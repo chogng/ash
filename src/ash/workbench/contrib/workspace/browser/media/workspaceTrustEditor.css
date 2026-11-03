@@ -246,3 +246,29 @@
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: -1px;
 }
+
+.ash-ide-directory-permission-dialog {
+	inline-size: min(40rem, calc(100vw - var(--ash-spacing-size320)));
+	border-radius: var(--ash-cornerRadius-xLarge);
+}
+
+.ash-ide-directory-permission-dialog .ash-dialog-icon {
+	font-size: var(--ash-fontSize-heading1);
+}
+
+.ash-ide-directory-permission-dialog .ash-dialog-actions {
+	flex-wrap: wrap;
+	align-items: flex-start;
+}
+
+.ash-ide-directory-permission-dialog .ash-dialog-action-with-detail {
+	flex: 1 1 10rem;
+}
+
+.ash-ide-directory-permission-dialog .ash-dialog-title {
+	font-size: var(--ash-fontSize-body1);
+}
+
+.ash-ide-directory-permission-dialog .ash-dialog-detail {
+	margin-inline-start: var(--ash-spacing-size280);
+}

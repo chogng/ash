@@ -50,7 +50,7 @@ async fn process_observer_follows_cloned_clients_and_stream_lifetimes() {
 }
 
 #[test]
-fn version_policy_accepts_the_minimum_and_vendor_versions_and_rejects_older_git() {
+fn git_version_policy_accepts_vendor_versions_and_rejects_older_git() {
     for (version, supported) in [
         ("git version 1.9.5", false),
         ("git version 2.26.3", false),
@@ -62,7 +62,14 @@ fn version_policy_accepts_the_minimum_and_vendor_versions_and_rejects_older_git(
     ] {
         let parsed = GitVersion::parse("git --version", version.as_bytes()).unwrap();
         assert_eq!(parsed.display, version);
-        assert_eq!(parsed.check_supported().is_ok(), supported, "{version}");
+        if supported {
+            parsed.check_supported().unwrap();
+        } else {
+            assert!(matches!(
+                parsed.check_supported(),
+                Err(GitError::UnsupportedVersion { installed }) if installed == version
+            ));
+        }
     }
     for version in [
         "not Git",
@@ -397,6 +404,73 @@ async fn system_git_uses_an_absolute_installation_path_when_workspace_contains_g
         .unwrap();
     assert!(output.stdout.starts_with(b"git version "));
     assert!(GitClient::with_executable("git".into(), GitExecutionLimits::default()).is_err());
+}
+
+#[tokio::test]
+async fn git_version_distinguishes_a_missing_executable_from_a_launch_failure() {
+    let directory = tempfile::tempdir().unwrap();
+    let executable = directory
+        .path()
+        .join(format!("git{}", std::env::consts::EXE_SUFFIX));
+    let client =
+        GitClient::with_executable(executable.clone(), GitExecutionLimits::default()).unwrap();
+    assert!(matches!(
+        client.version().await,
+        Err(GitError::ExecutableNotFound { .. })
+    ));
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // The executable exists, but spawning it still returns NotFound.
+        let interpreter = directory.path().join("missing-interpreter");
+        std::fs::write(&executable, format!("#!{}\n", interpreter.display())).unwrap();
+        std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
+    }
+    #[cfg(windows)]
+    std::fs::write(&executable, b"invalid executable").unwrap();
+
+    assert!(matches!(
+        client.version().await,
+        Err(GitError::LaunchFailed { .. })
+    ));
+}
+
+#[tokio::test]
+async fn git_version_survives_a_missing_temporary_directory() {
+    const CHILD: &str = "ASH_GIT_VERSION_MISSING_TEMP_TEST";
+    if std::env::var_os(CHILD).is_some() {
+        assert!(!std::env::temp_dir().exists());
+        assert!(
+            !GitClient::system()
+                .version()
+                .await
+                .unwrap()
+                .display
+                .is_empty()
+        );
+        return;
+    }
+    let temporary = tempfile::tempdir().unwrap();
+    let missing = temporary.path().join("missing");
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "client::tests::git_version_survives_a_missing_temporary_directory",
+            "--nocapture",
+        ])
+        .env(CHILD, "1")
+        .env("TMPDIR", &missing)
+        .env("TMP", &missing)
+        .env("TEMP", &missing)
+        .output()
+        .unwrap();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success() && stdout.contains("1 passed"),
+        "{stdout}\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 #[cfg(any(unix, windows))]

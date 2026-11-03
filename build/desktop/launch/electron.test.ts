@@ -82,7 +82,7 @@ test('real Ash development services exit after worker death or launcher loss wit
 	}
 });
 
-const launchSources = ['build/source-layout.json', 'build/processes.ts', 'build/desktop/launch/electron.ts', 'build/desktop/launch/supervisor.ts', 'build/desktop/electron.ts', 'src/ash/code/common/application.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/desktop/appServer.ts', 'build/desktop/liveBuild.ts', 'build/python.ts', 'build/protocol/generate.ts', 'build/lib/incrementalOutput.ts', 'build/lib/watchNativeFile.ts'];
+const launchSources = ['build/source-layout.json', 'build/processes.ts', 'build/desktop/launch/electron.ts', 'build/desktop/launch/supervisor.ts', 'build/desktop/electron.ts', 'src/ash/code/common/application.ts', 'build/desktop/host.ts', 'build/desktop/paths.ts', 'build/desktop/runtimeStore.ts', 'build/desktop/appServer.ts', 'build/desktop/liveBuild.ts', 'build/python.ts', 'build/protocol/generate.ts', 'build/lib/incrementalOutput.ts', 'build/lib/watchNativeFile.ts'];
 
 interface ObservedProcess { readonly pid: number; readonly recordedAt: number; }
 
@@ -126,6 +126,7 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
 			await copyFile(resolve(import.meta.dirname, '../../..', name), join(root, name));
 		}
 		await writeFile(join(root, 'package.json'), '{"type":"module"}');
+		await writeFile(join(root, 'build/desktop/host_logs.py'), '# Native host tools are outside this launcher fixture.\n');
 		await symlink(resolve(import.meta.dirname, '../../../node_modules/typescript'), join(root, 'node_modules/typescript'), process.platform === 'win32' ? 'junction' : 'dir');
 		for (const project of ['main', 'preload']) {
 			await writeFile(join(root, `tsconfig.${project}.json`), JSON.stringify({ compilerOptions: { incremental: true, outDir: `.build/desktop/${project}`, tsBuildInfoFile: `.build/desktop/${project}.tsbuildinfo` }, files: ['fixture.cjs'] }));
@@ -171,6 +172,7 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
         const mainOutput = '.build/desktop/main/src/main.js';
         fs.mkdirSync(path.dirname(mainOutput), { recursive: true });
         fs.writeFileSync(mainOutput, 'export const version = ' + (phase.startsWith('recovered') || phase === 'preload' ? 2 : 1));
+        fs.writeFileSync(mainOutput + '.map', JSON.stringify({ sourcesContent: [phase] }));
         fs.appendFileSync('phases.log', phase + '\\n');
         fs.unlinkSync('compiler-active');
         process.exitCode = phase === 'error' ? 1 : 0;
@@ -225,7 +227,7 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
 		await setPhase('unchanged');
 		await until(async () => (await lines('phases.log')).includes('unchanged'));
 		await delay(300);
-		assert.equal((await lines('launches.log')).length, 1, 'Rewriting unchanged compiler outputs must not restart Electron');
+		assert.equal((await lines('launches.log')).length, 1, 'Changing only source maps must not restart Electron');
 		await setPhase('slow');
 		await until(async () => (await lines('started.log')).includes('slow'));
 		await setPhase('valid-after-slow');
@@ -301,7 +303,7 @@ test('cancelling startup retires the backend preparation and its compiler descen
 	await symlink(resolve(import.meta.dirname, '../../../node_modules/typescript'), join(root, 'node_modules/typescript'), process.platform === 'win32' ? 'junction' : 'dir');
 	await writeFile(join(root, 'package.json'), '{"type":"module"}');
 	await writeFile(join(root, 'node_modules/electron/index.js'), 'module.exports = process.execPath;');
-	await writeFile(join(root, 'build/prepare.py'), `
+	await writeFile(join(root, 'build/desktop/develop.py'), `
 import json, os, signal, subprocess, sys, time
 from pathlib import Path
 signal.signal(signal.SIGTERM, lambda *_: None)
@@ -309,6 +311,7 @@ child = subprocess.Popen([sys.executable, '-c', 'import os, signal, time; signal
 compiler = int(child.stdout.readline())
 Path('preparation.tmp').write_text(json.dumps({'parent': os.getpid(), 'compiler': compiler}))
 os.replace('preparation.tmp', 'preparation.json')
+print('compiler progress', file=sys.stderr, flush=True)
 time.sleep(300)
 `);
 	const environment: NodeJS.ProcessEnv = { ...process.env, ASH_ELECTRON_LAUNCH_WORKER: '1', PYTHON: pythonCommand([]).command };
@@ -330,6 +333,9 @@ time.sleep(300)
 		if (!preparation) await delay(50);
 	}
 	assert.ok(preparation, output);
+	while (!output.includes('compiler progress') && Date.now() < deadline) await delay(50);
+	assert.match(output, /Preparing the development backend/);
+	assert.match(output, /compiler progress/);
 	// Signal only the launcher: its cancellation owner must reclaim preparation
 	// before this test's fallback ProcessRun performs cleanup.
 	child.kill('SIGTERM');
@@ -461,8 +467,8 @@ setInterval(() => {}, 1000);
 			const run = new ProcessRun(root, undefined, 100);
 			runs.push(run);
 			const previousCount = (await pids()).length;
-			const child = spawn(process.execPath, [join(root, 'build/desktop/launch/electron.ts'), '--watch', '--dev-services'], {
-				cwd: root, stdio: 'pipe', env: { ...process.env, ASH_DESKTOP_UI_ONLY: '1', ASH_DEV_APP_SERVER_RELOAD: '1', ASH_RENDERER_URL: `http://127.0.0.1:${port}` },
+			const child = spawn(process.execPath, [join(root, 'build/desktop/launch/electron.ts'), '--watch', '--dev-services', '--backend-prepared'], {
+				cwd: root, stdio: 'pipe', env: { ...process.env, ASH_DESKTOP_UI_ONLY: undefined, ASH_DEV_APP_SERVER_RELOAD: '1', ASH_RENDERER_URL: `http://127.0.0.1:${port}` },
 			});
 			let output = '';
 			child.stdout.on('data', chunk => { output += chunk; });

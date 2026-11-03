@@ -5,8 +5,8 @@ import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.
 import { localize } from '../../../../nls.js';
 import { createDecorator, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { AgentsVoiceStorageKeys } from '../common/agentsVoice.js';
-import { ChatInputOnboarding, type IChatInputOnboardingBanner, type IChatInputOnboardingContext, type IChatInputOnboardingHostOptions } from '../../chat/browser/widget/input/notices/chatInputOnboarding.js';
-import { ChatInputNoticeVariant, ChatInputNoticeWidget, getChatInputNoticeHelp } from '../../chat/browser/widget/input/notices/chatInputNoticeWidget.js';
+import { ChatInputOnboarding, type IChatInputOnboardingBanner, type IChatInputOnboardingContext, type IChatInputOnboardingHostOptions } from '../../chat/browser/widget/input/chatInputOnboarding.js';
+import { ChatInputNoticeVariant, ChatInputNoticeWidget, getChatInputNoticeHelp } from '../../chat/browser/widget/input/chatInputNoticeWidget.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import './media/voiceModeOnboarding.css';
 

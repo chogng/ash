@@ -1,8 +1,8 @@
+import type { IChatToolInvocation } from '../../../common/chatService/chatService.js';
 import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
-import type { IChatListItem } from '../../../common/model/chatViewModel.js';
 import './media/chatCollapsibleContentPart.css';
 
 interface ToolTextSection {
@@ -42,7 +42,7 @@ export class ChatCollapsibleInputOutputContentPart extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
-	public render(invocation: NonNullable<IChatListItem['toolInvocation']>): void {
+	public render(invocation: IChatToolInvocation): void {
 		const result = invocation.result;
 		const textParts = result?.content?.filter(part => part.type === 'text');
 		const resultText = textParts?.length ? textParts.map(part => part.text).join('\n') : result?.text ?? '';

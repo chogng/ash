@@ -231,6 +231,7 @@ pub struct CreateThreadRequest {
 enum ForkDestination {
     CurrentSession,
     NewSession,
+    Comparison(core_api::ComparisonFork),
 }
 
 pub struct CreateRewoundThreadRequest {
@@ -944,6 +945,19 @@ impl ThreadController {
         self.fork_into(binder, request, ForkDestination::NewSession)
     }
 
+    pub fn fork_comparison(
+        &self,
+        binder: &dyn ThreadWorktreeBinder,
+        request: ForkThreadRequest,
+        comparison: core_api::ComparisonFork,
+    ) -> Result<ThreadSnapshot, CoreError> {
+        comparison
+            .agent
+            .validate()
+            .map_err(|error| CoreError::InvalidInput(error.into()))?;
+        self.fork_into(binder, request, ForkDestination::Comparison(comparison))
+    }
+
     fn fork_into(
         &self,
         binder: &dyn ThreadWorktreeBinder,
@@ -951,43 +965,85 @@ impl ThreadController {
         destination: ForkDestination,
     ) -> Result<ThreadSnapshot, CoreError> {
         validate_thread_title(&request.command_id, &request.title)?;
-        let prefix = match destination {
+        let prefix = match &destination {
             ForkDestination::CurrentSession => "fork",
             ForkDestination::NewSession => "session-fork",
+            ForkDestination::Comparison(_) => "comparison-fork",
+        };
+        let comparison = match &destination {
+            ForkDestination::Comparison(comparison) => Some(comparison),
+            _ => None,
         };
         let thread_id = command_thread_id(prefix, &request.command_id)?;
         if let Some(binding) = self.store.read_thread_binding(&thread_id)? {
-            if matches!(&binding.origin, ThreadOrigin::Fork { parent_thread_id, .. } if parent_thread_id == &request.source_thread_id)
-            {
+            let matches_source = match (&binding.origin, comparison) {
+                (
+                    ThreadOrigin::Fork {
+                        parent_thread_id, ..
+                    },
+                    None,
+                ) => parent_thread_id == &request.source_thread_id,
+                (
+                    ThreadOrigin::Comparison {
+                        parent_thread_id,
+                        parent_sequence,
+                    },
+                    Some(options),
+                ) => {
+                    parent_thread_id == &request.source_thread_id
+                        && *parent_sequence == options.source_sequence
+                }
+                _ => false,
+            };
+            if matches_source {
                 let snapshot = self.read_thread(&thread_id)?;
-                if snapshot.title == request.title {
+                if snapshot.title == request.title
+                    && comparison.is_none_or(|options| {
+                        snapshot.agent_configuration() == Some(&options.agent)
+                    })
+                {
+                    if let Some(options) = comparison {
+                        binder.provision(&ThreadWorktreeBindingRequest {
+                            session_id: snapshot.session_id.clone(),
+                            thread_id,
+                            origin: binding.origin,
+                            branch_name: Some(options.branch_name.clone()),
+                        })?;
+                    }
                     return Ok(snapshot);
                 }
             }
             return Err(CoreError::CommandConflict);
         }
-        let source = self.read_thread(&request.source_thread_id)?;
-        let session_id = match destination {
+        let source = match comparison {
+            Some(options) => {
+                self.load_snapshot_at_sequence(&request.source_thread_id, options.source_sequence)?
+            }
+            None => self.read_thread(&request.source_thread_id)?,
+        };
+        let session_id = match &destination {
             ForkDestination::CurrentSession => source.session_id.clone(),
-            ForkDestination::NewSession => SessionId::new(thread_id.as_str())
-                .map_err(|error| CoreError::InvalidInput(error.to_string()))?,
+            ForkDestination::NewSession | ForkDestination::Comparison(_) => {
+                SessionId::new(thread_id.as_str())
+                    .map_err(|error| CoreError::InvalidInput(error.to_string()))?
+            }
         };
         binder.provision(&ThreadWorktreeBindingRequest {
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
-            branch_name: None,
-            origin: ThreadOrigin::Fork {
-                parent_thread_id: source.thread_id.clone(),
-                parent_sequence: source.sequence,
-            },
+            branch_name: comparison.map(|options| options.branch_name.clone()),
+            origin: fork_origin(&source.thread_id, source.sequence, comparison.is_some()),
         })?;
-        self.create_forked_thread(CreateForkedThreadRequest {
-            session_id,
-            thread_id,
-            title: request.title,
-            source_thread_id: source.thread_id,
-            source_sequence: source.sequence,
-        })
+        self.create_forked_thread_with_agent(
+            CreateForkedThreadRequest {
+                session_id,
+                thread_id,
+                title: request.title,
+                source_thread_id: source.thread_id,
+                source_sequence: source.sequence,
+            },
+            comparison.map(|options| &options.agent),
+        )
     }
 
     /// Rewinds one durable Thread into a new branch before the selected Turn.
@@ -1083,6 +1139,14 @@ impl ThreadController {
         &self,
         request: CreateForkedThreadRequest,
     ) -> Result<ThreadSnapshot, CoreError> {
+        self.create_forked_thread_with_agent(request, None)
+    }
+
+    fn create_forked_thread_with_agent(
+        &self,
+        request: CreateForkedThreadRequest,
+        agent: Option<&ash_protocol::AgentConfiguration>,
+    ) -> Result<ThreadSnapshot, CoreError> {
         let source =
             self.load_snapshot_at_sequence(&request.source_thread_id, request.source_sequence)?;
         if source.session_id != request.session_id
@@ -1103,12 +1167,13 @@ impl ThreadController {
         let reference = prefix.reference().map_err(CoreError::Journal)?;
         self.create_thread_with_history(
             CreateThreadRequest {
-                agent_id: source.agent_id.clone(),
-                origin: ThreadOrigin::Fork {
-                    parent_thread_id: source.thread_id.clone(),
-                    parent_sequence: request.source_sequence,
+                agent_id: if agent.is_some() {
+                    self.select_agent_id(None, &request.thread_id)?
+                } else {
+                    source.agent_id.clone()
                 },
-                agent: source.agent_configuration().cloned(),
+                origin: fork_origin(&source.thread_id, request.source_sequence, agent.is_some()),
+                agent: agent.or_else(|| source.agent_configuration()).cloned(),
                 session_id: request.session_id,
                 thread_id: request.thread_id.clone(),
                 title: request.title,
@@ -2697,6 +2762,18 @@ impl ThreadController {
         self.with_loaded_thread(thread_id, |loaded| Ok(loaded.snapshot.clone()))
     }
 
+    /// Keeps the execution target stable while the host retires an old directory binding.
+    pub fn with_execution_target(
+        &self,
+        thread_id: &ThreadId,
+        apply: impl FnOnce(Option<&ash_protocol::SessionExecutionTarget>),
+    ) -> Result<(), CoreError> {
+        self.with_loaded_thread(thread_id, |loaded| {
+            apply(loaded.snapshot.execution_target.as_ref());
+            Ok(())
+        })
+    }
+
     /// Reads a visible history page without restoring execution state when the index is current.
     pub fn read_thread_history(
         &self,
@@ -2978,6 +3055,129 @@ impl ThreadController {
                     }],
                 )?;
             }
+            Ok(snapshot.clone())
+        })
+    }
+
+    pub fn move_thread_to_session(
+        &self,
+        thread_id: &ThreadId,
+        source: &SessionId,
+        destination: &SessionId,
+        command_id: CommandId,
+    ) -> Result<ThreadSnapshot, CoreError> {
+        if source == destination {
+            return Err(CoreError::InvalidInput(
+                "Source and destination Sessions must differ".into(),
+            ));
+        }
+        self.mutate_thread(thread_id, |snapshot| {
+            let command = ThreadCommand::MoveToSession {
+                source_session_id: source.clone(),
+                destination_session_id: destination.clone(),
+            };
+            if let Some(existing) = snapshot
+                .commands
+                .iter()
+                .find(|entry| entry.receipt.command_id == command_id)
+            {
+                return if existing.receipt.command == command && &snapshot.session_id == destination
+                {
+                    Ok(snapshot.clone())
+                } else {
+                    Err(CoreError::CommandConflict)
+                };
+            }
+            if &snapshot.session_id != source {
+                return Err(CoreError::InvalidInput(
+                    "Thread is no longer in the source Session".into(),
+                ));
+            }
+            self.execution_mailboxes.retire_idle(thread_id)?;
+            let (next, batch) = self.project_batch(
+                Some(snapshot.clone()),
+                thread_id,
+                vec![ThreadEvent::ThreadMovedToSession {
+                    thread_id: thread_id.clone(),
+                    source_session_id: source.clone(),
+                    destination_session_id: destination.clone(),
+                }],
+                BatchCommand::AtEvent {
+                    index: 0,
+                    receipt: ThreadCommandReceipt {
+                        command_id,
+                        command,
+                    },
+                },
+            )?;
+            self.commit_batch(&batch)?;
+            *snapshot = next;
+            Ok(snapshot.clone())
+        })
+    }
+
+    /// Prepares the destination under the Thread writer lease before publishing its new route.
+    pub fn change_session_directory(
+        &self,
+        session_id: &SessionId,
+        root: &std::path::Path,
+        command_id: CommandId,
+        prepare: impl FnOnce(&ThreadId) -> Result<(), CoreError>,
+        activate: impl FnOnce(&ThreadId) -> Result<(), CoreError>,
+    ) -> Result<ThreadSnapshot, CoreError> {
+        let thread_id = ThreadId::new(session_id.as_str())
+            .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+        self.mutate_thread(&thread_id, |snapshot| {
+            let command = ThreadCommand::ChangeDirectory {
+                root: root.to_path_buf(),
+            };
+            let target = Some(ash_protocol::SessionExecutionTarget::Local {
+                root: root.to_path_buf(),
+            });
+            if let Some(existing) = snapshot
+                .commands
+                .iter()
+                .find(|entry| entry.receipt.command_id == command_id)
+            {
+                return if existing.receipt.command == command && snapshot.execution_target == target
+                {
+                    activate(&thread_id)?;
+                    Ok(snapshot.clone())
+                } else {
+                    Err(CoreError::CommandConflict)
+                };
+            }
+            if ash_protocol::SessionSource::from_session_id(session_id).is_some()
+                || self.store.list_session_thread_ids(session_id)? != [thread_id.clone()]
+                || !matches!(
+                    self.store.execution_binding(&thread_id)?,
+                    ash_thread_store::ThreadExecutionBinding::Recorded
+                )
+            {
+                return Err(CoreError::InvalidInput(
+                    "Changing directories requires a single-conversation Session".into(),
+                ));
+            }
+            self.execution_mailboxes.retire_idle(&thread_id)?;
+            let (next, batch) = self.project_batch(
+                Some(snapshot.clone()),
+                &thread_id,
+                vec![ThreadEvent::ThreadDirectoryChanged {
+                    thread_id: thread_id.clone(),
+                    root: root.to_path_buf(),
+                }],
+                BatchCommand::AtEvent {
+                    index: 0,
+                    receipt: ThreadCommandReceipt {
+                        command_id,
+                        command,
+                    },
+                },
+            )?;
+            prepare(&thread_id)?;
+            self.commit_batch(&batch)?;
+            *snapshot = next;
+            activate(&thread_id)?;
             Ok(snapshot.clone())
         })
     }
@@ -3703,6 +3903,11 @@ fn validate_request_id(request_id: &RequestId) -> Result<(), CoreError> {
 
 fn resolution_command(request: &ResolveTurnInteractionRequest) -> ThreadCommand {
     match &request.response {
+        AgentResponse::ToolResultReview { response } => ThreadCommand::ResolveToolResultReview {
+            turn_id: request.turn_id.clone(),
+            request_id: request.request_id.clone(),
+            response: response.clone(),
+        },
         AgentResponse::Approval { response } => ThreadCommand::ResolveApproval {
             turn_id: request.turn_id.clone(),
             request_id: request.request_id.clone(),
@@ -3738,6 +3943,25 @@ fn validate_thread_expectation(
                 expected,
                 actual,
             }))
+        }
+    }
+}
+
+fn fork_origin(
+    source_thread_id: &ThreadId,
+    parent_sequence: u64,
+    comparison: bool,
+) -> ThreadOrigin {
+    let parent_thread_id = source_thread_id.clone();
+    if comparison {
+        ThreadOrigin::Comparison {
+            parent_thread_id,
+            parent_sequence,
+        }
+    } else {
+        ThreadOrigin::Fork {
+            parent_thread_id,
+            parent_sequence,
         }
     }
 }
@@ -3923,6 +4147,7 @@ fn latest_catalog_turn(
 
 fn interaction_question(request: &AgentRequest) -> String {
     match request {
+        AgentRequest::ToolResultReview { request } => request.review.reason.clone(),
         AgentRequest::Approval { request } => request.reason.clone(),
         AgentRequest::Permissions { request } => request.reason.clone(),
         AgentRequest::UserInput { request } => request
@@ -4521,7 +4746,41 @@ impl ThreadStore for InMemoryThreadStore {
             ));
         }
         if let Some(previous) = state.catalog.get(&batch.thread_id) {
-            if previous.binding != batch.catalog.binding {
+            let mut expected = previous.binding.clone();
+            if let [stored] = batch.events.as_slice()
+                && let ThreadEvent::ThreadMovedToSession {
+                    source_session_id,
+                    destination_session_id,
+                    ..
+                } = &stored.event
+                && source_session_id == &expected.session_id
+            {
+                let active_root = |session: &SessionId| {
+                    state.catalog.values().find(|record| {
+                        &record.session_id == session
+                            && record.thread.thread_id.as_str() == session.as_str()
+                            && record.thread.status == ash_protocol::ThreadStatus::Active
+                    })
+                };
+                if ash_protocol::SessionSource::from_session_id(source_session_id).is_some()
+                    || ash_protocol::SessionSource::from_session_id(destination_session_id)
+                        .is_some()
+                    || active_root(source_session_id).is_none()
+                    || !active_root(destination_session_id)
+                        .is_some_and(|root| root.execution_target == batch.catalog.execution_target)
+                    || state.catalog.values().any(|record| {
+                        &record.session_id == source_session_id
+                            && record.binding.source_thread_id() == Some(&batch.thread_id)
+                    })
+                {
+                    return Err(ThreadStoreError::InvalidBatch(
+                        "Thread move requires two active Sessions with the same execution target"
+                            .into(),
+                    ));
+                }
+                expected.session_id = destination_session_id.clone();
+            }
+            if expected != batch.catalog.binding {
                 return Err(ThreadStoreError::InvalidBatch(
                     "Thread Agent identity and origin are immutable".into(),
                 ));

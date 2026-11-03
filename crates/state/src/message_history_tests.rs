@@ -13,6 +13,7 @@ fn input(text: &str) -> Submission {
         text: text.into(),
         kind: InputKind::Agent,
         thread_id: Some("remote-thread".into()),
+        scope: None,
     }
 }
 
@@ -25,6 +26,7 @@ fn reopening_a_profile_recalls_inputs_across_threads_and_searches_literal_unicod
     let second = store
         .append(Submission {
             thread_id: Some("another-thread".into()),
+            scope: None,
             ..input("new input")
         })
         .unwrap();
@@ -216,5 +218,74 @@ fn clear_does_not_touch_conversation_storage_and_profiles_are_isolated() {
                 ..Query::default()
             })
             .is_err()
+    );
+}
+
+#[test]
+fn scoped_history_filters_before_pagination_and_keeps_global_history() {
+    let directory = tempfile::tempdir().unwrap();
+    let store =
+        SqliteMessageHistory::open(&directory.path().join("history.sqlite"), Default::default())
+            .unwrap();
+    let first = store
+        .append(Submission {
+            scope: Some("host-a/session".into()),
+            ..input("first")
+        })
+        .unwrap();
+    store
+        .append(Submission {
+            scope: Some("host-b/session".into()),
+            ..input("other host")
+        })
+        .unwrap();
+    store.append(input("older format")).unwrap();
+    let second = store
+        .append(Submission {
+            scope: Some("host-a/session".into()),
+            ..input("second")
+        })
+        .unwrap();
+    let mut query = Query {
+        scope: Some("host-a/session".into()),
+        limit: 1,
+        ..Query::default()
+    };
+    let page = store.read(&query).unwrap();
+    assert_eq!(page.entries, [second]);
+    query.before = page.next_before;
+    assert_eq!(store.read(&query).unwrap().entries, [first]);
+    assert_eq!(store.read(&Query::default()).unwrap().entries.len(), 4);
+}
+
+#[test]
+fn legacy_profile_history_migrates_without_assigning_entries_to_a_session() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("history.sqlite");
+    let legacy = {
+        let store = SqliteMessageHistory::open(&path, Retention::default()).unwrap();
+        store.append(input("legacy")).unwrap()
+    };
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    connection
+        .execute_batch(
+            "DROP INDEX message_history_scope;
+             ALTER TABLE message_history DROP COLUMN scope;
+             UPDATE ash_schema_migrations SET version = 1 WHERE component = 'message-history';",
+        )
+        .unwrap();
+    drop(connection);
+
+    let store = SqliteMessageHistory::open(&path, Retention::default()).unwrap();
+    assert_eq!(store.read(&Query::default()).unwrap().entries, [legacy]);
+    assert!(
+        store
+            .read(&Query {
+                scope: Some("session".into()),
+                ..Query::default()
+            })
+            .unwrap()
+            .entries
+            .is_empty()
     );
 }

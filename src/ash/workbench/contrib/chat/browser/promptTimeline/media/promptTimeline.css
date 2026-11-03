@@ -1,0 +1,111 @@
+.ash-chat-sticky-prompt {
+	position: absolute;
+	z-index: 1;
+	inset: 0 var(--ash-spacing-size120) auto;
+	visibility: hidden;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	overflow: hidden;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-editor-widgetBackground);
+	color: var(--ash-description-foreground);
+	font: inherit;
+	text-align: start;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.ash-chat-sticky-prompt.visible {
+	visibility: visible;
+}
+
+.ash-chat-sticky-prompt:hover {
+	color: var(--ash-foreground);
+}
+
+.ash-chat-sticky-prompt:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-prompt-timeline-gutter,
+.ash-prompt-timeline-ruler {
+	position: absolute;
+	z-index: 2;
+	inset-block-start: var(--ash-spacing-size280);
+}
+
+.ash-prompt-timeline-gutter {
+	inset-inline-start: 0;
+}
+
+.ash-prompt-timeline-ruler {
+	inset-block-start: 0;
+	inset-inline-end: var(--ash-spacing-size120);
+}
+
+.ash-prompt-timeline-gutter > summary,
+.ash-prompt-timeline-mark,
+.ash-prompt-timeline-row button {
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-editor-widgetBackground);
+	color: var(--ash-foreground);
+	font: inherit;
+	cursor: pointer;
+}
+
+.ash-prompt-timeline-gutter > summary {
+	display: block;
+	list-style: none;
+}
+
+.ash-prompt-timeline-mark {
+	position: absolute;
+	inset-inline-end: 0;
+	transform: translateY(-50%);
+}
+
+.ash-prompt-timeline-panel {
+	position: absolute;
+	inset-block-start: 0;
+	inset-inline-start: 100%;
+	inline-size: min(16rem, 65vw);
+	max-block-size: min(22rem, 50vh);
+	overflow: auto;
+	padding: var(--ash-spacing-size60);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	border-radius: var(--ash-cornerRadius-small);
+	background: var(--ash-editor-widgetBackground);
+	color: var(--ash-foreground);
+}
+
+.ash-prompt-timeline-ruler .ash-prompt-timeline-panel {
+	inset-inline: auto 100%;
+}
+
+.ash-prompt-timeline-row button {
+	display: block;
+	inline-size: 100%;
+	overflow: hidden;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size60);
+	text-align: start;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-prompt-timeline-mark[aria-current],
+.ash-prompt-timeline-row button[aria-current] {
+	background: var(--ash-list-activeSelectionBackground);
+	color: var(--ash-list-activeSelectionForeground);
+}
+
+.ash-prompt-timeline-gutter :focus-visible,
+.ash-prompt-timeline-ruler :focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}

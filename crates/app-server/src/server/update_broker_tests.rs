@@ -1125,6 +1125,7 @@ fn approval_request(session_id: &SessionId, thread_id: &ThreadId) -> AgentReques
                         ash_protocol::ActionApprovalDecision::ApproveOnce,
                         ash_protocol::ActionApprovalDecision::Decline,
                     ],
+                    risk_assessment: None,
                     sandbox_denial: None,
                 },
             },

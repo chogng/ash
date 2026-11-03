@@ -13,6 +13,190 @@ use super::*;
 
 struct TestServer;
 
+tokio::task_local! { static CALL_OWNER: String; }
+
+struct ContextHost;
+struct CapturedHost(String);
+
+impl McpClientHost for ContextHost {
+    fn capture_request_context(&self) -> Option<Arc<dyn McpClientHost>> {
+        Some(Arc::new(CapturedHost(CALL_OWNER.with(Clone::clone))))
+    }
+}
+
+impl McpClientHost for CapturedHost {
+    fn handle_elicitation(
+        &self,
+        _: McpElicitation,
+    ) -> HostFuture<Result<ElicitResult, rmcp::ErrorData>> {
+        let owner = self.0.clone();
+        Box::pin(async move {
+            // The callback runs in RMCP's task, outside the initiating task-local scope.
+            assert!(CALL_OWNER.try_with(|_| ()).is_err());
+            Ok(ElicitResult::new(ElicitationAction::Accept)
+                .with_content(serde_json::json!({"owner": owner})))
+        })
+    }
+}
+
+struct ElicitationServer;
+
+#[derive(Clone)]
+struct GatedHost {
+    started: Arc<Notify>,
+    release: Arc<Notify>,
+}
+
+impl McpClientHost for GatedHost {
+    fn capture_request_context(&self) -> Option<Arc<dyn McpClientHost>> {
+        Some(Arc::new(self.clone()))
+    }
+
+    fn handle_elicitation(
+        &self,
+        _: McpElicitation,
+    ) -> HostFuture<Result<ElicitResult, rmcp::ErrorData>> {
+        let host = self.clone();
+        Box::pin(async move {
+            host.started.notify_one();
+            host.release.notified().await;
+            Ok(ElicitResult::new(ElicitationAction::Accept))
+        })
+    }
+}
+
+impl ServerHandler for ElicitationServer {
+    fn get_info(&self) -> ServerInfo {
+        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+    }
+
+    async fn call_tool(
+        &self,
+        _: CallToolRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResponse, rmcp::ErrorData> {
+        let request: ElicitRequestParams = serde_json::from_value(serde_json::json!({
+            "mode": "form", "message": "Question", "requestedSchema": {"type": "object", "properties": {"owner": {"type": "string"}}}
+        })).unwrap();
+        let answer = context
+            .peer
+            .send_request(rmcp::model::ServerRequest::ElicitRequest(
+                rmcp::model::ElicitRequest::new(request),
+            ))
+            .await
+            .map_err(|error| rmcp::ErrorData::internal_error(error.to_string(), None))?;
+        Ok(CallToolResult::success(vec![ContentBlock::text(
+            serde_json::to_string(&answer).unwrap(),
+        )])
+        .into())
+    }
+}
+
+#[tokio::test]
+async fn real_elicitation_dispatch_retains_each_concurrent_call_context() {
+    let (server_transport, client_transport) = tokio::io::duplex(8 * 1024);
+    let server = tokio::spawn(async move {
+        ElicitationServer
+            .serve(server_transport)
+            .await
+            .unwrap()
+            .waiting()
+            .await
+            .unwrap();
+    });
+    let client = RmcpClient::connect(
+        client_transport,
+        RmcpClientOptions::new("elicitation-test", "0")
+            .with_host(Arc::new(ContextHost))
+            .with_form_elicitation(),
+    )
+    .await
+    .unwrap();
+    let (first, second) = tokio::join!(
+        CALL_OWNER.scope(
+            "first".into(),
+            client.call_tool(CallToolRequestParams::new("first"))
+        ),
+        CALL_OWNER.scope(
+            "second".into(),
+            client.call_tool(CallToolRequestParams::new("second"))
+        ),
+    );
+    for (result, owner) in [(first, "first"), (second, "second")] {
+        let wire = serde_json::to_value(result.unwrap()).unwrap();
+        let answer: serde_json::Value =
+            serde_json::from_str(wire["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            answer,
+            serde_json::json!({"action": "accept", "content": {"owner": owner}})
+        );
+    }
+    client.shutdown().await.unwrap();
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn cancelling_a_call_waiting_for_elicitation_does_not_wait_for_the_active_answer() {
+    let (server_transport, client_transport) = tokio::io::duplex(8 * 1024);
+    let server = tokio::spawn(async move {
+        ElicitationServer
+            .serve(server_transport)
+            .await
+            .unwrap()
+            .waiting()
+            .await
+            .unwrap();
+    });
+    let host = GatedHost {
+        started: Arc::new(Notify::new()),
+        release: Arc::new(Notify::new()),
+    };
+    let client = Arc::new(
+        RmcpClient::connect(
+            client_transport,
+            RmcpClientOptions::new("elicitation-test", "0")
+                .with_host(Arc::new(host.clone()))
+                .with_form_elicitation(),
+        )
+        .await
+        .unwrap(),
+    );
+    let active_client = Arc::clone(&client);
+    let active = tokio::spawn(async move {
+        active_client
+            .call_tool(CallToolRequestParams::new("active"))
+            .await
+    });
+    tokio::time::timeout(Duration::from_secs(2), host.started.notified())
+        .await
+        .unwrap();
+    let error = tokio::time::timeout(
+        Duration::from_secs(2),
+        client.call_tool_with_cancellation(CallToolRequestParams::new("cancelled"), async {
+            "stopped before dispatch".into()
+        }),
+    )
+    .await
+    .unwrap()
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        RmcpClientError::Cancelled {
+            operation: "tools/call",
+            ..
+        }
+    ));
+    host.release.notify_one();
+    active.await.unwrap().unwrap();
+    Arc::try_unwrap(client)
+        .ok()
+        .unwrap()
+        .shutdown()
+        .await
+        .unwrap();
+    server.await.unwrap();
+}
+
 impl ServerHandler for TestServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(
@@ -64,8 +248,19 @@ impl ServerHandler for TestServer {
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
-        _context: RequestContext<RoleServer>,
+        context: RequestContext<RoleServer>,
     ) -> Result<CallToolResponse, rmcp::ErrorData> {
+        assert_eq!(
+            context
+                .peer
+                .peer_info()
+                .unwrap()
+                .capabilities
+                .extensions
+                .as_ref()
+                .unwrap()["ash/resultReview"]["versions"],
+            serde_json::json!([1])
+        );
         Ok(CallToolResult::success(vec![ContentBlock::text(request.name.into_owned())]).into())
     }
 }
@@ -83,6 +278,7 @@ async fn initializes_lists_and_calls_tools_over_an_in_process_transport() {
             .expect("join test server")
     });
     let options = RmcpClientOptions::new("ash-rmcp-client-test", "0")
+        .with_result_review()
         .with_mcp_apps()
         .with_timeouts(RmcpTimeouts {
             initialize: Duration::from_secs(2),

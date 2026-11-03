@@ -1,3 +1,5 @@
+import { ISessionsListModelService, SessionsListModelService } from '../../../../services/sessions/browser/sessionsListModelService.js';
+import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { IStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
@@ -22,7 +24,7 @@ import { getSingletonServiceDescriptors } from '../../../../../platform/instanti
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import type { ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, type ChatAgent } from '../../../../../workbench/services/chat/common/chatService.js';
 import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from '../../../../../workbench/contrib/chat/common/chat.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -30,6 +32,7 @@ import { CommandService } from '../../../../../workbench/services/commands/commo
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../../../workbench/services/configuration/test/common/testServices.js';
 import { initializeTestLocalization } from '../../../../../workbench/services/localization/test/common/localizationTestUtils.js';
 import '../../../../../workbench/contrib/chat/browser/chat.shared.contribution.js';
+import '../../browser/sessionsActions.js';
 import '../../browser/views/sessionsViewActions.js';
 import '../../../../browser/workbenchChat.contribution.js';
 import '../../../../../workbench/contrib/chat/browser/chat.contribution.js';
@@ -108,6 +111,7 @@ async function fixture(wording: 'archive' | 'done', archived = false) {
 	services.registerInstance(IQuickInputService, quickInput);
 	const commands = resources.add(new CommandService(services));
 	const actionsDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionActionsService)![1];
+	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(actionsDescriptor));
 	return Object.assign(resources, { provider, sessions, services, commands, quickInput, opened, configuration, storage });
 }
@@ -128,7 +132,9 @@ test('the existing New Chat action creates a draft without adding a peer to the 
 	using current = await historyFixture('archive', false);
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
 	using services = current.services.createChild();
-	services.registerInstance(IChatSessionNavigationService, services.createInstance(descriptor));
+	services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
+	services.registerInstance(IChatService, {} as IChatService);
+	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(descriptor));
 	using commands = new CommandService(services);
 	const before = current.sessions.sessions.map(session => ({ id: session.sessionId, threads: session.chats.map(chat => chat.threadId) }));
 	assert.equal(await commands.executeCommand(NEW_CHAT_COMMAND_ID), true);

@@ -172,7 +172,9 @@ export class ChatInlineAttachments extends Disposable {
 				if (preview) message.appendCodeblock('plaintext', preview);
 				if (preview.length < text.length) message.appendText(localize('chat.context.previewTruncated', 'Preview shortened. The full content is attached.'));
 				else if (!preview) message.appendText(`\n${localize('chat.context.previewEmpty', 'The attached content is empty.')}`);
-				message.appendText(`\n${localize('chat.context.openSavedContentHint', 'Click to open the full saved content, or press Alt+Enter at the reference.')}`);
+				message.appendText(`\n${context.open
+					? localize('chat.context.openProviderSourceHint', 'Click to open the source provided by the extension, or press Alt+Enter at the reference.')
+					: localize('chat.context.openSavedContentHint', 'Click to open the full saved content, or press Alt+Enter at the reference.')}`);
 				update(message);
 			}, () => update(MarkdownString.lift(options.hoverMessage!).appendText(`\n${localize('chat.context.previewUnavailable', 'Content preview unavailable.')}`)));
 		}
@@ -311,7 +313,8 @@ class InlineChatAttachmentWidget extends Disposable {
 			this.savedContentWidget = content;
 		}
 		if (this.savedContentWidget) {
-			this._register(this.savedContentWidget.onDidOpen(() => openSaved?.()));
+			// Provider source actions keep the saved-content hover without opening a second editor.
+			if (!attachment.open) this._register(this.savedContentWidget.onDidOpen(() => openSaved?.()));
 			this._register(editor.onDidChangeCursorSelection(() => this.savedContentWidget?.hideHover()));
 		}
 		this.widgets = [this.addContentWidget(host)];

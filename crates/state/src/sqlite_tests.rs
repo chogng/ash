@@ -68,22 +68,36 @@ fn manual_pull_requests_survive_reopen_and_follow_session_deletion() {
         append_created_thread(&store, &other_session, &other, 2);
         assert!(store.attach_pull_request(&root, &repository, 7).unwrap());
         assert!(!store.attach_pull_request(&root, &normalized, 7).unwrap());
+        assert!(store.record_pull_request(&root, &normalized, 7).unwrap());
+        assert!(!store.record_pull_request(&root, &normalized, 7).unwrap());
+        assert!(!store.attach_pull_request(&root, &normalized, 7).unwrap());
         store.attach_pull_request(&other, &normalized, 8).unwrap();
         assert!(store.attach_pull_request(&root, &repository, 0).is_err());
     }
     let store = SqliteThreadStore::open(&path).unwrap();
+    let artifact_id = store
+        .pull_request_artifact_id(&root, &normalized, 7)
+        .unwrap()
+        .unwrap();
     assert_eq!(
         store.list_pull_requests(&root).unwrap(),
-        vec![(normalized.clone(), 7)]
+        vec![(normalized.clone(), 7, true, Some(artifact_id.clone()), None)]
     );
     assert!(store.detach_pull_request(&root, &repository, 7).unwrap());
     assert!(!store.detach_pull_request(&root, &repository, 7).unwrap());
-    store.attach_pull_request(&root, &repository, 9).unwrap();
+    assert!(store.record_pull_request(&root, &repository, 7).unwrap());
+    assert_ne!(
+        store
+            .pull_request_artifact_id(&root, &repository, 7)
+            .unwrap()
+            .as_deref(),
+        Some(artifact_id.as_str())
+    );
     store.delete_session(&session).unwrap();
     assert!(store.list_pull_requests(&root).unwrap().is_empty());
     assert_eq!(
         store.list_pull_requests(&other).unwrap(),
-        vec![(normalized, 8)]
+        vec![(normalized, 8, false, None, None)]
     );
 }
 
@@ -135,12 +149,12 @@ fn schema_13_upgrade_keeps_prs_and_adds_issue_references_with_freeze_triggers() 
         store.attach_pull_request(&root, &repository, 7).unwrap();
     }
     let connection = rusqlite::Connection::open(&path).unwrap();
-    connection.execute_batch("DROP TABLE thread_issues; UPDATE ash_schema_migrations SET version = 13 WHERE component = 'event-store';").unwrap();
+    connection.execute_batch("DROP TABLE thread_issues; ALTER TABLE thread_pull_requests DROP COLUMN artifact_source_turn; ALTER TABLE thread_pull_requests DROP COLUMN artifact_source_thread; ALTER TABLE thread_pull_requests DROP COLUMN artifact_id; ALTER TABLE thread_pull_requests DROP COLUMN is_artifact; UPDATE ash_schema_migrations SET version = 13 WHERE component = 'event-store';").unwrap();
     drop(connection);
     let store = SqliteThreadStore::open(&path).unwrap();
     assert_eq!(
         store.list_pull_requests(&root).unwrap(),
-        vec![(repository.clone(), 7)]
+        vec![(repository.clone(), 7, false, None, None)]
     );
     assert!(store.attach_issue(&root, &repository, 7).unwrap());
     assert_eq!(store.list_issues(&root).unwrap(), vec![(repository, 7)]);
@@ -953,6 +967,49 @@ fn sqlite_session_cache_migration_retains_outer_branch_management_without_histor
 }
 
 #[test]
+fn sqlite_session_catalog_persists_and_recovers_automation_source() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("automation-source.sqlite3");
+    let id = format!("thread:automation-session-sha256-{}", "b".repeat(64));
+    let session_id = SessionId::new(&id).unwrap();
+    let thread_id = ThreadId::new(&id).unwrap();
+    let store = SqliteThreadStore::open(&path).unwrap();
+    append_created_thread(&store, &session_id, &thread_id, 1);
+    drop(store);
+
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    let json: String = connection
+        .query_row("SELECT record_json FROM session_catalog", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    let mut legacy: serde_json::Value = serde_json::from_str(&json).unwrap();
+    assert_eq!(
+        legacy.as_object_mut().unwrap().remove("source").unwrap(),
+        "automation"
+    );
+    let json = serde_json::to_string(&legacy).unwrap();
+    connection
+        .execute(
+            "UPDATE session_catalog SET record_json = ?1, record_digest = ?2",
+            rusqlite::params![
+                json,
+                ash_protocol::ContentDigest::sha256(json.as_bytes()).as_str()
+            ],
+        )
+        .unwrap();
+    drop(connection);
+
+    let reopened = SqliteThreadStore::open(&path).unwrap();
+    let source = Some(ash_protocol::SessionSource::Automation);
+    assert_eq!(
+        reopened.read_session(&session_id).unwrap().unwrap().source,
+        source
+    );
+    assert_eq!(reopened.list_sessions().unwrap()[0].source, source);
+}
+
+#[test]
 fn sqlite_session_catalog_tracks_model_only_updates() {
     assert_session_catalog_fact_updates(
         Some(ModelRef::new(
@@ -1128,6 +1185,184 @@ fn start_catalog_model_turn(
 }
 
 #[test]
+fn sqlite_replays_a_saved_session_directory_change_and_preserves_history() {
+    let profile = tempfile::tempdir().unwrap();
+    let path = profile.path().join("directory-switch.sqlite");
+    let previous = profile.path().join("previous");
+    let destination = profile.path().join("destination");
+    let id = SessionId::new("directory-session").unwrap();
+    let thread_id = ThreadId::new(id.as_str()).unwrap();
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let threads = ThreadController::with_store(store.clone());
+    threads
+        .create_thread(CreateThreadRequest {
+            session_id: id.clone(),
+            thread_id: thread_id.clone(),
+            agent_id: ash_protocol::AgentId::new("directory-agent").unwrap(),
+            origin: Default::default(),
+            agent: None,
+            title: "Existing conversation".into(),
+            execution_target: Some(ash_protocol::SessionExecutionTarget::Local { root: previous }),
+        })
+        .unwrap();
+    let original = store.load(&thread_id).unwrap();
+    let command = ash_protocol::CommandId::new("directory-command").unwrap();
+    assert!(
+        threads
+            .change_session_directory(
+                &id,
+                &destination,
+                command.clone(),
+                |_| {
+                    Err(core_api::CoreError::InvalidInput(
+                        "destination unavailable".into(),
+                    ))
+                },
+                |_| unreachable!()
+            )
+            .is_err()
+    );
+    assert_eq!(store.load(&thread_id).unwrap(), original);
+    let changed = threads
+        .change_session_directory(&id, &destination, command.clone(), |_| Ok(()), |_| Ok(()))
+        .unwrap();
+    let retried = threads
+        .change_session_directory(&id, &destination, command, |_| unreachable!(), |_| Ok(()))
+        .unwrap();
+    assert_eq!(changed.sequence, retried.sequence);
+    drop(threads);
+    drop(store);
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let target = Some(ash_protocol::SessionExecutionTarget::Local { root: destination });
+    assert_eq!(
+        store.read_session(&id).unwrap().unwrap().execution_target,
+        target
+    );
+    let replayed = ThreadController::with_store(store.clone())
+        .read_thread(&thread_id)
+        .unwrap();
+    assert_eq!(replayed.execution_target, target);
+    assert_eq!(replayed.title, "Existing conversation");
+    assert_eq!(
+        &store.load(&thread_id).unwrap()[..original.len()],
+        original.as_slice()
+    );
+}
+
+#[test]
+fn sqlite_moves_an_independent_thread_and_replays_its_new_session() {
+    use agent_graph_store::AgentGraphStore;
+
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("move-thread.sqlite3");
+    let source = SessionId::new("move-source").unwrap();
+    let destination = SessionId::new("move-target").unwrap();
+    let thread_id = ThreadId::new("move-conversation").unwrap();
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let threads = ThreadController::with_store(store.clone());
+    let create = |id: &str, session_id: &SessionId| {
+        threads
+            .create_thread(CreateThreadRequest {
+                execution_target: None,
+                agent_id: ash_protocol::AgentId::new(format!("agent-{id}")).unwrap(),
+                origin: Default::default(),
+                agent: None,
+                session_id: session_id.clone(),
+                thread_id: ThreadId::new(id).unwrap(),
+                title: id.into(),
+            })
+            .unwrap()
+    };
+    let source_root = create(source.as_str(), &source);
+    create(destination.as_str(), &destination);
+    let before = create(thread_id.as_str(), &source);
+    threads
+        .rename_thread(
+            &thread_id,
+            ash_protocol::CommandId::new("name-before-move").unwrap(),
+            "Conversation history".into(),
+            ash_protocol::ThreadTitleSource::Manual,
+        )
+        .unwrap();
+    let original_history = store.load(&thread_id).unwrap();
+    let command = || ash_protocol::CommandId::new("move-thread").unwrap();
+    assert!(
+        threads
+            .move_thread_to_session(&source_root.thread_id, &source, &destination, command())
+            .is_err()
+    );
+    assert!(
+        threads
+            .move_thread_to_session(
+                &thread_id,
+                &source,
+                &SessionId::new("missing").unwrap(),
+                command()
+            )
+            .is_err()
+    );
+    assert_eq!(store.load(&thread_id).unwrap(), original_history);
+
+    let moved = threads
+        .move_thread_to_session(&thread_id, &source, &destination, command())
+        .unwrap();
+    assert_eq!(moved.thread_id, thread_id);
+    assert_eq!(moved.agent_id, before.agent_id);
+    assert_eq!(moved.session_id, destination);
+    assert_eq!(
+        threads
+            .move_thread_to_session(&thread_id, &source, &destination, command())
+            .unwrap()
+            .sequence,
+        moved.sequence
+    );
+    assert_eq!(
+        store.list_session_thread_ids(&source).unwrap(),
+        vec![source_root.thread_id]
+    );
+    assert!(
+        store
+            .read_session(&destination)
+            .unwrap()
+            .unwrap()
+            .threads
+            .iter()
+            .any(|thread| thread.thread_id == thread_id)
+    );
+    assert_eq!(
+        store
+            .read_thread_binding(&thread_id)
+            .unwrap()
+            .unwrap()
+            .session_id,
+        destination
+    );
+    drop(threads);
+    drop(store);
+
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let threads = ThreadController::with_store(store.clone());
+    let replayed = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(replayed.session_id, destination);
+    assert_eq!(replayed.title, "Conversation history");
+    let replayed_events = store.load(&thread_id).unwrap();
+    assert_eq!(replayed_events.len(), original_history.len() + 1);
+    assert_eq!(
+        &replayed_events[..original_history.len()],
+        original_history.as_slice()
+    );
+    assert!(
+        store
+            .read_session(&source)
+            .unwrap()
+            .unwrap()
+            .threads
+            .iter()
+            .all(|thread| thread.thread_id != thread_id)
+    );
+}
+
+#[test]
 fn sqlite_model_provider_migration_backfills_legacy_catalog_once() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("model-migration.sqlite3");
@@ -1253,11 +1488,13 @@ fn sqlite_session_catalog_follows_waiting_turn_model_migration_and_reopen() {
                 request: ash_protocol::AgentRequest::UserInput {
                     request: ash_protocol::RequestUserInput {
                         questions: vec![ash_protocol::UserInputQuestion {
+                            required: true,
                             id: "continue".into(),
                             header: "Continue".into(),
                             question: "Continue the task?".into(),
                             options: Vec::new(),
                             allow_free_form: true,
+                            validation: None,
                         }],
                     },
                 },
@@ -2086,11 +2323,13 @@ fn history_window_retains_live_interactions_outside_an_older_page() {
                 request: ash_protocol::AgentRequest::UserInput {
                     request: ash_protocol::RequestUserInput {
                         questions: vec![ash_protocol::UserInputQuestion {
+                            required: true,
                             id: "continue".into(),
                             header: "Continue".into(),
                             question: "Continue?".into(),
                             options: Vec::new(),
                             allow_free_form: true,
+                            validation: None,
                         }],
                     },
                 },

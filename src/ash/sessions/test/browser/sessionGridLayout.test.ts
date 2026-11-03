@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { IPositionedRectangle } from '../../../base/browser/geometry.js';
-import type { IView } from '../../../base/browser/ui/grid/grid.js';
+import { Direction, type IView } from '../../../base/browser/ui/grid/grid.js';
 import { getWindowById } from '../../../base/browser/window.js';
 import { installEditorTestDom } from '../../../editor/test/browser/editorTestGlobals.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
@@ -88,6 +88,39 @@ test('Sessions split insertion preserves an unrelated pane and retained input fo
 		layout.reconcile([{ id: 'durable-first', view: first }, { id: 'second', view: second }, { id: 'third', view: third }], 'durable-first');
 
 		assert.deepEqual([first.bounds, second.bounds, third.bounds], beforeMaterialization);
+	} finally {
+		getWindowById(1)?.disposables.dispose();
+		browser.window.close();
+	}
+});
+
+test('Sessions maximization preserves saved split geometry and follows explicit pane activation', () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement', 'Event', 'MouseEvent']);
+	const document = browser.window.document;
+	try {
+		using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'test', flushInterval: 0 });
+		using services = createTestEditorServices(undefined, undefined, document, storage);
+		const left = new TestView(document);
+		const right = new TestView(document);
+		using layout = services.createInstance(SessionGridLayout, document.body, left);
+		const entries = [{ id: 'left', view: left }, { id: 'right', view: right }];
+		layout.reconcile(entries, 'left');
+		layout.layout(1200, 800);
+		assert.equal(layout.neighbor('left', Direction.Right), 'right');
+		assert.equal(layout.neighbor('right', Direction.Up), undefined);
+
+		const splitWidth = left.bounds!.width;
+		const saved = storage.get('sessions.gridState', StorageScope.WORKSPACE);
+		assert.ok(saved);
+		layout.toggleMaximized('left');
+		assert.equal(left.bounds!.width, 1200);
+		assert.equal(layout.neighbor('left', Direction.Right), undefined);
+		assert.equal(storage.get('sessions.gridState', StorageScope.WORKSPACE), saved);
+
+		layout.reconcile(entries, 'right');
+		assert.equal(left.bounds!.width, splitWidth);
+		assert.equal(layout.neighbor('right', Direction.Left), 'left');
 	} finally {
 		getWindowById(1)?.disposables.dispose();
 		browser.window.close();

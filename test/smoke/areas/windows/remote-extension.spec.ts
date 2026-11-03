@@ -1,3 +1,4 @@
+import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
 import { expect, test, writeEditorExtensionFixture } from '../../../automation/test.js';
 import type { ISandboxGlobals } from '../../../../src/ash/base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { MethodResult } from '../../../../.build/protocol/typescript/index.js';
@@ -268,7 +269,7 @@ test('inbound SSH hosting opens the Browser Workbench from a Chinese Desktop com
 		const firstPage = launched.application.windows()[0] ?? await launched.application.waitForEvent('window');
 		desktop = { ...launched, driver: new ElectronPlaywrightDriver(launched.application, firstPage, launched.diagnostics) };
 		const ready = desktop.driver.workbench.waitForReady();
-		const trust = firstPage.getByRole('dialog', { name: 'Ash', exact: true });
+		const trust = directoryPermissionPrompt(firstPage);
 		await Promise.race([ready, trust.waitFor({ state: 'visible' })]);
 		if (await trust.isVisible()) { await trust.getByRole('button', { name: '信任文件夹', exact: true }).click(); }
 		await ready;

@@ -10,23 +10,24 @@ This specification defines stable placement and state-ownership rules. Row styli
 
 ## Ownership
 
-| Concern                           | Owner                              |
-| --------------------------------- | ---------------------------------- |
-| Session catalog and lifecycle     | `ISessionsManagementService`       |
-| Pins and sidebar collapse state   | `SessionsList` via profile storage |
-| Custom groups and membership      | `ISessionGroupsService`            |
-| Top-level group/workspace order   | `ISessionSectionOrderService`      |
-| Tree composition and presentation | `SessionsView` and `SessionsList`  |
+| Concern                                       | Owner                              |
+| --------------------------------------------- | ---------------------------------- |
+| Session catalog and lifecycle                 | `ISessionsManagementService`       |
+| Pins, manual row order, and automation filter | `ISessionsListModelService`        |
+| Sidebar collapse state                        | `SessionsList` via profile storage |
+| Custom groups and membership                  | `ISessionGroupsService`            |
+| Top-level group/workspace order               | `ISessionSectionOrderService`      |
+| Tree composition and presentation             | `SessionsView` and `SessionsList`  |
 
-Chat and Code consume the same session selection, pins and project catalog. Chat presents flat conversation rows in top-level custom groups and a remaining conversation section beside pinned conversations and project entries. Code projects contain their sessions; its remaining conversations use custom groups and workspace groups. Each mode owns separate section expansion state. Project records and membership remain owned by `IProjectService`; the sidebar holds only a disposable projection.
+Chat and Code consume the same session selection and pins. Chat presents flat conversation rows in top-level custom groups and a remaining conversation section beside pinned conversations and project entries. Code lists project entries separately from Recents, which includes unpinned conversations across workspaces and projects. Explicit custom groups remain inside Recents. Each mode owns separate section expansion state. Project records and membership remain owned by `IProjectService`; the sidebar holds only a disposable projection.
 
 List-owned state is local presentation state. It is not synchronized back to a provider and must not mutate provider timestamps or metadata.
 
 ## Inputs
 
-The list consumes sessions from `ISessionsManagementService`. Providers decide whether a model represents a workspace session, quick chat, automation, or archived session through provider-neutral fields.
+The list consumes sessions from `ISessionsManagementService`. Providers expose workspace, quick-chat, and archived state through provider-neutral fields. The Session catalog exposes durable automation creation provenance. The sidebar uses that metadata for its automation filter, including after the automation plan has been deleted.
 
-Automation runs are excluded from the primary Sessions list. Surfaces that need session-row presentation without sectioning use `SessionsFlatList`.
+Sessions created by automation runs are hidden by default, with an exception for the active session. Chat and Code share the automation visibility preference and per-session overrides. The reply-based mode lists an automation session after the first accepted user submission. Runs that continue an existing conversation leave its classification intact. Automations retains its own run history. Surfaces that need session-row presentation without sectioning use `SessionsFlatList`.
 
 ## Placement precedence
 
@@ -44,8 +45,8 @@ Archived
 
 - Archived sessions appear only in the final archived section.
 - Pinned sessions appear in the pinned section, retaining their project and custom-group membership. Unpinning derives placement from that membership again.
-- In Code, an unpinned project member appears beneath its project before other grouping is considered. Chat project entries open the project page; unpinned conversations remain flat within their custom group or the conversation section.
-- A valid custom-group membership places an unpinned, unarchived session without project placement in that group, including a quick chat.
+- Chat project entries open the project page; unpinned conversations remain flat within their custom group or the conversation section.
+- A valid custom-group membership places an unpinned, unarchived session in that group, including a quick chat.
 - When dedicated external sectioning is enabled, remaining external sessions appear together before the archived section. Pinning and custom-group membership retain their precedence; disabling sectioning returns external sessions to the ordinary grouping rules without changing that presentation state.
 - Remaining unpinned quick chats appear in the dedicated chats section.
 - Remaining sessions follow the selected workspace or date grouping.
@@ -91,7 +92,7 @@ Stale entries that match no current session are inert and may be compacted by th
 
 ## Sorting and filtering
 
-The list supports created-time and updated-time sorting. Manual ordering stores list-owned sort keys for each mode without changing provider timestamps.
+Manual row order is scoped to the sidebar mode, section, and timestamp sort mode. It applies to durable session rows and leaves nested chats in provider order. Unordered rows follow their default list order. Custom section order is scoped to the sidebar mode and preserves fixed sections.
 
 Filters compose across session type, status, archive/read state, and provider. The archived filter governs both archived sessions and archived nested chats; there is no per-session archive-visibility override. The agent host filter scopes to every provider the selected host entry covers, which is more than one when that entry groups several hosts and none while such a group is empty. The find widget matches session and section labels and bypasses presentation capping while a search is active.
 

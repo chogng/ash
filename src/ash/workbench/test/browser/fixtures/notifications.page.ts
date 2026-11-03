@@ -1,3 +1,7 @@
+import { AccessibleViewType } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewService } from '../../../contrib/accessibility/browser/accessibleView.js';
+import { setHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
+import { HoverService, IHoverService } from '../../../../platform/hover/browser/hoverService.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IViewDescriptorService, WorkbenchViewRegistry } from '../../../common/views.js';
 import { ViewDescriptorService } from '../../../services/views/browser/viewDescriptorService.js';
@@ -93,7 +97,8 @@ services.registerInstance(IHostService, {
 const notifications = resources.add(services.createInstance(NotificationService));
 services.registerInstance(INotificationService, notifications);
 services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
-services.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected notification picker link'); } } as unknown as IOpenerService);
+const openedLinks: string[] = [];
+services.registerInstance(IOpenerService, { open: async (href: string) => { openedLinks.push(href); return true; } } as unknown as IOpenerService);
 services.registerInstance(IQuickInputService, resources.add(services.createInstance(QuickInputService)));
 services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({ root, contextKeyService: services.get(IContextKeyService), configurationService: resources.add(new InMemoryConfigurationService(new ConfigurationRegistry())) })));
 services.registerInstance(IClipboardService, new BrowserClipboardService(navigator.clipboard));
@@ -107,6 +112,10 @@ services.registerInstance(IKeybindingService, {
 	resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
 });
 services.registerInstance(IContextMenuService, resources.add(services.createInstance(BrowserContextMenuService)));
+const hover = resources.add(new HoverService(configuration, services.get(IContextViewService), services.get(IContextMenuService)));
+services.registerInstance(IHoverService, hover);
+resources.add(setHoverDelegate(hover));
+const accessibleView = resources.add(services.createInstance(AccessibleViewService));
 const runner = resources.add(services.createInstance(NotificationActionRunner));
 const themes = resources.add(new TestThemeService(lightColorTheme));
 services.registerInstance(IThemeService, themes);
@@ -188,6 +197,8 @@ resources.add(toDisposable(() => { void activeProgress?.finish.complete(undefine
 
 const fixture = {
 	setHostFocus(value: boolean): void { focused = value; focusChanges.fire(value); },
+	openedLinks: () => openedLinks,
+	showAccessibleView: () => accessibleView.show(AccessibleViewType.View),
 	notifyOptions(message: string, severity: Severity = Severity.Info, priority: NotificationPriority = NotificationPriority.DEFAULT, sticky = false): number {
 		notifications.notify({ message, severity, priority, sticky });
 		return notifications.model.getNotifications().at(-1)!.id;

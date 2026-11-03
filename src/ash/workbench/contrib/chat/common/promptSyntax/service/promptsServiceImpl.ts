@@ -59,6 +59,15 @@ export class PromptsService extends Disposable implements IPromptsService {
 		return Object.freeze(catalog.skills.map(skill => this.discover(skill, sessionId)));
 	}
 
+	public async resolveSkill(resource: URI, token: CancellationToken): Promise<IAgentSkill | undefined> {
+		throwIfCancelled(token);
+		if (this.isDisposed) throw new CancellationError();
+		const target = this.references.get(resource);
+		if (!target) return undefined;
+		const catalog = await this.findAgentSkills(token, target.sessionId);
+		return catalog.find(skill => skill.enabled && skill.compatible && skill.uri.toString() === resource.toString());
+	}
+
 	public async readSkillManagement(sessionId?: string): Promise<SkillManagementSnapshot> {
 		// Refresh may publish its own catalog invalidation before the response reaches this window.
 		// Re-read once so revision and descriptors come from a settled backend snapshot; never spin.

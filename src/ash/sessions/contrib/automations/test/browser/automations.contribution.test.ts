@@ -1,3 +1,7 @@
+import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { Event } from '../../../../../base/common/event.js';
+import { ISessionsListModelService, SessionsListModelService } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
 import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
@@ -452,6 +456,10 @@ test('Catalogue and history ordering changes retain card identity and keyboard f
 		value.services.registerInstance(IAutomationDialogService, { showAutomationDialog: async () => undefined });
 		value.services.registerInstance(IAutomationRunner, value.services.createInstance(AutomationRunner));
 		value.services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
+		const storage = value.resources.add(new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'automation-card-order', flushInterval: 0 }));
+		value.services.registerInstance(IStorageService, storage);
+		value.services.registerInstance(ISessionsListModelService, value.services.createInstance(SessionsListModelService));
+		value.services.registerInstance(ISessionsManagementService, { sessions: [], onDidChange: Event.None } as unknown as ISessionsManagementService);
 		const widget = value.resources.add(value.services.createInstance(AutomationsCardsWidget, browserEnvironment.window.document.body));
 		browserEnvironment.window.document.body.append(widget.element);
 		const oldTitle = widget.element.querySelector<HTMLButtonElement>('h3 button')!;
@@ -584,6 +592,17 @@ test('An offline automation host does not suppress another host failure or dupli
 
 suite('automations browser component', () => {
 	const browserTests = useBrowserTests();
+	test('Run card can show and hide its automation session in the Sessions list', async () => {
+		const { page } = browserTests;
+		await page.goto('/automations.html?locale=zh-CN');
+		const show = page.getByRole('button', { name: '在会话列表中显示', exact: true });
+		await show.click();
+		const hide = page.getByRole('button', { name: '从会话列表隐藏', exact: true });
+		await expect(hide).toBeFocused();
+		await hide.click();
+		await expect(show).toBeFocused();
+	});
+
 	for (const [locale, theme] of [['en', 'light'], ['zh-CN', 'dark'], ['zh-CN', 'hcDark'], ['en', 'hcLight']] as const) {
 		test(`Automations uses cards, a commit-aware dialog and host dispatch (${locale}, ${theme})`, async function () {
 			const { page } = browserTests;
@@ -951,29 +970,24 @@ suite('automations browser component', () => {
 			await page.goto(`/automations.html?hosts=1&locale=${locale}&theme=${theme}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			const chinese = locale === 'zh-CN';
-			const prompt = chinese ? '连接宿主，或选择已连接宿主以断开连接' : 'Connect a host, or select a connected host to disconnect';
-			const targetPrompt = chinese ? '选择要在此 Agents 窗口中连接的已保存 SSH 宿主' : 'Select a saved SSH host to connect in this Agents window';
+			const hosts = page.getByRole('dialog', { name: chinese ? '远程环境' : 'Remote Environments', exact: true });
 			await page.getByRole('button', { name: chinese ? '新建自动化' : 'New automation', exact: true }).click();
 			const initialForm = page.getByRole('dialog');
 			// An unowned destination is unsafe even when only one Automation provider is available.
 			await expect(initialForm.locator('select option', { hasText: 'Unknown host conversation' })).toHaveCount(0);
 			await page.keyboard.press('Escape');
 			await expect(initialForm).toHaveCount(0);
+			await page.evaluate(() => { void window.ashAutomations.manageHosts(); });
+			const connect = (name: string) => hosts.getByRole('button', { name: chinese ? `连接：${name}` : `Connect: ${name}`, exact: true });
+			await expect(connect('build-a')).toBeVisible();
 			for (const name of ['build-a', 'build-b']) {
-				await page.evaluate(() => { void window.ashAutomations.manageHosts(); });
-				const picker = page.getByRole('dialog', { name: prompt, exact: true });
-				await expect(picker.getByRole('combobox')).toBeFocused();
-				await picker.getByRole('combobox').fill(chinese ? '连接已保存' : 'Connect a Saved');
-				await picker.getByRole('combobox').press('Enter');
-				const targets = page.getByRole('dialog', { name: targetPrompt, exact: true });
-				await expect(targets.getByRole('combobox')).toBeFocused();
-				await targets.getByRole('combobox').fill(name);
-				await targets.getByRole('combobox').press('Enter');
-				await expect(targets).toHaveCount(0);
+				await connect(name).press('Enter');
 				await expect.poll(() => page.evaluate(() => window.ashAutomations.connectedHosts())).toContain(name);
 				await expect(page.getByRole('article', { name: `Shared review · ${name}`, exact: true })).toBeVisible();
 				await expect(page.getByRole('article', { name: `Shared review · ${name}`, exact: true })).toContainText(name);
 			}
+			await page.keyboard.press('Escape');
+			await expect(hosts).toHaveCount(0);
 			await expect(page.getByRole('article', { name: 'Scheduled review · Local host', exact: true })).toBeVisible();
 			const accessible = await page.evaluate(() => window.ashAutomations.help());
 			expect(accessible.help).toContain(chinese ? '切换宿主' : 'Changing hosts');
@@ -991,16 +1005,12 @@ suite('automations browser component', () => {
 			await page.keyboard.press('Escape');
 			await expect(form).toHaveCount(0);
 			await page.evaluate(() => { void window.ashAutomations.manageHosts(); });
-			let input = page.getByRole('dialog', { name: prompt, exact: true }).getByRole('combobox');
-			await input.fill('build-a');
-			await input.press('Enter');
+			await hosts.getByRole('button', { name: chinese ? '断开连接：build-a' : 'Disconnect: build-a', exact: true }).press('Enter');
 			await expect(page.getByRole('article', { name: 'Shared review · build-a', exact: true })).toHaveCount(0);
 			await expect(page.getByRole('article', { name: 'Shared review · build-b', exact: true })).toBeVisible();
 			expect(await page.evaluate(() => window.ashAutomations.hostChanges)).toEqual(['open:build-a', 'open:build-b', 'close:build-a']);
-			await page.evaluate(() => { void window.ashAutomations.manageHosts(); });
-			input = page.getByRole('dialog', { name: prompt, exact: true }).getByRole('combobox');
-			await input.press('Escape');
-			await expect(page.getByRole('dialog', { name: prompt, exact: true })).toHaveCount(0);
+			await page.keyboard.press('Escape');
+			await expect(hosts).toHaveCount(0);
 			expect(await page.evaluate(() => window.ashAutomations.errors)).toEqual([]);
 		});
 	}

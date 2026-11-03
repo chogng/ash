@@ -103,3 +103,23 @@ fn session_branches_use_outer_management_even_with_stale_nested_metadata() {
     assert_eq!(session.manager, expected);
     assert_eq!(session.threads[0].manager, Some(expected));
 }
+
+#[test]
+fn session_catalog_projects_automation_source_from_the_exact_creation_namespace() {
+    let mut record = batch(0, 1).catalog;
+    assert_eq!(
+        session_from_catalog(vec![record.clone()]).unwrap().source,
+        None
+    );
+
+    record.session_id = SessionId::new(format!(
+        "thread:automation-session-sha256-{}",
+        "a".repeat(64)
+    ))
+    .unwrap();
+    let session = session_from_catalog(vec![record.clone()]).unwrap();
+    assert_eq!(session.source, Some(SessionSource::Automation));
+
+    record.session_id = SessionId::new("thread:automation-session-sha256-abc").unwrap();
+    assert_eq!(session_from_catalog(vec![record]).unwrap().source, None);
+}

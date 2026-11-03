@@ -19,6 +19,47 @@ export interface AccountState {
 	readonly accounts: readonly Account[];
 }
 
+/** A provider-reported quota window. Reset timestamps are Unix seconds. */
+interface AccountRateLimitWindow {
+	readonly usedPercent: number;
+	readonly windowSeconds: number;
+	readonly resetsAt: number | null;
+}
+
+/** Subscription limits are independent of conversation token accounting. Null means not reported. */
+export interface AccountRateLimits {
+	readonly provider: string;
+	readonly accountId: string;
+	readonly plan: string | null;
+	readonly limits: readonly {
+		readonly id: string;
+		readonly name: string | null;
+		readonly model: string | null;
+		readonly allowed: boolean | null;
+		readonly limitReached: boolean | null;
+		readonly primary: AccountRateLimitWindow | null;
+		readonly secondary: AccountRateLimitWindow | null;
+	}[];
+	readonly credits: {
+		readonly hasCredits: boolean;
+		readonly unlimited: boolean;
+		readonly balance: string | null;
+	} | null;
+	readonly xai: {
+		readonly allowed: boolean | null;
+		readonly message: string | null;
+		readonly usedPercent: number | null;
+		readonly periodType: string | null;
+		readonly periodStart: string | null;
+		readonly periodEnd: string | null;
+		readonly prepaidCents: string | null;
+		readonly onDemandEnabled: boolean | null;
+		readonly onDemandUsedCents: string | null;
+		readonly onDemandCapCents: string | null;
+		readonly unifiedBilling: boolean | null;
+	} | null;
+}
+
 export type AccountLoginMethod =
 	| { readonly type: 'openAiChatGptBrowser'; }
 	| { readonly type: 'openAiChatGptDeviceCode'; }
@@ -53,6 +94,7 @@ export interface IAccountService {
 	readonly onDidChangeAccounts: Event<AccountState>;
 	readonly onDidCompleteLogin: Event<AccountLoginCompletion>;
 	read(): Promise<AccountState>;
+	readRateLimits(provider: string, accountId: string, signal?: AbortSignal): Promise<AccountRateLimits>;
 	startLogin(method: AccountLoginMethod): Promise<AccountLoginChallenge>;
 	cancelLogin(loginId: string): Promise<void>;
 	logout(provider: string, accountId?: string): Promise<void>;

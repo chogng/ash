@@ -88,6 +88,7 @@ impl SwitchModeToolService {
             // user-input surface owns localized controls and accessibility; no extra dialog is used.
             let outcome = interactions.request_user_input(RequestUserInput {
                 questions: vec![UserInputQuestion {
+                    required: true,
                     id: SWITCH_MODE_TOOL_NAME.into(),
                     header: SWITCH_MODE_TOOL_NAME.into(),
                     question: args.reason.clone(),
@@ -99,6 +100,7 @@ impl SwitchModeToolService {
                         })
                         .collect(),
                     allow_free_form: false,
+                    validation: None,
                 }],
             })?;
             let approved = match outcome {

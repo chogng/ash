@@ -1,4 +1,5 @@
 import { AbstractDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import type { IAction } from '../../../base/common/actions.js';
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
@@ -192,6 +193,9 @@ export interface IAccessibleViewContentProvider extends IDisposable {
 	readonly options: IAccessibleViewOptions;
 	readonly verbositySettingKey: string;
 	provideContent(): string;
+	readonly actions?: readonly IAction[];
+	provideNextContent?(): void;
+	providePreviousContent?(): void;
 	readonly onDidChangeContent?: Event<void>;
 }
 

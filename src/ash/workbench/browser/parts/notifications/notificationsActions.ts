@@ -1,8 +1,23 @@
-import { SubmenuAction, type IAction } from '../../../../base/common/actions.js';
+import { SubmenuAction, type IAction, type IActionRunner } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import type { NotificationItem } from '../../../common/notifications.js';
+import type { INotificationAction } from '../../../../platform/notification/common/notification.js';
 import { localize } from '../../../../nls.js';
+
+/** Invoke the producer before firing close listeners. The runner owns late failures. */
+export function runPrimaryNotificationAction(action: INotificationAction, runner: IActionRunner, close: () => void): Promise<void> {
+	return Promise.resolve().then(() => {
+		if (!action.enabled) return;
+		const completion = runner.run({
+			id: action.id, label: action.label, tooltip: action.tooltip,
+			enabled: action.enabled, checked: action.checked, icon: action.icon,
+			run: () => action.run(),
+		});
+		if (!action.keepOpen) close();
+		return completion;
+	});
+}
 
 /** Groups source policy and the notification producer's secondary operations. */
 export class ConfigureNotificationAction extends SubmenuAction {

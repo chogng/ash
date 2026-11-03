@@ -47,7 +47,7 @@ export function createAppServerWorkspaceTrustApi(connection: AppServerProtocolCl
 		},
 		readDirectory: async path => {
 			const result = await appServerRequest(connection, 'config/directoryGrants/read', { path });
-			return { dir: result.dir, permissions: result.permissions ?? undefined };
+			return { dir: result.dir, permissions: result.permissions ?? undefined, ...(result.inheritedWorkspacePermissions ? { inheritedWorkspacePermissions: result.inheritedWorkspacePermissions } : {}) };
 		},
 		listDirectories: async () => {
 			const result = await appServerRequest(connection, 'config/directoryGrants/list', {});

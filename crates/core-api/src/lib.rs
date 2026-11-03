@@ -36,6 +36,7 @@ pub use browser::CreateBrowserTargetResult;
 pub use checkpoint::CheckpointCapture;
 pub use checkpoint::MessageCheckpointSource;
 pub use checkpoint::WorkspaceRestoration;
+pub use commands::ComparisonFork;
 pub use commands::CreateBranchRequest;
 pub use commands::CreateSideChatRequest;
 pub use commands::ForkThreadRequest;

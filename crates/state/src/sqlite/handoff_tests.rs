@@ -132,7 +132,13 @@ fn import_preserves_old_event_bytes_ids_and_excludes_configuration() {
     let repository =
         github::Repository::new("ghe.example".into(), "team".into(), "repo".into()).unwrap();
     source
-        .attach_pull_request(&root.thread_id, &repository, 12)
+        .record_agent_pull_request(
+            &root.thread_id,
+            &repository,
+            12,
+            &root.thread_id,
+            &ash_protocol::TurnId::new("artifact-origin").unwrap(),
+        )
         .unwrap();
     source
         .attach_issue(&root.thread_id, &repository, 13)
@@ -181,7 +187,16 @@ fn import_preserves_old_event_bytes_ids_and_excludes_configuration() {
     assert_eq!(receipt.threads, 1);
     assert_eq!(
         target.list_pull_requests(&root.thread_id).unwrap(),
-        vec![(repository.clone(), 12)]
+        source.list_pull_requests(&root.thread_id).unwrap()
+    );
+    let origin: (String, String) = target.connection().unwrap().query_row(
+        "SELECT artifact_source_thread, artifact_source_turn FROM thread_pull_requests WHERE thread_id = ?1",
+        [root.thread_id.as_str()],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap();
+    assert_eq!(
+        origin,
+        (root.thread_id.to_string(), "artifact-origin".into())
     );
     assert_eq!(
         target.list_issues(&root.thread_id).unwrap(),
@@ -511,10 +526,12 @@ fn version_2_archives_restore_existing_prs_without_issue_rows() {
         .unwrap();
     let attachments = MemoryAttachmentStore::default();
     let archive = export(&source, &target, &attachments);
-    let legacy = rewrite_archive(&archive, |frame| {
-        if let Frame::Header { version, .. } = frame {
-            *version = 2;
+    let legacy = rewrite_archive(&archive, |frame| match frame {
+        Frame::Header { version, .. } => *version = 2,
+        Frame::Row { table, cells } if TABLES[*table].0 == "thread_pull_requests" => {
+            cells.truncate(5);
         }
+        _ => {}
     });
     target
         .import_history("build-host", &attachments, legacy.as_slice())

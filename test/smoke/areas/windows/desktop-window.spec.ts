@@ -1,3 +1,4 @@
+import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
 import { expect, test } from '../../../automation/test.js';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -49,7 +50,7 @@ for (const entry of ['welcome', 'explorer', 'recent'] as const) {
 			} else {
 				await page.getByRole('button', { name: 'Open folder', exact: true }).click();
 			}
-			await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder', exact: true }).click();
+			await directoryPermissionPrompt(page).getByRole('button', { name: 'Trust Folder', exact: true }).click();
 			const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 			if (await showSidebar.isVisible()) await showSidebar.click();
 			const file = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
@@ -192,7 +193,7 @@ test('cancelling directory authorization during startup keeps the window usable 
 	}, testWorkspace.directory);
 	const page = await opening;
 	const workbench = new Workbench(page);
-	const prompt = page.getByRole('dialog', { name: 'Ash', exact: true });
+	const prompt = directoryPermissionPrompt(page);
 	const reconnect = page.getByRole('button', { name: 'Reconnect', exact: true });
 	await prompt.getByRole('button', { name: 'Cancel', exact: true }).click();
 	await workbench.waitForReady();
@@ -235,15 +236,16 @@ test('opening a folder names the target and explains the permission choice in th
 
 	const page = workbench.page;
 	await expect(page.locator('[data-statusbar-item-id="ash.status.editor.state"]')).toHaveCount(0);
-	await page.getByRole('button', { name: /^(Open folder|打开文件夹)$/ }).click();
-	const prompt = page.getByRole('dialog', { name: 'Ash' });
+	await workbench.quickaccess.runCommand('workbench.action.files.openFolder');
+	const prompt = directoryPermissionPrompt(page);
 	await expect(prompt).toBeVisible();
-	await expect(prompt.locator('.ash-dialog-message')).toHaveText('是否信任此文件夹中的文件？');
+	await expect(prompt.getByRole('heading')).toHaveText('是否信任此文件夹中的文件？');
 	await expect(prompt.locator('.ash-dialog-detail')).toContainText(`文件夹：${URI.file(testWorkspace.directory).fsPath}`);
 	await expect(prompt.locator('.ash-dialog-detail')).toContainText('受限模式下可编辑和保存文件');
 	const readOnly = prompt.getByRole('button', { name: '在受限模式下打开' });
 	await expect(readOnly).toBeFocused();
-	await expect(page.getByText('No Folder Opened')).toHaveCount(1);
+	await expect(readOnly).toHaveAccessibleDescription('可编辑文件，命令和工作区集成保持禁用');
+	await expect(prompt.getByRole('button', { name: '信任文件夹' })).toHaveAccessibleDescription('启用命令和工作区集成');
 	await prompt.getByRole('button', { name: '取消' }).click();
 	await expect(prompt).toHaveCount(0);
 	const workspaceAfterCancel = await page.evaluate(() => {
@@ -251,8 +253,8 @@ test('opening a folder names the target and explains the permission choice in th
 		return ipc.invoke('ash:workspace:context:read');
 	});
 	expect(parseWorkspace(workspaceAfterCancel).folders).toHaveLength(0);
-	await page.getByRole('button', { name: /^(Open folder|打开文件夹)$/ }).click();
-	await page.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: '在受限模式下打开' }).click();
+	await workbench.quickaccess.runCommand('workbench.action.files.openFolder');
+	await directoryPermissionPrompt(page).getByRole('button', { name: '在受限模式下打开' }).click();
 	await expect.poll(async () => {
 		const value = await workbench.page.evaluate(() => {
 			const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string): Promise<unknown>; }; }; }).ash.ipcRenderer;

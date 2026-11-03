@@ -654,7 +654,7 @@ services.registerInstance(IViewsService, {
 	getActiveViewPaneContainerWithId: () => extensionsContainer,
 	openView: async (id: string) => extensionsContainer.openView(id, true),
 } as unknown as IViewsService);
-registerSkillActions();
+disposables.add(registerSkillActions());
 const commands = disposables.add(new CommandService(services));
 const lsp = disposables.add(services.createInstance(LanguageServerSettingsRenderer, document.getElementById('lsp')!));
 document.getElementById('lsp')!.append(lsp.domNode);
@@ -768,6 +768,10 @@ window.ashExtensionsIntegration = {
 	changePluginRevision: () => { pluginRevision++; },
 	removeEditorEntrypoint: () => { editorEntrypoint = null; },
 	localPackages: () => structuredClone(localPackages),
+	replaceLocalPluginDigest: () => {
+		localPackages = localPackages.map(plugin => ({ ...plugin, digest: 'sha256:' + 'd'.repeat(64) }));
+		pluginRevision++;
+	},
 	open: options => extensionsContainer.open(options),
 	openEditorExtension: () => services.get(IEditorService).openEditor(new ExtensionsInput(extensionSummary)),
 	holdReadme: () => { holdReadme = true; },
@@ -803,7 +807,7 @@ window.ashExtensionsIntegration = {
 declare global {
 	interface Window {
 
-		ashExtensionsIntegration: { holdSkillEnablement(): void; skillEnablementStarted(): boolean; completeSkillEnablement(): void; managementReads(): { installed: number; skills: number; connectors: number; }; installationSnapshot(): ExtensionsInstalledPackage[]; notifyConnectorsChanged(): void; setConnectors(entries: readonly ConnectorView[]): void; failConnectorList(fail: boolean): void; addConnector(binding?: { declarationId: string; serverId: string | null; }): void; enableMcpOAuth(): void; completeMcpLogin(): void; mcpLoginWaiting(): boolean; holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; recommendResource(resource: string): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
+		ashExtensionsIntegration: { holdSkillEnablement(): void; skillEnablementStarted(): boolean; completeSkillEnablement(): void; managementReads(): { installed: number; skills: number; connectors: number; }; installationSnapshot(): ExtensionsInstalledPackage[]; notifyConnectorsChanged(): void; setConnectors(entries: readonly ConnectorView[]): void; failConnectorList(fail: boolean): void; addConnector(binding?: { declarationId: string; serverId: string | null; }): void; enableMcpOAuth(): void; completeMcpLogin(): void; mcpLoginWaiting(): boolean; holdDiscoverySearch(): void; discoverySearchStarted(): boolean; setDiscoveryEnabled(value: boolean): void; changeMcpRevision(): void; setMcpConnectFailure(): void; deferMcpConnection(): void; configureMcp(server: McpServerConfiguration): void; setMcpServers(servers: readonly McpServerStatus[]): void; failMcpStatus(): void; failMcpTools(): void; setMcpSupported(supported: boolean): void; refreshMcp(): Promise<void>; holdMcpStatus(): void; mcpStatusStarted(): boolean; completeMcpStatus(): void; prepareSettings(): void; readSetting(key: string): unknown; openEditorExtension(): Promise<void>; holdReadme(): void; readmeStarted(): boolean; completeReadme(): void; recommendResource(resource: string): void; setRecommendations(content: string): Promise<void>; leaveWorkspace(): void; holdInstructions(): void; instructionsStarted(): boolean; instructionsAborted(): boolean; completeInstructions(): void; setSession(id: string): void; addMcpPackage(): void; addSkillOnlyPlugin(): void; requests: unknown[]; startCommand(id: string): void; waitCommand(): Promise<void>; changePluginRevision(): void; removeEditorEntrypoint(): void; localPackages(): PluginPackageDto[]; replaceLocalPluginDigest(): void; open(options: ExtensionsOpenOptions): Promise<void>; setOffline(): void; changeRevision(): void; startHeldSearch(): void; startHeldCommand(): Promise<void>; executeCommand(id: string): Promise<void>; failHeldSearch(): Promise<void>; addOtherPackage(): void; addSecondVersion(): void; dispose(): void; };
 	}
 }
 

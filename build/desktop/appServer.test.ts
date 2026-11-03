@@ -34,12 +34,66 @@ test('a source batch logs one build ID and passes its relative trigger paths to 
 	save('app-server/src/startup.rs');
 	save('app-server/src/startup.rs');
 	save('worktree/src/manager.rs');
+	save('src/main.rs', false, 'remote-server');
 	await completed.promise;
-	assert.deepEqual(context?.files, ['crates/app-server/src/startup.rs', 'crates/worktree/src/manager.rs']);
+	assert.deepEqual(context?.files, ['crates/app-server/src/startup.rs', 'crates/worktree/src/manager.rs', 'remote-server/src/main.rs']);
 	assert.equal(context?.reason, 'source-change');
 	assert.deepEqual(events.filter(value => value.event !== 'Build watcher started').map(value => ({ event: value.event, buildId: (value.detail as { buildId: string; }).buildId })), [
 		{ event: 'Build started', buildId: context!.buildId }, { event: 'Build completed', buildId: context!.buildId },
 	]);
+});
+
+test('Subsecond retries source errors and hands unsupported edits to normal publication', async t => {
+	let patched = Promise.withResolvers<void>();
+	const rejected = Promise.withResolvers<void>();
+	const published = Promise.withResolvers<void>();
+	const calls: string[] = [];
+	mockProtocolDirectories(t);
+	const save = mockSourceChanges(t);
+	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
+		assert.deepEqual(args, pythonCommand(['-B', 'build/desktop/develop.py', '--protocol-prepared']).args);
+		calls.push('publish');
+		const child = new ChildProcess();
+		setImmediate(() => child.emit('close', 0, null));
+		return child;
+	});
+	syncBuiltinESMExports();
+	let outcome: 'applied' | 'compile-error' | 'fallback' = 'applied';
+	const stop = await watchAppServer({
+		skipInitial: true,
+		subsecond: {
+			start: async () => { calls.push('start'); },
+			build: async files => {
+				assert.deepEqual(files, ['crates/app-server-diff/src/lib.rs']);
+				calls.push('patch');
+				return outcome;
+			},
+			disable: () => { calls.push('disable'); },
+			stop: async () => { },
+		},
+		log: (event, detail) => {
+			if ((detail as { mode?: string; }).mode !== 'subsecond') return;
+			if (event === 'Build completed') patched.resolve();
+			if (event === 'Build failed') rejected.resolve();
+		},
+		onDidBuild: async () => { published.resolve(); },
+	});
+	t.after(stop);
+	save('app-server-diff/src/lib.rs');
+	await patched.promise;
+	assert.deepEqual(calls, ['start', 'patch']);
+	outcome = 'compile-error';
+	save('app-server-diff/src/lib.rs');
+	await rejected.promise;
+	assert.deepEqual(calls, ['start', 'patch', 'patch']);
+	patched = Promise.withResolvers<void>();
+	outcome = 'applied';
+	save('app-server-diff/src/lib.rs');
+	await patched.promise;
+	outcome = 'fallback';
+	save('app-server-diff/src/lib.rs');
+	await published.promise;
+	assert.deepEqual(calls, ['start', 'patch', 'patch', 'patch', 'patch', 'disable', 'publish']);
 });
 
 function mockProtocolDirectories(t: TestContext, directories = () => protocolDirectories) {
@@ -102,9 +156,10 @@ for (const javascriptRuntime of ['host-provided-node', 'packaged-node'] as const
 			const preparation = prepareAppServer(javascriptRuntime);
 			if (succeeds) await preparation;
 			else await assert.rejects(preparation, /backend preparation exited with status 1/);
-			const expected = [pythonCommand(['-B', 'build/prepare.py', '--javascript-runtime', javascriptRuntime])];
-			if (succeeds && javascriptRuntime === 'host-provided-node') expected.push(pythonCommand(['-B', 'build/desktop/develop.py', '--select-prepared']));
-			assert.deepEqual(commands, expected);
+			const expected = javascriptRuntime === 'host-provided-node'
+				? ['-B', 'build/desktop/develop.py', '--prepare']
+				: ['-B', 'build/prepare.py', '--javascript-runtime', javascriptRuntime];
+			assert.deepEqual(commands, [pythonCommand(expected)]);
 		});
 	}
 }
@@ -381,7 +436,7 @@ test('macOS backend watching does not subscribe to the repository or its build c
 	syncBuiltinESMExports();
 	const stop = await watchAppServer({ skipInitial: true });
 	t.after(stop);
-	assert.deepEqual(new Set(paths), new Set(['crates', 'sdk/rust', 'Cargo.toml', 'Cargo.lock'].map(file => join(repositoryRoot, file))));
+	assert.deepEqual(new Set(paths), new Set(['crates', 'sdk/rust', 'remote-server', 'Cargo.toml', 'Cargo.lock'].map(file => join(repositoryRoot, file))));
 	stop();
 	assert.equal(closed, paths.length);
 });

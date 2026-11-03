@@ -403,7 +403,7 @@ test('message checkpoints and restoration use the existing typed session protoco
 
 test('Session catalog and subscriptions share the Agent domain snapshot boundary', async () => {
 	const session = {
-		sessionId: 'session', title: 'Task', status: 'active' as const,
+		sessionId: 'session', title: 'Task', status: 'active' as const, source: 'automation' as const,
 		executionTarget: { type: 'local' as const, root: '/workspace' },
 		model: { provider: 'openai', model: 'test' },
 		manager: { status: 'working' as const, statusChangedAtUnixMs: 4 }, threads: [],
@@ -916,6 +916,40 @@ test('Fork and edit dispatch existing typed session operations and keep their re
 	wrongSession = true;
 	await assert.rejects(service.fork({ ...base, target: 'thread' }), /different conversation/);
 	await assert.rejects(service.rewrite({ ...base, beforeTurnId: 'turn', input: [{ type: 'text', text: 'Edited' }] }), /different conversation/);
+});
+
+test('A saved directory change uses the existing Session identity and typed request', async () => {
+	const requests: unknown[] = [];
+	const connection = {
+		capabilities: { contracts: { changeSessionDirectory: { version: 1 } } },
+		async request(definition: { method: string; }, params: unknown) {
+			requests.push({ method: definition.method, params });
+			return { type: 'session', value: { session: { sessionId: 'saved' } } };
+		},
+	} as unknown as AppServerProtocolClient;
+	const service = createAppServerAgentSessionService(connection);
+	assert.equal(service.canChangeDirectory?.(), true);
+	assert.equal(createAppServerAgentSessionService(connection, 'remote').canChangeDirectory?.(), false);
+	await service.changeDirectory!({ sessionId: 'saved', commandId: 'change', root: '/new' });
+	assert.deepEqual(requests, [{ method: 'session/request', params: { sessionId: 'saved', commandId: 'change', request: { type: 'changeDirectory', root: '/new' } } }]);
+});
+
+test('Moving a conversation checks both the destination and the original Thread identity', async () => {
+	const requests: unknown[] = [];
+	let threadId = 'original';
+	const service = createAppServerAgentThreadService({
+		capabilities: { contracts: { moveThreadToSession: { version: 1 } } },
+		async request(definition: { method: string; }, params: unknown) {
+			requests.push({ method: definition.method, params });
+			return { type: 'thread', value: { session: { sessionId: 'target' }, threadId } };
+		},
+	} as unknown as AppServerProtocolClient);
+	const params = { sessionId: 'source', threadId: 'original', destinationSessionId: 'target', commandId: 'move' };
+	assert.equal(service.canMoveThreadToSession?.(), true);
+	await service.moveThreadToSession!(params);
+	assert.deepEqual(requests, [{ method: 'session/request', params: { sessionId: 'source', commandId: 'move', request: { type: 'moveThreadToSession', threadId: 'original', destinationSessionId: 'target' } } }]);
+	threadId = 'replacement';
+	await assert.rejects(service.moveThreadToSession!(params), /different conversation/);
 });
 
 test('Queue adapters preserve durable identity and revision and map guarded mutations without transport objects', async () => {

@@ -223,20 +223,23 @@ impl MediaRoom {
         };
         let ssrc = rand::random::<u32>();
         let track = Arc::new(
-            TrackLocalStaticSample::new(MediaStreamTrack::new(
-                cid.clone(),
-                cid.clone(),
-                name.into(),
-                kind,
-                vec![RTCRtpEncodingParameters {
-                    rtp_coding_parameters: RTCRtpCodingParameters {
-                        ssrc: Some(ssrc),
+            TrackLocalStaticSample::new(
+                Instant::now(),
+                MediaStreamTrack::new(
+                    cid.clone(),
+                    cid.clone(),
+                    name.into(),
+                    kind,
+                    vec![RTCRtpEncodingParameters {
+                        rtp_coding_parameters: RTCRtpCodingParameters {
+                            ssrc: Some(ssrc),
+                            ..Default::default()
+                        },
+                        codec,
                         ..Default::default()
-                    },
-                    codec,
-                    ..Default::default()
-                }],
-            ))
+                    }],
+                ),
+            )
             .map_err(|_| MediaError::Publication)?,
         );
         let (response, published) = oneshot::channel();
@@ -310,7 +313,7 @@ impl MediaRoom {
                     &Sample {
                         data: Bytes::copy_from_slice(&encoded[..len]),
                         duration: Duration::from_millis(10),
-                        ..Default::default()
+                        ..Sample::new(Instant::now())
                     },
                     &[],
                 ),
@@ -464,7 +467,7 @@ impl MediaRoom {
                 let sample = Sample {
                     data: Bytes::from(encoded),
                     duration: Duration::from_secs_f64(1.0 / f64::from(fps.max(1))),
-                    ..Default::default()
+                    ..Sample::new(Instant::now())
                 };
                 track
                     .write_sample(ssrc, payload_type, &sample, &[])

@@ -7,6 +7,7 @@ import { localize } from '../../../../nls.js';
 import { validateJsonValue } from '../../../../base/common/jsonValue.js';
 import { ConfigurationScope, type IConfigurationDefaults, type IConfigurationNode, type IConfigurationPropertySchema } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { URI } from '../../../../base/common/uri.js';
+import { ThemeIcon } from '../../../../base/common/themables.js';
 import { posix, win32 } from '../../../../base/common/path.js';
 import { validateTokenId, type ColorContribution } from '../../../../platform/theme/common/colorRegistry.js';
 import { getTokenClassificationRegistry, type TokenTypeOrModifierContribution } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
@@ -69,6 +70,7 @@ export interface ExtensionManifest {
 	readonly version: string;
 	readonly displayName: string;
 	readonly contributes: {
+		readonly chatContext: readonly { readonly id: string; readonly displayName: string; readonly icon: string; }[];
 		readonly canvases: readonly { readonly id: string; readonly displayName: string; readonly description: string; readonly requiresInput: boolean; }[];
 		readonly keybindings: readonly IKeybindingRule[];
 		readonly imageEditors: readonly { readonly id: string; readonly displayName: string; readonly default?: boolean; readonly accessibilityHelp: string; }[];
@@ -142,6 +144,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		version,
 		displayName,
 		contributes: Object.freeze({
+			chatContext: parseChatContext(contributes.chatContext),
 			canvases: parseCanvases(contributes.canvases),
 			imageEditors: parseImageEditors(contributes.imageEditors),
 			speechProviders: parseSpeechProviders(contributes.speechProviders),
@@ -699,6 +702,21 @@ function parseBreakpointContributions(value: unknown): ExtensionManifest['contri
 		if (item.when !== undefined && (typeof item.when !== 'string' || !ContextKeyExpr.deserialize(item.when))) throw new TypeError(localize('debug.breakpointDeclarationInvalid', 'Invalid breakpoint language declaration.'));
 		return Object.freeze({ language: languageId(item.language, 'contributes.breakpoints.language'), ...(item.when === undefined ? {} : { when: requiredString(item.when, 'contributes.breakpoints.when', 1024) }) });
 	}));
+}
+
+function parseChatContext(value: unknown): ExtensionManifest['contributes']['chatContext'] {
+	if (value === undefined) return [];
+	const invalid = (): TypeError => new TypeError(localize('chat.context.invalidDeclaration', 'Invalid chat context contribution.'));
+	if (!Array.isArray(value) || value.length > 64) throw invalid();
+	const ids = new Set<string>();
+	return value.map(item => {
+		const entry = record(item, 'chat context declaration');
+		const id = requiredString(entry.id, 'contributes.chatContext.id', 128);
+		const icon = requiredString(entry.icon, 'contributes.chatContext.icon', 256);
+		if (!/^[A-Za-z0-9._-]+$/.test(id) || ids.has(id) || !ThemeIcon.fromString(icon)) throw invalid();
+		ids.add(id);
+		return Object.freeze({ id, icon, displayName: requiredString(entry.displayName, 'contributes.chatContext.displayName', 256) });
+	});
 }
 
 function parseImageEditors(value: unknown): ExtensionManifest['contributes']['imageEditors'] {

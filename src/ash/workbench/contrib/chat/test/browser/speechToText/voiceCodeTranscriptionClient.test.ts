@@ -7,13 +7,43 @@ import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import type { AppServerProtocolClient } from '../../../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { createAppServerVoiceCodeTranscriptionBackend } from '../../../../../../platform/dictation/browser/appServerVoiceCodeTranscriptionBackend.js';
-import { IVoiceCodeTranscriptionBackendService } from '../../../../../../platform/dictation/common/dictation.js';
+import { IVoiceCodeTranscriptionBackendService, SpeechInstructionsConflictError } from '../../../../../../platform/dictation/common/dictation.js';
+import { AppServerRemoteError } from '../../../../../../platform/agentHost/common/appServerError.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { TestConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, type IVoiceCodeTranscription } from '../../../browser/speechToText/voiceCodeTranscriptionClient.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
+
+test('speech Profile adapter projects documents and maps conditional-save conflicts', async () => {
+	const requests: unknown[] = [];
+	const connection = {
+		state: 'ready', generation: 7, request: async (method: { method: string; }, params: unknown) => {
+			requests.push({ method: method.method, params });
+			if (method.method === 'speech/instructions/read') return { text: 'Ash terminology', exists: true, revision: 'r1' };
+			throw new AppServerRemoteError(-32000, 'changed', { kind: 'FileSystemRevisionConflict' });
+		}
+	};
+	const backend = createAppServerVoiceCodeTranscriptionBackend(connection as unknown as AppServerProtocolClient);
+	assert.deepEqual(await backend.readInstructions('dictation'), { text: 'Ash terminology', exists: true, revision: 'r1' });
+	await assert.rejects(backend.writeInstructions('dictation', 'Updated', 'r1'), SpeechInstructionsConflictError);
+	assert.deepEqual(requests, [
+		{ method: 'speech/instructions/read', params: { kind: 'dictation' } },
+		{ method: 'speech/instructions/write', params: { kind: 'dictation', text: 'Updated', expectedRevision: 'r1' } },
+	]);
+});
+
+test('speech Profile reads and saves cannot publish replies from a retired connection', async () => {
+	for (const operation of ['read', 'write'] as const) {
+		const gate = new DeferredPromise<void>();
+		const connection = { state: 'ready', generation: 1, request: async () => { await gate.p; return { text: 'Old Profile', exists: true, revision: 'old' }; } };
+		const backend = createAppServerVoiceCodeTranscriptionBackend(connection as unknown as AppServerProtocolClient);
+		const pending = operation === 'read' ? backend.readInstructions('voice') : backend.writeInstructions('voice', 'Old save', 'old');
+		const rejected = assert.rejects(pending, isCancellationError);
+		connection.generation++; await gate.complete(); await rejected;
+	}
+});
 
 type Notification = Parameters<Parameters<AppServerProtocolClient['onNotification']>[0]>[0];
 type ConnectionState = Parameters<Parameters<AppServerProtocolClient['onStateChange']>[0]>[0];

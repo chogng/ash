@@ -1,4 +1,7 @@
-import type { IChatContextValueItem } from '../attachments/chatContextPickService.js';
+import { IChatContextPickService, picksWithPromiseFn, type IChatContextValueItem, type IChatContextPickerItem, type IChatContextPicker, type IChatContextPickerPickItem } from '../attachments/chatContextPickService.js';
+import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { derived, observableSignalFromEvent } from '../../../../../base/common/observable.js';
+import { ScreenshotCommandId } from '../../common/constants.js';
 import type { IChatWidget } from '../chat.js';
 import { IImageEditorService } from '../../../../services/imageEditor/common/imageEditorService.js';
 import { captureTerminalAttachment } from '../../../terminal/browser/chatTerminalCommandMirror.js';
@@ -9,7 +12,7 @@ import { TERMINAL_VIEW_ID } from '../../../terminal/common/terminal.js';
 import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { Event } from '../../../../../base/common/event.js';
-import { DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { ThemeIcon } from '../../../../../base/common/themables.js';
@@ -22,73 +25,130 @@ import { GitHubIssueState, IGitHubService, type GitHubRepository } from '../../.
 import { filterQuickPickItems } from '../../../../../platform/quickinput/browser/quickInputList.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
 import { createToolSelectionAttachment, showToolsPicker, toolSetLabel } from './chatToolPicker.js';
-import type { ChatContextAttachment, ChatImageCapture } from '../../../../services/chat/common/chatContextService.js';
+import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { IChatService } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { convertBufferToScreenshotVariable } from '../attachments/chatScreenshotContext.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { readLocalRepositories } from '../../../github/common/localRepository.js';
 
-interface ToolReferencePick extends IQuickPickItem {
-	readonly configure?: true;
-	readonly reference?: string;
+/** Registers stateless sources once; each invocation borrows its composer's state. */
+export class ChatContextContributions extends Disposable {
+	public static readonly ID = 'chat.contextContributions';
+
+	constructor(
+		@IInstantiationService instantiation: IInstantiationService,
+		@IChatContextPickService contexts: IChatContextPickService,
+	) {
+		super();
+		try {
+			const sources = [
+				instantiation.createInstance(ClipboardImageContextValuePick),
+				instantiation.createInstance(ScreenshotContextValuePick),
+				instantiation.createInstance(SessionReferenceContextPickerPick),
+				instantiation.createInstance(ToolsContextPickerPick),
+			];
+			for (const source of sources) {
+				this._register(contexts.registerChatContextItem(source));
+			}
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
+	}
 }
 
-export class ToolsContextPickerPick implements IChatContextValueItem {
-	public readonly type = 'valuePick' as const;
+class ToolsContextPickerPick implements IChatContextPickerItem {
+	public readonly type = 'pickerPick' as const;
+	public readonly presentation = 'inline' as const;
+	public readonly ordinal = -500;
 	public readonly icon = Lxicon.settings;
 	public get label(): string { return localize('chat.context.tools', 'Tools…'); }
 
 	constructor(
-		private readonly disabled: readonly string[] = [],
 		@ILanguageModelToolsService private readonly toolsService: ILanguageModelToolsService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) { }
 
 	public isEnabled(): boolean { return this.toolsService.isAvailable; }
 
-	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal): Promise<ChatContextAttachment | undefined> {
-		if (!this.isEnabled() || signal.aborted) { return undefined; }
-		await this.toolsService.refresh();
-		if (signal.aborted) { return undefined; }
-		const selected = await pickChatContextItem<ToolReferencePick>(this.quickInput, localize('chat.context.selectTool', 'Search available tools by name, description or source'), async query => {
-			const tools = [...this.toolsService.getAllToolsIncludingDisabled()].filter(tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id));
-			const sets = [...this.toolsService.toolSets.get()].filter(set => [...set.getTools()].some(tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id)));
-			const references: ToolReferencePick[] = [
+	public asPicker(widget?: IChatWidget): IChatContextPicker {
+		const lifetime = new DisposableStore();
+		const controller = new AbortController();
+		lifetime.add(toDisposable(() => controller.abort()));
+		const changed = observableSignalFromEvent(lifetime, this.toolsService.onDidChangeTools);
+		let disabled: readonly string[] = [];
+		const load = async (): Promise<IChatContextPickerPickItem[]> => {
+			await this.toolsService.refresh();
+			if (controller.signal.aborted) return [];
+			const selection = widget?.input.attachmentModel.attachments.find(attachment => attachment.kind === 'toolSelection');
+			disabled = selection ? JSON.parse((await selection.resolve()).content) : [];
+			return [];
+		};
+		// Discovery and the captured draft selection belong to this picker, never the registration.
+		const initial = load();
+		const getPicks = (query: string): IChatContextPickerPickItem[] => {
+			const tools = [...this.toolsService.getAllToolsIncludingDisabled()].filter(tool => tool.canBeReferencedInPrompt && !disabled.includes(tool.id));
+			const sets = [...this.toolsService.toolSets.get()].filter(set => [...set.getTools()].some(tool => tool.canBeReferencedInPrompt && !disabled.includes(tool.id)));
+			const references: IChatContextPickerPickItem[] = [
 				...tools.map(tool => {
 					const reference = this.toolsService.getFullReferenceName(tool);
-					return { label: tool.displayName, description: tool.sourceDetails.join(' › '), detail: `${tool.modelDescription}\n${reference}`, reference };
+					return {
+						label: tool.displayName, description: tool.sourceDetails.join(' › '),
+						detail: `${tool.modelDescription}\n${reference}`,
+						asAttachment: () => this.captureReference(reference, disabled) ?? [],
+					};
 				}),
 				...sets.map(set => {
 					const reference = this.toolsService.getFullReferenceName(set);
-					const members = [...set.getTools()].filter(tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id)).map(tool => tool.id);
-					return { label: toolSetLabel(set), description: localize('chat.tools.set', 'Tool set'), detail: `${members.join(', ')}\n${reference}`, reference };
+					const members = [...set.getTools()].filter(tool => tool.canBeReferencedInPrompt && !disabled.includes(tool.id)).map(tool => tool.id);
+					return {
+						label: toolSetLabel(set), description: localize('chat.tools.set', 'Tool set'),
+						detail: `${members.join(', ')}\n${reference}`,
+						asAttachment: () => this.captureReference(reference, disabled) ?? [],
+					};
 				}),
 			];
-			return [...filterQuickPickItems(references, query), { label: localize('chat.tools.configure', 'Configure tools…'), configure: true, alwaysShow: true }];
-		}, signal, undefined, this.toolsService.onDidChangeTools);
-		if (signal.aborted || !selected || selected.kind === 'back') { return undefined; }
-		if (selected.item.configure) {
-			const disabled = await showToolsPicker(this.quickInput, this.toolsService, this.disabled, signal);
-			return disabled && !signal.aborted ? createToolSelectionAttachment(disabled) : undefined;
-		}
-		const reference = selected.item.reference ? this.toolsService.getToolByFullReferenceName(selected.item.reference) : undefined;
+			return [...filterQuickPickItems(references, query), {
+				label: localize('chat.tools.configure', 'Configure tools…'), alwaysShow: true,
+				asAttachment: async () => {
+					const selection = await showToolsPicker(this.quickInput, this.toolsService, disabled, controller.signal);
+					return selection && !controller.signal.aborted ? createToolSelectionAttachment(selection) : [];
+				},
+			}];
+		};
+		return {
+			placeholder: localize('chat.context.selectTool', 'Search available tools by name, description or source'),
+			picks: (query, token) => {
+				const loaded = picksWithPromiseFn(() => initial)(query, token);
+				return derived(reader => {
+					const state = loaded.read(reader);
+					changed.read(reader);
+					return state.busy || state.error ? state : { busy: false, picks: getPicks(query.read(reader)) };
+				});
+			},
+			dispose: () => lifetime.dispose(),
+		};
+	}
+
+	private captureReference(name: string, disabled: readonly string[]): ChatContextAttachment | undefined {
+		const reference = this.toolsService.getToolByFullReferenceName(name);
 		const set = isToolSet(reference) ? reference : undefined;
 		const tool = reference && !isToolSet(reference) ? reference : undefined;
 		if (!tool && !set) { return undefined; }
-		const name = tool ? localize('chat.context.toolName', 'Tool: {0}', tool.displayName) : localize('chat.tools.setName', 'Tool set: {0}', toolSetLabel(set!));
+		const label = tool ? localize('chat.context.toolName', 'Tool: {0}', tool.displayName) : localize('chat.tools.setName', 'Tool set: {0}', toolSetLabel(set!));
 		// References describe enabled tools; only the separate typed selection narrows execution.
 		const content = JSON.stringify(tool ? {
 			name: tool.id, description: tool.modelDescription, source: tool.source,
 			sourceDetails: tool.sourceDetails, exposure: tool.exposure, authority: tool.authority,
 		} : {
 			id: set!.id, source: set!.source, sourceId: set!.sourceId,
-			tools: [...set!.getTools()].filter(tool => tool.canBeReferencedInPrompt && !this.disabled.includes(tool.id)).map(tool => tool.id),
+			tools: [...set!.getTools()].filter(tool => tool.canBeReferencedInPrompt && !disabled.includes(tool.id)).map(tool => tool.id),
 		}, null, 2);
 		return {
-			id: tool ? `tool:${tool.id}` : `tool-set:${set!.id}`, kind: tool ? 'tool' : 'toolSet', name,
+			id: tool ? `tool:${tool.id}` : `tool-set:${set!.id}`, kind: tool ? 'tool' : 'toolSet', name: label,
 			resource: URI.from({ scheme: Schemas.internal, authority: 'agent-tools', query: new URLSearchParams({ name: tool?.id ?? set!.id }).toString() }),
-			resolve: async () => ({ name, content }),
+			resolve: async () => ({ name: label, content }),
 		};
 	}
 }
@@ -117,14 +177,17 @@ export class TerminalContext implements IChatContextValueItem {
 	}
 }
 
-export class ClipboardImageContextValuePick implements IChatContextValueItem {
+class ClipboardImageContextValuePick implements IChatContextValueItem {
 	public readonly type = 'valuePick' as const;
+	public readonly presentation = 'inline' as const;
+	public readonly ordinal = -100;
 	public readonly icon = Lxicon.image;
 	public get label(): string { return localize('chat.context.clipboardImage', 'Image from Clipboard'); }
 	constructor(
 		@IClipboardService private readonly clipboard: IClipboardService,
 		@IChatAttachmentResolveService private readonly attachments: IChatAttachmentResolveService,
 	) { }
+	public isEnabled(widget?: IChatWidget): boolean { return widget?.input.supportsImages() ?? true; }
 	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal): Promise<ChatContextAttachment | undefined> {
 		const image = await this.clipboard.readImage();
 		if (signal.aborted) return undefined;
@@ -134,39 +197,54 @@ export class ClipboardImageContextValuePick implements IChatContextValueItem {
 	}
 }
 
-export class ScreenshotContextValuePick implements IChatContextValueItem {
+class ScreenshotContextValuePick implements IChatContextValueItem {
 	public readonly type = 'valuePick' as const;
+	public readonly presentation = 'inline' as const;
+	public readonly ordinal = -200;
+	public readonly commandId = ScreenshotCommandId;
 	public readonly icon = Lxicon.openPreview;
 	public get label(): string { return localize('chat.context.screenshotWeb', 'Screenshot…'); }
 	constructor(@IImageEditorService private readonly imageEditors: IImageEditorService) { }
-	get accessibilityHelp(): string { return this.imageEditors.accessibilityHelp; }
-	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal, capture?: ChatImageCapture): Promise<ChatContextAttachment | undefined> {
-		const image = await (capture ? capture(signal) : this.imageEditors.capture(signal));
+	public isEnabled(widget?: IChatWidget): boolean { return widget?.input.supportsImages() ?? true; }
+	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal): Promise<ChatContextAttachment | undefined> {
+		const image = await this.imageEditors.capture(signal);
 		if (!image || signal.aborted) return undefined;
 		const attachment = await convertBufferToScreenshotVariable(image);
 		return signal.aborted ? undefined : attachment;
 	}
 }
 
-export class SessionReferenceContextPickerPick implements IChatContextValueItem {
-	public readonly type = 'valuePick' as const;
+class SessionReferenceContextPickerPick implements IChatContextPickerItem {
+	public readonly type = 'pickerPick' as const;
+	public readonly presentation = 'inline' as const;
+	public readonly ordinal = -400;
 	public readonly icon = Lxicon.chat;
 	public get label(): string { return localize('chat.context.sessions', 'Sessions…'); }
 	constructor(
-		private readonly current: { readonly sessionId: string; readonly threadId: string; } | undefined,
 		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
 		@IChatService private readonly chat: IChatService,
-		@IQuickInputService private readonly quickInput: IQuickInputService,
 	) { }
-	public async asAttachment(_widget: IChatWidget | undefined, signal: AbortSignal = new AbortController().signal): Promise<ChatContextAttachment | undefined> {
-		const conversations = this.navigation.getConversations().filter(item => !this.current || item.sessionId !== this.current.sessionId || item.threadId !== this.current.threadId);
-		const selected = await pickChatContextItem(this.quickInput, localize('chat.context.selectSession', 'Select a session'),
-			async query => filterQuickPickItems(conversations.map(conversation => ({ label: conversation.title, conversation })), query), signal);
-		if (!selected || selected.kind === 'back' || signal.aborted) return undefined;
-		const { sessionId, threadId, title } = selected.item.conversation;
+	public asPicker(widget?: IChatWidget): IChatContextPicker {
+		const current = widget ?? this.navigation.getActiveConversation();
+		const conversations = this.navigation.getConversations().filter(item => !current || item.sessionId !== current.sessionId || item.threadId !== current.threadId);
+		const controller = new AbortController();
+		return {
+			placeholder: localize('chat.context.selectSession', 'Select a session'),
+			picks: picksWithPromiseFn(async query => [...filterQuickPickItems(conversations.map(conversation => ({
+				label: conversation.title,
+				description: conversation.providerLabel,
+				asAttachment: () => this.captureConversation(conversation, controller.signal),
+			})), query)]),
+			dispose: () => controller.abort(),
+		};
+	}
+
+	private async captureConversation(conversation: { readonly sessionId: string; readonly threadId: string; readonly title: string; }, signal: AbortSignal): Promise<ChatContextAttachment[]> {
+		if (signal.aborted) return [];
+		const { sessionId, threadId, title } = conversation;
 		// Chat owns transcript reads. No subscription or second session catalog is created for an attachment.
 		const snapshot = await this.chat.readThread(sessionId, threadId);
-		if (signal.aborted) return undefined;
+		if (signal.aborted) return [];
 		const messages = snapshot.transcript.entries.flatMap(entry => {
 			if (entry.type !== 'item' || entry.transient) return [];
 			const item = entry.item;
@@ -175,7 +253,7 @@ export class SessionReferenceContextPickerPick implements IChatContextValueItem 
 			return [];
 		}).join('\n\n');
 		const content = `Conversation: ${title}\nSession: ${sessionId}\nThread: ${threadId}\n\n${messages.length > 100_000 ? `[Earlier messages omitted]\n${messages.slice(-100_000)}` : messages}`;
-		return { id: `session:${sessionId}:${threadId}`, kind: 'sessionReference', name: title, resource: URI.from({ scheme: Schemas.internal, authority: 'chat-session', query: new URLSearchParams({ sessionId, threadId }).toString() }), resolve: async () => ({ name: title, content }) };
+		return [{ id: `session:${sessionId}:${threadId}`, kind: 'sessionReference', name: title, resource: URI.from({ scheme: Schemas.internal, authority: 'chat-session', query: new URLSearchParams({ sessionId, threadId }).toString() }), resolve: async () => ({ name: title, content }) }];
 	}
 }
 
@@ -193,7 +271,7 @@ export class GitHubContextValuePick implements IChatContextValueItem {
 	public get icon(): Icon { return this.kind === 'issue' ? Lxicon.issues : Lxicon.gitPullRequest; }
 	public get label(): string { return this.kind === 'issue' ? localize('chat.context.issue', 'Issue…') : localize('chat.context.pullRequest', 'Pull Request…'); }
 	constructor(
-		private readonly kind: 'issue' | 'pullRequest',
+		public readonly kind: 'issue' | 'pullRequest',
 		@IGitHubService private readonly github: IGitHubService,
 		@ICommandService private readonly commands: ICommandService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,

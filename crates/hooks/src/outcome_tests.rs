@@ -49,3 +49,28 @@ fn malformed_or_truncated_output_fails_closed() {
     truncated.stdout_truncated = true;
     assert!(parse_output("user:hook:test", truncated).is_err());
 }
+
+#[test]
+fn claude_pre_tool_use_honors_denial_and_rejects_unsupported_authority_changes() {
+    let id = "user:hook:claude";
+    let mut blocked = output("");
+    blocked.exit_code = Some(2);
+    blocked.stderr = "Denied by the external hook".into();
+    assert_eq!(
+        parse_claude_pre_tool_use(id, blocked),
+        Ok(HookDecision::Deny {
+            reason: "Denied by the external hook".into()
+        })
+    );
+    assert_eq!(
+        parse_claude_pre_tool_use(
+            id,
+            output(
+                r#"{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow"}}"#
+            )
+        ),
+        Ok(HookDecision::Continue)
+    );
+    assert!(parse_claude_pre_tool_use(id, output(r#"{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"allow","updatedInput":{}}}"#)).is_err());
+    assert!(parse_claude_pre_tool_use(id, output(r#"{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"ask"}}"#)).is_err());
+}

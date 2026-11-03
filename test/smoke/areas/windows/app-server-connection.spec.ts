@@ -1,3 +1,4 @@
+import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
 import { Workbench } from '../../../automation/workbench.js';
 import { _electron, type ElectronApplication, type Page } from '@playwright/test';
 import { expect, test as baseTest } from '../../../automation/test.js';
@@ -198,7 +199,7 @@ startElectronApplication();
 			page.on('pageerror', error => startupErrors.push(error.stack ?? error.message));
 			page.on('console', message => { if (message.type() === 'error') startupErrors.push(message.text()); });
 			if (workspaceFolder) {
-				await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: connectionWorkspace === 'restricted' ? 'Open in Restricted Mode' : 'Trust Folder', exact: true }).click();
+				await directoryPermissionPrompt(page).getByRole('button', { name: connectionWorkspace === 'restricted' ? 'Open in Restricted Mode' : 'Trust Folder', exact: true }).click();
 			}
 			try {
 				await new Workbench(page).waitForReady();

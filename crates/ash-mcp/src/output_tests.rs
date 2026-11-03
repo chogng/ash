@@ -5,6 +5,25 @@ use super::project_tool_result;
 use crate::McpCallError;
 
 #[test]
+fn explicitly_requested_result_review_is_retained_and_bad_versions_fail_closed() {
+    let mut result = CallToolResult::success(vec![ContentBlock::text("private output")]);
+    result.meta = Some(
+        serde_json::from_value(
+            serde_json::json!({"ash/resultReview":{"version":1,"reason":"Review sensitive data"}}),
+        )
+        .unwrap(),
+    );
+    let output = super::project_tool_result(result.clone(), 4096).unwrap();
+    assert_eq!(output.result_confirmation(), Some("Review sensitive data"));
+    result.meta = Some(
+        serde_json::from_value(
+            serde_json::json!({"ash/resultReview":{"version":2,"reason":"Review sensitive data"}}),
+        )
+        .unwrap(),
+    );
+    assert!(super::project_tool_result(result, 4096).is_err());
+}
+#[test]
 fn truncates_text_result_at_byte_limit() {
     let output = project_tool_result(
         CallToolResult::success(vec![ContentBlock::text("oversized output ".repeat(64))]),
@@ -262,4 +281,25 @@ fn content_metadata_retains_positions_without_exposing_private_link_or_text_data
     let expected_metadata = ToolContent::Artifact(metadata.clone());
     let truncated = output.truncate_text(ash_tools::ToolOutputTruncationPolicy::Bytes(8));
     assert_eq!(truncated.content().last(), Some(&expected_metadata));
+}
+
+#[test]
+fn typed_result_targets_are_versioned_and_never_enter_model_text() {
+    let mut result = CallToolResult::success(vec![ContentBlock::text("created")]);
+    result.meta = Some(serde_json::from_value(serde_json::json!({"ash/resultPresentation":{"version":1,"target":{"type":"sessionTarget","sessionId":"session","threadId":"child","label":"Child task"}}})).unwrap());
+    let output = super::project_tool_result(result.clone(), 4096).unwrap();
+    let ToolContent::Artifact(artifact) = output.content().last().unwrap() else {
+        panic!("typed target missing");
+    };
+    assert!(
+        matches!(&artifact.presentation, Some(ash_protocol::ToolResultPresentation::SessionTarget { thread_id, .. }) if thread_id.as_str() == "child")
+    );
+    assert_eq!(artifact.model_text(), "");
+    result
+        .meta
+        .as_mut()
+        .unwrap()
+        .get_mut("ash/resultPresentation")
+        .unwrap()["version"] = serde_json::json!(2);
+    assert!(super::project_tool_result(result, 4096).is_err());
 }

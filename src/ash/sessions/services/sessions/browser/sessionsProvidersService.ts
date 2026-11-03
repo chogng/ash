@@ -18,7 +18,7 @@ export interface ISessionsProvidersService {
 
 export const ISessionsProvidersService = createServiceIdentifier<ISessionsProvidersService>('sessionsProvidersService');
 
-/** Registrations borrow providers. Their Session management owner retains disposal responsibility. */
+/** Registrations borrow providers. The host that creates each provider owns its disposal. */
 export class SessionsProvidersService extends Disposable implements ISessionsProvidersService {
 	private readonly providers = new Map<string, ISessionsProvider>();
 	private readonly changed = this._register(new Emitter<ISessionsProvidersChangeEvent>());

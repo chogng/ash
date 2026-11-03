@@ -24,6 +24,8 @@ interface AppServerDaemonConnectionOptions {
 export function createAppServerDaemonLauncher(options: AppServerDaemonConnectionOptions): { readonly launcher: AppServerDaemonLauncher; readonly generationFile: string | undefined; } {
 	const { packageLocation, sourceEnvironment } = options;
 	const reloadBackend = sourceEnvironment.ASH_DEV_APP_SERVER_RELOAD === '1';
+	const subsecond = !packageLocation.isPackaged && packageLocation.platform === 'darwin' && reloadBackend
+		&& sourceEnvironment.ASH_DEV_SUBSECOND === '1' && sourceEnvironment.ASH_DEV_APP_SERVER_GENERATION !== undefined;
 	const generationFile = !packageLocation.isPackaged && (reloadBackend || sourceEnvironment.ASH_RENDERER_URL !== undefined)
 		? sourceEnvironment.ASH_DEV_APP_SERVER_GENERATION ?? developmentAppServerGenerationPath(packageLocation.appPath)
 		: undefined;
@@ -72,8 +74,9 @@ export function createAppServerDaemonLauncher(options: AppServerDaemonConnection
 			executable: appServerDaemonExecutablePath(packageLocation),
 			generationFile,
 			expectedSha256: packagedAppServerDaemonSha256(packageLocation),
-			// Development selects the current build; released clients reuse the profile's selected backend.
-			args: [packageLocation.isPackaged ? 'connect' : 'connect-selected'],
+			// The opt-in launcher starts Subsecond before the first connection. Full
+			// publications still select their daemon explicitly through the reloader.
+			args: [packageLocation.isPackaged || subsecond ? 'connect' : 'connect-selected'],
 			environment,
 		}),
 		// Frontend-only development still selects live extension sources, while the
@@ -144,11 +147,19 @@ export class AppServerDaemonLauncher extends AbstractDisposable implements IAppS
 		this.assertNotDisposed();
 		if (this.developmentStartupBarrier) {
 			await this.developmentStartupBarrier();
-		} else if (this.options.generationFile && !this.developmentRuntime) {
+		} else if (this.options.generationFile && (
+			!this.developmentRuntime || this.developmentRuntime.runtime !== readDevelopmentAppServerGenerationSync(this.options.generationFile)
+		)) {
+			// Another Desktop instance can adopt a publication even when this window
+			// is not watching Rust builds. Reconnecting with its old lease would
+			// replace the shared profile daemon and disconnect the newer window.
 			const lease = await this.acquireDevelopmentRuntime();
 			if (this.isDisposed) { lease.dispose(); this.assertNotDisposed(); }
+			const previous = this.ownedDevelopmentRuntime;
+			try { this.selectDevelopmentRuntime(lease); }
+			catch (error) { lease.dispose(); throw error; }
 			this.ownedDevelopmentRuntime = lease;
-			this.selectDevelopmentRuntime(lease);
+			previous?.dispose();
 		}
 		this.developmentRuntime?.assertActive();
 		if (!this.fileExists(this.executable)) throw new Error(`Packaged Ash binary is missing: ${this.executable}`);

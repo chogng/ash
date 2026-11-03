@@ -37,6 +37,13 @@ pub struct ForkThreadRequest {
     pub title: String,
 }
 
+/// Pins a comparison fork to the source history and gives it an independent Agent and branch.
+pub struct ComparisonFork {
+    pub source_sequence: u64,
+    pub agent: ash_protocol::AgentConfiguration,
+    pub branch_name: String,
+}
+
 /// Branches one accepted Turn without taking ownership of its running execution.
 pub struct CreateSideChatRequest {
     pub command_id: CommandId,

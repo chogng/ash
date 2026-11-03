@@ -1,3 +1,4 @@
+import { ISessionsListModelService, SessionsListModelService } from '../../../../../services/sessions/browser/sessionsListModelService.js';
 import { registerTestWorkbenchHostServices } from '../../../../../../workbench/test/common/workbenchHostTestServices.js';
 import { remoteAgentHostRoot } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { URI } from '../../../../../../base/common/uri.js';
@@ -305,7 +306,7 @@ const drafts: IUntitledChatSession[] = [{
 	untitledSessionId: 'draft', title: 'Draft', model: undefined, agent: undefined,
 	get workspace() { return { type: 'local' as const, root: directory }; }
 }];
-const backgroundSession: ISession = { sessionId: 'background-session', title: 'Background session', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'background-thread', origin: { type: 'root' }, status: 'active' }] };
+const backgroundSession: ISession = { providerId: 'host', source: 'automation', sessionId: 'background-session', title: 'Background session', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'background-thread', origin: { type: 'root' }, status: 'active' }] };
 const management = {
 	sessions: [backgroundSession], untitledSessions: drafts, state: 'ready', materializedSessions: observableValue('materialized', new Map()),
 	onDidChange: sessionChanged.event,
@@ -318,7 +319,9 @@ const management = {
 		activeDraft = '';
 		sessionChanged.fire();
 	},
-	async openThread(sessionId: string, threadId: string) { management.selectThread(sessionId, threadId); },
+	async prepareThread(sessionId: string, threadId: string) {
+		if (sessionId !== backgroundSession.sessionId || threadId !== 'background-thread') throw new Error('Unknown background conversation');
+	},
 	selectUntitledSession(id: string) { active = undefined; activeDraft = id; sessionChanged.fire(); },
 	createUntitledSession(title: string) {
 		const draft: IUntitledChatSession = { untitledSessionId: `draft-${drafts.length}`, title, model: undefined, agent: undefined, workspace: { type: 'local', root: directory } };
@@ -331,6 +334,7 @@ const management = {
 } as unknown as ISessionsManagementService;
 const sessions = resources.add(new SessionsService(management, services.get(IStorageService), custom));
 services.registerInstance(ISessionsManagementService, management);
+services.registerInstance(ISessionsListModelService, services.createInstance(SessionsListModelService));
 services.registerInstance(ISessionsService, sessions);
 await sessions.initialize();
 
@@ -431,8 +435,8 @@ window.ashAutomations = {
 	async retryHistory() { historyUnavailable = false; await services.get(IAutomationService).refresh(); },
 	deferRun() { deferNextRun = true; },
 	async failRun() { run = { ...run, status: 'failed', message: 'Could not create session' }; await services.get(IAutomationService).refresh(); },
-	back() { sessions.navigateBack(); },
-	forward() { sessions.navigateForward(); },
+	back() { return sessions.openPreviousSession(); },
+	forward() { return sessions.openNextSession(); },
 	openDraft() { sessions.openNewSession('New draft'); },
 	selectedTitle() { return sessions.activeSelection?.kind === 'untitled' ? sessions.activeSelection.session.title : sessions.activeSelection?.active.session.title; },
 	async remoteEdit() {

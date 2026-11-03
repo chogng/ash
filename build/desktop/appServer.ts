@@ -6,6 +6,7 @@ import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { generateProtocol, protocolSourceDirectories } from '../protocol/generate.ts';
 import { runPython } from '../python.ts';
+import type { SubsecondBuilder } from './subsecond.ts';
 import { LiveBuilder } from './liveBuild.ts';
 import { watchNativeFile } from '../lib/watchNativeFile.ts';
 
@@ -13,17 +14,17 @@ const repositoryRoot = resolve(import.meta.dirname, '../..');
 const terminalCrates = new Set<string>(JSON.parse(readFileSync(resolve(repositoryRoot, 'build/source-layout.json'), 'utf8')).terminalCrates);
 const sharedRustSource = resolve(repositoryRoot, 'crates');
 const rustSdkSource = resolve(repositoryRoot, 'sdk/rust');
+const remoteServerSource = resolve(repositoryRoot, 'remote-server');
 const configuredTargetDirectory = process.env.CARGO_TARGET_DIR?.trim();
 const targetDirectory = resolve(repositoryRoot, configuredTargetDirectory || '.build/cargo');
 const debounceMs = 250;
 
 /** Prepare before selecting a runtime: file watchers only observe changes after startup. */
-export async function prepareAppServer(javascriptRuntime: 'host-provided-node' | 'packaged-node', signal?: AbortSignal): Promise<void> {
-	const commands = [['-B', 'build/prepare.py', '--javascript-runtime', javascriptRuntime]];
-	if (javascriptRuntime === 'host-provided-node') commands.push(['-B', 'build/desktop/develop.py', '--select-prepared']);
-	for (const arguments_ of commands) {
-		await runPython(arguments_, { cwd: repositoryRoot, operation: 'backend preparation', signal });
-	}
+export async function prepareAppServer(javascriptRuntime: 'host-provided-node' | 'packaged-node', signal?: AbortSignal, environment?: NodeJS.ProcessEnv): Promise<void> {
+	const command = javascriptRuntime === 'host-provided-node'
+		? ['-B', 'build/desktop/develop.py', '--prepare']
+		: ['-B', 'build/prepare.py', '--javascript-runtime', javascriptRuntime];
+	await runPython(command, { cwd: repositoryRoot, operation: 'backend preparation', signal, environment });
 }
 
 export function shouldRebuildAppServer(file: string | null, ignoredDirectory?: string): boolean {
@@ -53,6 +54,8 @@ export async function watchAppServer(options: {
 	onDidBuild?: () => Promise<void>;
 	environment?: NodeJS.ProcessEnv;
 	buildLog?: string;
+	subsecond?: Pick<SubsecondBuilder, 'start' | 'build' | 'disable' | 'stop'>;
+	signal?: AbortSignal;
 	log?: (event: string, detail: object, error?: unknown) => void;
 } = {}): Promise<() => void> {
 	let buildRequested = !options.skipInitial;
@@ -65,6 +68,8 @@ export async function watchAppServer(options: {
 	let debounce: NodeJS.Timeout | undefined;
 	let stopped = false;
 	let building = false;
+	let startingSubsecond = options.subsecond !== undefined;
+	let subsecond = options.subsecond;
 	const cancellation = new AbortController();
 	const watchers: Pick<FSWatcher, 'close'>[] = [];
 	const watchStarted = Date.now();
@@ -77,10 +82,12 @@ export async function watchAppServer(options: {
 	});
 	const liveDirectory = options.javascriptRuntime !== 'packaged-node' && environment.ASH_RUST_LIVE_DIRECTORY?.trim();
 	const liveBuilder = liveDirectory ? new LiveBuilder(repositoryRoot, environment) : undefined;
+	options.signal?.throwIfAborted();
+	options.signal?.addEventListener('abort', stop, { once: true });
 
 	try {
 		// The Rust author SDK remains a backend build input after leaving crates/.
-		for (const source of [sharedRustSource, rustSdkSource]) {
+		for (const source of [sharedRustSource, rustSdkSource, remoteServerSource]) {
 			const ignoredTarget = relativeWatchedDirectory(source, targetDirectory);
 			watchers.push(watch(source, { recursive: true }, (event, file) => requestBuild(source, file, event, fileName => shouldRebuildAppServer(fileName, ignoredTarget))));
 		}
@@ -97,8 +104,18 @@ export async function watchAppServer(options: {
 		stop();
 		throw error;
 	}
+	if (options.subsecond) {
+		try { await options.subsecond.start(); }
+		catch (error) {
+			if (!stopped) log('Subsecond unavailable; using the normal Rust watcher', {}, error);
+			await options.subsecond.stop();
+			subsecond = undefined;
+		}
+		startingSubsecond = false;
+	}
+	options.signal?.throwIfAborted();
 	console.log('[app-server] Watching Rust App Server sources');
-	log('Build watcher started', { roots: ['crates', 'sdk/rust', 'Cargo.toml', 'Cargo.lock'], initialBuild: buildRequested, buildLog: options.buildLog });
+	log('Build watcher started', { roots: ['crates', 'sdk/rust', 'remote-server', 'Cargo.toml', 'Cargo.lock'], initialBuild: buildRequested, buildLog: options.buildLog });
 	if (buildRequested) void drainBuilds();
 	return stop;
 
@@ -127,7 +144,7 @@ export async function watchAppServer(options: {
 		clearTimeout(debounce);
 		debounce = setTimeout(() => {
 			buildRequested = true;
-			void drainBuilds();
+			if (!startingSubsecond) void drainBuilds();
 		}, debounceMs);
 	}
 
@@ -152,6 +169,25 @@ export async function watchAppServer(options: {
 				};
 				const started = performance.now();
 				let contextDirectory: string | undefined;
+				if (subsecond && !fullBuildRequired) {
+					const patch = await subsecond.build(files).catch(error => {
+						log('Subsecond patch failed', context, error);
+						return 'fallback' as const;
+					});
+					if (stopped) break;
+					if (patch === 'compile-error') {
+						log('Build failed', { ...context, mode: 'subsecond', durationMillis: Math.round(performance.now() - started) }, new Error('Rust rejected the edit. The running App Server is unchanged. Fix the compiler error and save to retry.'));
+						continue;
+					}
+					if (patch === 'applied') {
+						log('Build completed', { ...context, mode: 'subsecond', durationMillis: Math.round(performance.now() - started) });
+						continue;
+					}
+					subsecond.disable();
+					subsecond = undefined;
+					fullBuildRequired = true;
+					log('Using normal App Server publication for this development session', context);
+				}
 				fullBuildRequired ||= sources.length === 0 || !liveDirectory || sources.some(source => {
 					const file = relativeWatchedDirectory(resolve(sharedRustSource, 'app-server-diff/src'), source);
 					return file === undefined || !file.endsWith('.rs');
@@ -214,9 +250,11 @@ export async function watchAppServer(options: {
 	function stop(): void {
 		if (stopped) return;
 		stopped = true;
+		options.signal?.removeEventListener('abort', stop);
 		cancellation.abort();
 		clearTimeout(debounce);
 		for (const watcher of watchers) watcher.close();
 		void liveBuilder?.stop();
+		void options.subsecond?.stop().catch(error => log('Subsecond shutdown failed', {}, error));
 	}
 }

@@ -129,20 +129,34 @@ suite('sessions browser component', () => {
 		const activityNavigation = page.locator('.ash-sessions-activity-content');
 		await expectActivityIconSize(activityNavigation, 18);
 		await expect(activityNavigation.getByRole('button', { name: 'New' }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'add');
-		await expect(activityNavigation.getByRole('button', { name: 'New' })).toHaveAttribute('aria-current', 'page');
+		await expect(activityNavigation.getByRole('button', { name: 'New' })).not.toHaveAttribute('aria-current');
 		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code' }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'code');
 		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code' })).not.toHaveAttribute('aria-pressed', 'true');
 		await expect(page.locator('.ash-sessions-sidebar-tabs')).toHaveCount(0);
 		await page.mouse.move(400, 180);
 		await expect(page.getByRole('button', { name: 'Hide sidebar' })).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect(activityNavigation.locator('.ash-sessions-activity-top button .ash-icon').first()).toHaveAttribute('data-ash-icon-id', 'add');
-		const collaboration = activityNavigation.getByRole('button', { name: 'Collab' });
+		const more = activityNavigation.getByRole('button', { name: 'More', exact: true });
+		const collaboration = page.getByRole('menuitemradio', { name: 'Collab', exact: true });
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		const projects = activityNavigation.getByRole('button', { name: 'Projects' });
 		const chat = activityNavigation.getByRole('button', { name: 'New' });
+		await more.press('Enter');
+		await expect(collaboration.locator('[data-ash-icon-id="collab"]')).toBeVisible();
+		const menu = page.getByRole('menu').filter({ has: collaboration });
+		expect((await menu.boundingBox())!.x).toBeGreaterThanOrEqual((await more.boundingBox())!.x + (await more.boundingBox())!.width);
+		await expect(collaboration).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(more).toBeFocused();
+		await more.click();
+		await expect(menu).toBeFocused();
+		await expect(menu.locator('.focused')).toHaveCount(0);
+		await page.keyboard.press('ArrowDown');
+		await expect(collaboration).toBeFocused();
 		await collaboration.click();
-		await expect(collaboration.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'collab');
-		await expect(collaboration).toHaveAttribute('aria-current', 'page');
+		await more.click();
+		await expect(collaboration).toHaveAttribute('aria-checked', 'true');
+		await page.keyboard.press('Escape');
 		await expect(page.locator('.ash-sessions-list:visible')).toBeHidden();
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
@@ -152,7 +166,7 @@ suite('sessions browser component', () => {
 		await expect(activityNavigation.locator('[data-action-id="sessions.open.projects"] button')).toHaveAttribute('aria-current', 'page');
 		await expect(activityNavigation).toBeVisible();
 		await expect(activityBar).toHaveCount(0);
-		await expect(collaboration).toHaveCount(0);
+		await expect(more).toHaveCount(0);
 		await expect(page.locator('.ash-window-mode-control')).toBeVisible();
 		await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
 		await expect(activityNavigation).toBeHidden();
@@ -160,10 +174,11 @@ suite('sessions browser component', () => {
 		await expect(projects).toHaveAttribute('aria-current', 'page');
 		await expect(page.locator('.ash-projects')).toBeVisible();
 		await chat.click();
-		await expect(chat).toHaveAttribute('aria-current', 'page');
+		await expect(chat).not.toHaveAttribute('aria-current');
 		await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
-		await expect(chat).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+		await page.mouse.move(400, 180);
+		await expect(chat).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect(page.locator('.ash-sessions-list [data-item^="untitled:"]')).toHaveCount(0);
 		await page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor .stanza-editor').getByRole('textbox').focus();
 		await page.keyboard.insertText('Navigation draft');
@@ -172,17 +187,20 @@ suite('sessions browser component', () => {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 			await chat.click();
 			await page.mouse.move(400, 180);
-			const background = await chat.evaluate(button => getComputedStyle(button).backgroundColor);
+			await expect(chat).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			await chat.hover();
-			await expect(chat).toHaveCSS('background-color', background);
+			if (theme.includes('high-contrast')) {
+				await expect(chat).toHaveCSS('outline-style', 'solid');
+			} else {
+				await expect(chat).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			}
 			await projects.hover();
 			await expect(projects).not.toHaveAttribute('aria-current');
 			await chat.focus();
 			await chat.press('ArrowDown');
 			await expect(chat).not.toBeFocused();
-			await expect(chat).toHaveAttribute('aria-current', 'page');
+			await expect(chat).not.toHaveAttribute('aria-current');
 			if (theme.includes('high-contrast')) {
-				await expect(chat).toHaveCSS('outline-style', 'solid');
 				await expect(projects).toHaveCSS('outline-style', 'solid');
 				await expect(activityNavigation.locator('button:focus')).toHaveCSS('outline-style', 'solid');
 			}
@@ -782,8 +800,9 @@ suite('sessions browser component', () => {
 				await expect(icon).toHaveCSS('width', '18px');
 				await expect(icon).toHaveCSS('height', '18px');
 			}
-			await expect(inline).toHaveCSS('width', '18px');
-			await expect(inline.locator('.ash-icon')).toHaveCSS('font-size', '18px');
+			const inlineSize = await inline.evaluate(element => element.closest('[data-section="projects"], [data-section="recent"]') ? '16px' : '18px');
+			await expect(inline).toHaveCSS('width', inlineSize);
+			await expect(inline.locator('.ash-icon')).toHaveCSS('font-size', inlineSize);
 			await expect(page.getByRole('note').locator('.ash-icon')).toHaveCSS('font-size', '18px');
 			await page.locator('[data-action-id="sessions.newSession"] button').click({ button: 'right' });
 			const auxiliary = page.locator('.ash-menu .ash-submenu-indicator > .ash-icon').first();

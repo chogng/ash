@@ -26,13 +26,142 @@ async function attachRuntimeLogs(testInfo: TestInfo, userDataDirectory: string):
 	}
 }
 
-async function publish(source: string, directory: string, identity: string): Promise<string> {
+async function publish(source: string, directory: string, identity: string, backend?: string): Promise<string> {
 	const marker = join(directory, 'test-generation');
 	await writeFile(marker, identity);
-	const script = 'import json,sys,uuid; from pathlib import Path; from build.lib.development_store import publish_generation; changed,generation=publish_generation(Path(sys.argv[1]), {"test-generation":Path(sys.argv[2])}, Path(sys.argv[3]), publication={"buildId":str(uuid.uuid4()),"reason":"source-change","files":["test/smoke/areas/windows/development-runtime.spec.ts"],"omittedFileCount":0}); print(json.dumps({"generation":generation}))';
-	const result = await execFileAsync(process.execPath, [resolve(desktopDirectory, 'build/python.ts'), '-B', '-c', script, source, marker, directory], { cwd: desktopDirectory, windowsHide: true });
+	const script = `
+import json
+import sys
+import uuid
+from pathlib import Path
+from build.lib.development_store import publish_generation
+
+binaries = {"test-generation": Path(sys.argv[2])}
+if len(sys.argv) > 4:
+    binaries["ash-app-server"] = Path(sys.argv[4])
+_, generation = publish_generation(Path(sys.argv[1]), binaries, Path(sys.argv[3]), publication={
+    "buildId": str(uuid.uuid4()),
+    "reason": "source-change",
+    "files": ["test/smoke/areas/windows/development-runtime.spec.ts"],
+    "omittedFileCount": 0,
+})
+print(json.dumps({"generation": generation}))
+`;
+	const result = await execFileAsync(process.execPath, [resolve(desktopDirectory, 'build/python.ts'), '-B', '-c', script, source, marker, directory, ...(backend ? [backend] : [])], { cwd: desktopDirectory, windowsHide: true });
 	return (JSON.parse(result.stdout) as { generation: string; }).generation;
 }
+
+test('a failed App Server preflight keeps A serving and the next publication connects to C', { tag: ['@electron-app-server'] }, async ({ testWorkspace }, testInfo) => {
+	test.setTimeout(120_000);
+	const source = await readDevelopmentAppServerGeneration(developmentAppServerGenerationPath(desktopDirectory));
+	if (!source) throw new Error('Prepare the development backend before this scenario');
+	const directory = await mkdtemp(resolve(desktopDirectory, '.build/desktop/dev/test-preflight-'));
+	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-'));
+	const environment = { ...process.env, ASH_DEV_APP_SERVER_RELOAD: '1', ASH_DEV_APP_SERVER_GENERATION: join(directory, 'current.json'), ASH_HOME: join(userDataDirectory, 'profile') };
+	const suffix = process.platform === 'win32' ? '.exe' : '';
+	const daemon = join(source, 'bin', `ash-app-server-daemon${suffix}`);
+	async function managedBackend(): Promise<{ pid: number; runtime: string; }> {
+		const status = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout);
+		const record = JSON.parse(await readFile(status.endpointPath.replace(/\.sock$/u, '.pid.json'), 'utf8'));
+		expect(record.pid).toBe(status.pid);
+		return { pid: record.pid, runtime: record.executableIdentity.developmentRoot };
+	}
+	let desktop: Awaited<ReturnType<typeof launchElectron>> | undefined;
+	try {
+		const a = await publish(source, directory, 'A');
+		desktop = await launchElectron({ appServerMode: 'required', environment, userDataDirectory, workspaceDirectory: testWorkspace.directory, workspacePermissions: 'development' });
+		const { workbench } = desktop.driver;
+		const before = await connection(workbench.page);
+		const backendA = await managedBackend();
+		expect(backendA.runtime).toBe(join(directory, 'generations', a));
+		await workbench.search.open();
+		async function assertSearch(text: string): Promise<void> {
+			await writeFile(join(testWorkspace.directory, `${text}.txt`), text + '\n');
+			await expect.poll(async () => {
+				await workbench.search.search(text);
+				return workbench.search.status.textContent();
+			}).toBe('1 results');
+			await expect(workbench.search.element.locator('.ash-search-preview mark')).toHaveText(text);
+		}
+		await assertSearch('preflight_generation_a');
+		const broken = join(directory, `ash-app-server${suffix}`);
+		await writeFile(broken, 'Invalid executable for the B startup failure', { mode: 0o755 });
+		const b = await publish(source, directory, 'B', broken);
+		await expect.poll(async () => {
+			const logs = join(userDataDirectory, 'logs');
+			const sessions = await readdir(logs);
+			const lines = (await Promise.all(sessions.map(session => readFile(join(logs, session, 'main.log'), 'utf8')))).join('\n').split('\n');
+			return lines.some(line => line.includes('Development runtime preflight failed; keeping the current backend') && line.includes(b));
+		}, { timeout: 45_000 }).toBe(true);
+		expect(await connection(workbench.page)).toEqual(before);
+		await assertSearch('preflight_generation_a_after_b');
+		const backendAfterB = await managedBackend();
+		expect(backendAfterB).toEqual(backendA);
+
+		// Hold one real renderer request at the port until Main starts draining.
+		// The result must traverse the old carrier before it acknowledges the switch.
+		const drainEvents = () => workbench.page.evaluate(() => (globalThis as typeof globalThis & { reloadDrainEvents: string[]; }).reloadDrainEvents);
+		await workbench.page.evaluate(() => {
+			const events: string[] = [];
+			(globalThis as typeof globalThis & { reloadDrainEvents: string[]; }).reloadDrainEvents = events;
+			const post = MessagePort.prototype.postMessage;
+			MessagePort.prototype.postMessage = function (message: { data?: Uint8Array; }, options?: Transferable[] | StructuredSerializeOptions) {
+				if (!events.length && message.data instanceof Uint8Array) {
+					const frame = new TextDecoder().decode(message.data).trim();
+					const request = frame.startsWith('{') && !frame.includes('\n') ? JSON.parse(frame) : undefined;
+					if (request?.method === 'grep/search/start') {
+						events.push('held');
+						MessagePort.prototype.postMessage = post;
+						const decoder = new TextDecoder();
+						let buffered = '';
+						this.addEventListener('message', function onMessage(event: MessageEvent) {
+							if (event.data?.drainForRestart === true) {
+								events.push('draining');
+								if (Array.isArray(options)) post.call(this, message, { transfer: options });
+								else post.call(this, message, options);
+							} else if (events.includes('draining') && event.data?.data instanceof Uint8Array) {
+								buffered += decoder.decode(event.data.data, { stream: true });
+								const lines = buffered.split('\n');
+								buffered = lines.pop()!;
+								for (const line of lines) {
+									const reply = JSON.parse(line);
+									if (reply.id === request.id) {
+										events.push('result' in reply ? 'old-result' : 'old-error');
+										this.removeEventListener('message', onMessage);
+									}
+								}
+							}
+						});
+						return;
+					}
+				}
+				if (Array.isArray(options)) post.call(this, message, { transfer: options });
+				else post.call(this, message, options);
+			};
+		});
+		await writeFile(join(testWorkspace.directory, 'preflight_in_flight.txt'), 'preflight_in_flight\n');
+		await workbench.search.query.fill('preflight_in_flight');
+		await workbench.search.query.press('Enter');
+		await expect.poll(drainEvents).toEqual(['held']);
+		const c = await publish(source, directory, 'C');
+		await expect.poll(async () => (await connection(workbench.page)).generation, { timeout: 45_000 }).toBe(before.generation + 1);
+		await expect.poll(drainEvents).toEqual(['held', 'draining', 'old-result']);
+		await assertSearch('preflight_generation_c');
+		const backendC = await managedBackend();
+		expect(backendC.runtime).toBe(join(directory, 'generations', c));
+		expect(backendC.pid).not.toBe(backendA.pid);
+		expect((await connection(workbench.page)).generation).toBe(before.generation + 1);
+		await testInfo.attach('verified-backend-generations', { body: JSON.stringify({ backendA, rejectedGeneration: b, backendAfterB, backendC }), contentType: 'application/json' });
+	} finally {
+		try {
+			try { await attachRuntimeLogs(testInfo, userDataDirectory); }
+			finally { await desktop?.close(); }
+		} finally {
+			await rm(directory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
+			await rm(userDataDirectory, { force: true, recursive: true, maxRetries: 10, retryDelay: 100 });
+		}
+	}
+});
 
 async function connection(page: Page): Promise<{ generation: number; }> {
 	return page.evaluate(async () => {
@@ -174,11 +303,10 @@ test('Rust publication overlapping a Workbench reload preserves its unsaved file
 		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 		if (await showSidebar.isVisible()) await showSidebar.click();
 		await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' }).dblclick();
-		const input = desktop.driver.workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
-		await input.focus();
-		await input.press('ControlOrMeta+A');
-		await input.pressSequentially('unsaved content across Rust publication and reload');
-		await expect(page.locator('.stanza-editor-line-text').first()).toContainText('unsaved content across Rust publication and reload');
+		const editor = new Editor(desktop.driver.workbench.editors.groupAt(0).content);
+		const unsavedText = 'unsaved content across Rust publication and reload';
+		await editor.waitForEditorFocus();
+		await editor.waitForTypeInEditor(unsavedText);
 		const daemon = join(source, `bin/ash-app-server-daemon${process.platform === 'win32' ? '.exe' : ''}`);
 		const before = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout) as { pid: number; };
 		const modulePath = resolve(desktopDirectory, '.build/desktop/main/src/ash/platform/agentHost/electron-main/appServerConnectionRelay.js');
@@ -229,7 +357,7 @@ test('Rust publication overlapping a Workbench reload preserves its unsaved file
 			await fixture.evaluate(value => value.release());
 			await reload;
 			await desktop.driver.workbench.waitForReady();
-			await expect(page.locator('.stanza-editor-line-text').first()).toContainText('unsaved content across Rust publication and reload');
+			await editor.waitForEditorContents(text => text.includes(unsavedText));
 			await expect.poll(() => fixture.evaluate(value => value.connectionState())).toBe('ready');
 			const after = JSON.parse((await execFileAsync(daemon, ['version'], { env: environment, windowsHide: true })).stdout) as { pid: number; };
 			expect(after.pid).not.toBe(before.pid);

@@ -392,6 +392,46 @@ test('Grid rejects duplicate views in its descriptor', () => {
 	dom.window.close();
 });
 
+test('SerializableGrid preserves split weights through a constrained resize', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const left = new SerializableTestGridView(dom.window.document, 'left', 100, Infinity);
+	const right = new SerializableTestGridView(dom.window.document, 'right', 200, Infinity);
+	const grid = new SerializableGrid(dom.window.document.body, {
+		type: 'branch',
+		orientation: Orientation.HORIZONTAL,
+		size: 800,
+		children: [
+			{ type: 'leaf', view: left, size: 600 },
+			{ type: 'leaf', view: right, size: 200 },
+		],
+	}, { preserveSplitWeights: true });
+
+	try {
+		grid.layout(800, 400);
+		grid.resizeView(left, { width: 560 });
+		const original = grid.serialize();
+
+		grid.layout(400, 400);
+		assert.equal(grid.getViewSize(left).width, 200);
+		assert.equal(grid.getViewSize(right).width, 200);
+
+		const restored = SerializableGrid.deserialize(dom.window.document.body, grid.serialize(), {
+			fromJSON: id => id === 'left' ? left : right,
+		}, { preserveSplitWeights: true });
+		try {
+			restored.layout(800, 400);
+			assert.deepEqual(restored.serialize(), original);
+			assert.equal(restored.getViewSize(left).width, 560);
+			assert.equal(restored.getViewSize(right).width, 240);
+		} finally {
+			restored.dispose();
+		}
+	} finally {
+		grid.dispose();
+		dom.window.close();
+	}
+});
+
 test('SerializableGrid restores view identity and runtime geometry', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const left = new SerializableTestGridView(dom.window.document, 'left', 100, 600);

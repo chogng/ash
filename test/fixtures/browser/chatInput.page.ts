@@ -1,16 +1,23 @@
 import { registerTestWorkbenchHostServices } from '../../../src/ash/workbench/test/common/workbenchHostTestServices.js';
 import { constObservable } from '../../../src/ash/base/common/observable.js';
+import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import type { AgentVoiceSessionState } from '../../../src/ash/platform/agentHost/common/agent.js';
+import { AGENTS_VOICE_TOGGLE_MUTE_COMMAND_ID } from '../../../src/ash/workbench/contrib/agentsVoice/common/agentsVoice.js';
+import '../../../src/ash/workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import { BtwSlashCommandContribution } from '../../../src/ash/workbench/contrib/chat/browser/btwSlashCommand.js';
 import { IChatSlashCommandService, ChatSlashCommandService } from '../../../src/ash/workbench/contrib/chat/common/participants/chatSlashCommands.js';
 import { IChatSideChatService, ChatSideChatService } from '../../../src/ash/workbench/contrib/chat/common/chatSideChatService.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
 import { IActionViewItemService } from '../../../src/ash/platform/actions/browser/actionViewItemService.js';
 import { ChatQueuePickerRendering } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatQueuePickerActionItem.js';
-import { IChatWidgetService, type IChatWidget } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
 import { IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import type { AgentHostInputCompletionItem } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { IChatContextPickService, picksWithPromiseFn } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatContextPickService.js';
+import { IChatContextService } from '../../../src/ash/workbench/contrib/chat/browser/contextContrib/chatContextService.js';
 import { ChatContextKeys } from '../../../src/ash/workbench/contrib/chat/common/actions/chatContextKeys.js';
+import { IChatWidgetService, type IChatWidget, type IWorkspacePickerItem } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
+import { OpenWorkspacePickerAction } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatExecuteActions.js';
+import { ChatContextContributions } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatContext.js';
 import { ChatReferenceAttachmentWidgetContribution } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatReferenceAttachmentWidget.contribution.js';
 import { startSnapshotFixture } from './snapshotFixture.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
@@ -84,7 +91,6 @@ import '../../../src/ash/workbench/contrib/quickaccess/browser/quickAccess.contr
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 
-import { ChatContextPickService } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatContextPickService.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../src/ash/platform/actionWidget/browser/actionWidget.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
@@ -148,7 +154,17 @@ import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDe
 
 declare global {
 	interface Window { ashChatInputIntegration: {
+		retireContextProviders(): void;
+		setWorkspaceContext(value: string): void;
+		contextProviderOpens(): number;
+		voiceInputState(): { starts: number; stops: number; muted: boolean; dictationCancelled: number; };
+		isDictationReady(): boolean;
+		setVoiceAvailable(available: boolean): void;
+		openWorkspace(): Promise<unknown>;
 		showIntroduction(): void;
+		showSandboxApproval(): void;
+		showResultReview(): void;
+		commandExplanations(): readonly { readonly resource: string; readonly command: string; readonly aborted: boolean; }[];
 		triggerInputSuggestions(): Promise<unknown>;
 		hostCompletionRequests(): readonly { text: string; offset: number; }[];
 		setInputReadOnly(readOnly: boolean): void;
@@ -206,6 +222,7 @@ let historyEntries: MessageHistoryEntry[] = [
 ];
 const historyWrites: string[] = [];
 const queueEvents: unknown[] = [];
+const commandExplanations: { resource: string; command: string; signal: AbortSignal | undefined; }[] = [];
 const historySubmissions: { text: string; skills: unknown; }[] = [];
 const historyReads: MessageHistoryQuery[] = [];
 const historyWaits = new Map<string, () => void>();
@@ -240,7 +257,7 @@ const recordDestination = (value: unknown): void => { destinations.textContent =
 services.registerInstance(IThemeService, theme);
 services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 services.registerInstance(IOpenerService, { open: async (resource, options) => { recordDestination({ resource: resource.toString(), options }); return true; } } as IOpenerService);
-services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === 'workbench.action.chat.askInSideChat' || id === 'workbench.action.chat.submit' || id === 'workbench.action.chat.queueMessage' || id === 'workbench.action.chat.steerWithMessage' || id === 'git.getRepositoryContexts' || id === 'editor.action.openLink' || id === 'editor.action.showHover' || id === 'editor.action.selectAll' || id === 'workbench.action.chat.attachSelection' || id === 'workbench.action.chat.attachScreenshot' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services, resource); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
+services.registerInstance(ICommandService, { executeCommand: async (id: string, resource?: unknown) => { if (id === AGENTS_VOICE_TOGGLE_MUTE_COMMAND_ID || id === 'workbench.action.chat.askInSideChat' || id === 'workbench.action.chat.submit' || id === 'workbench.action.chat.queueMessage' || id === 'workbench.action.chat.steerWithMessage' || id === 'git.getRepositoryContexts' || id === 'editor.action.openLink' || id === 'editor.action.showHover' || id === 'editor.action.selectAll' || id === 'workbench.action.chat.attachSelection' || id === 'workbench.action.chat.attachScreenshot' || id === 'undo' || id === 'redo') { return CommandsRegistry.getCommand(id)!(services, resource); } recordDestination({ command: id, ...(resource !== undefined ? { resource: URI.isUri(resource) ? resource.toString() : resource } : {}) }); } } as unknown as ICommandService);
 const contextKeys = resources.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, contextKeys);
 contextKeys.createKey('chatIsEnabled', true);
@@ -263,7 +280,15 @@ resources.add(services.createInstance(ChatQueuePickerRendering));
 if (new URLSearchParams(location.search).has('sideChat')) {
 	resources.add(services.get(IChatSideChatService).registerProvider({
 		canAskInSideChat: () => true,
-		askInSideChat: async (_resource, query) => { queueEvents.push({ kind: 'sideChat', query }); },
+		askInSideChat: async (resource, query, selection, options) => {
+			queueEvents.push({ kind: 'sideChat', query });
+			if (selection) {
+				commandExplanations.push({ resource: resource.toString(), command: selection.text, signal: options?.signal });
+				if (new URLSearchParams(location.search).has('holdExplanation') && options?.signal) {
+					await new Promise<void>(resolve => options.signal!.addEventListener('abort', () => resolve(), { once: true }));
+				}
+			}
+		},
 		observeSideChatOrigin: () => constObservable(undefined),
 		revealSideChatSource: async () => { },
 	}));
@@ -484,6 +509,35 @@ services.registerInstance(ILanguageModelsService, {
 	discoverProviderModels: async () => [],
 } satisfies ILanguageModelsService);
 services.registerInstance(IConfigurationService, resources.add(new InMemoryConfigurationService()));
+if (new URLSearchParams(location.search).has('hideDictation')) await services.get(IConfigurationService).updateValue('dictation.showButton', false);
+if (new URLSearchParams(location.search).has('hideVoice')) await services.get(IConfigurationService).updateValue('agents.voice.showButton', false);
+const voiceFixture = new URLSearchParams(location.search).has('voiceInput');
+const voiceChanges = resources.add(new Emitter<void>());
+let voiceState: AgentVoiceSessionState | undefined;
+let voiceAvailable = voiceFixture;
+let voiceStarts = 0;
+let voiceStops = 0;
+let dictationCancelled = 0;
+const voice: IAgentVoiceService = {
+	get isAvailable() { return voiceAvailable; }, get state() { return voiceState; },
+	onDidChange: voiceChanges.event, onDidRequestTask: Event.None,
+	getOptions: async () => [],
+	start: async source => {
+		voiceStarts++;
+		voiceState = { ...source, resourceId: 'voice-input', state: 'connected', mediaEpoch: voiceStarts, sequence: 1, inputSequence: 0, inputMode: 'openMic', muted: false, listening: true, usageMilliseconds: 0 };
+		voiceChanges.fire();
+		return voiceState;
+	},
+	stop: async () => {
+		voiceStops++;
+		if (new URLSearchParams(location.search).has('hideOnVoiceStop')) part.setVisible(false);
+		if (voiceState) voiceState = { ...voiceState, state: 'ended', listening: false };
+		voiceChanges.fire();
+	},
+	interrupt: async () => { }, rejectTask: async () => { }, setInputMode: async () => { }, pttDown: async () => { }, pttUp: async () => { },
+	setMuted: async muted => { if (voiceState) voiceState = { ...voiceState, muted, listening: !muted }; voiceChanges.fire(); },
+};
+if (voiceFixture) services.registerInstance(IAgentVoiceService, voice);
 let dictationStops = 0;
 let emitDictation: ((text: string, final: boolean) => void) | undefined;
 let finishDictation: ((result: { text: string; error?: string; }) => void) | undefined;
@@ -502,7 +556,7 @@ services.registerInstance(IVoiceCodeTranscriptionBackendService, dictationFixtur
 				if (result.error) throw new Error(result.error);
 				transcript(result.text, true);
 			},
-			cancel: async () => { finishDictation?.({ text: '' }); },
+			cancel: async () => { dictationCancelled++; finishDictation?.({ text: '' }); },
 		};
 	},
 }) : undefined);
@@ -511,7 +565,6 @@ services.registerSingleton(ISpeechService, () => services.createInstance(SpeechS
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 const notifications = resources.add(new TestNotificationService());
 services.registerInstance(INotificationService, notifications);
-registerTestDictationOnboarding(services);
 const quickInput = resources.add(new TestQuickInputService({ instantiationService: services, container: document.body }));
 services.registerInstance(IQuickInputService, quickInput);
 services.registerInstance(IHistoryService, { getHistory: () => [{ resource: URI.file('/workspace/closed.ts') }], goBack: async () => { }, goForward: async () => { }, reopenLastClosedEditor: async () => { } } satisfies IHistoryService);
@@ -535,8 +588,30 @@ services.registerInstance(IEditorService, {
 	},
 	focusActiveEditor() { },
 } satisfies IEditorService);
-const contextPicks = new ChatContextPickService();
-services.registerInstance(IChatContextPickService, contextPicks);
+registerTestDictationOnboarding(services);
+const contextPicks = services.get(IChatContextPickService);
+const providedContexts = services.get(IChatContextService);
+let providerOpens = 0;
+if (new URLSearchParams(location.search).has('contextProviders')) {
+	providedContexts.setExecuteCommandCallback(async () => { providerOpens++; });
+	providedContexts.setChatContextProvider('fixture-records', { title: 'Extension records', icon: Lxicon.file });
+	providedContexts.registerChatExplicitContextProvider('fixture-records', {
+		provideChatContext: async () => [{
+			handle: 901, label: 'Extension record', command: { id: 'fixture.open' }, tooltip: { value: '**Extension source**' },
+			iconPath: {
+				light: URI.parse('data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="black"/></svg>')),
+				dark: URI.parse('data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="white"/></svg>')),
+			},
+		}],
+		resolveChatContext: async item => ({ ...item, value: 'Captured extension record' }),
+	});
+	providedContexts.registerChatWorkspaceContextProvider('fixture-workspace', { provideWorkspaceChatContext: async () => [] });
+	providedContexts.updateWorkspaceContextItems('fixture-workspace', [{ handle: 902, label: 'Workspace branch', value: 'branch-at-start' }]);
+	providedContexts.registerChatResourceContextProvider('fixture-resource', { uri: { pattern: '**/provided.ctx' } }, {
+		provideChatContext: async resource => ({ handle: 903, resourceUri: resource, label: 'Provided document' }),
+		resolveChatContext: async item => ({ ...item, value: 'Captured extension document' }),
+	});
+}
 const contextSearchWaiters = new Map<string, () => void>();
 resources.add(toDisposable(() => { for (const release of contextSearchWaiters.values()) release(); contextSearchWaiters.clear(); }));
 resources.add(contextPicks.registerChatContextItem({
@@ -619,9 +694,10 @@ if (hasContextSources) resources.add(registerCodebaseSymbolsWorkspaceSymbolProvi
 		};
 	},
 } as unknown as ICodebaseSymbolsService, services.get(IWorkspaceContextService)));
-const contextEditorInputs = new URLSearchParams(location.search).has('openImageEditor')
+let contextEditorInputs: IResourceEditorInput[] = new URLSearchParams(location.search).has('openImageEditor')
 	? [{ resource: URI.parse('git-image:/index/picture.PNG'), initialBytes: png, contentType: 'image/png', readOnly: true }]
 	: [{ resource: edited, ...(new URLSearchParams(location.search).has('readonlyEditorSnapshot') ? { readOnly: true, initialText: 'Displayed readonly editor version' } : {}) }];
+if (new URLSearchParams(location.search).has('contextProviders')) contextEditorInputs = [{ resource: URI.file('/workspace/provided.ctx') }];
 services.registerInstance(IEditorGroupsService, { groups: [{ inputs: contextEditorInputs }] } as unknown as IEditorGroupsService);
 services.registerInstance(IWorkingCopyService, { get: (resource: URI) => resource.path === '/workspace/symbol.ts' ? [{ backupKind: 'text', backup: () => symbolSource }] : resource.path === edited.path ? [{ backupKind: 'text', backup: () => 'Unsaved editor text' }] : [] } as unknown as IWorkingCopyService);
 const fileSearchWaiters = new Map<number, () => void>();
@@ -740,6 +816,16 @@ let holdNextSubmission = new URLSearchParams(location.search).has('holdSubmissio
 let finishSubmission: ((error?: string) => void) | undefined;
 const cowork = ['cowork', 'project'].includes(new URLSearchParams(location.search).get('surface') ?? '');
 const delegate: ChatInputDelegate = {
+	voiceConversation: voiceFixture ? {
+		get isAvailable() { return voiceAvailable; },
+		get isActive() { return voiceState?.state === 'connected' || voiceState?.state === 'connecting'; },
+		get isConnected() { return voiceState?.state === 'connected'; },
+		toggle: async () => {
+			if (voiceState?.state === 'connected' || voiceState?.state === 'connecting') await voice.stop();
+			else await voice.start({ sessionId: 'session', threadId: 'thread' }, { connectionId: 'test', modelId: 'test' });
+		},
+		interrupt: () => voice.interrupt(),
+	} : undefined,
 	send: async (_text, _mode, _skills, contexts, _signal, queue) => {
 		queueEvents.push({ kind: 'send', text: _text, queue });
 		historySubmissions.push({ text: _text, skills: _skills });
@@ -771,7 +857,7 @@ const delegate: ChatInputDelegate = {
 	},
 	listAgents: async () => [], selectAgent: () => { }, selectMode: mode => { state = { ...state, mode }; part.render(state); }, selectApprovalMode: async approvalMode => { state = { ...state, approvalMode, interaction: undefined }; part.render(state); recordDestination({ approvalMode }); },
 	openModelSettings: async () => { recordDestination({ settings: 'models' }); },
-	resolveInteraction: async response => { if (response.type === 'approval') document.querySelector('output')!.textContent = response.response.decision; else if (response.type === 'permissions') document.querySelector('output')!.textContent = JSON.stringify(response.response); },
+	resolveInteraction: async response => { if (response.type === 'approval' || response.type === 'toolResultReview') document.querySelector('output')!.textContent = response.response.decision; else if (response.type === 'permissions') document.querySelector('output')!.textContent = JSON.stringify(response.response); },
 };
 const inlineCode = new URLSearchParams(location.search).has('inlineCode');
 registerCodeEditorServices(services);
@@ -786,13 +872,25 @@ let inlineEditor: ChatInputEditor | undefined;
 const editorProvider = inlineCode ? { create: (options: Parameters<typeof ChatInputEditors.create>[0]) => inlineEditor = services.createInstance(ChatInputEditor, { ...options, hostCompletions: hostInputCompletions }) } : ChatInputEditors;
 const snapshotFixture = new URLSearchParams(location.search).has('screenshotFixture') ? await startSnapshotFixture(services, resources) : undefined;
 
+const workspaceChanged = resources.add(new Emitter<IWorkspacePickerItem | undefined>());
+let selectedWorkspace: IWorkspacePickerItem | undefined;
+const workspaceChoices = [{ uri: URI.file('/fixture/workspace'), label: 'Fixture workspace', isFolder: true }];
 let part!: ChatInputPart;
 part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { contextMenuStyle: 'custom', showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
 	layout: new URLSearchParams(location.search).has('compact') ? 'compact' : undefined,
 	modePicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
 	renderSecondaryToolbar: !cowork,
+	workspacePickerDelegate: new URLSearchParams(location.search).has('workspacePicker') ? {
+		getWorkspaces: () => workspaceChoices,
+		getSelectedWorkspace: () => selectedWorkspace,
+		setSelectedWorkspace: (workspace: IWorkspacePickerItem | undefined) => { selectedWorkspace = workspace; workspaceChanged.fire(workspace); },
+		onDidChangeSelectedWorkspace: workspaceChanged.event,
+		onDidChangeWorkspaces: Event.None,
+		openFolderCommand: 'workbench.action.files.openFolder',
+	} : undefined,
 }));
+resources.add(services.createInstance(ChatContextContributions));
 if (new URLSearchParams(location.search).has('notices')) {
 	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 	services.registerSingleton(IChatTipService, () => services.createInstance(ChatTipService));
@@ -940,6 +1038,7 @@ function renderModels(): void {
 	part.render({ ...state, interaction: undefined });
 }
 part.render(state);
+if (voiceFixture) resources.add(voiceChanges.event(() => part.render(state)));
 let replaceDraftOnClear = false;
 const recoveryDrafts: Parameters<ChatInputPart['restoreDraft']>[0][] = [];
 if (new URLSearchParams(location.search).has('holdSubmission')) {
@@ -957,6 +1056,14 @@ if (new URLSearchParams(location.search).has('holdSubmission')) {
 }
 let releaseReferencePreview: (() => void) | undefined;
 window.ashChatInputIntegration = {
+	retireContextProviders: () => {
+		for (const id of ['fixture-records', 'fixture-workspace', 'fixture-resource']) providedContexts.unregisterChatContextProvider(id);
+	},
+	setWorkspaceContext: value => providedContexts.updateWorkspaceContextItems('fixture-workspace', [{ handle: 902, label: 'Workspace branch', value }]),
+	contextProviderOpens: () => providerOpens,
+	voiceInputState: () => ({ starts: voiceStarts, stops: voiceStops, muted: voiceState?.muted === true, dictationCancelled }),
+	isDictationReady: () => emitDictation !== undefined,
+	setVoiceAvailable: available => { voiceAvailable = available; voiceChanges.fire(); },
 	setAgent: (selectedAgent, mode = 'agent') => {
 		state = { ...state, selectedAgent, mode, canSelectAgent: true };
 		part.render(state);
@@ -979,6 +1086,7 @@ window.ashChatInputIntegration = {
 	triggerInputSuggestions: () => Promise.resolve(CommandsRegistry.getCommand('editor.action.triggerSuggest')!(services)),
 	hostCompletionRequests: () => [...hostCompletionRequests],
 	setInputReadOnly: readOnly => inlineEditor!.setReadOnly(readOnly),
+	openWorkspace: async () => services.invokeFunction(CommandsRegistry.getCommand(OpenWorkspacePickerAction.ID)!),
 	showIntroduction: () => { const onboarding = services.get(IDictationOnboardingService); onboarding.reset(); onboarding.showIfNeeded(); },
 	setCatalogError: modelsError => { state = { ...state, modelsError }; part.render(state); },
 	toggleNoticeFocus: () => Promise.resolve(CommandsRegistry.getCommand('workbench.action.chat.focusTip')!(services)),
@@ -1109,13 +1217,39 @@ window.ashChatInputIntegration = {
 	openModels: () => part.openModelPicker(),
 	dispose: () => resources.dispose(),
 	refresh: () => part.render({ ...state, queuedMessages: 1 }),
+	showResultReview: () => {
+		state = { ...state, interaction: { requestId: 'review-result', request: { type: 'toolResultReview', request: {
+			toolCallId: 'captured-call', toolName: 'capture_result', review: { reason: 'Review captured output', isError: false, content: [{ type: 'text', text: '<img src=x> private evidence\n' + 'long-output'.repeat(100) }] },
+		} } } };
+		part.render(state);
+	},
+	showSandboxApproval: () => {
+		state = {
+			...state, conversation: { sessionId: 'input-session', threadId: 'input-thread' }, interaction: {
+				requestId: 'sandbox', request: {
+					type: 'approval', request: {
+						reason: 'Review retry', capabilities: [{ kind: 'network', scope: 'example.test' }],
+						riskAssessment: { riskLevel: 'high', reason: 'External publication <script>literal</script>' },
+						command: { program: '/bin/curl', arguments: ['https://example.test/' + 'x'.repeat(200)] },
+						sandboxDenial: {
+							reason: 'Network denied', replaySafety: 'safeToRetry', output: {
+								exitStatus: { type: 'code', code: 1 }, stdout: 'stdout', stderr: 'stderr', aggregatedOutput: 'stderr\n<img src=x>\nstdout',
+							},
+						},
+					},
+				},
+			},
+		};
+		part.render(state);
+	},
+	commandExplanations: () => commandExplanations.map(request => ({ resource: request.resource, command: request.command, aborted: request.signal?.aborted === true })),
 	showQuestions: () => part.render({
 		...state, interaction: {
 			requestId: 'questions', request: {
 				type: 'userInput', request: {
 					questions: [
-						{ id: 'text', header: 'Answer', question: 'Your answer', allowFreeForm: true },
-						{ id: 'choice', header: 'Choice', question: 'Your choice', allowFreeForm: false, options: [{ label: 'First', description: 'First option' }] },
+						{ id: 'text', header: 'Answer', question: 'Your answer', required: true, allowFreeForm: true },
+						{ id: 'choice', header: 'Choice', question: 'Your choice', required: true, allowFreeForm: false, options: [{ label: 'First', description: 'First option' }] },
 					]
 				}
 			},

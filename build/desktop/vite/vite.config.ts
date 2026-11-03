@@ -49,9 +49,10 @@ export default defineConfig(({ mode, command }) => {
 			import { BrowserLanguagePackStore } from '${moduleUrl('platform/languagePacks/browser/languagePackStore.ts')}';
 			import { initializeBrowserLocalization } from '${moduleUrl('workbench/services/localization/browser/localizationBootstrap.ts')}';
 			import { showStartupError } from '${moduleUrl('workbench/browser/startupError.ts')}';
-			import { readBrowserPartsSplash, showPartsSplash } from '${moduleUrl('workbench/contrib/splash/browser/splash.ts')}';
+			import { readBrowserPartsSplash } from '${moduleUrl('workbench/contrib/splash/browser/splash.ts')}';
+			import { showSessionsSplash } from '${moduleUrl('sessions/contrib/splash/browser/sessionsSplash.ts')}';
 			try {
-				showPartsSplash(document, readBrowserPartsSplash(window));
+				showSessionsSplash(document, readBrowserPartsSplash(window));
 				{
 					using provider = await IndexedDBFileSystemProvider.create(window.indexedDB, Schemas.vscodeUserData);
 					await migrateLegacyBrowserSettings(window.indexedDB, provider, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }));

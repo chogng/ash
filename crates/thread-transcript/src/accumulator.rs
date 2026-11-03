@@ -322,6 +322,8 @@ impl TranscriptAccumulator {
             | ThreadEvent::ThreadCreated { .. }
             | ThreadEvent::ThreadArchived { .. }
             | ThreadEvent::ThreadRestored { .. }
+            | ThreadEvent::ThreadMovedToSession { .. }
+            | ThreadEvent::ThreadDirectoryChanged { .. }
             | ThreadEvent::ThreadTitleChanged { .. }
             | ThreadEvent::GoalCreated { .. }
             | ThreadEvent::GoalUpdated { .. }
@@ -561,6 +563,16 @@ impl TranscriptAccumulator {
 
 fn item_from_delta(turn_id: &TurnId, item_id: &ItemId, delta: &ItemDelta) -> ThreadItem {
     match delta {
+        ItemDelta::ToolCallArguments {
+            tool_call_id, name, ..
+        } => ThreadItem::ToolCall {
+            item_id: item_id.clone(),
+            turn_id: turn_id.clone(),
+            tool_call_id: tool_call_id.clone(),
+            name: name.clone(),
+            arguments_json: String::new(),
+            binding: None,
+        },
         ItemDelta::AgentMessage { .. } | ItemDelta::AgentMessagePhase { .. } => {
             ThreadItem::AgentMessage {
                 phase: None,
@@ -584,6 +596,28 @@ fn item_from_delta(turn_id: &TurnId, item_id: &ItemId, delta: &ItemDelta) -> Thr
 }
 
 fn append_matching_delta(item: &mut ThreadItem, delta: &ItemDelta) -> bool {
+    if let ItemDelta::ToolCallArguments {
+        tool_call_id,
+        name,
+        arguments,
+    } = delta
+    {
+        if let ThreadItem::ToolCall {
+            tool_call_id: current,
+            name: current_name,
+            arguments_json,
+            binding,
+            ..
+        } = item
+        {
+            if current == tool_call_id && binding.is_none() {
+                *current_name = name.clone();
+                append_bounded(arguments_json, arguments);
+                return true;
+            }
+        }
+        return false;
+    }
     if let ItemDelta::AgentMessagePhase { phase } = delta {
         if let ThreadItem::AgentMessage { phase: target, .. } = item {
             *target = phase.clone();

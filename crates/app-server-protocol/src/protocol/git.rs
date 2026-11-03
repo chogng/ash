@@ -905,6 +905,18 @@ pub enum GitWorktreeStateDto {
     MissingDirectory,
 }
 
+/// Selects a workspace repository or an explicitly trusted draft folder.
+#[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GitWorktreeListParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub repository_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub source_path: Option<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct GitWorktreeListResult {
@@ -1468,6 +1480,7 @@ pub struct GitDiscoveryParams {
 )]
 pub enum GitInstallationDto {
     Missing,
+    LaunchFailed,
     Unsupported {
         version: String,
         minimum_version: String,

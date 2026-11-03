@@ -27,8 +27,10 @@ import '../../../../../base/browser/ui/dropdown/dropdown.css';
 declare global {
 	interface Window {
 		ashActionWidgetIntegration: {
-			show(labels: string[], options?: IActionListOptions): void;
+			show(labels: string[], options?: IActionListOptions, description?: string): void;
 			showTabs(): void;
+			showSubmenu(): void;
+			showToggle(): void;
 			mountSelect(): void;
 			mountDropdown(): void;
 			update(labels: string[]): void;
@@ -89,9 +91,32 @@ window.ashActionWidgetIntegration = {
 			actions: [{ id: 'run', label: 'Run', enabled: true, run: () => { document.querySelector('output')!.textContent = 'Run'; } }],
 		}));
 	},
-	show(labels, options): void {
+	show(labels, options, description): void {
 		source.focus();
-		widget.show('integration', false, createItems(labels), delegate, source, options);
+		widget.show('integration', false, createItems(labels).map(item => ({ ...item, description })), delegate, source, options);
+	},
+	showSubmenu(): void {
+		source.focus();
+		widget.show('submenu', false, [{
+			kind: ActionListItemKind.Action, label: 'Remote', submenu: createItems(['SSH', 'Ash Tunnel']),
+		}], delegate, source);
+	},
+	showToggle(): void {
+		let checked = false;
+		const dropdown = resources.add(services.createInstance(ActionWidgetDropdown, document.body, {
+			label: 'Workspace', ariaLabel: 'Workspace', actions: [], listOptions: { minWidth: 180, maxWidth: 180 },
+		}));
+		dropdown.showItems<never>({
+			load: () => [{
+				kind: ActionListItemKind.Action, label: 'New worktree',
+				standaloneToggle: {
+					label: 'New worktree',
+					get checked() { return checked; },
+					onChange: value => { checked = value; },
+				},
+			}],
+			select: () => { throw new Error('A standalone toggle must not select a menu action'); },
+		});
 	},
 	showTabs(): void {
 		source.focus();

@@ -24,7 +24,7 @@ for (const lifecycle of ['hide', 'dispose'] as const) {
 		services.registerSingleton(IManagedSettingsUpdateService, () => services.createInstance(ManagedSettingsUpdateService));
 		let token: CancellationToken | undefined;
 		let release!: (repository: GitHubRepositoryInfo) => void;
-		services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [{ provider: 'github', accountId: 'alice', status: 'ready', credentialRevision: 1n }] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
+		services.registerInstance(IAccountService, { readRateLimits: async () => { throw new Error('Unexpected subscription limit query'); }, onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [{ provider: 'github', accountId: 'alice', status: 'ready', credentialRevision: 1n }] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
 		services.registerInstance(IGitHubService, {
 			listAccounts: async () => [{ id: 'alice', host: 'github.com', login: 'alice', status: 'ready', credentialRevision: 1n }],
 			readRepository: async (_repository, cancellation) => { token = cancellation; return new Promise(resolve => { release = resolve; }); },

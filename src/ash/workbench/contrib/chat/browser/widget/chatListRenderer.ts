@@ -1,3 +1,5 @@
+import { ChatErrorContentPart } from './chatContentParts/chatErrorContentPart.js';
+import { parseInlineFileReference } from '../../common/widget/annotations.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ChatLayoutTrace } from './chatLayoutTrace.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
@@ -19,7 +21,8 @@ import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/comm
 import { ChatMarkdownContentPart } from './chatContentParts/chatMarkdownContentPart.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ChatToolInvocationPart } from './chatContentParts/toolInvocationParts/chatToolInvocationPart.js';
-import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
+import type { IChatContentPart } from './chatContentParts/chatContentParts.js';
+import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppModel.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
 import { ChatAccessibilityProvider } from '../accessibility/chatAccessibilityProvider.js';
@@ -29,6 +32,7 @@ import { IStorageService, StorageScope } from '../../../../../platform/storage/c
 import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 import { captureAnimationTarget, triggerClickAnimation, ClickAnimation } from '../../../../../base/browser/ui/animations/animations.js';
 import { ChatResponseFeedbackStoragePrefix, ChatUpvoteAnimationSettingId, isResponseHelpful, type ChatUpvoteAnimation } from '../../common/chatResponseFeedback.js';
+import { MarkHelpfulActionId } from '../actions/chatTitleActions.js';
 
 interface ChatListItemRendererOptions {
 	readonly classPrefix: string;
@@ -52,6 +56,8 @@ const speechContextKeys = new Set([HasSpeechProvider.key, TextToSpeechInProgress
 
 /** Owns one message's DOM, incremental content, actions and disposable resources. */
 export class ChatListItemRenderer extends Disposable {
+	public getFileTreeInfos() { return this.toolPart?.getFileTreeInfos() ?? this.resources.value?.getFileTreeInfos() ?? []; }
+	public getLastFocusedFileTree() { return this.toolPart?.getLastFocusedFileTree() ?? this.resources.value?.getLastFocusedFileTree(); }
 	inViewport = true;
 	private readonly edit = this._register(new MutableDisposable<DisposableStore>());
 	private editButton: Button | undefined;
@@ -101,7 +107,8 @@ export class ChatListItemRenderer extends Disposable {
 	/** The list replaces the row only when its existing content cannot consume the new item. */
 	public update(item: IChatListItem): 'unchanged' | 'updated' | 'replace' {
 		this.layoutTrace.trace('renderElement', () => `update type=${item.type} chars=${item.text.length} transient=${item.transient}`);
-		if (sameItem(this.item, item) && this.item.content === item.content && sameToolInvocation(this.item.toolInvocation, item.toolInvocation)) {
+		const contentPart: IChatContentPart | undefined = this.toolPart ?? this.markdownPart;
+		if (sameItem(this.item, item) && this.item.content === item.content && (!contentPart || contentPart.hasSameContent(item))) {
 			this.item = item;
 			return 'unchanged';
 		}
@@ -114,7 +121,8 @@ export class ChatListItemRenderer extends Disposable {
 			this.hookPart.render(item.hookPart);
 			this.item = item;
 			this.updateState();
-		} else if (this.toolPart && item.toolInvocation && this.toolPart.toolCallId === item.toolInvocation.call.toolCallId) {
+		} else if (this.toolPart && item.toolInvocation && this.toolPart.toolCallId === item.toolInvocation.call.toolCallId
+			&& this.item.toolInvocation?.call.turnId === item.toolInvocation.call.turnId) {
 			this.toolPart.render(item.toolInvocation, item.attachmentSource);
 			this.item = item;
 			this.updateState();
@@ -127,7 +135,7 @@ export class ChatListItemRenderer extends Disposable {
 				|| this.markdownPart.tryIncrementalUpdate({ value: item.text, supportThemeIcons: true, supportAlertSyntax: true }, item.transient))) {
 			this.item = item;
 			this.updateState();
-		} else if (!sameItem(this.item, item)) {
+		} else if (this.toolPart || !sameItem(this.item, item)) {
 			return 'replace';
 		}
 		this.refreshContent();
@@ -261,7 +269,7 @@ export class ChatListItemRenderer extends Disposable {
 			pending = true;
 			status.textContent = '';
 			update();
-			void this.commands.executeCommand<boolean>('workbench.action.chat.markHelpful', target).then(changed => {
+			void this.commands.executeCommand<boolean>(MarkHelpfulActionId, target).then(changed => {
 				if (this.isDisposed || this.item.feedbackSource !== target || !changed) return;
 				status.textContent = localize('chat.response.helpfulSaved', 'Marked helpful in Ash.');
 				const kind = this.configurationService.getValue<ChatUpvoteAnimation>(ChatUpvoteAnimationSettingId) ?? 'floatingThumbs';
@@ -482,13 +490,19 @@ export class ChatListItemRenderer extends Disposable {
 		if (item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor') {
 			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
+				getChatItem: () => this.item,
 				visible: this.options.isVisible() && (item.type !== 'reasoning' || this.options.thinkingExpansion.get(item.id) === true),
 				deferCodeBlockModels: this.options.deferCodeBlockModels,
 				markdown: { value: item.text, supportThemeIcons: true, supportAlertSyntax: true },
 				markedOptions: { breaks: true },
 				fillInIncompleteTokens: item.transient,
 				actionHandler: this.options.onDidRequestLink ? (target: string) => this.options.onDidRequestLink!(target) : undefined,
-				sanitizerConfig: { allowedLinkSchemes: { augment: [OPEN_SESSION_LINK_SCHEME] } },
+				sanitizerConfig: {
+					allowedLinkSchemes: { augment: [OPEN_SESSION_LINK_SCHEME] },
+					resolveFileLink: item.type === 'agentMessage' && this.options.onDidRequestLink
+						? (href: string) => parseInlineFileReference(href) ? href : undefined
+						: undefined,
+				},
 				imageResourceLoader: this.options.imageResourceLoader,
 			}));
 			disposables.add(markdown.onDidChangeHeight(() => {
@@ -520,34 +534,18 @@ export class ChatListItemRenderer extends Disposable {
 		}
 		const attachments = h(article.ownerDocument, 'div');
 		body.append(attachments);
-		if (item.detail) {
-			const detail = h(this.element.ownerDocument, 'p');
+		if (item.type === 'turnError') {
+			disposables.add(new ChatErrorContentPart(article, item, this.options.classPrefix, this.options.onDidRequestErrorAction));
+		} else if (item.detail) {
+			const detail = h(article.ownerDocument, 'p');
 			detail.className = `${this.options.classPrefix}-turn-error-detail`;
 			detail.textContent = item.detail;
 			body.append(detail);
-		}
-		if (item.action) {
-			const action = item.action;
-			const button = disposables.add(new Button(article, {
-				...defaultButtonStyles,
-				label: action.label,
-				presentation: 'secondary',
-				size: 'small',
-				onClick: () => this.options.onDidRequestErrorAction?.(action),
-			}));
-			button.domNode.classList.add(`${this.options.classPrefix}-turn-error-action`);
 		}
 		this.markdownPart = markdownPart;
 		this.attachments = attachments;
 		if (item.type === 'agentMessage' || item.type === 'userMessage') this.renderCopyAction(disposables);
 	}
-}
-
-function sameToolInvocation(left: IChatListItem['toolInvocation'], right: IChatListItem['toolInvocation']): boolean {
-	if (left === right) return true;
-	return !!left && !!right && left.call === right.call && left.result === right.result && left.stopped === right.stopped
-		&& left.waitingFor === right.waitingFor && left.executionStarted === right.executionStarted
-		&& left.output.length === right.output.length && left.output.every((output, index) => output === right.output[index]);
 }
 
 function sameItem(left: IChatListItem, right: IChatListItem): boolean {

@@ -12,6 +12,7 @@ function fixture() {
 	const cancelled: string[] = [], errors: string[] = [];
 	let cancel: (() => void) | undefined;
 	const accounts: IAccountService = {
+		readRateLimits: async () => { throw new Error('Unexpected subscription limit query'); },
 		onDidCompleteLogin: completions.event, onDidChangeAccounts: Event.None,
 		read: async () => ({ revision: 0n, accounts: [] }), logout: async () => { },
 		startLogin: async method => { assert.deepEqual(method, { type: 'chatGptWebDeviceCode' }); return started.p; },

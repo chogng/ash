@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { Dimension } from '../../../base/browser/dom.js';
+import { Lxicon } from '../../../base/common/lxicons.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
@@ -64,6 +65,7 @@ test('Sessions layout commands update menu state from their owners and release w
 	let historyIndex = 1;
 	const sessions: ISessionsService = {
 		navigationRevision: 0,
+		getLastViewedAt: () => undefined,
 		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
 		async openThread() { },
 		onDidChange: changed.event,
@@ -71,14 +73,16 @@ test('Sessions layout commands update menu state from their owners and release w
 		activeSelection: undefined,
 		get canNavigateBack() { return historyIndex === 1; },
 		get canNavigateForward() { return historyIndex === 0; },
+		recentSessions: [],
 		async initialize() { },
 		openSession() { },
 		openUntitledSession() { },
 		openNewSession() { throw new Error('This scenario does not create sessions'); },
 		activateSelection() { },
 		closeVisibleSelection() { },
-		navigateBack() { historyIndex = 0; changed.fire(); },
-		navigateForward() { historyIndex = 1; changed.fire(); },
+		async reopenLastClosedItem() { },
+		async openPreviousSession() { historyIndex = 0; changed.fire(); },
+		async openNextSession() { historyIndex = 1; changed.fire(); },
 	};
 	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor);
 	using menu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarLeftLayout);
@@ -86,6 +90,11 @@ test('Sessions layout commands update menu state from their owners and release w
 	const state = (): unknown => menu.getActions().flatMap(([, actions]) => actions).filter(action => action.id !== 'ash.sessions.togglePanel').map(action => [action.label, action.tooltip, action.enabled, action.checked]);
 	const navigationState = (): unknown => [contextKeys.getValue(CanGoBackContext.key), contextKeys.getValue(CanGoForwardContext.key)];
 	try {
+		const tools = layoutMenu.getActions().find(([group]) => group === '1_tools')?.[1];
+		assert.deepEqual(tools?.map(action => [action.id, action.icon, action.enabled]), [
+			['ash.sessions.openSideChat', Lxicon.chat, true],
+			['ash.sessions.openIOSSimulator', Lxicon.deviceMobile, false],
+		]);
 		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
 		assert.deepEqual(navigationState(), [true, false]);
 		assert.equal(layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.togglePanel')?.enabled, true);
@@ -121,6 +130,8 @@ test('Sessions layout commands update menu state from their owners and release w
 		assert.deepEqual(navigationState(), [false, false]);
 		assert.deepEqual(menu.getActions(), []);
 		assert.equal(CommandsRegistry.getCommand('ash.sessions.toggleSidebar'), undefined);
+		assert.equal(CommandsRegistry.getCommand('ash.sessions.openSideChat'), undefined);
+		assert.equal(layoutMenu.getActions().some(([group]) => group === '1_tools'), false);
 		assert.equal(changed.hasListeners(), false);
 	} finally {
 		actions.dispose();

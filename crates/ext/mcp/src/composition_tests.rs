@@ -44,6 +44,20 @@ use super::{
     materialize_servers, start_mcp_tools,
 };
 use crate::connector::ConnectorMcpRuntimeError;
+
+#[test]
+fn explicitly_requested_result_review_survives_the_mcp_core_adapter() {
+    let output = ash_tools::ToolOutput::error(vec![ash_tools::ToolContent::Text(
+        "private MCP result".into(),
+    )])
+    .require_result_confirmation("Review captured result")
+    .unwrap();
+    let output = super::protocol_execution_output(output).unwrap();
+    assert!(
+        matches!(output, ash_core::ToolExecutionOutput::NeedsResultConfirmation(review)
+        if review.reason == "Review captured result" && review.is_error && review.content == vec![ash_protocol::ContentPart::Text("private MCP result".into())])
+    );
+}
 use crate::connector::ConnectorMcpRuntimeProvider;
 use crate::connector::materialize_connector_servers;
 use crate::status::McpServerRuntimeIntent;

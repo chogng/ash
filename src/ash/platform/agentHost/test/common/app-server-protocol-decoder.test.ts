@@ -237,6 +237,22 @@ test('account revisions preserve the full unsigned 64-bit value across the gener
 	}), AppServerProtocolDecodeError);
 });
 
+test('App Server user-input requirements accept legacy omission and reject non-boolean values', () => {
+	const question = { id: 'answer', header: 'Answer', question: 'A form answer', allowFreeForm: true };
+	const envelope = (value: Record<string, unknown>) => ({
+		jsonrpc: '2.0', method: 'agent/request', params: {
+			sessionId: 'session', threadId: 'thread', turnId: 'turn',
+			interaction: { requestId: 'request', itemId: null, deadline: null, request: { type: 'userInput', request: { questions: [value] } } },
+		},
+	});
+	for (const value of [question, { ...question, required: false }, { ...question, required: true }]) {
+		assert.deepEqual(decodeAppServerNotification(envelope(value)), envelope(value));
+	}
+	for (const required of [null, 'false', 0]) {
+		assert.throws(() => decodeAppServerNotification(envelope({ ...question, required })), AppServerProtocolDecodeError);
+	}
+});
+
 test('App Server notification decoding rejects unknown methods and envelope fields', () => {
 	const notification = {
 		jsonrpc: '2.0',

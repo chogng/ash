@@ -55,6 +55,54 @@ ash-mcp
 `NotStarted`，防止旧 catalog 劫持新连接。调用方应从 `catalog()` 获取 definition/binding，并在
 Core safe point 以整个新 runtime 替换旧 runtime。
 
+## 工具结果复核
+
+初始化的 `capabilities.extensions["ash/resultReview"]` 公告 `{ "versions": [1] }`。
+工具仅在已协商 v1 的宿主上，可通过返回值的 `_meta` 显式请求结果复核：
+
+```json
+{ "ash/resultReview": { "version": 1, "reason": "Review this captured output before sharing" } }
+```
+
+未提供该字段的结果继续正常交付。提供时必须是受支持版本，且 `reason` 是非空、最多 8192
+UTF-8 字节的字符串；无效声明返回 `InvalidResult`，不能静默绕过复核。`ToolOutput` 保留该要求，
+截断和附加 MCP App artifact 不得丢弃它。Core 捕获最终模型输出，绑定已执行的工具调用并持久化；
+候选交互最多 4 MiB，媒体使用可检查的 URL 内容，不接受尚无结果条目的持久 attachment 引用。
+
+分享把该候选结果交给模型；跳过交付未分享标记，取消也不披露结果。复核不请求新的执行权限，
+不会撤销工具已产生的副作用，也不会在恢复后重新调用工具。支持的文件修改由独立 checkpoint
+操作恢复。完整候选内容只向选定的交互 owner 交付，普通 Thread 订阅只获得脱敏的等待状态。
+
+## 工具展示声明
+
+MCP 工具目录可以在工具 `_meta["ash/activity"]` 声明 v1 展示内容。例如：
+
+```json
+{ "version": 1, "argumentPointer": "/presentation" }
+```
+
+该 JSON Pointer 从当前调用参数读取完整 `ToolActivity`；静态声明可改用 `activity` 字段。
+声明随工具目录与绑定冻结，不从工具名称或任意结果 JSON 推断。`confirmation` 的 `presentation`
+支持 `modifiedFiles`（`files` 含 `path`、可选 `original` 和 `modified`）、`agentFeedbackReview`
+（`message`）、`extensionsInstall`（`extensions`）、`sandboxPrerequisite`（`dependencies` 和
+`remediations`）及 `authentication`（`provider`）。这是原策略审批的只读证据，不能增加权限、
+应用修改、安装扩展或执行修复；认证按钮使用绑定来源的 MCP 服务，登录后仍需批准。
+
+声明最大 128 KiB；列表非空且最多 32 项，文件路径和沙箱条目最多 4096 字节，扩展 ID 和
+认证展示名最多 256 字节，文件各版本／反馈最多 64 KiB。未知类型、缺失参数和超限内容在执行前失败。
+
+结果可在根 `_meta["ash/resultPresentation"]` 返回结构化导航目标：
+
+```json
+{ "version": 1, "target": { "type": "sessionTarget", "sessionId": "session", "threadId": "child", "label": "Child task" } }
+```
+
+另一个类型是 `automationConfigured`，字段为 `automationId` 和 `label`。目标属于产生结果的
+同一宿主；客户端只通过原 Session 的服务解析，不能切换到当前默认连接。标题非空且最多
+512 字节，标识受领域类型及 256 字节上限约束；未知版本或无效声明返回 `InvalidResult`。
+导航元数据作为 `viewMetadata` artifact 保存并计入输出预算，不进入模型文本。隐藏、替换或
+关闭视图会取消尚未完成的导航；导航保留原会话草稿。
+
 ## 内部调用与校验
 
 ```text

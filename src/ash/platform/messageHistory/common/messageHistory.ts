@@ -6,6 +6,7 @@ export interface MessageHistorySubmission {
 	readonly text: string;
 	readonly kind: MessageHistoryKind;
 	readonly threadId?: string;
+	readonly scope?: string;
 }
 
 export interface MessageHistoryEntry extends MessageHistorySubmission {
@@ -14,6 +15,7 @@ export interface MessageHistoryEntry extends MessageHistorySubmission {
 }
 
 export interface MessageHistoryQuery {
+	readonly scope?: string;
 	readonly before?: string;
 	readonly text: string;
 	readonly kind?: MessageHistoryKind;

@@ -1,3 +1,4 @@
+import { AgentPluginEditorInput } from '../../../../workbench/contrib/extensions/common/agentPluginEditorInput.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
@@ -61,7 +62,6 @@ import {
 import {
 	ExtensionsCapabilityInput,
 	ExtensionsInput,
-	ExtensionsInputSource,
 } from '../../../../workbench/contrib/extensions/common/extensionsInput.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { CustomizeSkillActions } from './customizeSkillActions.js';
@@ -724,7 +724,7 @@ export class CustomizeEditorPane extends EditorPane {
 						),
 				})),
 				...local.packages.map(plugin => ({
-					id: `local/${plugin.id}`,
+					id: `local/${plugin.id}/${plugin.digest}`,
 					name: plugin.displayName,
 					description: localize('customize.localPlugin', 'Local plugin'),
 					metadata: [
@@ -735,7 +735,7 @@ export class CustomizeEditorPane extends EditorPane {
 					].join(' · '),
 					open: () =>
 						this.openInput(
-							new ExtensionsInput(
+							new AgentPluginEditorInput(
 								{
 									id: plugin.id,
 									version: plugin.version,
@@ -743,8 +743,7 @@ export class CustomizeEditorPane extends EditorPane {
 									description: '',
 									packageType: 'editorExtension',
 								},
-								undefined,
-								ExtensionsInputSource.Local,
+								plugin.digest,
 							),
 						),
 				})),

@@ -12,7 +12,7 @@ let fullRegistrationSnapshots = false;
 let registrationRevision = 0;
 let speechRegistrationGeneration = 0;
 const dynamicTerminalRegistration = kind => ['terminalProfileProvider', 'terminalPty', 'terminalLinkProvider', 'terminalCompletionProvider', 'terminalQuickFixProvider'].includes(kind);
-const dynamicRegistration = (kind, channelId) => kind === 'speechProvider' || kind === 'treeDataProvider' || kind === 'dataChannel' && channelId === 'canvas.provider.v1' || dynamicTerminalRegistration(kind);
+const dynamicRegistration = (kind, channelId) => kind === 'speechProvider' || kind === 'treeDataProvider' || kind === 'dataChannel' && ['canvas.provider.v1', 'chat.context.v1'].includes(channelId) || dynamicTerminalRegistration(kind);
 
 function publishDynamicRegistrations() {
 	if (phase !== 'active') return;
@@ -33,6 +33,8 @@ function publishDynamicRegistrations() {
 				...(triggerCharacters ? { triggerCharacters } : {}), ...(providerId ? { providerId } : {}), ...(profileId ? { profileId, title } : {})
 			})),
 		canvasProviders: active.filter(value => value.kind === 'dataChannel' && value.channelId === 'canvas.provider.v1')
+			.map(({ registrationId, kind, channelId }) => ({ registrationId, kind, channelId })),
+		chatContextProviders: active.filter(value => value.kind === 'dataChannel' && value.channelId === 'chat.context.v1')
 			.map(({ registrationId, kind, channelId }) => ({ registrationId, kind, channelId })),
 	}));
 }

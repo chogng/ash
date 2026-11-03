@@ -448,6 +448,20 @@ suite('dialog browser component', () => {
 		await expect(page.getByRole('dialog')).toHaveCount(0);
 	});
 
+	test('an explicit confirmation can focus Cancel without a default accept action', async function () {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		await page.evaluate(() => window.ashDialogIntegration.showCore('cancel-focus'));
+		const dialog = page.getByRole('dialog', { name: 'Core dialog' });
+		const cancel = dialog.getByRole('button', { name: 'Cancel', exact: true });
+		await expect(cancel).toBeFocused();
+		await dialog.press('Enter');
+		await expect(dialog).toBeVisible();
+		await cancel.press('Enter');
+		await expect(dialog).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastCoreResult?.button)).toBe(1);
+	});
+
 	test('dialog buttons and Escape return their result and restore focus', async function () {
 		const { page } = browserTests;
 
@@ -525,9 +539,13 @@ suite('dialog browser component', () => {
 			trigger.focus();
 			return window.ashDialogIntegration.showDirectoryPermission();
 		});
-		const dialog = page.getByRole('dialog', { name: 'Directory permissions' });
+		const dialog = page.getByRole('dialog', { name: 'Authorize this workspace directory.' });
 		await expect(dialog).toBeVisible();
 		await expect(dialog.getByRole('button', { name: 'Read only', exact: true })).toBeFocused();
+		await expect(dialog.getByRole('button', { name: 'Read only', exact: true }))
+			.toHaveAccessibleDescription('Edit files with commands and workspace integrations disabled');
+		await expect(dialog.getByRole('button', { name: 'Development', exact: true }))
+			.toHaveAccessibleDescription('Enable commands and workspace integrations');
 		await page.evaluate(() => window.ashDialogIntegration.cancelDirectoryPermission());
 		await expect(dialog).toHaveCount(0);
 		await expect(page.locator('#directory-trigger')).toBeFocused();
@@ -553,7 +571,7 @@ suite('dialog browser component', () => {
 		});
 		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastDirectoryResult)).toBe('cancelled');
 		await page.evaluate(() => window.ashDialogIntegration.showDirectoryPermission());
-		const dialog = page.getByRole('dialog', { name: 'Directory permissions' });
+		const dialog = page.getByRole('dialog', { name: 'Authorize this workspace directory.' });
 		await expect(dialog).toBeVisible();
 		await page.evaluate(() => window.ashDialogIntegration.releaseDirectoryPrompt());
 		await expect(page.getByRole('dialog')).toHaveCount(1);

@@ -60,6 +60,14 @@ export class MenuBar extends Disposable {
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(observeResize(container, () => this.update()));
 		const document = container.ownerDocument;
+		// Observe combinations before a host's document-level shortcut can stop
+		// propagation. Menu actions still respect consumption at the document.
+		const keyObserver = document.defaultView ?? document;
+		this._register(addDisposableListener(keyObserver, 'keydown', (event: KeyboardEvent) => {
+			if (event.key !== 'Alt' || event.ctrlKey || event.shiftKey || event.metaKey || event.isComposing || event.defaultPrevented) this.altOnly = false;
+			else if (!event.repeat) this.altOnly = true;
+		}, true));
+		this._register(addDisposableListener(keyObserver, 'compositionstart', () => { this.altOnly = false; }, true));
 		this._register(addDisposableListener(document, 'focusin', () => this.updateFocus(), true));
 		this._register(addDisposableListener(document, 'focusout', () => {
 			queueMicrotask(() => { if (!this.isDisposed) this.updateFocus(); });
@@ -68,12 +76,12 @@ export class MenuBar extends Disposable {
 		this._register(addDisposableListener(document, 'keydown', event => this.onKeyDown(event), true));
 		this._register(addDisposableListener(document, 'keyup', event => {
 			if (event.key === 'Alt') {
-				if (this.altOnly && !this.options.disableAltFocus) this.toggleFocus();
+				if (this.altOnly && !event.ctrlKey && !event.shiftKey && !event.metaKey && !event.isComposing && !event.defaultPrevented && !this.options.disableAltFocus) this.toggleFocus();
 				this.altOnly = false;
 			}
 			this.element.classList.toggle('show-mnemonics', this.options.alwaysOnMnemonics === true || event.altKey);
 		}, true));
-		if (document.defaultView) this._register(addDisposableListener(document.defaultView, 'blur', () => this.blur()));
+		if (document.defaultView) this._register(addDisposableListener(document.defaultView, 'blur', () => { this.altOnly = false; this.blur(); }));
 		this.render();
 	}
 
@@ -98,7 +106,7 @@ export class MenuBar extends Disposable {
 			...this.options.buttonStyles,
 			label: '', icon: Lxicon.menu, iconOnly: true,
 			ariaLabel: this.options.ariaLabel ?? localize('menuBar.applicationMenu', 'Application Menu'),
-			onClick: () => this.toggleMenu(MenuBar.OVERFLOW_INDEX),
+			onClick: event => this.toggleMenu(MenuBar.OVERFLOW_INDEX, event.detail === 0),
 		}));
 		button.setTitle(this.options.ariaLabel ?? localize('menuBar.applicationMenu', 'Application Menu'));
 		this.configureButton(button, MenuBar.OVERFLOW_INDEX);
@@ -180,7 +188,7 @@ export class MenuBar extends Disposable {
 				...this.options.buttonStyles,
 				label: readableLabel,
 				ariaLabel: readableLabel,
-				onClick: () => this.toggleMenu(index),
+				onClick: event => this.toggleMenu(index, event.detail === 0),
 			}));
 			this.configureButton(button, index);
 			const mnemonic = this.mnemonic(menu.label);
@@ -221,9 +229,9 @@ export class MenuBar extends Disposable {
 		}));
 	}
 
-	private toggleMenu(index: number): void {
+	private toggleMenu(index: number, selectFirst: boolean): void {
 		if (this.activeIndex === index) this.closeMenu(true);
-		else this.openMenu(index, true);
+		else this.openMenu(index, selectFirst);
 	}
 
 	private openMenu(index: number, selectFirst: boolean): void {
@@ -293,10 +301,9 @@ export class MenuBar extends Disposable {
 	}
 
 	private onKeyDown(event: KeyboardEvent): void {
-		if (event.isComposing || event.defaultPrevented) return;
-		this.altOnly = event.key === 'Alt';
+		if (event.isComposing || event.defaultPrevented) { this.altOnly = false; return; }
 		this.element.classList.toggle('show-mnemonics', this.options.alwaysOnMnemonics === true || event.altKey);
-		if (this.options.enableMnemonics && event.altKey && event.key.length === 1) {
+		if (this.options.enableMnemonics && event.altKey && !event.ctrlKey && !event.metaKey && event.key.length === 1) {
 			const index = this.menus.findIndex(menu => this.mnemonic(menu.label) === event.key.toLocaleLowerCase());
 			if (index >= 0) {
 				if (this.options.compactMode || this.overflowIndices.includes(index)) {

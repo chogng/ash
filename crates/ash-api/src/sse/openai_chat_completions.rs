@@ -119,6 +119,23 @@ impl OpenAiChatCompletionsSseDecoder {
             .flatten()
         {
             self.decode_tool_call(call)?;
+            let index = call
+                .get("index")
+                .and_then(Value::as_u64)
+                .expect("tool call index was validated");
+            let state = &self.tool_calls[&index];
+            if !state.id.is_empty() && !state.name.is_empty() {
+                events.push(ModelStreamEvent::ToolCallDelta {
+                    id: state.id.clone(),
+                    name: state.name.clone(),
+                    arguments: call
+                        .get("function")
+                        .and_then(|value| value.get("arguments"))
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_owned(),
+                });
+            }
         }
         Ok(events)
     }

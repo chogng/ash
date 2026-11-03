@@ -502,6 +502,7 @@ class LayoutFixture extends Disposable {
 		this.services.registerInstance(IWorkspaceContextService, this.workspace);
 		this.services.registerInstance(ILayoutService, {
 			onDidChangePartVisibility: this.partsChanged.event,
+			isPartRequested: (part: string) => part === 'auxiliarybar' ? this.auxiliaryVisible : this.editorVisible,
 			isPartVisible: (part: string) => part === 'sessions' ? this.sessionsVisible : part === 'panel' ? this.panelVisible : part === 'auxiliarybar' ? this.auxiliaryVisible : this.editorVisible,
 			showPart: (part: string) => { if (part === 'auxiliarybar') { this.auxiliaryVisible = true; } else { this.editorVisible = true; } },
 			hidePart: (part: string) => { if (part === 'auxiliarybar') { this.auxiliaryVisible = false; } else { this.editorVisible = false; } },

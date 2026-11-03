@@ -34,7 +34,7 @@ export class ChecksWidget extends Disposable {
 		@ISessionsService sessions: ISessionsService,
 	) {
 		super();
-		this.followUp = this._register(instantiation.createInstance(PullRequestFollowUpWidget, container));
+		this.followUp = this._register(instantiation.createInstance(PullRequestFollowUpWidget, container, undefined));
 		this.element = h(container.ownerDocument, 'section', { className: 'ash-sessions-checks' });
 		container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));

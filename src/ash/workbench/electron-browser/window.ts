@@ -149,15 +149,13 @@ export class NativeWindow extends Disposable {
 			if (frame !== undefined || this.isDisposed) return;
 			frame = target.requestAnimationFrame(() => {
 				frame = undefined;
-				if (!size) {
-					container.style.maxWidth = originalWidth;
-					container.style.maxHeight = originalHeight;
-					return;
-				}
-				// Chromium's integer DIP viewport can extend beyond the client pixels.
-				// Limit the root at the measured boundary; never reserve a fixed inset.
-				container.style.maxWidth = `${size.width / target.devicePixelRatio}px`;
-				container.style.maxHeight = `${size.height / target.devicePixelRatio}px`;
+				const scale = target.devicePixelRatio;
+				// A native sample can lag the viewport. The percentage floor tracks
+				// the containing block immediately and limits rounding correction to
+				// one physical pixel while the next sample is in flight.
+				const floor = `calc(100% - ${1 / scale}px)`;
+				container.style.maxWidth = size ? `max(${size.width / scale}px, ${floor})` : originalWidth;
+				container.style.maxHeight = size ? `max(${size.height / scale}px, ${floor})` : originalHeight;
 			});
 		};
 		const subscription = this.host.onDidChangeWindowClientSize(value => {

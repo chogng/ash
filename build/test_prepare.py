@@ -156,10 +156,13 @@ class PrepareTests(unittest.TestCase):
                 "extensions",
                 "resources",
                 "third_party",
+                "remote-server",
+                "livekit-server",
             ):
                 (root / directory).mkdir(parents=True)
             (root / "Cargo.lock").write_text("lock")
             (root / "rust-toolchain.toml").write_text("toolchain")
+            (root / "livekit-server/runtime.json").write_text("{}")
             backend = root / "crates/server.rs"
             backend.write_text("first")
             editor_backend = root / "crates/terminal/terminal.rs"
@@ -222,10 +225,13 @@ class PrepareTests(unittest.TestCase):
                 "extensions",
                 "resources",
                 "third_party",
+                "remote-server",
+                "livekit-server",
             ):
                 (root / directory).mkdir(parents=True)
             (root / "Cargo.lock").write_text("lock")
             (root / "rust-toolchain.toml").write_text("toolchain")
+            (root / "livekit-server/runtime.json").write_text("{}")
             (root / ".git").mkdir()
             args = prepare.parse_arguments([])
             with (
@@ -346,6 +352,13 @@ class PrepareTests(unittest.TestCase):
     def assert_preparation_contract(self, target: str) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
+            for name in (
+                "livekit-server/runtime.json",
+                "third_party/livekit/runtime-lock.json",
+            ):
+                descriptor = root / name
+                descriptor.parent.mkdir(parents=True, exist_ok=True)
+                descriptor.write_text("{}")
             spec = TARGETS[target]
             binaries = {}
             for name in (

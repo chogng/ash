@@ -4,6 +4,14 @@
 
 任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**布局前置**表示须先补齐布局 owner 的位置或移动契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
 
+## Agents Window · Windows 环境选择器验收
+
+- [ ] **验收 · Windows 冷启动环境枚举** · macOS Desktop 已用受控 IPC 验证菜单即时打开、SSH 与 WSL 独立更新，以及新建环境表单保留选择和焦点。待在装有 WSL 2 的 Windows 实机冷启动 Ash，测量菜单展开、SSH 和 WSL 条目出现的时间，并核对 WSL 发行版列表。
+
+## Agents Window · 真实 SSH 主机验收
+
+- [ ] **验收 · SSH 工作区信任** · 已通过本地桌面场景和远程路径的定向自动化测试。真实远程主机验收缺少可连接的 SSH 地址及允许创建临时目录的路径。取得这两项后，在隔离目录验证 SSH 工作区启动恢复、已有受限授权时重新提示并在确认后挂载，以及取消后目录未挂载。用远端目录绑定状态核对结果。
+
 ## Roadmap · Rust 运行时与 Node 退场
 
 最终目标是让 Rust 承担产品宿主、核心执行与基础设施，移除产品对 Node 运行时的依赖。迁移以实际调用链、打包依赖和进程退出为完成条件；把 Node 文件操作包成 Rust 原生模块、改目录名或另建一套平行业务后端，都不等于 Node 退场。浏览器 JavaScript／TypeScript 与 Node 是不同运行时：界面可以继续使用浏览器能力，Rust 可逐步进入前端计算与渲染流程，不要求先整体重写 UI。
@@ -13,7 +21,12 @@
 - [ ] **产品基础设施迁入 Rust** · 沿实际消费者迁移日志、存储、文件与网络 IO、进程和后台资源管理。每个切片同时删除旧 Node owner、注册与线上消费者，覆盖启动失败、取消、重连、多窗口及退出；日志落盘不能依赖它所诊断的 App Server 业务连接。Electron 仅保留尚未迁走的宿主适配。
 - [ ] **扩展与工具运行时去 Node** · 逐项核对扩展、语言服务器及 Electron run-as-Node 的消费者，将已需能力迁到 Rust、Rust/V8、浏览器 Worker 或原生程序。保留作者契约、权限、调试和资源回收语义；无法等价支持的 Node API 依赖须明确迁移或支持范围，不能通过兼容层继续隐式启动 Node。
 - [ ] **Rust 产品宿主替换 Electron／Node 启动链** · 闭合窗口、浏览器嵌入、系统集成、原生 IPC、更新、打包和跨平台生命周期，再替换过渡宿主。日志等 Rust 基础模块由 Rust 宿主直接拥有；过渡期内部 helper 随之退出。验收默认产品启动与主要工作流不加载或启动 Node，不能以仍需 Electron Main 的实现宣称完成。
+  - 内置浏览器按基础网页浏览验收：打开网页、站内跳转、前进／后退、刷新，以及常见网页的输入和登录。Agent 浏览器自动化和 Electron 专用调试集成不作为退场前置。外部网页使用独立的浏览视图和存储分区，与 Ash 工作台的认证及宿主 IPC 隔离。普通浏览器中的 Ash 继续走独立 Web 入口。
+  - Windows Rust 预览可选 `ASH_NATIVE_DESKTOP_VIEW=composition`，由 Rust 持有 DirectComposition 视觉树。125% 显示缩放下已验证真实工作台渲染、鼠标点击、顶栏拖动、右边缘缩放和文件保存；编辑器采样区域与子窗口版逐像素一致。三个窗口按钮已通过 Win32 命中与鼠标操作实测，Windows 11 23H2 悬停最大化按钮仍未弹出贴靠布局。切换默认宿主前须补齐贴靠、系统无障碍、输入与缩放矩阵验收。实机记录在 `.build/ash-native-gpu-probe/composition-comparison/validation.json` 和 `.build/ash-native-gpu-probe/native-caption/validation.json`。
+  - 独立 AppWindow 原型已在 Windows 11 23H2、125% 缩放下把系统按钮合入真实 Ash 工作台。系统贴靠浮层和三个按钮的 UI Automation 识别均已验证。移除旧自绘按钮的鼠标消息拦截后，系统按钮的最小化、最大化、还原和关闭也已通过实机测试。并入正式宿主前须接入标题栏布局对系统保留区和高度的动态更新，并闭合 Windows App Runtime 打包与缺失时的启动策略。本机 bootstrapper 返回 `0x80670016`，原型通过系统的动态包依赖加载已安装的 1.8 运行时。实机截图在 `.build/ash-native-gpu-probe/appwindow-caption/`，按钮操作记录在 `.build/ash-native-gpu-probe/appwindow-caption-actions/validation.json`。
 - [ ] **Rust 前端计算与渲染演进** · 沿真实 DOM 更新、布局、文本／差异计算和渲染调度热点选择 Rust／WASM 等切片，以匹配负载测量输入到可见更新、帧时间和内存。保持模型／编辑历史唯一 owner，覆盖 IME、选区、焦点、键盘和无障碍；现有 [WebGPU 渲染任务](#多文件审阅--webgpu) 按其独立范围验收，不把引擎 GPU 合成或 Rust 代码存在当作渲染优化完成。
+
+  - composition 开发模式复用 WebView2 工作台顶栏，并由 AppWindow 保留系统窗口按钮。125% 实测鼠标可打开搜索和应用菜单、隐藏和恢复主侧栏、拖动空白区并最大化，悬停最大化按钮可见贴靠布局。跨屏 DPI、键盘和系统无障碍仍待验收。记录在 `.build/ash-native-gpu-probe/workbench-system-titlebar/`。
 
 ## Rust 后端生命周期 · Windows 验收
 
@@ -39,13 +52,17 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 - [ ] **验收** · 在 Windows 显示缩放 100%、125%、150%、200% 下，分别检查 IDE 与 Agents：连续拖动四边和四角、往返缩放、最大化后恢复；标题栏左右图标应保持相对窗口边缘的位置，按钮不得抖动、重叠或被裁切。再切换应用界面缩放，检查底部状态栏和右边缘是否出现 1px 裁切。
 - [ ] **验收** · 将编辑器和会话分别弹出到辅助窗口，重复上述缩放与最大化恢复；检查编辑内容、状态栏与根容器边界对齐，切换紧凑模式后菜单、键盘操作和焦点恢复正常。记录 Windows 版本、显示缩放、应用缩放、窗口类型及复现步骤；验收通过后移除此节。
 
-同步 resize 已收至共享布局服务；辅助窗口已补齐布局前后阶段，根容器统一保留小数尺寸。macOS 已通过 268 项定向单测、2 项原生回归和 3 个真实窗口场景；Agents 106 帧采样无布局滞后，IDE 113 帧图标位置稳定。Windows 分数缩放实机尚未验证；本地证据在 `.build/ash-playwright-mcp/titlebar-resize/foundation-fix/validation.json`。
+同步 resize 已收至共享布局服务；辅助窗口已补齐布局前后阶段，根容器统一保留小数尺寸。macOS 已通过 268 项定向单测、2 项原生回归和 3 个真实窗口场景；Agents 106 帧采样无布局滞后，IDE 113 帧图标位置稳定。macOS 本地证据在 `.build/ash-playwright-mcp/titlebar-resize/foundation-fix/validation.json`。
+
+2026-11-03 Windows 11 23H2（22631）实机验收未通过。IDE 主窗在 100%、125%、150%、200% 连续拖动四边和四角时均测到右侧标题栏按钮短时偏移。最大化、恢复及应用缩放 0、+1、−1 的稳定状态下，主窗与原生客户区对齐。辅助编辑器在 125% 的右边和底边、150% 的右边、200% 的底边各出现 1 个物理像素的越界。紧凑模式键盘切换和焦点恢复通过，菜单和 Agents 会话弹窗仍待验收。复现步骤、采样日志和 IDE 录像索引见 [Windows 验收记录](.build/ash-playwright-mcp/windows-resize/validation.json)。
+
+主窗修复复测（GPU 开启）。旧原生尺寸对根容器的限制已收窄为一个物理像素。125% 完整自托管场景通过，1,782 帧未发现按钮偏移，松手后及应用缩放 0、+1、−1 均与 Win32 客户区对齐。150% 仍有右侧标题栏按钮距边缘的偏移，稳定状态通过。100% 和 200% 的界面隔离场景通过。继续验证 150% 标题栏边距、辅助窗物理边界及 Agents 会话弹窗。见 [125% 日志](.build/ash-playwright-mcp/windows-resize/ide-125-gpu-final.log) 和 [150% 日志](.build/ash-playwright-mcp/windows-resize/ide-150-gpu-final.log)。
 
 ## 上下文菜单 · 原生窗口按钮避让
 
-- [ ] **验证／修复候选 · 上下文菜单避让原生窗口按钮**：`src/ash/platform/windows/electron-main/windowImpl.ts` 的自定义标题栏已启用 Window Controls Overlay，但 `src/ash/base/browser/ui/contextview/contextview.ts` 只按完整 viewport 执行 `layout2d`，未消费当前窗口的原生按钮占用区域；当 Activity Bar 位于顶部时，标题栏账户／管理入口的右键菜单沿 CompositeBar 传入指针锚点；若锚点位于按钮高度内，菜单向右仍在 viewport 内却跨入按钮区，现有标题栏 padding 不会约束这个独立 popup。子菜单也须按自身锚点核验，不能泛称所有顶端菜单均受影响。参考 [VS Code 菜单避让窗口按钮](https://github.com/microsoft/vscode/pull/345326)（2026-11-02 已合并，稳定 1.144.0 尚不包含），先在原生 Windows 自定义标题栏复核顶端右键菜单／子菜单的遮挡与点击，再沿共享 ContextView 补窄范围避让。本项为静态布局链确认，尚未运行 Ash 原生窗口复现，不把上游模拟几何测试当作 Ash 实机验收。
-  - 范围与前提：沿现有 `base/browser/browser.ts` 的 `isWCOEnabled`／`getWCOTitlebarAreaRect` 读取目标窗口的实时可见性与几何；`base/browser/ui/menu/menu.ts` 的子菜单已复用 ContextView，不新增第二套菜单定位器。优先向标题栏下方放置，空间不足时评估横向避让及视口内回退；保留 visualViewport 偏移、缩放与容器坐标转换，不硬编码按钮宽度、不改变原生标题栏策略。WCO 隐藏、system 标题栏、全屏或 API 不可用时保持原布局。
-  - 验收：扩展 `src/ash/base/test/browser/contextview.test.ts`、`src/ash/platform/contextview/test/browser/contextViewService.test.ts` 及菜单测试，覆盖左右按钮区、顶端指针／元素锚点、多级子菜单、主／辅助窗口不同几何、窄窗口和超高菜单、缩放／滚动、可见性变化及无 WCO；保留键盘焦点、Escape、点击与取消语义。实际 Windows 主窗口与弹出窗口检查菜单不被按钮遮住且可点击，其他平台按真实可用 API 记录范围；此项不代替已有窗口缩放布局验收。
+- [ ] **验收剩余 · 原生窗口按钮与浮动菜单**：[共享浮动菜单避让](https://github.com/chogng/ash/commit/d25ce1a8a0fd7458cef050b4c361b772d9a467e3) 已在 `src/ash/base/browser/ui/contextview/contextview.ts` 接入目标窗口可见 WCO 几何及 `geometrychange`，由 `windowControlsOverlay.ts` 先向下、再横移、最后按视口回退；子菜单沿既有 ContextView 复用。原“只按完整 viewport 定位、未消费按钮区域”的实现缺口已消除，保留原生 Windows 主／辅助窗口的实际遮挡与点击验收。参考 [VS Code 菜单避让窗口按钮](https://github.com/microsoft/vscode/pull/345326)（2026-11-02 已合并，稳定 1.144.0 尚不包含），不重复建立另一套定位器。
+  - 已有证据与边界：`windowControlsOverlay.test.ts` 覆盖左右按钮区、高菜单、偏移 viewport 与无效几何；`contextview.test.ts` 覆盖 owner window、可见性更新和隐藏后释放监听；`menu.browser.test.ts` 覆盖多级菜单、主题和键盘。浏览器 fixture 注入 WCO 几何，不能等同原生按钮命中验收；提交记录的 Electron IPC smoke／构建通过也不替代该场景。当前窗口配置证据来自 Electron `windowImpl.ts`，不据此宣称 Rust 原生宿主／DirectComposition 的按钮区域已覆盖。
+  - 剩余验收：在实际 Windows 自定义标题栏，以 Activity Bar 顶部账户／管理入口右键菜单及键盘子菜单核对主窗口和弹出窗口，包含缩放、窄窗口、高菜单、全屏／system 标题栏及 WCO 隐藏或不可用；菜单不被按钮遮住且可点击，焦点、Escape 和取消保持可用。分别记录真实宿主、API 可用性和几何来源；Rust 原生宿主按其现有按钮／命中契约另记覆盖，不为此新增跨宿主模拟层。本项不替代已有窗口缩放布局或原生宿主切换验收。
 
 ## Connectors 面板 · 点击后窗口无响应
 
@@ -147,6 +164,14 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 ## Sessions · TODO
 
+- [ ] **Sessions contribution 对齐余项** · 多对话会话的目录切换还需跨 Thread 原子提交执行目标并保留各自的工作区。远程和 Provider 会话还需对接其拥有方的目录选择和授权契约。通知、分组外观、自动化进度和目录呈现仍需核对生产调用链。
+
+- [ ] **New Environment · Cloud 与 WSL 验收** · Cloud 需要可路由的 Sessions provider 与目标发现和创建契约。仍需在 Windows 实机验证 WSL 首次连接及环境变量注入。
+
+### Artifact Integrations
+
+- [ ] **Artifact Integrations** · 对照 VS Code `0dc300b2c77` 的 `src/vs/platform/artifactIntegrations`。Changes 直接创建的 GitHub PR 已记录为会话产物。Sessions 从存储投影通用记录，按 provider／Session／产物／集成绑定操作，经显式选择调用 GitHub 合并或 GitHub 托管的自动合并。Agent 可记录 PR 产物，App Server 保存来源 Thread／Turn 和一次性的记录身份。PR Autopilot 的 CI 修复由既有 Automations owner 保存授权与运行历史，移除产物后旧身份失效。仍需通用集成注册与 provider 生命周期、手动原生动作的持久运行与结果对账、通用详情和 prompt 动作，以及真实 GitHub 测试仓库的写入与重连验收。
+
 - [ ] **评估 · Agent Window 20px 图标字体**：可能需要按 20×20px 设计基准制作独立图标字体；后续确认适用范围、线宽与留白，并对比现有 16px 字体放大的效果，再决定实施。
 - [ ] **后端前置** · 为 Agent PR 的持续合并策略与 request metadata 补后端工作流契约；当前只闭合请求提交／排队、直接创建 PR、Draft 和 auto-merge，任务提交成功不能视为 PR 已创建。
 
@@ -156,7 +181,10 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 - [ ] **共享宿主前置 · widgetHosts 窗口归位** · 上游独立 Chat 窗口沿 `chatMoveActions.ts` 进入公共 `browser/parts/editor/auxiliaryEditorPart.ts` 与 titlebar，Quick Chat 外框由 Quick Input 承担。迁移本地 `widgetHosts/chatAuxiliaryWindow.ts` 及其样式前，先闭合非编辑器 Chat／Cowork 组件在公共窗口中的挂载、焦点、置顶、关闭归还和释放契约；现有 `ITitleService.createAuxiliaryTitlebarPart` 要求编辑器分组，不能用虚构分组或转调壳承接。`widgetHosts/media/chatQuick.css` 的外框迁移也先补公共 QuickWidget 外框 owner，保留 Chat 自身的标题与内容布局。随后迁移真实调用方并验证同一组件／草稿与关闭归还。
 
-- [ ] **修复候选 · Chat 回复的相对文件链接**：`src/ash/workbench/contrib/chat/browser/widget/chatListRenderer.ts` 的 `ChatListItemRenderer` 创建及增量更新助手 Markdown 时仍未传入目录基址（[渲染职责拆分](https://github.com/chogng/ash/commit/a748759f3aa13a070d97c20633496c32da82cbff) 已从 `chatListWidget.ts` 迁出逐消息渲染），`src/ash/base/browser/markdownRenderer.ts` 因缺少 `baseUri` 拒绝 `README.md` 等相对链接。参考 [相对回复链接解析](https://github.com/microsoft/vscode/pull/344087)（2026-10-25 已合并，已包含于 [VS Code 1.144.0](https://github.com/microsoft/vscode/releases/tag/1.144.0)），沿 `src/ash/sessions/browser/chatWidgetModel.ts` 的 Session／Thread owner 与 `chatWidget.ts` 为渲染提供带来源身份的权威工作目录，补齐回复 → 文件打开链路；不借用当前全局工作区、不改写历史原文。本项为静态调用链缺口，尚未运行行为验收，不扩大到任意资源自动读取。
+- [ ] **验收前置 · 上游同场景对照** · Ash 当前命令提示、补全、链接及快照已取得 86 项定向回归、2 项链接补验和 Windows Desktop 两个自托管场景的通过证据，范围见 `docs/chat.md`。Actions 的移动命令、工作区选择入口及四个内置 context 来源已完成本地迁移，128 项上下文界面回归、36 项最终定向测试和 macOS Electron 键盘流程通过。后续听写显式注册、New Chat／Helpful 命令契约与 Find 行为已通过本地定向测试，新的 New Chat ID 及附件键盘流程也通过 macOS Electron 自托管。 本轮三个诊断命令、Agent 窗口目录服务装配及日志导出共享入口已通过 IDE／Agent Window 两个 Electron/App Server 场景。本轮插件管理入口及 New Chat 的共享注册／窗口焦点委派通过 89 项定向测试和两个 Desktop 场景。只读 VS Code 源码的测试产物已由其原编译工具补齐，官方 Chromium runner 的 105 项 actions／插件入口测试通过；上游真实桌面的 Plugins 查询、重复打开、搜索焦点及未发送草稿四项语义也已补验。其内置 GitHub／Emmet／Git 扩展产物仍不齐，这组通过结果不覆盖插件安装、授权或 marketplace。仍需对 `chatMoveActions`、`chatExecuteActions`、`chatContext`、`chatNewActions`、`chatTitleActions`、`chatFindActions`、`chatSpeechToTextActions`、`chatDeveloperActions` 的完整界面场景复核输入、焦点／选区、换行和主题；完整上游 API／UI 对齐验收仍未完成。
+- [ ] **PromptSyntax 剩余能力（用户已确认六类均需要）** · 已实现 Skill／Agent／Instructions 的原生 schema 编辑、引用补全与跳转、正文原生文件引用补全、Quick Fix、Agent／Instructions 文件创建与角色管理、保留来源及 digest 的 Skill 执行、从当前已保存 Agent 打开草稿并正常发送，以及项目 Instructions 的审阅导入与后续加载；这些链路已有中英文 Ash 自举与定向回归。已接入用户级 Claude／Codex Instructions 导入、Agent 工具列表 CodeLens 和新聊天浮层。Claude 同步 POSIX PreToolUse 命令可审阅后导入为禁用，重复来源可识别，后端执行继续使用原 Hook 权限。本轮按 Ash 原生范围继续，第三方 harness Hook 兼容与迁移暂缓。原生剩余项包括扩展来源作者契约、模型引用的目录校验（已接入目录补全和引用格式校验）、工具集编辑、通用改写和 URL 入口。当前 Markdown 已可另存为原生 Agent 或 Instructions；逐条沿原 owner 实现并验收，不能以补文件计完成。范围与现状见 [promptSyntax 目录对应](docs/chat.md#promptsyntax-目录对应)，跨产品同场景复核仍待执行。
+
+- [ ] **修复候选 · Chat 回复的相对文件链接**：`src/ash/workbench/contrib/chat/browser/widget/chatListRenderer.ts` 的 `ChatListItemRenderer` 创建及增量更新助手 Markdown 时仍未传入目录基址（[渲染职责拆分](https://github.com/chogng/ash/commit/a748759f3aa13a070d97c20633496c32da82cbff) 已从 `chatListWidget.ts` 迁出逐消息渲染），`src/ash/base/browser/markdownRenderer.ts` 因缺少 `baseUri` 拒绝 `README.md` 等相对链接。现有 `parseInlineFileReference` 与 `resolveFileLink` 已支持显式、无 authority 的本机 `file:///…#L…` 引用并打开到行号，但不解析 `README.md` 等相对路径；保留该受限入口，不将其重复列为缺失。参考 [相对回复链接解析](https://github.com/microsoft/vscode/pull/344087)（2026-10-25 已合并，已包含于 [VS Code 1.144.0](https://github.com/microsoft/vscode/releases/tag/1.144.0)），沿 `src/ash/sessions/browser/chatWidgetModel.ts` 的 Session／Thread owner 与 `chatWidget.ts` 为渲染提供带来源身份的权威工作目录，补齐回复 → 文件打开链路；不借用当前全局工作区、不改写历史原文。本项为静态调用链缺口，尚未运行行为验收，不扩大到任意资源自动读取。
   - 前提与范围：复用 `ISessionWorkspace` 的 `authorityId`／`root`、既有本地／SSH URI 和 `openChatMarkdownLink` 打开边界；优先采用所属 Thread 的执行目录，不能用父 Session 的目录覆盖子 agent／worktree；目录 URI 须保留目录基址语义。先明确历史回复所属目录的来源，目录未水合、历史来源不确定或 provider 不支持时不猜测回退本机。来源 Session／Thread／目录变化时使对应渲染基址失效；不全局放宽 file scheme、不将模型 Markdown 标为可信，也不新增第二份工作区状态。
   - 验收：在 `src/ash/workbench/contrib/chat/test/browser/chatListWidget.test.ts` 和 `widget/chatContentMarkdownRenderer.test.ts` 补实时／历史恢复、切换会话及线程、流式重渲染、空格／Unicode／父目录路径、本地与 SSH 同名文件场景，并从真实 Chat 点击验证目标执行环境。复用现有打开与文件权限检查，不跨连接；外链和已有会话链接保持可用，脚本与未信任 command 仍拒绝，缺少来源的链接不伪造可打开地址。
 
@@ -268,10 +296,10 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 ### Sessions 按关联 PR 号查找
 
-未排期的新工作流增强。2026-10-23 的独立 Search 已由 `src/ash/sessions/contrib/search/browser/searchModel.ts` 按会话／线程标题与 provider label 过滤，侧栏 `sessionsList.ts` 只保留分组与已有 `IGitHubService.getSessionPullRequests()` 的 PR 标记，不再承担查询。关联 PR 的 number 已存在，但当前搜索结果尚未消费它，不需要新增后端发现服务。参考 [VS Code Sessions PR 号查找](https://github.com/microsoft/vscode/pull/338904)，让用户能从 PR 号找回标题不含该号码的会话。
+未排期的新工作流增强。2026-10-23 的独立 Search 已由 `src/ash/sessions/contrib/search/browser/searchModel.ts` 按会话／线程标题与 provider label 过滤，最新侧栏 `src/ash/sessions/contrib/sessions/browser/views/sessionsList.ts` 已通过 `SessionsListSearch` 恢复局部查找，并保留分组与已有 `IGitHubService.getSessionPullRequests()` 的 PR 标记；局部查找已消费含 `#number` 的 PR label，不能继续列为侧栏缺失；它采用子串匹配，不等同本候选拟议的精确号码语义。关联 PR 的 number 已存在，但独立 Search 结果尚未消费它，不需要新增后端发现服务。参考 [VS Code Sessions PR 号查找](https://github.com/microsoft/vscode/pull/338904)，让用户能从 PR 号找回标题不含该号码的会话。
 
 - 进入条件与范围：先确认 `#N` 与纯数字 `N` 精确匹配关联 PR 号的产品语义，再由独立 Search model 消费现有 GitHub 关联 owner 并响应关联变更，保留精确 session／thread 导航；仅消费已有分支关联／手动附加 PR 数据，不新增网络请求、第二份关联状态或通用搜索层。
-- 风险与验收：在 `src/ash/sessions/contrib/search/test/browser/searchModel.test.ts` 和真实搜索对话框场景覆盖两种输入、同号跨仓库的全部匹配、多个 PR、无 PR、关联解除／刷新以及不存在的号码；标题、provider、分类、多个活动 thread、关闭／重开、焦点与清空查询行为保持可用；侧栏分组保持原样。PR-only 命中不能伪造标题高亮；仅有现有关联数据的会话可按 PR 查找，不承诺尚未提供元数据的外部 provider。
+- 风险与验收：在 `src/ash/sessions/contrib/search/test/browser/searchModel.test.ts` 和真实搜索对话框场景覆盖两种输入、同号跨仓库的全部匹配、多个 PR、无 PR、关联解除／刷新以及不存在的号码；标题、provider、分类、多个活动 thread、关闭／重开、焦点与清空查询行为保持可用；侧栏已有局部查找与分组保持原样，不自动把本候选扩展为两个搜索入口同步改造。PR-only 命中不能伪造标题高亮；仅有现有关联数据的会话可按 PR 查找，不承诺尚未提供元数据的外部 provider。
 
 ### Workbench 模型选择器容错搜索
 
@@ -289,3 +317,13 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 ## Chat accessibility · 缺失宿主入口
 
 - [ ] **前置** · `src/ash/workbench/contrib/chat/browser/accessibility/` 已接入消息标签、响应纯文本视图和 Chat 信号 owner；37 项定向测试与 1 项 Desktop 自托管场景通过。上游对应的 `chatTerminalOutputAccessibleView.ts`、`chatBackgroundShellOutputAccessibleView.ts`、`chatPetJumpGameAccessibleView.ts` 尚无 Ash 生产入口：缺少终端工具输出的焦点／内容契约、后台 Shell 输出视图和宠物游戏 owner。先闭合各自真实宿主及焦点恢复契约，再在对应路径接入 Accessible View 并验证键盘、内容更新和释放；不提前创建无调用方文件。
+
+## Chat Status · 订阅额度最终 Desktop 复验
+
+- [ ] **验证阻塞** · `chatStatusEntry.ts` 已通过 `IAccountService.readRateLimits` 接入现有 `account/rateLimits/read`，42 项定向测试（含中英文真实 Chromium 渲染、账号切换、取消、精确余额与未知额度）通过，独立本地化生成缺失 0 项。最后执行 `pnpm run test:smoke:ui test/smoke/areas/chat/chat-status.spec.ts` 时，准备与 Renderer 类型检查通过，但 Vite 的 `ash-browser-extensions` 内嵌本地化生成报 `Unknown translation: zh-CN/ash.chat/chat.context.invalidProviderData`；相同源码由 `bun build/resources/localization.ts` 独立生成成功。先排查 Vite 配置内嵌提取与独立提取的差异，再重跑原 Desktop 场景，不删断言或忽略未知翻译。证据：`/tmp/ash-chat-quota-verified.log`、`/tmp/ash-chat-quota-localization-fix.log`、`/tmp/ash-chat-quota-desktop-verified.log`；中英文截图在 `.build/desktop/playwright/unit-browser-hAxd3m/`。成功复验后移除此项。
+
+### SCM 文件拖入终端
+
+- [ ] **候选／链路补齐（未排期）· SCM 文件拖入终端**：`src/ash/workbench/contrib/scm/browser/scmViewPane.ts` 的变更树尚未提供 drag policy，共享 Tree／List 仅在消费者提供 `dnd.getDragURI` 时启用行拖动；终端已接入 URI-list 文件拖放和 `sendPath(resource, false)`。参考 [Zed Git 面板文件拖放](https://github.com/zed-industries/zed/pull/66423)（2026-11-02 已合并 main，稳定 v1.26.2 尚不包含），补齐从已显示的 SCM 工作文件到现有终端的路径输入，减少先定位 Explorer 或复制路径的步骤。本项是静态确认的入口缺口，不是执行失败或数据丢失缺陷。
+  - 前提与范围：先限定单个文件行，沿现有 `TreeDragAndDrop` 和 Explorer 的 `text/uri-list` 契约导出权威 `sourceUri`，终端继续使用既有宿主 URI 转换及 shell 引号；只允许可确认的本地／同连接远端工作文件，分组、目录、已删除项、Git 历史／虚拟资源不伪装为工作文件。拖放只填入路径，不附加回车、不执行命令，不增加文件读写、上传或 provider 动作。当前终端只消费首个 URI，不能把上游多选行为直接照搬或静默截断成“多文件支持”；本候选不扩张到批量拖放。
+  - 风险与验收：在 `src/ash/workbench/contrib/scm/test/browser/scmViewPane.test.ts` 与 `src/ash/workbench/contrib/terminal/test/browser/terminalService.test.ts` 补来源／接收链测试，并走真实 Desktop SCM → 终端拖放；覆盖 staged／unstaged 同一工作文件、删除与重命名、列表／树视图、刷新后旧行、空格／中文／引号／shell 元字符、本地与 SSH 同名路径。异连接、只读或已退出终端、未知 shell、控制字符及转换期间进程重启仍拒绝；点击预览、键盘打开、inline actions 和文件菜单不退化。沿用现有取消与执行主机检查，不绕开 `sendPath`。

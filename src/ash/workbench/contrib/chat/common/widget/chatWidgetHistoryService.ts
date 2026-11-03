@@ -11,6 +11,15 @@ export class ChatHistoryNavigator<TDraft> extends Disposable {
 	private readonly operations = new TaskQueue();
 	private navigation: Navigation<TDraft> | undefined;
 	private generation = 0;
+	private _scope: string | undefined;
+	get scope(): string | undefined { return this._scope; }
+
+	setScope(scope: string | undefined): boolean {
+		if (this._scope === scope) return false;
+		this._scope = scope;
+		this.reset();
+		return true;
+	}
 
 	constructor(@IMessageHistoryService private readonly history: IMessageHistoryService | undefined) {
 		super();
@@ -35,7 +44,7 @@ export class ChatHistoryNavigator<TDraft> extends Disposable {
 
 	async record(text: string, kind: MessageHistoryKind): Promise<void> {
 		this.reset();
-		if (text.trim()) await this.history?.append({ text, kind });
+		if (text.trim()) await this.history?.append({ text, kind, ...(this.scope === undefined ? {} : { scope: this.scope }) });
 	}
 
 	previous(draft: TDraft): Promise<ChatHistoryNavigationResult<TDraft> | undefined> {
@@ -45,7 +54,7 @@ export class ChatHistoryNavigator<TDraft> extends Disposable {
 			if (this.isDisposed || generation !== this.generation) return undefined;
 			const navigation = this.navigation ??= { draft, entries: [], index: -1, before: undefined, loaded: false };
 			if (navigation.index + 1 >= navigation.entries.length && (!navigation.loaded || navigation.before !== undefined)) {
-				const page = await this.history!.read({ before: navigation.before, text: '', limit: 40 });
+				const page = await this.history!.read({ before: navigation.before, text: '', limit: 40, ...(this.scope === undefined ? {} : { scope: this.scope }) });
 				if (this.isDisposed || generation !== this.generation || this.navigation !== navigation) return undefined;
 				navigation.entries.push(...page.entries);
 				navigation.before = page.nextBefore;
@@ -72,6 +81,6 @@ export class ChatHistoryNavigator<TDraft> extends Disposable {
 	}
 
 	search(text: string, before?: string): Promise<MessageHistoryPage> {
-		return this.history?.read({ text, before, limit: 40 }) ?? Promise.resolve({ entries: [] });
+		return this.history?.read({ text, before, limit: 40, ...(this.scope === undefined ? {} : { scope: this.scope }) }) ?? Promise.resolve({ entries: [] });
 	}
 }

@@ -1,4 +1,6 @@
 import './chatFindWidget.css';
+import { revealMarkdownTableRange } from '../chatContentParts/chatMarkdownTableScrolling.js';
+import '../../../common/widget/chatColors.js';
 import { addDisposableListener, isHTMLElement, h, stopEvent } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../../../base/browser/ui/inputbox/inputbox.js';
@@ -367,7 +369,9 @@ export class ChatFindWidget extends Disposable implements IChatFindController {
 				this.pendingReveal = false;
 				openAncestorDisclosures(row, activeRange.startContainer);
 				if (typeof activeRange.getBoundingClientRect === 'function') {
-					this.host.reveal(this.current.itemId, activeRange.getBoundingClientRect());
+					const rect = activeRange.getBoundingClientRect();
+					revealMarkdownTableRange(activeRange, rect);
+					this.host.reveal(this.current.itemId, rect);
 				}
 			}
 		}

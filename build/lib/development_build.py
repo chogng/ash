@@ -19,6 +19,14 @@ def _stamp(path: Path) -> list[int] | None:
         return None
 
 
+def _artifact_digest(path: Path, stamp: list[int] | None) -> str | None:
+    if stamp is None:
+        return None
+    with path.open("rb") as artifact:
+        digest = hashlib.file_digest(artifact, "sha256").hexdigest()
+    return digest if _stamp(path) == stamp else None
+
+
 def _sources(roots: list[str], tracked: list[str], checked: dict | None = None) -> dict:
     files = {Path(name) for name in tracked}
     for name in roots:
@@ -129,6 +137,7 @@ class DevelopmentBuildPlan:
         self.key = _configuration(root, command)
         self.started = time.time_ns()
         self.groups = {}
+        self.discoveries = {}
         self.before = {}
         # Shared dependencies occur in several isolated feature groups. Content
         # checks may be shared within one invocation, never across requests or
@@ -152,6 +161,7 @@ class DevelopmentBuildPlan:
                             isinstance(entry.get(name), dict)
                             for name in ["outputs", "sources", "artifacts"]
                         )
+                        or not isinstance(entry.get("scriptDigests", {}), dict)
                         or not all(
                             isinstance(entry.get(name), list)
                             and all(isinstance(path, str) for path in entry[name])
@@ -160,9 +170,20 @@ class DevelopmentBuildPlan:
                     ):
                         raise ValueError("invalid cached group inputs")
                 self.groups = saved["groups"]
+                discoveries = saved.get("discoveries", {})
+                if isinstance(discoveries, dict):
+                    self.discoveries = {
+                        key: entry
+                        for key, entry in discoveries.items()
+                        if isinstance(entry, dict)
+                        and isinstance(entry.get("depInfo"), dict)
+                        and isinstance(entry.get("tracked"), list)
+                        and all(isinstance(name, str) for name in entry["tracked"])
+                    }
         except (OSError, ValueError, KeyError, TypeError):
             self.packages = None
             self.groups = {}
+            self.discoveries = {}
         # A failed or interrupted build cannot leave a reusable plan behind.
         self.path.unlink(missing_ok=True)
 
@@ -184,10 +205,17 @@ class DevelopmentBuildPlan:
             self.before[json.dumps(group)] = sources
             if sources != entry["sources"]:
                 return None
-            if {path: _stamp(Path(path)) for path in entry["artifacts"]} != entry[
-                "artifacts"
-            ]:
-                return None
+            script_digests = entry.get("scriptDigests", {})
+            for name, expected in entry["artifacts"].items():
+                path = Path(name)
+                stamp = _stamp(path)
+                if stamp == expected:
+                    continue
+                # Cargo relinks its build-script aliases while visiting a different
+                # feature group. Accept the replacement only with identical bytes.
+                digest = script_digests.get(name)
+                if not digest or _artifact_digest(path, stamp) != digest:
+                    return None
             return {name: Path(path) for name, path in outputs.items()}
         except (OSError, KeyError, TypeError):
             return None
@@ -196,11 +224,23 @@ class DevelopmentBuildPlan:
         self, group: list[str], outputs: dict[str, Path], messages: list[dict]
     ) -> None:
         self.checked.clear()
-        previous = self.groups.get(json.dumps(group), {})
+        key = json.dumps(group)
+        previous = self.groups.get(key, {})
         roots = set(previous.get("roots", []))
+        discovery = self.discoveries.pop(key, {})
         tracked = set(previous.get("tracked", []))
+        tracked.update(discovery.get("tracked", []))
+        known_dep_info = discovery.get("depInfo", {})
+        dep_info = {}
         artifacts = set()
+        script_aliases = set()
         resolved = {}
+        dependency_files = set()
+        package_roots = {
+            message["package_id"]: Path(message["manifest_path"]).parent
+            for message in messages
+            if message.get("manifest_path") and message.get("package_id")
+        }
 
         def resolve(name):
             if name not in resolved:
@@ -210,36 +250,67 @@ class DevelopmentBuildPlan:
         cargo_home = Path(
             os.environ.get("CARGO_HOME", Path.home() / ".cargo")
         ).resolve()
+        registry = cargo_home / "registry"
+        git = cargo_home / "git"
+        local_dependencies = {}
+
+        def local_dependency(name):
+            if name not in local_dependencies:
+                source = resolve(str(self.root / name.replace("\\ ", " ")))
+                local_dependencies[name] = (
+                    None if source.is_relative_to(cargo_home) else str(source)
+                )
+            return local_dependencies[name]
+
         for message in messages:
             if message.get("reason") == "compiler-artifact":
                 manifest = resolve(message["manifest_path"])
                 if not manifest.is_relative_to(
-                    cargo_home / "registry"
-                ) and not manifest.is_relative_to(cargo_home / "git"):
+                    registry
+                ) and not manifest.is_relative_to(git):
                     roots.add(str(manifest.parent))
                 for name in message["filenames"]:
                     artifact = Path(name)
                     artifacts.add(str(artifact))
+                    if "custom-build" in message.get("target", {}).get(
+                        "kind", []
+                    ) and artifact.name.startswith("build-script-"):
+                        script_aliases.add(str(artifact))
                     dep = artifact.with_name(
                         artifact.name.removeprefix("lib")
                     ).with_suffix(".d")
                     # Fresh dependency dep-info was captured by the previous
                     # successful build; only compilations can add source reads.
-                    if (not previous or not message.get("fresh")) and dep.is_file():
-                        line = dep.read_text(encoding="utf-8").splitlines()[0]
-                        for name in re.findall(
-                            r"(?:\\ |[^\s])+", line.split(": ", 1)[1]
+                    if (
+                        not previous or not message.get("fresh")
+                    ) and dep not in dependency_files:
+                        dependency_files.add(dep)
+                        stamp = _stamp(dep)
+                        if stamp is None:
+                            continue
+                        name = str(dep)
+                        if (
+                            not message.get("fresh")
+                            or known_dep_info.get(name) != stamp
                         ):
-                            source = resolve(str(self.root / name.replace("\\ ", " ")))
-                            if not source.is_relative_to(cargo_home):
-                                tracked.add(str(source))
+                            with dep.open(encoding="utf-8") as dependency:
+                                line = dependency.readline()
+                            for item in re.findall(
+                                r"(?:\\ |[^\s])+", line.split(": ", 1)[1]
+                            ):
+                                source = local_dependency(item)
+                                if source is not None:
+                                    tracked.add(source)
+                            if _stamp(dep) != stamp:
+                                self.groups.pop(key, None)
+                                return
+                        dep_info[name] = stamp
             elif message.get("reason") == "build-script-executed":
                 output = Path(message["out_dir"]).parent / "output"
                 previous_output = previous.get("sources", {}).get(str(output))
                 if (
                     previous_output
-                    and previous_output
-                    == self.before.get(json.dumps(group), {}).get(str(output))
+                    and previous_output == self.before.get(key, {}).get(str(output))
                     and previous_output[:4] == _stamp(output)
                 ):
                     # The declaration text was content-checked before Cargo and
@@ -248,19 +319,10 @@ class DevelopmentBuildPlan:
                 # build.rs may track inputs outside its package and the Cargo graph.
                 # Relative paths need its package root, supplied by the artifact.
                 if output.is_file():
-                    artifact = next(
-                        (
-                            m
-                            for m in messages
-                            if m.get("package_id") == message["package_id"]
-                            and m.get("manifest_path")
-                        ),
-                        None,
-                    )
-                    if artifact is None:
-                        self.groups.pop(json.dumps(group), None)
+                    base = package_roots.get(message["package_id"])
+                    if base is None:
+                        self.groups.pop(key, None)
                         return
-                    base = Path(artifact["manifest_path"]).parent
                     tracked.add(str(output))
                     for line in output.read_text(encoding="utf-8").splitlines():
                         match = re.match(r"cargo::?rerun-if-changed=(.*)", line)
@@ -275,11 +337,11 @@ class DevelopmentBuildPlan:
         try:
             sources = _sources(sorted(roots), sorted(tracked), self.checked)
         except OSError:
-            self.groups.pop(json.dumps(group), None)
+            self.groups.pop(key, None)
             return
         # A save during compilation belongs to the next build. Never bless a
         # post-save snapshot as the inputs of an earlier compiler invocation.
-        before = self.before.get(json.dumps(group))
+        before = self.before.get(key)
         if (before is not None and before != sources) or (
             before is None
             and any(
@@ -287,14 +349,37 @@ class DevelopmentBuildPlan:
                 for stamp in sources.values()
             )
         ):
-            self.groups.pop(json.dumps(group), None)
+            self.groups.pop(key, None)
+            # Discovery can help the next Cargo run even when this build cannot
+            # certify reusable outputs. It never supplies an output cache hit.
+            self.discoveries[key] = {"tracked": sorted(tracked), "depInfo": dep_info}
             return
-        self.groups[json.dumps(group)] = {
+        if discovery:
+            # Only a complete capture can certify output reuse. The hint was
+            # consumed on entry, so this re-reads even fresh dependency files.
+            self.record(group, outputs, messages)
+            return
+        stamps = {name: _stamp(Path(name)) for name in sorted(artifacts)}
+        previous_digests = previous.get("scriptDigests", {})
+        previous_stamps = previous.get("artifacts", {})
+        try:
+            script_digests = {
+                name: previous_digests[name]
+                if name in previous_digests
+                and stamps[name] == previous_stamps.get(name)
+                else _artifact_digest(Path(name), stamps[name])
+                for name in sorted(script_aliases)
+            }
+        except OSError:
+            self.groups.pop(key, None)
+            return
+        self.groups[key] = {
             "outputs": {name: str(path) for name, path in outputs.items()},
             "roots": sorted(roots),
             "tracked": sorted(tracked),
             "sources": sources,
-            "artifacts": {name: _stamp(Path(name)) for name in sorted(artifacts)},
+            "artifacts": stamps,
+            "scriptDigests": script_digests,
         }
 
     def save(self) -> None:
@@ -310,6 +395,7 @@ class DevelopmentBuildPlan:
                         "key": self.key,
                         "packages": sorted(self.packages),
                         "groups": self.groups,
+                        "discoveries": self.discoveries,
                     }
                 ),
                 encoding="utf-8",

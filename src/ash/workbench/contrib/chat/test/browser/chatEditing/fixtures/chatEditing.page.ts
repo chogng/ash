@@ -63,8 +63,8 @@ declare global {
 			snapshot(): { entries: string[][]; texts: string[]; };
 			prepareReload(): Promise<void>;
 			checkpointState(): { requests: RestoreChatCheckpointOptions[]; opened: string[]; };
-			switchChat(): void;
-			finishRestore(): void;
+			switchChat(target?: 'source' | 'other'): void;
+			finishRestore(): Promise<void>;
 			historyState(): { requests: MoveChatHistoryOptions[]; opened: string[]; };
 			dirtyFile(): Promise<void>;
 			setSaveFailure(fail: boolean): void;
@@ -114,6 +114,8 @@ const commands = resources.add(new CommandService(services));
 const editing = resources.add(services.createInstance(ChatEditingService));
 services.registerInstance(IChatEditingService, editing);
 let activeChat = { sessionId: 'session', threadId: 'source' };
+let navigationRevision = 0;
+const pendingCommands = new Set<Promise<unknown>>();
 const restoreRequests: RestoreChatCheckpointOptions[] = [];
 const historyRequests: MoveChatHistoryOptions[] = [];
 let historySequence = 17;
@@ -122,10 +124,10 @@ const opened: string[] = [];
 const restoring = (parameters.has('restoreSlow') || parameters.has('historySlow')) ? new DeferredPromise<void>() : undefined;
 services.registerInstance(IChatSessionNavigationService, {
 	createNewConversation: () => { throw new Error('Unexpected draft creation'); },
-	revision: 0,
+	get revision() { return navigationRevision; },
 	getActiveConversation: () => activeChat,
 	getConversations: () => [], startVoiceConversation: async () => { throw new Error("Unexpected voice start"); }, appendToActiveDraft() { }, captureActiveDraft: async () => undefined,
-	openConversation: async (sessionId, threadId) => { activeChat = { sessionId, threadId }; opened.push(threadId); },
+	openConversation: async (sessionId, threadId) => { activeChat = { sessionId, threadId }; navigationRevision++; opened.push(threadId); },
 });
 // Durable message history is the external boundary of this UI fixture.
 services.registerInstance(IChatService, {
@@ -173,9 +175,11 @@ files.save = async (request, signal) => {
 
 for (const [selector, command] of [['#reject', 'chatEditing.rejectAll'], ['#review', 'chatEditing.reviewChanges'], ['#checkpoint', 'workbench.action.chat.restoreCheckpoint'], ['#undo', 'workbench.action.chat.undoEdit'], ['#redo', 'workbench.action.chat.redoEdit']] as const) {
 	resources.add(addDisposableListener(document.querySelector(selector)!, 'click', () => {
-		void commands.executeCommand(command).catch(error => {
+		const pending = commands.executeCommand(command).catch(error => {
 			document.querySelector('#error')!.textContent = String(error.message);
 		});
+		pendingCommands.add(pending);
+		void pending.finally(() => pendingCommands.delete(pending));
 	}));
 }
 if (parameters.has('editor')) {
@@ -214,8 +218,8 @@ window.ashChatEditingIntegration = {
 		reference.model.applyEdits([{ range: reference.model.getFullModelRange(), text: 'unsaved user text' }]);
 	},
 	checkpointState: () => ({ requests: restoreRequests, opened }),
-	switchChat: () => { activeChat = { sessionId: 'other-session', threadId: 'other-thread' }; },
-	finishRestore: () => { void restoring?.complete(); },
+	switchChat: (target = 'other') => { activeChat = target === 'source' ? { sessionId: 'session', threadId: 'source' } : { sessionId: 'other-session', threadId: 'other-thread' }; navigationRevision++; },
+	finishRestore: async () => { await restoring?.complete(); await Promise.all([...pendingCommands]); },
 	prepareReload: () => lifecycle.shutdown('reload'),
 	snapshot: () => ({
 		entries: editing.entries.map(entry => entry.resources.map(resource => resource.path)),

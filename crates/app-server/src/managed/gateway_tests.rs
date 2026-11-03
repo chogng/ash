@@ -4,6 +4,213 @@ use std::io::BufReader;
 use std::sync::mpsc;
 
 #[test]
+fn saved_session_switches_directory_and_keeps_its_previous_working_copy() {
+    let profile = tempfile::tempdir().unwrap();
+    let old = tempfile::tempdir().unwrap();
+    let new = tempfile::tempdir().unwrap();
+    std::fs::write(old.path().join("from-old.txt"), "old source").unwrap();
+    std::fs::write(new.path().join("from-new.txt"), "new source").unwrap();
+    let options = |root: Option<PathBuf>| {
+        ash_app_server_daemon::ConnectionOptions::new(
+            profile.path(),
+            root,
+            ash_app_server_daemon::GrantSource::HostConfiguration,
+            None,
+        )
+    };
+    let root = ash_file_access::Dir::open_local(new.path())
+        .unwrap()
+        .canonical_path()
+        .to_path_buf();
+    let registry =
+        ProfileAppServerRegistry::open(options(None), ash_app_server_diff::compute).unwrap();
+    let old_server = registry
+        .server_for(options(Some(old.path().to_path_buf())))
+        .unwrap();
+    let new_server = registry
+        .server_for(options(Some(new.path().to_path_buf())))
+        .unwrap();
+    let initialize = |server: &AppServer| {
+        let mut connection = server.product_host_connection();
+        let result = crate::tests::call(
+            server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0", "id":1, "method":"initialize", "params":{"clientInfo":{"name":"directory-test","version":"1"}}
+            }),
+        );
+        assert!(result.get("error").is_none(), "{result}");
+        connection
+    };
+    let mut old_connection = initialize(&old_server);
+    let mut new_connection = initialize(&new_server);
+    let created = crate::tests::call(
+        &old_server,
+        &mut old_connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":2,"method":"session/create","params":{
+                "commandId":"directory-session","title":"Directory history","executionTarget":{"type":"local","root":old.path()}
+            }
+        }),
+    );
+    let id = created["result"]["session"]["sessionId"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{created}"));
+    let session_id = SessionId::new(id).unwrap();
+    let read = serde_json::json!({
+        "jsonrpc":"2.0","id":3,"method":"session/thread/read","params":{"sessionId":id,"threadId":id}
+    });
+    let before = crate::tests::call(&old_server, &mut old_connection, read.clone());
+    let old_copy = PathBuf::from(
+        before["result"]["directory"]["root"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{before}")),
+    );
+    std::fs::write(old_copy.join("from-old.txt"), "keep my changes").unwrap();
+    let change = serde_json::json!({
+        "jsonrpc":"2.0","id":4,"method":"session/request","params":{
+            "sessionId":id,"commandId":"switch-directory","request":{"type":"changeDirectory","root":root}
+        }
+    });
+    let remotes = RemoteSessionIndex::default();
+    let target = Some(SessionExecutionTarget::Local { root: root.clone() });
+    let mut unauthorized = change.clone();
+    unauthorized["id"] = serde_json::json!(2);
+    unauthorized["params"]["request"]["root"] = serde_json::json!(old.path());
+    let denied = crate::tests::call(&new_server, &mut new_connection, unauthorized);
+    assert!(denied.get("error").is_some(), "{denied}");
+    assert_ne!(
+        selected_execution_target(&registry, &remotes, &read).unwrap(),
+        target
+    );
+    assert_eq!(
+        selected_execution_target(&registry, &remotes, &change).unwrap(),
+        target
+    );
+    let result = crate::tests::call(&new_server, &mut new_connection, change.clone());
+    assert_eq!(
+        result["result"]["value"]["session"]["sessionId"], id,
+        "{result}"
+    );
+    registry.release_previous_session_directories(&session_id, &new_server);
+    assert_eq!(
+        selected_execution_target(&registry, &remotes, &read).unwrap(),
+        target
+    );
+    let mut read_after = read.clone();
+    read_after["id"] = serde_json::json!(5);
+    let after = crate::tests::call(&new_server, &mut new_connection, read_after);
+    let new_copy = PathBuf::from(
+        after["result"]["directory"]["root"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{after}")),
+    );
+    assert_ne!(new_copy, old_copy);
+    assert_eq!(
+        std::fs::read_to_string(new_copy.join("from-new.txt")).unwrap(),
+        "new source"
+    );
+    assert_eq!(
+        std::fs::read_to_string(old_copy.join("from-old.txt")).unwrap(),
+        "keep my changes"
+    );
+    assert_eq!(after["result"]["thread"]["threadId"], id);
+    assert_eq!(after["result"]["thread"]["title"], "Directory history");
+    let mut read_retired = read.clone();
+    read_retired["id"] = serde_json::json!(4);
+    let retired = crate::tests::call(&old_server, &mut old_connection, read_retired);
+    assert!(retired["result"]["directory"].is_null(), "{retired}");
+    let old_notifications = old_server.connection_notifications(&old_connection);
+    let new_notifications = new_server.connection_notifications(&new_connection);
+    old_notifications.drain();
+    new_notifications.drain();
+    let old_copy_id = ash_file_access::Dir::open_local(&old_copy)
+        .unwrap()
+        .id()
+        .to_string();
+    let new_copy_id = ash_file_access::Dir::open_local(&new_copy)
+        .unwrap()
+        .id()
+        .to_string();
+    std::fs::write(old_copy.join("retained.txt"), "old copy is still writable").unwrap();
+    std::fs::write(new_copy.join("active.txt"), "new watcher").unwrap();
+    let receives = |messages: Vec<String>, dir_id: &str| {
+        messages.into_iter().any(|raw| {
+            let value: Value = serde_json::from_str(&raw).unwrap();
+            value["method"] == "fs/changed" && value["params"]["dirId"] == dir_id
+        })
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !receives(new_notifications.drain(), &new_copy_id) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "new workspace watcher did not publish"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(
+        !receives(old_notifications.drain(), &old_copy_id),
+        "old workspace watcher remained active"
+    );
+    old_server.close_connection(old_connection);
+    new_server.close_connection(new_connection);
+    drop(old_server);
+    drop(new_server);
+    drop(registry);
+
+    let restarted =
+        ProfileAppServerRegistry::open(options(None), ash_app_server_diff::compute).unwrap();
+    assert_eq!(
+        selected_execution_target(&restarted, &remotes, &read).unwrap(),
+        target
+    );
+    let server = restarted.server_for(options(Some(root))).unwrap();
+    let mut connection = initialize(&server);
+    let recovered = crate::tests::call(&server, &mut connection, read);
+    assert_eq!(
+        recovered["result"]["directory"]["root"], after["result"]["directory"]["root"],
+        "{recovered}"
+    );
+    assert_eq!(
+        recovered["result"]["thread"]["sequence"],
+        after["result"]["thread"]["sequence"]
+    );
+    server.close_connection(connection);
+
+    let original = restarted
+        .server_for(options(Some(old.path().to_path_buf())))
+        .unwrap();
+    let mut connection = initialize(&original);
+    let switched_back = crate::tests::call(
+        &original,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":5,"method":"session/request","params":{
+                "sessionId":id,"commandId":"switch-back","request":{"type":"changeDirectory","root":old.path()}
+            }
+        }),
+    );
+    assert!(switched_back.get("error").is_none(), "{switched_back}");
+    restarted.release_previous_session_directories(&session_id, &original);
+    let recovered = crate::tests::call(
+        &original,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":6,"method":"session/thread/read","params":{"sessionId":id,"threadId":id}
+        }),
+    );
+    assert_eq!(
+        recovered["result"]["directory"]["root"], before["result"]["directory"]["root"],
+        "{recovered}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(old_copy.join("from-old.txt")).unwrap(),
+        "keep my changes"
+    );
+    original.close_connection(connection);
+}
+
+#[test]
 fn debug_log_collection_tags_every_nested_binary_resource_without_touching_other_ids() {
     let response = serde_json::json!({"jsonrpc":"2.0","id":2,"result":{
         "files":[
@@ -94,6 +301,35 @@ fn session_directory_file_requests_route_to_the_session_execution_authority() {
             Some(SessionExecutionTarget::Ssh { host: "build-host".into(), root: "/work/source".into() })
         );
     }
+    for method in ["instructions/importPreview", "instructions/import"] {
+        assert_eq!(
+            selected_execution_target(
+                &registry,
+                &remote,
+                &serde_json::json!({
+                    "method": method,
+                    "params": {"sessionId": "unrelated", "directory": {"sessionId": "remote-session", "path": "/work/source"}}
+                })
+            )
+            .unwrap(),
+            Some(SessionExecutionTarget::Ssh {
+                host: "build-host".into(),
+                root: "/work/source".into()
+            })
+        );
+    }
+    assert_eq!(
+        selected_execution_target(
+            &registry,
+            &remote,
+            &serde_json::json!({
+                "method": "hook/list",
+                "params": {"directory": {"sessionId": "remote-session", "path": "/work/source"}}
+            })
+        )
+        .unwrap(),
+        None
+    );
     for method in [
         "terminal/create",
         "terminal/profile/list",

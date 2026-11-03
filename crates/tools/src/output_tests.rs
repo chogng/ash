@@ -1,6 +1,24 @@
 use super::{ToolContent, ToolOutput, ToolOutputStatus};
 
 #[test]
+fn explicit_result_confirmation_survives_model_output_truncation() {
+    let output = ToolOutput::success(vec![ToolContent::Text("private result".repeat(100))])
+        .require_result_confirmation("Share the selected evidence?")
+        .unwrap()
+        .truncate_text(ash_utils_output_truncation::ToolOutputTruncationPolicy::Bytes(100));
+    assert_eq!(
+        output.result_confirmation(),
+        Some("Share the selected evidence?")
+    );
+    assert!(
+        ToolOutput::success(vec![])
+            .require_result_confirmation(" ")
+            .is_err()
+    );
+    assert_eq!(ToolOutput::success(vec![]).result_confirmation(), None);
+}
+
+#[test]
 fn error_output_preserves_model_visible_content() {
     let output = ToolOutput::error(vec![ToolContent::Text("request denied".to_owned())]);
 

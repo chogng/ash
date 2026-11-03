@@ -1,3 +1,4 @@
+import { DeferredPromise } from '../../base/common/async.js';
 import type {
 	IRuntimeEnvironment,
 } from '../../base/common/environment.js';
@@ -90,6 +91,10 @@ export interface AshElectronRendererApi extends IWorkbenchHost {
 	readonly localFiles: IFileSystemProvider;
 	readonly userDataHome: URI;
 	readonly workspace: IWorkspaceContextApi;
+	/** Settles after the first directory binding, including a declined startup prompt. */
+	readonly workspaceDirectoriesReady: Promise<void>;
+	readonly startWorkspaceDirectories: () => void;
+	readonly reloadWorkspaceDirectories: () => Promise<void>;
 }
 
 export type ElectronRendererCapabilityContribution = (client: AppServerProtocolClient, appServer: Parameters<RendererCapabilityContribution>[1], localClient: AppServerProtocolClient) => ReturnType<RendererCapabilityContribution>;
@@ -137,6 +142,9 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		const client = agentHost.client;
 		let backend: IWorkbenchHost;
 		const workspaceChanges = resources.add(new Emitter<void>());
+		const workspaceWindowReady = new DeferredPromise<void>();
+		resources.add(toDisposable(() => { void workspaceWindowReady.complete(); }));
+		let workspaceDirectoriesReady = Promise.resolve();
 		let workspaceInitialization: { readonly generation: number; readonly promise: Promise<void>; state: 'restoring' | 'ready' | 'failed'; error?: unknown; } | undefined;
 		const trackWorkspaceInitialization = (promise: Promise<void>): Promise<void> => {
 			const attempt: NonNullable<typeof workspaceInitialization> = {
@@ -156,10 +164,19 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			});
 			return promise;
 		};
-		const restoreWorkspace = (retry = false): Promise<void> => {
+		const restoreWorkspace = (retry = false, force = false): Promise<void> => {
 			// Terminals and reconnect listeners share one binding attempt per generation.
-			if (workspaceInitialization?.generation !== client.generation || retry && workspaceInitialization.state === 'failed') {
-				return trackWorkspaceInitialization(Promise.resolve().then(() => initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi)));
+			if (force || workspaceInitialization?.generation !== client.generation || retry && workspaceInitialization.state === 'failed') {
+				let remoteHostLabel: string | undefined;
+				if (remoteConnection.kind === 'ssh') {
+					remoteHostLabel = remoteConnection.host;
+				} else if (remoteConnection.kind === 'remote') {
+					remoteHostLabel = remoteConnection.authority;
+				}
+				return trackWorkspaceInitialization(workspaceWindowReady.p.then(() => {
+					if (resources.isDisposed) throw new CancellationError();
+					return initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi, { remoteHostLabel });
+				}));
 			}
 			return workspaceInitialization.promise;
 		};
@@ -240,19 +257,19 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			backend = { ...backend, terminal: terminals };
 			const replacement = subscribe('ash:terminal:prepareReplacement', () => terminals.prepareForServerReplacement());
 			resources.add(toDisposable(() => replacement.dispose()));
-			try {
-				await restoreWorkspace();
-			} catch (error) {
-				// Cancellation leaves directory access pending; the Workbench can offer an explicit retry.
+			// Publish the pending binding before Workbench services read connection recovery state.
+			// The window releases the prompt after its shell and theme are ready.
+			workspaceDirectoriesReady = restoreWorkspace().catch(error => {
 				if (!isCancellationError(error)) throw error;
-			}
+			});
+			void workspaceDirectoriesReady.catch(() => undefined);
 			// The selected execution host needs its roots after a runtime replacement,
 			// including SSH and extension hosts; local device recovery is independent.
 			resources.add(connection.onDidReconnect(() => {
 				void restoreWorkspace()
 					.catch(error => { if (!resources.isDisposed && !isCancellationError(error)) connectionLogger.error('app-server', 'Workspace recovery failed', error); });
 			}));
-			performance.mark('ash.rendererApi.workspace-initialized');
+			void workspaceDirectoriesReady.then(() => performance.mark('ash.rendererApi.workspace-initialized'), () => undefined);
 		} else {
 			// Desktop supports server features even when the UI development host starts disconnected.
 			backend = createDisconnectedRendererApi(true);
@@ -260,6 +277,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 
 		const agentHosts = hostCapabilities.agentHosts ? resources.add(connectionServices.createInstance(RemoteAgentHostService, {
 			browser: hostCapabilities.browser,
+			requiresDevelopmentTrust: workspaceTrust.requiresDevelopmentTrust,
 			onDidSuspendOS: listener => nativeHost.onDidSuspendOS(listener),
 			onDidResumeOS: listener => nativeHost.onDidResumeOS(listener),
 			initializeDirectories: (client, trust, directories) => initializeWorkspaceDirectories(client, workspaceTrust, trust, directories),
@@ -307,6 +325,9 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			userDataHome,
 			localUserHome: URI.parse(await mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call<string>('userHome')),
 			workspace: workspaceApi,
+			workspaceDirectoriesReady,
+			startWorkspaceDirectories: () => { void workspaceWindowReady.complete(); },
+			reloadWorkspaceDirectories: async () => { if (enabled) await restoreWorkspace(false, true); },
 			workspaceConfigurationFiles: workspaceApi.configurationFiles,
 		};
 	} catch (error) {

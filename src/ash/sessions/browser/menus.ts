@@ -6,6 +6,7 @@ export const Menus = {
 	ActivityBarContext: new MenuId('SessionsActivityBarContext'),
 	CustomViewAutomations: new MenuId('CustomViewAutomations'),
 	CustomViewCanvas: new MenuId('CustomViewCanvas'),
+	SidebarSessionContext: new MenuId('SidebarSessionContext'),
 	SidebarSessionsHeader: new MenuId('SidebarSessionsHeader'),
 	MenubarMainMenu: new MenuId('SessionsMenubarMainMenu'),
 	MenubarFileMenu: new MenuId('SessionsMenubarFileMenu'),
@@ -14,6 +15,7 @@ export const Menus = {
 	CodeAddTab: new MenuId('SessionsAddTab'),
 	SessionsEditorHeaderPrimary: new MenuId('SessionsEditorHeaderPrimary'),
 	SessionsEditorHeaderLayout: new MenuId('SessionsEditorHeaderLayout'),
+	SessionsToolMove: new MenuId('SessionsToolMove'),
 	SessionsEditorTitle: new MenuId('SessionsEditorTitle'),
 	SessionsEditorTabsBarAddTabCanvas: new MenuId('SessionsEditorTabsBarAddTabCanvas'),
 } as const;

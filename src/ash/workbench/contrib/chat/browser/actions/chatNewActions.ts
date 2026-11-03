@@ -5,9 +5,8 @@ import { ChatAIDisabledSettingId } from '../../../../../platform/chat/common/cha
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
-import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
-import { CHAT_VIEW_ID, NEW_CHAT_COMMAND_ID } from '../../common/chat.js';
+import { NEW_CHAT_COMMAND_ID } from '../../common/chat.js';
 import { clearChatEditor } from './chatClear.js';
 import { ActiveEditorContext } from '../../../../common/contextkeys.js';
 import { ChatEditorInput } from '../widgetHosts/editor/chatEditorInput.js';
@@ -34,10 +33,8 @@ export class NewChatAction extends Action2 {
 
 	override async run(accessor: ServicesAccessor): Promise<boolean> {
 		if (accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId)) return false;
-		const navigation = accessor.get(IChatSessionNavigationService);
-		const viewsService = accessor.get(IViewsService);
-		await navigation.createNewConversation();
-		return viewsService.focusView(CHAT_VIEW_ID);
+		await accessor.get(IChatSessionNavigationService).createNewConversation();
+		return true;
 	}
 }
 

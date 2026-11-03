@@ -1,0 +1,161 @@
+.ash-sessions-splash {
+	overflow: hidden;
+}
+
+.ash-sessions-splash > [data-part],
+.ash-sessions-splash-region,
+.ash-sessions-splash-uncached-main {
+	container-type: inline-size;
+	overflow: hidden;
+}
+
+.ash-sessions-splash-fallback {
+	position: absolute;
+	inset: 36px 0 0;
+	display: flex;
+}
+
+.ash-sessions-splash-titlebar-separator {
+	position: absolute;
+	inset-block: 0;
+}
+
+.ash-sessions-splash-uncached-main {
+	flex: 1;
+	min-width: 0;
+}
+
+.ash-sessions-splash-fallback > .ash-sessions-splash-sidebar {
+	box-sizing: border-box;
+	max-width: 30%;
+	flex: none;
+}
+
+.ash-sessions-splash-fallback:only-child > .ash-sessions-splash-sidebar {
+	background: color-mix(in srgb, currentColor 3%, transparent);
+}
+
+.ash-sessions-splash-sidebar {
+	display: grid;
+	align-content: start;
+	gap: var(--ash-spacing-size160, 16px);
+	padding: var(--ash-spacing-size240, 24px) var(--ash-spacing-size160, 16px);
+}
+
+.ash-sessions-splash-sidebar > div {
+	height: var(--ash-spacing-size120, 12px);
+	width: 72%;
+	border-radius: var(--ash-cornerRadius-large, 8px);
+	background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.ash-sessions-splash-sidebar > div:nth-child(2) {
+	width: 58%;
+}
+
+.ash-sessions-splash-sidebar > div:nth-child(3) {
+	margin-top: var(--ash-spacing-size160, 16px);
+	width: 85%;
+}
+
+.ash-sessions-splash-cards {
+	display: grid;
+	align-content: start;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	min-width: 0;
+	flex: 1;
+	gap: var(--ash-spacing-size120, 12px);
+	padding: 72px var(--ash-spacing-size400, 40px)
+		var(--ash-spacing-size400, 40px);
+	max-width: 1200px;
+	margin-inline: auto;
+}
+
+.ash-sessions-splash-cards > div {
+	display: grid;
+	grid-template-columns: var(--ash-spacing-size320, 32px) minmax(0, 1fr);
+	align-items: center;
+	gap: var(--ash-spacing-size120, 12px);
+	padding: var(--ash-spacing-size160, 16px);
+	border-radius: var(--ash-cornerRadius-large, 8px);
+	background: color-mix(in srgb, currentColor 3%, transparent);
+}
+
+.ash-sessions-splash-cards span {
+	display: block;
+	height: var(--ash-spacing-size120, 12px);
+	width: min(72%, 140px);
+	border-radius: var(--ash-cornerRadius-large, 8px);
+	background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.ash-sessions-splash-cards span + span {
+	margin-top: var(--ash-spacing-size80, 8px);
+	width: min(48%, 80px);
+}
+
+.ash-sessions-splash-cards > div > span {
+	height: var(--ash-spacing-size320, 32px);
+	width: 100%;
+}
+
+@container (width < 760px) {
+	.ash-sessions-splash-cards {
+		grid-template-columns: minmax(0, 1fr);
+		padding-inline: var(--ash-spacing-size200, 20px);
+	}
+}
+
+@media (max-width: 480px) {
+	.ash-sessions-splash-fallback > .ash-sessions-splash-sidebar {
+		display: none;
+	}
+}
+
+.ash-sessions-splash-fallback.ash-sessions-splash-scaled {
+	inset: 0;
+}
+
+.ash-sessions-splash-region,
+.ash-sessions-splash-shape {
+	position: absolute;
+	overflow: hidden;
+}
+
+.ash-sessions-splash-shape {
+	border-radius: var(--ash-cornerRadius-large, 8px);
+	background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.ash-sessions-splash-shape.surface {
+	border-radius: var(--ash-cornerRadius-xLarge, 12px);
+	background: color-mix(in srgb, currentColor 4%, transparent);
+}
+
+.ash-sessions-splash-chat {
+	position: relative;
+	flex: 1;
+	height: 100%;
+}
+
+.ash-sessions-splash-chat > div {
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
+}
+
+.ash-sessions-splash-chat > div:first-child {
+	bottom: calc(50% + 20px);
+	width: min(45%, 240px);
+	height: var(--ash-spacing-size200, 20px);
+	border-radius: var(--ash-cornerRadius-large, 8px);
+	background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.ash-sessions-splash-chat > div:last-child {
+	top: calc(50% + 12px);
+	width: min(calc(100% - 48px), 760px);
+	height: 96px;
+	border-radius: var(--ash-cornerRadius-xLarge, 12px);
+	background: color-mix(in srgb, currentColor 4%, transparent);
+}

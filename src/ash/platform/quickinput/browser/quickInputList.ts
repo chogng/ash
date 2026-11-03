@@ -37,7 +37,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 	private readonly _onDidAccept = this._register(new Emitter<TItem>());
 	private readonly _onDidChangeActive =
 		this._register(new Emitter<QuickInputListActiveChangeEvent<TItem>>());
-	private readonly buttonEmitter = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton; readonly anchor?: unknown; }>());
+	private readonly buttonEmitter = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton; readonly anchor?: unknown; readonly fromKeyboard?: boolean; }>());
 	private _items: readonly (TItem | IQuickPickSeparator)[] = [];
 	private readonly headings = new Map<TItem, IQuickPickSeparator>();
 	private readonly sectionHeaders = new Map<TItem, string>();
@@ -437,7 +437,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 				// The view supplies the native click event for both pointer and keyboard activation.
 				const event = context as MouseEvent | undefined;
 				if (event) this.keyMods = { ctrlCmd: event.ctrlKey || event.metaKey, alt: event.altKey, shift: event.shiftKey };
-				this.buttonEmitter.fire({ item, button: button as IQuickPickItemButton, anchor: event?.currentTarget });
+				this.buttonEmitter.fire({ item, button: button as IQuickPickItemButton, anchor: event?.currentTarget, fromKeyboard: event?.detail === 0 });
 			});
 			actions.setActions(converted.primary, converted.secondary);
 			actions.element.classList.add('ash-quick-pick-row-actions');

@@ -1,5 +1,6 @@
+import { ChatGoalBannerWidget } from '../../../../../workbench/contrib/chat/browser/widget/input/chatGoalBannerWidget.js';
 import { ChatQueueEditor } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import { ChatSideChatWidget } from '../../../../../workbench/contrib/chat/browser/chatSideChat.js';
+import { ChatRequestOriginPart } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatRequestOriginPart.js';
 import { IVoiceModeOnboardingService } from '../../../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -17,12 +18,12 @@ import type { ChatSubmissionOptions, ChatRequestQueueKind } from '../../../../..
 import { OPEN_CHAT_CHANGES_COMMAND_ID } from '../../../../../workbench/contrib/chat/common/chat.js';
 import './media/chat.css';
 import './media/chatListWidget.css';
-import type { IChatMcpAppDelegate } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatMcpAppSubPart.js';
+import type { IChatMcpAppDelegate } from '../../../../../workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatMcpAppModel.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions } from '../../../../../workbench/contrib/chat/browser/chat.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
-import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from '../../../../../workbench/services/chat/common/chatService.js';
+import type { AgentInteractionDecision, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from '../../../../../workbench/services/chat/common/chatService.js';
 import type { ChatInputDelegate } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { IChatInputPart } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
@@ -67,7 +68,7 @@ export interface ICoworkWidgetModel extends IDisposable {
 	selectAgent(agent: ChatAgent | undefined): void;
 	selectMode(mode: ChatMode): void;
 	selectApprovalMode(mode: ApprovalMode): void;
-	resolveInteraction(response: AgentResponse, expectedRequestId?: string): Promise<void>;
+	resolveInteraction(response: AgentInteractionDecision, expectedRequestId?: string): Promise<void>;
 	retryFailedTurn(turnId: string): Promise<void>;
 }
 
@@ -82,7 +83,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	private listWidget: ChatListWidget;
 	public readonly input: IChatInputPart;
 	private readonly queueEditor = this._register(new MutableDisposable<ChatQueueEditor>());
-	private readonly goalElement: HTMLDivElement;
+	private readonly goalBanner: ChatGoalBannerWidget;
 	private submittedMessage = false;
 	private displayedThreadId: ThreadId | undefined;
 	private readonly voiceSessionController: VoiceSessionController;
@@ -130,9 +131,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 			if (this.isDisposed || source.sessionId !== this.model.sessionId || source.threadId !== this.model.threadId) throw canceled();
 			return source;
 		} : undefined));
-		this.goalElement = h(ownerDocument, 'div');
-		this.goalElement.className = 'ash-cowork-goal';
-		this.goalElement.hidden = true;
+		this.goalBanner = new ChatGoalBannerWidget(ownerDocument);
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
 			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),
 			imageResourceLoader,
@@ -201,7 +200,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		};
 		this.input = this._register(createInputPart(this.element, inputDelegate));
 		this._register(widgets.register(this));
-		this._register(instantiationService.createInstance(ChatSideChatWidget, this.element, model));
+		this._register(instantiationService.createInstance(ChatRequestOriginPart, this.element, model));
 		const voiceContainer = h(ownerDocument, 'div');
 		let hold: string | undefined;
 		this.voiceWidget = this._register(instantiationService.createInstance(AgentsVoiceWidget, voiceContainer, {
@@ -215,7 +214,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 			closeWindow: () => this.input.focus(),
 			showSessionsPicker: () => this.input.focus(),
 		}, { showClose: false, showOnboarding: false, inputBoxLayout: true }));
-		this.element.append(this.goalElement, this.listWidget.element, voiceContainer, this.input.element);
+		this.element.append(this.goalBanner.domNode, this.listWidget.element, voiceContainer, this.input.element);
 		this._register(listWidgets.onDidChange(widget => {
 			const previous = this.listWidget;
 			const state = previous.getViewState();
@@ -263,7 +262,8 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	get domNode(): HTMLElement { return this.element; }
 	public cancelTranscriptProgress(): boolean {
 		if (this.isDisposed || !this.visible || !this.model.inputState.canInterrupt) { return false; }
-		void this.model.interrupt().catch(error => { if (!this.isDisposed && !isCancellationError(error)) { this.notifications.error(error); } });
+		const generation = this.model.composerGeneration;
+		void this.model.interrupt().catch(error => { if (!this.isDisposed && this.visible && generation === this.model.composerGeneration && !isCancellationError(error)) { this.notifications.error(error); } });
 		return true;
 	}
 	public getFindController(): IChatFindController { return this.listWidget.getFindController(); }
@@ -271,6 +271,8 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	public focusCodeBlock(reverse = false): void { this.listWidget.focusCodeBlock(reverse); }
 	public focusInput(): void { this.input.focus(); }
 	public getFocus(): IChatListItem | undefined { return this.listWidget.getFocus(); }
+	public getFileTreeInfosForResponse(item: IChatListItem) { return this.listWidget.getFileTreeInfosForResponse(item); }
+	public getLastFocusedFileTreeForResponse(item: IChatListItem) { return this.listWidget.getLastFocusedFileTreeForResponse(item); }
 	public getSibling(item: IChatListItem | undefined, type: 'next' | 'previous'): IChatListItem | undefined { return this.listWidget.getSibling(item, type); }
 	public reveal(item: IChatListItem): void { this.listWidget.reveal(item); }
 	get visible(): boolean { return !this.element.hidden; }
@@ -388,25 +390,11 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 				? voice.isListening ? localize('agentsVoice.listening', 'Listening…') : localize('agentsVoice.readyPtt', 'Press and hold to speak')
 				: localize('agentsVoice.listening', 'Listening…')
 			: localize('agentsVoice.connecting', 'Connecting…'));
-		this.renderGoal();
+		this.goalBanner.setGoal(this.model.goal);
 		const items = this.model.items;
 		this.updateConversationState(items.length > 0);
 		this.listWidget.render(items);
-		this.input.render({ ...this.model.inputState, conversation: this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined });
-	}
-
-	private renderGoal(): void {
-		const goal = this.model.goal;
-		if (!goal) {
-			this.goalElement.hidden = true;
-			this.goalElement.textContent = '';
-			return;
-		}
-		this.goalElement.hidden = false;
-		const usage = goal.tokenBudget === null || goal.tokenBudget === undefined
-			? `${formatNumber(goal.tokensUsed)} tokens`
-			: `${formatNumber(goal.tokensUsed)}/${formatNumber(goal.tokenBudget)} tokens`;
-		this.goalElement.textContent = `Goal · ${goal.status} · ${usage} · ${goal.objective}`;
+		this.input.render({ ...this.model.inputState, toolInvocations: this.model.items.flatMap(item => item.toolInvocation ? [item.toolInvocation] : []), toolInvocation: this.model.items.find(item => item.toolInvocation?.call.itemId === this.model.inputState.interaction?.itemId)?.toolInvocation, conversation: this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined });
 	}
 
 	private updateConversationState(hasTranscript = this.model.items.length > 0): void {
@@ -479,5 +467,3 @@ export function resolveMarkdownWorkspaceResource(resource: URI): URI | undefined
 	}
 	return undefined;
 }
-
-function formatNumber(value: number): string { return new Intl.NumberFormat('en-US').format(value); }

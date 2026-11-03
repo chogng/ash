@@ -57,3 +57,22 @@ for (const type of ['bigModelStartPlanBrowser', 'zaiStartPlanBrowser'] as const)
 		assert.deepEqual(failure.calls, [['account/login/start', { method }], ['open', started.authorizationUrl], ['account/login/cancel', { loginId: started.loginId }]]);
 	});
 }
+
+test('subscription limits use the existing account RPC and forward cancellation', async () => {
+	const controller = new AbortController();
+	const params = { provider: 'chatgpt-subscription', accountId: 'one' };
+	const result = { ...params, plan: null, limits: [], credits: null };
+	const calls: unknown[] = [];
+	const connection = {
+		async request(definition: { method: string; }, value: unknown, options: unknown): Promise<typeof result> {
+			calls.push([definition.method, value, options]);
+			return result;
+		},
+	} as unknown as AppServerProtocolClient;
+	const api = createAppServerAccountApi(connection, {} as BrowserAccountLoginHostServices);
+	assert.deepEqual(await api.readRateLimits(params, controller.signal), result);
+	assert.deepEqual(calls, [['account/rateLimits/read', params, { signal: controller.signal }]]);
+	const response = { jsonrpc: '2.0', id: 1, result };
+	assert.deepEqual(decodeAppServerResponse('account/rateLimits/read', response), response);
+	assert.throws(() => decodeAppServerResponse('account/rateLimits/read', { ...response, result: { ...result, limits: [{ primary: { usedPercent: '25' } }] } }));
+});

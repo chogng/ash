@@ -1674,6 +1674,7 @@ fn hooks_event_details_and_configuration_render_fullscreen() {
             args: vec!["--check".into()],
         },
         enablement: HookEnablementDto::Disabled,
+        claude_pre_tool_use: None,
     };
     let mut app = App::new();
     app.update(crate::hooks::Event::Opened(
@@ -2146,6 +2147,7 @@ fn manager_session(
 ) -> Session {
     let session_id = SessionId::new(id).unwrap();
     Session {
+        source: None,
         model: None,
         session_id: session_id.clone(),
         title: id.into(),

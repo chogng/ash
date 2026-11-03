@@ -162,10 +162,19 @@ export interface HookSource {
 	readonly hooks: readonly HookDeclaration[];
 }
 
+export interface ClaudeHookImportCommand {
+	readonly id: string;
+	readonly program: string;
+	readonly args: readonly string[];
+	readonly timeoutSeconds: number;
+}
+
 /** Backend Hook declarations and invalidations; Prompt service owns their frontend consumption. */
 export interface IAppServerHookApi {
 	readonly onDidChangeHooks: Event<void>;
 	list(sessionId?: string): Promise<readonly HookSource[]>;
+	/** Captures the owning Profile and configuration revision before the review opens. */
+	captureClaudeHookImport?(): Promise<(commands: readonly ClaudeHookImportCommand[], isCurrent: () => boolean) => Promise<{ readonly imported: number; readonly existing: number; readonly error?: unknown; }>>;
 }
 
 export const IAppServerHookApi = createServiceIdentifier<IAppServerHookApi>('appServerHookApi');

@@ -1,3 +1,4 @@
+import './media/chatTipContent.css';
 import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { h } from '../../../../../../base/browser/dom.js';
 import { IMarkdownRendererService } from '../../../../../../platform/markdown/browser/markdownRenderer.js';

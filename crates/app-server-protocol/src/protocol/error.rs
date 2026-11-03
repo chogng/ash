@@ -111,6 +111,8 @@ pub enum AppServerErrorName {
     IssueReporterRateLimited,
     IssueReporterSubmissionUncertain,
     GitUnavailable,
+    GitWorkspaceUnavailable,
+    GitRepositoryNotFound,
     GitNotRepository,
     GitOperationFailed,
     GitConflictChanged,

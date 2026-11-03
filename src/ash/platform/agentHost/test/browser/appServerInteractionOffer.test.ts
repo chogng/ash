@@ -39,6 +39,51 @@ for (const kind of ['approval', 'userInput'] as const) {
 	});
 }
 
+for (const required of [undefined, false, true]) {
+	test(`owner-directed user input preserves required=${String(required)} through the real decoder and domain adapter`, async () => {
+		const transport = new InteractionTransport();
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		const api = createAppServerAgentThreadService(client);
+		const offers: AgentInteractionOffer[] = [];
+		using listener = api.onDidOfferInteraction(offer => offers.push(offer));
+		await client.connect();
+		const question = { id: 'answer', header: 'Answer', question: 'A form answer', allowFreeForm: true, ...(required === undefined ? {} : { required }) };
+		transport.frame({ method: 'agent/request', params: { ...identity, interaction: { ...interaction, request: { type: 'userInput', request: { questions: [question] } } } } });
+		assert.equal(client.state, 'ready');
+		assert.equal(offers.length, 1);
+		assert.deepEqual({ sessionId: offers[0].sessionId, threadId: offers[0].threadId, turnId: offers[0].turnId, connectionGeneration: offers[0].connectionGeneration }, { ...identity, connectionGeneration: 1 });
+		const request = offers[0].interaction.request;
+		assert.equal(request.type, 'userInput');
+		if (request.type !== 'userInput') throw new Error('Missing user input offer');
+		assert.deepEqual(request.request.questions, [{ ...question, required: required ?? true, options: undefined }]);
+	});
+}
+
+test('result review decodes captured content only through the owner-directed offer', async () => {
+	const transport = new InteractionTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	const api = createAppServerAgentThreadService(client);
+	const offers: AgentInteractionOffer[] = [];
+	using listener = api.onDidOfferInteraction(offer => offers.push(offer));
+	await client.connect();
+	const request = {
+		...interaction, requestId: 'review', request: {
+			type: 'toolResultReview', request: {
+				toolCallId: 'executed-call', toolName: 'read_private', review: { reason: 'Review captured evidence', content: [{ type: 'text', text: 'private <img src=x>' }], isError: true },
+			}
+		}
+	};
+	transport.frame({ method: 'session/thread/update', params: { sessionId: 'session', threadId: 'thread', durableSequence: 2, streamCursor: null, update: { type: 'committed', event: { type: 'interactionRequested', ...identity, interaction: request } } } });
+	assert.equal(offers.length, 0);
+	transport.frame({ method: 'agent/request', params: { ...identity, interaction: request } });
+	assert.equal(client.state, 'ready');
+	assert.equal(offers.length, 1);
+	assert.deepEqual(offers[0].interaction.request, request.request);
+	assert.equal(offers[0].interaction.requestId, 'review');
+});
+
 test('committed interaction history never grants delivery ownership', async () => {
 	const transport = new InteractionTransport();
 	const client = new AppServerProtocolClient(transport);
@@ -50,6 +95,36 @@ test('committed interaction history never grants delivery ownership', async () =
 	transport.frame({ method: 'session/thread/update', params: { sessionId: 'session', threadId: 'thread', durableSequence: 2, streamCursor: null, update: { type: 'committed', event: { type: 'interactionRequested', ...identity, interaction } } } });
 	assert.equal(client.state, 'ready');
 	assert.deepEqual(offers, []);
+});
+
+test('sandbox approval preserves captured enforcement evidence without exposing authority fields', async () => {
+	const transport = new InteractionTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	const api = createAppServerAgentThreadService(client);
+	const offers: AgentInteractionOffer[] = [];
+	using listener = api.onDidOfferInteraction(offer => offers.push(offer));
+	await client.connect();
+	const sandboxDenial = {
+		reason: 'Network access denied', replaySafety: 'safeToRetry',
+		output: { exitStatus: { type: 'code', code: 1 }, stdout: '<script>literal</script>', stderr: 'denied', aggregatedOutput: 'denied\n<script>literal</script>' },
+	};
+	transport.frame({
+		method: 'agent/request', params: {
+			...identity, interaction: {
+				...interaction, request: { type: 'approval', request: { ...interaction.request.request, sandboxDenial, riskAssessment: { assessmentId: 'assessment', riskLevel: 'high', reason: 'publishes externally' } } },
+			},
+		},
+	});
+	assert.equal(client.state, 'ready');
+	assert.equal(offers.length, 1);
+	assert.deepEqual(offers[0].interaction.request, {
+		type: 'approval', request: {
+			reason: 'Approve access', allowedDecisions: undefined, command: undefined, sandboxDenial,
+			riskAssessment: { riskLevel: 'high', reason: 'publishes externally' },
+			capabilities: [{ kind: 'network', scope: 'example.test' }],
+		},
+	});
 });
 
 test('tool execution start preserves the exact Turn and Call through the real decoder', async () => {

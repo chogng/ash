@@ -211,6 +211,25 @@ struct RecordingSink {
     values: Vec<(ToolOutputStream, String)>,
 }
 
+#[test]
+fn tool_result_review_reaches_core_with_exact_model_payload() {
+    let output = ToolOutput::success(vec![ToolContent::Text("private result".into())])
+        .require_result_confirmation("Review captured result")
+        .unwrap();
+    let mut sink = RecordingSink { values: Vec::new() };
+    let output = super::returned_output(output, &mut sink).unwrap();
+    let ToolExecutionOutput::NeedsResultConfirmation(review) = output else {
+        panic!("result must remain withheld");
+    };
+    assert_eq!(review.reason, "Review captured result");
+    assert_eq!(
+        review.content,
+        vec![ash_protocol::ContentPart::Text("private result".into())]
+    );
+    assert!(!review.is_error);
+    assert!(sink.values.is_empty());
+}
+
 impl ToolOutputSink for RecordingSink {
     fn emit(&mut self, stream: ToolOutputStream, text: String) -> Result<(), CoreError> {
         self.values.push((stream, text));

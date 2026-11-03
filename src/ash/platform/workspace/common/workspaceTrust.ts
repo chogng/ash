@@ -41,7 +41,7 @@ export interface IWorkspaceTrustApi {
 	readonly onDidChangeTrust: Event<void>;
 	/** Reads the effective grant of an existing workspace directory without management authority. */
 	readWorkspaceDirectory(dirId: string): Promise<readonly WorkspaceTrustPermission[] | undefined>;
-	readDirectory(path: string): Promise<{ readonly dir: string; readonly permissions: readonly WorkspaceTrustPermission[] | undefined; }>;
+	readDirectory(path: string): Promise<{ readonly dir: string; readonly permissions: readonly WorkspaceTrustPermission[] | undefined; readonly inheritedWorkspacePermissions?: readonly WorkspaceTrustPermission[]; }>;
 	listDirectories(): Promise<WorkspaceTrustSnapshot>;
 	setDirectoryPermissions(path: string, permissions: readonly WorkspaceTrustPermission[], expectedRevision: number): Promise<WorkspaceTrustCommandResult>;
 	forgetDirectory(dir: string, expectedRevision: number): Promise<WorkspaceTrustCommandResult>;
@@ -69,6 +69,11 @@ export const DEVELOPMENT_DIR_PERMISSIONS: readonly WorkspaceTrustPermission[] = 
 	'executeCommands', 'loadInstructions', 'loadConfig', 'discoverSkills',
 	'discoverMcp', 'useLanguageServices', 'discoverHooks', 'discoverPlugins', 'mutateRepository',
 ]);
+
+/** Full trust is an effective grant for every development capability. */
+export function hasDevelopmentPermissions(allowed: readonly WorkspaceTrustPermission[] | undefined): boolean {
+	return allowed !== undefined && DEVELOPMENT_DIR_PERMISSIONS.every(permission => allowed.includes(permission));
+}
 
 /** Frontend view of the current workspace's effective directory permissions. */
 export interface IWorkspaceTrustInfo {
@@ -104,8 +109,15 @@ export interface IWorkspaceTrustManagementService {
 export const IWorkspaceTrustManagementService = createServiceIdentifier<IWorkspaceTrustManagementService>('workspaceTrustManagementService');
 
 /** Startup directory authorization is available before Workbench services exist. */
+export interface DirectoryPermissionRequest {
+	readonly path: string;
+	/** Presentation only; the connection and directory path determine authorization. */
+	readonly remoteHostLabel?: string;
+}
+
 export interface IDirectoryPermissionRequestService {
-	requestDirectoryPermissions(path: string, signal?: AbortSignal): Promise<WorkspaceTrustChoice>;
+	readonly requiresDevelopmentTrust?: boolean;
+	requestDirectoryPermissions(request: DirectoryPermissionRequest, signal?: AbortSignal): Promise<WorkspaceTrustChoice>;
 }
 
 export interface WorkspaceTrustRequestButton {

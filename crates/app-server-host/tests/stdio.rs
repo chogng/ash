@@ -163,7 +163,7 @@ fn app_server_without_dir_does_not_inherit_its_current_directory() {
         client.git_status().unwrap_err(),
         ClientError::Server {
             code: -32060,
-            message: "GitUnavailable".into(),
+            message: "GitWorkspaceUnavailable".into(),
         }
     );
     session.shutdown().unwrap();

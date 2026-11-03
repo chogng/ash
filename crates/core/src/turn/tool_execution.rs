@@ -359,6 +359,9 @@ impl ToolExecutionOrchestrator {
         output: ToolExecutionOutput,
     ) -> Result<ToolExecutionCompletion, CoreError> {
         let output = match output {
+            ToolExecutionOutput::NeedsResultConfirmation(review) => {
+                self.review_result(context, &call, review)?
+            }
             ToolExecutionOutput::Success(text) => ToolCallOutput::Success(text),
             ToolExecutionOutput::Failure(text) => ToolCallOutput::Failure(text),
             ToolExecutionOutput::SuccessContent(content) => ToolCallOutput::SuccessContent(content),
@@ -418,6 +421,9 @@ impl ToolExecutionOrchestrator {
             },
         )?;
         let output = match self.execute_service(context, &call, &authorization) {
+            Ok(ToolExecutionOutput::NeedsResultConfirmation(review)) => {
+                self.review_result(context, &call, review)?
+            }
             Ok(ToolExecutionOutput::Success(text)) => ToolCallOutput::Success(text),
             Ok(ToolExecutionOutput::Failure(text)) => ToolCallOutput::Failure(text),
             Ok(ToolExecutionOutput::SuccessContent(content)) => {
@@ -460,6 +466,10 @@ impl ToolExecutionOrchestrator {
     ) -> Result<ToolAttempt, CoreError> {
         let result = self.execute_service(context, call, &authorization);
         match result {
+            Ok(ToolExecutionOutput::NeedsResultConfirmation(review)) => Ok(ToolAttempt::Commit {
+                output: self.review_result(context, call, review)?,
+                completion: ToolExecutionCompletion::Complete,
+            }),
             Ok(ToolExecutionOutput::Success(text)) => Ok(ToolAttempt::Commit {
                 output: ToolCallOutput::Success(text),
                 completion: ToolExecutionCompletion::Complete,
@@ -792,6 +802,9 @@ impl ToolExecutionOrchestrator {
         escalated?;
 
         let output = match self.execute_service(context, call, &authorization) {
+            Ok(ToolExecutionOutput::NeedsResultConfirmation(review)) => {
+                self.review_result(context, call, review)?
+            }
             Ok(ToolExecutionOutput::Success(text)) => ToolCallOutput::Success(text),
             Ok(ToolExecutionOutput::Failure(text)) => ToolCallOutput::Failure(text),
             Ok(ToolExecutionOutput::SuccessContent(content)) => {
@@ -814,6 +827,84 @@ impl ToolExecutionOrchestrator {
             output,
             completion: ToolExecutionCompletion::Complete,
         })
+    }
+}
+
+impl ToolExecutionOrchestrator {
+    fn review_result(
+        &self,
+        context: &ToolExecutionContext<'_>,
+        call: &ToolCall,
+        review: ash_protocol::ToolResultReview,
+    ) -> Result<ToolCallOutput, CoreError> {
+        let interactions = CoreToolInteractions {
+            threads: Arc::clone(&self.threads),
+            updates: Arc::clone(&self.updates),
+            thread_id: context.thread_id.clone(),
+            turn_id: context.turn_id.clone(),
+            item_id: context.item_id.clone(),
+            cancellation: context.cancellation.clone(),
+            policy: Arc::clone(&self.policy),
+            frozen_policy_revision: context.frozen_policy_revision.to_owned(),
+            approval_mode: context.approval_mode,
+            source_id: call.name.as_str().to_owned(),
+        };
+        let outcome = interactions.request_live(
+            AgentRequest::ToolResultReview {
+                request: ash_protocol::ToolResultReviewRequest {
+                    tool_call_id: call.id.clone(),
+                    tool_name: call.name.clone(),
+                    review: review.clone(),
+                },
+            },
+            context.cancellation,
+        )?;
+        match outcome {
+            crate::thread_controller::live_interaction::LiveInteractionOutcome::Response(
+                AgentResponse::ToolResultReview { response },
+            ) => Ok(result_review_output(&review, response.decision)),
+            crate::thread_controller::live_interaction::LiveInteractionOutcome::Cancelled(_) => Ok(
+                ToolCallOutput::Success("The tool executed, but result review was cancelled. The results were not shared.".into()),
+            ),
+            _ => Err(CoreError::Journal(
+                "result review resolved with the wrong response kind".into(),
+            )),
+        }
+    }
+
+    pub(super) fn complete_result_review(
+        &self,
+        context: &ToolExecutionContext<'_>,
+        call: ToolCall,
+        request: &ash_protocol::ToolResultReviewRequest,
+        decision: ash_protocol::ToolResultReviewDecision,
+    ) -> Result<(), CoreError> {
+        self.threads.record_tool_result(
+            context.thread_id,
+            context.turn_id,
+            RecordToolResultRequest {
+                tool_call_id: call.id,
+                output: result_review_output(&request.review, decision),
+            },
+        )?;
+        Ok(())
+    }
+}
+
+fn result_review_output(
+    review: &ash_protocol::ToolResultReview,
+    decision: ash_protocol::ToolResultReviewDecision,
+) -> ToolCallOutput {
+    match decision {
+        ash_protocol::ToolResultReviewDecision::Share if review.is_error => {
+            ToolCallOutput::FailureContent(review.content.clone())
+        }
+        ash_protocol::ToolResultReviewDecision::Share => {
+            ToolCallOutput::SuccessContent(review.content.clone())
+        }
+        ash_protocol::ToolResultReviewDecision::Skip => ToolCallOutput::Success(
+            "The tool executed but the user chose not to share the results.".into(),
+        ),
     }
 }
 

@@ -1,7 +1,5 @@
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/changesActions.css';
-import { h } from '../../../../base/browser/dom.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { getErrorMessage } from '../../../../base/common/errors.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
@@ -16,9 +14,10 @@ import { RunOnceScheduler } from '../../../../base/common/async.js';
 
 /** Runs optional Git provider commands against a captured Session repository. */
 export class SessionSyncChangesActionViewItem extends Disposable {
-	private readonly sync: Button;
-	private readonly publish: Button;
-	private readonly workingTree: Button;
+	private readonly branchActions: HTMLSelectElement;
+	private readonly sync: HTMLOptionElement;
+	private readonly publish: HTMLOptionElement;
+	readonly workingTree: HTMLOptionElement;
 	private readonly picker = this._register(new DisposableStore());
 	private generation = 0;
 	private owner: string | undefined;
@@ -39,21 +38,33 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 		const element = h(container.ownerDocument, 'div', { className: 'ash-sessions-changes-actions' });
 		container.append(element);
 		this._register(toDisposable(() => element.remove()));
-		this.sync = this._register(new Button(element, {
-			...defaultButtonStyles,
-			label: localize('sessions.changes.sync', 'Sync changes'),
-			onClick: () => { void this.run('sync'); },
+		const document = container.ownerDocument;
+		const label = localize('sessions.changes.branchActions', 'Git branch actions');
+		this.branchActions = h(document, 'select');
+		this.branchActions.setAttribute('aria-label', label);
+		const placeholder = h(document, 'option');
+		placeholder.value = '';
+		placeholder.disabled = true;
+		placeholder.textContent = label;
+		this.sync = h(document, 'option');
+		this.sync.value = 'sync';
+		this.sync.textContent = localize('sessions.changes.sync', 'Sync changes');
+		this.publish = h(document, 'option');
+		this.publish.value = 'publish';
+		this.publish.textContent = localize('sessions.changes.publish', 'Publish branch');
+		this.branchActions.append(placeholder, this.sync, this.publish);
+		this.branchActions.value = '';
+		element.append(this.branchActions);
+		this._register(addDisposableListener(this.branchActions, 'change', () => {
+			const action = this.branchActions.value;
+			this.branchActions.value = '';
+			if (action === 'sync' || action === 'publish') {
+				void this.run(action === 'sync' ? 'sync' : 'git.publish');
+			}
 		}));
-		this.publish = this._register(new Button(element, {
-			...defaultButtonStyles,
-			label: localize('sessions.changes.publish', 'Publish branch'),
-			onClick: () => { void this.run('git.publish'); },
-		}));
-		this.workingTree = this._register(new Button(element, {
-			...defaultButtonStyles,
-			label: localize('sessions.changes.workingTree', 'Review working tree'),
-			onClick: () => { void this.run('git.openChangesSource'); },
-		}));
+		this.workingTree = h(document, 'option');
+		this._register(toDisposable(() => this.workingTree.remove()));
+		this.workingTree.textContent = localize('sessions.changes.workingTree', 'Review working tree');
 		this.status = h(container.ownerDocument, 'p', { className: 'ash-sessions-changes-repository-status' });
 		this.status.setAttribute('role', 'status');
 		this.status.hidden = true;
@@ -107,15 +118,18 @@ export class SessionSyncChangesActionViewItem extends Disposable {
 		const selected = this.sessions.activeSelection;
 		const owner = selected?.kind === 'session' ? JSON.stringify([selected.active.session.sessionId, selected.active.threadId, selected.active.session.workspace]) : undefined;
 		if (owner !== this.owner) { this.owner = owner; this.generation++; this.picker.clear(); }
-		const hasWorkspace = selected?.kind === 'session' && !!selected.active.session.workspace;
-		for (const [button, available] of [
-			[this.sync, CommandsRegistry.hasCommand('git.pull') && CommandsRegistry.hasCommand('git.push')],
-			[this.publish, CommandsRegistry.hasCommand('git.publish')],
-			[this.workingTree, CommandsRegistry.hasCommand('git.openChangesSource')],
-		] as const) {
-			button.domNode.hidden = !hasWorkspace || !available || !CommandsRegistry.hasCommand('git.getRepositoryContexts');
-			button.enabled = !this.running;
-		}
+		const available = selected?.kind === 'session' && !!selected.active.session.workspace
+			&& CommandsRegistry.hasCommand('git.getRepositoryContexts');
+		this.sync.hidden = this.sync.disabled = !CommandsRegistry.hasCommand('git.pull') || !CommandsRegistry.hasCommand('git.push');
+		this.publish.hidden = this.publish.disabled = !CommandsRegistry.hasCommand('git.publish');
+		this.branchActions.hidden = !available || (this.sync.hidden && this.publish.hidden);
+		this.branchActions.disabled = this.running;
+		this.workingTree.hidden = !available || !CommandsRegistry.hasCommand('git.openChangesSource');
+		this.workingTree.disabled = this.workingTree.hidden || this.running;
+	}
+
+	openWorkingTree(): void {
+		if (!this.workingTree.disabled) { void this.run('git.openChangesSource'); }
 	}
 
 	private async choose(repositories: readonly LocalRepository[]): Promise<LocalRepository | undefined> {

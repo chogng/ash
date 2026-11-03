@@ -214,11 +214,14 @@ impl<C: ActionClassifier> ActionPolicyEngine<C> {
             ) | (RiskLevel::High, UserAuthorization::Explicit)
         );
         if !authorized {
-            return ExecutionDecision::AskUser(ApprovalRequest::new(
-                request.action().digest().clone(),
-                capabilities.clone(),
-                format!("automatic review needs explicit user authorization: {reason}"),
-            ));
+            return ExecutionDecision::AskUser(
+                ApprovalRequest::new(
+                    request.action().digest().clone(),
+                    capabilities.clone(),
+                    format!("automatic review needs explicit user authorization: {reason}"),
+                )
+                .with_assessment(assessment.clone()),
+            );
         }
         ExecutionDecision::RunAutoReviewed(AutoReviewGrant::new(
             assessment.assessment_id().clone(),

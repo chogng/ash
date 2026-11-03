@@ -125,6 +125,7 @@ use ash_execpolicy::ScopeMatcher;
 /// Coordinates the existing owners needed by the configuration adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait ConfigRequestProcessorContext: Send + Sync {
+    fn managed_workspace_trust_source(&self, dir: &Dir) -> Option<ash_file_access::DirId>;
     fn active_dir_id(&self) -> Option<ash_file_access::DirId>;
     fn codebase_semantic_service(
         &self,
@@ -207,9 +208,23 @@ impl<'ctx, C: ConfigRequestProcessorContext + ?Sized> ConfigRequestProcessor<'ct
             .directory_grants
             .explicit_permissions_for(&dir.id())
             .map(permission_dtos);
+        let inherited_workspace_permissions = if configured.is_none() {
+            self.context
+                .managed_workspace_trust_source(&dir)
+                .and_then(|source| {
+                    snapshot
+                        .values
+                        .directory_grants
+                        .explicit_permissions_for(&source)
+                        .map(permission_dtos)
+                })
+        } else {
+            None
+        };
         result(&DirectoryGrantsReadResult {
             dir: dir.id(),
             permissions: configured,
+            inherited_workspace_permissions,
         })
     }
 

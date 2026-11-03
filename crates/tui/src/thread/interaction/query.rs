@@ -26,6 +26,7 @@ use ratatui::text::Span;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
 use ratatui::widgets::Paragraph;
+use ratatui::widgets::Wrap;
 
 const MAX_CHOICE_ROWS: usize = 8;
 
@@ -46,8 +47,17 @@ pub(crate) struct QueryQuestion {
     pub(crate) id: String,
     pub(crate) header: String,
     pub(crate) prompt: String,
+    pub(crate) required: bool,
     pub(crate) choices: Vec<QueryChoice>,
     pub(crate) custom_answer: QueryCustomAnswer,
+}
+
+impl QueryQuestion {
+    fn option_count(&self) -> usize {
+        usize::from(!self.required)
+            + self.choices.len()
+            + usize::from(self.custom_answer == QueryCustomAnswer::Allowed)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -64,6 +74,13 @@ pub(crate) enum QueryOutcome {
 }
 
 #[derive(Debug)]
+enum QueryResponseKind {
+    Questions,
+    Permissions(ash_protocol::PermissionRequest),
+    ResultReview,
+}
+
+#[derive(Debug)]
 pub(crate) struct Query {
     turn_id: TurnId,
     request_id: RequestId,
@@ -74,7 +91,8 @@ pub(crate) struct Query {
     submitting: bool,
     error: Option<String>,
     custom_answer: Option<String>,
-    permission_request: Option<ash_protocol::PermissionRequest>,
+    response_kind: QueryResponseKind,
+    review_scroll: std::cell::Cell<usize>,
 }
 
 impl Query {
@@ -90,6 +108,7 @@ impl Query {
                 id: question.id,
                 header: question.header,
                 prompt: question.question,
+                required: question.required,
                 choices: question
                     .options
                     .into_iter()
@@ -134,6 +153,7 @@ impl Query {
                     id: format!("directory:{directory_index}:{permission_index}"),
                     header: directory.path.clone(),
                     prompt: name,
+                    required: true,
                     choices: choices(),
                     custom_answer: QueryCustomAnswer::Unavailable,
                 });
@@ -144,6 +164,7 @@ impl Query {
                 id: format!("network:{index}"),
                 header: host.clone(),
                 prompt: "Access network".into(),
+                required: true,
                 choices: choices(),
                 custom_answer: QueryCustomAnswer::Unavailable,
             });
@@ -162,11 +183,57 @@ impl Query {
             id: "duration".into(),
             header: "Permissions".into(),
             prompt: "Permission duration".into(),
+            required: true,
             choices: durations,
             custom_answer: QueryCustomAnswer::Unavailable,
         });
         let mut query = Self::from_questions(turn_id, request_id, questions)?;
-        query.permission_request = Some(request);
+        query.response_kind = QueryResponseKind::Permissions(request);
+        Ok(query)
+    }
+
+    pub(crate) fn open_result_review(
+        turn_id: TurnId,
+        request_id: RequestId,
+        request: ash_protocol::ToolResultReviewRequest,
+    ) -> Result<Self, String> {
+        let preview = request
+            .review
+            .content
+            .iter()
+            .map(|part| match part {
+                ash_protocol::ContentPart::Text(text) => text.clone(),
+                ash_protocol::ContentPart::Artifact { artifact } => artifact.model_text(),
+                media => serde_json::to_string(media).expect("captured media is serializable"),
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        let mut query = Self::from_questions(
+            turn_id,
+            request_id,
+            vec![QueryQuestion {
+                id: "result-review".into(),
+                header: "Review tool results".into(),
+                prompt: format!(
+                    "{}\n{}\n\n{}",
+                    request.tool_name, request.review.reason, preview
+                ),
+                choices: vec![
+                    QueryChoice {
+                        label: "Skip results".into(),
+                        description:
+                            "Keep the execution record without sharing the result with the model."
+                                .into(),
+                    },
+                    QueryChoice {
+                        label: "Share results".into(),
+                        description: "Share this exact result with the model.".into(),
+                    },
+                ],
+                custom_answer: QueryCustomAnswer::Unavailable,
+            }],
+        )?;
+        query.response_kind = QueryResponseKind::ResultReview;
         Ok(query)
     }
 
@@ -188,7 +255,9 @@ impl Query {
             return Err("a query requires at least one question".into());
         }
         if questions.iter().any(|question| {
-            question.choices.is_empty() && question.custom_answer == QueryCustomAnswer::Unavailable
+            question.required
+                && question.choices.is_empty()
+                && question.custom_answer == QueryCustomAnswer::Unavailable
         }) {
             return Err("every query question requires a choice or a custom answer".into());
         }
@@ -202,11 +271,32 @@ impl Query {
             submitting: false,
             error: None,
             custom_answer: None,
-            permission_request: None,
+            response_kind: QueryResponseKind::Questions,
+            review_scroll: std::cell::Cell::new(0),
         })
     }
 
     pub(crate) fn handle_key(&mut self, key: KeyEvent) -> QueryOutcome {
+        if matches!(&self.response_kind, QueryResponseKind::ResultReview)
+            && !self.submitting
+            && key.kind != KeyEventKind::Release
+            && key.modifiers.is_empty()
+        {
+            match key.code {
+                KeyCode::PageDown => self
+                    .review_scroll
+                    .set(self.review_scroll.get().saturating_add(5)),
+                KeyCode::PageUp => self
+                    .review_scroll
+                    .set(self.review_scroll.get().saturating_sub(5)),
+                _ => return self.handle_choice_key(key),
+            }
+            return QueryOutcome::Consumed;
+        }
+        self.handle_choice_key(key)
+    }
+
+    fn handle_choice_key(&mut self, key: KeyEvent) -> QueryOutcome {
         if !self.submitting
             && self.custom_answer.is_none()
             && let Some(navigation) = Navigation::from_key(key)
@@ -233,7 +323,10 @@ impl Query {
                     custom_answer.pop();
                     QueryOutcome::Consumed
                 }
-                _ if bindings::ANSWER.matches(key) && !custom_answer.trim().is_empty() => {
+                _ if bindings::ANSWER.matches(key)
+                    && (!self.questions[self.current].required
+                        || !custom_answer.trim().is_empty()) =>
+                {
                     let value = self
                         .custom_answer
                         .take()
@@ -288,7 +381,24 @@ impl Query {
     }
 
     pub(crate) fn response(&self, answers: Vec<QueryAnswer>) -> ThreadRequestResponse {
-        if let Some(request) = &self.permission_request {
+        if matches!(self.response_kind, QueryResponseKind::ResultReview) {
+            let decision = if answers.iter().any(|answer| {
+                answer.question_id == "result-review" && answer.value == "Share results"
+            }) {
+                ash_protocol::ToolResultReviewDecision::Share
+            } else {
+                ash_protocol::ToolResultReviewDecision::Skip
+            };
+            return ThreadRequestResponse {
+                kind: ThreadRequestKind::Query,
+                turn_id: self.turn_id.clone(),
+                request_id: self.request_id.clone(),
+                response: AgentResponse::ToolResultReview {
+                    response: ash_protocol::ToolResultReviewResponse { decision },
+                },
+            };
+        }
+        if let QueryResponseKind::Permissions(request) = &self.response_kind {
             let allowed = |key: &str| {
                 answers
                     .iter()
@@ -344,6 +454,13 @@ impl Query {
         }
         let answers = answers
             .into_iter()
+            .filter(|answer| {
+                !answer.value.is_empty()
+                    || self
+                        .questions
+                        .iter()
+                        .any(|question| question.id == answer.question_id && question.required)
+            })
             .map(|answer| {
                 (
                     answer.question_id,
@@ -380,7 +497,12 @@ impl Query {
             submitting: self.submitting,
             error: self.error.as_deref(),
             custom_answer: self.custom_answer.as_deref(),
-            permission_request: self.permission_request.as_ref(),
+            permission_request: match &self.response_kind {
+                QueryResponseKind::Permissions(request) => Some(request),
+                QueryResponseKind::Questions | QueryResponseKind::ResultReview => None,
+            },
+            review_scroll: matches!(&self.response_kind, QueryResponseKind::ResultReview)
+                .then_some(&self.review_scroll),
         }
     }
 
@@ -390,6 +512,10 @@ impl Query {
 
     fn activate_at(&mut self, index: usize) -> QueryOutcome {
         let question = &self.questions[self.current];
+        if !question.required && index == 0 {
+            return self.advance(String::new());
+        }
+        let index = index - usize::from(!question.required);
         if index < question.choices.len() {
             let value = question.choices[index].label.clone();
             return self.advance(value);
@@ -413,8 +539,7 @@ impl Query {
     }
 
     fn option_count(&self) -> usize {
-        let question = &self.questions[self.current];
-        question.choices.len() + usize::from(question.custom_answer == QueryCustomAnswer::Allowed)
+        self.questions[self.current].option_count()
     }
 }
 
@@ -428,11 +553,14 @@ pub(crate) struct QueryView<'a> {
     pub(crate) error: Option<&'a str>,
     pub(crate) custom_answer: Option<&'a str>,
     pub(crate) permission_request: Option<&'a ash_protocol::PermissionRequest>,
+    review_scroll: Option<&'a std::cell::Cell<usize>>,
 }
 
 pub(crate) fn desired_height(view: QueryView<'_>) -> u16 {
-    let choice_count = view.question.choices.len()
-        + usize::from(view.question.custom_answer == QueryCustomAnswer::Allowed);
+    if view.review_scroll.is_some() {
+        return 16;
+    }
+    let choice_count = view.question.option_count();
     let content_rows = 2usize
         .saturating_add(usize::from(view.permission_request.is_some()) * 2)
         .saturating_add(choice_count.min(MAX_CHOICE_ROWS))
@@ -449,11 +577,12 @@ pub(crate) fn draw(
     pressed: Option<usize>,
     context: RenderContext<'_>,
 ) {
-    let choice_count = view.question.choices.len()
-        + usize::from(
-            view.question.custom_answer == QueryCustomAnswer::Allowed
-                && view.question.choices.len() < MAX_CHOICE_ROWS,
-        );
+    if view.review_scroll.is_some() {
+        draw_result_review(frame, area, view, hovered, pressed, context);
+        return;
+    }
+    let choice_count = view.question.option_count().min(MAX_CHOICE_ROWS);
+    let skip_count = usize::from(!view.question.required);
     let states = (0..choice_count)
         .map(|index| choice_state(index, view.selected, hovered, pressed))
         .collect::<Vec<_>>();
@@ -476,28 +605,41 @@ pub(crate) fn draw(
         },
         Style::default().add_modifier(Modifier::BOLD),
     ));
+    if !view.question.required {
+        lines.push(choice_line(
+            &context.localize("Skip (optional)"),
+            &context.localize("Leave this question unanswered"),
+            states[0],
+            context,
+        ));
+    }
     lines.extend(
         view.question
             .choices
             .iter()
             .enumerate()
-            .take(MAX_CHOICE_ROWS)
+            .take(MAX_CHOICE_ROWS - skip_count)
             .map(|(index, choice)| {
                 let label = if view.permission_request.is_some() {
                     context.localize(&choice.label).into_owned()
                 } else {
                     choice.label.clone()
                 };
-                choice_line(&label, &choice.description, states[index], context)
+                choice_line(
+                    &label,
+                    &choice.description,
+                    states[index + skip_count],
+                    context,
+                )
             }),
     );
     if view.question.custom_answer == QueryCustomAnswer::Allowed
-        && view.question.choices.len() < MAX_CHOICE_ROWS
+        && view.question.choices.len() + skip_count < MAX_CHOICE_ROWS
     {
         lines.push(choice_line(
             &context.localize("Type your own answer"),
             &context.localize("Answer in the input below"),
-            states[view.question.choices.len()],
+            states[view.question.choices.len() + skip_count],
             context,
         ));
     }
@@ -560,23 +702,98 @@ pub(crate) fn choice_at(
     if view.submitting || view.custom_answer.is_some() {
         return None;
     }
-    let count = view.question.choices.len().min(MAX_CHOICE_ROWS)
-        + usize::from(
-            view.question.custom_answer == QueryCustomAnswer::Allowed
-                && view.question.choices.len() < MAX_CHOICE_ROWS,
-        );
+    let count = view.question.option_count().min(MAX_CHOICE_ROWS);
     (0..count).find(|index| {
         Rect::new(
             area.x.saturating_add(1),
-            choice_row(
-                area,
-                *index + usize::from(view.permission_request.is_some()) * 2,
-            ),
+            if view.review_scroll.is_some() {
+                result_review_choice_row(area, view, *index)
+            } else {
+                choice_row(
+                    area,
+                    *index + usize::from(view.permission_request.is_some()) * 2,
+                )
+            },
             area.width.saturating_sub(2),
             1,
         )
         .contains(position)
     })
+}
+
+fn result_review_choice_row(area: Rect, view: QueryView<'_>, index: usize) -> u16 {
+    area.bottom()
+        .saturating_sub(
+            1 + u16::from(view.submitting || view.error.is_some())
+                + view.question.choices.len() as u16,
+        )
+        .saturating_add(index as u16)
+}
+
+fn draw_result_review(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    view: QueryView<'_>,
+    hovered: Option<usize>,
+    pressed: Option<usize>,
+    context: RenderContext<'_>,
+) {
+    let block = Block::default()
+        .title(context.localize(&view.question.header))
+        .borders(Borders::ALL)
+        .style(Style::default().bg(context.background()));
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+    let first_choice = result_review_choice_row(area, view, 0).max(inner.y);
+    let hint = context.localize(
+        "The tool has executed. Skipping does not undo changes. Page Up/Down scrolls output.",
+    );
+    let hint = Paragraph::new(hint).wrap(Wrap { trim: false });
+    let hint_height =
+        (hint.line_count(inner.width.max(1)) as u16).min(first_choice.saturating_sub(inner.y));
+    frame.render_widget(hint, Rect::new(inner.x, inner.y, inner.width, hint_height));
+    let preview = Rect::new(
+        inner.x,
+        inner.y.saturating_add(hint_height),
+        inner.width,
+        first_choice.saturating_sub(inner.y.saturating_add(hint_height)),
+    );
+    let paragraph = Paragraph::new(view.question.prompt.clone()).wrap(Wrap { trim: false });
+    let max_scroll = paragraph
+        .line_count(preview.width.max(1))
+        .saturating_sub(usize::from(preview.height));
+    let offset = view
+        .review_scroll
+        .expect("result review owns a scroll offset");
+    let scroll = offset.get().min(max_scroll).min(u16::MAX as usize) as u16;
+    offset.set(usize::from(scroll));
+    frame.render_widget(paragraph.scroll((scroll, 0)), preview);
+    for (index, choice) in view.question.choices.iter().enumerate() {
+        let row = result_review_choice_row(area, view, index);
+        if row < inner.y || row >= inner.bottom() {
+            continue;
+        }
+        let state = choice_state(index, view.selected, hovered, pressed);
+        frame.render_widget(
+            Paragraph::new(choice_line(
+                &context.localize(&choice.label),
+                &context.localize(&choice.description),
+                state,
+                context,
+            )),
+            Rect::new(inner.x, row, inner.width, 1),
+        );
+    }
+    if view.submitting || view.error.is_some() {
+        let status = view
+            .error
+            .map(std::borrow::Cow::Borrowed)
+            .unwrap_or_else(|| context.localize("Submitting…"));
+        frame.render_widget(
+            Paragraph::new(status),
+            Rect::new(inner.x, inner.bottom().saturating_sub(1), inner.width, 1),
+        );
+    }
 }
 
 fn choice_row(area: Rect, index: usize) -> u16 {

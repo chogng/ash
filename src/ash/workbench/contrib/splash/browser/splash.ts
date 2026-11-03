@@ -37,7 +37,7 @@ export function readBrowserPartsSplash(ownerWindow: Window): IPartsSplash {
 	};
 }
 
-export function showPartsSplash(ownerDocument: Document, splash: IPartsSplash): void {
+export function showPartsSplash(ownerDocument: Document, splash: IPartsSplash): HTMLElement {
 	removePartsSplash(ownerDocument);
 	const styles = ownerDocument.createElement('style');
 	styles.className = 'ash-initial-shell-colors';
@@ -58,6 +58,7 @@ export function showPartsSplash(ownerDocument: Document, splash: IPartsSplash): 
 	if (layout && ownerWindow && Math.abs(layout.width - ownerWindow.innerWidth) < 1 && Math.abs(layout.height - ownerWindow.innerHeight) < 1) {
 		for (const part of layout.partBounds) {
 			const region = ownerDocument.createElement('div');
+			if (part.id) region.dataset.part = part.id;
 			Object.assign(region.style, {
 				position: 'absolute', left: `${part.left}px`, top: `${part.top}px`,
 				width: `${part.width}px`, height: `${part.height}px`, boxSizing: 'border-box',
@@ -80,6 +81,7 @@ export function showPartsSplash(ownerDocument: Document, splash: IPartsSplash): 
 	}
 	ownerDocument.body.append(element);
 	ownerDocument.defaultView?.performance.mark('ash.splash.shown');
+	return element;
 }
 
 export function removePartsSplash(ownerDocument: Document): void {

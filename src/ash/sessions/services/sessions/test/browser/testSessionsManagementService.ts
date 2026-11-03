@@ -8,8 +8,9 @@ export class TestSessionsManagementService extends SessionsManagementService {
 	constructor(provider: ISessionsProvider) {
 		const registry = new SessionsProvidersService();
 		const registration = registry.registerProvider(provider);
-		super(provider, registry);
+		super(provider.id, registry);
 		this.registry = registry;
+		this._register(provider);
 		this._register(registration);
 	}
 	override dispose(): void { super.dispose(); this.registry.dispose(); }

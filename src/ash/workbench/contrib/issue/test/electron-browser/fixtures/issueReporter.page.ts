@@ -103,6 +103,7 @@ const accounts = resources.add(new Emitter<AccountState>());
 const accountState = (): AccountState => ({ revision: 1n, accounts: transport.signedIn ? [{ provider: 'github', accountId: '42', displayName: 'Test account', status: 'ready', credentialRevision: 1n }] : [] });
 let releaseAccountRead: (() => void) | undefined;
 services.registerInstance(IAccountService, {
+	readRateLimits: async () => { throw new Error('Unexpected subscription limit query'); },
 	onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => {
 		const snapshot = accountState();
 		if (new URL(location.href).searchParams.has('holdAccountRead')) { await new Promise<void>(resolve => { releaseAccountRead = resolve; }); }

@@ -59,7 +59,7 @@ impl ExecCall {
             }
             Some(ToolActivity::FileEdit { path }) => ("Failed to update file {0}", file_name(path)),
             Some(ToolActivity::Run | ToolActivity::Command { .. }) => ("Command failed", ""),
-            None => ("{0} failed", self.name.as_str()),
+            Some(ToolActivity::Confirmation { .. }) | None => ("{0} failed", self.name.as_str()),
         };
         if matches!(
             self.activity,
@@ -145,8 +145,12 @@ impl ExecCall {
             (false, Some(ToolActivity::Run | ToolActivity::Command { .. })) => {
                 ("Command finished", "", false)
             }
-            (true, None) => ("Running {0}", self.name.as_str(), false),
-            (false, None) => ("Completed {0}", self.name.as_str(), false),
+            (true, Some(ToolActivity::Confirmation { .. }) | None) => {
+                ("Running {0}", self.name.as_str(), false)
+            }
+            (false, Some(ToolActivity::Confirmation { .. }) | None) => {
+                ("Completed {0}", self.name.as_str(), false)
+            }
         };
         if translate_target {
             localized_activity(language, template, target)
@@ -527,9 +531,12 @@ fn group_for(activity: Option<&ToolActivity>) -> ExecGroup {
             | ToolActivity::FileList { .. },
         ) => ExecGroup::ExploreGroup,
         Some(ToolActivity::Run | ToolActivity::Command { .. }) => ExecGroup::CompactCommandGroup,
-        Some(ToolActivity::Edit { .. } | ToolActivity::FileEdit { .. }) | None => {
-            ExecGroup::SingleExec
-        }
+        Some(
+            ToolActivity::Edit { .. }
+            | ToolActivity::FileEdit { .. }
+            | ToolActivity::Confirmation { .. },
+        )
+        | None => ExecGroup::SingleExec,
     }
 }
 

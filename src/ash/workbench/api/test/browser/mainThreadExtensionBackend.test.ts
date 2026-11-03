@@ -19,7 +19,7 @@ import { Emitter, Event } from '../../../../base/common/event.js';
 import type { ServerNotification } from '../../../../../../.build/protocol/typescript/index.js';
 import type { IExtensionApi } from '../../../../platform/extensions/common/extensionApi.js';
 import type { IExtensionBackendApi } from '../../../../platform/extensions/common/extensionBackendApi.js';
-import type { IAppServerApi, IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import type { IAppServerApi, IAppServerConnectionRecovery, IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ConfigurationTarget, type IConfigurationChangeEvent, type IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { MainThreadExtensionBackend } from '../../browser/mainThreadExtensionBackend.js';
@@ -27,20 +27,43 @@ import type { EditorPartChangeEvent } from '../../../services/editor/common/edit
 
 const source = { extensionId: 'ash.git', activationGeneration: 1, incarnation: 1 };
 const manifest = { ashFrontend: { capabilities: { 'git.repository': { methods: { read: { route: 'config/read', fields: [], resultFields: ['revision', 'git', 'gitConfigured'] }, write: { route: 'config/update', fields: ['commandId', 'expectedRevision', 'git'] }, transport: { route: 'git/transport', cancellationRoute: 'git/transport/cancel', fields: ['operationId'] } }, notifications: ['config/changed'] } } } };
-function fixture(sourceKind = 'builtIn', request?: IExtensionBackendApi['request'], progress?: IProgressService, editor?: ICodeEditor, editorPart?: IEditorPart) {
+function fixture(sourceKind = 'builtIn', request?: IExtensionBackendApi['request'], progress?: IProgressService, editor?: ICodeEditor, editorPart?: IEditorPart, recovery?: IAppServerConnectionRecovery) {
 	const calls: { method: string; params: unknown; }[] = [];
 	const extensions = { list: async () => ({ extensions: [{ id: 'ash.git', sourceKind, manifestJson: JSON.stringify(manifest) }] }) } as unknown as IExtensionApi;
 	const backend = { request: async (method, params, signal) => { calls.push({ method, params }); if (request) return request(method, params, signal); return { revision: 1, git: { autofetch: 'off', autofetchPeriod: 180 }, gitConfigured: true, providers: { token: 'private' } }; } } satisfies IExtensionBackendApi;
-	const connection = { isAvailable: true, getConnectionState: async () => 'ready', getSlashCommands: async () => [], connectionGeneration: 1, onConnectionState: Event.None } satisfies IAppServerApi;
+	const connection = { isAvailable: true, getConnectionState: async () => 'ready', getSlashCommands: async () => [], connectionGeneration: 1, onConnectionState: Event.None, recovery } satisfies IAppServerApi;
 	const notifications = new Emitter<ServerNotification>();
 	const events: IServerEventApi = { subscribe: listener => notifications.event(listener) };
-	const workspace = { getWorkspace: () => ({ folders: [] }), onDidChangeWorkspace: Event.None } as unknown as IWorkspaceContextService;
+	const folders = recovery ? [{ id: 'fixture', name: 'Workspace', uri: URI.file('/workspace') }] : [];
+	const workspace = { getWorkspace: () => ({ folders }), onDidChangeWorkspace: Event.None } as unknown as IWorkspaceContextService;
 	const configurationChanges = new Emitter<IConfigurationChangeEvent>();
 	const configuration = { onDidChangeConfiguration: configurationChanges.event } as unknown as IConfigurationService;
 	const editors = editorPart ?? { activeGroup: { activeInput: { resource: URI.file('/file.ts') } }, groups: [{ inputs: [{ resource: URI.file('/file.ts') }] }], onDidChangeEditors: Event.None } as unknown as IEditorPart;
 	const codeEditors = { listCodeEditors: () => editor ? [editor] : [], onCodeEditorAdd: Event.None, onCodeEditorRemove: Event.None } as unknown as ICodeEditorService;
 	return { bridge: new MainThreadExtensionBackend(extensions, backend, connection, events, workspace, configuration, progress ?? { withProgress: async (_options, task) => task({ report() { } }) }, editors, codeEditors), calls, notifications, configurationChanges };
 }
+
+test('Git discovery observes directory recovery even when the protocol connection stays ready', async () => {
+	using recoveryChanged = new Emitter<void>();
+	let status: IAppServerConnectionRecovery['status'] = 'recovering';
+	const recovery: IAppServerConnectionRecovery = { get status() { return status; }, error: undefined, onDidChange: recoveryChanged.event, reconnect: async () => { } };
+	const value = fixture('builtIn', undefined, undefined, undefined, undefined, recovery);
+	using bridge = value.bridge; using changes = value.configurationChanges; using notifications = value.notifications;
+	const signal = new AbortController().signal;
+	const initial = await bridge.handle(source, 'git.repository', undefined, {}, 0, signal) as { connection: string; sequence: number; };
+	assert.equal(initial.connection, 'initializing');
+	const waiting = bridge.handle(source, 'git.repository', undefined, {}, initial.sequence, signal, undefined, true);
+	status = 'idle';
+	recoveryChanged.fire();
+	const restored = await waiting as { connection: string; sequence: number; reset: boolean; };
+	assert.equal(restored.connection, 'ready');
+	assert.equal(restored.sequence, initial.sequence + 1);
+	assert.equal(restored.reset, true);
+	status = 'suspended';
+	recoveryChanged.fire();
+	const suspended = await bridge.handle(source, 'git.repository', undefined, {}, restored.sequence, signal) as { connection: string; };
+	assert.equal(suspended.connection, 'ready', 'Suspension alone does not retire a bound Git workspace');
+});
 
 test('client settings invalidate backend state without fabricating a server configuration notification', async () => {
 	const value = fixture(); using bridge = value.bridge; using changes = value.configurationChanges; using notifications = value.notifications;

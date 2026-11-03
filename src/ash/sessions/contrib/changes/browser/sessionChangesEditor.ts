@@ -61,6 +61,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	private dimension: IDimension = Dimension.Zero;
 	private visible = false;
 	private detailsFocused = false;
+	private detailsVisible = true;
 	private revision = 0;
 	private inputRequest = 0;
 	private readonly pending = this._register(new MutableDisposable<IDisposable & { readonly signal: AbortSignal; completion?: Promise<void>; }>());
@@ -140,7 +141,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			this.clearInput();
 		}
 		this.input = input;
-		this.details?.setVisible(this.visible);
+		this.details?.setVisible(this.visible && this.showFileList);
 		const inputRequest = ++this.inputRequest;
 		let loading = this.refresh(signal);
 		for (; ;) {
@@ -182,12 +183,12 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	}
 
 	public getAccessibleContent(): string {
-		if (this.details && !this.comparisonInput) { return this.details.getAccessibleContent(); }
+		if (this.showFileList && this.details && !this.comparisonInput) { return this.details.getAccessibleContent(); }
 		if (!this.comparisonInput) {
 			return this.messageDomNode.textContent ?? '';
 		}
 		const comparison = this.comparisonInput.items.map(item => localize('sessions.changes.editorComparison', '{0}\nBefore:\n{1}\nAfter:\n{2}', item.label ?? item.modified.resource.path, item.original.initialText ?? '', item.modified.initialText ?? '')).join('\n\n');
-		return [this.details?.getAccessibleContent(), comparison].filter(Boolean).join('\n\n');
+		return [this.showFileList ? this.details?.getAccessibleContent() : undefined, comparison].filter(Boolean).join('\n\n');
 	}
 
 	public override setVisible(visibility: boolean): void {
@@ -200,7 +201,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			return;
 		}
 		this.visible = visible;
-		this.details?.setVisible(visible && this.input !== undefined);
+		this.details?.setVisible(visible && this.showFileList);
 		if (this.visible) {
 			void this.refresh();
 		} else {
@@ -209,6 +210,24 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			this.comparison.clear();
 			this.comparisonInput = undefined;
 		}
+	}
+
+	private get hasThread(): boolean {
+		return !!this.input && !!new URLSearchParams(this.input.resource.query).get('thread');
+	}
+
+	private get showFileList(): boolean {
+		return this.detailsVisible && this.hasThread;
+	}
+
+	public toggleFileList(): void {
+		if (!this.details || !this.hasThread) { return; }
+		this.detailsVisible = !this.detailsVisible;
+		if (!this.detailsVisible && this.details.element.contains(this.domNode.ownerDocument.activeElement)) {
+			this.domNode.focus();
+		}
+		this.details.setVisible(this.visible && this.showFileList);
+		this.layout(this.dimension);
 	}
 
 	public override layout(dimension: IDimension): void {
@@ -226,30 +245,30 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			this.split.value = split;
 			const details = this.details;
 			split.addView({
-				element: this.detailsDomNode,
-				get minimumSize() { return stacked ? details.minimumSize : 220; },
-				maximumSize: Infinity,
-				onDidChange: details.onDidChange,
-				layout: (size, _offset, orthogonalSize) => details.layout(stacked ? size : orthogonalSize, 0, stacked ? orthogonalSize : size),
-			}, stacked ? Math.min(300, dimension.height * 0.4) : 240);
-			split.addView({
 				element: this.comparisonDomNode, minimumSize: stacked ? 120 : 300, maximumSize: Infinity,
 				layout: (size, _offset, orthogonalSize) => {
 					this.comparisonDimension = new Dimension(stacked ? orthogonalSize : size, stacked ? size : orthogonalSize);
 					this.comparison.value?.layout(this.comparisonDimension);
 				},
 			}, stacked ? Math.max(120, dimension.height * 0.6) : Math.max(300, dimension.width - 240));
+			split.addView({
+				element: this.detailsDomNode,
+				get minimumSize() { return stacked ? details.minimumSize : 220; },
+				maximumSize: Infinity,
+				onDidChange: details.onDidChange,
+				layout: (size, _offset, orthogonalSize) => details.layout(stacked ? size : orthogonalSize, 0, stacked ? orthogonalSize : size),
+			}, stacked ? Math.min(300, dimension.height * 0.4) : 240);
 		}
-		this.split.value!.setViewVisible(1, this.comparisonInput !== undefined);
+		this.split.value!.setViewVisible(1, this.showFileList);
 		this.split.value!.layout(stacked ? dimension.height : dimension.width, stacked ? dimension.width : dimension.height);
 	}
 	public override focus(): void {
-		if (this.detailsFocused && this.details) {
+		if (this.detailsFocused && this.showFileList && this.details) {
 			this.details.focus();
 		} else if (this.comparison.value) {
 			this.comparison.value.focus();
 		} else {
-			if (this.details) { this.details.focus(); } else { this.domNode.focus(); }
+			if (this.showFileList && this.details) { this.details.focus(); } else { this.domNode.focus(); }
 		}
 	}
 

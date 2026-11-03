@@ -23,6 +23,8 @@ from build.prepare import (
     current_package,
     development_binary_inputs,
     development_root,
+    parse_arguments,
+    prepare_development_package,
 )
 from build.lib.targets import TARGETS, default_target
 from build.desktop.live import build_live, live_directory
@@ -31,17 +33,27 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def build_development_server(
-    *, root: Path = ROOT, select_prepared: bool = False, protocol_prepared: bool = False
+    *,
+    root: Path = ROOT,
+    prepare: bool = False,
+    protocol_prepared: bool = False,
+    context_file: str | None = None,
 ) -> tuple[bool, str]:
     spec = TARGETS[default_target()]
-    publication = _build_context(select_prepared)
-    if live_directory() is not None:
-        build_live(root, protocol_prepared=protocol_prepared)
-    package = current_package(development_root(root, spec.target, "host-provided-node"))
-    directory = root / ".build/desktop/dev/app-server"
+    publication = _build_context(prepare, context_file)
+    shared_directory = root / ".build/desktop/dev/app-server"
+    directory = shared_directory
+    if os.environ.get("ASH_DEV_SUBSECOND") == "1":
+        pointer = Path(os.environ["ASH_DEV_APP_SERVER_GENERATION"])
+        if not pointer.is_absolute() or pointer.name != "current.json":
+            raise ValueError(
+                "Subsecond requires an isolated development runtime pointer"
+            )
+        directory = pointer.parent
     directory.mkdir(parents=True, exist_ok=True)
+    shared_directory.mkdir(parents=True, exist_ok=True)
     with ExitStack() as frozen, ThreadPoolExecutor(max_workers=1) as startup:
-        if not select_prepared:
+        if not prepare:
             frozen.enter_context(
                 leased_cache(
                     root,
@@ -61,10 +73,19 @@ def build_development_server(
                 # groups and publication still run. No backend/profile is opened.
                 preloads.append(startup.submit(_load_app_server, executable))
 
-        with exclusive_lock(directory / "build.lock", create=True):
+        with exclusive_lock(shared_directory / "build.lock", create=True):
+            package = (
+                prepare_development_package(parse_arguments([]), root=root)
+                if prepare
+                else current_package(
+                    development_root(root, spec.target, "host-provided-node")
+                )
+            )
+            if live_directory() is not None:
+                build_live(root, protocol_prepared=protocol_prepared)
             binaries = (
                 {}
-                if select_prepared
+                if prepare
                 else build_binaries(
                     root,
                     spec,
@@ -77,10 +98,18 @@ def build_development_server(
                     plan_directory=directory,
                 )
             )
-        binaries.update(replacements)
-        result = publish_generation(
-            package, binaries, directory, publication=publication
-        )
+            # Cargo outputs are mutable until publication freezes them. Keep the
+            # build lock through selection so another watcher cannot overtake us.
+            binaries.update(replacements)
+            if os.environ.get("ASH_DEV_SUBSECOND") == "1" and not prepare:
+                # Even a build identical to the prepared binaries must replace the
+                # externally started Subsecond process on the first fallback.
+                marker = directory / "ash-subsecond-fallback"
+                marker.write_text("normal runtime\n")
+                binaries[marker.name] = marker
+            result = publish_generation(
+                package, binaries, directory, publication=publication
+            )
         print(
             f"[app-server] {'Published' if result[0] else 'Unchanged'} {result[1]}",
             flush=True,
@@ -90,14 +119,11 @@ def build_development_server(
     return result
 
 
-def _build_context(select_prepared: bool) -> dict:
-    source = os.environ.get("ASH_DEV_BUILD_CONTEXT_FILE")
+def _build_context(prepare: bool, source: str | None) -> dict:
     if source is None:
         return {
             "buildId": str(uuid.uuid4()),
-            "reason": "prepared-runtime-selection"
-            if select_prepared
-            else "manual-build",
+            "reason": "prepared-runtime-selection" if prepare else "manual-build",
             "files": [],
             "omittedFileCount": 0,
         }
@@ -167,12 +193,15 @@ if __name__ == "__main__":
         help="Reuse the protocol already prepared by the source watcher",
     )
     parser.add_argument(
-        "--select-prepared",
+        "--prepare",
         action="store_true",
-        help="Select prepared binaries without invoking Cargo",
+        help="Prepare the shared package and publish its Desktop generation",
     )
     arguments = parser.parse_args()
     build_development_server(
-        select_prepared=arguments.select_prepared,
+        prepare=arguments.prepare,
         protocol_prepared=arguments.protocol_prepared,
+        # Every watcher save uses a new diagnostic path. Consume it before
+        # computing Cargo input identity or launching compiler subprocesses.
+        context_file=os.environ.pop("ASH_DEV_BUILD_CONTEXT_FILE", None),
     )

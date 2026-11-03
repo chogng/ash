@@ -186,12 +186,14 @@ impl AnthropicMessagesSseDecoder {
                 Ok(Vec::new())
             }
             (ContentBlockKind::ToolUse, "input_json_delta") => {
-                block.tool_json.push_str(required_string(
-                    delta,
-                    "partial_json",
-                    "Anthropic input_json_delta",
-                )?);
-                Ok(Vec::new())
+                let arguments =
+                    required_string(delta, "partial_json", "Anthropic input_json_delta")?;
+                block.tool_json.push_str(arguments);
+                Ok(vec![ModelStreamEvent::ToolCallDelta {
+                    id: required_string(&block.content, "id", "Anthropic tool use")?.to_owned(),
+                    name: required_string(&block.content, "name", "Anthropic tool use")?.to_owned(),
+                    arguments: arguments.to_owned(),
+                }])
             }
             (ContentBlockKind::Other, _) => Ok(Vec::new()),
             _ => Err(ApiError::InvalidResponse(

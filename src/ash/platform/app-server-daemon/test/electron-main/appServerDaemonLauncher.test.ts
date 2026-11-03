@@ -136,3 +136,47 @@ test('startup tracing assigns distinct carrier identities without mutating the l
 	launcher.launch();
 	assert.deepEqual(environments[2], {});
 });
+
+test('a development reconnect replaces its stale runtime lease after another window publishes', async () => {
+	const root = mkdtempSync(join(tmpdir(), 'ash-daemon-generation-'));
+	try {
+		const generationFile = join(root, 'current.json');
+		const first = `generations/${'a'.repeat(64)}`;
+		const second = `generations/${'b'.repeat(64)}`;
+		const publish = (runtime: string) => writeFileSync(generationFile, JSON.stringify({ version: 3, runtime }));
+		publish(first);
+		using launcher = new AppServerDaemonLauncher({
+			executable: join(root, 'ash-app-server-daemon'),
+			args: ['connect-selected'],
+			environment: {},
+			generationFile,
+			fileExists: () => true,
+		});
+		const released: string[] = [];
+		let acquisitions = 0;
+		launcher.acquireDevelopmentRuntime = async () => {
+			const generation = ++acquisitions === 1 ? first : second;
+			const dispose = () => { released.push(generation); };
+			return {
+				runtime: join(root, generation),
+				assertActive() { assert.ok(!released.includes(generation)); },
+				dispose,
+				[Symbol.dispose]: dispose,
+			};
+		};
+
+		await launcher.validate();
+		assert.equal(launcher.environment.ASH_DEV_RUNTIME_ROOT, join(root, first));
+
+		publish(second);
+		await launcher.validate();
+		assert.equal(launcher.environment.ASH_DEV_RUNTIME_ROOT, join(root, second));
+		assert.equal(launcher.environment.ASH_APP_SERVER_PATH, join(root, second, 'bin', process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server'));
+		assert.deepEqual(released, [first]);
+
+		await launcher.validate();
+		assert.equal(acquisitions, 2);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});

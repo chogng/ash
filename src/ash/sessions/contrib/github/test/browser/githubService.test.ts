@@ -309,6 +309,38 @@ suite('Session GitHub associations', () => {
 		assert.equal(requests[0].state, 'unavailable');
 		assert.deepEqual(requests[0].recordedReference, reference);
 	});
+	test('a produced PR stays visible and removable when no GitHub account is available', async () => {
+		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7, isArtifact: true };
+		using context = fixture({ listAccounts: async () => [], listSessionPullRequests: async () => [reference] });
+		const requests = await context.load();
+		assert.equal(requests.length, 1);
+		assert.equal(requests[0].state, 'unavailable');
+		assert.deepEqual(requests[0].recordedReference, reference);
+	});
+
+	test('PR artifact merge rejects a head change after selection and dispatches against a fresh head', async () => {
+		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7, isArtifact: true };
+		let headCommit = 'a'.repeat(40);
+		const merged: string[] = [];
+		using context = fixture({
+			listSessionPullRequests: async () => [reference],
+			readPullRequest: async () => ({ ...pullRequest, mergeable: true, headCommit }),
+			readRepository: async () => ({ defaultBranch: 'main', fullName: 'team/repo', allowMergeCommit: true, allowSquashMerge: false, allowRebaseMerge: false, allowAutoMerge: false }),
+			mergePullRequest: async (_repository, _number, merge) => {
+				merged.push(merge.commit);
+				return { merged: true, commit: merge.commit, message: '' };
+			},
+		});
+		const [request] = await context.load();
+		await assert.rejects(context.service.invokePullRequestArtifact('session', request, async binding => {
+			headCommit = 'b'.repeat(40);
+			return binding.actions[0];
+		}), /changed/);
+		assert.deepEqual(merged, []);
+		await context.service.invokePullRequestArtifact('session', request, async binding => binding.actions[0]);
+		assert.deepEqual(merged, ['b'.repeat(40)]);
+	});
+
 	test('recorded PRs survive branch changes and duplicate discovery is merged', async () => {
 		const reference = { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7 };
 		let associated = true;
@@ -566,10 +598,9 @@ suite('sessionGitHub browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/sessionGitHub.html');
-		const attach = page.getByRole('button', { name: 'Attach PR', exact: true });
+		const composer = page.getByRole('textbox', { name: 'Fixture composer' });
 		await expect(page.locator('.ash-session-chat-input-pr')).toHaveCount(2);
-		await attach.focus();
-		await page.keyboard.press('Enter');
+		await page.evaluate(() => window.ashSessionGitHub.attach('pullRequest'));
 		const dialog = page.getByRole('dialog', { name: 'Attach a pull request to this session' });
 		await expect(dialog).toBeVisible();
 		await dialog.getByRole('textbox').fill('https://github.com/TEAM/one/pull/7#discussion');
@@ -577,7 +608,7 @@ suite('sessionGitHub browser component', () => {
 		const remove = page.getByRole('button', { name: 'Remove attached pull request team/one #7' });
 		await expect(remove).toBeVisible();
 		await expect(page.locator('.ash-session-chat-input-pr')).toHaveCount(2);
-		await expect(attach).toBeFocused();
+		await expect(composer).toBeFocused();
 		await page.reload();
 		await expect(remove).toBeVisible();
 		await page.evaluate(() => window.ashSessionGitHub.changeBranch());
@@ -589,23 +620,103 @@ suite('sessionGitHub browser component', () => {
 		await remove.focus();
 		await page.keyboard.press('Enter');
 		await expect(page.locator('.ash-session-chat-input-pr')).toHaveCount(0);
-		await expect(attach).toBeFocused();
+		await expect(composer).toBeFocused();
 		await page.reload();
 		await expect(remove).toHaveCount(0);
+	});
+
+	test('a produced PR can be removed in Chinese after sign-out without a workspace', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessionGitHub.html?noWorkspace');
+		await page.evaluate(() => sessionStorage.setItem('test-backend-pr-references', JSON.stringify([
+			{ repository: { host: 'github.com', owner: 'team', name: 'one' }, number: 7, isArtifact: true },
+		])));
+		await page.goto('/sessionGitHub.html?noWorkspace&locale=zh-CN');
+		const remove = page.getByRole('button', { name: '移除拉取请求产物 team/one #7' });
+		await expect(remove).toBeVisible();
+		await page.evaluate(() => window.ashSessionGitHub.signOut());
+		await expect(page.locator('.ash-session-chat-input-pr')).toHaveAccessibleName(/状态不可用$/);
+		await remove.focus();
+		await page.keyboard.press('Enter');
+		await expect(remove).toHaveCount(0);
+		await page.reload();
+		await expect(remove).toHaveCount(0);
+	});
+
+	test('PR artifact actions require explicit selection before dispatching GitHub auto-merge', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessionGitHub.html?noWorkspace');
+		await page.evaluate(() => sessionStorage.setItem('test-backend-pr-references', JSON.stringify([
+			{ repository: { host: 'github.com', owner: 'team', name: 'one' }, number: 7, isArtifact: true },
+		])));
+		await page.goto('/sessionGitHub.html?noWorkspace&locale=zh-CN');
+		const actions = page.getByRole('button', { name: 'team/one #7 的拉取请求操作' });
+		const action = page.getByText('启用 GitHub 自动合并（压缩并合并）', { exact: true });
+		await expect(page.getByRole('button', { name: '移除拉取请求产物 team/one #7' })).toBeVisible();
+		await expect(actions).toBeVisible();
+		await actions.focus();
+		await page.keyboard.press('Enter');
+		await expect(action).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(action).toHaveCount(0);
+		expect(await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/autoMerge'))).toHaveLength(0);
+		await actions.click();
+		await action.click();
+		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/autoMerge').map(request => ({
+			number: request.params.number, method: request.params.method, commit: request.params.commit,
+		})))).toEqual([{ number: 7, method: 'squash', commit: '7'.repeat(40) }]);
+		await actions.click();
+		await expect(action).toHaveCount(0);
+	});
+
+	test('Chinese PR Autopilot authorizes and pauses one persisted artifact generation', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessionGitHub.html?checks&locale=zh-CN');
+		await page.evaluate(() => sessionStorage.setItem('test-backend-pr-references', JSON.stringify([
+			{ repository: { host: 'github.com', owner: 'team', name: 'one' }, number: 7, isArtifact: true, artifactId: 'a'.repeat(32) },
+		])));
+		await page.reload();
+		await page.getByRole('button', { name: '启用 PR 自动跟进', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'automation/write')
+			.map(request => (request.params.definition as { condition: { artifactId?: string; }; }).condition.artifactId)))
+			.toEqual(['a'.repeat(32)]);
+		await page.reload();
+		await page.getByRole('button', { name: '停止 PR 自动跟进', exact: true }).click();
+		await expect(page.getByRole('button', { name: '启用 PR 自动跟进', exact: true })).toBeVisible();
+		expect(await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'automation/write')
+			.map(request => request.params.status))).toEqual(['paused']);
+	});
+
+	test('a PR artifact can be merged through the toolbar and refreshes its state', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessionGitHub.html?noWorkspace');
+		await page.evaluate(() => sessionStorage.setItem('test-backend-pr-references', JSON.stringify([
+			{ repository: { host: 'github.com', owner: 'team', name: 'one' }, number: 7, isArtifact: true },
+		])));
+		await page.reload();
+		const actions = page.getByRole('button', { name: 'Pull request actions for team/one #7' });
+		await expect(actions).toBeVisible();
+		await page.evaluate(() => window.ashSessionGitHub.setMergeable());
+		await actions.click();
+		await page.getByText('Squash and merge', { exact: true }).click();
+		await expect(page.locator('.ash-session-chat-input-pr')).toHaveAccessibleName(/Merged$/);
+		await expect(actions).toHaveCount(0);
+		expect(await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/merge').map(request => ({
+			number: request.params.number, method: request.params.method, commit: request.params.commit,
+		})))).toEqual([{ number: 7, method: 'squash', commit: '7'.repeat(40) }]);
 	});
 
 	test('Chinese attach input supports cancellation and restores focus', async function () {
 		const { page } = browserTests;
 
 		await page.goto('/sessionGitHub.html?locale=zh-CN');
-		const attach = page.getByRole('button', { name: '附加 PR', exact: true });
-		await attach.focus();
-		await page.keyboard.press('Enter');
+		const composer = page.getByRole('textbox', { name: 'Fixture composer' });
+		await page.evaluate(() => window.ashSessionGitHub.attach('pullRequest'));
 		const dialog = page.getByRole('dialog', { name: '将拉取请求附加到此会话' });
 		await expect(dialog).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(dialog).toHaveCount(0);
-		await expect(attach).toBeFocused();
+		await expect(composer).toBeFocused();
 		expect(await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/session/pullRequest/attach'))).toHaveLength(0);
 	});
 
@@ -614,7 +725,7 @@ suite('sessionGitHub browser component', () => {
 
 		await page.goto('/sessionGitHub.html');
 		await expect(page.locator('.ash-session-chat-input-pr')).toHaveCount(2);
-		await page.getByRole('button', { name: 'Attach PR', exact: true }).click();
+		await page.evaluate(() => window.ashSessionGitHub.attach('pullRequest'));
 		await page.getByRole('dialog').getByRole('textbox').fill('https://github.com/team/one/pull/7');
 		await page.keyboard.press('Enter');
 		const remove = page.getByRole('button', { name: 'Remove attached pull request team/one #7' });
@@ -639,7 +750,7 @@ suite('sessionGitHub browser component', () => {
 	});
 
 	async function attachIssue(page: import('@playwright/test').Page, number: number): Promise<void> {
-		await page.getByRole('button', { name: 'Attach issue', exact: true }).click();
+		await page.evaluate(() => window.ashSessionGitHub.attach('issue'));
 		await page.getByRole('dialog', { name: 'Attach an issue to this session' }).getByRole('textbox').fill(`https://github.com/TEAM/one/issues/${number}`);
 		await page.keyboard.press('Enter');
 		await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -685,7 +796,7 @@ suite('sessionGitHub browser component', () => {
 		const remove = page.getByRole('button', { name: 'Remove attached issue github.com/team/one #11', exact: true });
 		await remove.focus(); await page.keyboard.press('Enter');
 		await expect(summary).toHaveAccessibleName('1 issues · 0 open · 1 closed · 0 unavailable');
-		await expect(page.getByRole('button', { name: 'Attach issue', exact: true })).toBeFocused();
+		await expect(page.getByRole('textbox', { name: 'Fixture composer' })).toBeFocused();
 		await page.reload();
 		await expect(summary).toHaveAccessibleName('1 issues · 0 open · 1 closed · 0 unavailable');
 		expect(await page.evaluate(() => window.ashSessionGitHub.requests.some(request => request.method === 'github/issue/update'))).toBe(false);
@@ -711,12 +822,36 @@ suite('sessionGitHub browser component', () => {
 		await page.evaluate(() => window.ashSessionGitHub.signOut());
 		await expect(issue).toHaveAccessibleName(/状态不可用$/);
 		await expect(issue).not.toHaveAccessibleName(/long title/);
-		const attach = page.getByRole('button', { name: '附加 Issue', exact: true });
-		await attach.focus(); await page.keyboard.press('Enter');
+		const composer = page.getByRole('textbox', { name: 'Fixture composer' });
+		await page.evaluate(() => window.ashSessionGitHub.attach('issue'));
 		await expect(page.getByRole('dialog', { name: '将 Issue 附加到此会话' })).toBeVisible();
-		await page.keyboard.press('Escape'); await expect(attach).toBeFocused();
+		await page.keyboard.press('Escape'); await expect(composer).toBeFocused();
 		await page.evaluate(() => window.ashSessionGitHub.dispose());
 		await expect(page.locator('.ash-session-chat-input-issues')).toHaveCount(0);
+	});
+
+	test('recorded PR artifact details describe the authorized effect and cancel without merging', async () => {
+		const { page } = browserTests;
+		await page.goto('/sessionGitHub.html?artifactDetails');
+		const trigger = page.getByRole('button', { name: 'Pull request actions for team/one #7', exact: true });
+		await trigger.focus();
+		await trigger.press('Enter');
+		const panel = page.getByRole('dialog', { name: 'Merge actions for team/one #7' });
+		const merge = panel.getByRole('button', { name: 'Create a merge commit', exact: true });
+		await panel.getByText('Activities', { exact: true }).click();
+		await expect(panel.getByText('No activities yet.')).toBeVisible();
+		await panel.getByRole('button', { name: 'Enable PR Autopilot' }).click();
+		await expect(panel.getByRole('button', { name: 'Stop PR Autopilot' })).toBeVisible();
+		await expect(panel.getByRole('listitem')).toHaveText(/Completed/);
+		await expect(merge).toHaveAccessibleDescription(/Merge commit .* into main now/);
+		await page.keyboard.press('Escape');
+		await expect(panel).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+		expect(await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/merge'))).toHaveLength(0);
+
+		await trigger.press('Enter');
+		await merge.click();
+		await expect.poll(() => page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/pullRequest/merge').length)).toBe(1);
 	});
 
 	for (const locale of ['en', 'zh-CN']) {

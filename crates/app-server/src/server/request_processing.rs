@@ -156,7 +156,7 @@ impl RequestLane {
                 params
                     .pointer("/request/type")
                     .and_then(serde_json::Value::as_str),
-                Some("stop" | "interruptTurn" | "resolveInteraction")
+                Some("stop" | "interruptTurn" | "resolveInteraction" | "cancelUserInput")
             )
         {
             return Self::Control;
@@ -369,6 +369,12 @@ impl AppServer {
                 }
             }
         };
+        // A draft path is a read-only projection and may have no window Git runtime.
+        // Repository-ID requests still serialize with mutations in the window catalog.
+        let serialization_scope = serialization_scope.filter(|_| {
+            client_method(&request.method) != Some(ClientMethod::GitWorktreeList)
+                || request.params.get("sourcePath").is_none_or(Value::is_null)
+        });
         let serialization_scope = serialization_scope.map(|scope| {
             use ash_app_server_protocol::protocol::registry::ClientRequestSerializationScope as Declared;
             use request_serialization::RequestSerializationScope as Resolved;
@@ -383,7 +389,10 @@ impl AppServer {
                     access,
                 },
             })
-        }).transpose().map_err(|error: RpcError| serialize_response(error_response(request.id.clone(), error.code, error.message)))?;
+        }).transpose().map_err(|error: RpcError| {
+            log::debug!("{} stage=repository_resolution kind={:?}", request.method, error.message);
+            serialize_response(error_response(request.id.clone(), error.code, error.message))
+        })?;
         let cancellation = match self.request_cancellations.start(
             connection.connection_id,
             request_id,

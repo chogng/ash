@@ -87,6 +87,7 @@ for (const mode of ['build', 'watch'] as const) {
 		await mkdir(join(output, 'localization'), { recursive: true });
 		await writeFile(join(desktop, '.build/protocol/typescript/shared.ts'), 'export const protocolVersion = 1;');
 		await writeFile(join(output, 'localization/messages.ts'), 'export const label = "initial";');
+		await writeFile(join(desktop, 'src/renderer.ts'), 'export const renderer = 1;');
 		await writeFile(join(desktop, 'src/main.ts'), 'export { protocolVersion } from "../.build/protocol/typescript/shared.js"; export { label } from "../.build/desktop/localization/messages.js"; export const version = 1;');
 		await mkdir(join(desktop, 'src/ash/platform/browserView/electron-browser'), { recursive: true });
 		await writeFile(join(desktop, browserPreloadSource), 'declare function require(name: string): unknown; (() => { require("electron"); })();');
@@ -148,8 +149,10 @@ for (const mode of ['build', 'watch'] as const) {
 			await mkdir(cache, { recursive: true });
 			await Promise.all(Array.from({ length: 100 }, (_, index) => writeFile(join(cache, `runtime-${index}.ts`), `export const value = ${index};`)));
 			await writeFile(join(output, 'runtime.log'), 'runtime output');
-			await delay(500);
-			assert.deepEqual(readyStates, [], 'Runtime and cache output must never trigger a Host compilation');
+			await writeFile(join(desktop, 'src/renderer.ts'), 'export const renderer = 2;');
+			await writeFile(join(desktop, 'src/renderer-added.ts'), 'export const renderer = 3;');
+			await delay(800);
+			assert.deepEqual(readyStates, [], 'Renderer-only edits, additions, and runtime outputs must not trigger Host compilation');
 			ready = false;
 			await writeFile(join(desktop, '.build/protocol/typescript/shared.ts'), 'export const protocolVersion = 2;');
 			await until(() => ready);

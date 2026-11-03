@@ -19,7 +19,7 @@ interface WebLaunch {
 	reloadBackend(): Promise<void>;
 }
 
-export async function startWeb(options: { port: number; assets?: string; origin?: string; environment: Readonly<NodeJS.ProcessEnv>; preparedBackend?: boolean; }): Promise<WebLaunch> {
+export async function startWeb(options: { port: number; assets?: string; origin?: string; environment: Readonly<NodeJS.ProcessEnv>; preparedBackend?: boolean; startupTimeoutMs?: number; }): Promise<WebLaunch> {
 	const root = resolve(import.meta.dirname, '../..');
 	// Smoke orchestration prepares once before launching isolated test profiles.
 	// Direct callers retain preparation before selecting their runtime.
@@ -77,7 +77,7 @@ export async function startWeb(options: { port: number; assets?: string; origin?
 	try {
 		const info = await new Promise<WebListenInfo>((resolveInfo, reject) => {
 			const lines = createInterface({ input: child.stdout });
-			const timeout = setTimeout(() => finish(new Error('Web listener did not become ready')), 30_000);
+			const timeout = setTimeout(() => finish(new Error('Web listener did not become ready')), options.startupTimeoutMs ?? 30_000);
 			const onError = (error: Error): void => finish(error);
 			const onClose = (): void => finish(new Error(`Web launch failed: ${diagnostic}`));
 			const finish = (error?: Error, value?: WebListenInfo): void => {

@@ -27,6 +27,7 @@ pub enum ToolContent {
 pub struct ToolOutput {
     status: ToolOutputStatus,
     content: Vec<ToolContent>,
+    result_confirmation: Option<String>,
 }
 
 impl ToolOutput {
@@ -34,6 +35,7 @@ impl ToolOutput {
         Self {
             status: ToolOutputStatus::Success,
             content,
+            result_confirmation: None,
         }
     }
 
@@ -41,6 +43,7 @@ impl ToolOutput {
         Self {
             status: ToolOutputStatus::Error,
             content,
+            result_confirmation: None,
         }
     }
 
@@ -52,6 +55,31 @@ impl ToolOutput {
         &self.content
     }
 
+    /// Replaces the presentation payload while retaining the result's status and review contract.
+    pub fn with_content(self, content: Vec<ToolContent>) -> Self {
+        Self { content, ..self }
+    }
+
+    /// Withholds this result from the model until the user explicitly chooses to share it.
+    /// It does not request more execution authority and does not undo an executed action.
+    pub fn require_result_confirmation(
+        mut self,
+        reason: impl Into<String>,
+    ) -> Result<Self, crate::ToolIdentityError> {
+        let reason = reason.into();
+        if reason.trim().is_empty() {
+            return Err(crate::ToolIdentityError::Empty {
+                kind: "tool result confirmation reason",
+            });
+        }
+        self.result_confirmation = Some(reason);
+        Ok(self)
+    }
+
+    pub fn result_confirmation(&self) -> Option<&str> {
+        self.result_confirmation.as_deref()
+    }
+
     /// Truncates the combined text content while preserving non-text content such as images.
     ///
     /// Text parts are joined only when truncation is required. This keeps ordinary multi-part
@@ -61,6 +89,7 @@ impl ToolOutput {
         Self {
             status: self.status,
             content,
+            result_confirmation: self.result_confirmation,
         }
     }
 

@@ -942,6 +942,7 @@ fn modal_mouse_activation_uses_the_session_identity_and_close_requires_matching_
     let mut app = crate::app::App::new();
     let choices = crate::sessions::session_choices(
         &[ash_protocol::Session {
+            source: None,
             model: None,
             session_id: ash_protocol::SessionId::new("session-1").unwrap(),
             title: "Resume this work".into(),
@@ -1042,6 +1043,7 @@ fn modal_backdrop_click_closes_modal_and_drag_cancels() {
     let mut app = crate::app::App::new();
     let choices = crate::sessions::session_choices(
         &[ash_protocol::Session {
+            source: None,
             model: None,
             session_id: ash_protocol::SessionId::new("session-1").unwrap(),
             title: "Test session".into(),
@@ -1650,6 +1652,7 @@ fn paste_targets_the_modal_and_home_instead_of_a_background_question() {
     let mut app = crate::app::App::new();
     app.update(crate::thread::Event::QueryRequested(
         Query::new(vec![QueryQuestion {
+            required: true,
             id: "question".into(),
             header: "Question".into(),
             prompt: "Choose an option".into(),

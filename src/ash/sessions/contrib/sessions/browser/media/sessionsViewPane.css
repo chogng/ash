@@ -1,0 +1,9 @@
+.ash-sessions-navigation-view {
+	display: flex;
+	flex-direction: column;
+}
+.ash-sessions-navigation-view > .ash-sessions-list,
+.ash-sessions-navigation-view > .ash-teams-panel {
+	min-height: 0;
+	flex: 1 1 auto;
+}

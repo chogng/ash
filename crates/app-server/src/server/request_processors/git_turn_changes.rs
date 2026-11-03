@@ -293,6 +293,14 @@ impl<'a> GitTurnChangesRequestProcessor<'a> {
             .iter()
             .find(|repository| repository.repository_id() == repository_id)
             .ok_or_else(|| operation_error("Thread binding omitted repository".into()))?;
+        if ordered
+            .iter()
+            .any(|(record, _)| record.worktree_root != target.worktree_root())
+        {
+            return Err(operation_error(
+                "Switch back to the ChangeSet's working directory before committing it".into(),
+            ));
+        }
         let response = runtime.dirs.runtime.block_on(async {
             let git = ash_git::GitClient::system();
             let repository = git
@@ -466,6 +474,16 @@ impl<'a> GitTurnChangesRequestProcessor<'a> {
                     .map_err(|error| operation_error(error.to_string()))
             })
             .collect::<Result<Vec<_>, _>>()?;
+        if records.iter().any(|record| {
+            !binding.repositories().iter().any(|repository| {
+                repository.repository_id() == record.repository_id
+                    && repository.worktree_root() == record.worktree_root
+            })
+        }) {
+            return Err(operation_error(
+                "Switch back to the ChangeSet's working directory before committing it".into(),
+            ));
+        }
         let visible = runtime
             .list(&params.session_id, &params.thread_id)
             .map_err(operation_error)?;
@@ -547,10 +565,18 @@ impl<'a> GitTurnChangesRequestProcessor<'a> {
         if actual_revision != params.expected_revision {
             return Err(revision_error());
         }
+        let binding = runtime
+            .binding(&params.thread_id)
+            .ok_or_else(|| operation_error("Thread has no directory binding".into()))?;
         let mut discarded = Vec::new();
         let mut updates = Vec::new();
         for mut record in records {
-            if matches!(record.commit_state, CommitState::Committed { .. }) {
+            if matches!(record.commit_state, CommitState::Committed { .. })
+                || !binding.repositories().iter().any(|repository| {
+                    repository.repository_id() == record.repository_id
+                        && repository.worktree_root() == record.worktree_root
+                })
+            {
                 discarded.push(record);
                 continue;
             }
@@ -633,14 +659,6 @@ fn owned_record(
     thread_id: &ash_protocol::ThreadId,
     change_set_id: &ChangeSetIdDto,
 ) -> Result<TurnChangeSet, RpcError> {
-    if runtime
-        .binding(thread_id)
-        .is_some_and(|binding| binding.kind() == worktree::ManagedDirKind::Directory)
-    {
-        return Err(operation_error(
-            "non-Git Threads do not have Git ChangeSets".into(),
-        ));
-    }
     let id = ChangeSetId::new(change_set_id.0.clone())
         .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
     let record = runtime

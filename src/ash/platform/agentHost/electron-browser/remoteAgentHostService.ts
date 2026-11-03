@@ -12,7 +12,7 @@ import type { DisposableHandle } from '../../ipc/common/ipc.js';
 import { ILogService } from '../../log/common/log.js';
 import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../remote/common/remote.js';
 import { REMOTE_AGENT_HOST_OPEN_CHANNEL, REMOTE_AGENT_HOST_CLOSE_CHANNEL, REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL } from '../../remote/common/remoteConnectionIpc.js';
-import type { IWorkspaceTrustApi } from '../../workspace/common/workspaceTrust.js';
+import { hasDevelopmentPermissions, type IWorkspaceTrustApi } from '../../workspace/common/workspaceTrust.js';
 import type { AppServerProtocolClient } from '../browser/appServerProtocolClient.js';
 import { agentHostConnectionAddress } from '../common/agentHostConnectionsService.js';
 import type { IAgentConnection } from '../common/agentService.js';
@@ -22,10 +22,11 @@ import { LocalAgentHostServiceClient } from './localAgentHostService.js';
 
 interface RemoteAgentHostOptions {
 	readonly browser: boolean;
+	readonly requiresDevelopmentTrust?: boolean;
 	readonly onDidSuspendOS: (listener: () => void) => DisposableHandle;
 	readonly onDidResumeOS: (listener: () => void) => DisposableHandle;
 	readonly createApi: (lease: LocalAgentHostServiceClient, target: RemoteAgentHostConnection, resources: DisposableStore, id: string) => IAgentConnection;
-	readonly initializeDirectories: (client: AppServerProtocolClient, trust: IWorkspaceTrustApi, directories: readonly { readonly id: string; readonly path: string; readonly label: string; }[]) => Promise<void>;
+	readonly initializeDirectories: (client: AppServerProtocolClient, trust: IWorkspaceTrustApi, directories: readonly { readonly id: string; readonly path: string; readonly remoteHostLabel: string; }[]) => Promise<void>;
 }
 
 interface HostScope {
@@ -139,7 +140,7 @@ export class RemoteAgentHostService extends Disposable implements IRemoteAgentHo
 			if (hostResources.isDisposed) { throw new CancellationError(); }
 			const lease = hostResources.add(this.instantiation.createInstance(LocalAgentHostServiceClient, {
 				clientName: 'ash-desktop-agents', connection: { id }, initializeTimeoutMs: SSH_REMOTE_INITIALIZE_TIMEOUT_MS,
-				capabilities: { ...(this.options.browser ? { browser: { version: 4, observe: true, input: true } } : {}), agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, ...(isSSHAgentHost(target) || target.type === 'wsl' ? { directoryGrantsHost: { version: 1 } } : {}) },
+				capabilities: { ...(this.options.browser ? { browser: { version: 4, observe: true, input: true } } : {}), agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput', 'toolResultReview'] }, ...(isSSHAgentHost(target) || target.type === 'wsl' ? { directoryGrantsHost: { version: 1 } } : {}) },
 			}));
 			scope.lease = lease;
 			hostResources.add(lease.client.onStateChange(state => {
@@ -193,10 +194,17 @@ export class RemoteAgentHostService extends Disposable implements IRemoteAgentHo
 			const initialize = async (): Promise<void> => {
 				const root = remoteAgentHostRoot(target, id);
 				if (isSSHAgentHost(target) || target.type === 'wsl') {
-					await this.options.initializeDirectories(lease.client, api.workspaceTrust, [{ id: `agent-host:${id}`, path: target.workspace, label: root.toString() }]);
+					const host = isSSHAgentHost(target) ? target.host : target.distro;
+					const remoteHostLabel = target.name === host ? host : `${target.name} (${host})`;
+					await this.options.initializeDirectories(lease.client, api.workspaceTrust, [{ id: `agent-host:${id}`, path: target.workspace, remoteHostLabel }]);
 				}
 				// A Tunnel uses the Web session's existing grant, never Desktop host privileges.
 				const directory = await api.fs.resolvePath(root);
+				if (this.options.requiresDevelopmentTrust
+					&& (directory.target.type !== 'environment'
+						|| !hasDevelopmentPermissions(await api.workspaceTrust.readWorkspaceDirectory(directory.target.dirId)))) {
+					throw new CancellationError();
+				}
 				if (directory.uri.toString() !== root.toString()) throw new Error(localize('agentHost.rootChanged', 'The host returned a different workspace directory.'));
 				scope.directory = directory;
 			};

@@ -120,7 +120,7 @@ export class AgentSessionsPicker {
 				// The child menu must be above the Quick Input that owns it.
 				layer: 200,
 				getAnchor: () => button,
-				autoSelectFirstItem: true,
+				autoSelectFirstItem: event.fromKeyboard,
 				getActions: () => this.actions(event.item.session).map(action => action instanceof Separator ? action : {
 					...action,
 					run: () => runOperation(() => action.run(), false, action.keepPickerOpen),
@@ -174,11 +174,16 @@ export class AgentSessionsPicker {
 					label: session.kind === 'draft' ? localize('sessions.list.draft', '{0} (draft)', session.label || localize('chat.title.new', 'New Chat')) : label,
 					description: session.updatedAt === undefined ? undefined : sessionDateFromNow(session.updatedAt, true),
 					tooltip: date ? `${label}\n${localize('sessions.history.lastActivity', 'Last activity: {0}', date)}` : label,
-					detail: isArchived
-						? localize('sessions.history.restoreHint', '{0}. Press Enter to {1}.', getChatSessionArchivedSectionLabel(wording), presentation.unarchive.title.value)
-						: [sessions.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined,
-						session.parentSession && session.label !== parent.label ? session.label : undefined,
-						session.parentSession ? session.description : undefined].filter(Boolean).join(' · ') || undefined,
+					detail: [
+						parent.providerLabel,
+						...(isArchived
+							? [localize('sessions.history.restoreHint', '{0}. Press Enter to {1}.', getChatSessionArchivedSectionLabel(wording), presentation.unarchive.title.value)]
+							: [
+								sessions.length > 1 ? localize('sessions.history.thread', 'Thread {0}', index + 1) : undefined,
+								session.parentSession && session.label !== parent.label ? session.label : undefined,
+								session.parentSession ? session.description : undefined,
+							]),
+					].filter(Boolean).join(' · ') || undefined,
 					buttons: [
 						isArchived
 							? { id: 'restore', label: presentation.unarchive.title.value, iconClass: `ash-icon-${presentation.unarchive.icon.id}` }

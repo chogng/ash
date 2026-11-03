@@ -163,6 +163,11 @@ export interface IAgentSessionService {
 	/** Optional runtime capability; cancellation belongs to the originating connection. */
 	invokeRuntime?(providerId: string, request: Agent.SessionRuntimeRequest, signal: AbortSignal): Promise<Agent.SessionRuntimeResult>;
 	create(params: Agent.SessionCreateParams): Promise<Agent.SessionResult>;
+	canChangeDirectory?(): boolean;
+	changeDirectory?(params: Agent.SessionMutationParams & { readonly root: string; }): Promise<void>;
+	addWorkspaceFolder?(sessionId: string, path: string): Promise<void>;
+	saveEnvironmentProfile?(environmentId: string, variables: Readonly<Record<string, string>>): Promise<void>;
+	readEnvironmentProfile?(environmentId: string): Promise<Readonly<Record<string, string>> | undefined>;
 	listAgents(): Promise<Agent.AgentRoleListResult>;
 	/** Includes packaged workflow roles for Settings, without changing selectable root definitions. */
 	readRoleCatalog(): Promise<Agent.AgentRoleCatalog>;
@@ -186,11 +191,15 @@ export interface IAgentThreadService {
 	createSideChat(params: Agent.SessionMutationParams & {
 		readonly threadId: string; readonly sourceTurnId: string; readonly title: string; readonly selection?: string;
 	}): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
+	canMoveThreadToSession?(): boolean;
+	moveThreadToSession?(params: Agent.SessionMutationParams & { readonly threadId: string; readonly destinationSessionId: string; }): Promise<void>;
 	fork(params: Agent.SessionMutationParams & {
 		readonly threadId: string;
 		readonly title: string;
-		readonly target: 'session' | 'thread';
-	}): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
+	} & ({ readonly target: 'thread'; } | {
+		readonly target: 'session';
+		readonly comparison?: { readonly sourceSequence: number; readonly agent: { readonly sourceId: string; readonly name: string; }; readonly branchName: string; };
+	})): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	rewrite(params: Agent.SessionMutationParams & {
 		readonly threadId: string;
 		readonly beforeTurnId: string;

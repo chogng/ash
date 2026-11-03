@@ -1,0 +1,41 @@
+name: Set up Playwright browsers
+description: Install browsers with the workspace Playwright CLI and reuse its managed browser downloads.
+
+inputs:
+  install-args:
+    description: Arguments passed to playwright install.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Locate Playwright browser cache
+      id: browser-cache
+      shell: bash
+      run: |
+        version=$(pnpm exec playwright --version)
+        echo "version=${version#Version }" >> "$GITHUB_OUTPUT"
+        echo "PLAYWRIGHT_BROWSERS_PATH=$GITHUB_WORKSPACE/.build/ms-playwright" >> "$GITHUB_ENV"
+
+    - name: Restore Playwright browsers
+      id: restore
+      uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+      with:
+        path: .build/ms-playwright
+        key: playwright-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.browser-cache.outputs.version }}-${{ inputs.install-args }}
+
+    # The CLI still installs system dependencies and branded Chrome when requested.
+    - name: Install Playwright browsers
+      shell: bash
+      env:
+        PLAYWRIGHT_INSTALL_ARGS: ${{ inputs.install-args }}
+      run: |
+        read -r -a install_args <<< "$PLAYWRIGHT_INSTALL_ARGS"
+        pnpm exec playwright install "${install_args[@]}"
+
+    - name: Save Playwright browsers
+      if: github.ref == 'refs/heads/main' && steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4
+      with:
+        path: .build/ms-playwright
+        key: ${{ steps.restore.outputs.cache-primary-key }}

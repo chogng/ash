@@ -1408,6 +1408,8 @@ use crate::protocol::git::GitWorktreeDeleteParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitWorktreeDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::git::GitWorktreeListParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitWorktreeListResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::git::GitWorktreeResolveParams;
@@ -2252,6 +2254,8 @@ use crate::protocol::secrets::SecretStorageType;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::AdvisorConfigureResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::session::ComparisonForkParams;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::session::MessageCheckpointsParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::MessageCheckpointsResult;
@@ -2261,6 +2265,14 @@ use crate::protocol::session::SessionChanged;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionCreateParams;
 use crate::protocol::session::SessionDeleted;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionEnvironmentProfileReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionEnvironmentProfileReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionEnvironmentProfileSaveParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionEnvironmentVariables;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionListResult;
 #[cfg(any(test, feature = "export"))]
@@ -2413,6 +2425,16 @@ use crate::protocol::syntax::SyntaxUpdateParams;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ModelCatalogFreshness;
 
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::speech::SpeechInstructionKind;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::speech::SpeechInstructionsDocument;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::speech::SpeechInstructionsReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::speech::SpeechInstructionsWriteParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::speech::SpeechInstructionsWriteResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::task_delivery::CodeSnapshot;
 #[cfg(any(test, feature = "export"))]
@@ -2689,6 +2711,8 @@ use ash_protocol::ActionApprovalDecision;
 use ash_protocol::ActionApprovalRequest;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ActionApprovalResponse;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ActionApprovalRiskAssessment;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::AdvisorConfig;
 #[cfg(any(test, feature = "export"))]
@@ -2971,6 +2995,8 @@ use ash_protocol::RequestedDirectoryGrant;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ReviewTarget;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::RiskLevel;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::SandboxDenialOutput;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::Session;
@@ -2986,6 +3012,8 @@ use ash_protocol::SessionManagerStatus;
 use ash_protocol::SessionRuntimeRequest;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionRuntimeResult;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::SessionSource;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionStatus;
 #[cfg(any(test, feature = "export"))]
@@ -3053,9 +3081,13 @@ use ash_protocol::ToolCallCaller;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolCategory;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolConfirmationPresentation;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolExecutionAuthority;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolMode;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolModifiedFile;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolOutputArtifact;
 #[cfg(any(test, feature = "export"))]
@@ -3072,6 +3104,16 @@ use ash_protocol::ToolProductStatus;
 use ash_protocol::ToolProfileSnapshot;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolReplaySafety;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolResultPresentation;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolResultReview;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolResultReviewDecision;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolResultReviewRequest;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::ToolResultReviewResponse;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::ToolScope;
 #[cfg(any(test, feature = "export"))]
@@ -3108,6 +3150,8 @@ use ash_protocol::UserInputAnswer;
 use ash_protocol::UserInputOption;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::UserInputQuestion;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::UserInputValidation;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::VoiceTranscript;
 #[cfg(any(test, feature = "export"))]
@@ -3881,6 +3925,8 @@ client_methods! {
         serialization: GlobalExclusive,
     },
     VoiceOptions => "voice/options" { params: EmptyParams, response: VoiceOptions, serialization: GlobalSharedRead, },
+    SpeechInstructionsRead => "speech/instructions/read" { params: SpeechInstructionsReadParams, response: SpeechInstructionsDocument, serialization: GlobalSharedRead, },
+    SpeechInstructionsWrite => "speech/instructions/write" { params: SpeechInstructionsWriteParams, response: SpeechInstructionsWriteResult, serialization: GlobalExclusive, },
     VoiceStart => "voice/start" { params: VoiceStartParams, response: VoiceStatus, serialization: ConnectionExclusive("voice"), cancellation: "operationId" => PreserveOutcome, },
     VoiceStartCancel => "voice/start/cancel" { params: VoiceStartCancelParams, response: (), serialization: None, },
     VoiceRead => "voice/read" { params: VoiceResourceParams, response: VoiceStatus, serialization: ConnectionExclusive("voice"), },
@@ -3970,6 +4016,16 @@ client_methods! {
         params: DocumentCollaborationPresenceReadParams,
         response: DocumentCollaborationPresenceSnapshot,
         serialization: GlobalSharedRead,
+    },
+    SessionEnvironmentProfileRead => "session/environmentProfile/read" {
+        params: SessionEnvironmentProfileReadParams,
+        response: SessionEnvironmentProfileReadResult,
+        serialization: GlobalSharedRead,
+    },
+    SessionEnvironmentProfileSave => "session/environmentProfile/save" {
+        params: SessionEnvironmentProfileSaveParams,
+        response: (),
+        serialization: GlobalExclusive,
     },
     SessionCreate => "session/create" {
         params: SessionCreateParams,
@@ -5563,7 +5619,7 @@ client_methods! {
         serialization: RepositoryExclusive,
     },
     GitWorktreeList => "git/worktree/list" {
-        params: GitRepositoryParams,
+        params: GitWorktreeListParams,
         response: GitWorktreeListResult,
         serialization: RepositoryExclusive,
     },
@@ -6358,6 +6414,7 @@ typescript_bindings! {
     crate::protocol::github::GitHubManagedSettingsFailure,
     crate::protocol::github::GitHubManagedSettingsRefresh,
     crate::protocol::github::GitHubManagedSettingsResult,
+    crate::protocol::github::GitHubPullRequestArtifactOrigin,
     crate::protocol::github::GitHubPullRequestReference,
     crate::protocol::github::GitHubSessionPullRequestsParams,
     crate::protocol::github::GitHubIssueReference,
@@ -6687,6 +6744,11 @@ typescript_bindings! {
     TextDocumentReleaseParams,
     ServerInfo,
     ServerOperatingSystem,
+    SpeechInstructionKind,
+    SpeechInstructionsReadParams,
+    SpeechInstructionsDocument,
+    SpeechInstructionsWriteParams,
+    SpeechInstructionsWriteResult,
     VoiceStartParams,
     VoiceInputControl,
     VoiceInputMode,
@@ -6794,6 +6856,7 @@ typescript_bindings! {
     HookMatcherDto,
     HookActionDto,
     HookConfigDto,
+    ash_protocol::ClaudePreToolUseHook,
     LanguageServerModeDto,
     LanguageServerConfigDto,
     FrontendConfigDto,
@@ -7027,6 +7090,7 @@ typescript_bindings! {
     DirectoryGrantsSetParams,
     DirectoryGrantsForgetParams,
     SessionStatus,
+    SessionSource,
     SessionManagerStatus,
     SessionManagerActivity,
     SessionManagerInfo,
@@ -7036,6 +7100,11 @@ typescript_bindings! {
     SessionExecutionTarget,
     ApprovalMode,
     SessionCreateParams,
+    ComparisonForkParams,
+    SessionEnvironmentVariables,
+    SessionEnvironmentProfileReadParams,
+    SessionEnvironmentProfileReadResult,
+    SessionEnvironmentProfileSaveParams,
     SessionRuntimeParams,
     SessionRuntimeCancelParams,
     SessionRuntimeResult,
@@ -7190,6 +7259,12 @@ typescript_bindings! {
     ActionApprovalCommand,
     ActionApprovalDecision,
     ActionApprovalResponse,
+    ActionApprovalRiskAssessment,
+    ToolResultReview,
+    ToolResultReviewDecision,
+    ToolResultReviewRequest,
+    ToolResultReviewResponse,
+    RiskLevel,
     AgentInteractionKind,
     AgentRequest,
     AgentRequestEnvelope,
@@ -7201,6 +7276,7 @@ typescript_bindings! {
     RequestUserInput,
     RequestUserInputResponse,
     UserInputQuestion,
+    UserInputValidation,
     UserInputOption,
     UserInputAnswer,
     DynamicToolCall,
@@ -7208,6 +7284,8 @@ typescript_bindings! {
     DynamicToolOutput,
     ThreadItem,
     ToolActivity,
+    ToolConfirmationPresentation,
+    ToolModifiedFile,
     ToolCallBinding,
     ToolSourceProvenance,
     ToolCallCaller,
@@ -7252,6 +7330,7 @@ typescript_bindings! {
     Thread,
     ToolExecutionAuthority,
     ToolOutputArtifact,
+    ToolResultPresentation,
     ToolOutputArtifactData,
     ToolOutputArtifactSource,
     McpAppResourceCsp,
@@ -7793,6 +7872,7 @@ typescript_bindings! {
     GitWorktreeCreateResult,
     GitWorktreeDto,
     GitWorktreeStateDto,
+    GitWorktreeListParams,
     GitWorktreeListResult,
     GitWorktreeResolveParams,
     GitWorktreeResolveResult,

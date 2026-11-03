@@ -22,13 +22,16 @@ import { TimelineService } from '../../../contrib/timeline/common/timelineServic
 import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { NullLoggerService } from '../../../../platform/log/common/log.js';
 import type { IViewsService } from '../../../services/views/common/viewsService.js';
+import type { IAppServerApi, IAppServerConnectionRecovery } from '../../../../platform/agentHost/common/appServerApi.js';
+import type { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
 
 const source = { extensionId: 'ash.git', activationGeneration: 1, incarnation: 1 };
 const provider = (value = 'draft', inputRevision = 0): JsonValue => ({ id: 'repo', providerId: 'git', label: 'Repository', rootUri: 'file:///workspace', selected: true, groups: [], input: { value, enabled: true, canAccept: true, placeholder: 'Message', buttonLabel: 'Commit', buttonTooltip: 'Commit changes' }, inputRevision, statusBarCommands: [], activeRepositoryName: 'main', statusMessage: '', isBusy: false, historyRevision: 1, hasHistory: false, hasMerge: false, multiDiff: null });
 function fleet(providers: JsonValue[] = [provider()]): ExtensionHostFleetSnapshot {
 	return { generation: 1, extensions: [{ id: 'ash.git', version: '1.0.0', packageDigest: 'sha256:' + 'a'.repeat(64), runtimeApiVersion: 1, ...source, lifecycle: 'ready', failure: undefined, registrations: [{ kind: 'sourceControl', registrationId: 'ash.scm', revision: 1, providers }], stderr: '', outputEvents: [] }] };
 }
-function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[], reconcile?: IExtensionHostApi['reconcile']) {
+function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[], reconcile?: IExtensionHostApi['reconcile'], workspaceFolders: readonly string[] = [], recovery?: IAppServerConnectionRecovery) {
 	const lifetime = new DisposableStore();
 	const scm = lifetime.add(new SCMService()); const view = lifetime.add(new SCMViewService(scm));
 	const quickDiff = lifetime.add(new QuickDiffService()); const resolvers = lifetime.add(new MultiDiffSourceResolverService());
@@ -37,7 +40,9 @@ function fixture(invoke: IExtensionHostApi['invoke'], providers?: JsonValue[], r
 	const contexts = lifetime.add(new ContextKeyService());
 	const commands = new CommandRegistry();
 	const timeline = lifetime.add(new TimelineService(contexts, {} as IViewsService, new NullLoggerService()));
-	const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(error), commands, { invoke, reconcile } as IExtensionHostApi, scm, view, {} as ICommandService, resolvers, quickDiff, decorations, contexts, timeline, { activeGroup: { inputs: [] } } as unknown as IEditorPart));
+	const connection = { recovery } as IAppServerApi;
+	const workspace = { getWorkspace: () => ({ folders: workspaceFolders }), onDidChangeWorkspace: Event.None } as unknown as IWorkspaceContextService;
+	const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(error), commands, { invoke, reconcile } as IExtensionHostApi, scm, view, {} as ICommandService, resolvers, quickDiff, decorations, contexts, timeline, { activeGroup: { inputs: [] } } as unknown as IEditorPart, connection, workspace));
 	bridge.update(fleet(providers));
 	return { lifetime, scm, view, bridge, quickDiff, decorationProviders, errors, contexts, commands, timeline };
 }
@@ -789,6 +794,55 @@ test('SCM initialization completion preserves another runtime activation failure
 	assert.equal(value.contexts.getValue('scm.providerState.test.failed'), 'failed');
 	value.bridge.update(ready);
 	assert.notEqual(value.contexts.getValue('scm.providerState.test.failed'), 'failed');
+});
+
+test('Git initialization waits for the workspace and scans again when its binding is restored', async () => {
+	using changed = new Emitter<void>();
+	let status: IAppServerConnectionRecovery['status'] = 'recovering';
+	const recovery: IAppServerConnectionRecovery = { get status() { return status; }, error: undefined, onDidChange: changed.event, reconnect: async () => { } };
+	let scans = 0;
+	const value = fixture(async () => { scans++; return null; }, [], undefined, ['/workspace'], recovery);
+	using cleanup = value.lifetime;
+	const state = () => value.contexts.getValue('scm.providerState.ash.git');
+	const flush = () => new Promise<void>(resolve => setImmediate(resolve));
+	await flush();
+	assert.equal(state(), 'initializing');
+	assert.equal(scans, 0);
+	status = 'idle';
+	changed.fire();
+	await flush();
+	assert.equal(state(), 'ready');
+	assert.equal(scans, 1);
+	status = 'recovering';
+	changed.fire();
+	changed.fire();
+	await flush();
+	assert.equal(state(), 'initializing');
+	assert.equal(scans, 1);
+	status = 'idle';
+	changed.fire();
+	await flush();
+	assert.equal(state(), 'ready');
+	assert.equal(scans, 2);
+	assert.deepEqual(value.errors, []);
+});
+
+test('Workspace recovery shows Git loading even after activation failed before registration', () => {
+	using changed = new Emitter<void>();
+	let status: IAppServerConnectionRecovery['status'] = 'failed';
+	const recovery: IAppServerConnectionRecovery = { get status() { return status; }, error: undefined, onDidChange: changed.event, reconnect: async () => { } };
+	const value = fixture(async () => null, [], undefined, ['/workspace'], recovery);
+	using cleanup = value.lifetime;
+	const snapshot = fleet([]);
+	value.bridge.update({ ...snapshot, extensions: snapshot.extensions.map(runtime => ({ ...runtime, lifecycle: 'failed', registrations: [] })) });
+	const state = () => value.contexts.getValue('scm.providerState.ash.git');
+	assert.equal(state(), 'failed');
+	status = 'recovering';
+	changed.fire();
+	assert.equal(state(), 'initializing');
+	status = 'failed';
+	changed.fire();
+	assert.equal(state(), 'failed');
 });
 
 test('Git welcome predicates distinguish scanning, failure, disconnected and confirmed empty states in English and Chinese', async () => {

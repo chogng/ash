@@ -41,12 +41,23 @@ pub(crate) const AI_AGENT_ENV_VAR: &str = "AI_AGENT";
 // the final child boundary: the shared host also runs interactive terminals and extensions.
 const AI_AGENT_ENV_VALUE: &str = "ash";
 
+/// Child-process overrides supplied by a trusted host, outside model tool arguments.
+#[derive(Clone, Default, Eq, PartialEq)]
+pub struct CommandEnvironment(pub std::collections::BTreeMap<String, String>);
+
+impl std::fmt::Debug for CommandEnvironment {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("CommandEnvironment([REDACTED])")
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CommandRequest {
     pub program: String,
     pub arguments: Vec<String>,
     pub working_directory: PathBuf,
     pub input: CommandInput,
+    pub environment: CommandEnvironment,
 }
 
 /// Bytes supplied to a child process after spawn.
@@ -310,6 +321,7 @@ impl<B: SandboxBackend> ProcessExecutor<B> {
             arguments,
             working_directory,
             input,
+            environment: overrides,
         } = request;
         let mut command = SandboxCommand::new(program, arguments, working_directory);
         if let ash_sandboxing::ProcessIo::Pty(size) = io {
@@ -377,10 +389,14 @@ impl<B: SandboxBackend> ProcessExecutor<B> {
             ));
         }
         let mut environment = execution_environment();
+        for (name, value) in overrides.0 {
+            environment.retain(|(key, _)| !environment_key_matches(key, &name));
+            environment.push((name, value));
+        }
         if let Some(runtime_dir) = runtime_dir.as_ref() {
             let path = runtime_dir.path().to_string_lossy().into_owned();
             for name in ["TMPDIR", "TMP", "TEMP"] {
-                environment.retain(|(key, _)| key != name);
+                environment.retain(|(key, _)| !environment_key_matches(key, name));
                 environment.push((name.to_owned(), path.clone()));
             }
         }
@@ -475,6 +491,14 @@ fn prepare_runtime_scope(
     _: &Dir,
 ) -> Result<(Option<tempfile::TempDir>, Option<SandboxScope>), ExecutionError> {
     Ok((None, scope.cloned()))
+}
+
+fn environment_key_matches(left: &str, right: &str) -> bool {
+    if cfg!(windows) {
+        left.eq_ignore_ascii_case(right)
+    } else {
+        left == right
+    }
 }
 
 fn execution_environment() -> Vec<(String, String)> {

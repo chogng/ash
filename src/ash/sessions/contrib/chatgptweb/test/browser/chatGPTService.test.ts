@@ -1,3 +1,5 @@
+import type { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import type { Thread } from '../../../../../workbench/services/chat/common/chatService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
@@ -16,7 +18,7 @@ import { ChatGPTAuthenticationError, IChatGPTTransport, type ChatGPTRequest } fr
 import { ChatGPTService, IChatGPTService } from '../../browser/chatGPTService.js';
 import { ElectronChatGPTTransport } from '../../electron-browser/electronChatGPTTransport.js';
 
-function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>, retained?: string, onDidChangeAuthentication?: Event<void>) {
+function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>, retained?: string, onDidChangeAuthentication?: Event<void>, shared?: { values: Map<string, string>; instantiation: IInstantiationService; }) {
 	const requests = new Map<string, { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array>; }>();
 	const transport: IChatGPTTransport = {
 		onDidChangeAuthentication,
@@ -30,8 +32,8 @@ function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRe
 		async read(id) { const result = await requests.get(id)?.reader?.read(); return !result || result.done ? null : VSBuffer.wrap(new Uint8Array(result.value)); },
 		async cancel(id) { const request = requests.get(id); requests.delete(id); request?.controller.abort(); await request?.reader?.cancel().catch(() => { }); },
 	};
-	const values = new Map<string, string>(retained ? [['sessions.chatgpt.conversation', retained]] : []);
-	return new ChatGPTService(transport, { get: (key: string) => values.get(key), store: (key: string, value: string) => { values.set(key, value); }, remove: (key: string) => { values.delete(key); } } as unknown as IStorageService);
+	const values = shared?.values ?? new Map<string, string>(retained ? [['sessions.chatgpt.conversation', retained]] : []);
+	return new ChatGPTService(transport, { get: (key: string) => values.get(key), keys: () => [...values.keys()], store: (key: string, value: string) => { values.set(key, value); }, remove: (key: string) => { values.delete(key); }, flush: async () => { } } as unknown as IStorageService, shared?.instantiation);
 }
 function response(path: string): Response {
 	assert.ok(!path.endsWith('/me'), 'The chat must not request an account identity');
@@ -61,7 +63,7 @@ suite('ChatGPT shared service', () => {
 		using services = new InstantiationService(new ServiceCollection(
 			[IChatGPTTransport, new SyncDescriptor(ElectronChatGPTTransport, [], true)],
 			[IChatGPTService, new SyncDescriptor(ChatGPTService, [], true)],
-			[IStorageService, { get: () => undefined, store() { }, remove() { } } as unknown as IStorageService],
+			[IStorageService, { get: () => undefined, keys: () => [], store() { }, remove() { } } as unknown as IStorageService],
 			[IMainProcessService, { _serviceBrand: undefined, getChannel: () => channel, registerChannel() { } }],
 		));
 		const chat = services.get(IChatGPTService);
@@ -504,7 +506,9 @@ suite('ChatGPT shared service', () => {
 			return response(path);
 		});
 		await chat.reload();
+		const localId = chat.state.get().localConversationId;
 		chat.setDraft('First'); await chat.send();
+		assert.equal(chat.state.get().localConversationId, localId);
 		chat.setDraft('Follow up'); await chat.send();
 		assert.equal(lists, 1);
 		assert.equal(parents[1], 'hidden-1');
@@ -513,7 +517,13 @@ suite('ChatGPT shared service', () => {
 		assert.equal(chat.state.get().conversations[0]?.id, 'created');
 		assert.equal(chat.state.get().conversations[0]?.title, 'New accepted conversation');
 		assert.equal(chat.state.get().conversations.filter(item => item.id === 'created').length, 1);
+		chat.setDraft('Unsent continuation');
+		chat.newChat();
+		assert.notEqual(chat.state.get().localConversationId, localId);
+		assert.equal(chat.state.get().draft, '');
 		await chat.select('one'); await chat.select('created');
+		assert.equal(chat.state.get().localConversationId, localId);
+		assert.equal(chat.state.get().draft, 'Unsent continuation');
 		assert.equal(chat.state.get().parentId, 'hidden-2');
 	});
 
@@ -533,6 +543,151 @@ suite('ChatGPT shared service', () => {
 		chat.newChat(); assert.equal(chat.state.get().draft, 'new draft');
 		await chat.select('two'); assert.equal(chat.state.get().draft, 'two draft');
 	});
+	test('the same Send action starts a local task, then binds a normal question to that conversation', async () => {
+		const values = new Map<string, string>();
+		const routes: string[] = [];
+		const model = {
+			onDidChange: Event.None,
+			send: async (text: string) => { routes.push(`cowork:${text}`); },
+		};
+		const instantiation = {
+			createInstance: () => ({
+				prepare: async () => ({ sessionId: 'cowork-session', threadId: 'cowork-thread', model }),
+				resolve: async () => ({ session: { sessionId: 'cowork-session' }, threadId: 'cowork-thread' }),
+				createModel: () => model,
+			})
+		} as unknown as IInstantiationService;
+		let connected = false;
+		const respond = async (path: string, _signal: AbortSignal, request: ChatGPTRequest) => {
+			if (!connected && path.includes('/models?')) return new Response(null, { status: 401 });
+			if (path.includes('/.headers/')) return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' });
+			if (path.endsWith('/prepare')) return Response.json({ conduit_token: 'fixture' });
+			if (path.endsWith('/f/conversation')) {
+				const body = JSON.parse(String(request.body));
+				assert.equal(body.conversation_id, undefined);
+				routes.push(`reply:${body.messages[0].content.parts[0]}`);
+				return new Response('data: {"conversation_id":"bound","message":{"id":"reply","author":{"role":"assistant"},"content":{"parts":["Answer"]}}}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+			}
+			return response(path);
+		};
+		const shared = { values, instantiation };
+		using chat = fixture(respond, undefined, undefined, shared);
+		await chat.reload();
+		chat.setDraft('请把访谈整理成一份报告');
+		await chat.send();
+		assert.deepEqual(routes, ['cowork:请把访谈整理成一份报告']);
+		const localId = chat.state.get().localConversationId;
+		const localRow = chat.state.get().conversations.find(item => item.local);
+		assert.ok(localRow);
+		assert.equal(chat.state.get().conversationId, undefined);
+		chat.newChat();
+		assert.notEqual(chat.state.get().localConversationId, localId);
+		await chat.select(localRow.id);
+		assert.equal(chat.state.get().localConversationId, localId);
+		chat.dispose();
+		using reopened = fixture(respond, undefined, undefined, shared);
+		await reopened.reload();
+		assert.equal(reopened.state.get().localConversationId, localId);
+		assert.equal(reopened.state.get().coworkTasks[0]?.threadId, 'cowork-thread');
+		connected = true;
+		await reopened.reload();
+		reopened.setDraft('Can you explain how to write a report?');
+		await reopened.send();
+		assert.deepEqual(routes, ['cowork:请把访谈整理成一份报告', 'reply:Can you explain how to write a report?']);
+		assert.equal(reopened.state.get().localConversationId, localId);
+		assert.equal(reopened.state.get().conversationId, 'bound');
+		assert.equal(reopened.state.get().coworkTasks[0]?.threadId, 'cowork-thread');
+		assert.ok(!reopened.state.get().conversations.some(item => item.id === localRow.id));
+		await reopened.select('two');
+		await reopened.select('bound');
+		assert.equal(reopened.state.get().localConversationId, localId);
+		assert.equal(reopened.state.get().coworkTasks[0]?.threadId, 'cowork-thread');
+	});
+
+	test('Cowork progress and artifacts stay with the local Chat through navigation, refresh and restart', async () => {
+		using changed = new Emitter<void>();
+		const dispatched = new DeferredPromise<void>();
+		const finish = new DeferredPromise<void>();
+		const values = new Map<string, string>();
+		let thread: Thread | undefined;
+		const taskModel = {
+			onDidChange: changed.event,
+			get thread() { return thread; },
+			async send(text: string, _mode: string, _skills: unknown, contexts: readonly { content: string; }[]) {
+				assert.equal(text, 'Write a report');
+				assert.match(contexts[0]!.content, /one reply/u);
+				assert.ok([...values.values()].some(value => value.includes('cowork-thread')), 'Task reference is stored before dispatch');
+				thread = { turns: [{ status: 'running', items: [{ type: 'plan', itemId: 'plan', text: 'Collect sources' }] }] } as unknown as Thread;
+				changed.fire();
+				await dispatched.complete();
+				await finish.p;
+				thread = {
+					turns: [{
+						status: 'completed', items: [{
+							type: 'toolResult', itemId: 'result', content: [{ type: 'artifact', artifact: { source: { type: 'resourceLink', uri: 'file:///report.md' } } }],
+						}]
+					}]
+				} as unknown as Thread;
+				changed.fire();
+			},
+		};
+		const instantiation = {
+			createInstance: () => ({
+				prepare: async () => ({ sessionId: 'cowork-session', threadId: 'cowork-thread', model: taskModel }),
+				resolve: async () => ({ session: { sessionId: 'cowork-session' }, threadId: 'cowork-thread' }),
+				createModel: () => taskModel,
+			})
+		} as unknown as IInstantiationService;
+		const shared = { values, instantiation };
+		let historyFails = false;
+		let revised = false;
+		const respond = async (path: string) => {
+			if (path.endsWith('/conversation/one')) {
+				if (historyFails) return new Response(null, { status: 503 });
+				if (revised) return Response.json({
+					title: 'Updated', current_node: 'revised', mapping: {
+						revised: { parent: null, message: { id: 'revised', author: { role: 'assistant' }, content: { parts: ['Updated backend reply'] } } },
+					}
+				});
+			}
+			return response(path);
+		};
+		using chat = fixture(respond, undefined, undefined, shared);
+		await chat.reload();
+		await chat.select('one');
+		const localId = chat.state.get().localConversationId;
+		chat.setDraft('Write a report');
+		const running = chat.send();
+		await dispatched.p;
+		assert.equal(chat.state.get().coworkTasks[0]?.thread?.turns[0]?.status, 'running');
+		assert.match(chat.getAccessibleContent(), /Collect sources/u);
+		await chat.select('two');
+		assert.equal(chat.state.get().coworkTasks.length, 0);
+		await finish.complete();
+		await running;
+		await chat.select('one');
+		assert.equal(chat.state.get().localConversationId, localId);
+		assert.equal(chat.state.get().draft, '');
+		revised = true;
+		await chat.reload();
+		assert.equal(chat.state.get().messages[0]?.text, 'Updated backend reply');
+		assert.equal(chat.state.get().coworkTasks.length, 1);
+		assert.match(chat.getAccessibleContent(), /file:\/\/\/report\.md/u);
+		await chat.select('two');
+		historyFails = true;
+		await chat.select('one');
+		assert.equal(chat.state.get().localConversationId, localId);
+		assert.equal(chat.state.get().messages[0]?.text, 'Updated backend reply');
+		assert.match(chat.getAccessibleContent(), /file:\/\/\/report\.md/u);
+		chat.dispose();
+		using reopened = fixture(respond, undefined, undefined, shared);
+		await reopened.reload();
+		assert.equal(reopened.state.get().localConversationId, localId);
+		assert.equal(reopened.state.get().messages[0]?.text, 'Updated backend reply');
+		assert.equal(reopened.state.get().coworkTasks[0]?.thread?.turns[0]?.status, 'completed');
+		assert.match(reopened.getAccessibleContent(), /file:\/\/\/report\.md/u);
+	});
+
 	test('a superseded history cannot replace the selected chat or its draft', async () => {
 		let finish!: () => void;
 		let entered!: () => void;

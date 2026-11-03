@@ -1,3 +1,4 @@
+import type { ArtifactRecord } from '../../../../platform/artifactIntegrations/common/artifactIntegration.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { GitHubPullRequestReference, GitHubIssueReference, GitHubIssue } from '../../../../platform/github/common/githubService.js';
@@ -11,10 +12,12 @@ export interface IResolvedSessionPullRequest {
 	readonly repo: string;
 	readonly number: number;
 	readonly title: string;
+	readonly headCommit?: string;
 	readonly state: ChatPullRequestState | 'unavailable';
 	readonly status: IPullRequestIconStatus;
 	readonly icon: ThemeIcon;
 	readonly recordedReference?: GitHubPullRequestReference;
+	readonly artifact?: ArtifactRecord;
 }
 
 /** Exposes every attention reason in text even when the icon represents only the highest priority. */

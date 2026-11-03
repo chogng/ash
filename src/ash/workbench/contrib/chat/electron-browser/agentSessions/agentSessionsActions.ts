@@ -8,6 +8,7 @@ import { validateOpenAgentsWindow } from '../../../../../platform/native/common/
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../common/constants.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IsAuxiliaryWindowContext } from '../../../../common/contextkeys.js';
+import { continueChatInAgentsWindow } from '../../browser/actions/chatContinueInAction.js';
 
 const openAgentsWindowTitle = localize2({ bundle: 'ash.actions', key: 'openAgentsWindow' }, 'Open Agents Window');
 const openInAgentsTitle = localize2({ bundle: 'ash.actions', key: 'openInAgents' }, 'Open in Agents');
@@ -44,8 +45,6 @@ export class OpenAgentsWindowTitleBarAction extends Action2 {
 		const host = accessor.get(INativeHostService);
 		const conversation = navigation.getActiveConversation();
 		const captured = await navigation.captureActiveDraft();
-		await host.openAgentsWindow(conversation || captured ? { conversation, draft: captured?.draft } : undefined);
-		// Only the target window's acknowledgement transfers ownership of an unsent draft.
-		captured?.clear();
+		await continueChatInAgentsWindow(host, conversation, captured);
 	}
 }

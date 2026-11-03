@@ -1,6 +1,8 @@
+import { localize } from '../../../nls.js';
+import { IMcpServerManagementService } from '../../../platform/mcp/common/mcpServerManagementService.js';
 import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { IAgentThreadService, IAgentVoiceService, IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
-import { IInstructionService } from '../../../platform/instructions/common/instructionService.js';
+import { IInstructionService, type IInstructionImports } from '../../../platform/instructions/common/instructionService.js';
 import { buildAgentHostSessionWorkspace } from '../../common/agentHostSessionWorkspace.js';
 import { sessionWorkspaceUri } from '../../common/sessionWorkspace.js';
 import { createSessionVoiceService } from './sessionScopedVoiceService.js';
@@ -22,7 +24,7 @@ import { SessionScopedPromptsService } from './sessionScopedPromptsService.js';
 import { parseSessionIdentity, sessionIdentity } from '../../services/sessions/common/sessionIdentity.js';
 
 /** Captured at host-scope composition, before the window installs its routing facades. */
-export class SessionProviderServices {
+export class SessionProviderServices extends Disposable {
 	constructor(
 		@IChatService readonly chat: IChatService,
 		@ILanguageModelsService readonly models: ILanguageModelsService,
@@ -30,7 +32,7 @@ export class SessionProviderServices {
 		@IAgentExecutionSettingsService readonly execution: IAgentExecutionSettingsService,
 		@IAgentConnection readonly host: IAgentConnection,
 		@ILanguageModelToolsService readonly tools: ILanguageModelToolsService,
-	) { }
+	) { super(); }
 }
 export const ISessionPrimaryProviderServices = createServiceIdentifier<SessionProviderServices>('sessionPrimaryProviderServices');
 
@@ -89,6 +91,7 @@ export class SessionProviderScopeService extends Disposable implements ISessionP
 			? buildAgentHostSessionWorkspace(workspace) : undefined;
 		child.registerInstance(IInstructionService, {
 			get isAvailable() { try { scope.assertCurrent(); return instructions.isAvailable; } catch { return false; } },
+			captureImports: instructions.captureImports ? sessionId => captureInstructionImports(scope, sessionId) : undefined,
 			list: async sessionId => {
 				scope.assertCurrent();
 				const catalog = await instructions.list(sessionId === undefined ? undefined : scope.backendIdentity(sessionId));
@@ -97,6 +100,7 @@ export class SessionProviderScopeService extends Disposable implements ISessionP
 			},
 		});
 		child.registerInstance(ILanguageModelToolsService, scope.services.tools);
+		child.registerInstance(IMcpServerManagementService, scope.services.host.mcpServerManagement);
 		child.registerInstance(ILanguageModelsService, scope.services.models);
 		child.registerInstance(IAgentExecutionSettingsService, scope.services.execution);
 		child.registerInstance(IPromptsService, new SessionScopedPromptsService(scope));
@@ -119,6 +123,7 @@ export class SessionProviderScopeService extends Disposable implements ISessionP
 		if (providerId !== this.defaultProviderId && !provider.instantiationService) throw canceled();
 		const services = providerId === this.defaultProviderId ? this.primary : provider.instantiationService!.createInstance(SessionProviderServices);
 		const lifetime = new DisposableStore();
+		if (providerId !== this.defaultProviderId) lifetime.add(services);
 		let thread: IAgentThreadService | undefined;
 		const scope: ISessionProviderScope = {
 			providerId, services,
@@ -134,4 +139,17 @@ export class SessionProviderScopeService extends Disposable implements ISessionP
 		this.bindings.set(provider, { scope, lifetime });
 		return scope;
 	}
+}
+
+/** Import requests keep their original provider and backend Session across every review step. */
+export function captureInstructionImports(scope: ISessionProviderScope, sessionId: string): IInstructionImports {
+	scope.assertCurrent();
+	const imports = scope.services.host.instructions.captureImports?.(scope.backendIdentity(sessionId));
+	if (!imports) throw new Error(localize('prompt.import.unavailable', 'Instruction import is unavailable on this host.'));
+	return {
+		async directories(importScope) { scope.assertCurrent(); const result = await imports.directories(importScope); scope.assertCurrent(); return result; },
+		async grantAccess(directory) { scope.assertCurrent(); await imports.grantAccess(directory); scope.assertCurrent(); },
+		async preview(selection) { scope.assertCurrent(); const result = await imports.preview(selection); scope.assertCurrent(); return result; },
+		async apply(selection, digest) { scope.assertCurrent(); const result = await imports.apply(selection, digest); scope.assertCurrent(); return result; },
+	};
 }

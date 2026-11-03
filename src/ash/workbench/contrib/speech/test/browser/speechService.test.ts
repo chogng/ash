@@ -1,7 +1,7 @@
 import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import '../../../../contrib/accessibility/browser/accessibilityConfiguration.js';
-import '../../../chat/browser/actions/chatSpeechToTextActions.js';
+import { registerChatSpeechToTextActions } from '../../../chat/browser/actions/chatSpeechToTextActions.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { createHash } from 'node:crypto';
 import { ExtensionResourceLoaderService } from '../../../../../platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
@@ -180,6 +180,7 @@ suite('Workbench speech ownership', () => {
 	});
 
 	test('window context keys follow the owning service and Cancel dictation is enabled only for active input', async () => {
+		using commands = registerChatSpeechToTextActions();
 		using owner = new DisposableStore();
 		const contexts = owner.add(new ContextKeyService());
 		const speech = owner.add(new SpeechService(undefined, undefined, contexts));

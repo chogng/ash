@@ -267,7 +267,7 @@ export class StatusbarPart extends Part implements IStatusbarEntryContainer {
 					: target?.domNode ?? this.domNode,
 				getActions: () => actions,
 				getCheckedActionsRepresentation: () => 'checkbox',
-				autoSelectFirstItem: true,
+				autoSelectFirstItem: event.type === 'keydown',
 				cancellationToken: source.token,
 				onHide: () => {
 					if (this.contextMenu !== source) return;

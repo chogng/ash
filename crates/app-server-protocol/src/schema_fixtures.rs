@@ -1152,6 +1152,22 @@ fn fork_session_request_round_trips_source_and_title() {
 }
 
 #[test]
+fn move_thread_to_session_request_round_trips_both_sessions_and_thread() {
+    let value = serde_json::json!({
+        "commandId": "move-command",
+        "sessionId": "source-session",
+        "request": {
+            "type": "moveThreadToSession",
+            "threadId": "original-thread",
+            "destinationSessionId": "target-session"
+        }
+    });
+    let request: crate::protocol::session::SessionRequestParams =
+        serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(serde_json::to_value(request).unwrap(), value);
+}
+
+#[test]
 fn audio_upload_and_turn_input_round_trip_without_image_fields() {
     use crate::protocol::attachments::AttachmentUploadStartParams;
     let upload = serde_json::json!({"mediaType":"wav","encodedBytes":32044});

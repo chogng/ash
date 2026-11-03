@@ -98,6 +98,8 @@ impl McpCatalogUpdates {
     pub(crate) fn client_host(&self) -> Arc<dyn McpClientHost> {
         Arc::new(McpCatalogUpdateHost {
             updates: self.clone(),
+            interactions: None,
+            scope: None,
         })
     }
 
@@ -129,9 +131,18 @@ impl McpCatalogUpdateSubscription {
 
 struct McpCatalogUpdateHost {
     updates: McpCatalogUpdates,
+    interactions: Option<Arc<dyn ToolInteractionService>>,
+    scope: Option<HookEventScope>,
 }
 
 impl McpClientHost for McpCatalogUpdateHost {
+    fn capture_request_context(&self) -> Option<Arc<dyn McpClientHost>> {
+        Some(Arc::new(Self {
+            updates: self.updates.clone(),
+            interactions: ACTIVE_TOOL_INTERACTIONS.try_with(Arc::clone).ok(),
+            scope: ACTIVE_HOOK_SCOPE.try_with(Clone::clone).ok(),
+        }))
+    }
     fn on_event(&self, event: McpClientEvent) {
         if matches!(event, McpClientEvent::ToolListChanged) {
             self.updates.publish();
@@ -144,8 +155,8 @@ impl McpClientHost for McpCatalogUpdateHost {
     ) -> ash_rmcp_client::HostFuture<
         Result<ash_rmcp_client::ElicitResult, ash_rmcp_client::RmcpErrorData>,
     > {
-        let interactions = ACTIVE_TOOL_INTERACTIONS.try_with(Arc::clone).ok();
-        let scope = ACTIVE_HOOK_SCOPE.try_with(Clone::clone).ok();
+        let interactions = self.interactions.clone();
+        let scope = self.scope.clone();
         let hooks = self
             .updates
             .hooks

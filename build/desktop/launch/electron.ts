@@ -1,21 +1,26 @@
 import { spawn } from 'node:child_process';
+import { copyFileSync, mkdirSync, mkdtempSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { stripVTControlCharacters } from 'node:util';
 import { watchHost } from '../host.ts';
-import { detachedProcess, ProcessRun } from '../../processes.ts';
+import { detachedProcess, ProcessRun, registerRunResource } from '../../processes.ts';
 import { prepareAppServer } from '../appServer.ts';
 import { resolveDevelopmentElectronExecutable } from '../electron.ts';
+import { developmentAshPackagePath } from '../runtimeStore.ts';
 
 if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	const child = spawn(process.execPath, [resolve(import.meta.dirname, 'supervisor.ts'), ...process.argv.slice(2)], {
 		cwd: resolve(import.meta.dirname, '../../..'),
 		env: process.env,
-		stdio: ['inherit', 'inherit', 'inherit', 'ipc'],
+		stdio: ['inherit', 'pipe', 'pipe', 'ipc'],
 		// Windows also needs the supervisor outside the launcher's kill-on-close job.
 		// Its IPC disconnect handler must survive a forcibly terminated launcher.
 		detached: true,
 		windowsHide: true,
 	});
+	// A detached supervisor must write through the launcher that owns the debug terminal.
+	child.stdout.pipe(process.stdout, { end: false });
+	child.stderr.pipe(process.stderr, { end: false });
 	const interrupt = (): void => { child.kill('SIGINT'); };
 	const terminate = (): void => { child.kill('SIGTERM'); };
 	process.on('SIGINT', interrupt);
@@ -23,7 +28,7 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	try {
 		process.exitCode = await new Promise<number>((resolveExit, reject) => {
 			child.once('error', reject);
-			child.once('exit', (code, signal) => resolveExit(signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : code ?? 1));
+			child.once('close', (code, signal) => resolveExit(signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : code ?? 1));
 		});
 	} finally {
 		process.off('SIGINT', interrupt);
@@ -49,7 +54,24 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	const developmentServices = args[0] === '--dev-services';
 	if (developmentServices) args.shift();
 	if (developmentServices && !watch) throw new Error('--dev-services requires --watch');
+	const backendPrepared = args[0] === '--backend-prepared';
+	if (backendPrepared) args.shift();
 	const environment = { ...process.env };
+	const subsecond = environment.ASH_DEV_SUBSECOND === '1';
+	let subsecondSession: string | undefined;
+	if (subsecond) {
+		if (process.platform !== 'darwin' || process.arch !== 'arm64' || !developmentServices || backendPrepared || environment.ASH_DEV_APP_SERVER_RELOAD !== '1' || environment.ASH_DESKTOP_UI_ONLY === '1' || environment.ASH_RUST_LIVE_DIRECTORY) {
+			throw new Error('Subsecond development requires Apple Silicon macOS and pnpm dev:subsecond without ASH_RUST_LIVE_DIRECTORY');
+		}
+		if (args.some(argument => argument === '--user-data-dir' || argument.startsWith('--user-data-dir='))) throw new Error('Subsecond development owns its isolated user-data directory');
+		const directory = resolve(sourceRoot, '.build/desktop/subsecond');
+		mkdirSync(directory, { recursive: true });
+		const session = mkdtempSync(resolve(directory, 'session-'));
+		subsecondSession = session;
+		environment.ASH_HOME = resolve(session, 'profile');
+		environment.ASH_DEV_APP_SERVER_GENERATION = resolve(session, 'app-server/current.json');
+		args.push(`--user-data-dir=${resolve(session, 'user-data')}`);
+	}
 	delete environment.ELECTRON_RUN_AS_NODE;
 	// Product-launched commands must own independent supervisors and registries.
 	delete environment.ASH_ELECTRON_LAUNCH_WORKER;
@@ -62,7 +84,11 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	} else {
 		delete environment.ASH_DEV_LAUNCHER;
 	}
-	const serviceEnvironment = { ...environment, ASH_SMOKE_RUN_DIRECTORY: process.env.ASH_SMOKE_RUN_DIRECTORY, ASH_DEV_PROCESS_SUPERVISED: process.env.ASH_DEV_PROCESS_SUPERVISED };
+	const serviceEnvironment: NodeJS.ProcessEnv = { ...environment, ASH_SMOKE_RUN_DIRECTORY: process.env.ASH_SMOKE_RUN_DIRECTORY, ASH_DEV_PROCESS_SUPERVISED: process.env.ASH_DEV_PROCESS_SUPERVISED };
+	if (subsecond) {
+		serviceEnvironment.ASH_ELECTRON_RUN_AS_NODE_PATH = executable;
+		serviceEnvironment.ASH_USE_DEVELOPMENT_SECRETSTORAGE = '1';
+	}
 
 	let electronRun: ProcessRun | undefined;
 	const servicesRun = developmentServices ? new ProcessRun(sourceRoot, undefined, 5_000) : undefined;
@@ -113,12 +139,6 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		let relaunch = false;
 		let busy = false;
 		const child = spawn(executable, [sourceRoot, ...args], { cwd: sourceRoot, env: environment, stdio: watch ? ['inherit', 'inherit', 'inherit', 'ipc'] : 'inherit', detached: detachedProcess() });
-		const inspector = args.find(argument => /^--inspect(?:-brk)?=/u.test(argument));
-		if (inspector) {
-			// js-debug can suppress the runtime's Inspector stderr. Publish from the
-			// launcher instead; attach owns waiting for the new process to listen.
-			child.once('spawn', () => console.log(`Ash Electron debug target: ${inspector.slice(inspector.indexOf('=') + 1)}`));
-		}
 		child.on('message', message => {
 			if (message === 'ash:dev:ready') { ready = true; busySince = undefined; }
 			if (message === 'ash:dev:relaunch') relaunch = true;
@@ -179,7 +199,13 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		if (stopping) return stopping;
 		stopped = true;
 		cancellation.abort();
-		return stopping = Promise.all([watcher?.close(), electronRun?.stop('SIGTERM'), servicesRun?.stop('SIGTERM')]).then(() => undefined);
+		// Close Electron before retiring the backend so it cannot reconnect while
+		// the supervisor is trying to clean up the isolated profile.
+		const closeServices = async (): Promise<void> => {
+			try { await electronRun?.stop('SIGTERM'); }
+			finally { await servicesRun?.stop('SIGTERM'); }
+		};
+		return stopping = Promise.all([watcher?.close(), closeServices()]).then(() => undefined);
 	}
 
 	function fail(error: unknown): void {
@@ -199,11 +225,18 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		if (process.connected) process.send!('ash:dev:heartbeat', () => { });
 	}, 1_000).unref() : undefined;
 	process.once('exit', () => clearInterval(heartbeat));
-	if (environment.ASH_DESKTOP_UI_ONLY !== '1') {
-		try { await prepareAppServer('host-provided-node', cancellation.signal); }
+	if (!backendPrepared && environment.ASH_DESKTOP_UI_ONLY !== '1') {
+		console.log('[app-server] Preparing the development backend (builds Rust binaries if needed)...');
+		try { await prepareAppServer('host-provided-node', cancellation.signal, subsecond ? serviceEnvironment : undefined); }
 		catch (error) { if (!stopped) throw error; }
 	}
 	if (stopped) { await stop(); process.exit(1); }
+	if (subsecondSession) {
+		// Stop the isolated daemon after its clients, even after an ordinary fallback.
+		const daemon = resolve(subsecondSession, 'ash-app-server-daemon');
+		copyFileSync(resolve(developmentAshPackagePath(sourceRoot), 'bin/ash-app-server-daemon'), daemon);
+		await registerRunResource({ executable: daemon, profile: environment.ASH_HOME! });
+	}
 	if (developmentServices) {
 		try {
 			const renderer = new URL(environment.ASH_RENDERER_URL ?? '');

@@ -557,7 +557,7 @@ impl ExtensionHostSupervisor {
                             | external_ext_protocol::RegistrationKind::TerminalLinkProvider {}
                             | external_ext_protocol::RegistrationKind::TerminalCompletionProvider { .. }
                             | external_ext_protocol::RegistrationKind::TerminalQuickFixProvider { .. })
-                            || matches!(&registration.kind, external_ext_protocol::RegistrationKind::DataChannel { channel_id } if channel_id == "canvas.provider.v1")
+                            || matches!(&registration.kind, external_ext_protocol::RegistrationKind::DataChannel { channel_id } if channel_id == "canvas.provider.v1" || channel_id == "chat.context.v1")
                     }).map(|registration| registration.registration_id.clone())
                 );
                 state.registrations = registrations;
@@ -882,6 +882,7 @@ impl SupervisorInner {
                     .iter()
                     .chain(&event.tree_providers)
                     .chain(&event.canvas_providers)
+                    .chain(&event.chat_context_providers)
                     .collect::<Vec<_>>()
             })
             .unwrap_or_else(|| state.registrations.iter().collect());
@@ -891,6 +892,7 @@ impl SupervisorInner {
             .iter()
             .chain(&event.tree_providers)
             .chain(&event.canvas_providers)
+            .chain(&event.chat_context_providers)
         {
             if previous.contains(&registration) {
                 continue;
@@ -939,7 +941,7 @@ impl SupervisorInner {
                         | external_ext_protocol::RegistrationKind::TerminalLinkProvider {}
                         | external_ext_protocol::RegistrationKind::TerminalCompletionProvider { .. }
                         | external_ext_protocol::RegistrationKind::TerminalQuickFixProvider { .. }
-                ) && !matches!(&registration.kind, external_ext_protocol::RegistrationKind::DataChannel { channel_id } if channel_id == "canvas.provider.v1")
+                ) && !matches!(&registration.kind, external_ext_protocol::RegistrationKind::DataChannel { channel_id } if channel_id == "canvas.provider.v1" || channel_id == "chat.context.v1")
             })
             .cloned()
             .collect::<Vec<_>>();
@@ -947,6 +949,7 @@ impl SupervisorInner {
         registrations.extend(event.terminal_providers.iter().cloned());
         registrations.extend(event.tree_providers.iter().cloned());
         registrations.extend(event.canvas_providers.iter().cloned());
+        registrations.extend(event.chat_context_providers.iter().cloned());
         let snapshot = ActivateResult { registrations };
         snapshot
             .validate(
@@ -988,6 +991,7 @@ impl SupervisorInner {
                 .chain(&event.terminal_providers)
                 .chain(&event.tree_providers)
                 .chain(&event.canvas_providers)
+                .chain(&event.chat_context_providers)
                 .cloned()
                 .collect(),
         }

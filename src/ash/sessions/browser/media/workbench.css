@@ -36,10 +36,6 @@
 	pointer-events: none;
 }
 
-.ash-sessions-window .ash-workbench-sessions:not(.ash-sessions-frame-end) {
-	border-right: var(--ash-strokeThickness) solid var(--ash-border);
-}
-
 .ash-sessions-window .ash-feedback-host {
 	position: absolute;
 	z-index: 1000;

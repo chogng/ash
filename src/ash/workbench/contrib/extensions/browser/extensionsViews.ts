@@ -1,3 +1,5 @@
+import { AgentPluginEditorInput } from '../common/agentPluginEditorInput.js';
+import { localAgentPluginItem } from './agentPluginEditor/agentPluginItems.js';
 import {
 	defaultButtonStyles,
 	defaultCountBadgeStyles,
@@ -59,6 +61,7 @@ import { MainThreadLocalization } from '../../../api/browser/mainThreadLocalizat
 import './media/extension.css';
 
 interface ExtensionListItem {
+	readonly digest?: string;
 	readonly summary: ExtensionsPackageSummary;
 	readonly attribution?: string;
 	readonly searchTerms?: readonly string[];
@@ -118,7 +121,7 @@ class ExtensionsContent extends Disposable {
 			domFocusable: true,
 			keyboardNavigation: true,
 			focusOnMouseMove: false,
-			getId: item => `${item.source ?? ExtensionsInputSource.Registry}/${item.installation?.installationId ?? item.summary.id}/${item.summary.version}`,
+			getId: item => `${item.source ?? ExtensionsInputSource.Registry}/${item.installation?.installationId ?? item.summary.id}/${item.summary.version}/${item.digest ?? ''}`,
 			accessibilityProvider: {
 				getAriaLabel: item => [
 					item.summary.displayName,
@@ -133,7 +136,7 @@ class ExtensionsContent extends Disposable {
 		this._register(this.list.onDidAccept(({ item }) => {
 			void this.run(async () => {
 				const editors = this.editors;
-				const input = new ExtensionsInput(item.summary, item.installation?.installationId, item.source);
+				const input = item.digest ? new AgentPluginEditorInput(item.summary, item.digest) : new ExtensionsInput(item.summary, item.installation?.installationId, item.source);
 				await options.beforeOpenEditor?.();
 				await editors.openEditor(input);
 			});
@@ -235,7 +238,7 @@ class ExtensionsContent extends Disposable {
 					void this.run(async () => {
 						if (this.working) { return; }
 						this.working = true; toggle.enabled = false;
-						using input = new ExtensionsInput(item.summary, item.installation?.installationId, item.source);
+						using input = item.digest ? new AgentPluginEditorInput(item.summary, item.digest) : new ExtensionsInput(item.summary, item.installation?.installationId, item.source);
 						try { await changeExtensionEnablement(input, this.enablement, this.extensionManagement, this.plugins, this.extensionCatalog); }
 						finally { this.working = false; if (!this.isDisposed) { await this.load(); this.list.domFocus(); } }
 					});
@@ -291,7 +294,7 @@ class ExtensionsContent extends Disposable {
 				items.push(...builtInItems);
 				if (this.isPluginsPane || !this.options.capabilityKind || this.options.capabilityKind === 'editorExtension') {
 					const catalog = await this.plugins.list();
-					items.push(...catalog.packages.filter(plugin => this.isPluginsPane || !this.options.capabilityKind || plugin.hasEditorExtensions).map(plugin => ({ source: ExtensionsInputSource.Local, enabled: plugin.enabled, canChangeEnablement: plugin.enabled || !plugin.revoked, summary: { id: plugin.id, version: plugin.version, packageType: 'editorExtension', displayName: plugin.displayName, uiTargets: plugin.uiTargets, description: localize({ bundle: 'ash.extensions', key: 'localExtension' }, 'Local extension') } })));
+					items.push(...catalog.packages.filter(plugin => this.isPluginsPane || !this.options.capabilityKind || plugin.hasEditorExtensions).map(localAgentPluginItem));
 				}
 			} else {
 				const options = { limit: 200, packageType: this.isPluginsPane ? 'plugin' : undefined, capabilityKind: this.options.capabilityKind, languageId: this.options.languageId };

@@ -16,7 +16,7 @@ export class NotificationsList extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	private readonly renderers = this._register(new DisposableMap<number, NotificationTemplateRenderer>());
 	private readonly itemChanges = this._register(new DisposableMap<number>());
-	private readonly removeEmitter = this._register(new Emitter<number>());
+	private readonly removeEmitter = this._register(new Emitter<{ id: number; fromPrimaryAction?: boolean; }>());
 	public readonly onDidRequestRemove = this.removeEmitter.event;
 	private readonly items: NotificationItem[] = [];
 	private readonly itemsById = new Map<number, NotificationItem>();
@@ -53,7 +53,7 @@ export class NotificationsList extends Disposable {
 			if ((!event.ctrlKey && !event.metaKey && event.key === 'Delete') || (isMacintosh && event.metaKey && !event.ctrlKey && event.key === 'Backspace')) {
 				event.preventDefault();
 				event.stopPropagation();
-				this.removeEmitter.fire(Number(row.dataset.notificationId));
+				this.removeEmitter.fire({ id: Number(row.dataset.notificationId) });
 				return;
 			}
 			if (target !== row) return;
@@ -115,7 +115,7 @@ export class NotificationsList extends Disposable {
 					item,
 					this.presentation,
 					this.actionRunner,
-					(id: number) => this.removeEmitter.fire(id),
+					(id: number, fromPrimaryAction?: boolean) => this.removeEmitter.fire({ id, fromPrimaryAction }),
 				));
 				this.itemChanges.set(item.id, item.onDidChange(current => {
 					this.itemsById.set(item.id, current);
@@ -155,7 +155,7 @@ export class NotificationsList extends Disposable {
 				getActions: () => [this.copyAction],
 				getActionsContext: () => item,
 				cancellationToken: source.token,
-				autoSelectFirstItem: true,
+				autoSelectFirstItem: event.type === 'keydown',
 				onHide: () => {
 					if (this.copyMenu === source) this.copyMenu = undefined;
 					// Selection releases the menu without canceling the started clipboard write.

@@ -22,6 +22,7 @@ fn input_uses_the_ash_protocol_and_canonical_safe_point_identity() {
             args: Vec::new(),
         },
         enablement: HookEnablement::Enabled,
+        claude_pre_tool_use: None,
     };
     let request = BeforeToolHookRequest {
         session_id: ash_protocol::SessionId::new("session").unwrap(),
@@ -29,6 +30,7 @@ fn input_uses_the_ash_protocol_and_canonical_safe_point_identity() {
         turn_id: TurnId::new("turn-3").unwrap(),
         tool_call_id: ToolCallId::new("tool-9").unwrap(),
         tool_name: "shell-command".into(),
+        tool_input: serde_json::json!({}),
     };
 
     let bytes = encode_input(
@@ -60,6 +62,7 @@ fn sessionless_event_input_has_its_declared_name_and_subject() {
             args: Vec::new(),
         },
         enablement: HookEnablement::Enabled,
+        claude_pre_tool_use: None,
     };
     let request = HookEventRequest {
         event: HookEvent::ConfigChange,

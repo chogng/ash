@@ -8,6 +8,8 @@ import { runRemoteCommand } from './remoteCommand.js';
 import { validLocalCommand } from './remoteCommand.js';
 
 const MAX_CONNECTIONS = 1024;
+// The catalog can also be edited outside this process.
+const CATALOG_MAX_AGE_MS = 30_000;
 
 export interface RemoteConnectionsOptions {
 	readonly remoteExecutable: string;
@@ -21,15 +23,29 @@ export class RemoteConnections implements IRemoteConnectionApi {
 	readonly available = true;
 	private readonly runCommand: RunRemoteCommand;
 	private connectScheduled = false;
+	private catalog: Promise<readonly RemoteConnectionDefinition[]> | undefined;
+	private catalogExpiresAt = 0;
 
 	constructor(readonly options: RemoteConnectionsOptions) {
 		if (!validLocalCommand(options.remoteExecutable)) throw new Error('Remote connection command executable must be non-empty and contain no control characters');
 		this.runCommand = options.runCommand ?? runRemoteCommand;
 	}
 
-	async list(): Promise<readonly RemoteConnectionDefinition[]> {
-		const output = await this.invoke(['connections', 'list']);
-		return parseConnectionList(output);
+	list(): Promise<readonly RemoteConnectionDefinition[]> {
+		if (this.catalog && Date.now() < this.catalogExpiresAt) return this.catalog;
+		this.catalogExpiresAt = Infinity;
+		const catalog = this.catalog = this.listCurrent();
+		void catalog.then(() => {
+			if (this.catalog === catalog) this.catalogExpiresAt = Date.now() + CATALOG_MAX_AGE_MS;
+		}, () => {
+			if (this.catalog === catalog) this.catalog = undefined;
+		});
+		return catalog;
+	}
+
+	/** Re-read the catalog before authorizing a connection to a saved target. */
+	listCurrent(): Promise<readonly RemoteConnectionDefinition[]> {
+		return this.invoke(['connections', 'list']).then(parseConnectionList);
 	}
 
 	async save(connection: RemoteConnectionDefinition): Promise<RemoteConnectionDefinition> {
@@ -46,6 +62,7 @@ export class RemoteConnections implements IRemoteConnectionApi {
 			'--mode',
 			'create',
 		]);
+		this.catalog = undefined;
 		return exactMutationResult(output, expected);
 	}
 
@@ -64,12 +81,14 @@ export class RemoteConnections implements IRemoteConnectionApi {
 			'--dir',
 			expected.workspace,
 		]);
+		this.catalog = undefined;
 		return exactMutationResult(output, expected);
 	}
 
 	async remove(name: string): Promise<RemoteConnectionDefinition | undefined> {
 		const normalizedName = canonicalRemoteConnectionName(name);
 		const output = await this.invoke(['connections', 'remove', '--name', normalizedName]);
+		this.catalog = undefined;
 		const removed = parseConnection(output);
 		if (removed && removed.name !== normalizedName) throw new Error('Remote connection removal returned a different named target');
 		return removed;

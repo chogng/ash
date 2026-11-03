@@ -118,6 +118,15 @@ test('parses TextMate grammar contributions and normalizes package-relative path
 	});
 });
 
+test('parses bounded chat context declarations and rejects invalid icons and duplicate ids', () => {
+	const parse = (chatContext: unknown) => parseExtensionManifest(JSON.stringify({ name: 'demo', publisher: 'ash', version: '1.0.0', contributes: { chatContext } }), descriptor);
+	assert.deepEqual(parse([{ id: 'records', displayName: 'Records', icon: '$(file)' }]).contributes.chatContext,
+		[{ id: 'records', displayName: 'Records', icon: '$(file)' }]);
+	assert.throws(() => parse([{ id: 'records', displayName: 'Records', icon: 'file' }]));
+	assert.throws(() => parse(Array.from({ length: 65 }, (_, index) => ({ id: String(index), displayName: 'Record', icon: '$(file)' }))));
+	assert.throws(() => parse(Array.from({ length: 2 }, () => ({ id: 'same', displayName: 'Record', icon: '$(file)' }))));
+});
+
 test('fails closed for invalid or escaping grammar contributions', () => {
 	assert.throws(() => parseExtensionManifest(JSON.stringify({
 		name: 'demo',

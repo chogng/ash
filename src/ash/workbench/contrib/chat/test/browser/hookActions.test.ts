@@ -19,7 +19,7 @@ import { TestQuickInputService } from '../../../../../platform/quickinput/test/b
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import { IFileService } from '../../../../../platform/files/common/files.js';
+import { FileNotFoundError, IFileService } from '../../../../../platform/files/common/files.js';
 import { IPromptsService } from '../../common/promptSyntax/service/promptsService.js';
 import { PromptsService } from '../../common/promptSyntax/service/promptsServiceImpl.js';
 import { openHookConfiguration, showConfigureHooksQuickPick } from '../../browser/promptSyntax/hookActions.js';
@@ -75,8 +75,9 @@ test('Opening a Hook configuration cannot create or focus the old file after a w
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IAppServerRemoteAgentService, { connection: { kind: 'local', generation: 1 } } as IAppServerRemoteAgentService);
 	services.registerInstance(IEditorService, { openEditor: async () => { calls.push('editor'); } } as unknown as IEditorService);
-	services.registerInstance(IFileService, { createDirectory: () => { calls.push('directory'); return pending.p; }, createFile: async () => { calls.push('file'); } } as unknown as IFileService);
+	services.registerInstance(IFileService, { stat: async (resource: URI) => { throw new FileNotFoundError(resource); }, createDirectory: () => { calls.push('directory'); return pending.p; }, createFile: async () => { calls.push('file'); } } as unknown as IFileService);
 	const opening = services.invokeFunction(openHookConfiguration, { configPath: '/fixture/.ash/config.toml', namespace: 'directory:fixture' });
+	await Promise.resolve();
 	workspace.updateWorkspace({ id: 'fixture', folders: [] });
 	await pending.complete();
 	await assert.rejects(opening, isCancellationError);
@@ -93,7 +94,27 @@ test('Opening a generic remote Hook configuration preserves its owning authority
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IAppServerRemoteAgentService, { connection: { kind: 'remote', generation: 1, authority: 'fixture-cloud' } } as IAppServerRemoteAgentService);
 	services.registerInstance(IEditorService, { openEditor: async input => { calls.push(`editor:${input.resource}`); } } as IEditorService);
-	services.registerInstance(IFileService, { createDirectory: async (resource: URI) => { calls.push(`directory:${resource}`); }, createFile: async (resource: URI) => { calls.push(`file:${resource}`); } } as unknown as IFileService);
+	services.registerInstance(IFileService, { stat: async (resource: URI) => { throw new FileNotFoundError(resource); }, createDirectory: async (resource: URI) => { calls.push(`directory:${resource}`); }, createFile: async (resource: URI) => { calls.push(`file:${resource}`); } } as unknown as IFileService);
 	await services.invokeFunction(openHookConfiguration, { configPath: '/fixture/.ash/config.toml', namespace: 'directory:fixture' });
 	assert.deepEqual(calls, ['directory:ash-remote://fixture-cloud/fixture/.ash', 'file:ash-remote://fixture-cloud/fixture/.ash/config.toml', 'editor:ash-remote://fixture-cloud/fixture/.ash/config.toml']);
+});
+
+
+test('Opening existing Hook TOML does not require write access', async () => {
+	using resources = new DisposableStore();
+	const services = resources.add(new InstantiationService());
+	const root = URI.file('/fixture');
+	const resource = URI.joinPath(root, '.ash', 'config.toml');
+	const workspace = resources.add(new TestWorkspaceService({ id: 'fixture', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: root }] }));
+	const opened: string[] = [];
+	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerInstance(IAppServerRemoteAgentService, { connection: { kind: 'local', generation: 1 } } as IAppServerRemoteAgentService);
+	services.registerInstance(IEditorService, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService);
+	services.registerInstance(IFileService, {
+		stat: async () => ({ readonly: true }),
+		createDirectory: async () => assert.fail('Opening an existing configuration must not create a directory'),
+		createFile: async () => assert.fail('Opening an existing configuration must not create a file'),
+	} as unknown as IFileService);
+	await services.invokeFunction(openHookConfiguration, { configPath: resource.fsPath, namespace: 'directory:fixture' });
+	assert.deepEqual(opened, [resource.toString()]);
 });

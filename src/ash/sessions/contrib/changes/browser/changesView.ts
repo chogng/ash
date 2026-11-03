@@ -37,6 +37,7 @@ import {
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { findChangesEditorFileChange, getChangesEditorFileResource } from './changesEditorLabels.js';
+import { SessionChangesStatsCache } from '../../../services/sessions/common/sessionChangesStatsCache.js';
 import { createSessionFileChange } from '../../../services/sessions/common/session.js';
 import { ISessionChangesService } from '../common/sessionChangesService.js';
 
@@ -47,6 +48,7 @@ export class ChangesViewPane extends ViewPane {
 	private readonly review: Button;
 	private readonly preview: Button;
 	private readonly retry: Button;
+	private readonly statsCache: SessionChangesStatsCache;
 	private readonly statistics = observableValue<TurnChangeSetSummary['statistics'] | undefined>(this, undefined);
 	private rows: readonly IChangesFileItem[] = [];
 	private threadRows: readonly IChangesThreadFileItem[] = [];
@@ -85,6 +87,7 @@ export class ChangesViewPane extends ViewPane {
 		@IStorageService storage: IStorageService,
 	) {
 		super(container, options);
+		this.statsCache = new SessionChangesStatsCache(storage);
 		this.contentElement.classList.add('ash-sessions-changes');
 		this.statusDomNode = h(container.ownerDocument, 'p');
 		this.statusDomNode.setAttribute('role', 'status');
@@ -164,6 +167,13 @@ export class ChangesViewPane extends ViewPane {
 			onClick: () => this.setReviewState(false),
 		}));
 		this._register(addDisposableListener(this.changesetPicker, 'change', () => {
+			const gitActions = this.gitActions.value;
+			if (gitActions && this.changesetPicker.selectedOptions[0] === gitActions.workingTree) {
+				// The working-tree diff opens separately and does not change the conversation filter.
+				this.changesetPicker.value = this.changesetId ?? '';
+				gitActions.openWorkingTree();
+				return;
+			}
 			this.saveTreeState();
 			this.changesetId = this.changesetPicker.value || undefined;
 			this.renderRows();
@@ -396,7 +406,7 @@ export class ChangesViewPane extends ViewPane {
 			this.tree.setChildren([]);
 			this.review.enabled = false;
 			this.preview.enabled = false;
-			this.statistics.set(undefined, undefined);
+			this.statistics.set(owner && !this.changesetId ? this.statsCache.get(owner) : undefined, undefined);
 		}
 		if (selection?.kind !== 'session') {
 			this.loading = false;
@@ -420,6 +430,7 @@ export class ChangesViewPane extends ViewPane {
 			if (this.isDisposed || request !== this.request) { return; }
 			this.loading = false;
 			this.threadSummary = summary;
+			this.statsCache.set(owner!, summary.statistics);
 			this.threadRows = summary.repositories.flatMap((repository, index) => repository.files.map(file => {
 				const uri = createThreadChangeFileResource(active.session.sessionId, active.threadId, summary.revision, repository.repositoryId, file.path);
 				return {
@@ -446,6 +457,8 @@ export class ChangesViewPane extends ViewPane {
 				option.textContent = localize('sessions.changes.turn', 'Turn {0}', index + 1);
 				this.changesetPicker.append(option);
 			}
+			const workingTree = this.gitActions.value?.workingTree;
+			if (workingTree) { this.changesetPicker.append(workingTree); }
 			// Only an authoritative successful catalogue can clear a missing preference.
 			this.changesetId = details.some(entry => entry.summary.changeSetId === selectedTurn) ? selectedTurn : undefined;
 			this.changesetPicker.value = this.changesetId ?? '';
@@ -456,7 +469,7 @@ export class ChangesViewPane extends ViewPane {
 			this.threadRows = [];
 			this.threadSummary = undefined;
 			this.tree.setChildren([]);
-			this.statistics.set(undefined, undefined);
+			this.statistics.set(owner && !this.changesetId ? this.statsCache.get(owner) : undefined, undefined);
 			this.retry.hidden = false;
 			this.statusDomNode.textContent = localize('sessions.changes.error', 'Could not load changes: {0}', error instanceof Error ? error.message : String(error));
 		} finally {

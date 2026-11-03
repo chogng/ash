@@ -73,13 +73,13 @@ export class LanguageStatusContribution extends Disposable {
 			text, tooltip, ariaLabel: `${text}. ${tooltip}`,
 			icon: severity >= Severity.Error ? Lxicon.error : severity >= Severity.Warning ? Lxicon.warning : Lxicon.info,
 			showProgress: statuses.some(status => status.busy),
-			run: () => this.open(),
+			run: (_anchor: HTMLElement | undefined, event: MouseEvent | KeyboardEvent | undefined) => this.open((event?.detail ?? 0) === 0),
 		};
 		if (this.entry.value) this.entry.value.update(entry);
 		else this.entry.value = this.statusbar.addEntry(entry, { id: LanguageStatusContribution.Id, alignment: StatusbarAlignment.Right, priority: 15 });
 	}
 
-	private open(): void {
+	private open(autoSelectFirstItem: boolean): void {
 		this.menu.clear();
 		const anchor = this.contextView.container.ownerDocument.querySelector<HTMLElement>(`[data-statusbar-item-id="${LanguageStatusContribution.Id}"] .ash-statusbar-item-label`);
 		if (!anchor) return;
@@ -103,7 +103,7 @@ export class LanguageStatusContribution extends Disposable {
 			// Keep explanatory rows in the shared DOM surface, including accessible views.
 			getMenuClassName: () => 'ash-language-status-menu',
 			cancellationToken: cancelOnDispose(resources),
-			anchorPosition: AnchorPosition.Above, autoSelectFirstItem: true,
+			anchorPosition: AnchorPosition.Above, autoSelectFirstItem,
 			onHide: didCancel => {
 				this.menuFocused.reset();
 				if (didCancel && anchor.isConnected) anchor.focus();

@@ -3,6 +3,7 @@ use ash_protocol::ActionDigest;
 use ash_protocol::ActionPolicyRevision;
 use ash_protocol::AssessmentId;
 use ash_protocol::CapabilitySet;
+use ash_protocol::ClassifierAssessment;
 use ash_sandboxing::SandboxPolicy;
 use std::fmt;
 
@@ -17,6 +18,7 @@ pub struct ApprovalRequest {
     action_digest: ActionDigest,
     capabilities: CapabilitySet,
     reason: String,
+    assessment: Option<ClassifierAssessment>,
 }
 
 impl ApprovalRequest {
@@ -29,6 +31,7 @@ impl ApprovalRequest {
             action_digest,
             capabilities,
             reason: reason.into(),
+            assessment: None,
         }
     }
 
@@ -42,6 +45,15 @@ impl ApprovalRequest {
 
     pub fn reason(&self) -> &str {
         &self.reason
+    }
+
+    pub(crate) fn with_assessment(mut self, assessment: ClassifierAssessment) -> Self {
+        self.assessment = Some(assessment);
+        self
+    }
+
+    pub fn assessment(&self) -> Option<&ClassifierAssessment> {
+        self.assessment.as_ref()
     }
 }
 

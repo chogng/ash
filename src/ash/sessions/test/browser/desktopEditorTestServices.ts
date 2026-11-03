@@ -57,7 +57,7 @@ export function createDesktopEditorTestServices(services: InstantiationService, 
 	const filesScope = scope();
 	const files = resources.add(filesScope.child.createInstance(DesktopMainEditorPart, filesScope.container, filesScope.options));
 	const tools = new Map<Exclude<DesktopEditorTool, 'files'>, DesktopToolEditorPart>();
-	for (const tool of ['changes', 'browser', 'terminal'] as const) {
+	for (const tool of ['changes', 'browser', 'terminal', 'chat'] as const) {
 		const host = scope();
 		tools.set(tool, resources.add(host.child.createInstance(DesktopToolEditorPart, host.container, host.options)));
 	}

@@ -43,6 +43,32 @@ Object.defineProperty(environment.window.Element.prototype, 'scrollTo', {
 const { BrowserContextViewService } = await import('../../../contextview/browser/contextViewService.js');
 const { HoverService, IHoverService } = await import('../../browser/hoverService.js');
 
+test('managed hovers respect the open menu boundary and share its lifetime', () => {
+	const container = requiredElement<HTMLElement>('main');
+	const outside = requiredElement<HTMLButtonElement>('#second');
+	const menu = h(document, 'div');
+	const row = h(document, 'button');
+	menu.append(row);
+	using configuration = new InMemoryConfigurationService();
+	using views = new BrowserContextViewService(container);
+	using menus = new TestContextMenuService();
+	using service = new HoverService(configuration, views, menus);
+	assert.ok(views.show({ anchor: outside, content: menu, blockOutsidePointer: true }));
+	using outsideHover = service.showHover({ target: outside, content: 'Outside hint' });
+	assert.ok(menu.isConnected);
+	assert.equal(container.querySelector('[role="tooltip"]'), null);
+
+	using rowHover = service.showHover({ target: row, content: 'Row hint' });
+	assert.ok(menu.isConnected);
+	assert.equal(menu.parentElement!.querySelector('[role="tooltip"]')?.textContent, 'Row hint');
+
+	views.hide();
+	assert.equal(container.querySelector('[role="tooltip"]'), null);
+	assert.equal(row.hasAttribute('aria-describedby'), false);
+	outsideHover.show();
+	assert.equal(container.querySelector('[role="tooltip"]')?.textContent, 'Outside hint');
+});
+
 for (const reducedDelay of [false, true]) {
 	test(`HoverService waits for the ${reducedDelay ? 'reduced' : 'platform'} default delay and cancels brief visits`, () => {
 		mock.timers.enable({ apis: ['setTimeout'] });

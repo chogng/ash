@@ -122,6 +122,8 @@ pub enum ToolExecutionOutput {
     Success(String),
     Failure(String),
     SuccessContent(Vec<ContentPart>),
+    /// The executor opted in to user review before this result reaches model context.
+    NeedsResultConfirmation(crate::ToolResultReview),
     FailureContent(Vec<ContentPart>),
     SandboxDenied(SandboxDenialOutput),
     OutcomeUnknown(String),

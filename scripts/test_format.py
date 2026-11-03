@@ -239,6 +239,26 @@ class ScopedFormattingTests(unittest.TestCase):
             check=False,
         )
 
+    def test_changed_markdown_uses_full_check_only_when_formatter_inputs_change(
+        self,
+    ) -> None:
+        current = self.write("current.md", "# Current\n")
+        self.write("historical.md", "# Historical\n\n\nText.\n")
+        current_path = current.relative_to(self.root).as_posix()
+        with patch.object(formatting, "select_files", return_value={current_path}):
+            self.assertEqual(formatting.scoped(True, [], "base", "config"), 0)
+
+        for input_path in (".prettierrc.toml", "pnpm-lock.yaml"):
+            with (
+                self.subTest(input_path=input_path),
+                patch.object(
+                    formatting, "select_files", return_value={current_path, input_path}
+                ),
+                patch.object(formatting, "commands", return_value=()) as full_checks,
+            ):
+                self.assertEqual(formatting.scoped(True, [], "base", "config"), 0)
+                full_checks.assert_called_once_with(True, "config")
+
     def test_frontend_checks_do_not_need_package_manager_discovery(self) -> None:
         source = self.write("example.ts", "const value = 1;\n")
         config = self.write("example.json", "[1, 2]\n")

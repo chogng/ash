@@ -2,6 +2,11 @@ import { expect, type Page } from '@playwright/test';
 import type { BrowserWindow, MessageBoxOptions } from 'electron';
 import type { PlaywrightApplication } from './playwrightDriver.js';
 
+/** Locate the directory permission prompt before or after Workbench startup. */
+export function directoryPermissionPrompt(page: Page) {
+	return page.getByRole('dialog', { name: /^(?:Do you trust the files in this folder\?|是否信任此文件夹中的文件？)$/u });
+}
+
 export interface DialogMessage {
 	readonly title: string;
 	readonly message: string;

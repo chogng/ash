@@ -3313,6 +3313,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	services.registerInstance(IPreferencesService, preferences);
 	services.registerInstance(IOpenerService, { open: async () => true } as unknown as IOpenerService);
 	services.registerInstance(IAccountService, {
+		readRateLimits: async () => { throw new Error('Unexpected subscription limit query'); },
 		onDidChangeAccounts: Event.None,
 		onDidCompleteLogin: Event.None,
 		read: async () => ({ revision: 1n, accounts: [] }),

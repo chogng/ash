@@ -1349,17 +1349,53 @@ fn selected_execution_target(
         .map_err(|error| error.to_string())?;
         return Ok(selected);
     }
-    if let Some(session_id) = params
-        .and_then(|params| {
-            params.get("sessionId").or_else(|| {
-                params
-                    .get("sessionDirectory")
-                    .and_then(|dir| dir.get("sessionId"))
-            })
-        })
-        .or(terminal_session.as_ref())
-        .and_then(Value::as_str)
+    if method == Some("session/request")
+        && let Some(params) = params
+        && params["request"]["type"] == "changeDirectory"
     {
+        let session_id = SessionId::new(
+            params["sessionId"]
+                .as_str()
+                .ok_or("Session ID is required")?,
+        )
+        .map_err(|error| error.to_string())?;
+        let session = registry
+            .local_session(&session_id)?
+            .ok_or("Local Session is unavailable")?;
+        if matches!(
+            session.execution_target,
+            Some(SessionExecutionTarget::Ssh { .. } | SessionExecutionTarget::Provider { .. })
+        ) {
+            return Err("Changing directories requires a local Session".into());
+        }
+        let root = PathBuf::from(
+            params["request"]["root"]
+                .as_str()
+                .ok_or("Directory is required")?,
+        );
+        if !root.is_absolute() {
+            return Err("Directory must be absolute".into());
+        }
+        return Ok(Some(SessionExecutionTarget::Local { root }));
+    }
+    // Import authority is bound to its source directory's Session, including the grant
+    // issued while reviewing on that Session's execution runtime. Ignore unrelated
+    // top-level identity fields that are not part of these methods' contracts.
+    let session_selector = match method {
+        Some("instructions/importPreview" | "instructions/import") => params
+            .and_then(|params| params.get("directory"))
+            .and_then(|directory| directory.get("sessionId")),
+        _ => params
+            .and_then(|params| {
+                params.get("sessionId").or_else(|| {
+                    params
+                        .get("sessionDirectory")
+                        .and_then(|directory| directory.get("sessionId"))
+                })
+            })
+            .or(terminal_session.as_ref()),
+    };
+    if let Some(session_id) = session_selector.and_then(Value::as_str) {
         let local_id = SessionId::new(session_id.to_owned()).map_err(|error| error.to_string())?;
         if let Some(session) = registry.local_session(&local_id)? {
             // History lives in this profile even when its execution authority is SSH. Sending

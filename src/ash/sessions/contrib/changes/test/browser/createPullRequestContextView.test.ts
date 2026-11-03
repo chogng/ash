@@ -5,6 +5,7 @@ import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
 import { Event } from '../../../../../base/common/event.js';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
+import type { GitHubPullRequestReference } from '../../../../../platform/github/common/githubService.js';
 import type { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
@@ -18,6 +19,7 @@ import type { ICreatePullRequestWidgetOptions } from '../../browser/createPullRe
 
 function fixture() {
 	const calls: string[] = [];
+	let recorded: GitHubPullRequestReference | undefined;
 	let retired = false;
 	let options: ICreatePullRequestWidgetOptions | undefined;
 	const base = createDisconnectedRendererApi();
@@ -34,7 +36,10 @@ function fixture() {
 			listAccounts: async () => [{ id: 'account', host: 'github.com', login: 'user', status: 'ready' as const, credentialRevision: 1n }],
 			readRepository: async () => ({ defaultBranch: 'main', fullName: 'team/repo', allowMergeCommit: true, allowSquashMerge: true, allowRebaseMerge: false, allowAutoMerge: false }),
 			createPullRequest: async () => { calls.push('create'); return { number: 7, url: 'https://github.com/team/repo/pull/7', headCommit: 'a'.repeat(40) } as never; },
-			attachSessionPullRequest: async (sessionId: string) => { calls.push(`attach:${sessionId}`); },
+			attachSessionPullRequest: async (sessionId: string, reference: GitHubPullRequestReference) => {
+				calls.push(`attach:${sessionId}`);
+				recorded = reference;
+			},
 		},
 	};
 	const session = { sessionId: 'qualified-session', title: 'Remote', status: 'active', nextApprovalMode: 'manual', chats: [], workspace: { authorityId: 'ssh+builder', root: '/historical' } } as ISession;
@@ -55,7 +60,7 @@ function fixture() {
 		{} as IQuickInputService,
 		{ getScope: () => scope, onDidChangeScopes: Event.None } as unknown as ISessionProviderScopeService,
 		{ info: () => { }, error: () => { } } as unknown as INotificationService);
-	return { [Symbol.dispose]: () => view.dispose(), view, calls, retire: () => { retired = true; }, get creation() { assert.ok(options); return options.creation; } };
+	return { [Symbol.dispose]: () => view.dispose(), view, calls, get recorded() { return recorded; }, retire: () => { retired = true; }, get creation() { assert.ok(options); return options.creation; } };
 }
 
 test('PR creation captures the remote historical Session repository and attaches the result through its raw backend identity', async () => {
@@ -64,6 +69,7 @@ test('PR creation captures the remote historical Session repository and attaches
 	const details = await context.creation.prepare(CancellationToken.None);
 	await context.creation.create({ title: 'Remote change', description: '', draft: false, expectedContext: details.context });
 	assert.deepEqual(context.calls, ['repos:same-session:/historical', 'repos:same-session:/historical', 'create', 'attach:same-session']);
+	assert.deepEqual(context.recorded, { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7, isArtifact: true });
 });
 
 test('a retired PR scope cannot dispatch a write through a replacement host', async () => {

@@ -16,9 +16,9 @@ import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../chat
 import { IDictationOnboardingService } from '../../../chat/browser/speechToText/dictationOnboarding.js';
 import { SpeechService } from '../../../speech/browser/speechService.js';
 import { ISpeechService } from '../../../speech/common/speechService.js';
-import { ChatInputNoticeHost, ChatInputNoticeLane } from '../../../chat/browser/widget/input/notices/chatInputNoticeHost.js';
-import { IChatInputNoticeHubService } from '../../../chat/browser/widget/input/notices/chatInputNoticeHub.js';
-import { registerChatInputOnboardingHosts } from '../../../chat/browser/widget/input/notices/chatInputOnboardingHosts.js';
+import { ChatInputNoticeHost, ChatInputNoticeLane } from '../../../chat/browser/widget/input/chatInputNoticeHost.js';
+import { IChatInputNoticeHubService } from '../../../chat/browser/widget/input/chatInputNoticeHub.js';
+import { registerChatInputOnboardingHosts } from '../../../chat/browser/widget/input/chatInputOnboardingHosts.js';
 import { IVoiceModeOnboardingService } from '../../browser/voiceModeOnboarding.js';
 import { AgentsVoiceStorageKeys } from '../../common/agentsVoice.js';
 import { AgentsVoiceWidget } from '../../browser/agentsVoiceWidget.js';

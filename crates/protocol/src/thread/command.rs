@@ -25,6 +25,11 @@ use ts_rs::TS;
     rename_all_fields = "camelCase"
 )]
 pub enum ThreadCommand {
+    ResolveToolResultReview {
+        turn_id: TurnId,
+        request_id: RequestId,
+        response: crate::ToolResultReviewResponse,
+    },
     Rename {
         title: String,
         source: crate::ThreadTitleSource,
@@ -33,6 +38,13 @@ pub enum ThreadCommand {
         direction: crate::HistoryDirection,
         #[ts(type = "number")]
         expected_sequence: u64,
+    },
+    MoveToSession {
+        source_session_id: crate::SessionId,
+        destination_session_id: crate::SessionId,
+    },
+    ChangeDirectory {
+        root: std::path::PathBuf,
     },
     StartTurn {
         /// Frozen in the command receipt; older journals use the summary policy.

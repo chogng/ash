@@ -42,8 +42,9 @@ The registry:
 
 It does not aggregate sessions, choose a provider for an operation, or own UI state.
 
-The window registers the same App Server provider used by Session management;
-registry registrations borrow it and never dispose it. Optional
+Each host registers and disposes its App Server provider. Session management
+resolves providers through the registry, including the default provider for
+unqualified IDs. Registry registrations borrow providers. Optional
 `ISessionsProvider.automations` implements the shared Chat automation contract.
 `ProviderAutomationService` aggregates those observable catalogues and routes
 mutations by the owning provider. This type-only contract is the permitted
@@ -62,7 +63,9 @@ The model-orchestration service:
 - exposes provider-neutral lookup and recency APIs;
 - emits lifecycle notifications for operations initiated through the service.
 
-It does not own active or visible session state, focus, or layout.
+In the shared Workbench, management also maintains the Chat pane's selection.
+In the Agents window, management prepares threads without selecting them and
+receives the committed selection for consumers shared with the Workbench.
 
 ### `ISessionsService`
 
@@ -74,8 +77,14 @@ The view service:
 - owns session navigation, focus, and visible-session restoration.
 
 It delegates model lifecycle operations to `ISessionsManagementService`.
+The window checks that its navigation intent is still current after thread
+preparation, then commits the foreground choice. `VisibleSessions` owns slot
+order and the active projection. `sessionGridState.ts` validates and migrates
+the saved arrangement, draft catalog, and split geometry.
 
 Visible-session slots have stable identities independent of list position. The view service coordinates membership, activation, directional placement, cancellation, and persisted leaf bindings; the Sessions Part owns rendering and split geometry. Explicit batch opening resolves and prepares its sessions before committing a visibility change. Geometry and layout operations remain independent of providers and comparison membership. See [LAYOUT.md](LAYOUT.md#sessions-part) for the grid and restoration contract.
+
+Explicit opens of durable conversations and custom pages update a workspace-local recent-visit history. The active draft's first materialization also records a visit. The history picker ranks available conversations, while window restoration places the Back and Forward cursor on the restored destination when it has a saved visit. Explicit opens move that destination to the front. Traversal preserves the recorded visit order.
 
 ### `ISessionsConversationService`
 

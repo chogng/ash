@@ -34,7 +34,7 @@ export interface IStatusbarEntry {
 	readonly ariaExpanded?: boolean;
 	readonly tooltip?: string;
 	/** UI activation supplies a borrowed button for anchoring overlays; consumers must not mutate it. */
-	readonly run?: (anchor?: HTMLElement) => unknown;
+	readonly run?: (anchor?: HTMLElement, event?: MouseEvent | KeyboardEvent) => unknown;
 }
 
 /** Stable placement metadata supplied when an entry is registered. */

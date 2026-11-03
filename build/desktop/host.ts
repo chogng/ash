@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream, readdirSync, readFileSync, statSync, watch, type FSWatcher } from 'node:fs';
 import { cp, lstat, mkdir, readFile, readdir, realpath, symlink, unlink, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { createInterface } from 'node:readline';
 import ts from 'typescript';
 import { detachedProcess, ProcessRun } from '../processes.ts';
@@ -115,9 +115,12 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let structureTimer: ReturnType<typeof setTimeout> | undefined;
 	let pending = true;
+	let buildFailed = false;
+	let sourceEntries = new Set<string>();
 	// Keep TS7's dependency-tree FSEvents watcher away from build caches and
 	// runtime files. Watch source inputs here and invoke its incremental build once.
 	const roots = ['src', 'crates/host-logs', 'crates/host-integrity', '.build/protocol/typescript', '.build/desktop/localization'].map(path => resolve(sourceRoot, path));
+	const nativeRoots = roots.slice(1, 3);
 	const directories = new Map<string, ts.FileWatcher>();
 	const nativeDirectories: FSWatcher[] = [];
 	const files = new Map<string, ts.FileWatcher>();
@@ -130,7 +133,9 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 			// Windows timestamp polling cannot see equal-size saves with a restored
 			// mtime; native change events also let us compare their content digest.
 			const watcher = watch(root, { recursive: true }, (event, file) => {
-				if (file === null || event === 'rename' || /\.(?:[cm]?ts|json|rs|toml)$/u.test(file)) requestBuild(file === null ? root : resolve(root, file), event);
+				const path = file === null ? root : resolve(root, file);
+				if (files.has(path)) requestBuild(path, event);
+				if (event === 'rename' || file === null) scheduleWatchRefresh(path);
 			});
 			watcher.on('error', error => { if (!closing) fail(error); });
 			nativeDirectories.push(watcher);
@@ -166,23 +171,30 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 			// Poll directory timestamps for membership changes; native recursive
 			// events can miss a newly created subtree or replay initial entries.
 			directories.set(path, ts.sys.watchFile!(path, () => {
-				if (closing) return;
-				clearTimeout(structureTimer);
-				structureTimer = setTimeout(() => {
-					structureTimer = undefined;
-					try {
-						if (updateFileWatches()) requestBuild(path);
-					} catch (error) { fail(error); }
-				}, 100);
+				scheduleWatchRefresh(path);
 			}, 500, { watchFile: ts.WatchFileKind.DynamicPriorityPolling }));
 		}
 		return inputs;
 	}
 
-	function updateFileWatches(): boolean {
-		// Subscribe before compilation, including imports not listed as tsconfig
-		// roots, so a save during the first build cannot escape the pending batch.
-		const paths = updateDirectoryWatches();
+	function scheduleWatchRefresh(path: string): void {
+		if (closing) return;
+		clearTimeout(structureTimer);
+		structureTimer = setTimeout(() => {
+			structureTimer = undefined;
+			try {
+				if (updateFileWatches()) requestBuild(path);
+			} catch (error) { fail(error); }
+		}, 100);
+	}
+
+	function updateFileWatches(compileStarted?: number): boolean {
+		const entries = updateDirectoryWatches();
+		const paths = new Set([...entries].filter(path => nativeRoots.some(root => path.startsWith(root + sep))));
+		// A newly created module can resolve a failed import even when the compiler
+		// has no file entry for it yet. Successful builds use the resolved graph.
+		const addedAfterFailure = buildFailed && [...entries].some(path => !sourceEntries.has(path));
+		sourceEntries = entries;
 		for (const path of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'Cargo.toml', 'Cargo.lock', '.build/desktop/hostLogs.ts', 'rust-toolchain.toml', '.cargo/config.toml']) paths.add(resolve(sourceRoot, path));
 		const readConfig = (path: string): string | undefined => { paths.add(resolve(path)); return ts.sys.readFile(path); };
 		for (const project of projects) {
@@ -190,8 +202,19 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 			const config = ts.readJsonConfigFile(path, readConfig);
 			const parsed = ts.parseJsonSourceFileConfigFileContent(config, { ...ts.sys, readFile: readConfig }, sourceRoot, undefined, path);
 			for (const file of parsed.fileNames) paths.add(resolve(file));
+			const infoPath = parsed.options.tsBuildInfoFile;
+			if (!infoPath) continue;
+			// The pinned compiler records the resolved transitive inputs relative
+			// to the build-info file, including project-local resolution manifests.
+			const contents = ts.sys.readFile(infoPath);
+			if (!contents) continue;
+			const info = JSON.parse(contents);
+			for (const file of [...info.fileNames ?? [], ...info.packageJsons ?? [], ...info.missingPackageJsons ?? []]) {
+				const input = resolve(dirname(infoPath), file);
+				if (roots.some(root => input.startsWith(root + sep))) paths.add(input);
+			}
 		}
-		const changed = paths.size !== files.size || [...paths].some(path => !files.has(path));
+		const changed = addedAfterFailure || paths.size !== files.size || [...paths].some(path => !files.has(path));
 		for (const [path, watcher] of files) {
 			if (!paths.has(path)) { watcher.close(); files.delete(path); }
 		}
@@ -200,7 +223,13 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 				const input = readInput(path);
 				if (input) builtInputs.set(path, input);
 			}
-			if (!files.has(path)) files.set(path, ts.sys.watchFile!(path, () => requestBuild(path, 'change'), 250));
+			if (!files.has(path)) {
+				files.set(path, ts.sys.watchFile!(path, () => requestBuild(path, 'change'), 250));
+				if (compileStarted !== undefined) {
+					const stat = ts.sys.getModifiedTime?.(path);
+					if (stat && stat.getTime() >= compileStarted) requestBuild(path, 'change');
+				}
+			}
 		}
 		return changed;
 	}
@@ -257,6 +286,7 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 			return previous?.mtime === input.mtime && previous.content !== input.content;
 		});
 		const current = revision;
+		const compileStarted = Date.now();
 		console.log('[host] Starting incremental compilation...');
 		const run = new ProcessRun(sourceRoot, undefined, 5_000);
 		compilerRun = run;
@@ -275,7 +305,10 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 		try { await run.own(child); succeeded = await result; }
 		finally { await run.close(); compilerRun = undefined; }
 		if (closing) return;
-		updateFileWatches();
+		buildFailed = !succeeded;
+		const previousRevision = revision;
+		const inputsChanged = updateFileWatches(compileStarted);
+		if (inputsChanged && buildFailed && revision === previousRevision) requestBuild(sourceRoot);
 		if (succeeded && current === revision) {
 			for (const [path, input] of inputs) builtInputs.set(path, input);
 		}
@@ -301,7 +334,8 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 				for (const entry of entries) {
 					const path = join(directory, entry.name);
 					if (entry.isDirectory()) { await collect(path); }
-					else if (entry.isFile()) {
+					// Debugger metadata can change when the emitted code is identical.
+					else if (entry.isFile() && !entry.name.endsWith('.map')) {
 						const bytes = await readFile(path);
 						hash.update(JSON.stringify([path, bytes.length]));
 						hash.update(bytes);

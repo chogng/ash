@@ -2,7 +2,10 @@ import type { AccountDto, AccountLoginCompleted, AccountReadResult, AccountUpdat
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IAccountApi } from '../../../../platform/accounts/common/accountApi.js';
-import type { Account, AccountLoginChallenge, AccountLoginCompletion, AccountLoginMethod, AccountState, IAccountService } from '../../../../platform/accounts/common/accountService.js';
+import type {
+	Account, AccountRateLimits, AccountLoginChallenge, AccountLoginCompletion,
+	AccountLoginMethod, AccountState, IAccountService,
+} from '../../../../platform/accounts/common/accountService.js';
 import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
 
 export class AppServerAccountService extends Disposable implements IAccountService {
@@ -27,6 +30,23 @@ export class AppServerAccountService extends Disposable implements IAccountServi
 
 	async read(): Promise<AccountState> {
 		return accountState(await this.api.read());
+	}
+
+	public async readRateLimits(provider: string, accountId: string, signal?: AbortSignal): Promise<AccountRateLimits> {
+		const value = await this.api.readRateLimits({ provider, accountId }, signal);
+		if (value.provider !== provider || value.accountId !== accountId) {
+			throw new Error('Account rate limits response does not match the requested account');
+		}
+		return {
+			provider, accountId, plan: value.plan,
+			limits: value.limits.map(limit => ({
+				...limit,
+				primary: limit.primary ? { ...limit.primary } : null,
+				secondary: limit.secondary ? { ...limit.secondary } : null,
+			})),
+			credits: value.credits ? { ...value.credits } : null,
+			xai: value.xai ? { ...value.xai } : null,
+		};
 	}
 
 	async startLogin(method: AccountLoginMethod): Promise<AccountLoginChallenge> {

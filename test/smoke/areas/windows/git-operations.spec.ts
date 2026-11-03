@@ -1,3 +1,4 @@
+import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
 import type { Page } from '@playwright/test';
 import { execFile } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -417,7 +418,7 @@ test.describe('SCM commit authorization', () => {
 		const parentPrompt = await workbench.dialogs.expectMessage(application, 'Confirm', async () => {
 			await workbench.quickaccess.runCommand('workbench.action.files.openFolder');
 			if (target.kind === 'electron') {
-				await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder', exact: true }).click();
+				await directoryPermissionPrompt(page).getByRole('button', { name: 'Trust Folder', exact: true }).click();
 			} else {
 				const picker = page.getByRole('dialog', { name: 'Choose a server folder', exact: true });
 				await picker.getByText('commit-child', { exact: true }).click();
@@ -462,7 +463,7 @@ test.describe('SCM commit authorization', () => {
 		}, cwd);
 		await workbench.quickaccess.runCommand('workbench.action.files.openFolder');
 		const page = workbench.page;
-		await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Open in Restricted Mode', exact: true }).click();
+		await directoryPermissionPrompt(page).getByRole('button', { name: 'Open in Restricted Mode', exact: true }).click();
 		await workbench.waitForReady();
 		await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toContainText('Restricted');
 		const banner = page.locator('[data-part="banner"]');

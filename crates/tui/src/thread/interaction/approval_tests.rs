@@ -140,6 +140,7 @@ fn reusable_approval_choices_render_and_submit_the_advertised_authority() {
                 program: "echo".into(),
                 arguments: vec!["a b".into(), "<input>".into()],
             }),
+            risk_assessment: None,
             sandbox_denial: None,
         },
     );

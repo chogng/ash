@@ -37,8 +37,12 @@ impl McpSession for FakeSession {
             }
             let mut schema = JsonObject::new();
             schema.insert("type".into(), serde_json::Value::String("object".into()));
+            let mut tool = Tool::new("echo", "Echo server identity", Arc::new(schema));
+            if self.0.as_str() == "user:mcp:activity" {
+                tool.meta = Some(serde_json::from_value(serde_json::json!({"ash/activity":{"version":1,"argumentPointer":"/presentation"}})).unwrap());
+            }
             Ok(ListToolsResult {
-                tools: vec![Tool::new("echo", "Echo server identity", Arc::new(schema))],
+                tools: vec![tool],
                 ..Default::default()
             })
         })
@@ -173,4 +177,42 @@ fn prepared_call_rejects_non_object_arguments_before_dispatch() {
         )
         .unwrap_err();
     assert!(error.to_string().contains("JSON object"));
+}
+
+#[test]
+fn tool_activity_is_bound_to_its_frozen_catalog_and_validated_arguments() {
+    let definition = McpServerDefinition::new(
+        McpServerId::new("user:mcp:activity").unwrap(),
+        "Activity",
+        McpServerTransport::Stdio(StdioServerCommand::new("unused")),
+    )
+    .unwrap();
+    let owner = McpRuntimeOwner::start_with_factory(
+        vec![definition],
+        McpRuntimeOptions::new("test", "0"),
+        Arc::new(FakeFactory),
+    )
+    .unwrap();
+    let name = &owner.definitions()[0].name;
+    let presentation = serde_json::json!({"type":"confirmation","presentation":{"type":"extensionsInstall","extensions":["publisher.extension"]}});
+    let prepared = owner
+        .prepare_call(name, serde_json::json!({"presentation":presentation}))
+        .unwrap();
+    assert!(
+        matches!(prepared.activity(), Some(ash_protocol::ToolActivity::Confirmation { presentation: ash_protocol::ToolConfirmationPresentation::ExtensionsInstall { extensions } }) if extensions == vec!["publisher.extension"])
+    );
+    for presentation in [
+        serde_json::json!({"type":"extensionsInstall","extensions":[]}),
+        serde_json::json!({"type":"extensionsInstall","extensions":["x".repeat(257)]}),
+        serde_json::json!({"type":"agentFeedbackReview","message":" "}),
+        serde_json::json!({"type":"modifiedFiles","files":[{"path":"a","modified":"x".repeat(65537)}]}),
+    ] {
+        assert!(owner.prepare_call(name, serde_json::json!({"presentation":{"type":"confirmation","presentation":presentation}})).is_err());
+    }
+    assert!(owner.prepare_call(name, serde_json::json!({})).is_err());
+    assert!(
+        owner
+            .prepare_call(name, serde_json::json!({"presentation":{"type":"unknown"}}))
+            .is_err()
+    );
 }

@@ -1,8 +1,9 @@
+import { ChatCoworkTaskContent } from './chatCoworkTaskContent.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { type IRenderedMarkdown } from '../../../../base/browser/markdownRenderer.js';
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { autorun } from '../../../../base/common/observable.js';
@@ -24,11 +25,13 @@ import { getNewSessionWelcomePhrases, type INewSessionWelcomeMessagesConfigurati
 export class ChatGPTWidget extends Disposable {
 	private readonly markdownRenderer: ChatContentMarkdownRenderer;
 	private readonly rendered = new Map<string, { element: HTMLElement; body: HTMLElement; markdown?: IRenderedMarkdown; attachments?: ChatAttachmentsContentPart; resources: readonly ChatGPTResource[]; text: string; }>();
+	private readonly coworkRows = this._register(new DisposableMap<string, ChatCoworkTaskContent>());
 	private readonly activities = new Map<string, {
 		element: HTMLDetailsElement; summary: HTMLElement; label: HTMLElement; active: boolean;
 		entries: Map<string, { element: HTMLDetailsElement; summary: HTMLElement; content: HTMLElement; }>;
 	}>();
 	private renderedConversationId: string | undefined;
+	private renderedLocalConversationId: string | undefined;
 	private readonly scroll = this.element('div', 'ash-chatgpt-scroll');
 	private readonly messages = this.element('div', 'ash-chatgpt-messages');
 	private readonly welcome = this.element('h1', 'ash-chatgpt-welcome');
@@ -113,7 +116,7 @@ export class ChatGPTWidget extends Disposable {
 	private renderWelcome(state: ChatGPTState): void {
 		// parentId identifies the service-owned draft until its first message. Changes
 		// to input, catalog or attachments must not consume another welcome phrase.
-		const isNew = !state.conversationId && state.messages.length === 0 && state.loading?.kind !== 'conversation';
+		const isNew = !state.conversationId && !state.coworkTasks.length && state.messages.length === 0 && state.loading?.kind !== 'conversation';
 		if (isNew && this.welcomeDraftId !== state.parentId) {
 			this.welcomeDraftId = state.parentId;
 			this.welcomePhraseAnnounced = false;
@@ -195,18 +198,19 @@ export class ChatGPTWidget extends Disposable {
 	}
 
 	private render(state: ChatGPTState): void {
-		const conversationChanged = state.conversationId !== this.renderedConversationId;
+		const conversationChanged = state.localConversationId !== this.renderedLocalConversationId || state.conversationId !== this.renderedConversationId;
+		this.renderedLocalConversationId = state.localConversationId;
 		const follow = this.atBottom() || conversationChanged;
 		this.followOutput = follow;
 		this.renderedConversationId = state.conversationId;
 		const loading = state.loading?.kind === 'conversation' && (state.loading.id !== state.conversationId || !state.messages.length);
 		this.messages.hidden = loading;
-		this.root.classList.toggle('empty', !state.messages.length && !loading);
+		this.root.classList.toggle('empty', !state.messages.length && !state.coworkTasks.length && !loading);
 		this.renderWelcome(state);
 		this.error.textContent = state.error;
 		this.error.hidden = !state.error;
 		this.status.textContent = loading ? localize('sessions.loadingConversation', 'Loading conversation…') : state.sending ? localize('sessions.chatgpt.replying', 'ChatGPT is replying…') :
-			state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : '';
+			state.coworkStarting ? localize('sessions.chat.coworkPreparing', 'Preparing Cowork task…') : state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : '';
 		this.status.hidden = !this.status.textContent;
 		this.messages.setAttribute('aria-busy', String(state.sending || state.loading?.kind === 'conversation'));
 		const ids = new Set(state.messages.filter(message => !message.activity).map(message => message.id));
@@ -234,10 +238,35 @@ export class ChatGPTWidget extends Disposable {
 			if (next !== element) { this.messages.insertBefore(element, next); }
 			previous = element;
 		};
+		const taskKey = (task: ChatGPTState['coworkTasks'][number]) => JSON.stringify([task.sessionId, task.threadId]);
+		const taskIds = new Set(state.coworkTasks.map(taskKey));
+		for (const [id, row] of this.coworkRows) {
+			if (!taskIds.has(id)) { row.element.remove(); this.coworkRows.deleteAndDispose(id); }
+		}
+		const placedTasks = new Set<string>();
+		const placeTask = (task: ChatGPTState['coworkTasks'][number]): void => {
+			const id = taskKey(task);
+			let row = this.coworkRows.get(id);
+			if (!row) {
+				row = this.instantiation.createInstance(ChatCoworkTaskContent, this.root.ownerDocument);
+				this.coworkRows.set(id, row);
+			}
+			row.render(task);
+			place(row.element);
+			placedTasks.add(id);
+		};
+		const tasksByAnchor = new Map<string | undefined, ChatGPTState['coworkTasks'][number][]>();
+		for (const task of state.coworkTasks) {
+			const tasks = tasksByAnchor.get(task.afterMessageId);
+			if (tasks) tasks.push(task);
+			else tasksByAnchor.set(task.afterMessageId, [task]);
+		}
+		for (const task of tasksByAnchor.get(undefined) ?? []) placeTask(task);
 		for (const message of state.messages) {
 			if (message.activity) {
 				const activities = groups.get(message.id);
 				if (activities) { place(this.renderActivity(message.id, activities, state.sending && activities.at(-1) === latest)); }
+				for (const task of tasksByAnchor.get(message.id) ?? []) placeTask(task);
 				continue;
 			}
 			let row = this.rendered.get(message.id);
@@ -297,7 +326,9 @@ export class ChatGPTWidget extends Disposable {
 					row.element.append(row.attachments.domNode);
 				}
 			} else { row.attachments?.dispose(); row.attachments = undefined; }
+			for (const task of tasksByAnchor.get(message.id) ?? []) placeTask(task);
 		}
+		for (const task of state.coworkTasks) if (!placedTasks.has(taskKey(task))) placeTask(task);
 		if (follow) { this.scroll.scrollTop = this.scroll.scrollHeight; }
 		else if (state.sending) { this.jumpButton.hidden = false; }
 	}

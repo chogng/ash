@@ -484,25 +484,67 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Compare saved product sources with the messages seen at the last successful preparation. */
+export async function createLocalizationWatchFilter(): Promise<(paths: ReadonlySet<string>, prepare: () => Promise<boolean>) => Promise<boolean>> {
+	const [sourceRoot] = localizationWatchRoots;
+	const signature = (input: LocalizationSource): string => JSON.stringify(sortBundles(extractLocalizationMessages([input])));
+	const empty = '{}';
+	const messages = new Map<string, string>();
+	for (const input of await readSources(sourceRoot)) {
+		const value = signature(input);
+		if (value !== empty) messages.set(resolve(sourceRoot, input.path), value);
+	}
+	return async (paths, prepare) => {
+		const updates = new Map<string, string>();
+		let changed = false;
+		for (const path of paths) {
+			const file = resolve(path);
+			if (!isLocalizationInput(file)) continue;
+			if (!file.startsWith(sourceRoot + sep)) {
+				changed = true;
+				continue;
+			}
+			const text = await readFile(file, 'utf8').catch(error => {
+				if (error.code === 'ENOENT') return '';
+				throw error;
+			});
+			const value = signature({ path: relative(sourceRoot, file), text });
+			if (value !== (messages.get(file) ?? empty)) updates.set(file, value);
+		}
+		if (!changed && updates.size === 0) return false;
+		const published = await prepare();
+		for (const [file, value] of updates) {
+			if (value === empty) messages.delete(file);
+			else messages.set(file, value);
+		}
+		return published;
+	};
+}
+
 /** Rebuild the startup resource when a feature declaration or translation changes. */
 export function localizationPlugin(options: { watch?: boolean; } = {}): Plugin {
 	let stopWatching: (() => Promise<void>) | undefined;
 	let development = false;
+	let filter: Awaited<ReturnType<typeof createLocalizationWatchFilter>> | undefined;
 	return {
 		name: 'ash-localization',
 		async config(_config, environment) {
 			development = environment.command === 'serve';
 			// Failed replacement preparation must not retire a still-serving dev server.
-			if (development) { await generateLocalization(); }
+			if (development) {
+				if (options.watch !== false) filter = await createLocalizationWatchFilter();
+				await generateLocalization();
+			}
 		},
 		async buildStart() {
 			if (!development) { await generateLocalization(); }
 		},
 		async closeBundle() { await stopWatching?.(); },
-		configureServer(server) {
+		async configureServer(server) {
 			if (options.watch === false) { return; }
 			server.watcher.add(localizationWatchRoots);
-			stopWatching = watchRebuild(server, isLocalizationInput, generateLocalization);
+			const shouldPrepare = filter ?? await createLocalizationWatchFilter();
+			stopWatching = watchRebuild(server, isLocalizationInput, paths => shouldPrepare(paths, generateLocalization));
 		},
 	};
 }

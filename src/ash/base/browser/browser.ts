@@ -81,6 +81,11 @@ export function getWCOTitlebarAreaRect(targetWindow: Window): DOMRect | undefine
 	return (targetWindow.navigator as Navigator & { windowControlsOverlay?: { getTitlebarAreaRect(): DOMRect; }; }).windowControlsOverlay?.getTitlebarAreaRect();
 }
 
+/** Hidden overlays can retain their previous geometry, including in fullscreen. */
+export function getVisibleWCOTitlebarAreaRect(targetWindow: Window): DOMRect | undefined {
+	return isWCOEnabled(targetWindow) ? getWCOTitlebarAreaRect(targetWindow) : undefined;
+}
+
 export function getMonacoEnvironment(): IMonacoEnvironment | undefined {
 	return browserGlobals.MonacoEnvironment;
 }

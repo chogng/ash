@@ -5,6 +5,7 @@ use ash_protocol::ActionApprovalCapability;
 use ash_protocol::ActionApprovalCapabilityKind;
 use ash_protocol::ActionApprovalRequest;
 use ash_protocol::CapabilityKind;
+use ash_protocol::ClassifierRecommendation;
 use ash_protocol::SandboxDenialOutput;
 use ash_protocol::ToolReplaySafety;
 
@@ -51,6 +52,30 @@ pub fn durable_approval_request(
             "approval capability scope must not be empty".into(),
         ));
     }
+    let risk_assessment = match approval.assessment() {
+        Some(assessment) => {
+            if assessment.action_digest() != reviewed.action().digest()
+                || assessment.action_policy_revision() != reviewed.action_policy_revision()
+            {
+                return Err(CoreError::Policy(
+                    "approval assessment is not bound to the reviewed action".into(),
+                ));
+            }
+            match assessment.recommendation() {
+                ClassifierRecommendation::Approve { risk, reason, .. } => {
+                    Some(ash_protocol::ActionApprovalRiskAssessment {
+                        assessment_id: assessment.assessment_id().as_str().to_owned(),
+                        risk_level: *risk,
+                        reason: reason.clone(),
+                    })
+                }
+                ClassifierRecommendation::AskUser { .. }
+                | ClassifierRecommendation::ReviseAction { .. }
+                | ClassifierRecommendation::Deny { .. } => None,
+            }
+        }
+        None => None,
+    };
     Ok(ActionApprovalRequest {
         action_digest: reviewed.action().digest().as_str().to_owned(),
         policy_revision: reviewed.action_policy_revision().as_str().to_owned(),
@@ -68,6 +93,7 @@ pub fn durable_approval_request(
             ash_protocol::ActionApprovalDecision::Decline,
         ],
         sandbox_denial: None,
+        risk_assessment,
     })
 }
 

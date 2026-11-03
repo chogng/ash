@@ -1,6 +1,28 @@
 import type { URI } from '../../../base/common/uri.js';
 import type { Event } from '../../../base/common/event.js';
 import type { IFileBytes, IFileWriteOptions, IFileWriteResult, IFileStat } from '../../files/common/files.js';
+import type { DirectoryPermissionRequest } from './workspaceTrust.js';
+
+/** Validates display context at the IPC boundary without changing the directory being authorized. */
+export function validateDirectoryPermissionRequest(value: unknown): DirectoryPermissionRequest {
+	if (!value || typeof value !== 'object' || Array.isArray(value) ||
+		Object.keys(value).some(key => key !== 'path' && key !== 'remoteHostLabel') ||
+		!('path' in value) || typeof value.path !== 'string' || !value.path.length || value.path.length > 32768 || value.path.includes('\0')) {
+		throw new TypeError('Invalid directory permission request');
+	}
+	if (!('remoteHostLabel' in value) || value.remoteHostLabel === undefined) {
+		return { path: value.path };
+	}
+	if (typeof value.remoteHostLabel !== 'string' || value.remoteHostLabel.length > 1024 ||
+		/[\x00-\x08\x0e-\x1f\x7f]/u.test(value.remoteHostLabel)) {
+		throw new TypeError('Invalid remote environment label');
+	}
+	const remoteHostLabel = value.remoteHostLabel.replace(/\s+/gu, ' ').trim();
+	if (!remoteHostLabel) {
+		throw new TypeError('Invalid remote environment label');
+	}
+	return { path: value.path, remoteHostLabel };
+}
 
 export const WORKSPACE_CONTEXT_READ_CHANNEL =
 	'ash:workspace:context:read';

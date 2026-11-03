@@ -1,8 +1,11 @@
+import { CancellationError } from '../../../base/common/errors.js';
+import { localize } from '../../../nls.js';
 import type { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { ISessionProviderScopeService } from './sessionProviderScopeService.js';
 import { SessionScopedPromptsService } from './sessionScopedPromptsService.js';
 import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
 import { Emitter } from '../../../base/common/event.js';
+import { throwIfCancelled } from '../../../base/common/cancellation.js';
 
 /** Commands without an explicit Session follow the selected conversation's host. */
 export class SessionsPromptsService extends Disposable implements IPromptsService {
@@ -26,8 +29,25 @@ export class SessionsPromptsService extends Disposable implements IPromptsServic
 	}
 	getHooks(...args: Parameters<IPromptsService['getHooks']>): ReturnType<IPromptsService['getHooks']> { return new SessionScopedPromptsService(this.scopes.getScope(args[1])).getHooks(...args); }
 	findAgentSkills(...args: Parameters<IPromptsService['findAgentSkills']>): ReturnType<IPromptsService['findAgentSkills']> { return new SessionScopedPromptsService(this.scopes.getScope(args[1])).findAgentSkills(...args); }
+	async resolveSkill(...args: Parameters<IPromptsService['resolveSkill']>): ReturnType<IPromptsService['resolveSkill']> {
+		throwIfCancelled(args[1]);
+		if (this.isDisposed) throw new CancellationError();
+		const providerId = SessionScopedPromptsService.getResourceProvider(args[0]);
+		if (!providerId) return undefined;
+		const skill = await new SessionScopedPromptsService(this.scopes.getProviderScope(providerId)).resolveSkill(...args);
+		if (this.isDisposed) throw new CancellationError();
+		return skill;
+	}
 	readSkillManagement(...args: Parameters<IPromptsService['readSkillManagement']>): ReturnType<IPromptsService['readSkillManagement']> { return new SessionScopedPromptsService(this.scopes.getScope(args[0])).readSkillManagement(...args); }
 	setSkillEnablement(...args: Parameters<IPromptsService['setSkillEnablement']>): ReturnType<IPromptsService['setSkillEnablement']> { return new SessionScopedPromptsService(this.scopes.getScope(args[3])).setSkillEnablement(...args); }
 	registerSkillSource(rootReference: string): Promise<void> { return new SessionScopedPromptsService(this.scopes.getScope()).registerSkillSource(rootReference); }
-	parseNew(...args: Parameters<IPromptsService['parseNew']>): ReturnType<IPromptsService['parseNew']> { return new SessionScopedPromptsService(this.scopes.getScope()).parseNew(...args); }
+	async parseNew(...args: Parameters<IPromptsService['parseNew']>): ReturnType<IPromptsService['parseNew']> {
+		throwIfCancelled(args[1]);
+		if (this.isDisposed) throw new CancellationError();
+		const providerId = SessionScopedPromptsService.getResourceProvider(args[0]);
+		if (!providerId) throw new ReferenceError(localize('prompt.resource.unavailable', 'This Skill resource is unavailable on its original host. Reopen it from Skills.'));
+		const parsed = await new SessionScopedPromptsService(this.scopes.getProviderScope(providerId)).parseNew(...args);
+		if (this.isDisposed) throw new CancellationError();
+		return parsed;
+	}
 }

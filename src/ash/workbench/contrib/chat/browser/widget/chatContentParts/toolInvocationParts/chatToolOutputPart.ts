@@ -1,0 +1,93 @@
+import { BaseChatToolInvocationSubPart } from './chatToolInvocationSubPart.js';
+import type { IChatToolInvocation } from '../../../../common/chatService/chatService.js';
+import { h } from '../../../../../../../base/browser/dom.js';
+import { MutableDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
+import type { IChatListItem } from '../../../../common/model/chatViewModel.js';
+import { ChatAttachmentsContentPart } from '../chatAttachmentsContentPart.js';
+import { ChatResultListSubPart } from './chatResultListSubPart.js';
+import { ChatInputOutputMarkdownProgressPart } from './chatInputOutputMarkdownProgressPart.js';
+import { ChatSessionTargetResultPillSubPart } from './chatSessionTargetResultPillSubPart.js';
+import { ChatAutomationConfiguredResultSubPart } from './chatAutomationConfiguredResultSubPart.js';
+import { ChatCollapsibleInputOutputContentPart } from '../chatToolInputOutputContentPart.js';
+
+/** Owns streamed evidence and result resources. Backend coordinates remain attached to every media read. */
+export class ChatToolOutputSubPart extends BaseChatToolInvocationSubPart {
+	public getFileTreeInfos() { return this.resources.value?.getFileTreeInfos() ?? []; }
+	public getLastFocusedFileTree() { return this.resources.value?.getLastFocusedFileTree(); }
+	private readonly inputOutput: ChatCollapsibleInputOutputContentPart;
+	private readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
+	private readonly mediaChanges = this._register(new MutableDisposable());
+	private readonly resources = this._register(new MutableDisposable<ChatResultListSubPart>());
+	private readonly resourceChanges = this._register(new MutableDisposable());
+	private readonly markdown: ChatInputOutputMarkdownProgressPart;
+	private visible = true;
+	private readonly resultTarget = this._register(new MutableDisposable<ChatSessionTargetResultPillSubPart | ChatAutomationConfiguredResultSubPart>());
+	private targetIdentity: string | undefined;
+
+	constructor(document: Document, @IInstantiationService private readonly instantiation: IInstantiationService) {
+		super(h(document, 'div'));
+		this.inputOutput = this._register(new ChatCollapsibleInputOutputContentPart(document));
+		this.markdown = this._register(instantiation.createInstance(ChatInputOutputMarkdownProgressPart, document));
+		this._register(this.markdown.onDidChangeHeight(() => this.changedHeight.fire()));
+		this.domNode.append(this.inputOutput.domNode, this.markdown.domNode);
+		this._register(this.inputOutput.onDidChangeHeight(() => this.changedHeight.fire()));
+	}
+
+	public get codeblocks() { return this.markdown.codeblocks; }
+
+	public render(invocation: IChatToolInvocation, source: IChatListItem['attachmentSource'], options: { readonly generatedImages: boolean; }): void {
+		const { result } = invocation;
+		const content = result?.content ?? [];
+		const target = content.flatMap(part => part.type === 'artifact' && part.artifact.source.type === 'viewMetadata' && part.artifact.presentation ? [part.artifact.presentation] : [])[0];
+		const targetIdentity = source && result && !result.isError && target ? JSON.stringify([source, result.itemId, target]) : undefined;
+		if (targetIdentity !== this.targetIdentity) {
+			this.targetIdentity = targetIdentity;
+			this.resultTarget.clear();
+			if (targetIdentity && target && source) {
+				const part = target.type === 'sessionTarget'
+					? this.instantiation.createInstance(ChatSessionTargetResultPillSubPart, this.domNode.ownerDocument, target, source.sessionId)
+					: this.instantiation.createInstance(ChatAutomationConfiguredResultSubPart, this.domNode.ownerDocument, target, source.sessionId);
+				this.resultTarget.value = part;
+				part.setVisible(this.visible);
+				this.domNode.append(part.domNode);
+			}
+		}
+		this.markdown.render(content);
+		this.inputOutput.render(invocation);
+		const mediaContent = options.generatedImages ? content.map(part => part.type === 'imageUrl' || part.type === 'imageAttachment' ? { type: 'text' as const, text: '' } : part) : content;
+		if (mediaContent.some(part => part.type !== 'text' && part.type !== 'artifact')) {
+			if (!this.media.value) {
+				const media = this.instantiation.createInstance(ChatAttachmentsContentPart, { ownerDocument: this.domNode.ownerDocument, variables: mediaContent, source });
+				this.media.value = media;
+				media.setVisible(this.visible);
+				this.domNode.append(media.domNode);
+				this.mediaChanges.value = media.onDidChangeHeight(() => this.changedHeight.fire());
+			} else {
+				this.media.value.updateVariables(mediaContent, source);
+			}
+		} else {
+			this.mediaChanges.clear();
+			this.media.clear();
+		}
+		if (content.some(part => part.type === 'artifact' && part.artifact.source.type !== 'mcpApp' && part.artifact.source.type !== 'viewMetadata')) {
+			if (!this.resources.value) {
+				const resources = this.instantiation.createInstance(ChatResultListSubPart, this.domNode.ownerDocument);
+				this.resources.value = resources;
+				this.domNode.append(resources.domNode);
+				this.resourceChanges.value = resources.onDidChangeHeight(() => this.changedHeight.fire());
+			}
+			this.resources.value.render(content, JSON.stringify([source?.sessionId, source?.threadId, result?.itemId]), source);
+		} else {
+			this.resourceChanges.clear();
+			this.resources.clear();
+		}
+	}
+
+	public setVisible(visible: boolean): void {
+		this.visible = visible;
+		this.markdown.setVisible(visible);
+		this.resultTarget.value?.setVisible(visible);
+		this.media.value?.setVisible(visible);
+	}
+}

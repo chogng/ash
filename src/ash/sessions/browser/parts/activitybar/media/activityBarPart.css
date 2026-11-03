@@ -60,10 +60,25 @@
 	background: var(--ash-sessions-selectionBackground);
 }
 
+.ash-workbench:is([data-color-scheme="light"], [data-color-scheme="dark"])
+	.ash-sessions-navigation {
+	--ash-popup-trigger-background: var(--ash-menu-hoverBackground);
+}
+
+.ash-workbench:is([data-color-scheme="light"], [data-color-scheme="dark"])
+	.ash-sessions-navigation
+	.ash-sessions-activity-item:is(.selected, :hover):not(:disabled) {
+	background: var(--ash-menu-hoverBackground);
+}
+
 .ash-sessions-activity-item .ash-icon {
 	width: var(--ash-lxiconFontSize-large);
 	height: var(--ash-lxiconFontSize-large);
 	font-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-sessions-activity-more > .ash-dropdown-menu-indicator {
+	display: none;
 }
 
 .ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
@@ -105,4 +120,58 @@
 	justify-content: flex-start;
 	padding: 0 var(--ash-spacing-size120);
 	font-size: var(--ash-fontSize-body1);
+}
+
+.ash-menu .ash-sessions-navigation-menu-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+
+/* Keep destination icons visible when the menu marks the current page. */
+.ash-menu
+	.ash-sessions-navigation-menu-row
+	> .ash-button.checked
+	> .ash-menu-leading-check
+	> .ash-icon {
+	display: none;
+}
+
+.ash-menu
+	.ash-sessions-navigation-menu-row
+	> .ash-button.checked
+	> .ash-menu-leading-check
+	> .ash-icon-label-icon {
+	display: inline-flex;
+}
+
+.ash-menu
+	.ash-sessions-navigation-menu-row
+	> .ash-sessions-navigation-menu-pin {
+	justify-content: center;
+	padding: 0;
+	width: var(--ash-list-rowHeight);
+	opacity: 0;
+}
+
+.ash-sessions-navigation-menu-row:is(:hover, :focus-within, .focused)
+	> .ash-sessions-navigation-menu-pin {
+	opacity: 1;
+}
+
+.ash-menu
+	.ash-sessions-navigation-menu-row:is(:hover, :focus-within, .focused) {
+	color: var(
+		--ash-menu-style-selection-foreground-color,
+		var(--ash-menu-selectionForeground)
+	);
+	background: var(
+		--ash-menu-style-selection-background-color,
+		var(--ash-menu-selectionBackground)
+	);
+}
+
+.ash-menu
+	.ash-sessions-navigation-menu-row:is(:hover, :focus-within, .focused)
+	> .ash-button {
+	background: transparent;
 }

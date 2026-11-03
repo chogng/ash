@@ -113,6 +113,22 @@ suite('chatEditing browser component', () => {
 		expect(await page.evaluate(() => window.ashChatEditingIntegration.checkpointState().opened)).toEqual([]);
 	});
 
+	test('a checkpoint result cannot retake a chat revisited during restoration', async function () {
+		const { page } = browserTests;
+		await page.goto('/chatEditing.html?restoreSlow');
+		await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+		await page.getByRole('button', { name: 'Restore checkpoint', exact: true }).click();
+		await page.getByRole('combobox').fill('After');
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => window.ashChatEditingIntegration.checkpointState().requests.length)).toBe(1);
+		await page.evaluate(async () => {
+			window.ashChatEditingIntegration.switchChat();
+			window.ashChatEditingIntegration.switchChat('source');
+			await window.ashChatEditingIntegration.finishRestore();
+		});
+		expect(await page.evaluate(() => window.ashChatEditingIntegration.checkpointState().opened)).toEqual([]);
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`history Undo and Redo preserve the Thread and announce keyboard actions (${locale})`, async function () {
 			const { page } = browserTests;
@@ -184,6 +200,33 @@ suite('chatEditing browser component', () => {
 		await expect(page.getByRole('combobox')).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashChatEditingIntegration.checkpointState())).toEqual({ requests: [], opened: [] });
 	});
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`checkpoint selection and history reads retire across an A-B-A navigation (${locale})`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/chatEditing.html?locale=${locale}`);
+			await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+			await page.getByRole('button', { name: 'Restore checkpoint', exact: true }).click();
+			await expect(page.getByRole('combobox')).toBeVisible();
+			await page.evaluate(() => {
+				window.ashChatEditingIntegration.switchChat();
+				window.ashChatEditingIntegration.switchChat('source');
+			});
+			await page.keyboard.press('Enter');
+			await page.evaluate(() => window.ashChatEditingIntegration.finishRestore());
+			expect(await page.evaluate(() => window.ashChatEditingIntegration.checkpointState())).toEqual({ requests: [], opened: [] });
+
+			await page.goto(`/chatEditing.html?locale=${locale}&historySlow`);
+			await page.waitForFunction(() => !!window.ashChatEditingIntegration);
+			await page.getByRole('button', { name: 'Undo last request', exact: true }).click();
+			await page.evaluate(async () => {
+				window.ashChatEditingIntegration.switchChat();
+				window.ashChatEditingIntegration.switchChat('source');
+				await window.ashChatEditingIntegration.finishRestore();
+			});
+			expect(await page.evaluate(() => window.ashChatEditingIntegration.historyState())).toEqual({ requests: [], opened: [] });
+		});
+	}
 
 	for (const locale of ['en', 'zh-CN']) {
 		test(`a failed rejection survives reload and its keyboard retry reaches the file (${locale})`, async function () {

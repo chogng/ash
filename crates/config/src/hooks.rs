@@ -106,10 +106,22 @@ pub struct HookConfig {
     pub action: HookAction,
     #[serde(default)]
     pub enablement: HookEnablement,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub claude_pre_tool_use: Option<ash_protocol::ClaudePreToolUseHook>,
 }
 
 impl HookConfig {
     fn validate(&self) -> Result<(), ConfigError> {
+        if let Some(compatibility) = self.claude_pre_tool_use {
+            if self.event != HookEvent::PreToolUse
+                || !(1..=600).contains(&compatibility.timeout_seconds)
+            {
+                return Err(ConfigError(
+                    "Claude Hook compatibility requires preToolUse and a timeout of 1–600 seconds"
+                        .into(),
+                ));
+            }
+        }
         if !self.event.accepts_tool_matcher() && !self.matcher.tool_names.is_empty() {
             return Err(ConfigError(
                 "this Hook event cannot match tool names".into(),

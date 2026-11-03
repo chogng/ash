@@ -16,7 +16,7 @@ import { ServiceCollection } from '../../../instantiation/common/serviceCollecti
 import { getSingletonServiceDescriptors } from '../../../instantiation/common/extensions.js';
 import { getIconDefinition } from '../../../theme/common/iconRegistry.js';
 import { IActionWidgetService } from '../../browser/actionWidget.js';
-import { ActionList, ActionListItemKind } from '../../browser/actionList.js';
+import { ActionList, ActionListItemKind, type IActionListItem } from '../../browser/actionList.js';
 import { TabbedActionListWidget } from '../../browser/tabbedActionListWidget.js';
 import { ActionWidgetDropdown } from '../../browser/actionWidgetDropdown.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -416,20 +416,65 @@ test('dropdown providers refresh choices and a dismissed request cannot reopen o
 		dropdown.show();
 		dropdown.hide();
 		await pending.complete([choice]);
+		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.equal(service.isVisible, false);
+
+		pending = new DeferredPromise<readonly IAction[]>();
+		dropdown.show();
+		service.show('intervening', false, [{ kind: ActionListItemKind.Action, item: 1, label: 'Intervening' }], { onSelect: () => { }, onHide: () => { } }, dropdown.element);
+		service.hide();
+		await pending.complete([choice]);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(service.isVisible, false, 'A completed intervening menu invalidates a pending dropdown');
+
 		pending = new DeferredPromise<readonly IAction[]>();
 		dropdown.show();
 		await pending.complete([choice]);
+		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.equal(dom.window.document.querySelector('[role=menuitemradio]')!.textContent, 'First');
 		dropdown.hide();
 		pending = new DeferredPromise<readonly IAction[]>();
 		dropdown.show();
 		await pending.complete([{ ...choice, label: 'Updated' }]);
+		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.equal(dom.window.document.querySelector('[role=menuitemradio]')!.textContent, 'Updated');
 		service.show('replacement', false, [{ kind: ActionListItemKind.Action, item: 1, label: 'Replacement' }], { onSelect: () => { }, onHide: () => { } }, dropdown.element);
 		dropdown.dispose();
 		assert.equal(dom.window.document.querySelector('[role=menuitem]')!.textContent, 'Replacement');
 		assert.deepEqual(visibility, [true, false, true, false]);
+	} finally {
+		dom.window.close();
+	}
+});
+
+test('a dropdown cancels its refresh when a replacement menu takes over', async () => {
+	const dom = new JSDOM('<body><main></main></body>');
+	try {
+		using resources = new DisposableStore();
+		const services = createServices(dom.window.document, resources);
+		const service = services.get(IActionWidgetService);
+		const container = dom.window.document.querySelector<HTMLElement>('main')!;
+		const dropdown = resources.add(services.createInstance(ActionWidgetDropdown, container, {
+			label: 'Workspace', ariaLabel: 'Workspace', actions: [],
+		}));
+		const pending = new DeferredPromise<readonly IActionListItem<number>[]>();
+		let cancelled = false;
+		dropdown.showItems({
+			load: () => [{ kind: ActionListItemKind.Action, item: 1, label: 'Open Folder' }],
+			refresh: token => {
+				resources.add(token.onCancellationRequested(() => { cancelled = true; }));
+				return pending.p;
+			},
+			select: () => { },
+		});
+		assert.equal(dom.window.document.querySelector('[role=menuitem]')?.textContent, 'Open Folder');
+		service.show('replacement', false, [{ kind: ActionListItemKind.Action, item: 2, label: 'Replacement' }], {
+			onSelect: () => { }, onHide: () => { },
+		}, dropdown.element);
+		assert.equal(cancelled, true);
+		await pending.complete([{ kind: ActionListItemKind.Action, item: 3, label: 'Late workspace' }]);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(dom.window.document.querySelector('[role=menuitem]')?.textContent, 'Replacement');
 	} finally {
 		dom.window.close();
 	}
@@ -567,6 +612,41 @@ suite('actionWidget browser component', () => {
 		}
 	});
 
+	test('cascading action menus use the same surface and row styles', async function () {
+		const { page } = browserTests;
+		await page.goto('/actionWidget.html');
+		for (const scheme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+			await page.evaluate(scheme => {
+				window.ashActionWidgetIntegration.theme(scheme);
+				window.ashActionWidgetIntegration.showSubmenu();
+			}, scheme);
+			await page.getByRole('menuitem', { name: 'Remote', exact: true }).press('ArrowRight');
+			const panel = page.locator('.ash-context-view-menu:has(> .ash-action-widget-submenu)');
+			await expect(panel).toBeVisible();
+			const styles = await page.evaluate(() => {
+				const properties = (element: Element, keys: readonly string[]) =>
+					keys.map(key => getComputedStyle(element).getPropertyValue(key));
+				const parent = document.querySelector('.ash-action-widget')!;
+				const submenu = document.querySelector('.ash-action-widget-submenu')!;
+				const panelKeys = ['background-color', 'border-top-color', 'border-top-width', 'border-radius', 'box-shadow', 'font-size'];
+				const rowKeys = ['height', 'padding-inline-start', 'padding-inline-end', 'border-radius', 'font-size'];
+				return {
+					parent: properties(parent, panelKeys),
+					child: properties(submenu.parentElement!, panelKeys),
+					parentRow: properties(parent.querySelector('.ash-menu .ash-button')!, rowKeys),
+					childRow: properties(submenu.querySelector('.ash-button')!, rowKeys),
+					rowTopDifference: submenu.querySelector('.ash-button')!.getBoundingClientRect().top
+						- parent.querySelector('.ash-menu .ash-button')!.getBoundingClientRect().top,
+				};
+			});
+			expect(styles.child).toEqual(styles.parent);
+			expect(styles.childRow).toEqual(styles.parentRow);
+			expect(Math.abs(styles.rowTopDifference)).toBeLessThanOrEqual(0.5);
+			await page.getByRole('menuitemradio', { name: 'SSH' }).press('ArrowLeft');
+			await page.keyboard.press('Escape');
+		}
+	});
+
 	test('single-line action menu rows use the standard 22px height and pitch', async function () {
 		const { page } = browserTests;
 		const testInfo = browserTests.info;
@@ -634,6 +714,49 @@ suite('actionWidget browser component', () => {
 		await expect(page.getByRole('button', { name: 'Open actions' })).toBeFocused();
 	});
 
+	test('menu switches fit inside the trailing edge and toggle in place', async function () {
+		const { page } = browserTests;
+		await page.goto('/actionWidget.html');
+		await page.evaluate(() => window.ashActionWidgetIntegration.showToggle());
+		await page.keyboard.press('ArrowDown');
+		const row = page.getByRole('menuitemcheckbox', { name: 'New worktree' });
+		await expect(row).toBeFocused();
+		await expect(row).toHaveAttribute('aria-checked', 'false');
+		const track = row.locator('.ash-switch-track');
+		await expect(track).toHaveCSS('width', '34px');
+		const fits = await track.evaluate(element => {
+			const trackBounds = element.getBoundingClientRect();
+			const rowBounds = element.closest('button')!.getBoundingClientRect();
+			const labelBounds = element.closest('button')!.querySelector('.ash-button-label')!.getBoundingClientRect();
+			return trackBounds.left > labelBounds.right && trackBounds.right < rowBounds.right;
+		});
+		expect(fits).toBe(true);
+		const originalTrack = (await track.elementHandle())!;
+		await page.keyboard.press('Space');
+		await expect(row).toHaveAttribute('aria-checked', 'true');
+		await expect(row).toBeFocused();
+		expect(await originalTrack.evaluate(element => element.isConnected)).toBe(true);
+		await track.click();
+		await expect(row).toHaveAttribute('aria-checked', 'false');
+		expect(await originalTrack.evaluate(element => element.isConnected)).toBe(true);
+	});
+
+	test('menu descriptions appear in row tooltips and remain accessible without inline text', async function () {
+		const { page } = browserTests;
+		const parent = '/a/long/parent/directory/for/a/workspace';
+		await page.goto('/actionWidget.html');
+		await page.evaluate(description => window.ashActionWidgetIntegration.show(
+			['Project'], { showRowTooltips: true }, description,
+		), parent);
+		const row = page.getByRole('menuitemradio', { name: 'Project' });
+		await expect(row).toBeFocused();
+		await expect(row).toHaveAttribute('aria-description', parent);
+		await expect(row).toHaveText('Project');
+		await expect(row).toHaveAttribute('title', `Project · ${parent}`);
+		await page.keyboard.press('Enter');
+		await expect(page.getByRole('status', { name: 'Selection' })).toHaveText('Project');
+	});
+
 	test('action menu follows the viewport width when the window shrinks and grows', async function () {
 		const { page } = browserTests;
 
@@ -658,6 +781,9 @@ suite('actionWidget browser component', () => {
 		await page.goto('/actionWidget.html');
 		await page.evaluate(() => window.ashActionWidgetIntegration.show(['Run', 'Run the selected action with a longer descriptive label'], { showFilter: true }));
 		const widget = page.locator('.ash-action-widget');
+		expect(await widget.locator('.ash-action-widget-filter').evaluate(element =>
+			getComputedStyle(element, '::after').content
+		)).toBe('none');
 		const width = await widget.evaluate(element => element.getBoundingClientRect().width);
 		await page.keyboard.press('ControlOrMeta+f');
 		const search = widget.getByRole('searchbox');
@@ -670,6 +796,34 @@ suite('actionWidget browser component', () => {
 		await page.keyboard.press('Escape');
 		await expect(widget).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Open actions' })).toBeFocused();
+	});
+
+	test('action widgets show themed row focus after pointer opening and keyboard navigation', async function () {
+		const { page } = browserTests;
+		await page.goto('/actionWidget.html');
+		const trigger = page.getByRole('button', { name: 'Open actions' });
+		await trigger.evaluate(button => button.addEventListener('click', () => window.ashActionWidgetIntegration.show(['Run', 'Plan'])));
+		const run = page.getByRole('menuitemradio', { name: 'Run' });
+		const plan = page.getByRole('menuitemradio', { name: 'Plan' });
+		for (const scheme of ['light', 'dark', 'hcDark', 'hcLight'] as const) {
+			await page.evaluate(scheme => window.ashActionWidgetIntegration.theme(scheme), scheme);
+			await trigger.click();
+			await expect(run).toBeFocused();
+			const highlight = await run.evaluate(element => getComputedStyle(element).backgroundColor);
+			const outline = await run.evaluate(element => getComputedStyle(element).outlineColor);
+			if (scheme === 'light' || scheme === 'dark') {
+				expect(outline).toBe('rgba(0, 0, 0, 0)');
+			} else {
+				expect(outline).not.toBe('rgba(0, 0, 0, 0)');
+			}
+			await expect(plan).not.toHaveCSS('background-color', highlight);
+			await page.keyboard.press('ArrowDown');
+			await expect(plan).toBeFocused();
+			await expect(plan).toHaveCSS('background-color', highlight);
+			await expect(plan).toHaveCSS('outline-color', outline);
+			await page.keyboard.press('Escape');
+			await expect(trigger).toBeFocused();
+		}
 	});
 
 	test('switching tabs recomputes the menu width without replacing its owner', async function () {

@@ -34,7 +34,9 @@ fn response() -> SessionResult {
     }
     threads[2].status = ash_protocol::ThreadStatus::Archived;
     SessionResult {
+        environment_applied: None,
         session: Session {
+            source: None,
             model: None,
             session_id: SessionId::new("thread:session-1").unwrap(),
             title: "Coordinator".into(),

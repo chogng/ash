@@ -23,6 +23,7 @@ for (const host of ['github.com', 'ghe.example']) {
 		const startResult = new Promise<AccountLoginChallenge>(resolve => { finishStart = resolve; });
 		const methods: AccountLoginMethod[] = [];
 		const accounts: IAccountService = {
+			readRateLimits: async () => { throw new Error('Unexpected subscription limit query'); },
 			onDidChangeAccounts: Event.None,
 			onDidCompleteLogin: completed.event,
 			read: async () => accountState,

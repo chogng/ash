@@ -10,7 +10,6 @@ test('Sessions content shares one raised card with equal right and bottom margin
 	const sidebar = page.locator('[data-part="sidebar"]');
 	const sessions = page.locator('[data-part="sessions"]');
 	const titlebar = page.locator('[data-part="titlebar"]');
-	const navigation = page.locator('.ash-sessions-activity-content');
 	await expect(card).toBeVisible();
 	await expect(card).toHaveAttribute('aria-hidden', 'true');
 	await expect(card).toHaveCSS('pointer-events', 'none');
@@ -54,7 +53,8 @@ test('Sessions content shares one raised card with equal right and bottom margin
 	await expect(page.locator('[data-part="editor"]')).toHaveCSS('border-bottom-right-radius', '12px');
 	await expectCardGeometry();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
+	await page.locator('[data-action-id="sessions.activity.more"] button').click();
+	await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
 	await expect(sidebar).toBeVisible();
 	await expect(sidebar).toHaveCSS('border-top-left-radius', '12px');
 	await expect(sessions).toHaveCSS('border-bottom-right-radius', '12px');
@@ -99,7 +99,8 @@ test('Sessions shared layout preserves user geometry across views, resize and re
 	await page.keyboard.insertText('Retained Code draft');
 	const input = await editor.input.elementHandle();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await navigation.getByRole('button', { name: 'Collab', exact: true }).click();
+	await page.locator('[data-action-id="sessions.activity.more"] button').click();
+	await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
 	await expect(sidebar).toBeVisible();
 	await expect(auxiliarybar).toBeHidden();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -259,6 +260,7 @@ test('Sessions merges legacy pane arrangements and retains shared selections and
 
 test('Sessions migrates nested editor geometry into its conversation grid and restores drafts after reopening', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await page.setViewportSize({ width: 1900, height: 950 });
 	const references: { kind: 'untitled'; session: { untitledSessionId: string; title: string; workspace: { type: 'current'; }; }; }[] = [];
 	for (let index = 0; index < 3; index++) {
@@ -313,6 +315,55 @@ test('Sessions migrates nested editor geometry into its conversation grid and re
 	await expectRestored();
 	const saved = JSON.parse((await readStorageEntries(application, page, identity))['sessions.gridState'].value);
 	expect(saved.version).toBe(3);
-	expect(saved.layout.children[1].orientation).toBe('vertical');
+	// Version 3 stores the Grid orientation enum, where Vertical is 0.
+	expect(saved.layout.children[1].orientation).toBe(0);
 	expect([saved.layout.children[0].data.id, ...saved.layout.children[1].children.map((leaf: { data: { id: string; }; }) => leaf.data.id)]).toEqual(references.map(reference => `untitled:${reference.session.untitledSessionId}`));
+});
+
+
+test('Sessions navigates and maximizes a split without replacing its saved geometry', async ({ application, target, workbench }, testInfo) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	const code = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
+	await code.click();
+	const active = page.locator('.ash-sessions-chat-slot.active .ash-chat');
+	await expect(active).toHaveAttribute('data-untitled-session-id', /.+/);
+	const first = (await active.getAttribute('data-untitled-session-id'))!;
+	await page.locator('[data-action-id="sessions.newSession"] button').click();
+	await expect(active).not.toHaveAttribute('data-untitled-session-id', first);
+	await expect(active).toHaveAttribute('data-untitled-session-id', /.+/);
+	const second = (await active.getAttribute('data-untitled-session-id'))!;
+	const identity = { scope: StorageScope.WORKSPACE, id: 'sessions' };
+	await expect.poll(async () => {
+		const stored = (await readStorageEntries(application, page, identity))['sessions.viewState'];
+		return stored && JSON.parse(stored.value).drafts.length;
+	}).toBe(2);
+	const stored = (await readStorageEntries(application, page, identity))['sessions.viewState'].value;
+	await seedStorageOnNextLoad(application, page, identity, {
+		'sessions.viewState': {
+			value: JSON.stringify({
+				...JSON.parse(stored), active: 1,
+				visible: [first, second].map(untitledSessionId => ({ kind: 'untitled', session: { untitledSessionId, title: 'New session', workspace: { type: 'current' } } })),
+			}), target: StorageTarget.MACHINE
+		},
+		'sessions.gridState': null,
+	});
+	await page.reload({ waitUntil: 'domcontentloaded' });
+	const panes = page.locator('.ash-sessions-chat-slot:visible');
+	await expect(panes).toHaveCount(2);
+	await expect(active).toHaveAttribute('data-untitled-session-id', second);
+	const commands = new QuickAccess(page);
+	await commands.runCommand('sessions.focusLeft');
+	await expect(active).toHaveAttribute('data-untitled-session-id', first);
+	const widths = () => panes.evaluateAll(slots => slots.map(slot => slot.getBoundingClientRect().width));
+	const splitWidths = await widths();
+	await commands.runCommand('sessions.toggleMaximized');
+	await expect(panes).toHaveCount(1);
+	await expect.poll(async () => (await widths())[0]).toBeGreaterThan(splitWidths[0]!);
+	await page.screenshot({ path: testInfo.outputPath('maximized-session.png') });
+	await commands.runCommand('sessions.toggleMaximized');
+	await expect(panes).toHaveCount(2);
+	await expect.poll(widths).toEqual(splitWidths);
+	await commands.runCommand('sessions.focusRight');
+	await expect(active).toHaveAttribute('data-untitled-session-id', second);
+	await page.screenshot({ path: testInfo.outputPath('restored-session-grid.png') });
 });

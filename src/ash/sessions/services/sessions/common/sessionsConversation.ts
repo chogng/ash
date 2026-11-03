@@ -7,6 +7,7 @@ export type SessionsConversationKind = 'code' | 'cowork';
 export interface ISessionsConversationService {
 	openInNewWindow(selection: { readonly kind: 'session'; readonly active: IActiveSessionThread; } | { readonly kind: 'untitled'; readonly session: IUntitledChatSession; }): Promise<void>;
 	setConversationKind(kind: SessionsConversationKind): Promise<void>;
+	focusDraftPicker(picker: 'workspace' | 'environment'): void;
 }
 
 export const ISessionsConversationService = createServiceIdentifier<ISessionsConversationService>('sessionsConversationService');

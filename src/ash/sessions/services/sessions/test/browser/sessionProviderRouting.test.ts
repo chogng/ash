@@ -1,3 +1,15 @@
+import { IDialogService, type IConfirmationDialogOptions } from '../../../../../platform/dialogs/common/dialogs.js';
+import { IRemoteAgentHostService } from '../../../../../platform/agentHost/common/remoteAgentHostService.js';
+import { IRemoteConnectionService, type RemoteConnectionDefinition } from '../../../../../platform/remote/common/remoteConnectionService.js';
+import { SavedSSHConversationHost } from '../../../../browser/agentHost/savedSSHConversationHost.js';
+import { sshAgentHostProviderId } from '../../../../common/agentHostSessionsProvider.js';
+import { RemoteAgentHostContribution } from '../../../../../workbench/contrib/chat/browser/remoteAgentHost/remoteAgentHostChatContribution.js';
+import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
+import '../../../../browser/workbenchChat.contribution.js';
 import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
 import { createTestLanguageModelToolsService } from '../../../../../workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { ILanguageModelToolsService } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
@@ -20,7 +32,7 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { isCancellationError } from '../../../../../base/common/errors.js';
+import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IAgentExecutionSettingsService } from '../../../../../platform/agentHost/common/agentExecutionSettingsService.js';
@@ -29,10 +41,10 @@ import { ILanguageModelsService } from '../../../../../workbench/contrib/chat/co
 import { IPromptsService } from '../../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { createDisconnectedRendererApi } from '../../../../../workbench/browser/rendererApi.js';
 import { SessionsProvidersService } from '../../browser/sessionsProvidersService.js';
-import { SessionProviderServices, SessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import { ISessionProviderScopeService, SessionProviderServices, SessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { SessionsChatService } from '../../../../browser/agentHost/sessionsChatService.js';
 import { SessionsSearchService } from '../../../../contrib/providers/agentHost/browser/sessionsSearchService.js';
-import type { ISessionsManagementService } from '../../common/sessionsManagement.js';
+import { ISessionsManagementService } from '../../common/sessionsManagement.js';
 import type { ISessionsProvider } from '../../common/sessionsProvider.js';
 import { sessionIdentity } from '../../common/sessionIdentity.js';
 
@@ -73,7 +85,7 @@ function fixture() {
 	lifetime.add(registry.registerProvider(primary));
 	const registration = lifetime.add(registry.registerProvider(remote));
 	const management = { onDidChange: changed.event, sessions: [] as ISession[] } as unknown as ISessionsManagementService;
-	const scopes = lifetime.add(new SessionProviderScopeService('primary', new SessionProviderServices(primaryChat, models, prompts, execution, primaryHost, tools), registry, management, root));
+	const scopes = lifetime.add(new SessionProviderScopeService('primary', lifetime.add(new SessionProviderServices(primaryChat, models, prompts, execution, primaryHost, tools)), registry, management, root));
 	return {
 		lifetime, registry, remote, remoteHost, primaryHost, remoteChat, primaryChat, registration, scopes, goals, models, execution, tools, management, changed,
 		sessionId: sessionIdentity('remote', 'same', 'primary'), threadId: sessionIdentity('remote', 'thread', 'primary'),
@@ -110,6 +122,96 @@ test('Chat send unwraps the source address and never sends a removed remote Sess
 	assert.deepEqual(calls, [{ ...options, sessionId: 'same', threadId: 'thread', source: { sessionId: 'same', threadId: 'thread' } }]);
 	context.registration.dispose();
 	await assert.rejects(chat.startTurn(options), isCancellationError);
+});
+
+test('the editor link opener selects the remote conversation and sends its follow-up to that host', async () => {
+	using context = fixture();
+	Object.assign(context.remoteHost.appServer, { connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: Event.None });
+	context.primaryChat.readThread = async () => assert.fail('the link cannot read the ambient conversation');
+	context.primaryChat.startTurn = async () => assert.fail('the ambient host cannot receive a remote follow-up');
+	context.remoteChat.readThread = async (sessionId, threadId) => ({
+		thread: { sessionId, threadId },
+	} as ThreadRead);
+	const sent: { sessionId: string; threadId: string; text: string; }[] = [];
+	context.remoteChat.startTurn = async ({ sessionId, threadId, text }) => { sent.push({ sessionId, threadId, text }); };
+	using services = new InstantiationService();
+	using chat = new SessionsChatService(context.scopes);
+	let active: ISessionsManagementService['active'];
+	let focused = 0;
+	services.registerInstance(ISessionsManagementService, {
+		navigationRevision: 0,
+		get active() { return active; },
+		async openThread(sessionId: string, threadId: string) {
+			active = { session: { sessionId } as ISession, threadId };
+		},
+	} as ISessionsManagementService);
+	services.registerInstance(ISessionProviderScopeService, context.scopes);
+	services.registerInstance(IChatService, chat);
+	services.registerInstance(IAppServerApi, context.primaryHost.appServer);
+	services.registerInstance(IViewsService, { focusView: async () => { focused++; return true; } } as unknown as IViewsService);
+	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(descriptor));
+	let open: ((uri: URI) => Promise<boolean>) | undefined;
+	services.registerInstance(IOpenerService, {
+		registerOpener: (opener: { open(uri: URI): Promise<boolean>; }) => {
+			open = uri => opener.open(uri);
+			return toDisposable(() => { open = undefined; });
+		},
+	} as IOpenerService);
+	using opener = services.createInstance(RemoteAgentHostContribution);
+	const link = buildOpenSessionLinkUri('same', 'thread', 'sessions+remote');
+	assert.equal(await open!(link), true);
+	const navigation = services.get(IChatSessionNavigationService);
+	const conversation = navigation.getActiveConversation();
+	assert.deepEqual(conversation, { sessionId: context.sessionId, threadId: context.threadId });
+	assert.equal(focused, 1);
+	const followUp = { ...conversation!, expectedSequence: 1, text: 'Continue', mode: 'agent' as const };
+	await chat.startTurn(followUp);
+	assert.deepEqual(sent, [{ sessionId: 'same', threadId: 'thread', text: 'Continue' }]);
+	context.registration.dispose();
+	await assert.rejects(open!(link), /connection for this conversation link is unavailable/i);
+	await assert.rejects(chat.startTurn(followUp), isCancellationError);
+});
+
+test('link recovery prompts only for a unique saved SSH target and retires stale consent', async () => {
+	using services = new InstantiationService();
+	const target = { name: 'build', host: 'build.example', workspace: '/srv/project' };
+	let catalog: readonly RemoteConnectionDefinition[] = [];
+	const dialogs: IConfirmationDialogOptions[] = [];
+	const connected: unknown[] = [];
+	let confirmation = new DeferredPromise<{ confirmed: boolean; }>();
+	services.registerInstance(IRemoteConnectionService, { available: true, list: async () => catalog } as IRemoteConnectionService);
+	services.registerInstance(IRemoteAgentHostService, {
+		isAvailable: true,
+		connect: async (connection: RemoteConnectionDefinition) => { connected.push(connection); },
+	} as unknown as IRemoteAgentHostService);
+	services.registerInstance(IDialogService, {
+		confirm: async (options: IConfirmationDialogOptions) => { dialogs.push(options); return confirmation.p; },
+	} as IDialogService);
+	const resolver = services.createInstance(SavedSSHConversationHost);
+	const providerId = sshAgentHostProviderId(target);
+	let current = true;
+	const assertCurrent = () => { if (!current) throw canceled(); };
+	const signal = new AbortController().signal;
+	assert.equal(await resolver.connect(providerId, assertCurrent, signal), false);
+	catalog = [target, { ...target, name: 'another-alias' }];
+	assert.equal(await resolver.connect(providerId, assertCurrent, signal), false);
+	assert.equal(dialogs.length, 0);
+	catalog = [target];
+	const stale = resolver.connect(providerId, assertCurrent, signal);
+	await Promise.resolve();
+	assert.match(dialogs[0]!.message, /build/);
+	assert.match(dialogs[0]!.detail!, /build\.example[\s\S]*\/srv\/project/);
+	current = false;
+	await confirmation.complete({ confirmed: true });
+	await assert.rejects(stale, isCancellationError);
+	assert.deepEqual(connected, []);
+	current = true;
+	confirmation = new DeferredPromise();
+	const accepted = resolver.connect(providerId, assertCurrent, signal);
+	await confirmation.complete({ confirmed: true });
+	assert.equal(await accepted, true);
+	assert.deepEqual(connected, [target]);
 });
 
 test('Chat review stays on the owning host and unwraps its Session and Thread', async () => {
@@ -252,18 +354,18 @@ test('long provider conversation links preserve short backend coordinates and ca
 	};
 	const opened: unknown[] = [];
 	const view = { navigationRevision: 0, openThread: async (sessionId: string, threadId: string) => { opened.push({ sessionId, threadId }); } } as unknown as ISessionsService;
-	const links = new SessionConversationLinks('primary', context.scopes, view);
+	const links = new SessionConversationLinks('primary', context.scopes);
 	const sessionId = sessionIdentity(providerId, 'same', 'primary');
 	const threadId = sessionIdentity(providerId, 'thread', 'primary');
 	assert.ok(sessionId.length > 256);
 	const address = await links.prepare(sessionId, threadId);
 	assert.deepEqual({ sessionId: address.sessionId, threadId: address.threadId }, { sessionId: 'same', threadId: 'thread' });
 	const parsed = parseOpenSessionLinkUri(URI.parse(buildOpenSessionLinkUri(address.sessionId, address.threadId, address.connectionAuthority).toString()));
-	await links.open(parsed);
+	await links.open(parsed, view);
 	assert.deepEqual(opened, [{ sessionId, threadId }]);
 	assert.deepEqual(reads, [{ sessionId: 'same', threadId: 'thread' }, { sessionId: 'same', threadId: 'thread' }]);
 	registration.dispose();
-	await assert.rejects(links.open(parsed), isCancellationError);
+	await assert.rejects(links.open(parsed, view), /connection for this conversation link is unavailable/i);
 	assert.equal(opened.length, 1);
 });
 
@@ -337,7 +439,7 @@ test('Agent definition settings query the selected provider and retire its late 
 	let late = false;
 	context.remoteHost.session.readRoleCatalog = async () => late ? pending.p : catalog;
 	using sessions = new SessionsAgentSessionService(context.scopes);
-	assert.deepEqual(await sessions.readRoleCatalog(), catalog);
+	assert.deepEqual(await sessions.readRoleCatalog(), { ...catalog, providerId: 'remote' });
 	late = true;
 	const read = sessions.readRoleCatalog();
 	context.registration.dispose();

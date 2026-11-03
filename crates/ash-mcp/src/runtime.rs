@@ -215,6 +215,7 @@ impl McpRuntime {
             });
             let mut client_options =
                 RmcpClientOptions::new(&options.client_name, &options.client_version)
+                    .with_result_review()
                     .with_timeouts(options.client_timeouts)
                     .with_host(host);
             if options.mcp_apps {
@@ -463,7 +464,6 @@ impl McpRuntime {
             ));
         }
         let output = project_tool_result(result, self.limits.maximum_tool_output_bytes - reserved)?;
-        let status = output.status();
         let mut content = output.content().to_vec();
         if let Some(metadata) = metadata {
             content.push(ash_tools::ToolContent::Artifact(metadata));
@@ -471,10 +471,7 @@ impl McpRuntime {
         if let Some(app) = app {
             content.push(ash_tools::ToolContent::Artifact(app));
         }
-        Ok(match status {
-            ash_tools::ToolOutputStatus::Success => ToolOutput::success(content),
-            ash_tools::ToolOutputStatus::Error => ToolOutput::error(content),
-        })
+        Ok(output.with_content(content))
     }
 
     /// Reads only through a still-valid tool origin; a URI never chooses a different server.
@@ -732,6 +729,10 @@ struct RuntimeClientHost {
 }
 
 impl McpClientHost for RuntimeClientHost {
+    fn capture_request_context(&self) -> Option<Arc<dyn McpClientHost>> {
+        self.downstream.capture_request_context()
+    }
+
     fn on_event(&self, event: McpClientEvent) {
         if matches!(event, McpClientEvent::ToolListChanged) {
             self.catalog_stale.store(true, Ordering::Release);

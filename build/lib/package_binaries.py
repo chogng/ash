@@ -139,6 +139,9 @@ def build_binaries(
         environment["CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO"] = "packed"
 
     local_hosts = {"ash-livekit-client", "ash-realtime-voice", "ash-voice-host"}
+    if plan and cargo_profile == "dev-small":
+        # The independently distributed Remote Server tracks its own Cargo inputs.
+        local_hosts.add("ash-remote-server")
     core = [name for name in missing if name not in local_hosts]
     groups = ([core] if core else []) + [
         [name] for name in missing if name in local_hosts

@@ -16,3 +16,11 @@ export interface DesktopScreenshot {
 
 export const SCREENSHOT_MAX_BYTES = 20 * 1024 * 1024;
 export const SCREENSHOT_MAX_PIXELS = 67_108_864;
+
+export const APPLICATION_BADGE_CHANNEL = 'ash:native:applicationBadge';
+
+export interface IApplicationBadge {
+	readonly count: number;
+	readonly description: string;
+	readonly iconDataURL?: string;
+}

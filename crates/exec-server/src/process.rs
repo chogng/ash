@@ -471,6 +471,7 @@ fn run(
             arguments: record.request.arguments.clone(),
             working_directory: record.request.cwd.clone().into(),
             input: CommandInput::Open,
+            environment: Default::default(),
         },
         CommandExecutionAuthority::Sandboxed(policy),
         &record.cancellation.token(),

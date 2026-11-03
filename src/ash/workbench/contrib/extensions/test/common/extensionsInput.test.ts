@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { EditorInputSerializers } from '../../../../services/editor/common/editorInputSerializer.js';
 import { ExtensionsInput, ExtensionsCapabilityInput, ExtensionsInputSource } from '../../common/extensionsInput.js';
+import { AgentPluginEditorInput } from '../../common/agentPluginEditorInput.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 
@@ -59,6 +60,21 @@ test('Extensions restores built-in and local sources separately and accepts olde
 	using legacy = EditorInputSerializers.deserialize({ typeId: 'ash.extensions.input', value: summary }) as ExtensionsInput;
 	assert.equal(legacy.source, 'registry');
 	assert.throws(() => EditorInputSerializers.deserialize({ typeId: 'ash.extensions.input', value: { ...summary, source: 'untrusted' } }), TypeError);
+});
+
+test('Local plugin tabs restore the reviewed package digest and distinguish replacements', () => {
+	const summary = { id: 'ash.demo', version: '1.0.0', displayName: 'Demo', description: '', packageType: 'editorExtension' };
+	using input = new AgentPluginEditorInput(summary, 'original');
+	using replacement = new AgentPluginEditorInput(summary, 'replacement');
+	const saved = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input)));
+	assert.equal(saved.typeId, 'ash.extensions.agentPluginInput');
+	assert.deepEqual(saved.value, { ...summary, digest: 'original' });
+	using restored = EditorInputSerializers.deserialize(saved) as AgentPluginEditorInput;
+	assert.ok(restored instanceof AgentPluginEditorInput);
+	assert.equal(restored.source, ExtensionsInputSource.Local);
+	assert.ok(input.matches(restored));
+	assert.equal(restored.matches(replacement), false);
+	assert.throws(() => EditorInputSerializers.deserialize({ typeId: saved.typeId, value: { ...saved.value, digest: '' } }), TypeError);
 });
 
 test('Capability tabs restore Skill, Connector and MCP identities without catalog state', () => {

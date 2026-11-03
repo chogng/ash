@@ -78,7 +78,9 @@ jobs:
         run: pnpm exec node --test build/desktop/packageApplication.deploy.test.ts
       - name: Install browser used to render Windows application icons
         if: runner.os == 'Windows'
-        run: pnpm exec playwright install chromium
+        uses: ./.github/actions/setup-playwright
+        with:
+          install-args: chromium
       - name: Fetch locked Rust graph for offline build-script metadata
         # V8's include discovery reads Cargo metadata offline, including other targets.
         run: cargo fetch --locked

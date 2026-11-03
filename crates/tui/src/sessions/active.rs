@@ -418,6 +418,7 @@ where
         title,
         execution_target,
         branch_name: None,
+        environment_variables: None,
     })?;
     let thread_id = current_conversation_thread(&session.session)
         .map(|thread| thread.thread_id.clone())

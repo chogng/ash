@@ -1,0 +1,32 @@
+.ash-tool-risk-badge {
+	margin-block-end: var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+}
+
+.ash-tool-risk-badge > summary {
+	width: fit-content;
+	padding: var(--ash-spacing-size20) var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-small);
+	cursor: pointer;
+}
+
+.ash-tool-risk-badge > summary:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: 1px;
+}
+
+.ash-tool-risk-badge.high > summary {
+	color: var(--ash-warning-foreground);
+}
+
+.ash-tool-risk-badge.critical > summary {
+	color: var(--ash-error-foreground);
+}
+
+.ash-tool-risk-badge > p {
+	margin-block-start: var(--ash-spacing-size80);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}

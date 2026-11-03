@@ -79,6 +79,20 @@ fn session_create_serializes_execution_target_and_named_worktrees() {
 }
 
 #[test]
+fn session_create_transports_environment_overrides_without_debug_values() {
+    let request = json!({
+        "agent": { "type": "default" },
+        "commandId": "create-session",
+        "title": "topic",
+        "executionTarget": null,
+        "environmentVariables": { "MODE": "synthetic-secret" }
+    });
+    let params: SessionCreateParams = serde_json::from_value(request.clone()).unwrap();
+    assert!(!format!("{params:?}").contains("synthetic-secret"));
+    assert_eq!(serde_json::to_value(params).unwrap(), request);
+}
+
+#[test]
 fn session_create_accepts_an_unscoped_target_but_no_implicit_current_variant() {
     let unscoped = json!({
         "commandId": "create-session",

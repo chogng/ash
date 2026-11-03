@@ -38,6 +38,7 @@ fn dns_ipv6_and_host_routes_preserve_the_network_boundary() {
                     arguments: fixtures.arguments(mode),
                     working_directory: ".".into(),
                     input: CommandInput::Closed,
+                    environment: Default::default(),
                 },
                 CommandExecutionAuthority::Sandboxed(support::sandbox_policy(
                     FileSystemAccess::DirectoryWrite,

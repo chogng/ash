@@ -27,6 +27,7 @@ from build.lib.package import (
     build_package_directory,
     load_protocol_metadata,
 )
+from build.lib.file_lock import exclusive_lock
 from build.lib.livekit import resolve_livekit
 from build.lib.node import resolve_node
 from build.lib.ripgrep import resolve_ripgrep
@@ -256,6 +257,8 @@ def development_source_paths(root: Path) -> list[Path]:
         root / ".cargo",
         root / "rust-toolchain.toml",
         root / "extensions",
+        root / "remote-server",
+        root / "livekit-server/runtime.json",
         root / "resources",
         # Downloaded archives are pinned by tracked locks and are not source inputs.
         *(path for path in (root / "third_party").iterdir() if path.name != ".cache"),
@@ -385,22 +388,30 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
         )
         return existing
     requested_binaries = {"ash-package-store": None, **development_binary_inputs(spec)}
-    binaries = build_binaries(
-        root,
-        spec,
-        requested_binaries,
-        cargo="cargo",
-        cargo_profile=PROFILE,
-        host_build=True,
-        protocol_prepared=True,
-    )
+    store.mkdir(parents=True, exist_ok=True)
+    with exclusive_lock(store / "build-plan.lock", create=True):
+        binaries = build_binaries(
+            root,
+            spec,
+            requested_binaries,
+            cargo="cargo",
+            cargo_profile=PROFILE,
+            host_build=True,
+            protocol_prepared=True,
+            plan_directory=store,
+        )
     from build.lib.media_package import assemble_capability_package
 
-    livekit_binary = resolve_livekit(target, root=root)
+    livekit_binary = resolve_livekit(target, root=root, reuse_development=True)
     livekit_root = root / ".build/livekit-capability"
     # Content-address the development companion so a running generation is never replaced.
     livekit_root = (
-        livekit_root / hashlib.sha256(livekit_binary.read_bytes()).hexdigest()
+        livekit_root
+        / hashlib.sha256(
+            livekit_binary.read_bytes()
+            + (root / "livekit-server/runtime.json").read_bytes()
+            + (root / "third_party/livekit/runtime-lock.json").read_bytes()
+        ).hexdigest()
     )
     if not livekit_root.exists():
         assemble_capability_package(

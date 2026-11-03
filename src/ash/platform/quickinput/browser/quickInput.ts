@@ -375,7 +375,7 @@ export class QuickPick<TItem extends IQuickPickItem>
 	private acceptingInBackground = false;
 	private readonly _onDidChangeValue = this._register(new Emitter<string>());
 	private readonly _onDidBlur = this._register(new Emitter<void>());
-	private readonly _onDidTriggerItemButton = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton; readonly anchor?: unknown; }>());
+	private readonly _onDidTriggerItemButton = this._register(new Emitter<{ readonly item: TItem; readonly button: IQuickPickItemButton; readonly anchor?: unknown; readonly fromKeyboard?: boolean; }>());
 	private _ariaLabel = localize('quickInput.title', 'Quick Pick');
 	private _placeholder = '';
 	private _filterValue = (value: string): string => value;

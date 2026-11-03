@@ -28,16 +28,35 @@ fn decoder_streams_text_reasoning_and_reassembles_tool_calls() {
             ModelStreamEvent::ReasoningDelta("Plan ".into()),
         ]
     );
-    decoder
+    let events = decoder
         .decode(&data(
             r#"{"choices":[{"index":0,"delta":{"content":"lo","tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"weather","arguments":"{\"city\":"}}]},"finish_reason":null}]}"#,
         ))
         .unwrap();
-    decoder
+    assert_eq!(
+        events,
+        vec![
+            ModelStreamEvent::TextDelta("lo".into()),
+            ModelStreamEvent::ToolCallDelta {
+                id: "call_1".into(),
+                name: "weather".into(),
+                arguments: "{\"city\":".into()
+            }
+        ]
+    );
+    let events = decoder
         .decode(&data(
             r#"{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"Paris\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":9,"completion_tokens":4}}"#,
         ))
         .unwrap();
+    assert_eq!(
+        events,
+        vec![ModelStreamEvent::ToolCallDelta {
+            id: "call_1".into(),
+            name: "weather".into(),
+            arguments: "\"Paris\"}".into()
+        }]
+    );
     decoder.decode(&data("[DONE]")).unwrap();
 
     let response = decoder.finish_response().unwrap();

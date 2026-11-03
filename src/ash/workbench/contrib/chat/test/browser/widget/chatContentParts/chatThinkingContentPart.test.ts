@@ -120,6 +120,18 @@ suite('Chat thinking transcript lifecycle', () => {
 
 suite('Rendered reasoning disclosure', () => {
 	const browserTests = useBrowserTests();
+	for (const type of ['agentMessage', 'reasoning'] as const) test(`code block navigation cycles through both ${type} blocks`, async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		await page.evaluate(item => window.ashChatTranscriptIntegration.renderItems([item]), { ...reasoning('```ts\nconst first = 1;\n```\n\n```ts\nconst second = 2;\n```'), type });
+		const inputs = page.locator('.ash-chat-code-block .stanza-editor-input');
+		if (type === 'reasoning') await page.locator('.ash-chat-thinking summary').focus();
+		for (const [command, index] of [['next', 0], ['next', 1], ['next', 0], ['previous', 1]] as const) {
+			await page.evaluate(direction => window.ashChatTranscriptIntegration.runNavigationCommand(`workbench.action.chat.${direction}CodeBlock`), command);
+			await expect(inputs.nth(index)).toBeFocused();
+		}
+	});
+
 	test('code block navigation expands reasoning and retains its editor through streaming and completion', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html');

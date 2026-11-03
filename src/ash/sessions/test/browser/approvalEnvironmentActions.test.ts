@@ -1,3 +1,4 @@
+import { ISessionsListModelService, SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { QuickInputType, QuickInputHideReason, type IQuickInput, type IQuickInputHideEvent, type IQuickPickDidAcceptEvent } from '../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../base/common/event.js';
@@ -44,6 +45,7 @@ function registerSessionActions(services: InstantiationService, workspace: IWork
 	services.registerInstance(IStorageService, {} as IStorageService);
 	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
 	services.registerInstance(IWorkspaceContextService, workspace);
+	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
 }
 

@@ -1,0 +1,29 @@
+import type { CancellationToken } from '../../../../../base/common/cancellation.js';
+import type { URI } from '../../../../../base/common/uri.js';
+import type { IMarkdownString } from '../../../../../base/common/htmlContent.js';
+import type { ChatContextIconPath } from '../attachments/chatVariableEntries.js';
+
+export interface IChatContextItem {
+	iconPath?: ChatContextIconPath;
+	label?: string;
+	resourceUri?: URI;
+	modelDescription?: string;
+	tooltip?: IMarkdownString;
+	handle: number;
+	value?: string;
+	command?: { id: string; };
+}
+
+export interface IChatWorkspaceContextProvider {
+	provideWorkspaceChatContext(token: CancellationToken): Promise<IChatContextItem[]>;
+}
+
+export interface IChatExplicitContextProvider {
+	provideChatContext(token: CancellationToken): Promise<IChatContextItem[]>;
+	resolveChatContext(context: IChatContextItem, token: CancellationToken): Promise<IChatContextItem>;
+}
+
+export interface IChatResourceContextProvider {
+	provideChatContext(resource: URI, withValue: boolean, viewType: string | undefined, token: CancellationToken): Promise<IChatContextItem | undefined>;
+	resolveChatContext(context: IChatContextItem, token: CancellationToken): Promise<IChatContextItem>;
+}

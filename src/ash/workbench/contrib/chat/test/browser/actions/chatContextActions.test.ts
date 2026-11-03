@@ -1,4 +1,5 @@
 import type { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+import type { IChatWidgetService } from '../../../browser/chat.js';
 import { type IChatContextPickService } from '../../../browser/attachments/chatContextPickService.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { SCMHistoryItemUri } from '../../../../scm/common/history.js';
@@ -66,7 +67,8 @@ for (const cancellation of ['Escape', 'toggle', 'dispose'] as const) {
 		}, quickInput, { items: [] } as unknown as IChatContextPickService, instantiation,
 			{ getWorkspace: () => ({ folders: [] }) } as unknown as IWorkspaceContextService,
 			{ groups: [] } as unknown as IEditorGroupsService,
-			{ getActiveConversation: () => undefined } as unknown as IChatSessionNavigationService, notifications, {} as IChatAttachmentResolveService, {} as ICommandService));
+			{ getActiveConversation: () => undefined } as unknown as IChatSessionNavigationService, notifications, {} as IChatAttachmentResolveService, {} as ICommandService,
+			{ getAllWidgets: () => [] } as unknown as IChatWidgetService));
 		anchor.focus();
 		const running = action.run(anchor);
 		await Promise.race([shown.p, running.then(() => { throw new Error(`Picker did not open: ${notifications.model.getNotifications().map(item => item.message).join('; ')}`); })]);
@@ -122,7 +124,8 @@ suite('Attachment source discovery lifetime', () => {
 			container, target: { attachFiles: async () => { }, acquireContext: async () => [] }, focusInput: () => input.focus(), supportsImages: () => false,
 		}, quickInput, { items: [{ id: 'slow', label: 'Slow', isEnabled: () => { checks++; void checking.complete(); return checks === 1 ? availability.p : false; } }] } as unknown as IChatContextPickService, instantiation,
 			{ getWorkspace: () => ({ folders: [] }) } as unknown as IWorkspaceContextService, { groups: [] } as unknown as IEditorGroupsService,
-			{ getActiveConversation: () => undefined } as unknown as IChatSessionNavigationService, notifications, {} as IChatAttachmentResolveService, {} as ICommandService));
+			{ getActiveConversation: () => undefined } as unknown as IChatSessionNavigationService, notifications, {} as IChatAttachmentResolveService, {} as ICommandService,
+			{ getAllWidgets: () => [] } as unknown as IChatWidgetService));
 		const first = action.run(anchor);
 		await checking.p;
 		await action.run(anchor);
@@ -143,6 +146,53 @@ suite('Attachment source discovery lifetime', () => {
 
 suite('chatContextActions browser component', () => {
 	const browserTests = useBrowserTests();
+	for (const locale of ['en', 'zh-CN']) for (const theme of ['light', 'hcDark']) {
+		test(`extension context selection captures content, source actions and workspace values in ${locale}, ${theme}`, async () => {
+			const { page } = browserTests;
+			const chinese = locale === 'zh-CN';
+			await page.goto(`/chatInput.html?inlineCode=1&contextProviders=1&locale=${locale}&theme=${theme}`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			await page.getByRole('button', { name: chinese ? '添加上下文' : 'Add context', exact: true }).press('Enter');
+			const picker = page.getByRole('dialog');
+			await picker.getByRole('combobox').fill(chinese ? '其他上下文来源' : 'Other context sources');
+			await page.keyboard.press('Enter');
+			await picker.getByRole('option', { name: 'Extension records', exact: true }).press('Enter');
+			await expect(picker.getByRole('option', { name: 'Extension record', exact: true })).toBeVisible();
+			await page.keyboard.press('Enter');
+			const source = page.getByRole('button', { name: chinese ? '打开 Extension record' : 'Open Extension record', exact: true });
+			await expect(source).toBeVisible();
+			const image = source.locator('img');
+			await expect(image).toHaveAttribute('src', new RegExp(theme === 'hcDark' ? 'white' : 'black'));
+			assert.ok(await image.evaluate(element => element.getBoundingClientRect().width > 0 && element.getBoundingClientRect().height > 0));
+			await expect.poll(() => image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+			await source.press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.contextProviderOpens())).toBe(1);
+			await expect(page.getByLabel('Opened saved content')).toHaveText('[]');
+			await page.evaluate(() => window.ashChatInputIntegration.setWorkspaceContext('branch-at-send'));
+			await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+			await expect(page.getByLabel('Submission')).toHaveText(JSON.stringify([
+				{ name: 'Extension record', content: 'Captured extension record' },
+				{ name: 'Workspace branch', content: 'branch-at-send' },
+			]));
+		});
+	}
+
+	test('retiring extension sources preserves already captured resource context in the originating draft', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode=1&contextProviders=1');
+		await page.evaluate(() => {
+			window.ashChatInputIntegration.showModels();
+			window.ashChatInputIntegration.setActiveFile('/workspace/provided.ctx');
+		});
+		await page.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		const picker = page.getByRole('dialog');
+		await picker.getByRole('combobox').fill('Open editors');
+		await page.keyboard.press('Enter');
+		await expect(page.getByRole('button', { name: 'Open Provided document', exact: true })).toBeVisible();
+		await page.evaluate(() => window.ashChatInputIntegration.retireContextProviders());
+		await page.locator('[data-action-id="ash.chat.input.send"] button').press('Enter');
+		await expect(page.getByLabel('Submission')).toHaveText(JSON.stringify([{ name: 'Provided document', content: 'Captured extension document' }]));
+	});
 	for (const locale of ['en', 'zh-CN']) for (const theme of ['dark', 'light', 'hcDark', 'hcLight']) test(`attachment resource menus preserve source drag, focus and undo in ${locale}, ${theme}`, async () => {
 		const { page } = browserTests;
 		const chinese = locale === 'zh-CN';

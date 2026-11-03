@@ -24,10 +24,21 @@ use ts_rs::TS;
     rename_all_fields = "camelCase"
 )]
 pub enum AgentRequest {
-    Approval { request: ActionApprovalRequest },
-    Permissions { request: crate::PermissionRequest },
-    UserInput { request: RequestUserInput },
-    DynamicTool { call: DynamicToolCall },
+    Approval {
+        request: ActionApprovalRequest,
+    },
+    Permissions {
+        request: crate::PermissionRequest,
+    },
+    UserInput {
+        request: RequestUserInput,
+    },
+    DynamicTool {
+        call: DynamicToolCall,
+    },
+    ToolResultReview {
+        request: crate::ToolResultReviewRequest,
+    },
 }
 
 impl AgentRequest {
@@ -37,6 +48,7 @@ impl AgentRequest {
             Self::Permissions { .. } => AgentInteractionKind::Permissions,
             Self::UserInput { .. } => AgentInteractionKind::UserInput,
             Self::DynamicTool { .. } => AgentInteractionKind::DynamicTool,
+            Self::ToolResultReview { .. } => AgentInteractionKind::ToolResultReview,
         }
     }
 }
@@ -48,6 +60,7 @@ pub enum AgentInteractionKind {
     Permissions,
     UserInput,
     DynamicTool,
+    ToolResultReview,
 }
 
 /// A wall-clock deadline that the interaction owner must enforce.
@@ -129,10 +142,21 @@ pub struct AgentRequestEnvelope {
     rename_all_fields = "camelCase"
 )]
 pub enum AgentResponse {
-    Approval { response: ActionApprovalResponse },
-    Permissions { response: crate::PermissionResponse },
-    UserInput { response: RequestUserInputResponse },
-    DynamicTool { response: DynamicToolResponse },
+    Approval {
+        response: ActionApprovalResponse,
+    },
+    Permissions {
+        response: crate::PermissionResponse,
+    },
+    UserInput {
+        response: RequestUserInputResponse,
+    },
+    DynamicTool {
+        response: DynamicToolResponse,
+    },
+    ToolResultReview {
+        response: crate::ToolResultReviewResponse,
+    },
 }
 
 impl AgentResponse {
@@ -142,6 +166,7 @@ impl AgentResponse {
             Self::Permissions { .. } => AgentInteractionKind::Permissions,
             Self::UserInput { .. } => AgentInteractionKind::UserInput,
             Self::DynamicTool { .. } => AgentInteractionKind::DynamicTool,
+            Self::ToolResultReview { .. } => AgentInteractionKind::ToolResultReview,
         }
     }
 }
@@ -157,6 +182,7 @@ pub enum InteractionCancelReason {
     TurnInterrupted,
     DeadlineElapsed,
     OwnerDisconnected,
+    UserCancelled,
     ServerShutdown,
 }
 

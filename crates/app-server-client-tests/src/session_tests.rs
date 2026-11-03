@@ -134,6 +134,7 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
     let created_session = client
         .create_session(SessionCreateParams {
             branch_name: None,
+            environment_variables: None,
             agent_id: None,
             agent: ash_protocol::AgentRoleSelection::Default,
             command_id: command_id("session"),

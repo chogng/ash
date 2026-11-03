@@ -1,3 +1,13 @@
+import { IAgentHostConnectionsService } from '../../../src/ash/platform/agentHost/common/agentHostConnectionsService.js';
+import { ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
+import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
+import { createServiceIdentifier } from '../../../src/ash/platform/instantiation/common/instantiation.js';
+import { registerWorkbenchServiceContribution } from '../../../src/ash/workbench/browser/workbenchServiceContributions.js';
+import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
+import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
+import { IRemoteAgentHostService, isSSHAgentHost, NullRemoteAgentHostService, remoteAgentHostRoot, type RemoteAgentHostConnection } from '../../../src/ash/platform/agentHost/common/remoteAgentHostService.js';
+import { IRemoteConnectionService, UnavailableRemoteConnectionApi } from '../../../src/ash/platform/remote/common/remoteConnectionService.js';
 import { sessionIdentity } from '../../../src/ash/sessions/services/sessions/common/sessionIdentity.js';
 import { installMultiHostSessionsFixture } from './multiHostSessionsFixture.js';
 import { errorHandler } from '../../../src/ash/base/common/errors.js';
@@ -19,6 +29,18 @@ if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 }
 await import('../../../src/ash/sessions/sessions.web.main.js');
+if (new URL(location.href).searchParams.has('speechProvider')) {
+	registerWorkbenchServiceContribution({
+		service: createServiceIdentifier<object>('test.speechProvider'),
+		dependencies: [ISpeechService],
+		install: context => context.register(context.container.get(ISpeechService).registerSpeechProvider('test', {
+			metadata: { extension: new ExtensionIdentifier('test.speech'), displayName: 'Test speech provider' },
+			createSpeechToTextSession: () => { throw new Error('Unexpected dictation start'); },
+			createTextToSpeechSession: () => { throw new Error('Unexpected speech synthesis'); },
+			createKeywordRecognitionSession: () => { throw new Error('Unexpected keyword recognition'); },
+		})),
+	});
+}
 const updateChanges = new Emitter<UpdateState>();
 let updateState: UpdateState = new URL(location.href).searchParams.get('update') === 'ready' ? 'ready' : 'idle';
 let updateInstallCount = 0;
@@ -59,6 +81,43 @@ globalThis.ashWebWorkbenchHost = {
 		github: { ...disconnectedApi.github, listAccounts: async () => [] },
 	}
 };
+if (new URL(location.href).searchParams.has('remoteManagement')) {
+	const { SSHAgentHostContribution } = await import('../../../src/ash/sessions/contrib/providers/remoteAgentHost/browser/sshAgentHost.contribution.js');
+	const { WSLAgentHostContribution } = await import('../../../src/ash/sessions/contrib/providers/remoteAgentHost/browser/wslAgentHost.contribution.js');
+	const { TunnelAgentHostContribution } = await import('../../../src/ash/sessions/contrib/providers/remoteAgentHost/browser/tunnelAgentHost.contribution.js');
+	registerWorkbenchServiceContribution({
+		service: createServiceIdentifier<object>('test.remoteManagement'),
+		dependencies: [IRemoteAgentHostService, IAgentHostConnectionsService, IRemoteConnectionService, ICommandService, ILayoutService, INotificationService],
+		install: context => {
+			context.register(context.container.createInstance(WSLAgentHostContribution));
+			context.register(context.container.createInstance(TunnelAgentHostContribution));
+			return context.register(context.container.createInstance(SSHAgentHostContribution));
+		},
+	});
+	const saved = [{ name: 'build-server', host: 'build.example', workspace: '/srv/project' }];
+	globalThis.ashWebWorkbenchHost = { api: {
+		...globalThis.ashWebWorkbenchHost.api,
+		agentHosts: Object.assign(new NullRemoteAgentHostService(), {
+			isAvailable: true,
+			listWSLDistros: async () => new URL(location.href).searchParams.has('wsl') ? ['Ubuntu'] : [],
+			connect: async (target: RemoteAgentHostConnection, _signal: AbortSignal, ticket?: string) => {
+				if (isSSHAgentHost(target) || target.type !== 'tunnel' || !ticket) throw new Error('Expected authenticated Tunnel fixture');
+				const id = 'test-tunnel';
+				return {
+					id, connection: target, api: disconnectedApi,
+					directory: { uri: remoteAgentHostRoot(target, id), target: { type: 'environment' as const, dirId: id } },
+					dispose() { }, [Symbol.dispose]() { },
+				};
+			},
+		}),
+		remoteConnections: {
+			...UnavailableRemoteConnectionApi,
+			available: true,
+			list: async () => [...saved],
+			save: async target => { saved.push(target); return target; },
+		},
+	} };
+}
 if (new URL(location.href).searchParams.has('creator') || new URL(location.href).searchParams.has('catalog')) {
 	// Layout scenarios need a successful catalog, rather than transient errors
 	// from an intentionally disconnected host changing the notice lane's height.

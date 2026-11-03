@@ -92,6 +92,10 @@ jobs:
         shell: bash
         run: ${{ matrix.python }} -B scripts/cargo.py --deny-warnings check --workspace --exclude ash-external-js-ext --all-targets --locked --keep-going
 
+      - name: Test Git installation detection
+        shell: bash
+        run: ${{ matrix.python }} -B scripts/cargo.py test -p ash-git --lib git_version_ --locked
+
       - name: Test managed CLI installation and launcher boundaries
         shell: bash
         run: |

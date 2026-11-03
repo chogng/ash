@@ -1,6 +1,6 @@
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { URI } from '../../../base/common/uri.js';
-import type { AccountLoginStartResult } from '../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_METHODS, type AccountLoginStartResult } from '../../../../../.build/protocol/typescript/index.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import type { UnavailableOperation } from '../../agentHost/browser/disconnectedAppServer.js';
@@ -16,6 +16,7 @@ export interface BrowserAccountLoginHostServices {
 export function createDisconnectedAccountApi(unavailable: UnavailableOperation): IAccountApi {
 	return {
 		read: () => unavailable('accounts.read'),
+		readRateLimits: () => unavailable('accounts.readRateLimits'),
 		startLogin: () => unavailable('accounts.startLogin'),
 		cancelLogin: () => unavailable('accounts.cancelLogin'),
 		logout: () => unavailable('accounts.logout'),
@@ -25,6 +26,7 @@ export function createDisconnectedAccountApi(unavailable: UnavailableOperation):
 export function createAppServerAccountApi(connection: AppServerProtocolClient, hostServices: BrowserAccountLoginHostServices): IAccountApi {
 	return {
 		read: () => appServerRequest(connection, 'account/read', {}),
+		readRateLimits: (params, signal) => connection.request(APP_SERVER_METHODS['account/rateLimits/read'], params, { signal }),
 		startLogin: params => startLogin(connection, params, hostServices),
 		cancelLogin: params => appServerRequest(connection, 'account/login/cancel', params),
 		logout: params => appServerRequest(connection, 'account/logout', params),

@@ -1,4 +1,5 @@
 import './media/chatMarkdownPart.css';
+import { chatMarkdownTableScrollClass } from './chatMarkdownTableScrolling.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { addDisposableListener, getWindow, h, scheduleAtNextAnimationFrame } from '../../../../../../base/browser/dom.js';
 import type { MarkdownRenderOptions } from '../../../../../../base/browser/markdownRenderer.js';
@@ -10,6 +11,12 @@ import { MarkedKatexExtension } from '../../../../markdown/common/markedKatexExt
 import { ChatContentMarkdownRenderer } from '../chatContentMarkdownRenderer.js';
 import { ChatMarkdownDecorationsRenderer } from './chatMarkdownDecorationsRenderer.js';
 import { CodeBlockPart } from './codeBlockPart.js';
+import type { ICodeBlockActionContext } from './codeBlockPart.js';
+import { LocalChatSessionUri } from '../../../common/model/chatUri.js';
+import type { IChatListItem } from '../../../common/model/chatViewModel.js';
+import type { IChatContentPart } from './chatContentParts.js';
+import type { IChatCodeBlockInfo } from '../../chat.js';
+import { createUuid } from '../../../../../../base/common/uuid.js';
 
 interface RenderedBlock {
 	node: ChildNode;
@@ -31,6 +38,7 @@ interface MarkdownFragment {
 }
 
 interface ChatMarkdownContentPartOptions extends MarkdownRenderOptions {
+	readonly getChatItem?: () => IChatListItem | undefined;
 	readonly ownerDocument: Document;
 	readonly markdown?: string | IMarkdownString;
 	readonly visible?: boolean;
@@ -39,10 +47,11 @@ interface ChatMarkdownContentPartOptions extends MarkdownRenderOptions {
 }
 
 /** Owns one stable response root, sanitized render lifetime and the response's existing code models. */
-export class ChatMarkdownContentPart extends Disposable {
+export class ChatMarkdownContentPart extends Disposable implements IChatContentPart {
 	public readonly domNode: HTMLElement;
 	private readonly changedHeight = this._register(new Emitter<void>());
 	public readonly onDidChangeHeight = this.changedHeight.event;
+	public readonly codeblocksPartId = `ash-chat-markdown-${createUuid()}`;
 	private readonly markdownRenderer: ChatContentMarkdownRenderer;
 	private readonly renders = this._register(new DisposableMap<HTMLElement, DisposableStore>());
 	private readonly lexer = new Marked(MarkedKatexExtension.extension());
@@ -53,6 +62,11 @@ export class ChatMarkdownContentPart extends Disposable {
 	private markdown: IMarkdownString | undefined;
 	// Code actions retain this response, rather than a full historical string per code block.
 	private readonly codeElement: IMarkdownString;
+	private readonly getCodeActionContext = (): Pick<ICodeBlockActionContext, 'element' | 'chatSessionResource'> => {
+		const item = this.options.getChatItem?.();
+		const source = item?.feedbackSource;
+		return { element: item ?? this.codeElement, chatSessionResource: source ? LocalChatSessionUri.forSession(source.sessionId, source.threadId) : undefined };
+	};
 	private visible: boolean;
 	private viewportVisible = true;
 	private hasDeferredCodeBlocks = false;
@@ -88,13 +102,22 @@ export class ChatMarkdownContentPart extends Disposable {
 		return true;
 	}
 
-	public focusCodeBlock(reverse = false): void {
-		if (this.isDisposed || !this.visible) { return; }
-		const blocks = [...this.codeBlocks].sort(([left], [right]) => left - right).map(([, block]) => block);
-		if (!blocks.length) { return; }
-		const current = blocks.findIndex(block => block.hasFocus);
-		const index = current < 0 ? (reverse ? blocks.length - 1 : 0) : (current + (reverse ? blocks.length - 1 : 1)) % blocks.length;
-		blocks[index].focus();
+	public get codeblocks(): readonly IChatCodeBlockInfo[] {
+		if (this.isDisposed) { return []; }
+		return [...this.codeBlocks].sort(([left], [right]) => left - right).map(([index, part]) => ({
+			ownerMarkdownPartId: this.codeblocksPartId,
+			codeBlockIndex: index,
+			elementId: part.element.id,
+			uri: part.editor.getModel()?.uri,
+			languageId: part.editor.getModel()?.getLanguageId(),
+			focus: () => { if (!this.isDisposed && this.visible) { part.focus(); } },
+		}));
+	}
+
+	public hasSameContent(other: IChatListItem): boolean {
+		const markdown = this.pending?.markdown ?? this.markdown;
+		const incomplete = this.pending?.incomplete ?? this.fragments.at(-1)?.incomplete ?? false;
+		return !!markdown && markdown.value === other.text && incomplete === other.transient;
 	}
 
 	public setVisible(visible: boolean): void {
@@ -187,7 +210,7 @@ export class ChatMarkdownContentPart extends Disposable {
 			&& !markdown.supportHtml && !this.options.markedExtensions?.length
 			&& !/[$\\<>\r]|!\[|`{3}|~{3}|\]:/u.test(markdown.value) && !/\n[\t ]*\n/u.test(tail)
 			&& previousTail?.element.childElementCount === 1
-			&& ['P', 'UL', 'OL', 'TABLE'].includes(previousTail.element.firstElementChild!.tagName)) sources = [tail];
+			&& previousTail.element.firstElementChild!.matches(`p, ul, ol, .${chatMarkdownTableScrollClass}`)) sources = [tail];
 		// HTML and arbitrary extensions can carry state across blocks. Display math
 		// may acquire a closing delimiter several paragraphs later; formulas also
 		// share message-scoped macros. These inputs, reference definitions and
@@ -323,13 +346,14 @@ export class ChatMarkdownContentPart extends Disposable {
 				let part = this.codeBlocks.get(index);
 				if (!part) {
 					part = this.codeBlocks.set(index, this.instantiation.createInstance(CodeBlockPart, document));
+					part.element.id = `${this.codeblocksPartId}-${index}`;
 					if (this.options.deferCodeBlockModels) {
 						this.deferredCodeBlocks.add(part);
 						this.hasDeferredCodeBlocks = true;
 					}
 				}
 				part.setVisible(this.visible && this.viewportVisible && !this.deferredCodeBlocks.has(part));
-				part.render({ text: data.text, languageId: data.languageId, codeBlockIndex: index, element: this.codeElement, chatSessionResource: undefined, renderOptions: { maxHeightInLines: 20 } }, this.domNode.clientWidth);
+				part.render({ text: data.text, languageId: data.languageId, codeBlockIndex: index, element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 } }, this.domNode.clientWidth);
 				const parent = data.placeholder.parentElement;
 				if (parent?.tagName === 'PRE') parent.replaceWith(part.element);
 				else data.placeholder.replaceWith(part.element);
@@ -365,7 +389,7 @@ export class ChatMarkdownContentPart extends Disposable {
 		this.codeBlocks.get(fragment.codeStart)!.render({
 			text: fragment.source.slice(fragment.fence.headerLength).replace(/\n$/u, ''),
 			languageId: fragment.fence.languageId, codeBlockIndex: fragment.codeStart,
-			element: this.codeElement, chatSessionResource: undefined, renderOptions: { maxHeightInLines: 20 },
+			element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 },
 		}, this.domNode.clientWidth);
 		return true;
 	}

@@ -37,6 +37,7 @@ pub struct BeforeToolHookRequest {
     pub turn_id: TurnId,
     pub tool_call_id: ToolCallId,
     pub tool_name: String,
+    pub tool_input: serde_json::Value,
 }
 
 /// Decision produced by configured Hooks before Tool execution.

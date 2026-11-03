@@ -70,7 +70,9 @@ jobs:
         working-directory: scripts
         run: .venv/bin/python -B -m unittest test_format.ScopedFormattingTests
       - name: Install browsers for Stanza and browser service unit tests
-        run: pnpm exec playwright install --with-deps chromium firefox
+        uses: ./.github/actions/setup-playwright
+        with:
+          install-args: --with-deps chromium firefox
       - name: Test Stanza distribution
         run: pnpm run test:stanza:no-compile
       - name: Upload Stanza test diagnostics
@@ -157,7 +159,9 @@ jobs:
           key: desktop-addons-v1-${{ matrix.runner }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'build/desktop/addons.ts') }}
       - name: Install Chromium
         if: matrix.surface == 'browser'
-        run: pnpm exec playwright install --with-deps chromium chrome
+        uses: ./.github/actions/setup-playwright
+        with:
+          install-args: --with-deps chromium chrome
       - name: Check sources and build Desktop and Web on every platform
         # Each runner checks its own platform declarations once. The Desktop
         # and both Web bundles reuse these inputs without lifecycle rechecks.

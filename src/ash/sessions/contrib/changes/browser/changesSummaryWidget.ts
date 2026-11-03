@@ -6,7 +6,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { ChangesStatsWidget } from '../../../../workbench/browser/changesStatsWidget.js';
 import type { TurnChangeSetSummary } from '../../../../workbench/services/chat/common/chatService.js';
 
-/** Displays the visible Turn ledger statistics without caching business state. */
+/** Displays the statistics selected by the Changes view. */
 export class ChangesSummaryWidget extends Disposable {
 	constructor(
 		private readonly summary: IObservable<TurnChangeSetSummary['statistics'] | undefined>,

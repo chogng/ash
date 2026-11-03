@@ -19,6 +19,89 @@ fn local_connector() -> WebSocketConnector {
 }
 
 #[tokio::test]
+async fn native_transcription_hints_reach_the_dedicated_openai_session() {
+    let secrets = Arc::new(MemorySecretStore::default());
+    secrets
+        .store(
+            &provider_api_key_secret_key(&ash_protocol::ModelConnectionId::new("openai").unwrap()),
+            &SecretValue::new(b"transcription-fixture-key".to_vec()),
+        )
+        .unwrap();
+    let runtime = ModelProviderRuntime::with_client_and_secrets(
+        ProviderConfigRegistry::builtin(),
+        Arc::new(FailingTransport),
+        secrets,
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let config = provider_config_with_endpoint(
+        "openai",
+        format!("http://{}/v1", listener.local_addr().unwrap()),
+    );
+    let server = tokio::spawn(async move {
+        for prompt in [None, Some("Project terms: Ash and Stanza.")] {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut socket = tokio_tungstenite::accept_hdr_async(
+                tcp,
+                |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response| {
+                    assert_eq!(request.uri().path(), "/v1/realtime");
+                    assert_eq!(request.uri().query(), Some("intent=transcription"));
+                    assert_eq!(
+                        request.headers()["authorization"],
+                        "Bearer transcription-fixture-key"
+                    );
+                    Ok(response)
+                },
+            )
+            .await
+            .unwrap();
+            socket
+                .send(Message::Text(
+                    json!({"type":"session.created","session":{"id":"native-transcription"}})
+                        .to_string()
+                        .into(),
+                ))
+                .await
+                .unwrap();
+            let update: Value =
+                serde_json::from_str(socket.next().await.unwrap().unwrap().to_text().unwrap())
+                    .unwrap();
+            assert_eq!(update["session"]["type"], "transcription");
+            assert_eq!(
+                update["session"]["audio"]["input"]["transcription"]["model"],
+                "gpt-live-transcribe"
+            );
+            assert_eq!(
+                update["session"]["audio"]["input"]["transcription"]["languages"],
+                json!(["en"])
+            );
+            assert_eq!(
+                update["session"]["audio"]["input"]["transcription"]
+                    .get("prompt")
+                    .and_then(Value::as_str),
+                prompt
+            );
+            socket.send(Message::Text(json!({"type":"session.updated","session":{"id":"native-transcription","type":"transcription"}}).to_string().into())).await.unwrap();
+        }
+    });
+    let cancellation = CancellationSource::new().token();
+    for prompt in [None, Some("Project terms: Ash and Stanza.")] {
+        let _session = runtime
+            .connect_transcription(
+                &config,
+                &model_ref("openai", "gpt-live-transcribe"),
+                &local_connector(),
+                WebSocketSessionConfig::default(),
+                Some("en"),
+                prompt,
+                &cancellation,
+            )
+            .await
+            .unwrap();
+    }
+    server.await.unwrap();
+}
+
+#[tokio::test]
 async fn xai_transcription_uses_the_direct_api_key() {
     let secrets = Arc::new(MemorySecretStore::default());
     secrets

@@ -71,6 +71,9 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::Mutex;
 
+#[path = "result_review_tests.rs"]
+mod result_review_tests;
+
 struct DenyBeforeToolHooks;
 
 #[derive(Default)]

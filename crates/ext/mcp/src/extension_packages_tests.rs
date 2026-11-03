@@ -130,6 +130,7 @@ impl ExtensionSource for Registry {
                 package_type: "plugin".into(),
                 display_name: "GitHub".into(),
                 description: "GitHub integration".into(),
+                ui_targets: None,
             }],
         })
     }
@@ -141,6 +142,7 @@ impl ExtensionSource for Registry {
             package_type: "plugin".into(),
             display_name: "GitHub".into(),
             description: "GitHub integration".into(),
+            ui_targets: None,
             license: "MIT".into(),
             source: PackageSource::Official,
             upstream: None,

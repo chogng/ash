@@ -65,6 +65,14 @@ pub struct GitHubManagedSettingsResult {
     pub refresh: GitHubManagedSettingsRefresh,
 }
 
+/// Source supplied by the host for an agent-produced artifact.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GitHubPullRequestArtifactOrigin {
+    pub chat: String,
+    pub turn_id: String,
+}
+
 /// A durable PR identity; live state and account credentials are resolved separately.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -72,6 +80,16 @@ pub struct GitHubPullRequestReference {
     pub repository: IssueRepository,
     #[ts(type = "number")]
     pub number: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub is_artifact: Option<bool>,
+    /// Server-assigned identity of this PR artifact generation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub artifact_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub artifact_origin: Option<GitHubPullRequestArtifactOrigin>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

@@ -2,8 +2,8 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '..
 import { IChatTipService } from '../../chatTipService.js';
 import { ChatTipContentPart } from '../chatContentParts/chatTipContentPart.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { ChatInputNoticeHost, ChatInputNoticeLane } from './notices/chatInputNoticeHost.js';
-import { registerChatInputNoticeAccessibleViews } from './notices/chatInputNoticeWidget.js';
+import { ChatInputNoticeHost, ChatInputNoticeLane } from './chatInputNoticeHost.js';
+import { registerChatInputNoticeAccessibleViews } from './chatInputNoticeWidget.js';
 import { chatInputStackSlotClass, ChatInputStackSlot, setChatInputStackSlot } from './chatInputStack.js';
 
 export interface IChatInputTipPresenterOptions {

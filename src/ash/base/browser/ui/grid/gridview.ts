@@ -100,6 +100,8 @@ export interface IGridViewOptions {
 	readonly styles?: ISplitViewStyles;
 	/** Whether hidden snap views remain recoverable from an outer Grid edge. Defaults to false. */
 	readonly edgeSnapping?: boolean;
+	/** Preserve split weights across viewport constraints and serialize those weights. */
+	readonly preserveSplitWeights?: boolean;
 }
 
 interface BoundarySashes {
@@ -115,6 +117,7 @@ interface ParentLink {
 }
 
 interface GridNodeHost {
+	readonly preserveSplitWeights: boolean;
 	readonly container: HTMLElement;
 	readonly sashPresentation: SashPresentation;
 	readonly styles: ISplitViewStyles | undefined;
@@ -224,7 +227,7 @@ class BranchNode extends LayoutNode {
 		this.priority = priority;
 		this.splitView = host.ownSplitView(new SplitView(
 			host.container,
-			{ proportionalLayout: false, orientation: orientation, sashPresentation: host.sashPresentation, styles: host.styles },
+			{ proportionalLayout: false, preserveSplitWeights: host.preserveSplitWeights, orientation: orientation, sashPresentation: host.sashPresentation, styles: host.styles },
 		));
 		this.element = this.splitView.element;
 		this.children = descriptors.map((descriptor) => host.createNode(descriptor));
@@ -459,6 +462,7 @@ export class GridView extends Disposable {
 	private layingOut = false;
 	private rebuilding = false;
 	private _edgeSnapping: boolean;
+	private readonly preserveSplitWeights: boolean;
 
 	readonly onDidChange: Event<void> = this._onDidChange.event;
 	/** Ash extension: the current tree has completed a user sash resize. */
@@ -492,6 +496,7 @@ export class GridView extends Disposable {
 		this._sashPresentation = options.sashPresentation;
 		this.styles = options.styles;
 		this._edgeSnapping = options.edgeSnapping ?? false;
+		this.preserveSplitWeights = options.preserveSplitWeights ?? false;
 		this._register(toDisposable(() => this.element.remove()));
 		container.append(this.element);
 		this.rebuild(normalizeRootDescriptor(descriptor));
@@ -845,6 +850,7 @@ export class GridView extends Disposable {
 			this.treeResources.clear();
 			this.leaves.clear();
 			const host: GridNodeHost = {
+				preserveSplitWeights: this.preserveSplitWeights,
 				container: this.element,
 				sashPresentation: this._sashPresentation,
 				styles: this.styles,
@@ -1010,7 +1016,7 @@ function serializeGridNode(node: LayoutNode, didLayout: boolean): SerializedGrid
 function gridNodeSize(node: LayoutNode, didLayout: boolean): number {
 	if (node.parent) {
 		const { branch, index } = node.parent;
-		return branch.splitView.getViewCachedVisibleSize(index) ?? branch.splitView.getViewSize(index);
+		return branch.splitView.getViewLayoutSize(index);
 	}
 	if (!didLayout) return node.initialSize;
 	return node instanceof BranchNode && node.orientation === Orientation.VERTICAL ? node.height : node.width;

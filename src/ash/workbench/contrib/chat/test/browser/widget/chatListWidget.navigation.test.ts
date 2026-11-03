@@ -35,6 +35,48 @@ suite('Chat transcript navigation', () => {
 		await expect(page.locator('[data-item-id="first"]')).toBeFocused();
 	});
 
+	test('pins the prompt above a long reply and returns focus to the original message', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?locale=zh-CN');
+		await page.evaluate(messages => window.ashChatTranscriptIntegration.renderItems(
+			messages.map(item => item.type === 'agentMessage' ? { ...item, text: (item.text + '\n\n').repeat(100) } : item)
+		), messages);
+		const viewport = page.locator('.ash-chat-transcript-scrollable > .ash-scrollbar-viewport');
+		await viewport.evaluate(element => { element.scrollTop = 0; });
+		const pinned = page.locator('.ash-chat-sticky-prompt');
+		await expect(pinned).toBeHidden();
+		await viewport.evaluate(element => { element.scrollTop = 200; });
+		await expect(pinned).toHaveAccessibleName('跳转到用户消息：First request');
+		expect(await pinned.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+		await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
+		await expect(pinned).toHaveAccessibleName('跳转到用户消息：Second request');
+		await pinned.focus();
+		await pinned.press('Enter');
+		await expect(page.locator('[data-item-id="second"]')).toBeFocused();
+		await expect(pinned).toBeHidden();
+	});
+
+	test('navigates loaded prompts in the gutter and ruler and dispatches a file review', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?locale=zh-CN&promptTimeline');
+		await page.evaluate(messages => window.ashChatTranscriptIntegration.renderItems(messages), messages);
+		await page.getByLabel('显示提问', { exact: true }).press('Enter');
+		const gutter = page.locator('.ash-prompt-timeline-gutter');
+		await gutter.getByText('已更改的文件（1）').press('Enter');
+		await gutter.getByRole('button', { name: 'src/example.ts' }).press('Enter');
+		await expect(page.locator('main[data-reviewed-prompt]')).toHaveAttribute('data-reviewed-prompt', 'second');
+		await gutter.getByRole('button', { name: 'Second request' }).press('Enter');
+		await expect(page.locator('[data-item-id="second"]')).toBeFocused();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setPromptTimeline('ruler'));
+		const ruler = page.locator('.ash-prompt-timeline-ruler');
+		await ruler.getByRole('button', { name: 'First request' }).press('Enter');
+		await expect(ruler.getByRole('button', { name: 'First request' }).last()).toBeFocused();
+		await ruler.getByRole('button', { name: 'First request' }).last().press('Escape');
+		await expect(ruler.getByRole('button', { name: 'First request' })).toHaveAttribute('aria-expanded', 'false');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setPromptTimeline('off'));
+		await expect(ruler).toHaveCount(0);
+	});
+
 	test('latest and remembered focus remain distinct, removed rows retire focus and hidden lists do not steal it', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html');
@@ -62,7 +104,7 @@ suite('Chat transcript navigation', () => {
 		await page.evaluate(() => window.ashChatTranscriptIntegration.runNavigationCommand('chat.action.focus'));
 		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(true))).toBe(true);
 		const help = page.getByRole('dialog').getByRole('textbox');
-		await expect(help).toHaveValue(/用户提问之间移动[\s\S]*聚焦待确认控件/u);
+		await expect(help).toHaveValue(/固定在对话顶部[\s\S]*用户提问之间移动[\s\S]*聚焦待确认控件/u);
 		await expect(help).not.toHaveValue(/Use |<keybinding:/u);
 		await help.press('Escape');
 		await expect(page.locator('[data-item-id="reply-second"]')).toBeFocused();

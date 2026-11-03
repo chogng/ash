@@ -1,5 +1,6 @@
+import type { IChatToolInvocation } from '../../../common/chatService/chatService.js';
 import type { ChatRequestQueueKind, ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
-import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction, TurnChangeSetSummary } from '../../../../../services/chat/common/chatService.js';
+import type { AgentInteractionDecision, ApprovalMode, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction, TurnChangeSetSummary } from '../../../../../services/chat/common/chatService.js';
 import type { SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
 import type { ModelRef } from '../../../../../services/chat/common/chatService.js';
 import type { ModelReasoningEffort } from '../../../../../services/chat/common/modelCatalog.js';
@@ -46,6 +47,8 @@ export interface ChatInputState {
 	readonly modelsError?: string;
 	readonly slashCommands: readonly SlashCommandDefinition[];
 	readonly skillSelectors: readonly SkillSelectorDefinition[];
+	/** Skill discovery can still be pending after model selection is ready. */
+	readonly skillSelectorsLoading?: boolean;
 	readonly selectedModel?: ModelRef;
 	readonly selectedReasoningEffort?: ModelReasoningEffort;
 	readonly isAutomaticModel: boolean;
@@ -53,6 +56,10 @@ export interface ChatInputState {
 	readonly agentName?: string;
 	readonly canSelectAgent: boolean;
 	readonly interaction?: TurnInteraction;
+	/** Readable pending identity, which may outlive the connection's actionable offer. */
+	readonly pendingUserInputRequestId?: string;
+	readonly toolInvocation?: IChatToolInvocation;
+	readonly toolInvocations?: readonly IChatToolInvocation[];
 }
 
 /** Operations that the input area may request from its owning Chat pane. */
@@ -74,7 +81,7 @@ export interface ChatInputDelegate {
 	selectMode(mode: ChatMode): void;
 	selectApprovalMode?(mode: ApprovalMode): Promise<void>;
 	openModelSettings(category?: 'models' | 'dictation'): Promise<void>;
-	resolveInteraction(response: AgentResponse, expectedRequestId?: string): Promise<void>;
+	resolveInteraction(response: AgentInteractionDecision, expectedRequestId?: string): Promise<void>;
 }
 
 /** Validates the optional Git extension's command result at its process boundary. */

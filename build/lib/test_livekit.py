@@ -139,6 +139,54 @@ class LivekitTests(unittest.TestCase):
                 self.assertIsNone(seeded_outputs[-1])
                 self.assertEqual(built_bytes, binary.read_bytes())
 
+    def test_development_reuses_only_a_verified_locked_server(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = root / "third_party/.cache/livekit/1.0/source.tar.gz"
+            archive.parent.mkdir(parents=True)
+            archive.write_bytes(b"source")
+            lock = root / "third_party/livekit/runtime-lock.json"
+            lock.parent.mkdir(parents=True)
+            source = {
+                "url": "https://example.test/first",
+                "sha256": hashlib.sha256(b"source").hexdigest(),
+            }
+
+            def write_lock():
+                lock.write_text(
+                    json.dumps({"version": "1.0", "artifacts": {}, "source": source})
+                )
+
+            def run(command, **kwargs):
+                if command[0] == "tar":
+                    (Path(command[-1]) / "livekit-1.0").mkdir()
+                else:
+                    Path(command[command.index("-o") + 1]).write_bytes(b"server")
+
+            write_lock()
+            with (
+                patch("build.lib.livekit.sys.platform", "darwin"),
+                patch("build.lib.livekit.shutil.which", return_value="go") as tool,
+                patch("build.lib.livekit.subprocess.run", side_effect=run) as commands,
+            ):
+
+                def resolve():
+                    return resolve_livekit(
+                        "aarch64-apple-darwin", root=root, reuse_development=True
+                    )
+
+                binary = resolve()
+                self.assertEqual(binary, resolve())
+                self.assertEqual(2, commands.call_count)
+                tool.assert_called_once()
+                binary.write_bytes(b"damaged")
+                self.assertEqual(b"server", resolve().read_bytes())
+                self.assertEqual(4, commands.call_count)
+                source["url"] = "https://example.test/relocked"
+                write_lock()
+                resolve()
+                self.assertEqual(6, commands.call_count)
+
     def test_verified_archive_extracts_only_the_server(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

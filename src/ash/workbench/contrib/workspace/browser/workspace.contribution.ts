@@ -1,3 +1,11 @@
+import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { ManagedStyleSheet } from '../../../../base/browser/domStylesheets.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { darkColorTheme, lightColorTheme } from '../../../../platform/theme/common/colorTheme.js';
+import { generateColorThemeCSS } from '../../../services/themes/browser/colorThemeCss.js';
+import { BrowserDialogHandler } from '../../../browser/parts/dialogs/dialog.js';
+import { DialogResult, type DialogRequest, type IDialogHandler, type IDialogOutcome } from '../../../../platform/dialogs/common/dialogs.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerEditorPane } from '../../../browser/editor.js';
@@ -6,9 +14,9 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { WorkspaceTrustEditorInput } from '../../../services/workspaces/browser/workspaceTrustEditorInput.js';
 import { WorkspaceTrustEditor } from './workspaceTrustEditor.js';
 import { MANAGE_TRUST_COMMAND_ID } from '../common/workspace.js';
-import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService, type IWorkspaceTrustInfo, type WorkspaceTrustRequestOptions } from '../../../../platform/workspace/common/workspaceTrust.js';
+import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService, type DirectoryPermissionRequest, type IDirectoryPermissionRequestService, type IWorkspaceTrustInfo, type WorkspaceTrustRequestOptions } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { IDialogsModel, type IDialogHandle } from '../../../common/dialogs.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { getErrorMessage } from '../../../../base/common/errors.js';
@@ -25,6 +33,71 @@ import { IBannerService } from '../../../services/banner/browser/bannerService.j
 import { ITerminalService } from '../../terminal/browser/terminal.js';
 import { IDebugService } from '../../debug/common/debug.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../../../platform/remote/common/remote.js';
+
+/** Owns the lifetime of the window’s active workspace trust prompt. */
+export class WorkspaceTrustPrompt extends Disposable {
+	private readonly activeRequest = this._register(new MutableDisposable<DisposableStore>());
+
+	constructor(private readonly container: HTMLElement) { super(); }
+
+	public async show(load: () => Promise<DialogRequest>, handler: IDialogHandler, signal?: AbortSignal): Promise<IDialogOutcome> {
+		this.assertNotDisposed();
+		if (signal) throwIfCancelled(signal);
+		if (this.activeRequest.value) throw new Error('Directory permission selection is already in progress');
+		const controller = new AbortController();
+		const ownerWindow = this.container.ownerDocument.defaultView;
+		if (!ownerWindow) throw new Error('Directory permission dialog requires a window');
+		const resources = this.activeRequest.value = new DisposableStore();
+		resources.add(toDisposable(() => controller.abort()));
+		const cancel = (): void => {
+			controller.abort(signal?.reason);
+			// Free the slot synchronously, before a replacement connection can request its prompt.
+			if (this.activeRequest.value === resources) this.activeRequest.clear();
+		};
+		if (signal) resources.add(addDisposableListener(signal, 'abort', cancel, { once: true }));
+		resources.add(addDisposableListener(ownerWindow, 'pagehide', cancel, { once: true }));
+		try {
+			const prompt = await raceCancellationError(load(), controller.signal);
+			throwIfCancelled(controller.signal);
+			if (!this.container.hasAttribute('data-color-theme')) {
+				const theme = ownerWindow.matchMedia('(prefers-color-scheme: dark)').matches ? darkColorTheme : lightColorTheme;
+				resources.add(new ManagedStyleSheet(this.container.ownerDocument, generateColorThemeCSS(theme, ':root').code));
+			}
+			const outcome = await handler.showDialog(prompt, controller.signal);
+			throwIfCancelled(controller.signal);
+			return outcome;
+		} finally {
+			if (this.activeRequest.value === resources) this.activeRequest.clear();
+		}
+	}
+}
+
+/** Composes the IDE's directory trust choices before contribution services are available. */
+export function createDirectoryPermissionRequestService(
+	container: HTMLElement,
+	showPrompt: (request: DirectoryPermissionRequest, handler: IDialogHandler, signal?: AbortSignal) => Promise<IDialogOutcome>,
+): IDirectoryPermissionRequestService {
+	const handler = new BrowserDialogHandler(container, {
+		messageAsTitle: true,
+		icon: Lxicon.lock,
+		extraClasses: ['ash-ide-directory-permission-dialog'],
+		buttonOptions: [
+			{ sublabel: localize('workspaceTrust.restrictedActionDetail', 'Edit files with commands and workspace integrations disabled') },
+			{ sublabel: localize('workspaceTrust.developmentActionDetail', 'Enable commands and workspace integrations') },
+			{ presentation: 'quiet' },
+		],
+	});
+	return {
+		async requestDirectoryPermissions(request, signal) {
+			const outcome = await showPrompt(request, handler, signal);
+			switch (outcome.button) {
+				case DialogResult.Primary: return 'restricted';
+				case DialogResult.Secondary: return 'development';
+				default: return 'cancel';
+			}
+		},
+	};
+}
 
 const bannerId = 'workbench.banner.restrictedMode';
 const dismissedKey = 'workbench.banner.restrictedMode.dismissed';

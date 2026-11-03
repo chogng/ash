@@ -1,3 +1,7 @@
+import { readAutomationTemplates } from './automationTemplates.js';
+import { ISessionsListModelService } from '../../../../services/sessions/browser/sessionsListModelService.js';
+import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
 import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
@@ -46,6 +50,7 @@ interface PlanCard {
 }
 
 interface RunRow {
+	readonly visibility: Button;
 	readonly lifetime: DisposableStore;
 	readonly element: HTMLElement;
 	readonly title: HTMLElement;
@@ -88,6 +93,8 @@ export class AutomationsCardsWidget extends Disposable {
 		@IContextKeyService contexts: IContextKeyService,
 		@IConfigurationService configuration: IConfigurationService,
 		@INotificationService private readonly notifications: INotificationService,
+		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
+		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
 	) {
 		super();
 		const document = container.ownerDocument;
@@ -156,6 +163,8 @@ export class AutomationsCardsWidget extends Disposable {
 		const notificationPreference = h(document, 'label', { className: 'ash-automation-notification-preference' });
 		const notifySuccess = h(document, 'input', { properties: { type: 'checkbox' } });
 		notificationPreference.append(notifySuccess, h(document, 'span', {}, localize('automations.notifySuccess', 'Notify when an automation completes')));
+		const sessionVisibilityChanged = observableSignalFromEvent(this, this.listModel.onDidChange);
+		const sessionCatalogChanged = observableSignalFromEvent(this, this.sessions.onDidChange);
 		const configurationChanged = observableSignalFromEvent(this, configuration.onDidChangeConfiguration);
 		this._register(autorun(reader => {
 			configurationChanged.read(reader);
@@ -216,6 +225,8 @@ export class AutomationsCardsWidget extends Disposable {
 			summary.hidden = plans.length === 0 && runs.length === 0;
 			this.updatePlans(plans);
 			noMatches.hidden = plans.length === 0 || [...this.cards.values()].some(card => !card.element.hidden);
+			sessionVisibilityChanged.read(reader);
+			sessionCatalogChanged.read(reader);
 			this.updateRuns(runs);
 			this.updateAttention(runs);
 		}));
@@ -233,11 +244,7 @@ export class AutomationsCardsWidget extends Disposable {
 
 	private createTemplates(container: HTMLElement): readonly Button[] {
 		const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-		const templates = [
-			{ name: localize('automations.template.briefing', 'Daily briefing'), prompt: localize('automations.template.briefingPrompt', 'Review recent activity in this project. Summarize progress, flag blockers, and suggest the next priorities.'), weekdays: [1, 2, 3, 4, 5, 6, 7], hour: 9, icon: Lxicon.calendar },
-			{ name: localize('automations.template.review', 'Review changes'), prompt: localize('automations.template.reviewPrompt', 'Review recent code changes for bugs and missing tests. Summarize actionable findings with file references.'), weekdays: [1, 2, 3, 4, 5], hour: 18, icon: Lxicon.code },
-			{ name: localize('automations.template.recap', 'Weekly recap'), prompt: localize('automations.template.recapPrompt', 'Summarize this week’s project activity, completed work, and unresolved questions. Suggest priorities for next week.'), weekdays: [5], hour: 17, icon: Lxicon.check },
-		];
+		const templates = readAutomationTemplates();
 		const grid = h(container.ownerDocument, 'div', { className: 'ash-automation-templates' });
 		container.append(grid);
 		return templates.map(template => {
@@ -344,6 +351,13 @@ export class AutomationsCardsWidget extends Disposable {
 		this.orderRows(this.plans, plans.map(plan => this.cards.get(plan.id)!.element));
 	}
 
+	private runSession(run: IAutomationRun) {
+		if (!run.sessionId) return undefined;
+		return this.sessions.sessions.find(session => session.status === 'active' && session.source === 'automation'
+			&& (session.providerId ?? LOCAL_AGENT_HOST_PROVIDER_ID) === run.providerId
+			&& (session.backendSessionId ?? session.sessionId) === run.sessionId);
+	}
+
 	private updateRuns(runs: readonly IAutomationRun[]): void {
 		const providers = this.automations.availableProviders.get();
 		const multipleHosts = new Set(runs.map(run => run.providerId)).size > 1;
@@ -380,6 +394,15 @@ export class AutomationsCardsWidget extends Disposable {
 						if (current?.sessionId && current.threadId) void this.perform(run.id, () => this.navigation.openConversation(current.sessionId!, current.threadId!, current.providerId));
 					},
 				}));
+				const visibility = lifetime.add(new Button(actions, {
+					...defaultButtonStyles,
+					label: localize('sessions.list.showAutomationSession', 'Show in Sessions List'),
+					onClick: () => {
+						const current = this.automations.runs.get().find(item => item.id === run.id);
+						const session = current && this.runSession(current);
+						if (session) this.listModel.setAutomationSessionOverride(session, this.listModel.isSessionListed(session) ? 'hide' : 'show');
+					},
+				}));
 				const stop = lifetime.add(new Button(actions, {
 					...defaultButtonStyles,
 					label: localize('automations.stopRun', 'Stop run'),
@@ -390,7 +413,7 @@ export class AutomationsCardsWidget extends Disposable {
 				}));
 				lifetime.add(toDisposable(() => element.remove()));
 				this.history.append(element);
-				row = { lifetime, element, title, details, state, time, text, open, stop };
+				row = { lifetime, element, title, details, state, time, text, open, stop, visibility };
 				this.rows.set(run.id, row);
 			}
 			const host = providers.find(provider => provider.id === run.providerId)?.label ?? localize('automations.hostOffline', 'Host unavailable');
@@ -406,6 +429,11 @@ export class AutomationsCardsWidget extends Disposable {
 			row.text.hidden = !run.message;
 			row.open.label = run.status === 'needsInput' ? localize('automations.continueChat', 'Continue in Chat') : localize('automations.openConversation', 'Open conversation');
 			row.open.domNode.hidden = !run.sessionId || !run.threadId;
+			const session = this.runSession(run);
+			row.visibility.domNode.hidden = !session;
+			row.visibility.label = session && this.listModel.isSessionListed(session)
+				? localize('sessions.list.hideAutomationSession', 'Hide from Sessions List')
+				: localize('sessions.list.showAutomationSession', 'Show in Sessions List');
 			row.stop.domNode.hidden = !this.automations.canStopRun(run);
 			row.stop.enabled = row.open.enabled = !this.pending.has(run.id);
 		}

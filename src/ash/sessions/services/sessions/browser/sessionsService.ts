@@ -1,25 +1,21 @@
+import { localize } from '../../../../nls.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { canceled } from '../../../../base/common/errors.js';
+import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { autorun, observableValue, transaction, type IReader, type ITransaction } from '../../../../base/common/observable.js';
+import { autorun, transaction, type IReader } from '../../../../base/common/observable.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import { isRecord } from '../../../../base/common/types.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import type { IActiveSessionThread, IUntitledChatSession, SessionId, ThreadId } from '../common/session.js';
+import type { IUntitledChatSession, SessionId, ThreadId } from '../common/session.js';
 import { ISessionsManagementService } from '../common/sessionsManagement.js';
-import type { SessionWorkspaceSelection } from '../common/session.js';
 import { WELCOME_COMPLETE_KEY } from '../../../common/welcome.js';
 import { ICustomViewService } from '../../customView/browser/customViewService.js';
+import { ClosedItemHistory } from './closedItemHistory.js';
+import { SessionsRecencyHistory, type SessionRecencyEntry } from './sessionsRecencyHistory.js';
+import { SessionsNavigation } from './sessionNavigation.js';
+import { loadSessionGridState, saveSessionGridState, storedReference, type ISessionGridState } from './sessionGridState.js';
+import { VisibleSessions, referenceForSelection, referenceKey, type SessionSlotPlacement, type SessionsSelection, type SessionsViewReference, type SessionsViewSelection } from './visibleSessions.js';
 
-/** One visible slot in the dedicated Sessions Workbench. */
-export type SessionsViewSelection =
-	| { readonly kind: 'session'; readonly active: IActiveSessionThread; }
-	| { readonly kind: 'untitled'; readonly session: IUntitledChatSession; };
-
-export interface SessionsSelection {
-	readonly visibleSelections: readonly SessionsViewSelection[];
-	readonly activeSelection: SessionsViewSelection | undefined;
-}
+export type { SessionsSelection, SessionsViewSelection } from './visibleSessions.js';
 
 /** Owns window-local visibility, active selection, and navigation history. */
 export interface ISessionsService {
@@ -31,22 +27,23 @@ export interface ISessionsService {
 	readonly navigationRevision: number;
 	readonly canNavigateBack: boolean;
 	readonly canNavigateForward: boolean;
+	readonly recentSessions: readonly SessionRecencyEntry[];
+	getLastViewedAt(entry: SessionRecencyEntry): number | undefined;
 	initialize(): Promise<void>;
-	openThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
+	openThread(sessionId: SessionId, threadId: ThreadId, options?: { readonly sideBySide?: boolean; }): Promise<void>;
 	openSession(sessionId: SessionId, threadId: ThreadId): void;
 	openUntitledSession(untitledSessionId: string): void;
-	openNewSession(title?: string, options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; }): IUntitledChatSession;
+	openNewSession(title?: string, options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; readonly forkSource?: IUntitledChatSession['forkSource']; }): IUntitledChatSession;
 	activateSelection(selection: SessionsViewSelection, options?: { readonly source: 'restore'; }): void;
 	closeVisibleSelection(selection: SessionsViewSelection): void;
-	navigateBack(): void;
-	navigateForward(): void;
+	reopenLastClosedItem(): Promise<void>;
+	openPreviousSession(): Promise<void>;
+	openNextSession(): Promise<void>;
 }
 
-export const ISessionsService = createServiceIdentifier<ISessionsService>('sessionsService');
+type SessionPlacement = SessionSlotPlacement | 'focus';
 
-type SessionsViewReference =
-	| { readonly kind: 'session'; readonly sessionId: SessionId; readonly threadId: ThreadId; }
-	| { readonly kind: 'untitled'; readonly untitledSessionId: string; };
+export const ISessionsService = createServiceIdentifier<ISessionsService>('sessionsService');
 
 type NavigationEntry = SessionsViewReference | { readonly kind: 'customView'; readonly id: string; readonly state?: string; };
 
@@ -54,10 +51,27 @@ type NavigationEntry = SessionsViewReference | { readonly kind: 'customView'; re
 export class SessionsService extends Disposable implements ISessionsService {
 	private readonly sessionService: ISessionsManagementService;
 	private readonly _onDidChange = this._register(new Emitter<void>());
-	private readonly current = new SessionsViewState();
+	private readonly slots = new VisibleSessions(reference => this.resolve(reference));
+	private readonly recency: SessionsRecencyHistory;
+	private readonly closedItems = new ClosedItemHistory();
+	private readonly navigation = new SessionsNavigation<NavigationEntry>(
+		navigationKey,
+		entry => entry.kind === 'customView' || this.resolve(entry) !== undefined,
+		entry => this.openHistoryEntry(entry),
+		() => this._onDidChange.fire(),
+	);
 	private _navigationRevision = 0;
 	private initialized = false;
-	private readonly storedState: StoredSessionsViewState | undefined;
+	private readonly storedState: ISessionGridState | undefined;
+
+	private readonly threadOpenFinished = this._register(new Emitter<{
+		readonly outcome: 'opened' | 'superseded' | 'cancelled' | 'failed';
+		readonly durationMs: number;
+		readonly preparationMs?: number;
+		readonly activationMs?: number;
+		readonly sideBySide: boolean;
+	}>());
+	readonly onDidFinishThreadOpen = this.threadOpenFinished.event;
 
 	readonly onDidChange = this._onDidChange.event;
 
@@ -67,10 +81,10 @@ export class SessionsService extends Disposable implements ISessionsService {
 		@ICustomViewService private readonly customViews: ICustomViewService,
 	) {
 		// Validate persisted input before allocating subscriptions that a failed constructor cannot release.
-		const raw = storage.get('sessions.viewState', StorageScope.WORKSPACE);
-		const storedState = raw === undefined ? undefined : parseStoredSessionsViewState(JSON.parse(raw), storage.get('sessions.activityBar.activePage', StorageScope.WORKSPACE) === 'code');
+		const storedState = loadSessionGridState(storage);
 		super();
 		this.sessionService = sessionService;
+		this.recency = new SessionsRecencyHistory(storage);
 		this.storedState = storedState;
 		this._register(storage.onWillSaveState(() => this.saveState()));
 		this._register(sessionService.onDidChange(() => this.syncFromSessionService()));
@@ -80,123 +94,167 @@ export class SessionsService extends Disposable implements ISessionsService {
 			if (!opening) return;
 			// A custom-view open supersedes an in-flight Thread open without changing the covered selection.
 			this._navigationRevision++;
-			if (opening.source !== 'history' && (opening.source !== 'restore' || this.initialized)) this.record({ kind: 'customView', id: opening.descriptor.id, state: opening.state }, this.current);
+			const entry = { kind: 'customView', id: opening.descriptor.id, state: opening.state } as const;
+			if (opening.source === 'explicit') this.recency.markOpened(entry);
+			if (opening.source !== 'history' && (opening.source !== 'restore' || this.initialized)) this.navigation.recordOpened(entry);
 			this._onDidChange.fire();
 		}));
 	}
 
+	get recentSessions(): readonly SessionRecencyEntry[] { return this.recency.entries.filter((entry): entry is SessionRecencyEntry => !('kind' in entry)); }
+	getLastViewedAt(entry: SessionRecencyEntry): number | undefined { return this.recency.getLastViewedAt(entry); }
 	get navigationRevision(): number { return this._navigationRevision; }
-	get visibleSelections(): readonly SessionsViewSelection[] { return this.current.visibleSelections.get(); }
-	get activeSelection(): SessionsViewSelection | undefined { return this.current.activeSelection.get(); }
-	get canNavigateBack(): boolean { return this.findNavigableIndex(this.current.historyIndex, -1) !== undefined; }
-	get canNavigateForward(): boolean { return this.findNavigableIndex(this.current.historyIndex, 1) !== undefined; }
+	get visibleSelections(): readonly SessionsViewSelection[] { return this.slots.read().visibleSelections; }
+	get activeSelection(): SessionsViewSelection | undefined { return this.slots.read().activeSelection; }
+	get canNavigateBack(): boolean { return this.navigation.canGoBack; }
+	get canNavigateForward(): boolean { return this.navigation.canGoForward; }
 
 	getSelection(reader?: IReader): SessionsSelection {
-		return { visibleSelections: this.current.visibleSelections.read(reader), activeSelection: this.current.activeSelection.read(reader) };
+		return this.slots.read(reader);
 	}
 
 	async initialize(): Promise<void> {
 		await this.sessionService.initialize();
 		if (this.isDisposed) return;
 		if (!this.initialized) {
-			const state = this.current;
+			let restoredNavigation = false;
 			for (const draft of this.storedState?.drafts ?? []) {
 				if (!this.sessionService.untitledSessions.some(current => current.untitledSessionId === draft.untitledSessionId)) {
 					this.sessionService.restoreUntitledSession(draft);
 				}
 			}
 			// An explicit choice made while the catalog loads supersedes the saved arrangement.
-			if (this.storedState && state.visibleReferences.length === 0) {
+			if (this.storedState && !this.slots.hasSlots) {
 				const saved = this.storedState;
-				state.visibleReferences = saved.visible.map(storedReference);
-				state.activeReference.set(state.visibleReferences[saved.active]);
-				state.activeSelection.set(this.resolve(state.activeReference.get()));
-				this.projectVisibleSelections(state);
-				if (!state.activeSelection.get()) { state.activeSelection.set(state.visibleSelections.get()[0]); }
-				const active = state.activeSelection.get();
-				if (active && !this.customViews.activeCustomView.get()) { this.record(referenceForSelection(active), state); }
+				this.slots.restore(saved.visible.map(storedReference), saved.active, this.catalogUnavailable);
+				const active = this.activeSelection;
+				if (active) {
+					const current = referenceForSelection(active);
+					const previous = [...this.recency.entries].reverse().map(entry =>
+						'kind' in entry ? entry : { kind: 'session' as const, sessionId: entry.sessionId, threadId: entry.threadId });
+					const opening = this.customViews.activeCustomViewOpen.get();
+					const currentDestination = opening
+						? { kind: 'customView' as const, id: opening.descriptor.id, state: opening.state }
+						: current;
+					restoredNavigation = this.navigation.restorePreviousVisits(previous, currentDestination);
+					if (!restoredNavigation && !opening) this.navigation.recordOpened(current);
+				}
 			}
 
 			const restored = activeSelection(this.sessionService);
-			const alreadyOpen = restored && this.current.visibleReferences.some(reference => referenceKey(reference) === selectionKey(restored));
-			if (!this.storedState && restored && !alreadyOpen && !this.current.activeSelection.get()) {
-				this.select(restored, this.current, 'open', 'automatic');
+			const alreadyOpen = restored && this.slots.find(reference => referenceKey(reference) === selectionKey(restored));
+			if (!this.storedState && restored && !alreadyOpen && !this.activeSelection) {
+				this.select(restored, 'open', 'automatic');
 			}
 			if (this.activeSelection && this.sessionService.state !== 'error') {
-				this.activate(referenceForSelection(this.activeSelection), this.current, 'focus', 'automatic');
+				this.activate(referenceForSelection(this.activeSelection), 'focus', 'automatic');
 			}
 			// Restoring drafts emits catalog changes; none may persist an incomplete arrangement.
 			this.initialized = true;
 			const opening = this.customViews.activeCustomViewOpen.get();
-			if (opening?.source === 'restore') {
-				if (this.activeSelection) this.record(referenceForSelection(this.activeSelection), state);
-				this.record({ kind: 'customView', id: opening.descriptor.id, state: opening.state }, state);
+			if (!restoredNavigation && opening?.source === 'restore') {
+				if (this.activeSelection) this.navigation.recordOpened(referenceForSelection(this.activeSelection));
+				this.navigation.recordOpened({ kind: 'customView', id: opening.descriptor.id, state: opening.state });
 			}
 		}
 		this.syncFromSessionService();
 	}
 
 	openSession(sessionId: SessionId, threadId: ThreadId): void { this.activate({ kind: 'session', sessionId, threadId }); }
-	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
+	async openThread(sessionId: SessionId, threadId: ThreadId, options?: { readonly sideBySide?: boolean; }): Promise<void> {
 		const revision = ++this._navigationRevision;
-		await this.sessionService.openThread(sessionId, threadId);
-		if (this.isDisposed) throw canceled();
-		if (revision === this._navigationRevision) { this.activate({ kind: 'session', sessionId, threadId }); }
+		const started = performance.now();
+		const sideBySide = options?.sideBySide === true;
+		let outcome: 'opened' | 'superseded' | 'cancelled' | 'failed' = 'superseded';
+		let preparedAt: number | undefined;
+		let activationMs: number | undefined;
+		try {
+			await this.sessionService.prepareThread(sessionId, threadId);
+			preparedAt = performance.now();
+			if (this.isDisposed) throw canceled();
+			if (revision !== this._navigationRevision) return;
+			const sideThread = sideBySide && this.slots.find(reference =>
+				reference.kind === 'session' && reference.sessionId === sessionId && reference.threadId !== threadId);
+			this.activate({ kind: 'session', sessionId, threadId, ...(sideThread ? { sideThread: true } : {}) }, sideBySide ? 'add' : 'open');
+			activationMs = Math.round(performance.now() - preparedAt);
+			outcome = 'opened';
+		} catch (error) {
+			outcome = isCancellationError(error) ? 'cancelled' : 'failed';
+			throw error;
+		} finally {
+			this.threadOpenFinished.fire({ outcome, durationMs: Math.round(performance.now() - started), preparationMs: preparedAt === undefined ? undefined : Math.round(preparedAt - started), activationMs, sideBySide });
+		}
 	}
 	openUntitledSession(untitledSessionId: string): void { this.activate({ kind: 'untitled', untitledSessionId }); }
-	openNewSession(title = 'New chat', options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; }): IUntitledChatSession {
-		const session = this.sessionService.createUntitledSession(title, undefined, options?.providerId);
-		this.select({ kind: 'untitled', session }, this.current, options?.sideBySide ? 'add' : 'open', options?.source === 'restore' ? 'automatic' : 'explicit');
+	openNewSession(title = localize({ bundle: 'ash', key: 'chat.sessions.new' }, 'New Session'), options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; readonly forkSource?: IUntitledChatSession['forkSource']; }): IUntitledChatSession {
+		const session = this.sessionService.createUntitledSession(title, undefined, options?.providerId, true, options?.forkSource);
+		this.select({ kind: 'untitled', session }, options?.sideBySide ? 'add' : 'open', options?.source === 'restore' ? 'automatic' : 'explicit');
 		return session;
 	}
-	activateSelection(selection: SessionsViewSelection, options?: { readonly source: 'restore'; }): void { this.activate(referenceForSelection(selection), this.current, 'focus', options?.source === 'restore' ? 'automatic' : 'explicit'); }
+	activateSelection(selection: SessionsViewSelection, options?: { readonly source: 'restore'; }): void { this.activate(referenceForSelection(selection), 'focus', options?.source === 'restore' ? 'automatic' : 'explicit'); }
 	closeVisibleSelection(selection: SessionsViewSelection): void {
-		const state = this.current;
-		const key = visibilityKey(referenceForSelection(selection));
-		const index = state.visibleReferences.findIndex(reference => visibilityKey(reference) === key);
-		if (index < 0) return;
+		const removed = this.slots.remove(selection);
+		if (!removed) {
+			return;
+		}
 		this._navigationRevision++;
-		const active = state.activeSelection.get();
-		const wasActive = active !== undefined && visibilityKey(referenceForSelection(active)) === key;
-		// Closing a sibling supersedes pending navigation even when the foreground identity stays the same.
-		if (!wasActive && active) this.updateManagementSelection(referenceForSelection(active));
-		state.visibleReferences.splice(index, 1);
-		const replacement = state.visibleReferences.slice(index).find(reference => this.resolve(reference))
-			?? state.visibleReferences.slice(0, index).reverse().find(reference => this.resolve(reference));
-		if (wasActive) state.activeSelection.set(undefined);
-		if (wasActive) {
-			state.activeReference.set(undefined);
+		const { index, wasActive, replacement } = removed;
+		const reference = referenceForSelection(selection);
+		if (reference.kind === 'session') {
+			if (wasActive && !this.customViews.activeCustomView.get()) this.recency.markViewed(reference);
+			this.closedItems.recordClosedItem(reference, index);
 		}
 		if (selection.kind === 'untitled') {
 			this.sessionService.discardUntitledSession(selection.session.untitledSessionId);
 		}
-		if (wasActive && replacement) this.activate(replacement, state, 'focus', 'automatic');
+		if (wasActive && replacement) this.activate(replacement, 'focus', 'automatic');
 		else if (wasActive) {
 			const session = this.sessionService.createUntitledSession('New chat');
-			this.select({ kind: 'untitled', session }, state, 'open', 'automatic');
+			this.select({ kind: 'untitled', session }, 'open', 'automatic');
 		}
-		this.projectVisibleSelections(state);
+		this.slots.publish(this.catalogUnavailable);
 		this.saveState();
 		this._onDidChange.fire();
 	}
-	navigateBack(): void { this.navigate(-1); }
-	navigateForward(): void { this.navigate(1); }
+	async reopenLastClosedItem(): Promise<void> {
+		const item = this.closedItems.lastClosedItem;
+		if (!item) {
+			return;
+		}
+		const { reference, index, replacedBy } = item;
+		if (!this.resolve(reference)) {
+			if (!this.catalogUnavailable) {
+				this.closedItems.clear(item);
+			}
+			return;
+		}
+		const revision = ++this._navigationRevision;
+		await this.sessionService.prepareThread(reference.sessionId, reference.threadId);
+		if (this.isDisposed || this._navigationRevision !== revision || !this.resolve(reference)) {
+			return;
+		}
+		this.activate(reference, replacedBy ? { index, replacedBy: this.materializedReference(replacedBy) } : index);
+		this.closedItems.clear(item);
+	}
+
+	async openPreviousSession(): Promise<void> { this.navigation.goBack(); }
+	async openNextSession(): Promise<void> { this.navigation.goForward(); }
 
 	private syncFromSessionService(): void {
 		if (this.sessionService.sessions.length && !this.storage.getBoolean(WELCOME_COMPLETE_KEY, StorageScope.PROFILE, false)) {
 			this.storage.store(WELCOME_COMPLETE_KEY, true, StorageScope.PROFILE, StorageTarget.USER);
 		}
 		// Catalog changes refresh identities without changing the foreground selection.
-		const state = this.current;
-		state.visibleReferences = state.visibleReferences.map(reference => this.materializedReference(reference));
-		state.history = state.history.map(reference => reference.kind === 'customView' ? reference : this.materializedReference(reference));
-		const reference = state.activeReference.get();
-		state.activeReference.set(reference ? this.materializedReference(reference) : undefined);
-		this.projectVisibleSelections(state);
-		if (this.sessionService.state !== 'loading' && this.sessionService.state !== 'error' && !this.resolve(state.activeReference.get())) {
-			state.activeReference.set(state.visibleReferences[0]);
+		this.navigation.updateEntries(reference => reference.kind === 'customView' ? reference : this.materializedReference(reference));
+		const before = this.activeSelection;
+		this.slots.refresh(reference => this.materializedReference(reference), this.catalogUnavailable);
+		const after = this.activeSelection;
+		if (before?.kind === 'untitled' && after?.kind === 'session' && !this.customViews.activeCustomView.get()) {
+			const materialized = this.materializedReference(referenceForSelection(before));
+			if (materialized.kind === 'session' && referenceKey(materialized) === selectionKey(after)) {
+				this.recency.markOpened({ sessionId: materialized.sessionId, threadId: materialized.threadId });
+			}
 		}
-		state.activeSelection.set(this.resolve(state.activeReference.get()) ?? state.visibleSelections.get()[0]);
 		this.saveState();
 		this._onDidChange.fire();
 	}
@@ -206,118 +264,62 @@ export class SessionsService extends Disposable implements ISessionsService {
 		if (!this.initialized) {
 			return;
 		}
-		const snapshot = (): StoredSessionsSelection => {
-			const state = this.current;
-			return {
-				visible: state.visibleReferences.map(reference => {
-					if (reference.kind === 'session') {
-						return reference;
-					}
-					const session = this.sessionService.untitledSessions.find(draft => draft.untitledSessionId === reference.untitledSessionId)!;
-					return { kind: 'untitled', session };
-				}),
-				active: state.visibleReferences.findIndex(reference => visibilityKey(reference) === visibilityKey(state.activeReference.get())),
-			};
-		};
-		const state: StoredSessionsViewState = { version: 2, drafts: this.sessionService.untitledSessions, ...snapshot() };
-		this.storage.store('sessions.viewState', JSON.stringify(state), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		saveSessionGridState(this.storage, this.slots.snapshot(), this.sessionService.untitledSessions);
 	}
 
 	private materializedReference(reference: SessionsViewReference): SessionsViewReference {
 		const active = reference.kind === 'untitled' ? this.sessionService.materializedSessions.get().get(reference.untitledSessionId) : undefined;
-		return active ? { kind: 'session', sessionId: active.sessionId, threadId: active.threadId } : reference;
+		return active ? { kind: 'session', sessionId: active.sessionId, threadId: active.threadId, ...(active.sideThread ? { sideThread: true } : {}) } : reference;
 	}
 
-	private select(selection: SessionsViewSelection, state = this.current, mode: 'open' | 'focus' | 'add' = 'open', intent: 'explicit' | 'automatic' = 'explicit'): void {
+	private select(selection: SessionsViewSelection, mode: SessionPlacement = 'open', intent: 'explicit' | 'automatic' | 'history' = 'explicit'): void {
 		this._navigationRevision++;
 		const reference = referenceForSelection(selection);
-		const previous = state.activeSelection.get();
+		const previous = this.activeSelection;
 		const covered = this.customViews.activeCustomView.get() !== undefined;
-		if (covered && intent === 'automatic' && this.customViews.activeCustomViewOpen.get()?.source === 'restore' && state.history.length === 1 && state.history[0]?.kind === 'customView') {
-			// A restored view in an otherwise empty window covers the startup draft, rather than visiting it.
-			state.history.unshift(reference);
-			state.historyIndex++;
+		if (!covered && previous?.kind === 'session' && selectionKey(previous) !== selectionKey(selection)) {
+			this.recency.markViewed({ sessionId: previous.active.session.sessionId, threadId: previous.active.threadId });
 		}
-		const existing = state.visibleReferences.findIndex(candidate => visibilityKey(candidate) === visibilityKey(reference));
-		if (existing >= 0) state.visibleReferences[existing] = reference;
-		else if (mode === 'add') state.visibleReferences.push(reference);
-		else {
-			// Ash uses single-content editor groups: ordinary opens replace the active
-			// Session in place and preserve siblings. Unlike VS Code's Agents pin policy,
-			// replacement does not search for another transient slot or create a group.
-			const current = state.activeReference.get();
-			const activeIndex = current ? state.visibleReferences.findIndex(candidate => visibilityKey(candidate) === visibilityKey(current)) : -1;
-			if (activeIndex >= 0) state.visibleReferences[activeIndex] = reference;
-			else state.visibleReferences = [reference];
+		if (covered && intent === 'automatic' && this.customViews.activeCustomViewOpen.get()?.source === 'restore') {
+			// A restored view in an otherwise empty window covers the startup draft, rather than visiting it.
+			this.navigation.insertBeforeInitialVisit(reference, entry => entry.kind === 'customView');
 		}
 		transaction(tx => {
-			if (intent === 'explicit') this.customViews.hideCustomView(tx);
-			state.activeReference.set(reference, tx);
-			state.activeSelection.set(selection, tx);
-			this.projectVisibleSelections(state, tx);
+			if (intent !== 'automatic') this.customViews.hideCustomView(tx);
+			const displaced = this.slots.select(reference, mode === 'focus' ? 'open' : mode, this.catalogUnavailable, tx);
+			if (intent === 'explicit' && mode === 'open' && displaced?.reference.kind === 'session') {
+				this.closedItems.recordClosedItem(displaced.reference, displaced.index, reference);
+			}
 		});
-		if (!state.navigating && !(covered && intent === 'automatic') && (covered || selectionKey(previous) !== selectionKey(selection))) this.record(reference, state);
+		if (intent === 'explicit' || !(covered && intent === 'automatic') && (covered || selectionKey(previous) !== selectionKey(selection))) {
+			this.navigation.recordOpened(reference);
+		}
+		if (intent === 'explicit' && reference.kind === 'session') {
+			this.recency.markOpened({ sessionId: reference.sessionId, threadId: reference.threadId });
+		}
 		this.saveState();
 		this._onDidChange.fire();
 	}
 
-	private projectVisibleSelections(state: SessionsViewState, tx?: ITransaction): void {
-		// A disconnected catalog cannot prove that a saved conversation was deleted.
-		const catalogUnavailable = this.sessionService.state === 'loading' || this.sessionService.state === 'error';
-		state.visibleReferences = state.visibleReferences.filter(reference => this.resolve(reference) !== undefined || reference.kind === 'session' && catalogUnavailable);
-		state.visibleSelections.set(state.visibleReferences.flatMap(reference => {
-			const selection = this.resolve(reference);
-			return selection ? [selection] : [];
-		}), tx);
+	private get catalogUnavailable(): boolean {
+		return this.sessionService.state === 'loading' || this.sessionService.state === 'error';
 	}
 
-	private record(reference: NavigationEntry, state: SessionsViewState): void {
-		const key = navigationKey(reference);
-		if (navigationKey(state.history[state.historyIndex]) === key) return;
-		state.history.splice(state.historyIndex + 1);
-		state.history.push(reference);
-		state.historyIndex = state.history.length - 1;
-	}
-
-	private navigate(direction: -1 | 1): void {
-		const state = this.current;
-		const targetIndex = this.findNavigableIndex(state.historyIndex, direction);
-		if (targetIndex === undefined) return;
-		const reference = state.history[targetIndex];
-		const previousIndex = state.historyIndex;
-		state.navigating = true;
-		state.historyIndex = targetIndex;
-		try {
-			if (reference.kind === 'customView') {
-				this.customViews.showCustomView(reference.id, { source: 'history', state: reference.state });
-				if (this.customViews.activeCustomView.get()?.id !== reference.id || this.customViews.activeCustomViewOpen.get()?.state !== reference.state) {
-					// A removed contribution cannot be a destination; discard its visit and continue in the same direction.
-					state.history.splice(targetIndex, 1);
-					state.historyIndex = previousIndex - (targetIndex < previousIndex ? 1 : 0);
-					this.navigate(direction);
-				}
-			} else this.activate(reference);
-		} catch (error) {
-			state.historyIndex = previousIndex;
-			this._onDidChange.fire();
-			throw error;
-		} finally {
-			state.navigating = false;
-			this._onDidChange.fire();
+	private openHistoryEntry(entry: NavigationEntry): boolean {
+		if (entry.kind !== 'customView') {
+			this.activate(entry, 'open', 'history');
+			return true;
 		}
+		this.customViews.showCustomView(entry.id, { source: 'history', state: entry.state });
+		return this.customViews.activeCustomView.get()?.id === entry.id
+			&& this.customViews.activeCustomViewOpen.get()?.state === entry.state;
 	}
 
-	private findNavigableIndex(from: number, direction: -1 | 1): number | undefined {
-		for (let index = from + direction; index >= 0 && index < this.current.history.length; index += direction) {
-			const entry = this.current.history[index]!;
-			if (entry.kind === 'customView' || this.resolve(entry)) return index;
-		}
-		return undefined;
-	}
-
-	private activate(reference: SessionsViewReference, state = this.current, mode: 'open' | 'focus' | 'add' = 'open', intent: 'explicit' | 'automatic' = 'explicit'): void {
-		this.updateManagementSelection(reference);
-		this.select(this.resolve(reference)!, state, mode, intent);
+	private activate(reference: SessionsViewReference, mode: SessionPlacement = 'open', intent: 'explicit' | 'automatic' | 'history' = 'explicit'): void {
+		// Ordinary navigation to an already visible side Thread keeps that slot.
+		const visible = this.slots.find(candidate => referenceKey(candidate) === referenceKey(reference)) ?? reference;
+		this.updateManagementSelection(visible);
+		this.select(this.resolve(visible)!, mode, intent);
 	}
 
 	private updateManagementSelection(reference: SessionsViewReference): void {
@@ -333,19 +335,8 @@ export class SessionsService extends Disposable implements ISessionsService {
 		}
 		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === reference.sessionId && candidate.status === 'active');
 		const thread = session?.chats.find(candidate => candidate.threadId === reference.threadId && candidate.status === 'active');
-		return session && thread ? { kind: 'session', active: { session, threadId: thread.threadId } } : undefined;
+		return session && thread ? { kind: 'session', active: { session, threadId: thread.threadId }, ...(reference.sideThread ? { sideThread: true } : {}) } : undefined;
 	}
-}
-
-class SessionsViewState {
-	// Keep the chosen identity while an unavailable catalog prevents a rendered selection.
-	readonly activeReference = observableValue<SessionsViewReference | undefined>(this, undefined);
-	readonly activeSelection = observableValue<SessionsViewSelection | undefined>(this, undefined);
-	readonly visibleSelections = observableValue<readonly SessionsViewSelection[]>(this, []);
-	visibleReferences: SessionsViewReference[] = [];
-	history: NavigationEntry[] = [];
-	historyIndex = -1;
-	navigating = false;
 }
 
 function activeSelection(sessionService: ISessionsManagementService): SessionsViewSelection | undefined {
@@ -357,147 +348,10 @@ function activeSelection(sessionService: ISessionsManagementService): SessionsVi
 		: undefined;
 }
 
-function referenceForSelection(selection: SessionsViewSelection): SessionsViewReference {
-	return selection.kind === 'session'
-		? { kind: 'session', sessionId: selection.active.session.sessionId, threadId: selection.active.threadId }
-		: { kind: 'untitled', untitledSessionId: selection.session.untitledSessionId };
-}
-
 function selectionKey(selection: SessionsViewSelection | undefined): string | undefined {
 	return selection ? referenceKey(referenceForSelection(selection)) : undefined;
 }
 
 function navigationKey(entry: NavigationEntry | undefined): string | undefined {
 	return entry?.kind === 'customView' ? `customView:${JSON.stringify([entry.id, entry.state])}` : referenceKey(entry);
-}
-
-function referenceKey(reference: SessionsViewReference | undefined): string | undefined {
-	return reference?.kind === 'session'
-		? `session:${reference.sessionId}:${reference.threadId}`
-		: reference ? `untitled:${reference.untitledSessionId}` : undefined;
-}
-
-function visibilityKey(reference: SessionsViewReference | undefined): string | undefined {
-	return reference?.kind === 'session'
-		? `session:${reference.sessionId}`
-		: reference ? `untitled:${reference.untitledSessionId}` : undefined;
-}
-
-type StoredSessionsViewReference = Extract<SessionsViewReference, { kind: 'session'; }> | { readonly kind: 'untitled'; readonly session: IUntitledChatSession; };
-
-interface StoredSessionsSelection {
-	readonly visible: readonly StoredSessionsViewReference[];
-	readonly active: number;
-}
-
-interface StoredSessionsViewState extends StoredSessionsSelection {
-	readonly version: 2;
-	readonly drafts: readonly IUntitledChatSession[];
-}
-
-function storedReference(reference: StoredSessionsViewReference): SessionsViewReference {
-	return reference.kind === 'session' ? reference : { kind: 'untitled', untitledSessionId: reference.session.untitledSessionId };
-}
-
-function parseStoredSessionsViewState(value: unknown, preferCode: boolean): StoredSessionsViewState {
-	if (!isRecord(value) || (value.version !== 1 && value.version !== 2)) { throw new TypeError('Invalid stored Sessions view state'); }
-	let states: unknown[];
-	if (value.version === 1) {
-		if (!isRecord(value.pages)) { throw new TypeError('Invalid stored Sessions view state'); }
-		states = preferCode ? [value.pages.code, value.pages.chat] : [value.pages.chat, value.pages.code];
-	} else {
-		states = [value];
-	}
-	for (const state of states) {
-		if (!isRecord(state) || !Array.isArray(state.visible) || !Number.isInteger(state.active)
-			|| (state.visible.length === 0 ? state.active !== -1 : (state.active as number) < 0 || (state.active as number) >= state.visible.length)) {
-			throw new TypeError('Invalid stored Sessions selection');
-		}
-		const keys = new Set<string>();
-		for (const reference of state.visible) {
-			if (!isRecord(reference)) {
-				throw new TypeError('Invalid stored Sessions reference');
-			}
-			if (reference.kind === 'session') {
-				if (!nonEmptyString(reference.sessionId) || !nonEmptyString(reference.threadId)) {
-					throw new TypeError('Invalid stored Session identity');
-				}
-			} else if (reference.kind === 'untitled') {
-				if (!isUntitledSession(reference.session)) {
-					throw new TypeError('Invalid stored untitled Session');
-				}
-			} else {
-				throw new TypeError('Invalid stored Sessions reference kind');
-			}
-			const key = visibilityKey(storedReference(reference as unknown as StoredSessionsViewReference))!;
-			if (keys.has(key)) {
-				throw new TypeError('Duplicate stored Sessions slot');
-			}
-			keys.add(key);
-		}
-	}
-	const selections = states as StoredSessionsSelection[];
-	const drafts = [...new Map(selections.flatMap(state => state.visible.flatMap(reference => reference.kind === 'untitled' ? [[reference.session.untitledSessionId, reference.session] as const] : []))).values()];
-	if (value.version === 2) {
-		if (!Array.isArray(value.drafts) || !value.drafts.every(isUntitledSession) || new Set(value.drafts.map(draft => draft.untitledSessionId)).size !== value.drafts.length) {
-			throw new TypeError('Invalid stored Sessions drafts');
-		}
-		for (const reference of selections[0]!.visible) {
-			if (reference.kind === 'untitled' && !value.drafts.some(draft => draft.untitledSessionId === reference.session.untitledSessionId)) {
-				throw new TypeError('Stored visible draft is missing from the draft catalog');
-			}
-		}
-		drafts.splice(0, drafts.length, ...value.drafts);
-	}
-	const visible: StoredSessionsViewReference[] = [];
-	const keys = new Set<string>();
-	for (const state of selections) {
-		for (const reference of state.visible) {
-			const key = visibilityKey(storedReference(reference))!;
-			if (!keys.has(key)) { visible.push(reference); keys.add(key); }
-		}
-	}
-	const preferred = selections.find(state => state.active >= 0);
-	const activeKey = preferred && visibilityKey(storedReference(preferred.visible[preferred.active]!));
-	return { version: 2, drafts, visible, active: activeKey ? visible.findIndex(reference => visibilityKey(storedReference(reference)) === activeKey) : -1 };
-}
-
-function nonEmptyString(value: unknown): value is string {
-	return typeof value === 'string' && value.length > 0;
-}
-
-export function isUntitledSession(value: unknown): value is IUntitledChatSession {
-	return isRecord(value) && nonEmptyString(value.untitledSessionId) && typeof value.title === 'string'
-		&& (value.model === undefined || isRecord(value.model) && nonEmptyString(value.model.provider) && nonEmptyString(value.model.model))
-		&& (value.providerId === undefined || nonEmptyString(value.providerId))
-		&& (value.modelSelectionKind === undefined || value.modelSelectionKind === 'manual')
-		&& (value.devContainer === undefined || typeof value.devContainer === 'boolean')
-		&& (value.branchName === undefined || typeof value.branchName === 'string' && value.branchName.trim().length > 0 && value.branchName.length <= 1024)
-		&& (value.agent === undefined || isRecord(value.agent) && nonEmptyString(value.agent.name) && typeof value.agent.description === 'string' && nonEmptyString(value.agent.sourceId))
-		&& isWorkspaceSelection(value.workspace);
-}
-
-function isWorkspaceSelection(value: unknown): value is SessionWorkspaceSelection {
-	if (!isRecord(value)) {
-		return false;
-	}
-	if (value.type === 'current') {
-		return true;
-	}
-	if (value.type === 'local') {
-		return nonEmptyString(value.root);
-	}
-	if (value.type === 'ssh') {
-		return nonEmptyString(value.host) && nonEmptyString(value.root);
-	}
-	if (value.type === 'remote') {
-		return nonEmptyString(value.authority) && /^(wsl|tunnel)\+(?:[0-9a-f]{2})+$/.test(value.authority) && nonEmptyString(value.root);
-	}
-	if (value.type === 'provider') {
-		return nonEmptyString(value.providerId) && nonEmptyString(value.workspace) && nonEmptyString(value.root)
-			&& (value.hostAuthority === undefined || nonEmptyString(value.hostAuthority));
-	}
-	return value.type === 'multiple' && Array.isArray(value.folders) && value.folders.length > 0
-		&& value.folders.every(folder => isRecord(folder) && typeof folder.label === 'string' && isRecord(folder.target)
-			&& (folder.target.type === 'local' || folder.target.type === 'ssh' || folder.target.type === 'provider') && isWorkspaceSelection(folder.target));
 }

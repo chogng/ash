@@ -311,6 +311,7 @@ impl TestIds {
 
 fn session(ids: &TestIds) -> Session {
     Session {
+        source: None,
         session_id: ids.session_id.clone(),
         title: "test run".into(),
         status: SessionStatus::Active,

@@ -112,10 +112,18 @@ fn concurrent_mcp_calls_keep_elicitation_bound_to_their_own_tool_context() {
         let right_port: Arc<dyn ToolInteractionService> = right.clone();
         let (left_result, right_result) = tokio::join!(
             with_active_tool_interactions(left_port, None, async {
-                host.handle_elicitation(elicitation(1)).await.unwrap()
+                host.capture_request_context()
+                    .unwrap()
+                    .handle_elicitation(elicitation(1))
+                    .await
+                    .unwrap()
             }),
             with_active_tool_interactions(right_port, None, async {
-                host.handle_elicitation(elicitation(2)).await.unwrap()
+                host.capture_request_context()
+                    .unwrap()
+                    .handle_elicitation(elicitation(2))
+                    .await
+                    .unwrap()
             })
         );
 
@@ -131,6 +139,55 @@ fn concurrent_mcp_calls_keep_elicitation_bound_to_their_own_tool_context() {
         );
         assert_eq!(left.requests.lock().unwrap().len(), 1);
         assert_eq!(right.requests.lock().unwrap().len(), 1);
+    });
+}
+
+#[test]
+fn mcp_elicitation_delivers_optional_fields_and_accepts_their_absence() {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let host = McpCatalogUpdates::default().client_host();
+        let interactions = Arc::new(TestInteractions {
+            answer: "left".into(),
+            requests: Mutex::new(Vec::new()),
+        });
+        let port: Arc<dyn ToolInteractionService> = interactions.clone();
+        let result = with_active_tool_interactions(port, None, async {
+            host.capture_request_context()
+                .unwrap()
+                .handle_elicitation(McpElicitation {
+                    request_id: McpRequestId::Number(1),
+                    params: serde_json::from_value::<ElicitRequestParams>(serde_json::json!({
+                        "mode": "form",
+                        "message": "Choose one",
+                        "requestedSchema": {
+                            "type": "object",
+                            "properties": {
+                                "choice": {"type": "string", "enum": ["left", "right"]},
+                                "note": {"type": "string"},
+                                "notify": {"type": "boolean"},
+                                "visibility": {"type": "string", "enum": ["private", "team"]}
+                            },
+                            "required": ["choice"]
+                        }
+                    }))
+                    .unwrap(),
+                })
+                .await
+                .unwrap()
+        })
+        .await;
+        assert_eq!(result.action, ElicitationAction::Accept);
+        assert_eq!(result.content, Some(serde_json::json!({"choice": "left"})));
+        let requests = interactions.requests.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0].questions.len(), 4);
+        for question in &requests[0].questions {
+            assert_eq!(question.required, question.id == "choice");
+        }
     });
 }
 
@@ -197,7 +254,11 @@ fn mcp_elicitation_emits_both_events_in_its_call_scope() {
             turn_id: ash_protocol::TurnId::new("turn_1").unwrap(),
         };
         let result = with_active_tool_interactions(interactions, Some(scope.clone()), async {
-            host.handle_elicitation(elicitation(1)).await.unwrap()
+            host.capture_request_context()
+                .unwrap()
+                .handle_elicitation(elicitation(1))
+                .await
+                .unwrap()
         })
         .await;
         assert_eq!(result.action, ElicitationAction::Accept);

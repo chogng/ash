@@ -1,6 +1,6 @@
+import { bindActionWidgetActivation } from '../../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import './media/modelPicker.css';
 import { addDisposableListener, h, stopEvent } from '../../../../../../../base/browser/dom.js';
-import { EventType, Gesture } from '../../../../../../../base/browser/touch.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../../../../base/common/uuid.js';
 import { localize } from '../../../../../../../nls.js';
@@ -43,16 +43,16 @@ export class ModelPickerWidget extends Disposable {
 		name.setAttribute('aria-haspopup', 'dialog');
 		options.setAttribute('aria-haspopup', 'dialog');
 		this.picker = this._register(this.instantiationService.createInstance(TabbedModelPicker, this.delegate));
-		this.bindTrigger(name, () => {
+		this._register(bindActionWidgetActivation(name, () => {
 			name.focus();
 			if (this.visible) { this.hide(); }
 			else { this.show(name); }
-		});
-		this.bindTrigger(options, () => {
+		}, () => this.enabled));
+		this._register(bindActionWidgetActivation(options, () => {
 			this.hide();
 			options.focus();
 			this.show(options, this.delegate.getSelectedModel());
-		});
+		}, () => this.enabled));
 		this._register(addDisposableListener(control, 'keydown', event => {
 			if (!this.enabled || event.isComposing) { return; }
 			if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -69,24 +69,6 @@ export class ModelPickerWidget extends Disposable {
 		}));
 		this._register(this.delegate.onDidChangePresentation(() => this.updateButtons()));
 		this.updateButtons();
-	}
-
-	private bindTrigger(trigger: HTMLElement, activate: () => void): void {
-		this._register(addDisposableListener(trigger, 'mousedown', event => {
-			if (event.button !== 0 || trigger.getAttribute('aria-disabled') === 'true') { return; }
-			stopEvent(event);
-			activate();
-		}));
-		this._register(addDisposableListener(trigger, 'keydown', event => {
-			if (event.isComposing || (event.key !== 'Enter' && event.key !== ' ') || trigger.getAttribute('aria-disabled') === 'true') { return; }
-			stopEvent(event);
-			activate();
-		}));
-		this._register(Gesture.addTarget(trigger));
-		this._register(addDisposableListener(trigger, EventType.Tap, event => {
-			stopEvent(event);
-			if (this.enabled) { activate(); }
-		}));
 	}
 
 	public focus(): void {

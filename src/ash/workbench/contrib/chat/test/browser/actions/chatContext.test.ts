@@ -19,8 +19,19 @@ import { DisposableStore, toDisposable } from '../../../../../../base/common/lif
 import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../../../platform/quickinput/common/quickInput.js';
-import { pickChatContextItem, ScreenshotContextValuePick } from '../../../browser/actions/chatContext.js';
+import { ChatContextContributions, pickChatContextItem } from '../../../browser/actions/chatContext.js';
 import { ImageEditorService } from '../../../../../services/imageEditor/browser/imageEditorService.js';
+import { IImageEditorService } from '../../../../../services/imageEditor/common/imageEditorService.js';
+import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
+import { IChatContextPickService } from '../../../browser/attachments/chatContextPickService.js';
+import { IClipboardService } from '../../../../../../platform/clipboard/common/clipboardService.js';
+import { IChatAttachmentResolveService } from '../../../browser/attachments/chatAttachmentResolveService.js';
+import { IChatSessionNavigationService } from '../../../../../services/chat/common/chatSessionNavigationService.js';
+import { IChatService } from '../../../../../services/chat/common/chatService.js';
+import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
+import { ILanguageModelToolsService } from '../../../common/tools/languageModelToolsService.js';
+import { Event } from '../../../../../../base/common/event.js';
+import { ScreenshotCommandId } from '../../../common/constants.js';
 
 function pickerHost(resources: DisposableStore): TestQuickInputService {
 	const container = document.createElement('div');
@@ -75,25 +86,36 @@ test('Escape cancels an unresolved context catalog and ignores its late result',
 suite('Registered attachment source contracts', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	test('user screenshots use the image editor while an explicit capture never falls back to desktop selection', async () => {
+	test('native sources assemble through DI, borrow image capture and unregister with their contribution', async () => {
+		using resources = new DisposableStore();
+		const services = resources.add(new InstantiationService());
+		const contexts = new ChatContextPickService();
+		services.registerInstance(IChatContextPickService, contexts);
+		services.registerInstance(IClipboardService, {} as IClipboardService);
+		services.registerInstance(IChatAttachmentResolveService, {} as IChatAttachmentResolveService);
+		assert.throws(() => services.createInstance(ChatContextContributions), /imageEditorService/);
+		assert.deepEqual([...contexts.items], [], 'A missing dependency must not leave partially registered sources');
 		const requests: AbortSignal[] = [];
 		class ManualImageEditors extends ImageEditorService {
 			constructor() { super(); }
 			async capture(signal: AbortSignal) { requests.push(signal); return undefined; }
 		}
-		using editors = new ManualImageEditors();
-		const screenshot = new ScreenshotContextValuePick(editors);
+		const editors = resources.add(new ManualImageEditors());
+		services.registerInstance(IImageEditorService, editors);
+		services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
+		services.registerInstance(IChatService, {} as IChatService);
+		services.registerInstance(ILanguageModelToolsService, { isAvailable: false, onDidChangeTools: Event.None } as ILanguageModelToolsService);
+		services.registerInstance(IQuickInputService, pickerHost(resources));
+		const contribution = resources.add(services.createInstance(ChatContextContributions));
+		assert.deepEqual([...contexts.items].map(source => source.label), ['Image from Clipboard', 'Screenshot…', 'Sessions…', 'Tools…']);
+		const screenshot = [...contexts.items].find(source => source.commandId === ScreenshotCommandId)!;
+		assert.equal(screenshot.type, 'valuePick');
+		assert.ok(screenshot.type === 'valuePick');
 		const signal = new AbortController().signal;
 		assert.equal(await screenshot.asAttachment(undefined, signal), undefined);
 		assert.deepEqual(requests, [signal]);
-		let targeted = 0;
-		assert.equal(await screenshot.asAttachment(undefined, signal, async requestSignal => {
-			assert.equal(requestSignal, signal);
-			targeted++;
-			return undefined;
-		}), undefined);
-		assert.equal(targeted, 1);
-		assert.deepEqual(requests, [signal], 'A missing target image must not start a manual screenshot');
+		contribution.dispose();
+		assert.deepEqual([...contexts.items], []);
 	});
 
 	function item(name: string): IChatContextPickerPickItem {

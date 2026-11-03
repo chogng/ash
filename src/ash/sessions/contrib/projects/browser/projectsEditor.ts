@@ -108,9 +108,10 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 
 	public override create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
+		// Projects restores its catalogue even when the previous window closed in a detail view.
 		this.domNode = h(document, 'section', {
 			className: 'ash-projects',
-			attributes: { 'aria-label': localize('projects.title', 'Projects') },
+			attributes: { 'aria-label': localize('projects.title', 'Projects'), 'data-splash-grid': '' },
 		});
 		parent.append(this.domNode);
 		super.create(this.domNode);
@@ -220,7 +221,6 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 										anchorPosition: AnchorPosition.Below,
 										getMenuClassName: () => 'ash-projects-sort-menu',
 										getCheckedActionsRepresentation: () => 'radio',
-										autoSelectFirstItem: true,
 									}),
 							},
 							options,

@@ -24,6 +24,7 @@ const binding: Record<string, PolicyDefinition> = { ManagedFeature: { type: 'boo
 function accountServices(events: Emitter<AccountState>): IAccountService {
 	const unexpected = async (): Promise<never> => { throw new Error('Unexpected account mutation'); };
 	return {
+		readRateLimits: async () => { throw new Error('Unexpected subscription limit query'); },
 		onDidChangeAccounts: events.event, onDidCompleteLogin: Event.None,
 		read: async () => ({ revision: 1n, accounts: [] }), startLogin: unexpected, cancelLogin: unexpected, logout: unexpected
 	};

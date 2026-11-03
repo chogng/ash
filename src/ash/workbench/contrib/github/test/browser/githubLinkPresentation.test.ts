@@ -26,7 +26,7 @@ function setup(resources: DisposableStore, github: GitHubService): { services: I
 	const notifications = resources.add(new TestNotificationService());
 	const signIns: string[] = [];
 	services.registerInstance(IGitHubService, github);
-	services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Use connection service'); }, cancelLogin: async () => { }, logout: async () => { } });
+	services.registerInstance(IAccountService, { readRateLimits: async () => { throw new Error('Unexpected subscription limit query'); }, onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Use connection service'); }, cancelLogin: async () => { }, logout: async () => { } });
 	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	services.registerInstance(ILogService, new NullLoggerService());
 	services.registerInstance(INotificationService, notifications);

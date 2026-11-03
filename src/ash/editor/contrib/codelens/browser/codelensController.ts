@@ -8,7 +8,7 @@ import { CancellationTokenSource } from '../../../../base/common/cancellation.js
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { type URI } from '../../../../base/common/uri.js';
 import { type LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
-import { type CodeLens, type CodeLensProvider, type Command } from '../../../common/languages.js';
+import { type CodeLens, type CodeLensProvider } from '../../../common/languages.js';
 import { CodeLensCache, getCodeLensCache } from './codeLensCache.js';
 import { CodeLensModel, getCodeLensModel, type CodeLensItem } from './codelens.js';
 import { CodeLensWidget } from './codelensWidget.js';
@@ -181,7 +181,7 @@ export class CodeLensContribution extends Disposable {
 					current.updateCodeLensItems(lineItems);
 					continue;
 				}
-				this.widgets.set(lineNumber, new CodeLensWidget(this.viewport, lineItems, this.onExecuteCommand ? command => this.executeCommand(command) : undefined));
+				this.widgets.set(lineNumber, new CodeLensWidget(this.viewport, lineItems, item => this.executeCommand(item), this.onExecuteCommand !== undefined));
 			}
 		} finally {
 			scrollState.restore(this.editor);
@@ -255,9 +255,13 @@ export class CodeLensContribution extends Disposable {
 		if (this.resource) this.cache.put(this.resource, this.viewport.textModel.lineCount, this.currentModel);
 	}
 
-	private executeCommand(command: Command): void {
+	private executeCommand(item: CodeLensItem): void {
+		const command = item.symbol.command;
+		if (!command) return;
 		try {
-			const result = this.onExecuteCommand!(command.id, command.arguments);
+			const result = item.provider.executeCodeLensCommand
+				? item.provider.executeCodeLensCommand(this.viewport.textModel, command, this.editor.getId())
+				: this.onExecuteCommand?.(command.id, command.arguments);
 			if (result && typeof (result as { readonly then?: unknown; }).then === 'function') {
 				void Promise.resolve(result as PromiseLike<void>).catch(this.onError);
 			}

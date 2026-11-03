@@ -1,3 +1,4 @@
+import type { PromptFileDiff } from './promptTimeline/promptTimelineModel.js';
 import type { ChatMode } from '../../../services/chat/common/chatService.js';
 import type { IChatInputPart } from './widget/input/chatInputPart.js';
 import type { ChatRequestQueueKind } from '../../../services/chat/common/chatService.js';
@@ -20,6 +21,16 @@ export interface IChatAcceptInputOptions {
 	readonly sideChat?: boolean;
 }
 
+/** A rendered code block borrows its editor and current model from its content owner. */
+export interface IChatCodeBlockInfo {
+	readonly ownerMarkdownPartId: string;
+	readonly codeBlockIndex: number;
+	readonly elementId: string;
+	readonly uri: URI | undefined;
+	readonly languageId: string | undefined;
+	focus(): void;
+}
+
 /** The Welcome host owns the available targets and the current selection. */
 export interface IWorkspacePickerItem {
 	readonly uri: URI;
@@ -38,13 +49,16 @@ export interface IWorkspacePickerDelegate {
 
 /** Host routing receives the accepted snapshot before model send; the live editor may already hold another draft. */
 export interface IChatWidgetViewOptions {
+	readonly promptTimelineFiles?: (prompt: IChatListItem) => readonly PromptFileDiff[];
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;
 }
 
 /** The live presentation owns the input; the registry never owns a conversation model. */
 export interface IChatWidget {
-	readonly model?: Pick<import('./widget/chatWidget.js').IChatWidgetModel, 'onDidChange' | 'inputState' | 'thread' | 'composerGeneration' | 'items'>;
+	getFileTreeInfosForResponse(response: IChatListItem): readonly IChatFileTreeInfo[];
+	getLastFocusedFileTreeForResponse(response: IChatListItem): IChatFileTreeInfo | undefined;
+	readonly model?: Pick<import('./widget/chatWidget.js').IChatWidgetModel, 'onDidChange' | 'inputState' | 'thread' | 'composerGeneration' | 'items' | 'olderHistory' | 'loadOlderHistory'>;
 	readonly input: IChatInputPart;
 	readonly sessionId: string | undefined;
 	readonly threadId: string | undefined;
@@ -72,6 +86,12 @@ export interface IChatWidget {
 	startVoiceConversation(): Promise<void>;
 	/** Prepares references within this composer’s draft lifetime and admission rules. */
 	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]>;
+}
+
+export interface IChatFileTreeInfo {
+	readonly treeDataId: string;
+	readonly treeIndex: number;
+	focus(): void;
 }
 
 export interface IChatFindController {
@@ -146,6 +166,7 @@ export const IChatPasteTargetService = createServiceIdentifier<IChatPasteTargetS
 
 /** Presentation operations for Workbench actions; the product adapter owns selection and drafts. */
 export interface IChatViewPane extends IView {
+	reopenLastClosedSessionTab(): void;
 	createNewChatEditorInput(source?: ChatEditorInput): ChatEditorInput;
 	/** Borrowed root used only to measure the host's content frame. */
 	readonly element: HTMLElement;

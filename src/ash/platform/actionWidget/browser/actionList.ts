@@ -9,13 +9,15 @@ import { InputBox } from '../../../base/browser/ui/inputbox/inputbox.js';
 import { Emitter } from '../../../base/common/event.js';
 import '../../../base/browser/ui/dialog/dialog.css';
 import '../../../base/browser/ui/menu/menu.css';
+import '../../../base/browser/ui/toggle/toggle.css';
 import { Dialog } from '../../../base/browser/ui/dialog/dialog.js';
 import type { AnchorPosition } from '../../../base/browser/ui/contextview/contextview.js';
 import { Menu } from '../../../base/browser/ui/menu/menu.js';
-import { Separator, type IAction } from '../../../base/common/actions.js';
+import { Separator, SubmenuAction, type IAction } from '../../../base/common/actions.js';
 import type { Icon } from '../../../base/common/icon.js';
 import type { ResolvedKeybinding } from '../../../base/common/keybindings.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { isMacintosh } from '../../../base/common/platform.js';
 import { localize } from '../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../accessibility/browser/accessibleViewRegistry.js';
@@ -29,14 +31,23 @@ export const enum ActionListItemKind {
 	Separator = 'separator',
 }
 
+export interface IActionListItemInlineToggle {
+	readonly label: string;
+	readonly checked: boolean;
+	readonly onChange: (checked: boolean) => void | Promise<void>;
+	readonly disabled?: boolean;
+}
+
 export interface IActionListItem<T> {
 	readonly id?: string;
 	readonly kind: ActionListItemKind;
 	readonly item?: T;
+	readonly submenu?: readonly IActionListItem<T>[];
 	readonly label: string;
 	readonly disabled?: boolean;
 	readonly group?: { readonly title: string; readonly icon?: Icon; };
 	readonly checked?: boolean;
+	readonly standaloneToggle?: IActionListItemInlineToggle;
 	readonly canPreview?: boolean;
 	readonly keybinding?: ResolvedKeybinding;
 	/** Visible status text, included in search and the accessible description. */
@@ -44,15 +55,25 @@ export interface IActionListItem<T> {
 	/** Searchable metadata announced with the action, separate from the visible label and badge. */
 	readonly detail?: string;
 	readonly description?: string;
+	/** Overrides the default row tooltip text. */
+	readonly tooltip?: string;
+}
+
+function isDisabled(entry: IActionListItem<unknown>): boolean {
+	return entry.disabled === true || entry.standaloneToggle?.disabled === true;
 }
 
 export interface IActionListOptions {
 	readonly anchorPosition?: AnchorPosition;
 	readonly className?: string;
 	readonly presentation?: 'menu' | 'details';
+	/** Enable row tooltips in menus, or disable the default tooltips in detail rows. */
+	readonly showRowTooltips?: boolean;
 	readonly showFilter?: boolean;
 	readonly filterPlaceholder?: string;
+	readonly onDidChangeFilter?: (text: string) => void;
 	readonly focusFilterOnOpen?: boolean;
+	readonly focusItemOnOpen?: boolean;
 	readonly filterAsCombobox?: boolean;
 	readonly ariaMultiselectable?: boolean;
 	readonly ariaLabel?: string;
@@ -99,6 +120,8 @@ class ActionListHeader extends ActionViewItem {
 
 /** A selectable row keeps its checked state, summary and badge within one navigation stop. */
 class ActionListAction extends ButtonActionViewItem {
+	private toggleIndicator: HTMLElement | undefined;
+
 	constructor(action: IAction, private readonly entry: IActionListItem<unknown>, private readonly options: IActionListOptions) {
 		super(action, { buttonStyles: defaultButtonStyles, buttonPresentation: 'quiet' });
 	}
@@ -109,26 +132,36 @@ class ActionListAction extends ButtonActionViewItem {
 		const button = this.button.domNode;
 		button.classList.add('ash-action-widget-primary');
 		const listbox = this.options.ariaMultiselectable && this.options.filterAsCombobox;
-		let role = this.entry.checked === undefined ? 'menuitem' : 'menuitemradio';
+		const toggle = this.entry.standaloneToggle;
+		const checked = toggle?.checked ?? this.entry.checked;
+		let role = toggle ? 'menuitemcheckbox' : checked === undefined ? 'menuitem' : 'menuitemradio';
 		if (this.options.ariaMultiselectable) {
 			button.id = `${this.action.id}.option`;
 			role = listbox ? 'option' : 'menuitemcheckbox';
 		}
 		button.setAttribute('role', role);
+		if (toggle) { button.setAttribute('aria-label', toggle.label); }
 		button.removeAttribute('aria-pressed');
-		if (this.entry.checked !== undefined) {
-			button.setAttribute('aria-checked', String(this.entry.checked));
-			if (listbox) { button.setAttribute('aria-selected', String(this.entry.checked)); }
+		if (checked !== undefined) {
+			button.setAttribute('aria-checked', String(checked));
+			if (listbox) { button.setAttribute('aria-selected', String(checked)); }
 			const check = h(container.ownerDocument, 'span');
-			check.className = 'ash-action-widget-check';
-			check.hidden = !this.entry.checked;
 			check.setAttribute('aria-hidden', 'true');
-			appendIcon(Lxicon.check, check);
+			if (toggle) {
+				check.className = 'ash-action-widget-check ash-toggle ash-switch';
+				check.classList.toggle('checked', checked);
+				check.append(h(container.ownerDocument, 'span', { className: 'ash-switch-track' }));
+				this.toggleIndicator = check;
+			} else {
+				check.className = 'ash-action-widget-check';
+				check.hidden = !checked;
+				appendIcon(Lxicon.check, check);
+			}
 			button.append(check);
 		}
 		const description = [this.entry.detail, this.entry.description, this.entry.badge].filter(Boolean).join(' · ');
 		if (description) { button.setAttribute('aria-description', description); }
-		if (this.entry.description) {
+		if (this.entry.description && (this.options.presentation === 'details' || this.options.ariaMultiselectable)) {
 			const summary = h(container.ownerDocument, 'span');
 			summary.className = 'ash-action-widget-summary';
 			summary.textContent = this.entry.description;
@@ -142,8 +175,19 @@ class ActionListAction extends ButtonActionViewItem {
 		}
 	}
 
+	updateToggle(checked: boolean): void {
+		if (this.isDisposed || !this.toggleIndicator) return;
+		this.toggleIndicator.classList.toggle('checked', checked);
+		const button = this.button.domNode;
+		button.setAttribute('aria-checked', String(checked));
+		if (button.getAttribute('role') === 'option') {
+			button.setAttribute('aria-selected', String(checked));
+		}
+	}
+
 	protected override setupTooltip(): void {
-		this.setupDelayedHover(this.button.domNode, [this.action.label, this.entry.description].filter(Boolean).join(' · '));
+		if (this.options.showRowTooltips === false) { return; }
+		this.setupDelayedHover(this.button.domNode, this.entry.tooltip ?? [this.action.label, this.entry.description].filter(Boolean).join(' · '));
 	}
 }
 
@@ -152,9 +196,11 @@ export class ActionList<T> extends Disposable {
 	public readonly domNode: HTMLElement;
 	private menu: Menu | undefined;
 	private readonly menuResources = this._register(new DisposableStore());
+	private readonly toggleRows = new WeakMap<IActionListItem<T>, ActionListAction>();
 	private readonly itemsDomNode: HTMLElement;
 	private readonly statusDomNode: HTMLElement;
 	private readonly filter: InputBox | undefined;
+	private filterText = '';
 	private readonly filterHost: HTMLElement | undefined;
 	private readonly preview: Button | undefined;
 	private readonly help = this._register(new MutableDisposable<DisposableStore>());
@@ -204,9 +250,28 @@ export class ActionList<T> extends Disposable {
 				this.filter.inputElement.setAttribute('aria-haspopup', 'dialog');
 				this.filter.inputElement.setAttribute('aria-controls', this.domNode.id);
 			}
-			this._register(this.filter.onDidChange(() => this.renderItems()));
+			const filter = this.filter;
+			let composing = false;
+			const applyFilter = (text: string): void => {
+				if (composing || text === this.filterText) { return; }
+				this.filterText = text;
+				const items = this.items;
+				options.onDidChangeFilter?.(text);
+				// A consumer that replaced the items has already rendered with this filter.
+				if (this.items === items) { this.renderItems(); }
+			};
+			this._register(addDisposableListener(filter.inputElement, 'compositionstart', () => { composing = true; }));
+			this._register(addDisposableListener(filter.inputElement, 'compositionend', () => {
+				composing = false;
+				applyFilter(filter.value);
+			}));
+			this._register(filter.onDidChange(applyFilter));
 			this._register(this.filter.onKeyDown(event => {
-				if (event.isComposing) {
+				if (composing || event.isComposing) {
+					return;
+				}
+				if (!this.options.filterAsCombobox && this.handleNavigationShortcut(event, true)) { return; }
+				if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
 					return;
 				}
 				if (event.key === 'Enter' && this.focusedEntry) {
@@ -215,7 +280,7 @@ export class ActionList<T> extends Disposable {
 				} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 					stopEvent(event);
 					if (this.options.ariaMultiselectable) {
-						const candidates = this.visibleItems.filter(item => item.kind === ActionListItemKind.Action && !item.disabled);
+						const candidates = this.visibleItems.filter(item => item.kind === ActionListItemKind.Action && !isDisabled(item));
 						if (candidates.length) {
 							const index = candidates.indexOf(this.focusedEntry!);
 							this.focusedEntry = candidates[(index + (event.key === 'ArrowDown' ? 1 : -1) + candidates.length) % candidates.length];
@@ -225,7 +290,11 @@ export class ActionList<T> extends Disposable {
 						this.updatePreview();
 						return;
 					}
-					this.focus();
+					if (this.options.filterAsCombobox) {
+						this.focus();
+					} else {
+						this.focusFromFilter(event.key === 'ArrowDown' ? 1 : -1);
+					}
 				}
 			}));
 		}
@@ -319,7 +388,7 @@ export class ActionList<T> extends Disposable {
 	private renderItems(): void {
 		const focused = this.itemsDomNode.contains(getActiveElement(this.domNode.ownerDocument));
 		const previous = this.focusedEntry;
-		const terms = (this.filter?.value ?? '').toLocaleLowerCase().trim().split(/\s+/u).filter(Boolean);
+		const terms = this.filterText.toLocaleLowerCase().trim().split(/\s+/u).filter(Boolean);
 		const visible: IActionListItem<T>[] = [];
 		let header: IActionListItem<T> | undefined;
 		for (const entry of this.items) {
@@ -338,35 +407,44 @@ export class ActionList<T> extends Disposable {
 			visible.push(entry);
 		}
 		const entries = new Map<string, IActionListItem<T>>();
-		const actions: IAction[] = visible.map((entry, index) => {
+		const toAction = (entry: IActionListItem<T>, id: string): IAction => {
 			if (entry.kind === ActionListItemKind.Separator) {
 				return new Separator();
 			}
-			const id = `${this.user}.${index}`;
 			entries.set(id, entry);
+			if (entry.submenu && !isDisabled(entry)) {
+				return new SubmenuAction(id, entry.label, entry.submenu.map((child, index) => toAction(child, `${id}.${index}`)), entry.group?.icon);
+			}
 			return {
 				id, label: entry.label, tooltip: entry.label,
-				enabled: entry.kind === ActionListItemKind.Action && !entry.disabled,
+				enabled: entry.kind === ActionListItemKind.Action && !isDisabled(entry),
 				icon: entry.group?.icon,
 				checked: entry.checked,
 				badge: entry.badge,
 				run: () => this.select(entry),
 			};
-		});
+		};
+		const actions = visible.map((entry, index) => toAction(entry, `${this.user}.${index}`));
 		this.menuResources.clear();
 		this.visibleItems = visible;
 		const menu = this.menu = this.menuResources.add(new Menu(this.itemsDomNode, actions, {
 			buttonStyles: defaultButtonStyles,
 			keybindingLabelStyles: defaultKeybindingLabelStyles,
 			className: 'ash-action-widget-menu',
+			submenuClassName: 'ash-action-widget-menu ash-action-widget-submenu',
 			getCheckedActionsRepresentation: () => 'radio',
 			getKeyBinding: action => entries.get(action.id)?.keybinding,
 			getAriaDescription: action => [entries.get(action.id)?.detail, entries.get(action.id)?.badge].filter(Boolean).join(' · '),
 			actionViewItemProvider: action => {
 				const entry = entries.get(action.id);
-				if (!entry) { return undefined; }
+				if (!entry || action instanceof SubmenuAction) { return undefined; }
 				if (entry.kind === ActionListItemKind.Header) { return new ActionListHeader(action); }
-				return this.options.presentation === 'details' || this.options.ariaMultiselectable ? new ActionListAction(action, entry, this.options) : undefined;
+				const customRow = entry.standaloneToggle || this.options.presentation === 'details' || this.options.ariaMultiselectable
+					|| (this.options.showRowTooltips && (entry.tooltip || entry.description));
+				if (!customRow) return undefined;
+				const row = new ActionListAction(action, entry, this.options);
+				if (entry.standaloneToggle) this.toggleRows.set(entry, row);
+				return row;
 			}
 		}, defaultMenuStyles));
 		menu.getContainer().setAttribute('aria-label', this.options.ariaLabel ?? localize('actionWidget.label', 'Actions'));
@@ -382,10 +460,54 @@ export class ActionList<T> extends Disposable {
 		if (hint) {
 			menu.getContainer().setAttribute('aria-description', hint);
 		}
+		if (!this.options.filterAsCombobox) {
+			this.menuResources.add(addDisposableListener(menu.getContainer(), 'keydown', event => {
+				if (event.isComposing || this.handleNavigationShortcut(event, false)) { return; }
+				if (this.filter && !this.filterHost?.hidden && event.key.length === 1 && event.key !== ' ' &&
+					!event.altKey && !event.ctrlKey && !event.metaKey) {
+					stopEvent(event);
+					this.filter.focus();
+					this.filter.value = event.key;
+				}
+			}, true));
+		}
+		if (this.options.focusItemOnOpen === false) {
+			const menuElement = menu.getContainer();
+			this.menuResources.add(addDisposableListener(menuElement, 'keydown', event => {
+				if (event.target !== menuElement || event.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !this.focusedEntry) {
+					return;
+				}
+				if (event.key === 'Enter' || event.key === ' ') {
+					stopEvent(event);
+					void this.select(this.focusedEntry);
+				} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+					stopEvent(event);
+					this.focusAdjacentItem(event.key === 'ArrowDown' ? 1 : -1);
+				}
+			}, true));
+		}
+		if (this.filterHost && !this.options.filterAsCombobox) {
+			this.menuResources.add(addDisposableListener(menu.getContainer(), 'keydown', event => {
+				if (this.filterHost!.hidden || !this.focusedEntry || event.isComposing ||
+					event.altKey || event.ctrlKey || event.metaKey || event.shiftKey ||
+					(event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) {
+					return;
+				}
+				const candidates = this.visibleItems.filter(item => item.kind === ActionListItemKind.Action && !isDisabled(item));
+				const boundary = event.key === 'ArrowUp' ? candidates[0] : candidates.at(-1);
+				if (this.focusedEntry === boundary) {
+					stopEvent(event);
+					this.focusedEntry = undefined;
+					this.updatePreview();
+					this.focusFilter();
+				}
+			}, true));
+		}
 		this.menuResources.add(addDisposableListener(menu.getContainer(), 'focusin', event => {
+			if (this.options.focusItemOnOpen === false && event.target === menu.getContainer()) { return; }
 			const row = isHTMLElement(event.target) ? event.target.closest<HTMLElement>('[data-action-id]') : null;
 			this.focusedEntry = row ? entries.get(row.dataset.actionId!) : undefined;
-			if (this.focusedEntry && row) {
+			if (this.focusedEntry && !this.focusedEntry.submenu && !this.focusedEntry.standaloneToggle && row) {
 				this.delegate.onFocus?.(this.focusedEntry.item!, row);
 			}
 			this.updatePreview();
@@ -393,17 +515,17 @@ export class ActionList<T> extends Disposable {
 		this.menuResources.add(addDisposableListener(menu.getContainer(), 'mousemove', event => {
 			const row = isHTMLElement(event.target) ? event.target.closest<HTMLElement>('[data-action-id]') : null;
 			const entry = row ? entries.get(row.dataset.actionId!) : undefined;
-			if (entry?.kind === ActionListItemKind.Action && !entry.disabled && row) {
+			if (entry?.kind === ActionListItemKind.Action && !entry.submenu && !entry.standaloneToggle && !isDisabled(entry) && row) {
 				this.delegate.onHover?.(entry.item!, row);
 			}
 		}));
 		const retained = previous && visible.find(entry => entry === previous || (entry.id !== undefined && entry.id === previous.id));
-		this.focusedEntry = retained && !retained.disabled
+		this.focusedEntry = retained && !isDisabled(retained)
 			? retained
-			: visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled && entry.checked)
-			?? visible.find(entry => entry.kind === ActionListItemKind.Action && !entry.disabled);
+			: visible.find(entry => entry.kind === ActionListItemKind.Action && !isDisabled(entry) && entry.checked)
+			?? visible.find(entry => entry.kind === ActionListItemKind.Action && !isDisabled(entry));
 		this.updatePreview();
-		if (this.focusedEntry && previous) {
+		if (this.focusedEntry && !this.focusedEntry.submenu && !this.focusedEntry.standaloneToggle && previous) {
 			const row = menu.getContainer().children[visible.indexOf(this.focusedEntry)] as HTMLElement;
 			this.delegate.onFocus?.(this.focusedEntry.item!, row);
 		}
@@ -429,7 +551,7 @@ export class ActionList<T> extends Disposable {
 			}
 		}
 		if (this.preview) {
-			this.preview.enabled = !this.busy && this.focusedEntry?.canPreview === true && !this.focusedEntry.disabled;
+			this.preview.enabled = !this.busy && this.focusedEntry?.canPreview === true && !this.focusedEntry.standaloneToggle && !isDisabled(this.focusedEntry);
 		}
 	}
 
@@ -451,6 +573,61 @@ export class ActionList<T> extends Disposable {
 		}
 	}
 
+	private handleNavigationShortcut(event: KeyboardEvent, fromFilter: boolean): boolean {
+		if (event.altKey || event.shiftKey) { return false; }
+		const command = isMacintosh ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+		const macControl = isMacintosh && event.ctrlKey && !event.metaKey;
+		if (command && event.key === '.' && this.focusedEntry) {
+			stopEvent(event);
+			void this.select(this.focusedEntry);
+			return true;
+		}
+		const previous = command && event.key === 'ArrowUp' || macControl && event.key === 'p';
+		const next = command && event.key === 'ArrowDown' || macControl && event.key === 'n';
+		if (!previous && !next) { return false; }
+		stopEvent(event);
+		const direction = previous ? -1 : 1;
+		if (fromFilter) { this.focusFromFilter(direction); }
+		else { this.focusAdjacentItem(direction); }
+		return true;
+	}
+
+	private focusAdjacentItem(direction: 1 | -1): void {
+		const candidates = this.visibleItems.filter(item => item.kind === ActionListItemKind.Action && !isDisabled(item));
+		if (!candidates.length) { return; }
+		const current = this.focusedEntry ? candidates.indexOf(this.focusedEntry) : -1;
+		const next = current < 0 ? (direction === 1 ? 0 : candidates.length - 1) : current + direction;
+		if (current >= 0 && (next < 0 || next >= candidates.length) && this.filterHost && !this.filterHost.hidden) {
+			this.focusedEntry = undefined;
+			this.updatePreview();
+			this.focusFilter();
+			return;
+		}
+		this.menu?.focus(this.visibleItems.indexOf(candidates[(next + candidates.length) % candidates.length]!));
+	}
+
+	private focusFromFilter(direction: 1 | -1): void {
+		const candidates = this.visibleItems.filter(item => item.kind === ActionListItemKind.Action && !isDisabled(item));
+		const current = this.focusedEntry ? candidates.indexOf(this.focusedEntry) : -1;
+		const index = current < 0 ? (direction === 1 ? 0 : candidates.length - 1) : current + direction;
+		const next = candidates[index];
+		if (next) {
+			this.menu?.focus(this.visibleItems.indexOf(next));
+		} else if (direction === 1 && this.focusedEntry) {
+			this.focus();
+		}
+	}
+
+	public clearFocusedFilter(): boolean {
+		const filter = this.filter;
+		if (!filter || this.options.filterAsCombobox || !filter.value ||
+			getActiveElement(this.domNode.ownerDocument) !== filter.inputElement) {
+			return false;
+		}
+		filter.value = '';
+		return true;
+	}
+
 	public focusFilter(): void {
 		if (this.filterHost && !this.filterHost.hidden) {
 			this.filter?.focus();
@@ -463,7 +640,7 @@ export class ActionList<T> extends Disposable {
 		finishActionWidgetOpeningAnimation(this.domNode);
 		// Measure the existing menu at its intrinsic width, including icons, shortcuts and chrome.
 		// Filtering retains the full menu width so typing does not move the popup's edge.
-		if (this.filterHost?.hidden || !this.filter?.value.trim() || this.contentWidth === undefined) {
+		if (this.filterHost?.hidden || !this.filterText.trim() || this.contentWidth === undefined) {
 			const previousWidth = this.domNode.style.width;
 			this.domNode.style.width = 'max-content';
 			this.contentWidth = Math.ceil(this.domNode.getBoundingClientRect().width);
@@ -475,14 +652,28 @@ export class ActionList<T> extends Disposable {
 	}
 
 	private async select(entry: IActionListItem<T>, preview = false): Promise<void> {
-		if (this.busy || entry.kind !== ActionListItemKind.Action || entry.disabled || (preview && (!this.supportsPreview || !entry.canPreview))) {
+		if (this.busy || entry.kind !== ActionListItemKind.Action || isDisabled(entry) || (preview && (!this.supportsPreview || !entry.canPreview || entry.standaloneToggle))) {
+			return;
+		}
+		if (entry.submenu) {
+			if (!preview) {
+				const index = this.visibleItems.indexOf(entry);
+				this.menu?.focus(index);
+				this.menu?.getContainer().children[index]?.querySelector<HTMLButtonElement>('button')?.click();
+			}
 			return;
 		}
 		this.busy = true;
 		this.updatePreview();
 		this.domNode.setAttribute('aria-busy', 'true');
 		try {
-			await this.delegate.onSelect(entry.item!, preview);
+			const toggle = entry.standaloneToggle;
+			if (toggle) {
+				await toggle.onChange(!toggle.checked);
+				this.toggleRows.get(entry)?.updateToggle(toggle.checked);
+			} else {
+				await this.delegate.onSelect(entry.item!, preview);
+			}
 		} finally {
 			if (!this.isDisposed) {
 				this.busy = false;
@@ -492,8 +683,16 @@ export class ActionList<T> extends Disposable {
 		}
 	}
 
-	public focus(): void {
-		if (this.focusedEntry) {
+	public contains(target: Node): boolean {
+		return this.domNode.contains(target) || this.menu?.contains(target) === true;
+	}
+
+	public focus(focusItem = true): void {
+		if (!focusItem) {
+			// Keep keyboard navigation in the menu without drawing a ring on pointer open.
+			const pointerFocus: FocusOptions & { focusVisible: boolean; } = { focusVisible: false };
+			this.menu?.focus(false, pointerFocus);
+		} else if (this.focusedEntry) {
 			this.menu?.focus(this.visibleItems.indexOf(this.focusedEntry));
 		}
 		if (!this.domNode.contains(getActiveElement(this.domNode.ownerDocument))) {

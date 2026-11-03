@@ -86,6 +86,22 @@ suite('ChatResponseAccessibleView', () => {
 		});
 	}
 
+	test('reads a captured tree as indented labels and original resource addresses', () => {
+		const item = {
+			id: 'tree', type: 'agentMessage', text: '', transient: false,
+			content: [{
+				type: 'artifact', artifact: {
+					source: { type: 'structuredResult' }, mimeType: 'application/json', contentDigest: 'tree', truncated: false,
+					data: { type: 'json', json: JSON.stringify({ kind: 'treeData', treeData: { label: '目录', uri: 'file:///workspace', children: [{ label: '<img src=x>', uri: 'file:///workspace/main.ts', type: 'file' }] } }) },
+				}
+			}],
+		} as IChatListItem;
+		const implementation = new ChatResponseAccessibleView({ getItems: () => [item], getFocusedElement: () => document.body, onDidChangeContent: () => toDisposable(() => { }) });
+		using provider = implementation.getProvider()!;
+		assert.ok(provider.provideContent().includes('目录 · file:///workspace\n  <img src=x> · file:///workspace/main.ts'));
+		assert.equal(document.querySelector('img[src="x"]'), null);
+	});
+
 	test('includes tool evidence and resource metadata in Chinese without creating resource DOM', () => {
 		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
 		try {

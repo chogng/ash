@@ -28,7 +28,7 @@ export class ModePickerActionItem extends ChatSessionPickerActionItem {
 			getOptions: () => typeof modeAction.actions === 'function' ? modeAction.actions() : modeAction.actions,
 			captureContext,
 			onDidSelect,
-		}, { className: 'ash-chat-input-mode-menu' }, instantiationService);
+		}, { className: 'ash-chat-input-mode-menu ash-action-widget-accent-checks' }, instantiationService);
 	}
 
 	protected override setupHover(target: HTMLElement, content: string): IManagedHover {

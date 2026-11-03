@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suite, test } from 'mocha';
+import { expect } from '@playwright/test';
+import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
+import type { } from '../../../../../../../test/fixtures/browser/chatInput.page.js';
 import { JSDOM } from 'jsdom';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { Emitter } from '../../../../../base/common/event.js';
@@ -98,4 +101,32 @@ test('Remote workspace choices keep their authority in labels without converting
 	assert.equal(f.entries.find(entry => entry.item?.id === `workspace.${uri.toString()}`)?.item?.tooltip, uri.toString());
 	await f.choose(`workspace.${uri.toString()}`);
 	assert.equal(f.selected?.uri.toString(), uri.toString());
+});
+
+suite('Workspace picker command in a rendered composer', () => {
+	const browser = useBrowserTests();
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`the command opens its existing picker and preserves the draft in ${locale}`, async () => {
+			const { page } = browser;
+			await page.goto(`/chatInput.html?workspacePicker&locale=${locale}`);
+			const input = page.getByRole('textbox').first();
+			await input.fill('Keep this draft');
+			await page.evaluate(() => window.ashChatInputIntegration.openWorkspace());
+			await expect(page.getByRole('menuitemradio', { name: 'Fixture workspace' })).toBeVisible();
+			await page.keyboard.press('Escape');
+			await expect(input).toHaveValue('Keep this draft');
+			await page.evaluate(() => window.ashChatInputIntegration.openWorkspace());
+			await page.getByRole('menuitemradio', { name: 'Fixture workspace' }).click();
+			await expect(page.getByRole('button', { name: /Fixture workspace/ })).toBeVisible();
+			await expect(input).toHaveValue('Keep this draft');
+			await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('submitting'));
+			await page.evaluate(() => window.ashChatInputIntegration.openWorkspace());
+			await expect(page.getByRole('menuitemradio', { name: 'Fixture workspace' })).toHaveCount(0);
+			await page.evaluate(() => window.ashChatInputIntegration.setFooterPhase('ready'));
+			await page.evaluate(() => window.ashChatInputIntegration.setVisible(false));
+			await page.evaluate(() => window.ashChatInputIntegration.openWorkspace());
+			await expect(page.getByRole('menuitemradio', { name: 'Fixture workspace' })).toHaveCount(0);
+		});
+	}
 });

@@ -2,6 +2,9 @@ import './contrib/splash/browser/splash.contribution.js';
 import '../workbench/contrib/remote/browser/remote.contribution.js';
 import '../workbench/contrib/workspace/browser/workspace.contribution.js';
 import './contrib/workspace/browser/workspace.contribution.js';
+import './contrib/chat/browser/chat.contribution.js';
+import './contrib/chat/browser/newSessionAction.js';
+import './contrib/chat/browser/openSessionLinkOpener.contribution.js';
 import '../workbench/contrib/accessibility/browser/accessibility.contribution.js';
 import '../workbench/contrib/debug/browser/debug.service.contribution.js';
 import '../workbench/services/testing/browser/testingServiceRegistration.js';
@@ -26,6 +29,7 @@ import '../workbench/contrib/chat/browser/aiCustomization/customizationMarketpla
 import '../workbench/contrib/preferences/browser/preferences.contribution.js';
 import '../workbench/contrib/advisor/browser/advisor.contribution.js';
 import '../workbench/contrib/authentication/browser/authentication.contribution.js';
+import '../workbench/contrib/issue/browser/issue.contribution.js';
 import '../workbench/contrib/language/browser/languageServers.contribution.js';
 import '../workbench/contrib/format/browser/format.contribution.js';
 import '../workbench/contrib/inlayHints/browser/inlayHintsAccessibilty.js';
@@ -35,6 +39,7 @@ import '../workbench/contrib/opener/browser/opener.contribution.js';
 import '../workbench/contrib/chat/browser/chat.shared.contribution.js';
 import '../workbench/contrib/webview/browser/webview.contribution.js';
 import '../workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
+import './contrib/sessions/browser/sessionsActions.js';
 import './contrib/sessions/browser/views/sessionsViewActions.js';
 import '../workbench/contrib/speech/browser/speech.contribution.js';
 import '../workbench/contrib/accessibilitySignals/browser/accessibilitySignal.contribution.js';
@@ -100,14 +105,14 @@ import { WebWorkerService } from '../platform/webWorker/browser/webWorkerService
 registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed);
 
 MenusRegistry.appendMenuItem(Menus.ActivityBar, {
-	command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.or(ContextKeyExpr.has('sessions.activity.chatSelected'), ContextKeyExpr.has('sessions.activity.chatgptSelected')) },
+	command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add },
 	group: 'navigation', order: 10,
 });
 
 MenusRegistry.appendMenuItems([
 	{
 		id: Menus.CodeActivityBar,
-		item: { command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.has('sessions.activity.codeSelected') }, group: 'navigation', order: 10 },
+		item: { command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add }, group: 'navigation', order: 10 },
 	},
 	{
 		id: Menus.CodeActivityBar,

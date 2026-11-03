@@ -1,4 +1,5 @@
 import './contextview.css';
+import { findLast } from '../../../common/arraysFind.js';
 import { Emitter } from '../../../common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../common/lifecycle.js';
 import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, type IRectangle, layout2d } from '../../../common/layout.js';
@@ -6,6 +7,8 @@ import { addDisposableListener, getActiveElement, getWindow, isHTMLElement, isNo
 import { isAncestorOfActiveElement, isFocusable, restoreFocus } from '../../focus.js';
 import { getViewport } from '../../geometry.js';
 import { observeResize } from '../../observer.js';
+import { getVisibleWCOTitlebarAreaRect } from '../../browser.js';
+import { avoidWindowControlsOverlay } from './windowControlsOverlay.js';
 
 export {
 	AnchorAlignment,
@@ -38,14 +41,21 @@ export interface ContextViewOptions {
 	readonly anchorAlignment?: AnchorAlignment;
 	readonly anchorPosition?: AnchorPosition;
 	readonly anchorAxisAlignment?: AnchorAxisAlignment;
+	/** For a side-by-side view, align this content element with the anchor’s top edge. */
+	readonly alignTopTo?: Element;
 	readonly gap?: number;
 	readonly presentation?: ContextViewPresentation;
 	readonly focusRestore?: ContextViewFocusRestore;
 	readonly layer?: number;
+	/** Shield background controls from pointer interaction while the popup is open. */
+	readonly blockOutsidePointer?: boolean;
 	readonly isTargetWithin?: (target: Node) => boolean;
+	/** Handle Escape inside the popup before the default dismissal. */
+	readonly onEscape?: (event: KeyboardEvent) => boolean;
 	readonly onHide?: (reason: ContextViewHideReason) => void;
 }
 
+const popupRevisions = new WeakMap<Document, number>();
 const visibleContextViews = new WeakMap<Document, ContextView[]>();
 
 /**
@@ -87,6 +97,19 @@ export class ContextView
 		return this.options !== undefined;
 	}
 
+	static getPopupRevision(document: Document): number {
+		return popupRevisions.get(document) ?? 0;
+	}
+
+	static getHoverScope(target: HTMLElement): ContextView | undefined {
+		return findLast(visibleContextViews.get(target.ownerDocument) ?? [], view =>
+			view.options?.blockOutsidePointer && !isTargetInAnotherModal(target, view.element));
+	}
+
+	contains(target: Node): boolean {
+		return this.element.contains(target) || this.options?.isTargetWithin?.(target) === true;
+	}
+
 	show(options: ContextViewOptions): boolean {
 		if (this.visible) {
 			this.hide(ContextViewHideReason.Replaced);
@@ -108,6 +131,18 @@ export class ContextView
 
 		this.options = options;
 		this.element.replaceChildren(options.content);
+		if (options.blockOutsidePointer) {
+			const shield = h(ownerDocument, 'div', { className: 'ash-context-view-pointer-shield' });
+			shield.setAttribute('aria-hidden', 'true');
+			this.element.prepend(shield);
+			// Let pointerdown leave the menu input before restoring trigger focus on click.
+			// The shield still consumes the full click.
+			this.visibleListeners.add(addDisposableListener(shield, 'click', event => {
+				event.stopPropagation();
+				this.hide(ContextViewHideReason.OutsidePointer);
+			}));
+			this.visibleListeners.add(addDisposableListener(shield, 'contextmenu', event => event.preventDefault()));
+		}
 		this.element.className =
 			`ash-context-view ash-context-view-${options.presentation ?? 'default'}`;
 		this.element.style.setProperty(
@@ -128,6 +163,9 @@ export class ContextView
 		if (!this.visible) return false;
 		this.element.style.visibility = '';
 		registerVisibleContextView(this);
+		if (options.presentation !== 'hover') {
+			popupRevisions.set(ownerDocument, ContextView.getPopupRevision(ownerDocument) + 1);
+		}
 
 		this.visibleListeners.add(addDisposableListener(
 			ownerDocument,
@@ -160,7 +198,9 @@ export class ContextView
 				}
 				event.preventDefault();
 				event.stopPropagation();
-				this.hide(ContextViewHideReason.Escape);
+				if (!options.onEscape?.(event)) {
+					this.hide(ContextViewHideReason.Escape);
+				}
 			},
 			true,
 		));
@@ -174,6 +214,10 @@ export class ContextView
 			'resize',
 			() => this.layout(),
 		));
+		const overlay = (targetWindow.navigator as Navigator & { windowControlsOverlay?: EventTarget; }).windowControlsOverlay;
+		if (overlay) {
+			this.visibleListeners.add(addDisposableListener(overlay, 'geometrychange', () => this.layout()));
+		}
 		const visualViewport = targetWindow.visualViewport;
 		if (visualViewport) {
 			this.visibleListeners.add(addDisposableListener(
@@ -211,12 +255,24 @@ export class ContextView
 		const targetWindow = getWindow(this.element);
 		const anchor = getAnchorRectangle(options.anchor);
 		const bounds = this.element.getBoundingClientRect();
+		const viewport = getViewport(targetWindow);
+		// Account for the surface inset before viewport fitting so rows can line up.
+		const topInset = options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal && options.alignTopTo
+			? options.alignTopTo.getBoundingClientRect().top - bounds.top + options.content.scrollTop
+			: 0;
 		const result = layout2d(
-			getViewport(targetWindow),
+			viewport,
 			{ width: bounds.width, height: bounds.height },
-			anchor,
+			{ ...anchor, top: anchor.top - topInset },
 			options,
 		);
+		const titlebar = getVisibleWCOTitlebarAreaRect(targetWindow);
+		const position = avoidWindowControlsOverlay(titlebar && {
+			x: titlebar.x - viewport.left,
+			y: titlebar.y - viewport.top,
+			width: titlebar.width,
+			height: titlebar.height,
+		}, viewport, bounds, result);
 		this.element.classList.toggle(
 			'ash-context-view-above',
 			result.anchorPosition === AnchorPosition.Above,
@@ -238,7 +294,7 @@ export class ContextView
 			result.anchorAlignment === AnchorAlignment.Center,
 		);
 		if (result.anchorAlignment === AnchorAlignment.Center && options.anchorAxisAlignment !== AnchorAxisAlignment.Horizontal) {
-			this.element.style.setProperty('--ash-context-view-anchor-offset', `${anchor.left + anchor.width / 2 - result.left}px`);
+			this.element.style.setProperty('--ash-context-view-anchor-offset', `${anchor.left + anchor.width / 2 - position.left}px`);
 		} else {
 			this.element.style.removeProperty('--ash-context-view-anchor-offset');
 		}
@@ -246,8 +302,8 @@ export class ContextView
 			'ash-context-view-axis-horizontal',
 			options.anchorAxisAlignment === AnchorAxisAlignment.Horizontal,
 		);
-		this.element.style.left = `${result.left}px`;
-		this.element.style.top = `${result.top}px`;
+		this.element.style.left = `${position.left}px`;
+		this.element.style.top = `${position.top}px`;
 	}
 
 	hide(

@@ -92,6 +92,8 @@ import { UserKeyboardLayoutMainService, userKeyboardLayoutChannel } from '../../
 import { NativeMenubarMainService, nativeMenubarIpcRoutes } from '../../platform/menubar/electron-main/menubarMainService.js';
 import { clearElectronApplicationMenu, createElectronMenubarHost, Menubar } from '../../platform/menubar/electron-main/menubar.js';
 import { powerMonitorChannel, colorSchemeChannel, windowSplashIpcRoutes, nativeHostIpcRoutes, type INativeHostMainService } from '../../platform/native/electron-main/nativeHostIpc.js';
+import { applicationBadgeIpcRoute } from '../../platform/native/electron-main/applicationBadge.js';
+import type { IApplicationBadge } from '../../platform/native/common/native.js';
 import { UpdateMainService } from '../../platform/update/electron-main/updateMainService.js';
 import { UpdateChannel } from '../../platform/update/common/updateIpc.js';
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_TERMINAL_REQUEST_CHANNEL, validateOpenAgentsWindow, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
@@ -141,7 +143,7 @@ import { electronRemoteWindowMainHost } from '../../platform/remote/electron-mai
 import { RemoteWindowMainContext } from '../../platform/remote/electron-main/remoteWindowMainContext.js';
 import { WORKSPACE_CONTEXT_CHANGED_CHANNEL } from '../../platform/workspace/common/workspaceIpc.js';
 import { createAppServerWorkspaceTransitionAdapter, reconnectAppServerWorkspace } from '../../platform/workspaces/electron-main/appServerWorkspaceTransition.js';
-import { DEVELOPMENT_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, type WorkspaceTrustGrant } from '../../platform/workspace/common/workspaceTrust.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, RESTRICTED_DIR_PERMISSIONS, type DirectoryPermissionRequest, type WorkspaceTrustGrant } from '../../platform/workspace/common/workspaceTrust.js';
 import { type IWorkspaceTransitionFailure, type WorkspaceTransitionMainServiceOptions, WorkspaceTransitionFailureKind, WorkspaceTransitionMainService, WorkspaceTransitionStatus } from '../../platform/workspaces/electron-main/workspaceTransitionMainService.js';
 import { WorkspaceEditingMainService, WorkspacesManagementMainService } from '../../platform/workspaces/electron-main/workspacesManagementMainService.js';
 import { WORKSPACE_EDIT_CHANNEL, WORKSPACE_EDIT_ERROR_CHANNEL, validateWorkspaceEdit, WORKSPACE_CONFIGURATION_CHANNEL, WORKSPACE_CONFIGURATION_CHANGED_CHANNEL, validateWorkspaceConfigurationRequest } from '../../platform/workspace/common/workspaceIpc.js';
@@ -243,6 +245,8 @@ export class AshApplication extends Disposable {
 	private readonly tracking: globalThis.Disposable | undefined;
 	private readonly trustedIpcRouter: TrustedIpcRouter;
 	private readonly mainProcessIpcServer = this._register(new MainProcessIPCServer());
+	private remoteConnections: RemoteConnections | undefined;
+	private readonly wslHosts = new WSLRemoteAgentHostService();
 	private readonly remoteTunnel = this._register(new MutableDisposable<RemoteTunnelService>());
 	private readonly windowPortForwarding = new Map<string, SshPortForwardingService>();
 	private readonly browserChannels = new Map<string, { readonly view: IServerChannel<string>; readonly host: IServerChannel<string>; }>();
@@ -687,6 +691,12 @@ export class AshApplication extends Disposable {
 		const wasUpdated = this.lifecycleMainService.wasRestarted;
 		const workspaces = new WorkspacesManagementMainService();
 		this.workspaces = workspaces;
+		this.remoteConnections = this.createRemoteConnections(workspaces);
+		if (this.remoteConnections) {
+			// Warm the local catalog independently of the window's initial mode.
+			void this.remoteConnections.list().catch(error => this.logService.debug('Remote catalog warmup failed', error));
+			void this.wslHosts.listDistros().catch(error => this.logService.debug('WSL catalog warmup failed', error));
+		}
 		launchServices.registerInstance(IWindowsMainService, this.windowsMainService);
 		launchServices.registerInstance(ILogService, this.logService);
 		this.launchMainService = this._register(launchServices.createInstance(LaunchMainService));
@@ -1332,6 +1342,53 @@ export class AshApplication extends Disposable {
 		})).routes();
 	}
 
+	private remoteAgentHostRoutes(window: BrowserWindow, entryUrl: string, windowDisposables: DisposableStore): IpcRoute<unknown, unknown>[] {
+		const target = { webContents: window.webContents, allowedEntryUrls: new Set([normalizeEntryUrl(entryUrl)]) };
+		const wslHosts = this.wslHosts;
+		const agentHosts = windowDisposables.add(new RemoteAgentHostConnectionPool({
+			list: () => this.remoteConnections?.listCurrent() ?? UnavailableRemoteConnectionApi.list(),
+		}, async (connection, id, signal, ticket) => {
+			const resources = new DisposableStore();
+			try {
+				let tunnel: TunnelAgentHostService | undefined;
+				if (!isSSHAgentHost(connection) && connection.type === 'tunnel') {
+					tunnel = resources.add(new TunnelAgentHostService(connection.endpoint, ticket));
+					connection = canonicalAgentHostConnection({ ...connection, workspace: await tunnel.acquire(signal) });
+				}
+				const workspace = { id: `agent-host:${id}`, uri: remoteAgentHostRoot(connection, id) };
+				// SSH owns a remote Workbench connection; its directory is granted on that connection.
+				const relay = resources.add(isSSHAgentHost(connection)
+					? this.createAppServerConnectionRelay(workspace, resources, undefined, 'workbench', { id })
+					: new AppServerConnectionRelay({ enabled: true, processLauncher: connection.type === 'wsl' ? wslHosts.createProcessLauncher(connection) : tunnel! }, { id }));
+				resources.add(this.trustedIpcRouter.register(target, relay.routes(window.webContents, () => ({ workspaceId: workspace.id, workspaceRoot: connection.workspace }))));
+				return Object.assign(resources, { connection });
+			} catch (error) {
+				resources.dispose();
+				throw error;
+			}
+		}));
+		const retireAgentHosts = (): void => agentHosts.reset();
+		const contents = window.webContents;
+		contents.on('did-navigate', retireAgentHosts);
+		contents.on('render-process-gone', retireAgentHosts);
+		windowDisposables.add(toDisposable(() => {
+			if (contents.isDestroyed()) return;
+			contents.removeListener('did-navigate', retireAgentHosts);
+			contents.removeListener('render-process-gone', retireAgentHosts);
+		}));
+		return [
+			...agentHosts.routes(),
+			{
+				channel: REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL,
+				validate: (value: unknown) => {
+					if (value !== undefined) throw new TypeError('Unexpected WSL discovery parameters');
+					return undefined;
+				},
+				invoke: () => wslHosts.listDistros(),
+			},
+		];
+	}
+
 	private createAppServerConnectionRelay(
 		workspace: IAnyWorkspaceIdentifier,
 		resources: DisposableStore,
@@ -1505,7 +1562,7 @@ export class AshApplication extends Disposable {
 			: undefined;
 		if (localSupervisor) this.trackAppServerConnection(window, localSupervisor, resources);
 
-		const remoteConnections = this.createRemoteConnections(workspaces);
+		const remoteConnections = this.remoteConnections ?? UnavailableRemoteConnectionApi;
 		const windowStateTracking = windowsStateHandler.trackWindow(window);
 		const record: WorkbenchWindowRecord = {
 			id: window.id,
@@ -1678,6 +1735,7 @@ export class AshApplication extends Disposable {
 		const ipcRoutes = [
 			...this.mainProcessIpcRoutes(window),
 			...this.terminalLifetimeRoutes(windowDisposables),
+			...this.remoteAgentHostRoutes(window, rendererEntry.url, windowDisposables),
 			...workspaceHost.routes(),
 			...supervisor.routes(window.webContents, () => {
 				const folder = workspaceContext.getResolvedWorkspace().folders[0]?.uri;
@@ -1685,7 +1743,7 @@ export class AshApplication extends Disposable {
 			}),
 			...(localSupervisor?.routes(window.webContents, () => ({ workspaceId: 'local-profile', workspaceRoot: this.profileRoot })) ?? []),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
-			...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),
+			...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService),
 			...this.globalKeybindings.createWindowRoutes(window, windowDisposables),
 			...windowDisposables.add(new ImageViewMainService(window, {
 				entry: this.resolveRendererEntry('imageView'), webPreferences: this.createSandboxWebPreferences(),
@@ -1753,9 +1811,9 @@ export class AshApplication extends Disposable {
 		}
 	}
 
-	private createRemoteConnections(workspaces: WorkspacesManagementMainService): IRemoteConnectionApi {
+	private createRemoteConnections(workspaces: WorkspacesManagementMainService): RemoteConnections | undefined {
 		return this.appServerStartupMode === 'disabled'
-			? UnavailableRemoteConnectionApi
+			? undefined
 			: new RemoteConnections({
 				remoteExecutable: remoteExecutablePath({
 					appPath: app.getAppPath(),
@@ -1966,7 +2024,7 @@ export class AshApplication extends Disposable {
 		if (!workspaces) throw new Error('Workspace service is not initialized');
 		let sessions = this.sessionsWindow.value;
 		if (!sessions) {
-			const remoteConnections = this.createRemoteConnections(workspaces);
+			const remoteConnections = this.remoteConnections ?? UnavailableRemoteConnectionApi;
 			const workspaceContext = new WorkspaceContextMainService(workspace, resolvedWorkspace);
 			sessions = new SessionsWindowRecord(workspaceContext, remoteConnections);
 			this.sessionsWindow.value = sessions;
@@ -2002,16 +2060,28 @@ export class AshApplication extends Disposable {
 					};
 					window.on('focus', onFocus);
 					windowDisposables.add(toDisposable(() => window.removeListener('focus', onFocus)));
-					// Reloaded renderers must register their current system-wide keybindings again.
-					const clearInterruptedKeybindings = (): void => {
+					const setApplicationBadge = (badge: IApplicationBadge): void => {
+						if (process.platform === 'win32') {
+							if (window.isDestroyed()) return;
+							const icon = badge.count && badge.iconDataURL ? nativeImage.createFromDataURL(badge.iconDataURL) : null;
+							window.setOverlayIcon(icon?.isEmpty() ? null : icon, badge.description);
+						} else if (process.platform === 'darwin' || process.platform === 'linux') {
+							app.setBadgeCount(badge.count);
+						}
+					};
+					const clearApplicationBadge = (): void => setApplicationBadge({ count: 0, description: '' });
+					windowDisposables.add(toDisposable(clearApplicationBadge));
+					// A replacement renderer publishes its own keybindings and attention badge.
+					const clearInterruptedRendererState = (): void => {
 						// Contribution leases belong to the live window and handle navigation themselves.
 						this.globalKeybindings.updateKeybindings(window.id, []);
+						clearApplicationBadge();
 					};
-					windowDisposables.add(this.windowsMainService.getWindowById(window.id)!.onWillLoad(clearInterruptedKeybindings));
-					window.webContents.on('render-process-gone', clearInterruptedKeybindings);
+					windowDisposables.add(this.windowsMainService.getWindowById(window.id)!.onWillLoad(clearInterruptedRendererState));
+					window.webContents.on('render-process-gone', clearInterruptedRendererState);
 					windowDisposables.add(toDisposable(() => {
 						if (window.isDestroyed()) return;
-						window.webContents.removeListener('render-process-gone', clearInterruptedKeybindings);
+						window.webContents.removeListener('render-process-gone', clearInterruptedRendererState);
 					}));
 					const runtimeResources = new DisposableStore();
 					let sessionsRelay: AppServerConnectionRelay;
@@ -2073,46 +2143,14 @@ export class AshApplication extends Disposable {
 						host: electronRemoteWindowMainHost(window, this.dialogs),
 						prepareForRuntimeReplacement: () => this.windowsMainService.getWindowById(window.id)?.send('ash:terminal:prepareReplacement'),
 					}));
-					const agentHostTarget = {
-						webContents: window.webContents,
-						allowedEntryUrls: new Set([normalizeEntryUrl(sessionsEntry.url)]),
-					};
-					const wslHosts = new WSLRemoteAgentHostService();
-					const agentHosts = windowDisposables.add(new RemoteAgentHostConnectionPool(session.remoteConnections, async (target, id, signal, ticket) => {
-						const resources = new DisposableStore();
-						try {
-							let tunnel: TunnelAgentHostService | undefined;
-							if (!isSSHAgentHost(target) && target.type === 'tunnel') {
-								tunnel = resources.add(new TunnelAgentHostService(target.endpoint, ticket));
-								target = canonicalAgentHostConnection({ ...target, workspace: await tunnel.acquire(signal) });
-							}
-							const workspace = { id: `agent-host:${id}`, uri: remoteAgentHostRoot(target, id) };
-							// SSH owns a remote Workbench connection; its directory is granted on that connection.
-							const relay = resources.add(isSSHAgentHost(target)
-								? this.createAppServerConnectionRelay(workspace, resources, undefined, 'workbench', { id })
-								: new AppServerConnectionRelay({ enabled: true, processLauncher: target.type === 'wsl' ? wslHosts.createProcessLauncher(target) : tunnel! }, { id }));
-							resources.add(this.trustedIpcRouter.register(agentHostTarget, relay.routes(window.webContents, () => ({ workspaceId: workspace.id, workspaceRoot: target.workspace }))));
-							return Object.assign(resources, { connection: target });
-						} catch (error) {
-							resources.dispose();
-							throw error;
-						}
-					}));
-					const retireAgentHosts = (): void => agentHosts.reset();
-					window.webContents.on('did-navigate', retireAgentHosts);
-					window.webContents.on('render-process-gone', retireAgentHosts);
-					windowDisposables.add(toDisposable(() => {
-						window.webContents.removeListener('did-navigate', retireAgentHosts);
-						window.webContents.removeListener('render-process-gone', retireAgentHosts);
-					}));
 					const ipcRoutes = [
 						...this.mainProcessIpcRoutes(window),
+						applicationBadgeIpcRoute(setApplicationBadge),
 						...this.terminalLifetimeRoutes(windowDisposables),
-						...agentHosts.routes(),
-						{ channel: REMOTE_AGENT_HOST_WSL_DISTROS_CHANNEL, validate: (value: unknown) => { if (value !== undefined) throw new TypeError('Unexpected WSL discovery parameters'); return undefined; }, invoke: () => wslHosts.listDistros() },
+						...this.remoteAgentHostRoutes(window, sessionsEntry.url, windowDisposables),
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),
-						...rendererSystemHostRoutes(window, path => this.directoryPermissionPrompt(path), this.auxiliaryWindowsMainService),
+						...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService),
 						...this.globalKeybindings.createWindowRoutes(window, windowDisposables),
 						...windowDisposables.add(new ImageViewMainService(window, {
 							entry: this.resolveRendererEntry('imageView'), webPreferences: this.createSandboxWebPreferences(),
@@ -2472,8 +2510,20 @@ export class AshApplication extends Disposable {
 		return workspaceHost.createGrant(path, choice === 'development' ? DEVELOPMENT_DIR_PERMISSIONS : RESTRICTED_DIR_PERMISSIONS);
 	}
 
-	private directoryPermissionPrompt(path: string): DialogRequest {
+	private directoryPermissionPrompt(request: DirectoryPermissionRequest): DialogRequest {
 		const translate = (key: string, english: string): string => this.activeLanguagePack.bundles.ash?.[key] ?? english;
+		let detail: string;
+		if (request.remoteHostLabel) {
+			detail = formatNlsMessage(
+				translate('workspaceTrust.remoteDetail', localize2('workspaceTrust.remoteDetail', 'Remote environment: {0}\nFolder: {1}\n\nThis choice controls Ash access to this folder in that environment. In Restricted Mode, Ash can edit and save files. Trust this folder to enable commands, project configuration, instructions, skills, MCP servers, hooks, plugins and language services there.').original),
+				{ '0': request.remoteHostLabel, '1': request.path },
+			);
+		} else {
+			detail = formatNlsMessage(
+				translate('workspaceTrust.detail', localize2('workspaceTrust.detail', 'Folder: {0}\n\nYou can edit and save files in Restricted Mode. Trust this folder to enable commands, project configuration, instructions, skills, MCP servers, hooks, plugins and language services.').original),
+				{ '0': request.path },
+			);
+		}
 		return {
 			kind: 'prompt',
 			title: AshApplicationName,
@@ -2481,10 +2531,7 @@ export class AshApplication extends Disposable {
 			secondaryButton: translate('workspaceTrust.trust', localize2('workspaceTrust.trust', 'Trust Folder').original),
 			cancelButton: translate('dialog.cancel', localize2('dialog.cancel', 'Cancel').original),
 			message: translate('workspaceTrust.question', localize2('workspaceTrust.question', 'Do you trust the files in this folder?').original),
-			detail: formatNlsMessage(
-				translate('workspaceTrust.detail', localize2('workspaceTrust.detail', 'Folder: {0}\n\nYou can edit and save files in Restricted Mode. Trust this folder to enable commands, project configuration, instructions, skills, MCP servers, hooks, plugins and language services.').original),
-				{ '0': path },
-			),
+			detail,
 		};
 	}
 

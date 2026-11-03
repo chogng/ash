@@ -1,6 +1,7 @@
+import { ISessionsListModelService, SessionsListModelService } from '../../../src/ash/sessions/services/sessions/browser/sessionsListModelService.js';
 import { IChatEntitlementService } from '../../../src/ash/workbench/services/chat/common/chatEntitlementService.js';
-import { ISessionGroupsService, SessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';
 import * as chatInputStatePersistence from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
+import { ISessionGroupsService, SessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';
 import { ServiceCollection } from '../../../src/ash/platform/instantiation/common/serviceCollection.js';
 import { ChatAuxiliaryWindow } from '../../../src/ash/workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
 import { BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
@@ -48,8 +49,8 @@ import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/d
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { IDictationOnboardingService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
-import { IChatInputNoticeHubService } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/notices/chatInputNoticeHub.js';
-import { IChatInputNotificationService, ChatInputNotificationSeverity } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/notices/chatInputNotificationService.js';
+import { IChatInputNoticeHubService } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputNoticeHub.js';
+import { IChatInputNotificationService, ChatInputNotificationSeverity } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputNotificationService.js';
 import { AgentsVoiceStorageKeys } from '../../../src/ash/workbench/contrib/agentsVoice/common/agentsVoice.js';
 import '../../../src/ash/workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import { type AgentVoiceSessionState, type AgentVoiceTaskRequest, type AgentVoiceSelection } from '../../../src/ash/platform/agentHost/common/agent.js';
@@ -87,6 +88,7 @@ import { Selection } from '../../../src/ash/editor/common/core/selection.js';
 import { IModelService } from '../../../src/ash/editor/common/services/model.js';
 import { ILanguageService } from '../../../src/ash/editor/common/languages/language.js';
 import { IMarkerService } from '../../../src/ash/platform/markers/common/markers.js';
+import { IInstructionService } from '../../../src/ash/platform/instructions/common/instructionService.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { CodeBlockPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/codeBlockPart.js';
@@ -104,7 +106,6 @@ import { BrowserContextViewService } from '../../../src/ash/platform/contextview
 import { ISpeechService, SpeechToTextStatus, type ISpeechToTextEvent } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
 import { IChatWidgetService, type IChatWidget } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
-import '../../../src/ash/workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
@@ -171,6 +172,7 @@ const windowLogger = resources.add(new LogService({ level: LogLevel.Debug, sinks
 parentServices.registerInstance(ILogService, windowLogger);
 parentServices.registerInstance(ILoggerService, windowLogger);
 const services = resources.add(createTestEditorServices(resources.add(new WorkbenchConfigurationService()), parentServices, document));
+services.registerInstance(IInstructionService, { isAvailable: false, list: async () => [] });
 services.registerInstance(IContentSearchService, new FileContentSearchService(services.get(IFileService)));
 services.registerSingleton(ISearchService, () => services.createInstance(SearchService));
 // This fixture hosts standalone editors rather than tabbed Workbench groups.
@@ -186,12 +188,14 @@ services.registerInstance(IDialogsModel, dialogs.model);
 resources.add(new DialogHandlerContribution(dialogs.model, new BrowserDialogHandler(document.body)));
 resources.add(bindTestColorTheme(theme, document.body));
 let clipboardText = '';
+let clipboardImage: number[] = [];
 let clipboardReady = Promise.resolve();
 let releaseClipboard!: () => void;
 let clipboardFailure = false;
 class Clipboard extends BrowserClipboardService {
 	constructor() { super(undefined); }
 	public override async writeText(text: string): Promise<void> { await clipboardReady; if (clipboardFailure) throw new Error('clipboard rejected'); clipboardText = text; }
+	public override async writeImage(data: Uint8Array | Promise<Uint8Array>): Promise<void> { clipboardImage = [...await data]; }
 }
 services.registerInstance(IClipboardService, resources.add(new Clipboard()));
 services.registerSingleton(ICommandService, () => services.createInstance(StandaloneCommandService));
@@ -212,6 +216,8 @@ if (builtinBackend) {
 	};
 	const cancel = async (resourceId: string) => { retiredBuiltinResource = resourceId; builtinOperations.push('cancel'); };
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, {
+		readInstructions: async () => { throw new Error('This transcript fixture does not provide Profile instructions'); },
+		writeInstructions: async () => { throw new Error('This transcript fixture does not provide Profile instructions'); },
 		isConnected: true, onDidChangeConnection: Event.None, onDidTranscribe: builtinTranscripts.event, onDidEnd: Event.None,
 		getOptions: async () => ({ inputDevices: [], languages: [] }), start, stop, cancel,
 		pushAudio: async (_resourceId, audio) => { builtinOperations.push(`audio:${atob(audio).length}`); },
@@ -235,6 +241,7 @@ registerTestDictationOnboarding(services);
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 services.registerSingleton(ITerminalLogService, () => services.createInstance(TerminalLogService));
+services.registerInstance(ILanguageModelsService, { listModelCatalog: async () => [] } as unknown as ILanguageModelsService);
 services.registerSingleton(ILanguageModelToolsService, () => createTestLanguageModelToolsService({ isAvailable: true, read: async () => ({ tools: [{ name: 'read_file', description: 'Read authorized files', source: 'local', sourceDetails: ['Ash'], exposure: 'direct', authority: 'directoryRead' }, { name: 'internal_tool', description: 'Internal', source: 'local', sourceDetails: [], exposure: 'hidden', authority: 'providerDefined' }], toolSets: [], sourceGroups: [] }) }));
 registerCodeEditorServices(services);
 const skillResourceRequests: unknown[] = [];
@@ -340,7 +347,12 @@ let imageReads = 0;
 const openedAppLinks: { uri: string; options: unknown; }[] = [];
 const appServices = resources.add(services.createChild());
 appServices.registerInstance(IOpenerService, { open: async (uri: URI, options: unknown) => { openedAppLinks.push({ uri: uri.toString(), options }); return true; } } as unknown as IOpenerService);
-const listOptions = { imageResourceLoader: async () => { imageReads++; return new Blob([new Uint8Array(imageBytes)], { type: 'image/png' }); } };
+const listOptions = {
+	promptTimelineFiles: new URLSearchParams(location.search).has('promptTimeline')
+		? (prompt: IChatListItem) => prompt.id === 'second' ? [{
+			id: 'change', path: 'src/example.ts', review: () => { root.dataset.reviewedPrompt = prompt.id; },
+		}] : [] : undefined,
+	imageResourceLoader: async () => { imageReads++; return new Blob([new Uint8Array(imageBytes)], { type: 'image/png' }); } };
 let rendererItems: readonly IChatListItem[] = [];
 let list = resources.add(appServices.createInstance(ChatListWidget, root, listOptions));
 list.setVisible(true);
@@ -614,7 +626,7 @@ declare global {
 			dictationState(): { starts: number; cancels: number; busy: boolean; widgets: number; focused: boolean; file: string; };
 			holdClipboard(fail?: boolean): void;
 			releaseClipboard(): void;
-			state(): { copied: string; file: string; resource: string; editorCount: number; codeModelCount: number; selection: unknown; notifications: readonly string[]; };
+			state(): { copied: string; copiedImage: readonly number[]; file: string; resource: string; editorCount: number; codeModelCount: number; selection: unknown; notifications: readonly string[]; };
 			openSkill(): Promise<void>;
 			referenceReady(line: number, column: number): boolean;
 			openReference(line: number, column: number): Promise<void>;
@@ -624,7 +636,9 @@ declare global {
 			setReadonly(value: boolean): void;
 			setWrap(value: boolean): Promise<void>;
 			setCodeLineHeight(height: number): Promise<void>;
+			setAutoExpandToolFailures(value: boolean): Promise<void>;
 			setTypography(values: Readonly<Record<string, string | number | undefined>>): Promise<void>;
+			setPromptTimeline(value: 'off' | 'gutter' | 'ruler'): Promise<void>;
 			setTheme(value: 'dark' | 'light' | 'hc' | 'hcLight'): void;
 			showHistoryFailure(): void;
 			showHistoryPagination(fail?: boolean): void;
@@ -669,6 +683,7 @@ declare global {
 			showArtifacts(revise: boolean): void;
 			showLink(mode: 'read' | 'delay' | 'error'): void;
 			showApp(mode?: 'read' | 'delay' | 'error', allowCsp?: boolean, withMedia?: boolean): void;
+			setAppResourceMode(mode: 'read' | 'error'): void;
 			showReadAloudMessage(text: string, cowork?: boolean): Promise<void>;
 			finishReadAloud(failure?: boolean): void;
 			stopReadAloudCommand(): Promise<void>;
@@ -792,7 +807,7 @@ window.ashChatTranscriptIntegration = {
 	holdClipboard: (fail = false) => { clipboardFailure = fail; clipboardReady = new Promise(resolve => { releaseClipboard = resolve; }); },
 	releaseClipboard: () => releaseClipboard(),
 	state: () => ({
-		copied: clipboardText, file: file.getModel()!.getValue(), resource: activeResource.toString(),
+		copied: clipboardText, copiedImage: clipboardImage, file: file.getModel()!.getValue(), resource: activeResource.toString(),
 		editorCount: services.get(ICodeEditorService).listCodeEditors().length,
 		codeModelCount: services.get(ICodeEditorService).listCodeEditors().filter(editor => editor !== file && editor.getModel()).length,
 		selection: services.get(ICodeEditorService).listCodeEditors().find(editor => editor !== file)?.getSelection(),
@@ -813,9 +828,11 @@ window.ashChatTranscriptIntegration = {
 	setReadonly: value => file.updateOptions({ readOnly: value }),
 	setWrap: value => services.get(IConfigurationService).updateValue('chat.editor.wordWrap', value ? 'on' : 'off'),
 	setCodeLineHeight: height => services.get(IConfigurationService).updateValue('chat.editor.lineHeight', height),
+	setAutoExpandToolFailures: value => services.get(IConfigurationService).updateValue('chat.tools.autoExpandFailures', value),
 	setTypography: async values => {
 		for (const [key, value] of Object.entries(values)) await services.get(IConfigurationService).updateValue(key, value);
 	},
+	setPromptTimeline: value => services.get(IConfigurationService).updateValue('sessions.chatTimeline.display', value),
 	setTheme: value => {
 		const palette = value === 'dark' ? darkColorTheme : value === 'light' ? lightColorTheme : value === 'hcLight' ? highContrastLightColorTheme : highContrastDarkColorTheme;
 		theme.setColorTheme(palette);
@@ -825,14 +842,15 @@ window.ashChatTranscriptIntegration = {
 	runNavigationCommand: async command => {
 		const widget = {
 			visible: true, domNode: list.element,
+			getFindController: (): ReturnType<IChatWidget['getFindController']> => list.getFindController(),
 			focusResponseItem: (last?: boolean) => list.focusResponseItem(last),
 			focusCodeBlock: (reverse?: boolean) => list.focusCodeBlock(reverse),
 			getFocus: () => list.getFocus(),
-			getSibling: (item, type) => list.getSibling(item, type),
-			focus: item => list.focus(item),
-			reveal: item => list.reveal(item),
-		} as IChatWidget;
-		using scope = services.createChild(new ServiceCollection([IChatWidgetService, { lastFocusedWidget: widget } as IChatWidgetService]));
+			getSibling: (item: IChatListItem | undefined, type: 'next' | 'previous') => list.getSibling(item, type),
+			focus: (item: IChatListItem) => list.focus(item),
+			reveal: (item: IChatListItem) => list.reveal(item),
+		} as unknown as IChatWidget;
+		using scope = services.createChild(new ServiceCollection([IChatWidgetService, { lastFocusedWidget: widget, getAllWidgets: () => [widget] } as unknown as IChatWidgetService]));
 		await scope.invokeFunction(CommandsRegistry.getCommand(command)!);
 	},
 	renderItems: items => { rendererItems = items; list.render(items); },
@@ -1104,6 +1122,7 @@ window.ashChatTranscriptIntegration = {
 	linkRequests: () => linkRequests,
 	finishLink: () => completeLink?.(),
 	closeConnection: () => connectionChanges.fire(),
+	setAppResourceMode: mode => { linkMode = mode; },
 	appState: () => ({ messages: appMessages, views: [...webviews.webviews].length }),
 	showChatApp: (voice = false, cowork = false, withMedia = false) => {
 		appChat?.dispose();
@@ -1276,6 +1295,7 @@ window.ashChatTranscriptIntegration = {
 		lifecycleServices.registerSingleton(IAgentSessionsService, () => lifecycleServices.createInstance(historyDescriptor));
 		lifecycleServices.registerSingleton(ISessionGroupsService, () => lifecycleServices.createInstance(SessionGroupsService));
 		const actionsDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionActionsService)![1];
+		lifecycleServices.registerSingleton(ISessionsListModelService, () => lifecycleServices.createInstance(SessionsListModelService));
 		lifecycleServices.registerSingleton(IAgentSessionActionsService, () => lifecycleServices.createInstance(actionsDescriptor));
 		const disconnected = createDisconnectedRendererApi();
 		lifecycleServices.registerInstance(IAgentConnection, disconnected);

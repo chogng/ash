@@ -140,7 +140,7 @@ pub enum TurnExecutionOutcome {
 impl TurnExecutor {
     /// Releases process-local cells and stored values when a session is stopped or archived.
     pub fn close_code_mode_session(&self, session_id: &SessionId) {
-        self.code_mode.close_session(session_id);
+        self.close_directory_code_mode(session_id);
         if let Ok(mut models) = self.threads.turn_tool_models.lock() {
             models.retain(|thread, _| {
                 self.threads
@@ -156,6 +156,11 @@ impl TurnExecutor {
                     .is_ok_and(|snapshot| &snapshot.session_id != session_id)
             });
         }
+    }
+
+    /// Closes the cells in this directory runtime without changing shared Thread model state.
+    pub fn close_directory_code_mode(&self, session_id: &SessionId) {
+        self.code_mode.close_session(session_id);
     }
 
     /// Captures the model-neutral direct tool surface for a newly accepted Turn.
@@ -1419,6 +1424,7 @@ impl TurnExecutor {
                     turn_id,
                     &tool_calls,
                     &tool_catalog,
+                    &stream,
                 )?);
             }
             let action = decision.action.clone();
@@ -1887,6 +1893,7 @@ impl TurnExecutor {
         turn_id: &TurnId,
         calls: &[ToolCall],
         catalog: &crate::ModelToolCatalogSnapshot,
+        stream: &InvocationStream,
     ) -> Result<Vec<ash_protocol::ThreadItem>, ExecutionFailure> {
         calls
             .iter()
@@ -1911,7 +1918,11 @@ impl TurnExecutor {
                     )))
                 })?;
                 Ok(ash_protocol::ThreadItem::ToolCall {
-                    item_id: self.threads.next_stream_item_id(),
+                    item_id: stream
+                        .tool_items
+                        .get(call.id.as_str())
+                        .cloned()
+                        .unwrap_or_else(|| self.threads.next_stream_item_id()),
                     turn_id: turn_id.clone(),
                     tool_call_id: call.id.clone(),
                     name: call.name.clone(),
@@ -2118,6 +2129,7 @@ pub(super) fn activated_tool_names(
 }
 
 struct InvocationStream {
+    tool_items: BTreeMap<String, ItemId>,
     threads: Arc<ThreadController>,
     updates: Arc<dyn ThreadUpdateSink>,
     session_id: ash_protocol::SessionId,
@@ -2168,6 +2180,7 @@ impl InvocationStream {
             text: String::new(),
             reasoning: String::new(),
             messages: BTreeMap::new(),
+            tool_items: BTreeMap::new(),
         }
     }
 
@@ -2335,6 +2348,44 @@ impl ModelStreamSink for InvocationStream {
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         match event {
+            ModelStreamEvent::ToolCallDelta {
+                id,
+                name,
+                arguments,
+            } => {
+                let tool_call_id = ash_protocol::ToolCallId::new(id.clone())
+                    .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+                let name = ash_protocol::ToolName::new(name)
+                    .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
+                let item_id = match self.tool_items.get(&id) {
+                    Some(item) => item.clone(),
+                    None => {
+                        let item = self.threads.next_stream_item_id();
+                        self.tool_items.insert(id, item.clone());
+                        self.publish(ThreadUpdate::ItemStarted {
+                            turn_id: self.turn_id.clone(),
+                            item: ThreadItem::ToolCall {
+                                item_id: item.clone(),
+                                turn_id: self.turn_id.clone(),
+                                tool_call_id: tool_call_id.clone(),
+                                name: name.clone(),
+                                arguments_json: String::new(),
+                                binding: None,
+                            },
+                        });
+                        item
+                    }
+                };
+                self.publish(ThreadUpdate::ItemDelta {
+                    turn_id: self.turn_id.clone(),
+                    item_id,
+                    delta: ash_protocol::ItemDelta::ToolCallArguments {
+                        tool_call_id,
+                        name,
+                        arguments,
+                    },
+                });
+            }
             ModelStreamEvent::MessageStarted { id, phase } => {
                 let item_id = self.start_message(&id, phase.clone());
                 self.publish(ThreadUpdate::ItemDelta {

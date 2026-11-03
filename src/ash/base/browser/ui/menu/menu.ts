@@ -10,7 +10,6 @@ import type { IKeybindingLabelStyles } from '../keybindinglabel/keybindinglabel.
 import { getActionForAltMode, type IAction, type IActionRunner, Separator, SubmenuAction } from '../../../common/actions.js';
 import { RunOnceScheduler } from '../../../common/async.js';
 import { addDisposableListener, isNode, h, ModifierKeyEmitter, getActiveElement } from '../../dom.js';
-import { isModifierKey } from '../../keyboardEvent.js';
 import type { ResolvedKeybinding } from '../../../common/keybindings.js';
 import { MutableDisposable, toDisposable } from '../../../common/lifecycle.js';
 import { Scrollable } from '../../../common/scrollable.js';
@@ -129,7 +128,7 @@ abstract class MenuButtonActionViewItem extends ButtonActionViewItem {
 }
 
 /** Runnable menu action with live checked, shortcut and alternative presentation. */
-class MenuActionViewItem extends MenuButtonActionViewItem {
+export class MenuActionViewItem extends MenuButtonActionViewItem {
 	private readonly shortcut = this._register(new MutableDisposable<KeybindingLabel>());
 	private badge: HTMLElement | undefined;
 	private shortcutValue: ResolvedKeybinding | undefined;
@@ -284,8 +283,8 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 		this.update();
 	}
 
-	override runAction(): void {
-		this.open(true);
+	override runAction(event?: MouseEvent | KeyboardEvent): void {
+		this.open((event?.detail ?? 0) === 0);
 	}
 
 	private openFromPointer(): void {
@@ -309,7 +308,7 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 				actionRunner: this.actionRunner,
 				context: this.actionContext,
 				ariaLabel: cleanMnemonic(this.action.label),
-				className: undefined,
+				className: this.options.submenuOptions?.submenuClassName,
 				openSubmenusImmediatelyOnHover: undefined,
 				submenuIds: new Set([...(this.options.submenuOptions?.submenuIds ?? []), this.action.id]),
 				onDidSelect: () => {
@@ -325,11 +324,18 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 		}
 		this.showScheduler.cancel();
 		if (!this.contextView.visible) {
+			// A popup can be rendered before it mounts. Use its overlay host once the anchor is attached.
+			const overlayHost = this.button.domNode.closest('.ash-context-view')?.parentNode;
+			if (!this.contextViewContainer && overlayHost && this.contextView.element.parentNode !== overlayHost) {
+				overlayHost.appendChild(this.contextView.element);
+			}
 			this.onWillOpenSubmenu?.(this);
+			const content = this.menu.getContainer();
 			const shown = this.contextView.show({
 				anchor: this.button.domNode,
-				content: this.menu.getContainer(),
+				content,
 				anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+				alignTopTo: content.querySelector(':scope > .ash-action-view-item > .ash-button') ?? undefined,
 				// Nested menus align to the parent row; vertical direction positions the MenuBar popup.
 				anchorAlignment: AnchorAlignment.Left,
 				anchorPosition: (this.options.submenuOptions?.expandDirection?.horizontal ??
@@ -434,6 +440,7 @@ export interface IMenuOptions {
 	readonly anchorAlignment?: AnchorAlignment;
 	readonly expandDirection?: IMenuDirection;
 	readonly submenuIds?: Set<string>;
+	readonly submenuClassName?: string;
 	readonly buttonStyles?: IButtonStyles;
 	readonly keybindingLabelStyles?: IKeybindingLabelStyles;
 	readonly getAriaDescription?: (action: IAction) => string | undefined;
@@ -534,14 +541,6 @@ export class Menu extends ActionBar {
 			if (isNode(event.relatedTarget) && this.contains(event.relatedTarget)) return;
 			this.setFocusedEntry(undefined);
 		}));
-		// Keyboard input may come from a sibling filter or an open submenu before focus returns here.
-		this._register(addDisposableListener(ownerDocument, 'keydown', event => {
-			if (event.isComposing || isModifierKey(event)) return;
-			element.classList.remove('pointer-navigation');
-		}, true));
-		this._register(addDisposableListener(element, 'pointerdown', () => {
-			element.classList.add('pointer-navigation');
-		}));
 		this._register(addDisposableListener(element, 'mouseover', (event) => {
 			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
 		}));
@@ -552,7 +551,6 @@ export class Menu extends ActionBar {
 			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
 			// Showing a menu under a resting pointer must not select an action.
 			if (!moved) return;
-			element.classList.add('pointer-navigation');
 			const entry = this.findEntry(event.target);
 			this.setFocusedEntry(entry?.action.enabled ? entry : undefined, true);
 			// Only this parent's still-visible submenu keeps a cascade continuous.
@@ -628,9 +626,9 @@ export class Menu extends ActionBar {
 	}
 
 	/** Menu focus and action focus are separate so opening need not highlight a row. */
-	public override focus(selectFirst?: boolean): void;
+	public override focus(selectFirst?: boolean, options?: FocusOptions): void;
 	public override focus(index?: number): void;
-	public override focus(target: boolean | number = true): void {
+	public override focus(target: boolean | number = true, options?: FocusOptions): void {
 		if (typeof target === 'number') {
 			const entry = this.entries[target];
 			if (entry?.action.enabled) {
@@ -642,7 +640,7 @@ export class Menu extends ActionBar {
 			return;
 		}
 		this.setFocusedEntry(undefined);
-		this.domNode.focus({ preventScroll: true });
+		this.domNode.focus({ preventScroll: true, ...options });
 	}
 
 	focusFirst(): void {

@@ -1,3 +1,8 @@
+import { isCancellationError } from '../../base/common/errors.js';
+import type { IWorkspaceTrustApi, DirectoryPermissionRequest } from '../../platform/workspace/common/workspaceTrust.js';
+import { createSessionFolderTrustRequestService } from '../contrib/workspace/browser/workspace.contribution.js';
+import { removePartsSplash } from '../../workbench/contrib/splash/browser/splash.js';
+import { structuralEquals } from '../../base/common/equals.js';
 import { registerBrowserNetworkHost } from '../../platform/browserView/electron-browser/browserNetworkHost.js';
 import { IAgentHostConnectionsService } from '../../platform/agentHost/common/agentHostConnectionsService.js';
 import { IWorkspaceContextService } from '../../platform/workspace/common/workspace.js';
@@ -26,7 +31,11 @@ import { DisposableStore, toDisposable, type IDisposable } from '../../base/comm
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { createElectronRendererApi } from '../../workbench/electron-browser/rendererApi.js';
 import { registerLocalTranscriptionService } from '../../workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
-import { DirectoryPermissionDialog } from '../../workbench/electron-browser/parts/dialogs/directoryPermissionDialog.js';
+import { throwIfCancelled } from '../../base/common/cancellation.js';
+import { createAppServerWorkspaceTrustApi } from '../../platform/workspace/browser/workspaceTrustApi.js';
+import { DEVELOPMENT_DIR_PERMISSIONS, hasDevelopmentPermissions } from '../../platform/workspace/common/workspaceTrust.js';
+import { ISessionFolderAuthorizationService } from '../common/sessionWorkspace.js';
+import { WorkspaceTrustPrompt } from '../../workbench/contrib/workspace/browser/workspace.contribution.js';
 import { BrowserContextMenuService } from '../../platform/contextview/browser/contextMenuService.js';
 import type { SessionsProfile } from '../common/sessionsProfile.js';
 import type { Workbench } from '../browser/workbench.js';
@@ -62,6 +71,8 @@ import { registerAppServerBrowserHost } from '../../platform/agentHost/electron-
 import { IAgentHostCanvasCollection } from '../../workbench/contrib/canvases/common/agentHostCanvas.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
+import '../contrib/sessions/electron-browser/sessions.contribution.js';
+import { SessionsApplicationBadge } from '../contrib/sessions/electron-browser/sessionsApplicationBadge.js';
 
 /** Starts the Code-specific Electron Sessions page. */
 export async function main(profile: SessionsProfile): Promise<IDisposable> {
@@ -99,7 +110,13 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	};
 	const handoffSubscription = subscribe<void>(AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, requestDrain);
 	sessions.add(toDisposable(() => handoffSubscription.dispose()));
-	const permissionDialog = sessions.add(new DirectoryPermissionDialog(container));
+	const permissionDialog = sessions.add(new WorkspaceTrustPrompt(container));
+	const workspaceTrust = createSessionFolderTrustRequestService(container, (load, handler, signal) =>
+		permissionDialog.show(async () => {
+			const prompt = await load();
+			removePartsSplash(container.ownerDocument);
+			return prompt;
+		}, handler, signal));
 	const transcriptionServices = sessions.add(new InstantiationService());
 	const profileServices = sessions.add(new InstantiationService(new ServiceCollection(
 		...getSingletonServiceDescriptors().filter(([id]) => id === IPlaywrightService),
@@ -126,7 +143,24 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		serviceCollection.set(IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName)));
 		logger = sessions.add(profileServices.createInstance(NativeLogService, 'agents'));
 		serviceCollection.set(ILoggerService, logger);
-		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, (_client, _appServer, localClient) => registerLocalTranscriptionService(transcriptionServices, localClient)], { browser: true, textDocuments: true, appTools: true, agentHosts: true }, permissionDialog, mainProcessService);
+		api = await createElectronRendererApi([client => { documentClient = client; return {}; }, (_client, _appServer, localClient) => {
+			const localTrust = createAppServerWorkspaceTrustApi(localClient);
+			serviceCollection.set(ISessionFolderAuthorizationService, {
+				isTrusted: async path => {
+					const directory = await localTrust.readDirectory(path);
+					return hasDevelopmentPermissions(directory.permissions ?? directory.inheritedWorkspacePermissions);
+				},
+				authorize: (path, signal, host) => authorizeSessionFolder(
+					host?.api.workspaceTrust ?? localTrust,
+					listener => {
+						if (!host) return localClient.onStateChange(listener);
+						const subscription = host.api.appServer.onConnectionState(listener);
+						return toDisposable(() => subscription.dispose());
+					},
+					workspaceTrust.confirmFolderTrust, { path, remoteHostLabel: host?.label }, signal),
+			});
+			return registerLocalTranscriptionService(transcriptionServices, localClient);
+		}], { browser: true, textDocuments: true, appTools: true, agentHosts: true }, workspaceTrust, mainProcessService);
 	}
 	catch (error) { sessions.dispose(); return showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text)); }
 	try {
@@ -151,11 +185,32 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		sessions.add(toDisposable(() => zoomSubscription.dispose()));
 		let lifecycleService!: ElectronLifecycleService;
 		const workspaceContext = createWorkspaceContextApi();
-		let workspace = parseWorkspace(await workspaceContext.getWorkspace());
+		const initialWorkspace = parseWorkspace(await workspaceContext.getWorkspace());
+		let workspace: typeof initialWorkspace = { id: initialWorkspace.id, folders: [] };
 		let workspaceSelection = selectionFromWorkspace(workspace);
+		let workspaceGeneration = 0;
+		const initialWorkspaceReady = api.workspaceDirectoriesReady.then(async () => {
+			if (sessions.isDisposed || workspaceGeneration !== 0 || !api.appServer.isAvailable) return;
+			const boundFolders = await Promise.all(initialWorkspace.folders.map(async folder =>
+				hasDevelopmentPermissions(await api.workspaceTrust.readWorkspaceDirectory(folder.id))));
+			if (!sessions.isDisposed && workspaceGeneration === 0 && boundFolders.every(Boolean)) {
+				workspace = initialWorkspace;
+				workspaceSelection = selectionFromWorkspace(workspace);
+			}
+		});
+		// Workbench construction will take ownership of startup errors.
+		void initialWorkspaceReady.catch(() => undefined);
+		let workspaceChange = initialWorkspaceReady.catch(() => undefined);
 		const workspaceSubscription = workspaceContext.onDidChange(value => {
-			workspace = parseWorkspace(value);
-			workspaceSelection = selectionFromWorkspace(workspace);
+			const next = parseWorkspace(value);
+			const generation = ++workspaceGeneration;
+			workspaceChange = workspaceChange.then(async () => {
+				if (sessions.isDisposed || generation !== workspaceGeneration) return;
+				await api.reloadWorkspaceDirectories();
+				if (sessions.isDisposed || generation !== workspaceGeneration || !api.appServer.isAvailable) return;
+				workspace = next;
+				workspaceSelection = selectionFromWorkspace(workspace);
+			}).catch(error => { if (!isCancellationError(error)) onUnexpectedError(error); });
 		});
 		sessions.add(toDisposable(() => workspaceSubscription.dispose()));
 		const hostColorScheme = await api.nativeHost.getOSColorScheme();
@@ -207,6 +262,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.mediaPreviewStatusBar',
 					'workbench.contrib.opener',
 					'chatResponseResourceWorkbenchContribution',
+					'workbench.contrib.chatSpeechInstructions',
 					'terminalAutoReplies',
 					'terminalTelemetry',
 					'workbench.contrib.settingsChangeRelauncher',
@@ -220,21 +276,33 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'terminal.native',
 					'workbench.contrib.call',
 					'sessions.contrib.multiDiffSource',
+					'sessions.openSessionLinkOpener',
 					'sessions.contrib.remoteAgentHostContribution',
 					'sessions.contrib.sshAgentHostContribution',
 					'sessions.contrib.wslAgentHostContribution',
 					'sessions.contrib.tunnelAgentHostContribution',
 					'sessions.contrib.automationsCustomView',
+					'sessions.contrib.titleBarWidget',
+					'workbench.contrib.sessionsMouseNavigation',
+					'sessions.automationSessionsListing',
+					SessionsApplicationBadge.ID,
 					'workbench.contrib.nativeWindow',
 					OpenAgentsWindowSystemWideKeybindingContribution.ID,
 					'workbench.contrib.chatScreenshot',
 					'workbench.contrib.agentsWindowInvitation',
 					'chat.edits.editorOverlay',
 					'chat.promptLanguageFeatures',
+					'chat.newPromptFileActions',
+					'chat.agentActions',
+					'chat.runPromptActions',
+					'chat.skillActions',
+					'chat.promptActions',
 					'workbench.contrib.chatSetup',
+					'workbench.contrib.chatContextContribution',
 					'workbench.contrib.dataChannels',
 					'workbench.contrib.output',
 					'workbench.contrib.logs',
+					'workbench.contrib.workspaceTrustRequestHandler',
 					'sessions.contrib.workspaceStatus',
 					'workbench.contrib.githubLinkPresentations',
 					'workbench.contrib.githubFileSystemProvider',
@@ -273,6 +341,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 				api,
 				workspaceSelection: () => workspaceSelection,
 				workspace: () => workspace,
+				initialWorkspaceReady,
 				createFileDialogService: services => services.createInstance(FileDialogService),
 				createLifecycleService: services => {
 					lifecycleService = services.createInstance(ElectronLifecycleService, {
@@ -333,6 +402,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			void activeWorkbench.shutdown('pageHide').catch(error => console.error('Failed to shut down Sessions Workbench', error)).finally(() => sessions.dispose());
 		}, { once: true }));
 		await lifecycleService.initialize();
+		api.startWorkspaceDirectories();
 		await workbench.whenRestored;
 		return sessions;
 	} catch (error) {
@@ -343,3 +413,37 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 import { IWorkbenchEnvironmentService } from '../../workbench/services/environment/common/environmentService.js';
 import { ElectronWorkbenchEnvironmentService } from '../../workbench/services/environment/electron-browser/environmentService.js';
 import { sandboxProcess } from '../../base/parts/sandbox/electron-browser/globals.js';
+
+async function authorizeSessionFolder(
+	trust: IWorkspaceTrustApi,
+	onConnectionState: (listener: (state: string) => void) => IDisposable,
+	confirmFolderTrust: (request: DirectoryPermissionRequest, signal: AbortSignal) => Promise<boolean>,
+	request: DirectoryPermissionRequest,
+	signal: AbortSignal,
+): Promise<boolean> {
+	const { path } = request;
+	const controller = new AbortController();
+	using selection = addDisposableListener(signal, 'abort', () => controller.abort(), { once: true });
+	using connection = onConnectionState(state => {
+		if (state !== 'ready') { controller.abort(); }
+	});
+	throwIfCancelled(signal);
+	const existing = await trust.readDirectory(path);
+	throwIfCancelled(controller.signal);
+	const permissions = existing.permissions ?? existing.inheritedWorkspacePermissions;
+	if (hasDevelopmentPermissions(permissions)) { return true; }
+
+	const confirmed = await confirmFolderTrust(request, controller.signal);
+	if (!confirmed) { return false; }
+	const grant = await trust.createGrant(path, DEVELOPMENT_DIR_PERMISSIONS);
+	// A concurrent grant wins, and an alias must still identify the folder that was approved.
+	const current = await trust.readDirectory(path);
+	throwIfCancelled(controller.signal);
+	if (current.dir !== existing.dir) { return false; }
+	const currentPermissions = current.permissions ?? current.inheritedWorkspacePermissions;
+	if (hasDevelopmentPermissions(currentPermissions)) { return true; }
+	if (!structuralEquals(currentPermissions, permissions)) { return false; }
+	await trust.persistGrant(path, grant);
+	throwIfCancelled(controller.signal);
+	return true;
+}

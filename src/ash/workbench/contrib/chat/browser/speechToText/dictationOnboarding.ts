@@ -22,8 +22,8 @@ import { IChatSpeechToTextService, ChatSpeechToTextState } from './chatSpeechToT
 import { localize } from '../../../../../nls.js';
 import { isModelPreparing } from '../../../../../platform/localTranscription/common/localTranscription.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
-import { ChatInputOnboarding, type IChatInputOnboardingHostOptions, type IChatInputOnboardingContext } from '../widget/input/notices/chatInputOnboarding.js';
-import { ChatInputNoticeWidget, ChatInputNoticeVariant } from '../widget/input/notices/chatInputNoticeWidget.js';
+import { ChatInputOnboarding, type IChatInputOnboardingHostOptions, type IChatInputOnboardingContext } from '../widget/input/chatInputOnboarding.js';
+import { ChatInputNoticeWidget, ChatInputNoticeVariant } from '../widget/input/chatInputNoticeWidget.js';
 
 export const SHOW_DICTATION_ONBOARDING_COMMAND = 'workbench.action.chat.showSpeechToTextIntroduction';
 export const RESET_DICTATION_ONBOARDING_COMMAND = 'workbench.action.chat.resetSpeechToTextIntroduction';

@@ -1,5 +1,6 @@
 import { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
 import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
+import type { IManagedHover } from '../../../base/browser/ui/hover/hoverDelegate.js';
 import type { IAction } from '../../../base/common/actions.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
 import { ActionWidgetDropdown, type IActionWidgetDropdownOptions } from '../../actionWidget/browser/actionWidgetDropdown.js';
@@ -9,6 +10,7 @@ import { IInstantiationService } from '../../instantiation/common/instantiation.
 export class ActionWidgetDropdownActionViewItem extends ActionViewItem {
 	protected element!: HTMLElement;
 	private dropdown!: ActionWidgetDropdown;
+	private hover: IManagedHover | undefined;
 
 	constructor(action: IAction, private readonly actionWidgetOptions: Omit<IActionWidgetDropdownOptions, 'label' | 'ariaLabel' | 'labelRenderer'>, @IInstantiationService private readonly instantiationService: IInstantiationService) {
 		super(action);
@@ -23,7 +25,7 @@ export class ActionWidgetDropdownActionViewItem extends ActionViewItem {
 		}));
 		this.element = this.dropdown.element;
 		this._register(this.dropdown.onDidChangeVisibility(() => this.setTabbable(true)));
-		this.setupHover(this.element, this.action.tooltip);
+		this.hover = this.setupHover(this.element, this.action.tooltip);
 		this.updateEnabled();
 	}
 
@@ -35,6 +37,12 @@ export class ActionWidgetDropdownActionViewItem extends ActionViewItem {
 	protected updateEnabled(): void {
 		this.element.classList.toggle('disabled', !this.action.enabled);
 		this.dropdown.setEnabled(this.action.enabled);
+	}
+
+	protected refreshActionLabel(): void {
+		this.dropdown.setLabel(this.action.label);
+		this.element.setAttribute('aria-label', this.action.tooltip);
+		this.hover?.update(this.action.tooltip);
 	}
 
 	public override focus(): void { this.element.focus(); }

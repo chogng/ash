@@ -303,6 +303,7 @@ pub(crate) fn compose_local_tools_with_config(
     pty_helper: Option<&std::path::PathBuf>,
     documents: Option<Arc<dyn ash_tools::TextDocumentEditorProvider>>,
     threads: Arc<ash_core::ThreadController>,
+    session_environments: Arc<crate::session_environment::SessionEnvironments>,
 ) -> Result<LocalToolComposition, LocalToolError> {
     let requirements = config
         .requirements
@@ -359,7 +360,16 @@ pub(crate) fn compose_local_tools_with_config(
                 max_output_bytes: DEFAULT_OUTPUT_BYTES,
             },
         )
-        .map_err(LocalToolError::definition)?,
+        .and_then(|tool| tool.with_execution_guidance(&shell_execution_guidance(shell_policy)))
+        .map_err(LocalToolError::definition)?
+        .with_session_environment({
+            let environments = Arc::clone(&session_environments);
+            move |context| {
+                environments
+                    .load(context.session_id())
+                    .map_err(|error| error.to_string())
+            }
+        }),
     );
     let mut apply_patch = ApplyPatchTool::new(
         environment_id.clone(),
@@ -393,7 +403,8 @@ pub(crate) fn compose_local_tools_with_config(
         revision: action_policy_revision.clone(),
     };
     let mut service = LocalToolSuite::new(shell, grep, file_search, dir_grants, grant)
-        .with_permission_requests(requests);
+        .with_permission_requests(requests)
+        .with_session_environments(session_environments);
     if let Some(documents) = documents {
         service = service.with_text_document_editor(documents);
     }
@@ -741,6 +752,9 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
             },
         )
         .map_err(LocalToolError::definition)?;
+        let shell = shell
+            .with_execution_guidance(&shell_execution_guidance(shell_policy))
+            .map_err(LocalToolError::definition)?;
         let definition = to_protocol_tool_definition(shell.host_definition())
             .map_err(LocalToolError::definition)?;
         Ok(Self {
@@ -870,12 +884,15 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         relative: PathBuf,
         network_policy: Option<&network_proxy::NetworkPolicyHandle>,
         scope: &SandboxScope,
+        environment: exec_server::execution::CommandEnvironment,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let request = ShellCommandRequest::from_arguments(&ToolPayload::FunctionArguments(
             call.arguments.clone(),
         ))
         .map_err(|error| CoreError::Execution(error.to_string()))?;
-        let request = self.materialize_at(request, dir_authorization.dir(), relative)?;
+        let request = self
+            .materialize_at(request, dir_authorization.dir(), relative)?
+            .with_environment(environment);
         self.execute_request_scoped(
             request,
             authorization,
@@ -2071,6 +2088,9 @@ pub(crate) fn local_command_authority(
     // profile read-only constraints when choosing the process launch path.
     let restricted = scope
         .map(|scope| {
+            if cfg!(windows) {
+                return scope.can_run_unrestricted().map(|allowed| !allowed);
+            }
             if scope.host_read() == ash_sandboxing::HostReadScope::Minimal
                 || scope
                     .grants()
@@ -2185,6 +2205,26 @@ fn shell_sandbox() -> SandboxPolicy {
     SandboxPolicy::new(FileSystemAccess::DirectoryWrite, NetworkAccess::Denied)
         .with_host_acl_changes(local_acl_changes())
         .with_file_system_isolation(local_isolation())
+}
+
+fn shell_execution_guidance(policy: SandboxPolicy) -> String {
+    let files = match policy.file_system() {
+        FileSystemAccess::ReadOnly => "Filesystem access is read-only.",
+        FileSystemAccess::DirectoryWrite => {
+            "Writes are limited to authorized directories and paths."
+        }
+        FileSystemAccess::FullAccess => {
+            "Filesystem access is subject to active path grants and restrictions."
+        }
+    };
+    let network = match policy.network() {
+        NetworkAccess::Denied => "Network access is blocked.",
+        NetworkAccess::Managed => "Network destinations are checked by the host proxy.",
+        NetworkAccess::Allowed => "Network access is allowed by the baseline policy.",
+    };
+    format!(
+        "\n\nBaseline command sandbox: {files} {network} The host checks the effective permissions for each command."
+    )
 }
 
 fn configured_shell_policy(

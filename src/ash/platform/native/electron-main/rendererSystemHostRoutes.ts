@@ -8,10 +8,12 @@ import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { DialogRequest } from '../../dialogs/common/dialogs.js';
 import { validateScreenshotRectangle } from '../common/nativeHost.js';
 import { getScreenshot } from './nativeHostMainService.js';
+import type { DirectoryPermissionRequest } from '../../workspace/common/workspaceTrust.js';
+import { validateDirectoryPermissionRequest } from '../../workspace/common/workspaceIpc.js';
 
 export function rendererSystemHostRoutes(
 	window: BrowserWindow,
-	directoryPermissionPrompt: (path: string) => DialogRequest,
+	directoryPermissionPrompt: (request: DirectoryPermissionRequest) => DialogRequest,
 	auxiliaryWindows: IAuxiliaryWindowsMainService,
 ): readonly IpcRoute<unknown, unknown>[] {
 	const clipboard = new ElectronMainClipboardService(window);
@@ -100,6 +102,6 @@ export function rendererSystemHostRoutes(
 			}
 		},
 		{ channel: 'ash:host:hasClipboardResources', validate: value => { if (value !== undefined) throw new Error('Unexpected clipboard arguments'); }, invoke: () => clipboard.hasResources() },
-		{ channel: 'ash:host:directoryPermissionPrompt', validate: text, invoke: value => directoryPermissionPrompt(value as string) },
+		{ channel: 'ash:host:directoryPermissionPrompt', validate: validateDirectoryPermissionRequest, invoke: value => directoryPermissionPrompt(value as DirectoryPermissionRequest) },
 	];
 }

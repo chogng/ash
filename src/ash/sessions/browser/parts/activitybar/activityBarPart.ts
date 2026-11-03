@@ -1,9 +1,13 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/activityBarPart.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
+import { MenuActionViewItem, type MenuActionViewItemOptions } from '../../../../base/browser/ui/menu/menu.js';
+import { parse } from '../../../../base/common/json.js';
+import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/button.js';
+import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
+import { AnchorAxisAlignment } from '../../../../base/common/layout.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
@@ -14,8 +18,8 @@ import { CompositeActionViewItem, getActivityHoverPosition } from '../../../../w
 import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
-import { ActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
-import { observableValue } from '../../../../base/common/observable.js';
+import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { autorun, observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -24,8 +28,11 @@ import { Menus } from '../../menus.js';
 import { ActivityBarItemContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 
 interface ActivityBarDelegate {
-	showAccountMenu(anchor: HTMLElement): void;
+	showAccountMenu(anchor: HTMLElement, selectFirst: boolean): void;
 }
+
+const pinnedCodeActionsKey = 'sessions.activityBar.pinnedCodeActions';
+const primaryCodeActionIds = new Set(['sessions.newSession', 'sessionsView.manageAutomations', 'sessions.open.customize']);
 
 /** Owns navigation actions and Accounts; SidebarPart supplies their visible hosts. */
 export class ActivityBar extends Disposable {
@@ -33,9 +40,18 @@ export class ActivityBar extends Disposable {
 	private readonly navigation: ActionBar;
 	private readonly accounts: ActionBar;
 	public readonly accountAction: IAction;
-	private readonly showAccountMenu: (anchor: HTMLElement) => void;
+	private readonly showAccountMenu: (anchor: HTMLElement, selectFirst: boolean) => void;
+	private readonly moreAction: IAction = {
+		id: 'sessions.activity.more',
+		label: localize('sessions.activity.more', 'More'),
+		tooltip: '',
+		icon: Lxicon.ellipsis,
+		enabled: true,
+		run() { },
+	};
 	private readonly actions = new Map<string, ActivityAction>();
 	private order: string[];
+	private readonly pinnedCodeActions = observableValue<ReadonlySet<string>>(this, new Set());
 	private orderedActions: ActivityAction[] = [];
 	private draggedActionId: string | undefined;
 	private readonly bottomDomNode: HTMLDivElement;
@@ -58,6 +74,7 @@ export class ActivityBar extends Disposable {
 		this.domNode.className = 'ash-sessions-activity-content labeled';
 		container.append(this.domNode);
 		this.order = this.readOrder();
+		this.pinnedCodeActions.set(this.readPinnedCodeActions());
 		const menu = this._register(menus.createMenu(Menus.ActivityBar, contextKeys));
 		const codeMenu = this._register(menus.createMenu(Menus.CodeActivityBar, contextKeys));
 		const top = h(container.ownerDocument, 'div');
@@ -75,15 +92,17 @@ export class ActivityBar extends Disposable {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: localize('sessions.activity.navigation', 'Navigation'),
 			orientation: 'vertical',
-			actionViewItemProvider: action => new CompositeActionViewItem(action, {
-				presentation: 'navigation',
-				navigationClassName: 'ash-sessions-activity-item',
-				navigationLabel: this.labeled ? 'visible' : 'hidden',
-				onDidChange: (action as ActivityAction).current.onDidChange,
-				hoverOptions: { position: () => getActivityHoverPosition(this.configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation), 'left') },
-			}),
+			actionViewItemProvider: action => action === this.moreAction
+				? new MoreActionViewItem(action, contextMenuService, () => this.moreActions, this.pinnedCodeActions, (id, pinned) => this.setCodeActionPinned(id, pinned))
+				: new CompositeActionViewItem(action, {
+					presentation: 'navigation',
+					navigationClassName: 'ash-sessions-activity-item',
+					navigationLabel: this.labeled ? 'visible' : 'hidden',
+					onDidChange: (action as ActivityAction).current.onDidChange,
+					hoverOptions: { position: () => getActivityHoverPosition(this.configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation), 'left') },
+				}),
 			dragAndDrop: {
-				canDrop: () => this.draggedActionId !== undefined,
+				canDrop: (_event, target) => this.draggedActionId !== undefined && target !== this.moreAction,
 				onDragStart: (action, event) => {
 					this.draggedActionId = action.id;
 					event.dataTransfer!.setData('text/plain', action.id);
@@ -116,7 +135,7 @@ export class ActivityBar extends Disposable {
 				...this.order.filter(id => this.actions.has(id)).map(id => this.actions.get(id)!),
 				...registered.filter(action => !this.order.includes(action.id)),
 			];
-			this.navigation.setActions(this.orderedActions);
+			this.renderNavigation();
 		};
 		this._register(menu.onDidChange(updateActions));
 		this._register(codeMenu.onDidChange(updateActions));
@@ -125,7 +144,11 @@ export class ActivityBar extends Disposable {
 			if (event.affectsSome(workspaceModeKeys)) updateActions();
 		}));
 		this._register(storage.onDidChangeValue(event => {
-			if (event.external && event.scope === StorageScope.PROFILE && event.key === this.orderStorageKey) {
+			if (event.scope !== StorageScope.PROFILE) return;
+			if (event.key === pinnedCodeActionsKey) {
+				this.pinnedCodeActions.set(this.readPinnedCodeActions());
+				this.renderNavigation({ retainOpenDropdowns: true });
+			} else if (event.external && event.key === this.orderStorageKey) {
 				updateActions();
 			}
 		}));
@@ -133,7 +156,7 @@ export class ActivityBar extends Disposable {
 
 		const accountLabel = localize('workbench.accounts', 'Accounts');
 		this.accountAction = { id: 'sessions.activity.accounts', label: accountLabel, tooltip: accountLabel, icon: Lxicon.account, enabled: true, run() { } };
-		this.showAccountMenu = anchor => delegate.showAccountMenu(anchor);
+		this.showAccountMenu = (anchor, selectFirst) => delegate.showAccountMenu(anchor, selectFirst);
 		this.accounts = this._register(new ActionBar(bottom, {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: accountLabel,
@@ -171,7 +194,7 @@ export class ActivityBar extends Disposable {
 		if (presentationChanged) {
 			// The same actions retain order and selection while their button presentation changes.
 			this.navigation.setActions([]);
-			this.navigation.setActions(this.orderedActions);
+			this.renderNavigation();
 			if (navigationTabStop) { this.navigation.setTabStop(navigationTabStop); }
 			this.accounts.setActions([]);
 		}
@@ -197,8 +220,9 @@ export class ActivityBar extends Disposable {
 			getAnchor: () => event.type === 'contextmenu'
 				? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: this.domNode.ownerDocument.defaultView ?? undefined }
 				: event.target as HTMLElement,
-			getActions: () => Separator.join([...this.getItemContextMenuActions(event.target as Element)], [...this.getOrderActions(event.target as Element)], [...this.getContextMenuActions()]),
+			getActions: () => Separator.join([...this.getItemContextMenuActions(event.target as Element)], [...this.getUnpinActions(event.target as Element)], [...this.getOrderActions(event.target as Element)], [...this.getContextMenuActions()]),
 			getCheckedActionsRepresentation: () => 'radio',
+			autoSelectFirstItem: event.type === 'keydown',
 		});
 	}
 
@@ -222,9 +246,43 @@ export class ActivityBar extends Disposable {
 		return [new SubmenuAction('sessions.action.activityBar.position', localize('workbench.activityBarPosition', 'Activity Bar Position'), positions)];
 	}
 
+	private getUnpinActions(target: Element): readonly IAction[] {
+		const id = target.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
+		if (this.domNode.dataset.workspaceMode !== 'code' || !id || !this.pinnedCodeActions.get().has(id)) return [];
+		return [{
+			id: 'sessions.activity.unpin',
+			label: localize('sessions.activity.unpin', 'Unpin from Sidebar'),
+			icon: Lxicon.unpin,
+			tooltip: '',
+			enabled: true,
+			run: () => {
+				this.setCodeActionPinned(id, false);
+				this.navigation.setTabStop(this.labeled ? this.moreAction.id : id);
+				this.navigation.focus();
+			},
+		}];
+	}
+
+	private readPinnedCodeActions(): Set<string> {
+		const saved = parse(this.storage.get(pinnedCodeActionsKey, StorageScope.PROFILE, '[]'));
+		return new Set(Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string' && !primaryCodeActionIds.has(id)) : []);
+	}
+
+	private setCodeActionPinned(id: string, pinned: boolean): void {
+		const action = this.actions.get(id);
+		if (!action || primaryCodeActionIds.has(id) || this.domNode.dataset.workspaceMode !== 'code') return;
+		const pins = this.readPinnedCodeActions();
+		if (pinned) pins.add(id);
+		else pins.delete(id);
+		this.storage.store(pinnedCodeActionsKey, JSON.stringify([...pins]), StorageScope.PROFILE, StorageTarget.USER);
+		status(pinned
+			? localize('sessions.activity.pinned', '{0} pinned to the sidebar.', action.label)
+			: localize('sessions.activity.unpinned', '{0} unpinned from the sidebar.', action.label));
+	}
+
 	private getOrderActions(target: Element): readonly IAction[] {
 		const id = target.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
-		const actions = this.orderedActions;
+		const actions = this.primaryActions;
 		const index = actions.findIndex(action => action.id === id);
 		if (index < 0) { return []; }
 		return [
@@ -241,10 +299,31 @@ export class ActivityBar extends Disposable {
 		this.orderedActions = actions;
 		this.order = actions.map(action => action.id);
 		this.storage.store(this.orderStorageKey, JSON.stringify(this.order), StorageScope.PROFILE, StorageTarget.USER);
-		this.navigation.setActions(actions);
+		this.renderNavigation();
 		this.navigation.setTabStop(id);
 		this.navigation.focus();
-		status(localize('sessions.activity.moved', '{0}, position {1} of {2}', this.actions.get(id)!.label, actions.findIndex(action => action.id === id) + 1, actions.length));
+		const visible = this.primaryActions;
+		status(localize('sessions.activity.moved', '{0}, position {1} of {2}', this.actions.get(id)!.label, visible.findIndex(action => action.id === id) + 1, visible.length));
+	}
+
+	private isPrimaryCodeAction(id: string): boolean {
+		return primaryCodeActionIds.has(id) || this.pinnedCodeActions.get().has(id);
+	}
+
+	private get primaryActions(): readonly ActivityAction[] {
+		return this.labeled && this.domNode.dataset.workspaceMode === 'code'
+			? this.orderedActions.filter(action => this.isPrimaryCodeAction(action.id))
+			: this.orderedActions;
+	}
+
+	private get moreActions(): readonly ActivityAction[] {
+		return this.orderedActions.filter(action => !primaryCodeActionIds.has(action.id));
+	}
+
+	private renderNavigation(options?: { readonly retainOpenDropdowns?: boolean; }): void {
+		const actions = this.primaryActions;
+		const showMore = this.labeled && this.domNode.dataset.workspaceMode === 'code' && this.moreActions.length > 0;
+		this.navigation.setActions(showMore ? [...actions, this.moreAction] : actions, options);
 	}
 
 	private get orderStorageKey(): string {
@@ -262,7 +341,7 @@ export class ActivityBar extends Disposable {
 		const includeSearch = (actions: string[]): string[] => {
 			const index = actions.indexOf('sessions.newSession');
 			// Introduce Search beside New once; later user reordering keeps its saved position.
-			if (index >= 0 && !actions.includes('sessions.search')) { actions.splice(index + 1, 0, 'sessions.search'); }
+			if (this.orderStorageKey === 'sessions.activityBar.actionOrder' && index >= 0 && !actions.includes('sessions.search')) { actions.splice(index + 1, 0, 'sessions.search'); }
 			return actions;
 		};
 		if (legacy !== undefined) {
@@ -291,6 +370,86 @@ export class ActivityBar extends Disposable {
 	}
 }
 
+class MoreActionViewItem extends DropdownMenuActionViewItem {
+	constructor(action: IAction, contextMenus: IContextMenuService, getActions: () => readonly IAction[], pins: IObservable<ReadonlySet<string>>, setPinned: (id: string, pinned: boolean) => void) {
+		super(action, getActions, {
+			showContextMenu: delegate => contextMenus.showContextMenu({
+				...delegate,
+				getActionViewItem: (item, options) => new PinnableMenuActionViewItem(item, options,
+					pins.map(ids => ids.has(item.id)), pinned => setPinned(item.id, pinned)),
+				getMenuClassName: () => 'ash-sessions-navigation-menu',
+				getCheckedActionsRepresentation: () => 'radio',
+			}),
+		}, { buttonStyles: defaultButtonStyles }, () => ({ anchorAxisAlignment: AnchorAxisAlignment.Horizontal }));
+	}
+
+	protected override createButton(container: HTMLElement, options: IButtonOptions): Button {
+		const button = super.createButton(container, options);
+		button.domNode.classList.add('ash-sessions-activity-item', 'ash-sessions-activity-more');
+		return button;
+	}
+}
+
+class PinnableMenuActionViewItem extends MenuActionViewItem {
+	private readonly pinItem: ButtonActionViewItem;
+
+	constructor(action: IAction, options: MenuActionViewItemOptions, pinned: IObservable<boolean>, setPinned: (pinned: boolean) => void) {
+		super(action, options);
+		this.pinItem = this._register(new SidebarPinActionViewItem(action, options, pinned, setPinned, () => this.focus()));
+	}
+
+	override render(container: HTMLElement): void {
+		super.render(container);
+		container.classList.add('ash-sessions-navigation-menu-row');
+		this.pinItem.render(container);
+		this._register(addDisposableListener(this.button.domNode, 'keydown', event => {
+			if (event.key !== 'ArrowRight') return;
+			event.preventDefault();
+			this.pinItem.focus();
+		}));
+	}
+}
+
+class SidebarPinActionViewItem extends ButtonActionViewItem {
+	constructor(
+		private readonly entry: IAction,
+		options: ActionViewItemOptions,
+		private readonly pinned: IObservable<boolean>,
+		setPinned: (pinned: boolean) => void,
+		private readonly focusPrimary: () => void,
+	) {
+		super({
+			id: 'sessions.activity.pin', label: '', tooltip: '', enabled: true, run: () => setPinned(!pinned.get()),
+		}, { ...options, iconOnly: true, actionRunner: undefined });
+	}
+
+	override render(container: HTMLElement): void {
+		super.render(container);
+		const button = this.button.domNode;
+		button.classList.add('ash-sessions-navigation-menu-pin');
+		button.setAttribute('role', 'menuitem');
+		this._register(autorun(reader => {
+			const pinned = this.pinned.read(reader);
+			const label = pinned
+				? localize('sessions.activity.unpinItem', 'Unpin {0} from Sidebar', this.entry.label)
+				: localize('sessions.activity.pin', 'Pin {0} to Sidebar', this.entry.label);
+			this.button.icon = pinned ? Lxicon.pinFilled : Lxicon.pin;
+			this.button.setTitle(label);
+			button.setAttribute('aria-label', label);
+		}));
+		this.setTabbable(false);
+		this._register(addDisposableListener(button, 'keydown', event => {
+			if (event.key === 'ArrowLeft') {
+				event.preventDefault();
+				this.focusPrimary();
+			} else if (event.key === 'Enter' || event.key === ' ') {
+				// Leave activation to the native button instead of the menu's primary action.
+				event.stopPropagation();
+			}
+		}));
+	}
+}
+
 class AccountActionViewItem extends ActionViewItem {
 	private button!: Button;
 
@@ -298,7 +457,7 @@ class AccountActionViewItem extends ActionViewItem {
 		action: IAction,
 		options: ActionViewItemOptions,
 		private readonly presentation: 'sidebar' | 'titlebar',
-		private readonly showMenu: (anchor: HTMLElement) => void,
+		private readonly showMenu: (anchor: HTMLElement, selectFirst: boolean) => void,
 		private readonly showContextMenu: (event: MouseEvent | KeyboardEvent) => void,
 		private readonly createHover: (anchor: HTMLElement) => IDisposable,
 	) { super(action, options); }
@@ -309,7 +468,7 @@ class AccountActionViewItem extends ActionViewItem {
 			label: this.action.label,
 			icon: this.action.icon,
 			iconOnly: this.presentation !== 'sidebar',
-			onClick: () => this.showMenu(this.button.domNode),
+			onClick: event => this.showMenu(this.button.domNode, event.detail === 0),
 		}));
 		if (this.presentation !== 'titlebar') { this.button.domNode.classList.add('ash-sessions-activity-item'); }
 		this.button.domNode.setAttribute('aria-haspopup', 'menu');

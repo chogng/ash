@@ -35,6 +35,7 @@ fn fixed_answers_advance_pages_and_complete_once() {
 #[test]
 fn custom_answer_keeps_the_question_until_text_is_submitted() {
     let mut query = Query::new(vec![QueryQuestion {
+        required: true,
         id: "custom".into(),
         header: "Choice".into(),
         prompt: "What should happen?".into(),
@@ -71,6 +72,7 @@ fn final_custom_answer_remains_renderable_and_retry_keeps_the_answer() {
     let mut query = Query::new(vec![
         question("first"),
         QueryQuestion {
+            required: true,
             id: "last".into(),
             header: "Last".into(),
             prompt: "What next?".into(),
@@ -106,6 +108,7 @@ fn final_custom_answer_remains_renderable_and_retry_keeps_the_answer() {
 #[test]
 fn paste_is_owned_by_the_custom_answer_editor() {
     let mut query = Query::new(vec![QueryQuestion {
+        required: true,
         id: "custom".into(),
         header: "Choice".into(),
         prompt: "What should happen?".into(),
@@ -126,6 +129,7 @@ fn paste_is_owned_by_the_custom_answer_editor() {
 #[test]
 fn keyboard_activation_answers_the_selected_choice() {
     let mut query = Query::new(vec![QueryQuestion {
+        required: true,
         id: "choice".into(),
         header: "Choose".into(),
         prompt: "Which one?".into(),
@@ -155,6 +159,7 @@ fn keyboard_activation_answers_the_selected_choice() {
 #[test]
 fn pointer_choice_uses_the_full_row_and_the_ordinary_activation_path() {
     let mut query = Query::new(vec![QueryQuestion {
+        required: true,
         id: "choice".into(),
         header: "Choose".into(),
         prompt: "Which one?".into(),
@@ -208,6 +213,7 @@ fn pointer_choice_uses_the_full_row_and_the_ordinary_activation_path() {
 
 fn question(id: &str) -> QueryQuestion {
     QueryQuestion {
+        required: true,
         id: id.into(),
         header: "Confirm".into(),
         prompt: "Continue?".into(),
@@ -220,8 +226,208 @@ fn question(id: &str) -> QueryQuestion {
 }
 
 #[test]
+fn optional_answers_skip_without_values_and_retry_preserves_earlier_answers() {
+    let mut optional = question("optional");
+    optional.required = false;
+    let mut query = Query::new(vec![question("required"), optional]).unwrap();
+    assert_eq!(query.activate(0), QueryOutcome::Consumed);
+    let QueryOutcome::Completed(answers) = query.activate(0) else {
+        panic!("skipping the optional final question must complete the form");
+    };
+    let ash_protocol::AgentResponse::UserInput { response } =
+        query.response(answers.clone()).response
+    else {
+        panic!("a query must return user input");
+    };
+    assert_eq!(response.answers.len(), 1);
+    assert_eq!(response.answers["required"].value, "Yes");
+    assert!(!response.answers.contains_key("optional"));
+    query.submission_failed("offline".into());
+    assert_eq!(query.activate(0), QueryOutcome::Completed(answers));
+}
+
+#[test]
+fn optional_custom_answer_can_be_blank_while_required_answers_stay_required() {
+    let custom = QueryQuestion {
+        required: true,
+        id: "name".into(),
+        header: "Name".into(),
+        prompt: "Enter a name".into(),
+        choices: Vec::new(),
+        custom_answer: QueryCustomAnswer::Allowed,
+    };
+    let mut query = Query::new(vec![custom.clone()]).unwrap();
+    query.activate(0);
+    assert_eq!(
+        query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
+        QueryOutcome::Consumed
+    );
+    assert!(!query.view().submitting);
+
+    let mut optional = custom;
+    optional.required = false;
+    let mut query = Query::new(vec![optional]).unwrap();
+    query.activate(1);
+    let QueryOutcome::Completed(answers) =
+        query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("an optional blank answer must complete the form");
+    };
+    let ash_protocol::AgentResponse::UserInput { response } = query.response(answers).response
+    else {
+        panic!("a query must return user input");
+    };
+    assert!(response.answers.is_empty());
+}
+
+#[test]
+fn optional_question_projects_the_protocol_and_preserves_explicit_false() {
+    let mut query = Query::open(
+        ash_protocol::TurnId::new("turn").unwrap(),
+        ash_protocol::RequestId::new("request").unwrap(),
+        ash_protocol::RequestUserInput {
+            questions: vec![ash_protocol::UserInputQuestion {
+                required: false,
+                id: "notify".into(),
+                header: "Notify".into(),
+                question: "Send a notification?".into(),
+                options: ["true", "false"]
+                    .into_iter()
+                    .map(|label| ash_protocol::UserInputOption {
+                        label: label.into(),
+                        description: String::new(),
+                    })
+                    .collect(),
+                allow_free_form: false,
+                validation: None,
+            }],
+        },
+    )
+    .unwrap();
+    assert!(!query.view().question.required);
+    let area = Rect::new(0, 0, 70, super::desired_height(query.view()));
+    assert_eq!(
+        super::choice_at(area, query.view(), ratatui::layout::Position::new(1, 2)),
+        Some(0)
+    );
+    query.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    query.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let QueryOutcome::Completed(answers) =
+        query.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("the explicitly selected false answer must complete the form");
+    };
+    let ash_protocol::AgentResponse::UserInput { response } = query.response(answers).response
+    else {
+        panic!("a query must return user input");
+    };
+    assert_eq!(response.answers["notify"].value, "false");
+}
+
+#[test]
+fn result_review_displays_literal_evidence_and_returns_only_the_selected_decision() {
+    for (selection, expected) in [
+        (0, ash_protocol::ToolResultReviewDecision::Skip),
+        (1, ash_protocol::ToolResultReviewDecision::Share),
+    ] {
+        let mut query = Query::open_result_review(
+            ash_protocol::TurnId::new("turn").unwrap(),
+            ash_protocol::RequestId::new("review").unwrap(),
+            ash_protocol::ToolResultReviewRequest {
+                tool_call_id: ash_protocol::ToolCallId::new("call").unwrap(),
+                tool_name: ash_protocol::ToolName::new("read_resource").unwrap(),
+                review: ash_protocol::ToolResultReview {
+                    reason: "Share sensitive evidence?".into(),
+                    content: vec![ash_protocol::ContentPart::Text("literal <data>".into())],
+                    is_error: false,
+                },
+            },
+        )
+        .unwrap();
+        assert!(query.view().question.prompt.contains("literal <data>"));
+        let QueryOutcome::Completed(answers) = query.activate(selection) else {
+            panic!("expected a result decision");
+        };
+        assert!(
+            matches!(query.response(answers).response, ash_protocol::AgentResponse::ToolResultReview { response } if response.decision == expected)
+        );
+    }
+}
+
+#[test]
+fn result_review_scrolls_long_evidence_and_localizes_controls() {
+    let mut query = Query::open_result_review(
+        ash_protocol::TurnId::new("turn").unwrap(),
+        ash_protocol::RequestId::new("review").unwrap(),
+        ash_protocol::ToolResultReviewRequest {
+            tool_call_id: ash_protocol::ToolCallId::new("call").unwrap(),
+            tool_name: ash_protocol::ToolName::new("capture_result").unwrap(),
+            review: ash_protocol::ToolResultReview {
+                reason: "Review captured output".into(),
+                content: vec![ash_protocol::ContentPart::Text(
+                    (1..=18)
+                        .map(|line| format!("Literal evidence line {line}"))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                )],
+                is_error: false,
+            },
+        },
+    )
+    .unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(96, 16)).unwrap();
+    let mut render = |query: &Query| {
+        terminal
+            .draw(|frame| {
+                super::draw(
+                    frame,
+                    Rect::new(0, 0, 96, 16),
+                    query.view(),
+                    None,
+                    None,
+                    crate::render::test_context().with_language(crate::nls::Language::Chinese),
+                )
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        (0..16)
+            .map(|row| {
+                (0..96)
+                    .map(|column| buffer[(column, row)].symbol())
+                    .collect::<String>()
+                    .trim_end()
+                    .to_owned()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let initial = render(&query);
+    assert!(initial.contains("Literal evidence line 1"));
+    insta::assert_snapshot!("result_review_initial_zh", initial);
+    for _ in 0..3 {
+        assert_eq!(
+            query.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE)),
+            QueryOutcome::Consumed
+        );
+    }
+    assert_eq!(query.view().selected, 0);
+    let scrolled = render(&query);
+    assert!(scrolled.contains("Literal evidence line 18"));
+    insta::assert_snapshot!("result_review_scrolled_zh", scrolled);
+    assert_eq!(
+        super::choice_at(
+            Rect::new(0, 0, 96, 16),
+            query.view(),
+            ratatui::layout::Position::new(90, 13)
+        ),
+        Some(0)
+    );
+}
+
+#[test]
 fn english_punctuation_converts_typed_custom_answers_and_preserves_paste() {
     let mut query = Query::new(vec![QueryQuestion {
+        required: true,
         id: "custom".into(),
         header: "Choice".into(),
         prompt: "Choose".into(),

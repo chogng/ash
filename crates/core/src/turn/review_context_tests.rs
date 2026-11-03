@@ -333,11 +333,13 @@ fn user_answers_keep_their_question_and_precede_a_later_revocation() {
                 request: ash_protocol::AgentRequest::UserInput {
                     request: ash_protocol::RequestUserInput {
                         questions: vec![ash_protocol::UserInputQuestion {
+                            required: true,
                             id: "destination".into(),
                             header: "Destination".into(),
                             question: "Where may I publish?".into(),
                             options: vec![],
                             allow_free_form: true,
+                            validation: None,
                         }],
                     },
                 },

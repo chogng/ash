@@ -1,3 +1,10 @@
+import { ISessionContext } from '../../services/sessions/browser/sessionContext.js';
+import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
+import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
+import { ISessionFolderAuthorizationService } from '../../common/sessionWorkspace.js';
+import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
+import { ILocalGitService } from '../../../platform/git/common/localGitService.js';
+import { ISessionsListModelService, SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
 import { IChatEntitlementService } from '../../../workbench/services/chat/common/chatEntitlementService.js';
 import { IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
 import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
@@ -18,6 +25,8 @@ import { emptyEditorGroupsService } from '../../../workbench/test/common/testWor
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { ISearchService } from '../../../workbench/services/search/common/search.js';
 import { IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
+import { ISessionChangesService } from '../../contrib/changes/common/sessionChangesService.js';
+import { IRemoteConnectionService, RemoteConnectionService, UnavailableRemoteConnectionApi } from '../../../platform/remote/common/remoteConnectionService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 
 import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
@@ -67,6 +76,7 @@ import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workben
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictation/common/dictation.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
+import { IVoiceInputModeService, VoiceInputModeService } from '../../../workbench/contrib/chat/browser/voiceInputMode/voiceInputMode.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
@@ -85,7 +95,7 @@ import { isCancellationError } from '../../../base/common/errors.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import { SessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
-import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, DisposableTracker, installDisposableTracker, toDisposable } from '../../../base/common/lifecycle.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { IMenuService, MenuId } from '../../../platform/actions/common/actions.js';
@@ -117,7 +127,7 @@ import { IWorkbenchLayoutService, Position, type WorkbenchPartId, type Workbench
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
-import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from '../../../workbench/services/chat/common/chatService.js';
+import { IChatService, type AdvisorConfig, type ModelProviderCredentialStatus, type ThreadGoal, type ThreadTranscriptUpdateEnvelope, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnError } from '../../../workbench/services/chat/common/chatService.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { ModelCatalogConfiguration } from '../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
@@ -156,7 +166,6 @@ import { ISessionProviderScopeService } from '../../browser/agentHost/sessionPro
 import { ISCMService } from '../../../workbench/contrib/scm/common/scm.js';
 import { SCMService } from '../../../workbench/contrib/scm/common/scmService.js';
 import { QuickChatService } from '../../../workbench/contrib/chat/browser/widgetHosts/chatQuick.js';
-import { IVoiceInputModeService, VoiceInputModeService } from '../../../workbench/contrib/chat/browser/voiceInputMode/voiceInputMode.js';
 import { IExtensionService } from '../../../workbench/services/extensions/common/extensionService.js';
 import { registerTestExtensionService } from '../../../workbench/test/common/testExtensionServices.js';
 
@@ -176,6 +185,8 @@ function createInputServices(
 	const editorServices = createCodeEditorServices(inputResources);
 	if (!editorServices.has(IExtensionService)) registerTestExtensionService(inputResources, editorServices);
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), editorServices));
+	services.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
+	services.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 	services.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	services.registerInstance(IFileDialogService, {
 		showOpenDialog: async () => { throw new Error('Folder browsing is outside this composer fixture'); },
@@ -216,7 +227,11 @@ function createInputServices(
 	if (commandScope) commandScope.registerInstance(IChatWidgetService, services.get(IChatWidgetService));
 	return services;
 }
-function createSessionChatViewPane(...args: ConstructorParameters<typeof SessionChatViewPane>): InstanceType<typeof SessionChatViewPane> {
+type SessionChatViewPaneTestArguments = ConstructorParameters<typeof SessionChatViewPane> extends [...infer Head, IOpenerService | undefined, IEditorService | undefined, ISessionProviderScopeService, ISessionsListModelService]
+	? [...Head, opener?: IOpenerService, editor?: IEditorService]
+	: never;
+
+function createSessionChatViewPane(...args: SessionChatViewPaneTestArguments): InstanceType<typeof SessionChatViewPane> {
 	const services = inputResources.add(args[12].createChild());
 	services.registerInstance(IChatService, args[2]);
 	services.registerInstance(ISessionsManagementService, args[3]);
@@ -236,9 +251,11 @@ function createSessionChatViewPane(...args: ConstructorParameters<typeof Session
 	services.registerInstance(IEditorGroupsService, args[18]);
 	if (args[19]) services.registerInstance(IOpenerService, args[19]);
 	if (args[20]) services.registerInstance(IEditorService, args[20]);
+	services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	services.registerSingleton(ISessionGroupsService, () => services.createInstance(SessionGroupsService));
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
 	services.registerSingleton(IAgentSessionsService, () => services.createInstance(descriptor));
+	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 	return services.createInstance(SessionChatViewPane, args[0], args[1]);
 }
 
@@ -682,6 +699,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	services.registerInstance(IChatService, chat);
 	services.registerInstance(ISessionsManagementService, sessions);
 	const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
+	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 	services.registerSingleton(IAgentSessionsService, () => services.createInstance(historyDescriptor));
 	services.registerSingleton(ISessionGroupsService, () => services.createInstance(SessionGroupsService));
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
@@ -691,6 +709,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	services.registerInstance(IDialogService, recordingDialogService([]));
 	services.registerInstance(IContextKeyService, contextKeys);
 	const navigationDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(navigationDescriptor));
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
@@ -922,7 +941,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	for (const chatPane of chatPanes) {
 		assert.equal(chatPane.classList.contains('empty'), true);
 		assert.equal(chatPane.classList.contains('has-conversation'), false);
-		assert.equal(chatPane.querySelector<HTMLElement>(':scope > .ash-chat-goal')?.hidden, true);
+		assert.equal(chatPane.querySelector<HTMLElement>(':scope > .ash-chat-goal-banner')?.hidden, true);
 		assert.ok(chatPane.querySelector(':scope > .ash-chat-list-widget'));
 		assert.ok(chatPane.querySelector(':scope > .ash-chat-input-part'));
 		const inputToolbar = chatPane.querySelector<HTMLElement>('.ash-chat-input-toolbars');
@@ -1164,6 +1183,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		const parentServices = resources.add(createInputServices(contextView, chat));
 		const services = resources.add(parentServices.createChild());
 		services.registerInstance(ISessionsManagementService, sessions);
+		services.registerInstance(IRemoteConnectionService, resources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 		const storage = resources.add(createTestStorage());
 		const notices = resources.add(new TestNotificationService());
 		services.registerInstance(IStorageService, storage);
@@ -1172,7 +1192,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		services.registerSingleton(IChatTipService, () => services.createInstance(ChatTipService));
 		services.registerInstance(ISessionsGitHubService, {
 			onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], initialize() { },
-			attachIssue: async () => { }, detachIssue: async () => { }, attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); }, detachPullRequest: async () => { },
+			attachIssue: async () => { }, detachIssue: async () => { }, attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { },
 		});
 		const identity = `untitled:${draft.untitledSessionId}`;
 		if (stored !== undefined) storage.store(`sessions.inputDraft:${identity}`, stored, StorageScope.WORKSPACE, StorageTarget.MACHINE);
@@ -1192,6 +1212,10 @@ async function sessionsWidgetFixture(send: (text: string, signal?: AbortSignal) 
 	const fixture = await sessionsInputFixture();
 	try {
 		fixture.input.dispose();
+		fixture.services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
+		fixture.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
+		fixture.services.registerInstance(ISessionContext, fixture.model);
+		fixture.services.registerInstance(ILayoutService, { activeContainer: document.body } as ILayoutService);
 		fixture.model.send = async (text, _mode, _skills, _contexts, options) => send(text, options?.signal);
 		fixture.model.interrupt = interrupt;
 		const widget = fixture.services.createInstance(NewChatWidget, document.body, 'sessions-composer', fixture.model, () => { });
@@ -1272,7 +1296,7 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with
 		fixture.input.appendToDraft('Keep this text');
 		assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep this text');
 		assert.deepEqual(sent, []);
-		assert.equal(form.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		assert.ok(form.querySelector('[data-action-id="ash.chat.input.send"] button'));
 		const ring = footer.querySelector<HTMLButtonElement>('.ash-chat-context-usage-button')!;
 		assert.equal(ring.hidden, false);
 		assert.equal(ring.disabled, true);
@@ -1503,8 +1527,15 @@ test('sending from one session preserves a later draft during first-session crea
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using editorResources = new DisposableStore();
 	const composerStorage = editorResources.add(createTestStorage());
-	const editorServices = editorResources.add(createTestEditorServices(undefined, createCodeEditorServices(editorResources), dom.window.document, composerStorage));
+	const editorRoot = createCodeEditorServices(editorResources);
+	registerTestExtensionService(editorResources, editorRoot);
+	const editorServices = editorResources.add(createTestEditorServices(undefined, editorRoot, dom.window.document, composerStorage));
 	editorServices.registerInstance(IFileDialogService, { showOpenDialog: async () => { throw new Error('Unexpected folder browser'); } } as unknown as IFileDialogService);
+	editorServices.registerInstance(IRemoteConnectionService, editorResources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
+	editorServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
+	editorServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
+	editorServices.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
+	editorServices.registerInstance(ILayoutService, { activeContainer: dom.window.document.body } as ILayoutService);
 	editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	editorServices.registerInstance(ISearchService, {
 		registerSearchResultProvider: () => { throw new Error('Search registration is outside this composer fixture'); },
@@ -1521,12 +1552,14 @@ test('sending from one session preserves a later draft during first-session crea
 		initialize() { },
 		attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); },
 		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
+		invokePullRequestArtifact: async () => { throw new Error('Unexpected PR artifact action'); },
 	});
 	editorServices.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 	editorServices.registerSingleton(IVoiceCodeTranscriptionClient, () => editorServices.createInstance(VoiceCodeTranscriptionClient));
 	editorServices.registerInstance(IAgentVoiceService, undefined);
 	editorServices.registerSingleton(ISpeechService, () => editorServices.createInstance(SpeechService));
 	editorServices.registerSingleton(IChatSpeechToTextService, () => editorServices.createInstance(ChatSpeechToTextService));
+	editorServices.registerSingleton(IVoiceInputModeService, () => editorServices.createInstance(VoiceInputModeService));
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	editorServices.registerInstance(IAccessibleViewService, unavailableAccessibleViewService);
 	editorServices.registerInstance(INotificationService, notifications);
@@ -1783,6 +1816,7 @@ test('the New Chat slash command opens an untitled session', async () => {
 		getViewWithId: () => undefined,
 	} as unknown as IViewsService);
 	const navigationDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(navigationDescriptor));
 	using commands = new CommandService(services);
 	const menuService = new MenuService(commands, contextKeys);
@@ -1790,7 +1824,8 @@ test('the New Chat slash command opens an untitled session', async () => {
 	const contextMenuService = {
 		showContextMenu: () => undefined,
 	} as unknown as IContextMenuService;
-	const paneChat = createChatService(fake.api);
+	using paneChat = createChatService(fake.api);
+	services.registerInstance(IChatService, paneChat);
 	using pane = createSessionChatViewPane(
 		dom.window.document.body,
 		{
@@ -1832,7 +1867,7 @@ test('the New Chat slash command opens an untitled session', async () => {
 	assert.equal(fake.createSessionRequests.length, 0);
 	assert.equal(fake.createThreadRequests.length, 0);
 	assert.equal(sessions.untitledSessions.length, 1);
-	assert.equal(focusedView, CHAT_VIEW_ID);
+	assert.equal(focusedView, undefined);
 
 	dom.window.close();
 });
@@ -2017,6 +2052,8 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	using sessions = new SessionsManagementService(api);
+	using chat = createChatService(api);
+	services.registerInstance(IChatService, chat);
 	using contextKeys = new ContextKeyService();
 	using quickInput = new TestQuickInputService({
 		instantiationService: services,
@@ -2026,8 +2063,10 @@ test('Chat history selects an active Thread through Quick Pick', async () => {
 	let focusedView: string | undefined;
 	services.registerInstance(ISessionsManagementService, sessions);
 	const navigationDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(navigationDescriptor));
 	const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
+	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 	services.registerSingleton(IAgentSessionsService, () => services.createInstance(historyDescriptor));
 	services.registerSingleton(ISessionGroupsService, () => services.createInstance(SessionGroupsService));
 	services.registerInstance(IQuickInputService, quickInput);
@@ -2084,7 +2123,10 @@ for (const [locale, wording] of [['en', 'archive'], ['en', 'done'], ['zh-CN', 'a
 			using services = new InstantiationService();
 			using configuration = new WorkbenchConfigurationService({ source: JSON.stringify({ 'chat.experimental.sessionArchiveActionWording': wording }) });
 			using storage = createTestStorage();
-			using sessions = new SessionsManagementService(fakeApi({ sessions: [session('source', 'branch'), session('other', 'foreground')] }).api);
+			const { api } = fakeApi({ sessions: [session('source', 'branch'), session('other', 'foreground')] });
+			using sessions = new SessionsManagementService(api);
+			using chat = createChatService(api);
+			services.registerInstance(IChatService, chat);
 			await sessions.initialize();
 			const draft = sessions.createUntitledSession('Unsent draft');
 			using hidden = new Emitter<IQuickInputHideEvent>();
@@ -2106,8 +2148,10 @@ for (const [locale, wording] of [['en', 'archive'], ['en', 'done'], ['zh-CN', 'a
 			const calls: { id: string; target: unknown; }[] = [];
 			services.registerInstance(ISessionsManagementService, sessions);
 			const navigationDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+			services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 			services.registerSingleton(IChatSessionNavigationService, () => services.createInstance(navigationDescriptor));
 			const historyDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1];
+			services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 			services.registerSingleton(IAgentSessionsService, () => services.createInstance(historyDescriptor));
 			services.registerSingleton(ISessionGroupsService, () => services.createInstance(SessionGroupsService));
 			services.registerInstance(IConfigurationService, configuration);
@@ -3518,13 +3562,32 @@ test('ChatWidgetModel sends the selected model thinking effort with its Turn', a
 	await assert.rejects(model.selectReasoningEffort('medium'), /Select a model/);
 });
 
-test('New Chat keeps its thinking effort when it creates a Thread', async () => {
+for (const phase of ['creating the Session', 'loading the Thread'] as const) test(`New Chat keeps its accepted model and effort while ${phase}`, async () => {
 	const entry = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First', supportedReasoningEfforts: [{ effort: 'low' }, { effort: 'high' }] as const };
 	const fake = fakeApi({
 		models: [entry],
 		createSession: session('session-1', undefined, 'New Chat'),
 		createThread: { session: session('session-1', 'thread-1', 'New Chat'), threadId: 'thread-1' },
 	});
+	const preparing = new DeferredPromise<void>();
+	const finishPreparation = new DeferredPromise<void>();
+	const pause = async () => {
+		await preparing.complete();
+		await finishPreparation.p;
+	};
+	if (phase === 'creating the Session') {
+		const create = fake.api.session.create;
+		fake.api.session.create = async (...args) => {
+			await pause();
+			return create(...args);
+		};
+	} else {
+		const subscribe = fake.api.thread.subscribe;
+		fake.api.thread.subscribe = async (...args) => {
+			await pause();
+			return subscribe(...args);
+		};
+	}
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	const untitled = sessions.createUntitledSession();
@@ -3534,10 +3597,20 @@ test('New Chat keeps its thinking effort when it creates a Thread', async () => 
 	await model.selectModel(entry.model);
 	model.selectUntitledSession(sessions.untitledSessions.find(session => session.untitledSessionId === untitled.untitledSessionId)!);
 	await model.selectReasoningEffort('high');
-	await model.send('Use high effort');
+	const sending = model.send('Use high effort');
+	await Promise.race([preparing.p, sending]);
+	assert.equal(preparing.isResolved, true);
+	try {
+		await model.selectAutomaticModel();
+	} finally {
+		await finishPreparation.complete();
+		await sending;
+	}
 
+	assert.deepEqual(fake.turnStartRequests[0]?.model, entry.model);
 	assert.equal(fake.turnStartRequests[0]?.reasoningEffort, 'high');
-	assert.equal(model.inputState.selectedReasoningEffort, 'high');
+	assert.equal(model.inputState.isAutomaticModel, true);
+	assert.equal(model.inputState.selectedReasoningEffort, undefined);
 });
 
 test('ChatWidgetModel Auto retains the configured profile model and leaves Turn resolution to the backend', async () => {
@@ -3715,6 +3788,9 @@ for (const locale of ['en', 'zh-CN']) test(`Permission menu accessibility help s
 		const menu = document.querySelector<HTMLElement>('.ash-chat-permission-menu')!;
 		assert.ok(menu);
 		const selected = document.activeElement;
+		fixture.model.selectMode('plan');
+		assert.ok(menu.isConnected);
+		assert.equal(document.activeElement, selected);
 		const provider = focusedChatHelp(fixture.services);
 		assert.match(provider.provideContent(), locale === 'en' ? /^Permissions/ : /^权限/);
 		assert.doesNotMatch(provider.provideContent(), /Chat: Configure Tools|工作区|workspace/);
@@ -4523,7 +4599,7 @@ test('Audio history identifies the sender and recording duration', () => {
 	assert.equal(list.element.querySelector('.ash-chat-item-label')!.textContent, 'You');
 	assert.equal(list.element.querySelector('figcaption')!.textContent, 'Audio (2 seconds)');
 	assert.equal(list.element.querySelector('audio')!.controls, true);
-	assert.equal(list.element.querySelector('button')!.textContent, 'Load audio');
+	assert.equal(list.element.querySelector('.ash-chat-item button')!.textContent, 'Load audio');
 	dom.window.close();
 });
 
@@ -4786,7 +4862,7 @@ test('approval capabilities reach the composer only through owner-directed backe
 	fake.emit({ method: 'session/thread/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 2, update: { type: 'committed', event: { type: 'interactionRequested', threadId: 'thread-1', turnId: 'turn-1', interaction } } } });
 	assert.equal(model.interaction, undefined);
 	fake.emit({ method: 'agent/request', params: { sessionId: 'session-1', threadId: 'thread-1', turnId: 'turn-1', interaction } });
-	assert.deepEqual(model.inputState.interaction?.request, { type: 'approval', request: { reason: interaction.request.request.reason, allowedDecisions: interaction.request.request.allowedDecisions, command: undefined, capabilities: interaction.request.request.capabilities } });
+	assert.deepEqual(model.inputState.interaction?.request, { type: 'approval', request: { reason: interaction.request.request.reason, allowedDecisions: interaction.request.request.allowedDecisions, command: undefined, riskAssessment: undefined, sandboxDenial: undefined, capabilities: interaction.request.request.capabilities } });
 	await nextTask();
 });
 
@@ -4872,6 +4948,48 @@ test('Chat context usage refresh ignores an estimate from an older connection', 
 	await oldRead.complete({ ...sample, context: { ...sample.context, estimatedTokens: 100 } });
 	await nextTask();
 	assert.equal(contextUsage()?.estimatedTokens, 400);
+});
+
+for (const locale of ['en', 'zh-CN']) for (const kind of ['Code', 'Cowork'] as const) test(`${kind} goal banner localizes every status and retains raw objectives in ${locale}`, async () => {
+	initializeTestLocalization(locale);
+	try {
+		const activeSession = session('session-1', 'thread-1');
+		const fake = fakeApi({ sessions: [activeSession] });
+		using chat = createChatService(fake.api);
+		using sessions = new SessionsManagementService(fake.api);
+		using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+		await model.initialize();
+		using contextView = new BrowserContextViewService(document.body);
+		const services = createInputServices(contextView, chat);
+		const createInput = (container: HTMLElement, delegate: ChatInputDelegate) => services.createInstance(ChatInputPart, container, delegate, {} as IContextMenuService, contextView, unavailableAccessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible' as const, modelPickerPosition: 'leading' as const });
+		using widget = kind === 'Code'
+			? new ChatWidget(document.body, 'goal-banner', model, () => { }, {} as IContextMenuService, contextView, services.get(ICommandService), unavailableAccessibleViewService, notifications, undefined, undefined, undefined, createInput, undefined, services, recordingDialogService([]), services.get(IQuickInputService), services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService))
+			: new CoworkWidget(document.body, 'goal-banner', model, () => { }, services.get(ICommandService), undefined, undefined, undefined, createInput, services, services.get(IQuickInputService), notifications, services.get(IChatWidgetService), services.get(IContextKeyService), services.get(IVoiceModeOnboardingService));
+		widget.setVisible(true);
+		const banner = widget.domNode.querySelector<HTMLDivElement>('.ash-chat-goal-banner')!;
+		assert.ok(banner);
+		assert.equal(banner.hidden, true);
+		const labels: Readonly<Record<ThreadGoal['status'], readonly [string, string]>> = {
+			active: ['Active', '进行中'], paused: ['Paused', '已暂停'], blocked: ['Blocked', '受阻'],
+			usageLimited: ['Usage limit reached', '已达用量上限'], budgetLimited: ['Budget limit reached', '已达预算上限'], complete: ['Complete', '已完成'],
+		};
+		const objective = 'Keep 中文 & <code>literal</code>\n  spacing  ';
+		for (const status of Object.keys(labels) as ThreadGoal['status'][]) {
+			for (const tokenBudget of [undefined, null, 0, 30_000]) {
+				const goal: ThreadGoal = { threadId: 'thread-1', goalId: 'goal', objective, status, tokensUsed: 1234, tokenBudget };
+				fake.emit({ method: 'thread/goal/updated', params: { threadId: 'thread-1', goal } });
+				const usage = tokenBudget === undefined || tokenBudget === null ? '1,234' : tokenBudget === 0 ? '1,234/0' : '1,234/30,000';
+				assert.equal(banner.hidden, false);
+				assert.equal(banner.textContent, locale === 'en'
+					? `Goal · ${labels[status][0]} · ${usage} tokens · ${objective}`
+					: `目标 · ${labels[status][1]} · ${usage} 个 token · ${objective}`);
+				assert.equal(banner.querySelector('code'), null, 'the user objective remains text');
+			}
+		}
+		fake.emit({ method: 'thread/goal/cleared', params: { threadId: 'thread-1' } });
+		assert.equal(banner.hidden, true);
+		assert.equal(banner.textContent, '');
+	} finally { resetNlsResolver(); }
 });
 
 for (const kind of ['Code', 'Cowork'] as const) test(`${kind} widget submits inline snapshots in text order despite reversed reads`, async () => {
@@ -5197,8 +5315,11 @@ async function createNavigationInputPane(configurationSource = '{}', configurati
 	const layout = testLayoutService();
 	commandServices.registerInstance(IWorkbenchLayoutService, layout);
 	const viewServices = resources.add(inputServices.createChild());
+	viewServices.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	viewServices.registerInstance(IChatService, chat);
+	commandServices.registerInstance(IChatService, chat);
 	viewServices.registerInstance(ISessionsManagementService, sessions);
+	viewServices.registerSingleton(ISessionsListModelService, () => viewServices.createInstance(SessionsListModelService));
 	viewServices.registerSingleton(IAgentSessionsService, () => viewServices.createInstance(getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionsService)![1]));
 	viewServices.registerInstance(ICommandService, commands);
 	viewServices.registerInstance(IWorkbenchLayoutService, layout);
@@ -5842,6 +5963,14 @@ for (const command of ['chat.closeTab', 'chat.closeOtherTabs', 'chat.closeTabsTo
 			'chat.closeAllTabs': [right],
 		}[command]);
 		if (command === 'chat.closeAllTabs') assert.equal(f.layout.isPartVisible('auxiliarybar'), false);
+		if (command === 'chat.closeTab') {
+			title.querySelector<HTMLButtonElement>('.ash-tab-label')!.dispatchEvent(new f.dom.window.KeyboardEvent('keydown', { key: 'ContextMenu', bubbles: true }));
+			const reopen = menu.getActions().find(action => action.id === 'chat.reopenClosedTab');
+			assert.ok(reopen?.enabled);
+			await reopen.run();
+			assert.deepEqual(JSON.parse(f.storage.get('chat.viewState', StorageScope.WORKSPACE)!).opened, ['session:session-1', middle, right]);
+			assert.equal(f.sessions.activeUntitledSession?.untitledSessionId, drafts[0]!.untitledSessionId);
+		}
 		f.sessions.selectUntitledSession(drafts[1]!.untitledSessionId);
 		await waitFor(() => f.pane.element.querySelector<HTMLTextAreaElement>('.ash-chat:not([hidden]) .ash-chat-textarea-input')?.value === 'Keep right draft');
 		f.sessions.selectThread('session-1', 'thread-1');
@@ -5896,6 +6025,7 @@ for (const kind of ['session', 'untitled'] as const) {
 }
 
 test('Chat restores opened tabs and leaves closed sessions available in the catalog', async () => {
+	using tracking = installDisposableTracker(new DisposableTracker());
 	using storage = createTestStorage();
 	const fixture = await createNavigationInputPane('{}', undefined, {}, storage);
 	const { pane, sessions, dom } = fixture;
@@ -6892,8 +7022,10 @@ test('IDE item organization retains the background composer and never submits it
 	f.sessions.selectThread('session-1', 'thread-1');
 	await nextTask();
 	const actionsDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IAgentSessionActionsService)![1];
+	f.commandServices.registerSingleton(ISessionsListModelService, () => f.commandServices.createInstance(SessionsListModelService));
 	f.commandServices.registerSingleton(IAgentSessionActionsService, () => f.commandServices.createInstance(actionsDescriptor));
 	const navDescriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatSessionNavigationService)![1];
+	f.commandServices.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	f.commandServices.registerSingleton(IChatSessionNavigationService, () => f.commandServices.createInstance(navDescriptor));
 	await f.commands.executeCommand('sessions.list.togglePin', { untitledSessionId: draft.untitledSessionId });
 	await nextTask();

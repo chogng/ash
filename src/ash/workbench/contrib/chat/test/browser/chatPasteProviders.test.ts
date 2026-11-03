@@ -10,6 +10,7 @@ import type { IWorkspaceContextService } from '../../../../../platform/workspace
 import type { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { ChatAttachmentResolveService, createChatFileAttachments } from '../../browser/attachments/chatAttachmentResolveService.js';
 import { URI } from '../../../../../base/common/uri.js';
+import type { IChatContextService } from '../../browser/contextContrib/chatContextService.js';
 
 // File preparation uses only the resolver's in-memory image port in this suite.
 const resolver = new ChatAttachmentResolveService(
@@ -17,6 +18,7 @@ const resolver = new ChatAttachmentResolveService(
 	{} as IWorkingCopyService,
 	{} as IFileSearchService,
 	{} as IWorkspaceContextService,
+	{} as IChatContextService,
 );
 
 test('native text drops retain their real source URI alongside the captured bytes', async () => {

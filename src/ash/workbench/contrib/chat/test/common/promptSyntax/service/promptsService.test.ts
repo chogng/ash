@@ -97,9 +97,8 @@ for (const reason of ['token', 'catalog', 'window'] as const) {
 	});
 }
 
-registerSkillActions();
-
 test('Configure Skills opens the Extensions Skills pane without opening Settings', async () => {
+	using actions = registerSkillActions();
 	using services = new InstantiationService();
 	const calls: unknown[] = [];
 	services.registerInstance(ICommandService, { executeCommand: async (id, options) => { calls.push([id, options]); } } as ICommandService);
@@ -234,4 +233,39 @@ test('Prompt service requires its Hook backend registration before creating subs
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => [] });
 	using prompts = services.createInstance(PromptsService);
 	assert.equal(backend.changed.hasListeners(), true);
+});
+
+
+test('Resolving an owned Skill retains its original Session and never discovers an arbitrary editor path', async () => {
+	using backend = new Backend();
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => [] });
+	const [first] = await prompts.findAgentSkills(CancellationToken.None, 'source-session');
+	await prompts.findAgentSkills(CancellationToken.None, 'other-session');
+	assert.equal((await prompts.resolveSkill(first.uri, CancellationToken.None))?.uri.toString(), first.uri.toString());
+	assert.deepEqual(backend.calls.at(-1), ['list', 'cached', 'source-session']);
+	const reads = backend.calls.length;
+	assert.equal(await prompts.resolveSkill(URI.file('/other/review/SKILL.md'), CancellationToken.None), undefined);
+	assert.equal(backend.calls.length, reads);
+});
+
+test('Resolving an owned Skill rejects changed digests, disabled entries and invalidated discovery', async () => {
+	using backend = new Backend();
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => [] });
+	const [skill] = await prompts.findAgentSkills(CancellationToken.None, 'source-session');
+	backend.list = async () => ({ ...catalog, skills: catalog.skills.map(skill => ({ ...skill, contentDigest: `sha256:${'b'.repeat(64)}` })) });
+	assert.equal(await prompts.resolveSkill(skill.uri, CancellationToken.None), undefined);
+	backend.list = async () => ({ ...catalog, skills: catalog.skills.map(skill => ({ ...skill, enabled: false })) });
+	assert.equal(await prompts.resolveSkill(skill.uri, CancellationToken.None), undefined);
+	backend.changed.fire();
+	backend.list = async () => { throw new Error('Invalidated editor resources must be rediscovered through their owner'); };
+	assert.equal(await prompts.resolveSkill(skill.uri, CancellationToken.None), undefined);
+});
+
+test('Skill resolution observes cancellation and contribution disposal before any lookup', async () => {
+	using backend = new Backend();
+	using prompts = new PromptsService(backend, { onDidChangeHooks: Event.None, list: async () => [] });
+	const [skill] = await prompts.findAgentSkills(CancellationToken.None);
+	await assert.rejects(prompts.resolveSkill(skill.uri, CancellationToken.Cancelled), isCancellationError);
+	prompts.dispose();
+	await assert.rejects(prompts.resolveSkill(skill.uri, CancellationToken.None), isCancellationError);
 });

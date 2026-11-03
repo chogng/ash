@@ -33,8 +33,7 @@
 
 .ash-chat-input-part.ash-sessions-chat-input.chat-composer.floating-card
 	> .ash-chat-input-container:is(:hover, .focused) {
-	box-shadow: 0 2px 8px
-		color-mix(in srgb, var(--ash-chat-input-shadow) 30%, transparent);
+	box-shadow: var(--ash-sessions-soft-shadow);
 }
 
 .ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
@@ -78,11 +77,15 @@
 	display: flex;
 	align-items: center;
 	padding-top: var(--ash-spacing-size80);
-	gap: var(--ash-spacing-size40);
+	gap: var(--ash-actionBar-gap);
 }
 
 .ash-sessions-chat-input-footer .ash-chat-input-context-toolbar {
 	flex: 0 0 auto;
+}
+
+.ash-sessions-chat-input-footer > .ash-chat-input-toolbars {
+	width: auto;
 }
 
 .ash-sessions-chat-input-footer > .ash-button {
@@ -90,33 +93,95 @@
 	white-space: nowrap;
 }
 
+.ash-sessions-chat-input-footer
+	:is(
+		.ash-sessions-environment-picker,
+		.ash-sessions-workspace-picker,
+		.ash-chat-input-permission-picker
+	).ash-button {
+	padding-inline: var(--ash-spacing-size40);
+}
+
+.ash-sessions-chat-input
+	.ash-chat-input-toolbars.ash-toolbar
+	.ash-chat-input-mode-selector
+	.ash-chat-input-action.ash-chat-input-mode-action,
+.ash-sessions-chat-input
+	.ash-chat-model-picker-control
+	> .ash-chat-input-picker-button {
+	border-radius: var(
+		--ash-button-border-radius,
+		var(--ash-cornerRadius-small)
+	);
+}
+
+.ash-sessions-chat-input-footer
+	.ash-chat-input-toolbars.ash-toolbar
+	.ash-chat-input-mode-selector
+	.ash-chat-input-action.ash-chat-input-mode-action {
+	padding-inline: var(--ash-spacing-size40);
+}
+
+.ash-sessions-chat-input-footer
+	.ash-chat-input-toolbars
+	.ash-chat-model-picker-control
+	> .ash-chat-input-picker-button {
+	padding: 0 var(--ash-spacing-size40);
+}
+
+.ash-sessions-chat-input
+	.ash-chat-input-toolbars.ash-toolbar
+	.ash-chat-input-mode-selector.mode-agent
+	.ash-chat-input-action.ash-chat-input-mode-action {
+	background: transparent;
+}
+
+.ash-sessions-chat-input
+	.ash-chat-input-toolbars.ash-toolbar
+	.ash-chat-input-mode-selector.mode-agent
+	.ash-chat-input-action.ash-chat-input-mode-action[aria-haspopup]:is(
+		:hover,
+		[aria-expanded="true"]
+	):not(:disabled, [aria-disabled="true"], [aria-readonly="true"]) {
+	background-color: var(
+		--ash-popup-trigger-background,
+		var(--ash-toolbar-hoverBackground)
+	);
+	box-shadow: inset 0 0 0 var(--ash-strokeThickness)
+		var(--ash-contrastBorder, transparent);
+}
+
+.ash-sessions-environment,
 .ash-sessions-chat-input-workspace {
 	display: flex;
 	align-items: center;
 	gap: var(--ash-spacing-size80);
 	min-width: 0;
-	max-width: 25%;
 	color: var(--ash-description-foreground);
 }
 
+.ash-sessions-environment,
 .ash-sessions-chat-input-footer > .ash-sessions-chat-input-workspace {
 	flex: 0 1 auto;
 }
 
+.ash-sessions-chat-input-workspace {
+	max-inline-size: 200px;
+}
+
+.ash-sessions-environment[hidden],
 .ash-sessions-chat-input-workspace[hidden] {
 	display: none;
 }
 
-.ash-sessions-permission-picker {
-	flex: 0 0 auto;
-}
-
-.ash-sessions-window .ash-chat-permission-menu {
-	border-radius: var(--ash-cornerRadius-xxLarge);
-}
-
+.ash-sessions-environment-picker.ash-button,
 .ash-sessions-workspace-picker.ash-button {
 	min-width: 0;
 	max-width: 100%;
 	color: inherit;
+}
+
+.ash-sessions-environment-picker.ash-button:focus-visible,
+.ash-sessions-workspace-picker.ash-button:focus-visible {
+	outline-color: var(--ash-contrastBorder, currentColor);
 }

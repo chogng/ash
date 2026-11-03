@@ -40,6 +40,9 @@ export function createApi(configuration, initialization) {
 	let canvasAdmitted = false;
 	let canvasRegistrationGeneration = 0;
 	const canvasRegistrations = new Map();
+	const chatContextRegistrations = new Map();
+	let chatContextGeneration = 0;
+	let chatContextAdmitted = false;
 	let treeAdmitted = false;
 	let terminalLinksAdmitted = false;
 	let terminalCompletionsAdmitted = false;
@@ -774,6 +777,109 @@ export function createApi(configuration, initialization) {
 			await provider.resolveImageEditor(Object.freeze({ source: context.source }), view, call.cancellationToken);
 			return { html: view.html, resources: [...assets], state: view.state ?? null };
 		}));
+		subscriptions.push(registration);
+		return registration;
+	}
+
+	function registerChatContextProvider(kind, id, provider, selector) {
+		if (!chatContextAdmitted) throw new Error('Chat context providers require the admitted dataChannel capability');
+		if (typeof id !== 'string' || !/^[A-Za-z0-9._-]{1,128}$/.test(id) || !provider || typeof provider[kind === 'workspace' ? 'provideWorkspaceChatContext' : 'provideChatContext'] !== 'function') throw new TypeError('Invalid chat context provider');
+		if (chatContextRegistrations.has(id)) throw new Error('Chat context provider is already registered');
+		if (kind === 'explicit' && !configuration.manifest?.contributes?.chatContext?.some(entry => entry.id === id)) throw new TypeError('Explicit chat context must be declared in package.json');
+		if (provider.resolveChatContext !== undefined && typeof provider.resolveChatContext !== 'function' || provider.onDidChangeWorkspaceChatContext !== undefined && typeof provider.onDidChangeWorkspaceChatContext !== 'function') throw new TypeError('Invalid chat context callbacks');
+		if (kind === 'resource') {
+			const validSelector = value => {
+				if (typeof value === 'string') return value.length > 0 && value.length <= 256;
+				if (Array.isArray(value)) return value.length > 0 && value.length <= 64 && value.every(entry => !Array.isArray(entry) && validSelector(entry));
+				return value && typeof value === 'object' && Object.keys(value).length > 0
+					&& Object.entries(value).every(([key, entry]) => ['language', 'scheme', 'pattern'].includes(key) && typeof entry === 'string' && entry.length > 0 && entry.length <= 4096);
+			};
+			if (!selector || Object.keys(selector).length !== 1 || !('viewType' in selector ? typeof selector.viewType === 'string' && selector.viewType.length > 0 && selector.viewType.length <= 256 : validSelector(selector.uri))) throw new TypeError('Invalid chat context selector');
+			selector = JSON.parse(JSON.stringify(selector));
+		}
+		const originals = new Map();
+		const resourceRequests = new Map();
+		let sequence = 0;
+		const encode = (item, existingHandle) => {
+			if (!item || typeof item !== 'object' || Array.isArray(item)) throw new TypeError('Invalid chat context item');
+			for (const [key, limit] of [['label', 4096], ['value', 1024 * 1024], ['modelDescription', 16384]]) {
+				if (item[key] !== undefined && (typeof item[key] !== 'string' || item[key].length > limit)) throw new TypeError('Invalid chat context ' + key);
+			}
+			if (item.resourceUri !== undefined && !(item.resourceUri instanceof Uri)) throw new TypeError('Invalid chat context resource');
+			const result = { handle: existingHandle ?? ++sequence };
+			for (const key of ['label', 'value', 'modelDescription']) if (item[key] !== undefined) result[key] = item[key];
+			if (item.resourceUri) result.resourceUri = item.resourceUri.toString();
+			if (item.tooltip !== undefined) {
+				if (typeof item.tooltip.value !== 'string' || item.tooltip.value.length > 16384) throw new TypeError('Invalid chat context tooltip');
+				result.tooltip = { value: item.tooltip.value };
+			}
+			if (item.iconPath !== undefined) {
+				const icon = item.iconPath;
+				if (icon instanceof Uri) result.iconPath = icon.toString();
+				else if (icon?.light instanceof Uri && icon?.dark instanceof Uri) result.iconPath = { light: icon.light.toString(), dark: icon.dark.toString() };
+				else if (typeof icon?.id === 'string' && /^[A-Za-z0-9-]+(?:~[A-Za-z]+)?$/.test(icon.id)) result.iconPath = { id: icon.id };
+				else throw new TypeError('Invalid chat context icon');
+			}
+			if (item.command !== undefined) {
+				if (typeof item.command.command !== 'string' || !item.command.command || item.command.command.length > 256) throw new TypeError('Invalid chat context command');
+				result.command = { id: item.command.command };
+			}
+			originals.set(result.handle, item);
+			if (originals.size > 4096) {
+				const first = originals.keys().next().value;
+				originals.delete(first);
+				resourceRequests.delete(first);
+			}
+			return result;
+		};
+		const registrationId = 'chat.context.' + (++chatContextGeneration);
+		const handle = ashRuntime.registerContribution({ kind: 'dataChannel', registrationId, channelId: 'chat.context.v1' }, 'receiveData', (call, payload) => invoke(async () => {
+			const data = payload?.data;
+			if (!data || typeof data !== 'object') throw new TypeError('Invalid chat context request');
+			if (data.action === 'describe') return { id, kind, ...(selector ? { selector } : {}) };
+			if (data.action === 'provide') {
+				if (kind === 'resource') {
+					if (typeof data.resource !== 'string' || data.resource.length > 8192 || typeof data.withValue !== 'boolean' || data.viewType !== null && typeof data.viewType !== 'string') throw new TypeError('Invalid chat context resource request');
+					const item = await provider.provideChatContext(Uri.parse(data.resource), data.withValue, data.viewType ?? undefined, call.cancellationToken);
+					if (item == null) return null;
+					const encoded = encode(item);
+					resourceRequests.set(encoded.handle, { resource: data.resource, viewType: data.viewType });
+					return encoded;
+				}
+				const items = await provider[kind === 'workspace' ? 'provideWorkspaceChatContext' : 'provideChatContext'](call.cancellationToken) ?? [];
+				if (!Array.isArray(items) || items.length > 512) throw new TypeError('Too many chat context items');
+				return items.map(item => encode(item));
+			}
+			const item = originals.get(data.handle);
+			if (!item) throw new Error('Chat context item has retired');
+			if (data.action === 'resolve' && kind !== 'workspace') {
+				let resolved = item;
+				if (item.value === undefined && provider.resolveChatContext) resolved = await provider.resolveChatContext(item, call.cancellationToken);
+				else if (item.value === undefined && kind === 'resource') {
+					const request = resourceRequests.get(data.handle);
+					resolved = await provider.provideChatContext(Uri.parse(request.resource), true, request.viewType ?? undefined, call.cancellationToken);
+				}
+				return encode(resolved ?? item, data.handle);
+			}
+			if (data.action === 'execute' && item.command) {
+				await api.commands.execute(item.command.command, item, ...(item.command.arguments ?? []));
+				return null;
+			}
+			throw new TypeError('Invalid chat context operation');
+		}));
+		let active = true;
+		const changed = kind === 'workspace' ? provider.onDidChangeWorkspaceChatContext?.(() => {
+			if (active) void request({ operation: 'editorOperation', payload: { method: 'chatContextChanged', registrationId } }, 'value').catch(() => { });
+		}) : undefined;
+		const registration = new Disposable(() => {
+			active = false;
+			changed?.dispose();
+			originals.clear();
+			resourceRequests.clear();
+			chatContextRegistrations.delete(id);
+			handle.dispose();
+		});
+		chatContextRegistrations.set(id, registration);
 		subscriptions.push(registration);
 		return registration;
 	}
@@ -1913,6 +2019,11 @@ export function createApi(configuration, initialization) {
 				}));
 			},
 		}),
+		chat: contract('chat', {
+			registerChatWorkspaceContextProvider: (id, provider) => registerChatContextProvider('workspace', id, provider),
+			registerChatExplicitContextProvider: (id, provider) => registerChatContextProvider('explicit', id, provider),
+			registerChatResourceContextProvider: (selector, id, provider) => registerChatContextProvider('resource', id, provider, selector),
+		}),
 		window: contract('window', {
 			async openComparison(input, options, sideBySide = false) {
 				if (!input || typeof input !== 'object' || Array.isArray(input) || !['diff', 'binaryDiff', 'multiDiff'].includes(input.kind)) throw new TypeError('A comparison requires a diff, binaryDiff or multiDiff input');
@@ -2126,6 +2237,7 @@ export function createApi(configuration, initialization) {
 			speechAdmitted = capabilities.includes('speechProvider');
 			imageEditorAdmitted = capabilities.includes('imageEditor');
 			canvasAdmitted = capabilities.includes('dataChannel');
+			chatContextAdmitted = capabilities.includes('dataChannel');
 			treeAdmitted = capabilities.includes('treeView');
 			if (environmentAdmitted) subscriptions.push(ashTerminals.registerEnvironmentVariableCollection('ash.terminalEnvironment', snapshotEnvironment));
 			if (initialization) subscriptions.push(ensureWorkspaceEvents());
@@ -2139,6 +2251,7 @@ export function createApi(configuration, initialization) {
 				speechAdmitted = false;
 				imageEditorAdmitted = false;
 				canvasAdmitted = false;
+				chatContextAdmitted = false;
 				treeAdmitted = false;
 				environmentMutators.clear();
 				scmBridge.dispose();

@@ -47,7 +47,8 @@ test('built-in Symphony concurrently runs tasks, pauses, resumes and preserves c
 	await writeFile(workflow, `---\ntracker:\n  kind: local\nworkspace:\n  root: ${JSON.stringify(workspaceRoot)}\nagent:\n  max_concurrent_agents: 2\nhooks:\n  after_create: printf 'after_create\\n' >> ${quotedLog}\n  before_run: printf 'before_run\\n' >> ${quotedLog}\n  after_run: printf 'after_run\\n' >> ${quotedLog}\n  before_remove: printf 'before_remove\\n' >> ${quotedLog}\n---\n{{ issue.description }}\n`);
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Symphony', exact: true }).click();
+	await page.locator('[data-action-id="sessions.activity.more"] button').click();
+	await page.getByRole('menuitemradio', { name: 'Symphony', exact: true }).click();
 	let tasks = page.locator('.ash-symphony-tasks');
 	await tasks.getByRole('textbox', { name: 'Workflow file' }).fill(workflow);
 	await tasks.getByRole('button', { name: 'Load workflow', exact: true }).click();
@@ -130,7 +131,8 @@ test('Symphony keyboard help and controls use Chinese in the Agents Window', asy
 	({ application, workbench } = await restartWorkbench());
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Symphony', exact: true }).click();
+	await page.locator('[data-action-id="sessions.activity.more"] button').click();
+	await page.getByRole('menuitemradio', { name: 'Symphony', exact: true }).click();
 	const tasks = page.locator('.ash-symphony-tasks');
 	await expect(tasks.getByRole('button', { name: '载入工作流', exact: true })).toBeVisible();
 	await tasks.getByRole('textbox', { name: '工作流文件' }).focus();
@@ -195,7 +197,8 @@ test('Execution and permissions settings persist defaults, govern ordinary chats
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await expect(page.locator('.ash-sessions-chat-input').getByRole('button', { name: 'Permissions: Auto', exact: true })).toBeVisible();
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Symphony', exact: true }).click();
+		await page.locator('[data-action-id="sessions.activity.more"] button').click();
+		await page.getByRole('menuitemradio', { name: 'Symphony', exact: true }).click();
 		const workflow = join(testWorkspace.directory, 'EXECUTION.md');
 		await writeFile(workflow, '---\ntracker:\n  kind: local\n---\n{{ issue.description }}\n');
 		const tasks = page.locator('.ash-symphony-tasks');

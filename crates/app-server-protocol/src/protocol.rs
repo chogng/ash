@@ -56,6 +56,7 @@ mod serde_helpers;
 pub mod session;
 pub mod skills;
 pub mod slash_commands;
+pub mod speech;
 pub mod symphony;
 pub mod syntax;
 pub mod task_delivery;

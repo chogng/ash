@@ -479,7 +479,14 @@ impl GitTurnChangesRuntime {
                 let binding = self
                     .dirs
                     .runtime
-                    .block_on(self.dirs.worktrees.recover_owner(&owner))
+                    .block_on(async {
+                        if let Ok(binding) =
+                            self.dirs.switched_worktrees.recover_owner(&owner).await
+                        {
+                            return Ok(binding);
+                        }
+                        self.dirs.worktrees.recover_owner(&owner).await
+                    })
                     .map_err(|error| format!("cannot recover Thread {thread_id} dir: {error}"))?;
                 // Profile history is shared across Directory runtimes; filesystem authority is not.
                 if binding.source_dir_id() != self.dirs.id.as_str() {

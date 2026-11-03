@@ -3873,11 +3873,13 @@ impl ToolService for InteractiveTool {
     ) -> Result<ToolExecutionOutput, CoreError> {
         let outcome = interactions.request_user_input(RequestUserInput {
             questions: vec![UserInputQuestion {
+                required: true,
                 id: "city".into(),
                 header: "City".into(),
                 question: "Which city?".into(),
                 options: Vec::new(),
                 allow_free_form: true,
+                validation: None,
             }],
         })?;
         match outcome {
@@ -5554,4 +5556,122 @@ fn positive_tool_scope_preserves_code_mode_controls_under_agent_ceiling() {
     for name in ["weather", "exec", "wait", "outside"] {
         assert!(!empty.allows_tool(&ToolName::new(name).unwrap()));
     }
+}
+
+struct ToolArgumentStreamModel;
+impl ModelService for ToolArgumentStreamModel {
+    fn invoke(
+        &self,
+        _: ModelSelection<'_>,
+        request: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        if request
+            .input
+            .iter()
+            .any(|item| matches!(item, InputItem::ToolResult(_)))
+        {
+            return Ok(text_response("done"));
+        }
+        Ok(ModelResponse {
+            output: vec![ResponseItem::ToolCall(ToolCall {
+                id: ToolCallId::new("stream-call").unwrap(),
+                name: ToolName::new("weather").unwrap(),
+                arguments: json!({"city":"Paris"}),
+            })],
+            usage: None,
+            billing: None,
+            stop_reason: StopReason::ToolUse,
+        })
+    }
+    fn stream(
+        &self,
+        selection: ModelSelection<'_>,
+        request: &ModelRequest,
+        cancellation: &CancellationToken,
+        sink: &mut dyn ModelStreamSink,
+    ) -> Result<ModelResponse, CoreError> {
+        if !request
+            .input
+            .iter()
+            .any(|item| matches!(item, InputItem::ToolResult(_)))
+        {
+            for arguments in ["{\"city\":", "\"Paris\"}"] {
+                sink.emit(ModelStreamEvent::ToolCallDelta {
+                    id: "stream-call".into(),
+                    name: "weather".into(),
+                    arguments: arguments.into(),
+                })?;
+            }
+        }
+        self.invoke(selection, request, cancellation)
+    }
+}
+
+#[test]
+fn tool_argument_stream_keeps_one_identity_and_executes_only_after_final_binding() {
+    let (threads, thread_id, turn_id) = started_turn();
+    let updates = Arc::new(RecordingUpdates::default());
+    let executor = TurnExecutor::new(
+        threads.clone(),
+        Arc::new(ToolArgumentStreamModel),
+        Arc::new(WeatherTool),
+        Arc::new(SandboxActionPolicyService),
+    )
+    .with_thread_updates(updates.clone());
+    executor
+        .execute(&thread_id, &turn_id, &CancellationSource::new().token())
+        .unwrap();
+    let events = updates.updates();
+    let started = events
+        .iter()
+        .find_map(|event| match &event.update {
+            ThreadUpdate::ItemStarted {
+                item:
+                    ThreadItem::ToolCall {
+                        item_id,
+                        binding: None,
+                        ..
+                    },
+                ..
+            } => Some(item_id.clone()),
+            _ => None,
+        })
+        .expect("a provisional call reaches the transcript");
+    let deltas = events
+        .iter()
+        .enumerate()
+        .filter_map(|(index, event)| match &event.update {
+            ThreadUpdate::ItemDelta {
+                item_id,
+                delta: ash_protocol::ItemDelta::ToolCallArguments { arguments, .. },
+                ..
+            } => {
+                assert_eq!(*item_id, started);
+                Some((index, arguments.clone()))
+            }
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        deltas
+            .iter()
+            .map(|(_, text)| text.as_str())
+            .collect::<String>(),
+        "{\"city\":\"Paris\"}"
+    );
+    let snapshot = threads.read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.items.iter().filter(|item| matches!(item, ThreadItem::ToolCall { item_id, binding: Some(_), .. } if *item_id == started)).count(),1);
+    let execution = events
+        .iter()
+        .position(|event| {
+            matches!(
+                event.update,
+                ThreadUpdate::Committed {
+                    event: ash_protocol::ThreadEvent::ToolExecutionStarted { .. }
+                }
+            )
+        })
+        .expect("tool executes after binding");
+    assert!(execution > deltas.last().unwrap().0);
 }

@@ -22,7 +22,7 @@ use std::sync::mpsc;
 struct CaptureModel(mpsc::Sender<ModelRequest>);
 
 #[test]
-fn manual_pull_request_references_use_durable_rpc_state_and_notify_other_connections() {
+fn pull_request_artifacts_and_references_use_durable_rpc_state_and_notify_other_connections() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("state.sqlite3");
     let store = Arc::new(ash_state::SqliteThreadStore::open(&path).unwrap());
@@ -114,6 +114,15 @@ fn manual_pull_request_references_use_durable_rpc_state_and_notify_other_connect
         serde_json::json!({"sessionId":"missing","reference":reference}),
     );
     assert!(missing.get("error").is_some());
+    let mut artifact = params.clone();
+    artifact["reference"]["isArtifact"] = serde_json::json!(true);
+    let recorded = call(
+        &server,
+        &mut first,
+        "github/session/pullRequest/attach",
+        artifact,
+    );
+    assert!(recorded.get("result").is_some(), "{recorded}");
     drop(server);
     let reopened = Arc::new(ash_state::SqliteThreadStore::open(&path).unwrap());
     let (sender, _) = mpsc::channel();
@@ -136,7 +145,14 @@ fn manual_pull_request_references_use_durable_rpc_state_and_notify_other_connect
         "github/session/pullRequests",
         serde_json::json!({"sessionId":"pr-session"}),
     );
-    assert_eq!(restored["result"], listed["result"]);
+    let mut expected = listed["result"].clone();
+    expected["references"][0]["isArtifact"] = serde_json::json!(true);
+    let artifact_id = restored["result"]["references"][0]["artifactId"]
+        .as_str()
+        .unwrap();
+    assert_eq!(artifact_id.len(), 32);
+    expected["references"][0]["artifactId"] = serde_json::json!(artifact_id);
+    assert_eq!(restored["result"], expected);
     assert!(
         call(
             &restarted,
@@ -154,6 +170,38 @@ fn manual_pull_request_references_use_durable_rpc_state_and_notify_other_connect
         serde_json::json!({"sessionId":"pr-session"}),
     );
     assert_eq!(empty["result"]["references"], serde_json::json!([]));
+    restarted
+        .app_tools_processor()
+        .execute_app_tool(
+            app_tools::AppToolOperation::RecordPullRequestArtifact {
+                host: "ghe.example".into(),
+                owner: "team".into(),
+                repository: "repo".into(),
+                number: 12,
+            },
+            &app_tools::AppToolContext {
+                session_id: ash_protocol::SessionId::new("pr-session").unwrap(),
+                thread_id: ash_protocol::ThreadId::new("pr-session").unwrap(),
+                turn_id: ash_protocol::TurnId::new("agent-turn").unwrap(),
+                call_id: ash_protocol::ToolCallId::new("record-pr").unwrap(),
+            },
+            &ash_async_utils::CancellationSource::new().token(),
+        )
+        .unwrap();
+    let produced = call(
+        &restarted,
+        &mut connection,
+        "github/session/pullRequests",
+        serde_json::json!({"sessionId":"pr-session"}),
+    );
+    assert_ne!(
+        produced["result"]["references"][0]["artifactId"],
+        artifact_id
+    );
+    assert_eq!(
+        produced["result"]["references"][0]["artifactOrigin"],
+        serde_json::json!({"chat":"pr-session","turnId":"agent-turn"})
+    );
 }
 #[test]
 fn manual_issue_references_use_durable_rpc_state_and_notify_other_connections() {
@@ -889,6 +937,7 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
                             ash_protocol::ActionApprovalDecision::ApproveOnce,
                             ash_protocol::ActionApprovalDecision::Decline,
                         ],
+                        risk_assessment: None,
                         sandbox_denial: None,
                     },
                 },
@@ -1462,6 +1511,7 @@ fn rejected_thread_subscription_does_not_deliver_or_cancel_a_pending_interaction
                                     ash_protocol::ActionApprovalDecision::ApproveOnce,
                                     ash_protocol::ActionApprovalDecision::Decline,
                                 ],
+                                risk_assessment: None,
                                 sandbox_denial: None,
                             },
                         }

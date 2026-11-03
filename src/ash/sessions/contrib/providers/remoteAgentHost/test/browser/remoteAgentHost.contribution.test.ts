@@ -1,3 +1,10 @@
+import { JSDOM } from 'jsdom';
+import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../../../../workbench/services/storage/browser/storageService.js';
+import { getWindows } from '../../../../../../base/browser/window.js';
+import { ILayoutService } from '../../../../../../platform/layout/browser/layoutService.js';
+import { MenuId, MenusRegistry, isMenuItem } from '../../../../../../platform/actions/common/actions.js';
+import { Menus } from '../../../../../browser/menus.js';
 import { registerTestWorkbenchHostServices } from '../../../../../../workbench/test/common/workbenchHostTestServices.js';
 import { IRemoteAgentHostService } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { IAgentConnection } from '../../../../../../platform/agentHost/common/agentService.js';
@@ -17,7 +24,7 @@ import { browserEnvironment } from '../../../../../../editor/test/browser/testEd
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { test } from 'mocha';
-import { DeferredPromise, raceCancellationError } from '../../../../../../base/common/async.js';
+import { DeferredPromise, raceCancellationError, timeout } from '../../../../../../base/common/async.js';
 import { canceled } from '../../../../../../base/common/errors.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
@@ -34,7 +41,7 @@ import type { Automation, IAutomationBackendService } from '../../../../../../pl
 import { ContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
-import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService, type RemoteConnectionDefinition } from '../../../../../../platform/remote/common/remoteConnectionService.js';
 import { URI } from '../../../../../../base/common/uri.js';
@@ -53,6 +60,8 @@ import { ISessionsProvidersService, SessionsProvidersService } from '../../../..
 import { ProviderAutomationService } from '../../../../automations/browser/providerAutomationService.js';
 import { SSHAgentHostContribution } from '../../browser/sshAgentHost.contribution.js';
 
+// Initialize the shared browser test window before tracking fixture-owned disposables.
+getWindows();
 ensureNoDisposablesAreLeakedInTestSuite();
 
 const manageHosts = 'sessions.action.manageAgentHosts';
@@ -67,6 +76,23 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	const container = browserEnvironment.window.document.createElement('div');
 	browserEnvironment.window.document.body.append(container);
 	lifetime.add(toDisposable(() => container.remove()));
+	services.registerInstance(ILayoutService, { activeContainer: container } as Partial<ILayoutService> as ILayoutService);
+	// jsdom has no native dialog top layer. Exercise the real dialog's DOM and cancel lifecycle.
+	const dialogPrototype = browserEnvironment.window.HTMLDialogElement.prototype;
+	const elementPrototype = browserEnvironment.window.HTMLElement.prototype;
+	Object.defineProperty(elementPrototype, 'scrollTo', { configurable: true, value() { } });
+	Object.defineProperties(dialogPrototype, {
+		showModal: { configurable: true, value(this: HTMLDialogElement) { this.open = true; } },
+		close: { configurable: true, value(this: HTMLDialogElement) { this.open = false; } },
+	});
+	lifetime.add(toDisposable(() => {
+		Reflect.deleteProperty(dialogPrototype, 'showModal');
+		Reflect.deleteProperty(dialogPrototype, 'close');
+		Reflect.deleteProperty(elementPrototype, 'scrollTo');
+	}));
+	const storageWindow = new JSDOM('', { url: 'https://ash.test' }).window;
+	lifetime.add(toDisposable(() => storageWindow.close()));
+	services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: storageWindow as unknown as Window, workspaceId: 'remote-hosts', flushInterval: 0 })));
 	const contexts = lifetime.add(new ContextKeyService());
 	const quickInput = lifetime.add(new TestQuickInputService({ container, instantiationService: services, contextKeyService: contexts }));
 	services.registerInstance(IQuickInputService, quickInput);
@@ -87,10 +113,12 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	services.registerInstance(IRemoteConnectionService, lifetime.add(services.createInstance(RemoteConnectionService)));
 	const opened: string[] = [];
 	const closed: string[] = [];
+	const reconnected: string[] = [];
 	const renamed: string[] = [];
 	const deleted: string[] = [];
 	let openResult: ((target: RemoteAgentHostConnection, host: IRemoteAgentHostProtocolClient) => Promise<IRemoteAgentHostProtocolClient>) | undefined;
 	const renderer = createDisconnectedRendererApi();
+	let readCapabilities: typeof renderer.agentCapabilities.read | undefined;
 	let containerSessions = false;
 	const sessionDirectoryRequests: unknown[] = [];
 	services.registerInstance(IConfigurationService, lifetime.add(new InMemoryConfigurationService()));
@@ -131,7 +159,13 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 			get connections() { return [...hosts.values()]; },
 			onDidChangeConnections: hostChanges.event,
 			disconnect,
-			reconnect: async () => { },
+			reconnect: async id => {
+				reconnected.push(id);
+				const entry = [...hosts.entries()].find(([, value]) => value.id === id);
+				assert.ok(entry);
+				hosts.set(entry[0], { ...entry[1], state: 'ready' });
+				hostChanges.fire();
+			},
 			listWSLDistros: async () => [],
 			connect: async (target, signal) => {
 				const key = agentHostConnectionAddress(target);
@@ -236,6 +270,9 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 						},
 					},
 					appServer: { ...renderer.appServer, getConnectionState: async () => 'ready' },
+					agentCapabilities: readCapabilities
+						? { ...renderer.agentCapabilities, isAvailable: true, read: readCapabilities }
+						: renderer.agentCapabilities,
 					session: {
 						...renderer.session,
 						subscribeCatalog: async () => ({ sessions: [session] }), unsubscribeCatalog: async () => { },
@@ -266,31 +303,45 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	lifetime.add(services.createInstance(WSLAgentHostContribution));
 	lifetime.add(services.createInstance(TunnelAgentHostContribution));
 	const automations = lifetime.add(services.createInstance(ProviderAutomationService));
-	function picker(): IQuickPick<IQuickPickItem> {
-		assert.ok(quickInput.currentQuickInput);
-		return quickInput.currentQuickInput as IQuickPick<IQuickPickItem>;
+	function dialog(): HTMLDialogElement {
+		const current = container.querySelector('dialog[open]');
+		assert.ok(current);
+		return current as HTMLDialogElement;
+	}
+	function closeDialog(): void {
+		dialog().dispatchEvent(new browserEnvironment.window.Event('cancel', { cancelable: true }));
 	}
 	async function choose(label: string): Promise<void> {
-		const current = picker();
-		const item = current.items.find(item => 'label' in item && item.label === label);
-		assert.ok(item && !('type' in item), `Missing choice: ${label}`);
-		current.activeItems = [item];
-		current.selectedItems = [item];
-		await current.accept();
+		for (let i = 0; i < 100; i++) {
+			const button = [...dialog().querySelectorAll('button')].find(button => button.getAttribute('aria-label') === label);
+			if (button) {
+				button.click();
+				for (let j = 0; j < 100 && dialog().querySelector('tbody[aria-busy="true"]'); j++) await timeout(0);
+				assert.equal(dialog().querySelector('tbody[aria-busy="true"]'), null);
+				closeDialog();
+				return;
+			}
+			await timeout(0);
+		}
+		assert.fail(`Missing action: ${label}`);
 	}
 	async function connect(name: string): Promise<void> {
 		const result = commands.executeCommand(manageHosts);
-		const shown = new DeferredPromise<void>();
-		using listener = quickInput.onShow(() => { void shown.complete(); });
-		await choose('Connect a Saved SSH Host…');
-		await shown.p;
-		await choose(name);
+		await choose(`Connect: ${name}`);
 		await result;
 	}
 	return {
 		[Symbol.dispose]: () => lifetime.dispose(),
-		services, commands, contribution, scopeOwner, registry, automations, quickInput, errors,
-		opened, closed, renamed, deleted, connect, choose, picker, sessionDirectoryRequests,
+		services, commands, contribution, scopeOwner, registry, automations, container, errors, notifications,
+		readCapabilities: (read: typeof readCapabilities) => { readCapabilities = read; },
+		opened, closed, renamed, deleted, reconnected, connect, choose, dialog, closeDialog, sessionDirectoryRequests,
+		crash: (name: string) => {
+			const entry = [...hosts.entries()].find(([, value]) => value.connection.name === name);
+			assert.ok(entry);
+			hosts.set(entry[0], { ...entry[1], state: 'crashed' });
+			hostChanges.fire();
+			return entry[1].id;
+		},
 		containerSessions: () => { containerSessions = true; },
 		connectTarget: (target: RemoteAgentHostConnection) => (services.get(IAgentConnection) as IWorkbenchHost).agentHosts!.connect(target, new AbortController().signal), files, fileRequests, primaryRequests, resourceRequests, openResources,
 		publishSessions: (sessions: readonly ISession[]) => { canonicalSessions = sessions; catalogChanges.fire(); },
@@ -298,6 +349,42 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 		deferOpen: (next: typeof openResult) => { openResult = next; },
 	};
 }
+
+test('remote Windows sandbox setup notice refreshes against the connected execution host', async () => {
+	using context = fixture();
+	let ready = false;
+	let reads = 0;
+	context.readCapabilities(async () => {
+		reads++;
+		return {
+			localProcessSandboxConfigured: true,
+			directoryGrantsReadable: false,
+			sandboxBackends: ['mxc', 'windows'],
+			sandboxPolicy: { profile: 'workspace', fileSystem: 'directoryWrite', network: 'denied', hostRead: 'host', managedConstraints: false, pathRuleCount: 0 },
+			sandboxDiagnostics: [
+				{ backend: 'mxc', network: 'denied', readiness: { type: 'unsupported', reason: 'Missing OS capability' } },
+				{ backend: 'windows', network: 'denied', readiness: ready ? { type: 'ready' } : { type: 'unavailable', reason: 'Setup required' } },
+			],
+		};
+	});
+	const notices: { readonly message: unknown; readonly actions?: { readonly primary?: readonly { readonly id: string; run(): unknown; }[]; }; }[] = [];
+	using listener = context.notifications.model.onDidAdd(notice => notices.push(notice));
+	await context.connect('build-a');
+	assert.match(String(notices[0]?.message), /build-a.*administrator setup/);
+	const refresh = notices[0]?.actions?.primary?.find(action => action.id === 'sessions.remoteSandbox.refresh');
+	assert.ok(refresh);
+	await refresh.run();
+	assert.equal(reads, 2);
+	assert.equal(notices.length, 1);
+	ready = true;
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsMessages(chinese.locale, chinese.bundles);
+	try {
+		await refresh.run();
+		assert.equal(reads, 3);
+		assert.equal(String(notices[1]?.message), 'build-a 上的命令沙箱已就绪。');
+	} finally { resetNlsResolver(); }
+});
 
 test('remote provider scopes bind their own connection while borrowing window connection management', async () => {
 	using context = fixture();
@@ -319,6 +406,11 @@ test('remote provider scopes bind their own connection while borrowing window co
 
 test('Agents host command registers independent providers and routes equal backend IDs through their own domains', async () => {
 	using context = fixture();
+	const hasManageHosts = (menu: MenuId) => MenusRegistry.getMenuItems(menu)
+		.some(item => isMenuItem(item) && item.command.id === manageHosts);
+	assert.equal(hasManageHosts(MenuId.CommandPalette), true);
+	assert.equal(hasManageHosts(Menus.SidebarSessionsHeader), true);
+	assert.equal(MenusRegistry.getMenuItems(Menus.SidebarSessionsHeader).some(item => isMenuItem(item) && item.command.id === manageHosts && item.group === 'navigation'), false);
 	await context.connect('build-a');
 	await context.connect('build-b');
 	const [first, second] = context.registry.getProviders();
@@ -383,7 +475,7 @@ test('disconnecting one Agents host unregisters its provider and retains the oth
 	await context.connect('build-a');
 	await context.connect('build-b');
 	const result = context.commands.executeCommand(manageHosts);
-	await context.choose('build-a');
+	await context.choose('Disconnect: build-a');
 	await result;
 	assert.deepEqual(context.closed, ['build-a']);
 	assert.deepEqual(context.registry.getProviders().map(provider => provider.label), ['build-b']);
@@ -391,10 +483,34 @@ test('disconnecting one Agents host unregisters its provider and retains the oth
 	assert.deepEqual(context.automations.automations.get().map(plan => plan.name), ['build-b']);
 });
 
-test('reselecting an already connected target shares the existing scope', async () => {
+test('the remote environments dialog shows connection status and reconnects the exact retained provider', async () => {
 	using context = fixture();
 	await context.connect('build-a');
+	await context.connect('build-b');
+	const first = context.registry.getProviders().find(provider => provider.label === 'build-a');
+	const command = context.commands.executeCommand(manageHosts);
+	const id = context.crash('build-a');
+	const rows = [...context.dialog().querySelectorAll('tbody tr')];
+	assert.equal(rows.find(row => row.querySelector('th')?.firstChild?.textContent === 'build-a')?.querySelector('td')?.textContent, 'Disconnected');
+	assert.equal(rows.find(row => row.querySelector('th')?.firstChild?.textContent === 'build-b')?.querySelector('td')?.textContent, 'Connected');
+	assert.equal(context.dialog().querySelector('[aria-label="Reconnect: build-b"]'), null);
+	await context.choose('Reconnect: build-a');
+	await command;
+	assert.deepEqual(context.reconnected, [id]);
+	assert.deepEqual(context.closed, []);
+	assert.equal(context.registry.getProviders().find(provider => provider.label === 'build-a'), first);
+});
+
+test('an active saved target has only one management row', async () => {
+	using context = fixture();
 	await context.connect('build-a');
+	const result = context.commands.executeCommand(manageHosts);
+	await timeout(0);
+	const rows = [...context.dialog().querySelectorAll('tbody tr')];
+	assert.equal(rows.filter(row => row.querySelector('th')?.firstChild?.textContent === 'build-a').length, 1);
+	assert.equal(context.dialog().querySelector('[aria-label="Connect: build-a"]'), null);
+	context.closeDialog();
+	await result;
 	assert.deepEqual(context.opened, ['build-a']);
 	assert.equal(context.registry.getProviders().length, 1);
 });
@@ -404,7 +520,10 @@ test('closing the Agents owner retires pending setup and releases its late resul
 	const entered = new DeferredPromise<void>();
 	const release = new DeferredPromise<void>();
 	context.deferOpen(async (_target, host) => { void entered.complete(); await release.p; return host; });
-	const connecting = context.connect('build-a');
+	const connecting = context.commands.executeCommand(manageHosts);
+	let connectButton: HTMLButtonElement | null = null;
+	while (!(connectButton = context.dialog().querySelector('[aria-label="Connect: build-a"]'))) await timeout(0);
+	connectButton.click();
 	await entered.p;
 	context.contribution.dispose();
 	await release.complete();
@@ -414,20 +533,19 @@ test('closing the Agents owner retires pending setup and releases its late resul
 	assert.deepEqual(context.errors, []);
 });
 
-test('the host picker uses Chinese labels and closes on cancellation and owner disposal', async () => {
+test('the remote environments dialog uses Chinese labels and closes on cancellation and owner disposal', async () => {
 	using context = fixture();
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages(chinese.locale, chinese.bundles);
 	try {
 		const command = context.commands.executeCommand(manageHosts);
-		assert.equal(context.picker().ariaLabel, '连接宿主，或选择已连接宿主以断开连接');
-		assert.equal(context.picker().items[0]!.label, '连接已保存的 SSH 宿主…');
-		context.picker().hide();
+		assert.equal(context.dialog().querySelector('h2')?.textContent, '远程环境');
+		context.closeDialog();
 		await command;
 		const interrupted = context.commands.executeCommand(manageHosts);
 		context.contribution.dispose();
 		await interrupted;
-		assert.equal(context.quickInput.currentQuickInput, undefined);
+		assert.equal(context.container.querySelector('dialog'), null);
 		assert.deepEqual(context.opened, []);
 	} finally { resetNlsResolver(); }
 });
@@ -458,7 +576,7 @@ test('connected Agents hosts route identical file paths through their own filesy
 	assert.equal((await context.files.readFile(second)).content, updated);
 	assert.equal((await context.files.readFile(first)).content, 'build-a:main.ts');
 	const disconnect = context.commands.executeCommand(manageHosts);
-	await context.choose('build-a');
+	await context.choose('Disconnect: build-a');
 	await disconnect;
 	await assert.rejects(context.files.readFile(first));
 	assert.equal((await context.files.readFile(second)).content, updated);
@@ -497,7 +615,7 @@ test('Agents file changes preserve their originating authority and stop after sc
 		[URI.joinPath(createSshRemoteWorkspaceUri(targets[1]!.host, targets[1]!.workspace), 'main.ts').toString()],
 	]);
 	const disconnect = context.commands.executeCommand(manageHosts);
-	await context.choose('build-a');
+	await context.choose('Disconnect: build-a');
 	await disconnect;
 	const observed = changes.length;
 	context.changeFiles('build-a', 'retired.ts');

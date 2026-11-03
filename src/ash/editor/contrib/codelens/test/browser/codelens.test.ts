@@ -376,6 +376,7 @@ function createViewport(dom: JSDOM, model: TextModel): InstanceType<typeof View>
 function editorFor(viewport: InstanceType<typeof View>): ICodeEditor {
 	return {
 		onDidChangeConfiguration: viewport.testConfiguration.onDidChange,
+		getId: () => 'test-editor',
 		getOption: viewport.testConfiguration.options.get.bind(viewport.testConfiguration.options),
 		getScrollTop: () => viewport.currentLayout.scrollPosition.top,
 		getContentHeight: () => viewport.currentLayout.contentSize.height,
@@ -484,3 +485,35 @@ class TestStorageService implements IStorageService {
 
 const codeFeatures = registerTestCodeEditorFeatures();
 afterCodeFeatures(() => codeFeatures.dispose());
+
+test('provider-owned CodeLens actions run without enabling generic document commands', async () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
+	using model = new TextModel('tools: []', { languageId: 'markdown' });
+	using providers = new LanguageFeatureRegistry<CodeLensProvider>();
+	const executions: string[] = [];
+	using owned = providers.register('markdown', {
+		provideCodeLenses: () => ({ lenses: [lens(0, 0, command('owned', 'Owned'))] }),
+		executeCodeLensCommand(current, action, editorId) {
+			assert.equal(current, model);
+			assert.equal(editorId, 'test-editor');
+			executions.push(action.id);
+		},
+	});
+	using external = providers.register('markdown', {
+		provideCodeLenses: () => ({ lenses: [lens(0, 0, command('external', 'External'))] }),
+	});
+	using viewport = new View({
+		container: requiredElement<HTMLElement>(dom.window.document, 'main'),
+		model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(),
+	});
+	viewport.layout({ width: 300, height: 60 });
+	using contribution = new CodeLensContribution(editorFor(viewport), viewport, providers, codeLensCache, undefined, undefined);
+	await contribution.getModel();
+	viewport.render(true, false);
+	const widget = requiredElement<HTMLElement>(viewport.domNode.domNode, '.stanza-editor-codelens');
+	assert.equal(widget.getAttribute('aria-hidden'), null);
+	assert.deepEqual([...widget.querySelectorAll('button')].map(button => button.textContent), ['Owned']);
+	requiredElement<HTMLButtonElement>(widget, 'button').click();
+	assert.deepEqual(executions, ['owned']);
+	dom.window.close();
+});

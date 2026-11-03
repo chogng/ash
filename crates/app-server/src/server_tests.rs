@@ -6043,11 +6043,13 @@ impl ToolService for AppServerInteractiveTool {
     ) -> Result<ToolExecutionOutput, CoreError> {
         match interactions.request_user_input(RequestUserInput {
             questions: vec![ash_protocol::UserInputQuestion {
+                required: true,
                 id: "city".into(),
                 header: "City".into(),
                 question: "Which city?".into(),
                 options: Vec::new(),
                 allow_free_form: true,
+                validation: None,
             }],
         })? {
             ash_core::ToolUserInputOutcome::Answered(response) => Ok(ToolExecutionOutput::Success(
@@ -6096,6 +6098,15 @@ impl ash_core::TurnExecutionBackend for CountingResumeBackend {
 
 #[test]
 fn live_tool_interaction_resolution_wakes_execution_without_duplicate_backend_resume() {
+    live_tool_interaction_finishes(false);
+}
+
+#[test]
+fn live_tool_question_can_be_cancelled_without_interrupting_the_turn() {
+    live_tool_interaction_finishes(true);
+}
+
+fn live_tool_interaction_finishes(cancel: bool) {
     let model = Arc::new(AppServerInteractiveModel::default());
     let server = server_with_model(model.clone()).with_tool_service(
         Arc::new(AppServerInteractiveTool),
@@ -6185,6 +6196,45 @@ fn live_tool_interaction_resolution_wakes_execution_without_duplicate_backend_re
         );
         thread::sleep(Duration::from_millis(2));
     };
+    if cancel {
+        let rejected = call(
+            &server,
+            &mut connection,
+            serde_json::json!({
+                "jsonrpc":"2.0",
+                "id":7,
+                "method":"session/request",
+                "params":{
+                    "commandId":"cancel-wrong-turn",
+                    "sessionId":session_id,
+                    "request":{
+                        "type":"cancelUserInput",
+                        "threadId":thread_id,
+                        "turnId":"wrong-turn",
+                        "requestId":request_id
+                    }
+                }
+            }),
+        );
+        assert_eq!(rejected["error"]["code"], -32030);
+    }
+    let request = if cancel {
+        serde_json::json!({
+            "type":"cancelUserInput",
+            "threadId":thread_id,
+            "turnId":turn_id,
+            "requestId":request_id,
+        })
+    } else {
+        serde_json::json!({
+            "type":"resolveInteraction",
+            "expectedSequence":sequence,
+            "threadId":thread_id,
+            "turnId":turn_id,
+            "requestId":request_id,
+            "response":{"type":"userInput","response":{"answers":{"city":{"value":"Paris"}}}}
+        })
+    };
     let resolved = call(
         &server,
         &mut connection,
@@ -6195,14 +6245,7 @@ fn live_tool_interaction_resolution_wakes_execution_without_duplicate_backend_re
             "params":{
                 "commandId":"resolve-live-tool-input",
                 "sessionId":session_id,
-                "request":{
-                    "type":"resolveInteraction",
-                    "expectedSequence":sequence,
-                    "threadId":thread_id,
-                    "turnId":turn_id,
-                    "requestId":request_id,
-                    "response":{"type":"userInput","response":{"answers":{"city":{"value":"Paris"}}}}
-                }
+                "request":request
             }
         }),
     );
@@ -6213,7 +6256,8 @@ fn live_tool_interaction_resolution_wakes_execution_without_duplicate_backend_re
     let snapshot = server.threads().read_thread(&protocol_thread_id).unwrap();
     assert!(snapshot.items.iter().any(|item| matches!(
         item,
-        ash_protocol::ThreadItem::ToolResult { text, is_error: false, .. } if text == "Paris"
+        ash_protocol::ThreadItem::ToolResult { text, is_error, .. }
+            if if cancel { *is_error && text.contains("UserCancelled") } else { !*is_error && text == "Paris" }
     )));
 }
 
@@ -6376,6 +6420,7 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
                             ash_protocol::ActionApprovalDecision::ApproveOnce,
                             ash_protocol::ActionApprovalDecision::Decline,
                         ],
+                        risk_assessment: None,
                         sandbox_denial: None,
                     },
                 },
@@ -6555,6 +6600,7 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
                             ash_protocol::ActionApprovalDecision::ApproveOnce,
                             ash_protocol::ActionApprovalDecision::Decline,
                         ],
+                        risk_assessment: None,
                         sandbox_denial: None,
                     },
                 },
@@ -7825,7 +7871,18 @@ fn restricted_dir_exposes_git_status_but_rejects_mutations() {
             "params":{"paths":["tracked.txt"]}
         }),
     );
-    assert_eq!(staged["error"]["message"], "GitUnavailable");
+    assert_eq!(staged["error"]["data"]["kind"], "PermissionRequired");
+
+    let missing_repository = call(
+        &server,
+        &mut connection,
+        serde_json::json!({"jsonrpc":"2.0","id":4,"method":"git/status","params":{"repositoryId":"retired-repository"}}),
+    );
+    assert_eq!(missing_repository["error"]["code"], -32602);
+    assert_eq!(
+        missing_repository["error"]["data"]["kind"],
+        "GitRepositoryNotFound"
+    );
 
     drop(server);
     std::fs::remove_dir_all(root).unwrap();
@@ -7985,7 +8042,7 @@ fn git_named_fetch_rpc_keeps_other_refs_and_local_state_and_revalidates_remote_n
         &mut reader,
         serde_json::json!({"jsonrpc":"2.0","id":2,"method":"git/fetch","params":{"mode":{"remote":"origin"}}}),
     );
-    assert_eq!(rejected["error"]["message"], "GitUnavailable");
+    assert_eq!(rejected["error"]["data"]["kind"], "PermissionRequired");
     assert_eq!(
         read_git(&["rev-parse", "refs/remotes/origin/main"]),
         origin_ref

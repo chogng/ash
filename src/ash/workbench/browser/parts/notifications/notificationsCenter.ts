@@ -16,18 +16,20 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
 import { localize } from '../../../../nls.js';
-import { INotificationService, NotificationsFilter } from '../../../../platform/notification/common/notification.js';
+import { INotificationService, NotificationsFilter, type INotificationAction } from '../../../../platform/notification/common/notification.js';
 import { getNotificationsPosition, NotificationsPosition, NotificationsSettings, type NotificationsModel } from '../../../common/notifications.js';
 import type { IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
 import { NotificationsToasts } from './notificationsToasts.js';
 import { StatusbarHeight } from '../workbenchPartDimensions.js';
 import { NotificationsAlerts } from './notificationsAlerts.js';
 import { NotificationsStatus } from './notificationsStatus.js';
+import { runPrimaryNotificationAction } from './notificationsActions.js';
 import { NotificationsList } from './notificationsList.js';
 
 export interface INotificationsCenter {
 	readonly model: NotificationsModel;
-	show(): void;
+	show(notificationId?: number): void;
+	runNotificationAction(id: number, action: INotificationAction, primary: boolean): Promise<void>;
 	hide(): void;
 	toggle(): void;
 	clearAll(): void;
@@ -133,8 +135,8 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			run: () => this.hide(),
 		};
 		this.clearButton = new NotificationCenterActionViewItem(clear, 'ash-notifications-clear');
-		const doNotDisturb = new NotificationCenterActionViewItem(configureDoNotDisturb, undefined, button => this.showHeaderMenu(button, this.getDoNotDisturbActions()));
-		const position = new NotificationCenterActionViewItem(configurePosition, undefined, button => this.showHeaderMenu(button, positionMenu.getActions().flatMap(([, actions]) => actions)));
+		const doNotDisturb = new NotificationCenterActionViewItem(configureDoNotDisturb, undefined, (button, selectFirst) => this.showHeaderMenu(button, this.getDoNotDisturbActions(), selectFirst));
+		const position = new NotificationCenterActionViewItem(configurePosition, undefined, (button, selectFirst) => this.showHeaderMenu(button, positionMenu.getActions().flatMap(([, actions]) => actions), selectFirst));
 		this.hideButton = new NotificationCenterActionViewItem(hide, 'ash-notifications-hide');
 		const items = new Map<IAction, NotificationCenterActionViewItem>([
 			[clear, this.clearButton],
@@ -169,7 +171,7 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 			if (!this.panel.contains(event.relatedTarget as Node | null)) focused.reset();
 		}));
 		this._register(toDisposable(() => focused.reset()));
-		this._register(this.notificationList.onDidRequestRemove(id => { if (!model.get(id)?.hasActiveProgress) model.remove(id); }));
+		this._register(this.notificationList.onDidRequestRemove(({ id, fromPrimaryAction }) => { if (fromPrimaryAction || !model.get(id)?.hasActiveProgress) model.remove(id); }));
 		const observe = (item: import('../../../common/notifications.js').NotificationItem): void => {
 			this.itemChanges.set(item.id, item.onDidChange(() => { this.clearButton.enabled = model.getNotifications().some(item => !item.hasActiveProgress); }));
 		};
@@ -203,14 +205,30 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 
 	private readonly toasts: NotificationsToasts;
 
-	show(): void {
+	runNotificationAction(id: number, action: INotificationAction, primary: boolean): Promise<void> {
+		const item = this.model.get(id);
+		const actions = primary ? item?.actions?.primary : item?.actions?.secondary;
+		if (!action.enabled || !actions?.includes(action)) return Promise.resolve();
+		if (primary) return runPrimaryNotificationAction(action, this.actionRunner, () => this.model.remove(id));
+		return this.actionRunner.run({ id: action.id, label: action.label, tooltip: action.tooltip, enabled: true, run: () => action.run() });
+	}
+
+	show(notificationId?: number): void {
 		if (this.isDisposed) return;
-		if (this.open) { this.panel.focus(); this.notificationList.focusFirst(); return; }
+		if (this.open) { this.focusNotification(notificationId); return; }
 		this.previousFocus = this.panel.ownerDocument.activeElement;
 		this.open = true; this.panel.hidden = false; this.toasts.setHidden(true);
 		this.render(); this.status.update(true, this.toasts.isVisible);
-		this.panel.focus();
-		this.notificationList.focusFirst();
+		this.focusNotification(notificationId);
+	}
+
+	private focusNotification(id?: number): void {
+		const row = id === undefined ? undefined : this.list.querySelector<HTMLElement>(`[data-notification-id="${id}"]`);
+		if (row) row.focus();
+		else {
+			this.panel.focus();
+			this.notificationList.focusFirst();
+		}
 	}
 
 	hide(): void {
@@ -295,13 +313,13 @@ export class NotificationsCenter extends Disposable implements INotificationsCen
 		return actions;
 	}
 
-	private showHeaderMenu(button: Button, actions: readonly IAction[]): void {
+	private showHeaderMenu(button: Button, actions: readonly IAction[], autoSelectFirstItem: boolean): void {
 		this.cancelHeaderMenu();
 		const source = this.headerMenu = new CancellationTokenSource();
 		button.domNode.setAttribute('aria-expanded', 'true');
 		try {
 			this.contextMenuService.showContextMenu({
-				getAnchor: () => button.domNode, getActions: () => actions, actionRunner: this.actionRunner, autoSelectFirstItem: true, cancellationToken: source.token,
+				getAnchor: () => button.domNode, getActions: () => actions, actionRunner: this.actionRunner, autoSelectFirstItem, cancellationToken: source.token,
 				onHide: () => {
 					if (this.headerMenu === source) this.headerMenu = undefined;
 					source.dispose();
@@ -322,7 +340,7 @@ class NotificationCenterActionViewItem extends ButtonActionViewItem {
 	constructor(
 		action: IAction,
 		private readonly className?: string,
-		private readonly showMenu?: (button: Button) => void,
+		private readonly showMenu?: (button: Button, selectFirst: boolean) => void,
 	) {
 		super(action, { buttonStyles: defaultButtonStyles });
 	}
@@ -336,7 +354,7 @@ class NotificationCenterActionViewItem extends ButtonActionViewItem {
 			this._register(addDisposableListener(this.button.domNode, 'keydown', event => {
 				if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
 				event.preventDefault();
-				this.showMenu?.(this.button);
+				this.showMenu?.(this.button, true);
 			}));
 		}
 	}
@@ -345,8 +363,8 @@ class NotificationCenterActionViewItem extends ButtonActionViewItem {
 	set checked(value: boolean) { this.button.checked = value; }
 	set icon(value: Button['icon']) { this.button.icon = value; }
 
-	protected override runAction(): unknown {
-		if (this.showMenu) return this.showMenu(this.button);
+	protected override runAction(event?: MouseEvent | KeyboardEvent): unknown {
+		if (this.showMenu) return this.showMenu(this.button, (event?.detail ?? 0) === 0);
 		return super.runAction();
 	}
 }

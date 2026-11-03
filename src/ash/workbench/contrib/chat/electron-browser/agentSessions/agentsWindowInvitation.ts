@@ -13,6 +13,7 @@ import type { INativeHostApi } from '../../../../../platform/native/common/nativ
 import { IChatService } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IHostService } from '../../../../services/host/browser/host.js';
+import { continueChatInAgentsWindow } from '../../browser/actions/chatContinueInAction.js';
 
 /** Desktop-only invitation; the native host arbitrates claims across both product windows. */
 export class AgentsWindowInvitationContribution extends Disposable {
@@ -197,7 +198,7 @@ export class AgentsWindowInvitationContribution extends Disposable {
 			const notification = this.notifications.notify({
 				severity: Severity.Info,
 				message: localize('agentsWindowInvitation.message', 'Continue in the Agents Window to keep track of your agent conversations across projects.'),
-				actions: { primary: [{ tooltip: '', enabled: true, id: 'agentsWindowInvitation.open', label: localize('agentsWindowInvitation.open', 'Continue in Agents Window'), run: () => this.open(claimed) }] },
+				actions: { primary: [{ tooltip: '', enabled: true, keepOpen: true, id: 'agentsWindowInvitation.open', label: localize('agentsWindowInvitation.open', 'Continue in Agents Window'), run: () => this.open(claimed) }] },
 			});
 			const lifetime = new DisposableStore();
 			this.presentation = { invitation: claimed, notification, lifetime };
@@ -222,8 +223,7 @@ export class AgentsWindowInvitationContribution extends Disposable {
 		const state = await this.host.getAgentHostEditorState();
 		if (this.isDisposed || !this.isCurrent(resource) || state.invitation?.id !== invitation.id) { this.closePresentation(); return; }
 		const { sessionId, threadId } = parseOpenSessionLinkUri(resource);
-		await this.host.openAgentsWindow({ conversation: { sessionId, threadId }, draft: captured?.draft });
-		captured?.clear();
+		await continueChatInAgentsWindow(this.host, { sessionId, threadId }, captured);
 		this.closePresentation();
 	}
 

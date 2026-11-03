@@ -1,3 +1,6 @@
+import { isRecord } from '../../../base/common/types.js';
+import type { DialogRequest } from '../../dialogs/common/dialogs.js';
+import type { DirectoryPermissionRequest } from '../common/workspaceTrust.js';
 import { invoke, subscribe } from '../../ipc/electron-browser/rendererIpc.js';
 import { WORKSPACE_CONTEXT_CHANGED_CHANNEL, WORKSPACE_CONTEXT_READ_CHANNEL, WORKSPACE_EDIT_CHANNEL, type IWorkspaceContextApi } from '../common/workspaceIpc.js';
 import { WORKSPACE_CONFIGURATION_CHANNEL, WORKSPACE_CONFIGURATION_CHANGED_CHANNEL } from '../common/workspaceIpc.js';
@@ -44,4 +47,16 @@ export function createWorkspaceContextApi(): IWorkspaceContextApi & { validateFo
 		editWorkspace: request => invoke(WORKSPACE_EDIT_CHANNEL, request),
 		onDidChange: (listener) => subscribe(WORKSPACE_CONTEXT_CHANGED_CHANNEL, listener),
 	};
+}
+
+export async function readDirectoryPermissionPrompt(request: DirectoryPermissionRequest): Promise<Extract<DialogRequest, { kind: 'prompt'; }>> {
+	const value = await invoke<unknown>('ash:host:directoryPermissionPrompt', request);
+	if (!isRecord(value) || value.kind !== 'prompt'
+		|| Object.keys(value).sort().join(',') !== 'cancelButton,detail,kind,message,primaryButton,secondaryButton,title'
+		|| typeof value.title !== 'string' || typeof value.message !== 'string'
+		|| typeof value.detail !== 'string' || typeof value.primaryButton !== 'string'
+		|| typeof value.secondaryButton !== 'string' || typeof value.cancelButton !== 'string') {
+		throw new TypeError('Invalid directory permission prompt');
+	}
+	return value as unknown as Extract<DialogRequest, { readonly kind: 'prompt'; }>;
 }

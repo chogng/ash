@@ -15,6 +15,8 @@ If the repository or publication target is unclear, ask before committing or pub
 
 ## Prepare the exact change
 
+By default, commit only changes made for the user in the current conversation, including work from earlier turns. A bare commit request uses this scope without confirmation. Include other work only when the user explicitly adds it to the commit scope. Use the conversation's edits and any pre-edit baseline to identify the files and hunks in scope. Leave pre-existing or concurrent edits outside that scope untouched.
+
 1. Before staging, inspect `git status --short --branch`, `git remote -v`, `git diff`, `git diff --cached`, and relevant untracked files. Check for an existing merge or rebase before starting another operation.
 2. If the index includes unrelated or uncertain work, stop and ask; do not unstage, stash, reset, or overwrite it. If one file mixes task and unrelated edits, stage only the task hunks, or stop when they cannot be separated.
 3. Format only task-owned files with `just fmt <paths...>` before staging. Never use a repository-wide write or collect all dirty paths for automatic fixes. When a file mixes task and unrelated edits, review formatter output and preserve unrelated hunks.

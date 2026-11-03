@@ -1,8 +1,15 @@
 import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
+import { IVoiceInputModeService, VoiceInputModeService } from '../../contrib/chat/browser/voiceInputMode/voiceInputMode.js';
 import { CommandService } from '../../services/commands/common/commandService.js';
 import { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../../services/localTranscription/browser/localTranscriptionService.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
+import { ChatContextService, IChatContextService } from '../../contrib/chat/browser/contextContrib/chatContextService.js';
+import { ChatContextPickService, IChatContextPickService } from '../../contrib/chat/browser/attachments/chatContextPickService.js';
+import { IThemeService } from '../../../platform/theme/common/themeService.js';
+import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IContextKeyService } from '../../../platform/contextkey/common/contextkey.js';
@@ -12,8 +19,8 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../services/storage/browser/storageService.js';
 import { DictationOnboardingService, IDictationOnboardingService } from '../../contrib/chat/browser/speechToText/dictationOnboarding.js';
-import { ChatInputNoticeHubService, IChatInputNoticeHubService } from '../../contrib/chat/browser/widget/input/notices/chatInputNoticeHub.js';
-import { ChatInputNotificationService, IChatInputNotificationService } from '../../contrib/chat/browser/widget/input/notices/chatInputNotificationService.js';
+import { ChatInputNoticeHubService, IChatInputNoticeHubService } from '../../contrib/chat/browser/widget/input/chatInputNoticeHub.js';
+import { ChatInputNotificationService, IChatInputNotificationService } from '../../contrib/chat/browser/widget/input/chatInputNotificationService.js';
 import { IVoiceModeOnboardingService, VoiceModeOnboardingService } from '../../contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { AgentsVoiceStorageKeys } from '../../contrib/agentsVoice/common/agentsVoice.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
@@ -40,6 +47,8 @@ export function createTestDictationBackend(owner: DisposableStore, capture: Test
 	const sessions = new Map<string, { handle: Promise<TestDictationSession>; text?: string; cancelling?: Promise<void>; }>();
 	return {
 		isConnected: true, onDidChangeConnection: Event.None, onDidTranscribe: transcript.event, onDidEnd: ended.event,
+		readInstructions: async () => { throw new Error('This recording fixture does not provide Profile instructions'); },
+		writeInstructions: async () => { throw new Error('This recording fixture does not provide Profile instructions'); },
 		getOptions: capture.getOptions ?? (async () => ({ inputDevices: [], languages: [] })),
 		start: async (resourceId, options) => {
 			const entry = {
@@ -121,6 +130,8 @@ export function installTestDictationAudio(target: Window & typeof globalThis): I
 
 /** Test profile storage is isolated from the browser's persistent user profile. */
 export function registerTestDictationOnboarding(services: InstantiationService, seen = true): void {
+	if (!services.has(IAgentVoiceService)) services.registerInstance(IAgentVoiceService, undefined);
+	if (!services.has(IVoiceInputModeService)) services.registerSingleton(IVoiceInputModeService, () => services.createInstance(VoiceInputModeService));
 	if (!services.has(IChatInputNoticeHubService)) services.registerSingleton(IChatInputNoticeHubService, () => services.createInstance(ChatInputNoticeHubService));
 	if (!services.has(IChatInputNotificationService)) services.registerSingleton(IChatInputNotificationService, () => services.createInstance(ChatInputNotificationService));
 	if (!services.has(IVoiceModeOnboardingService)) services.registerSingleton(IVoiceModeOnboardingService, () => services.createInstance(VoiceModeOnboardingService));
@@ -135,6 +146,9 @@ export function registerTestDictationOnboarding(services: InstantiationService, 
 	if (!services.has(IConfigurationService)) services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	if (!services.has(IExtensionService)) services.registerSingleton(IExtensionService, () => new TestExtensionService());
+	if (!services.has(IChatContextPickService)) services.registerSingleton(IChatContextPickService, () => new ChatContextPickService());
+	if (!services.has(IChatContextService)) services.registerSingleton(IChatContextService, () => services.createInstance(ChatContextService));
+	if (!services.has(IThemeService)) services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 	if (!services.has(IStorageService)) {
 		const entries = new Map<string, string>();
 		services.registerSingleton(IStorageService, () => new BrowserStorageService({

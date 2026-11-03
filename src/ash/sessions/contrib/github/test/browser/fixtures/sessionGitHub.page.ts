@@ -1,3 +1,6 @@
+import { SessionSectionOrderService } from '../../../../../services/sessions/browser/sessionSectionOrderService.js';
+import { SessionsListModelService } from '../../../../../services/sessions/browser/sessionsListModelService.js';
+import { BrowserContextViewService } from '../../../../../../platform/contextview/browser/contextViewService.js';
 import { AppServerAutomationService } from '../../../../../../platform/automations/browser/appServerAutomationService.js';
 import type { Automation } from '../../../../../../platform/automations/common/automation.js';
 import { ChecksOperationService } from '../../../../changes/browser/checksOperationService.js';
@@ -43,8 +46,8 @@ import { ISessionsService, type SessionsViewSelection } from '../../../../../ser
 import type { ISessionsManagementService } from '../../../../../services/sessions/common/sessionsManagement.js';
 import type { ISession } from '../../../../../services/sessions/common/session.js';
 import { GitHubService } from '../../../browser/githubService.js';
-import { SessionChatInputToolbar } from '../../../../chat/browser/sessionChatInputToolbar.js';
-import { SessionsList } from '../../../../../browser/parts/sidebar/sessionsList.js';
+import { attachSessionGitHubReference, SessionChatInputToolbar } from '../../../../chat/browser/sessionChatInputToolbar.js';
+import { SessionsList } from '../../../../sessions/browser/views/sessionsList.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import type { GitHubPullRequestReference, GitHubIssueReference } from '../../../../../../platform/github/common/githubService.js';
 import { chatInputStackClass, chatInputStackSlotClass, ChatInputStackSlot, refreshChatInputStack, setChatInputStackSlot } from '../../../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
@@ -67,6 +70,7 @@ class Transport implements AppServerTransport {
 	public failingChecks = false;
 	public unresolvedComments = false;
 	public mergeable: boolean | null = null;
+	private autoMerge = false;
 	public signedIn = true;
 	private references: GitHubPullRequestReference[] = JSON.parse(sessionStorage.getItem('test-backend-pr-references') ?? '[]');
 	public on(event: string, listener: (payload: unknown) => void): void {
@@ -88,7 +92,7 @@ class Transport implements AppServerTransport {
 		const repository = request.params.repository as { name: string; } | undefined;
 		const number = repository?.name === 'two' ? 8 : 7;
 		const state = this.states.get(number)!;
-		const pr = { number, title: `Changes in ${repository?.name}`, body: '', url: `https://github.com/team/${repository?.name}/pull/${number}`, state: state === 'closed' || state === 'merged' ? 'closed' : 'open', draft: state === 'draft', mergedAt: state === 'merged' ? '2026-10-06' : null, mergeable: this.mergeable, headCommit: String(number).repeat(40), headBranch: 'feature', headRepository: `team/${repository?.name}`, baseBranch: 'main', autoMerge: false };
+		const pr = { number, title: `Changes in ${repository?.name}`, body: '', url: `https://github.com/team/${repository?.name}/pull/${number}`, state: state === 'closed' || state === 'merged' ? 'closed' : 'open', draft: state === 'draft', mergedAt: state === 'merged' ? '2026-10-06' : null, mergeable: this.mergeable, headCommit: String(number).repeat(40), headBranch: 'feature', headRepository: `team/${repository?.name}`, baseBranch: 'main', autoMerge: this.autoMerge };
 		switch (request.method) {
 			case 'github/session/pullRequests': this.reply(request, { references: this.references }); break;
 			case 'github/session/pullRequest/attach': {
@@ -99,7 +103,9 @@ class Transport implements AppServerTransport {
 			}
 			case 'github/session/pullRequest/detach': {
 				const reference = request.params.reference as GitHubPullRequestReference;
-				this.references = this.references.filter(item => JSON.stringify(item) !== JSON.stringify(reference));
+				this.references = this.references.filter(item =>
+					item.number !== reference.number || item.repository.host !== reference.repository.host
+					|| item.repository.owner !== reference.repository.owner || item.repository.name !== reference.repository.name);
 				this.persistReferences(request);
 				break;
 			}
@@ -127,7 +133,16 @@ class Transport implements AppServerTransport {
 				break;
 			}
             case 'automation/list': this.reply(request, { automations: this.plans }); break;
-            case 'automation/runs': this.reply(request, { runs: [] }); break;
+            case 'automation/runs': {
+				const plan = this.plans.find(value => value.id === request.params.id);
+				const time = Date.now();
+				this.reply(request, { runs: plan && new URL(location.href).searchParams.has('artifactDetails') ? [{
+					id: 'fixture-run', automationId: plan.id, revision: plan.revision, definition: plan.definition,
+					scheduledAt: time, createdAt: time, startedAt: time, finishedAt: time,
+					status: 'completed', sessionId: 'session', threadId: 'thread', turnId: null, message: null,
+				}] : [] });
+				break;
+			}
             case 'automation/write': {
                 const p = request.params;
                 const previous = this.plans.find(plan => plan.id === p.id);
@@ -149,6 +164,17 @@ class Transport implements AppServerTransport {
 			case 'github/account/list': this.reply(request, { accounts: this.signedIn ? [{ id: 'account', host: 'github.com', login: 'User', status: 'ready', credentialRevision: '1' }] : [] }); break;
 			case 'github/pullRequest/list': this.reply(request, { pullRequests: request.params.state === pr.state ? [pr] : [], nextPage: null }); break;
 			case 'github/pullRequest/read': this.reply(request, pr); break;
+			case 'github/repository/read':
+				this.reply(request, { defaultBranch: 'main', fullName: 'team/one', allowMergeCommit: true, allowSquashMerge: true, allowRebaseMerge: false, allowAutoMerge: true });
+				break;
+			case 'github/pullRequest/autoMerge':
+				this.autoMerge = true;
+				this.reply(request, null);
+				break;
+			case 'github/pullRequest/merge':
+				this.states.set(number, 'merged');
+				this.reply(request, { merged: true, commit: 'a'.repeat(40), message: 'Merged' });
+				break;
 			case 'github/check/details': this.reply(request, { title: 'Build failure', summary: 'Compiler error', text: '<script>untrusted output</script>', annotations: [{ path: 'src/main.rs', startLine: 3, endLine: 4, annotationLevel: 'failure', message: `Error page ${request.params.page}`, title: null }], nextPage: request.params.page === 1 ? 2 : null, actionsJob: true }); break;
 			case 'github/check/log': this.reply(request, { url: 'https://productionresults.blob.core.windows.net/logs?sig=fixture' }); break;
 			case 'github/check/rerun': this.reply(request, null); break;
@@ -180,7 +206,14 @@ resources.add(setARIAContainer(document.body));
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 }
+if (new URL(location.href).searchParams.has('artifactDetails')) {
+	sessionStorage.setItem('test-backend-pr-references', JSON.stringify([{
+		repository: { host: 'github.com', owner: 'team', name: 'one' },
+		number: 7, isArtifact: true, artifactId: 'a'.repeat(32),
+	} satisfies GitHubPullRequestReference]));
+}
 const transport = new Transport();
+if (new URL(location.href).searchParams.has('artifactDetails')) transport.mergeable = true;
 const client = new AppServerProtocolClient(transport);
 resources.add(toDisposable(() => client.dispose()));
 await client.connect();
@@ -232,12 +265,19 @@ const toolbarModel = inputStack ? {
 	get sessionId() { return selection?.kind === 'session' ? selection.active.session.sessionId : undefined; },
 	onDidChange: selected.event,
 } : { sessionId: 'session', onDidChange: Event.None };
-const toolbar = resources.add(new SessionChatInputToolbar(main, toolbarModel, github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService));
-toolbar.render();
+const input = document.createElement('textarea');
+input.setAttribute('aria-label', 'Fixture composer');
+main.append(input);
+const toolbarServices = resources.add(new InstantiationService());
+toolbarServices.registerInstance(ISessionsService, sessions);
+toolbarServices.registerInstance(ISessionProviderScopeService, scopes);
+toolbarServices.registerInstance(ICustomViewService, listCustomViews);
+toolbarServices.registerInstance(ISessionGitHubService, github);
+toolbarServices.registerInstance(INotificationService, notifications);
+const toolbar = resources.add(new SessionChatInputToolbar(main, () => input.focus(), toolbarModel, github, opener, notifications, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService, resources.add(new BrowserContextViewService(document.body)), toolbarServices));
 if (inputStack) {
 	// Exercise the real PR producer against the same slot contract used by NewChatWidget.
 	main.classList.add('ash-chat-input-part', chatInputStackClass);
-	const input = document.createElement('textarea');
 	input.classList.add('ash-chat-input-container', chatInputStackSlotClass);
 	input.value = 'Retained PR draft';
 	main.append(input);
@@ -245,7 +285,7 @@ if (inputStack) {
 	refreshChatInputStack(main);
 }
 const listStorage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'github-list', flushInterval: 0 }));
-const list = resources.add(new SessionsList(main, 'Sessions', 'chat', management, sessions, github, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, listStorage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications));
+const list = resources.add(new SessionsList(main, 'Sessions', 'chat', management, sessions, github, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, listStorage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(listStorage), new SessionSectionOrderService(listStorage)));
 const submissions: Record<string, unknown>[] = [];
 if (new URL(location.href).searchParams.has('checks')) {
 	transport.failingChecks = true;
@@ -274,6 +314,9 @@ github.initialize();
 
 window.ashSessionGitHub = {
 	opened, requests: transport.requests, submissions,
+	attach: (kind: 'issue' | 'pullRequest') => {
+		void attachSessionGitHubReference(kind, toolbarModel, github, quickInput, new AbortController().signal).finally(() => input.focus());
+	},
 	setIssueState: (number: number, state: string, reason?: string) => transport.changeIssue(number, state, reason),
 	setState: (state: State) => { transport.states.set(7, state); statusChanged.fire(gitStatus('one')); },
 	setAttention: (attention: 'comments' | 'checks' | 'conflicts' | 'none') => {
@@ -282,6 +325,7 @@ window.ashSessionGitHub = {
 		transport.mergeable = attention === 'conflicts' ? false : null;
 		statusChanged.fire(gitStatus('one'));
 	},
+	setMergeable: () => { transport.mergeable = true; statusChanged.fire(gitStatus('one')); },
 	changeBranch: () => { branch = 'another'; statusChanged.fire(gitStatus('one')); },
 	signOut: () => { transport.signedIn = false; accountsChanged.fire({ revision: 2n, accounts: [] }); },
 	selectDraft: () => { selection = undefined; selected.fire(); },
@@ -289,4 +333,4 @@ window.ashSessionGitHub = {
 	dispose: () => { resources.dispose(); list.domNode.remove(); },
 };
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
-declare global { interface Window { ashSessionGitHub: { submissions: Record<string, unknown>[]; opened: string[]; requests: Request[]; setIssueState(number: number, state: string, reason?: string): void; setState(state: State): void; setAttention(attention: 'comments' | 'checks' | 'conflicts' | 'none'): void; changeBranch(): void; signOut(): void; selectDraft(): void; theme(name: string): void; dispose(): void; }; } }
+declare global { interface Window { ashSessionGitHub: { attach(kind: 'issue' | 'pullRequest'): void; submissions: Record<string, unknown>[]; opened: string[]; requests: Request[]; setIssueState(number: number, state: string, reason?: string): void; setState(state: State): void; setAttention(attention: 'comments' | 'checks' | 'conflicts' | 'none'): void; setMergeable(): void; changeBranch(): void; signOut(): void; selectDraft(): void; theme(name: string): void; dispose(): void; }; } }

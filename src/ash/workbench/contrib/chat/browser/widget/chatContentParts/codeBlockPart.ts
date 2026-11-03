@@ -1,8 +1,10 @@
+import './media/codeBlockPart.css';
 import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h, stopEvent } from '../../../../../../base/browser/dom.js';
 import { status } from '../../../../../../base/browser/ui/aria/aria.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { RunOnceScheduler } from '../../../../../../base/common/async.js';
+import { isCancellationError } from '../../../../../../base/common/errors.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../../../base/common/uri.js';
 import { CodeEditorWidget } from '../../../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
@@ -37,6 +39,8 @@ export interface ICodeBlockData {
 	readonly element: unknown;
 	readonly chatSessionResource: URI | undefined;
 	readonly renderOptions?: ICodeBlockRenderOptions;
+	/** Resolve the owning row at invocation, after a streaming reply may have completed. */
+	readonly getActionContext?: () => Pick<ICodeBlockActionContext, 'element' | 'chatSessionResource'>;
 }
 
 /** Owns a read-only Stanza document; actions operate on its source text, never rendered markup. */
@@ -75,6 +79,7 @@ export class CodeBlockPart extends Disposable {
 		this.toolbar.append(this.language);
 		for (const [command, label, announcement] of [
 			['workbench.action.chat.copyCodeBlock', localize('chat.code.copy', 'Copy'), localize('chat.code.copied', 'Code copied.')],
+			['workbench.action.chat.applyInEditor', localize('chat.code.apply', 'Apply to editor'), undefined],
 			['workbench.action.chat.insertCodeBlock', localize('chat.code.insert', 'Insert at cursor'), undefined],
 			['workbench.action.chat.insertIntoNewFile', localize('chat.code.newFile', 'Open in new file'), undefined],
 		] as const) {
@@ -93,13 +98,14 @@ export class CodeBlockPart extends Disposable {
 					codeBlockIndex: data.codeBlockIndex,
 					element: data.element,
 					chatSessionResource: data.chatSessionResource,
+					...data.getActionContext?.(),
 				};
 				this.pendingActions.add(button);
 				button.domNode.setAttribute('aria-busy', 'true');
 				void this.commands.executeCommand(command, context).then(() => {
 					if (!this.isDisposed && announcement) status(announcement);
 				}, error => {
-					if (!this.isDisposed) this.notifications.error(localize('chat.code.failed', 'Could not perform the code block action: {0}', String(error)));
+					if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(localize('chat.code.failed', 'Could not perform the code block action: {0}', String(error)));
 				}).finally(() => {
 					this.pendingActions.delete(button);
 					if (!this.isDisposed) button.domNode.removeAttribute('aria-busy');

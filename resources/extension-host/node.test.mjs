@@ -1353,3 +1353,77 @@ exports.activate = context => {
 	assert.equal((await invoke('open')).status, 'failure');
 	await h.request('shutdown').result;
 });
+
+test('Chat context SDK resolves explicit and resource items, refreshes workspace values and retires registrations', async t => {
+	const calls = [];
+	const h = await host(t, `
+const ash = require('@ash/sdk');
+exports.activate = context => {
+ const changes = new ash.EventEmitter();
+ const explicit = ash.chat.registerChatExplicitContextProvider('records', {
+  provideChatContext() { return [{ label: 'Record', key: 42, command: { command: 'test.open', title: 'Open', arguments: ['extra'] } }]; },
+  resolveChatContext(item) { return { ...item, value: 'Resolved ' + item.key }; }
+ });
+ const workspace = ash.chat.registerChatWorkspaceContextProvider('workspace', {
+  onDidChangeWorkspaceChatContext: changes.event,
+  provideWorkspaceChatContext() { return [{ label: 'Branch', value: 'feature/context' }]; }
+ });
+ const resource = ash.chat.registerChatResourceContextProvider({ viewType: 'test.document' }, 'document', {
+  provideChatContext(uri, withValue, viewType) { return { label: viewType, resourceUri: uri, ...(withValue ? { value: uri.path + ':' + withValue } : {}) }; }
+ });
+ context.subscriptions.push(changes, explicit, workspace, resource,
+  ash.commands.register('test.node', () => changes.fire()),
+  ash.commands.register('test.second', () => { explicit.dispose(); workspace.dispose(); resource.dispose(); }));
+};`, 'extension.cjs', ['command', 'dataChannel'], frame => {
+		calls.push(frame.operation);
+		return frame.operation.operation === 'executeCommand' ? { result: 'command', value: null } : { result: 'value', value: null };
+	}, { manifest: { contributes: { commands: [{ command: 'test.node', title: 'Change' }, { command: 'test.second', title: 'Dispose' }], chatContext: [{ id: 'records', displayName: 'Records', icon: '$(file)' }] } } });
+	const registrations = h.registrations.filter(value => value.channelId === 'chat.context.v1');
+	assert.equal(registrations.length, 3);
+	const invoke = async (registrationId, data) => {
+		const response = await h.request('invoke', { extensionId: 'test.node', registrationId, operation: 'receiveData', payload: { data }, deadlineUnixMillis: Date.now() + 5000 }).result;
+		assert.equal(response.status, 'success', JSON.stringify(response));
+		return response.body.body.payload;
+	};
+	const byKind = new Map();
+	for (const registration of registrations) {
+		const description = await invoke(registration.registrationId, { action: 'describe' });
+		byKind.set(description.kind, registration.registrationId);
+	}
+	const explicit = byKind.get('explicit');
+	const [item] = await invoke(explicit, { action: 'provide' });
+	assert.equal(item.value, undefined);
+	const resolved = await invoke(explicit, { action: 'resolve', handle: item.handle });
+	assert.equal(resolved.value, 'Resolved 42');
+	assert.equal(resolved.handle, item.handle);
+	await invoke(explicit, { action: 'execute', handle: item.handle });
+	assert.equal(calls.at(-1).command, 'test.open');
+	assert.equal(calls.at(-1).arguments[0].key, 42);
+	assert.equal(calls.at(-1).arguments[1], 'extra');
+	const [workspace] = await invoke(byKind.get('workspace'), { action: 'provide' });
+	assert.equal(workspace.value, 'feature/context');
+	const resource = await invoke(byKind.get('resource'), { action: 'provide', resource: 'file:///report.pdf', withValue: false, viewType: 'test.document' });
+	assert.equal(resource.value, undefined);
+	assert.equal((await invoke(byKind.get('resource'), { action: 'resolve', handle: resource.handle })).value, '/report.pdf:true');
+	assert.equal(resource.resourceUri, 'file:///report.pdf');
+	await h.invoke('test.node', []).result;
+	assert.equal(calls.at(-1).payload.method, 'chatContextChanged');
+	assert.equal(calls.at(-1).payload.registrationId, byKind.get('workspace'));
+	await h.invoke('test.second', []).result;
+	assert.deepEqual((await h.registrationEvent(3)).chatContextProviders, []);
+	const retired = await h.request('invoke', { extensionId: 'test.node', registrationId: explicit, operation: 'receiveData', payload: { data: { action: 'provide' } }, deadlineUnixMillis: Date.now() + 5000 }).result;
+	assert.equal(retired.status, 'failure');
+	await h.request('shutdown').result;
+});
+
+test('Chat context SDK requires capability admission and declared explicit sources', async t => {
+	for (const admitted of [false, true]) {
+		const h = await host(t, `const ash = require('@ash/sdk'); exports.activate = context => context.subscriptions.push(ash.commands.register('test.node', () => {
+ try { ash.chat.registerChatExplicitContextProvider('missing', { provideChatContext() { return []; } }); return 'registered'; }
+ catch (error) { return error.message; }
+}));`, 'extension.cjs', admitted ? ['command', 'dataChannel'] : ['command']);
+		const response = await h.invoke('test.node', []).result;
+		assert.match(response.body.body.payload, admitted ? /declared in package.json/ : /admitted dataChannel/);
+		await h.request('shutdown').result;
+	}
+});

@@ -9,7 +9,7 @@ import { IEditorService } from '../../../../services/editor/common/editorService
 import { IUntitledTextEditorService } from '../../../../services/untitled/common/untitledTextEditorService.js';
 import { localize2 } from '../../../../../nls.js';
 import type { ICodeBlockActionContext } from '../widget/chatContentParts/codeBlockPart.js';
-import { InsertCodeBlockOperation } from './codeBlockOperations.js';
+import { ApplyCodeBlockOperation, InsertCodeBlockOperation } from './codeBlockOperations.js';
 
 export function isCodeBlockActionContext(value: unknown): value is ICodeBlockActionContext {
 	if (!value || typeof value !== 'object') return false;
@@ -19,6 +19,12 @@ export function isCodeBlockActionContext(value: unknown): value is ICodeBlockAct
 }
 
 export function registerChatCodeBlockActions(): void {
+	registerAction2(class ApplyInEditorAction extends Action2 {
+		constructor() { super({ id: 'workbench.action.chat.applyInEditor', title: localize2('chat.code.apply', 'Apply to editor') }); }
+		override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
+			if (isCodeBlockActionContext(context)) await accessor.get(IInstantiationService).createInstance(ApplyCodeBlockOperation).run(context);
+		}
+	});
 	for (const previous of [false, true]) {
 		registerAction2(class NavigateCodeBlockAction extends Action2 {
 			constructor() {

@@ -1,0 +1,349 @@
+.ash-sessions-list {
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	flex-direction: column;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size120);
+	background: var(--ash-sideBar-background);
+}
+
+.ash-sessions-list h2 {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+.ash-sessions-list-navigation {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-sessions-list-navigation[hidden] {
+	display: none;
+}
+
+.ash-sessions-list-navigation .ash-button {
+	justify-content: flex-start;
+	min-width: 0;
+	width: 100%;
+}
+
+.ash-sessions-list-navigation .ash-button[aria-current="page"] {
+	color: var(--ash-foreground);
+	background: var(--ash-sessions-selectionBackground);
+}
+
+.ash-sessions-list-more {
+	align-self: flex-end;
+}
+
+.ash-sessions-list-search {
+	min-width: 0;
+	min-height: var(--ash-spacing-size320);
+	padding-inline: var(--ash-spacing-size120);
+	border: 1px solid var(--ash-input-border, transparent);
+	border-radius: var(--ash-cornerRadius-medium);
+	background: var(--ash-input-background);
+	color: var(--ash-input-foreground);
+	font: inherit;
+}
+
+.ash-sessions-list-search:focus-visible {
+	outline: 1px solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-sessions-list-items {
+	display: flex;
+	min-height: 0;
+	flex: 1 1 auto;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+	overflow: auto;
+}
+
+.ash-sessions-list-item {
+	width: 100%;
+	display: flex;
+	min-width: 0;
+	min-height: var(--ash-spacing-size320);
+	align-items: center;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size120);
+	border: 0;
+	border-radius: var(--ash-cornerRadius-large);
+	color: var(--ash-foreground);
+	background: transparent;
+	cursor: pointer;
+	font-size: var(--ash-fontSize-body1);
+	text-align: left;
+}
+
+.ash-sessions-list-item.has-management {
+	min-height: 64px;
+}
+
+.ash-sessions-list-content {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	flex-direction: column;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-sessions-list-management {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label2);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-sessions-list-management[hidden] {
+	display: none;
+}
+
+.ash-sessions-list-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-sessions-list-pr {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+}
+
+.ash-sessions-list-pr[hidden] {
+	display: none;
+}
+
+.ash-sessions-list-pr > .ash-icon {
+	width: 12px;
+	height: 12px;
+	font-size: var(--ash-lxiconFontSize-compact);
+}
+
+.ash-sessions-list-row:is(:hover, :focus-within, .menu-visible)
+	> .ash-sessions-list-item {
+	background: var(--sessions-row-background);
+}
+
+.ash-sessions-list-row.selected > .ash-sessions-list-item {
+	color: var(--ash-foreground);
+	background: var(--ash-sessions-selectionBackground);
+}
+
+.ash-sessions-list-item:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-sessions-empty {
+	margin: var(--ash-spacing-size80) var(--ash-spacing-size20);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-sessions-list-section,
+.ash-sessions-list-subgroup {
+	min-width: 0;
+	flex: 0 0 auto;
+}
+
+.ash-sessions-list-section + .ash-sessions-list-section {
+	margin-top: var(--ash-spacing-size160);
+}
+
+/* The list gap contributes the remaining 4px between these sections. */
+.ash-sessions-list-section[data-section="projects"]
+	+ .ash-sessions-list-section[data-section="recent"] {
+	margin-top: var(--ash-spacing-size120);
+}
+
+.ash-sessions-list-section h3 {
+	margin: 0;
+	font: inherit;
+}
+
+.ash-sessions-list-section-toggle {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	width: 100%;
+	min-width: 0;
+	min-height: var(--ash-spacing-size320);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size120);
+	border: 0;
+	border-radius: var(--ash-cornerRadius-large);
+	background: transparent;
+	color: var(--ash-description-foreground);
+	font: inherit;
+	font-size: var(--ash-fontSize-label1);
+	text-align: start;
+	cursor: pointer;
+}
+
+.ash-sessions-list-subgroup > h3 > .ash-sessions-list-section-toggle {
+	color: var(--ash-foreground);
+	font-size: var(--ash-fontSize-body1);
+}
+
+.ash-sessions-list-section-toggle:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-sessions-list-section-toggle:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-sessions-list-section:is(
+		[data-section="projects"],
+		[data-section="recent"]
+	)
+	> h3
+	> .ash-sessions-list-section-toggle
+	> .ash-sessions-list-section-icon {
+	width: var(--ash-lxiconFontSize);
+	height: var(--ash-lxiconFontSize);
+	font-size: var(--ash-lxiconFontSize);
+}
+
+@media (hover: hover) {
+	.ash-sessions-list-section:is(
+			[data-section="projects"],
+			[data-section="recent"]
+		)
+		> h3
+		> .ash-sessions-list-section-toggle:not(:hover, :focus-visible)
+		> .ash-sessions-list-section-icon {
+		opacity: 0;
+	}
+}
+
+.ash-sessions-list-section-icon,
+.ash-sessions-list-item > .ash-icon {
+	display: inline-flex;
+	align-items: center;
+	flex: 0 0 auto;
+	width: var(--ash-lxiconFontSize-large);
+	height: var(--ash-lxiconFontSize-large);
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-sessions-list-section-icon > .ash-icon {
+	font-size: inherit;
+}
+
+.ash-sessions-list-section-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-sessions-list-section-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size20);
+}
+
+.ash-sessions-list-nested-chats,
+.ash-sessions-list-subgroup > .ash-sessions-list-section-body {
+	padding-inline-start: var(--ash-spacing-size240);
+}
+
+.ash-sessions-list-section-body[hidden] {
+	display: none;
+}
+
+.ash-sessions-list-row {
+	position: relative;
+	min-width: 0;
+	--sessions-row-background: var(--ash-sideBar-background);
+}
+
+.ash-sessions-list-row:hover,
+.ash-sessions-list-row:focus-within,
+.ash-sessions-list-row.menu-visible {
+	--sessions-row-background: var(--ash-list-hoverBackground);
+}
+
+.ash-sessions-list-row.selected {
+	--sessions-row-background: var(--ash-sessions-selectionBackground);
+}
+
+.ash-sessions-list-row .ash-sessions-list-actions {
+	position: absolute;
+	inset-inline-end: var(--ash-strokeThickness);
+	top: var(--ash-spacing-size40);
+	height: 28px;
+	padding-inline-end: var(--ash-spacing-size40);
+	border-radius: 0 var(--ash-cornerRadius-large) var(--ash-cornerRadius-large)
+		0;
+	background: var(--sessions-row-background);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--ash-animation-durationFast) ease-out;
+}
+
+.ash-sessions-list-actions::before {
+	content: "";
+	position: absolute;
+	inset-inline-end: 100%;
+	top: 0;
+	bottom: 0;
+	width: var(--ash-spacing-size320);
+	pointer-events: none;
+	background: linear-gradient(
+		to right,
+		transparent,
+		color-mix(in srgb, var(--sessions-row-background) 16%, transparent) 25%,
+		color-mix(in srgb, var(--sessions-row-background) 50%, transparent) 50%,
+		color-mix(in srgb, var(--sessions-row-background) 84%, transparent) 75%,
+		var(--sessions-row-background)
+	);
+}
+
+[dir="rtl"] .ash-sessions-list-actions::before {
+	transform: scaleX(-1);
+}
+
+.ash-sessions-list-row:hover .ash-sessions-list-actions,
+.ash-sessions-list-row:focus-within .ash-sessions-list-actions,
+.ash-sessions-list-row.menu-visible .ash-sessions-list-actions {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.ash-sessions-list-row:focus-within .ash-sessions-list-actions,
+.ash-reduce-motion .ash-sessions-list-actions {
+	transition: none;
+}
+
+.ash-sessions-list-actions[hidden] {
+	display: none;
+}
+
+.ash-sessions-list-row .ash-sessions-list-actions button {
+	width: 28px;
+	height: 28px;
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+:is(.hc-black, .hc-light) .ash-sessions-list-actions::before {
+	display: none;
+}
+
+.ash-sessions-list-actions .ash-button-label {
+	display: none;
+}

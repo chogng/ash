@@ -2,7 +2,7 @@ import '../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
-import { Direction } from '../../../base/browser/ui/grid/grid.js';
+import { Direction, Orientation, type SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
 import { URI } from '../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
 import { browserEnvironment } from '../../../editor/test/browser/testEditorDom.js';
@@ -50,6 +50,21 @@ function fixture() {
 suite('Desktop tool EditorParts', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('reopens a product editor in its retained group after closing the last tab', async () => {
+		using hosts = fixture();
+		const editor = hosts.editor;
+		const groupId = editor.pageGroupId;
+		const pages = editor.groups.find(group => group.id === groupId)!;
+		const input = { resource: URI.parse('ash-symphony:/monitor') };
+		await editor.openEditor(input, { pinned: true }, { groupId });
+		assert.equal(await pages.closeEditor(input), true);
+		editor.setGroupVisible(groupId, false);
+		assert.equal(await editor.removeGroup(groupId), false);
+		await editor.openEditor(input, { pinned: true }, { groupId });
+		assert.equal(editor.activeGroup, pages);
+		assert.equal(pages.activeInput, input);
+	});
+
 	test('splitting Files creates a local group without changing other tool hosts', async () => {
 		using hosts = fixture();
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
@@ -59,7 +74,7 @@ suite('Desktop tool EditorParts', () => {
 		const pane = browser.activePane;
 		const split = hosts.editor.addGroup(files.id, Direction.Down);
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/b.txt') }, { pinned: true }, { groupId: split.id });
-		assert.equal(hosts.editor.parts.length, 4);
+		assert.equal(hosts.editor.parts.length, 5);
 		assert.equal(hosts.editor.getEditorState().groups.length, hosts.editor.groups.length);
 		assert.deepEqual(hosts.files.fileGroups.map(group => group.id), [files.id, split.id]);
 		assert.equal(hosts.tools.get('browser')!.groups.length, 1);
@@ -92,6 +107,78 @@ suite('Desktop tool EditorParts', () => {
 		assert.equal(hosts.tools.get('browser')!.activeInput?.resource.toString(), 'ash-browser:/fixture');
 		assert.equal(hosts.tools.get('browser')!.isGroupVisible(hosts.tools.get('browser')!.activeGroup.id), false);
 		assert.deepEqual(hosts.area.saveLayout(), saved.toolParts!.layout);
+	});
+
+	test('restores tool layouts saved before the Chat workspace was added', async () => {
+		using hosts = fixture();
+		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
+		const saved = hosts.editor.saveWorkingSet('before-side-chat');
+		const { chat, ...parts } = saved.toolParts!.parts;
+		const layout = saved.toolParts!.layout;
+		assert.ok(layout.type === 'branch');
+		const children = layout.children.filter(node => node.type !== 'leaf' || node.data !== 'chat');
+		assert.equal(children.length, layout.children.length - 1);
+		const legacy = {
+			...saved, groups: saved.groups.filter(group => !chat.groups.includes(group.id!)), toolParts: {
+				version: 1, parts, layout: children.length === 1 ? children[0] : { ...layout, children },
+			}
+		};
+		await hosts.editor.applyWorkingSet(legacy);
+		assert.equal(hosts.editor.activeGroup.activeInput?.resource.toString(), 'file:///fixture/a.txt');
+		assert.ok(hosts.tools.get('chat')!.groups.every(group => !hosts.editor.isGroupVisible(group.id)));
+		assert.deepEqual(hosts.area.saveLayout(), layout);
+	});
+
+	test('restacks an older Files and Changes pair and preserves a recorded manual split', async () => {
+		using hosts = fixture();
+		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
+		await hosts.editor.openEditor({ resource: URI.parse('ash-session-changes:/fixture') }, { pinned: true });
+		hosts.area.moveTool('changes', 'files', Direction.Right);
+		const saved = hosts.editor.saveWorkingSet('files-and-changes');
+		const split = (node: SerializedGridDescriptor): Orientation | undefined => {
+			if (node.type === 'leaf') return undefined;
+			const hasTool = (child: SerializedGridDescriptor, name: string): boolean =>
+				child.type === 'leaf' ? child.data === name : child.children.some(nested => hasTool(nested, name));
+			const shared = node.children.find(child => hasTool(child, 'files') && hasTool(child, 'changes'));
+			return shared ? split(shared) : node.orientation;
+		};
+		assert.equal(split(saved.toolParts!.layout), Orientation.HORIZONTAL);
+		await hosts.editor.applyWorkingSet(saved);
+		assert.equal(split(hosts.area.saveLayout()), Orientation.HORIZONTAL);
+		const older = { ...saved, toolParts: { ...saved.toolParts!, manuallyArranged: undefined } };
+		await hosts.editor.applyWorkingSet(older);
+		assert.equal(split(hosts.area.saveLayout()), Orientation.VERTICAL);
+		assert.equal(hosts.editor.activeGroup.activeInput?.resource.toString(), 'ash-session-changes:/fixture');
+	});
+
+	test('reopens Preview by a surviving neighbor and falls back after that neighbor closes', async () => {
+		using hosts = fixture();
+		const preview = { resource: URI.parse('ash-browser:/fixture') };
+		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
+		await hosts.editor.openEditor(preview, { pinned: true });
+		await hosts.editor.openEditor({ resource: URI.parse('ash-session-changes:/fixture') }, { pinned: true });
+		const visible = (node: SerializedGridDescriptor): unknown => {
+			if (node.type === 'leaf') return node.visible ? node.data : undefined;
+			const children = node.children.map(visible).filter(child => child !== undefined);
+			return children.length > 1 ? [node.orientation, ...children] : children[0];
+		};
+		const togglePreview = () => hosts.editor.toggleToolEditors(input => input.resource.scheme === 'ash-browser');
+		await togglePreview();
+		const saved = hosts.editor.saveWorkingSet('closed-preview');
+		assert.deepEqual(saved.toolParts?.closedSlots?.browser?.anchors, ['files']);
+		await hosts.editor.applyWorkingSet(saved);
+		await togglePreview();
+		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.HORIZONTAL, [Orientation.VERTICAL, 'files', 'browser'], 'changes']);
+		await togglePreview();
+		const filesGroup = hosts.files.fileGroups[0]!;
+		hosts.editor.moveToolToEdge(Direction.Up, filesGroup.id);
+		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.VERTICAL, 'files', 'changes']);
+		await togglePreview();
+		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.VERTICAL, 'files', 'browser', 'changes']);
+		await hosts.editor.applyWorkingSet(saved);
+		await hosts.editor.toggleFileEditors();
+		await togglePreview();
+		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.VERTICAL, 'changes', 'browser']);
 	});
 
 	test('migrates a legacy mixed group to separate hosts while retaining all tabs', async () => {

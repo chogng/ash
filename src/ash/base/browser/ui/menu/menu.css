@@ -19,6 +19,8 @@
 }
 
 .ash-menu {
+	--ash-menu-padding: var(--ash-spacing-size40);
+	--ash-menu-trailing-inset: var(--ash-spacing-size80);
 	display: grid;
 	gap: 0;
 	box-sizing: border-box;
@@ -30,7 +32,7 @@
 		var(--ash-menu-background)
 	);
 	min-width: 180px;
-	padding: 4px;
+	padding: var(--ash-menu-padding);
 }
 .ash-menu .ash-action-view-item {
 	display: block;
@@ -41,7 +43,11 @@
 	width: 100%;
 	height: var(--ash-list-rowHeight);
 	min-height: var(--ash-list-rowHeight);
-	padding: 0 var(--ash-spacing-size80);
+	padding: 0 var(--ash-menu-item-padding-inline, var(--ash-spacing-size80));
+	padding-inline-end: var(
+		--ash-menu-item-padding-end,
+		var(--ash-menu-item-padding-inline, var(--ash-spacing-size80))
+	);
 	border: 0;
 	border-radius: var(--ash-cornerRadius-small);
 	background: transparent;
@@ -49,10 +55,8 @@
 	justify-content: flex-start;
 	cursor: default;
 }
-/* Hover-driven focus can inherit :focus-visible from a search field or keyboard navigation. */
-.ash-menu.pointer-navigation
-	> .ash-action-view-item
-	> .ash-button:focus-visible {
+/* Menu rows use their themed highlight instead of the generic button focus ring. */
+.ash-menu > .ash-action-view-item > .ash-button:focus-visible {
 	outline: none;
 }
 .ash-menu .ash-action-view-item.focused > .ash-button {
@@ -66,10 +70,12 @@
 	);
 }
 
-.ash-menu:not(.pointer-navigation)
-	> .ash-action-view-item.focused
-	> .ash-button {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+.ash-menu > .ash-action-view-item.focused > .ash-button {
+	outline: var(--ash-strokeThickness) solid
+		var(
+			--ash-menu-style-selection-border-color,
+			var(--ash-menu-selectionBorder, transparent)
+		);
 	outline-offset: -1px;
 }
 
@@ -121,27 +127,44 @@
 .ash-menu .ash-button.checked > .ash-menu-leading-check > .ash-icon-label-icon {
 	display: none;
 }
-/* Override ActionBar's dimmed separator so the theme border stays visible in high contrast. */
+/* Count the menu padding toward the divider inset from the popup edge. */
 .ash-menu .ash-action-view-item-separator {
 	width: auto;
-	height: 1px;
-	margin: 4px 8px;
-	background: var(--ash-menu-style-separator-color, var(--ash-border));
+	height: var(--ash-strokeThickness);
+	margin-block: var(--ash-menu-divider-gap, var(--ash-spacing-size40));
+	margin-inline: var(--ash-menu-divider-margin, var(--ash-spacing-size80));
+	background: var(
+		--ash-menu-divider-color,
+		var(--ash-menu-style-separator-color, var(--ash-border))
+	);
 	opacity: 1;
 }
+.ash-menu .ash-button:has(> .ash-submenu-indicator) {
+	position: relative;
+	--ash-menu-item-padding-end: var(--ash-menu-submenu-padding-end);
+}
+
 .ash-menu .ash-submenu-indicator {
+	position: var(--ash-menu-submenu-position, static);
+	inset-inline-end: var(--ash-menu-submenu-inset, auto);
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 16px;
-	height: 16px;
-	flex: 0 0 16px;
-	margin-left: auto;
+	width: var(--ash-menu-trailing-icon-size, var(--ash-lxiconFontSize));
+	height: var(--ash-menu-trailing-icon-size, var(--ash-lxiconFontSize));
+	flex: 0 0 var(--ash-menu-trailing-icon-size, var(--ash-lxiconFontSize));
+	margin-inline-start: auto;
 }
 .ash-menu .ash-submenu-indicator > .ash-icon {
-	width: 12px;
-	height: 12px;
-	font-size: var(--ash-lxiconFontSize-compact);
+	width: var(--ash-menu-submenu-icon-size, var(--ash-lxiconFontSize-compact));
+	height: var(
+		--ash-menu-submenu-icon-size,
+		var(--ash-lxiconFontSize-compact)
+	);
+	font-size: var(
+		--ash-menu-submenu-icon-size,
+		var(--ash-lxiconFontSize-compact)
+	);
 }
 .ash-menu .ash-menu-keybinding {
 	margin-left: auto;

@@ -1,4 +1,4 @@
-import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
@@ -9,11 +9,14 @@ import { AccessibilityVerbositySettingId } from '../../../../platform/accessibil
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
-import { AGENTS_VOICE_CONNECTED, AGENTS_VOICE_CONNECTING, AGENTS_VOICE_PUSH_TO_TALK, IAgentsVoiceWindowService } from '../common/agentsVoice.js';
+import {
+	AGENTS_VOICE_CONNECTED, AGENTS_VOICE_CONNECTING, AGENTS_VOICE_LISTENING, AGENTS_VOICE_MUTED,
+	AGENTS_VOICE_PUSH_TO_TALK, AGENTS_VOICE_TOGGLE_MUTE_COMMAND_ID, AgentsVoiceSettingId, IAgentsVoiceWindowService,
+} from '../common/agentsVoice.js';
 import { AgentsVoiceWindowService } from './agentsVoiceWindowService.js';
 import { IVoiceModeOnboardingService, VoiceModeOnboardingService } from './voiceModeOnboarding.js';
 import { ChatContextKeys } from '../../chat/common/actions/chatContextKeys.js';
@@ -22,6 +25,21 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 
 registerSingleton(IAgentsVoiceWindowService, AgentsVoiceWindowService, InstantiationType.Delayed);
 registerSingleton(IVoiceModeOnboardingService, VoiceModeOnboardingService, InstantiationType.Delayed);
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AgentsVoiceSettingId.ShowButton, defaultValue: true, scope: ConfigurationScope.WINDOW,
+	parse: value => {
+		if (typeof value !== 'boolean') {
+			throw new TypeError(localize({ bundle: 'ash', key: 'voiceInputMode.showButtonInvalid' }, 'Show voice button must be boolean.'));
+		}
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize({ bundle: 'ash', key: 'voiceInputMode.showButton' }, 'Show voice conversation button'); },
+		get description() { return localize({ bundle: 'ash', key: 'voiceInputMode.showButtonDescription' }, 'Show the voice conversation control in Chat inputs.'); },
+	},
+});
 
 registerAction2(class ShowVoiceIntroduction extends Action2 {
 	constructor() {
@@ -53,11 +71,22 @@ registerWorkbenchContribution('workbench.contrib.agentsVoice', WorkbenchPhase.Bl
 	const context = accessor.get(IContextKeyService);
 	const connected = AGENTS_VOICE_CONNECTED.bindTo(context);
 	const connecting = AGENTS_VOICE_CONNECTING.bindTo(context);
+	const listening = AGENTS_VOICE_LISTENING.bindTo(context);
+	const muted = AGENTS_VOICE_MUTED.bindTo(context);
 	const pushToTalk = AGENTS_VOICE_PUSH_TO_TALK.bindTo(context);
+	lifetime.add(toDisposable(() => {
+		connected.reset();
+		connecting.reset();
+		listening.reset();
+		muted.reset();
+		pushToTalk.reset();
+	}));
 	const voice = accessor.get(IAgentVoiceService);
 	const update = () => {
 		connected.set(voice?.state?.state === 'connected');
 		connecting.set(voice?.state?.state === 'connecting');
+		listening.set(voice?.state?.state === 'connected' && voice.state.listening);
+		muted.set(voice?.state?.state === 'connected' && voice.state.muted);
 		pushToTalk.set(voice?.state?.inputMode === 'pushToTalk' && !voice.state.muted);
 	};
 	if (voice) lifetime.add(voice.onDidChange(update));
@@ -66,7 +95,7 @@ registerWorkbenchContribution('workbench.contrib.agentsVoice', WorkbenchPhase.Bl
 });
 
 registerAction2(class ToggleVoiceMute extends Action2 {
-	constructor() { super({ id: 'agentsVoice.toggleMute', title: localize2('agentsVoice.command.mute', 'Voice: Toggle Microphone Mute'), f1: true, precondition: AGENTS_VOICE_CONNECTED.isEqualTo(true) }); }
+	constructor() { super({ id: AGENTS_VOICE_TOGGLE_MUTE_COMMAND_ID, title: localize2('agentsVoice.command.mute', 'Voice: Toggle Microphone Mute'), f1: true, precondition: AGENTS_VOICE_CONNECTED.isEqualTo(true) }); }
 	async run(accessor: ServicesAccessor): Promise<void> { const voice = accessor.get(IAgentVoiceService); if (voice?.state?.state === 'connected') await voice.setMuted(!voice.state.muted); }
 });
 

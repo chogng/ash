@@ -10,6 +10,12 @@
 	max-height: calc(100vh - 8px);
 }
 
+.ash-context-view-pointer-shield {
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+}
+
 .ash-context-view-default {
 	color: var(--ash-foreground);
 	background: var(--ash-editor-background);

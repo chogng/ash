@@ -31,6 +31,18 @@ import { DesktopWorkbenchLayout } from '../../browser/desktopWorkbench.js';
 import { Menus } from '../../browser/menus.js';
 import { TitlebarPart } from '../../browser/parts/titlebarPart.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
+import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
+import type { ISession } from '../../services/sessions/common/session.js';
+import type { IGitHubService } from '../../contrib/github/browser/githubService.js';
+import type { IResolvedSessionPullRequest } from '../../contrib/github/common/types.js';
+import { BlockedSessionsIndicatorModel } from '../../contrib/sessions/browser/blockedSessionsIndicatorModel.js';
+import { BlockedSessionsCIFixModel } from '../../contrib/sessions/browser/blockedSessionsCIFixModel.js';
+import type { IBlockedSession } from '../../contrib/sessions/browser/blockedSessionsIndicatorModel.js';
+import { ChecksOperationService } from '../../contrib/changes/browser/checksOperationService.js';
+import type { IChatService } from '../../../workbench/services/chat/common/chatService.js';
+import type { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { URI } from '../../../base/common/uri.js';
+import { autorun } from '../../../base/common/observable.js';
 
 class TestPart extends Part {
 	public getTabsHeight(): number { return 35; }
@@ -42,6 +54,72 @@ class TestPart extends Part {
 		this._register(services);
 	}
 }
+
+test('Batch CI repair submits once per current conversation using its own connection and sequence', async () => {
+	using operations = new ChecksOperationService();
+	const captured: string[] = [];
+	const submitted: { sessionId: string; expectedSequence: number; text: string; }[] = [];
+	const model = new BlockedSessionsCIFixModel({
+		readThread: async () => ({ thread: { status: 'active', sequence: 42, turns: [] } }),
+		startTurn: async (request: typeof submitted[number]) => { submitted.push(request); },
+	} as unknown as IChatService, {
+		captureConnection: (id: string) => {
+			captured.push(id);
+			return Object.assign(toDisposable(() => { }), { generation: 1, assertCurrent: async () => { } });
+		},
+	} as unknown as IChatSessionNavigationService, operations);
+	const item = (sessionId: string): IBlockedSession => ({
+		session: { sessionId, title: sessionId, status: 'active', nextApprovalMode: 'manual', chats: [] },
+		threadId: 'root', occurrence: 'ci-head', reason: 'ci',
+		checks: [{ uri: URI.parse('https://github.com/owner/repo/pull/1'), headCommit: 'abcd' } as IResolvedSessionPullRequest],
+	});
+	await model.fixAll([item('host-a'), item('host-a'), item('host-b'), item('stale')], value => value.session.sessionId !== 'stale');
+	assert.deepEqual(captured, ['host-a', 'host-b']);
+	assert.deepEqual(submitted.map(value => [value.sessionId, value.expectedSequence]), [['host-a', 42], ['host-b', 42]]);
+	assert.ok(submitted.every(value => value.text.includes('https://github.com/owner/repo/pull/1 @ abcd')));
+});
+
+test('Sessions titlebar tracks CI status only for open PRs on the active host', () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using windowLifetime = toDisposable(() => browser.window.close());
+	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'blocked', flushInterval: 0 });
+	using checksChanged = new Emitter<void>();
+	const createSession = (sessionId: string, providerId: string): ISession => ({
+		sessionId, providerId, title: sessionId, status: 'active', nextApprovalMode: 'manual',
+		chats: [{ threadId: sessionId, origin: { type: 'root' }, status: 'active' }],
+	});
+	const active = createSession('active', 'host');
+	const background = createSession('background', 'host');
+	const remote = createSession('remote', 'other-host');
+	const activeSelection = { kind: 'session', active: { session: active, threadId: 'active' } } as const;
+	let checkState: IResolvedSessionPullRequest['state'] = 'closed';
+	let headCommit = 'first';
+	const model = new BlockedSessionsIndicatorModel(
+		{ sessions: [active, background, remote], onDidChange: Event.None } as unknown as ISessionsManagementService,
+		{ getSelection: () => ({ activeSelection, visibleSelections: [activeSelection] }) } as unknown as ISessionsService,
+		{
+			onDidChange: checksChanged.event,
+			getSessionPullRequests: () => [{
+				uri: URI.parse('https://github.com/owner/repo/pull/1'), headCommit,
+				state: checkState, status: { hasFailingChecks: true },
+			}] as IResolvedSessionPullRequest[],
+		} as unknown as IGitHubService,
+		storage,
+	);
+	const snapshots: string[][] = [];
+	using observation = autorun(reader => {
+		snapshots.push(model.blockedSessions.read(reader).map(item => `${item.threadId}:${item.reason}`));
+	});
+	checkState = 'open';
+	checksChanged.fire();
+	model.ignore(model.blockedSessions.get());
+	assert.deepEqual(model.blockedSessions.get(), []);
+	headCommit = 'second';
+	checksChanged.fire();
+	checkState = 'merged';
+	checksChanged.fire();
+	assert.deepEqual(snapshots, [[], ['background:ci'], [], ['background:ci'], []]);
+});
 
 test('Sessions titlebar initializes localized actions and closes the application menu before refreshing or disposal', () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
@@ -65,21 +143,23 @@ test('Sessions titlebar initializes localized actions and closes the application
 	};
 	const sessions: ISessionsService = {
 		navigationRevision: 0,
+		getLastViewedAt: () => undefined,
 		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
 		async openThread() { },
 		onDidChange: changed.event,
 		visibleSelections: [],
 		activeSelection: undefined,
 		canNavigateBack: false,
-		canNavigateForward: false,
+		canNavigateForward: false, recentSessions: [],
 		async initialize() { },
 		openSession() { },
 		openUntitledSession() { },
 		openNewSession() { throw new Error('This scenario does not create sessions'); },
 		activateSelection() { },
 		closeVisibleSelection() { },
-		navigateBack() { },
-		navigateForward() { },
+		async reopenLastClosedItem() { },
+		async openPreviousSession() { },
+		async openNextSession() { },
 	};
 	using configuration = new TestConfigurationService();
 	using contextViews = new BrowserContextViewService(browser.window.document.body);

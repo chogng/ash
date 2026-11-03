@@ -300,6 +300,52 @@ test('corrected response resources retain disclosure identity, expansion and sum
 });
 
 
+for (const replacement of ['changed', 'removed'] as const) test(`a ${replacement} linked-resource Item source retires its unchanged content and pending read`, async () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	services.registerInstance(INotificationService, resources.add(new TestNotificationService()));
+	let pending = new DeferredPromise<{ bytes: Uint8Array; mimeType: string; }>();
+	let signal: AbortSignal | undefined;
+	const requests: Parameters<IAgentThreadService['readToolResource']>[0][] = [];
+	services.registerInstance(IAgentThreadService, { ...createDisconnectedRendererApi().thread, readToolResource: async (coordinate, cancellation) => { requests.push(coordinate); signal = cancellation; return pending.p; } });
+	const files = resources.add(new RecordingResponseFiles());
+	services.registerInstance(IChatResponseResourceFileSystemProvider, files);
+	let opens = 0;
+	const opened = new DeferredPromise<void>();
+	services.registerInstance(IEditorService, { ...emptyEditorServiceState, openEditor: async () => { opens++; await opened.complete(); }, focusActiveEditor() { } });
+	const widget = mount(resources, services);
+	const artifact = { type: 'artifact' as const, artifact: { source: { type: 'resourceLink' as const, uri: 'mcp://resource/readme.md' }, mimeType: 'text/markdown', data: { type: 'text' as const, text: 'Unchanged description' }, contentDigest: 'unchanged', truncated: false } };
+	widget.render([{ ...response, content: [artifact], attachmentSource: source }]);
+	const disclosure = widget.element.querySelector<HTMLDetailsElement>('.ash-chat-resources details')!;
+	disclosure.open = true;
+	widget.element.querySelector<HTMLButtonElement>('.ash-chat-resources button')!.click();
+	assert.equal(signal?.aborted, false);
+	const nextSource = replacement === 'changed' ? { ...source, itemId: 'corrected-item' } : undefined;
+	widget.render([{ ...response, content: [artifact], attachmentSource: nextSource }]);
+	assert.equal(widget.element.querySelector('.ash-chat-resources details'), disclosure);
+	assert.equal(disclosure.open, true);
+	assert.equal(signal?.aborted, true);
+	await pending.complete({ bytes: new TextEncoder().encode('Retired bytes'), mimeType: 'text/markdown' });
+	await Promise.resolve();
+	await Promise.resolve();
+	assert.equal(opens, 0);
+	assert.equal(files.associated.length, 0);
+	pending = new DeferredPromise<{ bytes: Uint8Array; mimeType: string; }>();
+	widget.element.querySelector<HTMLButtonElement>('.ash-chat-resources button')!.click();
+	if (nextSource) {
+		assert.deepEqual(requests.at(-1), { sessionId: nextSource.sessionId, threadId: nextSource.threadId, itemId: nextSource.itemId, contentIndex: 0 });
+		await pending.complete({ bytes: new TextEncoder().encode('Current bytes'), mimeType: 'text/markdown' });
+		await opened.p;
+		assert.equal(opens, 1);
+		assert.equal(files.associated.length, 1);
+		assert.equal(new TextDecoder().decode((await files.readFile(files.associated[0])).bytes), 'Current bytes');
+	} else {
+		await Promise.resolve();
+		assert.equal(requests.length, 1);
+		assert.equal(opens, 0);
+	}
+});
+
 test('correcting a linked resource cancels its original read and suppresses a retired origin failure', async () => {
 	using resources = new DisposableStore();
 	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));

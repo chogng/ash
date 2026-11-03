@@ -139,7 +139,7 @@ suite('Local Agent Host connection service', () => {
 		return services.createInstance(Service, { clientName: 'test-desktop' });
 	}
 
-	function assembleRemote(services: InstantiationService, logger: ILogService, restore: () => Promise<void> = async () => { }) {
+	function assembleRemote(services: InstantiationService, logger: ILogService, restore: ConstructorParameters<typeof RemoteService>[0]['initializeDirectories'] = async () => { }) {
 		services.registerInstance(IWebWorkerService, new WebWorkerService());
 		services.registerInstance(ILogService, logger);
 		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
@@ -154,6 +154,20 @@ suite('Local Agent Host connection service', () => {
 				};
 			},
 		} satisfies ConstructorParameters<typeof RemoteService>[0]);
+	}
+
+	for (const target of [
+		{ name: 'build-pool', host: 'build', workspace: '/repo' },
+		{ type: 'wsl', name: 'Linux development', distro: 'Ubuntu', workspace: '/repo' },
+	] satisfies RemoteAgentHostConnection[]) {
+		test(`remote ${'type' in target ? target.type : 'ssh'} acquisition supplies a readable environment name with the original path`, async () => {
+			using services = new InstantiationService();
+			using logger = new LogService({ sinks: [] });
+			const directories: unknown[] = [];
+			using remote = assembleRemote(services, logger, async (_client, _trust, folders) => { directories.push(...folders); });
+			const host = await remote.connect(target, new AbortController().signal);
+			assert.deepEqual(directories, [{ id: `agent-host:${host.id}`, path: '/repo', remoteHostLabel: 'type' in target ? 'Linux development (Ubuntu)' : 'build-pool (build)' }]);
+		});
 	}
 
 	test('remote registry deduplicates acquisition and retires only the selected connection', async () => {

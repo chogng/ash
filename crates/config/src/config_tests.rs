@@ -1123,6 +1123,7 @@ fn hook(id: &str) -> HookConfig {
             args: vec!["--check".into()],
         },
         enablement: HookEnablement::Disabled,
+        claude_pre_tool_use: None,
     }
 }
 
@@ -2172,6 +2173,7 @@ fn plugin_and_hook_commands_reject_missing_targets_and_unsafe_shapes() {
             args: Vec::new(),
         },
         enablement: HookEnablement::Enabled,
+        claude_pre_tool_use: None,
     };
     let error = store
         .apply(ConfigCommandRequest {

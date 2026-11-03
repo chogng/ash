@@ -1,3 +1,5 @@
+import { ISessionsListModelService, SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
+import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { IChatService } from '../../../workbench/services/chat/common/chatService.js';
 import { IAgentSessionsService } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { ChatHistoryModel } from '../../browser/chatHistoryModel.js';
@@ -130,12 +132,14 @@ test('opens a local Chat conversation before the backend session request settles
 	using files = new TestConfigurationFiles();
 	registerCodeEditorServices(services);
 	using viewServices = services.createChild();
+	viewServices.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 	viewServices.registerInstance(IChatService, chat);
 	viewServices.registerInstance(ISessionsManagementService, sessionService);
 	viewServices.registerInstance(IWorkbenchLayoutService, layoutService);
 	viewServices.registerInstance(IFileService, files);
 	viewServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
 	viewServices.registerInstance(ISessionGroupsService, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService);
+	viewServices.registerSingleton(ISessionsListModelService, () => viewServices.createInstance(SessionsListModelService));
 	viewServices.registerSingleton(IAgentSessionsService, () => viewServices.createInstance(ChatHistoryModel));
 	using view = viewServices.createInstance(SessionChatViewPane, document.body, { id: 'workbench.chat', title: 'Chat' });
 
@@ -169,6 +173,7 @@ class PendingSessionService implements ISessionsManagementService {
 	initialize(): Promise<void> { return this.pendingInitialization; }
 	refresh(): Promise<void> { return this.initialize(); }
 	listAgents(): Promise<readonly import('../../../workbench/services/chat/common/chatService.js').ChatAgent[]> { return Promise.resolve([]); }
+	async prepareThread(): Promise<void> { throw new Error('Unexpected thread preparation'); }
 	openThread(_sessionId: SessionId, _threadId: ThreadId): Promise<void> { return Promise.reject(new Error('Backend is unavailable')); }
 
 	selectThread(_sessionId: SessionId, _threadId: ThreadId): void { }

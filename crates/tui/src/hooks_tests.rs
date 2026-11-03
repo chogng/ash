@@ -22,6 +22,7 @@ fn hook() -> HookConfigDto {
             args: vec!["--fast".into()],
         },
         enablement: HookEnablementDto::Enabled,
+        claude_pre_tool_use: None,
     }
 }
 fn panel(hooks: Vec<HookConfigDto>) -> Panel {

@@ -21,7 +21,7 @@ import type { AdvisorConfig, IAgentModelsService } from '../../../platform/model
 import type { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import type { IAppServerApi, IServerEventApi, AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
 import type { ITurnChangesApi } from '../../../platform/turnChanges/common/turnChangesApi.js';
-import type { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
+import type { IAgentSkill, IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import type { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { ILanguageModelsConfigurationService } from '../../contrib/cowork/common/languageModelsConfiguration.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
@@ -43,7 +43,7 @@ function messageHistory(threadId: string, sequence: number, text: string): Threa
 	};
 }
 
-function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Promise<ThreadSubscription>, waiting = false, routed = false) {
+function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Promise<ThreadSubscription>, waiting = false, routed = false, skillService?: IPromptsService) {
 	const resources = new DisposableStore();
 	const updates = resources.add(new Emitter<ThreadUpdateEnvelope>());
 	const transcripts = resources.add(new Emitter<ThreadTranscriptUpdateEnvelope>());
@@ -74,7 +74,7 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	const chat = resources.add(new ChatService(modelApi, sessionApi, threadApi, turnApi, changeApi, appServer, events, execution, configuration));
 	const scope = { services: { chat }, identity: (value: string) => value, backendIdentity: (value: string) => value, assertCurrent() { } } as unknown as ISessionProviderScope;
 	const routedChat = routed ? resources.add(new SessionsChatService({ onDidChangeScopes: Event.None, getScopes: () => [scope], getScope: () => scope } as unknown as ISessionProviderScopeService)) : chat;
-	const prompts = { onDidChangeSkills: Event.None, findAgentSkills: async () => [] } as unknown as IPromptsService;
+	const prompts = skillService ?? { onDidChangeSkills: Event.None, findAgentSkills: async () => [] } as unknown as IPromptsService;
 	const models = { onDidChangeModels: Event.None, listModels: async () => [], readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }) } as unknown as ILanguageModelsService;
 	const preferences = { onDidChangeModels: Event.None } as ILanguageModelsConfigurationService;
 	const session: ISession = { sessionId: 'session', title: 'Session', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'A', origin: { type: 'root' }, status: 'active' }, { threadId: 'B', origin: { type: 'fork', parentThreadId: 'A', parentSequence: 1 }, status: 'active' }] };
@@ -186,6 +186,24 @@ test('invalid attachment positions explain recovery in Chinese', async () => {
 	} finally {
 		resetNlsResolver();
 	}
+});
+
+test('Code reports history subscription and reconciliation separately without conversation data', async () => {
+	const f = fixture('Code', async threadId => {
+		if (threadId === 'B') throw new Error('Fixture subscription failed');
+		return { ...snapshot(threadId, 1), updates: [] };
+	});
+	using resources = f.resources;
+	assert.ok(f.model instanceof ChatWidgetModel);
+	const results: Parameters<Parameters<ChatWidgetModel['onDidFinishHistoryBinding']>[0]>[0][] = [];
+	using listener = f.model.onDidFinishHistoryBinding(result => results.push(result));
+	await f.model.initialize();
+	await f.model.selectThread({ session: f.session, threadId: 'B' });
+	assert.deepEqual(results.map(result => result.outcome), ['bound', 'failed']);
+	assert.equal(typeof results[0]?.subscriptionMs, 'number');
+	assert.equal(typeof results[0]?.reconciliationMs, 'number');
+	assert.equal(results[1]?.subscriptionMs, undefined);
+	assert.ok(results.every(result => !('threadId' in result) && !('error' in result)));
 });
 
 test('Code transcript updates preserve live body revisions across stale reads and same-ID navigation', async () => {
@@ -520,17 +538,34 @@ test('queue and steering preserve the source-owned idempotency key', async () =>
 });
 
 for (const kind of ['Code', 'Cowork'] as const) {
+	test(`${kind} failed interruption rejects before a follow-up can be sent`, async () => {
+		const f = fixture(kind, undefined, true);
+		using resources = f.resources;
+		await f.model.initialize();
+		const failure = new Error('Synthetic interruption failure');
+		f.turnApi.interrupt = async () => { throw failure; };
+		await assert.rejects(async () => {
+			await f.model.interrupt();
+			await f.model.send('Keep this follow-up unsent');
+		}, error => error === failure);
+		assert.equal(f.model.error, failure.message);
+		assert.equal(f.model.inputState.canInterrupt, true);
+		assert.deepEqual({ starts: f.starts, queues: f.queues, steers: f.steers }, { starts: [], queues: [], steers: [] });
+	});
+
 	for (const failed of [false, true]) {
 		test(`${kind} interrupt ${failed ? 'error' : 'completion'} cannot rewrite a new A-B-A operation`, async () => {
 			const f = fixture(kind, undefined, true); using resources = f.resources; await f.model.initialize();
 			const pending = new DeferredPromise<{ sequence: number; }>();
 			const targets: Parameters<IAgentTurnService['interrupt']>[0][] = [];
 			f.turnApi.interrupt = input => { targets.push(input); return pending.p; };
-			const interrupting = f.model.interrupt();
+			const interrupting = f.model.interrupt().then(() => undefined, error => error);
 			await f.model.selectThread({ session: f.session, threadId: 'B' }); await f.model.selectThread({ session: f.session, threadId: 'A' });
 			f.offers.fire(approval('next-operation')); const state = f.model.state;
 			if (failed) await pending.error(new Error('Retired interrupt failed')); else await pending.complete({ sequence: 2 });
-			await interrupting; assert.equal(targets.length, 1); assert.equal(targets[0]!.threadId, 'A'); assert.equal(targets[0]!.turnId, 'turn-A');
+			const result = await interrupting;
+			if (failed) assert.match(result.message, /Retired interrupt failed/u); else assert.equal(result, undefined);
+			assert.equal(targets.length, 1); assert.equal(targets[0]!.threadId, 'A'); assert.equal(targets[0]!.turnId, 'turn-A');
 			assert.equal(f.model.interaction?.requestId, 'next-operation'); assert.equal(f.model.state, state); assert.equal(f.model.error, undefined);
 		});
 		test(`${kind} approval ${failed ? 'error' : 'completion'} retains a replacement request in the same Thread`, async () => {
@@ -606,7 +641,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 			f.turnApi.resolveInteraction = async () => { calls++; return { sequence: 2 }; };
 			f.offers.fire(approval('owned'));
 			using listener = f.model.onDidChange(() => { if (!changed && f.model.state === 'submitting') { changed = true; navigation = f.model.selectThread({ session: f.session, threadId: 'B' }); } });
-			if (operation === 'interrupt') await f.model.interrupt();
+			if (operation === 'interrupt') await assert.rejects(f.model.interrupt(), isCancellationError);
 			else await f.model.resolveInteraction({ type: 'approval', response: { decision: 'decline' } }).catch(() => { });
 			await navigation;
 			assert.equal(calls, 0); assert.equal(f.model.threadId, 'B'); assert.equal(f.model.state, 'ready'); assert.equal(f.model.error, undefined);
@@ -987,4 +1022,28 @@ test('Cowork does not expose Code command execution and submits slash text liter
 		assert.equal(f.compacts.length, 0);
 		assert.equal(f.consults.length, 0);
 	}
+});
+
+
+for (const kind of ['Code', 'Cowork'] as const) test(`${kind} retains Skill catalog loading until the newest owned read settles`, async () => {
+	using skillsChanged = new Emitter<void>();
+	const first = new DeferredPromise<readonly IAgentSkill[]>();
+	const second = new DeferredPromise<readonly IAgentSkill[]>();
+	let reads = 0;
+	const prompts = { onDidChangeSkills: skillsChanged.event, findAgentSkills: () => ++reads === 1 ? first.p : second.p } as unknown as IPromptsService;
+	const f = fixture(kind, undefined, false, false, prompts);
+	using resources = f.resources;
+	const initialization = f.model.initialize();
+	assert.equal(f.model.inputState.skillSelectorsLoading, true);
+	skillsChanged.fire();
+	assert.equal(reads, 2);
+	await first.complete([]);
+	await initialization;
+	assert.equal(f.model.inputState.skillSelectorsLoading, true, 'an older read cannot finish the replacement catalog read');
+	const ready = new Promise<void>(resolve => resources.add(f.model.onDidChange(() => {
+		if (!f.model.inputState.skillSelectorsLoading) resolve();
+	})));
+	await second.complete([]);
+	await ready;
+	assert.equal(f.model.inputState.skillSelectorsLoading, false);
 });

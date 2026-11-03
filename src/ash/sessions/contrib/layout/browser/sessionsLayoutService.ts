@@ -22,7 +22,7 @@ import { IViewsService } from '../../../../workbench/services/views/common/views
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../services/layout/common/sessionsLayoutService.js';
-import { CODE_NAVIGATION_CONTAINER_ID, SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../browser/parts/sidebarPart.js';
+import { CODE_NAVIGATION_CONTAINER_ID, SESSIONS_NAVIGATION_CONTAINER_ID } from '../../sessions/browser/views/sessionsView.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
@@ -40,6 +40,7 @@ interface EntryVisibility {
 
 const visibilityKey = 'sessions.layout.entryVisibility';
 const activeEntryKey = 'sessions.layout.activeEntry';
+const activeEntryModeKey = 'sessions.layout.activeEntryMode';
 
 /** Applies feature-supplied entries without owning their resource or workspace selection. */
 export class SessionsLayoutService extends Disposable implements ISessionsLayoutService, IDesktopLayoutContext {
@@ -52,7 +53,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	public get conversationVisible(): boolean { return this.activeEntry.get()?.conversation === 'optional' && this.layout.isPartVisible('sessions'); }
 	private readonly controller: DesktopLayoutController;
 	private readonly activeEntry = observableValue<ISessionsEntry | undefined>(this, undefined);
-	private readonly workspaceMode = derived(reader => this.activeEntry.read(reader)?.workspaceMode ?? 'chat');
+	private readonly workspaceMode = derived(reader => this.activeEntry.read(reader)?.workspaceMode === 'code' ? 'code' : 'chat');
 	public readonly documentContent = derived(reader => !this.customViews.activeCustomView.read(reader) && this.activeEntry.read(reader)?.content === 'documents');
 	private readonly visibility = new Map<string, EntryVisibility>();
 	private readonly editorEntries = new Map<string, ISessionsEntry>();
@@ -174,7 +175,14 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		return this.runOperation(async () => {
 			await this.controller.prepareContentChange();
 			if (this.isDisposed) { return; }
-			await this.conversation.setConversationKind(entry.content === 'documents' ? 'code' : 'cowork');
+			const previousEntry = this.activeEntry.get();
+			const sharedWorkspace = entry.workspaceMode === 'current';
+			const retainedMode = previousEntry
+				? previousEntry.workspaceMode ?? 'chat'
+				: options?.source === 'restore' ? this.storage.get(activeEntryModeKey, StorageScope.WORKSPACE) : undefined;
+			if (!sharedWorkspace || !previousEntry) {
+				await this.conversation.setConversationKind(entry.content === 'documents' || (sharedWorkspace && retainedMode === 'code') ? 'code' : 'cowork');
+			}
 			if (this.isDisposed) { return; }
 			this.saveVisibility();
 			this.isChangingContent = true;
@@ -184,18 +192,21 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				}
 				if (this.isDisposed) { return; }
 				entry = initialize ? initialize() : entry;
-				const previousEntry = this.activeEntry.get();
+				if (entry.editorInput) { this.editorEntries.set(extUri.getComparisonKey(entry.editorInput.resource), entry); }
+				if (entry.workspaceMode === 'current') {
+					entry = { ...entry, workspaceMode: retainedMode === 'code' ? 'code' : 'chat' };
+				}
 				const sameWorkspace = previousEntry && (previousEntry.workspaceMode ?? 'chat') === (entry.workspaceMode ?? 'chat');
 				const sidebarContainerId = entry.sidebarContainerId
 					?? (sameWorkspace ? this.views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id : undefined)
+					?? (sharedWorkspace && entry.workspaceMode === 'code' ? CODE_NAVIGATION_CONTAINER_ID : undefined)
 					?? this.viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id
 					?? SESSIONS_NAVIGATION_CONTAINER_ID;
 				this.activeEntry.set(entry, undefined);
-				if (entry.editorInput) { this.editorEntries.set(extUri.getComparisonKey(entry.editorInput.resource), entry); }
 				const productEditor = entry.content === 'editor';
 				const documents = entry.content === 'documents';
 				// Navigation visibility belongs to the window, independently of the page's side content.
-				const sidebarVisible = this.layout.isPartVisible('sidebar');
+				const sidebarVisible = this.layout.isPartRequested('sidebar');
 				const state = this.visibility.get(entry.id) ?? {
 					details: entry.detailsContainerId !== undefined,
 					documents: documents && this.controller.hasDocumentEditors,
@@ -234,6 +245,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				else { this.setVisible('auxiliarybar', state.details); }
 				if (this.isDisposed) { return; }
 				this.storage.store(activeEntryKey, entry.restoreCommand, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+				this.storage.store(activeEntryModeKey, sharedWorkspace ? entry.workspaceMode : undefined, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				if (this.customViews.activeCustomView.get()) { return; }
 				if (entry.focus === 'conversation') { this.layout.focus(); }
 				else if (entry.focus === 'editor') { documents ? this.controller.focus() : this.editors.focusActiveEditor(); }
@@ -263,13 +275,13 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		const files = this.isDocumentContent ? (this.editor as DesktopEditorParts) : undefined;
 		this.visibility.set(entry.id, {
 			// File navigation belongs to the retained editor group, independently of properties.
-			details: files?.filesDetailsOpen ?? this.layout.isPartVisible('auxiliarybar'),
-			documents: this.isDocumentContent && (this.layout.isPartVisible('editor')),
+			details: files?.filesDetailsOpen ?? this.layout.isPartRequested('auxiliarybar'),
+			documents: this.isDocumentContent && this.layout.isPartRequested('editor'),
 		});
 		this.storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 	}
 
-	public async restore(): Promise<void> {
+	public async restore(onWillRestoreEntry?: (command: string) => void): Promise<void> {
 		await this.controller.whenSettled();
 		if (this.isDisposed) { return; }
 		const saved = this.customViews.activeCustomView.get()?.entryCommand ?? this.storage.get(activeEntryKey, StorageScope.WORKSPACE);
@@ -292,7 +304,9 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		// Entry commands can disappear during development or when a contribution is
 		// removed. Discard stale navigation state without invoking an unknown command.
 		if (!available) { this.storage.remove(activeEntryKey, StorageScope.WORKSPACE); }
-		await this.commands.executeCommand(available ? requested : defaultEntry, 'restore');
+		const command = available ? requested : defaultEntry;
+		if (!this.customViews.activeCustomView.get()) onWillRestoreEntry?.(command);
+		await this.commands.executeCommand(command, 'restore');
 		if (this.isDisposed) { return; }
 		for (const key of ['sessions.layout.activeMode', 'sessions.layout.primaryPage', 'sessions.activityBar.activePage', 'sessions.layout.primaryEditor']) {
 			this.storage.remove(key, StorageScope.WORKSPACE);

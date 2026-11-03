@@ -1,19 +1,15 @@
 import { LayoutPriority } from '../../../base/browser/ui/splitview/splitview.js';
 import { Orientation } from '../../../base/browser/ui/sash/sash.js';
 import { scheduleAtNextAnimationFrame, isHTMLElement, type IDimension } from '../../../base/browser/dom.js';
-import { Direction, SerializableGrid, Sizing, type GridDescriptor, type ISerializableView, type IView, type SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
+import { Direction, SerializableGrid, Sizing, type GridDescriptor, type ISerializableView, type IView } from '../../../base/browser/ui/grid/grid.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import { isRecord } from '../../../base/common/types.js';
-import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
+import { IStorageService } from '../../../platform/storage/common/storage.js';
+import { loadSessionGridLayout, saveSessionGridLayout, type SessionGridNode } from '../../services/sessions/browser/sessionGridState.js';
 
 interface ISessionGridEntry {
 	readonly id: string;
 	readonly view: IView;
 }
-
-type SessionGridNode =
-	| Omit<Extract<SerializedGridDescriptor, { type: 'leaf'; }>, 'data'> & { readonly data: { readonly id: string; }; }
-	| Omit<Extract<SerializedGridDescriptor, { type: 'branch'; }>, 'children'> & { readonly children: readonly SessionGridNode[]; };
 
 /** Owns conversation geometry, independently of document editors and their tabs. */
 export class SessionGridLayout extends Disposable {
@@ -29,7 +25,6 @@ export class SessionGridLayout extends Disposable {
 	private changing = false;
 	private visible = true;
 	private dimension: IDimension | undefined;
-	private readonly storageKey = 'sessions.gridState';
 
 	constructor(container: HTMLElement, initialView: IView, @IStorageService private readonly storage: IStorageService) {
 		super();
@@ -38,21 +33,9 @@ export class SessionGridLayout extends Disposable {
 		container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
 		try {
-			const raw = storage.get(this.storageKey, StorageScope.WORKSPACE);
-			if (raw !== undefined) {
-				const value: unknown = JSON.parse(raw);
-				if (isRecord(value) && value.version === 1) this.legacyWidths = parseStoredWidths(value);
-				else this.savedLayout = parseStoredLayout(value);
-			} else {
-				const widths = new Map<string, number>();
-				for (const key of ['sessions.gridState.code', 'sessions.gridState.chat']) {
-					const legacy = storage.get(key, StorageScope.WORKSPACE);
-					if (legacy !== undefined) {
-						for (const [id, width] of parseStoredWidths(JSON.parse(legacy))) widths.set(id, width);
-					}
-				}
-				if (widths.size) this.legacyWidths = widths;
-			}
+			const saved = loadSessionGridLayout(storage);
+			this.savedLayout = saved.layout;
+			this.legacyWidths = saved.widths;
 		} catch (error) {
 			console.warn('Failed to restore Sessions grid state', error);
 		}
@@ -89,6 +72,10 @@ export class SessionGridLayout extends Disposable {
 		this.changing = true;
 		try {
 			const changed = previous.length !== next.length || previous.some((item, index) => item !== next[index]);
+			const grid = this.grid.value;
+			if (grid?.hasMaximizedView() && (changed || !next.some(item => item.entry.id === active && grid.isViewMaximized(item)))) {
+				this.preserveFocus(() => grid.exitMaximizedView());
+			}
 			if (changed) {
 				this.preserveFocus(() => {
 					const reordered = previous.length === next.length && previous.every(item => next.includes(item));
@@ -123,6 +110,25 @@ export class SessionGridLayout extends Disposable {
 		this.scheduleRestore();
 	}
 
+	neighbor(id: string, direction: Direction): string | undefined {
+		const item = this.items.find(candidate => candidate.entry.id === id);
+		return item && this.grid.value!.getNeighborViews(item, direction)[0]?.entry.id;
+	}
+
+	toggleMaximized(id: string): void {
+		const item = this.items.find(candidate => candidate.entry.id === id);
+		const grid = this.grid.value;
+		if (!item || !grid || this.items.length < 2) return;
+		this.restoreFrame.clear();
+		this.preserveFocus(() => {
+			if (grid.isViewMaximized(item)) {
+				grid.exitMaximizedView();
+			} else {
+				grid.maximizeView(item);
+			}
+		});
+		this.scheduleRestore();
+	}
 	layout(width: number, height: number): void {
 		if (this.savedLayout && (this.dimension?.width !== width || this.dimension?.height !== height)) this.restorePending = true;
 		this.dimension = { width, height };
@@ -155,20 +161,18 @@ export class SessionGridLayout extends Disposable {
 	}
 
 	private captureLayout(): void {
-		if (this.changing || this.restorePending || this.restoring || !this.dimension?.width || !this.dimension.height || this.items.some(item => item.entry.id === 'empty')) return;
+		if (this.changing || this.restorePending || this.restoring || this.grid.value?.hasMaximizedView() || !this.dimension?.width || !this.dimension.height || this.items.some(item => item.entry.id === 'empty')) return;
 		this.savedLayout = this.grid.value!.serialize() as SessionGridNode;
 		this.saveState();
 	}
 
 	private saveState(): void {
 		if (this.changing || this.restorePending || this.restoring || !this.savedLayout) return;
-		this.storage.store(this.storageKey, JSON.stringify({ version: 3, layout: this.savedLayout }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
-		this.storage.remove('sessions.gridState.chat', StorageScope.WORKSPACE);
-		this.storage.remove('sessions.gridState.code', StorageScope.WORKSPACE);
+		saveSessionGridLayout(this.storage, this.savedLayout);
 	}
 
 	private scheduleRestore(): void {
-		if (!this.visible || !this.restorePending || !this.dimension?.width || !this.dimension.height || this.restoreFrame.value) return;
+		if (!this.visible || this.grid.value?.hasMaximizedView() || !this.restorePending || !this.dimension?.width || !this.dimension.height || this.restoreFrame.value) return;
 		this.restoreFrame.value = scheduleAtNextAnimationFrame(this.element.ownerDocument.defaultView!, () => {
 			this.restoreFrame.clear();
 			if (this.items.some(item => item.entry.id === 'empty')) return;
@@ -254,52 +258,4 @@ function renameLayout(node: SessionGridNode, renames: ReadonlyMap<string, string
 	return node.type === 'leaf'
 		? { ...node, data: { id: renames.get(node.data.id) ?? node.data.id } }
 		: { ...node, children: node.children.map(child => renameLayout(child, renames)) };
-}
-
-function parseStoredWidths(value: unknown): ReadonlyMap<string, number> {
-	if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.widths) || !value.widths.length) throw new TypeError('Invalid stored Sessions grid state');
-	const widths = new Map<string, number>();
-	for (const entry of value.widths) {
-		if (!isRecord(entry) || typeof entry.id !== 'string' || !entry.id.length || widths.has(entry.id)
-			|| typeof entry.width !== 'number' || !Number.isFinite(entry.width) || entry.width <= 0) throw new TypeError('Invalid stored Sessions pane width');
-		widths.set(entry.id, entry.width);
-	}
-	return widths;
-}
-
-/** Version 2 encoded editor groups. Migration resolves them once into Session identities. */
-function parseStoredLayout(value: unknown): SessionGridNode {
-	if (!isRecord(value) || (value.version !== 2 && value.version !== 3)) throw new TypeError('Invalid stored Sessions grid state');
-	const groups = new Map<string, string>();
-	if (value.version === 2) {
-		if (!Array.isArray(value.groups) || !value.groups.length) throw new TypeError('Invalid stored Sessions grid bindings');
-		const ids = new Set<string>();
-		for (const binding of value.groups) {
-			if (!isRecord(binding) || typeof binding.groupId !== 'string' || !binding.groupId.length || binding.groupId.length > 128 || groups.has(binding.groupId)
-				|| typeof binding.id !== 'string' || !binding.id.length || ids.has(binding.id)) throw new TypeError('Invalid stored Sessions grid binding');
-			groups.set(binding.groupId, binding.id);
-			ids.add(binding.id);
-		}
-	}
-	const seen = new Set<string>();
-	const visit = (node: unknown, parentOrientation?: Orientation, depth = 0): SessionGridNode => {
-		if (!isRecord(node)) throw new TypeError('Invalid stored Sessions grid node');
-		const priority = node.priority === 'normal' ? LayoutPriority.Normal : node.priority === 'low' ? LayoutPriority.Low : node.priority === 'high' ? LayoutPriority.High : node.priority;
-		const orientation = node.orientation === 'vertical' ? Orientation.VERTICAL : node.orientation === 'horizontal' ? Orientation.HORIZONTAL : node.orientation;
-		if (depth > 64 || typeof node.size !== 'number' || !Number.isFinite(node.size) || node.size < 0
-			|| (priority !== LayoutPriority.Low && priority !== LayoutPriority.Normal && priority !== LayoutPriority.High)) throw new TypeError('Invalid stored Sessions grid geometry');
-		if (node.type === 'leaf') {
-			const reference = isRecord(node.data) ? value.version === 2 ? node.data.groupId : node.data.id : undefined;
-			const id = typeof reference === 'string' && value.version === 2 ? groups.get(reference) : reference;
-			if (typeof id !== 'string' || !id.length || seen.has(id) || typeof node.visible !== 'boolean') throw new TypeError('Invalid stored Sessions grid reference');
-			seen.add(id);
-			return { type: 'leaf', data: { id }, size: node.size, priority, visible: node.visible };
-		}
-		if (node.type !== 'branch' || (orientation !== Orientation.HORIZONTAL && orientation !== Orientation.VERTICAL) || orientation === parentOrientation
-			|| !Array.isArray(node.children) || !node.children.length) throw new TypeError('Invalid stored Sessions grid branch');
-		return { type: 'branch', orientation, size: node.size, priority, children: node.children.map(child => visit(child, orientation, depth + 1)) };
-	};
-	const layout = visit(value.layout);
-	if (value.version === 2 && seen.size !== groups.size) throw new TypeError('Incomplete stored Sessions grid bindings');
-	return layout;
 }

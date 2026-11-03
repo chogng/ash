@@ -36,6 +36,7 @@ pub fn validate_definition(definition: &AutomationDefinition) -> Result<(), Auto
         number,
         account_id,
         credential_revision,
+        artifact_id,
     }) = &definition.condition
     {
         if !matches!(
@@ -62,6 +63,12 @@ pub fn validate_definition(definition: &AutomationDefinition) -> Result<(), Auto
             || account_id.len() > 256
             || account_id.contains('\0')
             || credential_revision.parse::<u64>().is_err()
+            || artifact_id.as_ref().is_some_and(|id| {
+                id.len() != 32
+                    || !id
+                        .bytes()
+                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            })
         {
             return Err(AutomationError::Invalid(
                 "invalid PR follow-up condition".into(),

@@ -70,6 +70,23 @@ impl super::codebase_retrieval_operations::CodebaseRetrievalRequestProcessorCont
 }
 
 impl super::config_operations::ConfigRequestProcessorContext for AppServer {
+    fn managed_workspace_trust_source(
+        &self,
+        dir: &ash_file_access::Dir,
+    ) -> Option<ash_file_access::DirId> {
+        let dirs = self.dir_services.as_ref()?;
+        let bindings = dirs
+            .bindings
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let binding = bindings.values().find(|binding| {
+            binding.kind() == worktree::ManagedDirKind::Git && binding.dir() == dir.canonical_path()
+        })?;
+        // Check the recovered binding against the current source directory identity.
+        let source = ash_file_access::Dir::open_local(binding.source_directory()).ok()?;
+        (source.id().as_str() == binding.source_dir_id() && source.id() != dir.id())
+            .then(|| source.id())
+    }
     fn active_dir_id(&self) -> Option<ash_file_access::DirId> {
         AppServer::active_dir_id(self)
     }
@@ -308,6 +325,22 @@ impl super::fs_operations::FileSystemRequestProcessorContext for AppServer {
 }
 
 impl super::git_operations::GitRequestProcessorContext for AppServer {
+    fn authorize_worktree_source(
+        &self,
+        path: std::path::PathBuf,
+    ) -> Result<ash_file_access::Authorization, super::RpcError> {
+        let denied = || super::RpcError::new(-32073, super::AppServerErrorName::PermissionRequired);
+        let grant = self
+            .authorize_local_dir_root(path, None)
+            .map_err(|_| denied())?;
+        if grant.source() != ash_file_access::GrantSource::ExplicitUser {
+            return Err(denied());
+        }
+        grant
+            .authorize(ash_file_access::Permission::InspectRepository)
+            .map_err(|_| denied())
+    }
+
     fn session_dir_authorization(
         &self,
         session_id: &ash_protocol::SessionId,
@@ -531,6 +564,9 @@ impl super::search_operations::SearchRequestProcessorContext for AppServer {
 }
 
 impl super::session_operations::SessionRequestProcessorContext for AppServer {
+    fn session_environments(&self) -> &crate::session_environment::SessionEnvironments {
+        &self.session_environments
+    }
     fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_ {
         AppServer::agent_runtime(self)
     }
@@ -727,6 +763,13 @@ impl super::team_operations::TeamRequestProcessorContext for AppServer {
 }
 
 impl super::operations::AgentRequestProcessorContext for AppServer {
+    fn change_session_directory_request(
+        &self,
+        mutation: super::operations::SessionMutation,
+        root: std::path::PathBuf,
+    ) -> Result<ash_app_server_protocol::protocol::session::SessionResult, super::RpcError> {
+        self.session_processor().change_directory(mutation, root)
+    }
     fn read_host_context(
         &self,
         owner: u64,
@@ -801,10 +844,11 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
         mutation: super::operations::SessionMutation,
         parent_thread_id: ash_protocol::ThreadId,
         title: String,
+        comparison: Option<ash_app_server_protocol::protocol::session::ComparisonForkParams>,
     ) -> Result<ash_app_server_protocol::protocol::session::SessionThreadResult, super::RpcError>
     {
         self.session_processor()
-            .fork_session_request(mutation, parent_thread_id, title)
+            .fork_session_request(mutation, parent_thread_id, title, comparison)
     }
     fn local_env_tool_ports(
         &self,
@@ -859,6 +903,32 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
 }
 
 impl super::app_tools_operations::AppToolsRequestProcessorContext for AppServer {
+    fn record_pull_request_artifact(
+        &self,
+        context: &app_tools::AppToolContext,
+        repository: &github::Repository,
+        number: u64,
+    ) -> Result<(), core_api::CoreError> {
+        let store = self.thread_pull_requests.as_ref().ok_or_else(|| {
+            core_api::CoreError::Execution("artifact records are unavailable".into())
+        })?;
+        let root = ash_protocol::ThreadId::new(context.session_id.as_str())
+            .map_err(|error| core_api::CoreError::Execution(error.to_string()))?;
+        if store
+            .record_agent_pull_request(
+                &root,
+                repository,
+                number,
+                &context.thread_id,
+                &context.turn_id,
+            )
+            .map_err(core_api::CoreError::ThreadStore)?
+        {
+            self.updates.publish_session_changed(&context.session_id);
+        }
+        Ok(())
+    }
+
     fn session_views(&self) -> Result<Vec<ash_protocol::Session>, super::RpcError> {
         self.agent_processor().session_views()
     }
@@ -883,7 +953,7 @@ impl super::app_tools_operations::AppToolsRequestProcessorContext for AppServer 
     ) -> Result<ash_app_server_protocol::protocol::session::SessionThreadResult, super::RpcError>
     {
         self.session_processor()
-            .fork_session_request(mutation, parent_thread_id, title)
+            .fork_session_request(mutation, parent_thread_id, title, None)
     }
     fn read_session_thread_snapshot(
         &self,

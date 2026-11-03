@@ -49,6 +49,79 @@ pub(crate) fn parse_output(
     }
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ClaudeOutput {
+    hook_specific_output: Option<ClaudePreToolUseOutput>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ClaudePreToolUseOutput {
+    hook_event_name: ClaudeEvent,
+    permission_decision: ClaudePermission,
+    permission_decision_reason: Option<String>,
+}
+
+#[derive(Deserialize)]
+enum ClaudeEvent {
+    PreToolUse,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum ClaudePermission {
+    Allow,
+    Deny,
+}
+
+/// Claude decisions can veto a Tool but cannot supply Ash execution authority.
+pub(crate) fn parse_claude_pre_tool_use(
+    hook_id: &str,
+    output: CommandOutput,
+) -> Result<HookDecision, CoreError> {
+    if output.stdout_truncated || output.stderr_truncated {
+        return Err(CoreError::Execution(format!(
+            "Hook '{hook_id}' exceeded the output limit"
+        )));
+    }
+    let deny = |reason: &str| HookDecision::Deny {
+        reason: if reason.trim().is_empty() {
+            format!("Hook '{hook_id}' blocked this Tool")
+        } else {
+            reason.trim().to_owned()
+        },
+    };
+    match output.exit_code {
+        Some(2) => return Ok(deny(&output.stderr)),
+        Some(0) => {}
+        _ => {
+            return Err(CoreError::Execution(format!(
+                "Hook '{hook_id}' exited unsuccessfully"
+            )));
+        }
+    }
+    let stdout = output.stdout.trim();
+    if stdout.is_empty() {
+        return Ok(HookDecision::Continue);
+    }
+    let parsed: ClaudeOutput = serde_json::from_str(stdout).map_err(|_| {
+        CoreError::Execution(format!(
+            "Hook '{hook_id}' returned unsupported Claude PreToolUse output"
+        ))
+    })?;
+    match parsed.hook_specific_output {
+        Some(ClaudePreToolUseOutput {
+            hook_event_name: ClaudeEvent::PreToolUse,
+            permission_decision: ClaudePermission::Deny,
+            permission_decision_reason,
+        }) => Ok(deny(
+            permission_decision_reason.as_deref().unwrap_or_default(),
+        )),
+        _ => Ok(HookDecision::Continue),
+    }
+}
+
 #[cfg(test)]
 #[path = "outcome_tests.rs"]
 mod tests;

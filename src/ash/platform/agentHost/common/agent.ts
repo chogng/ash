@@ -87,7 +87,7 @@ interface SessionOperations {
 		readonly expectedSequence: number;
 		readonly turnId: string;
 		readonly requestId: string;
-		readonly response: AgentResponse;
+		readonly response: AgentInteractionDecision;
 	};
 }
 
@@ -98,6 +98,7 @@ export interface SessionReadParams {
 }
 
 export interface SessionCreateParams {
+	readonly environmentVariables?: Readonly<Record<string, string>>;
 	readonly commandId: string;
 	readonly title: string;
 	/** A new branch for this conversation's managed worktree; omitted keeps the default target. */
@@ -132,6 +133,7 @@ export interface AgentSessionChange {
 
 export interface AgentSession {
 	readonly sessionId: string;
+	readonly source?: 'automation';
 	readonly title: string;
 	readonly status: 'active' | 'archived';
 	readonly executionTarget?: SessionCreateParams['executionTarget'];
@@ -224,6 +226,8 @@ export interface AgentRoleDefinition {
 }
 
 export interface AgentRoleCatalog {
+	/** The host adapter supplies the catalog owner when a window has multiple backends. */
+	readonly providerId?: string;
 	readonly agents: readonly AgentRoleDefinition[];
 	readonly diagnostics: readonly string[];
 }
@@ -368,6 +372,7 @@ export interface ChatToolCallBinding {
 	readonly definitionDigest: string;
 	readonly sourceChain: readonly ChatToolSource[];
 	readonly activity?:
+	| { readonly type: 'confirmation'; readonly presentation: ToolConfirmationPresentation; }
 	| { readonly type: 'read' | 'search' | 'list' | 'edit'; readonly target: string; }
 	| { readonly type: 'run'; }
 	| { readonly type: 'fileRead'; readonly path: string; readonly offset: number; readonly limit: number; }
@@ -390,9 +395,21 @@ export interface ChatToolCallBinding {
 	};
 }
 
+export type ToolConfirmationPresentation =
+	| { readonly type: 'modifiedFiles'; readonly files: readonly { readonly path: string; readonly original?: string | null; readonly modified: string; }[]; }
+	| { readonly type: 'agentFeedbackReview'; readonly message: string; }
+	| { readonly type: 'extensionsInstall'; readonly extensions: readonly string[]; }
+	| { readonly type: 'sandboxPrerequisite'; readonly dependencies: readonly string[]; readonly remediations: readonly string[]; }
+	| { readonly type: 'authentication'; readonly provider: string; };
+
+export type ToolResultPresentation =
+	| { readonly type: 'sessionTarget'; readonly sessionId: string; readonly threadId: string; readonly label: string; }
+	| { readonly type: 'automationConfigured'; readonly automationId: string; readonly label: string; };
+
 export type ChatContentPart =
 	| {
 		readonly type: 'artifact'; readonly artifact: {
+			readonly presentation?: ToolResultPresentation | null;
 			readonly source: { readonly type: 'embeddedResource'; readonly uri: string; } | { readonly type: 'resourceLink'; readonly uri: string; } | { readonly type: 'mcpApp'; readonly uri: string; } | { readonly type: 'structuredResult'; } | { readonly type: 'viewMetadata'; };
 			readonly mimeType: string;
 			readonly data: { readonly type: 'text'; readonly text: string; } | { readonly type: 'bytes'; readonly bytes: Uint8Array; } | { readonly type: 'json'; readonly json: string; };
@@ -571,6 +588,7 @@ export interface ThreadGoal {
 export type ThreadOrigin =
 	| { readonly type: 'root'; }
 	| { readonly type: 'fork'; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
+	| { readonly type: 'comparison'; readonly parentThreadId: ThreadId; readonly parentSequence: number; }
 	| {
 		readonly type: 'sideChat'; readonly parentThreadId: ThreadId; readonly parentSequence: number;
 		readonly sourceTurnId: string; readonly contextThreadId: ThreadId; readonly contextSequence: number;
@@ -620,8 +638,17 @@ export interface UserInputQuestion {
 	readonly id: string;
 	readonly header: string;
 	readonly question: string;
+	/** Legacy wire questions default to required at the adapter boundary. */
+	readonly required: boolean;
 	readonly options?: readonly UserInputOption[];
 	readonly allowFreeForm: boolean;
+	readonly validation?: UserInputValidation | null;
+}
+
+export interface UserInputValidation {
+	readonly type: 'string' | 'number' | 'integer';
+	readonly min: string | null;
+	readonly max: string | null;
 }
 
 export interface RequestUserInput {
@@ -643,9 +670,26 @@ export interface ActionApprovalCapability {
 
 export type ActionApprovalDecision = 'approveOnce' | 'approveForSession' | 'approveAndSaveRule' | 'decline';
 
+export interface ActionApprovalRiskAssessment {
+	readonly riskLevel: 'low' | 'medium' | 'high' | 'critical';
+	readonly reason: string;
+}
+
 export interface ActionApprovalRequest {
+	readonly riskAssessment?: ActionApprovalRiskAssessment | null;
 	readonly allowedDecisions?: readonly ActionApprovalDecision[];
 	readonly command?: { readonly program: string; readonly arguments: readonly string[]; } | null;
+	/** Captured sandbox enforcement evidence; an ordinary failed command is not a denial. */
+	readonly sandboxDenial?: {
+		readonly reason: string;
+		readonly replaySafety: 'safeToRetry' | 'mayHaveSideEffects';
+		readonly output: {
+			readonly exitStatus: { readonly type: 'code'; readonly code: number; } | { readonly type: 'terminated'; };
+			readonly stdout: string;
+			readonly stderr: string;
+			readonly aggregatedOutput: string;
+		};
+	} | null;
 	readonly reason: string;
 	readonly capabilities: readonly ActionApprovalCapability[];
 }
@@ -673,13 +717,27 @@ export interface PermissionRequest extends PermissionResponse {
 	readonly reason: string;
 }
 
+export interface ToolResultReviewRequest {
+	readonly toolCallId: string;
+	readonly toolName: string;
+	readonly review: {
+		readonly reason: string;
+		readonly content: readonly ChatContentPart[];
+		readonly isError: boolean;
+	};
+}
+
 export type AgentRequest =
 	| { readonly type: 'approval'; readonly request: ActionApprovalRequest; }
 	| { readonly type: 'permissions'; readonly request: PermissionRequest; }
+	| { readonly type: 'toolResultReview'; readonly request: ToolResultReviewRequest; }
 	| { readonly type: 'userInput'; readonly request: RequestUserInput; }
 	| { readonly type: 'dynamicTool'; readonly call: DynamicToolCall; };
 
+export type AgentInteractionDecision = AgentResponse | { readonly type: 'cancelUserInput'; };
+
 export type AgentResponse =
+	| { readonly type: 'toolResultReview'; readonly response: { readonly decision: 'share' | 'skip'; }; }
 	| { readonly type: 'approval'; readonly response: { readonly decision: ActionApprovalDecision; }; }
 	| { readonly type: 'permissions'; readonly response: PermissionResponse; }
 	| {
@@ -733,6 +791,8 @@ export type ThreadCommittedEvent =
 		| 'modelProvidersMigrated'
 		| 'threadArchived'
 		| 'threadRestored'
+		| 'threadMovedToSession'
+		| 'threadDirectoryChanged'
 		| 'goalCreated'
 		| 'goalUpdated'
 		| 'goalCleared'
@@ -782,6 +842,7 @@ export type ThreadUpdate =
 		readonly type: 'itemDelta';
 		readonly itemId: string;
 		readonly delta:
+		| { readonly type: 'toolCallArguments'; readonly toolCallId: string; readonly name: string; readonly arguments: string; }
 		| { readonly type: 'agentMessage' | 'reasoning' | 'plan'; readonly text: string; }
 		| { readonly type: 'agentMessagePhase'; readonly phase: MessagePhase | null; };
 	}

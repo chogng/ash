@@ -1,6 +1,24 @@
-import type { IChatHookPart, ChatContentPart, PlanUpdate, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from '../../../../services/chat/common/chatService.js';
-import { localize } from '../../../../../nls.js';
+import type { IChatToolInvocation } from '../chatService/chatService.js';
+import type { IChatHookPart, ChatContentPart, PlanUpdate, ThreadGoal, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from '../../../../services/chat/common/chatService.js';
+import { getNLSLanguage, localize } from '../../../../../nls.js';
 import type { ChatResponseFeedbackTarget } from '../chatResponseFeedback.js';
+
+/** Both Chat presentations describe the same backend-owned goal without translating user content. */
+export function formatChatGoal(goal: ThreadGoal): string {
+	const status: Record<ThreadGoal['status'], string> = {
+		active: localize('chat.goal.active', 'Active'),
+		paused: localize('chat.goal.paused', 'Paused'),
+		blocked: localize('chat.goal.blocked', 'Blocked'),
+		usageLimited: localize('chat.goal.usageLimited', 'Usage limit reached'),
+		budgetLimited: localize('chat.goal.budgetLimited', 'Budget limit reached'),
+		complete: localize('chat.goal.complete', 'Complete'),
+	};
+	const numbers = new Intl.NumberFormat(getNLSLanguage());
+	const usage = goal.tokenBudget === null || goal.tokenBudget === undefined
+		? localize('chat.goal.tokensUsed', '{0} tokens', numbers.format(goal.tokensUsed))
+		: localize('chat.goal.tokenBudget', '{0}/{1} tokens', numbers.format(goal.tokensUsed), numbers.format(goal.tokenBudget));
+	return localize('chat.goal.summary', 'Goal · {0} · {1} · {2}', status[goal.status], usage, goal.objective);
+}
 
 export type ChatTurnErrorAction =
 	| { readonly type: 'retry'; readonly label: string; readonly turnId: string; }
@@ -22,14 +40,7 @@ export interface IChatListItem {
 	readonly content?: readonly ChatContentPart[];
 	readonly attachmentSource?: { readonly sessionId: string; readonly threadId: string; readonly itemId: string; readonly kind: 'item' | 'toolResult'; };
 	readonly hookPart?: IChatHookPart;
-	readonly toolInvocation?: {
-		readonly call: Extract<ThreadItem, { readonly type: 'toolCall'; }>;
-		readonly result?: Extract<ThreadItem, { readonly type: 'toolResult'; }>;
-		readonly output: readonly Extract<ThreadTranscriptEntry, { readonly type: 'toolOutput'; }>[];
-		readonly stopped: boolean;
-		readonly waitingFor?: NonNullable<Turn['pendingInteraction']>['kind'];
-		readonly executionStarted?: boolean;
-	};
+	readonly toolInvocation?: IChatToolInvocation;
 	readonly text: string;
 	/** Exact Core-accepted context body, independent of any current composer draft. */
 	readonly contextText?: string;
@@ -90,6 +101,7 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 		if (!pending?.itemId) return [];
 		const waitingStatus = {
 			approval: 'waitingForApproval', permissions: 'waitingForUserInput',
+			toolResultReview: 'waitingForApproval',
 			userInput: 'waitingForUserInput', dynamicTool: 'waitingForCapability',
 		};
 		return turn.status === waitingStatus[pending.kind] ? [[turn.turnId, pending] as const] : [];
@@ -112,7 +124,7 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 				text: [call.name, call.argumentsJson, ...output.map(value => `${value.stream}: ${value.text}`), result?.text].filter(Boolean).join('\n\n'),
 				transient: !result && !stoppedTurns.has(entry.turnId), isError: result?.isError,
 				toolInvocation: {
-					call, result, output, stopped: stoppedTurns.has(entry.turnId),
+					call, result, output, streaming: entry.transient && !result && !stoppedTurns.has(entry.turnId), stopped: stoppedTurns.has(entry.turnId),
 					waitingFor: !result && !stoppedTurns.has(entry.turnId) && pending?.itemId === call.itemId ? pending.kind : undefined,
 					executionStarted: startedCalls.has(identity),
 				},

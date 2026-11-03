@@ -15,7 +15,7 @@ import { SkillSelectorCatalog } from '../../../../workbench/contrib/chat/common/
 import { SlashCommandCatalog } from '../../../../workbench/contrib/chat/common/slashCommands.js';
 import { IChatSpeechToTextService } from '../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IPreferencesService } from '../../../../workbench/services/preferences/common/preferences.js';
-import { IChatGPTService, type ChatGPTAttachment } from './chatGPTService.js';
+import { IChatGPTService, isCoworkSubmission, type ChatGPTAttachment } from './chatGPTService.js';
 import { ModelPickerWidget } from './modelPickerWidget.js';
 import '../../../common/theme.js';
 import '../../../../base/browser/ui/button/button.css';
@@ -168,7 +168,7 @@ export class ChatGPTInputWidget extends Disposable {
 			}
 			this.inputIdentity = identity;
 			const voiceActive = state.voice !== 'idle';
-			this.editor.setReadOnly(!state.connected || state.busy || state.sending || voiceActive);
+			this.editor.setReadOnly(state.busy || state.sending || voiceActive);
 			this.attachButton.disabled = !state.connected || state.busy || state.sending || state.managing || voiceActive;
 			const selectedModel = state.models.find(model => model.id === state.model);
 			this.modelPicker.update({
@@ -221,7 +221,8 @@ export class ChatGPTInputWidget extends Disposable {
 	private renderSend(): void {
 		const state = this.chat.state.get();
 		const voiceActive = state.voice !== 'idle';
-		this.sendButton.disabled = !state.sending && !voiceActive && (!state.connected || state.busy || state.managing || state.uncertain || state.attachments.some(attachment => attachment.status !== 'ready'));
+		const canSend = isCoworkSubmission(state) || state.connected && !state.uncertain && state.attachments.every(attachment => attachment.status === 'ready');
+		this.sendButton.disabled = !state.sending && !voiceActive && (state.coworkStarting || !canSend || state.busy || state.managing);
 		const hasInput = !!state.draft.trim() || state.attachments.length > 0 || this.dictation.isActive;
 		const sendLabel = state.sending ? localize('sessions.chatgpt.stop', 'Stop') : voiceActive ? localize('sessions.chatgpt.stopVoice', 'Stop voice conversation')
 			: hasInput ? localize('sessions.chatgpt.send', 'Send') : localize('sessions.chatgpt.startVoice', 'Voice conversation');

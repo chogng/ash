@@ -370,6 +370,10 @@ impl GitRuntime {
                 }
                 false
             }
+            model::Installation::LaunchFailed => {
+                self.api.warning("git.launchFailed", &[], token)?;
+                false
+            }
             model::Installation::Unsupported {
                 version,
                 minimum_version,

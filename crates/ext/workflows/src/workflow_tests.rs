@@ -684,11 +684,13 @@ fn waiting_stage_keeps_its_identity_and_cancellation_reaches_its_pending_interac
                 request: protocol::AgentRequest::UserInput {
                     request: protocol::RequestUserInput {
                         questions: vec![protocol::UserInputQuestion {
+                            required: true,
                             id: "choice".into(),
                             header: "Choice".into(),
                             question: "Which scope?".into(),
                             options: Vec::new(),
                             allow_free_form: true,
+                            validation: None,
                         }],
                     },
                 },

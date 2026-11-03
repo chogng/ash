@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 import type { TestInfo } from '@playwright/test';
 import { expect, test as base } from '../../../automation/test.js';
 import { Workbench } from '../../../automation/workbench.js';
+import { Editor } from '../../../automation/editor.js';
 import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 import { createSshFixture } from '../../../automation/ssh.js';
@@ -103,6 +104,8 @@ for (const surface of ['IDE', 'Agent Window'] as const) {
 	test(`${surface} exports debug logs for the active session from the Command Palette`, { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
 		const agents = surface === 'Agent Window';
 		const page = agents ? await workbench.openAgentsWindow(target.kind) : workbench.page;
+		await page.bringToFront();
+		if (agents) await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		const window = new Workbench(page);
 		const connection = await connectProfile(application, webAppServer, testWorkspace.directory, page);
 		try {
@@ -117,7 +120,20 @@ for (const surface of ['IDE', 'Agent Window'] as const) {
 			}
 			const chat = page.locator(agents ? '.ash-sessions-chat-slot.active:visible [data-thread-id]' : '.ash-chat-view-pane .ash-chat:visible').first();
 			await expect(chat).toHaveAttribute('data-thread-id', threadId);
+			const input = chat.locator('.ash-chat-input-editor .stanza-editor-input');
+			await input.focus();
+			await page.keyboard.insertText('debug-logs-unsent-draft');
+			await connection.client.request(methods['messageHistory/append'], { text: 'debug-profile-history', kind: 'agent', threadId });
+			await window.quickaccess.runCommand('workbench.action.chat.logInputHistory');
+			await window.quickaccess.runCommand('workbench.action.chat.logChatIndex');
+			await window.quickaccess.runCommand('workbench.action.chat.inspectChatModel');
+			const inspection = new Editor(page.locator('.ash-editor-group-content:visible').first());
+			await inspection.waitForEditorContents(text => text.includes(session.sessionId) && text.includes(threadId));
+			await expect(inspection.input).toBeFocused();
+			await expect(chat.locator('.ash-chat-input-editor .stanza-editor-line-text')).toHaveText('debug-logs-unsent-draft');
 			const { files, manifest } = await exportBundle(window, application, testInfo);
+			expect([...files.values()].some(content => content.includes('chat.inputHistory') && content.includes('debug-profile-history'))).toBe(true);
+			expect([...files.values()].some(content => content.includes('chat.index') && content.includes('Debug logs source'))).toBe(true);
 			expect(manifest.conversation).toEqual({ sessionId: session.sessionId, threadId });
 			expect(manifest.issues.filter((issue: { source: string; }) => issue.source.startsWith('session'))).toEqual([]);
 			expect(JSON.parse(files.get('session/trace-1.json')!).trace.sessionId).toBe(session.sessionId);

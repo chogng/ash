@@ -10,10 +10,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from build.lib.cargo import cargo_artifact_executable, parse_cargo_message
-from build.lib.development_store import publish_generation
-from build.lib.targets import TARGETS, OperatingSystem, default_target
-from build.prepare import PROFILE, current_package, development_root
+from build.lib.cargo import cargo_artifact_executable, parse_cargo_message  # noqa: E402
+from build.lib.development_store import publish_generation  # noqa: E402
+from build.lib.targets import TARGETS, OperatingSystem, default_target  # noqa: E402
+from build.prepare import PROFILE, current_package, development_root  # noqa: E402
 
 
 def prepare_debug_backend() -> None:

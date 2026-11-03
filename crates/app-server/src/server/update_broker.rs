@@ -478,6 +478,14 @@ impl UpdateBroker {
     }
 
     pub(crate) fn publish_session_changed(&self, session_id: &SessionId) {
+        self.publish_session_change(session_id, false);
+    }
+
+    pub(super) fn publish_session_details_changed(&self, session_id: &SessionId) {
+        self.publish_session_change(session_id, true);
+    }
+
+    fn publish_session_change(&self, session_id: &SessionId, agent_tree_changed: bool) {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
@@ -490,12 +498,39 @@ impl UpdateBroker {
                     ServerNotificationMethod::SessionChanged,
                     &SessionChanged {
                         session_id: session_id.clone(),
-                        agent_tree_changed: false,
+                        agent_tree_changed,
                     },
                 ));
             }
             true
         });
+    }
+
+    pub(super) fn publish_thread_moved(
+        &self,
+        source: &SessionId,
+        destination: &SessionId,
+        thread_id: &ThreadId,
+    ) {
+        self.publish_session_changed(source);
+        self.publish_session_changed(destination);
+        if let Ok(mut state) = self.state.lock() {
+            for subscriber in state.subscribers.values_mut() {
+                subscriber.threads.retain(|id, subscription| {
+                    if id == thread_id {
+                        subscription.session_owners.remove(source);
+                        subscription
+                            .pending
+                            .retain(|_, pending| &pending.session_id != source);
+                    }
+                    !subscription.session_owners.is_empty() || !subscription.pending.is_empty()
+                });
+            }
+            reconcile_interaction_assignments(&mut state, &self.hooks, &self.hook_events);
+        }
+        if let Ok(mut transcripts) = self.transcripts.lock() {
+            transcripts.remove(&(source.clone(), thread_id.clone()));
+        }
     }
 
     pub(super) fn publish_session_deleted(&self, session_id: &SessionId) {
@@ -1507,6 +1542,8 @@ fn event_changes_agent_tree(event: &ThreadEvent) -> bool {
             | ThreadEvent::ThreadHistoryMoved { .. }
             | ThreadEvent::ThreadArchived { .. }
             | ThreadEvent::ThreadRestored { .. }
+            | ThreadEvent::ThreadMovedToSession { .. }
+            | ThreadEvent::ThreadDirectoryChanged { .. }
             | ThreadEvent::ThreadTitleChanged { .. }
             | ThreadEvent::HistoryImported { .. }
             | ThreadEvent::ForkHistoryImported { .. }

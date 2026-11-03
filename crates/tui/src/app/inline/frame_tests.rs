@@ -68,6 +68,7 @@ fn open_help(app: &mut App) {
 
 fn pending_query() -> Query {
     Query::new(vec![QueryQuestion {
+        required: true,
         id: "next".into(),
         header: "Next step".into(),
         prompt: "How should the work continue?".into(),
@@ -248,6 +249,7 @@ fn hooks_inline_details_wrap_and_scroll_without_losing_actions() {
             ],
         },
         enablement: HookEnablementDto::Disabled,
+        claude_pre_tool_use: None,
     };
     let mut app = app();
     app.update(crate::hooks::Event::Opened(

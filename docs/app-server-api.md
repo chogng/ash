@@ -1285,6 +1285,8 @@ Resource bytes 使用标准 RFC 4648 Base64；`decodedLength` 是原始 byte 数
 - `TerminalBusy`
 - `TerminalOperationFailed`
 - `GitUnavailable`
+- `GitWorkspaceUnavailable`
+- `GitRepositoryNotFound`
 - `GitNotRepository`
 - `GitOperationFailed`
 - `ConfigUnavailable`

@@ -24,5 +24,5 @@ skip =
     src/ash/base/browser/dompurify/*,src/ash/base/common/marked/*,
     src/ash/base/common/productIcons.ts,crates/app-server-protocol/schema/*,schemas/*,
     crates/utils/pty/src/win/psuedocon.rs
-# Test hook name and the documented fuzzy-command example are intentional.
-ignore-regex = \bafterAll\b|/cofig\b
+# Keep dependency localization keys, code identifiers, and partial test inputs intact.
+ignore-regex = \bafterAll\b|/cofig\b|(?<=contains )contraint(?=\.)|\b(?:searchIn|listIn|atLeast|lockIn|currentY|editor\.fo)\b

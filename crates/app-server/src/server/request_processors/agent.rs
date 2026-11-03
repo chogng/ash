@@ -146,6 +146,11 @@ pub(super) trait AgentRequestProcessorContext: Send + Sync {
         expected_ide: Option<&str>,
     ) -> Result<core_api::TurnReceipt, core_api::CoreError>;
     fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_;
+    fn change_session_directory_request(
+        &self,
+        mutation: SessionMutation,
+        root: std::path::PathBuf,
+    ) -> Result<ash_app_server_protocol::protocol::session::SessionResult, RpcError>;
     fn archive_session_request(
         &self,
         mutation: super::operations::SessionMutation,
@@ -169,6 +174,7 @@ pub(super) trait AgentRequestProcessorContext: Send + Sync {
         mutation: super::operations::SessionMutation,
         parent_thread_id: ash_protocol::ThreadId,
         title: String,
+        comparison: Option<ash_app_server_protocol::protocol::session::ComparisonForkParams>,
     ) -> Result<ash_app_server_protocol::protocol::session::SessionThreadResult, super::RpcError>;
     fn local_env_tool_ports(
         &self,
@@ -658,12 +664,57 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     thread_id,
                 }))
             }
+            SessionRequest::ChangeDirectory { root } => {
+                if !connection.allows_product_host_capabilities() {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                result(&SessionRequestResult::Session(
+                    self.context
+                        .change_session_directory_request(mutation, root)?,
+                ))
+            }
+            SessionRequest::MoveThreadToSession {
+                thread_id,
+                destination_session_id,
+            } => {
+                self.session_view(&destination_session_id)?;
+                self.context
+                    .agent_runtime()
+                    .move_thread_to_session(
+                        &thread_id,
+                        &mutation.session_id,
+                        &destination_session_id,
+                        mutation.command_id,
+                    )
+                    .map_err(core_error)?;
+                self.updates.publish_thread_moved(
+                    &mutation.session_id,
+                    &destination_session_id,
+                    &thread_id,
+                );
+                result(&SessionRequestResult::Thread(SessionThreadResult {
+                    session: self.session_view(&destination_session_id)?,
+                    thread_id,
+                }))
+            }
             SessionRequest::ForkSession {
                 parent_thread_id,
                 title,
             } => result(&SessionRequestResult::Thread(
                 self.context
-                    .fork_session_request(mutation, parent_thread_id, title)?,
+                    .fork_session_request(mutation, parent_thread_id, title, None)?,
+            )),
+            SessionRequest::ForkComparison {
+                parent_thread_id,
+                title,
+                comparison,
+            } => result(&SessionRequestResult::Thread(
+                self.context.fork_session_request(
+                    mutation,
+                    parent_thread_id,
+                    title,
+                    Some(comparison),
+                )?,
             )),
             SessionRequest::CreateSideChat {
                 parent_thread_id,
@@ -900,6 +951,19 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     thread_mutation(mutation, expected_sequence, connection.connection_id),
                     thread_id,
                     turn_id,
+                )?,
+            )),
+            SessionRequest::CancelUserInput {
+                thread_id,
+                turn_id,
+                request_id,
+            } => result(&SessionRequestResult::Interaction(
+                self.cancel_user_input_request(
+                    connection.connection_id,
+                    &mutation.session_id,
+                    &thread_id,
+                    &turn_id,
+                    &request_id,
                 )?,
             )),
             SessionRequest::ResolveInteraction {
@@ -2016,6 +2080,65 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         })
     }
 
+    fn cancel_user_input_request(
+        &self,
+        connection_id: u64,
+        session_id: &ash_protocol::SessionId,
+        thread_id: &ash_protocol::ThreadId,
+        turn_id: &ash_protocol::TurnId,
+        request_id: &ash_protocol::RequestId,
+    ) -> Result<TurnInteractionResolveResult, RpcError> {
+        let _env_runtime = self
+            .env_runtime_gate
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?;
+        let runtime = self.context.agent_runtime();
+        let thread = runtime.read_thread(thread_id).map_err(core_error)?;
+        let is_pending_question = thread.session_id == *session_id
+            && thread.turns.iter().any(|turn| {
+                turn.turn_id == *turn_id
+                    && turn
+                        .pending_interaction
+                        .as_ref()
+                        .is_some_and(|interaction| {
+                            interaction.request_id == *request_id
+                                && matches!(
+                                    interaction.request,
+                                    ash_protocol::AgentRequest::UserInput { .. }
+                                )
+                        })
+            });
+        if !is_pending_question
+            || !self
+                .updates
+                .is_agent_interaction_owner(connection_id, request_id)
+        {
+            return Err(RpcError::new(
+                -32030,
+                AppServerErrorName::AgentInteractionNotOwner,
+            ));
+        }
+        if self
+            .updates
+            .is_agent_interaction_expired(request_id, super::update_broker::unix_time_millis())
+        {
+            return Err(RpcError::new(
+                -32031,
+                AppServerErrorName::AgentInteractionExpired,
+            ));
+        }
+        runtime
+            .cancel_interaction(
+                thread_id,
+                turn_id,
+                request_id,
+                ash_protocol::InteractionCancelReason::UserCancelled,
+            )
+            .map_err(core_error)?;
+        let sequence = runtime.read_thread(thread_id).map_err(core_error)?.sequence;
+        Ok(TurnInteractionResolveResult { sequence })
+    }
+
     fn resolve_turn_interaction_request(
         &self,
         connection_id: u64,
@@ -2109,6 +2232,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             .ok_or_else(|| core_error(core_api::CoreError::NotFound(session_id.to_string())))?;
         let agent_tree = view.agent_tree;
         Ok(ash_app_server_protocol::protocol::session::SessionResult {
+            environment_applied: None,
             session,
             agent_tree,
         })

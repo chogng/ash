@@ -1,3 +1,7 @@
+import { getAgentPluginEditorDetails } from './agentPluginEditor/agentPluginEditor.js';
+import { findInstalledPlugin } from './agentPluginEditor/agentPluginItems.js';
+import { AgentPluginEditorInput } from '../common/agentPluginEditorInput.js';
+import { reviewLocalExtensionPermissions, uninstallAgentPlugin } from './agentPluginActions.js';
 import { extensionUiTargetsLabel } from '../../../../platform/extensionManagement/common/extensionNls.js';
 import { defaultButtonStyles, defaultToggleStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
@@ -31,7 +35,7 @@ import { IExtensionApi, type ExtensionDescriptor } from '../../../../platform/ex
 import { toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { URI } from '../../../../base/common/uri.js';
-import { changeExtensionEnablement, configureMcpServer, describeConnectorState, describeMcpServerState, describePluginPermission, getSkillSummary, promptConnectorApiToken, reviewExtensionExecution, reviewLocalExtensionPermissions } from './extensionsActions.js';
+import { changeExtensionEnablement, configureMcpServer, describeConnectorState, describeMcpServerState, getSkillSummary, promptConnectorApiToken, reviewExtensionExecution } from './extensionsActions.js';
 import type { ParsedPromptFile } from '../../chat/common/promptSyntax/promptFileParser.js';
 import { IPromptsService } from '../../chat/common/promptSyntax/service/promptsService.js';
 import { ILanguageModelToolsService } from '../../chat/common/tools/languageModelToolsService.js';
@@ -429,6 +433,9 @@ export class ExtensionEditor extends EditorPane {
 					]
 				}]);
 				this.header.status.textContent = '';
+				this.addResourceLink('SKILL.md', async () => {
+					await this.editors.openEditor({ resource: skill.uri, label: `${skill.id.name}/SKILL.md`, languageId: 'markdown', readOnly: true }, { pinned: true });
+				});
 				this.capabilities.textContent = [
 					skill.compatible ? localize({ bundle: 'ash.extensions', key: 'skillCompatible' }, 'Compatible') : localize({ bundle: 'ash.extensions', key: 'skillCompatibilityUnknown' }, 'Compatibility unknown'),
 					localize({ bundle: 'ash.extensions', key: 'skillInvoke' }, 'Invoke enabled skills with ${0} in chat.', skill.id.name),
@@ -627,29 +634,25 @@ export class ExtensionEditor extends EditorPane {
 		if (input.source === ExtensionsInputSource.Local) {
 			const catalog = await this.plugins.list();
 			if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
-			const plugin = catalog.packages.find(value => value.id === input.summary.id && value.version === input.summary.version);
+			const plugin = findInstalledPlugin(catalog.packages, input);
 			if (!plugin) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
 			this.header.status.textContent = '';
 			this.contentHeading.textContent = localize({ bundle: 'ash.extensions', key: 'pluginPermissionsHeading' }, 'Permissions');
-			this.renderInfo([{
-				label: localize({ bundle: 'ash.extensions', key: 'detailInstallation' }, 'Installation'), rows: [
-					{ label: localize({ bundle: 'ash.extensions', key: 'detailIdentifier' }, 'Identifier'), value: plugin.id },
-					{ label: localize({ bundle: 'ash.extensions', key: 'detailVersion' }, 'Version'), value: plugin.version },
-					{ label: localize({ bundle: 'ash.extensions', key: 'uiTargetsHeading' }, 'Applicable windows'), value: extensionUiTargetsLabel(plugin.uiTargets) },
-					{ label: localize({ bundle: 'ash.extensions', key: 'detailSource' }, 'Source'), value: localize({ bundle: 'ash.extensions', key: 'localPlugin' }, 'Local plugin') },
-					{ label: localize({ bundle: 'ash.extensions', key: 'detailDigest' }, 'Package digest'), value: plugin.digest },
-				]
-			}]);
-			this.capabilities.textContent = [localize({ bundle: 'ash.extensions', key: 'localExtensionDigest' }, 'Package digest: {0}', plugin.digest), ...plugin.permissions.map(describePluginPermission)].join('\n\n');
-			this.renderEnablement({ label: localize({ bundle: 'ash.extensions', key: 'enableExtension' }, 'Enable extension'), checked: plugin.enabled, enabled: plugin.enabled || !plugin.revoked, change: setEnabled });
+			const details = getAgentPluginEditorDetails(plugin);
+			this.renderInfo(details.info);
+			this.capabilities.textContent = details.permissions;
+			this.renderEnablement({
+				label: localize({ bundle: 'ash.extensions', key: 'enableExtension' }, 'Enable extension'),
+				checked: plugin.enabled,
+				enabled: plugin.enabled || !plugin.revoked,
+				change: async checked => {
+					using target = new AgentPluginEditorInput(input.summary, plugin.digest);
+					await changeExtensionEnablement(target, this.enablement, this.extensions, this.plugins, this.editorExtensions, { enabled: checked });
+				},
+			});
 			button(plugin.granted ? localize({ bundle: 'ash.extensions', key: 'revokeLocalExtension' }, 'Revoke permissions') : localize({ bundle: 'ash.extensions', key: 'grantLocalExtension' }, 'Grant permissions'), async () => { await reviewLocalExtensionPermissions(plugin, this.plugins, this.dialogs); if (!signal.aborted && !this.isDisposed && version === this.loadVersion) { await this.setInput(input, signal); } }, plugin.granted || !plugin.revoked);
 			button(localize({ bundle: 'ash.extensions', key: 'uninstall' }, 'Uninstall'), async () => {
-				const review = await this.dialogs.confirm({ title: localize({ bundle: 'ash.extensions', key: 'uninstallTitle' }, 'Uninstall extension'), message: localize({ bundle: 'ash.extensions', key: 'uninstallMessage' }, 'Uninstall {0} {1}?', plugin.id, plugin.version), primaryButton: localize({ bundle: 'ash.extensions', key: 'uninstall' }, 'Uninstall') });
-				if (!review.confirmed) { return; }
-				const latest = await this.plugins.list();
-				const selected = latest.packages.find(value => value.id === plugin.id && value.digest === plugin.digest);
-				if (!selected) { return; }
-				await this.plugins.uninstall(selected, latest.revision);
+				if (!await uninstallAgentPlugin(plugin, this.plugins, this.dialogs)) { return; }
 				if (signal.aborted || this.isDisposed || version !== this.loadVersion) { return; }
 				this.clearInput(); this.header.actions.replaceChildren();
 				this.header.status.textContent = localize({ bundle: 'ash.extensions', key: 'uninstalled' }, 'Uninstalled');

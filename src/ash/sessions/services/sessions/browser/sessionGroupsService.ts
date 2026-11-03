@@ -12,6 +12,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 export interface SessionGroup {
 	readonly sectionId: string;
 	readonly name: string;
+	readonly kind?: 'comparison';
 	readonly sessionIds: readonly string[];
 }
 
@@ -19,7 +20,7 @@ export interface SessionGroup {
 export interface ISessionGroupsService {
 	readonly groups: readonly SessionGroup[];
 	readonly onDidChange: import('../../../../base/common/event.js').Event<void>;
-	create(name: string, signal?: AbortSignal): Promise<SessionGroup>;
+	create(name: string, signal?: AbortSignal, kind?: SessionGroup['kind']): Promise<SessionGroup>;
 	rename(sectionId: string, name: string, signal?: AbortSignal): Promise<void>;
 	delete(sectionId: string, signal?: AbortSignal): Promise<void>;
 	move(sessionId: string, sectionId: string | null, signal?: AbortSignal): Promise<void>;
@@ -59,7 +60,7 @@ export class SessionGroupsService extends Disposable implements ISessionGroupsSe
 		const sections = new Set<string>();
 		const sessions = new Set<string>();
 		for (const group of groups) {
-			if (!isRecord(group) || typeof group.sectionId !== 'string' || !group.sectionId || sections.has(group.sectionId) || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 128 || !Array.isArray(group.sessionIds) || group.sessionIds.length > 1000) throw new Error('Invalid saved session group');
+			if (!isRecord(group) || typeof group.sectionId !== 'string' || !group.sectionId || sections.has(group.sectionId) || (group.kind !== undefined && group.kind !== 'comparison') || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 128 || !Array.isArray(group.sessionIds) || group.sessionIds.length > 1000) throw new Error('Invalid saved session group');
 			sections.add(group.sectionId);
 			for (const id of group.sessionIds) {
 				if (typeof id !== 'string' || !id || sessions.has(id)) throw new Error('Invalid saved session group membership');
@@ -84,8 +85,8 @@ export class SessionGroupsService extends Disposable implements ISessionGroupsSe
 		this.pending = next.catch(() => { });
 		await next;
 	}
-	async create(name: string, signal?: AbortSignal): Promise<SessionGroup> {
-		const group: SessionGroup = { sectionId: generateUuid(), name: validName(name), sessionIds: [] };
+	async create(name: string, signal?: AbortSignal, kind?: SessionGroup['kind']): Promise<SessionGroup> {
+		const group: SessionGroup = { sectionId: generateUuid(), name: validName(name), ...(kind ? { kind } : {}), sessionIds: [] };
 		await this.change(groups => {
 			if (groups.length >= 100) throw new Error('Maximum session groups reached');
 			return [...groups, group];

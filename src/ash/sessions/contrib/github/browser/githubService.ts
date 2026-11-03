@@ -7,7 +7,9 @@ import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js
 import { observableValue, type IReader } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
-import { GitHubIssueState, IGitHubService as IGitHubApi, type GitHubRepository, type GitHubPullRequest, type GitHubPullRequestReference, type GitHubAccount, type GitHubIssueReference } from '../../../../platform/github/common/githubService.js';
+import { ArtifactExecutionService } from '../../../../platform/artifactIntegrations/common/artifactExecutionService.js';
+import { artifactBindingId, type ArtifactAction, type IArtifactIntegrationBinding } from '../../../../platform/artifactIntegrations/common/artifactIntegration.js';
+import { GitHubIssueState, GitHubMergeMethod, IGitHubService as IGitHubApi, type GitHubRepository, type GitHubPullRequest, type GitHubPullRequestReference, type GitHubAccount, type GitHubIssueReference } from '../../../../platform/github/common/githubService.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
@@ -34,12 +36,14 @@ export interface IGitHubService {
 	initialize(): void;
 	attachPullRequest(sessionId: SessionId, url: string): Promise<void>;
 	detachPullRequest(sessionId: SessionId, reference: GitHubPullRequestReference): Promise<void>;
+	invokePullRequestArtifact(sessionId: SessionId, request: IResolvedSessionPullRequest, select: (binding: IArtifactIntegrationBinding) => Promise<ArtifactAction | undefined>): Promise<void>;
 }
 
 export const IGitHubService = createServiceIdentifier<IGitHubService>('sessionsGitHubService');
 
 /** Resolves live Issue and PR state from durable references and execution-directory branches. */
 export class GitHubService extends Disposable implements IGitHubService {
+	private readonly artifactExecution = new ArtifactExecutionService();
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
 	private readonly requests = new Map<SessionId, { readonly directory: string; readonly values: readonly IResolvedSessionPullRequest[]; }>();
@@ -179,6 +183,102 @@ export class GitHubService extends Disposable implements IGitHubService {
 			this.operation.value?.cancel();
 			this.refresh.schedule(0);
 		}
+	}
+
+	public async invokePullRequestArtifact(sessionId: SessionId, request: IResolvedSessionPullRequest, select: (binding: IArtifactIntegrationBinding) => Promise<ArtifactAction | undefined>): Promise<void> {
+		const reference = request.recordedReference;
+		const artifact = request.artifact;
+		if (!reference?.isArtifact || !artifact) {
+			throw new CancellationError();
+		}
+		const scope = this.capture(sessionId);
+		const { host, owner, name } = reference.repository;
+		const id = artifactBindingId(scope.provider.providerId, scope.backendSessionId, artifact.id, 'githubPullRequest');
+		const assertCurrent = () => {
+			scope.assertCurrent();
+			const selection = this.sessions.activeSelection;
+			if (selection?.kind !== 'session' || selection.active.session.sessionId !== sessionId) {
+				throw new CancellationError();
+			}
+		};
+		const readTarget = async () => {
+			assertCurrent();
+			const [references, accounts] = await Promise.all([
+				scope.github.listSessionPullRequests(scope.backendSessionId),
+				scope.github.listAccounts(),
+			]);
+			assertCurrent();
+			if (!references.some(item => item.isArtifact && item.artifactId === reference.artifactId && item.number === reference.number
+				&& item.repository.host === host && item.repository.owner === owner && item.repository.name === name)) {
+				throw new CancellationError();
+			}
+			const account = accounts.find(item => item.status === 'ready' && item.host.toLowerCase() === host.toLowerCase());
+			if (!account) {
+				throw new Error(localize('sessions.github.artifactConnectHost', 'Connect a GitHub account for {0} before running this pull request action.', host));
+			}
+			const repository = { ...reference.repository, accountId: account.id };
+			const [pr, info] = await Promise.all([
+				scope.github.readPullRequest(repository, reference.number),
+				scope.github.readRepository(repository),
+			]);
+			assertCurrent();
+			if (pr.state !== 'open' || pr.draft || pr.mergedAt || !pr.headCommit) {
+				throw new Error(localize('sessions.github.artifactMergeUnavailable', 'This pull request is no longer available to merge.'));
+			}
+			return { repository, account, pr, info };
+		};
+		await this.artifactExecution.invoke(id, async () => {
+			const target = await readTarget();
+			const methods = [
+				{ method: GitHubMergeMethod.Merge, permission: 'allowMergeCommit' as const, label: localize('sessions.github.artifactMergeCommit', 'Create a merge commit') },
+				{ method: GitHubMergeMethod.Squash, permission: 'allowSquashMerge' as const, label: localize('sessions.github.artifactSquash', 'Squash and merge') },
+				{ method: GitHubMergeMethod.Rebase, permission: 'allowRebaseMerge' as const, label: localize('sessions.github.artifactRebase', 'Rebase and merge') },
+			].filter(option => target.info[option.permission]);
+			const actions: ArtifactAction[] = [];
+			for (const option of methods) {
+				const invoke = async (auto: boolean) => {
+					const current = await readTarget();
+					if (current.account.id !== target.account.id || current.account.credentialRevision !== target.account.credentialRevision
+						|| current.pr.headCommit !== target.pr.headCommit || current.pr.baseBranch !== target.pr.baseBranch
+						|| !current.info[option.permission]
+						|| (auto ? !current.info.allowAutoMerge || current.pr.autoMerge : current.pr.mergeable !== true)) {
+						throw new Error(localize('sessions.github.artifactTargetChanged', 'The pull request or GitHub account changed. Open its actions again.'));
+					}
+					const merge = { commit: target.pr.headCommit, method: option.method };
+					try {
+						if (auto) {
+							await scope.github.enableAutoMerge(current.repository, reference.number, merge);
+						} else {
+							const result = await scope.github.mergePullRequest(current.repository, reference.number, merge);
+							if (!result.merged) {
+								throw new Error(localize('sessions.github.artifactMergeFailed', 'GitHub did not merge the pull request.'));
+							}
+						}
+					} finally {
+						if (!this.isDisposed) {
+							this.operation.value?.cancel();
+							this.refresh.schedule(0);
+						}
+					}
+				};
+				if (target.pr.mergeable === true) {
+					actions.push({
+						id: `merge:${option.method}`, label: option.label,
+						description: localize('sessions.github.artifactMergeEffect', 'Merge commit {0} into {1} now', target.pr.headCommit, target.pr.baseBranch),
+						invoke: () => invoke(false),
+					});
+				}
+				if (target.info.allowAutoMerge && !target.pr.autoMerge) {
+					actions.push({
+						id: `autoMerge:${option.method}`,
+						label: localize('sessions.github.artifactAutoMerge', 'Enable GitHub auto-merge ({0})', option.label),
+						description: localize('sessions.github.artifactAutoMergeEffect', 'Authorize GitHub to merge into {0} when its requirements pass. GitHub manages subsequent branch updates.', target.pr.baseBranch),
+						invoke: () => invoke(true),
+					});
+				}
+			}
+			return { id, artifact, actions };
+		}, select);
 	}
 
 	public getSessionPullRequests(sessionId: SessionId): readonly IResolvedSessionPullRequest[] {
@@ -437,18 +537,26 @@ export class GitHubService extends Disposable implements IGitHubService {
 
 	private async resolveReference(binding: SessionGitHubScope, reference: GitHubPullRequestReference, accounts: readonly GitHubAccount[], token: CancellationToken): Promise<IResolvedSessionPullRequest | undefined> {
 		const account = accounts.find(account => account.host.toLowerCase() === reference.repository.host.toLowerCase() && account.status === 'ready');
-		if (!account || token.isCancellationRequested) { return undefined; }
+		if (token.isCancellationRequested) { return undefined; }
+		const uri = URI.from({ scheme: 'https', authority: reference.repository.host, path: `/${reference.repository.owner}/${reference.repository.name}/pull/${reference.number}` });
+		const resource = uri.toString();
+		const artifact = reference.isArtifact ? {
+			id: reference.artifactId ?? linkKey(resource), resource, label: `${reference.repository.owner}/${reference.repository.name} #${reference.number}`, isArtifact: true,
+			origin: reference.artifactOrigin,
+		} : undefined;
+		const unavailable: IResolvedSessionPullRequest = {
+			uri,
+			owner: reference.repository.owner, repo: reference.repository.name, number: reference.number,
+			title: '', state: 'unavailable', status: {}, icon: { id: 'link', color: { id: 'descriptionForeground' } }, recordedReference: reference, artifact,
+		};
+		if (!account) { return reference.isArtifact ? unavailable : undefined; }
 		try {
 			const request = await this.readPullRequest(binding, { ...reference.repository, accountId: account.id }, reference.number, token);
-			return request ? { ...request, recordedReference: reference } : undefined;
+			return request ? { ...request, recordedReference: reference, artifact } : undefined;
 		} catch (error) {
 			if (token.isCancellationRequested || isCancellationError(error)) { return undefined; }
 			this.log.error('sessions.github', 'Unable to read an attached pull request', error);
-			return {
-				uri: URI.from({ scheme: 'https', authority: reference.repository.host, path: `/${reference.repository.owner}/${reference.repository.name}/pull/${reference.number}` }),
-				owner: reference.repository.owner, repo: reference.repository.name, number: reference.number,
-				title: '', state: 'unavailable', status: {}, icon: { id: 'link', color: { id: 'descriptionForeground' } }, recordedReference: reference,
-			};
+			return unavailable;
 		}
 	}
 
@@ -474,6 +582,7 @@ export class GitHubService extends Disposable implements IGitHubService {
 			repo: repository.name,
 			number: pullRequest.number,
 			title: pullRequest.title,
+			headCommit: pullRequest.headCommit,
 			state,
 			status,
 			icon: computePullRequestIcon(state, status),

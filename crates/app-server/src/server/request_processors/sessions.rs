@@ -30,6 +30,7 @@ use serde_json::Value;
 /// Coordinates the existing owners needed by the sessions adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait SessionRequestProcessorContext: Send + Sync {
+    fn session_environments(&self) -> &crate::session_environment::SessionEnvironments;
     fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_;
     fn bind_session_runtime(
         &self,
@@ -106,6 +107,100 @@ pub(super) struct SessionRequestProcessor<'ctx, C: SessionRequestProcessorContex
 }
 
 impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'ctx, C> {
+    pub(super) fn change_directory(
+        &self,
+        mutation: SessionMutation,
+        root: std::path::PathBuf,
+    ) -> Result<SessionResult, RpcError> {
+        let runtime = self.context.git_turn_changes_runtime()?;
+        let dir = ash_file_access::Dir::open_local(&root)
+            .map_err(|error| core_error(core_api::CoreError::InvalidInput(error.to_string())))?;
+        let grant = self
+            .env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .selected_grant
+            .clone();
+        let authorize = || {
+            grant
+                .as_ref()
+                .filter(|grant| {
+                    dir.id() == runtime.dirs.id
+                        && grant.is_active()
+                        && grant.dir().id() == dir.id()
+                        && grant
+                            .permissions()
+                            .allows(ash_file_access::Permission::ReadFiles)
+                })
+                .map(|_| ())
+                .ok_or_else(|| {
+                    core_api::CoreError::InvalidInput(
+                        "Directory does not match the authorized runtime".into(),
+                    )
+                })
+        };
+        authorize().map_err(core_error)?;
+        let thread_id = ThreadId::new(mutation.session_id.as_str())
+            .map_err(|error| core_error(core_api::CoreError::InvalidInput(error.to_string())))?;
+        if let Some(queue) = self.queue.as_ref()
+            && queue
+                .list(&mutation.session_id, &thread_id)
+                .map_err(|_| RpcError::new(-32010, AppServerErrorName::QueueOperationFailed))?
+                .iter()
+                .any(|message| {
+                    matches!(
+                        message.status,
+                        queue::QueueStatus::Pending
+                            | queue::QueueStatus::Paused
+                            | queue::QueueStatus::Delivering
+                    )
+                })
+        {
+            return Err(RpcError::new(-32010, AppServerErrorName::QueueConflict));
+        }
+        self.context
+            .agent_runtime()
+            .change_session_directory(
+                &mutation.session_id,
+                dir.canonical_path(),
+                mutation.command_id,
+                |thread| {
+                    let commits = git_turn_changes::TurnCommitStore::list_commits(
+                        runtime.store.as_ref(),
+                        thread,
+                    )
+                    .map_err(|error| core_api::CoreError::Journal(error.to_string()))?;
+                    git_turn_changes::require_settled_publications(&commits).map_err(|_| {
+                        core_api::CoreError::InvalidInput(
+                            "Wait for pending Turn commits before changing directories".into(),
+                        )
+                    })?;
+                    if !runtime
+                        .history_files_ready(thread)
+                        .map_err(core_api::CoreError::Journal)?
+                        || runtime
+                            .history_restoration_pending(thread)
+                            .map_err(core_api::CoreError::Journal)?
+                    {
+                        return Err(core_api::CoreError::InvalidInput(
+                            "Wait for file history operations before changing directories".into(),
+                        ));
+                    }
+                    runtime.prepare_switched_directory(thread)?;
+                    authorize()
+                },
+                |thread| {
+                    authorize()?;
+                    runtime.activate_switched_directory(thread)?;
+                    self.context.bind_session_runtime(&mutation.session_id)
+                },
+            )
+            .map_err(core_error)?;
+        self.updates
+            .publish_session_details_changed(&mutation.session_id);
+        self.context.session_result(&mutation.session_id)
+    }
+
     pub(super) fn new(
         context: &'ctx C,
         agent_extensions: &'ctx super::Arc<super::ExtensionRegistry>,
@@ -358,6 +453,17 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         &self,
         params: SessionCreateParams,
     ) -> Result<SessionResult, RpcError> {
+        if ash_protocol::SessionSource::is_automation_creation_command(params.command_id.as_str()) {
+            return Err(core_error(core_api::CoreError::InvalidInput(
+                "Session creation command ID belongs to automation".into(),
+            )));
+        }
+        if let Some(values) = &params.environment_variables {
+            self.context
+                .session_environments()
+                .validate(&values.0)
+                .map_err(core_error)?;
+        }
         let execution_target = match &params.execution_target {
             None => None,
             Some(SessionExecutionTarget::Local { root }) => {
@@ -461,6 +567,16 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                 .map_err(core_error)?;
             (created, true)
         };
+        let has_environment = params.environment_variables.is_some();
+        if has_environment || !is_new {
+            self.context
+                .session_environments()
+                .install(
+                    &created.session_id,
+                    params.environment_variables.map(|values| values.0),
+                )
+                .map_err(core_error)?;
+        }
         self.context
             .bind_session_runtime(&created.session_id)
             .map_err(core_error)?;
@@ -475,7 +591,9 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
             });
         }
         self.updates.publish_session_changed(&created.session_id);
-        self.context.session_result(&created.session_id)
+        let mut result = self.context.session_result(&created.session_id)?;
+        result.environment_applied = has_environment.then_some(true);
+        Ok(result)
     }
 
     pub(super) fn fork_session_request(
@@ -483,18 +601,44 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         mutation: SessionMutation,
         parent_thread_id: ash_protocol::ThreadId,
         title: String,
+        comparison: Option<ash_app_server_protocol::protocol::session::ComparisonForkParams>,
     ) -> Result<ash_app_server_protocol::protocol::session::SessionThreadResult, RpcError> {
         self.context
             .read_session_thread_snapshot(&mutation.session_id, &parent_thread_id)?;
-        let forked = self
-            .context
-            .agent_runtime()
-            .fork_session(core_api::ForkThreadRequest {
-                command_id: mutation.command_id,
-                source_thread_id: parent_thread_id,
-                title,
-            })
-            .map_err(core_error)?;
+        let request = core_api::ForkThreadRequest {
+            command_id: mutation.command_id,
+            source_thread_id: parent_thread_id,
+            title,
+        };
+        let runtime = self.context.agent_runtime();
+        let forked = match comparison {
+            None => runtime.fork_session(request),
+            Some(comparison) => {
+                if self.git_turn_changes.is_none() {
+                    return Err(core_error(core_api::CoreError::InvalidInput(
+                        "comparison requires a Git worktree runtime".into(),
+                    )));
+                }
+                let agent = self
+                    .context
+                    .resolve_root_agent(&comparison.agent)
+                    .map_err(core_error)?
+                    .ok_or_else(|| {
+                        core_error(core_api::CoreError::InvalidInput(
+                            "comparison requires an exact Agent".into(),
+                        ))
+                    })?;
+                runtime.fork_comparison(
+                    request,
+                    core_api::ComparisonFork {
+                        source_sequence: comparison.source_sequence,
+                        branch_name: comparison.branch_name,
+                        agent,
+                    },
+                )
+            }
+        }
+        .map_err(core_error)?;
         self.context
             .bind_session_runtime(&forked.session_id)
             .map_err(core_error)?;
@@ -801,6 +945,9 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
             .agent_runtime()
             .delete_session_threads(&session_id)
             .map_err(core_error)?;
+        if let Err(error) = self.context.session_environments().delete(&session_id) {
+            log::warn!("Session environment secret cleanup remains pending: {error}");
+        }
         self.trace_recorder.remove_session(&session_id);
         if let Some(runtime) = &self.git_turn_changes {
             if let Err(error) = self.context.collect_message_checkpoints(runtime.as_ref()) {

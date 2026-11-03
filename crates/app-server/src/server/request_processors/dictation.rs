@@ -233,6 +233,17 @@ impl<'a> DictationRequestProcessor<'a> {
                     self.calls.network_policy(),
                 )
                 .map_err(|error| dictation_error(error.to_string()))?;
+                let prompt = if matches!(&protocol, CloudTranscriptionProvider::OpenAi) {
+                    let text = super::speech_instructions::read(
+                        self.profile_root()?.as_path(),
+                        ash_app_server_protocol::protocol::speech::SpeechInstructionKind::Dictation,
+                    )
+                    .map_err(|error| dictation_error(error.to_string()))?
+                    .text;
+                    (!text.trim().is_empty()).then_some(text)
+                } else {
+                    None
+                };
                 DictationRequest::Cloud(CloudDictationRequest {
                     provider: protocol,
                     model_id,
@@ -242,6 +253,7 @@ impl<'a> DictationRequestProcessor<'a> {
                     connector: ash_websocket_client::WebSocketConnector::new(network),
                     input_device: params.input_device,
                     language: params.language,
+                    prompt,
                 })
             }
         };

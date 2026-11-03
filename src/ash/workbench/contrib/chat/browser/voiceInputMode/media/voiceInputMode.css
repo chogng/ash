@@ -1,0 +1,25 @@
+.ash-voice-input-mode {
+	display: inline-flex;
+	align-items: center;
+	flex: none;
+	gap: var(--ash-spacing-size20);
+	padding: var(--ash-spacing-size20);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-circle);
+}
+
+.ash-voice-input-mode > .ash-button {
+	border-radius: var(--ash-cornerRadius-circle);
+}
+
+.ash-voice-input-mode > .ash-button[data-selected="true"] {
+	background-color: var(--ash-button-activeBackground);
+	color: var(--ash-foreground);
+	border-color: var(--ash-contrastBorder, transparent);
+}
+
+.ash-voice-input-mode > .ash-button:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}

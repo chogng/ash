@@ -135,6 +135,7 @@ fn managed_session_read_failure_releases_its_proxy_before_reporting_failure() {
                 arguments: Vec::new(),
                 working_directory: ".".into(),
                 input: CommandInput::Open,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
                 ash_sandboxing::FileSystemAccess::DirectoryWrite,

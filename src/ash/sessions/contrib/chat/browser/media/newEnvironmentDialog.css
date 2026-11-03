@@ -1,0 +1,141 @@
+.ash-new-environment-dialog {
+	inline-size: min(40rem, calc(100vw - 2rem));
+	max-block-size: calc(100dvh - 2rem);
+	overflow: auto;
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-new-environment-dialog .ash-environment-fields,
+.ash-new-environment-dialog .ash-environment-field {
+	display: grid;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-new-environment-dialog .ash-environment-fields {
+	gap: var(--ash-spacing-size160);
+}
+
+.ash-dialog.ash-new-environment-dialog
+	> :is(.ash-dialog-header, .ash-dialog-body) {
+	box-sizing: border-box;
+	padding-inline: var(--ash-spacing-size240);
+	inline-size: 100%;
+}
+
+.ash-new-environment-dialog .ash-environment-fields {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.ash-new-environment-dialog .ash-dialog-footer {
+	margin-block-start: var(--ash-spacing-size160);
+	padding-block-start: var(--ash-spacing-size120);
+	border-block-start: var(--ash-strokeThickness) solid
+		var(--ash-dialog-border);
+}
+
+.ash-new-environment-dialog .ash-environment-field :is(input, select, textarea),
+.ash-new-environment-dialog .ash-environment-row select,
+.ash-new-environment-dialog .ash-environment-recent input {
+	padding: var(--ash-spacing-size80);
+	color: var(--ash-input-foreground);
+	background: var(--ash-input-background);
+	border: 1px solid var(--ash-input-border, var(--ash-dialog-border));
+	border-radius: var(--ash-cornerRadius-small);
+	font: inherit;
+}
+
+.ash-new-environment-dialog textarea {
+	resize: vertical;
+	font-family: var(--ash-editor-font-family, monospace);
+}
+
+.ash-new-environment-dialog :is(input, select, textarea, button):focus-visible {
+	outline: 1px solid var(--ash-focusBorder);
+	outline-offset: 2px;
+}
+
+.ash-new-environment-dialog .ash-environment-row,
+.ash-new-environment-dialog .ash-environment-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-new-environment-dialog .ash-environment-row {
+	justify-content: space-between;
+}
+
+.ash-new-environment-dialog .ash-environment-folder > span {
+	flex: 1;
+	min-inline-size: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-new-environment-dialog .ash-environment-actions {
+	justify-content: flex-end;
+}
+
+.ash-new-environment-dialog [role="alert"] {
+	color: var(--ash-errorForeground);
+}
+
+.ash-new-environment-dialog .ash-environment-recent {
+	display: grid;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid var(--ash-dialog-border);
+	border-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-new-environment-dialog .ash-environment-recent > div {
+	display: grid;
+	max-block-size: 12rem;
+	overflow: auto;
+}
+
+.ash-new-environment-dialog
+	:is(.ash-environment-recent, .ash-environment-folder)
+	button {
+	padding: var(--ash-spacing-size80);
+	text-align: start;
+	color: inherit;
+	background: transparent;
+	border: 0;
+	border-radius: var(--ash-cornerRadius-small);
+	font: inherit;
+	cursor: pointer;
+}
+
+.ash-new-environment-dialog
+	:is(.ash-environment-recent, .ash-environment-folder)
+	button:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-new-environment-dialog
+	:is(
+		.ash-environment-recent,
+		.ash-environment-fields,
+		.ash-environment-field,
+		.ash-environment-row,
+		.ash-environment-actions
+	)[hidden] {
+	display: none;
+}
+
+.ash-new-environment-dialog .ash-environment-folder {
+	padding: var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid var(--ash-dialog-border);
+	border-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-new-environment-dialog .ash-environment-folder select {
+	max-inline-size: 48%;
+}
+
+.ash-new-environment-dialog .ash-environment-fields > .ash-button {
+	justify-content: flex-start;
+	padding: var(--ash-spacing-size120);
+}

@@ -1,3 +1,4 @@
+import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
@@ -13,6 +14,7 @@ import { Menus } from '../../../browser/menus.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../layout/browser/desktopLayoutController.js';
 import { registerAddTabActions } from './addTabActions.js';
+import { SessionChangesEditor } from '../../changes/browser/sessionChangesEditor.js';
 import { isRecord } from '../../../../base/common/types.js';
 
 const editorVisibleContext = new RawContextKey<boolean>('sessions.editorContentVisible', false);
@@ -88,6 +90,10 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			});
 		const toolGroup = (arg: unknown): number => isRecord(arg) && typeof arg.groupId === 'number'
 			&& editor.groups.some(group => group.id === arg.groupId) ? arg.groupId : editor.activeGroup.id;
+		this._register(CommandsRegistry.register('ash.sessions.toggleChangesFileList', arg => {
+			const pane = editor.groups.find(group => group.id === toolGroup(arg))?.activePane;
+			if (pane instanceof SessionChangesEditor) { pane.toggleFileList(); }
+		}));
 		this._register(CommandsRegistry.register('ash.sessions.hideTool', arg => run(async () => {
 			(editor as DesktopEditorParts).hideTool(toolGroup(arg));
 			if (editor.groups.every(group => !editor.isGroupVisible(group.id))) layout.hidePart('editor');
@@ -119,6 +125,25 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			),
 		);
 		const codeWhen = codeContext.isEqualTo(true);
+		this._register(MenusRegistry.appendMenuItem(Menus.SessionsEditorHeaderLayout, {
+			submenu: Menus.SessionsToolMove,
+			title: localize2({ bundle: 'ash', key: 'sessions.layout.moveTool' }, 'Move tool'),
+			when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.has('sessions.editorTool')),
+			group: 'layout',
+		}));
+		for (const [direction, id, title] of [
+			[Direction.Left, 'left', localize2({ bundle: 'ash', key: 'sessions.layout.moveToolLeft' }, 'Move left')],
+			[Direction.Right, 'right', localize2({ bundle: 'ash', key: 'sessions.layout.moveToolRight' }, 'Move right')],
+			[Direction.Up, 'up', localize2({ bundle: 'ash', key: 'sessions.layout.moveToolUp' }, 'Move up')],
+			[Direction.Down, 'down', localize2({ bundle: 'ash', key: 'sessions.layout.moveToolDown' }, 'Move down')],
+		] as const) {
+			const command = `ash.sessions.moveTool.${id}`;
+			this._register(CommandsRegistry.register(command, arg => run(async () => {
+				(editor as DesktopEditorParts).moveToolToEdge(direction, toolGroup(arg));
+			})));
+			this._register(MenusRegistry.appendMenuItem(Menus.SessionsToolMove, { command: { id: command, title } }));
+		}
+
 		const editorShown = ContextKeyExpr.and(codeWhen, editorVisibleContext.isEqualTo(true));
 		const editorHidden = ContextKeyExpr.and(codeWhen, editorVisibleContext.isEqualTo(false));
 		const toggleSidePane = {
@@ -147,6 +172,19 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					item: {
 						command: { ...toggleDetails, icon: Lxicon.listUnordered },
 						when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.equals('sessions.editorTool', 'files')),
+						group: 'navigation',
+						order: -1,
+					},
+				},
+				{
+					id: Menus.SessionsEditorHeaderLayout,
+					item: {
+						command: {
+							id: 'ash.sessions.toggleChangesFileList',
+							title: localize2({ bundle: 'ash', key: 'sessions.changes.toggleFileList' }, 'Toggle changed files list'),
+							icon: Lxicon.listUnordered,
+						},
+						when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.equals('sessions.editorTool', 'changes')),
 						group: 'navigation',
 						order: -1,
 					},

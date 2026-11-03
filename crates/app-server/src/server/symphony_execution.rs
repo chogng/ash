@@ -554,6 +554,7 @@ impl AppServer {
             event: ash_protocol::HookEvent::Setup,
             matcher: Default::default(),
             enablement: ash_config::HookEnablement::Enabled,
+            claude_pre_tool_use: None,
             action: ash_config::HookAction::Process {
                 program: "bash".into(),
                 args: vec!["-lc".into(), script.into()],

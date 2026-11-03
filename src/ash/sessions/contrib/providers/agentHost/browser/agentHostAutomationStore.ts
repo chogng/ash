@@ -108,6 +108,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 	}
 
 	getAutomation(id: string): IAutomationDescriptor | undefined { return this.automations.get().find(item => item.id === id); }
+	getAutomationByBackendId(id: string): IAutomationDescriptor | undefined { return this.getAutomation(this.identity(id)); }
 
 	private getActiveRunFor(id: string): IAutomationRun | undefined { return this.runs.get().find(item => item.automationId === id && !terminal(item)); }
 

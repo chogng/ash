@@ -24,6 +24,16 @@ use serde::Deserialize;
 use serde::Deserializer;
 use serde::Serialize;
 
+/// Selects an Agent and the immutable source history for an isolated comparison fork.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ComparisonForkParams {
+    #[ts(type = "number")]
+    pub source_sequence: u64,
+    pub agent: ash_protocol::AgentRoleSelection,
+    pub branch_name: String,
+}
+
 /// Selects an admitted runtime Provider, never an executable supplied by the client.
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -57,6 +67,39 @@ pub struct SessionCreateParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub branch_name: Option<String>,
+    /// Environment overrides supplied by the user for processes in this Session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub environment_variables: Option<SessionEnvironmentVariables>,
+}
+
+#[derive(Clone, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(transparent)]
+pub struct SessionEnvironmentVariables(pub std::collections::BTreeMap<String, String>);
+
+impl std::fmt::Debug for SessionEnvironmentVariables {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("SessionEnvironmentVariables([REDACTED])")
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionEnvironmentProfileReadParams {
+    pub environment_id: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionEnvironmentProfileReadResult {
+    pub variables: Option<SessionEnvironmentVariables>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionEnvironmentProfileSaveParams {
+    pub environment_id: String,
+    pub variables: SessionEnvironmentVariables,
 }
 
 fn deserialize_execution_target<'de, D>(
@@ -217,10 +260,22 @@ pub enum SessionRequest {
         expected_sequence: u64,
         direction: ash_protocol::HistoryDirection,
     },
+    MoveThreadToSession {
+        thread_id: ThreadId,
+        destination_session_id: SessionId,
+    },
+    ChangeDirectory {
+        root: std::path::PathBuf,
+    },
     /// Copies the selected Thread history into an independent Session without subscribing to it.
     ForkSession {
         parent_thread_id: ThreadId,
         title: String,
+    },
+    ForkComparison {
+        parent_thread_id: ThreadId,
+        title: String,
+        comparison: ComparisonForkParams,
     },
     ForkThread {
         parent_thread_id: ThreadId,
@@ -328,6 +383,11 @@ pub enum SessionRequest {
         expected_sequence: u64,
         turn_id: TurnId,
     },
+    CancelUserInput {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        request_id: RequestId,
+    },
     ResolveInteraction {
         thread_id: ThreadId,
         #[ts(type = "number")]
@@ -426,6 +486,10 @@ pub struct SessionThreadUnsubscribeParams {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionResult {
+    /// Acknowledges that the execution host persisted the requested overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub environment_applied: Option<bool>,
     pub session: Session,
     pub agent_tree: AgentTreeProjection,
 }

@@ -103,7 +103,7 @@ resources.add(toDisposable(() => client.dispose()));
 await client.connect();
 services.registerInstance(IGitHubService, new AppServerGitHubService(client));
 const accounts = resources.add(new Emitter<AccountState>());
-services.registerInstance(IAccountService, { onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Use GitHub connection'); }, cancelLogin: async () => { }, logout: async () => { } });
+services.registerInstance(IAccountService, { readRateLimits: async () => { throw new Error('Unexpected subscription limit query'); }, onDidChangeAccounts: accounts.event, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Use GitHub connection'); }, cancelLogin: async () => { }, logout: async () => { } });
 services.registerInstance(IGitHubConnectionService, { isConnecting: false, connect: async () => { }, cancel: async () => { } });
 const host = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, [GitHubLinkPresentationContribution.ID]));
 host.advance(WorkbenchPhase.BlockRestore);

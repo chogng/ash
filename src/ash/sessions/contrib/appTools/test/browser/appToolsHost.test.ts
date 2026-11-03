@@ -24,7 +24,7 @@ suite('appTools browser component', () => {
 		const { page } = browserTests;
 
 		page.on('pageerror', error => console.error(error.message));
-		await page.goto('/appTools.html');
+		await page.goto('/appTools.html?treeFixture');
 		await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
 		const group = await page.evaluate(async () => await window.ashAppToolsIntegration.call({ type: 'createSection', name: '<Review>' }) as { sectionId: string; });
 		await expect(page.getByRole('heading', { name: '<Review>', exact: true })).toBeVisible();
@@ -37,6 +37,19 @@ suite('appTools browser component', () => {
 		await page.evaluate(sectionId => window.ashAppToolsIntegration.call({ type: 'renameSection', sectionId, name: 'Ship' }), group.sectionId);
 		await expect(rows.first()).toBeFocused();
 		await expect(page.getByRole('heading', { name: 'Ship', exact: true })).toBeVisible();
+		const tree = await page.evaluate(async () => {
+			const result = await window.ashAppToolsIntegration.call({ type: 'listSections' }) as { tree: unknown; };
+			return result.tree;
+		});
+		expect(tree).toMatchObject({
+			mode: 'code', automationSessions: 'never',
+			sections: [{
+				id: 'recent', children: [
+					{ id: `group:${group.sectionId}`, label: 'Ship', children: [{ sessionId: 'session-2', threadId: 'thread-2' }] },
+					{ sessionId: 'session-1', threadId: 'thread-1' },
+				]
+			}],
+		});
 		expect(await page.evaluate(async sectionId => {
 			try { await window.ashAppToolsIntegration.call({ type: 'reorderSection', sectionId, sessionIds: [] }); return 'accepted'; }
 			catch (error) { return String(error); }
@@ -81,7 +94,57 @@ suite('appTools browser component', () => {
 		expect(await cancelled).toContain('cancelled');
 		await page.evaluate(() => window.ashAppToolsIntegration.releaseTerminal());
 		await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.closedTerminals)).toEqual(['terminal-1']);
-		expect(await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'listSections' }))).toEqual({ sections: [] });
+		expect(await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'listSections' }))).toMatchObject({ sections: [] });
+	});
+
+	test('the sidebar tool retains nested chats under a collapsed section', async () => {
+		const { page } = browserTests;
+		await page.goto('/appTools.html?nested');
+		await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+		await page.locator('[data-section="recent"] > h3 button').press('ArrowLeft');
+		const result = await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'listSections' }));
+		expect(result).toMatchObject({
+			tree: {
+				sections: [{
+					id: 'recent', collapsed: true, children: [
+						{ sessionId: 'session-1' },
+						{ sessionId: 'session-2', children: [{ sessionId: 'session-2', threadId: 'follow-up', kind: 'chat' }] },
+					],
+				}]
+			}
+		});
+	});
+
+	test('sidebar search expands matches and shares the filtered tree with application tools', async () => {
+		const { page } = browserTests;
+		await page.goto('/appTools.html?nested&treeFixture&locale=zh-CN');
+		await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+		const recent = page.locator('[data-section="recent"] > h3 button');
+		await recent.press('ArrowLeft');
+		await expect(recent).toHaveAttribute('aria-expanded', 'false');
+		await recent.press('Control+f');
+		const search = page.getByRole('searchbox', { name: '在侧栏中搜索会话' });
+		await expect(search).toBeFocused();
+		await search.fill('missing');
+		await expect(page.getByText('没有匹配的会话。')).toBeVisible();
+		await search.fill('follow-up');
+		await expect(recent).toHaveAttribute('aria-expanded', 'true');
+		await expect(page.getByText('Follow-up', { exact: true })).toBeVisible();
+		await expect(page.getByText('Task 1', { exact: true })).toHaveCount(0);
+		const result = await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'listSections' }));
+		expect(result).toMatchObject({
+			tree: {
+				sections: [{
+					id: 'recent', collapsed: false, children: [
+						{ sessionId: 'session-2', children: [{ threadId: 'follow-up', kind: 'chat' }] },
+					],
+				}]
+			}
+		});
+		await search.press('Escape');
+		await expect(search).toHaveCount(0);
+		await expect(recent).toHaveAttribute('aria-expanded', 'false');
+		await expect(recent).toBeFocused();
 	});
 
 	for (const platform of ['linux', 'osx', 'windows']) {

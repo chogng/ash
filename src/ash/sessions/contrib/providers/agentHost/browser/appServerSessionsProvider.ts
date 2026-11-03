@@ -28,6 +28,7 @@ export interface AppServerSessionsProviderHost {
 	readonly id?: string;
 	readonly label?: string;
 	readonly workspace: () => SessionWorkspaceSelection;
+	readonly authorizeWorkspace?: (target: SessionExecutionTarget, signal: AbortSignal) => Promise<boolean>;
 	readonly selectWorkspace: (folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]) => Promise<SessionExecutionTarget | undefined>;
 }
 
@@ -231,18 +232,32 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 
 	currentWorkspace(): SessionWorkspaceSelection { return this.host.workspace(); }
 
-	public async getWorktrees(workspace: SessionExecutionTarget, token: CancellationToken): Promise<readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]> {
+	public async getWorktrees(workspace: SessionExecutionTarget, token: CancellationToken, includeOtherRepositories = false): Promise<readonly { readonly label: string; readonly target: SessionExecutionTarget; readonly repository?: SessionExecutionTarget; }[]> {
 		const source = buildAgentHostSessionWorkspace(workspace)!;
 		if (!this.ownsSourceAuthority(source.authorityId)) { return []; }
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
-		const worktrees = await this.rendererHost.localGit.listWorktrees(token);
+		const git = this.rendererHost.localGit;
+		const matchesSource = (path: string): boolean => extUri.isEqual(sessionWorkspaceUri({ ...source, root: path }), sessionWorkspaceUri(source));
+		let worktrees = await git.listWorktrees(token).catch(error => {
+			if (workspace.type !== 'local') throw error;
+			this.assertCurrentConnection(generation, epoch);
+			if (token.isCancellationRequested) throw canceled();
+			return [];
+		});
+		// A draft can select a trusted folder outside the window's repository catalog.
+		if (workspace.type === 'local' && !worktrees.some(worktree => matchesSource(worktree.sourcePath) || matchesSource(worktree.path))) {
+			worktrees = [...worktrees, ...await git.listWorktrees(token, workspace.root)];
+		}
 		this.assertCurrentConnection(generation, epoch);
 		if (token.isCancellationRequested) { throw canceled(); }
-		const matchesSource = (path: string): boolean => extUri.isEqual(sessionWorkspaceUri({ ...source, root: path }), sessionWorkspaceUri(source));
 		const projectSources = new Set(worktrees.filter(worktree => matchesSource(worktree.sourcePath) || matchesSource(worktree.path)).map(worktree => worktree.sourcePath));
-		return worktrees.filter(worktree => projectSources.has(worktree.sourcePath))
-			.map(worktree => ({ label: worktree.label, target: { ...workspace, root: worktree.path } }));
+		return worktrees.filter(worktree => includeOtherRepositories || projectSources.has(worktree.sourcePath))
+			.map(worktree => ({
+				label: worktree.label,
+				target: { ...workspace, root: worktree.path },
+				...(includeOtherRepositories ? { repository: { ...workspace, root: worktree.sourcePath } } : {}),
+			}));
 	}
 
 	private ownsSourceAuthority(authority: string): boolean {
@@ -252,9 +267,51 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		return sources.some(source => buildAgentHostSessionWorkspace(source)?.authorityId === authority);
 	}
 
+	public async authorizeWorkspace(target: SessionExecutionTarget, signal: AbortSignal): Promise<boolean> {
+		if (!this.host.authorizeWorkspace || target.type === 'provider') return true;
+		const source = buildAgentHostSessionWorkspace(target);
+		return !!source && this.ownsSourceAuthority(source.authorityId) && this.host.authorizeWorkspace(target, signal);
+	}
+
 	public isDevContainerWorkspaceAvailable(workspaceUri: URI, token = CancellationToken.None): Promise<boolean> {
 		if (!this.ownsSourceAuthority(workspaceUri.scheme === 'file' ? 'local' : workspaceUri.authority)) return Promise.resolve(false);
 		return this.containers.isAvailable(devContainerSourcePath(workspaceUri), token);
+	}
+
+	canChangeDirectory(): boolean {
+		return this.sessionApi.canChangeDirectory?.() === true;
+	}
+
+	async changeDirectory(sessionId: SessionId, root: string, commandId: string): Promise<void> {
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		await this.sessionApi.changeDirectory!({ sessionId, root, commandId });
+		this.assertCurrentConnection(generation, epoch);
+	}
+
+	canMoveChat(): boolean {
+		return this.rendererHost.thread.canMoveThreadToSession?.() === true;
+	}
+
+	async moveChat(sessionId: SessionId, threadId: ThreadId, destinationSessionId: SessionId, commandId: string): Promise<void> {
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		await this.rendererHost.thread.moveThreadToSession!({ sessionId, threadId, destinationSessionId, commandId });
+		this.assertCurrentConnection(generation, epoch);
+	}
+
+	async forkChat(sessionId: SessionId, threadId: ThreadId, title: string, creationId: string): Promise<IActiveSessionThread> {
+		const generation = this.appServer.connectionGeneration;
+		const epoch = this.connectionEpoch;
+		const target = await this.rendererHost.thread.fork({ sessionId, threadId, title, commandId: creationId, target: 'thread' });
+		this.assertCurrentConnection(generation, epoch);
+		if (target.sessionId !== sessionId) throw new Error(localize('sessions.nestedChat.unavailable', 'The new conversation is unavailable.'));
+		const session = await this.readCatalog(sessionId);
+		this.assertCurrentConnection(generation, epoch);
+		if (!session?.chats.some(chat => chat.threadId === target.threadId)) {
+			throw new Error(localize('sessions.nestedChat.unavailable', 'The new conversation is unavailable.'));
+		}
+		return { session, threadId: target.threadId };
 	}
 
 	async create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId: string = createUuid(), options?: ISessionCreateOptions): Promise<IActiveSessionThread> {
@@ -266,6 +323,14 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 			: workspace.type === 'current' ? null : workspace;
 		if (executionTarget === undefined) throw canceled();
 		const token = options?.token ?? CancellationToken.None;
+		if (this.host.authorizeWorkspace) {
+			const authorization = new AbortController();
+			using cancellation = token.onCancellationRequested(() => authorization.abort());
+			if (token.isCancellationRequested) throw canceled();
+			for (const target of [...(executionTarget ? [executionTarget] : []), ...options?.additionalFolders ?? []]) {
+				if (!await this.authorizeWorkspace(target, authorization.signal)) throw canceled();
+			}
+		}
 		if (options?.devContainer) {
 			const source = executionTarget && buildAgentHostSessionWorkspace(executionTarget);
 			if (!executionTarget || executionTarget.type === 'provider' || !source || !this.ownsSourceAuthority(source.authorityId)) {
@@ -277,7 +342,11 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		if (!this.connectionReady) await this.initialConnectionState;
 		this.assertCurrentConnection(generation, epoch);
 		if (token.isCancellationRequested) throw canceled();
-		const created = await this.sessionApi.create({ commandId: `desktop-session-${creationId}`, title, executionTarget, branchName: options?.branchName, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
+		const additional = options?.additionalFolders ?? [];
+		if (additional.length && (!this.sessionApi.addWorkspaceFolder || additional.some(folder => !this.ownsSourceAuthority(buildAgentHostSessionWorkspace(folder)!.authorityId)))) {
+			throw new Error(localize('sessions.environment.foldersUnavailable', 'The selected host cannot access every environment folder.'));
+		}
+		const created = await this.sessionApi.create({ commandId: `desktop-session-${creationId}`, title, executionTarget, branchName: options?.branchName, environmentVariables: options?.environmentVariables, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
 		// Creation also subscribes this connection to the new Session on the server.
 		if (this.isDisposed && generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) {
 			await this.sessionApi.unsubscribe({ sessionId: created.session.sessionId });
@@ -292,6 +361,11 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 			throw new Error(localize('sessions.create.noActiveChat', 'The new session has no active chat.'));
 		}
 		try {
+			for (const folder of additional) {
+				if (token.isCancellationRequested) throw canceled();
+				this.assertCurrentConnection(generation, epoch);
+				await this.sessionApi.addWorkspaceFolder!(created.session.sessionId, folder.root);
+			}
 			const session = await this.subscribe(toSession(created.session));
 			this.assertCurrentConnection(generation, epoch);
 			if (!session.chats.some(candidate => candidate.threadId === root.threadId && candidate.status === 'active')) {
@@ -390,12 +464,15 @@ function connectionStatus(state: AppServerConnectionState): 'connecting' | 'conn
 
 function toSession(session: AgentSession, threads: readonly ThreadSubscription[] = [], previous?: ISession, agentTree?: readonly AgentExecutionNode[]): ISession {
 	const byId = new Map(threads.map(entry => [entry.thread.threadId, entry]));
+	const workspace = buildAgentHostSessionWorkspace(session.executionTarget);
+	const directoryChanged = previous?.workspace?.authorityId !== workspace?.authorityId || previous?.workspace?.root !== workspace?.root;
 	return {
 		application: getSessionApplication('ash'),
 		sessionId: session.sessionId,
+		...(session.source ? { source: session.source } : {}),
 		title: session.title,
 		status: session.status,
-		workspace: buildAgentHostSessionWorkspace(session.executionTarget),
+		workspace,
 		model: session.model,
 		management: { ...session.manager },
 		nextApprovalMode: previous?.nextApprovalMode ?? 'manual',
@@ -407,7 +484,7 @@ function toSession(session: AgentSession, threads: readonly ThreadSubscription[]
 				threadId: thread.threadId,
 				createdAt: thread.createdAtUnixMs === undefined ? undefined : new Date(thread.createdAtUnixMs),
 				updatedAt: thread.lastActivityAtUnixMs === undefined ? undefined : new Date(thread.lastActivityAtUnixMs),
-				workspace: snapshot ? buildAgentHostChatWorkspace(snapshot.directory ?? null) : prior?.workspace,
+				workspace: snapshot ? buildAgentHostChatWorkspace(snapshot.directory ?? null) : directoryChanged ? undefined : prior?.workspace,
 				origin: thread.parentThreadId || thread.forkedFromId
 					? { type: 'fork' as const, parentThreadId: thread.parentThreadId ?? thread.forkedFromId!, parentSequence: detail?.sequence ?? 0 }
 					: { type: 'root' as const },

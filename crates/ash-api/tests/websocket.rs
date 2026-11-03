@@ -125,7 +125,7 @@ async fn transcription_uses_dedicated_session_and_commits_one_audio_turn() {
             |request: &tokio_tungstenite::tungstenite::handshake::server::Request, response| {
                 assert_eq!(
                     request.uri().path_and_query().unwrap().as_str(),
-                    "/v1/realtime?model=gpt-live-transcribe"
+                    "/v1/realtime?intent=transcription"
                 );
                 assert_eq!(request.headers()["authorization"], "Bearer fixture");
                 Ok(response)
@@ -163,6 +163,7 @@ async fn transcription_uses_dedicated_session_and_commits_one_audio_turn() {
         "gpt-live-transcribe",
         limits(),
         Some("en"),
+        None,
         &token,
     )
     .await

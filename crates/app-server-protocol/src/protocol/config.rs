@@ -25,6 +25,10 @@ pub struct DirectoryGrantsReadResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub permissions: Option<Vec<PermissionDto>>,
+    /// Source grant used only to project workspace trust for a managed checkout.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub inherited_workspace_permissions: Option<Vec<PermissionDto>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -488,6 +492,9 @@ pub struct HookConfigDto {
     pub matcher: HookMatcherDto,
     pub action: HookActionDto,
     pub enablement: HookEnablementDto,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub claude_pre_tool_use: Option<ash_protocol::ClaudePreToolUseHook>,
 }
 
 /// Reads user declarations and directory declarations discoverable by one Session.

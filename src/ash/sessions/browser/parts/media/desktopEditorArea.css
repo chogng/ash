@@ -1,3 +1,7 @@
+.ash-workbench[data-color-scheme="light"] .ash-desktop-editor-area {
+	background: var(--ash-sessions-conversation-background);
+}
+
 .ash-desktop-editor-area > .ash-workbench-part-content {
 	position: absolute;
 	inset: 0;
@@ -22,7 +26,10 @@
 	overflow: hidden;
 	border-radius: var(--ash-cornerRadius-xLarge);
 	background: var(--ash-editor-background);
-	box-shadow: 0 0 0 var(--ash-strokeThickness) var(--ash-editorGroup-border);
+	box-shadow:
+		0 0 0 var(--ash-strokeThickness) var(--ash-editorGroup-border),
+		0 2px 8px
+			color-mix(in srgb, var(--ash-sessions-inputShadow) 45%, transparent);
 }
 
 .ash-desktop-editor-area
@@ -37,6 +44,7 @@
 	.ash-tool-editor-workspace
 	.ash-workbench-part-frame
 	> .ash-workbench-part {
+	box-shadow: none;
 	outline: var(--ash-strokeThickness) solid var(--ash-contrastBorder);
 	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }

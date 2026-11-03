@@ -39,6 +39,7 @@ pub(super) async fn run(
             &request.connector,
             model_provider::VoiceSessionLimits::default(),
             request.language.as_deref(),
+            request.prompt.as_deref(),
             &token,
         ) => result.map_err(|error| error.to_string())?,
         _ = &mut *stopped => return Ok(()),

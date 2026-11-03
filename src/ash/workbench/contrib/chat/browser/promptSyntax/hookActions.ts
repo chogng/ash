@@ -5,7 +5,7 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
-import { IFileService } from '../../../../../platform/files/common/files.js';
+import { FileSystemProviderErrorCode, IFileService, toFileSystemProviderErrorCode } from '../../../../../platform/files/common/files.js';
 import { HookEvents } from '../../common/promptSyntax/hookTypes.js';
 import { IPromptsService } from '../../common/promptSyntax/service/promptsService.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
@@ -65,9 +65,15 @@ export async function openHookConfiguration(accessor: ServicesAccessor, source: 
 	const resource = getHookConfigurationResource(accessor, source)!;
 	const files = accessor.get(IFileService);
 	const editors = accessor.get(IEditorService);
-	await files.createDirectory(dirname(resource));
-	checkContext();
-	await files.createFile(resource, 'ignore');
+	try {
+		await files.stat(resource);
+	} catch (error) {
+		if (!(error instanceof Error) || toFileSystemProviderErrorCode(error) !== FileSystemProviderErrorCode.FileNotFound) throw error;
+		checkContext();
+		await files.createDirectory(dirname(resource));
+		checkContext();
+		await files.createFile(resource, 'ignore');
+	}
 	checkContext();
 	if (options?.openEditor) { await options.openEditor(resource); }
 	else { await editors.openEditor({ resource, languageId: 'toml' }, { pinned: true }); }

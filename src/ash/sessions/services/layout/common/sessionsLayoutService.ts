@@ -14,7 +14,8 @@ export interface ISessionEditorWorkingSetState {
 /** Features describe their shared hosts; resource categories and workspace models stay with the feature. */
 export interface ISessionsEntry {
 	readonly id: string;
-	readonly workspaceMode?: 'chat' | 'code';
+	/** Shared entries retain the current workspace mode, including on restoration. */
+	readonly workspaceMode?: 'chat' | 'code' | 'current';
 	readonly activityContext: string;
 	readonly content: 'conversation' | 'documents' | 'editor';
 	/** Starts hidden on entry; user actions may reveal the shared conversation without replacing the editor or side views. */
@@ -41,7 +42,8 @@ export interface ISessionsLayoutService extends IDisposable {
 	setConversationVisible(visible: boolean): Promise<void>;
 	/** Initialize retained content after its editor is created. Restoration preserves any covering Custom View and its focus. */
 	openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: { readonly source: 'restore'; }): Promise<void>;
-	restore(): Promise<void>;
+	/** Notify startup of the resolved command before opening an uncovered entry. */
+	restore(onWillRestoreEntry?: (command: string) => void): Promise<void>;
 }
 
 export const ISessionsLayoutService = createServiceIdentifier<ISessionsLayoutService>('sessionsLayoutService');

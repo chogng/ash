@@ -1,6 +1,7 @@
 import { URI } from '../../../../base/common/uri.js';
+import type { EditSuggestionId } from '../../../../editor/common/textModelEditSource.js';
 import type { CommandInterpretation } from '../../../../platform/agentHost/common/agent.js';
-import type { AgentInteractionOffer, AgentReviewTarget, ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentResponse, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
+import type { AgentInteractionOffer, AgentReviewTarget, ChatHookRun, SessionMode, Turn, Thread, ThreadGoalUpdate, AgentInteractionDecision, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, ThreadRead, ThreadSubscription, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
 export type {
 	ChatImageAttachment,
 	ChatAudioAttachment,
@@ -30,6 +31,7 @@ export type {
 	DynamicToolCall,
 	AgentRequest,
 	AgentResponse,
+	AgentInteractionDecision,
 	TurnInteraction,
 	ThreadCommittedEvent,
 	ThreadUpdate,
@@ -67,6 +69,9 @@ export { AgentThreadHistoryConflictError as ChatHistoryConflictError } from '../
 export interface ChatEditSource {
 	readonly threadId: ThreadId;
 	readonly turnId: string;
+	readonly sessionId?: SessionId;
+	readonly codeBlockSuggestionId?: EditSuggestionId;
+	readonly languageId?: string;
 }
 
 export type ChatEditOutcome = 'completed' | 'failed' | 'interrupted';
@@ -175,7 +180,7 @@ export interface ConsultAdvisorOptions { readonly isNewSession?: boolean; readon
 export interface CompactContextOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly expectedSequence: number; readonly retentionPrompt?: string; }
 export interface SteerTurnOptions extends ChatSubmissionOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; readonly text: string; readonly contexts?: readonly ResolvedChatContext[]; }
 export interface InterruptTurnOptions { readonly sessionId: SessionId; readonly threadId: ThreadId; readonly turnId: string; readonly expectedSequence: number; }
-export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentResponse; }
+export interface ResolveInteractionOptions extends InterruptTurnOptions { readonly requestId: string; readonly response: AgentInteractionDecision; }
 
 export type TurnChangeCaptureState = 'open' | 'sealed' | 'incomplete' | 'discarded';
 export type TurnChangeMessageState = 'unconfigured' | 'queued' | 'generating' | 'ready' | 'failed';

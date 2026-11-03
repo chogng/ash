@@ -66,7 +66,7 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 		const paths = {
 			card: 'workbench/contrib/chat/browser/widget/input/modelPicker/modelPickerCard.ts',
 			chat: 'workbench/contrib/chat/browser/widget/chatListWidget.ts',
-			sidebar: 'sessions/browser/parts/sidebar/sessionsList.ts',
+			sidebar: 'sessions/contrib/sessions/browser/views/sessionsList.ts',
 		};
 		const sources = await Promise.all(Object.entries(paths).map(async ([name, path]) => {
 			const file = resolve(desktopDirectory, 'src/ash', path);
@@ -339,7 +339,7 @@ test('development DomWidget rebuilds chat tips twice while retaining draft, focu
 			const { IStorageService } = await import(moduleUrl('platform/storage/common/storage.ts'));
 			const { IChatTipService, ChatTipService } = await import(moduleUrl('workbench/contrib/chat/browser/chatTipService.ts'));
 			const { ChatInputTipPresenter } = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.ts'));
-			const { ChatInputNoticeHost } = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/notices/chatInputNoticeHost.ts'));
+			const { ChatInputNoticeHost } = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/chatInputNoticeHost.ts'));
 			const scope = new DisposableStore();
 			const services = scope.add(new InstantiationService());
 			const storage = scope.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'widget-hmr', backend: localStorage, flushInterval: 0 }));

@@ -43,6 +43,7 @@ impl Drop for Admission {
 struct RoutedRequest {
     raw: IncomingRequest,
     admission: Admission,
+    switched_session: Option<ash_protocol::SessionId>,
 }
 
 /// Directory IO and initialization belong to this route task. The reader only offers bounded
@@ -138,12 +139,24 @@ impl<'scope> LocalTarget<'scope> {
                     break;
                 }
                 let output = outbound.clone();
-                let RoutedRequest { raw, admission } = request;
+                let RoutedRequest {
+                    raw,
+                    admission,
+                    switched_session,
+                } = request;
+                let retirement = switched_session
+                    .map(|session| (Arc::clone(&registry), Arc::clone(&target.server), session));
                 requests.dispatch(
                     Arc::clone(&target.server),
                     &target.connection,
                     raw,
                     move |response| {
+                        if let Some((registry, server, session)) = retirement
+                            && serde_json::from_str::<Value>(&response)
+                                .is_ok_and(|value| value.get("result").is_some())
+                        {
+                            registry.release_previous_session_directories(&session, &server);
+                        }
                         let result = output
                             .send(super::tag_resource_response(response, route_id).into())
                             .map_err(|_| io::Error::from(io::ErrorKind::BrokenPipe));
@@ -199,8 +212,18 @@ impl<'scope> LocalTarget<'scope> {
             )
         })?;
         *count += 1;
+        let switched_session = if request["method"] == "session/request"
+            && request["params"]["request"]["type"] == "changeDirectory"
+        {
+            request["params"]["sessionId"]
+                .as_str()
+                .and_then(|id| ash_protocol::SessionId::new(id).ok())
+        } else {
+            None
+        };
         let routed = RoutedRequest {
             raw,
+            switched_session,
             admission: Admission {
                 state: Arc::clone(&self.state),
                 lane,

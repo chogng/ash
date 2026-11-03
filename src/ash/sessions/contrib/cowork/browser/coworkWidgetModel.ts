@@ -1,3 +1,4 @@
+import { SessionModelSelection } from '../../../browser/sessionModelSelection.js';
 import { ChatRequestQueueKind } from '../../../../workbench/services/chat/common/chatService.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
@@ -9,7 +10,7 @@ import { ILanguageModelsConfigurationService } from '../common/languageModelsCon
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import type { AgentResponse, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, ThreadChangesSummary, TurnChangeSetSummary, TurnInteraction } from '../../../../workbench/services/chat/common/chatService.js';
+import type { AgentInteractionDecision, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, ThreadChangesSummary, TurnChangeSetSummary, TurnInteraction } from '../../../../workbench/services/chat/common/chatService.js';
 import { localize } from '../../../../nls.js';
 import type { SkillReference } from '../../../../platform/agentHost/common/appServerApi.js';
 import type { ResolvedChatContext } from '../../../../workbench/services/chat/common/chatContextService.js';
@@ -68,16 +69,16 @@ export class CoworkWidgetModel extends Disposable {
 	private readonly selectedModes = new Map<string, ChatMode>();
 	private queuedMessages = 0;
 	private queueGeneration = 0;
-	private readonly selectedModels = new Map<string, ModelRef>();
-	private readonly hasManualUntitledModel = observableValue(this, false);
+	private readonly threadModelSelection = new SessionModelSelection();
+	private readonly draftModelSelection = observableValue<{ readonly model?: ModelRef; readonly manual: boolean; }>(this, { manual: false });
 	private readonly defaultApprovalMode = observableValue<ApprovalMode>(this, 'manual');
 	private approvalGeneration = 0;
 	private readonly selectedApprovalModes = observableValue<ReadonlyMap<string, ApprovalMode>>(this, new Map());
-	private readonly automaticModels = new Set<ThreadId>();
 	// A New Chat's key is replaced with its Thread ID when the first message materializes it.
 	private readonly selectedReasoningEfforts = new Map<string, { model: string; effort: ModelReasoningEffort | undefined; }>();
 	private _skillSelectors: readonly SkillSelectorDefinition[] = [];
 	private skillCatalogGeneration = 0;
+	private readonly skillSelectorsLoading = observableValue(this, false);
 	private _changeSets: readonly TurnChangeSetSummary[] = [];
 	private readonly changeDetails = new Map<string, TurnChangeDetails>();
 	private changesGeneration = 0;
@@ -134,6 +135,7 @@ export class CoworkWidgetModel extends Disposable {
 	}
 
 	get inputState(): ChatInputState {
+		const pendingInteraction = activeTurn(this._thread)?.pendingInteraction;
 		return {
 			draftIdentity: { id: this.composerIdentity, generation: this.composerGeneration },
 			inputBlocked: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
@@ -153,6 +155,7 @@ export class CoworkWidgetModel extends Disposable {
 			modelsError: this.modelsError,
 			slashCommands: [],
 			skillSelectors: this._skillSelectors,
+			skillSelectorsLoading: this.skillSelectorsLoading.get(),
 			selectedModel: this.selectedModel,
 			selectedReasoningEffort: this.selectedReasoningEffort,
 			isAutomaticModel: this.isAutomaticModel,
@@ -160,6 +163,7 @@ export class CoworkWidgetModel extends Disposable {
 			agentName: this.selection.kind === 'session' ? this.selection.active.session.agentTree?.find(node => node.threadId === this.threadId)?.role?.name : undefined,
 			canSelectAgent: this.selection.kind === 'untitled',
 			interaction: this.interaction,
+			pendingUserInputRequestId: pendingInteraction?.kind === 'userInput' ? pendingInteraction.requestId : undefined,
 		};
 	}
 
@@ -213,16 +217,14 @@ export class CoworkWidgetModel extends Disposable {
 
 	get selectedModel(): ModelRef | undefined {
 		return this.selection.kind === 'untitled'
-			? this.selectedModels.get(this.composerIdentity)
-			: this.selectedModels.get(this.selection.active.threadId)
-			?? (this._thread?.threadId === this.selection.active.threadId ? this._thread.turns.at(-1)?.model : undefined)
-			?? this.selection.active.session.model ?? undefined;
+			? this.draftModelSelection.get().model
+			: this.threadModelSelection.resolveModel(this.selection.active, this._thread);
 	}
 
 	get isAutomaticModel(): boolean {
 		return this.selection.kind === 'untitled'
-			? !this.selectedModels.has(this.composerIdentity)
-			: this.automaticModels.has(this.selection.active.threadId);
+			? this.draftModelSelection.get().model === undefined
+			: this.threadModelSelection.isAutomatic(this.selection.active.threadId);
 	}
 
 	get selectedReasoningEffort(): ModelReasoningEffort | undefined {
@@ -343,20 +345,20 @@ export class CoworkWidgetModel extends Disposable {
 
 	async selectModel(model: ModelRef): Promise<void> {
 		if (this.selection.kind === 'untitled') {
-			this.hasManualUntitledModel.set(true, undefined);
+			this.draftModelSelection.set({ model, manual: true });
+		} else {
+			this.threadModelSelection.select(this.selection.active.threadId, model);
 		}
-		this.selectedModels.set(this.composerIdentity, model);
-		this.automaticModels.delete(this.composerIdentity);
 		this.modelPreferences.rememberSelectedModel(model);
 		this._onDidChange.fire();
 	}
 
 	async selectAutomaticModel(): Promise<void> {
 		if (this.selection.kind === 'untitled') {
-			this.hasManualUntitledModel.set(true, undefined);
+			this.draftModelSelection.set({ manual: true });
+		} else {
+			this.threadModelSelection.select(this.selection.active.threadId, undefined);
 		}
-		this.selectedModels.delete(this.composerIdentity);
-		this.automaticModels.add(this.composerIdentity);
 		this.modelPreferences.rememberSelectedModel(undefined);
 		this._onDidChange.fire();
 	}
@@ -409,9 +411,12 @@ export class CoworkWidgetModel extends Disposable {
 			this.requireCurrentOperation(operation);
 			await this.initialize();
 			this.requireCurrentOperation(operation);
+			// Once accepted, this request keeps its model even if the picker changes during preparation.
+			const model = this.isAutomaticModel ? undefined : this.selectedModel;
+			const reasoningEffort = this.selectedReasoningEffort;
 			this.setState('submitting');
 			this.requireCurrentOperation(operation);
-			const active = await this.ensureActiveSession();
+			const active = await this.ensureActiveSession(operation.signal);
 			if (this.isDisposed || operation.signal?.aborted || operation.generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
 			operation.identity = active.threadId;
 			if (this._thread?.threadId !== active.threadId) {
@@ -434,8 +439,8 @@ export class CoworkWidgetModel extends Disposable {
 				mode,
 				commandInterpretation: 'literal' as const,
 				approvalMode: this.inputState.approvalMode,
-				model: this.isAutomaticModel ? undefined : this.selectedModel,
-				reasoningEffort: this.selectedReasoningEffort,
+				model,
+				reasoningEffort,
 				contexts,
 				signal: operation.signal,
 				commandId: options?.commandId,
@@ -515,17 +520,18 @@ export class CoworkWidgetModel extends Disposable {
 
 		} catch (error) {
 			if (isCurrent()) this.setError(error);
+			throw error;
 		}
 	}
 
-	async resolveInteraction(response: AgentResponse, expectedRequestId?: string): Promise<void> {
+	async resolveInteraction(response: AgentInteractionDecision, expectedRequestId?: string): Promise<void> {
 		const thread = this._thread;
 		const offer = thread ? this.chatService.getInteractionOffer(thread.sessionId, thread.threadId) : undefined;
 		const interaction = offer?.interaction;
 		const turn = activeTurn(thread);
 		if (!thread || !turn || !offer || !interaction || offer.turnId !== turn.turnId) return;
 		if (expectedRequestId !== undefined && interaction.requestId !== expectedRequestId) { throw canceled(); }
-		if (response.type !== interaction.request.type) {
+		if ((response.type === 'cancelUserInput' ? 'userInput' : response.type) !== interaction.request.type) {
 			throw new Error('Interaction response kind does not match request');
 		}
 		const operation = this.captureOperation();
@@ -605,23 +611,28 @@ export class CoworkWidgetModel extends Disposable {
 	}
 
 	private applyDefaultNewChatModel(): void {
-		if (this.selection.kind !== 'untitled' || this.hasManualUntitledModel.get()) return;
+		if (this.selection.kind !== 'untitled' || this.draftModelSelection.get().manual) return;
 		const model = this.modelPreferences.getDefaultNewChatModel(this._models);
 		// The draft identity and text are shared with Code; its model choice is owned by that UI.
-		if (model) { this.selectedModels.set(this.composerIdentity, model); }
-		else { this.selectedModels.delete(this.composerIdentity); }
+		this.draftModelSelection.set({ model, manual: false });
 	}
 
 	private async loadSkillSelectors(): Promise<void> {
 		const generation = ++this.skillCatalogGeneration;
 		const sessionId = this.sessionId;
+		this.skillSelectorsLoading.set(true);
+		this._onDidChange.fire();
 		try {
 			const catalog = await this.skills.findAgentSkills(CancellationToken.None, sessionId);
 			if (this.isDisposed || generation !== this.skillCatalogGeneration || sessionId !== this.sessionId) return;
 			this._skillSelectors = toSkillSelectors(catalog);
-			this._onDidChange.fire();
 		} catch {
 			// Keep the last valid catalog when a transient refresh fails.
+		} finally {
+			if (!this.isDisposed && generation === this.skillCatalogGeneration && sessionId === this.sessionId) {
+				this.skillSelectorsLoading.set(false);
+				this._onDidChange.fire();
+			}
 		}
 	}
 
@@ -649,7 +660,11 @@ export class CoworkWidgetModel extends Disposable {
 		const generation = ++this.generation;
 		const oldThreadId = this._thread?.threadId;
 		const request = ++this.readRequest;
-		this._thread = undefined;
+		// The new connection supplies authority. Keep the last readable snapshot
+		// for the same thread so a pending question retains its draft during hydration.
+		if (this._thread?.sessionId !== active.session.sessionId || oldThreadId !== active.threadId) {
+			this._thread = undefined;
+		}
 		this.transcriptEntries = [];
 		this.transcriptRevision = 0;
 		this._changeSets = [];
@@ -1008,10 +1023,8 @@ export class CoworkWidgetModel extends Disposable {
 		this.selectedApprovalModes.set(approvalModes);
 		if (effort) this.selectedReasoningEfforts.set(created.threadId, effort);
 		this.selectedReasoningEfforts.delete(untitledSession.untitledSessionId);
-		if (selectedModel) this.selectedModels.set(created.threadId, selectedModel);
-		else this.automaticModels.add(created.threadId);
-		this.selectedModels.delete(untitledSession.untitledSessionId);
-		this.automaticModels.delete(untitledSession.untitledSessionId);
+		this.threadModelSelection.select(created.threadId, selectedModel);
+		this.draftModelSelection.set({ manual: false });
 	}
 
 }

@@ -1,4 +1,5 @@
 .ash-sessions-chat-slot {
+	position: relative;
 	display: flex;
 	height: 100%;
 	min-width: 0;
@@ -17,4 +18,11 @@
 	min-width: 0;
 	min-height: 0;
 	flex: 1 1 auto;
+}
+
+.ash-sessions-chat-slot-close {
+	position: absolute;
+	inset-block-start: var(--ash-spacing-size80);
+	inset-inline-end: var(--ash-spacing-size80);
+	z-index: 1;
 }

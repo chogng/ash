@@ -1,3 +1,4 @@
+import { createDirectoryPermissionRequestService, WorkspaceTrustPrompt } from '../contrib/workspace/browser/workspace.contribution.js';
 import { registerBrowserNetworkHost } from '../../platform/browserView/electron-browser/browserNetworkHost.js';
 import { IAgentHostConnectionsService } from '../../platform/agentHost/common/agentHostConnectionsService.js';
 import { IBrowserViewWorkbenchService } from '../contrib/browserView/common/browserView.js';
@@ -59,7 +60,7 @@ import { ElectronLifecycleService } from '../services/lifecycle/electron-browser
 import { createElectronTitlebarPartFactory } from '../services/title/electron-browser/titleService.js';
 import { ElectronTitleService } from './parts/titlebar/titlebarPart.js';
 import { NativeDialogHandler } from './parts/dialogs/dialogHandler.js';
-import { DirectoryPermissionDialog } from './parts/dialogs/directoryPermissionDialog.js';
+import { readDirectoryPermissionPrompt } from '../../platform/workspace/electron-browser/workspaceContextApi.js';
 import { ElectronWindow } from './window.js';
 import { registerLocalTranscriptionService } from '../services/localTranscription/electron-browser/localTranscriptionService.js';
 import { NativeWorkbenchStorageService } from '../services/storage/electron-browser/storageService.js';
@@ -97,7 +98,9 @@ export class DesktopMain extends Disposable {
 		const tracking = tracker ? installDisposableTracker(tracker) : undefined;
 		try {
 			const container = document.querySelector<HTMLElement>('#app') ?? document.body;
-			const permissionDialog = this._register(new DirectoryPermissionDialog(container));
+			const permissionDialog = this._register(new WorkspaceTrustPrompt(container));
+			const workspaceTrust = createDirectoryPermissionRequestService(container, (request, handler, signal) =>
+				permissionDialog.show(() => readDirectoryPermissionPrompt(request), handler, signal));
 			const transcriptionServices = this._register(new InstantiationService());
 			// Browser requests arrive during backend initialization, before the Parts exist.
 			const profileServices = this._register(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors().filter(([id]) => id === IPlaywrightService))));
@@ -121,7 +124,7 @@ export class DesktopMain extends Disposable {
 				client => { documentClient = client; return {}; },
 				...this.rendererCapabilities,
 				(_client, _appServer, localClient) => registerLocalTranscriptionService(transcriptionServices, localClient),
-			], { browser: true, textDocuments: true }, permissionDialog, mainProcessService, async (localApi, factories, authority, attempt) => {
+			], { browser: true, textDocuments: true, agentHosts: true }, workspaceTrust, mainProcessService, async (localApi, factories, authority, attempt) => {
 				if (!resolverScope.value) {
 					const scope = new DisposableStore();
 					resolverScope.value = scope;
@@ -201,6 +204,7 @@ export class DesktopMain extends Disposable {
 				api,
 				container,
 				workspace,
+				workspaceDirectoriesReady: api.workspaceDirectoriesReady,
 				createLifecycleService: services => {
 					lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError });
 					this._register(lifecycleService.onWillShutdown(event => event.join(logger.flush().catch(error => console.error('Could not flush Desktop logs during shutdown', error)), 'Desktop logs flush')));
@@ -255,6 +259,7 @@ export class DesktopMain extends Disposable {
 				});
 			}, { once: true }));
 			await lifecycleService.initialize();
+			api.startWorkspaceDirectories();
 			performance.mark('ash.desktop.lifecycle-ready');
 			await workbench.whenRestored;
 			await desktopWindow.initialize();

@@ -66,7 +66,7 @@ test('the production capture receives layout and theme events and releases all l
 		services.registerInstance(ILayoutService, { mainContainer: ownerDocument.getElementById('app')!, onDidLayoutMainContainer: layoutChanged.event } as ILayoutService);
 		services.registerInstance(ILifecycleService, { get phase() { return phase; }, when: () => restoration, onWillShutdown: shutdown.event } as unknown as ILifecycleService);
 		services.registerInstance(ISplashStorageService, { saveWindowSplash: async splash => { saved.push(splash); } });
-		const capture = services.createInstance(PartsSplash);
+		const capture = services.createInstance(PartsSplash, {});
 		layoutChanged.fire({ width: 0, height: 0 });
 		assert.ok(ownerDocument.getElementById('ash-parts-splash'));
 		layoutChanged.fire({ width: 1200, height: 800 });
@@ -189,7 +189,7 @@ test('startup capture restores the titlebar surface split and its separator, inc
 		services.registerInstance(ISplashStorageService, { saveWindowSplash: async splash => { saved.push(validatePartsSplash(JSON.parse(JSON.stringify(splash)))); } });
 		for (const sidebarWidth of [280, 0]) {
 			part.style.backgroundImage = `linear-gradient(to right, rgb(248, 248, 248) 0px ${sidebarWidth - 1}px, rgb(229, 229, 229) ${sidebarWidth - 1}px ${sidebarWidth}px, rgb(255, 255, 255) ${sidebarWidth}px)`;
-			using capture = services.createInstance(PartsSplash);
+			using capture = services.createInstance(PartsSplash, {});
 			await Promise.resolve();
 			const splash = saved.at(-1)!;
 			assert.deepEqual(splash.layoutInfo!.partBounds[0].backgroundGradient, {
@@ -227,7 +227,7 @@ test('capture and startup drawing preserve one-sided borders and independent ell
 		services.registerInstance(ILayoutService, { mainContainer: root, onDidLayoutMainContainer: layoutChanged.event } as ILayoutService);
 		services.registerInstance(ILifecycleService, { phase: LifecyclePhase.Restored, when: () => Promise.resolve(), onWillShutdown: shutdown.event } as unknown as ILifecycleService);
 		services.registerInstance(ISplashStorageService, { saveWindowSplash: async splash => { saved.push(validatePartsSplash(JSON.parse(JSON.stringify(splash)))); } });
-		using capture = services.createInstance(PartsSplash);
+		using capture = services.createInstance(PartsSplash, {});
 		await Promise.resolve();
 		assert.equal(saved.length, 1);
 		assert.deepEqual(saved[0].layoutInfo!.partBounds, [{ ...drawing, borders: drawing.borders.map((border, index) => index === 1 ? { ...border, style: 'dashed' } : border) }]);

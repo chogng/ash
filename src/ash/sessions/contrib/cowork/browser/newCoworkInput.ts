@@ -1,3 +1,4 @@
+import { IChatContextService } from '../../../../workbench/contrib/chat/browser/contextContrib/chatContextService.js';
 import { IChatSlashCommandService } from '../../../../workbench/contrib/chat/common/participants/chatSlashCommands.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IActionViewItemService } from '../../../../platform/actions/browser/actionViewItemService.js';
@@ -5,6 +6,7 @@ import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/c
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IImageEditorService } from '../../../../workbench/services/imageEditor/common/imageEditorService.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import './media/chatInput.css';
@@ -17,12 +19,13 @@ import { IContextMenuService, IContextViewService } from '../../../../platform/c
 import { IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IChatSpeechToTextService } from '../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
+import { IVoiceInputModeService } from '../../../../workbench/contrib/chat/browser/voiceInputMode/voiceInputMode.js';
 import { IDictationOnboardingService } from '../../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
 import type { ICoworkWidgetModel } from './widget/coworkWidget.js';
 import type { ChatInputDelegate, ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
-import { IChatInputNoticeHubService } from '../../../../workbench/contrib/chat/browser/widget/input/notices/chatInputNoticeHub.js';
-import { IChatInputNotificationService } from '../../../../workbench/contrib/chat/browser/widget/input/notices/chatInputNotificationService.js';
+import { IChatInputNoticeHubService } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputNoticeHub.js';
+import { IChatInputNotificationService } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputNotificationService.js';
 import { IVoiceModeOnboardingService } from '../../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { IChatAttachmentResolveService } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
@@ -54,6 +57,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		private readonly model: ICoworkWidgetModel,
 		private readonly presentation: 'conversation' | 'embedded',
 		@IChatSpeechToTextService speechToText: IChatSpeechToTextService,
+		@IVoiceInputModeService voiceInputMode: IVoiceInputModeService,
 		@IDictationOnboardingService onboarding: IDictationOnboardingService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IContextViewService contextViews: IContextViewService,
@@ -73,7 +77,9 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		@IActionViewItemService presentations: IActionViewItemService,
 		@IChatWidgetService chatWidgets: IChatWidgetService,
 		@IChatSlashCommandService clientCommands: IChatSlashCommandService,
+		@IChatContextService providedContexts: IChatContextService,
 		@ICommandService commands: ICommandService,
+		@IImageEditorService imageEditors: IImageEditorService,
 	) {
 		super(container, {
 			...delegate,
@@ -96,7 +102,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 				placeholder: presentation === 'embedded' ? localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question') : '',
 				height: { minimum: 32, maximum: 240 },
 			}),
-		}, [], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands);
+		}, [], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, voiceInputMode, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands, imageEditors, providedContexts);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-cowork-input', 'floating-card');
 		this.element.classList.add('cowork-composer');

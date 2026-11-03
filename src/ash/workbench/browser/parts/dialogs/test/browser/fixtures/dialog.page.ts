@@ -11,7 +11,7 @@ import { isCancellationError } from '../../../../../../../base/common/errors.js'
 import type { ISandboxGlobals } from '../../../../../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { AppServerProtocolClient } from '../../../../../../../platform/agentHost/browser/appServerProtocolClient.js';
 import type { IWorkspaceTrustApi } from '../../../../../../../platform/workspace/common/workspaceTrust.js';
-import type { DirectoryPermissionDialog } from '../../../../../../electron-browser/parts/dialogs/directoryPermissionDialog.js';
+import type { IDirectoryPermissionRequestService } from '../../../../../../../platform/workspace/common/workspaceTrust.js';
 import { MenuId, MenusRegistry } from '../../../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../../../platform/actions/common/menuService.js';
 import { CommandRegistry, ICommandService } from '../../../../../../../platform/commands/common/commands.js';
@@ -45,7 +45,7 @@ declare global {
 			showInput(): void;
 			showCheckboxConfirmation(): void;
 			showBare(): void;
-			showCore(kind: 'standard' | 'custom' | 'blocked' | 'detail' | 'footer' | 'default' | 'buttons' | 'search' | 'vertical'): void;
+			showCore(kind: 'standard' | 'custom' | 'blocked' | 'detail' | 'footer' | 'default' | 'buttons' | 'search' | 'vertical' | 'cancel-focus'): void;
 			updateCoreMessage(message: string): void;
 			lastCoreResult?: IDialogResult;
 			visibility: boolean[];
@@ -94,7 +94,7 @@ Object.defineProperty(globalThis, 'ash', {
 		webUtils: { getPathForFile: () => '' },
 	} satisfies ISandboxGlobals
 });
-let directoryPermission: DirectoryPermissionDialog | undefined;
+let directoryPermission: IDirectoryPermissionRequestService | undefined;
 let cancelDirectoryPermission = (): void => { };
 window.addEventListener('pagehide', () => commandResources.dispose(), { once: true });
 let controller: AbortController;
@@ -102,11 +102,16 @@ let bareDialog: Dialog;
 window.ashDialogIntegration = {
 	directoryWrites: 0,
 	async showDirectoryPermission(): Promise<void> {
-		const [{ DirectoryPermissionDialog }, { initializeWorkspaceDirectories }] = await Promise.all([
-			import('../../../../../../electron-browser/parts/dialogs/directoryPermissionDialog.js'),
+		const [{ readDirectoryPermissionPrompt }, { initializeWorkspaceDirectories }, { createDirectoryPermissionRequestService, WorkspaceTrustPrompt }] = await Promise.all([
+			import('../../../../../../../platform/workspace/electron-browser/workspaceContextApi.js'),
 			import('../../../../../../../platform/workspaces/electron-browser/appServerWorkspaceHost.js'),
+			import('../../../../../../contrib/workspace/browser/workspace.contribution.js'),
 		]);
-		directoryPermission ??= commandResources.add(new DirectoryPermissionDialog(document.body));
+		if (!directoryPermission) {
+			const dialog = commandResources.add(new WorkspaceTrustPrompt(document.body));
+			directoryPermission = createDirectoryPermissionRequestService(document.body, (request, handler, signal) =>
+				dialog.show(() => readDirectoryPermissionPrompt(request), handler, signal));
+		}
 		const resources = directoryFlow.value = new DisposableStore();
 		const changes = resources.add(new Emitter<'ready' | 'stopped'>());
 		const client = {
@@ -202,7 +207,8 @@ window.ashDialogIntegration = {
 			detail: kind === 'detail' ? 'Ignored plain detail' : undefined,
 			detailElement: kind === 'detail' ? detail : undefined,
 			disableCloseAction: kind === 'blocked',
-			disableDefaultAction: kind === 'blocked' || kind === 'footer',
+			disableDefaultAction: kind === 'blocked' || kind === 'footer' || kind === 'cancel-focus',
+			focusCancelButton: kind === 'cancel-focus',
 			onVisibilityChange: (_window, visible) => window.ashDialogIntegration.visibility.push(visible),
 			renderBody: body => {
 				if (kind === 'search') {

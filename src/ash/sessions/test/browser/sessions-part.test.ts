@@ -1,13 +1,22 @@
+import { createDisconnectedAgentHostInputCompletionService } from '../../../platform/agentHost/browser/appServerAgentService.js';
+
+import { IEditorGroupsService } from '../../../workbench/services/editor/common/editorGroupsService.js';
+import { emptyEditorGroupsService } from '../../../workbench/test/common/testWorkbenchContextKeys.js';
+
+import { ISearchService } from '../../../workbench/services/search/common/search.js';
+import { IVoiceInputModeService, VoiceInputModeService } from '../../../workbench/contrib/chat/browser/voiceInputMode/voiceInputMode.js';
 import { registerTestWorkbenchHostServices } from '../../../workbench/test/common/workbenchHostTestServices.js';
 import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ISCMService } from '../../../workbench/contrib/scm/common/scm.js';
 import { SCMService } from '../../../workbench/contrib/scm/common/scmService.js';
 import { BrowserImageEditorService } from '../../../workbench/services/imageEditor/browser/browserImageEditorService.js';
 import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
+import { IRemoteConnectionService, RemoteConnectionService, UnavailableRemoteConnectionApi } from '../../../platform/remote/common/remoteConnectionService.js';
+import { ISessionChangesService } from '../../contrib/changes/common/sessionChangesService.js';
 import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
-import { IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
+import { IAgentHostInputCompletionService, IAgentVoiceService } from '../../../platform/agentHost/common/agentService.js';
 
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { IPathService } from '../../../platform/path/common/pathService.js';
@@ -34,10 +43,11 @@ import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
 import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/appServerWebWorkspaceClient.js';
 import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
+import { registerTestExtensionService } from '../../../workbench/test/common/testExtensionServices.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
-import { observableValue } from '../../../base/common/observable.js';
+import { autorun, observableValue } from '../../../base/common/observable.js';
 import assert from 'node:assert/strict';
 import { test, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -61,6 +71,13 @@ import { BrowserLifecycleService } from '../../../workbench/services/lifecycle/b
 import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
 import type { SessionsPartOptions } from '../../browser/parts/sessionsPart.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
+import { ChatConfiguration } from '../../../workbench/contrib/chat/common/constants.js';
+import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
+import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
+import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
+import { ISessionFolderAuthorizationService } from '../../common/sessionWorkspace.js';
+import { ILocalGitService } from '../../../platform/git/common/localGitService.js';
+import { BrowserLayoutService, ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
 import { getWindowById, getWindowId } from '../../../base/browser/window.js';
 
@@ -83,6 +100,7 @@ for (const [name, value] of Object.entries({
 Object.defineProperty(browserEnvironment.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
 const { SessionsPart } = await import('../../browser/parts/sessionsPart.js');
 await import('../../contrib/creator/browser/creatorEditor.contribution.js');
+await import('../../../workbench/contrib/chat/browser/chat.shared.contribution.js');
 const { NewChatWidget } = await import('../../contrib/chat/browser/newChatWidget.js');
 const { CoworkPaneFactory } = await import('../../contrib/cowork/browser/cowork.contribution.js');
 const { ChatTipService: CoworkTipService, IChatTipService: ICoworkTipService } = await import('../../contrib/cowork/browser/chatTipService.js');
@@ -121,6 +139,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		async initialize() { },
 		async refresh() { },
 		async listAgents() { return []; },
+		async prepareThread() { },
 		async openThread() { },
 		selectThread() { },
 		async interruptThread() { },
@@ -272,7 +291,9 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	};
 	const editorRoot = createCodeEditorServices(resources);
 	editorRoot.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
+	registerTestExtensionService(resources, editorRoot);
 	const services = resources.add(editorRoot.createChild());
+
 	services.registerInstance(IHostService, new TestHostService());
 	registerTestWorkbenchHostServices(services, createDisconnectedRendererApi());
 	services.registerInstance(IAgentVoiceService, createDisconnectedRendererApi().agentVoice);
@@ -285,6 +306,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		initialize() { },
 		attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); },
 		detachPullRequest: async () => { throw new Error('Unexpected PR removal'); },
+		invokePullRequestArtifact: async () => { throw new Error('Unexpected PR artifact action'); },
 	});
 	services.registerInstance(ILanguageModelsService, chatService);
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
@@ -294,6 +316,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(IChatSessionNavigationService, { openConversation: async () => { throw new Error('Unexpected conversation navigation'); } } as unknown as IChatSessionNavigationService);
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+	services.registerSingleton(IVoiceInputModeService, () => services.createInstance(VoiceInputModeService));
 	using notifications = new TestNotificationService();
 	services.registerInstance(IContextMenuService, contextMenuService);
 	services.registerInstance(IContextViewService, contextViewService);
@@ -317,6 +340,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(INotificationService, notifications);
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', flushInterval: 0 }));
 	services.registerInstance(IStorageService, storage);
+	services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: dom.window.document.body })));
 	registerTestDictationOnboarding(services);
 	services.registerInstance(ISessionsManagementService, sessionService);
 	const initialDrafts = ['saved-first', 'saved-second'].map(untitledSessionId => ({ untitledSessionId, title: 'New code session', workspace: { type: 'current' } }));
@@ -337,6 +361,20 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	using editorServices = createTestEditorServices(undefined, services, dom.window.document);
 	services.registerInstance(IFileDialogService, editorServices.createInstance(FileDialogService, { kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
 	const paneServices = registerTestComponentServices(editorServices);
+	paneServices.registerInstance(IRemoteConnectionService, resources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
+	paneServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
+	paneServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
+	paneServices.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
+	paneServices.registerInstance(ILayoutService, { activeContainer: dom.window.document.body } as ILayoutService);
+	paneServices.registerInstance(IEditorGroupsService, emptyEditorGroupsService);
+	paneServices.registerInstance(IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService());
+
+
+	paneServices.registerInstance(ISearchService, {
+		registerSearchResultProvider: () => { throw new Error('Search registration is outside this composer fixture'); },
+		fileSearch: async () => ({ results: [], messages: [] }),
+		textSearch: async () => { throw new Error('Text search is outside this composer fixture'); },
+	});
 	paneServices.registerSingleton(ISCMService, () => paneServices.createInstance(SCMService));
 	paneServices.registerInstance(IEditorService, {
 		...emptyEditorServiceState,
@@ -351,18 +389,15 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	paneServices.registerInstance(IImageEditorService, resources.add(paneServices.createInstance(BrowserImageEditorService)));
 	const cowork = resources.add(paneServices.createInstance(CoworkPaneFactory));
 	using part = paneServices.createInstance(SessionsPart, dom.window.document.body, {
-		sessionService,
-		notifications,
 		createCoworkPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { viewService.openNewSession(); }),
 		activateSelection: selection => viewService.activateSelection(selection),
+		closeSelection: selection => viewService.closeVisibleSelection(selection),
 		createNewSession: () => { viewService.openNewSession(); },
 	} satisfies SessionsPartOptions);
-	const updatePart = (): void => {
-		const selection = viewService.getSelection();
-		part.updateVisibleSelections(selection.visibleSelections, selection.activeSelection);
-	};
-	using partListener = viewService.onDidChange(updatePart);
-	updatePart();
+	using partListener = autorun(reader => {
+		const { visibleSelections, activeSelection } = viewService.getSelection(reader);
+		part.updateVisibleSessions(visibleSelections, activeSelection);
+	});
 
 	await part.captureActiveDraft();
 	assert.equal(part.domNode.dataset.part, 'sessions');
@@ -372,23 +407,17 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-part').length, 2);
 	assert.equal(part.domNode.querySelectorAll('.ash-sessions-chat-input .ash-chat-input-editor').length, 2);
 	await new Promise(resolve => setTimeout(resolve, 0));
-	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-tip').length, 2);
-	const firstTip = part.domNode.querySelector('.ash-chat-input-tip');
-	assert.ok(firstTip);
+	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-tip').length, 0);
 	const initialWidgets = paneServices.get(IChatWidgetService).getAllWidgets().filter(widget => widget instanceof NewChatWidget);
 	assert.equal(initialWidgets.length, 2);
-	assert.match(firstTip.textContent ?? '', /Attach text files or images with the \+ button/u);
-	const retainedTip = part.domNode.querySelector('.ash-chat-input-tip');
-	viewService.activateSelection(viewService.activeSelection!);
-	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), retainedTip);
-	retainedTip!.querySelector<HTMLButtonElement>('button')!.click();
-	assert.equal(part.domNode.querySelectorAll('.ash-chat-input-tip').length, 0);
-	assert.equal(services.get(IChatTipService).getWelcomeTip(), undefined);
 
 	(part.domNode.querySelector('.ash-sessions-chat-slot input, .ash-sessions-chat-slot textarea') as HTMLElement).focus();
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-slot.active'));
 	assert.equal(part.domNode.querySelector('.ash-editor-group, .ash-editor-title-control, [role=tab]'), null);
-	viewService.closeVisibleSelection(viewService.activeSelection!);
+	const closeButtons = part.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-chat-slot-close:not([hidden]) button');
+	assert.equal(closeButtons.length, 2);
+	closeButtons[1]!.click();
+	assert.equal(part.domNode.querySelector('.ash-sessions-chat-slot-close:not([hidden])'), null);
 	await part.captureActiveDraft();
 	assert.equal(part.domNode.querySelectorAll('.ash-sessions-chat-slot').length, 1);
 	assert.ok(part.domNode.querySelector('.ash-sessions-chat-view.single-chat'));
@@ -402,6 +431,22 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedInput);
 	assert.equal(paneServices.get(IChatWidgetService).getAllWidgets().filter(widget => widget instanceof NewChatWidget).length, 1);
 	assert.equal(initialWidgets.filter(widget => widget.isDisposed).length, 1);
+	const firstTip = part.domNode.querySelector('.ash-chat-input-tip');
+	assert.ok(firstTip);
+	assert.match(firstTip.textContent ?? '', /Attach text files or images with the \+ button/u);
+	viewService.activateSelection(viewService.activeSelection!);
+	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), firstTip);
+	const configuration = paneServices.get(IConfigurationService);
+	firstTip.querySelector('button')!.focus();
+	await configuration.updateValue(ChatConfiguration.TipsEnabled, false);
+	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), null);
+	assert.ok(retainedInput?.querySelector('.ash-chat-input-container')?.contains(dom.window.document.activeElement));
+	await configuration.updateValue(ChatConfiguration.TipsEnabled, true);
+	const restoredTip = part.domNode.querySelector('.ash-chat-input-tip');
+	assert.ok(restoredTip);
+	restoredTip.querySelector('button')!.click();
+	assert.equal(part.domNode.querySelector('.ash-chat-input-tip'), null);
+	assert.equal(services.get(IChatTipService).getWelcomeTip(), undefined);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
 	const second = viewService.openNewSession('Another draft');
 	const separateDraft = { mode: 'plan' as const, text: 'Keep this second draft code.ts ', contexts: [{ id: 'code-file', kind: 'file', name: 'code.ts', content: 'Code context', reference: { start: 23, end: 30 } }] };
@@ -447,6 +492,22 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(part.domNode.querySelector('[data-conversation-kind="code"]'), codeView);
 	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
+	assert.equal(await part.didActiveCodeHistoryFail(), false);
+	const unavailable = {
+		kind: 'session',
+		active: {
+			threadId: 'unavailable-thread',
+			session: {
+				sessionId: 'unavailable-session',
+				title: 'Unavailable Session',
+				status: 'active',
+				nextApprovalMode: 'manual',
+				chats: [{ threadId: 'unavailable-thread', origin: { type: 'root' }, status: 'active' }],
+			},
+		},
+	} as const;
+	part.updateVisibleSessions([unavailable], unavailable);
+	assert.equal(await part.didActiveCodeHistoryFail(), true);
 });
 
 test('Sessions draft state restores text and images while isolating Threads and workspaces', async () => {

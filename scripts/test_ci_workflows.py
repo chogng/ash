@@ -452,7 +452,8 @@ class CiWorkflowTests(unittest.TestCase):
         self.assertIn("pnpm --dir build run test:prepared", contracts)
         build = json.loads((ROOT / "build/package.json").read_text())
         self.assertEqual(
-            build["scripts"]["test:prepared"], 'node --test "**/*.test.ts"'
+            build["scripts"]["test:prepared"],
+            'node --test --test-concurrency=1 "**/*.test.ts"',
         )
         self.assertTrue((ROOT / "build/builtin/typescriptSdk.test.ts").is_file())
 

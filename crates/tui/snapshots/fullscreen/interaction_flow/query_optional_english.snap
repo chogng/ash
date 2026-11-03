@@ -1,0 +1,24 @@
+---
+source: crates/tui/src/app/interaction_flow_tests.rs
+expression: "render(&app, 80, 20)"
+---
+  .                                                                [Dashboard]
+
+
+
+
+
+
+┌Notifications  (1/1)──────────────────────────────────────────────────────────┐
+│Send a notification?                                                          │
+│> Skip (optional)  Leave this question unanswered                             │
+│  true                                                                        │
+│  false                                                                       │
+│                                                                              │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+  ────────────────────────────────────────────────────────────────────────────
+  > Unsent draft
+  ─────────────────────────────────────────────────────────── Automatic model
+
+  Enter to answer

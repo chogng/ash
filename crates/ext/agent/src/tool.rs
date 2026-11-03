@@ -231,13 +231,31 @@ impl MultiAgentToolService {
                     self.turn_backend
                         .start(&spawned.child_thread_id, &spawned.child_turn_id)?;
                 }
-                success(json!({
+                let model_result = json!({
                     "delegation_id": delegation_id,
                     "child_thread_id": spawned.child_thread_id,
                     "child_turn_id": spawned.child_turn_id,
                     "agent": spawned.context_seed.agent.role.as_ref().and_then(|role| role.definition.as_ref()),
                     "status": status
-                }))
+                });
+                let mut navigation = protocol::ToolOutputArtifact::new(
+                    protocol::ToolOutputArtifactSource::ViewMetadata,
+                    "application/vnd.ash.tool-result+json".into(),
+                    protocol::ToolOutputArtifactData::Text {
+                        text: String::new(),
+                    },
+                );
+                navigation.presentation = Some(protocol::ToolResultPresentation::SessionTarget {
+                    session_id: child.session_id.clone(),
+                    thread_id: spawned.child_thread_id.clone(),
+                    label: child.title.clone(),
+                });
+                Ok(ToolExecutionOutput::SuccessContent(vec![
+                    protocol::ContentPart::Text(model_result.to_string()),
+                    protocol::ContentPart::Artifact {
+                        artifact: navigation,
+                    },
+                ]))
             }
             SEND_AGENT_MESSAGE_TOOL_NAME => {
                 let arguments: SendArguments = decode_arguments(&call.arguments)?;

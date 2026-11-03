@@ -357,6 +357,7 @@ export interface IStartWorkbenchOptions {
 	readonly webWorkspaceClient?: IWebWorkspaceClient;
 	readonly container: HTMLElement;
 	readonly workspace: IWorkspace;
+	readonly workspaceDirectoriesReady?: Promise<void>;
 	/** The host selects its implementation; the Workbench supplies initialized window services. */
 	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
 	readonly createURLService: (services: InstantiationService) => IURLService & IDisposable;
@@ -395,6 +396,7 @@ export async function startWorkbench({
 	webWorkspaceClient,
 	container,
 	workspace,
+	workspaceDirectoriesReady,
 	createLifecycleService,
 	createURLService,
 	createWindow,
@@ -483,6 +485,7 @@ export async function startWorkbench({
 			serviceCollection,
 			contributionIds,
 			viewConstructors,
+			workspaceDirectoriesReady,
 		);
 		await themesReady;
 		return workbench;
@@ -560,6 +563,7 @@ export class Workbench extends Disposable {
 		serviceCollection = new ServiceCollection(),
 		contributionIds?: readonly string[],
 		viewConstructors?: IStartWorkbenchOptions['viewConstructors'],
+		workspaceDirectoriesReady = Promise.resolve(),
 	) {
 		super();
 		performance.mark('ash.workbench.constructor-start');
@@ -907,8 +911,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IAgentThreadService, api.thread);
 		services.registerInstance(IAgentTurnService, api.turn);
 		services.registerInstance(ITurnChangesApi, api.turnChanges);
-		const chatService = this._register(services.createInstance(ChatService));
-		services.registerInstance(IChatService, chatService);
+		if (!services.has(IChatService)) services.registerSingleton(IChatService, () => services.createInstance(ChatService));
 		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
 		const savedFontInfo = storage.get('editorFontInfo', StorageScope.APPLICATION);
@@ -1016,7 +1019,9 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPolicyService, policies);
 		// Language-server initialization consumes extension-contributed defaults too.
 		// Starting earlier can launch expensive server work with upstream defaults.
-		serviceContributionReady.push(Promise.all([configuration.initialize(fileService, policies, workingCopyService), extensionReady]).then(() => {
+		serviceContributionReady.push(Promise.all([workspaceDirectoriesReady.then(() => {
+			if (!this.isDisposed) return configuration.initialize(fileService, policies, workingCopyService);
+		}), extensionReady]).then(() => {
 			languageLifecycle?.start();
 			languageProviders?.start();
 			languageDiagnosticsService?.start();

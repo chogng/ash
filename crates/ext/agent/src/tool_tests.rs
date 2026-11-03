@@ -319,6 +319,23 @@ fn spawn_tool_uses_frozen_intent_parent_to_launch_private_investigator() {
                 .delegation_tools
                 .is_empty()
         );
+        let result_content = parent
+            .items
+            .iter()
+            .find_map(|item| {
+                if let protocol::ThreadItem::ToolResult { content, .. } = item {
+                    content.as_ref()
+                } else {
+                    None
+                }
+            })
+            .expect("spawn result content");
+        assert!(result_content.iter().any(|part| matches!(part,
+            protocol::ContentPart::Artifact { artifact } if matches!(&artifact.presentation,
+                Some(protocol::ToolResultPresentation::SessionTarget { session_id, thread_id, .. })
+                    if session_id == &child.session_id && thread_id == &child.thread_id)
+                && artifact.model_text().is_empty()
+        )));
         let child_turn = &child.turns[0];
         assert_eq!(child_turn.mode, mode.delegated());
         assert_eq!(
@@ -513,11 +530,13 @@ fn wait_timeout_returns_a_durable_waiting_join_without_losing_the_delegation() {
                 request: protocol::AgentRequest::UserInput {
                     request: protocol::RequestUserInput {
                         questions: vec![protocol::UserInputQuestion {
+                            required: true,
                             id: "answer".into(),
                             header: "Choice".into(),
                             question: "Which target?".into(),
                             options: Vec::new(),
                             allow_free_form: true,
+                            validation: None,
                         }],
                     },
                 },

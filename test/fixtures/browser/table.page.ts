@@ -25,7 +25,6 @@ import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
 import '../../../src/ash/workbench/contrib/codeEditor/browser/dictation/editorDictation.js';
-import '../../../src/ash/workbench/contrib/chat/browser/actions/chatSpeechToTextActions.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { IKeybindingService } from '../../../src/ash/platform/keybinding/common/keybinding.js';

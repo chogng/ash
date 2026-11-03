@@ -1,9 +1,13 @@
+import { Emitter } from '../../../../base/common/event.js';
+import type { IAction } from '../../../../base/common/actions.js';
+import { parseLinkedText } from '../../../../base/common/linkedText.js';
 import { localize } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 
 import { INotificationsCenter, NotificationsFocusedContext } from './notificationsCenter.js';
-import { DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { Severity } from '../../../../platform/notification/common/notification.js';
 import type { NotificationItem } from '../../../common/notifications.js';
 
@@ -15,7 +19,7 @@ AccessibleViewRegistry.register({
 	getProvider: accessor => new AccessibleContentProvider(
 		AccessibleViewProviderId.Notifications,
 		{ type: AccessibleViewType.Help },
-		() => localize('notifications.accessibilityHelp', 'Notification Center\nUse Tab and Shift+Tab to move between notifications and actions. On a notification, use Up and Down Arrow or Home and End to navigate, Right and Left Arrow to expand or collapse, and Enter or Space to toggle details. Use Ctrl+Enter (Command+Enter on macOS) to run its first action. Delete, Command+Backspace on macOS, or a middle-click removes a notification when it is not running. In the header toolbar, use Left and Right Arrow to move between actions, Home and End to jump to the first and last actions, and Up or Down Arrow to open a configuration menu. When a notification has more actions, focus its More Actions button and press Enter or an arrow key to open the menu. In a toast or the notification center, right-click a notification, or press the Context Menu key or Shift+F10, and choose Copy Text to copy its full message. You can also select message text and press Ctrl+C (Command+C on macOS) to copy the selection. Press Escape to close the menu and return to the notification. Press Delete on a notification to remove it. Press Escape to close the center. When a notification toast or one of its actions has focus, press Escape to hide the toasts without removing them from history. Press <keybinding:editor.action.accessibleView> to read the notification history.') + '\n' + localize('notifications.doNotDisturbHelp', 'Use Configure Do Not Disturb to silence information and warning notifications globally or by source. Checked sources allow all notifications. Errors still appear, and all notifications remain available in the center. Opening the center marks notifications as read.') + '\n' + localize('notifications.positionProgressHelp', 'Use Configure Notifications Position to choose Bottom Right, Bottom Left, or Top Right. The top-right notification button is in the title bar. Running notifications cannot be removed with Delete or Clear All; use their Cancel action when available. Hidden progress appears in the status bar. Select it to open the notification center.') + '\n' + localize('notifications.toastLifetimeHelp', 'Ordinary notification toasts hide automatically and remain in history. Hover or focus a toast to keep it visible. Running progress, pinned notifications, and errors with primary actions stay visible until their pending state ends or you dismiss them.') + '\n' + localize('notifications.agentsWindowInvitationHelp', 'An Agents Window invitation has a Continue in Agents Window action. Use Tab to reach it and Enter or Space to open the conversation. The unsent draft transfers only after the target window confirms receipt; a failed handoff preserves it.'),
+		() => localize('notifications.accessibilityHelp', 'Notification Center\nUse Tab and Shift+Tab to move between notifications and actions. On a notification, use Up and Down Arrow or Home and End to navigate, Right and Left Arrow to expand or collapse, and Enter or Space to toggle details. Use Ctrl+Enter (Command+Enter on macOS) to run its first action. Delete, Command+Backspace on macOS, or a middle-click removes a notification when it is not running. In the header toolbar, use Left and Right Arrow to move between actions, Home and End to jump to the first and last actions, and Up or Down Arrow to open a configuration menu. When a notification has more actions, focus its More Actions button and press Enter or an arrow key to open the menu. In a toast or the notification center, right-click a notification, or press the Context Menu key or Shift+F10, and choose Copy Text to copy its full message. You can also select message text and press Ctrl+C (Command+C on macOS) to copy the selection. Press Escape to close the menu and return to the notification. Press Delete on a notification to remove it. Press Escape to close the center. When a notification toast or one of its actions has focus, press Escape to hide the toasts without removing them from history. Press <keybinding:editor.action.accessibleView> on a notification to read it, move between notifications, or run its actions.') + '\n' + localize('notifications.doNotDisturbHelp', 'Use Configure Do Not Disturb to silence information and warning notifications globally or by source. Checked sources allow all notifications. Errors still appear, and all notifications remain available in the center. Opening the center marks notifications as read.') + '\n' + localize('notifications.positionProgressHelp', 'Use Configure Notifications Position to choose Bottom Right, Bottom Left, or Top Right. The top-right notification button is in the title bar. Running notifications cannot be removed with Delete or Clear All; use their Cancel action when available. Hidden progress appears in the status bar. Select it to open the notification center.') + '\n' + localize('notifications.toastLifetimeHelp', 'Ordinary notification toasts hide automatically and remain in history. Hover or focus a toast to keep it visible. Running progress, pinned notifications, and errors with primary actions stay visible until their pending state ends or you dismiss them.') + '\n' + localize('notifications.agentsWindowInvitationHelp', 'An Agents Window invitation has a Continue in Agents Window action. Use Tab to reach it and Enter or Space to open the conversation. The unsent draft transfers only after the target window confirms receipt; a failed handoff preserves it.'),
 		() => accessor.get(INotificationsCenter).show(),
 		AccessibilityVerbositySettingId.Notifications,
 	),
@@ -31,16 +35,7 @@ AccessibleViewRegistry.register({
 		const provider = new AccessibleContentProvider(
 			AccessibleViewProviderId.Notifications,
 			{ type: AccessibleViewType.View },
-			() => notifications.getNotifications().map(item => {
-				const details = [`${Severity[item.severity].toLowerCase()}: ${item.message}`];
-				if (item.source) details.push(localize('notifications.source', 'Source: {0}', item.source));
-				if (item.hasActiveProgress) {
-					details.push(item.progress?.total && item.progress.total > 0
-						? localize('notifications.progressPercent', '{0}% complete', Math.round(Math.max(0, Math.min(1, (item.progress.worked ?? 0) / item.progress.total)) * 100))
-						: localize('notifications.progressDescription', 'In progress'));
-				}
-				return details.join('\n');
-			}).join('\n') || localize('notifications.empty', 'No notifications'),
+			() => notifications.getNotifications().map(notificationContent).join('\n') || localize('notifications.empty', 'No notifications'),
 			() => accessor.get(INotificationsCenter).show(),
 			AccessibilityVerbositySettingId.Notifications,
 		);
@@ -60,3 +55,92 @@ AccessibleViewRegistry.register({
 		return provider;
 	},
 });
+
+AccessibleViewRegistry.register({
+	type: AccessibleViewType.View,
+	priority: 110,
+	name: 'focusedNotificationView',
+	getProvider: (accessor, target) => {
+		const row = target?.closest<HTMLElement>('.ash-notification[data-notification-id], .ash-notifications-row[data-notification-id]');
+		if (!row) return;
+		const center = accessor.get(INotificationsCenter);
+		const model = center.model;
+		const item = model.get(Number(row.dataset.notificationId));
+		if (!item) return;
+		const opener = accessor.get(IOpenerService);
+		const lifetime = new DisposableStore();
+		const changes = lifetime.add(new Emitter<void>());
+		let id = item.id;
+		let actions: readonly IAction[] = [];
+		const observation = lifetime.add(new MutableDisposable());
+		const ordered = () => model.getNotifications().slice().reverse();
+
+		const select = (notification: NotificationItem | undefined): void => {
+			observation.clear();
+			if (notification) {
+				id = notification.id;
+				observation.value = notification.onDidChange(current => {
+					if (current.message !== notification.message || current.actions !== notification.actions) select(current);
+					else changes.fire();
+				});
+			}
+			const selectedId = id;
+			const wrap = (primary: boolean) => (action: IAction): IAction => ({
+				id: action.id, label: action.label, tooltip: action.tooltip, enabled: action.enabled,
+				run: () => center.runNotificationAction(selectedId, action, primary),
+			});
+			const links = parseLinkedText(notification?.message ?? '').nodes.flatMap((node, index): IAction[] => typeof node === 'string' ? [] : [{
+				id: 'notification.link.' + index, label: node.label, tooltip: node.title ?? '', enabled: true,
+				run: () => opener.open(node.href, { fromUserGesture: true, allowCommands: true }),
+			}]);
+			actions = [...(notification?.actions?.primary ?? []).map(wrap(true)), ...(notification?.actions?.secondary ?? []).map(wrap(false)), ...links];
+			changes.fire();
+		};
+		const navigate = (offset: number): void => {
+			const items = ordered();
+			const index = items.findIndex(candidate => candidate.id === id);
+			const next = index < 0 ? items[0] : items[index + offset];
+			if (next) select(next);
+		};
+		lifetime.add(model.onDidRemove(removed => {
+			if (removed.id !== id) return;
+			const items = ordered();
+			select(items.find(candidate => candidate.id < id) ?? items.at(0));
+		}));
+		const provider = {
+			id: AccessibleViewProviderId.Notifications,
+			options: { type: AccessibleViewType.View },
+			verbositySettingKey: AccessibilityVerbositySettingId.Notifications,
+			get actions() { return actions; },
+			onDidChangeContent: changes.event,
+			provideContent: () => {
+				const current = model.get(id);
+				return current ? notificationContent(current) : localize('notifications.empty', 'No notifications');
+			},
+			provideNextContent: () => navigate(1),
+			providePreviousContent: () => navigate(-1),
+			dispose() {
+				if (lifetime.isDisposed) return;
+				lifetime.dispose();
+				if (model.get(id)) center.show(id);
+			},
+			[Symbol.dispose]() { this.dispose(); },
+		};
+		center.show(id);
+		select(item);
+		return provider;
+	},
+});
+
+function notificationContent(item: NotificationItem): string {
+	const severity = item.severity === Severity.Error ? localize('notifications.error', 'Error')
+		: item.severity === Severity.Warning ? localize('notifications.warning', 'Warning') : localize('notifications.info', 'Information');
+	const details = [severity + ': ' + parseLinkedText(item.message).toString()];
+	if (item.source) details.push(localize('notifications.source', 'Source: {0}', item.source));
+	if (item.hasActiveProgress) {
+		details.push(item.progress?.total && item.progress.total > 0
+			? localize('notifications.progressPercent', '{0}% complete', Math.round(Math.max(0, Math.min(1, (item.progress.worked ?? 0) / item.progress.total)) * 100))
+			: localize('notifications.progressDescription', 'In progress'));
+	}
+	return details.join('\n');
+}

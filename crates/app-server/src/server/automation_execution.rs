@@ -128,6 +128,17 @@ impl AppServer {
         if run.status.is_finished() {
             return Ok(run.clone());
         }
+        if run.status != AutomationRunStatus::Stopping
+            && !self.artifact_binding_is_current(&run.definition)?
+        {
+            self.pause_follow_up(run, now)?;
+            let store = self
+                .automation_processor
+                .store()
+                .ok_or("Automation store unavailable")?;
+            let stopping = store.stop_run(&run.id).map_err(|error| error.to_string())?;
+            return self.advance_automation_run(&stopping, now);
+        }
         let mut observed = run.clone();
         observed.message = None;
         let command = command_id("start", &run.id)?;
@@ -243,6 +254,14 @@ impl AppServer {
             .map_err(|error| error.to_string())?;
         let snapshot = if accepted.is_none() {
             let dispatch = || {
+                if !self
+                    .artifact_binding_is_current(&run.definition)
+                    .map_err(|message| core_error(CoreError::Execution(message)))?
+                {
+                    return Err(core_error(CoreError::Execution(
+                        "PR artifact authorization was revoked".into(),
+                    )));
+                }
                 if let Some(condition) = &run.definition.condition {
                     self.validate_follow_up_account(condition).map_err(|message| RpcError::with_details(
                         -32030, ash_app_server_protocol::protocol::error::AppServerErrorName::AccountAuthenticationRequired, message,
@@ -375,6 +394,77 @@ impl AppServer {
         }
         Ok(observed)
     }
+    /// The durable record owns the binding. Recreating a PR association cannot revive consent.
+    pub(super) fn artifact_binding_is_current(
+        &self,
+        definition: &ash_protocol::AutomationDefinition,
+    ) -> Result<bool, String> {
+        let Some(ash_protocol::AutomationCondition::GitHubChecks {
+            host,
+            owner,
+            repository,
+            number,
+            artifact_id: Some(expected),
+            ..
+        }) = &definition.condition
+        else {
+            return Ok(true);
+        };
+        let AutomationSession::Continue { session_id, .. } = &definition.session else {
+            return Ok(false);
+        };
+        let Some(store) = &self.thread_pull_requests else {
+            return Ok(false);
+        };
+        let thread =
+            ash_protocol::ThreadId::new(session_id.as_str()).map_err(|error| error.to_string())?;
+        let repository = github::Repository::new(host.clone(), owner.clone(), repository.clone())
+            .map_err(|error| error.to_string())?;
+        Ok(store
+            .pull_request_artifact_id(&thread, &repository, *number)
+            .map_err(|error| error.to_string())?
+            .as_ref()
+            == Some(expected))
+    }
+
+    fn pause_follow_up(&self, run: &AutomationRun, now: UnixMillis) -> Result<(), String> {
+        let store = self
+            .automation_processor
+            .store()
+            .ok_or("Automation store unavailable")?;
+        let Some(plan) = store
+            .list()
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .find(|plan| {
+                plan.id == run.automation_id
+                    && plan.revision == run.revision
+                    && plan.status == ash_protocol::AutomationStatus::Enabled
+            })
+        else {
+            return Ok(());
+        };
+        match store.write(
+            &ash_automation::AutomationWrite {
+                command_id: command_id("retire-binding", &run.id)?.to_string(),
+                id: plan.id,
+                expected_revision: plan.revision,
+                definition: plan.definition,
+                status: ash_protocol::AutomationStatus::Paused,
+            },
+            now,
+        ) {
+            Ok(_) => self.updates.publish_automation_changed(),
+            // A concurrent explicit edit or stop won the revision.
+            Err(
+                ash_automation::AutomationError::Conflict
+                | ash_automation::AutomationError::NotFound,
+            ) => (),
+            Err(error) => return Err(error.to_string()),
+        }
+        Ok(())
+    }
+
     fn validate_follow_up_account(
         &self,
         condition: &ash_protocol::AutomationCondition,

@@ -138,6 +138,7 @@ impl<'a> GitHubSessionRequestProcessor<'a> {
         params: &Value,
     ) -> Result<Value, RpcError> {
         use ash_app_server_protocol::protocol::github::GitHubIssueReference;
+        use ash_app_server_protocol::protocol::github::GitHubPullRequestArtifactOrigin;
         use ash_app_server_protocol::protocol::github::GitHubPullRequestReference;
         use ash_app_server_protocol::protocol::github::GitHubSessionIssueParams;
         use ash_app_server_protocol::protocol::github::GitHubSessionIssuesParams;
@@ -159,14 +160,18 @@ impl<'a> GitHubSessionRequestProcessor<'a> {
                 let p: GitHubSessionPullRequestParams = decode(params)?;
                 (
                     p.session_id,
-                    Some((p.reference.repository, p.reference.number)),
+                    Some((
+                        p.reference.repository,
+                        p.reference.number,
+                        p.reference.is_artifact.unwrap_or(false),
+                    )),
                 )
             }
             ClientMethod::GitHubSessionIssueAttach | ClientMethod::GitHubSessionIssueDetach => {
                 let p: GitHubSessionIssueParams = decode(params)?;
                 (
                     p.session_id,
-                    Some((p.reference.repository, p.reference.number)),
+                    Some((p.reference.repository, p.reference.number, false)),
                 )
             }
             _ => unreachable!("only Session GitHub reference methods are dispatched here"),
@@ -209,10 +214,19 @@ impl<'a> GitHubSessionRequestProcessor<'a> {
                 result(&GitHubSessionPullRequestsResult {
                     references: references
                         .into_iter()
-                        .map(|(repository, number)| GitHubPullRequestReference {
-                            repository: repository_view(repository),
-                            number,
-                        })
+                        .map(
+                            |(repository, number, is_artifact, artifact_id, artifact_origin)| {
+                                GitHubPullRequestReference {
+                                    repository: repository_view(repository),
+                                    number,
+                                    is_artifact: is_artifact.then_some(true),
+                                    artifact_id,
+                                    artifact_origin: artifact_origin.map(|(chat, turn_id)| {
+                                        GitHubPullRequestArtifactOrigin { chat, turn_id }
+                                    }),
+                                }
+                            },
+                        )
                         .collect(),
                 })
             }
@@ -232,7 +246,8 @@ impl<'a> GitHubSessionRequestProcessor<'a> {
             | ClientMethod::GitHubSessionPullRequestDetach
             | ClientMethod::GitHubSessionIssueAttach
             | ClientMethod::GitHubSessionIssueDetach => {
-                let (repository, number) = reference.expect("mutation params include a reference");
+                let (repository, number, is_artifact) =
+                    reference.expect("mutation params include a reference");
                 let repository =
                     github::Repository::new(repository.host, repository.owner, repository.name)
                         .map_err(github_error)?;
@@ -240,6 +255,9 @@ impl<'a> GitHubSessionRequestProcessor<'a> {
                     return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
                 }
                 let changed = match method {
+                    ClientMethod::GitHubSessionPullRequestAttach if is_artifact => {
+                        store.record_pull_request(&thread_id, &repository, number)
+                    }
                     ClientMethod::GitHubSessionPullRequestAttach => {
                         store.attach_pull_request(&thread_id, &repository, number)
                     }

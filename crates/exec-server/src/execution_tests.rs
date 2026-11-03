@@ -54,6 +54,7 @@ fn commands_preserve_msvc_toolchain_environment() {
                 ],
                 working_directory: ".".into(),
                 input: CommandInput::Closed,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Unrestricted,
             &CancellationSource::new().token(),

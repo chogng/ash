@@ -1033,10 +1033,11 @@ fn git_transport_recovers_tag_conflicts_without_parsing_error_messages() {
 }
 
 #[test]
-fn git_installation_distinguishes_missing_supported_and_upgrade_required() {
+fn git_installation_distinguishes_missing_launch_failed_supported_and_upgrade_required() {
     use crate::protocol::git::GitVersionResult;
     for value in [
         serde_json::json!({"kind":"missing"}),
+        serde_json::json!({"kind":"launchFailed"}),
         serde_json::json!({"kind":"available","version":"git version 2.40.0"}),
         serde_json::json!({"kind":"unsupported","version":"git version 2.39.9","minimumVersion":"2.40.0"}),
     ] {

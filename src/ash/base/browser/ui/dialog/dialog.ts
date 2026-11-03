@@ -5,7 +5,7 @@ import { Disposable, toDisposable } from '../../../common/lifecycle.js';
 import { focusFirst, getTabbableElements, isTabbable, restoreFocus, trapTabFocus } from '../../focus.js';
 import { observeResize } from '../../observer.js';
 import { setAriaAttribute } from '../aria/aria.js';
-import { Button, type IButtonStyles } from '../button/button.js';
+import { Button, type ButtonPresentation, type IButtonStyles } from '../button/button.js';
 import { ActionBar } from '../actionbar/actionbar.js';
 import { LabelActionViewItem } from '../actionbar/actionViewItems.js';
 import { InputBox, type IInputBoxStyles } from '../inputbox/inputbox.js';
@@ -56,10 +56,15 @@ export interface IDialogOptions {
 	readonly renderBody?: (container: HTMLElement) => void;
 	readonly renderFooter?: (container: HTMLElement) => void;
 	readonly icon?: ThemeIcon;
-	readonly buttonOptions?: Array<undefined | { styleButton?: (button: Button) => void; }>;
+	readonly buttonOptions?: readonly (undefined | {
+		readonly sublabel?: string;
+		readonly presentation?: ButtonPresentation;
+		readonly styleButton?: (button: Button) => void;
+	})[];
 	readonly disableCloseAction?: boolean;
 	readonly disableCloseButton?: boolean;
 	readonly disableDefaultAction?: boolean;
+	readonly focusCancelButton?: boolean;
 	readonly onVisibilityChange?: (window: Window, visible: boolean) => void;
 	readonly buttonStyles: IButtonStyles;
 	readonly checkboxStyles: ICheckboxStyles;
@@ -184,14 +189,24 @@ export class Dialog extends Disposable {
 		if (labels.length) {
 			const actions = h(ownerDocument, 'footer', { className: 'ash-dialog-actions' });
 			for (const [index, label] of labels.entries()) {
-				const button = this._register(new Button(actions, {
+				const buttonOptions = options.buttonOptions?.[index];
+				const item = buttonOptions?.sublabel ? h(ownerDocument, 'div', { className: 'ash-dialog-action-with-detail' }) : actions;
+				if (item !== actions) actions.append(item);
+				const button = this._register(new Button(item, {
 					...options.buttonStyles,
 					label,
-					presentation: index === 0 ? 'primary' : 'secondary',
+					presentation: buttonOptions?.presentation ?? (index === 0 ? 'primary' : 'secondary'),
 					onClick: () => this.finish(index),
 				}));
 				this.buttons.push(button);
-				options.buttonOptions?.[index]?.styleButton?.(button);
+				if (buttonOptions?.sublabel) {
+					const detail = h(ownerDocument, 'span', { className: 'ash-dialog-button-detail' });
+					detail.id = `${this.headingDomNode.id}-button-${index}-detail`;
+					detail.textContent = buttonOptions.sublabel;
+					item.append(detail);
+					setAriaAttribute(button.domNode, 'describedby', detail.id);
+				}
+				buttonOptions?.styleButton?.(button);
 			}
 			body.append(actions);
 		}
@@ -281,7 +296,8 @@ export class Dialog extends Disposable {
 				const custom = this.customBodyRoots
 					.map(root => isTabbable(root) ? root : getTabbableElements(root)[0])
 					.find(target => target !== undefined);
-				const action = this.buttons.find(button => isTabbable(button.domNode));
+				const cancel = this.options.focusCancelButton ? this.buttons[this.options.cancelId ?? -1] : undefined;
+				const action = cancel && isTabbable(cancel.domNode) ? cancel : this.buttons.find(button => isTabbable(button.domNode));
 				if (custom) custom.focus();
 				else if (action) action.focus();
 				else if (!focusFirst(this.bodyDomNode)) this.element.focus();

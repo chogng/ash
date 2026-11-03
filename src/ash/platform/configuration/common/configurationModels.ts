@@ -102,6 +102,7 @@ export class UserSettings extends Disposable {
 	readonly onDidChange = this.changes.event;
 	private parser: ConfigurationModelParser;
 	private loading: Promise<ConfigurationModel> | undefined;
+	private reloading = false;
 	private generation = 0;
 
 	constructor(
@@ -119,9 +120,17 @@ export class UserSettings extends Disposable {
 		this._register(fileService.onDidChangeFiles(event => {
 			if (event.resources && !event.resources.some(candidate => extUri.isEqualOrParent(resource, candidate))) return;
 			this.generation++;
+			// One pending read publishes one change, even when many watcher events
+			// invalidate it. Repeated publications would fan out identical refreshes.
+			if (this.reloading) return;
+			this.reloading = true;
 			void this.loadConfiguration().then(() => {
+				this.reloading = false;
 				if (!this.isDisposed) this.changes.fire();
-			}, error => logService.error('Could not reload user settings', error));
+			}, error => {
+				this.reloading = false;
+				logService.error('Could not reload user settings', error);
+			});
 		}));
 	}
 

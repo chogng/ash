@@ -430,7 +430,11 @@ fn returned_output_with_policy(
                 artifact: artifact.clone(),
             }),
             ToolContent::Text(text) => {
-                sink.emit(ToolOutputStream::Stdout, text.clone())?;
+                // Reviewed results are disclosed through the exact interaction, not the
+                // ordinary output stream before the user has made that decision.
+                if output.result_confirmation().is_none() {
+                    sink.emit(ToolOutputStream::Stdout, text.clone())?;
+                }
                 Ok(ContentPart::Text(text.clone()))
             }
             ToolContent::Audio { url } => Ok(ContentPart::AudioUrl { url: url.clone() }),
@@ -440,6 +444,15 @@ fn returned_output_with_policy(
             }),
         })
         .collect::<Result<Vec<_>, CoreError>>()?;
+    if let Some(reason) = output.result_confirmation() {
+        return Ok(ToolExecutionOutput::NeedsResultConfirmation(
+            ash_protocol::ToolResultReview {
+                reason: reason.to_owned(),
+                content,
+                is_error: output.status() == ToolOutputStatus::Error,
+            },
+        ));
+    }
     Ok(match output.status() {
         ToolOutputStatus::Success => ToolExecutionOutput::SuccessContent(content),
         ToolOutputStatus::Error => ToolExecutionOutput::FailureContent(content),

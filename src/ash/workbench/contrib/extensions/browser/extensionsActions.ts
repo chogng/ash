@@ -1,3 +1,5 @@
+import { setAgentPluginEnablement } from './agentPluginActions.js';
+import { registerAgentPluginCommands } from './agentPluginCommands.js';
 import { localize, localize2 } from '../../../../nls.js';
 import type { SkillDescriptor } from '../../../../platform/agentHost/common/appServerApi.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -8,15 +10,13 @@ import { type ServicesAccessor } from '../../../../platform/instantiation/common
 import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, type ExtensionsEditorExtensionPolicy } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { IPluginManagementService, type PluginPackageView, type PluginPermission } from '../../../../platform/extensionManagement/common/pluginManagementService.js';
+import type { IPluginManagementService } from '../../../../platform/extensionManagement/common/pluginManagementService.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { type IGlobalExtensionEnablementService } from '../../../../platform/extensionManagement/common/extensionManagement.js';
 import type { IExtensionApi } from '../../../../platform/extensions/common/extensionApi.js';
 import { ExtensionsInputSource, type ExtensionsInput, type ExtensionsCapabilityTarget } from '../common/extensionsInput.js';
-import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IExtensionIgnoredRecommendationsService, IExtensionRecommendationsService } from '../../../services/extensionRecommendations/common/extensionRecommendations.js';
 import { IExtensionRecommendationNotificationService } from '../../../../platform/extensionRecommendations/common/extensionRecommendations.js';
-import { isCancellationError } from '../../../../base/common/errors.js';
 import type { McpServerRuntimeState } from '../../../../platform/mcp/common/mcpServerStatusService.js';
 import type { ConnectorState, IConnectorService } from '../../../../platform/connectors/common/connectorService.js';
 import type { IMcpServerManagementService, McpServerConfiguration, McpServerConfigurationSnapshot } from '../../../../platform/mcp/common/mcpServerManagementService.js';
@@ -390,109 +390,7 @@ export function registerExtensionManagementActions(): DisposableStore {
 			await service.addSource({ sourceId: values[0]?.trim() ?? '', metadataBaseUrl: values[1]?.trim() ?? '', targetsBaseUrl: values[2]?.trim() ?? '', trustedRootJson: values[3]?.trim() ?? '' }, catalog.revision);
 		}
 	}));
-	registrations.add(registerAction2(class InstallLocalExtension extends Action2 {
-		constructor() {
-			super({
-				id: 'ash.extensions.installLocal',
-				get title() { return localize2({ bundle: 'ash.extensions', key: 'installLocalExtension' }, 'Install extension from workspace'); },
-				f1: true,
-				menu: { id: MenuId.ViewContainerTitle, when: extensionsTitle, group: '3_install', order: 1 },
-			});
-		}
-		public override async run(accessor: ServicesAccessor): Promise<void> {
-			const plugins = accessor.get(IPluginManagementService);
-			const dialogs = accessor.get(IDialogService);
-			const catalog = await plugins.list();
-			const input = await dialogs.input({
-				title: localize({ bundle: 'ash.extensions', key: 'installLocalExtension' }, 'Install extension from workspace'),
-				message: localize({ bundle: 'ash.extensions', key: 'localExtensionPath' }, 'Enter the extension package path relative to the selected workspace directory.'),
-				detail: localize({ bundle: 'ash.extensions', key: 'localExtensionInstallNotice' }, 'The package must contain .ash-plugin/plugin.json. Installation copies the package into your profile; enablement and permissions are managed separately.'),
-				inputs: [{ placeholder: 'examples/extensions/inspect' }],
-				primaryButton: localize({ bundle: 'ash.extensions', key: 'install' }, 'Install'),
-			});
-			if (!input.confirmed) { return; }
-			const installed = await plugins.installLocal(input.values?.[0]?.trim() ?? '', catalog.revision);
-			await dialogs.info(localize({ bundle: 'ash.extensions', key: 'localExtensionInstalled' }, 'Installed {0} {1}. Use Manage local extensions to enable it and review its permissions.', installed.id, installed.version));
-		}
-	}));
-	registrations.add(registerAction2(class InstallGitExtension extends Action2 {
-		constructor() {
-			super({
-				id: 'ash.extensions.installFromGit', title: localize2({ bundle: 'ash.extensions', key: 'installGitExtension' }, 'Install extension from Git repository'),
-				f1: true,
-				menu: { id: MenuId.ViewContainerTitle, when: extensionsTitle, group: '3_install', order: 2 },
-			});
-		}
-
-		public override async run(accessor: ServicesAccessor): Promise<void> {
-			const plugins = accessor.get(IPluginManagementService);
-			const dialogs = accessor.get(IDialogService);
-			const quickInput = accessor.get(IQuickInputService);
-			const folders = accessor.get(IWorkspaceContextService).getWorkspace().folders;
-			if (folders.length === 0) {
-				await dialogs.info(localize({ bundle: 'ash.extensions', key: 'gitInstallWorkspace' }, 'Open a workspace folder to install an extension from Git.'));
-				return;
-			}
-			let folder = folders[0]!;
-			if (folders.length > 1) {
-				using selection = new DisposableStore();
-				const picker = selection.add(quickInput.createQuickPick<IQuickPickItem & { readonly folderId: string; }>());
-				picker.ariaLabel = localize({ bundle: 'ash.extensions', key: 'gitInstallFolder' }, 'Choose the workspace folder for the temporary checkout');
-				picker.items = folders.map(folder => ({ label: folder.name, description: folder.uri.toString(), folderId: folder.id }));
-				const selected = await new Promise<string | undefined>(resolve => {
-					selection.add(picker.onDidAccept(() => {
-						const item = picker.selectedItems[0];
-						if (!item) return;
-						resolve(item.folderId); picker.hide();
-					}));
-					selection.add(picker.onDidHide(() => resolve(undefined)));
-					picker.show();
-				});
-				if (!selected) { return; }
-				folder = folders.find(folder => folder.id === selected)!;
-			}
-			const input = await dialogs.input({
-				title: localize({ bundle: 'ash.extensions', key: 'installGitExtension' }, 'Install extension from Git repository'),
-				message: localize({ bundle: 'ash.extensions', key: 'gitInstallSource' }, 'Enter the repository URL, optional branch, tag or full commit ID, and package directory.'),
-				detail: localize({ bundle: 'ash.extensions', key: 'gitInstallNotice' }, 'The package directory defaults to the repository root and must contain .ash-plugin/plugin.json. Installation uses a temporary checkout in {0}; enablement and permissions are managed separately.', folder.name),
-				inputs: [
-					{ placeholder: localize({ bundle: 'ash.extensions', key: 'gitRepositoryUrl' }, 'Git repository URL') },
-					{ placeholder: localize({ bundle: 'ash.extensions', key: 'gitReference' }, 'Branch, tag or full commit ID (optional)') },
-					{ placeholder: localize({ bundle: 'ash.extensions', key: 'gitPackagePath' }, 'Package directory (optional)'), value: '.' },
-				],
-				primaryButton: localize({ bundle: 'ash.extensions', key: 'install' }, 'Install'),
-			});
-			if (!input.confirmed) { return; }
-			const url = input.values?.[0]?.trim() ?? '';
-			const reference = input.values?.[1]?.trim() || undefined;
-			const packagePath = input.values?.[2]?.trim() ?? '';
-			using running = new DisposableStore();
-			const controller = new AbortController();
-			const progress = running.add(quickInput.createQuickPick<IQuickPickItem>());
-			progress.ariaLabel = localize({ bundle: 'ash.extensions', key: 'gitInstallProgress' }, 'Installing extension from Git. Press Escape to cancel.');
-			progress.placeholder = progress.ariaLabel;
-			progress.busy = true;
-			progress.items = [{ label: localize({ bundle: 'ash.extensions', key: 'cancelGitInstall' }, 'Cancel installation') }];
-			running.add(progress.onDidAccept(() => { controller.abort(); progress.hide(); }));
-			running.add(progress.onDidHide(() => controller.abort()));
-			progress.show();
-			try {
-				const installed = await plugins.installFromGit(folder, url, reference, packagePath, controller.signal);
-				progress.hide();
-				await dialogs.info(localize({ bundle: 'ash.extensions', key: 'localExtensionInstalled' }, 'Installed {0} {1}. Use Manage local extensions to enable it and review its permissions.', installed.id, installed.version));
-			} catch (error) {
-				if (!controller.signal.aborted && !isCancellationError(error)) { throw error; }
-			} finally {
-				progress.hide();
-			}
-		}
-	}));
-	registrations.add(registerAction2(class ManageLocalExtensions extends Action2 {
-		constructor() { super({ id: 'ash.extensions.manageLocal', get title() { return localize2({ bundle: 'ash.extensions', key: 'manageLocalExtensions' }, 'Manage local extensions'); }, f1: true }); }
-		public override async run(accessor: ServicesAccessor): Promise<void> {
-			await accessor.get(ICommandService).executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { view: 'plugins', mode: 'installed' });
-		}
-	}));
+	registrations.add(registerAgentPluginCommands());
 	registrations.add(registerAction2(class ManageExtensionExecution extends Action2 {
 		constructor() { super({ id: 'ash.extensions.manageExtensions', title: localize2({ bundle: 'ash.extensions', key: 'manageExtensionExecution' }, 'Manage extension execution'), f1: true }); }
 		async run(accessor: ServicesAccessor): Promise<void> {
@@ -501,15 +399,6 @@ export function registerExtensionManagementActions(): DisposableStore {
 	}));
 	return registrations;
 }
-
-export function describePluginPermission(permission: PluginPermission): string {
-	switch (permission.type) {
-		case 'directory': return permission.access === 'read' ? localize({ bundle: 'ash.extensions', key: 'permissionRead' }, 'Read workspace files') : localize({ bundle: 'ash.extensions', key: 'permissionWrite' }, 'Write workspace files');
-		case 'process': return localize({ bundle: 'ash.extensions', key: 'permissionProcess' }, 'Run {0}', permission.executable);
-		case 'network': return localize({ bundle: 'ash.extensions', key: 'permissionNetwork' }, 'Access network hosts: {0}', permission.hosts.join(', '));
-	}
-}
-
 
 /** Resolve current authority at invocation time; rows and editors never retain a policy revision. */
 export async function changeExtensionEnablement(input: ExtensionsInput, enablement: IGlobalExtensionEnablementService, management: IExtensionManagementService, plugins: IPluginManagementService, packages: IExtensionApi, options: { readonly enabled?: boolean; } = {}): Promise<void> {
@@ -534,12 +423,7 @@ export async function changeExtensionEnablement(input: ExtensionsInput, enableme
 		return;
 	}
 	if (input.source === ExtensionsInputSource.Local) {
-		const catalog = await plugins.list();
-		const plugin = catalog.packages.find(value => value.id === input.summary.id && value.version === input.summary.version);
-		if (!plugin) { throw new Error(localize({ bundle: 'ash.extensions', key: 'extensionMissing' }, 'This extension is no longer installed. Refresh Extensions.')); }
-		const nextEnabled = enabled ?? !plugin.enabled;
-		if (nextEnabled) { await plugins.enable(plugin, catalog.revision); }
-		else { await plugins.disable(plugin, catalog.revision); }
+		await setAgentPluginEnablement(plugins, input, enabled);
 		return;
 	}
 	const catalog = await management.listEditorExtensions();
@@ -558,19 +442,6 @@ export async function reviewExtensionExecution(extension: ExtensionsEditorExtens
 			? localize({ bundle: 'ash.extensions', key: 'nativeExtensionsExecutionNotice' }, 'Authorize this exact extension to run its native program and trusted editor client with your user-level filesystem, network and child-process access. The editor client receives document content, including unsaved text. Package or execution-contract changes require new authorization.')
 			: localize({ bundle: 'ash.extensions', key: 'extensionsExecutionNotice' }, 'Authorize this exact extension to run in the product Node host with your user-level filesystem, network and child-process access, including inherited developer environment variables. Editor APIs receive documents including unsaved text. Package or execution-contract changes require new authorization.'),
 		buttons: [{ label: selected.granted ? localize({ bundle: 'ash.extensions', key: 'revokeExtensionsExecution' }, 'Revoke execution authorization') : localize({ bundle: 'ash.extensions', key: 'grantExtensionsExecution' }, 'Authorize execution'), run: () => management.setEditorExtensionPolicy(selected, selected.granted ? 'revoke' : 'grant', catalog.revision) }],
-	});
-}
-
-export async function reviewLocalExtensionPermissions(plugin: PluginPackageView, plugins: IPluginManagementService, dialogs: IDialogService): Promise<void> {
-	const catalog = await plugins.list();
-	const selected = catalog.packages.find(value => value.id === plugin.id && value.digest === plugin.digest);
-	if (!selected) { return; }
-	await dialogs.prompt({
-		title: selected.displayName, message: `${selected.id} · ${selected.version}`,
-		detail: [localize({ bundle: 'ash.extensions', key: 'localExtensionPermissions' }, 'Requested permissions: {0}', selected.permissions.length ? selected.permissions.map(describePluginPermission).join('; ') : localize({ bundle: 'ash.extensions', key: 'noPermissions' }, 'None')),
-		localize({ bundle: 'ash.extensions', key: 'localExtensionDocumentNotice' }, 'Ash extensions use the product Node host with user-level filesystem, network and child-process access and inherited developer environment variables. Editor callbacks can receive unsaved text. Grant permissions only to packages you trust.'),
-		localize({ bundle: 'ash.extensions', key: 'localExtensionDigest' }, 'Package digest: {0}', selected.digest)].join('\n\n'),
-		buttons: [{ label: selected.granted ? localize({ bundle: 'ash.extensions', key: 'revokeLocalExtension' }, 'Revoke permissions') : localize({ bundle: 'ash.extensions', key: 'grantLocalExtension' }, 'Grant permissions'), run: () => selected.granted ? plugins.revokeGrant(selected, catalog.revision) : plugins.grant(selected, catalog.revision) }],
 	});
 }
 

@@ -194,6 +194,7 @@ impl ExecConnection for ServerConnection {
         self.client
             .create_session(SessionCreateParams {
                 branch_name: None,
+                environment_variables: None,
                 agent_id: None,
                 agent: ash_protocol::AgentRoleSelection::Default,
                 command_id,

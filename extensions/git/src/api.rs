@@ -242,20 +242,23 @@ impl Api {
                 }
             };
             if let Some(error) = value.get("backendError") {
-                let message = if error["name"] == "GitUnavailable" {
-                    self.text("git.unavailable", &[])
-                } else {
-                    let name = error["name"].as_str().unwrap_or("Unavailable");
-                    let message = error["message"]
-                        .as_str()
-                        .filter(|message| !message.is_empty())
-                        .unwrap_or(name);
-                    // RPC messages prefix diagnostics with their stable error name;
-                    // the typed name still determines cancellation below.
-                    message
-                        .strip_prefix(&format!("{name}: "))
-                        .unwrap_or(message)
-                        .to_owned()
+                let message = match error["name"].as_str().unwrap_or("Unavailable") {
+                    "GitUnavailable" => self.text("git.unavailable", &[]),
+                    "GitWorkspaceUnavailable" => self.text("git.workspaceUnavailable", &[]),
+                    "GitRepositoryNotFound" => self.text("git.repositoryNotFound", &[]),
+                    "PermissionRequired" => self.text("git.permissionRequired", &[]),
+                    name => {
+                        let message = error["message"]
+                            .as_str()
+                            .filter(|message| !message.is_empty())
+                            .unwrap_or(name);
+                        // RPC messages prefix diagnostics with their stable error name;
+                        // the typed name still determines cancellation below.
+                        message
+                            .strip_prefix(&format!("{name}: "))
+                            .unwrap_or(message)
+                            .to_owned()
+                    }
                 };
                 return Err(ExtensionError::new(
                     if error["name"] == "RequestCancelled" {

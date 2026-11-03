@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { APP_SERVER_METHODS, APPROVAL_MODE_DEFINITIONS } from '../../../../.build/protocol/typescript/index.js';
+import { DEVELOPMENT_DIR_PERMISSIONS } from '../../../../src/ash/platform/workspace/common/workspaceTrust.js';
 import { connectProfile } from './sessionProfileFixture.js';
 
 const run = promisify(execFile);
@@ -71,7 +72,7 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 		const workspace = () => active().locator('.ash-sessions-workspace-picker');
 		const chooseBranch = async (name: string) => {
 			await workspace().click();
-			await page.getByRole('option').filter({ hasText: 'New worktree…' }).click();
+			await page.getByRole('menuitem', { name: 'New worktree…', exact: true }).click();
 			const input = page.getByRole('dialog', { name: 'New worktree…', exact: true }).getByRole('textbox');
 			await input.fill(name);
 			await input.press('Enter');
@@ -193,6 +194,29 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 		expect(await git('status', '--porcelain')).toBe(sourceStatus);
 		expect(await readFile(testWorkspace.file, 'utf8')).toBe('const value = 17;\n');
 		await expect(readFile(join(cwd, 'agent.txt'))).rejects.toThrow(/ENOENT/u);
+		const trustConnection = await connectProfile(application, webAppServer, cwd, page, { directoryGrantsHost: true });
+		try {
+			const trust = trustConnection.client;
+			const readGrant = (path: string) => trust.request(APP_SERVER_METHODS['config/directoryGrants/read'], { path });
+			const config = await trust.request(APP_SERVER_METHODS['config/read'], {});
+			const grant = await trust.request(APP_SERVER_METHODS['config/directoryGrants/set'], {
+				path: cwd, expectedRevision: config.revision, commandId: 'worktree-trust-source',
+				permissions: [...DEVELOPMENT_DIR_PERMISSIONS],
+			});
+			const source = await readGrant(cwd);
+			for (const root of [rootA, rootB]) {
+				const inherited = await readGrant(root);
+				expect(inherited.permissions).toBeFalsy();
+				expect(inherited.inheritedWorkspacePermissions).toEqual(source.permissions);
+			}
+			await trust.request(APP_SERVER_METHODS['config/directoryGrants/forget'], {
+				dir: source.dir, expectedRevision: grant.revision, commandId: 'worktree-trust-revoke',
+			});
+			expect((await readGrant(rootA)).inheritedWorkspacePermissions).toBeFalsy();
+			expect((await readGrant(rootB)).inheritedWorkspacePermissions).toBeFalsy();
+		} finally {
+			await trustConnection.close();
+		}
 		await testInfo.attach('worktree-identities.json', { body: JSON.stringify({ a: { ...a, root: rootA }, b: { ...b, root: rootB }, inventory, sourceHead, sourceStatus }, null, 2), contentType: 'application/json' });
 		await page.screenshot({ path: testInfo.outputPath('first-send-worktrees.png') });
 	} finally {

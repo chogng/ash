@@ -673,6 +673,7 @@ fn exec_policy_authority_serializes_exact_rule_and_revision() {
 #[test]
 fn canonical_session_contains_root_model_and_thread_lineage_without_history() {
     let mut session = Session {
+        source: None,
         model: None,
         session_id: SessionId::new("session_1").expect("test ID is non-empty"),
         title: "task".into(),
@@ -855,6 +856,31 @@ fn interaction_request_is_durable_without_connection_ownership() {
 }
 
 #[test]
+fn user_input_required_defaults_preserve_older_pending_requests() {
+    let legacy = json!({
+        "id": "name",
+        "header": "Name",
+        "question": "Your name?",
+        "allowFreeForm": true
+    });
+    let question: UserInputQuestion = serde_json::from_value(legacy.clone()).unwrap();
+    assert!(question.required);
+    assert_eq!(serde_json::to_value(&question).unwrap()["required"], true);
+
+    let mut optional = legacy.clone();
+    optional["required"] = json!(false);
+    let optional: UserInputQuestion = serde_json::from_value(optional).unwrap();
+    assert!(!optional.required);
+    assert_eq!(serde_json::to_value(&optional).unwrap()["required"], false);
+
+    for invalid in [json!(null), json!("false"), json!(0)] {
+        let mut malformed = legacy.clone();
+        malformed["required"] = invalid;
+        assert!(serde_json::from_value::<UserInputQuestion>(malformed).is_err());
+    }
+}
+
+#[test]
 fn readable_wait_state_excludes_the_owner_directed_request_payload() {
     let interaction = TurnInteraction {
         request_id: RequestId::new("request_1").expect("test ID is non-empty"),
@@ -862,11 +888,13 @@ fn readable_wait_state_excludes_the_owner_directed_request_payload() {
         request: AgentRequest::UserInput {
             request: RequestUserInput {
                 questions: vec![UserInputQuestion {
+                    required: true,
                     id: "secret-question".into(),
                     header: "Secret".into(),
                     question: "Do not broadcast this payload".into(),
                     options: Vec::new(),
                     allow_free_form: true,
+                    validation: None,
                 }],
             },
         },
@@ -901,6 +929,7 @@ fn approval_interaction_serializes_its_exact_policy_binding() {
                     ActionApprovalDecision::ApproveOnce,
                     ActionApprovalDecision::Decline,
                 ],
+                risk_assessment: None,
                 sandbox_denial: Some(SandboxDenialOutput::safe_to_retry(
                     "network access denied",
                     ProcessExecutionOutput::from_captured_streams(
@@ -982,6 +1011,7 @@ fn ordinary_approval_omits_the_sandbox_escalation_payload() {
             crate::ActionApprovalDecision::ApproveOnce,
             crate::ActionApprovalDecision::Decline,
         ],
+        risk_assessment: None,
         sandbox_denial: None,
     };
 
@@ -990,6 +1020,33 @@ fn ordinary_approval_omits_the_sandbox_escalation_payload() {
             .unwrap()
             .get("sandboxDenial")
             .is_none()
+    );
+}
+
+#[test]
+fn approval_risk_assessment_is_optional_and_round_trips_with_its_provenance() {
+    let legacy = serde_json::json!({
+        "actionDigest": "a".repeat(64), "policyRevision": "policy-1",
+        "capabilities": [{"kind": "network", "scope": "example.test"}],
+        "reason": "review access"
+    });
+    let mut request: ActionApprovalRequest = serde_json::from_value(legacy).unwrap();
+    assert_eq!(request.risk_assessment, None);
+    request.risk_assessment = Some(crate::ActionApprovalRiskAssessment {
+        assessment_id: "review-1".into(),
+        risk_level: crate::RiskLevel::High,
+        reason: "publishes externally".into(),
+    });
+    let wire = serde_json::to_value(&request).unwrap();
+    assert_eq!(
+        wire["riskAssessment"],
+        serde_json::json!({
+            "assessmentId": "review-1", "riskLevel": "high", "reason": "publishes externally"
+        })
+    );
+    assert_eq!(
+        serde_json::from_value::<ActionApprovalRequest>(wire).unwrap(),
+        request
     );
 }
 
@@ -1576,4 +1633,68 @@ fn tool_scopes_validate_composition_and_preserve_empty_positive_ceilings() {
     let profile: ToolProfileSnapshot = serde_json::from_value(serde_json::json!({"id":"coding","revision":"coding-v1","definitionDigest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","toolNames":[],"parallelToolCalls":true,"allowedTools":[]})).unwrap();
     assert!(!profile.allows_tool(&name));
     assert!(!profile.allows_tool(&ToolName::new("exec").unwrap()));
+}
+
+#[test]
+fn tool_result_review_is_a_redacted_disclosure_decision() {
+    let interaction: TurnInteraction = serde_json::from_value(serde_json::json!({
+        "requestId":"result-review", "itemId":"tool-item",
+        "request":{"type":"toolResultReview","request":{
+            "toolCallId":"tool-call", "toolName":"read_private",
+            "review":{"reason":"Sensitive output", "content":[{"type":"text","text":"private evidence"}], "isError":false}
+        }}
+    })).unwrap();
+    assert_eq!(
+        interaction.request.kind(),
+        AgentInteractionKind::ToolResultReview
+    );
+    let public = serde_json::to_value(interaction.pending_state()).unwrap();
+    assert_eq!(public["kind"], "toolResultReview");
+    assert!(!public.to_string().contains("private evidence"));
+    let event = ThreadEvent::InteractionRequested {
+        thread_id: ThreadId::new("thread").unwrap(),
+        turn_id: TurnId::new("turn").unwrap(),
+        interaction: interaction.clone(),
+    };
+    let update = ThreadUpdateEnvelope {
+        session_id: SessionId::new("session").unwrap(),
+        thread_id: ThreadId::new("thread").unwrap(),
+        durable_sequence: 3,
+        stream_cursor: None,
+        update: ThreadUpdate::Committed {
+            event: event.clone(),
+        },
+    };
+    let watch = serde_json::to_string(&update).unwrap();
+    assert!(!watch.contains("private evidence"));
+    assert!(!watch.contains("Sensitive output"));
+    assert!(
+        serde_json::to_string(&event)
+            .unwrap()
+            .contains("private evidence")
+    );
+    let delivery = AgentRequestEnvelope {
+        session_id: SessionId::new("session").unwrap(),
+        thread_id: ThreadId::new("thread").unwrap(),
+        turn_id: TurnId::new("turn").unwrap(),
+        interaction: interaction.clone(),
+    };
+    assert!(
+        serde_json::to_string(&delivery)
+            .unwrap()
+            .contains("private evidence")
+    );
+    for decision in ["share", "skip"] {
+        let response: AgentResponse = serde_json::from_value(
+            serde_json::json!({"type":"toolResultReview","response":{"decision":decision}}),
+        )
+        .unwrap();
+        assert_eq!(response.kind(), interaction.request.kind());
+    }
+    for response in [
+        serde_json::json!({"decision":"approveOnce"}),
+        serde_json::json!({"decision":"share", "content":"substituted result"}),
+    ] {
+        assert!(serde_json::from_value::<crate::ToolResultReviewResponse>(response).is_err());
+    }
 }

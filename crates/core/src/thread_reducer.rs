@@ -388,6 +388,8 @@ pub struct ThreadCommandSnapshot {
 pub enum ThreadCommandResult {
     Renamed,
     HistoryMoved,
+    SessionMoved,
+    DirectoryChanged,
     AdvisorConfigured,
     TurnAccepted {
         turn_id: TurnId,
@@ -571,7 +573,8 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 CoreError::Journal("history movement requires a command receipt".into())
             })?;
             if envelope.schema_version < 26
-                || source.session_id != snapshot.session_id
+                || (source.session_id != snapshot.session_id
+                    && source.thread_id != snapshot.thread_id)
                 || source.thread_id != target.prefix.source_thread_id
                 || source.sequence != target.prefix.source_sequence
                 || previous.prefix.source_thread_id != snapshot.thread_id
@@ -637,6 +640,8 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 || (source.session_id != snapshot.session_id
                     && !(snapshot.thread_id.as_str() == snapshot.session_id.as_str()
                         && matches!(&snapshot.origin, ash_protocol::ThreadOrigin::Fork {
+                            parent_thread_id, parent_sequence
+                        } | ash_protocol::ThreadOrigin::Comparison {
                             parent_thread_id, parent_sequence
                         } if parent_thread_id == &source.thread_id && *parent_sequence == source.sequence)
                         || matches!(&snapshot.origin, ash_protocol::ThreadOrigin::SideChat {
@@ -722,6 +727,86 @@ pub(crate) fn reduce_thread_event_with_prefix(
             return Err(CoreError::Journal(
                 "Thread cannot be created more than once".into(),
             ));
+        }
+        ThreadEvent::ThreadDirectoryChanged { root, .. } => {
+            let receipt = envelope.command.clone().ok_or_else(|| {
+                CoreError::Journal("directory change requires a command receipt".into())
+            })?;
+            if envelope.schema_version < 30
+                || snapshot.thread_id.as_str() != snapshot.session_id.as_str()
+                || snapshot.status != ThreadStatus::Active
+                || !snapshot.origin.is_root()
+                || !root.is_absolute()
+                || matches!(
+                    snapshot.execution_target,
+                    Some(
+                        ash_protocol::SessionExecutionTarget::Ssh { .. }
+                            | ash_protocol::SessionExecutionTarget::Provider { .. }
+                    )
+                )
+                || receipt.command != (ThreadCommand::ChangeDirectory { root: root.clone() })
+                || snapshot
+                    .commands
+                    .iter()
+                    .any(|entry| entry.receipt.command_id == receipt.command_id)
+                || snapshot.turns.iter().any(|turn| {
+                    !matches!(
+                        turn.status,
+                        TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+                    )
+                })
+            {
+                return Err(CoreError::Journal(
+                    "Thread cannot change directories".into(),
+                ));
+            }
+            snapshot.execution_target =
+                Some(ash_protocol::SessionExecutionTarget::Local { root: root.clone() });
+            snapshot.history_workspace = None;
+            snapshot.commands.push(ThreadCommandSnapshot {
+                receipt,
+                result: ThreadCommandResult::DirectoryChanged,
+                response_sequence: envelope.sequence,
+            });
+        }
+        ThreadEvent::ThreadMovedToSession {
+            source_session_id,
+            destination_session_id,
+            ..
+        } => {
+            let receipt = envelope.command.clone().ok_or_else(|| {
+                CoreError::Journal("Thread move requires a command receipt".into())
+            })?;
+            if envelope.schema_version < 29
+                || &snapshot.session_id != source_session_id
+                || source_session_id == destination_session_id
+                || snapshot.thread_id.as_str() == source_session_id.as_str()
+                || snapshot.status != ThreadStatus::Active
+                || !snapshot.origin.is_root()
+                || receipt.command
+                    != (ThreadCommand::MoveToSession {
+                        source_session_id: source_session_id.clone(),
+                        destination_session_id: destination_session_id.clone(),
+                    })
+                || snapshot
+                    .commands
+                    .iter()
+                    .any(|entry| entry.receipt.command_id == receipt.command_id)
+                || snapshot.turns.iter().any(|turn| {
+                    !matches!(
+                        turn.status,
+                        TurnStatus::Completed | TurnStatus::Failed | TurnStatus::Interrupted
+                    )
+                })
+            {
+                return Err(CoreError::Journal("Thread cannot change Sessions".into()));
+            }
+            snapshot.session_id = destination_session_id.clone();
+            snapshot.commands.push(ThreadCommandSnapshot {
+                receipt,
+                result: ThreadCommandResult::SessionMoved,
+                response_sequence: envelope.sequence,
+            });
         }
         ThreadEvent::ThreadArchived { thread_id, reason } => {
             require_no_command(envelope)?;
@@ -1786,6 +1871,27 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 return Err(CoreError::Journal(
                     "a Turn cannot wait for more than one interaction".into(),
                 ));
+            }
+            if let AgentRequest::ToolResultReview { request } = &interaction.request {
+                let matching_call = snapshot.items.iter().any(|item| matches!(item,
+                    ThreadItem::ToolCall { item_id, turn_id: call_turn_id, tool_call_id, name, .. }
+                    if interaction.item_id.as_ref() == Some(item_id)
+                        && call_turn_id == turn_id && *tool_call_id == request.tool_call_id && *name == request.tool_name
+                ));
+                let already_completed = snapshot.items.iter().any(|item| {
+                    matches!(item,
+                        ThreadItem::ToolResult { turn_id: result_turn_id, tool_call_id, .. }
+                        if result_turn_id == turn_id && *tool_call_id == request.tool_call_id
+                    )
+                });
+                if !matching_call
+                    || already_completed
+                    || !snapshot.started_tool_calls.contains(&request.tool_call_id)
+                {
+                    return Err(CoreError::Journal(
+                        "result review does not match an executed tool call".into(),
+                    ));
+                }
             }
             transition_turn(
                 &mut snapshot,
@@ -3057,6 +3163,29 @@ fn event_digest(event: &ThreadEvent) -> Result<String, CoreError> {
 }
 
 pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), String> {
+    if let AgentRequest::ToolResultReview { request } = request {
+        if request.review.reason.trim().is_empty() || request.review.reason.len() > 8192 {
+            return Err("result review must have a bounded, nonempty reason".into());
+        }
+        // A candidate has no committed ToolResult item from which clients can read attachments.
+        // Producers must carry inspectable media in the captured payload before requesting review.
+        if request.review.content.iter().any(|part| {
+            matches!(
+                part,
+                ash_protocol::ContentPart::ImageAttachment { .. }
+                    | ash_protocol::ContentPart::AudioAttachment { .. }
+            )
+        }) {
+            return Err("result review cannot reference uncommitted media attachments".into());
+        }
+        let size = serde_json::to_vec(&request.review)
+            .map_err(|error| error.to_string())?
+            .len();
+        if size > 4 * 1024 * 1024 {
+            return Err("result review exceeds the 4 MiB interaction limit".into());
+        }
+        return Ok(());
+    }
     if let AgentRequest::Permissions { request } = request {
         return request.validate();
     }
@@ -3359,7 +3488,9 @@ fn pending_interaction(
 
 fn waiting_status_for(request: &AgentRequest) -> TurnStatus {
     match request {
-        AgentRequest::Approval { .. } => TurnStatus::WaitingForApproval,
+        AgentRequest::Approval { .. } | AgentRequest::ToolResultReview { .. } => {
+            TurnStatus::WaitingForApproval
+        }
         AgentRequest::UserInput { .. } | AgentRequest::Permissions { .. } => {
             TurnStatus::WaitingForUserInput
         }
@@ -3373,6 +3504,11 @@ fn resolution_command(
     response: &AgentResponse,
 ) -> ThreadCommand {
     match response {
+        AgentResponse::ToolResultReview { response } => ThreadCommand::ResolveToolResultReview {
+            turn_id: turn_id.clone(),
+            request_id: request_id.clone(),
+            response: response.clone(),
+        },
         AgentResponse::Approval { response } => ThreadCommand::ResolveApproval {
             turn_id: turn_id.clone(),
             request_id: request_id.clone(),

@@ -1,3 +1,4 @@
+import { SessionsWindowUsageService } from '../../services/sessions/browser/sessionsWindowUsageService.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { autorun, constObservable, observableValue } from '../../../base/common/observable.js';
 import assert from 'node:assert/strict';
@@ -11,12 +12,16 @@ import { Emitter } from '../../../base/common/event.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import type { ApprovalMode, IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from '../../services/sessions/common/session.js';
 import { ISessionsManagementService, type SessionsManagementState } from '../../services/sessions/common/sessionsManagement.js';
-import { SessionsService } from '../../../sessions/services/sessions/browser/sessionsService.js';
-import type { SessionsViewSelection } from '../../../sessions/services/sessions/browser/sessionsService.js';
+import { ISessionsService, SessionsService, type SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
 import { WELCOME_COMPLETE_KEY } from '../../common/welcome.js';
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { NullLoggerService } from '../../../platform/log/common/log.js';
 import { SyncDescriptor } from '../../../platform/instantiation/common/descriptors.js';
+import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
+import { KeybindingRuleKind, KeybindingWeight, KeybindingsRegistry } from '../../../platform/keybinding/common/keybindingsRegistry.js';
+import { IsSessionsWindowContext } from '../../../workbench/common/contextkeys.js';
+import '../../contrib/sessions/browser/sessionsActions.js';
+import '../../contrib/sessions/browser/views/sessionsViewActions.js';
 import { AbstractCustomView } from '../../services/customView/browser/customView.js';
 
 let storageResources: DisposableStore;
@@ -62,11 +67,11 @@ test('A restored Custom View survives delayed catalog initialization and automat
 	view.activateSelection(selected, { source: 'restore' });
 	assert.equal(custom.activeCustomView.get()?.id, 'automations');
 	assert.equal(selectionId(view.activeSelection), 'session:saved:root');
-	view.navigateBack();
+	await view.openPreviousSession();
 	assert.equal(custom.activeCustomView.get(), undefined);
 	assert.equal(selectionId(view.activeSelection), 'session:saved:root');
 	assert.equal(view.canNavigateBack, false, 'Recovered drafts must not become navigation visits');
-	view.navigateForward();
+	await view.openNextSession();
 	assert.equal(custom.activeCustomView.get()?.id, 'automations');
 });
 
@@ -80,10 +85,10 @@ test('The automatic startup draft remains behind the restored Custom View', asyn
 	await view.initialize();
 	const draft = view.openNewSession('Startup draft', { source: 'restore' });
 	assert.equal(custom.activeCustomView.get()?.id, 'automations');
-	view.navigateBack();
+	await view.openPreviousSession();
 	assert.equal(custom.activeCustomView.get(), undefined);
 	assert.equal(selectionId(view.activeSelection), `untitled:${draft.untitledSessionId}`);
-	view.navigateForward();
+	await view.openNextSession();
 	assert.equal(custom.activeCustomView.get()?.id, 'automations');
 	view.activateSelection(view.activeSelection!);
 	assert.equal(custom.activeCustomView.get(), undefined);
@@ -104,14 +109,14 @@ test('Explicit Session opens dismiss Custom Views atomically and Back/Forward re
 	});
 	view.openSession('second', 'second-thread');
 	assert.deepEqual(observed.filter((destination, index) => index === 0 || destination !== observed[index - 1]), ['automations', 'session:second:second-thread']);
-	view.navigateBack();
+	await view.openPreviousSession();
 	assert.equal(custom.activeCustomView.get()?.id, 'automations');
-	view.navigateBack();
+	await view.openPreviousSession();
 	assert.equal(custom.activeCustomView.get(), undefined);
 	assert.equal(selectionId(view.activeSelection), 'session:first:first-thread');
-	view.navigateForward();
+	await view.openNextSession();
 	assert.equal(custom.activeCustomView.get()?.id, 'automations');
-	view.navigateForward();
+	await view.openNextSession();
 	assert.equal(custom.activeCustomView.get(), undefined);
 	assert.equal(selectionId(view.activeSelection), 'session:second:second-thread');
 	assert.equal(view.canNavigateForward, false);
@@ -127,13 +132,22 @@ test('Opening the covered Session again and creating a draft each close the Cust
 	custom.showCustomView('automations');
 	view.openSession('first', 'first-thread');
 	assert.equal(custom.activeCustomView.get(), undefined);
-	view.navigateBack();
+	await view.openPreviousSession();
 	assert.equal(custom.activeCustomView.get()?.id, 'automations');
 	const draft = view.openNewSession('New draft');
 	assert.equal(custom.activeCustomView.get(), undefined);
 	assert.equal(selectionId(view.activeSelection), `untitled:${draft.untitledSessionId}`);
-	view.navigateBack();
+	await view.openPreviousSession();
+	assert.equal(selectionId(view.activeSelection), 'session:first:first-thread');
+	await view.openPreviousSession();
 	assert.equal(custom.activeCustomView.get()?.id, 'automations');
+});
+
+test('Sessions window usage records the next start in application storage', () => {
+	using storage = createTestStorage();
+	const first = new SessionsWindowUsageService(storage);
+	const second = new SessionsWindowUsageService(storage);
+	assert.deepEqual([first.windowOpenCount, first.hadPriorWindowOpen, second.windowOpenCount, second.hadPriorWindowOpen], [1, false, 2, true]);
 });
 
 test('Custom View navigation supersedes a pending Thread open and survives automatic fallback', async () => {
@@ -144,13 +158,17 @@ test('Custom View navigation supersedes a pending Thread open and survives autom
 	using view = createView(sessions, storage, custom);
 	await view.initialize();
 	const gate = new DeferredPromise<void>();
-	sessions.openThread = async () => gate.p;
+	sessions.prepareThread = async () => gate.p;
+	const outcomes: string[] = [];
+	using diagnostics = view.onDidFinishThreadOpen(({ outcome }) => outcomes.push(outcome));
 	const pending = view.openThread('second', 'second-thread');
 	const revision = view.navigationRevision;
 	custom.showCustomView('automations');
 	assert.ok(view.navigationRevision > revision, 'Covered conversation identity must not hide explicit navigation');
 	await gate.complete();
 	await pending;
+	assert.deepEqual(outcomes, ['superseded']);
+	assert.equal(sessions.active?.threadId, 'first-thread');
 	assert.equal(selectionId(view.activeSelection), 'session:first:first-thread');
 	sessions.removeSession('first');
 	assert.equal(custom.activeCustomView.get()?.id, 'automations');
@@ -171,7 +189,7 @@ test('History skips a Custom View whose contribution was removed', async () => {
 	custom.showCustomView('automations');
 	view.openSession('second', 'second-thread');
 	registration.dispose();
-	view.navigateBack();
+	await view.openPreviousSession();
 	assert.equal(custom.activeCustomView.get(), undefined);
 	assert.equal(selectionId(view.activeSelection), 'session:first:first-thread');
 	assert.equal(view.canNavigateBack, false);
@@ -187,13 +205,13 @@ test('History distinguishes stateful pages and skips a removed state within the 
 	await view.initialize();
 	custom.showCustomView('canvas', { state: 'pin-one' });
 	custom.showCustomView('canvas', { state: 'pin-two' });
-	view.navigateBack();
+	await view.openPreviousSession();
 	assert.equal(custom.activeCustomViewOpen.get()?.state, 'pin-one');
-	view.navigateForward();
+	await view.openNextSession();
 	assert.equal(custom.activeCustomViewOpen.get()?.state, 'pin-two');
 	assert.equal(selectionId(view.activeSelection), 'session:first:first-thread');
 	states.delete('pin-one');
-	view.navigateBack();
+	await view.openPreviousSession();
 	assert.equal(custom.activeCustomView.get(), undefined);
 	assert.equal(view.canNavigateBack, false);
 });
@@ -231,16 +249,40 @@ test('Sessions view service replaces visible sessions on open and Back/Forward n
 	using navigationListener = view.onDidChange(() => {
 		projectedNavigation = [view.canNavigateBack, view.canNavigateForward];
 	});
-	view.navigateBack();
+	await view.openPreviousSession();
 	assert.equal(selectionId(view.activeSelection), 'session:session-1:thread-1');
 	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-1:thread-1']);
 	assert.equal(view.canNavigateForward, true);
 	assert.deepEqual(projectedNavigation, [false, true]);
 
-	view.navigateForward();
+	await view.openNextSession();
 	assert.equal(selectionId(view.activeSelection), 'session:session-2:thread-2');
 
 	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-2:thread-2']);
+});
+
+test('a side Thread retains its source slot and restores both slots from workspace state', async () => {
+	const root = session('session', 'source');
+	using sessions = new FakeSessionService([{
+		...root,
+		chats: [...root.chats, { threadId: 'side', origin: { type: 'root' }, status: 'active' }],
+	}]);
+	using storage = createTestStorage();
+	using view = createView(sessions, storage);
+	await view.initialize();
+	await view.openThread('session', 'side', { sideBySide: true });
+	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session:source', 'session:session:side']);
+	assert.equal(selectionId(view.activeSelection), 'session:session:side');
+
+	view.openSession('session', 'source');
+	await view.openThread('session', 'side');
+	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session:source', 'session:session:side']);
+	using restored = createView(sessions, storage);
+	await restored.initialize();
+	assert.deepEqual(restored.visibleSelections.map(selectionId), ['session:session:source', 'session:session:side']);
+	assert.equal(selectionId(restored.activeSelection), 'session:session:side');
+	restored.closeVisibleSelection(restored.activeSelection!);
+	assert.deepEqual(restored.visibleSelections.map(selectionId), ['session:session:source']);
 });
 
 test('Sessions view navigation skips references that are no longer available', async () => {
@@ -253,7 +295,7 @@ test('Sessions view navigation skips references that are no longer available', a
 	sessions.removeSession('session-1');
 
 	assert.equal(view.canNavigateBack, false);
-	view.navigateBack();
+	await view.openPreviousSession();
 	assert.equal(selectionId(view.activeSelection), 'session:session-2:thread-2');
 });
 
@@ -291,9 +333,9 @@ test('new Sessions replace the active slot and preserve siblings across navigati
 	const first = view.openNewSession('First draft');
 	const second = view.openNewSession('Second draft');
 	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-1:thread-1', `untitled:${second.untitledSessionId}`]);
-	view.navigateBack();
+	await view.openPreviousSession();
 	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-1:thread-1', `untitled:${first.untitledSessionId}`]);
-	view.navigateForward();
+	await view.openNextSession();
 	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-1:thread-1', `untitled:${second.untitledSessionId}`]);
 });
 
@@ -350,8 +392,152 @@ test('pane focus and closing a pane preserve the remaining split while history n
 	assert.deepEqual({ visible: view.visibleSelections.map(selectionId), active: selectionId(view.activeSelection) }, {
 		visible: ['session:session-1:thread-1', 'session:session-3:thread-3'], active: 'session:session-3:thread-3',
 	});
-	view.navigateBack();
+	await view.openPreviousSession();
 	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-1:thread-1', 'session:session-2:thread-2']);
+});
+
+test('Recent visits persist as deduplicated conversation identities without changing Back and Forward', async () => {
+	using sessions = new FakeSessionService([session('first', 'root'), session('second', 'root'), session('third', 'root')]);
+	using storage = createTestStorage();
+	{
+		using view = createView(sessions, storage);
+		await view.initialize();
+		view.openSession('second', 'root');
+		view.openSession('third', 'root');
+		view.openSession('second', 'root');
+		await view.openPreviousSession();
+		assert.equal(selectionId(view.activeSelection), 'session:third:root');
+		await view.openPreviousSession();
+		assert.equal(selectionId(view.activeSelection), 'session:first:root');
+		view.openSession('first', 'root');
+		await view.openPreviousSession();
+		assert.equal(selectionId(view.activeSelection), 'session:second:root');
+		assert.ok(view.getLastViewedAt({ sessionId: 'first', threadId: 'root' }));
+		assert.deepEqual(view.recentSessions, [
+			{ sessionId: 'first', threadId: 'root' },
+			{ sessionId: 'second', threadId: 'root' },
+			{ sessionId: 'third', threadId: 'root' },
+		]);
+	}
+	using restored = createView(sessions, storage);
+	await restored.initialize();
+	assert.deepEqual(restored.recentSessions.map(entry => entry.sessionId), ['first', 'second', 'third']);
+	assert.ok(restored.getLastViewedAt({ sessionId: 'first', threadId: 'root' }));
+});
+
+test('Restoring a Session window keeps the Forward destination from the saved recency order', async () => {
+	using sessions = new FakeSessionService([session('first', 'root'), session('second', 'root')]);
+	using storage = createTestStorage();
+	{
+		using view = createView(sessions, storage);
+		await view.initialize();
+		view.openSession('first', 'root');
+		view.openSession('second', 'root');
+		await view.openPreviousSession();
+		assert.equal(selectionId(view.activeSelection), 'session:first:root');
+	}
+	using restored = createView(sessions, storage);
+	await restored.initialize();
+	assert.equal(restored.canNavigateForward, true);
+	await restored.openNextSession();
+	assert.equal(selectionId(restored.activeSelection), 'session:second:root');
+});
+
+test('Back and Forward can revisit a custom page after restoring the window', async () => {
+	using sessions = new FakeSessionService([session('first', 'root')]);
+	using storage = createTestStorage();
+	using custom = new CustomViewService(new NullLoggerService(), storage);
+	using registration = custom.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+	{
+		using view = createView(sessions, storage, custom);
+		await view.initialize();
+		custom.showCustomView('automations');
+		view.openSession('first', 'root');
+	}
+	using restored = createView(sessions, storage, custom);
+	await restored.initialize();
+	await restored.openPreviousSession();
+	assert.equal(custom.activeCustomView.get()?.id, 'automations');
+	await restored.openNextSession();
+	assert.equal(custom.activeCustomView.get(), undefined);
+	assert.equal(selectionId(restored.activeSelection), 'session:first:root');
+});
+
+test('Reopen Closed Chat or Session restores the closed pane in place and consumes the entry', async () => {
+	using sessions = new FakeSessionService([session('first', 'root'), session('middle', 'root'), session('last', 'root')]);
+	using storage = createTestStorage();
+	using view = createView(sessions, storage);
+	using services = new InstantiationService();
+	services.registerInstance(ISessionsService, view);
+	using commands = new CommandService(services);
+	await view.initialize();
+	await view.openThread('middle', 'root', { sideBySide: true });
+	await view.openThread('last', 'root', { sideBySide: true });
+	view.activateSelection(view.visibleSelections[1]!);
+
+	await commands.executeCommand('sessionsViewPane.closeSession');
+	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:first:root', 'session:last:root']);
+	await commands.executeCommand('sessions.reopenLastClosedItem');
+	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:first:root', 'session:middle:root', 'session:last:root']);
+	assert.equal(selectionId(view.activeSelection), 'session:middle:root');
+
+	view.activateSelection(view.visibleSelections[0]!);
+	await commands.executeCommand('sessions.reopenLastClosedItem');
+	assert.equal(selectionId(view.activeSelection), 'session:first:root');
+});
+
+test('Reopening a displaced Session restores its pane without replacing the focused sibling', async () => {
+	using sessions = new FakeSessionService([session('first', 'root'), session('second', 'root')]);
+	using storage = createTestStorage();
+	using view = createView(sessions, storage);
+	await view.initialize();
+	await view.openThread('second', 'root', { sideBySide: true });
+	view.openNewSession('Replacement draft');
+	view.activateSelection(view.visibleSelections[0]!);
+
+	await view.reopenLastClosedItem();
+	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:first:root', 'session:second:root']);
+	assert.equal(selectionId(view.activeSelection), 'session:second:root');
+	view.activateSelection(view.visibleSelections[0]!);
+	await view.reopenLastClosedItem();
+	assert.equal(selectionId(view.activeSelection), 'session:first:root');
+});
+
+test('The Sessions reopen shortcut yields to editor tools and other windows', () => {
+	const shortcut = KeybindingsRegistry.getKeybindings().find(rule =>
+		rule.kind === KeybindingRuleKind.Command && rule.command === 'sessions.reopenLastClosedItem');
+	assert.ok(shortcut?.when);
+	assert.equal(shortcut.priority, KeybindingWeight.SessionsContrib);
+
+	const inSessions = { [IsSessionsWindowContext.key]: true };
+	for (const [values, expected] of [
+		[inSessions, true],
+		[{ ...inSessions, 'sessions.editorTool': 'files' }, false],
+		[{}, false],
+	] as const) {
+		assert.equal(shortcut.when.evaluate({ getValue: key => Reflect.get(values, key) }), expected);
+	}
+});
+
+test('Reopening a closed pane leaves later navigation in control and can be retried', async () => {
+	using sessions = new FakeSessionService([session('first', 'root'), session('closed', 'root')]);
+	using storage = createTestStorage();
+	using view = createView(sessions, storage);
+	await view.initialize();
+	await view.openThread('closed', 'root', { sideBySide: true });
+	view.closeVisibleSelection(view.activeSelection!);
+
+	const preparing = new DeferredPromise<void>();
+	sessions.prepareThread = () => preparing.p;
+	const reopening = view.reopenLastClosedItem();
+	const draft = view.openNewSession('New task', { sideBySide: true });
+	await preparing.complete();
+	await reopening;
+	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:first:root', `untitled:${draft.untitledSessionId}`]);
+
+	await view.reopenLastClosedItem();
+	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:first:root', 'session:closed:root', `untitled:${draft.untitledSessionId}`]);
+	assert.equal(selectionId(view.activeSelection), 'session:closed:root');
 });
 
 test('Sessions view replaces a visible draft when it materializes', async () => {
@@ -403,13 +589,13 @@ test('the session owner keeps one active selection and one navigation history', 
 	await view.initialize();
 	const draft = view.openNewSession('Draft');
 	view.openSession('session-2', 'thread-2');
-	view.navigateBack();
+	await view.openPreviousSession();
 	assert.equal(selectionId(view.getSelection().activeSelection), `untitled:${draft.untitledSessionId}`);
 	assert.equal(view.canNavigateForward, true);
-	view.navigateBack();
+	await view.openPreviousSession();
 	assert.equal(selectionId(view.activeSelection), 'session:session-1:thread-1');
-	view.navigateForward();
-	view.navigateForward();
+	await view.openNextSession();
+	await view.openNextSession();
 	assert.equal(selectionId(view.activeSelection), 'session:session-2:thread-2');
 });
 
@@ -423,16 +609,15 @@ test('background first send materializes its history entry without replacing a l
 	const active = await sessions.materializeUntitledSession(pending.untitledSessionId);
 	sessions.promoteUntitledSession(pending.untitledSessionId, active);
 	assert.deepEqual(view.visibleSelections.map(selectionId), [`untitled:${later.untitledSessionId}`]);
-	view.navigateBack();
+	await view.openPreviousSession();
 	assert.equal(selectionId(view.activeSelection), 'session:materialized-1:materialized-thread-1');
 });
 
 test('a delayed conversation open does not steal focus from a newer choice', async () => {
 	const pending = new DeferredPromise<void>();
 	using sessions = new class extends FakeSessionService {
-		override async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
+		override async prepareThread(): Promise<void> {
 			await pending.p;
-			await super.openThread(sessionId, threadId);
 		}
 	}([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	using storage = createTestStorage();
@@ -442,6 +627,7 @@ test('a delayed conversation open does not steal focus from a newer choice', asy
 	view.openSession('session-1', 'thread-1');
 	await pending.complete();
 	await opening;
+	assert.equal(sessions.active?.threadId, 'thread-1');
 	assert.equal(selectionId(view.activeSelection), 'session:session-1:thread-1');
 });
 
@@ -607,6 +793,7 @@ class FakeSessionService implements ISessionsManagementService {
 	async initialize(): Promise<void> { }
 	async refresh(): Promise<void> { }
 	async listAgents(): Promise<readonly import('../../../workbench/services/chat/common/chatService.js').ChatAgent[]> { return []; }
+	async prepareThread(): Promise<void> { }
 	async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> { this.selectThread(sessionId, threadId); }
 
 	selectThread(sessionId: SessionId, threadId: ThreadId): void {
@@ -701,9 +888,8 @@ function selectionId(selection: SessionsViewSelection | undefined): string {
 test('closing a visible sibling supersedes a pending open of that conversation', async () => {
 	const pending = new DeferredPromise<void>();
 	using sessions = new class extends FakeSessionService {
-		override async openThread(sessionId: SessionId, threadId: ThreadId): Promise<void> {
+		override async prepareThread(): Promise<void> {
 			await pending.p;
-			await super.openThread(sessionId, threadId);
 		}
 	}([session('first', 'first-thread'), session('second', 'second-thread')]);
 	using storage = createTestStorage();

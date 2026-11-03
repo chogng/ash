@@ -60,6 +60,10 @@ import { IChatSessionNavigationService } from '../../../workbench/services/chat/
 import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { IFileService } from '../../../platform/files/common/files.js';
+import { ILanguagePackService } from '../../../platform/languagePacks/common/languagePacks.js';
+import { ILocaleService, LocalizationConfiguration } from '../../../workbench/services/localization/common/locale.js';
+import { createEmptyTestLanguagePacks, createTestLocaleService } from '../../../workbench/services/localization/test/common/localizationTestUtils.js';
+import { localize } from '../../../nls.js';
 import { ILocalizationService } from '../../../workbench/services/localization/common/localizationService.js';
 import type { IClipboardService } from '../../../platform/clipboard/common/clipboardService.js';
 import type { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
@@ -262,7 +266,15 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		}
 	} as IEditorService);
 	services.registerInstance(IFileService, {} as IFileService);
-	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback) => fallback });
+	services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (bundle, key, fallback) => localize({ bundle, key }, fallback) });
+	const languagePacks = createEmptyTestLanguagePacks();
+	services.registerInstance(ILanguagePackService, languagePacks);
+	let restartPrompted = false;
+	using locale = createTestLocaleService(configuration, languagePacks, undefined, async () => {
+		restartPrompted = true;
+		return { confirmed: false };
+	});
+	services.registerInstance(ILocaleService, locale);
 	const { IPreferencesService } = await import('../../../workbench/services/preferences/common/preferences.js');
 	const preferenceOpens: unknown[] = [];
 	let rejectShortcut = false;
@@ -280,7 +292,22 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 			preferenceOpens.push({ keybindings: textual });
 		},
 	});
-	services.registerInstance(IAccountService, { onDidChangeAccounts: Event.None, onDidCompleteLogin: Event.None, read: async () => ({ revision: 1n, accounts: [] }), startLogin: async () => { throw new Error('Not used'); }, cancelLogin: async () => { }, logout: async () => { } });
+	services.registerInstance(IAccountService, {
+		readRateLimits: async (provider, accountId) => ({
+			provider, accountId, plan: 'Plus', credits: null, xai: null,
+			limits: [{
+				id: 'codex', name: 'Codex', model: null, allowed: true, limitReached: false,
+				primary: { usedPercent: 37, windowSeconds: 18000, resetsAt: 1800000000 },
+				secondary: { usedPercent: 20, windowSeconds: 604800, resetsAt: 1800200000 },
+			}],
+		}),
+		onDidChangeAccounts: Event.None,
+		onDidCompleteLogin: Event.None,
+		read: async () => ({ revision: 1n, accounts: [{ provider: 'chatgpt-subscription', accountId: 'test', status: 'ready', credentialRevision: 1n }] }),
+		startLogin: async () => { throw new Error('Not used'); },
+		cancelLogin: async () => { },
+		logout: async () => { },
+	});
 	services.registerInstance(IGitHubService, { listAccounts: async () => [] } as unknown as IGitHubService);
 	services.registerInstance(IAccountPolicyService, { state: { phase: 'idle' }, onDidChangeState: Event.None, refresh: async () => { } });
 	services.registerSingleton(IManagedSettingsUpdateService, () => services.createInstance(ManagedSettingsUpdateService));
@@ -308,6 +335,19 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await preferences.open({ query: 'Preferences: Open User Settings (JSON)' });
 	assert.ok(window.document.querySelector('.ash-sessions-customize'), 'global search discovers lazily created Settings actions');
 	await preferences.open({ section: 'general' });
+	const languageControl = window.document.querySelector<HTMLElement>('[data-configuration-key="workbench.locale"] [role="combobox"]');
+	assert.ok(languageControl);
+	assert.equal(languageControl.getAttribute('aria-label'), 'Interface language');
+	languageControl.click();
+	const languageList = window.document.getElementById(languageControl.getAttribute('aria-controls')!);
+	const chineseOption = [...languageList!.querySelectorAll<HTMLElement>('[role="option"]')].find(option => option.textContent === '简体中文');
+	assert.ok(chineseOption);
+	chineseOption.click();
+	await new Promise(resolve => setTimeout(resolve, 0));
+	assert.equal(configuration.getValue(LocalizationConfiguration.locale), 'zh-CN');
+	assert.equal(languageControl.textContent, '简体中文');
+	assert.equal(restartPrompted, true);
+	await locale.clearLocalePreference();
 	assert.equal(window.document.querySelector('.ash-local-transcription-model-controls'), null, 'General keeps voice settings on their own page');
 	for (const key of ['accessibility.verbosity.sessionsActivityBar', 'accessibility.verbosity.sessionsSettings', 'accessibility.verbosity.executionSettings', 'accessibility.verbosity.resourceEditor']) {
 		assert.equal(window.document.querySelector(`[data-configuration-key="${key}"]`), null, 'General omits per-surface accessibility hint switches');
@@ -382,6 +422,10 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await preferences.open({ section: 'chat-usage' });
 	const usageButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Usage');
 	assert.ok(usageButton?.querySelector('.ash-icon-dashboard'));
+	await new Promise<void>(resolve => setImmediate(resolve));
+	const subscription = window.document.querySelector('[data-settings-item-id="chat.subscriptionUsage"]');
+	assert.match(subscription?.textContent ?? '', /5-hour window · 63% remaining \(37% used\) · Resets:/u);
+	assert.match(subscription?.textContent ?? '', /7-day window · 80% remaining \(20% used\) · Resets:/u);
 	assert.ok(window.document.querySelector('[data-settings-item-id="chat.usage"]'));
 	assert.match(window.document.querySelector('[data-settings-item-id="chat.usage"]')!.textContent!, /Open a chat/u);
 	const designButton = [...window.document.querySelectorAll<HTMLElement>('.ash-sessions-settings-navigation-item')].find(button => button.textContent === 'Design');
@@ -543,6 +587,8 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		assert.deepEqual(copied, ['"accessibility.verbosity.designCanvas": false', '"accessibility.verbosity.designCanvas": false']);
 		assert.equal(reopenedMenu.menu.isConnected, false);
 		assert.equal(window.document.activeElement, reopenedMenu.more);
+		await preferences.open({ section: 'general' });
+		assert.equal(window.document.querySelector('[data-configuration-key="workbench.locale"] [role="combobox"]')?.getAttribute('aria-label'), '界面语言');
 		await preferences.open({ section: 'dictation' });
 		assert.equal(categoryButton('dictation').textContent, '语音');
 		assert.ok(window.document.querySelector('[data-configuration-key="dictation.backend"]'));

@@ -1,3 +1,4 @@
+import { RunOnceScheduler } from '../../../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 
 // The model picker has no compact icon, so keep part of its name visible before collapsing the mode label.
@@ -7,7 +8,9 @@ const minimumReadableModelWidth = 48;
 export class ChatInputPickerResponsiveLayout extends Disposable {
 	constructor(private readonly toolbar: HTMLElement) {
 		super();
-		const resizeObserver = new ResizeObserver(() => this.layout());
+		// Measuring the uncollapsed pickers changes their layout. Run after resize delivery.
+		const relayout = this._register(new RunOnceScheduler(() => this.layout(), 0));
+		const resizeObserver = new ResizeObserver(() => relayout.schedule());
 		resizeObserver.observe(toolbar);
 		this._register(toDisposable(() => resizeObserver.disconnect()));
 	}

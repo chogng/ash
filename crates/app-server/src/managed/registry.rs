@@ -272,6 +272,24 @@ impl ProfileAppServerRegistry {
         self.profile_runtime.local_session(session_id)
     }
 
+    pub(super) fn release_previous_session_directories(
+        &self,
+        session_id: &SessionId,
+        target: &Arc<AppServer>,
+    ) {
+        let servers = self
+            .servers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .values()
+            .filter_map(|runtime| runtime.server.get().cloned())
+            .filter(|server| !Arc::ptr_eq(server, target))
+            .collect::<Vec<_>>();
+        for server in servers {
+            server.release_switched_session_directory(session_id);
+        }
+    }
+
     pub(crate) fn local_thread_session(
         &self,
         thread_id: &ThreadId,

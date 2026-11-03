@@ -1,13 +1,17 @@
 import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
+import { Dialog, type IDialogOptions } from '../../../../base/browser/ui/dialog/dialog.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { type DialogRequest, DialogResult, DialogSeverity, type IDialogHandler, type IDialogOutcome } from '../../../../platform/dialogs/common/dialogs.js';
 
+export interface BrowserDialogPresentation extends Pick<IDialogOptions, 'icon' | 'extraClasses' | 'detailElement' | 'buttonOptions' | 'disableCloseButton' | 'disableDefaultAction' | 'focusCancelButton'> {
+	readonly messageAsTitle?: boolean;
+}
+
 /** Maps queued domain requests to the service-independent Dialog widget. */
 export class BrowserDialogHandler implements IDialogHandler {
-	constructor(private readonly container: HTMLElement) { }
+	constructor(private readonly container: HTMLElement, private readonly presentation?: BrowserDialogPresentation) { }
 
 	async showDialog(request: DialogRequest, signal: AbortSignal): Promise<IDialogOutcome> {
 		if (signal.aborted) return { button: DialogResult.Cancel };
@@ -19,18 +23,20 @@ export class BrowserDialogHandler implements IDialogHandler {
 			if (request.kind === 'prompt') buttons.push(request.secondaryButton);
 			if (request.kind !== 'message') buttons.push(request.cancelButton ?? localize('dialog.cancel', 'Cancel'));
 			const cancelId = request.kind === 'message' ? -1 : buttons.length - 1;
-			const dialog = disposables.add(new Dialog(this.container, request.title ?? defaultTitle(request), buttons, {
+			const title = this.presentation?.messageAsTitle ? request.message : request.title ?? defaultTitle(request);
+			const dialog = disposables.add(new Dialog(this.container, title, buttons, {
+				...this.presentation,
 				buttonStyles: defaultButtonStyles,
 				checkboxStyles: defaultCheckboxStyles,
 				inputBoxStyles: defaultInputBoxStyles,
 				dialogStyles: defaultDialogStyles,
 				cancelId,
-				type: request.kind === 'message' || request.kind === 'choice' ? request.severity ?? 'question' : 'question',
+				type: this.presentation?.messageAsTitle ? 'none' : request.kind === 'message' || request.kind === 'choice' ? request.severity ?? 'question' : 'question',
 				detail: request.detail,
 				inputs: request.kind === 'input' ? request.inputs.map(input => ({ ...input })) : undefined,
 				checkboxLabel: request.checkbox?.label,
 				checkboxChecked: request.checkbox?.checked,
-				renderBody: body => {
+				renderBody: this.presentation?.messageAsTitle ? undefined : body => {
 					const message = h(body.ownerDocument, 'p', { className: 'ash-dialog-message' });
 					message.textContent = request.message;
 					body.append(message);

@@ -50,21 +50,21 @@ export class AppServerAppToolsHost extends Disposable {
 				await this.host.navigate(operation.sessionId, operation.threadId);
 				return { opened: true };
 			case 'listSections':
-				return { sections: this.host.listSections() };
+				return { sections: this.host.sessionsList.listSections(), tree: this.host.sessionsList.readTree() ?? null };
 			case 'createSection':
-				return this.host.createSection(operation.name, signal);
+				return this.host.sessionsList.createSection(operation.name, signal);
 			case 'renameSection':
-				await this.host.renameSection(operation.sectionId, operation.name, signal);
-				return { sections: this.host.listSections() };
+				await this.host.sessionsList.renameSection(operation.sectionId, operation.name, signal);
+				return { sections: this.host.sessionsList.listSections() };
 			case 'deleteSection':
-				await this.host.deleteSection(operation.sectionId, signal);
-				return { sections: this.host.listSections() };
+				await this.host.sessionsList.deleteSection(operation.sectionId, signal);
+				return { sections: this.host.sessionsList.listSections() };
 			case 'moveSession':
-				await this.host.moveSession(operation.sessionId, operation.sectionId, signal);
-				return { sections: this.host.listSections() };
+				await this.host.sessionsList.moveSession(operation.sessionId, operation.sectionId, signal);
+				return { sections: this.host.sessionsList.listSections() };
 			case 'reorderSection':
-				await this.host.reorderSection(operation.sectionId, operation.sessionIds, signal);
-				return { sections: this.host.listSections() };
+				await this.host.sessionsList.reorderSection(operation.sectionId, operation.sessionIds, signal);
+				return { sections: this.host.sessionsList.listSections() };
 			case 'checkUpdate':
 				return this.host.checkUpdate();
 			case 'confetti':

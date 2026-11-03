@@ -1,10 +1,25 @@
+import './promptTimeline/promptTimeline.contribution.js';
 import { BtwSlashCommandContribution } from './btwSlashCommand.js';
-import { ChatSideChatProvider } from './chatSideChat.js';
+import './contextContrib/chatContext.contribution.js';
+import { ChatSideChatProvider } from './chatSideChatProvider.js';
 import { IChatSideChatService, ChatSideChatService } from '../common/chatSideChatService.js';
 import { IChatSlashCommandService, ChatSlashCommandService } from '../common/participants/chatSlashCommands.js';
 import { ChatQueuePickerRendering } from './widget/input/chatQueuePickerActionItem.js';
 import { PanelChatAccessibilityHelp } from './actions/chatAccessibilityHelp.js';
 import { registerChatExportActions } from './actions/chatImportExport.js';
+import { registerChatSpeechToTextActions } from './actions/chatSpeechToTextActions.js';
+import { registerChatDeveloperActions } from './actions/chatDeveloperActions.js';
+import { AgentPluginsBrowseCommand } from './agentPluginsView.js';
+import { UpdateAgentPluginsCommand } from './agentPluginCommands.js';
+import { registerCreatePluginAction } from './actions/createPluginAction.js';
+import { registerLanguageModelActions } from './actions/chatLanguageModelActions.js';
+import { registerConfigureSpeechInstructionsActions } from './actions/configureVoiceInstructionsAction.js';
+import { registerChatModelFeedbackSurveyActions } from './actions/chatModelFeedbackSurveyActions.js';
+import { registerChatFileTreeActions } from './actions/chatFileTreeActions.js';
+import { registerNewChatActions } from './actions/chatNewActions.js';
+import { ExportAgentHostDebugLogsAction } from './actions/exportAgentHostDebugLogsAction.js';
+import { registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { ChatContextContributions } from './actions/chatContext.js';
 import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
 import { ChatLayoutService } from './widget/chatLayoutService.js';
 import { registerChatCopyActions } from './actions/chatCopyActions.js';
@@ -36,6 +51,7 @@ import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTra
 import { parseBackend, parseLocalModel, parseCloudProvider, parseInputDevice, parseLanguage } from '../common/constants.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService, DICTATION_MODEL_SETTING } from './speechToText/chatSpeechToTextService.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from './speechToText/voiceCodeTranscriptionClient.js';
+import { IVoiceInputModeService, VoiceInputModeService } from './voiceInputMode/voiceInputMode.js';
 import { IChatContextPickService, ChatContextPickService } from './attachments/chatContextPickService.js';
 import { ChatAttachmentResolveService, IChatAttachmentResolveService } from './attachments/chatAttachmentResolveService.js';
 import { ChatPasteTargetService } from './attachments/chatPasteTargetService.js';
@@ -51,6 +67,7 @@ import { InstantiationType, registerSingleton } from '../../../../platform/insta
 import { ILanguageModelToolsService } from '../common/tools/languageModelToolsService.js';
 import { LanguageModelToolsService } from './tools/languageModelToolsService.js';
 import { IChatWidgetService } from './chat.js';
+import { SubscriptionUsageSettingsModel } from './subscriptionUsageSettingsModel.js';
 import { ChatUsageSettingsModel } from './chatUsageSettingsModel.js';
 import { registerSettingsSection } from '../../../services/preferences/browser/settingsSections.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
@@ -65,10 +82,12 @@ import { ILanguageFeaturesService } from '../../../../editor/common/services/lan
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import './chatManagement/chatManagement.contribution.js';
 import { IChatEditingService } from '../common/editing/chatEditingService.js';
+import './chatEditing/chatEditingEditorActions.js';
+import { CodeMapperService, ICodeMapperService } from '../common/editing/chatCodeMapperService.js';
 import { ChatEditingService } from './chatEditing/chatEditingServiceImpl.js';
 import { DictationOnboardingService, IDictationOnboardingService } from './speechToText/dictationOnboarding.js';
-import { ChatInputNoticeHubService, IChatInputNoticeHubService } from './widget/input/notices/chatInputNoticeHub.js';
-import { ChatInputNotificationService, IChatInputNotificationService } from './widget/input/notices/chatInputNotificationService.js';
+import { ChatInputNoticeHubService, IChatInputNoticeHubService } from './widget/input/chatInputNoticeHub.js';
+import { ChatInputNotificationService, IChatInputNotificationService } from './widget/input/chatInputNotificationService.js';
 import { ChatInputEditor } from './widget/input/chatInputEditor.js';
 import { ChatInputEditors } from './widget/input/chatInputEditorRegistry.js';
 import { IChatDebugService } from '../common/chatDebugService.js';
@@ -76,16 +95,24 @@ import { AppServerChatDebugService } from './chatDebug/appServerChatDebugService
 import { ChatResponseResourceFileSystemProvider, ChatResponseResourceWorkbenchContribution, IChatResponseResourceFileSystemProvider } from '../common/widget/chatResponseResourceFileSystemProvider.js';
 import { ChatEditingEditorOverlay } from './chatEditing/chatEditingEditorOverlay.js';
 import { PromptLanguageFeaturesProvider } from './promptSyntax/promptFileContributions.js';
-
-import { ChatSessionArchiveActionWording, ChatSessionArchiveActionWordingSettingId } from '../../../../platform/chat/common/sessionArchiveActions.js';
+import { registerPromptActions } from './promptSyntax/promptFileActions.js';
+import { registerSkillActions } from './promptSyntax/skillActions.js';
+import { registerRunPromptActions } from './promptSyntax/runPromptAction.js';
+import { registerAgentActions } from './promptSyntax/chatModeActions.js';
+import { registerNewPromptFileActions } from './promptSyntax/newPromptFileActions.js';
 import { ChatSetupContribution } from './chatSetup/chatSetupContributions.js';
 import { ChatEntitlementService, IChatEntitlementService } from '../../../services/chat/common/chatEntitlementService.js';
+
+import { ChatSessionArchiveActionWording, ChatSessionArchiveActionWordingSettingId } from '../../../../platform/chat/common/sessionArchiveActions.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { chatUpvoteAnimationConfiguration } from '../common/chatResponseFeedback.js';
 
-// Both renderer hosts use these primitives; each host registers its own New and History actions.
+import { ChatStatusBarEntry } from './chatStatus/chatStatusEntry.js';
+// Both renderer hosts use these primitives; each host owns session navigation and History actions.
 registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
+registerSingleton(ICodeMapperService, CodeMapperService, InstantiationType.Delayed);
 registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
+registerSingleton(IVoiceInputModeService, VoiceInputModeService, InstantiationType.Delayed);
 registerSingleton(IChatInputNoticeHubService, ChatInputNoticeHubService, InstantiationType.Delayed);
 registerSingleton(IChatInputNotificationService, ChatInputNotificationService, InstantiationType.Delayed);
 registerSingleton(IChatDebugService, AppServerChatDebugService, InstantiationType.Delayed);
@@ -93,6 +120,11 @@ registerSingleton(IChatResponseResourceFileSystemProvider, ChatResponseResourceF
 registerWorkbenchContribution(ChatResponseResourceWorkbenchContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatResponseResourceWorkbenchContribution));
 registerWorkbenchContribution(ChatEditingEditorOverlay.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ChatEditingEditorOverlay));
 registerWorkbenchContribution(PromptLanguageFeaturesProvider.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(PromptLanguageFeaturesProvider));
+registerWorkbenchContribution('chat.promptActions', WorkbenchPhase.BlockStartup, () => registerPromptActions());
+registerWorkbenchContribution('chat.skillActions', WorkbenchPhase.BlockStartup, () => registerSkillActions());
+registerWorkbenchContribution('chat.runPromptActions', WorkbenchPhase.BlockStartup, () => registerRunPromptActions());
+registerWorkbenchContribution('chat.agentActions', WorkbenchPhase.BlockStartup, () => registerAgentActions());
+registerWorkbenchContribution('chat.newPromptFileActions', WorkbenchPhase.BlockStartup, () => registerNewPromptFileActions());
 registerWorkbenchContribution('workbench.contrib.chatInputEditor', WorkbenchPhase.BlockStartup, accessor => {
 	const instantiationService = accessor.get(IInstantiationService);
 	return ChatInputEditors.register({ id: 'stanza', create: options => instantiationService.createInstance(ChatInputEditor, options) });
@@ -103,6 +135,11 @@ registerSingleton(IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, I
 registerSingleton(IChatWidgetService, ChatWidgetService, InstantiationType.Delayed);
 registerSingleton(IChatLayoutService, ChatLayoutService, InstantiationType.Delayed);
 registerSettingsSection({
+	id: 'chat.subscriptionUsage', categoryId: 'chat-usage', model: new SyncDescriptor(SubscriptionUsageSettingsModel),
+	accessibleViewProviderId: AccessibleViewProviderId.ChatUsage,
+	accessibilityVerbositySettingId: AccessibilityVerbositySettingId.ChatUsage,
+});
+registerSettingsSection({
 	id: 'chat.usage', categoryId: 'chat-usage', model: new SyncDescriptor(ChatUsageSettingsModel),
 	accessibleViewProviderId: AccessibleViewProviderId.ChatUsage,
 	accessibilityVerbositySettingId: AccessibilityVerbositySettingId.ChatUsage,
@@ -112,6 +149,17 @@ registerQuickChatActions();
 registerChatFindActions();
 registerChatPromptNavigationActions();
 registerChatExecuteActions();
+registerChatSpeechToTextActions();
+registerChatDeveloperActions();
+registerAction2(AgentPluginsBrowseCommand);
+registerAction2(UpdateAgentPluginsCommand);
+registerCreatePluginAction();
+registerLanguageModelActions();
+registerConfigureSpeechInstructionsActions();
+registerChatModelFeedbackSurveyActions();
+registerChatFileTreeActions();
+registerNewChatActions();
+registerAction2(ExportAgentHostDebugLogsAction);
 registerChatToolActions();
 registerChatTitleActions();
 registerChatExportActions();
@@ -181,6 +229,7 @@ Registry.as<IConfigurationMigrationRegistry>(WorkbenchExtensions.ConfigurationMi
 	},
 }]);
 registerSingleton(IChatContextPickService, ChatContextPickService, InstantiationType.Delayed);
+registerWorkbenchContribution(ChatContextContributions.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatContextContributions));
 registerSingleton(IChatAttachmentResolveService, ChatAttachmentResolveService, InstantiationType.Delayed);
 registerSingleton(IChatPasteTargetService, ChatPasteTargetService, InstantiationType.Delayed);
 registerSingleton(IChatAttachmentWidgetRegistry, ChatAttachmentWidgetRegistry, InstantiationType.Delayed);
@@ -200,12 +249,46 @@ registerWorkbenchContribution('workbench.contrib.chatCopyText', WorkbenchPhase.B
 });
 
 registerSingleton(IChatEntitlementService, ChatEntitlementService, InstantiationType.Delayed);
+registerWorkbenchContribution(ChatStatusBarEntry.ID, WorkbenchPhase.BlockRestore,
+	accessor => accessor.get(IInstantiationService).createInstance(ChatStatusBarEntry));
 registerWorkbenchContribution(ChatSetupContribution.ID, WorkbenchPhase.BlockStartup,
 	accessor => accessor.get(IInstantiationService).createInstance(ChatSetupContribution));
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
 configurationRegistry.registerConfiguration(agentsWindowGraphicConfiguration);
 configurationRegistry.registerConfiguration(chatUpvoteAnimationConfiguration);
+
+configurationRegistry.registerConfiguration<boolean>({
+	key: ChatConfiguration.TipsEnabled,
+	defaultValue: true,
+	scope: ConfigurationScope.APPLICATION,
+	schema: { type: 'boolean' },
+	parse(value: unknown): boolean {
+		if (typeof value === 'boolean') { return value; }
+		throw new TypeError(localize('chat.tips.enabled.invalid', 'The Chat tips setting must be a boolean.'));
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('chat.tips.enabled.title', 'Show Chat tips'); },
+		get description() { return localize('chat.tips.enabled.description', 'Show tips in new Code conversations in the Agents window.'); },
+	},
+});
+
+configurationRegistry.registerConfiguration<boolean>({
+	key: ChatConfiguration.AutoExpandToolFailures,
+	defaultValue: true,
+	scope: ConfigurationScope.WINDOW,
+	schema: { type: 'boolean' },
+	parse(value: unknown): boolean {
+		if (typeof value === 'boolean') { return value; }
+		throw new TypeError(localize('chat.tools.autoExpandFailuresInvalid', 'Expand failed command output must be a boolean.'));
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('chat.tools.autoExpandFailuresTitle', 'Expand failed command output'); },
+		get description() { return localize('chat.tools.autoExpandFailures', 'Automatically expand terminal tool failures to show their error details.'); },
+	},
+});
 
 configurationRegistry.registerConfiguration<'queue' | 'steer'>({
 	key: ChatConfiguration.RequestQueueingDefaultAction,

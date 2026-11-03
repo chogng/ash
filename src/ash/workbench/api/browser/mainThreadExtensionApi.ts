@@ -1,4 +1,5 @@
 import { MainThreadImageEditors } from './mainThreadImageEditors.js';
+import { MainThreadChatContext } from './mainThreadChatContext.js';
 import { MainThreadCanvases } from './mainThreadCanvases.js';
 import { IAgentHostCanvasCollection } from '../../contrib/canvases/common/agentHostCanvas.js';
 import { MainThreadTreeViews } from './mainThreadTreeViews.js';
@@ -134,6 +135,7 @@ export class MainThreadExtensionApi extends Disposable {
 	private readonly namedOutputCursors = new Map<string, ExtensionNamedOutputCursor>();
 	private readonly customEditors: MainThreadCustomEditors;
 	private imageEditors: MainThreadImageEditors | undefined;
+	private chatContext: MainThreadChatContext | undefined;
 	private canvases: MainThreadCanvases | undefined;
 	private readonly documents: MainThreadDocuments;
 	private readonly diagnostics: MainThreadDiagnostics;
@@ -222,6 +224,11 @@ export class MainThreadExtensionApi extends Disposable {
 			case 'backendRequest': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, operation.method, operation.params, 0, signal, operation.progress) };
 			case 'backendState': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, undefined, {}, operation.after, signal, undefined, operation.waitForChange === true) };
 			case 'editorOperation':
+				if (operation.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload) && 'method' in operation.payload && operation.payload.method === 'chatContextChanged') {
+					if (!this.chatContext) throw new Error('Chat context providers are unavailable');
+					await this.chatContext.handleChange(operation.payload, source);
+					return { result: 'value', value: null };
+				}
 				if (operation.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload) && 'method' in operation.payload && operation.payload.method === 'canvasChanged') {
 					if (!this.canvases) { throw new Error('Canvas providers are unavailable'); }
 					await this.canvases.handleChange(operation.payload, source);
@@ -432,6 +439,14 @@ export class MainThreadExtensionApi extends Disposable {
 		return [...this.activeContributions?.issues ?? [], ...treeIssues];
 	}
 
+	/** Activation waits for context descriptors so the first picker sees the newly registered provider. */
+	public async updateChatContextProviders(snapshot: ExtensionHostFleetSnapshot): Promise<void> {
+		this.assertNotDisposed();
+		if (this.chatContext || snapshot.extensions.some(owner => owner.registrations.some(registration => registration.kind === 'dataChannel' && registration.channelId === 'chat.context.v1'))) {
+			await (this.chatContext ??= this._register(this.instantiation.createInstance(MainThreadChatContext, this.invocationTimeoutMillis))).update(snapshot);
+		}
+	}
+
 	public clear(): void {
 		this.assertNotDisposed();
 		this.activationController.abort();
@@ -441,6 +456,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.speechApi.clear();
 		this.customEditors.clear();
 		this.imageEditors?.clear();
+		this.chatContext?.clear();
 		this.canvases?.clear();
 		this.documents.clear();
 		this.configurationApi.clear();

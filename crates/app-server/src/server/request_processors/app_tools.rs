@@ -34,6 +34,12 @@ enum TaskDirectoryAccess {
 /// Coordinates the existing owners needed by the app tools adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait AppToolsRequestProcessorContext: Send + Sync {
+    fn record_pull_request_artifact(
+        &self,
+        context: &AppToolContext,
+        repository: &github::Repository,
+        number: u64,
+    ) -> Result<(), CoreError>;
     fn session_views(&self) -> Result<Vec<ash_protocol::Session>, super::RpcError>;
     fn archive_session_request(
         &self,
@@ -101,7 +107,8 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
         context: &AppToolContext,
         cancellation: &CancellationToken,
     ) -> Result<Value, CoreError> {
-        self.context
+        let caller = self
+            .context
             .read_session_thread_snapshot(&context.session_id, &context.thread_id)
             .map_err(rpc_error)?;
         let command_id = CommandId::new(format!(
@@ -110,11 +117,22 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
         ))
         .map_err(|error| CoreError::Execution(error.to_string()))?;
         let value = match operation {
+            AppToolOperation::ReadAttemptComparison {} => comparison_evidence(&caller, context)?,
+            AppToolOperation::CompleteAttemptComparison { verdict_json } => {
+                let evidence = comparison_evidence(&caller, context)?;
+                if !has_successful_comparison_call(&caller, context, "read_attempt_comparison")
+                    || has_successful_comparison_call(&caller, context, "complete_attempt_comparison") {
+                    return Err(CoreError::Policy("read comparison evidence before submitting one verdict".into()));
+                }
+                let verdict: Value = serde_json::from_str(&verdict_json).map_err(json_error)?;
+                validate_comparison_verdict(&evidence, &verdict)?;
+                json!({"verdict": verdict})
+            }
             AppToolOperation::ListThreads { archived } => json!({"sessions": self.context.session_views().map_err(rpc_error)?.into_iter().filter(|session| (session.status == SessionStatus::Archived) == archived).collect::<Vec<_>>() }),
             AppToolOperation::ReadThread { session_id, thread_id } => self.context.session_thread_read(&json!({"sessionId":session_id,"threadId":thread_id,"history":{"type":"latest","turnLimit":20}})).map_err(rpc_error)?,
             AppToolOperation::CreateThread { title } => {
                 let caller = self.context.session_view(&context.session_id).map_err(rpc_error)?;
-                serde_json::to_value(self.context.create_session(SessionCreateParams { agent_id: None, agent: Default::default(), command_id, title, execution_target: caller.execution_target, branch_name: None }).map_err(rpc_error)?).map_err(json_error)?
+                serde_json::to_value(self.context.create_session(SessionCreateParams { agent_id: None, agent: Default::default(), command_id, title, execution_target: caller.execution_target, branch_name: None, environment_variables: None }).map_err(rpc_error)?).map_err(json_error)?
             }
             AppToolOperation::ForkThread { session_id, thread_id, title } => serde_json::to_value(self.context.fork_session_request(SessionMutation { command_id, session_id }, thread_id, title).map_err(rpc_error)?).map_err(json_error)?,
             AppToolOperation::SetThreadArchived { session_id, archived } => {
@@ -124,6 +142,15 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
                 serde_json::to_value(result.map_err(rpc_error)?).map_err(json_error)?
             }
             AppToolOperation::ListProjects {} => json!({"projects":self.projects.as_deref().ok_or_else(|| CoreError::Execution("projects are unavailable".into()))?.list().map_err(|error| CoreError::Execution(error.to_string()))?.iter().map(project_projection::summary).collect::<Vec<_>>() }),
+            AppToolOperation::RecordPullRequestArtifact { host, owner, repository, number } => {
+                if cancellation.is_cancelled() {
+                    return Err(CoreError::Execution("artifact recording cancelled".into()));
+                }
+                let repository = github::Repository::new(host, owner, repository)
+                    .map_err(|error| CoreError::Policy(error.to_string()))?;
+                self.context.record_pull_request_artifact(context, &repository, number)?;
+                json!({"recorded":true})
+            }
             AppToolOperation::AutomationUpdate { operation } => self.execute_app_automation(operation, &command_id, context)?,
             other => {
                 let operation = match other {
@@ -152,7 +179,7 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
                     AppToolOperation::ReorderSection { section_id, session_ids } => AppHostOperation::ReorderSection { section_id, session_ids },
                     AppToolOperation::CheckAppUpdate {} => AppHostOperation::CheckUpdate {},
                     AppToolOperation::FireConfetti {} => AppHostOperation::Confetti {},
-                    AppToolOperation::ListThreads { .. } | AppToolOperation::ReadThread { .. } | AppToolOperation::CreateThread { .. } | AppToolOperation::ForkThread { .. } | AppToolOperation::SetThreadArchived { .. } | AppToolOperation::ListProjects {} | AppToolOperation::AutomationUpdate { .. } => unreachable!("business operations were handled above"),
+                    AppToolOperation::ReadAttemptComparison {} | AppToolOperation::CompleteAttemptComparison { .. } | AppToolOperation::ListThreads { .. } | AppToolOperation::ReadThread { .. } | AppToolOperation::CreateThread { .. } | AppToolOperation::ForkThread { .. } | AppToolOperation::SetThreadArchived { .. } | AppToolOperation::ListProjects {} | AppToolOperation::AutomationUpdate { .. } | AppToolOperation::RecordPullRequestArtifact { .. } => unreachable!("business operations were handled above"),
                 };
                 self.execute_app_host(operation, context, cancellation)?
             }
@@ -334,16 +361,25 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
                         .read_session_thread_snapshot(session_id, thread_id)
                         .map_err(rpc_error)?;
                 }
-                self.automation_processor.automation_write(
-                    &serde_json::to_value(AutomationWriteParams {
+                if matches!(
+                    definition.condition,
+                    Some(ash_protocol::AutomationCondition::GitHubChecks {
+                        artifact_id: Some(_),
+                        ..
+                    })
+                ) {
+                    return Err(CoreError::Execution(
+                        "PR artifact Autopilot requires explicit user authorization".into(),
+                    ));
+                }
+                self.automation_processor
+                    .automation_write(AutomationWriteParams {
                         command_id: command_id.to_string(),
                         id,
                         expected_revision,
                         definition,
                         status,
                     })
-                    .map_err(json_error)?,
-                )
             }
             AutomationOperation::Delete {
                 id,
@@ -525,4 +561,104 @@ fn host_error(error: crate::client_host::ClientHostError) -> CoreError {
         crate::client_host::ClientHostError::Cancelled(reason) => CoreError::Cancelled(reason),
         other => CoreError::Execution(format!("{other:?}")),
     }
+}
+
+// Evidence is frozen in the caller's own turn. Tool arguments cannot select a
+// session, thread, checkout or comparison from another turn.
+fn comparison_evidence(
+    caller: &core_api::ThreadView,
+    context: &AppToolContext,
+) -> Result<Value, CoreError> {
+    let mut attachments = caller.items.iter().filter_map(|item| match item {
+        ash_protocol::ThreadItem::UserContext {
+            turn_id, content, ..
+        } if turn_id == &context.turn_id && content.len() <= 160_000 => {
+            serde_json::from_str::<Value>(content).ok().filter(|value| {
+                value["schema"] == "ash.attempt-comparison.v1"
+                    && matches!(value["role"].as_str(), Some("judge" | "synthesis"))
+                    && value["evidence"].is_array()
+            })
+        }
+        _ => None,
+    });
+    match (attachments.next(), attachments.next()) {
+        (Some(evidence), None) => Ok(evidence),
+        _ => Err(CoreError::Policy(
+            "this turn does not own a comparison manifest".into(),
+        )),
+    }
+}
+
+fn validate_comparison_verdict(evidence: &Value, verdict: &Value) -> Result<(), CoreError> {
+    let attempts = evidence["evidence"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default();
+    let completed = |number: &Value| {
+        number.is_u64()
+            && attempts
+                .iter()
+                .any(|attempt| attempt["number"] == *number && attempt["status"] == "completed")
+    };
+    let text = |value: &Value, limit| {
+        value
+            .as_str()
+            .is_some_and(|text| !text.trim().is_empty() && text.encode_utf16().count() <= limit)
+    };
+    let decisions_valid = verdict.get("decisions").is_none_or(|decisions| {
+        decisions.as_array().is_some_and(|decisions| {
+            !decisions.is_empty()
+                && decisions.len() <= 6
+                && decisions.iter().all(|decision| {
+                    text(&decision["topic"], 160)
+                        && decision["options"].as_array().is_some_and(|options| {
+                            let mut numbers = std::collections::BTreeSet::new();
+                            options.iter().all(|option| {
+                                completed(&option["attempt"])
+                                    && numbers.insert(option["attempt"].as_u64())
+                                    && text(&option["assessment"], 200)
+                            }) && numbers.contains(&decision["recommended"].as_u64())
+                                && decision["recommended"].is_u64()
+                        })
+                })
+        })
+    });
+    if evidence["role"] != "judge"
+        || !completed(&verdict["winner"])
+        || !decisions_valid
+        || !["comparison", "validation", "quality", "solution"]
+            .iter()
+            .all(|key| text(&verdict[key], 1000))
+    {
+        return Err(CoreError::Policy(
+            "invalid verdict for this comparison Judge turn".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn has_successful_comparison_call(
+    caller: &core_api::ThreadView,
+    context: &AppToolContext,
+    tool: &str,
+) -> bool {
+    let calls: std::collections::BTreeSet<_> = caller
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            ash_protocol::ThreadItem::ToolCall {
+                turn_id,
+                tool_call_id,
+                name,
+                ..
+            } if turn_id == &context.turn_id && name.as_str() == tool => Some(tool_call_id),
+            _ => None,
+        })
+        .collect();
+    caller.items.iter().any(|item| {
+        matches!(item,
+            ash_protocol::ThreadItem::ToolResult { turn_id, tool_call_id, is_error: false, .. }
+                if turn_id == &context.turn_id && calls.contains(tool_call_id)
+        )
+    })
 }

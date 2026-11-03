@@ -9,10 +9,15 @@ import type { CancellationToken } from '../../../../base/common/cancellation.js'
 export interface ISessionCreateOptions {
 	readonly devContainer?: boolean;
 	readonly branchName?: string;
+	readonly environmentVariables?: Readonly<Record<string, string>>;
+	readonly additionalFolders?: readonly SessionExecutionTarget[];
 	readonly token: CancellationToken;
 }
 
-export interface ISessionsProviderAutomations extends IAutomationStore { }
+export interface ISessionsProviderAutomations extends IAutomationStore {
+	/** Resolve a tool receipt on this provider without exposing the catalogue's composite ID format. */
+	getAutomationByBackendId?(id: string): import('../../../../workbench/contrib/chat/common/automations/automation.js').IAutomationDescriptor | undefined;
+}
 
 /** Adapts one backend into frontend Session and Chat objects. */
 export interface ISessionsProvider extends IDisposable {
@@ -37,9 +42,18 @@ export interface ISessionsProvider extends IDisposable {
 	unsubscribe(sessionId: SessionId): Promise<void>;
 	currentWorkspace(): SessionWorkspaceSelection;
 	/** Available checkouts on this provider's host, preserving execution authority. */
-	getWorktrees?(workspace: SessionExecutionTarget, token: CancellationToken): Promise<readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]>;
+	getWorktrees?(workspace: SessionExecutionTarget, token: CancellationToken, includeOtherRepositories?: boolean): Promise<readonly {
+		readonly label: string;
+		readonly target: SessionExecutionTarget;
+		readonly repository?: SessionExecutionTarget;
+	}[]>;
 	/** Creation identity is stable across retries; model defaults are applied by the first Turn's owner. */
 	create(title: string, workspace: SessionWorkspaceSelection, agent?: ChatAgent, creationId?: string, options?: ISessionCreateOptions): Promise<IActiveSessionThread>;
+	forkChat?(sessionId: SessionId, threadId: ThreadId, title: string, creationId: string): Promise<IActiveSessionThread>;
+	canMoveChat?(): boolean;
+	canChangeDirectory?(): boolean;
+	changeDirectory?(sessionId: SessionId, root: string, commandId: string): Promise<void>;
+	moveChat?(sessionId: SessionId, threadId: ThreadId, destination: SessionId, commandId: string): Promise<void>;
 	setModel(model: ModelRef): Promise<void>;
 	archive(session: ISession): Promise<ISession>;
 	deleteSession(session: ISession): Promise<void>;

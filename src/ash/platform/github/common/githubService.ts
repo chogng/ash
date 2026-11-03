@@ -42,6 +42,10 @@ export interface GitHubManagedSettingsSnapshot {
 
 /** Durable association without account credentials or cached remote status. */
 export interface GitHubPullRequestReference {
+	/** True when the session produced the PR. Older associations are references. */
+	readonly isArtifact?: boolean;
+	readonly artifactId?: string;
+	readonly artifactOrigin?: { readonly chat: string; readonly turnId: string; };
 	readonly repository: { readonly host: string; readonly owner: string; readonly name: string; };
 	readonly number: number;
 }

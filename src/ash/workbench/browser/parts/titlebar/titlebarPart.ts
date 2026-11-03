@@ -154,6 +154,7 @@ export abstract class WebTitlebarPart extends Part {
 		if (isWeb) {
 			const targetWindow = container.ownerDocument.defaultView!;
 			const refresh = (): void => this.updateWebWindowControls();
+			this._register(addDisposableListener(targetWindow, 'ash-system-caption-changed', refresh));
 			const overlay = (targetWindow.navigator as Navigator & { windowControlsOverlay?: EventTarget; }).windowControlsOverlay;
 			if (overlay) this._register(addDisposableListener(overlay, 'geometrychange', refresh));
 			this._register(addDisposableListener(targetWindow, 'resize', refresh));
@@ -171,14 +172,25 @@ export abstract class WebTitlebarPart extends Part {
 
 	private updateWebWindowControls(): void {
 		const targetWindow = this.domNode.ownerDocument.defaultView!;
+		const caption = targetWindow.document.documentElement.dataset;
+		const scale = targetWindow.devicePixelRatio;
+		const systemHeight = Number(caption.systemCaptionHeight) / scale;
+		const systemLeftInset = Number(caption.systemCaptionLeftInset) / scale;
+		const systemRightInset = Number(caption.systemCaptionRightInset) / scale;
+		const hasSystemCaption = Number.isFinite(systemHeight) && systemHeight > 0
+			&& Number.isFinite(systemLeftInset) && systemLeftInset >= 0
+			&& Number.isFinite(systemRightInset) && systemRightInset >= 0;
 		const area = isWCOEnabled(targetWindow) ? getWCOTitlebarAreaRect(targetWindow) : undefined;
 		// In fullscreen the API can remain enabled while its titlebar rectangle is empty.
 		const overlay = area !== undefined && area.width > 0 && area.height > 0;
-		this.domNode.classList.toggle('ash-web-titlebar-overlay', overlay);
+		this.domNode.classList.toggle('ash-web-titlebar-overlay', overlay || hasSystemCaption);
 		this.domNode.classList.toggle('ash-web-titlebar-compact', overlay && area.width < 800);
 		this.domNode.classList.toggle('ash-web-titlebar-standalone', isStandalone(targetWindow));
-		const height = overlay ? Math.max(WorkbenchWindowBarHeight, area.height) : WorkbenchWindowBarHeight;
-		if (overlay) {
+		const height = hasSystemCaption ? systemHeight : overlay ? Math.max(WorkbenchWindowBarHeight, area.height) : WorkbenchWindowBarHeight;
+		if (hasSystemCaption) {
+			this.domNode.style.paddingLeft = `${this.horizontalPadding + systemLeftInset}px`;
+			this.domNode.style.paddingRight = `${this.horizontalPadding + systemRightInset}px`;
+		} else if (overlay) {
 			const bounds = this.domNode.getBoundingClientRect();
 			this.domNode.style.paddingLeft = `${this.horizontalPadding + Math.max(0, area.x - bounds.x)}px`;
 			this.domNode.style.paddingRight = `${this.horizontalPadding + Math.max(0, bounds.right - area.right)}px`;
@@ -275,6 +287,73 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 		this.actionsDomNode = actionsDomNode;
 		actionsDomNode.className = 'ash-titlebar-actions ash-titlebar-interactive-region';
 		this.contentDomNode.append(actionsDomNode);
+		const edges = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'] as const;
+		type NativeWindowCommand = 'minimize' | 'toggle-maximize' | 'close' | 'read-state' | `resize:${typeof edges[number]}`;
+		const target = getWindow(container) as Window & {
+			ashNativeWindowCommand?: (command: NativeWindowCommand) => void;
+			ashNativeCaptionBounds?: (bounds: string) => void;
+		};
+		if (typeof target.ashNativeWindowCommand === 'function') {
+			const send = target.ashNativeWindowCommand;
+			this.domNode.classList.add('ash-native-titlebar');
+			const controls = h(ownerDocument, 'div', { className: 'ash-native-window-controls' });
+			this.contentDomNode.append(controls);
+			const addControl = (command: 'minimize' | 'toggle-maximize' | 'close', label: string, icon: typeof Lxicon.close): HTMLButtonElement => {
+				const button = h(ownerDocument, 'button', { className: 'ash-native-window-control' });
+				button.type = 'button';
+				button.dataset.windowCommand = command;
+				button.setAttribute('aria-label', label);
+				button.title = label;
+				appendIcon(icon, button);
+				controls.append(button);
+				this._register(addDisposableListener(button, 'click', () => send(command)));
+				return button;
+			};
+			const minimize = addControl('minimize', localizationService.translate('ash', 'workbench.minimizeWindow', 'Minimize Window'), Lxicon.remove);
+			const maximizeLabel = localizationService.translate('ash', 'workbench.maximizeWindow', 'Maximize Window');
+			const restoreLabel = localizationService.translate('ash', 'workbench.restoreWindow', 'Restore Window');
+			const maximize = addControl('toggle-maximize', maximizeLabel, Lxicon.square);
+			const close = addControl('close', localizationService.translate('ash', 'workbench.closeWindow', 'Close Window'), Lxicon.close);
+			// Keep the outer resize regions above the workbench's own split-view sashes.
+			const resizeHandles = edges.map(edge => {
+				const handle = h(ownerDocument, 'div', { className: 'ash-native-window-resize-handle' });
+				handle.setAttribute('aria-hidden', 'true');
+				handle.dataset.edge = edge;
+				ownerDocument.body.append(handle);
+				this._register(toDisposable(() => handle.remove()));
+				this._register(addDisposableListener(handle, 'pointerdown', event => {
+					if (event.button === 0) send(`resize:${edge}`);
+				}));
+				return handle;
+			});
+			const sendBounds = target.ashNativeCaptionBounds;
+			let publishBounds: (() => void) | undefined;
+			if (sendBounds) {
+				publishBounds = () => {
+					const scale = target.devicePixelRatio;
+					sendBounds([minimize, maximize, close].flatMap(button => {
+						const rect = button.getBoundingClientRect();
+						// Leave the top and right resize handles reachable in restored windows.
+						const top = Math.max(rect.top, resizeHandles[0].hidden ? 0 : 5);
+						const right = Math.min(rect.right, target.innerWidth - (resizeHandles[0].hidden ? 0 : 5));
+						return [rect.left, top, Math.max(rect.left, right), Math.max(top, rect.bottom)]
+							.map(coordinate => Math.max(0, Math.round(coordinate * scale)));
+					}).join(','));
+				};
+				this._register(observeResize([this.domNode, this.contentDomNode, controls], publishBounds));
+				this._register(addDisposableListener(target, 'resize', publishBounds));
+			}
+			this._register(addDisposableListener<CustomEvent<boolean>>(target, 'ash-native-window-maximized', event => {
+				for (const handle of resizeHandles) handle.hidden = event.detail;
+				const label = event.detail ? restoreLabel : maximizeLabel;
+				maximize.setAttribute('aria-label', label);
+				maximize.title = label;
+				maximize.replaceChildren();
+				appendIcon(event.detail ? Lxicon.screenNormal : Lxicon.square, maximize);
+				publishBounds?.();
+			}));
+			send('read-state');
+		}
 		this.actions = this._register(new WorkbenchToolBar(actionsDomNode, contextMenuService, {
 			ariaLabel: localizationService.translate('ash', 'workbench.titleBarGlobalActions', 'Title Bar global actions'),
 			presentation: 'inherit-foreground',

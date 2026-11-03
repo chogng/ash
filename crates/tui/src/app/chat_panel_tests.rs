@@ -20,6 +20,7 @@ fn approval_and_query_share_one_request_position() {
 
     panel.show_query(
         Query::new(vec![QueryQuestion {
+            required: true,
             id: "choice".into(),
             header: "Choose".into(),
             prompt: "Which option?".into(),
@@ -41,6 +42,7 @@ fn opening_an_approval_replaces_an_existing_query() {
     let mut panel = ChatPanel::new();
     panel.show_query(
         Query::new(vec![QueryQuestion {
+            required: true,
             id: "choice".into(),
             header: "Choose".into(),
             prompt: "Which option?".into(),

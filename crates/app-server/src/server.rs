@@ -269,6 +269,9 @@ mod terminal_operations;
 #[path = "server/request_processors/testing.rs"]
 mod testing_operations;
 
+mod speech_instructions;
+#[cfg(test)]
+mod speech_instructions_tests;
 #[cfg(test)]
 mod testing_operations_tests;
 mod thread_dir_binding;
@@ -349,6 +352,7 @@ pub struct AppServer {
     extension_hosts: Option<extension_host_runtime::ExtensionHostRuntime>,
     built_in_editor_extensions: extension_host_runtime::source::BuiltInEditorExtensions,
     extension_state: Option<Arc<ash_state::SqliteExtensionStateStore>>,
+    session_environments: Arc<crate::session_environment::SessionEnvironments>,
     extension_secrets: Option<Arc<dyn ash_secrets::SecretStore>>,
     pub(super) plugin_package_service: Option<Arc<dyn ash_core_plugins::ExtensionPackageService>>,
     plugins_manager: Option<Arc<ash_core_plugins::ExtensionPackageManager>>,
@@ -1352,6 +1356,7 @@ impl AppServer {
             plugins: None,
             extension_hosts: None,
             extension_state: None,
+            session_environments: Arc::default(),
             extension_secrets: None,
             built_in_editor_extensions:
                 extension_host_runtime::source::BuiltInEditorExtensions::Omitted,
@@ -1466,11 +1471,13 @@ impl AppServer {
             .turn_executor
             .clone()
             .with_execution_observer(observer);
-        self.turn_backend.install_executor(executor.clone());
         self.env_runtime
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .turn_executor = executor;
+        // Workspace rebinding replaces the authorized catalogs in env_runtime. Keep
+        // Turn dispatch live after adding this observer instead of pinning its snapshot.
+        self.use_current_env_turn_backend();
         self.multi_agent
             .install_turn_submission(Arc::new(AppServerAgentTurnSubmission {
                 clients: Arc::clone(&self.client_host),
@@ -1554,6 +1561,7 @@ impl AppServer {
             file_access,
             hooks,
             Arc::downgrade(&self.env_runtime),
+            &self.threads,
         )?;
         let runtime = git_turn_changes_runtime::GitTurnChangesRuntime::open(
             database_path,
@@ -2576,6 +2584,7 @@ impl AppServer {
     }
 
     pub(crate) fn with_secret_store(mut self, store: Arc<dyn ash_secrets::SecretStore>) -> Self {
+        self.session_environments.bind(store.clone());
         self.extension_secrets = Some(store.clone());
         if let Some(runtime) = &self.extension_hosts {
             runtime.bind_secrets(store.clone());
@@ -2786,6 +2795,25 @@ impl AppServer {
         Ok(())
     }
 
+    pub(crate) fn release_switched_session_directory(&self, session_id: &SessionId) {
+        let Ok(thread) = ash_protocol::ThreadId::new(session_id.as_str()) else {
+            return;
+        };
+        if let Err(error) = self.threads.with_execution_target(&thread, |target| {
+            if matches!(target, Some(ash_protocol::SessionExecutionTarget::Local { root })
+                if self.dir_services.as_ref().is_some_and(|dirs| &dirs.root == root))
+            {
+                return;
+            }
+            if let Some(runtime) = &self.git_turn_changes {
+                runtime.release_switched_directory(&thread);
+            }
+            self.release_session_directory_resources(session_id);
+        }) {
+            log::warn!("Cannot retire old Session directory: {error}");
+        }
+    }
+
     pub(super) fn collect_message_checkpoints(
         &self,
         source: &dyn core_api::MessageCheckpointSource,
@@ -2858,11 +2886,28 @@ impl AppServer {
     pub(super) fn admit_bound_turn_with_ide(
         &self,
         thread: &ash_protocol::ThreadId,
-        request: ash_core::StartTurnRequest,
+        mut request: ash_core::StartTurnRequest,
         connection: Option<u64>,
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
     ) -> Result<ash_core::StartTurnResult, CoreError> {
+        let record = self.threads.thread_catalog_record(thread)?;
+        if let Some(ash_protocol::SessionExecutionTarget::Local { root }) = record.execution_target
+        {
+            if self
+                .dir_services
+                .as_ref()
+                .is_none_or(|dirs| dirs.root != root)
+            {
+                return Err(CoreError::InvalidInput(
+                    "The session execution directory has changed".into(),
+                ));
+            }
+            // A queued admission must not race a directory change after the route check.
+            if request.expected_sequence == core_api::SequenceExpectation::Any {
+                request.expected_sequence = core_api::SequenceExpectation::Exact(record.sequence);
+            }
+        }
         let mut started = None;
         self.client_host.submit_turn_with_ide(
             thread,
@@ -3438,6 +3483,26 @@ impl AppServer {
             Some(ClientMethod::IssueReporterSubmit) => self
                 .issue_reporter_processor()
                 .issue_reporter_submit(&request.params),
+            Some(ClientMethod::SessionEnvironmentProfileSave) => (|| {
+                let params: ash_app_server_protocol::protocol::session::SessionEnvironmentProfileSaveParams = decode(&request.params)?;
+                self.session_environments
+                    .save_profile(&params.environment_id, &params.variables.0)
+                    .map_err(core_error)?;
+                result(&())
+            })(),
+            Some(ClientMethod::SessionEnvironmentProfileRead) => (|| {
+                use ash_app_server_protocol::protocol::session::SessionEnvironmentProfileReadParams;
+                use ash_app_server_protocol::protocol::session::SessionEnvironmentProfileReadResult;
+                use ash_app_server_protocol::protocol::session::SessionEnvironmentVariables;
+                let params: SessionEnvironmentProfileReadParams = decode(&request.params)?;
+                let variables = self
+                    .session_environments
+                    .read_profile(&params.environment_id)
+                    .map_err(core_error)?;
+                result(&SessionEnvironmentProfileReadResult {
+                    variables: variables.map(SessionEnvironmentVariables),
+                })
+            })(),
             Some(ClientMethod::SessionCreate) => self
                 .session_processor()
                 .session_create(connection, &request.params),
@@ -3611,6 +3676,18 @@ impl AppServer {
                 cancellation,
             ),
             Some(ClientMethod::NetworkRead) => self.network_processor().network_read(),
+            Some(ClientMethod::SpeechInstructionsRead) => speech_instructions::request(
+                self.home.as_deref(),
+                connection,
+                speech_instructions::Operation::Read,
+                &request.params,
+            ),
+            Some(ClientMethod::SpeechInstructionsWrite) => speech_instructions::request(
+                self.home.as_deref(),
+                connection,
+                speech_instructions::Operation::Write,
+                &request.params,
+            ),
             Some(ClientMethod::NetworkHttpConfigure) => self
                 .network_processor()
                 .network_http_configure(&request.params),
@@ -3703,9 +3780,16 @@ impl AppServer {
                 .automation_processor
                 .automation_preview(&request.params),
             Some(ClientMethod::AutomationWrite) => {
-                let response = self
-                    .automation_processor
-                    .automation_write(&request.params)?;
+                let params: ash_app_server_protocol::protocol::automation::AutomationWriteParams =
+                    decode(&request.params)?;
+                if params.status == ash_protocol::AutomationStatus::Enabled
+                    && !self
+                        .artifact_binding_is_current(&params.definition)
+                        .map_err(|message| core_error(core_api::CoreError::Execution(message)))?
+                {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                let response = self.automation_processor.automation_write(params)?;
                 self.advance_stopping_automations()?;
                 Ok(response)
             }
@@ -4560,9 +4644,9 @@ impl AppServer {
             Some(ClientMethod::GitWorktreeDelete) => {
                 self.git_processor().git_worktree_delete(&request.params)
             }
-            Some(ClientMethod::GitWorktreeList) => {
-                self.git_processor().git_worktree_list(&request.params)
-            }
+            Some(ClientMethod::GitWorktreeList) => self
+                .git_processor()
+                .git_worktree_list(connection, &request.params),
             Some(ClientMethod::GitWorktreeResolve) => {
                 self.git_processor().git_worktree_resolve(&request.params)
             }

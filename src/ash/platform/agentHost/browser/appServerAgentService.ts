@@ -21,6 +21,7 @@ import { AppServerRemoteError } from '../common/appServerError.js';
 import { AgentThreadHistoryConflictError, AgentWireLogCaptureUnavailableError, AgentQueueConflictError } from '../common/agentService.js';
 import type {
 	AgentResponse as AgentResponseDto,
+	ContentPart as ContentPartDto,
 	Thread as ThreadDto,
 	ThreadItem as ThreadItemDto,
 	ThreadTranscriptEntry as ThreadTranscriptEntryDto,
@@ -138,6 +139,13 @@ export function createDisconnectedAgentTurnService(unavailable: UnavailableOpera
 
 export function createAppServerAgentSessionService(connection: AppServerProtocolClient, remoteHost?: string | { readonly authority: string; }): IAgentSessionService {
 	return {
+		canChangeDirectory: () => !remoteHost && connection.capabilities?.contracts.changeSessionDirectory?.version === 1,
+		async changeDirectory(params) {
+			const result = sessionResult(await appServerRequest(connection, 'session/request', sessionRequest(params, {
+				type: 'changeDirectory', root: params.root,
+			})));
+			if (result.session.sessionId !== params.sessionId) throw new Error(localize('chat.operation.wrongIdentity', 'The server returned a different conversation. Refresh before trying again.'));
+		},
 		onDidChangeSession: Event.any((listener, thisArgs) => connection.onNotification(event => {
 			if (event.method === 'session/changed') {
 				listener.call(thisArgs, {
@@ -225,7 +233,26 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 		create: (params) => appServerRequest(connection, 'session/create', {
 			...params,
 			executionTarget: toBackendExecutionTarget(params.executionTarget, remoteHost)
-		}).then(result => toSessionResult(result, remoteHost)),
+		}).then(result => {
+			if (params.environmentVariables && result.environmentApplied !== true) {
+				throw new Error(localize({ bundle: 'ash.workbench', key: 'sessions.environment.variablesRuntimeUnavailable' }, 'This execution host cannot apply environment variables to a session.'));
+			}
+			return toSessionResult(result, remoteHost);
+		}),
+		async saveEnvironmentProfile(environmentId, variables) {
+			await appServerRequest(connection, 'session/environmentProfile/save', { environmentId, variables });
+		},
+		async readEnvironmentProfile(environmentId) {
+			const result = await appServerRequest(connection, 'session/environmentProfile/read', { environmentId });
+			return result.variables ?? undefined;
+		},
+		async addWorkspaceFolder(sessionId, path) {
+			const current = await appServerRequest(connection, 'session/dirs/list', { sessionId });
+			if (current.dirs.some(folder => folder.path === path)) return;
+			await appServerRequest(connection, 'session/dirs/add', {
+				sessionId, path, permissions: ['readFiles', 'writeFiles', 'executeCommands', 'browseFiles', 'searchFiles', 'inspectRepository'],
+			});
+		},
 		listAgents: () => appServerRequest(connection, 'agent/roles/list', {}),
 		async readRoleCatalog() {
 			const catalog = await appServerRequest(connection, 'agent/roles/catalog', {});
@@ -327,6 +354,15 @@ async function readToolResource(connection: AppServerProtocolClient, source: Par
 export function createAppServerAgentThreadService(connection: AppServerProtocolClient, remoteHost?: string | { readonly authority: string; }, snapshots?: IAgentHostResourceService): IAgentThreadService {
 	return {
 		canCreateSideChat: () => connection.capabilities?.contracts.sideChats?.version === 1,
+		canMoveThreadToSession: () => connection.capabilities?.contracts.moveThreadToSession?.version === 1,
+		moveThreadToSession: async params => {
+			const result = sessionThreadResult(await appServerRequest(connection, 'session/request', sessionRequest(params, {
+				type: 'moveThreadToSession', threadId: params.threadId, destinationSessionId: params.destinationSessionId,
+			})));
+			if (result.session.sessionId !== params.destinationSessionId || result.threadId !== params.threadId) {
+				throw new Error(localize('chat.operation.wrongIdentity', 'The server returned a different conversation. Refresh before trying again.'));
+			}
+		},
 		createSideChat: async params => {
 			const result = sessionThreadResult(await appServerRequest(connection, 'session/request', sessionRequest(params, {
 				type: 'createSideChat', parentThreadId: params.threadId, sourceTurnId: params.sourceTurnId,
@@ -337,7 +373,16 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 		},
 		fork: async params => {
 			const result = sessionThreadResult(await appServerRequest(connection, 'session/request', sessionRequest(params, {
-				type: params.target === 'session' ? 'forkSession' : 'forkThread', parentThreadId: params.threadId, title: params.title,
+				...(params.target === 'session' && params.comparison
+					? {
+						type: 'forkComparison' as const, comparison: {
+							sourceSequence: params.comparison.sourceSequence,
+							branchName: params.comparison.branchName,
+							agent: { type: 'exact' as const, source: { type: 'directory' as const, id: params.comparison.agent.sourceId }, name: params.comparison.agent.name },
+						}
+					}
+					: { type: params.target === 'session' ? 'forkSession' as const : 'forkThread' as const }),
+				parentThreadId: params.threadId, title: params.title,
 			})));
 			if (params.target === 'thread' && result.session.sessionId !== params.sessionId) throw new Error(localize('chat.operation.wrongIdentity', 'The server returned a different conversation. Refresh before trying again.'));
 			return { sessionId: result.session.sessionId, threadId: result.threadId };
@@ -625,7 +670,12 @@ export function createAppServerAgentTurnService(connection: AppServerProtocolCli
 			appServerRequest(
 				connection,
 				'session/request',
-				sessionRequest(params, {
+				sessionRequest(params, params.response.type === 'cancelUserInput' ? {
+					type: 'cancelUserInput',
+					threadId: params.threadId,
+					turnId: params.turnId,
+					requestId: params.requestId
+				} : {
 					type: 'resolveInteraction',
 					threadId: params.threadId,
 					expectedSequence: params.expectedSequence,
@@ -741,13 +791,24 @@ function toTurnInteraction(interaction: import('../../../../../.build/protocol/t
 		requestId: interaction.requestId,
 		itemId: interaction.itemId,
 		deadline: interaction.deadline ? { ...interaction.deadline } : interaction.deadline,
-		request: request.type === 'approval'
-			? { type: 'approval', request: { reason: request.request.reason, allowedDecisions: request.request.allowedDecisions ? [...request.request.allowedDecisions] : undefined, command: request.request.command ? { ...request.request.command, arguments: [...request.request.command.arguments] } : request.request.command, capabilities: request.request.capabilities.map(capability => ({ ...capability })) } }
-			: request.type === 'permissions'
-				? { type: 'permissions', request: structuredClone(request.request) }
-				: request.type === 'userInput'
-					? { type: 'userInput', request: { questions: request.request.questions.map(question => ({ ...question, options: question.options?.map(option => ({ ...option })) })) } }
-					: { type: 'dynamicTool', call: { ...request.call, arguments: structuredClone(request.call.arguments) } },
+		request: request.type === 'toolResultReview'
+			? { type: 'toolResultReview', request: { toolCallId: request.request.toolCallId, toolName: request.request.toolName, review: { ...request.request.review, content: request.request.review.content.map(toChatContentPart) } } }
+			: request.type === 'approval'
+				? {
+					type: 'approval', request: {
+						reason: request.request.reason,
+						allowedDecisions: request.request.allowedDecisions ? [...request.request.allowedDecisions] : undefined,
+						command: request.request.command ? { ...request.request.command, arguments: [...request.request.command.arguments] } : request.request.command,
+						sandboxDenial: request.request.sandboxDenial ? structuredClone(request.request.sandboxDenial) : request.request.sandboxDenial,
+						riskAssessment: request.request.riskAssessment ? { riskLevel: request.request.riskAssessment.riskLevel, reason: request.request.riskAssessment.reason } : request.request.riskAssessment,
+						capabilities: request.request.capabilities.map(capability => ({ ...capability })),
+					}
+				}
+				: request.type === 'permissions'
+					? { type: 'permissions', request: structuredClone(request.request) }
+					: request.type === 'userInput'
+						? { type: 'userInput', request: { questions: request.request.questions.map(question => ({ ...question, required: question.required ?? true, options: question.options?.map(option => ({ ...option })) })) } }
+						: { type: 'dynamicTool', call: { ...request.call, arguments: structuredClone(request.call.arguments) } },
 	};
 }
 
@@ -897,32 +958,37 @@ function toThreadItem(item: ThreadItemDto): ThreadItem {
 		}
 		case 'toolResult': return {
 			...item,
-			content: item.content == null ? item.content : item.content.map((part): ChatContentPart => {
-				switch (part.type) {
-					case 'artifact': {
-						const artifact = part.artifact;
-						const data = artifact.data;
-						return {
-							type: 'artifact', artifact: {
-								mimeType: artifact.mimeType, contentDigest: artifact.contentDigest, truncated: artifact.truncated,
-								...(artifact.resourceMetadata === undefined ? {} : { resourceMetadata: artifact.resourceMetadata }), source: { ...artifact.source },
-								data: data.type === 'binary' ? { type: 'bytes', bytes: Uint8Array.from(data.bytes) }
-									: data.type === 'json' ? { type: 'json', json: normalizeArtifactJson(data.json) } : { ...data },
-							},
-						};
-					}
-					case 'imageAttachment': return { ...part, attachment: { ...part.attachment } };
-					case 'audioAttachment': return { ...part, attachment: { ...part.attachment } };
-					default: return { ...part };
-				}
-			}),
+			content: item.content == null ? item.content : item.content.map(toChatContentPart),
 		};
 		default: return { ...item };
 	}
 }
 
+function toChatContentPart(part: ContentPartDto): ChatContentPart {
+	switch (part.type) {
+		case 'artifact': {
+			const artifact = part.artifact;
+			const data = artifact.data;
+			return {
+				type: 'artifact', artifact: {
+					...(artifact.presentation == null ? {} : { presentation: { ...artifact.presentation } }),
+					mimeType: artifact.mimeType, contentDigest: artifact.contentDigest, truncated: artifact.truncated,
+					...(artifact.resourceMetadata === undefined ? {} : { resourceMetadata: artifact.resourceMetadata }), source: { ...artifact.source },
+					data: data.type === 'binary' ? { type: 'bytes', bytes: Uint8Array.from(data.bytes) }
+						: data.type === 'json' ? { type: 'json', json: normalizeArtifactJson(data.json) } : { ...data },
+				},
+			};
+		}
+		case 'imageAttachment': return { ...part, attachment: { ...part.attachment } };
+		case 'audioAttachment': return { ...part, attachment: { ...part.attachment } };
+		default: return { ...part };
+	}
+}
+
 function toAgentResponse(response: AgentResponse): AgentResponseDto {
 	switch (response.type) {
+		case 'toolResultReview':
+			return { type: 'toolResultReview', response: { ...response.response } };
 		case 'approval':
 			return { type: 'approval', response: { ...response.response } };
 		case 'permissions':
@@ -974,6 +1040,7 @@ function toSessionResult(result: SessionResultDto, remoteHost?: string | { reado
 function toAgentSession(session: SessionDto, remoteHost?: string | { readonly authority: string; }): AgentSession {
 	return {
 		sessionId: session.sessionId,
+		...(session.source ? { source: session.source } : {}),
 		title: session.title,
 		status: session.status,
 		executionTarget: toExecutionTarget(session.executionTarget, remoteHost),

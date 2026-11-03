@@ -23,6 +23,7 @@ try {
 	await import('../../../sessions/contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js');
 	await import('../../../sessions/contrib/providers/agentHost/browser/workbenchSessionsService.contribution.js');
 	await import('../../../sessions/browser/workbenchChat.contribution.js');
+	await import('../../../sessions/contrib/providers/remoteAgentHost/browser/remoteAgentHost.contribution.js');
 	await import('../../../sessions/contrib/changes/browser/changesMultiDiffSourceResolver.js');
 	const { main } = await import('../../../workbench/electron-browser/desktop.main.js');
 	performance.mark('ash.desktop.contributions-ready');

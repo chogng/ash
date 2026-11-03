@@ -9,11 +9,14 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
 import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
-import { NewSessionsChatAction, ShowSessionsChatHistoryAction } from '../../browser/actions/sessionsChatActions.js';
+import { SHOW_SESSIONS_PICKER_COMMAND_ID } from '../../contrib/sessions/browser/sessionsActions.js';
+import '../../browser/actions/sessionsChatActions.js';
+import '../../contrib/sessions/browser/sessionDetailsAction.js';
+import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
+import { NewChatInSessionsWindowAction } from '../../contrib/chat/browser/newSessionAction.js';
 import { registerNewChatActions } from '../../../workbench/contrib/chat/browser/actions/chatNewActions.js';
 import { registerChatActions } from '../../../workbench/contrib/chat/browser/actions/chatActions.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
-import { IViewsService } from '../../../workbench/services/views/common/viewsService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { ISessionsService } from '../../../sessions/services/sessions/browser/sessionsService.js';
 import type { ISession } from '../../../sessions/services/sessions/common/session.js';
@@ -66,29 +69,31 @@ test('permission commands use shared Chinese copy and require confirmation only 
 	} finally { resetNlsResolver(); }
 });
 
-test('Sessions owns its New Session command without requiring regular Workbench Views', async () => {
+test('Sessions owns its New Session command and routes explicit provider choices', async () => {
 	const onDidChange = new Emitter<void>();
-	let created = 0;
+	const created: Array<string | undefined> = [];
 	const viewService: ISessionsService = {
 		navigationRevision: 0,
+		getLastViewedAt: () => undefined,
 		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
 		async openThread() { },
 		onDidChange: onDidChange.event,
 		visibleSelections: [],
 		activeSelection: undefined,
 		canNavigateBack: false,
-		canNavigateForward: false,
+		canNavigateForward: false, recentSessions: [],
 		async initialize() { },
 		openSession() { },
 		openUntitledSession() { },
-		openNewSession() {
-			created += 1;
-			return { untitledSessionId: `untitled-${created}`, title: 'New code session', model: undefined, agent: undefined, workspace: { type: 'current' } };
+		openNewSession(_title, options) {
+			created.push(options?.providerId);
+			return { untitledSessionId: `untitled-${created.length}`, title: 'New code session', model: undefined, agent: undefined, workspace: { type: 'current' } };
 		},
 		activateSelection() { },
 		closeVisibleSelection() { },
-		navigateBack() { },
-		navigateForward() { },
+		async reopenLastClosedItem() { },
+		async openPreviousSession() { },
+		async openNextSession() { },
 	};
 	const services = new InstantiationService();
 	services.registerInstance(ISessionsService, viewService);
@@ -96,9 +101,11 @@ test('Sessions owns its New Session command without requiring regular Workbench 
 	services.registerInstance(ISessionsProvidersService, providers);
 	using commands = new CommandService(services);
 
-	await commands.executeCommand(NewSessionsChatAction.ID);
+	await commands.executeCommand(NewChatInSessionsWindowAction.ID);
 
-	assert.equal(created, 1);
+	await commands.executeCommand(NewChatInSessionsWindowAction.ID, 'ssh-host');
+	await assert.rejects(commands.executeCommand(NewChatInSessionsWindowAction.ID, {}), TypeError);
+	assert.deepEqual(created, [undefined, 'ssh-host']);
 	onDidChange.dispose();
 });
 
@@ -138,36 +145,39 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 	using services = new InstantiationService();
 	const created: Array<string | undefined> = [];
 	const opened: string[] = [];
-	const input = new TestQuickInputService(['Remote']);
+	const focus: string[] = [];
+	const input = new TestQuickInputService();
 	services.registerInstance(IQuickInputService, input);
-	services.registerInstance(ISessionsProvidersService, {
-		getProviders: () => [{ id: 'local', label: 'Local' }, { id: 'remote', label: 'Remote' }],
-	} as unknown as ISessionsProvidersService);
 	services.registerInstance(ISessionsService, {
 		openNewSession: (_title: string, options?: { providerId?: string; }) => { created.push(options?.providerId); return { untitledSessionId: 'draft' }; },
+		recentSessions: [],
 		openSession: (sessionId: string, threadId: string) => opened.push(`${sessionId}/${threadId}`),
 	} as unknown as ISessionsService);
 	services.registerInstance(ISessionsManagementService, {
 		sessions: [{ sessionId: 'session', title: 'Session', status: 'active', chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }] }],
 	} as unknown as ISessionsManagementService);
 	services.registerInstance(IConfigurationService, { getValue: () => false } as unknown as IConfigurationService);
-	let focused = false;
-	services.registerInstance(IViewsService, { focusView: async () => { focused = true; return true; } } as unknown as IViewsService);
+	services.registerInstance(IContextKeyService, { getValue: () => 'code' } as unknown as IContextKeyService);
+	services.registerInstance(ISessionsLayoutService, { newSessionCommand: undefined } as unknown as ISessionsLayoutService);
+	services.registerInstance(ILayoutService, { focus: () => focus.push('composer') } as unknown as ILayoutService);
+	using code = CommandsRegistry.register('sessions.open.code', () => { focus.push('code'); });
 	using commands = new CommandService(services);
+	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IChatSessionNavigationService, {
-		createNewConversation: async () => { await commands.executeCommand(NewSessionsChatAction.ID); },
-		showConversationHistory: () => commands.executeCommand(ShowSessionsChatHistoryAction.ID),
+		createNewConversation: async () => { await commands.executeCommand('sessions.newSession'); },
+		showConversationHistory: () => commands.executeCommand(SHOW_SESSIONS_PICKER_COMMAND_ID),
 	} as unknown as IChatSessionNavigationService);
-	assert.equal(await commands.executeCommand(NEW_CHAT_COMMAND_ID), true);
-	assert.deepEqual(created, ['remote']);
-	assert.equal(focused, true);
+	assert.equal(NEW_CHAT_COMMAND_ID, 'workbench.action.chat.newChat');
+	assert.equal(await commands.executeCommand('workbench.action.chat.newChat'), true);
+	assert.deepEqual(created, [undefined]);
+	assert.deepEqual(focus, ['code', 'composer']);
 	await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
 	assert.deepEqual(input.picker?.items.map(item => item.label), ['Session']);
 	input.picker!.acceptFirst();
 	assert.deepEqual(opened, ['session/thread']);
 });
 
-test('Sessions History opens the selected active chat', async () => {
+test('Sessions History ranks recent active chats ahead of unvisited chats', async () => {
 	const opened: Array<{ sessionId: string; threadId: string; }> = [];
 	const quickInput = new TestQuickInputService();
 	const sessions: readonly ISession[] = [
@@ -182,6 +192,13 @@ test('Sessions History opens the selected active chat', async () => {
 			],
 		},
 		{
+			sessionId: 'recent',
+			title: 'Recent Session',
+			status: 'active',
+			nextApprovalMode: 'manual',
+			chats: [{ threadId: 'root', origin: { type: 'root' }, status: 'active' }],
+		},
+		{
 			sessionId: 'session-2',
 			title: 'Archived Session',
 			status: 'archived',
@@ -192,17 +209,21 @@ test('Sessions History opens the selected active chat', async () => {
 	const services = new InstantiationService();
 	services.registerInstance(ISessionsManagementService, { sessions, onDidChange: Event.None } as ISessionsManagementService);
 	services.registerInstance(ISessionsService, {
+		recentSessions: [
+			{ sessionId: 'session-2', threadId: 'thread-3' },
+			{ sessionId: 'recent', threadId: 'root' },
+		],
 		openSession: (sessionId: string, threadId: string) => opened.push({ sessionId, threadId }),
 	} as unknown as ISessionsService);
 	services.registerInstance(IQuickInputService, quickInput);
 	using commands = new CommandService(services);
 
-	await commands.executeCommand(ShowSessionsChatHistoryAction.ID);
+	await commands.executeCommand('sessions.chat.history');
 
 	assert.equal(quickInput.picker?.placeholder, 'Select a session');
-	assert.deepEqual(quickInput.picker?.items.map(item => item.label), ['First Session']);
+	assert.deepEqual(quickInput.picker?.items.map(item => item.label), ['Recent Session', 'First Session']);
 	quickInput.picker?.acceptFirst();
-	assert.deepEqual(opened, [{ sessionId: 'session-1', threadId: 'thread-1' }]);
+	assert.deepEqual(opened, [{ sessionId: 'recent', threadId: 'root' }]);
 });
 
 test('Session History shows each branch management state in Chinese before opening details', async () => {
@@ -220,17 +241,70 @@ test('Session History shows each branch management state in Chinese before openi
 			],
 		}], onDidChange: Event.None
 	} as unknown as ISessionsManagementService);
-	services.registerInstance(ISessionsService, { openSession: (_sessionId: string, threadId: string) => opened.push(threadId) } as unknown as ISessionsService);
+	services.registerInstance(ISessionsService, { recentSessions: [], openSession: (_sessionId: string, threadId: string) => opened.push(threadId) } as unknown as ISessionsService);
 	services.registerInstance(IQuickInputService, quickInput);
 	using commands = new CommandService(services);
 	try {
-		await commands.executeCommand(ShowSessionsChatHistoryAction.ID);
+		await commands.executeCommand(SHOW_SESSIONS_PICKER_COMMAND_ID);
 		assert.deepEqual(quickInput.picker?.items.map(item => ({ label: item.label, description: item.description, detail: item.detail })), [
-			{ label: 'Branch session', description: '分支 1 · 待审阅', detail: undefined },
 			{ label: 'Branch session', description: '分支 2 · 独立分支名称 · 需要回应', detail: 'Choose a path' },
+			{ label: 'Branch session', description: '分支 1 · 待审阅', detail: undefined },
 		]);
 		assert.deepEqual(opened, []);
 		quickInput.picker?.hide();
+	} finally { resetNlsResolver(); }
+});
+
+test('Session History has an unread group for new background activity since the last visit', async () => {
+	using services = new InstantiationService();
+	using commands = new CommandService(services);
+	const quickInput = new TestQuickInputService();
+	const catalog: ISession[] = ['unread', 'read', 'working'].map(sessionId => ({
+		sessionId, title: sessionId, status: 'active', nextApprovalMode: 'manual',
+		chats: [{
+			threadId: 'root', origin: { type: 'root' }, status: 'active',
+			updatedAt: new Date(200), executionStatus: sessionId === 'working' ? 'running' : 'completed'
+		}],
+	}));
+	services.registerInstance(ISessionsManagementService, { sessions: catalog, onDidChange: Event.None } as unknown as ISessionsManagementService);
+	services.registerInstance(ISessionsService, {
+		recentSessions: [{ sessionId: 'unread', threadId: 'root' }],
+		getLastViewedAt: (entry: { sessionId: string; }) => entry.sessionId === 'read' ? 300 : 100,
+	} as unknown as ISessionsService);
+	services.registerInstance(IQuickInputService, quickInput);
+	await commands.executeCommand(SHOW_SESSIONS_PICKER_COMMAND_ID);
+	assert.deepEqual(quickInput.picker?.items.map(item => item.label), ['Unread', 'unread', 'Other sessions', 'read', 'working']);
+	quickInput.picker?.hide();
+});
+
+test('Session Details opens a localized read-only snapshot of active user sessions', async () => {
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		using services = new InstantiationService();
+		using commands = new CommandService(services);
+		const opened: Parameters<IEditorService['openEditor']>[] = [];
+		const local: ISession = {
+			sessionId: 'local', title: 'Local\nTask', status: 'active', nextApprovalMode: 'manual', chats: [],
+			workspace: { authorityId: 'local', root: 'C:\\work' },
+		};
+		services.registerInstance(ISessionsManagementService, {
+			sessions: [
+				local,
+				{ ...local, sessionId: 'archived', title: 'Archived task', status: 'archived' },
+				{ ...local, sessionId: 'automation', title: 'Automated task', source: 'automation' },
+			]
+		} as unknown as ISessionsManagementService);
+		services.registerInstance(IEditorService, {
+			openEditor: async (...args: Parameters<IEditorService['openEditor']>) => { opened.push(args); },
+		} as unknown as IEditorService);
+		await commands.executeCommand('sessions.showSessionDetails');
+		const [[input, options]] = opened;
+		assert.equal(input.label, '会话详情');
+		assert.equal(input.readOnly, true);
+		assert.equal(options?.pinned, true);
+		assert.match(input.initialText ?? '', /会话：Local Task\n工作目录：C:\\work\n资源：ash-agent-session:/);
+		assert.doesNotMatch(input.initialText ?? '', /Archived task|Automated task/);
 	} finally { resetNlsResolver(); }
 });
 

@@ -109,6 +109,18 @@ for (const decision of [true, false, undefined]) {
 	});
 }
 
+test('terminal creation passes the session folder to the backend without requesting window trust', async () => {
+	const dirId = 'session:conversation:%2Fworkspace';
+	const processes = new TestTerminalProcessService([]);
+	using workspace = new TestWorkspaceService({ id: dirId, uri: URI.file('/workspace') });
+	using services = revivalServices(processes, workspace);
+	const trust = services.get(IWorkspaceTrustManagementService);
+	trust.getUriTrustInfo = async () => { throw new Error('Session folders have no window workspace grant'); };
+	services.get(IWorkspaceTrustRequestService).requestWorkspaceTrust = async () => { throw new Error('Unexpected window trust prompt'); };
+	await services.get(ITerminalService).createTerminal({ deferStart: true });
+	assert.equal(processes.createCalls[0]?.dirId, dirId);
+});
+
 test('resolved hover launch metadata is immutable and stays out of native process requests after relaunch', async () => {
 	const processes = new TestTerminalProcessService([]);
 	const create = processes.create.bind(processes);

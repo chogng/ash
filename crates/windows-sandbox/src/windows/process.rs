@@ -156,6 +156,7 @@ pub(super) fn spawn(
     runner: &Path,
     directory: &Path,
     request: &Request,
+    worker_desktop: &str,
     pipes: Pipes,
     job: &super::job::Job,
 ) -> Result<Child> {
@@ -172,10 +173,12 @@ pub(super) fn spawn(
     .map_err(|error| error.to_string())?;
     let mut command = win::wide(command);
     let mut password = win::wide(&account.password);
-    // As in Codex, the trusted logon worker uses the default logon desktop.
-    // Only the restricted command is attached to the execution-owned desktop.
+    // The SSH caller's desktop may be inaccessible to the sandbox account.
+    // The worker uses its own desktop on the execution's private station.
+    let mut worker_desktop = win::wide(worker_desktop);
     let startup = STARTUPINFOW {
         cb: size_of::<STARTUPINFOW>() as u32,
+        lpDesktop: worker_desktop.as_mut_ptr(),
         ..unsafe { std::mem::zeroed() }
     };
     let mut process: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
@@ -396,9 +399,11 @@ pub(super) fn run(path: &Path) -> Result<()> {
     if request.account == request.owner {
         return Err("the worker must use a dedicated account".into());
     }
+    let station = super::desktop::window_station_name()?;
     let desktop_suffix = request
         .desktop
-        .strip_prefix("Winsta0\\AshExecution-")
+        .strip_prefix(station.as_str())
+        .and_then(|name| name.strip_prefix("\\AshExecution-"))
         .ok_or("invalid execution desktop")?;
     if desktop_suffix.len() != 32
         || !desktop_suffix
