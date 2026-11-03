@@ -117,7 +117,8 @@ suite('multiSelectDropdown browser component', () => {
 		await expect(wednesday).toHaveAttribute('aria-checked', 'true');
 		await wednesday.dblclick();
 		await expect(wednesday).toHaveAttribute('aria-checked', 'true');
-		await wednesday.click({ modifiers: ['Control'] });
+		// Control-click opens the context menu on macOS. Use its primary modifier instead.
+		await wednesday.click({ modifiers: ['ControlOrMeta'] });
 		await expect(page.getByRole('status', { name: 'Selection' })).toHaveText('["mon"]');
 		await expect(root.getByRole('menuitemcheckbox', { name: 'Tuesday', exact: true })).toBeDisabled();
 		await page.keyboard.press('Escape');
