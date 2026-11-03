@@ -176,6 +176,15 @@ suite('appTools browser component', () => {
 		});
 	}
 
+	test('opening an agent terminal uses its editor instead of requesting the terminal panel', async function () {
+		const { page } = browserTests;
+		await page.goto('/appTools.html?editorTerminals');
+		await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
+		await page.evaluate(() => window.ashAppToolsIntegration.automaticCreation());
+		expect(await page.evaluate(() => window.ashAppToolsIntegration.call({ type: 'openTerminal' }))).toEqual({ opened: true, terminalId: 'terminal-instance-1' });
+		expect(await page.evaluate(() => window.ashAppToolsIntegration.terminalViews)).toEqual([{ id: 'terminal-instance-1', focus: true }]);
+	});
+
 	test('an empty Agent profile falls back to the configured interactive shell and Chinese profile identity', async function () {
 		const { page } = browserTests;
 
@@ -317,13 +326,17 @@ suite('appTools browser component', () => {
 		}
 	});
 
-	for (const locale of ['en', 'zh-CN']) {
-		test(`Agent task tools share Run IDs, output and cancellation with Tasks and Terminal in ${locale}`, async function () {
+	for (const { locale, editor, reveal } of [
+		{ locale: 'en', editor: false, reveal: false },
+		{ locale: 'zh-CN', editor: true, reveal: true },
+		{ locale: 'en', editor: true, reveal: false },
+	]) {
+		test(`Agent task tools share Run IDs, output and cancellation in ${locale} (${editor ? 'editor' : 'panel'}, reveal ${reveal})`, async function () {
 			const { page } = browserTests;
 
 			const errors: string[] = [];
 			page.on('pageerror', error => errors.push(error.message));
-			await page.goto('/appTools.html?taskTools=true&locale=' + locale);
+			await page.goto('/appTools.html?taskTools=true&locale=' + locale + (editor ? '&editorTerminals' : '') + (reveal ? '&revealTask' : ''));
 			await expect.poll(() => page.evaluate(() => !!window.ashAppToolsIntegration)).toBe(true);
 			await page.evaluate(() => window.ashAppToolsIntegration.automaticCreation());
 			const catalog = await page.evaluate(async () => await window.ashAppToolsIntegration.call({ type: 'tasksList', directory: '/workspace' }) as import('../../../../services/appTools/browser/appTools.js').TaskCatalog);
@@ -337,6 +350,9 @@ suite('appTools browser component', () => {
 			await expect.poll(async () => (await status()).terminalId).toBe('terminal-instance-1');
 			await expect.poll(() => page.evaluate(runId => window.ashAppToolsIntegration.taskRuns.find(run => run.runId === runId), run.runId)).toMatchObject({ runId: run.runId, terminalId: 'terminal-instance-1', label: 'Check', status: 'running' });
 			await expect(taskButton).toBeFocused();
+			if (reveal) {
+				await expect.poll(() => page.evaluate(() => window.ashAppToolsIntegration.terminalViews)).toEqual([{ id: 'terminal-instance-1', focus: false }]);
+			}
 			await expect.poll(() => page.evaluate(async runId => (await window.ashAppToolsIntegration.call({ type: 'tasksOutput', directory: '/workspace', runId, cursor: 0, maxCharacters: 4096 }) as { text: string; }).text, run.runId)).toContain('output for terminal-1');
 			expect(await page.evaluate(() => window.ashAppToolsIntegration.terminalCreations.length)).toBe(1);
 			for (let attempt = 0; attempt < 2; attempt++) {
@@ -345,6 +361,7 @@ suite('appTools browser component', () => {
 				await expect.poll(() => page.evaluate(runId => window.ashAppToolsIntegration.taskRuns.find(run => run.runId === runId)?.status, run.runId)).toBe('canceled');
 			}
 			expect((await status()).status).toBe('canceled');
+			if (editor && !reveal) expect(await page.evaluate(() => window.ashAppToolsIntegration.terminalViews)).toEqual([]);
 			await expect(taskButton).toBeFocused();
 
 			expect(await page.evaluate(() => window.ashAppToolsIntegration.closedTerminals)).toEqual(['terminal-1']);

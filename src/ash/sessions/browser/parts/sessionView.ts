@@ -23,6 +23,7 @@ export interface ISessionsConversationPane extends IDisposable {
 	};
 	focus(): void;
 	startVoiceConversation(): Promise<void>;
+	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>): Promise<readonly ChatContextAttachment[]>;
 	addContext(attachment: ChatContextAttachment): void;
 	appendToDraft(text: string): void;
 	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined>;

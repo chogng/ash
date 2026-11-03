@@ -82,6 +82,16 @@ export class EditorHeaderControl extends Disposable {
 			tabsRow.classList.add('ash-editor-group-header');
 		}
 		const actionRow = this.headerRow ?? tabsRow;
+		if (actions) {
+			const trailing = h(titleContainer.ownerDocument, 'div', { className: 'ash-editor-tabs-trailing' });
+			actionRow.append(trailing);
+			this._register(new MenuWorkbenchToolBar(trailing, actions.menuService, actions.contextMenuProvider, MenuId.EditorTabsTrailing, {
+				ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
+				contextKeyService: actions.contextKeyService,
+				menuOptions: group === undefined ? undefined : { arg: { groupId: group } },
+			}));
+			this._register(toDisposable(() => trailing.remove()));
+		}
 		if (actions && viewOptions.menuIds?.headerPrimary && this.headerRow) {
 			const primary = h(titleContainer.ownerDocument, 'div', { className: 'ash-editor-header-primary' });
 			actionRow.append(primary);

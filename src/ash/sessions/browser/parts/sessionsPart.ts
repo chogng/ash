@@ -338,6 +338,12 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		this.activeView.activeChat.addContext(attachment);
 	}
 
+	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>): Promise<readonly ChatContextAttachment[]> {
+		const view = this.activeView;
+		if (!view || this.popouts.has(view)) return Promise.resolve([]);
+		return view.activeChat.acquireContext(prepare);
+	}
+
 	appendToDraft(text: string): void {
 		if (!this.activeView)
 			throw new Error(

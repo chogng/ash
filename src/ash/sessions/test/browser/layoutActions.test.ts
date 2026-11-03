@@ -25,6 +25,7 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import { Part } from '../../../workbench/browser/part.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 import { registerLayoutActions } from '../../browser/layoutActions.js';
+import { registerSessionsTerminalContribution } from '../../contrib/terminal/browser/sessionsTerminalContribution.js';
 import { DesktopWorkbenchLayout } from '../../browser/desktopWorkbench.js';
 import { Menus } from '../../browser/menus.js';
 import { CanGoBackContext, CanGoForwardContext, SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
@@ -85,6 +86,7 @@ test('Sessions layout commands update menu state from their owners and release w
 		async openNextSession() { historyIndex = 1; changed.fire(); },
 	};
 	using actions = registerLayoutActions(layout, sessions, contextKeys, hosts.editor);
+	using terminal = registerSessionsTerminalContribution(layout, contextKeys, hosts.editor);
 	using menu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarLeftLayout);
 	using layoutMenu = new MenuService(commands, contextKeys).createMenu(Menus.TitleBarRightLayout);
 	const state = (): unknown => menu.getActions().flatMap(([, actions]) => actions).filter(action => action.id !== 'ash.sessions.togglePanel').map(action => [action.label, action.tooltip, action.enabled, action.checked]);
@@ -153,7 +155,8 @@ for (const hidden of [false, true]) {
 		await editor.openEditor(document, { pinned: true, inactive: true }, { groupId: destination.id });
 		const documentGroup = editor.groups.find(group => group.inputs.includes(document))!;
 		editor.setGroupVisible(documentGroup.id, true);
-		const otherSession = new TerminalEditorInput(URI.parse('vscode-terminal:/other-session/1'));
+		const otherInstance = fixture.addInstance(URI.parse('vscode-terminal:/other-session/1'));
+		const otherSession = new TerminalEditorInput(otherInstance.resource!, otherInstance);
 		const otherDestination = editor.addGroup(destination.id, (await import('../../../base/browser/ui/grid/grid.js')).Direction.Down);
 		await editor.openEditor(otherSession, { pinned: true }, { groupId: otherDestination.id });
 		const otherGroup = editor.activeGroup;
@@ -175,13 +178,13 @@ for (const hidden of [false, true]) {
 		assert.notEqual(documentGroup, destination);
 		assert.deepEqual(otherGroup.inputs, [otherSession]);
 		assert.equal(editor.isGroupVisible(otherGroup.id), false);
-		assert.equal((destination.activeInput as TerminalEditorInput).resource, instances[0]!.resource);
+		assert.equal((destination.activeInput as TerminalEditorInput).resource, instances[1]!.resource);
 
 		await commands.executeCommand('ash.sessions.togglePanel');
 		assert.equal(editor.isGroupVisible(destination.id), false);
 		assert.equal(editor.isGroupVisible(documentGroup.id), true);
 		await commands.executeCommand('ash.sessions.togglePanel');
-		assert.equal((destination.activeInput as TerminalEditorInput).resource, instances[0]!.resource);
+		assert.equal((destination.activeInput as TerminalEditorInput).resource, instances[1]!.resource);
 		assert.equal(attempts.length, 1, 'Toggling a live terminal retains its original shell');
 	});
 }
@@ -338,7 +341,7 @@ function terminalLayoutFixture(owner: DisposableStore, options: {
 		openEditor,
 		getInstanceFromResource: resource => instances.find(instance => instance.resource?.toString() === resource.toString()),
 	} as ITerminalEditorService);
-	owner.add(registerLayoutActions(layout, { onDidChange: Event.None, canNavigateBack: false, canNavigateForward: false } as ISessionsService, contextKeys, editor));
+	owner.add(registerSessionsTerminalContribution(layout, contextKeys, editor));
 	return { editor, commands, instances, attempts, addInstance };
 }
 

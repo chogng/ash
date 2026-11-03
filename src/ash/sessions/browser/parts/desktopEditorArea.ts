@@ -460,39 +460,6 @@ export class DesktopEditorArea extends Part {
 		else this.replaceGrid(next);
 	}
 
-	public moveToolToEdge(tool: DesktopEditorTool, direction: Direction): void {
-		if (this.compact === 'single' || this.maximized || !this.desired.has(tool) || this.desired.size < 2) return;
-		const horizontal = direction === Direction.Left || direction === Direction.Right;
-		const orientation = horizontal ? Orientation.HORIZONTAL : Orientation.VERTICAL;
-		const after = direction === Direction.Right || direction === Direction.Down;
-		const layout = this.saveLayout();
-		const path: { branch: ToolBranch; atEdge: boolean; }[] = [];
-		let node = layout;
-		while (node.type === 'branch') {
-			const children = node.children.filter(child => toolLeaves(child).some(leaf => leaf.visible));
-			const index = children.findIndex(child => toolLeaves(child).some(leaf => leaf.data === tool));
-			if (index < 0) return;
-			// A branch with only one visible child has no edge of its own.
-			if (children.length > 1) path.push({ branch: node, atEdge: index === (after ? children.length - 1 : 0) });
-			node = children[index]!;
-		}
-		const parent = path.at(-1);
-		if (!parent) return;
-		let target: ToolBranch | undefined;
-		if (parent.branch.orientation === orientation) {
-			target = path.find(entry => entry.branch.orientation === orientation && !entry.atEdge)?.branch;
-		} else {
-			target = path.find(entry => entry.branch.orientation === orientation && !entry.atEdge)?.branch
-				?? path.filter(entry => entry.branch.orientation === orientation).at(-1)?.branch ?? parent.branch;
-		}
-		if (!target) return;
-		this.manuallyArranged = true;
-		this.reposition(layout, tool, target, orientation, after);
-		this.applyVisibility();
-		this.layout(this.dimension);
-		this.notifyConstraintsChanged();
-	}
-
 	public moveTool(tool: DesktopEditorTool, target: DesktopEditorTool, direction: Direction): void {
 		if (this.compact) return;
 		this.manuallyArranged = true;

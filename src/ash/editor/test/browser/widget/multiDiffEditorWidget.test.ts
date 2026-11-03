@@ -691,12 +691,15 @@ test('MultiDiffEditorWidget presents ordered file sections with one outer viewpo
 	assert.equal(editor.currentChange?.itemId, 'second');
 	assert.match(editor.domNode.querySelector('.stanza-multi-diff-editor-accessibility-status')?.textContent ?? '', /Change 2 of 101/);
 	editor.domNode.scrollTop = 52;
+	const currentChange = editor.currentChange;
 	const viewState: unknown = JSON.parse(JSON.stringify(editor.saveViewState()));
 	editor.collapseAll();
 	editor.domNode.scrollTop = 0;
 	editor.restoreViewState(viewState);
 	assert.equal(editor.domNode.scrollTop, 52);
 	assert.equal(editor.getActiveItem()?.id, 'second');
+	assert.deepEqual(editor.currentChange, currentChange);
+	assert.equal((await editor.previousChange())?.itemId, 'first');
 	assert.ok([...editor.domNode.querySelectorAll('.stanza-multi-diff-editor-header-toggle')].every(header => header.getAttribute('aria-expanded') === 'true'));
 	editor.updateOptions({ fontSize: 18, lineHeight: 30, showLineNumbers: true, showInlineChanges: false, loopChanges: false });
 	assert.equal(editor.domNode.classList.contains('hide-line-numbers'), false);

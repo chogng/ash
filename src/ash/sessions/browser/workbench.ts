@@ -1,3 +1,6 @@
+import { IDiffEditorCommandsService } from '../../workbench/browser/parts/editor/diffEditorCommandsService.js';
+import { SessionsDiffEditorCommandsService } from '../contrib/editor/browser/diffEditor.sessions.contribution.js';
+import { registerAddFileAsContextAction } from '../contrib/editor/browser/editor.contribution.js';
 import { ISessionSectionOrderService, SessionSectionOrderService } from '../services/sessions/browser/sessionSectionOrderService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../services/sessions/browser/sessionsListModelService.js';
 import { ISymphonyBackendService } from '../../platform/symphony/common/symphonyService.js';
@@ -340,6 +343,7 @@ import { ISessionsManagementService } from '../services/sessions/common/sessions
 import { ISessionsService, SessionsService } from '../services/sessions/browser/sessionsService.js';
 import { ISessionsLayoutService } from '../services/layout/common/sessionsLayoutService.js';
 import { registerLayoutActions } from './layoutActions.js';
+import { registerSessionsTerminalContribution } from '../contrib/terminal/browser/sessionsTerminalContribution.js';
 import { ITerminalProcessService, TerminalLocation } from '../../platform/terminal/common/terminal.js';
 import { ITerminalService, ITerminalEditorService } from '../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalService } from '../../workbench/contrib/terminal/browser/terminalService.js';
@@ -1030,6 +1034,7 @@ export abstract class Workbench extends Disposable {
 		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageService));
 		const editors = this._register(new BrowserEditorService(editorParts));
 		services.registerInstance(IEditorService, editors);
+		services.registerSingleton(IDiffEditorCommandsService, () => services.createInstance(SessionsDiffEditorCommandsService));
 		services.registerInstance(IEditorGroupsService, editors);
 		// The browser host resolves Workbench browsing, which borrows the window's editor services.
 		if (options.createBrowserHost) { this._register(options.createBrowserHost(services)); }
@@ -1120,6 +1125,8 @@ export abstract class Workbench extends Disposable {
 		if (options.createAppToolsHost) this._register(options.createAppToolsHost(services));
 		this._register(new SessionsModernUIContribution(this.domNode, layout, configurationService));
 		this._register(registerLayoutActions(layout, view, contextKeys, editor));
+		this._register(registerAddFileAsContextAction(this.sessionsPart));
+		this._register(registerSessionsTerminalContribution(layout, contextKeys, editor));
 		const contributions = this._register(WorkbenchContributionsRegistry.createHost(services, undefined, options.contributionIds));
 		contributions.advance(WorkbenchPhase.BlockStartup);
 		contributions.advance(WorkbenchPhase.BlockRestore);

@@ -228,7 +228,7 @@ test('workbench configuration exposes modern and flat layout styles', () => {
 test('editor tab style offers connected and pill with connected as the default', () => {
 	const style = configurationRegistry.getConfiguration(WorkbenchConfiguration.modernUIEditorTabStyle)!;
 	assert.deepEqual({ key: style.key, defaultValue: style.defaultValue, scope: style.scope, schema: style.schema }, {
-		key: 'workbench.experimental.modernUIEditorTabStyle', defaultValue: 'connected', scope: ConfigurationScope.WINDOW,
+		key: 'workbench.experimental.modernUIEditorTabStyle', defaultValue: 'pill', scope: ConfigurationScope.WINDOW,
 		schema: { type: 'string', enum: ['connected', 'pill'] },
 	});
 	assert.deepEqual(['connected', 'pill'].map(value => style.serialize(style.parse(value))), ['connected', 'pill']);

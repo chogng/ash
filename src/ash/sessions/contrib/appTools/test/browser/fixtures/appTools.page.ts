@@ -1,3 +1,4 @@
+import { TerminalLocation } from '../../../../../../platform/terminal/common/terminal.js';
 import { SessionSectionOrderService } from '../../../../../services/sessions/browser/sessionSectionOrderService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../../../services/sessions/browser/sessionsListModelService.js';
 import { createTestPathService } from '../../../../../../workbench/test/common/workbenchHostTestServices.js';
@@ -7,7 +8,7 @@ import { ContextKeyService, IContextKeyService } from '../../../../../../platfor
 import { ILabelService } from '../../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../../../workbench/services/label/common/labelService.js';
 import { InstantiationType } from '../../../../../../platform/instantiation/common/extensions.js';
-import { ITerminalEditorService, ITerminalGroupService } from '../../../../../../workbench/contrib/terminal/browser/terminal.js';
+import { ITerminalEditorService, ITerminalGroupService, type ITerminalInstance, type TerminalEditorLocation } from '../../../../../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalEditorService } from '../../../../../../workbench/contrib/terminal/browser/terminalEditorService.js';
 import { TerminalGroupService } from '../../../../../../workbench/contrib/terminal/browser/terminalGroupService.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
@@ -225,20 +226,32 @@ services.registerSingleton(ITerminalProfileResolverService, () => services.creat
 services.registerInstance(IEditorService, { openEditor: async (...args: unknown[]) => { opened.push(args); } } as unknown as IEditorService);
 services.registerInstance(IOpenerService, { open: async (resource: { toString(): string; }) => { openedUrls.push(resource.toString()); return true; } } as unknown as IOpenerService);
 services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService), { instantiation: InstantiationType.Delayed });
-services.registerSingleton(ITerminalEditorService, () => services.createInstance(TerminalEditorService), { instantiation: InstantiationType.Delayed });
+const useEditorTerminals = new URL(location.href).searchParams.has('editorTerminals');
+if (useEditorTerminals) {
+	services.registerInstance(ITerminalEditorService, {
+		openEditor: async (instance: ITerminalInstance, options?: TerminalEditorLocation) => {
+			terminalViews.push({ id: instance.id, focus: !options?.preserveFocus });
+		},
+	} as ITerminalEditorService);
+} else {
+	services.registerSingleton(ITerminalEditorService, () => services.createInstance(TerminalEditorService), { instantiation: InstantiationType.Delayed });
+}
 services.registerInstance(IWorkspaceTrustManagementService, resources.add(new TestWorkspaceTrustManagementService()));
 services.registerInstance(IWorkspaceTrustRequestService, {
 	onDidInitiateWorkspaceTrustRequest: Event.None, onDidInitiateWorkspaceTrustRequestOnStartup: Event.None,
 	requestWorkspaceTrust: async () => { throw new Error('App tool fixtures are already trusted'); },
 	requestWorkspaceTrustOnStartup() { }, completeWorkspaceTrustRequest: async () => { }, cancelWorkspaceTrustRequest() { },
 });
-const terminals = resources.add(services.createInstance(TerminalService));
+class EditorTerminalService extends TerminalService {
+	protected override getDefaultLocation(): TerminalLocation { return TerminalLocation.Editor; }
+}
+const terminals = resources.add(useEditorTerminals ? services.createInstance(EditorTerminalService) : services.createInstance(TerminalService));
 services.registerInstance(ITerminalService, terminals);
 services.registerInstance(IViewsService, { openView: async (id: string, focus: boolean | undefined) => { if (viewFailure) throw new Error('Terminal view unavailable'); terminalViews.push({ id, focus }); } } as unknown as IViewsService);
 services.registerInstance(IChatSessionNavigationService, { openConversation: async (sessionId: string, threadId: string) => { opened.push({ sessionId, threadId }); } } as unknown as IChatSessionNavigationService);
 services.registerInstance(ISessionGroupsService, groups);
 services.registerInstance(IAccessibilityService, { onDidChangeReducedMotion: Event.None, isMotionReduced: () => window.matchMedia('(prefers-reduced-motion: reduce)').matches } as unknown as IAccessibilityService);
-let taskSource = JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Check', command: 'compiler', presentation: { reveal: 'never' } }, { label: 'Interactive', command: '${input:value}' }] });
+let taskSource = JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Check', command: 'compiler', presentation: { reveal: new URL(location.href).searchParams.has('revealTask') ? 'always' : 'never' } }, { label: 'Interactive', command: '${input:value}' }] });
 services.registerInstance(IFileService, {
 	onDidChangeFiles: Event.None,
 	stat: async (resource: URI) => { if (!resource.path.endsWith('/.vscode/tasks.json')) throw new FileNotFoundError(resource); return { kind: FileKind.File }; },

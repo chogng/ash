@@ -127,6 +127,8 @@ export type ICreateTerminalOptions = Omit<Partial<ITerminalCreateOptions>, 'conf
 	readonly cwd?: string | URI;
 	readonly location?: ITerminalLocationOptions;
 	readonly skipContributedProfileCheck?: boolean;
+	/** Leave a resolved editor terminal unplaced until its caller reveals it. */
+	readonly deferEditorOpen?: boolean;
 	/** Do not select the created instance, including intermediate provider-created instances. */
 	readonly preserveFocus?: boolean;
 };

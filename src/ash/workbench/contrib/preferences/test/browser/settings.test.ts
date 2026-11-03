@@ -2179,7 +2179,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	const tabStyleSetting = defaults.get(WorkbenchConfiguration.modernUIEditorTabStyle);
 	assert.equal(tabStyleSetting.valueType, 'select');
 	if (tabStyleSetting.valueType === 'select') {
-		assert.equal(tabStyleSetting.configuration.defaultValue, 'connected');
+		assert.equal(tabStyleSetting.configuration.defaultValue, 'pill');
 		assert.deepEqual(
 			tabStyleSetting.options.map(option => option.value),
 			['connected', 'pill'],

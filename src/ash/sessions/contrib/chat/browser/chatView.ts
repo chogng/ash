@@ -74,6 +74,7 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 	}
 	public startVoiceConversation(): Promise<void> { return this.widget.startVoiceConversation(); }
 	public addContext(...args: Parameters<ISessionsConversationPane['addContext']>): void { this.widget.addContext(...args); }
+	acquireContext(...args: Parameters<ISessionsConversationPane['acquireContext']>): ReturnType<ISessionsConversationPane['acquireContext']> { return this.widget.acquireContext(...args); }
 	public appendToDraft(...args: Parameters<ISessionsConversationPane['appendToDraft']>): void { this.widget.appendToDraft(...args); }
 	public captureDraft(): ReturnType<ISessionsConversationPane['captureDraft']> { return this.widget.captureDraft(); }
 	public restoreDraft(...args: Parameters<ISessionsConversationPane['restoreDraft']>): void { this.widget.restoreDraft(...args); }

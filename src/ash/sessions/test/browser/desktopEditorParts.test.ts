@@ -170,8 +170,7 @@ suite('Desktop tool EditorParts', () => {
 		await togglePreview();
 		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.HORIZONTAL, [Orientation.VERTICAL, 'files', 'browser'], 'changes']);
 		await togglePreview();
-		const filesGroup = hosts.files.fileGroups[0]!;
-		hosts.editor.moveToolToEdge(Direction.Up, filesGroup.id);
+		hosts.area.moveTool('changes', 'files', Direction.Down);
 		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.VERTICAL, 'files', 'changes']);
 		await togglePreview();
 		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.VERTICAL, 'files', 'browser', 'changes']);

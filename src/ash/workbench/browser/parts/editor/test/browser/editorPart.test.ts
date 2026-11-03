@@ -943,10 +943,10 @@ test('EditorPart retains tabs and switches loaded panes', async () => {
 		'horizontal',
 	);
 	assert.equal(
-		titleControl?.querySelector('.ash-editor-tabs-control .ash-tab-list')?.classList.contains('ash-tab-list-flush'),
+		titleControl?.querySelector('.ash-editor-tabs-control .ash-tab-list')?.classList.contains('ash-tab-list-inset'),
 		true,
 	);
-	assert.equal(tablist?.closest('.ash-multi-row-editor-tabs-control')?.nextElementSibling, toolbar?.parentElement);
+	assert.equal(titleControl?.querySelector('.ash-multi-row-editor-tabs-control ~ .ash-editor-title-actions'), toolbar?.parentElement);
 	const firstTab = tablist?.querySelector<HTMLElement>("[role='tab']");
 	assert.equal(firstTab?.querySelector('.ash-icon-label-text')?.textContent, 'main.ts');
 	assert.equal(firstTab?.getAttribute('aria-selected'), 'true');
@@ -3303,6 +3303,40 @@ test('editor commands share group state for keep open, selected pins and close o
 	assert.equal(editor.isModalEditorVisible, true);
 	await commands.executeCommand(CLOSE_EDITOR_COMMAND_ID);
 	assert.deepEqual({ modal: editor.isModalEditorVisible, inputs: group.inputs }, { modal: false, inputs: [second] });
+});
+
+test('moving a modal editor retains the source on failure and restores state after revealing the destination', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using browserOwner = toDisposable(() => dom.window.close());
+	using registry = new EditorPaneRegistry();
+	let failOpen = false;
+	using registration = registry.registerEditorPane(descriptor('test.modalMove', '.move', () => {
+		if (failOpen) throw new Error('Destination failed');
+		return new TestViewStateEditorPane('test.modalMove');
+	}));
+	using editor = createEditorPart(dom.window.document.body, { registry });
+	const source = input('C:/project/review.move');
+	const modal = await editor.openEditor(source, {}, 'modalGroup') as TestViewStateEditorPane;
+	const state = { activeItemId: 'second', scrollTop: 80, collapsedItemIds: ['first'] };
+	modal.viewState = state;
+	const group = editor.activeGroup;
+
+	failOpen = true;
+	await assert.rejects(editor.moveModalEditorTo(group, () => assert.fail('Failed destination was revealed')), /Destination failed/);
+	assert.equal(editor.activePane, modal);
+	assert.equal(editor.isModalEditorVisible, true);
+	assert.deepEqual(group.inputs, []);
+
+	failOpen = false;
+	let revealed = false;
+	assert.equal(await editor.moveModalEditorTo(group, () => {
+		assert.equal(editor.isModalEditorVisible, false);
+		assert.equal((group.activePane as TestViewStateEditorPane).restoredViewState, undefined);
+		revealed = true;
+	}), true);
+	assert.equal(revealed, true);
+	assert.equal(group.activeInput, source);
+	assert.deepEqual((group.activePane as TestViewStateEditorPane).restoredViewState, state);
 });
 
 for (const closeEmptyGroups of [true, false]) {

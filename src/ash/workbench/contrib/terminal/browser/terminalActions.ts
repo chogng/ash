@@ -1,5 +1,7 @@
 import { getWindow } from '../../../../base/browser/dom.js';
 import { IEditorPartsService } from '../../../browser/parts/editor/editorParts.js';
+import { resolveCommandsContext } from '../../../browser/parts/editor/editorCommandsContext.js';
+import { IEditorGroupsService } from '../../../services/editor/common/editorGroupsService.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { TerminalChatCommandId } from '../terminalContribChatExports.js';
 import { TerminalTabsChatEntry } from './terminalTabsChatEntry.js';
@@ -316,6 +318,22 @@ export function registerTerminalActions(): void {
 			if (instance.target === TerminalLocation.Editor) await instantiation.invokeFunction(accessor => accessor.get(ITerminalEditorService)).openEditor(instance, { preserveFocus: true });
 			else await groups.showPanel(false);
 			if (focus && !quickInput.currentQuickInput && terminals.activeInstance === instance) instance.xterm?.focus();
+		}
+	});
+	registerAction2(class CreateTerminalEditorSameGroupAction extends Action2 {
+		constructor() {
+			super({
+				id: TerminalCommandId.CreateTerminalEditorSameGroup,
+				title: localize2('terminal.title.new', 'New Terminal'),
+				precondition: AppServerAvailableContext.isEqualTo(true),
+			});
+		}
+
+		override async run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
+			const { groupedEditors: [target], preserveFocus } = resolveCommandsContext(args, accessor.get(IEditorGroupsService));
+			if (target) {
+				await accessor.get(ITerminalService).createTerminal({ location: { viewColumn: target.group.id, preserveFocus } });
+			}
 		}
 	});
 	registerAction2(class NewTerminalWindowAction extends Action2 {

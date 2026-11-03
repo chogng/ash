@@ -1,11 +1,12 @@
+import '../../../workbench/contrib/codeEditor/common/editorConfiguration.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { resetNlsResolver, setNlsResolver } from '../../../nls.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
-import { SessionsConfiguration } from '../../common/configuration.js';
+import { SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP, SessionsConfiguration } from '../../common/configuration.js';
 import { ActivityBarPosition, WorkbenchConfiguration } from '../../../workbench/common/configuration.js';
-import { TestConfigurationService as WorkbenchConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
+import { TestConfigurationService as WorkbenchConfigurationService, testConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 
 test('Sessions settings keep their values while their labels belong to the Sessions page', () => {
@@ -21,6 +22,7 @@ test('Sessions settings keep their values while their labels belong to the Sessi
 		assert.equal(layoutSetting.valueType, 'select');
 		assert.deepEqual(layoutSetting.options, [{ value: 'modern', label: 'Modern' }, { value: 'flat', label: 'Flat' }]);
 		assert.equal(chinese.bundles.ash?.['sessions.settings.title'], '会话设置');
+		assert.equal(registry.getConfiguration(SESSIONS_DIFF_VIEW_MODE)?.setting?.title, '差异视图');
 		for (const [key, label] of Object.entries({
 			'sessions.settings.section.basics': '基础',
 			'sessions.settings.section.development': '开发',
@@ -64,4 +66,36 @@ test('Activity Bar position enum keeps Workbench and Sessions settings as string
 	} finally {
 		configuration.dispose();
 	}
+});
+
+
+test('Agents Window editor preferences override inherited settings only in that window', async () => {
+	const { ConfigurationService } = await import('../../services/configuration/browser/configurationService.js');
+	const SessionsConfigurationService = testConfigurationService(ConfigurationService);
+	using sessions = new SessionsConfigurationService();
+	using workbench = new WorkbenchConfigurationService();
+	for (const configuration of [sessions, workbench]) {
+		await configuration.updateValue('diffEditor.renderSideBySide', true);
+		await configuration.updateValue('diffEditor.wordWrap', 'off');
+	}
+	assert.equal(sessions.getValue('diffEditor.renderSideBySide'), true);
+	const changes: string[] = [];
+	using listener = sessions.onDidChangeConfiguration(event => {
+		for (const key of ['diffEditor.renderSideBySide', 'diffEditor.wordWrap', 'editor.wordWrap']) {
+			if (event.affectsConfiguration(key, { overrideIdentifier: 'typescript' })) changes.push(key);
+		}
+	});
+	for (const configuration of [sessions, workbench]) {
+		await configuration.updateValue(SESSIONS_DIFF_VIEW_MODE, 'inline');
+		await configuration.updateValue(SESSIONS_DIFF_WORD_WRAP, 'on');
+		await configuration.updateValue(SESSIONS_EDITOR_WORD_WRAP, 'on');
+	}
+	assert.deepEqual(changes, ['diffEditor.renderSideBySide', 'diffEditor.wordWrap', 'editor.wordWrap']);
+	assert.equal(sessions.getValue('diffEditor.renderSideBySide'), false);
+	assert.equal(sessions.getValue('diffEditor.wordWrap'), 'on');
+	assert.equal(sessions.getValue('editor.wordWrap'), 'on');
+	assert.equal(workbench.getValue('diffEditor.renderSideBySide'), true);
+	assert.equal(workbench.getValue('diffEditor.wordWrap'), 'off');
+	await sessions.updateValue(SESSIONS_DIFF_VIEW_MODE, 'inherit');
+	assert.equal(sessions.getValue('diffEditor.renderSideBySide'), true);
 });

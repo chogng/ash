@@ -1,8 +1,5 @@
 import { SessionSideChatEditorInput } from '../contrib/chat/browser/sessionSideChatEditorInput.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
-import { ITerminalService, ITerminalEditorService } from '../../workbench/contrib/terminal/browser/terminal.js';
-import { TerminalEditorInput } from '../../workbench/contrib/terminal/browser/terminalEditorInput.js';
-import { TerminalLocation } from '../../platform/terminal/common/terminal.js';
 import type { DesktopEditorParts } from './parts/desktopEditorParts.js';
 import type { ServicesAccessor } from '../../platform/instantiation/common/instantiation.js';
 import { localize, localize2 } from '../../nls.js';
@@ -15,7 +12,6 @@ import {
 	SideBarVisibleContext,
 	PanelVisibleContext,
 } from '../../workbench/common/contextkeys.js';
-import { Keybinding, logicalKey } from '../../base/common/keybindings.js';
 import type { ISessionsService } from '../services/sessions/browser/sessionsService.js';
 import type { IAgentWorkbenchLayoutService } from './workbench.js';
 import { Menus } from './menus.js';
@@ -23,7 +19,6 @@ import { CanGoBackContext, CanGoForwardContext } from '../common/contextkeys.js'
 
 const sessionTools = new RawContextKey<boolean>('sessions.toolsAvailable', false);
 const conversationCovered = new RawContextKey<boolean>('sessions.conversationCovered', false);
-const terminalVisibleContext = new RawContextKey<boolean>('sessions.terminalVisible', false);
 
 /** Registers window-local commands and derives their menu state from the layout and session owners. */
 export function registerLayoutActions(
@@ -38,9 +33,7 @@ export function registerLayoutActions(
 	const forwardEnabled = CanGoForwardContext.bindTo(contextKeys);
 	const codeAvailable = sessionTools.bindTo(contextKeys);
 	const panelVisible = PanelVisibleContext.bindTo(contextKeys);
-	const terminalVisible = terminalVisibleContext.bindTo(contextKeys);
 	const covered = conversationCovered.bindTo(contextKeys);
-	let terminalToggle: Promise<void> | undefined;
 	const updateContext = (): void =>
 		contextKeys.bufferChangeEvents(() => {
 			sidebarVisible.set(layout.isPartVisible('sidebar'));
@@ -49,7 +42,6 @@ export function registerLayoutActions(
 			codeAvailable.set(contextKeys.getValue('sessions.desktopCode') === true);
 			panelVisible.set(false);
 			covered.set(codeAvailable.get() === true && layout.isPartAvailable('sessions') && !layout.isPartVisible('sessions') && layout.isPartVisible('editor'));
-			terminalVisible.set(layout.isPartVisible('editor') && editor.groups.some(group => editor.isGroupVisible(group.id) && group.activeInput instanceof TerminalEditorInput));
 		});
 	updateContext();
 	disposables.add(layout.onDidChangePartVisibility(updateContext));
@@ -64,7 +56,6 @@ export function registerLayoutActions(
 				forwardEnabled.reset();
 				codeAvailable.reset();
 				panelVisible.reset();
-				terminalVisible.reset();
 				covered.reset();
 			}),
 		),
@@ -128,86 +119,6 @@ export function registerLayoutActions(
 		group: '1_tools',
 		order: 2,
 	}));
-	disposables.add(
-		registerAction2(
-			class extends Action2 {
-				constructor() {
-					super({
-						id: 'ash.sessions.togglePanel',
-						title: localize2({ bundle: 'ash', key: 'sessions.layout.toggleTerminal' }, 'Toggle terminal'),
-						icon: Lxicon.terminalSession,
-						f1: true,
-						precondition: sessionTools.isEqualTo(true),
-						keybinding: {
-							primary: new Keybinding([logicalKey('`', { ctrlKey: true })]),
-							when: sessionTools.isEqualTo(true),
-						},
-						menu: [
-							{
-								id: Menus.TitleBarRightLayout,
-								group: 'navigation',
-								order: 3,
-								when: sessionTools.isEqualTo(true),
-							},
-							{
-								id: MenuId.MenubarViewMenu,
-								group: '2_code_layout',
-								order: 3,
-								when: sessionTools.isEqualTo(true),
-							},
-						],
-						toggled: terminalVisibleContext.isEqualTo(true),
-					});
-				}
-				override async run(accessor: ServicesAccessor): Promise<void> {
-					if (!layout.isPartAvailable('editor')) {
-						return;
-					}
-					terminalToggle ??= (async () => {
-						const terminals = accessor.get(ITerminalService);
-						await terminals.whenConnected;
-						if (disposables.isDisposed) {
-							return;
-						}
-						const terminalEditors = accessor.get(ITerminalEditorService);
-						const groups = editor.getToolGroups(input => input instanceof TerminalEditorInput);
-						const unavailable = groups.flatMap(group => group.inputs
-							.filter(input => input instanceof TerminalEditorInput && !terminalEditors.getInstanceFromResource(input.resource))
-							.map(input => ({ group, input })));
-						const hasLiveTerminal = groups.some(group => group.inputs.some(input =>
-							input instanceof TerminalEditorInput && terminalEditors.getInstanceFromResource(input.resource)));
-						if (!hasLiveTerminal) {
-							// A restored tab can outlive its PTY checkpoint. Replace it in its
-							// retained group only after an explicit request successfully opens a shell.
-							const destination = groups.find(group => group === editor.activeGroup) ?? groups[0];
-							const location = destination ? { viewColumn: destination.id } : undefined;
-							const retained = terminals.activeInstance ?? terminals.instances[0];
-							if (retained) {
-								await terminalEditors.openEditor(retained, location);
-							} else {
-								await terminals.createTerminal({ location: location ?? TerminalLocation.Editor });
-							}
-							if (destination) {
-								editor.setGroupVisible(destination.id, true);
-								editor.activateGroup(destination.id);
-								editor.focus();
-							}
-						}
-						for (const { group, input } of unavailable) {
-							await group.closeEditor(input, { skipConfirmation: true });
-						}
-						if (hasLiveTerminal) {
-							await editor.toggleToolEditors(input => input instanceof TerminalEditorInput);
-						}
-					})().finally(() => {
-						terminalToggle = undefined;
-						updateContext();
-					});
-					return terminalToggle;
-				}
-			},
-		),
-	);
 	disposables.add(
 		MenusRegistry.appendMenuItems([
 			{

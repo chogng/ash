@@ -398,8 +398,8 @@ test('EditorTitleControl switches tab modes and breadcrumbs from configuration',
 	const stickyRow = control.domNode.querySelector('.ash-sticky-editor-tabs-row')!;
 	const close = firstTab!.querySelector<HTMLButtonElement>('.ash-tab-primary-action button')!;
 	close.focus();
-	assert.equal(ordinaryRow.classList.contains('ash-flush-editor-tabs'), true);
-	assert.equal(control.domNode.querySelector('.ash-tab-list')?.classList.contains('ash-tab-list-flush'), true);
+	assert.equal(ordinaryRow.classList.contains('ash-flush-editor-tabs'), false);
+	assert.equal(control.domNode.querySelector('.ash-tab-list')?.classList.contains('ash-tab-list-inset'), true);
 	await configuration.updateValue(WorkbenchConfiguration.modernUIEditorTabStyle, 'connected');
 	assert.equal(ordinaryRow.classList.contains('ash-flush-editor-tabs'), true);
 	assert.equal(ordinaryRow.classList.contains('ash-connected-editor-tabs'), true);

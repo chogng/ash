@@ -3,12 +3,24 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { newTerminalIcon, killTerminalIcon } from './terminalIcons.js';
 import { MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
-import { AppServerAvailableContext } from '../../../common/contextkeys.js';
+import { ActiveEditorContext, AppServerAvailableContext } from '../../../common/contextkeys.js';
+import { TerminalEditorInput } from './terminalEditorInput.js';
 import { TerminalCommandId } from '../common/terminal.js';
 import { TerminalCreatingContext, TerminalHasActiveInstanceContext, TerminalActiveInstanceInTitleContext, TerminalActiveInstanceStateContext, TerminalViewInlineActionsContext } from '../common/terminalContextKey.js';
 
 /** Registers terminal menus once for the renderer; enablement comes from each window's context. */
 export function setupTerminalMenus(): void {
+	MenusRegistry.appendMenuItem(MenuId.EditorTabsTrailing, {
+		command: {
+			id: TerminalCommandId.CreateTerminalEditorSameGroup,
+			title: localize2('terminal.title.new', 'New Terminal'),
+			icon: newTerminalIcon,
+			precondition: AppServerAvailableContext.isEqualTo(true),
+		},
+		when: ActiveEditorContext.isEqualTo(TerminalEditorInput.ID),
+		group: 'navigation',
+		order: 0,
+	});
 	for (const [id, title, order] of [
 		[TerminalCommandId.CopySelection, localize2('terminal.context.copy', 'Copy'), 1],
 		[TerminalCommandId.Paste, localize2('terminal.context.paste', 'Paste'), 2],

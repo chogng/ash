@@ -50,7 +50,7 @@ import { SettingsTreeModel, type SettingsSectionReference, type SettingsTreeNode
 import { SettingsSearchQuery } from '../../../../workbench/contrib/preferences/browser/settingsSearch.js';
 import type { SettingWidgetOptions } from '../../../../workbench/contrib/preferences/browser/settingsWidgets.js';
 import { IPreferencesService, validateSettingsEditorOptions, type IOpenSettingsOptions, type ISetting } from '../../../../workbench/services/preferences/common/preferences.js';
-import { SessionsConfiguration } from '../../../common/configuration.js';
+import { SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP, SessionsConfiguration } from '../../../common/configuration.js';
 import { SESSIONS_LAYOUT_SCOPE_SETTING } from '../../../common/chatLayout.js';
 import '../../../common/sessionConfig.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
@@ -565,7 +565,8 @@ export class SessionsPreferences extends Disposable {
 		const appearanceSettings: readonly ISetting[] = [
 			SESSIONS_LAYOUT_SCOPE_SETTING,
 			SessionsConfiguration.layoutStyle,
-			SessionsConfiguration.activityBarLocation
+			SessionsConfiguration.activityBarLocation,
+			SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP,
 		].map(id => defaults.get(id));
 		const generalSettings: readonly ISetting[] = [
 			...defaults.all.filter(setting => setting.id === STARTUP_WINDOW_SETTING || setting.id === ChatConfiguration.TipsEnabled),

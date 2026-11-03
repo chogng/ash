@@ -49,6 +49,7 @@ import {
 	ActiveEditorContext, ActiveEditorReadonlyContext, ResourceContext, ResourceSchemeContext,
 	ResourcePathContext, ResourceFilenameContext, ResourceDirnameContext, ResourceExtensionContext,
 	ResourceLanguageIdContext, ResourceSetContext,
+	IsSessionsWindowContext,
 } from '../../../common/contextkeys.js';
 import { CodeEditorConfiguration } from '../../codeEditor/common/editorConfiguration.js';
 import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/editor/common/editorConfiguration.js';
@@ -328,9 +329,19 @@ class MultiDiffEditorSession extends Disposable {
 			this.itemResources.value = resources;
 			const items = this.createItems(paneInput, resources);
 			this.model = this._register(new MultiDiffEditorModel(items));
+			const useConfiguredViewMode = contextKeyService.getValue(IsSessionsWindowContext.key) === true;
 			this._register(configuration.onDidChangeConfiguration(event => {
 				if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) {
 					this.editor?.setLayoutStyle(configuration.getValue(WorkbenchConfiguration.layoutStyle));
+				}
+				if (useConfiguredViewMode && (event.affectsConfiguration('diffEditor.renderSideBySide')
+					|| event.affectsConfiguration('diffEditor.useInlineViewWhenSpaceIsLimited')
+					|| event.affectsConfiguration('diffEditor.renderSideBySideInlineBreakpoint'))) {
+					this.editor?.setViewMode(
+						configuration.getValue('diffEditor.renderSideBySide'),
+						configuration.getValue('diffEditor.useInlineViewWhenSpaceIsLimited'),
+						configuration.getValue('diffEditor.renderSideBySideInlineBreakpoint'),
+					);
 				}
 				if (event.affectsConfiguration(CodeEditorConfiguration.diffWordWrap)
 					|| event.affectsConfiguration(CodeEditorConfiguration.wordWrap)) {
@@ -372,6 +383,11 @@ class MultiDiffEditorSession extends Disposable {
 						.finally(() => retention?.dispose());
 				},
 				wordWrap: getDiffWordWrap(configuration),
+				...(useConfiguredViewMode ? {
+					renderSideBySide: configuration.getValue<boolean>('diffEditor.renderSideBySide'),
+					useInlineViewWhenSpaceIsLimited: configuration.getValue<boolean>('diffEditor.useInlineViewWhenSpaceIsLimited'),
+					renderSideBySideInlineBreakpoint: configuration.getValue<number>('diffEditor.renderSideBySideInlineBreakpoint'),
+				} : {}),
 				layoutStyle: configuration.getValue(WorkbenchConfiguration.layoutStyle),
 				...this.getEditorOptions(),
 				workbenchUIElementFactory: {

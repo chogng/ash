@@ -26,7 +26,7 @@ import { IConfigurationResolverService } from '../../../services/configurationRe
 import { ConfigurationResolverExpression, type Replacement, type IResolvedValue } from '../../../services/configurationResolver/common/configurationResolverExpression.js';
 import { type IOutputChannel, type OutputEntrySeverity } from '../../../services/output/common/output.js';
 import { readTaskOutput, ShellQuoting, type ITaskRun, type ITaskOutput, type IWorkspaceTask, type TaskRunStatus, type TaskPseudoterminal, type TaskShellExecution, type ShellQuotedString } from '../common/tasks.js';
-import { type ITerminalCreateOptions, type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalProfileSelection, ITerminalGroupService, ITerminalService } from '../../terminal/browser/terminal.js';
+import { type ITerminalCreateOptions, type ITerminalCommandStatusEvent, type ITerminalInstance, type ITerminalProfileSelection, ITerminalEditorService, ITerminalGroupService, ITerminalService } from '../../terminal/browser/terminal.js';
 import { parseShellExecution } from '../common/taskConfiguration.js';
 import { parseProblemMatchers, type ProblemMatcher } from '../common/problemMatcher.js';
 import { WatchingProblemCollector } from '../common/problemCollectors.js';
@@ -38,6 +38,7 @@ import { WorkbenchViewContainerId } from '../../../common/views.js';
 interface TaskTerminal {
 	readonly terminal: ITerminalInstance;
 	readonly folderId: string;
+	readonly createdInEditor: boolean;
 	readonly taskId: string;
 	readonly panel: 'shared' | 'dedicated' | 'new';
 	readonly group: string | undefined;
@@ -64,6 +65,7 @@ export class TerminalTaskSystem extends Disposable {
 	constructor(
 		private readonly output: IOutputChannel,
 		@ITerminalService private readonly terminals: ITerminalService,
+		@ITerminalEditorService private readonly terminalEditors: ITerminalEditorService,
 		@ITerminalGroupService private readonly groups: ITerminalGroupService,
 		@IConfigurationResolverService private readonly resolver: IConfigurationResolverService,
 		@ILogService private readonly logService: ILogService,
@@ -294,7 +296,10 @@ export class TerminalTaskSystem extends Disposable {
 		let terminal: ITerminalInstance;
 		// Reserving an idle instance synchronously keeps overlapping preparations from sharing a process.
 		const panel = task.presentation?.panel ?? 'shared';
-		const reusable = panel === 'new' ? undefined : [...this.taskTerminals.values()].find(slot => slot.idle && slot.folderId === folder.id && slot.panel === panel && slot.group === task.presentation?.group && slot.terminal.target !== TerminalLocation.Editor && (panel === 'shared' || slot.taskId === task.id) && this.terminals.instances.includes(slot.terminal));
+		const reusable = panel === 'new' ? undefined : [...this.taskTerminals.values()].find(slot =>
+			slot.idle && slot.folderId === folder.id && slot.panel === panel && slot.group === task.presentation?.group
+			&& (slot.terminal.target !== TerminalLocation.Editor || slot.createdInEditor)
+			&& (panel === 'shared' || slot.taskId === task.id) && this.terminals.instances.includes(slot.terminal));
 		if (reusable) reusable.idle = false;
 		try {
 			const options: ITerminalCreateOptions = pty ? {
@@ -326,7 +331,7 @@ export class TerminalTaskSystem extends Disposable {
 				});
 				this.terminals.setActiveInstance(terminal);
 			} else {
-				terminal = await this.terminals.createTerminal(options);
+				terminal = await this.terminals.createTerminal({ ...options, deferEditorOpen: true });
 			}
 		} catch (error) {
 			closePty();
@@ -384,7 +389,7 @@ export class TerminalTaskSystem extends Disposable {
 			await this.closeTerminal(terminal);
 		}, executionId);
 		this.runs.set(terminal.id, run);
-		const slot: TaskTerminal = { terminal, folderId: folder.id, taskId: task.id, panel, group: task.presentation?.group, idle: false };
+		const slot: TaskTerminal = { terminal, createdInEditor: reusable?.createdInEditor ?? terminal.target === TerminalLocation.Editor, folderId: folder.id, taskId: task.id, panel, group: task.presentation?.group, idle: false };
 		this.taskTerminals.set(terminal.id, slot);
 		void run.completion.then(async () => {
 			if (this.isDisposed) return;
@@ -436,7 +441,13 @@ export class TerminalTaskSystem extends Disposable {
 	private async revealTerminal(terminal: ITerminalInstance, focus: boolean): Promise<void> {
 		if (this.isDisposed || !this.terminals.instances.includes(terminal)) return;
 		this.terminals.setActiveInstance(terminal);
-		try { await this.views.openView(TERMINAL_VIEW_ID, focus); }
+		try {
+			if (terminal.target === TerminalLocation.Editor) {
+				await this.terminalEditors.openEditor(terminal, { preserveFocus: !focus });
+			} else {
+				await this.views.openView(TERMINAL_VIEW_ID, focus);
+			}
+		}
 		catch (error) { this.log('error', errorMessage(error)); }
 	}
 

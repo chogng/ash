@@ -209,7 +209,7 @@ export const WorkbenchConfiguration = Object.freeze({
 	}),
 	modernUIEditorTabStyle: configurationRegistry.registerConfiguration<ModernUIEditorTabStyle>({
 		key: 'workbench.experimental.modernUIEditorTabStyle',
-		defaultValue: 'connected',
+		defaultValue: 'pill',
 		scope: ConfigurationScope.WINDOW,
 		schema: { type: 'string', enum: ['connected', 'pill'] },
 		parse(value: unknown): ModernUIEditorTabStyle {

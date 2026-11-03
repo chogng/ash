@@ -1,3 +1,4 @@
+import type { DiffEditorWidgetOptions } from '../diffEditor/diffEditorOptions.js';
 import type { IEditorOptions } from '../../../common/config/editorOptions.js';
 import { getWindow, isHTMLElement } from '../../../../base/browser/dom.js';
 import { isFiniteNumber, isNonNegativeSafeInteger } from '../../../../base/common/numbers.js';
@@ -21,8 +22,10 @@ export function hideUnchangedRegions(configuration: IConfigurationService): bool
 		: true;
 }
 
+export type MultiDiffViewOptions = Pick<DiffEditorWidgetOptions, 'renderSideBySide' | 'useInlineViewWhenSpaceIsLimited' | 'renderSideBySideInlineBreakpoint'>;
+
 /** Inputs supplied by an editor host; file models remain owned by that host. */
-export interface IMultiDiffEditorWidgetOptions {
+export interface IMultiDiffEditorWidgetOptions extends MultiDiffViewOptions {
 	readonly container: HTMLElement;
 	readonly model: IMultiDiffEditorModel;
 	/** Raw editor line height: zero derives it from font size, and values below eight are multipliers. */

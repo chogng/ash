@@ -239,11 +239,11 @@ export class ModalEditorPart extends Disposable {
 		return pane;
 	}
 
-	public closeEditor(input: IResourceEditorInput): boolean {
+	public closeEditor(input: IResourceEditorInput, restorePreviousFocus = true): boolean {
 		if (!this.currentEntry || !this.isSameEditor(this.currentEntry.input, input)) return false;
 		this.openSequence += 1;
 		this.cancelPendingOpen();
-		this.hide();
+		this.hide(restorePreviousFocus);
 		this.titleListener.clear();
 		this.titleHover.clear();
 		this.toolbar?.setActions([]);
@@ -274,7 +274,7 @@ export class ModalEditorPart extends Disposable {
 		if (!focusFirst(this.domNode)) this.domNode.focus();
 	}
 
-	private hide(): void {
+	private hide(restorePreviousFocus = true): void {
 		if (!this.visible) return;
 		this.visible = false;
 		this.active.value?.setVisible(false);
@@ -282,7 +282,7 @@ export class ModalEditorPart extends Disposable {
 		this.visibilityEmitter.fire(false);
 		const focusToRestore = this.focusToRestore;
 		this.focusToRestore = undefined;
-		if (focusToRestore) restoreFocus(focusToRestore);
+		if (restorePreviousFocus && focusToRestore) restoreFocus(focusToRestore);
 	}
 
 	private layout(dimension: IDimension): void {

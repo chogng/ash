@@ -10,7 +10,8 @@ import { NullLocalTranscriptionService } from '../../../../services/localTranscr
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { IEnvironmentVariableService } from '../../common/environmentVariable.js';
 import { EnvironmentVariableService } from '../../common/environmentVariableService.js';
-import { ITerminalGroupService } from '../../browser/terminal.js';
+import { ITerminalGroupService, ITerminalService, type ICreateTerminalOptions } from '../../browser/terminal.js';
+import { TerminalEditorInput } from '../../browser/terminalEditorInput.js';
 import { TerminalGroupService } from '../../browser/terminalGroupService.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
@@ -22,7 +23,7 @@ import { TerminalProfileService } from '../../browser/terminalProfileService.js'
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { ITerminalProcessService } from '../../../../../platform/terminal/common/terminal.js';
-import { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import { IMenuService, MenuId } from '../../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { CommandRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { TerminalCommandId } from '../../common/terminal.js';
@@ -36,7 +37,8 @@ import { Emitter, Event } from '../../../../../base/common/event.js';
 import type { IContextMenuDelegate } from '../../../../../base/browser/contextmenu.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { ITerminalInstance } from '../../browser/terminal.js';
-import { AppServerAvailableContext } from '../../../../common/contextkeys.js';
+import { ActiveEditorContext, AppServerAvailableContext } from '../../../../common/contextkeys.js';
+import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { TestConfigurationService, TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import { TerminalContextKeys, TerminalHasActiveInstanceContext } from '../../common/terminalContextKey.js';
@@ -88,6 +90,33 @@ suiteTeardown(() => {
 setupTerminalMenus();
 const { registerTerminalActions } = await import('../../browser/terminalActions.js');
 registerTerminalActions();
+
+test('the terminal editor title creates a terminal in the invoking group', async () => {
+	using services = new InstantiationService();
+	using context = new ContextKeyService();
+	using commands = new CommandService(services);
+	const menus = new MenuService(commands, context);
+	using menu = menus.createMenu(MenuId.EditorTabsTrailing);
+	const group = { id: 7, inputs: [] };
+	services.registerInstance(IEditorGroupsService, {
+		activeGroup: { id: 1 },
+		getGroup: (id: number) => id === group.id ? group : undefined,
+	} as unknown as IEditorGroupsService);
+	const creations: ICreateTerminalOptions[] = [];
+	services.registerInstance(ITerminalService, {
+		createTerminal: async (options: ICreateTerminalOptions) => { creations.push(options); },
+	} as unknown as ITerminalService);
+	const action = () => menu.getActions({ arg: { groupId: group.id } })
+		.find(([name]) => name === 'navigation')?.[1].find(action => action.id === TerminalCommandId.CreateTerminalEditorSameGroup);
+
+	assert.equal(action(), undefined);
+	ActiveEditorContext.bindTo(context).set(TerminalEditorInput.ID);
+	assert.equal(action()?.enabled, false);
+	AppServerAvailableContext.bindTo(context).set(true);
+	assert.equal(action()?.label, 'New Terminal');
+	await action()!.run();
+	assert.deepEqual(creations, [{ location: { viewColumn: 7, preserveFocus: false } }]);
+});
 
 let shownProfileActions: readonly IAction[] = [];
 let shownProfileAnchor: unknown;
