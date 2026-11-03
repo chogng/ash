@@ -389,6 +389,9 @@ export class ChatWidgetModel extends Disposable {
 			&& this.sessionService.untitledSessions.some(draft => draft.untitledSessionId === this.untitledSessionId && draft.devContainer);
 	}
 
+	/** History recovery can settle independently of model and skill discovery. */
+	get pendingHistoryBinding(): Promise<void> | undefined { return this.subscriptionPromise; }
+
 	async initialize(): Promise<void> {
 		if (!this.initializePromise) {
 			this.initializePromise = this._initialize();

@@ -1,3 +1,5 @@
+import { IGitHubService } from '../../github/browser/githubService.js';
+import { attachSessionGitHubReference } from './sessionChatInputToolbar.js';
 import { AGENT_SESSIONS_SCOPED_INPUT_HISTORY_SETTING } from './sessionsChatHistory.js';
 import { IChatContextService } from '../../../../workbench/contrib/chat/browser/contextContrib/chatContextService.js';
 import { IChatSlashCommandService } from '../../../../workbench/contrib/chat/common/participants/chatSlashCommands.js';
@@ -65,6 +67,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		@IImageEditorService imageEditors: IImageEditorService,
 		@IChatContextService providedContexts: IChatContextService,
 		@ICommandService commands: ICommandService,
+		@IGitHubService github: IGitHubService,
 	) {
 		super(container, delegate, contextMenus, contextViews, accessibleViews, notifications, {
 			create: options => instantiationService.createInstance(ChatInputEditor, {
@@ -76,6 +79,7 @@ export class NewChatInputWidget extends ChatInputPart {
 			}),
 		}, [], {
 			layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host',
+			attachGitHubReference: (kind, signal) => attachSessionGitHubReference(kind, model, github, quickInput, signal),
 			primaryPermissionPicker: {
 				action: {
 					id: 'sessions.chat.permissions',

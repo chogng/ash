@@ -493,6 +493,22 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	assert.equal(part.domNode.querySelector('[data-conversation-kind="code"]'), codeView);
 	assert.equal(part.domNode.querySelector('.ash-chat-input-part'), retainedCodeInput);
 	assert.deepEqual((await part.captureActiveDraft())?.draft, draft);
+	assert.equal(await part.didActiveCodeHistoryFail(), false);
+	const unavailable = {
+		kind: 'session',
+		active: {
+			threadId: 'unavailable-thread',
+			session: {
+				sessionId: 'unavailable-session',
+				title: 'Unavailable Session',
+				status: 'active',
+				nextApprovalMode: 'manual',
+				chats: [{ threadId: 'unavailable-thread', origin: { type: 'root' }, status: 'active' }],
+			},
+		},
+	} as const;
+	part.updateVisibleSessions([unavailable], unavailable);
+	assert.equal(await part.didActiveCodeHistoryFail(), true);
 });
 
 test('Sessions draft state restores text and images while isolating Threads and workspaces', async () => {

@@ -1,3 +1,4 @@
+import { localize } from '../../../../nls.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
@@ -183,7 +184,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		}
 	}
 	openUntitledSession(untitledSessionId: string): void { this.activate({ kind: 'untitled', untitledSessionId }); }
-	openNewSession(title = 'New chat', options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; readonly forkSource?: IUntitledChatSession['forkSource']; }): IUntitledChatSession {
+	openNewSession(title = localize({ bundle: 'ash', key: 'chat.sessions.new' }, 'New Session'), options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; readonly forkSource?: IUntitledChatSession['forkSource']; }): IUntitledChatSession {
 		const session = this.sessionService.createUntitledSession(title, undefined, options?.providerId, true, options?.forkSource);
 		this.select({ kind: 'untitled', session }, options?.sideBySide ? 'add' : 'open', options?.source === 'restore' ? 'automatic' : 'explicit');
 		return session;

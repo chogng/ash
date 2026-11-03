@@ -1197,6 +1197,13 @@ export abstract class Workbench extends Disposable {
 		view.activateSelection(selected, { source: 'restore' });
 		await entryLayout.restore(command => showSessionsSplashForRestore(ownerWindow.document, command));
 		if (this.isDisposed) return;
+		const revision = view.navigationRevision;
+		void this.sessionsPart.didActiveCodeHistoryFail().then(failed => {
+			// A late history failure must not replace a conversation the user chose meanwhile.
+			if (failed && !this.isDisposed && revision === view.navigationRevision) {
+				view.openNewSession(undefined, { source: 'restore' });
+			}
+		}).catch(error => this.logService.error('Failed to restore Code conversation', error));
 		this.lifecycleService.phase = LifecyclePhase.Restored;
 		contributions.advance(WorkbenchPhase.AfterRestored);
 		await contributions.workspaceRestored();

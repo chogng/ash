@@ -1,4 +1,4 @@
-import { localize, localize2 } from '../../../../nls.js';
+import { localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -21,7 +21,7 @@ export class NewChatInSessionsWindowAction extends Action2 {
 		if (providerId !== undefined && (typeof providerId !== 'string' || !providerId.trim())) {
 			throw new TypeError('Expected a Sessions provider ID');
 		}
-		return accessor.get(ISessionsService).openNewSession(localize({ bundle: 'ash', key: 'chat.sessions.new' }, 'New Session'), { providerId });
+		return accessor.get(ISessionsService).openNewSession(undefined, { providerId });
 	}
 }
 registerAction2(NewChatInSessionsWindowAction);

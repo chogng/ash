@@ -185,6 +185,13 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		return this.switching;
 	}
 
+	async didActiveCodeHistoryFail(): Promise<boolean> {
+		const pane = this.activeView?.activeChat;
+		if (!(pane instanceof NewChatView) || !pane.sessionId) return false;
+		await pane.model.pendingHistoryBinding;
+		return this.activeView?.activeChat === pane && !!pane.model.historyStatus && pane.model.items.length === 0;
+	}
+
 	focus(): void {
 		if (this.activeView) this.popouts.get(this.activeView)?.window.window.focus();
 		this.activeView?.focus();

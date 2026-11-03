@@ -165,8 +165,9 @@ changes remove automatic associations but retain manual attachments; ordinary PR
 updates preserve link focus.
 Account changes cancel reads and clear private data.
 
-Attach PR accepts a GitHub.com or Enterprise pull request URL and verifies access
-before saving its host, repository and number. App Server stores these references
+In an existing Code conversation, Add context (+) → Pull Request accepts a
+GitHub.com or Enterprise URL and verifies access before saving its host, repository
+and number. App Server stores these references
 on the Session's root Thread in the profile SQLite database, through
 `github/session/pullRequests`, `github/session/pullRequest/attach` and
 `github/session/pullRequest/detach`. Changes notify subscribed windows through

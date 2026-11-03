@@ -21,7 +21,8 @@ suite('Sessions Chat accessibility help', () => {
 			const text = await content.inputValue();
 			expect(text).toMatch(locale === 'en' ? /Chat: Configure Tools/ : /聊天：配置工具/);
 			expect(text).toMatch(locale === 'en' ? /run Compare Agents from the Command Palette/ : /从命令面板运行“比较 Agent”/);
-			expect(text).toMatch(locale === 'en' ? /New worktree asks for a new Git branch name/ : /新建 worktree/);
+			expect(text).toMatch(locale === 'en' ? /Open Add context \(\+\) and choose Pull Request/ : /打开添加上下文（\+），选择拉取请求/);
+			expect(text).toMatch(locale === 'en' ? /Open Add context \(\+\) and choose Issue/ : /打开添加上下文（\+），选择 Issue/);
 			expect(text).toMatch(locale === 'en' ? /Focus Workspace Picker or Focus Environment Picker/ : /聚焦工作区选择器.*聚焦环境选择器/);
 			expect(text.match(locale === 'en' ? /Chat: Configure Tools/g : /聊天：配置工具/g)).toHaveLength(1);
 			await page.keyboard.press('Escape');
@@ -31,7 +32,7 @@ suite('Sessions Chat accessibility help', () => {
 			const permissions = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-permission-picker');
 			await permissions.focus();
 			await page.keyboard.press('Alt+F1');
-			await expect(content).toHaveValue(locale === 'en' ? /New worktree asks for a new Git branch name/ : /新建 worktree/);
+			await expect(content).toHaveValue(locale === 'en' ? /Open Add context \(\+\) and choose Pull Request/ : /打开添加上下文（\+），选择拉取请求/);
 			await page.keyboard.press('Escape');
 			await expect(permissions).toBeFocused();
 		});

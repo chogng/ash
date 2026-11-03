@@ -271,7 +271,7 @@ export class GitHubContextValuePick implements IChatContextValueItem {
 	public get icon(): Icon { return this.kind === 'issue' ? Lxicon.issues : Lxicon.gitPullRequest; }
 	public get label(): string { return this.kind === 'issue' ? localize('chat.context.issue', 'Issue…') : localize('chat.context.pullRequest', 'Pull Request…'); }
 	constructor(
-		private readonly kind: 'issue' | 'pullRequest',
+		public readonly kind: 'issue' | 'pullRequest',
 		@IGitHubService private readonly github: IGitHubService,
 		@ICommandService private readonly commands: ICommandService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,

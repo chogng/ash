@@ -180,6 +180,8 @@ export interface ChatInputPartOptions {
 	};
 	/** Sessions composers already own persisted drafts; the regular input retains them in memory. */
 	readonly draftStorage?: 'input' | 'host';
+	/** Allows a conversation host to store GitHub references beyond the current draft. */
+	readonly attachGitHubReference?: (kind: 'issue' | 'pullRequest', signal: AbortSignal) => Promise<boolean>;
 }
 
 /** The product supplies its existing workspace draft store; the input owns snapshots and async writes. */
@@ -266,6 +268,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			// The command creates the picker owner only when this composer opens it.
 			this.attachContext.value ??= this.instantiationService.createInstance(AttachContextAction, {
 				container: this.inputContainer, target: this, focusInput: () => this.focus(), supportsImages: () => this.supportsImages(),
+				attachGitHubReference: this.options.attachGitHubReference,
 			});
 			return this.attachContext.value.run(this.element.querySelector<HTMLElement>('[data-action-id="ash.chat.input.attach"] button') ?? undefined);
 		},

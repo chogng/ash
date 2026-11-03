@@ -598,10 +598,9 @@ suite('sessionGitHub browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/sessionGitHub.html');
-		const attach = page.getByRole('button', { name: 'Attach PR', exact: true });
+		const composer = page.getByRole('textbox', { name: 'Fixture composer' });
 		await expect(page.locator('.ash-session-chat-input-pr')).toHaveCount(2);
-		await attach.focus();
-		await page.keyboard.press('Enter');
+		await page.evaluate(() => window.ashSessionGitHub.attach('pullRequest'));
 		const dialog = page.getByRole('dialog', { name: 'Attach a pull request to this session' });
 		await expect(dialog).toBeVisible();
 		await dialog.getByRole('textbox').fill('https://github.com/TEAM/one/pull/7#discussion');
@@ -609,7 +608,7 @@ suite('sessionGitHub browser component', () => {
 		const remove = page.getByRole('button', { name: 'Remove attached pull request team/one #7' });
 		await expect(remove).toBeVisible();
 		await expect(page.locator('.ash-session-chat-input-pr')).toHaveCount(2);
-		await expect(attach).toBeFocused();
+		await expect(composer).toBeFocused();
 		await page.reload();
 		await expect(remove).toBeVisible();
 		await page.evaluate(() => window.ashSessionGitHub.changeBranch());
@@ -621,7 +620,7 @@ suite('sessionGitHub browser component', () => {
 		await remove.focus();
 		await page.keyboard.press('Enter');
 		await expect(page.locator('.ash-session-chat-input-pr')).toHaveCount(0);
-		await expect(attach).toBeFocused();
+		await expect(composer).toBeFocused();
 		await page.reload();
 		await expect(remove).toHaveCount(0);
 	});
@@ -711,14 +710,13 @@ suite('sessionGitHub browser component', () => {
 		const { page } = browserTests;
 
 		await page.goto('/sessionGitHub.html?locale=zh-CN');
-		const attach = page.getByRole('button', { name: '附加 PR', exact: true });
-		await attach.focus();
-		await page.keyboard.press('Enter');
+		const composer = page.getByRole('textbox', { name: 'Fixture composer' });
+		await page.evaluate(() => window.ashSessionGitHub.attach('pullRequest'));
 		const dialog = page.getByRole('dialog', { name: '将拉取请求附加到此会话' });
 		await expect(dialog).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(dialog).toHaveCount(0);
-		await expect(attach).toBeFocused();
+		await expect(composer).toBeFocused();
 		expect(await page.evaluate(() => window.ashSessionGitHub.requests.filter(request => request.method === 'github/session/pullRequest/attach'))).toHaveLength(0);
 	});
 
@@ -727,7 +725,7 @@ suite('sessionGitHub browser component', () => {
 
 		await page.goto('/sessionGitHub.html');
 		await expect(page.locator('.ash-session-chat-input-pr')).toHaveCount(2);
-		await page.getByRole('button', { name: 'Attach PR', exact: true }).click();
+		await page.evaluate(() => window.ashSessionGitHub.attach('pullRequest'));
 		await page.getByRole('dialog').getByRole('textbox').fill('https://github.com/team/one/pull/7');
 		await page.keyboard.press('Enter');
 		const remove = page.getByRole('button', { name: 'Remove attached pull request team/one #7' });
@@ -752,7 +750,7 @@ suite('sessionGitHub browser component', () => {
 	});
 
 	async function attachIssue(page: import('@playwright/test').Page, number: number): Promise<void> {
-		await page.getByRole('button', { name: 'Attach issue', exact: true }).click();
+		await page.evaluate(() => window.ashSessionGitHub.attach('issue'));
 		await page.getByRole('dialog', { name: 'Attach an issue to this session' }).getByRole('textbox').fill(`https://github.com/TEAM/one/issues/${number}`);
 		await page.keyboard.press('Enter');
 		await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -798,7 +796,7 @@ suite('sessionGitHub browser component', () => {
 		const remove = page.getByRole('button', { name: 'Remove attached issue github.com/team/one #11', exact: true });
 		await remove.focus(); await page.keyboard.press('Enter');
 		await expect(summary).toHaveAccessibleName('1 issues · 0 open · 1 closed · 0 unavailable');
-		await expect(page.getByRole('button', { name: 'Attach issue', exact: true })).toBeFocused();
+		await expect(page.getByRole('textbox', { name: 'Fixture composer' })).toBeFocused();
 		await page.reload();
 		await expect(summary).toHaveAccessibleName('1 issues · 0 open · 1 closed · 0 unavailable');
 		expect(await page.evaluate(() => window.ashSessionGitHub.requests.some(request => request.method === 'github/issue/update'))).toBe(false);
@@ -824,10 +822,10 @@ suite('sessionGitHub browser component', () => {
 		await page.evaluate(() => window.ashSessionGitHub.signOut());
 		await expect(issue).toHaveAccessibleName(/状态不可用$/);
 		await expect(issue).not.toHaveAccessibleName(/long title/);
-		const attach = page.getByRole('button', { name: '附加 Issue', exact: true });
-		await attach.focus(); await page.keyboard.press('Enter');
+		const composer = page.getByRole('textbox', { name: 'Fixture composer' });
+		await page.evaluate(() => window.ashSessionGitHub.attach('issue'));
 		await expect(page.getByRole('dialog', { name: '将 Issue 附加到此会话' })).toBeVisible();
-		await page.keyboard.press('Escape'); await expect(attach).toBeFocused();
+		await page.keyboard.press('Escape'); await expect(composer).toBeFocused();
 		await page.evaluate(() => window.ashSessionGitHub.dispose());
 		await expect(page.locator('.ash-session-chat-input-issues')).toHaveCount(0);
 	});

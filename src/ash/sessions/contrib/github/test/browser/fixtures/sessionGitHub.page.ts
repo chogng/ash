@@ -46,7 +46,7 @@ import { ISessionsService, type SessionsViewSelection } from '../../../../../ser
 import type { ISessionsManagementService } from '../../../../../services/sessions/common/sessionsManagement.js';
 import type { ISession } from '../../../../../services/sessions/common/session.js';
 import { GitHubService } from '../../../browser/githubService.js';
-import { SessionChatInputToolbar } from '../../../../chat/browser/sessionChatInputToolbar.js';
+import { attachSessionGitHubReference, SessionChatInputToolbar } from '../../../../chat/browser/sessionChatInputToolbar.js';
 import { SessionsList } from '../../../../../browser/parts/sidebar/sessionsList.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import type { GitHubPullRequestReference, GitHubIssueReference } from '../../../../../../platform/github/common/githubService.js';
@@ -266,13 +266,15 @@ const toolbarModel = inputStack ? {
 	onDidChange: selected.event,
 } : { sessionId: 'session', onDidChange: Event.None };
 const input = document.createElement('textarea');
+input.setAttribute('aria-label', 'Fixture composer');
+main.append(input);
 const toolbarServices = resources.add(new InstantiationService());
 toolbarServices.registerInstance(ISessionsService, sessions);
 toolbarServices.registerInstance(ISessionProviderScopeService, scopes);
 toolbarServices.registerInstance(ICustomViewService, listCustomViews);
 toolbarServices.registerInstance(ISessionGitHubService, github);
 toolbarServices.registerInstance(INotificationService, notifications);
-const toolbar = resources.add(new SessionChatInputToolbar(main, () => input.focus(), toolbarModel, github, opener, notifications, quickInput, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService, resources.add(new BrowserContextViewService(document.body)), toolbarServices));
+const toolbar = resources.add(new SessionChatInputToolbar(main, () => input.focus(), toolbarModel, github, opener, notifications, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService, resources.add(new BrowserContextViewService(document.body)), toolbarServices));
 if (inputStack) {
 	// Exercise the real PR producer against the same slot contract used by NewChatWidget.
 	main.classList.add('ash-chat-input-part', chatInputStackClass);
@@ -312,6 +314,9 @@ github.initialize();
 
 window.ashSessionGitHub = {
 	opened, requests: transport.requests, submissions,
+	attach: (kind: 'issue' | 'pullRequest') => {
+		void attachSessionGitHubReference(kind, toolbarModel, github, quickInput, new AbortController().signal).finally(() => input.focus());
+	},
 	setIssueState: (number: number, state: string, reason?: string) => transport.changeIssue(number, state, reason),
 	setState: (state: State) => { transport.states.set(7, state); statusChanged.fire(gitStatus('one')); },
 	setAttention: (attention: 'comments' | 'checks' | 'conflicts' | 'none') => {
@@ -328,4 +333,4 @@ window.ashSessionGitHub = {
 	dispose: () => { resources.dispose(); list.domNode.remove(); },
 };
 window.addEventListener('pagehide', () => resources.dispose(), { once: true });
-declare global { interface Window { ashSessionGitHub: { submissions: Record<string, unknown>[]; opened: string[]; requests: Request[]; setIssueState(number: number, state: string, reason?: string): void; setState(state: State): void; setAttention(attention: 'comments' | 'checks' | 'conflicts' | 'none'): void; setMergeable(): void; changeBranch(): void; signOut(): void; selectDraft(): void; theme(name: string): void; dispose(): void; }; } }
+declare global { interface Window { ashSessionGitHub: { attach(kind: 'issue' | 'pullRequest'): void; submissions: Record<string, unknown>[]; opened: string[]; requests: Request[]; setIssueState(number: number, state: string, reason?: string): void; setState(state: State): void; setAttention(attention: 'comments' | 'checks' | 'conflicts' | 'none'): void; setMergeable(): void; changeBranch(): void; signOut(): void; selectDraft(): void; theme(name: string): void; dispose(): void; }; } }

@@ -1250,7 +1250,7 @@
     "chat.context.sessions": "会话…",
     "chat.context.selectSession": "选择会话",
     "chat.context.issue": "Issue…",
-    "chat.context.pullRequest": "Pull Request…",
+    "chat.context.pullRequest": "拉取请求…",
     "chat.context.githubSignIn": "请在设置中连接 GitHub 账号，以添加 Issue 或 Pull Request",
     "chat.context.githubAccount": "选择 GitHub 账号",
     "chat.context.githubRepository": "选择仓库、输入 owner/repository，或粘贴 GitHub 链接",

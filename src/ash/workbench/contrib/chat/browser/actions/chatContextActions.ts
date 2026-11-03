@@ -131,6 +131,7 @@ interface AttachContextHost {
 	readonly container: HTMLElement;
 	readonly focusInput: () => void;
 	readonly supportsImages: () => boolean;
+	readonly attachGitHubReference?: (kind: GitHubContextValuePick['kind'], signal: AbortSignal) => Promise<boolean>;
 }
 
 type ContextSourceItem = IQuickPickItem & (
@@ -294,6 +295,10 @@ export class AttachContextAction extends Disposable {
 						}
 						if (item.source === 'context') {
 							const context = (item as Extract<ContextSourceItem, { source: 'context'; }>).context;
+							if (context instanceof GitHubContextValuePick && await this.host.attachGitHubReference?.(context.kind, signal)) {
+								finish();
+								return;
+							}
 							contextBackground.value = false;
 							const attachments = await this.host.target.acquireContext(async draftSignal => {
 								const selection = await context.asAttachment(widget, AbortSignal.any([signal, draftSignal]));
