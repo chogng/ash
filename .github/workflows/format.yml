@@ -29,6 +29,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.11"
       - uses: pnpm/setup@fbda4c85fc2e1e08721cd8763afea8f48d60f024
         with:
           install: false
@@ -37,12 +42,19 @@ jobs:
           node-version-file: .nvmrc
       - name: Install formatter dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
-      - name: Check TypeScript and JavaScript formatting
-        if: always() && !cancelled()
-        run: pnpm format:ts
-      - name: Check configuration and documentation formatting
-        if: always() && !cancelled()
-        run: pnpm format:config
+      - name: Check frontend formatting
+        env:
+          FORMAT_BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+        run: |
+          scope=()
+          if [[ -n "$FORMAT_BASE" ]]; then
+            scope=(--changed "$FORMAT_BASE")
+          fi
+          status=0
+          for language in typescript config; do
+            python3 -B scripts/format.py --check --language "$language" "${scope[@]}" || status=1
+          done
+          exit "$status"
 
   editor-windows:
     name: Windows editor formatter command

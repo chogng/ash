@@ -38,6 +38,17 @@ CONFIGURATION = (
 )
 
 
+FRONTEND_FORMATTER_INPUTS = {
+    "typescript": {"build/format.ts", "tsfmt.json"},
+    "config": {".gitignore", ".prettierignore", ".prettierrc.toml"},
+}
+FRONTEND_TOOLCHAIN_INPUTS = {
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+}
+
+
 @dataclass(frozen=True)
 class Command:
     name: str
@@ -206,11 +217,17 @@ def chunks(paths: list[str]):
 
 
 def scoped_commands(
-    check: bool, root: Path, files: set[str], language: str | None
+    check: bool,
+    root: Path,
+    files: set[str],
+    language: str | None,
+    *,
+    full_frontend_checks: frozenset[str] = frozenset(),
 ) -> list[Command]:
     configured = []
     mode = "--check" if check else "--write"
     enabled = set(LANGUAGES) if language is None else {language}
+    enabled -= full_frontend_checks
     if "just" in enabled and "justfile" in files:
         configured.append(
             Command(
@@ -399,7 +416,22 @@ def scoped(
         root = Path(directory)
         snapshot_files(root, selected)
         originals = {name: (root / name).read_bytes() for name in selected}
-        success = execute(scoped_commands(check, root, selected, language))
+        full_frontend_checks = frozenset(
+            formatter
+            for formatter, inputs in FRONTEND_FORMATTER_INPUTS.items()
+            if check
+            and changed is not None
+            and not paths
+            and language in (None, formatter)
+            and selected & (inputs | FRONTEND_TOOLCHAIN_INPUTS)
+        )
+        checks = scoped_commands(
+            check, root, selected, language, full_frontend_checks=full_frontend_checks
+        )
+        for formatter in sorted(full_frontend_checks):
+            print(f"Checking all {formatter} files because formatter inputs changed.")
+            checks.extend(commands(check, formatter))
+        success = execute(checks)
         if language in (None, "rust"):
             success = scoped_rust(check, root, selected) and success
         if not success:
