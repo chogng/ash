@@ -1,4 +1,3 @@
-import { isUntitledSession } from '../../browser/sessionGridState.js';
 import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
 import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { URI } from '../../../../../base/common/uri.js';
