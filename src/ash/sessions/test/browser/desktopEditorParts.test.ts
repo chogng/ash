@@ -50,6 +50,21 @@ function fixture() {
 suite('Desktop tool EditorParts', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	test('reopens a product editor in its retained group after closing the last tab', async () => {
+		using hosts = fixture();
+		const editor = hosts.editor;
+		const groupId = editor.pageGroupId;
+		const pages = editor.groups.find(group => group.id === groupId)!;
+		const input = { resource: URI.parse('ash-symphony:/monitor') };
+		await editor.openEditor(input, { pinned: true }, { groupId });
+		assert.equal(await pages.closeEditor(input), true);
+		editor.setGroupVisible(groupId, false);
+		assert.equal(await editor.removeGroup(groupId), false);
+		await editor.openEditor(input, { pinned: true }, { groupId });
+		assert.equal(editor.activeGroup, pages);
+		assert.equal(pages.activeInput, input);
+	});
+
 	test('splitting Files creates a local group without changing other tool hosts', async () => {
 		using hosts = fixture();
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });

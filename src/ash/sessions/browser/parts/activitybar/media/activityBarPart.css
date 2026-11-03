@@ -127,6 +127,23 @@
 	grid-template-columns: minmax(0, 1fr) auto;
 }
 
+/* Keep destination icons visible when the menu marks the current page. */
+.ash-menu
+	.ash-sessions-navigation-menu-row
+	> .ash-button.checked
+	> .ash-menu-leading-check
+	> .ash-icon {
+	display: none;
+}
+
+.ash-menu
+	.ash-sessions-navigation-menu-row
+	> .ash-button.checked
+	> .ash-menu-leading-check
+	> .ash-icon-label-icon {
+	display: inline-flex;
+}
+
 .ash-menu
 	.ash-sessions-navigation-menu-row
 	> .ash-sessions-navigation-menu-pin {
