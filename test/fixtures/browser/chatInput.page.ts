@@ -90,7 +90,6 @@ import '../../../src/ash/workbench/contrib/quickaccess/browser/quickAccess.contr
 import { IQuickInputService } from '../../../src/ash/platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../src/ash/platform/quickinput/test/browser/testQuickInputService.js';
 
-import { ChatContextPickService } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatContextPickService.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../src/ash/platform/actionWidget/browser/actionWidget.js';
 import { DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
@@ -154,6 +153,9 @@ import { setHoverDelegate } from '../../../src/ash/base/browser/ui/hover/hoverDe
 
 declare global {
 	interface Window { ashChatInputIntegration: {
+		retireContextProviders(): void;
+		setWorkspaceContext(value: string): void;
+		contextProviderOpens(): number;
 		voiceInputState(): { starts: number; stops: number; muted: boolean; dictationCancelled: number; };
 		isDictationReady(): boolean;
 		setVoiceAvailable(available: boolean): void;
@@ -562,7 +564,6 @@ services.registerSingleton(ISpeechService, () => services.createInstance(SpeechS
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 const notifications = resources.add(new TestNotificationService());
 services.registerInstance(INotificationService, notifications);
-registerTestDictationOnboarding(services);
 const quickInput = resources.add(new TestQuickInputService({ instantiationService: services, container: document.body }));
 services.registerInstance(IQuickInputService, quickInput);
 services.registerInstance(IHistoryService, { getHistory: () => [{ resource: URI.file('/workspace/closed.ts') }], goBack: async () => { }, goForward: async () => { }, reopenLastClosedEditor: async () => { } } satisfies IHistoryService);
@@ -586,8 +587,30 @@ services.registerInstance(IEditorService, {
 	},
 	focusActiveEditor() { },
 } satisfies IEditorService);
-const contextPicks = new ChatContextPickService();
-services.registerInstance(IChatContextPickService, contextPicks);
+registerTestDictationOnboarding(services);
+const contextPicks = services.get(IChatContextPickService);
+const providedContexts = services.get(IChatContextService);
+let providerOpens = 0;
+if (new URLSearchParams(location.search).has('contextProviders')) {
+	providedContexts.setExecuteCommandCallback(async () => { providerOpens++; });
+	providedContexts.setChatContextProvider('fixture-records', { title: 'Extension records', icon: Lxicon.file });
+	providedContexts.registerChatExplicitContextProvider('fixture-records', {
+		provideChatContext: async () => [{
+			handle: 901, label: 'Extension record', command: { id: 'fixture.open' }, tooltip: { value: '**Extension source**' },
+			iconPath: {
+				light: URI.parse('data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="black"/></svg>')),
+				dark: URI.parse('data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="white"/></svg>')),
+			},
+		}],
+		resolveChatContext: async item => ({ ...item, value: 'Captured extension record' }),
+	});
+	providedContexts.registerChatWorkspaceContextProvider('fixture-workspace', { provideWorkspaceChatContext: async () => [] });
+	providedContexts.updateWorkspaceContextItems('fixture-workspace', [{ handle: 902, label: 'Workspace branch', value: 'branch-at-start' }]);
+	providedContexts.registerChatResourceContextProvider('fixture-resource', { uri: { pattern: '**/provided.ctx' } }, {
+		provideChatContext: async resource => ({ handle: 903, resourceUri: resource, label: 'Provided document' }),
+		resolveChatContext: async item => ({ ...item, value: 'Captured extension document' }),
+	});
+}
 const contextSearchWaiters = new Map<string, () => void>();
 resources.add(toDisposable(() => { for (const release of contextSearchWaiters.values()) release(); contextSearchWaiters.clear(); }));
 resources.add(contextPicks.registerChatContextItem({
@@ -670,9 +693,10 @@ if (hasContextSources) resources.add(registerCodebaseSymbolsWorkspaceSymbolProvi
 		};
 	},
 } as unknown as ICodebaseSymbolsService, services.get(IWorkspaceContextService)));
-const contextEditorInputs = new URLSearchParams(location.search).has('openImageEditor')
+let contextEditorInputs: IResourceEditorInput[] = new URLSearchParams(location.search).has('openImageEditor')
 	? [{ resource: URI.parse('git-image:/index/picture.PNG'), initialBytes: png, contentType: 'image/png', readOnly: true }]
 	: [{ resource: edited, ...(new URLSearchParams(location.search).has('readonlyEditorSnapshot') ? { readOnly: true, initialText: 'Displayed readonly editor version' } : {}) }];
+if (new URLSearchParams(location.search).has('contextProviders')) contextEditorInputs = [{ resource: URI.file('/workspace/provided.ctx') }];
 services.registerInstance(IEditorGroupsService, { groups: [{ inputs: contextEditorInputs }] } as unknown as IEditorGroupsService);
 services.registerInstance(IWorkingCopyService, { get: (resource: URI) => resource.path === '/workspace/symbol.ts' ? [{ backupKind: 'text', backup: () => symbolSource }] : resource.path === edited.path ? [{ backupKind: 'text', backup: () => 'Unsaved editor text' }] : [] } as unknown as IWorkingCopyService);
 const fileSearchWaiters = new Map<number, () => void>();
@@ -1031,6 +1055,11 @@ if (new URLSearchParams(location.search).has('holdSubmission')) {
 }
 let releaseReferencePreview: (() => void) | undefined;
 window.ashChatInputIntegration = {
+	retireContextProviders: () => {
+		for (const id of ['fixture-records', 'fixture-workspace', 'fixture-resource']) providedContexts.unregisterChatContextProvider(id);
+	},
+	setWorkspaceContext: value => providedContexts.updateWorkspaceContextItems('fixture-workspace', [{ handle: 902, label: 'Workspace branch', value }]),
+	contextProviderOpens: () => providerOpens,
 	voiceInputState: () => ({ starts: voiceStarts, stops: voiceStops, muted: voiceState?.muted === true, dictationCancelled }),
 	isDictationReady: () => emitDictation !== undefined,
 	setVoiceAvailable: available => { voiceAvailable = available; voiceChanges.fire(); },

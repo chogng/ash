@@ -3,6 +3,8 @@ import type { IOpenAgentsWindowOptions } from '../../../../platform/native/commo
 import type { URI } from '../../../../base/common/uri.js';
 import type { VSBuffer } from '../../../../base/common/buffer.js';
 import type { ITerminalOutputSnapshot } from '../../../../platform/terminal/common/terminal.js';
+import type { ThemeIcon } from '../../../../base/common/themables.js';
+import type { IMarkdownString } from '../../../../base/common/htmlContent.js';
 
 export interface ResolvedChatContext {
 	readonly name: string;
@@ -22,6 +24,11 @@ export interface ChatContextAttachment {
 	/** Original source; the resolved content remains the selected snapshot. */
 	readonly resource?: URI;
 	readonly name: string;
+	/** Provider presentation is optional; accepted content remains an immutable draft snapshot. */
+	readonly iconPath?: ThemeIcon | URI | { light: URI; dark: URI; };
+	readonly tooltip?: IMarkdownString;
+	/** A source-owned action can retire independently of the saved attachment content. */
+	readonly open?: () => Promise<void>;
 	/** Position of the visible reference in the message; older saved drafts may omit it. */
 	readonly reference?: { readonly start: number; readonly end: number; };
 	resolve(): Promise<ResolvedChatContext>;

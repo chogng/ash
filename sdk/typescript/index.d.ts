@@ -159,6 +159,36 @@ export interface WebviewPanel extends Disposable { readonly webview: Webview; re
 export interface CustomTextEditorProvider { resolveCustomTextEditor(document: TextDocument, panel: WebviewPanel, token: CancellationToken): ProviderResult<void>; }
 
 /** Identities are supplied by the initiating conversation and cannot be selected by the extension registration. */
+export interface ChatContextItem {
+	label?: string;
+	resourceUri?: Uri;
+	value?: string;
+	modelDescription?: string;
+	iconPath?: { readonly id: string; } | Uri | { readonly light: Uri; readonly dark: Uri; };
+	tooltip?: MarkdownString;
+	command?: Command;
+}
+export interface ChatWorkspaceContextProvider {
+	readonly onDidChangeWorkspaceChatContext?: Event<void>;
+	provideWorkspaceChatContext(token: CancellationToken): ProviderResult<ChatContextItem[]>;
+}
+export interface ChatExplicitContextProvider<T extends ChatContextItem = ChatContextItem> {
+	provideChatContext(token: CancellationToken): ProviderResult<T[]>;
+	resolveChatContext?(context: T, token: CancellationToken): ProviderResult<ChatContextItem>;
+}
+export type ChatTabSelector = { readonly uri: DocumentSelector | { readonly language?: string; readonly scheme?: string; readonly pattern?: string; }; } | { readonly viewType: string; };
+export interface ChatResourceContextProvider<T extends ChatContextItem = ChatContextItem> {
+	provideChatContext(resource: Uri, withValue: boolean, viewType: string | undefined, token: CancellationToken): ProviderResult<T>;
+	resolveChatContext?(context: T, token: CancellationToken): ProviderResult<ChatContextItem>;
+}
+/** Requires the admitted dataChannel capability. Registrations retire with their extension instance. */
+export namespace chat {
+	function registerChatWorkspaceContextProvider(id: string, provider: ChatWorkspaceContextProvider): Disposable;
+	/** Declare id, displayName and icon under contributes.chatContext. */
+	function registerChatExplicitContextProvider<T extends ChatContextItem>(id: string, provider: ChatExplicitContextProvider<T>): Disposable;
+	function registerChatResourceContextProvider<T extends ChatContextItem>(selector: ChatTabSelector, id: string, provider: ChatResourceContextProvider<T>): Disposable;
+}
+
 export interface CanvasContext { readonly sessionId: string; readonly threadId: string; readonly instanceId: string; }
 export interface Canvas { readonly url: string; readonly title?: string; readonly status?: string; }
 export interface CanvasProvider {

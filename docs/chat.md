@@ -61,6 +61,8 @@ Stanza 与 textarea 默认文本高度 40px，含工具栏默认总高 84px，�
 
 共享输入在词首输入 `@` 或 `#` 时补全文件、目录、打开的编辑器和已有上下文；候选查询复用 Search，接受后由原附件解析服务捕获内容，并绑定正文引用。准备过程属于原草稿，普通编辑期间跟踪候选文字的位置，切换输入或修改候选文字会取消绑定；撤销和重做恢复同一捕获内容。上下文补全与 `/` 命令、`$name` Skill selector 使用独立 provider，不引入 `@Agent` 参与者路由。
 
+`common/contextContrib/chatContext.ts` 定义工作区、显式条目和资源 provider；`browser/contextContrib/chatContextService.ts` 唯一持有窗口注册和已提交的工作区值。`chatContext.contribution.ts` 维护 manifest 中的来源名称与图标，显式选择按需激活对应扩展。SDK `chat.registerChat*ContextProvider` 经已有 `chat.context.v1` DataChannel 和 `MainThreadChatContext` 接入，adapter 校验数据并绑定包、incarnation、activation generation 与取消。资源提供方按语言／URI 或编辑器类型匹配；仅在用户附加资源时解析，随后交回原草稿快照。工作区值在 Send 时单独捕获，不进入正文引用、输入历史或草稿移交。扩展停用会撤销注册、工作区值及来源操作，已捕获内容保留；提供方描述随内容交给模型，图标和 tooltip 由原附件控件呈现。
+
 `actions/chatContext.ts` 的 `ChatContextContributions` 随共享窗口入口注册剪贴板图片、截图、会话与工具四个内置来源，并在释放时撤销登记；来源类保持模块私有。Tools 和 Sessions 通过 picker 契约向同一个选择界面提供选项，读取发起操作的输入和会话，不借用最近聚焦的另一份草稿。工具选择保留在原输入的附件模型，图片来源借用 `IChatInputPart.supportsImages()` 判断当前模型的接收能力；窗口注册不持有这些状态。已注册来源在查询期间显示加载状态并清空旧选择；只有当前查询和仍有效的来源可以附加。匹配结果及顺序由提供者决定，不按显示名再次过滤；来源检查、选择和结果读取均随原输入取消。
 
 新建 Chat 使用共享注册的 `workbench.action.chat.newChat`；菜单、`/new` 与宿主调用共用 `NEW_CHAT_COMMAND_ID`。创建、显示及输入焦点均由窗口导航 owner 负责：IDE 打开原 Chat ViewPane，现代 Agent 委派已有 `sessions.newSession`，沿用当前产品模式及提供方选择策略。移动 Chat 的命令分别为 `workbench.action.chat.openInEditor`、`workbench.action.chat.openInNewWindow` 和 `workbench.action.chat.openInSidebar`，继续由原 host 保存草稿并完成移动。`workbench.action.chat.openWorkspacePicker` 打开最近聚焦输入已有的工作区选择器；选择仍归 Welcome host，隐藏、提交或禁用 AI 时不会打开选择器。

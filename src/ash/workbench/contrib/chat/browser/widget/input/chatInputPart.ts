@@ -21,6 +21,7 @@ import { LocalChatSessionUri } from '../../../common/model/chatUri.js';
 import type { IWorkspacePickerDelegate } from '../../chat.js';
 import { WorkspacePickerActionItem } from './workspacePickerActionItem.js';
 import { captureChatDraft } from '../../../../../services/chat/common/chatContextService.js';
+import { IChatContextService } from '../../contextContrib/chatContextService.js';
 import { OPEN_CHAT_PERMISSIONS_COMMAND_ID } from '../../../common/chat.js';
 import type { IChatAcceptInputOptions } from '../../chat.js';
 import type { IContextKey } from '../../../../../../platform/contextkey/common/contextkey.js';
@@ -345,6 +346,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		@ICommandService private readonly commands: ICommandService,
 		@IChatSlashCommandService private readonly clientCommands: IChatSlashCommandService,
 		@IImageEditorService private readonly imageEditors: IImageEditorService,
+		@IChatContextService private readonly providedContexts: IChatContextService,
 	) {
 		super();
 		// Client commands have their own host-neutral handlers; product and server commands belong to Code.
@@ -1066,6 +1068,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			// Commands do not submit context. Their settings and management actions remain available during reads.
 			const contexts = (input.kind === 'message' || input.kind === 'command' && input.binding.origin === 'client') && this.attachmentModel.hasPendingContext
 				? [...new Map([...draft.attachments, ...await this.attachmentModel.resolvePendingContext()].map(attachment => [attachment.id, attachment])).values()] : draft.attachments;
+			// Workspace values are captured at Send, independently of editable draft references and history.
+			const requestContexts: readonly ChatContextAttachment[] = input.kind === 'message' || input.kind === 'command' && input.binding.origin === 'client'
+				? [...contexts, ...this.providedContexts.getWorkspaceContextItems().map(item => ({
+					id: item.id, kind: item.kind, name: item.name,
+					resolve: async () => ({ name: item.name, content: item.modelDescription ? `${item.modelDescription}\n\n${item.value}` : item.value }),
+				}))] : contexts;
 			if (this.isDisposed || lifecycle.aborted || !this.visible) return;
 			const localCommand = input.kind === 'command' && input.binding.origin === 'local';
 			// Preparation can outlast the permission to send. Recheck before consuming the draft or recording history.
@@ -1079,7 +1087,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				if (!widget?.sessionId || !widget.threadId) throw new Error(localize('chat.btw.unavailable', 'Send a message in this conversation before starting a side chat.'));
 				const offset = input.kind === 'command' ? Math.max(0, draft.text.indexOf(input.argumentsText, input.command.name.length + 1)) : 0;
 				const query = draft.text.slice(offset);
-				const attachedContext = contexts.map(context => context.reference ? { ...context, reference: context.reference.start >= offset ? { start: context.reference.start - offset, end: context.reference.end - offset } : undefined } : context);
+				const attachedContext = requestContexts.map(context => context.reference ? { ...context, reference: context.reference.start >= offset ? { start: context.reference.start - offset, end: context.reference.end - offset } : undefined } : context);
 				await this.submit(draft, textRevision, lifecycle, () => this.clientCommands.executeCommand(input.kind === 'command' ? input.command.name : 'btw', query, LocalChatSessionUri.forSession(widget.sessionId!, widget.threadId!), { attachedContext, signal: lifecycle }));
 				return;
 			}
@@ -1101,7 +1109,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					await this.delegate.interrupt();
 					if (this.isDisposed || lifecycle.aborted || !this.visible) throw new CancellationError();
 				}
-				await this.delegate.send(draft.text, mode, draft.skills.length > 0 ? draft.skills : undefined, contexts, lifecycle, queue);
+				await this.delegate.send(draft.text, mode, draft.skills.length > 0 ? draft.skills : undefined, requestContexts, lifecycle, queue);
 				if (!this.isDisposed && !lifecycle.aborted) this.inputNotifications.handleMessageSent({ inputUri: this.notificationUri });
 			});
 		} finally {

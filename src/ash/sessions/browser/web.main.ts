@@ -108,6 +108,7 @@ export class SessionsBrowserMain extends Disposable {
 					'chat.edits.editorOverlay',
 					'chat.promptLanguageFeatures',
 					'workbench.contrib.chatSetup',
+					'workbench.contrib.chatContextContribution',
 					'workbench.contrib.dataChannels',
 					'workbench.contrib.output',
 					'workbench.contrib.logs',

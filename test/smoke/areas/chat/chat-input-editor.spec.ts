@@ -1,5 +1,78 @@
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
-import { expect, test } from '../../../automation/test.js';
+import { expect, test, writeEditorExtensionFixture } from '../../../automation/test.js';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+test('Chat context extensions activate on first selection and preserve captured content after disablement', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
+	test.setTimeout(180_000);
+	const root = join(testWorkspace.directory, 'context-extension');
+	await mkdir(join(root, '.ash-plugin'), { recursive: true });
+	await writeFile(join(root, '.ash-plugin/plugin.json'), JSON.stringify({
+		schemaVersion: 1, id: 'acme/context-smoke', version: '1.0.0', displayName: 'Context provider smoke',
+		compatibility: { ash: '>=0.1.0' }, permissions: [],
+		contributions: {
+			editorExtensions: [{
+				id: 'context', runtime: 'javascript', api: 'ash', entrypoint: 'extension.js', runtimeApiVersion: 1,
+				activationEvents: [{ type: 'onDemand', capability: 'dataChannel' }], capabilities: ['command', 'dataChannel']
+			}]
+		},
+	}));
+	await writeEditorExtensionFixture(root, `
+const ash = require('@ash/sdk');
+exports.activate = context => {
+ context.subscriptions.push(ash.chat.registerChatExplicitContextProvider('records', {
+  provideChatContext() { return [{ label: 'Record snapshot', recordId: 'alpha', command: { command: 'acme.context.open', title: 'Open record' } }]; },
+  resolveChatContext(item) { return { ...item, value: 'Captured record ' + item.recordId }; }
+ }), ash.commands.register('acme.context.open', item => ash.window.showInformationMessage('Record ' + item.recordId + ' from extension')));
+};`);
+	const manifestPath = join(root, 'package.json');
+	const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+	manifest.activationEvents = ['onDemand:dataChannel'];
+	manifest.contributes.chatContext = [{ id: 'records', displayName: 'Context records', icon: '$(file)' }];
+	await writeFile(manifestPath, JSON.stringify(manifest));
+	const page = workbench.page;
+	await workbench.quickaccess.runCommand('ash.extensions.installLocal');
+	const install = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
+	await install.getByRole('textbox').fill('context-extension');
+	await workbench.dialogs.expectMessage(application, 'Information', () => install.getByRole('textbox').press('Enter'));
+	await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
+	await page.locator('[data-package-id="acme/context-smoke"]').click();
+	const details = page.locator('.ash-extension-editor:visible').filter({ hasText: 'acme/context-smoke' });
+	await workbench.dialogs.confirm(application, 'Context provider smoke', 'Grant permissions', () => details.getByRole('button', { name: 'Grant permissions', exact: true }).click());
+	await expect(details).toHaveAttribute('aria-busy', 'false');
+	if (!await details.getByRole('switch').isChecked()) await details.getByRole('switch').press('Space');
+	await expect(details.getByRole('switch')).toBeChecked();
+	await expect(details).toHaveAttribute('aria-busy', 'false');
+	await workbench.quickaccess.runCommand('workbench.action.chat.open');
+	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
+	await expect(async () => {
+		await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+		try {
+			await expect(page.getByRole('option', { name: 'Other context sources', exact: true })).toBeVisible({ timeout: 500 });
+		} catch (error) {
+			await page.keyboard.press('Escape');
+			throw error;
+		}
+	}).toPass();
+	await workbench.quickaccess.select('Other context sources');
+	const picker = page.getByRole('dialog');
+	await expect(picker).toContainText(/Context records|Record snapshot/);
+	const source = picker.getByRole('option', { name: 'Context records', exact: true });
+	if (await source.isVisible()) await source.press('Enter');
+	await picker.getByRole('option', { name: 'Record snapshot', exact: true }).press('Enter');
+	const reference = chat.getByRole('button', { name: 'Open Record snapshot', exact: true });
+	await expect(reference).toBeVisible();
+	await reference.press('Enter');
+	await expect(page.locator('.ash-notification', { hasText: 'Record alpha from extension' })).toBeVisible();
+	await workbench.quickaccess.runCommand('ash.extensions.manageLocal');
+	await page.locator('[data-package-id="acme/context-smoke"]').click();
+	await details.getByRole('switch').press('Space');
+	await expect(details.getByRole('switch')).not.toBeChecked();
+	await workbench.quickaccess.runCommand('workbench.action.chat.open');
+	await expect(reference).toBeVisible();
+	await reference.hover();
+	await expect(page.locator('.ash-hover pre')).toContainText('Captured record alpha');
+});
 
 test('Empty chat anchors its input and secondary toolbar to the bottom pane edge', async ({ workbench }) => {
 	const page = workbench.page;

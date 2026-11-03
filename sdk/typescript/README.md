@@ -269,6 +269,43 @@ tab hides a live page; Close Canvas or `browser_close` ends it. Add context runs
 Canvas action without creating a message attachment. Native Canvas hosting is a Desktop
 capability; a remote provider must supply its own Canvas capability to participate.
 
+### Chat context providers
+
+Extensions admitted with `dataChannel` can register context through `chat`:
+
+- `registerChatWorkspaceContextProvider` supplies the latest committed workspace values at Send. Fire `onDidChangeWorkspaceChatContext` to refresh them.
+- `registerChatExplicitContextProvider` adds a source to Add context. Declare its `id`, `displayName` and theme `icon` under `contributes.chatContext`, and use `onDemand:dataChannel` activation for lazy loading.
+- `registerChatResourceContextProvider` matches an explicitly attached file or editor through `{ uri: ... }` or `{ viewType: ... }`. It does not automatically attach the active editor.
+
+```json
+{
+  "ashCapabilities": ["dataChannel"],
+  "activationEvents": ["onDemand:dataChannel"],
+  "contributes": {
+    "chatContext": [{ "id": "records", "displayName": "Records", "icon": "$(file)" }]
+  }
+}
+```
+
+```ts
+import { chat, type ExtensionContext } from '@ash/sdk';
+
+export function activate(context: ExtensionContext) {
+  context.subscriptions.push(chat.registerChatExplicitContextProvider('records', {
+    provideChatContext() {
+      return [{ label: 'Current record', recordId: 'current' }];
+    },
+    async resolveChatContext(item, token) {
+      return { ...item, value: await readRecord(item.recordId, token) };
+    }
+  }));
+}
+```
+
+`readRecord` is extension-owned. A `value` supplied by `provideChatContext` is already resolved; otherwise the optional resolver supplies it when selected. Resource providers can alternatively return the full value when called with `withValue: true`. The accepted content becomes a draft snapshot, so later provider changes and extension disablement do not change it. `modelDescription` precedes that value in model context. Workspace values are captured separately from editable drafts and input history.
+
+Items may supply a resource URI, a theme icon or light/dark URI icons, an untrusted Markdown tooltip, and a source command. Source commands receive the original item followed by their declared arguments. The extension needs its normal command authority for that action. Registrations and their in-flight calls retire on disposal, disablement or incarnation changes; retained content remains readable, while retired source actions cannot execute. Results are limited to 512 items per acquisition, 1 MiB of text per item, and 4,096 live source handles per registration.
+
 ### Product window metadata
 
 Declare `ashUiTargets` in an editor extension's `package.json` as `["ide"]`, `["agents"]`, or `["ide", "agents"]`. Package builders preserve it as `uiTargets` in the signed market `catalog.json`; local Plugin manifests use `uiTargets` directly. Marketplace, details and recommendations consume this declaration. Omission preserves an unknown audience for legacy packages and does not imply shared support. Recommendation rules and capability types cannot override it. This metadata is separate from OS/runtime compatibility and execution authorization.

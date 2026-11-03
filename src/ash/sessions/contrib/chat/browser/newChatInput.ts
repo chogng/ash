@@ -1,3 +1,4 @@
+import { IChatContextService } from '../../../../workbench/contrib/chat/browser/contextContrib/chatContextService.js';
 import { IChatSlashCommandService } from '../../../../workbench/contrib/chat/common/participants/chatSlashCommands.js';
 import { IActionViewItemService } from '../../../../platform/actions/browser/actionViewItemService.js';
 import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
@@ -66,6 +67,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		@IChatWidgetService chatWidgets: IChatWidgetService,
 		@IChatSlashCommandService clientCommands: IChatSlashCommandService,
 		@IImageEditorService imageEditors: IImageEditorService,
+		@IChatContextService providedContexts: IChatContextService,
 		@ICommandService commands: ICommandService,
 		@IApprovalEnvironmentService approvalEnvironment: IApprovalEnvironmentService | undefined,
 	) {
@@ -76,7 +78,7 @@ export class NewChatInputWidget extends ChatInputPart {
 				// Let the row center the actual text height beside its 28px controls.
 				height: { minimum: 0, maximum: 240 },
 			}),
-		}, [], { layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, voiceInputMode, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands, imageEditors);
+		}, [], { layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, voiceInputMode, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands, imageEditors, providedContexts);
 		const footer = this.inputFooter!;
 		const owner = this;
 		const permissionHost = h(container.ownerDocument, 'div');

@@ -1,3 +1,4 @@
+import { IChatContextService } from '../../../../workbench/contrib/chat/browser/contextContrib/chatContextService.js';
 import { IChatSlashCommandService } from '../../../../workbench/contrib/chat/common/participants/chatSlashCommands.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IActionViewItemService } from '../../../../platform/actions/browser/actionViewItemService.js';
@@ -76,6 +77,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		@IActionViewItemService presentations: IActionViewItemService,
 		@IChatWidgetService chatWidgets: IChatWidgetService,
 		@IChatSlashCommandService clientCommands: IChatSlashCommandService,
+		@IChatContextService providedContexts: IChatContextService,
 		@ICommandService commands: ICommandService,
 		@IImageEditorService imageEditors: IImageEditorService,
 	) {
@@ -100,7 +102,7 @@ export class NewCoworkInputWidget extends ChatInputPart {
 				placeholder: presentation === 'embedded' ? localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question') : '',
 				height: { minimum: 32, maximum: 240 },
 			}),
-		}, [], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, voiceInputMode, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands, imageEditors);
+		}, [], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, voiceInputMode, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands, imageEditors, providedContexts);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-cowork-input', 'floating-card');
 		this.element.classList.add('cowork-composer');

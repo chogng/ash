@@ -18,6 +18,9 @@ import { createBinaryDiffEditorInput, createDiffEditorInput } from '../../../../
 import { IWorkingCopyService } from '../../../../../services/workingCopy/common/workingCopyService.js';
 import '../../../browser/chat.shared.contribution.js';
 import { IChatAttachmentResolveService } from '../../../browser/attachments/chatAttachmentResolveService.js';
+import { ChatContextService, IChatContextService } from '../../../browser/contextContrib/chatContextService.js';
+import { ChatContextPickService, IChatContextPickService } from '../../../browser/attachments/chatContextPickService.js';
+import { IExtensionService } from '../../../../../services/extensions/common/extensionService.js';
 
 function services(resources: DisposableStore, read: () => Promise<string>, options: { readonly text?: string; readonly files?: IFileService; } = {}): InstantiationService {
 	const owner = resources.add(new InstantiationService());
@@ -29,6 +32,9 @@ function services(resources: DisposableStore, read: () => Promise<string>, optio
 	} as unknown as IWorkingCopyService);
 	owner.registerInstance(IFileSearchService, {} as IFileSearchService);
 	owner.registerInstance(IWorkspaceContextService, {} as IWorkspaceContextService);
+	owner.registerInstance(IChatContextPickService, new ChatContextPickService());
+	owner.registerInstance(IExtensionService, { activateByEvent: async () => { } } as unknown as IExtensionService);
+	owner.registerInstance(IChatContextService, resources.add(owner.createInstance(ChatContextService)));
 	return owner;
 }
 
@@ -36,6 +42,24 @@ test('Registered attachment resolver requires its real services before creation'
 	using owner = new InstantiationService();
 	const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IChatAttachmentResolveService)![1];
 	assert.throws(() => owner.createInstance(descriptor), /Unknown service: fileService/u);
+});
+
+test('custom editor context resolves through its provider before binary file fallback and remains a snapshot', async () => {
+	using resources = new DisposableStore();
+	const owner = services(resources, async () => { assert.fail('The provider owns this document'); });
+	const contexts = owner.get(IChatContextService);
+	let source = 'First PDF text';
+	contexts.registerChatResourceContextProvider('test.pdf', { viewType: 'pdf' }, {
+		provideChatContext: async resource => ({ handle: 1, label: 'PDF', resourceUri: resource }),
+		resolveChatContext: async item => ({ ...item, value: source }),
+	});
+	const result = await owner.get(IChatAttachmentResolveService).resolveEditorAttachContext({
+		resource: URI.file('/report.pdf'), editorId: 'pdf', contentType: 'application/octet-stream', initialBytes: new Uint8Array([1]),
+	});
+	assert.ok(result);
+	source = 'Changed after selection';
+	contexts.unregisterChatContextProvider('test.pdf');
+	assert.deepEqual(await result.resolve(), { name: 'PDF', content: 'First PDF text' });
 });
 
 test('Editor context reads the modified working copy and freezes the selected content', async () => {

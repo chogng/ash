@@ -1,6 +1,10 @@
 import { IChatSlashCommandService, ChatSlashCommandService } from '../../common/participants/chatSlashCommands.js';
 import { IChatSideChatService, ChatSideChatService } from '../../common/chatSideChatService.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
+import { ChatContextService, IChatContextService } from '../../browser/contextContrib/chatContextService.js';
+import { ChatContextPickService, IChatContextPickService } from '../../browser/attachments/chatContextPickService.js';
+import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
+import { registerTestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { IChatWidgetService, type IChatWidget } from '../../browser/chat.js';
 import { ChatQueuePickerRendering } from '../../browser/widget/input/chatQueuePickerActionItem.js';
 import { IActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
@@ -133,6 +137,9 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 	}
 	const partServices = inputResources.add(services.createChild());
 	if (mcp) partServices.registerInstance(IMcpServerManagementService, mcp);
+	if (!partServices.has(IChatContextPickService)) partServices.registerInstance(IChatContextPickService, new ChatContextPickService());
+	if (!partServices.has(IExtensionService)) registerTestExtensionService(inputResources, partServices);
+	if (!partServices.has(IChatContextService)) partServices.registerSingleton(IChatContextService, () => partServices.createInstance(ChatContextService));
 	if (!partServices.has(IFileService)) partServices.registerInstance(IFileService, { hasProvider: () => false } as unknown as IFileService);
 	if (!partServices.has(IChatPasteTargetService)) partServices.registerSingleton(IChatPasteTargetService, () => new ChatPasteTargetService());
 	if (!partServices.has(IChatAttachmentResolveService)) {
@@ -142,6 +149,7 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 			{} as IWorkingCopyService,
 			{} as IFileSearchService,
 			{} as IWorkspaceContextService,
+			partServices.get(IChatContextService),
 		));
 	}
 	if (!partServices.has(IHostService)) partServices.registerInstance(IHostService, new TestHostService());

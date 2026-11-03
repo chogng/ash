@@ -74,5 +74,6 @@ export const Hover = unavailable;
 export const MarkdownString = unavailable;
 export const commands = namespace();
 export const window = namespace();
+export const chat = namespace();
 export const workspace = namespace();
 export const languages = namespace();

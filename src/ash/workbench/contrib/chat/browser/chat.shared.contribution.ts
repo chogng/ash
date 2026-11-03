@@ -1,4 +1,5 @@
 import { BtwSlashCommandContribution } from './btwSlashCommand.js';
+import './contextContrib/chatContext.contribution.js';
 import { ChatSideChatProvider } from './chatSideChat.js';
 import { IChatSideChatService, ChatSideChatService } from '../common/chatSideChatService.js';
 import { IChatSlashCommandService, ChatSlashCommandService } from '../common/participants/chatSlashCommands.js';

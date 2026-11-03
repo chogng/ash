@@ -528,6 +528,8 @@ pub struct ExtensionHostRegistrationEvent {
     pub tree_providers: Vec<RegistrationDescriptor>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub canvas_providers: Vec<RegistrationDescriptor>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub chat_context_providers: Vec<RegistrationDescriptor>,
 }
 
 impl ExtensionHostRegistrationEvent {
@@ -570,6 +572,16 @@ impl ExtensionHostRegistrationEvent {
         }
         validate_registrations(
             &self.canvas_providers,
+            limits.maximum_registrations,
+            &[ExtensionCapability::DataChannel],
+        )?;
+        if self.chat_context_providers.iter().any(|registration| {
+            !matches!(&registration.kind, RegistrationKind::DataChannel { channel_id } if channel_id == "chat.context.v1")
+        }) {
+            return Err(validation::protocol_error("invalid dynamic chat context registrations"));
+        }
+        validate_registrations(
+            &self.chat_context_providers,
             limits.maximum_registrations,
             &[ExtensionCapability::DataChannel],
         )?;

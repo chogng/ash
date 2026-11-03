@@ -5,6 +5,11 @@ import { CommandService } from '../../services/commands/common/commandService.js
 import { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../platform/localTranscription/common/localTranscription.js';
 import { NullLocalTranscriptionService } from '../../services/localTranscription/browser/localTranscriptionService.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
+import { ChatContextService, IChatContextService } from '../../contrib/chat/browser/contextContrib/chatContextService.js';
+import { ChatContextPickService, IChatContextPickService } from '../../contrib/chat/browser/attachments/chatContextPickService.js';
+import { IThemeService } from '../../../platform/theme/common/themeService.js';
+import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IContextKeyService } from '../../../platform/contextkey/common/contextkey.js';
@@ -141,6 +146,9 @@ export function registerTestDictationOnboarding(services: InstantiationService, 
 	if (!services.has(IConfigurationService)) services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	if (!services.has(IExtensionService)) services.registerSingleton(IExtensionService, () => new TestExtensionService());
+	if (!services.has(IChatContextPickService)) services.registerSingleton(IChatContextPickService, () => new ChatContextPickService());
+	if (!services.has(IChatContextService)) services.registerSingleton(IChatContextService, () => services.createInstance(ChatContextService));
+	if (!services.has(IThemeService)) services.registerSingleton(IThemeService, () => new TestThemeService(darkColorTheme));
 	if (!services.has(IStorageService)) {
 		const entries = new Map<string, string>();
 		services.registerSingleton(IStorageService, () => new BrowserStorageService({

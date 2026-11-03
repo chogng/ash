@@ -23,7 +23,10 @@ import { IResourceIconRenderer } from '../../../../browser/labels.js';
 import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { IconLabel } from '../../../../../base/browser/ui/iconlabel/iconlabel.js';
 import { getHoverDelegate, type IManagedHover } from '../../../../../base/browser/ui/hover/hoverDelegate.js';
-import type { MarkdownString } from '../../../../../base/common/htmlContent.js';
+import { MarkdownString } from '../../../../../base/common/htmlContent.js';
+import { ThemeIcon } from '../../../../../base/common/themables.js';
+import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
+import { isDarkColorScheme } from '../../../../../platform/theme/common/theme.js';
 import { renderMarkdown } from '../../../../../base/browser/markdownRenderer.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { cancelOnDispose, type CancellationToken } from '../../../../../base/common/cancellation.js';
@@ -41,7 +44,7 @@ import { fillEditorsDragData } from '../../../../browser/dnd.js';
 import { isRemoteResource } from '../../../../../platform/remote/common/remote.js';
 import { basename, dirname } from '../../../../../base/common/resources.js';
 import { extname } from '../../../../../base/common/path.js';
-import type { URI } from '../../../../../base/common/uri.js';
+import { URI } from '../../../../../base/common/uri.js';
 
 /** Generic sources keep their original navigation; source-less contexts expose their saved-content intent. */
 export class DefaultChatAttachmentWidget extends Disposable implements IChatAttachmentWidgetInstance {
@@ -51,6 +54,7 @@ export class DefaultChatAttachmentWidget extends Disposable implements IChatAtta
 	readonly onDidDelete = this.deleted.event;
 	private readonly opened = this._register(new Emitter<void>());
 	readonly onDidOpen = this.opened.event;
+	private readonly providerTooltip: string | undefined;
 
 	constructor(
 		attachment: ChatContextAttachment,
@@ -60,15 +64,20 @@ export class DefaultChatAttachmentWidget extends Disposable implements IChatAtta
 		@ICommandService commands: ICommandService,
 		@INotificationService notifications: INotificationService,
 		@IInstantiationService instantiation: IInstantiationService,
+		@IThemeService theme: IThemeService,
 	) {
 		super();
-		const control = this._register(createSourceAttachmentControl(attachment, getDefaultAttachmentIcon(attachment.kind), container));
+		const control = this._register(createSourceAttachmentControl(attachment,
+			ThemeIcon.isThemeIcon(attachment.iconPath) ? attachment.iconPath : getDefaultAttachmentIcon(attachment.kind), container, theme));
 		this.element = control.element;
 		this.contentHover = control.contentHover;
+		this.providerTooltip = attachment.tooltip?.value;
+		if (this.providerTooltip !== undefined) this.contentHover.update(new MarkdownString(this.providerTooltip));
 		if (attachment.kind === 'symbol' && isAttachmentResource(attachment.resource)) {
 			this._register(instantiation.createInstance(AttachmentResourceActions, control.element, control.source, attachment.resource, false, MenuId.ChatInputSymbolAttachmentContext));
 		}
 		this._register(wireSourceAttachmentActions(this, control.element, control.source, attachment, options, () => {
+			if (attachment.open) return attachment.open();
 			const resource = attachment.resource;
 			if (!resource) return;
 			if (resource.scheme === Schemas.internal && resource.authority === 'search-results') {
@@ -79,7 +88,7 @@ export class DefaultChatAttachmentWidget extends Disposable implements IChatAtta
 	}
 
 	setHoverMessage(message: MarkdownString): void {
-		this.contentHover.update(message);
+		this.contentHover.update(this.providerTooltip === undefined ? message : new MarkdownString(this.providerTooltip));
 	}
 
 	hideHover(): void {
@@ -319,7 +328,7 @@ class AttachmentContentHover extends Disposable {
 }
 
 /** Label layout and hover lifetime are shared; source policies and open/delete events remain widget-owned. */
-function createSourceAttachmentControl(attachment: ChatContextAttachment, icon: Icon, container: HTMLElement) {
+function createSourceAttachmentControl(attachment: ChatContextAttachment, icon: Icon, container: HTMLElement, theme?: IThemeService) {
 	const resources = new DisposableStore();
 	const element = h(container.ownerDocument, 'div');
 	element.className = 'ash-chat-attachment-chip';
@@ -328,12 +337,24 @@ function createSourceAttachmentControl(attachment: ChatContextAttachment, icon: 
 	element.setAttribute('aria-label', attachment.name);
 	container.append(element);
 	resources.add(toDisposable(() => element.remove()));
+	const imageIcon = attachment.iconPath && !ThemeIcon.isThemeIcon(attachment.iconPath) ? attachment.iconPath : undefined;
 	const source = resources.add(new Button(element, {
-		...defaultButtonStyles, label: attachment.name, icon,
+		...defaultButtonStyles, label: imageIcon ? '' : attachment.name, icon: imageIcon ? undefined : icon,
 		ariaLabel: localize('chat.context.open', 'Open {0}', attachment.name),
 		title: attachment.resource ? `${attachment.name}\n${attachment.resource.toString(true)}` : attachment.name,
 		size: 'small', presentation: 'quiet',
 	}));
+	if (imageIcon && theme) {
+		const label = resources.add(new IconLabel(source.domNode, { label: attachment.name }));
+		const render = (): void => {
+			let resource: URI;
+			if (URI.isUri(imageIcon)) resource = imageIcon;
+			else resource = isDarkColorScheme(theme.getColorTheme().colorScheme) ? imageIcon.dark : imageIcon.light;
+			label.setIcon(undefined, undefined, false, false, resource);
+		};
+		render();
+		resources.add(theme.onDidColorThemeChange(render));
+	}
 	source.domNode.classList.add('ash-chat-attachment-source');
 	const contentHover = resources.add(new AttachmentContentHover(source.domNode, () => source.setTitle(undefined)));
 	return Object.assign(resources, { element, source: source.domNode, contentHover });

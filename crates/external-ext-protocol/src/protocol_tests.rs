@@ -1246,6 +1246,17 @@ fn dynamic_canvas_frames_only_admit_the_versioned_canvas_channel() {
 }
 
 #[test]
+fn dynamic_chat_context_frames_only_admit_the_versioned_context_channel() {
+    let mut value = json!({"context":{"protocolVersion":1,"incarnation":2,"activationGeneration":3},"revision":1,"speechProviders":[],"chatContextProviders":[{"registrationId":"chat.context.1","kind":"dataChannel","channelId":"chat.context.v1"}]});
+    let event: super::ExtensionHostRegistrationEvent =
+        serde_json::from_value(value.clone()).unwrap();
+    event.validate(&ProtocolLimits::default()).unwrap();
+    value["chatContextProviders"][0]["channelId"] = json!("canvas.provider.v1");
+    let invalid: super::ExtensionHostRegistrationEvent = serde_json::from_value(value).unwrap();
+    assert!(invalid.validate(&ProtocolLimits::default()).is_err());
+}
+
+#[test]
 fn terminal_completion_and_quick_fix_registrations_require_distinct_capabilities() {
     for (value, capability) in [
         (

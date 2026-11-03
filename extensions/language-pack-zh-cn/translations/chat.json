@@ -1,5 +1,11 @@
 {
   "ash": {
+    "chat.context.providerNoContent": "上下文提供方未返回任何内容。",
+    "chat.context.unnamed": "上下文条目",
+    "chat.context.invalidDeclaration": "聊天上下文贡献无效。",
+    "chat.context.openProviderSourceHint": "单击可打开扩展提供的来源，也可在引用处按 Alt+Enter。",
+    "chat.context.providerHelp": "扩展可以向“添加上下文”增加来源，并为你明确附加的资源提供内容。选择来源及其中的条目，即可插入捕获的内容。聚焦引用后按 Enter 可打开扩展提供的来源操作。已注册的工作区上下文在发送时捕获，不会插入草稿。停用扩展会移除其实时来源，草稿中已捕获的内容仍会保留。",
+    "chat.context.invalidProviderData": "上下文提供方为 {0} 返回的数据无效。",
     "chat.status.subscriptionPlan": "订阅套餐",
     "chat.status.limitReached": "AI · 订阅额度已达上限",
     "chat.status.refresh": "刷新账号状态与额度",

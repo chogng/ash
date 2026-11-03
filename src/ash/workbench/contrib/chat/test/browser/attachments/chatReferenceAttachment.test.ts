@@ -17,7 +17,7 @@ import { ChatAttachmentWidgetRegistry, IChatAttachmentWidgetRegistry, type ChatA
 import { ChatReferenceAttachmentWidgetContribution } from '../../../browser/attachments/chatReferenceAttachmentWidget.contribution.js';
 import { ChatReferenceAttachmentWidget, DefaultChatAttachmentWidget, ElementChatAttachmentWidget, SCMHistoryItemAttachmentWidget, SCMHistoryItemChangeAttachmentWidget, FileAttachmentWidget, ImageAttachmentWidget, PromptFileAttachmentWidget, TerminalCommandAttachmentWidget, ToolSetOrToolItemAttachmentWidget } from '../../../browser/attachments/chatAttachmentWidgets.js';
 import { IResourceIconRenderer } from '../../../../../browser/labels.js';
-import { noFileIconTheme } from '../../../../../../platform/theme/common/themeService.js';
+import { IThemeService, noFileIconTheme } from '../../../../../../platform/theme/common/themeService.js';
 import { BrowserContextViewService } from '../../../../../../platform/contextview/browser/contextViewService.js';
 import { IContextMenuService, IContextViewService, type IContextMenuMenuDelegate } from '../../../../../../platform/contextview/browser/contextView.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -56,6 +56,7 @@ suite('Registered Chat reference attachments', () => {
 	function specializedFixture(resources: DisposableStore, commands: ICommandService = { executeCommand: async () => { throw new Error('Unexpected command'); } } as unknown as ICommandService) {
 		const result = fixture(resources);
 		result.services.registerInstance(ICommandService, commands);
+		result.services.registerInstance(IThemeService, { onDidColorThemeChange: Event.None } as unknown as IThemeService);
 		result.services.registerInstance(IResourceIconRenderer, { onDidChangeResourceIcons: Event.None, getFileIconTheme: () => noFileIconTheme, renderFileIcon() { } });
 		const views = resources.add(new BrowserContextViewService(document.body));
 		result.services.registerInstance(IContextViewService, views);

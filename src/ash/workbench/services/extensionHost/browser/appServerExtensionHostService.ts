@@ -246,6 +246,8 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 				this.publishSnapshotFailures(snapshot, issues);
 				this.setState(projectState(snapshot, issues.length > 0));
 			});
+			await this.extensionApi.updateChatContextProviders(snapshot);
+			if (this.isDisposed || !this.started || !this.connectionReady || revision !== this.authorityRevision || snapshot.generation < this.snapshot.fleetGeneration) return;
 			this.activateEditorEvents(snapshot);
 		} catch (error) {
 			runWithBufferedEvents(() => {
@@ -286,6 +288,13 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 		if (!this.started || !this.connectionReady || this.isDisposed || revision !== this.authorityRevision) throw new CancellationError();
 		const activations = snapshot.extensions.flatMap(runtime => {
 			if (runtime.lifecycle !== 'dormant') return [];
+			if (event.startsWith('onChatContextProvider:')) {
+				const requested = event.slice('onChatContextProvider:'.length);
+				const declared = this.extensions.getExtensionPointContributions<readonly { readonly id: string; }[]>('chatContext')
+					.some(extension => (extension.description.id === runtime.id || extension.description.runtimeBinding?.runtimeId === runtime.id && extension.description.runtimeBinding.packageDigest === runtime.packageDigest)
+						&& extension.value.some(item => `${extension.description.id}:${item.id}` === requested));
+				if (!declared) return [];
+			}
 			const activation = selectActivationEvent(runtime.activation!.events, event);
 			return activation ? [this.activateRuntime(runtime, activation)] : [];
 		});
@@ -348,6 +357,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 }
 
 function selectActivationEvent(declarations: readonly string[], event: string): ExtensionHostActivationEvent | undefined {
+	if (event.startsWith('onChatContextProvider:') && declarations.includes('onDemand:dataChannel')) return { type: 'capability', capability: 'dataChannel' };
 	for (const capability of ['terminalCompletionProvider', 'terminalQuickFixProvider']) {
 		if (event === `onTerminal:${capability}` && declarations.includes(`onDemand:${capability}`)) return { type: 'capability', capability };
 	}

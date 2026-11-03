@@ -24,6 +24,8 @@ import type { ChatContextAttachment } from '../../../../services/chat/common/cha
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { createImageAttachment } from '../chatImageUtils.js';
 import { extractSelection } from '../../../../../platform/opener/common/opener.js';
+import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { IChatContextService } from '../contextContrib/chatContextService.js';
 
 export type ImageTransferData = {
 	readonly data: Uint8Array;
@@ -61,14 +63,17 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 		@IWorkingCopyService private readonly workingCopies: IWorkingCopyService,
 		@IFileSearchService private readonly search: IFileSearchService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
+		@IChatContextService private readonly contexts: IChatContextService,
 	) { }
 
 	public async resolveEditorAttachContext(editor: IResourceEditorInput, signal?: AbortSignal): Promise<ChatContextAttachment | undefined> {
-		if (editor.resource.scheme === 'untitled') return this.resolveUntitledEditorAttachContext(editor, signal);
 		if (isBinaryDiffEditorInput(editor)) {
 			return undefined;
 		}
 		const input = isResourceDiffEditorInput(editor) ? editor.modified : editor;
+		const provided = await this.resolveProviderContext(input.resource, signal, input.languageId, input.editorId);
+		if (provided) return provided;
+		if (input.resource.scheme === 'untitled') return this.resolveUntitledEditorAttachContext(input, signal);
 		const imageData = input.initialBytes ? VSBuffer.wrap(new Uint8Array(input.initialBytes)) : undefined;
 		const image = await this.resolveImageEditorAttachContext(input.resource, imageData, input.contentType, signal);
 		if (image) {
@@ -147,6 +152,8 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 
 	public async resolveResourceAttachContext(resource: URI, isDirectory: boolean, signal?: AbortSignal): Promise<ChatContextAttachment> {
 		if (!isDirectory) {
+			const provided = await this.resolveProviderContext(resource, signal);
+			if (provided) return provided;
 			const image = await this.resolveImageEditorAttachContext(extractSelection(resource).uri, undefined, undefined, signal);
 			if (image) {
 				return { ...image, resource };
@@ -193,6 +200,26 @@ export class ChatAttachmentResolveService implements IChatAttachmentResolveServi
 			}
 			return image.resource ? { ...attachment, resource: image.resource } : attachment;
 		}));
+	}
+
+	private async resolveProviderContext(resource: URI, signal?: AbortSignal, language?: string, viewType?: string): Promise<ChatContextAttachment | undefined> {
+		if (signal?.aborted) throw new CancellationError();
+		using cancellation = new CancellationTokenSource();
+		using listener = signal ? addDisposableListener(signal, 'abort', () => cancellation.cancel()) : undefined;
+		const context = await this.contexts.contextForResource(resource, language, viewType, cancellation.token);
+		if (!context) return undefined;
+		const resolved = context.value === undefined ? await this.contexts.resolveChatContext(context, language, cancellation.token) : context;
+		if (signal?.aborted) throw new CancellationError();
+		if (resolved.value === undefined) throw new Error(localize('chat.context.providerNoContent', 'The context provider did not return any content.'));
+		const name = resolved.name ?? basename(resource);
+		const content = resolved.modelDescription ? `${resolved.modelDescription}\n\n${resolved.value}` : resolved.value;
+		const handle = resolved.handle;
+		return {
+			id: `chat-context:${resource.toString()}:${resolved.handle}`, kind: 'generic', name,
+			resource: resolved.resourceUri ?? resource, iconPath: resolved.iconPath, tooltip: resolved.tooltip,
+			open: resolved.commandId ? () => this.contexts.executeChatContextItemCommand(handle) : undefined,
+			resolve: async () => ({ name, content }),
+		};
 	}
 
 	private async capture(resource: URI, isDirectory: boolean, signal?: AbortSignal, snapshotText?: string): Promise<ChatContextAttachment> {
