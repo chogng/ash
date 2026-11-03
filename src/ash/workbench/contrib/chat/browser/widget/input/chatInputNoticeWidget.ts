@@ -1,13 +1,13 @@
-import { addDisposableListener, h } from '../../../../../../../base/browser/dom.js';
-import { status } from '../../../../../../../base/browser/ui/aria/aria.js';
-import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../../../../base/common/lifecycle.js';
-import { generateUuid } from '../../../../../../../base/common/uuid.js';
-import { Emitter } from '../../../../../../../base/common/event.js';
-import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../../../platform/accessibility/browser/accessibleView.js';
-import { AccessibleViewRegistry } from '../../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { localize } from '../../../../../../../nls.js';
+import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
+import { status } from '../../../../../../base/browser/ui/aria/aria.js';
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../../../base/common/lifecycle.js';
+import { generateUuid } from '../../../../../../base/common/uuid.js';
+import { Emitter } from '../../../../../../base/common/event.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { localize } from '../../../../../../nls.js';
 import type { IChatInputNoticeFocusTarget } from './chatInputNoticeHost.js';
-import { chatInputStackSlotClass, ChatInputStackSlot, isChatInputStackSlotShowing, setChatInputStackSlot } from '../chatInputStack.js';
+import { chatInputStackSlotClass, ChatInputStackSlot, isChatInputStackSlotShowing, setChatInputStackSlot } from './chatInputStack.js';
 import './media/chatInputNotice.css';
 
 export const enum ChatInputNoticeVariant {

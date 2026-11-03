@@ -1469,11 +1469,13 @@ impl AppServer {
             .turn_executor
             .clone()
             .with_execution_observer(observer);
-        self.turn_backend.install_executor(executor.clone());
         self.env_runtime
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .turn_executor = executor;
+        // Workspace rebinding replaces the authorized catalogs in env_runtime. Keep
+        // Turn dispatch live after adding this observer instead of pinning its snapshot.
+        self.use_current_env_turn_backend();
         self.multi_agent
             .install_turn_submission(Arc::new(AppServerAgentTurnSubmission {
                 clients: Arc::clone(&self.client_host),

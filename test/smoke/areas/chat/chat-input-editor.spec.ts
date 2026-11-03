@@ -225,7 +225,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		await page.keyboard.press('Home');
 		await page.keyboard.press('Enter');
 		await voice.locator('.ash-modal-editor-close').click();
-		await expect(chat.locator('.ash-chat-input-part [role="status"]')).not.toContainText('Could not read dictation model package');
+		await expect(chat.locator('.ash-chat-input-part [role="status"]').filter({ hasText: 'Could not read dictation model package' })).toHaveCount(0);
 		await expect(button).not.toHaveAttribute('aria-pressed', 'true');
 		await expect(chat.locator('.ash-chat-model-preparation')).toHaveCount(0);
 		await expect(composer).toHaveCSS('height', '84px');

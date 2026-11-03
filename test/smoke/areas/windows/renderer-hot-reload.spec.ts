@@ -339,7 +339,7 @@ test('development DomWidget rebuilds chat tips twice while retaining draft, focu
 			const { IStorageService } = await import(moduleUrl('platform/storage/common/storage.ts'));
 			const { IChatTipService, ChatTipService } = await import(moduleUrl('workbench/contrib/chat/browser/chatTipService.ts'));
 			const { ChatInputTipPresenter } = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.ts'));
-			const { ChatInputNoticeHost } = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/notices/chatInputNoticeHost.ts'));
+			const { ChatInputNoticeHost } = await import(moduleUrl('workbench/contrib/chat/browser/widget/input/chatInputNoticeHost.ts'));
 			const scope = new DisposableStore();
 			const services = scope.add(new InstantiationService());
 			const storage = scope.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'widget-hmr', backend: localStorage, flushInterval: 0 }));

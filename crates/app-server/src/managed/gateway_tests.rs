@@ -94,6 +94,35 @@ fn session_directory_file_requests_route_to_the_session_execution_authority() {
             Some(SessionExecutionTarget::Ssh { host: "build-host".into(), root: "/work/source".into() })
         );
     }
+    for method in ["instructions/importPreview", "instructions/import"] {
+        assert_eq!(
+            selected_execution_target(
+                &registry,
+                &remote,
+                &serde_json::json!({
+                    "method": method,
+                    "params": {"sessionId": "unrelated", "directory": {"sessionId": "remote-session", "path": "/work/source"}}
+                })
+            )
+            .unwrap(),
+            Some(SessionExecutionTarget::Ssh {
+                host: "build-host".into(),
+                root: "/work/source".into()
+            })
+        );
+    }
+    assert_eq!(
+        selected_execution_target(
+            &registry,
+            &remote,
+            &serde_json::json!({
+                "method": "hook/list",
+                "params": {"directory": {"sessionId": "remote-session", "path": "/work/source"}}
+            })
+        )
+        .unwrap(),
+        None
+    );
     for method in [
         "terminal/create",
         "terminal/profile/list",

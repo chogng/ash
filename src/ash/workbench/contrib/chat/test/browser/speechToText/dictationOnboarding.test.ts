@@ -15,8 +15,8 @@ import { SpeechService } from '../../../../speech/browser/speechService.js';
 import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio } from '../../../../../test/common/testDictationServices.js';
 import { IDictationOnboardingService } from '../../../browser/speechToText/dictationOnboarding.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService, ChatSpeechToTextState } from '../../../browser/speechToText/chatSpeechToTextService.js';
-import type { IChatInputNoticeClaimOptions } from '../../../browser/widget/input/notices/chatInputNoticeHost.js';
-import { ChatInputNoticeHost, ChatInputNoticeLane } from '../../../browser/widget/input/notices/chatInputNoticeHost.js';
+import type { IChatInputNoticeClaimOptions } from '../../../browser/widget/input/chatInputNoticeHost.js';
+import { ChatInputNoticeHost, ChatInputNoticeLane } from '../../../browser/widget/input/chatInputNoticeHost.js';
 import { IStorageService, StorageScope } from '../../../../../../platform/storage/common/storage.js';
 import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
 

@@ -19,8 +19,8 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../services/storage/browser/storageService.js';
 import { DictationOnboardingService, IDictationOnboardingService } from '../../contrib/chat/browser/speechToText/dictationOnboarding.js';
-import { ChatInputNoticeHubService, IChatInputNoticeHubService } from '../../contrib/chat/browser/widget/input/notices/chatInputNoticeHub.js';
-import { ChatInputNotificationService, IChatInputNotificationService } from '../../contrib/chat/browser/widget/input/notices/chatInputNotificationService.js';
+import { ChatInputNoticeHubService, IChatInputNoticeHubService } from '../../contrib/chat/browser/widget/input/chatInputNoticeHub.js';
+import { ChatInputNotificationService, IChatInputNotificationService } from '../../contrib/chat/browser/widget/input/chatInputNotificationService.js';
 import { IVoiceModeOnboardingService, VoiceModeOnboardingService } from '../../contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { AgentsVoiceStorageKeys } from '../../contrib/agentsVoice/common/agentsVoice.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';

@@ -28,7 +28,7 @@ import { IViewsService } from '../../../../services/views/common/viewsService.js
 import { CHAT_VIEW_ID } from '../../common/chat.js';
 import { IChatWidgetService, type IChatViewPane } from '../chat.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
-import { IChatInputNoticeHubService } from '../widget/input/notices/chatInputNoticeHub.js';
+import { IChatInputNoticeHubService } from '../widget/input/chatInputNoticeHub.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 
 export const CHAT_SETUP_ACTION_ID = 'workbench.action.chat.triggerSetup';

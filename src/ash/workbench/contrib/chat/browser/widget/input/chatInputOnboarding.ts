@@ -1,7 +1,7 @@
-import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../../../../base/common/lifecycle.js';
-import { IStorageService, StorageScope, StorageTarget } from '../../../../../../../platform/storage/common/storage.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../../../base/common/lifecycle.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../../../platform/storage/common/storage.js';
 import { pickActiveChatInput, trackChatInputRecency, type IChatInputNoticeClaimOptions, type IChatInputNoticeFocusTarget, type IChatInputSurface } from './chatInputNoticeHost.js';
-import { ChatInputStackSlot, setChatInputStackSlot } from '../chatInputStack.js';
+import { ChatInputStackSlot, setChatInputStackSlot } from './chatInputStack.js';
 
 export type ChatInputNoticeClaim = (options: IChatInputNoticeClaimOptions) => IDisposable;
 

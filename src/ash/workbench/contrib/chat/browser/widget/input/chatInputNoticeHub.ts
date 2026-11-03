@@ -1,5 +1,5 @@
-import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../../../../base/common/lifecycle.js';
-import { createDecorator } from '../../../../../../../platform/instantiation/common/instantiation.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../../../base/common/lifecycle.js';
+import { createDecorator } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { ChatInputNoticeHost, pickActiveChatInput, trackChatInputRecency, type IChatInputSurface } from './chatInputNoticeHost.js';
 
 export const IChatInputNoticeHubService = createDecorator<IChatInputNoticeHubService>('chatInputNoticeHubService');

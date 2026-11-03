@@ -1,8 +1,8 @@
-import { alert, status } from '../../../../../../../base/browser/ui/aria/aria.js';
-import { Emitter, type Event } from '../../../../../../../base/common/event.js';
-import { Disposable } from '../../../../../../../base/common/lifecycle.js';
-import type { URI } from '../../../../../../../base/common/uri.js';
-import { createDecorator } from '../../../../../../../platform/instantiation/common/instantiation.js';
+import { alert, status } from '../../../../../../base/browser/ui/aria/aria.js';
+import { Emitter, type Event } from '../../../../../../base/common/event.js';
+import { Disposable } from '../../../../../../base/common/lifecycle.js';
+import type { URI } from '../../../../../../base/common/uri.js';
+import { createDecorator } from '../../../../../../platform/instantiation/common/instantiation.js';
 
 export const enum ChatInputNotificationSeverity {
 	Info = 0,

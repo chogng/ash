@@ -65,5 +65,34 @@ test('an edit during a multi-batch link scan cancels its old coordinates and pre
 	} finally { clearTimeout(edit); }
 });
 
+for (const failure of ['throw', 'reject'] as const) {
+	test(`a link provider that ${failure}s cannot suppress another provider or detected URLs`, async () => {
+		const dom = new JSDOM('<!doctype html><body><main></main></body>');
+		using close = toDisposable(() => dom.window.close());
+		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
+		using model = new TextModel('Skill reference\nhttps://guide.test');
+		using features = new LanguageFeaturesService();
+		using provider = features.linkProvider.register('*', {
+			provideLinks: () => [{ range: new Range(1, 1, 1, 16), target: 'file:///skills/review/guide.md' }],
+		});
+		const error = new Error('Synthetic extension link failure');
+		using broken = features.linkProvider.register('*', {
+			provideLinks: () => {
+				if (failure === 'throw') { throw error; }
+				return Promise.reject(error);
+			},
+		});
+		const errors: unknown[] = [];
+		using editor = createTestCodeEditor({
+			container: dom.window.document.querySelector<HTMLElement>('main')!,
+			model, languageFeaturesService: features, onLanguageError: error => errors.push(error),
+		});
+		const detector = LinkDetector.get(editor)!;
+		await waitFor(() => detector.getLinkOccurrence(new Position(2, 3))?.target === 'https://guide.test');
+		assert.equal(detector.getLinkOccurrence(new Position(1, 3))?.target, 'file:///skills/review/guide.md');
+		assert.deepEqual(errors, [error]);
+	});
+}
+
 const codeFeatures = registerTestCodeEditorFeatures();
 afterCodeFeatures(() => codeFeatures.dispose());

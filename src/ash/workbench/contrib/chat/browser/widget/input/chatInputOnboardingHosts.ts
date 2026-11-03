@@ -1,6 +1,6 @@
-import { DisposableStore, type IDisposable } from '../../../../../../../base/common/lifecycle.js';
-import type { IDictationOnboardingService } from '../../../speechToText/dictationOnboarding.js';
-import type { IVoiceModeOnboardingService } from '../../../../../agentsVoice/browser/voiceModeOnboarding.js';
+import { DisposableStore, type IDisposable } from '../../../../../../base/common/lifecycle.js';
+import type { IDictationOnboardingService } from '../../speechToText/dictationOnboarding.js';
+import type { IVoiceModeOnboardingService } from '../../../../agentsVoice/browser/voiceModeOnboarding.js';
 import { ChatInputNoticeHost, ChatInputNoticeLane } from './chatInputNoticeHost.js';
 
 /** Register voice and dictation against the same onboarding lane for the composer's visible lifetime. */

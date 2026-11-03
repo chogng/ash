@@ -66,7 +66,7 @@ export interface ConnectedWebRendererApi {
 
 /** Connects a browser Renderer host through its transport. */
 export async function connectWebRendererApi(transport: AppServerTransport, connectorHostServices: BrowserConnectorHostServices, options: AppServerProtocolClientOptions = {}, contributions: readonly RendererCapabilityContribution[] = [], decoder?: AppServerFrameDecoder): Promise<ConnectedWebRendererApi> {
-	const connection = new AppServerProtocolClient(transport, { ...options, capabilities: { agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput'] }, ...options.capabilities } }, decoder);
+	const connection = new AppServerProtocolClient(transport, { ...options, capabilities: { agentInteractions: { version: 1, kinds: ['approval', 'permissions', 'userInput', 'toolResultReview'] }, ...options.capabilities } }, decoder);
 	let metadata: AppServerConnectionMetadata;
 	const recovery = new AppServerConnectionRecovery(connection, async () => {
 		connection.disconnect();

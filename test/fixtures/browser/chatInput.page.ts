@@ -13,6 +13,7 @@ import { ChatQueuePickerRendering } from '../../../src/ash/workbench/contrib/cha
 import { IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import type { AgentHostInputCompletionItem } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { IChatContextPickService, picksWithPromiseFn } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatContextPickService.js';
+import { IChatContextService } from '../../../src/ash/workbench/contrib/chat/browser/contextContrib/chatContextService.js';
 import { ChatContextKeys } from '../../../src/ash/workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { IChatWidgetService, type IChatWidget, type IWorkspacePickerItem } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
 import { OpenWorkspacePickerAction } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatExecuteActions.js';
@@ -161,8 +162,8 @@ declare global {
 		setVoiceAvailable(available: boolean): void;
 		openWorkspace(): Promise<unknown>;
 		showIntroduction(): void;
-		showResultReview(): void;
 		showSandboxApproval(): void;
+		showResultReview(): void;
 		commandExplanations(): readonly { readonly resource: string; readonly command: string; readonly aborted: boolean; }[];
 		triggerInputSuggestions(): Promise<unknown>;
 		hostCompletionRequests(): readonly { text: string; offset: number; }[];

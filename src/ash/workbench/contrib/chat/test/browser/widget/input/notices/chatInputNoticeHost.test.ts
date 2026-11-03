@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import { ChatInputNoticeHost, ChatInputNoticeLane } from '../../../../../browser/widget/input/notices/chatInputNoticeHost.js';
+import { ChatInputNoticeHost, ChatInputNoticeLane } from '../../../../../browser/widget/input/chatInputNoticeHost.js';
 import { DisposableStore } from '../../../../../../../../base/common/lifecycle.js';
 
 suite('Chat input notice arbitration', () => {

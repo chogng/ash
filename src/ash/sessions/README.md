@@ -89,7 +89,7 @@ and replacement or removal releases the old payload. Combined drafts migrate on
 read after validation; conflicting legacy migrations preserve both records.
 
 Shared notices, introductions and tips live under
-`workbench/contrib/chat/browser/widget/input/notices/`.
+`workbench/contrib/chat/browser/widget/input/`.
 `ChatInputPart` owns one `ChatInputNoticeHost` per composer. Input errors,
 feature introductions and tips claim that host in descending priority; model errors
 remain model-owned. `ChatInputOnboarding` owns introduction host selection, deferred

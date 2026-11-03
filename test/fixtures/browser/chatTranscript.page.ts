@@ -48,8 +48,8 @@ import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/d
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { IDictationOnboardingService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
-import { IChatInputNoticeHubService } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/notices/chatInputNoticeHub.js';
-import { IChatInputNotificationService, ChatInputNotificationSeverity } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/notices/chatInputNotificationService.js';
+import { IChatInputNoticeHubService } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputNoticeHub.js';
+import { IChatInputNotificationService, ChatInputNotificationSeverity } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputNotificationService.js';
 import { AgentsVoiceStorageKeys } from '../../../src/ash/workbench/contrib/agentsVoice/common/agentsVoice.js';
 import '../../../src/ash/workbench/contrib/agentsVoice/browser/agentsVoice.contribution.js';
 import { type AgentVoiceSessionState, type AgentVoiceTaskRequest, type AgentVoiceSelection } from '../../../src/ash/platform/agentHost/common/agent.js';

@@ -103,12 +103,12 @@ import {
 	chatInputStackClass, chatInputStackSlotClass, ChatInputStackSlot,
 	refreshChatInputStack, setChatInputStackInputFocused, setChatInputStackSlot,
 } from './chatInputStack.js';
-import { ChatInputNoticeHost } from './notices/chatInputNoticeHost.js';
-import { IChatInputNoticeHubService } from './notices/chatInputNoticeHub.js';
+import { ChatInputNoticeHost } from './chatInputNoticeHost.js';
+import { IChatInputNoticeHubService } from './chatInputNoticeHub.js';
 import { getChatInputAccessibilityHelp } from '../../actions/chatAccessibilityHelp.js';
-import { ChatInputNotificationWidget } from './notices/chatInputNotificationWidget.js';
-import { ChatInputNotificationActionKind, ChatInputNotificationSeverity, IChatInputNotificationService } from './notices/chatInputNotificationService.js';
-import { registerChatInputOnboardingHosts } from './notices/chatInputOnboardingHosts.js';
+import { ChatInputNotificationWidget } from './chatInputNotificationWidget.js';
+import { ChatInputNotificationActionKind, ChatInputNotificationSeverity, IChatInputNotificationService } from './chatInputNotificationService.js';
+import { registerChatInputOnboardingHosts } from './chatInputOnboardingHosts.js';
 import { IVoiceModeOnboardingService } from '../../../../agentsVoice/browser/voiceModeOnboarding.js';
 import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../../../platform/agentHost/common/approvalModes.js';
@@ -118,13 +118,13 @@ import { ChatContextUsageWidget } from '../../widgetHosts/viewPane/chatContextUs
 import { IActionViewItemService } from '../../../../../../platform/actions/browser/actionViewItemService.js';
 import { IChatWidgetService } from '../../chat.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';
+import { CHAT_SETUP_ACTION_ID } from '../../actions/chatActions.js';
 import { ServiceCollection } from '../../../../../../platform/instantiation/common/serviceCollection.js';
 import type { IMenu } from '../../../../../../platform/actions/common/actions.js';
 import { SubmenuItemAction } from '../../../../../../platform/actions/common/actions.js';
 import { ChatSubmitAction, type IChatExecuteActionContext } from '../../actions/chatExecuteActions.js';
 import { ChatQueueMessageAction, ChatSteerWithMessageAction } from '../../actions/chatQueueActions.js';
 import { ChatConfiguration } from '../../../common/constants.js';
-import { CHAT_SETUP_ACTION_ID } from '../../actions/chatActions.js';
 import { ChatRequestQueueKind } from '../../../../../services/chat/common/chatService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 

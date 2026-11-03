@@ -84,6 +84,19 @@ test('Sessions common entry supplies shared Chat services and startup contributi
 	assert.equal(host.phase, undefined);
 });
 
+test('Sessions owns Prompt authoring command registration until its contribution host closes', async () => {
+	const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import('../../../workbench/common/contributions.js');
+	const { CommandsRegistry } = await import('../../../platform/commands/common/commands.js');
+	using services = new InstantiationService();
+	const commands = ['workbench.command.new.agent', 'workbench.command.new.instructions', 'workbench.action.chat.configure.customagents', 'workbench.action.chat.run.prompt', 'workbench.action.chat.run.prompt.current', 'workbench.action.chat.configure.skills', 'workbench.action.chat.newWithCurrentAgent', 'workbench.action.chat.importInstructions'];
+	const host = WorkbenchContributionsRegistry.createHost(services, undefined, ['chat.newPromptFileActions', 'chat.agentActions', 'chat.runPromptActions', 'chat.skillActions', 'chat.promptActions']);
+	try {
+		host.advance(WorkbenchPhase.BlockStartup);
+		for (const id of commands) assert.equal(typeof CommandsRegistry.getCommand(id), 'function');
+	} finally { host.dispose(); }
+	for (const id of commands) assert.equal(CommandsRegistry.getCommand(id), undefined);
+});
+
 test('Sessions common entry supplies the shared editor Worker service in each window scope', async () => {
 	const { getSingletonServiceDescriptors } = await import('../../../platform/instantiation/common/extensions.js');
 	const { ServiceCollection } = await import('../../../platform/instantiation/common/serviceCollection.js');

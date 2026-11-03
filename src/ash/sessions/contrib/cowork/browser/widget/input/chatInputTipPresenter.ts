@@ -2,8 +2,8 @@ import { Disposable, MutableDisposable } from '../../../../../../base/common/lif
 import { IChatTipService } from '../../chatTipService.js';
 import { ChatTipContentPart } from '../chatContentParts/chatTipContentPart.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
-import { ChatInputNoticeHost, ChatInputNoticeLane } from '../../../../../../workbench/contrib/chat/browser/widget/input/notices/chatInputNoticeHost.js';
-import { registerChatInputNoticeAccessibleViews } from '../../../../../../workbench/contrib/chat/browser/widget/input/notices/chatInputNoticeWidget.js';
+import { ChatInputNoticeHost, ChatInputNoticeLane } from '../../../../../../workbench/contrib/chat/browser/widget/input/chatInputNoticeHost.js';
+import { registerChatInputNoticeAccessibleViews } from '../../../../../../workbench/contrib/chat/browser/widget/input/chatInputNoticeWidget.js';
 
 export interface IChatInputTipPresenterOptions {
 	readonly container: HTMLElement;

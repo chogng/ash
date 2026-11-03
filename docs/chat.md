@@ -30,6 +30,8 @@ control／viewer 仍有底层差异：当前 AsyncDataTree 逐父节点刷新时
 
 `ChatInputPart` 使用 Stanza 输入编辑器，textarea 为后备。输入字体、代码块字体与自动接受延迟的键归 `common/constants.ts`；`chat.shared.contribution.ts` 注册窗口服务和设置。命令／Skill／上下文补全在 `browser/widget/input/editor/chatInputCompletions.ts`，装配和测试显式加载注册入口，不依赖产品类导入副作用。
 
+通知与引导模块位于上游对应的 `browser/widget/input/`，样式位于 `input/media/`。Chat、Cowork、语音入口和窗口服务注册直接引用这些模块；原通知排序、引导持久化、DOM 与释放 owner 保持唯一。
+
 2026-11-02 已确认保留 Ash 的 `CHAT_INPUT_LANGUAGE_ID`、`createChatCommandCompletionProvider`、`createChatSkillCompletionProvider` 和 `createChatFileAttachments` 入口及职责。补全读取捕获的 Stanza snapshot，沿当前命令／Skill 目录生成替换；前导空白与提交端的 trim 规则一致，接受补全复用已有分隔空格。`SlashCommandCatalog` 发布同一份命令快照的变化，`editor/chatInputCommandArgumentHint.ts` 借用它投影参数提示；提示不进入文本、撤销历史或提交内容，键入参数和只读状态会隐藏提示，目录更新、撤销和恢复可重新计算它。提示使用输入占位文字的主题 token，并通过现有 ARIA 状态和输入帮助提供同一说明。
 
 上述导出名与上游不同，不表示职责没有对应归属：命令补全对应同路径 `chatInputCompletions.ts` 的 `SlashCommandCompletions`；`BuiltinDynamicCompletions` 在上游同文件中已有同名内部类，Ash 为逐输入释放而导出。`AgentHostInputCompletionHost` 借用原 composer 的上下文和接收回调，对应上游 `agentHostInputCompletions.ts` 对输入 widget 的接入；host 技能候选的接受也归该模块。Ash 的本地 `$skill` 目录补全仍位于 `chatInputCompletions.ts`。输入语言标识对应上游 `chatEditorInputContentProvider.ts` 创建输入模型的职责；Ash 目前直接创建模型，不为无调用方的 URI 解析另加 provider。`createChatFileAttachments` 已从粘贴 provider 移入 `attachments/chatAttachmentResolveService.ts`，文件选择和拖放复用该采集入口，仍由原 composer 接收捕获结果。
@@ -59,9 +61,9 @@ Stanza 与 textarea 默认文本高度 40px，含工具栏默认总高 84px，�
 
 `attachments/chatAttachmentResolveService.ts` 拥有编辑器、未命名编辑器、资源、图片、符号与 SCM 历史项的 Chat 附件构造：文本优先取工作副本或版本快照，目录生成限定范围的文件清单，图片复用原有解码、缩放与内容哈希管线。“打开的编辑器”跳过没有文本快照和文件 provider 的页签；只读编辑器的显式内容代表其显示版本，优先于同 URI 的可编辑工作副本；可编辑输入继续读取未保存文本。读取失败仍由原草稿报告，取消后的结果不能附加。工作区和编辑器图片在加入草稿前检查当前模型能力。 粘贴、拖放和文件选择也通过同一图片解析服务；当原生文件缺少 MIME 或仅有通用二进制类型时，按扩展名识别 PNG、JPEG、GIF 和 WebP，并在读取前检查图片大小与模型能力。混合文件批次在全部准备完成并再次检查模型和取消状态后，交回原有正文引用入口接收。符号源版本校验由 Search 的 `common/search.ts` 共享领域操作承担；SCM 仍解析固定提交与比较父版本，Chat resolver 只构造捕获条目。`attachments/chatContextPickService.ts` 拥有公开 value／picker／pick 契约与窗口注册；`AttachContextAction` 拥有选择界面、查询取消、错误和原输入接收。内置来源及 Browser、Debug、SCM 注册方均使用该契约。共享附件领域数据保留在 `services/chat/common/chatContextService.ts`；Code 和 Sessions 通过 `chat.shared.contribution.ts` 装配窗口默认服务。
 
-共享输入在词首输入 `@` 或 `#` 时补全文件、目录、打开的编辑器和已有上下文；候选查询复用 Search，接受后由原附件解析服务捕获内容，并绑定正文引用。准备过程属于原草稿，普通编辑期间跟踪候选文字的位置，切换输入或修改候选文字会取消绑定；撤销和重做恢复同一捕获内容。上下文补全与 `/` 命令、`$name` Skill selector 使用独立 provider，不引入 `@Agent` 参与者路由。
-
 `common/contextContrib/chatContext.ts` 定义工作区、显式条目和资源 provider；`browser/contextContrib/chatContextService.ts` 唯一持有窗口注册和已提交的工作区值。`chatContext.contribution.ts` 维护 manifest 中的来源名称与图标，显式选择按需激活对应扩展。SDK `chat.registerChat*ContextProvider` 经已有 `chat.context.v1` DataChannel 和 `MainThreadChatContext` 接入，adapter 校验数据并绑定包、incarnation、activation generation 与取消。资源提供方按语言／URI 或编辑器类型匹配；仅在用户附加资源时解析，随后交回原草稿快照。工作区值在 Send 时单独捕获，不进入正文引用、输入历史或草稿移交。扩展停用会撤销注册、工作区值及来源操作，已捕获内容保留；提供方描述随内容交给模型，图标和 tooltip 由原附件控件呈现。
+
+共享输入在词首输入 `@` 或 `#` 时补全文件、目录、打开的编辑器和已有上下文；候选查询复用 Search，接受后由原附件解析服务捕获内容，并绑定正文引用。准备过程属于原草稿，普通编辑期间跟踪候选文字的位置，切换输入或修改候选文字会取消绑定；撤销和重做恢复同一捕获内容。上下文补全与 `/` 命令、`$name` Skill selector 使用独立 provider，不引入 `@Agent` 参与者路由。
 
 `actions/chatContext.ts` 的 `ChatContextContributions` 随共享窗口入口注册剪贴板图片、截图、会话与工具四个内置来源，并在释放时撤销登记；来源类保持模块私有。Tools 和 Sessions 通过 picker 契约向同一个选择界面提供选项，读取发起操作的输入和会话，不借用最近聚焦的另一份草稿。工具选择保留在原输入的附件模型，图片来源借用 `IChatInputPart.supportsImages()` 判断当前模型的接收能力；窗口注册不持有这些状态。已注册来源在查询期间显示加载状态并清空旧选择；只有当前查询和仍有效的来源可以附加。匹配结果及顺序由提供者决定，不按显示名再次过滤；来源检查、选择和结果读取均随原输入取消。
 
@@ -135,7 +137,9 @@ MCP 嵌入内容保留 annotations／`_meta` sidecar 的原位置，模型文本
 
 `PromptsService` 统一提供文件解析、目录和 Hook 声明。`PromptFileParser` 保留 exact 原文，`PromptBody` 提供正文及 UTF-16 偏移／范围，CRLF／CR／LF 保留；Instructions 预览显示正文，原文编辑器保留元数据并定位正文开头。YAML AST 支持编辑诊断、目录名／工具值补全、正文引用和字段 Hover；后端 Skill catalog 仍拥有接受、版本和授权判断。
 
-`promptFileAttributes.ts` 对应后端 Skill 的 name／description／license／compatibility／metadata／allowed-tools；根键补全排除已有字段，不把嵌套映射、正文或其他文件当头部。Hover 消费当前 AST 诊断与 schema 说明，Problems 和装饰使用独立 marker owner；不另存诊断。完整上游 Agent／Prompt 格式按真实 Ash 产品调用决定支持范围。详见 [Skills](skills.md) 与 [Agent 定制](agent-customizations.md)。
+`promptFileAttributes.ts` 对应后端 Skill 的 name／description／license／compatibility／metadata／allowed-tools；根键补全排除已有字段，不把嵌套映射、正文或其他文件当头部。Hover 消费当前 AST 诊断与 schema 说明，Problems 和装饰使用 `promptValidator.ts` 的 `MARKERS_OWNER_ID`；仅编辑器绑定的 Skill 模型发布诊断，共享模型只验证一次，最后一个编辑器脱离、语言改变或释放时移除自身 marker 并取消调度。完整上游 Agent／Prompt 格式按真实 Ash 产品调用决定支持范围。详见 [Skills](skills.md) 与 [Agent 定制](agent-customizations.md)。
+
+正文链接保留资源所属的 scheme／authority、Skill 来源、固定摘要和 Session。普通文件支持文件系统根路径及当前宿主的 `~/`，编码文件名和 fragment 在 URI 解析后分别处理；宿主没有实际 home 时不借用工作区目录，其他宿主的 home 不参与解析。固定版本的 Skill 包只接受包内相对资源，编码后的根路径、home 和越界引用同样拒绝。
 
 Hook 事件类型归 `common/promptSyntax/hookTypes.ts`，读取与变更通知归 `IPromptsService`；配置编辑器和 action 共用服务。Ash 保留 TOML、停用及历史事件语义，可传 Session；不宣称完整 ChatRequestHooks 或 JSON／Claude／Copilot 格式兼容。后端值和 adapter 在 agentHost，复用 `hook/list`／`config/changed`；本机 TOML 编辑走可信 `IWorkbenchHostService.editUserConfiguration`，工作区文件走原文件服务。旧 platform/hooks 和重复听写实现已退出，不保留转发别名。
 
@@ -171,6 +175,8 @@ Hook 事件类型归 `common/promptSyntax/hookTypes.ts`，读取与变更通知�
 
 `services/chat/common/chatEntitlementService.ts` 只从该配置投影 `sentiment.hidden`，不保存账号或模型就绪状态。共享的 `browser/chatSetup/chatSetupContributions.ts` 在 Code、Agents 和主题预览中统一更新 `ChatContextKeys.Setup.hidden`／`enabled`；命令面板和模型目录错误提示通过 `workbench.action.chat.triggerSetup` 进入现有模型连接或账号管理。取消、禁用 AI 或关闭窗口释放设置选择器，保留草稿。上游 Copilot 扩展安装、套餐、Microsoft 探测和增长会话没有对应的 Ash 生产调用链，不加入这条配置流程。
 
+`browser/chatStatus/chatStatusEntry.ts` 通过窗口级状态栏显示订阅账号状态，并使用 Quick Input 提供账号管理、模型连接和 Usage 入口。状态来自 `IAccountService`，账号事件淘汰迟到读取；禁用 AI 或释放窗口时撤回入口与选择器。上下文及累计 token 用量仍由原输入框和 Usage 页面拥有，不迁入状态栏，也不表示订阅剩余额度。订阅额度复用后端 `account/rateLimits/read`：窗口剩余百分比与重置时间、ChatGPT credits、xAI 账期和精确 USD 余额分别展示；未知字段不推断为不限量。按账号独立处理加载与失败，选择器内刷新可重试；账号事件、关闭、禁用 AI 和释放取消旧结果写回。未接入上游 Copilot 推广、套餐升级或扩展 Chat 状态项。
+
 共享后端同时服务 Agent、手动终端和扩展。`aiAgentEnv.ts`／宿主环境构建器过滤继承的 `AI_AGENT`（含大小写变体），不更改父环境；Rust `ProcessExecutor` 只为 Core 工具、Hook 和认证 Agent ProcessStart 的最终子环境设置 `AI_AGENT=ash`。手动终端默认不继承标记，显式 env 可以覆盖。该值仅作进程归因，不代表授权、身份认证、账号或模型，不另加配置或协议字段。
 
 邀请沿成功的 `ChatService.onDidSubmitRequest` → sender 绑定可信 IPC → Main `AgentsWindowInvitationState` → focused conversation 的现有通知列表。只有后端接受的本窗口请求登记使用；Main 的 Application／Machine storage 仅保存首次使用计数与冷却，不读领域 RPC 或建立会话目录。单窗口等待 30 秒，并行活动等待 15 秒，全局只有一个 claim，真正可见后才记曝光。
@@ -205,7 +211,6 @@ Ash 保留现有模型、供应商、推理运行时和凭据归属。当前本�
 `speechLanguageConfigToLanguage` 从 TypeScript `SPEECH_LANGUAGE_CONFIG` 解析语言，同一次 factory 向 Host 递交；auto 使用 display language，未知输入回到 en-US。旧 `dictation.language` 只控制原后端，不双写。onSpeech 激活等待、provider acquisition 和 capture 归原 recording/token；等待时显示 Starting，收到 Started 才显示 Listening，同步取消后不再启动后端。精确 session 事件不写入另一个输入，预取消 keyword 返回 Canceled。
 
 Desktop 只给已完成 Agent 回答提供 Read Aloud。`voiceChatActions.ts` 经 `renderAsPlaintext` → SpeechService／MainThreadSpeech 向原扩展逐段合成，每段遵守 Host 16384 UTF-16 上限且不拆代理对；RPC 接受不代表播放结束，必须等待 Stopped 后才能下一段。Error／取消／注册撤销拒绝等待并释放。来源文字改变、移除、隐藏、行 Escape 或窗口 StopReadAloud 取消本次 CTS，不停止其他窗口或其他 owner 的 TTS；旧 finally 不能清除同窗口新操作。Web 未装配 Desktop command 或 provider 撤销时隐藏按钮。
-`browser/chatStatus/chatStatusEntry.ts` 通过窗口级状态栏显示订阅账号状态，并使用 Quick Input 提供账号管理、模型连接和 Usage 入口。状态来自 `IAccountService`，账号事件淘汰迟到读取；禁用 AI 或释放窗口时撤回入口与选择器。上下文及累计 token 用量仍由原输入框和 Usage 页面拥有，不迁入状态栏，也不表示订阅剩余额度。订阅额度复用后端 `account/rateLimits/read`：窗口剩余百分比与重置时间、ChatGPT credits、xAI 账期和精确 USD 余额分别展示；未知字段不推断为不限量。按账号独立处理加载与失败，选择器内刷新可重试；账号事件、关闭、禁用 AI 和释放取消旧结果写回。未接入上游 Copilot 推广、套餐升级或扩展 Chat 状态项。
 
 标准 HasSpeechProvider／SpeechToTextInProgress／TextToSpeechInProgress context keys 由 SpeechService 的事实驱动，不另存录音状态。无障碍提示、语言偏好、焦点、控制可用性均使用同一窗口服务；fixture 也必须在 window 级注册一次配置、ContextKey、ExtensionService 和 SpeechService。
 

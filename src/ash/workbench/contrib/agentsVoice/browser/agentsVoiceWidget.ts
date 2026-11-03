@@ -11,8 +11,8 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IVoiceModeOnboardingService } from './voiceModeOnboarding.js';
-import { ChatInputNoticeHost, ChatInputNoticeLane } from '../../chat/browser/widget/input/notices/chatInputNoticeHost.js';
-import { IChatInputNoticeHubService } from '../../chat/browser/widget/input/notices/chatInputNoticeHub.js';
+import { ChatInputNoticeHost, ChatInputNoticeLane } from '../../chat/browser/widget/input/chatInputNoticeHost.js';
+import { IChatInputNoticeHubService } from '../../chat/browser/widget/input/chatInputNoticeHub.js';
 
 export interface VoiceWidgetCallbacks {
 	openSession(): void;

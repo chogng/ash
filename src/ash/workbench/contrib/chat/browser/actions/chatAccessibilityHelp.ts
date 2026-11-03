@@ -8,7 +8,7 @@ import { IViewsService } from '../../../../services/views/common/viewsService.js
 import { CHAT_VIEW_ID } from '../../common/chat.js';
 import type { IChatViewPane } from '../chat.js';
 import { localize } from '../../../../../nls.js';
-import { getChatInputNoticeHelp } from '../widget/input/notices/chatInputNoticeWidget.js';
+import { getChatInputNoticeHelp } from '../widget/input/chatInputNoticeWidget.js';
 
 /** Chat help borrows the focused sidebar and returns to its live view when a row was replaced. */
 export class PanelChatAccessibilityHelp implements IAccessibleViewImplementation {

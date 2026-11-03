@@ -11,9 +11,9 @@ import { ICommandService } from '../../../../../../../../platform/commands/commo
 import { InstantiationService } from '../../../../../../../../platform/instantiation/common/instantiationService.js';
 import { AccessibleViewRegistry } from '../../../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { AccessibleViewType } from '../../../../../../../../platform/accessibility/browser/accessibleView.js';
-import { ChatInputNoticeHost, ChatInputNoticeLane } from '../../../../../browser/widget/input/notices/chatInputNoticeHost.js';
-import { ChatInputNotificationWidget } from '../../../../../browser/widget/input/notices/chatInputNotificationWidget.js';
-import { ChatInputNotificationActionKind, ChatInputNotificationService, ChatInputNotificationSeverity, IChatInputNotificationService, type IChatInputNotification } from '../../../../../browser/widget/input/notices/chatInputNotificationService.js';
+import { ChatInputNoticeHost, ChatInputNoticeLane } from '../../../../../browser/widget/input/chatInputNoticeHost.js';
+import { ChatInputNotificationWidget } from '../../../../../browser/widget/input/chatInputNotificationWidget.js';
+import { ChatInputNotificationActionKind, ChatInputNotificationService, ChatInputNotificationSeverity, IChatInputNotificationService, type IChatInputNotification } from '../../../../../browser/widget/input/chatInputNotificationService.js';
 
 const flush = () => new Promise<void>(resolve => setImmediate(resolve));
 

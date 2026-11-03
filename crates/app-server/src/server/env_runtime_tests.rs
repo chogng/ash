@@ -29,6 +29,7 @@ use ash_core::InMemoryThreadStore;
 use ash_core::NoTools;
 use ash_core::StartTurnRequest;
 use ash_core::ThreadController;
+use ash_core::TurnExecutionBackend;
 use ash_file_access::GrantSource;
 use ash_home::AshHome;
 use ash_model_provider::EchoModel;
@@ -322,6 +323,93 @@ fn clearing_directories_keeps_home_instructions_in_model_requests() {
 }
 
 struct PermissionBoundSemanticEmbedding;
+
+#[test]
+fn managed_thread_turn_uses_instructions_after_workspace_rebinding() {
+    let profile = tempfile::tempdir().unwrap();
+    let directory = tempfile::tempdir().unwrap();
+    std::fs::write(directory.path().join("ASH.md"), "Initial directory rules.").unwrap();
+    let model = Arc::new(RequestRecordingModel::default());
+    let server = crate::open_app_server(
+        crate::AppServerOptions::new(profile.path())
+            .without_built_in_skills()
+            .with_agent_model_service(model.clone())
+            .with_dir_root(directory.path()),
+        ash_app_server_diff::compute,
+    )
+    .unwrap();
+    assert!(server.dir_services.is_some());
+    // Code binds its renderer workspace after composition adds the managed worktree
+    // observer. The retired catalog must not remain captured by Turn dispatch.
+    server
+        .activate_local_dirs(vec![(
+            "project".into(),
+            ash_file_access::Grant::for_environment(
+                Dir::open_local(directory.path()).unwrap(),
+                GrantSource::HostConfiguration,
+                Permissions::new([Permission::ReadFiles, Permission::LoadInstructions]),
+            ),
+        )])
+        .unwrap();
+    std::fs::write(
+        directory.path().join("ASH.md"),
+        "Reviewed imported directory rules.",
+    )
+    .unwrap();
+    let thread = server
+        .start_thread(StartThreadRequest {
+            execution_target: None,
+            branch_name: None,
+            agent_id: None,
+            agent: None,
+            command_id: CommandId::new("rebound-instructions-thread").unwrap(),
+            title: "Instructions after rebinding".into(),
+        })
+        .unwrap();
+    let turn = server
+        .threads
+        .start_turn(
+            &thread.thread_id,
+            StartTurnRequest {
+                context_policy: Default::default(),
+                mode: Default::default(),
+                advisor: None,
+                kind: ash_protocol::TurnKind::Coding,
+                instructions: ash_prompts::AGENT_INSTRUCTIONS.freeze(),
+                command_id: CommandId::new("rebound-instructions-turn").unwrap(),
+                expected_sequence: SequenceExpectation::Exact(1),
+                model: None,
+                reasoning_effort: None,
+                policy_revision: "test-policy-v1".into(),
+                approval_mode: ash_protocol::ApprovalMode::Manual,
+                tool_mode: ash_protocol::ToolMode::Direct,
+                tool_profile: None,
+                activated_skills: Vec::new(),
+                input: vec![UserInput::Text {
+                    text: "Follow the project rules.".into(),
+                }],
+            },
+        )
+        .unwrap();
+    server
+        .turn_backend
+        .start(&thread.thread_id, &turn.turn_id)
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    let request = loop {
+        if let Some(request) = model.requests.lock().unwrap().first().cloned() {
+            break request;
+        }
+        assert!(Instant::now() < deadline, "model request was not captured");
+        std::thread::yield_now();
+    };
+    let input = serde_json::to_string(&request.input).unwrap();
+    assert!(
+        input.contains("Reviewed imported directory rules."),
+        "{input}"
+    );
+    assert!(!input.contains("Initial directory rules."));
+}
 
 #[test]
 fn init_does_not_import_external_instructions_into_agent_input() {

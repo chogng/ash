@@ -1,6 +1,6 @@
-import { addDisposableListener, getActiveWindow } from '../../../../../../../base/browser/dom.js';
-import { onUnexpectedError } from '../../../../../../../base/common/errors.js';
-import { Disposable, toDisposable, type IDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { addDisposableListener, getActiveWindow } from '../../../../../../base/browser/dom.js';
+import { onUnexpectedError } from '../../../../../../base/common/errors.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../../../../base/common/lifecycle.js';
 
 /** A notice owns its focus target while it leads the input's notice area. */
 export interface IChatInputNoticeFocusTarget {

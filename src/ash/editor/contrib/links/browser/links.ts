@@ -154,7 +154,15 @@ export class LinkDetector extends Disposable {
 		const seen = new Set<string>();
 		for (const provider of this.languageFeatures.linkProvider.ordered(model)) {
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
-			const result = await provider.provideLinks(request, signal);
+			let result: readonly LanguageLink[];
+			try {
+				result = await provider.provideLinks(request, signal);
+			} catch (error) {
+				if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
+				// One extension failure must not discard links supplied by other owners.
+				this.onError(error);
+				continue;
+			}
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			for (const link of result) {
 				if (typeof link.target !== 'string' || link.target.length === 0) continue;

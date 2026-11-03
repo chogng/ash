@@ -73,7 +73,7 @@ import type { IChatWidgetModel } from '../../browser/widget/chatWidget.js';
 import type { IWillShutdownEvent } from '../../../../services/lifecycle/common/lifecycle.js';
 import type { IChatDraftStorage } from '../../browser/widget/input/chatInputPart.js';
 import { ChatInputPart } from '../../browser/widget/input/chatInputPart.js';
-import { IChatInputNotificationService } from '../../browser/widget/input/notices/chatInputNotificationService.js';
+import { IChatInputNotificationService } from '../../browser/widget/input/chatInputNotificationService.js';
 import { IChatPasteTargetService } from '../../browser/chat.js';
 import { ChatPasteTargetService } from '../../browser/attachments/chatPasteTargetService.js';
 import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../../browser/attachments/chatAttachmentResolveService.js';
