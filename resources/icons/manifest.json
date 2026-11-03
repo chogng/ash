@@ -987,6 +987,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "local",
+      "file": "local.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "lock",
       "file": "lock.svg",
       "rendering": "symbolic"

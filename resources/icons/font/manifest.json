@@ -353,7 +353,8 @@
     "thumbsdown-filled": "E15E",
     "thumbsdown": "E15F",
     "thumbsup": "E160",
-    "rocket": "E161"
+    "rocket": "E161",
+    "local": "E162"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -553,6 +554,7 @@
     "link": "d2e6da90cdb09e5d02eba4af14ecb4c41fb3442d699a03984bda7f126e502cdc",
     "list-filter": "200a290de0e8cbcdfecb8eeb65e116b1a7952f8728c43dd64e94004670694f7d",
     "list-unordered": "c7c8a3751d7b83a7b5ea0fd737756e54f90c434da073930f59515c9d74815df5",
+    "local": "5274d30d9973fa8f082f371b45f1440778835f28e7769b8e0dd11269a3d2858b",
     "lock": "78f6173b4c2f545631109b2308c46ef23608b2a31b760f185b9d2e98ddf5c9ef",
     "map-filled": "b142dad87996e17c753a4f174e3265872df54a050c080ee55c1abe0badd4ba16",
     "map-vertical-filled": "24898610e3670149efb8243b5b5d2197b55a54fb2c8dc46183485856e56fe126",

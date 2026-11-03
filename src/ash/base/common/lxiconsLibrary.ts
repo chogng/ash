@@ -201,6 +201,7 @@ export const lxiconsLibrary = {
 	linkExternal: registerLxicon("link-external", 0xe0ad),
 	listFilter: registerLxicon("list-filter", 0xe0af),
 	listUnordered: registerLxicon("list-unordered", 0xe0b0),
+	local: registerLxicon("local", 0xe162),
 	lock: registerLxicon("lock", 0xe0b1),
 	map: registerLxicon("map", 0xe0b5),
 	mapFilled: registerLxicon("map-filled", 0xe0b2),
