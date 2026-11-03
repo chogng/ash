@@ -53,6 +53,7 @@ fn restricted_accounts_cannot_enter_caller_or_system_wsl() {
                         arguments: arguments.clone(),
                         working_directory: ".".into(),
                         input: CommandInput::Closed,
+                        environment: Default::default(),
                     },
                     CommandExecutionAuthority::Sandboxed(sandbox_policy(
                         FileSystemAccess::DirectoryWrite,

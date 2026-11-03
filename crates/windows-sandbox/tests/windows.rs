@@ -45,6 +45,7 @@ fn powershell(script: String) -> CommandRequest {
         ],
         working_directory: ".".into(),
         input: CommandInput::Closed,
+        environment: Default::default(),
     }
 }
 
@@ -525,6 +526,7 @@ fn managed_execution_allows_the_proxy_and_blocks_direct_traffic_and_listeners() 
                 ],
                 working_directory: ".".into(),
                 input: CommandInput::Closed,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Sandboxed(sandbox_policy(
                 FileSystemAccess::DirectoryWrite,

@@ -300,7 +300,7 @@ struct Resources {
     job: job::Job,
     filesystem: filesystem::Filesystem,
     _proxy: Option<proxy::Proxy>,
-    _desktop: desktop::Desktop,
+    _station: desktop::PrivateStation,
     _directory_pin: win::Handle,
     _directory: Directory,
     _lease: runtime::Lease,
@@ -337,7 +337,7 @@ fn spawn(request: &Execution) -> Result<Process, String> {
             .join("-")
     );
     let directory = Directory::new(&lease.root, &owner, &lease.account.sid, &capability)?;
-    let desktop = desktop::Desktop::new(&owner, &lease.account.sid, &capability)?;
+    let station = desktop::PrivateStation::start(&lease.runner, &lease.account.sid, &capability)?;
     let directory_pin = filesystem::pin(&directory.0)?;
     let filesystem = filesystem::Filesystem::prepare(
         request,
@@ -404,7 +404,7 @@ fn spawn(request: &Execution) -> Result<Process, String> {
             ash_sandboxing::ProcessIo::Pty(size) => Some([size.rows, size.cols]),
         },
         reply: directory.0.join("reply.json"),
-        desktop: desktop.name.clone(),
+        desktop: station.command_desktop.clone(),
     };
     let mut result = Process {
         process: None,
@@ -416,7 +416,7 @@ fn spawn(request: &Execution) -> Result<Process, String> {
             job,
             filesystem,
             _proxy: proxy,
-            _desktop: desktop,
+            _station: station,
             _directory_pin: directory_pin,
             _directory: directory,
             _lease: lease,
@@ -430,6 +430,7 @@ fn spawn(request: &Execution) -> Result<Process, String> {
         &resources._lease.runner,
         &resources._directory.0,
         &worker,
+        &resources._station.worker_desktop,
         pipes,
         &resources.job,
     )?;
@@ -546,6 +547,7 @@ pub(super) fn run(arguments: impl Iterator<Item = std::ffi::OsString>) -> Result
         .collect::<Result<Vec<_>, _>>()?;
     match arguments.as_slice() {
         [command, path] if command == "run" => process::run(std::path::Path::new(path)),
+        [command, id, account, capability] if command == "hold-private-station" => desktop::hold_private_station(id, account, capability),
         [command] if command == "metrics" => service::print(crate::provisioning::Request::Metrics {}),
         [command] if command == "status" => service::print(crate::provisioning::Request::Status {}),
         [command, operation, slots, count] if command == "plan" && operation == "setup" && slots == "--slots" => service::print(crate::provisioning::Request::SetupPlan { runner: std::env::current_exe().map_err(|error| error.to_string())?, slots: count.parse().map_err(|_| "slots must be a number")? }),

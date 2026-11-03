@@ -156,6 +156,7 @@ pub(super) fn spawn(
     runner: &Path,
     directory: &Path,
     request: &Request,
+    worker_desktop: &str,
     pipes: Pipes,
     job: &super::job::Job,
 ) -> Result<Child> {
@@ -172,10 +173,12 @@ pub(super) fn spawn(
     .map_err(|error| error.to_string())?;
     let mut command = win::wide(command);
     let mut password = win::wide(&account.password);
-    // As in Codex, the trusted logon worker uses the default logon desktop.
-    // Only the restricted command is attached to the execution-owned desktop.
+    // The SSH caller's desktop may be inaccessible to the sandbox account.
+    // The worker uses its own desktop on the execution's private station.
+    let mut worker_desktop = win::wide(worker_desktop);
     let startup = STARTUPINFOW {
         cb: size_of::<STARTUPINFOW>() as u32,
+        lpDesktop: worker_desktop.as_mut_ptr(),
         ..unsafe { std::mem::zeroed() }
     };
     let mut process: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };

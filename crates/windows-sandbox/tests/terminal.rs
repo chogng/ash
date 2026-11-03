@@ -51,6 +51,7 @@ fn terminal_teardown(end: &str) {
                 arguments: Vec::new(),
                 working_directory: ".".into(),
                 input: CommandInput::Open,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Sandboxed(support::sandbox_policy(
                 FileSystemAccess::DirectoryWrite,
@@ -226,6 +227,7 @@ fn session_round_trip(terminal: Option<TerminalSize>) {
                 ],
                 working_directory: ".".into(),
                 input: CommandInput::Open,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Sandboxed(support::sandbox_policy(
                 FileSystemAccess::DirectoryWrite,

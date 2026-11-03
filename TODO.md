@@ -112,7 +112,6 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 ## Sessions · TODO
 
 - [ ] **New Environment · Cloud 与 WSL 验收** · Cloud 需要可路由的 Sessions provider 与目标发现和创建契约。仍需在 Windows 实机验证 WSL 首次连接及环境变量注入。
-- [ ] **New Environment · Windows SSH 变量验收** · Windows 11 23H2 实机已验证账户沙箱管理员初始化和同一 Remote 连接重新读取就绪状态。窗口站修复版已原生构建。计划任务与真实 SSH 均复现账户沙箱 logon worker 在接通标准流前以 `0xC0000142` 退出，配置环境的会话未能启动 PowerShell。临时账户、服务和安装目录已清理。需修复非交互窗口站下的 worker 启动，再重跑两个会话的变量对照。实机日志在 `.build/windows-remote/env-acceptance/windows-account-sandbox-e2e-ssh-shell.log`。
 
 ### Artifact Integrations
 
