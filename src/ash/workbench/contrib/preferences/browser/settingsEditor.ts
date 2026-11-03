@@ -43,10 +43,11 @@ import { DESKTOP_UPDATE_POLICY_SETTING, type DesktopUpdatePolicy } from '../../.
 import { localize } from '../../../../nls.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IAppServerRemoteAgentService } from '../../../services/remote/common/appServerRemoteAgentService.js';
+import { displayLanguageSetting } from './displayLanguageSetting.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { ILocaleService, LocalizationConfiguration } from '../../../services/localization/common/locale.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
-import type { IOpenSettingsOptions, ISelectSetting, ISetting } from '../../../services/preferences/common/preferences.js';
+import type { IOpenSettingsOptions, ISetting } from '../../../services/preferences/common/preferences.js';
 import { isSettingsEditorInput } from '../../../services/preferences/common/settingsEditorInput.js';
 import { configurationSettingBinding, DefaultSettings, SettingsEditorModel } from '../../../services/preferences/common/settingsModels.js';
 import type { SettingWidgetOptions } from './settingsWidgets.js';
@@ -723,34 +724,6 @@ export class SettingsEditor extends EditorPane implements IEditorPane {
 	private localizedGroupDescription(group: SettingsCategoryGroupDescriptor): string {
 		return this.localized(`groups.${group.id}.description`, group.description);
 	}
-}
-
-function displayLanguageSetting(setting: ISetting, locale: ILocaleService, languagePacks: ILanguagePackService, localization: ILocalizationService, configuration: IConfigurationService): ISelectSetting {
-	if (setting.valueType !== 'select') throw new TypeError('Display language requires a select setting');
-	return {
-		...setting,
-		get title() { return localization.translate('ash.settings', 'displayLanguage.select', 'Interface language'); },
-		get description() { return localization.translate('ash.settings', 'displayLanguage.description', 'Choose the language used by the Ash interface.'); },
-		get options() {
-			const options = languagePacks.catalogs
-				.map(catalog => ({ value: catalog.locale, label: catalog.localizedLanguageName }))
-				.sort((left, right) => left.value.localeCompare(right.value));
-			const preference = configuration.getValue<string>(LocalizationConfiguration.locale);
-			// A selected local resource remains valid after its Extensions package is removed.
-			if (!options.some(option => option.value === preference)) options.push({ value: preference, label: preference });
-			return options;
-		},
-		// The setting shows the next startup's preference while this UI keeps its active language.
-		binding: {
-			id: setting.id,
-			defaultValue: setting.configuration.defaultValue,
-			onDidChange: listener => configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(LocalizationConfiguration.locale)) { listener(); } }),
-			getValue: () => configuration.getValue(LocalizationConfiguration.locale),
-			isDefault: () => configuration.inspect(LocalizationConfiguration.locale).userLocalValue === undefined,
-			updateValue: value => locale.setLocale({ id: String(value), label: String(value) }),
-			resetValue: () => locale.clearLocalePreference(),
-		},
-	};
 }
 
 function localUpdatePolicySetting(setting: ISetting, configuration: IConfigurationService): ISetting {

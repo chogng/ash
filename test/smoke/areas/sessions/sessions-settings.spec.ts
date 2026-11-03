@@ -6,6 +6,28 @@ import { join } from 'node:path';
 import { Workbench } from '../../../automation/workbench.js';
 import { EditorGroup } from '../../../automation/editors.js';
 
+test('Sessions General settings switch the interface language after restart', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench, reloadWorkbench }) => {
+	let page = await workbench.openAgentsWindow(target.kind);
+	await page.getByRole('button', { name: 'Accounts', exact: true }).click();
+	await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
+	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+	await settings.getByRole('button', { name: 'General', exact: true }).click();
+	const language = settings.getByRole('combobox', { name: 'Interface language', exact: true });
+	await expect(language).toHaveText('English');
+	await language.press('Enter');
+	await page.getByRole('option', { name: '简体中文', exact: true }).click();
+	await expect(page.getByText('Restart Ash to use 简体中文?', { exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Later', exact: true }).click();
+	await expect(language).toHaveText('简体中文');
+
+	({ workbench } = await reloadWorkbench('quit'));
+	page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-sessions-activity-bottom button').last().click();
+	const settingsItem = page.getByRole('menuitem', { name: '设置', exact: true });
+	await settingsItem.click();
+	await expect(page.getByRole('combobox', { name: '界面语言', exact: true })).toHaveText('简体中文');
+});
+
 test('Sessions Settings command queries reuse search and restore saved values after reopening', async ({ application, target, workbench, runningApplication }, testInfo) => {
 	await workbench.quickaccess.runCommand('workbench.action.openGlobalKeybindingsFile');
 	const group = workbench.editors.groupAt(0);
