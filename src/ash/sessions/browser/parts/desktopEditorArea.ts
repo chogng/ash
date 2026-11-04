@@ -28,6 +28,7 @@ class ToolPartView extends WorkbenchPartView<DesktopEditorTool> implements ISeri
 	constructor(tool: DesktopEditorTool, private readonly editor: EditorPart, private readonly container: HTMLElement) {
 		super(tool, editor);
 		container.append(this.frame);
+		container.style.setProperty('--ash-sessions-editor-tool-inset', `${toolFrameInset}px`);
 		this.setFrameInsets(toolFrameInsets);
 	}
 	public override get element(): HTMLElement { return this.container; }

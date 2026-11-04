@@ -10,6 +10,7 @@ import { IImageEditorService } from '../../../../workbench/services/imageEditor/
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import './media/chatInput.css';
+import '../../chat/browser/media/chatInputCard.css';
 import '../../../common/theme.js';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
@@ -104,7 +105,8 @@ export class NewCoworkInputWidget extends ChatInputPart {
 			}),
 		}, [], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host' }, instantiationService, speechToText, voiceInputMode, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands, imageEditors, providedContexts);
 		this.draftNotifications = notifications;
-		this.element.classList.add('ash-sessions-cowork-input', 'floating-card');
+		this.element.classList.add('ash-sessions-cowork-input');
+		this.inputContainer.classList.add('ash-sessions-chat-input-card', 'floating-card', 'stacked');
 		this.element.classList.add('cowork-composer');
 		this.element.classList.toggle('embedded-composer', presentation === 'embedded');
 		const tipContainer = h(container.ownerDocument, 'div');

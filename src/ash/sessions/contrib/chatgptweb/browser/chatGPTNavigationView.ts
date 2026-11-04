@@ -32,6 +32,7 @@ import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 import { SessionLeadingIcon } from '../../../browser/ui/sessionLeadingIcon.js';
 import { SessionListRowRenderer, SessionListSection, SessionsListTree } from '../../sessions/browser/views/sessionsList.js';
 import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
+import { ASH_CHAT_SELECTED_CONTEXT } from '../../chat/common/constants.js';
 import '../../../../base/browser/ui/button/button.css';
 import './media/chatGPTNavigationView.css';
 
@@ -162,6 +163,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 			const top = scrollable.state.top;
 			const groups = this.groups(state);
 			const wanted = new Set(groups.map(group => group.key));
+			const showSelection = !contextKeys.getValue(ASH_CHAT_SELECTED_CONTEXT);
 			for (const [key] of this.sections) {
 				if (!wanted.has(key)) { this.sections.deleteAndDispose(key); }
 			}
@@ -171,7 +173,7 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 					view = this.sections.set(group.key, instantiationService.createInstance(ChatGPTNavigationGroup, document, group.key,
 						(collapsed?: boolean) => tree.setSectionCollapsed(group.key, collapsed), openConversation, focusConversation));
 				}
-				view.render(group, state);
+				view.render(group, state, showSelection);
 				return {
 					element: view.section.domNode,
 					children: view.section.children.map(element => ({ element })),
@@ -205,6 +207,8 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 				render(chat.state.get());
 			}
 		}));
+		const selectionKeys = new Set([ASH_CHAT_SELECTED_CONTEXT]);
+		this._register(contextKeys.onDidChangeContext(event => { if (event.affectsSome(selectionKeys)) render(chat.state.get()); }));
 		const window = getWindow(root);
 		chat.setNetworkAvailable(window.navigator.onLine);
 		chat.initialize();
@@ -303,7 +307,7 @@ class ChatGPTNavigationGroup extends Disposable {
 		if (this.menuRow) { this.contextMenus.hideContextMenu(); }
 	}
 
-	public render(group: ConversationGroup, state: ChatGPTState): void {
+	public render(group: ConversationGroup, state: ChatGPTState, showSelection: boolean): void {
 		const conversations = group.conversations;
 		if (conversations.length !== this.conversations.length || conversations.some((conversation, index) => conversation !== this.conversations[index])) {
 			this.rows.clear();
@@ -330,8 +334,8 @@ class ChatGPTNavigationGroup extends Disposable {
 			for (const button of row.element.querySelectorAll('button')) {
 				button.disabled = state.sending || state.managing || (state.busy && button !== row.titleButton);
 			}
-			row.element.classList.toggle('selected', selected);
-			if (selected) { row.titleButton.setAttribute('aria-current', 'page'); }
+			row.element.classList.toggle('selected', selected && showSelection);
+			if (selected && showSelection) { row.titleButton.setAttribute('aria-current', 'page'); }
 			else { row.titleButton.removeAttribute('aria-current'); }
 		}
 		this.section.update(group.title, this.sessionRows.map(row => row.element));

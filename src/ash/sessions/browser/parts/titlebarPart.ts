@@ -27,6 +27,7 @@ import { Event } from '../../../base/common/event.js';
 import { SideBarVisibleContext } from '../../../workbench/common/contextkeys.js';
 import { titleBarBackground } from '../../../workbench/common/theme.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { SHOW_CHAT_WORKSPACE_COMMAND } from '../../contrib/chat/common/constants.js';
 
 /** The titlebar surface to the right of the sidebar also backs the window controls. */
 export function getSessionsTitlebarBackground(theme: IColorTheme): string | undefined {
@@ -98,7 +99,7 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		modeHost.className = 'ash-sessions-workspace-mode';
 		left.append(modeHost);
 		this._register(instantiationService.createInstance(WindowModeControl, modeHost, activeMode, {
-			agents: environment.runtime === 'electron' ? 'sessions.show.chatgpt' : 'sessions.open.chat',
+			agents: environment.runtime === 'electron' ? SHOW_CHAT_WORKSPACE_COMMAND : 'sessions.open.chat',
 			code: 'sessions.open.code',
 		}));
 		const updateModeVisibility = (): void => {

@@ -11,13 +11,20 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import '../../../common/theme.js';
+import '../../../../workbench/contrib/chat/browser/widget/input/media/chatInputPicker.css';
 import './media/modelPickerWidget.css';
+
+interface AshModelAction {
+	readonly title: string;
+	run(): void;
+}
 
 /** Provider-owned values and actions. Unknown thinking capabilities are omitted. */
 export interface ModelPickerPresentation {
 	readonly models: readonly { readonly id: string; readonly title: string; }[];
 	readonly selectedModel: string;
 	readonly disabled: boolean;
+	readonly loadAshModels?: () => Promise<readonly AshModelAction[]>;
 	readonly thinking?: {
 		readonly levels: readonly { readonly id: string; readonly label: string; }[];
 		readonly selectedLevel: string;
@@ -45,7 +52,7 @@ export class ModelPickerWidget extends Disposable {
 		super();
 		this.button = h(container.ownerDocument, 'button');
 		this.button.type = 'button';
-		this.button.className = 'ash-sessions-model-picker';
+		this.button.className = 'ash-sessions-model-picker ash-chat-input-picker-button';
 		this.button.setAttribute('aria-expanded', 'false');
 		this.label = h(container.ownerDocument, 'span');
 		this.label.className = 'ash-sessions-model-picker-label';
@@ -79,7 +86,7 @@ export class ModelPickerWidget extends Disposable {
 		this.button.title = thinking ? localize('sessions.modelPicker.modelAndThinking', '{0} · {1}', model?.title ?? '', this.label.textContent) : modelLabel;
 		this.button.setAttribute('aria-label', thinking ? localize('sessions.modelPicker.chooseThinking', 'Thinking level: {0}. Model: {1}', this.label.textContent, model?.title ?? '') : modelLabel);
 		this.button.setAttribute('aria-haspopup', this.popup?.getAttribute('role') ?? (thinking ? 'dialog' : 'menu'));
-		this.button.disabled = presentation.disabled || !presentation.models.length;
+		this.button.disabled = presentation.disabled || (!presentation.models.length && !presentation.loadAshModels);
 		if (this.button.disabled || previous.models !== presentation.models) {
 			this.hide();
 		} else {
@@ -89,6 +96,12 @@ export class ModelPickerWidget extends Disposable {
 
 	public hide(): void {
 		if (this.popup) { this.views.hide(); }
+	}
+
+	public focus(): void { this.button.focus(); }
+
+	public setTabbable(tabbable: boolean): void {
+		this.button.tabIndex = tabbable ? 0 : -1;
 	}
 
 	private get thinking(): ModelPickerPresentation['thinking'] {
@@ -107,7 +120,6 @@ export class ModelPickerWidget extends Disposable {
 		this.popup = popup;
 		this.button.setAttribute('aria-controls', popup.id);
 		this.button.setAttribute('aria-expanded', 'true');
-		this.registerAccessibility(popup);
 		const surface = h(popup.ownerDocument, 'div');
 		surface.className = 'ash-sessions-model-picker-surface';
 		const pages = h(popup.ownerDocument, 'div');
@@ -137,7 +149,7 @@ export class ModelPickerWidget extends Disposable {
 			if (popup.isConnected) {
 				pages.style.height = `${(next === 'thinking' ? thinkingPage : modelsPage).offsetHeight}px`;
 				this.views.layout();
-				if (focus) { (next === 'thinking' ? thinking.focus() : models.focus()).focus({ preventScroll: true }); }
+				if (focus) { ((next === 'thinking' ? thinking.focus() : models.focus()) ?? popup).focus({ preventScroll: true }); }
 			}
 		};
 		const thinking = this.renderThinking(thinkingPage, event => setView('models', event.detail === 0));
@@ -146,6 +158,7 @@ export class ModelPickerWidget extends Disposable {
 			if (this.thinking) { setView('thinking', keyboard); }
 			else { this.hide(); }
 		});
+		this.registerAccessibility(popup, models.ashModelLabels);
 		this.popupResources.add(addDisposableListener(popup, 'keydown', event => {
 			if (event.target !== popup || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { return; }
 			const controls = (view === 'thinking' ? thinkingPage : modelsPage).querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)');
@@ -292,9 +305,10 @@ export class ModelPickerWidget extends Disposable {
 		return { focus: () => models, refresh };
 	}
 
-	private renderModels(popup: HTMLElement, select: (model: string, keyboard: boolean) => void): { focus(): HTMLElement; refresh(): void; } {
+	private renderModels(popup: HTMLElement, select: (model: string, keyboard: boolean) => void): { focus(): HTMLElement | undefined; refresh(): void; ashModelLabels(): readonly string[]; } {
+		const localModels = this.presentation.models;
 		const buttons: HTMLButtonElement[] = [];
-		for (const model of this.presentation.models) {
+		for (const model of localModels) {
 			const button = h(popup.ownerDocument, 'button');
 			button.type = 'button';
 			button.className = 'ash-sessions-model-picker-item';
@@ -314,29 +328,80 @@ export class ModelPickerWidget extends Disposable {
 			buttons.push(button);
 			this.popupResources.add(addDisposableListener(button, 'click', event => select(model.id, event.detail === 0)));
 		}
+		const items = [...buttons];
+		const ashModelLabels: string[] = [];
+		const loadAshModels = this.presentation.loadAshModels;
+		if (loadAshModels) {
+			const lifetime = this.popupResources.add(new DisposableStore());
+			const group = h(popup.ownerDocument, 'div');
+			group.setAttribute('role', 'group');
+			group.setAttribute('aria-label', 'Ash');
+			const heading = h(popup.ownerDocument, 'div');
+			heading.className = 'ash-sessions-model-picker-group-label';
+			heading.setAttribute('aria-hidden', 'true');
+			heading.textContent = 'Ash';
+			const status = h(popup.ownerDocument, 'div');
+			status.className = heading.className;
+			status.setAttribute('role', 'status');
+			status.textContent = localize('sessions.newChatModel.loadingAsh', 'Loading Ash models…');
+			group.append(heading, status);
+			popup.append(group);
+			void loadAshModels().then(models => {
+				if (lifetime.isDisposed) return;
+				status.hidden = models.length > 0;
+				status.textContent = models.length ? '' : localize('sessions.newChatModel.noAsh', 'No Ash models are enabled.');
+				for (const model of models) {
+					const button = h(popup.ownerDocument, 'button');
+					button.type = 'button';
+					button.className = 'ash-sessions-model-picker-item';
+					button.setAttribute('role', 'menuitem');
+					button.tabIndex = -1;
+					button.title = model.title;
+					const label = h(popup.ownerDocument, 'span');
+					label.className = 'ash-sessions-model-picker-label';
+					label.textContent = model.title;
+					button.append(label);
+					group.append(button);
+					items.push(button);
+					ashModelLabels.push(model.title);
+					lifetime.add(addDisposableListener(button, 'click', () => { this.hide(); model.run(); }));
+				}
+				this.refreshPopup?.();
+			}, () => {
+				if (lifetime.isDisposed) return;
+				status.textContent = localize('sessions.newChatModel.ashUnavailable', 'Ash models are unavailable.');
+				this.refreshPopup?.();
+			});
+		}
 		this.popupResources.add(addDisposableListener(popup, 'keydown', event => {
-			const index = buttons.indexOf(popup.ownerDocument.activeElement as HTMLButtonElement);
+			if (!items.length) return;
+			const index = items.indexOf(popup.ownerDocument.activeElement as HTMLButtonElement);
 			let next: number;
 			switch (event.key) {
-				case 'ArrowDown': next = (index + 1) % buttons.length; break;
-				case 'ArrowUp': next = index < 0 ? buttons.length - 1 : (index - 1 + buttons.length) % buttons.length; break;
+				case 'ArrowDown': next = (index + 1) % items.length; break;
+				case 'ArrowUp': next = index < 0 ? items.length - 1 : (index - 1 + items.length) % items.length; break;
 				case 'Home': next = 0; break;
-				case 'End': next = buttons.length - 1; break;
+				case 'End': next = items.length - 1; break;
 				default: return;
 			}
 			event.preventDefault();
-			buttons.forEach((button, i) => button.tabIndex = i === next ? 0 : -1);
-			buttons[next]!.focus();
+			items.forEach((button, i) => button.tabIndex = i === next ? 0 : -1);
+			items[next]?.focus();
 		}));
 		return {
-			focus: () => buttons.find(button => button.getAttribute('aria-checked') === 'true') ?? buttons[0]!,
-			refresh: () => buttons.forEach((button, index) => {
-				const checked = this.presentation.models[index]!.id === this.presentation.selectedModel;
-				button.setAttribute('aria-checked', String(checked));
-				button.classList.toggle('checked', checked);
-				button.tabIndex = checked ? 0 : -1;
-				(button.lastElementChild as HTMLElement).style.visibility = checked ? 'visible' : 'hidden';
-			}),
+			focus: () => buttons.find(button => button.getAttribute('aria-checked') === 'true') ?? items[0],
+			ashModelLabels: () => ashModelLabels,
+			refresh: () => {
+				buttons.forEach((button, index) => {
+					const checked = localModels[index]!.id === this.presentation.selectedModel;
+					button.setAttribute('aria-checked', String(checked));
+					button.classList.toggle('checked', checked);
+					(button.lastElementChild as HTMLElement).style.visibility = checked ? 'visible' : 'hidden';
+				});
+				const focused = items.find(button => button === popup.ownerDocument.activeElement);
+				const tabStop = focused ?? buttons.find(button => button.getAttribute('aria-checked') === 'true') ?? items[0];
+				items.forEach(button => button.tabIndex = button === tabStop ? 0 : -1);
+			},
 		};
 	}
 
@@ -346,8 +411,9 @@ export class ModelPickerWidget extends Disposable {
 		}));
 	}
 
-	private registerAccessibility(popup: HTMLElement): void {
-		const help = localize('sessions.modelPicker.help', 'Up and Down Arrow move between the model heading and thinking slider. Left and Right Arrow adjust the focused slider; Home and End select its first and last levels. Activate the heading to open the model list, then use Up and Down Arrow, Home or End, and Enter or Space to choose a model. Selection returns to its thinking slider when available. Tab moves between controls. Escape closes the popup and returns to the picker.');
+	private registerAccessibility(popup: HTMLElement, ashModelLabels: () => readonly string[]): void {
+		const help = localize('sessions.modelPicker.help', 'Up and Down Arrow move between the model heading and thinking slider. Left and Right Arrow adjust the focused slider; Home and End select its first and last levels. Activate the heading to open the model list, then use Up and Down Arrow, Home or End, and Enter or Space to choose a model. Selection returns to its thinking slider when available. Tab moves between controls. Escape closes the popup and returns to the picker.')
+			+ (this.presentation.loadAshModels ? ' ' + localize('sessions.newChatModel.ashGroupHelp', 'Choosing a model in the Ash group opens a new Ash chat.') : '');
 		if (this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.ChatModelConfiguration) !== false) {
 			popup.setAttribute('aria-description', help);
 		}
@@ -363,6 +429,7 @@ export class ModelPickerWidget extends Disposable {
 								? localize('sessions.modelPicker.selected', '{0}, selected', model.title) : model.title),
 							...this.thinking?.levels.map(level => level.id === this.thinking?.selectedLevel
 								? localize('sessions.modelPicker.selected', '{0}, selected', level.label) : level.label) ?? [],
+							...(ashModelLabels().length ? ['Ash', ...ashModelLabels()] : []),
 						].join('\n'),
 						() => { if (focused.isConnected) { focused.focus(); } else { this.button.focus(); } },
 						AccessibilityVerbositySettingId.ChatModelConfiguration);

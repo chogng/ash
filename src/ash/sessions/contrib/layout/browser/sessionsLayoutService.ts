@@ -186,7 +186,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				? previousEntry.workspaceMode ?? 'chat'
 				: options?.source === 'restore' ? this.storage.get(activeEntryModeKey, StorageScope.WORKSPACE) : undefined;
 			if (!sharedWorkspace || !previousEntry) {
-				await this.conversation.setConversationKind(entry.content === 'documents' || (sharedWorkspace && retainedMode === 'code') ? 'code' : 'cowork');
+				await this.conversation.setConversationKind(entry.conversationKind ?? (entry.content === 'documents' || (sharedWorkspace && retainedMode === 'code') ? 'code' : 'cowork'));
 			}
 			if (this.isDisposed) { return; }
 			this.saveVisibility();

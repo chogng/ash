@@ -1,9 +1,13 @@
+import { createServer } from 'node:http';
 import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { Editor } from '../../../automation/editor.js';
+import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { simpleChatGPTModelCatalog } from '../../../fixtures/chatGPTModels.js';
 import { chatGPTAuthDocument } from '../../../fixtures/chatGPTAuth.js';
+import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
+import { connectProfile } from './sessionProfileFixture.js';
 
 declare global {
 	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; };
@@ -156,7 +160,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 
 	test.describe(`ChatGPT entry in ${locale}`, () => {
 		test.use({ electronWindowMode: 'active' });
-		test('opens by default, retains the existing login, streams followups and restores history and drafts', { tag: ['@electron-app-server'] }, async ({ application: initialApplication, workbench: initialWorkbench, target, restartWorkbench }, testInfo) => {
+		test('opens by default, retains the existing login, streams followups and restores history and drafts', { tag: ['@electron-app-server'] }, async ({ application: initialApplication, workbench: initialWorkbench, target, restartWorkbench, testWorkspace }, testInfo) => {
 			let application = initialApplication as ElectronApplication; let workbench = initialWorkbench;
 			if (locale === 'zh-CN') {
 				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
@@ -165,6 +169,35 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				const restarted = await restartWorkbench(); application = restarted.application as ElectronApplication; workbench = restarted.workbench;
 			}
 			await installService(application);
+			const model = { provider: 'custom-chat-routing-fixture', model: 'ash-routing-fixture' };
+			const ashRequests: string[] = [];
+			await using catalog = createServer(async (request, response) => {
+				if (request.method === 'GET') {
+					response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ data: [{ id: model.model }] }));
+					return;
+				}
+				const chunks: Buffer[] = [];
+				for await (const chunk of request) chunks.push(Buffer.from(chunk));
+				ashRequests.push((JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string; }).model);
+				response.writeHead(200, { 'Content-Type': 'text/event-stream' }).end('data: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Answer from Ash"},"finish_reason":null}]}\n\ndata: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
+			});
+			await new Promise<void>(resolve => catalog.listen(0, '127.0.0.1', resolve));
+			const address = catalog.address();
+			if (!address || typeof address === 'string') throw new Error('Ash model fixture has no port');
+			const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+			try {
+				const config = await connection.client.request(APP_SERVER_METHODS['config/read'], {});
+				await connection.client.request(APP_SERVER_METHODS['provider/configure'], {
+					commandId: 'chat-routing-fixture', expectedRevision: config.revision, config: {
+						connection: model.provider, provider: model.provider, baseUrl: `http://127.0.0.1:${address.port}/v1`,
+						custom: { name: 'Ash routing fixture', protocol: 'chatCompletions', order: 0, contextWindow: 272_000 },
+						modelContext: { [model.model]: { contextWindow: 272_000 } },
+					},
+				});
+				await connection.client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: model.provider, apiKey: 'isolated-fixture-key' });
+			} finally { await connection.close(); }
+			const settings = await readUserSettings(workbench.page);
+			await writeUserSettings(workbench.page, JSON.stringify({ ...JSON.parse(settings.content), 'models.hidden': [{ ...model, visible: true }] }), settings.revision);
 			const page = await workbench.openAgentsWindow(target.kind); const commands = new QuickAccess(page);
 			await expect(page.locator('[data-action-id="sessions.open.chatgpt"]')).toHaveCount(0);
 			await expect(page.locator('[data-action-id="sessions.newSession"] button:not([aria-current])')).toBeVisible();
@@ -173,7 +206,54 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const input = editor.getByRole('textbox', { name: locale === 'en' ? 'Ask ChatGPT' : '询问 ChatGPT', exact: true });
 			const composer = new Editor(editor);
 			await expect(input).toBeEditable();
-			await composer.waitForEditorFocus(); await composer.waitForTypeInEditor('Hello from native UI');
+			await composer.waitForEditorFocus();
+			await composer.waitForTypeInEditor('Hello from native UI');
+			const cardStyle = (element: HTMLElement) => {
+				const style = getComputedStyle(element);
+				return { padding: style.padding, radius: style.borderRadius, background: style.backgroundColor, grid: style.gridTemplateAreas, height: style.height };
+			};
+			const chatGPTCard = editor.locator('.ash-chat-input-container.ash-chat-input-adaptive');
+			const chatGPTCardStyle = await chatGPTCard.evaluate(cardStyle);
+			const chatGPTCardBounds = await chatGPTCard.boundingBox();
+			await editor.locator('.ash-sessions-model-picker').press('ArrowDown');
+			const modelMenu = page.getByRole('menu', { name: locale === 'en' ? 'Choose model' : '选择模型', exact: true });
+			await expect(modelMenu.getByRole('menuitemradio', { name: 'Fixture model', exact: true })).toBeVisible();
+			await modelMenu.getByRole('group', { name: 'Ash', exact: true }).getByRole('menuitem', { name: model.model, exact: true }).click();
+			const mode = page.locator('.ash-window-mode-control');
+			const chatMode = mode.getByRole('button', { name: locale === 'en' ? 'Chat / Agents' : '聊天 / Agents', exact: true });
+			const ash = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+			const ashComposer = new Editor(ash);
+			await ashComposer.waitForEditorContents(text => text === 'Hello from native UI');
+			const ashCard = ash.locator('.ash-chat-input-container.ash-chat-input-adaptive');
+			await expect.poll(() => ashCard.evaluate(cardStyle)).toEqual(chatGPTCardStyle);
+			const ashCardBounds = await ashCard.boundingBox();
+			for (const dimension of ['width', 'x', 'y'] as const) {
+				expect(Math.abs(ashCardBounds![dimension] - chatGPTCardBounds![dimension]), dimension).toBeLessThanOrEqual(2);
+			}
+			await expect(chatMode).toHaveAttribute('aria-pressed', 'true');
+			await expect(ash.locator('.ash-chat-input-model-action')).toHaveText(model.model);
+			const ashDraftId = await ash.getAttribute('data-untitled-session-id');
+			expect(ashDraftId).toBeTruthy();
+			await ash.locator('.ash-chat-input-model-action').press('ArrowDown');
+			await page.getByRole('dialog', { name: locale === 'en' ? 'Choose a chat model' : '选择聊天模型', exact: true })
+				.getByText(locale === 'en' ? 'New ChatGPT Chat with Model…' : '选择模型新建 ChatGPT 对话…', { exact: true }).click();
+			await expect(page.getByRole('dialog', { name: locale === 'en' ? 'Choose a model for a new chat' : '选择新对话的模型', exact: true })).toBeVisible();
+			await commands.select('Fixture model');
+			await expect(editor).toBeVisible();
+			await composer.waitForEditorContents(text => text === 'Hello from native UI');
+			const sidebar = page.locator('.ash-chatgpt-navigation');
+			await sidebar.getByRole('button', { name: 'Ash', exact: true }).click();
+			await sidebar.locator('.ash-sessions-list .ash-sessions-list-item').getByText(locale === 'en' ? /\(draft\)/ : /（草稿）/).click();
+			await expect(ash).toHaveAttribute('data-untitled-session-id', ashDraftId!);
+			await ashComposer.waitForEditorContents(text => text === 'Hello from native UI');
+			await expect(chatMode).toHaveAttribute('aria-pressed', 'true');
+			await ashComposer.waitForEditorFocus();
+			await page.keyboard.press('Enter');
+			await expect(ash).toContainText('Answer from Ash');
+			expect(ashRequests).toEqual([model.model]);
+			await commands.runCommand('sessions.open.chatgpt');
+			await expect(editor).toBeVisible();
+			expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(0);
 			await editor.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
 			const answer = editor.locator('.ash-chatgpt-turn.assistant').last();
 			await expect(answer).toContainText('First chunk');

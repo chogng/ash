@@ -1,4 +1,3 @@
-import type { IChatListItem } from '../../common/model/chatViewModel.js';
 import type { IChangesStats } from '../../../../browser/changesStatsWidget.js';
 
 interface PromptFileDiff {
@@ -12,15 +11,20 @@ export interface PromptTurnChanges extends IChangesStats {
 	review(): void | Promise<void>;
 }
 
+export interface PromptTimelinePrompt {
+	readonly id: string;
+	readonly text: string;
+}
+
 export interface PromptTick {
-	readonly prompt: IChatListItem;
+	readonly prompt: PromptTimelinePrompt;
 	readonly position: number;
 }
 
 /** Derives navigation from the same rendered rows the transcript uses for reveal. */
-export class PromptTimelineModel {
+export class PromptTimelineModel<T extends PromptTimelinePrompt = PromptTimelinePrompt> {
 	constructor(
-		readonly prompts: readonly IChatListItem[],
+		readonly prompts: readonly T[],
 		private readonly getRow: (id: string) => HTMLElement,
 	) { }
 
@@ -35,7 +39,7 @@ export class PromptTimelineModel {
 		return low;
 	}
 
-	bounds(prompt: IChatListItem): DOMRect {
+	bounds(prompt: PromptTimelinePrompt): DOMRect {
 		return this.getRow(prompt.id).getBoundingClientRect();
 	}
 

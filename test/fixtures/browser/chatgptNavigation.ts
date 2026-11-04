@@ -1,4 +1,5 @@
 import { ChatTimelineStorage } from '../../../src/ash/sessions/browser/chatTimelineStorage.js';
+import { ISessionProviderScopeService } from '../../../src/ash/sessions/browser/agentHost/sessionProviderScopeService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
@@ -140,6 +141,7 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	[IOpenerService, { open: async () => true } as unknown as IOpenerService],
 	[IEditorService, { focusActiveEditor: () => widget.focus() } as unknown as IEditorService],
 	[IAgentThreadService, {} as IAgentThreadService],
+	[ISessionProviderScopeService, { getProviderScope: () => { throw new Error('This fixture has no Ash model provider'); } } as unknown as ISessionProviderScopeService],
 	[IThemeService, theme],
 	[IContextViewService, resources.add(new BrowserContextViewService(document.body))],
 	[IVoiceCodeTranscriptionBackendService, dictation ? createTestDictationBackend(resources, dictation) : undefined],

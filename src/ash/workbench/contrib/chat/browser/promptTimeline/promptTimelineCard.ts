@@ -17,7 +17,7 @@ export class PromptTimelineCard {
 	) { }
 
 	show(ticks: readonly PromptTick[]): void {
-		const prompts = ticks.map(tick => ({ tick, changes: this.actions.changes(tick.prompt) }));
+		const prompts = ticks.map(tick => ({ tick, changes: this.actions.changes?.(tick.prompt.id) }));
 		const key = JSON.stringify(prompts.map(({ tick, changes }) => [
 			tick.prompt.id, tick.prompt.text, changes?.files, changes?.insertions, changes?.deletions,
 			this.showFiles ? changes?.fileDiffs.map(file => file.id) : undefined,
@@ -37,7 +37,7 @@ export class PromptTimelineCard {
 			reveal.className = 'ash-prompt-timeline-jump';
 			reveal.textContent = promptLabel(tick);
 			reveal.title = reveal.textContent;
-			reveal.onclick = () => { this.close(); this.actions.reveal(tick.prompt); };
+			reveal.onclick = () => { this.close(); this.actions.reveal(tick.prompt.id); };
 			row.append(reveal);
 			if (changes) {
 				const review = document.createElement('button');
@@ -54,7 +54,7 @@ export class PromptTimelineCard {
 				removed.className = 'ash-changes-stats-removed';
 				removed.textContent = `−${changes.deletions}`;
 				review.append(added, document.createTextNode(' '), removed);
-				review.onclick = () => { this.close(); void this.actions.changes(tick.prompt)?.review(); };
+				review.onclick = () => { this.close(); void this.actions.changes?.(tick.prompt.id)?.review(); };
 				row.append(review);
 			}
 			const files = this.showFiles ? changes?.fileDiffs ?? [] : [];
@@ -70,7 +70,7 @@ export class PromptTimelineCard {
 					button.title = file.path;
 					button.onclick = () => {
 						this.close();
-						this.actions.changes(tick.prompt)?.fileDiffs.find(candidate => candidate.id === file.id)?.review();
+						this.actions.changes?.(tick.prompt.id)?.fileDiffs.find(candidate => candidate.id === file.id)?.review();
 					};
 					changes.append(button);
 				}

@@ -4,15 +4,22 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import type { IWorkbenchContribution } from '../../../../workbench/common/contributions.js';
 import { EditorInputCapabilities } from '../../../../workbench/common/editor.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { ASH_CHAT_SELECTED_CONTEXT, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../chat/common/constants.js';
 import { IChatGPTService, chatGPTNavigationContainerId } from './chatGPTService.js';
 import { ISessionsSearchService } from '../../search/browser/searchService.js';
 import type { SearchResult } from '../../search/browser/searchModel.js';
 
 export const chatGPTScrollOptimization = 'sessions.chatgpt.optimizeScrolling';
+const chatBackendKey = 'sessions.chat.lastBackend';
+const newAshChatCommand = 'sessions.chat.newAsh';
 
 export class ChatGPTWebContribution extends Disposable implements IWorkbenchContribution {
 	public static readonly ID = 'sessions.chatgpt.web';
@@ -21,11 +28,12 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 		@IChatGPTService chat: IChatGPTService,
 		@ISessionsSearchService search: ISessionsSearchService,
 		@IEditorService editors: IEditorService,
+		@IStorageService storage: IStorageService,
 	) {
 		super();
-		const showChat = (source?: unknown) => {
+		const showChat = async (source?: unknown) => {
 			chat.initialize();
-			return layout.openEntry({
+			await layout.openEntry({
 				id: 'chatgpt', activityContext: 'sessions.activity.chatgptSelected', content: 'editor',
 				sidebarContainerId: chatGPTNavigationContainerId, showEditorTabs: false,
 				useConversationBackground: true,
@@ -35,6 +43,15 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 				},
 				restoreCommand: 'sessions.show.chatgpt', newSessionCommand: 'sessions.chatgpt.newChat', focus: 'editor',
 			}, undefined, source === 'restore' ? { source } : undefined);
+			storage.store(chatBackendKey, 'chatgpt', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		};
+		const showAsh = async (source?: unknown) => {
+			await layout.openEntry({
+				id: 'ashChat', workspaceMode: 'chat', activityContext: ASH_CHAT_SELECTED_CONTEXT,
+				content: 'conversation', conversationKind: 'code', sidebarContainerId: chatGPTNavigationContainerId,
+				restoreCommand: SHOW_ASH_CHAT_COMMAND, newSessionCommand: newAshChatCommand, focus: 'conversation',
+			}, undefined, source === 'restore' ? { source } : undefined);
+			storage.store(chatBackendKey, 'ash', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		};
 		this._register(search.registerSource(derived<readonly SearchResult[]>(reader => {
 			const state = chat.state.read(reader);
@@ -58,6 +75,12 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 		};
 		this._register(CommandsRegistry.register('sessions.chatgpt.newChat', newChat));
 		this._register(CommandsRegistry.register('sessions.show.chatgpt', (_accessor, source) => showChat(source)));
+		this._register(CommandsRegistry.register(SHOW_ASH_CHAT_COMMAND, (_accessor, source) => showAsh(source)));
+		this._register(CommandsRegistry.register(SHOW_CHAT_WORKSPACE_COMMAND, () => storage.get(chatBackendKey, StorageScope.WORKSPACE) === 'ash' ? showAsh() : showChat()));
+		this._register(CommandsRegistry.register(newAshChatCommand, accessor => {
+			accessor.get(ISessionsService).openNewSession(undefined, { providerId: LOCAL_AGENT_HOST_PROVIDER_ID });
+			accessor.get(ILayoutService).focus();
+		}));
 		this._register(CommandsRegistry.register('sessions.open.new', async (_accessor, source) => {
 			if (source !== 'restore') { chat.newChat(); }
 			await showChat(source);

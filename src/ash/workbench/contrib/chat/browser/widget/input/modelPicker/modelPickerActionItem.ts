@@ -8,6 +8,7 @@ import { ModelPickerWidget } from './modelPickerWidget.js';
 
 export interface IModelPickerDelegate {
 	readonly configureInMenu?: boolean;
+	readonly alternateModelAction?: IAction;
 	readonly onDidChangePresentation: Event<void>;
 	getModels(): readonly ModelCatalogEntry[];
 	getSelectedModel(): ModelRef | undefined;

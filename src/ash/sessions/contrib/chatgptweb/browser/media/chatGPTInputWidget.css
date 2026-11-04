@@ -1,16 +1,3 @@
-.ash-chatgpt-dictation.active {
-	background: var(--ash-toolbar-hoverBackground);
-	outline: var(--ash-strokeThickness) solid var(--ash-foreground);
-	outline-offset: -1px;
-}
-
-.ash-chatgpt-dictation-preview {
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label1);
-	white-space: pre-wrap;
-	overflow-wrap: anywhere;
-}
-
 .ash-chatgpt-input-attachments {
 	display: flex;
 	flex-wrap: wrap;

@@ -384,7 +384,7 @@ test('ChatGPT dictation inserts text at the cursor and cancels on navigation wit
 	const stop = page.getByRole('button', { name: 'Stop dictation', exact: true });
 	await expect(stop).toHaveAttribute('aria-pressed', 'true');
 	await page.evaluate(() => window.ashChatGPTIntegration.dictate('interim speech', false));
-	await expect(page.locator('.ash-chatgpt-dictation-preview')).toHaveText('interim speech');
+	await expect(page.locator('.ash-chatgpt-widget .ash-chat-dictation-preview')).toHaveText('interim speech');
 	await expectDraft(page, 'Please explain');
 	await page.evaluate(() => window.ashChatGPTIntegration.dictate('First ', true));
 	await stop.click();
@@ -397,7 +397,7 @@ test('ChatGPT dictation inserts text at the cursor and cancels on navigation wit
 	await input.press('Escape');
 	await expect(mic).toHaveAttribute('aria-pressed', 'false');
 	await expectDraft(page, 'First Please explain');
-	await expect(page.locator('.ash-chatgpt-dictation-preview')).toBeHidden();
+	await expect(page.locator('.ash-chatgpt-widget .ash-chat-dictation-preview')).toBeHidden();
 	await mic.click();
 	await expect(stop).toHaveAttribute('aria-pressed', 'true');
 	await page.evaluate(() => window.ashChatGPTIntegration.newChat());

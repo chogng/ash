@@ -1,17 +1,21 @@
 import { ChatCoworkTaskContent } from './chatCoworkTaskContent.js';
-import { addDisposableListener } from '../../../../base/browser/dom.js';
-import { observeElementSize } from '../../../../base/browser/observer.js';
+import { addDisposableListener, getWindow } from '../../../../base/browser/dom.js';
+import { observeElementSize, observeResize } from '../../../../base/browser/observer.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { type IRenderedMarkdown } from '../../../../base/browser/markdownRenderer.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
+import { equals } from '../../../../base/common/arrays.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ChatContentMarkdownRenderer } from '../../../../workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
 import { wrapTablesWithScrollable } from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownTableScrolling.js';
+import { PromptTimelineModel } from '../../../../workbench/contrib/chat/browser/promptTimeline/promptTimelineModel.js';
+import { PromptTimelineWidgetContrib } from '../../../../workbench/contrib/chat/browser/promptTimeline/promptTimelineWidgetContrib.js';
+import '../../../../workbench/contrib/chat/browser/widget/media/chatListWidget.css';
 import type { ChatGPTMessage, ChatGPTResource } from './chatGPTClient.js';
 import { ChatAttachmentsContentPart, type IChatAttachmentResource } from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatAttachmentsContentPart.js';
 import { IChatGPTService, pendingCreationStatus, type ChatGPTState } from './chatGPTService.js';
@@ -36,6 +40,8 @@ export class ChatGPTWidget extends Disposable {
 	private renderedLocalConversationId: string | undefined;
 	private readonly scroll = this.element('div', 'ash-chatgpt-scroll');
 	private readonly messages = this.element('div', 'ash-chatgpt-messages');
+	private readonly promptTimeline: PromptTimelineWidgetContrib;
+	private promptModel = new PromptTimelineModel<ChatGPTMessage>([], id => this.rendered.get(id)!.element);
 	private readonly welcome = this.element('h1', 'ash-chatgpt-welcome');
 	private readonly input: ChatGPTInputWidget;
 	private readonly error = this.element('p', 'ash-chatgpt-error');
@@ -59,14 +65,20 @@ export class ChatGPTWidget extends Disposable {
 		this.markdownRenderer = this._register(instantiation.createInstance(ChatContentMarkdownRenderer));
 		root.className = 'ash-chatgpt-widget';
 		root.tabIndex = -1;
-		const main = this.element('main', 'ash-chatgpt-main');
+		const main = this.element('main', 'ash-chatgpt-main ash-chat-transcript-viewport ash-sessions-chat-content');
+		const transcript = this.element('div', 'ash-chatgpt-transcript');
+		transcript.append(this.scroll);
 		this.scroll.append(this.welcome, this.messages);
+		this.promptTimeline = this._register(instantiation.createInstance(PromptTimelineWidgetContrib, transcript, this.scroll, {
+			reveal: (id: string) => this.revealPrompt(id),
+		}, () => this.renderPromptTimeline()));
 		this.messages.setAttribute('role', 'log');
 		this.messages.setAttribute('aria-label', localize('sessions.chatgpt.conversation', 'Conversation'));
 		this.messages.setAttribute('aria-live', 'off');
 		this.listen(this.scroll, 'scroll', () => {
 			this.followOutput = this.atBottom();
 			if (this.followOutput) { this.jumpButton.hidden = true; }
+			this.updateActivePrompt();
 		});
 		this.jumpButton = this._register(new Button(main, {
 			...defaultButtonStyles,
@@ -81,14 +93,15 @@ export class ChatGPTWidget extends Disposable {
 		this.status.setAttribute('aria-live', 'polite');
 		const footer = this.element('div', 'ash-chatgpt-footer');
 		this.input = this._register(instantiation.createInstance(ChatGPTInputWidget, footer));
-		footer.append(this.error, this.status);
-		main.append(this.scroll, this.jumpButton, footer);
+		footer.prepend(this.error, this.status);
+		main.append(transcript, this.jumpButton, footer);
 		root.append(main);
 		this._register(observeElementSize(footer, ({ height }) => {
 			// Let messages scroll behind the composer, with room to reveal the last line.
 			main.style.setProperty('--ash-chatgpt-footer-height', `${height}px`);
 			if (this.followOutput) { this.scroll.scrollTop = this.scroll.scrollHeight; }
 		}));
+		this._register(observeResize([this.scroll, this.messages], () => this.renderPromptTimeline()));
 		this._register(autorun(reader => this.render(this.chat.state.read(reader))));
 		this._register(this.configuration.onDidChangeConfiguration(event => {
 			if ([NEW_SESSION_WELCOME_PHRASES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_MESSAGES_SETTING, 'accessibility.verbosity.newSessionWelcome'].some(key => event.affectsConfiguration(key))) {
@@ -115,10 +128,38 @@ export class ChatGPTWidget extends Disposable {
 		this.input.setVisible(visible);
 		for (const row of this.rendered.values()) row.attachments?.setVisible(visible);
 		this.renderWelcome(this.chat.state.get());
+		this.renderPromptTimeline();
 	}
 	public setScrollingOptimization(enabled: boolean): void { this.root.classList.toggle('optimize-scrolling', enabled); }
 	private atBottom(): boolean { return this.scroll.scrollHeight - this.scroll.scrollTop - this.scroll.clientHeight < 80; }
 	private roleLabel(role: ChatGPTMessage['role']): string { return role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT'; }
+
+	private renderPromptTimeline(): void {
+		const visible = this.visible && !this.messages.hidden;
+		this.updateActivePrompt();
+		const focused = this.root.ownerDocument.activeElement as HTMLElement | null;
+		const hadFocus = focused && this.promptTimeline.contains(focused);
+		this.promptTimeline.render(this.promptModel, visible);
+		if (visible && hadFocus && !focused.isConnected) { this.input.focus(); }
+	}
+
+	private updateActivePrompt(): void {
+		if (!this.visible || this.messages.hidden || this.promptModel.prompts.length < 2) { return; }
+		const inset = parseFloat(getWindow(this.scroll).getComputedStyle(this.scroll).scrollPaddingBlockStart) || 0;
+		const top = Math.ceil(this.scroll.getBoundingClientRect().top + inset);
+		const index = this.promptModel.firstPromptAfter(top);
+		const next = this.promptModel.prompts[index];
+		const current = next && this.promptModel.bounds(next).top <= top ? next : this.promptModel.prompts[index - 1];
+		this.promptTimeline.setActive(current?.id);
+	}
+
+	private revealPrompt(id: string): void {
+		const row = this.rendered.get(id)?.element;
+		if (!row) { return; }
+		this.followOutput = false;
+		row.focus({ preventScroll: true });
+		row.scrollIntoView({ block: 'start', inline: 'nearest' });
+	}
 
 	private renderWelcome(state: ChatGPTState): void {
 		// parentId identifies the service-owned draft until its first message. Changes
@@ -206,11 +247,15 @@ export class ChatGPTWidget extends Disposable {
 
 	private render(state: ChatGPTState): void {
 		const conversationChanged = state.localConversationId !== this.renderedLocalConversationId || state.conversationId !== this.renderedConversationId;
+		if (conversationChanged) {
+			this.promptTimeline.render(this.promptModel, false);
+		}
 		this.renderedLocalConversationId = state.localConversationId;
 		const follow = this.atBottom() || conversationChanged;
 		this.followOutput = follow;
 		this.renderedConversationId = state.conversationId;
 		const loading = state.loading?.kind === 'conversation' && (state.loading.id !== state.conversationId || !state.messages.length);
+		const loadingChanged = this.messages.hidden !== loading;
 		this.messages.hidden = loading;
 		this.root.classList.toggle('empty', !state.messages.length && !state.coworkTasks.length && !loading);
 		this.renderWelcome(state);
@@ -223,11 +268,15 @@ export class ChatGPTWidget extends Disposable {
 		const ids = new Set(state.messages.filter(message => !message.activity).map(message => message.id));
 		// One execution entry per user turn, derived from the service-owned record.
 		const groups = new Map<string, ChatGPTMessage[]>();
+		const prompts: ChatGPTMessage[] = [];
 		let group: ChatGPTMessage[] | undefined;
 		let latest: ChatGPTMessage | undefined;
 		for (const message of state.messages) {
 			if (message.activity || message.text.trim() || message.resources?.length) { latest = message; }
-			if (message.role === 'user') { group = undefined; }
+			if (message.role === 'user') {
+				group = undefined;
+				if (!message.activity) { prompts.push(message); }
+			}
 			if (message.activity) {
 				if (!group) { group = []; groups.set(message.id, group); }
 				group.push(message);
@@ -280,6 +329,7 @@ export class ChatGPTWidget extends Disposable {
 			if (!row) {
 				const element = this.element('article', `ash-chatgpt-turn ${message.role}`);
 				element.setAttribute('aria-label', this.roleLabel(message.role));
+				if (message.role === 'user') { element.tabIndex = -1; }
 				const body = this.element('div', 'ash-chatgpt-message-body');
 				element.append(body);
 				row = { element, body, resources: [], text: '' };
@@ -339,6 +389,11 @@ export class ChatGPTWidget extends Disposable {
 		for (const task of state.coworkTasks) if (!placedTasks.has(taskKey(task))) placeTask(task);
 		if (follow) { this.scroll.scrollTop = this.scroll.scrollHeight; }
 		else if (state.sending) { this.jumpButton.hidden = false; }
+		// Streaming replies can resize the viewport content without changing its prompt list.
+		if (conversationChanged || loadingChanged || !equals(this.promptModel.prompts, prompts, (a, b) => a.id === b.id && a.text === b.text)) {
+			this.promptModel = new PromptTimelineModel(prompts, id => this.rendered.get(id)!.element);
+			this.renderPromptTimeline();
+		}
 	}
 
 }

@@ -34,6 +34,25 @@ suite('modelPicker browser component', () => {
 		await expect(page.getByRole('menu')).toHaveCount(0);
 	});
 
+	test('Ash models appear after ChatGPT models and a keyboard selection opens the Ash route', async () => {
+		const { page } = browserTests;
+		await page.goto('/modelPicker.html');
+		await page.evaluate(() => window.ashModelPickerIntegration.configure({ ashModels: true }));
+		const picker = page.locator('.ash-sessions-model-picker');
+		await picker.press('ArrowDown');
+		const menu = page.getByRole('menu');
+		const ash = menu.getByRole('group', { name: 'Ash', exact: true }).getByRole('menuitem', { name: 'Ash fixture model', exact: true });
+		await expect(ash).toBeVisible();
+		await expect(ash).toHaveAttribute('title', 'Ash fixture model');
+		await expect(menu.getByRole('menuitemradio', { name: 'First model' })).toBeFocused();
+		await page.keyboard.press('End');
+		await expect(ash).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(page.getByRole('status', { name: 'Selection' })).toHaveText('ash');
+		await expect(menu).toHaveCount(0);
+		await expect(picker).toHaveText('First model');
+	});
+
 	test('Sessions thinking slider uses only supplied levels and its heading opens the model list', async function () {
 		const { page } = browserTests;
 		const testInfo = browserTests.info;

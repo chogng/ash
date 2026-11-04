@@ -25,6 +25,7 @@ import { SessionEnvironmentPicker } from './sessionEnvironmentPicker.js';
 import { SessionWorkspacePicker } from './sessionWorkspacePicker.js';
 import { refreshChatInputStack } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
 import './media/chatInput.css';
+import './media/chatInputCard.css';
 import '../../../common/theme.js';
 
 /** Owns the Code chat surface and its input while retaining the shared transcript and send pipeline. */
@@ -85,7 +86,8 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		const parent = this.input.element;
 		const inputContainer = this.input.inputContainerElement;
 		const footer = this.input.inputFooterElement;
-		parent.classList.add('ash-sessions-chat-input', 'floating-card', 'chat-composer');
+		parent.classList.add('ash-sessions-chat-input', 'chat-composer');
+		inputContainer.classList.add('ash-sessions-chat-input-card', 'floating-card');
 		const toolbar = this._register(instantiationService.createInstance(SessionChatInputToolbar, parent, () => this.input.focus()));
 		parent.insertBefore(toolbar.element, inputContainer);
 		const activities = this._register(instantiationService.createInstance(SessionBackgroundActivitiesControl, parent, model));

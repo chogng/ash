@@ -100,7 +100,7 @@ export class ChatListWidget extends DomWidget {
 	private readonly scrollToLatestHostObserver = this._register(new MutableDisposable());
 	private readonly transcript: HTMLDivElement;
 	private readonly stickyPrompt: PromptTimelineStickyHeader;
-	private promptModel = new PromptTimelineModel([], id => this.renderedItems.get(id)!.element);
+	private promptModel = new PromptTimelineModel<IChatListItem>([], id => this.renderedItems.get(id)!.element);
 	private readonly promptTimeline: PromptTimelineWidgetContrib | undefined;
 	private pinnedPrompt: IChatListItem | undefined;
 	private readonly layoutTrace: ChatLayoutTrace;
@@ -282,11 +282,18 @@ export class ChatListWidget extends DomWidget {
 			this.focus(prompt);
 			this.reveal(prompt);
 		}));
-		if (options.promptTimelineChanges) {
+		const promptTimelineChanges = options.promptTimelineChanges;
+		if (promptTimelineChanges) {
 			this.promptTimeline = this._register(instantiationService.createInstance(PromptTimelineWidgetContrib,
 				this.element, this.scrollable.scrollableElement, {
-				reveal: (prompt: IChatListItem) => { this.focus(prompt); this.reveal(prompt); },
-				changes: options.promptTimelineChanges,
+				reveal: (id: string) => {
+					const prompt = this.renderedItems.get(id)?.item;
+					if (prompt) { this.focus(prompt); this.reveal(prompt); }
+				},
+				changes: (id: string) => {
+					const prompt = this.renderedItems.get(id)?.item;
+					return prompt && promptTimelineChanges(prompt);
+				},
 			}, () => this.renderPromptTimeline()));
 		}
 

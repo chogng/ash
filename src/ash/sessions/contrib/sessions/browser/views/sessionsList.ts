@@ -65,8 +65,12 @@ interface SessionBucket {
 	readonly label: string;
 }
 
+export type SessionsListPresentation = 'chat' | 'code' | { readonly openCommand: string; readonly activeContext: string; };
+
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends DomWidget {
+	private readonly mode: 'chat' | 'code';
+	private readonly entry: Exclude<SessionsListPresentation, string> | undefined;
 	private readonly search: SessionsListSearch;
 	private readonly tree: SessionsListTree;
 	private syncingCollapse = false;
@@ -97,7 +101,7 @@ export class SessionsList extends DomWidget {
 
 	public get element(): HTMLElement { return this.domNode; }
 
-	constructor(container: HTMLElement, title: string, private readonly mode: 'chat' | 'code',
+	constructor(container: HTMLElement, title: string, presentation: SessionsListPresentation,
 		@ISessionsManagementService private readonly sessionService: ISessionsManagementService,
 		@ISessionsService private readonly viewService: ISessionsService,
 		@IGitHubService private readonly github: IGitHubService,
@@ -118,6 +122,8 @@ export class SessionsList extends DomWidget {
 		@IConfigurationService configuration?: IConfigurationService,
 	) {
 		super();
+		const mode = this.mode = typeof presentation === 'string' ? presentation : 'chat';
+		this.entry = typeof presentation === 'string' ? undefined : presentation;
 		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, 'section');
 		this.domNode.className = 'ash-sessions-list';
@@ -141,7 +147,11 @@ export class SessionsList extends DomWidget {
 			const row = [...this.list.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => !button.closest('[hidden]'));
 			row?.focus();
 		}));
-		this._register(listModel.registerTree(mode, () => this.readTree()));
+		if (!this.entry) this._register(listModel.registerTree(mode, () => this.readTree()));
+		else if (contextKeys) {
+			const keys = new Set([this.entry.activeContext]);
+			this._register(contextKeys.onDidChangeContext(event => { if (event.affectsSome(keys)) this.render(); }));
+		}
 		this.empty = h(ownerDocument, 'p');
 		this.empty.className = 'ash-sessions-empty';
 		this.projectError = h(ownerDocument, 'button', { className: 'ash-sessions-list-item' });
@@ -212,7 +222,7 @@ export class SessionsList extends DomWidget {
 		}));
 		headerActions.domNode.classList.add('ash-sessions-list-more');
 		const updateNavigation = (): void => {
-			const actions = menu.getActions().filter(([group]) => group === 'navigation').flatMap(([, actions]) => actions);
+			const actions = this.entry ? [] : menu.getActions().filter(([group]) => group === 'navigation').flatMap(([, actions]) => actions);
 			this.navigationActions.clear();
 			for (const action of actions) {
 				this.navigationActions.set(action.id, action);
@@ -241,6 +251,13 @@ export class SessionsList extends DomWidget {
 		this.render();
 		this._register(projectService.onDidChange(() => { void this.loadProjects(); }));
 		void this.loadProjects();
+	}
+
+	private openRow(open: () => void): void {
+		if (!this.entry || this.contextKeys?.getValue(this.entry.activeContext)) { open(); return; }
+		void this.commands.executeCommand(this.entry.openCommand).then(() => {
+			if (!this.isDisposed) open();
+		}).catch(error => this.notifications.error(String(error)));
 	}
 
 	private getHeaderActions(contributed: readonly MenuActionGroup[]): readonly IAction[] {
@@ -652,7 +669,8 @@ export class SessionsList extends DomWidget {
 		const pinned: HTMLElement[] = [];
 		const recent: HTMLElement[] = [];
 		const remaining = new Map<string, HTMLElement>();
-		const activeSelection = this.customViews.activeCustomView.get() ? undefined : this.viewService.activeSelection;
+		const activeSelection = this.customViews.activeCustomView.get() || this.entry && !this.contextKeys?.getValue(this.entry.activeContext)
+			? undefined : this.viewService.activeSelection;
 		const itemFor = (key: string, icon = this.mode === 'code' ? Lxicon.chat : undefined, conversation = false): SessionListItem => {
 			present.add(key);
 			let item = this.items.get(key);
@@ -698,7 +716,7 @@ export class SessionsList extends DomWidget {
 			if (!this.search.matches(session.title)) continue;
 			const selected = activeSelection?.kind === 'untitled' && activeSelection.session.untitledSessionId === session.untitledSessionId;
 			const item = itemFor(`untitled:${session.untitledSessionId}`);
-			item.update(localize('sessions.list.draft', '{0} (draft)', session.title || localize('chat.sessions.new', 'New Session')), selected, () => this.viewService.openUntitledSession(session.untitledSessionId));
+			item.update(localize('sessions.list.draft', '{0} (draft)', session.title || localize('chat.sessions.new', 'New Session')), selected, () => this.openRow(() => this.viewService.openUntitledSession(session.untitledSessionId)));
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'untitled', session }, item, anchor));
 			if (session.forkSource) {
 				const id = session.forkSource.sessionId;
@@ -728,7 +746,7 @@ export class SessionsList extends DomWidget {
 			const item = itemFor(`session:${session.sessionId}`, this.mode === 'code' ? Lxicon.chat : Lxicon.cowork, true);
 			item.leadingIcon?.setStatus(session.management?.status === 'working' ? this.workingIcon : undefined);
 			item.target = { sessionId: session.sessionId, threadId: thread.threadId };
-			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, () => this.viewService.openSession(session.sessionId, thread.threadId), session.management);
+			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, () => this.openRow(() => this.viewService.openSession(session.sessionId, thread.threadId)), session.management);
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor));
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
 			item.updateSummary(this.hoverService, getSessionSummaryHoverData(session, thread));
@@ -738,7 +756,7 @@ export class SessionsList extends DomWidget {
 				child.target = { sessionId: session.sessionId, threadId: chat.threadId };
 				child.domNode.draggable = true;
 				child.update(chat.title || localize('sessions.list.untitledChat', 'Untitled Chat'), current?.threadId === chat.threadId,
-					() => this.viewService.openSession(session.sessionId, chat.threadId), chat.management);
+					() => this.openRow(() => this.viewService.openSession(session.sessionId, chat.threadId)), chat.management);
 				child.updateSummary(this.hoverService, getSessionSummaryHoverData(session, chat));
 				child.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: chat.threadId } }, child, anchor));
 				return child.domNode;

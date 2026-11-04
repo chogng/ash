@@ -79,7 +79,7 @@ suite('Chat transcript navigation', () => {
 		await marks.last().hover();
 		await expect(secondPrompt).toBeVisible();
 		await expect(secondPrompt.locator('..')).toHaveClass(/\bpreview\b/);
-		await page.locator('[data-item-id="second"]').hover();
+		await page.mouse.move(0, 0);
 		await expect(panel).toBeHidden();
 		await marks.last().hover();
 		await secondPrompt.click();

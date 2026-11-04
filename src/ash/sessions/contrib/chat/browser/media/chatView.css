@@ -1,8 +1,4 @@
 .ash-code-conversation {
-	/* Center the content within the pane while the scroll viewport spans it. */
-	--ash-sessions-chat-content-inset: calc(
-		var(--ash-spacing-size240) + max(0px, (100% - 950px) / 2)
-	);
 	display: flex;
 	position: relative;
 	flex: 1;
@@ -28,71 +24,6 @@
 
 .ash-code-conversation .ash-chat-list-widget > .ash-chat-sticky-prompt {
 	inset-inline: var(--ash-sessions-chat-content-inset);
-}
-
-.ash-code-conversation .ash-prompt-timeline-panel {
-	box-sizing: border-box;
-	inline-size: min(18rem, 65vw);
-	border-radius: var(--ash-cornerRadius-xLarge);
-	background: var(--ash-menu-background);
-	color: var(--ash-menu-foreground);
-	box-shadow: 0 2px 8px
-		color-mix(in srgb, var(--ash-widget-shadow) 30%, transparent);
-	font-size: var(--ash-fontSize-body1);
-	line-height: 1.4;
-}
-
-.ash-code-conversation .ash-prompt-timeline-row + .ash-prompt-timeline-row {
-	margin-block-start: var(--ash-spacing-size20);
-}
-
-.ash-code-conversation .ash-prompt-timeline-row :is(button, summary) {
-	box-sizing: border-box;
-	min-block-size: var(--ash-spacing-size280);
-	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
-	border-color: transparent;
-	border-radius: var(--ash-cornerRadius-large);
-	background: transparent;
-	color: inherit;
-	cursor: pointer;
-}
-
-.ash-code-conversation .ash-prompt-timeline-row > details {
-	margin-inline-start: var(--ash-spacing-size80);
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label1);
-}
-
-.ash-code-conversation .ash-prompt-timeline-row summary {
-	list-style-position: inside;
-	padding-block: var(--ash-spacing-size60);
-}
-
-.ash-code-conversation .ash-prompt-timeline-row > button[aria-current] {
-	background: var(--ash-list-inactiveSelectionBackground);
-	color: inherit;
-}
-
-.ash-code-conversation .ash-prompt-timeline-row :is(button, summary):hover,
-.ash-code-conversation
-	.ash-prompt-timeline-row.preview
-	> .ash-prompt-timeline-jump {
-	background: var(--ash-list-hoverBackground);
-}
-
-:where([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
-	.ash-code-conversation
-	.ash-prompt-timeline-panel {
-	border-color: var(--ash-contrastBorder);
-	box-shadow: none;
-}
-
-@media (pointer: coarse) {
-	.ash-code-conversation .ash-prompt-timeline-row :is(button, summary) {
-		min-block-size: calc(
-			var(--ash-spacing-size400) + var(--ash-spacing-size40)
-		);
-	}
 }
 
 .ash-session-side-chat-editor {

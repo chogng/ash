@@ -54,32 +54,6 @@
 	align-items: center;
 }
 
-.ash-prompt-timeline-row > details {
-	grid-column: 1 / -1;
-}
-
-.ash-prompt-timeline-row button {
-	border: var(--ash-strokeThickness) solid
-		var(--ash-contrastBorder, transparent);
-	border-radius: var(--ash-cornerRadius-small);
-	background: var(--ash-editor-widgetBackground);
-	color: var(--ash-foreground);
-	font: inherit;
-	cursor: pointer;
-}
-
-.ash-prompt-timeline-row .ash-prompt-timeline-review {
-	display: flex;
-	inline-size: auto;
-	flex-wrap: nowrap;
-	font-size: var(--ash-fontSize-label1);
-	font-variant-numeric: tabular-nums;
-}
-
-.ash-prompt-timeline-review:hover {
-	background: var(--ash-list-hoverBackground);
-}
-
 .ash-prompt-timeline-gutter > summary {
 	display: grid;
 	place-items: center;
@@ -129,15 +103,20 @@
 	position: absolute;
 	inset-block-start: 0;
 	inset-inline-start: 100%;
-	inline-size: min(16rem, 65vw);
+	box-sizing: border-box;
+	inline-size: min(18rem, 65vw);
 	max-block-size: min(22rem, 50vh);
 	overflow: auto;
 	padding: var(--ash-spacing-size60);
 	border: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, var(--ash-border));
-	border-radius: var(--ash-cornerRadius-small);
-	background: var(--ash-editor-widgetBackground);
-	color: var(--ash-foreground);
+	border-radius: var(--ash-cornerRadius-xLarge);
+	background: var(--ash-menu-background);
+	color: var(--ash-menu-foreground);
+	box-shadow: 0 2px 8px
+		color-mix(in srgb, var(--ash-widget-shadow) 30%, transparent);
+	font-size: var(--ash-fontSize-body1);
+	line-height: 1.4;
 }
 
 .ash-prompt-timeline-gutter .ash-prompt-timeline-panel {
@@ -149,27 +128,77 @@
 	inset-inline: auto 100%;
 }
 
+.ash-prompt-timeline-row + .ash-prompt-timeline-row {
+	margin-block-start: var(--ash-spacing-size20);
+}
+
+.ash-prompt-timeline-row :is(button, summary) {
+	box-sizing: border-box;
+	min-block-size: var(--ash-spacing-size280);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	border-radius: var(--ash-cornerRadius-large);
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+}
+
 .ash-prompt-timeline-row button {
 	display: block;
 	inline-size: 100%;
 	overflow: hidden;
-	padding: var(--ash-spacing-size40) var(--ash-spacing-size60);
+	border: var(--ash-strokeThickness) solid transparent;
+	font: inherit;
 	text-align: start;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.ash-prompt-timeline-mark[aria-current],
-.ash-prompt-timeline-row button[aria-current] {
+.ash-prompt-timeline-row .ash-prompt-timeline-review {
+	display: flex;
+	inline-size: auto;
+	flex-wrap: nowrap;
+	font-size: var(--ash-fontSize-label1);
+	font-variant-numeric: tabular-nums;
+}
+
+.ash-prompt-timeline-row > details {
+	grid-column: 1 / -1;
+	margin-inline-start: var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-prompt-timeline-row summary {
+	list-style-position: inside;
+	padding-block: var(--ash-spacing-size60);
+}
+
+.ash-prompt-timeline-mark[aria-current] {
 	background: var(--ash-list-activeSelectionBackground);
 	color: var(--ash-list-activeSelectionForeground);
 }
 
-.ash-prompt-timeline-gutter
-	.ash-prompt-timeline-row.preview
-	> .ash-prompt-timeline-jump,
-.ash-prompt-timeline-gutter .ash-prompt-timeline-row > button:hover {
+.ash-prompt-timeline-row > button[aria-current] {
+	background: var(--ash-list-inactiveSelectionBackground);
+}
+
+.ash-prompt-timeline-row :is(button, summary):hover,
+.ash-prompt-timeline-row.preview > .ash-prompt-timeline-jump {
 	background: var(--ash-list-hoverBackground);
+}
+
+:where([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-prompt-timeline-panel {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
+@media (pointer: coarse) {
+	.ash-prompt-timeline-row :is(button, summary) {
+		min-block-size: calc(
+			var(--ash-spacing-size400) + var(--ash-spacing-size40)
+		);
+	}
 }
 
 .ash-prompt-timeline-gutter :focus-visible,

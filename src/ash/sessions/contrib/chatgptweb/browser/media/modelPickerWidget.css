@@ -1,24 +1,14 @@
-.ash-sessions-model-picker {
-	display: inline-flex;
+.ash-sessions-model-picker.ash-chat-input-picker-button {
 	flex: 0 1 auto;
-	align-items: center;
-	justify-content: center;
 	gap: var(--ash-spacing-size80);
-	min-width: 0;
-	max-width: 30%;
-	height: 32px;
-	min-height: 32px;
-	padding: 0 var(--ash-spacing-size120);
+	height: var(--ash-toolbar-actionSize, var(--ash-spacing-size280));
+	min-height: var(--ash-toolbar-actionSize, var(--ash-spacing-size280));
+	padding: 0 var(--ash-spacing-size80);
 	border: 0;
 	border-radius: var(--ash-cornerRadius-circle);
-	background: var(--ash-button-secondaryBackground);
-	color: var(--ash-description-foreground);
-	font-family: inherit;
-	font-size: var(--ash-fontSize-label1);
-	cursor: pointer;
+	font-size: var(--ash-fontSize-body1);
 }
 
-.ash-sessions-model-picker:hover,
 .ash-sessions-model-picker[aria-expanded="true"] {
 	background: var(--ash-toolbar-hoverBackground);
 	color: var(--ash-foreground);
@@ -149,6 +139,12 @@
 .ash-sessions-model-picker-item {
 	justify-content: space-between;
 	text-align: start;
+}
+
+.ash-sessions-model-picker-group-label {
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body2);
 }
 
 .ash-sessions-model-picker-heading {

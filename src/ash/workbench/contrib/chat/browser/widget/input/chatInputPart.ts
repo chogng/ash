@@ -40,7 +40,7 @@ import { ChatPasteProvidersFeature } from './editor/chatPasteProviders.js';
 import { AgentHostInputCompletions, type AgentHostInputCompletionHost } from './editor/agentHostInputCompletions.js';
 import { ChatDragAndDrop } from '../chatDragAndDrop.js';
 import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
-import { installChatInputLayout } from './chatInputLayout.js';
+import { ChatInputAction, ChatInputSurface } from './chatInputSurface.js';
 import { toErrorMessage } from '../../../../../../base/common/errorMessage.js';
 import { ChatChangesPill } from './chatChangesPill.js';
 import { ChatWorkingLogo } from '../chatWorkingLogo.js';
@@ -133,8 +133,6 @@ import { ChatConfiguration } from '../../../common/constants.js';
 import { ChatRequestQueueKind } from '../../../../../services/chat/common/chatService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 
-type ChatInputToolbarPresentation = 'mode' | 'model' | 'mic' | 'voice' | 'send' | 'interrupt';
-
 interface ChatInputToolbarState {
 	readonly voiceAvailable: boolean;
 	readonly voiceActive: boolean;
@@ -177,6 +175,8 @@ export interface ChatInputPartOptions {
 	readonly layout?: 'compact';
 	readonly inlineEdit?: { readonly descriptionId: string; readonly initialHeight: number; readonly reportError: (error: unknown) => void; };
 	readonly renderSecondaryToolbar?: boolean;
+	/** Opens a fresh conversation through a model route supplied by the host. */
+	readonly alternateModelAction?: IAction;
 	/** Host-owned permission policy presented immediately after the mode picker. */
 	readonly primaryPermissionPicker?: {
 		readonly action: IAction;
@@ -426,29 +426,42 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const interactionContext = this._register(context.createScoped(this.interaction));
 		this.elicitationFocused = interactionContext.createKey('chatElicitationFocused', false);
 		this.interaction.setAttribute('aria-live', 'polite');
-		this.inputContainer = h(ownerDocument, 'form');
-		this.inputContainer.className = `ash-chat-input-container ${chatInputStackSlotClass}`;
-		setChatInputStackSlot(this.inputContainer, ChatInputStackSlot.Standalone);
-		const editorHost = h(ownerDocument, 'div');
-		editorHost.className = 'ash-chat-input-editor-host';
-		// Editor scopes inherit their DOM ancestors when they are constructed.
-		this.element.append(this.inputContainer);
-		this.inputContainer.append(editorHost);
-		ChatContextKeys.inChatInput.bindTo(this._register(context.createScoped(editorHost))).set(true);
-		this.input = this._register(editorProvider.create({
-			container: editorHost,
-			placeholder: options.inlineEdit ? '' : 'Ask Ash',
-			ariaLabel: options.inlineEdit ? localize('chat.edit.input', 'Edit request') : 'Chat message',
-			ariaDescribedBy: options.inlineEdit?.descriptionId,
-			submitWithModifier: options.inlineEdit ? true : undefined,
-			tabFocusMode: options.inlineEdit ? true : undefined,
-			// Different wrapping in the editor can shorten the message. Keep its
-			// original text height so the transcript cannot clamp its scroll position.
-			height: options.inlineEdit ? { minimum: options.inlineEdit.initialHeight, maximum: Math.max(CHAT_INPUT_DEFAULT_MAX_HEIGHT, options.inlineEdit.initialHeight) } : undefined,
-			slashCommands: this.slashCommands,
-			skills: this.skills,
-			hostCompletions: true,
+		const surface = this._register(new ChatInputSurface(this.element, contextMenuService, {
+			createEditor: editorHost => {
+				ChatContextKeys.inChatInput.bindTo(this._register(context.createScoped(editorHost))).set(true);
+				return editorProvider.create({
+					container: editorHost,
+					placeholder: options.inlineEdit ? '' : 'Ask Ash',
+					ariaLabel: options.inlineEdit ? localize('chat.edit.input', 'Edit request') : 'Chat message',
+					ariaDescribedBy: options.inlineEdit?.descriptionId,
+					submitWithModifier: options.inlineEdit ? true : undefined,
+					tabFocusMode: options.inlineEdit ? true : undefined,
+					// Different wrapping in the editor can shorten the message. Keep its
+					// original text height so the transcript cannot clamp its scroll position.
+					height: options.inlineEdit ? { minimum: options.inlineEdit.initialHeight, maximum: Math.max(CHAT_INPUT_DEFAULT_MAX_HEIGHT, options.inlineEdit.initialHeight) } : undefined,
+					slashCommands: this.slashCommands,
+					skills: this.skills,
+					hostCompletions: true,
+				});
+			},
+			submit: () => {
+				if (options.inlineEdit) void this.acceptInput().catch(options.inlineEdit.reportError);
+				else void this.commands.executeCommand(this.followUpCommand(), this.executionContext()).catch(() => undefined);
+			},
+			modelPickerPosition: options.modelPickerPosition,
+			layout: options.layout,
+			compactLayout: options.inlineEdit ? 'stacked' : undefined,
+			actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
 		}));
+		this.inputContainer = surface.form;
+		this.inputContainer.classList.add(chatInputStackSlotClass);
+		setChatInputStackSlot(this.inputContainer, ChatInputStackSlot.Standalone);
+		this.input = surface.editor;
+		this.inputToolbar = surface.toolbar;
+		this.attachmentToolbar = surface.attachmentToolbar;
+		this.inlineActionsToolbar = surface.inlineActionsToolbar;
+		this.inputFooter = surface.footer;
+		this.pickerResponsiveLayout = this._register(new ChatInputPickerResponsiveLayout(this.inputToolbar.element));
 		const updateCursorAtTop = (): void => cursorAtTop.set(this.input.isAtHistoryBoundary('previous'));
 		this._register(this.input.onDidChange(updateCursorAtTop));
 		if (this.input.codeEditor) {
@@ -489,31 +502,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				acceptResource: (resource, isDirectory, replacement, signal) => this.acceptResourceCompletion(resource, isDirectory, replacement, signal),
 			} satisfies AgentHostInputCompletionHost));
 			completions.register();
-		}
-		this.inputToolbar = this._register(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
-			ariaLabel: localize('chat.input.actions', 'Chat input actions'),
-			actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
-		}));
-		this.inputToolbar.element.classList.add('ash-chat-input-toolbars');
-		this.inputToolbar.element.classList.toggle('model-picker-trailing', options.modelPickerPosition === 'trailing');
-		this.pickerResponsiveLayout = this._register(new ChatInputPickerResponsiveLayout(this.inputToolbar.element));
-		if (options.layout === 'compact') {
-			this.element.classList.add('compact');
-			this.inputFooter = h(ownerDocument, 'div', { className: 'ash-chat-input-footer' });
-			this.attachmentToolbar = this._register(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
-				ariaLabel: localize('chat.context.add', 'Add context'),
-				actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
-			}));
-			this.inputContainer.append(editorHost);
-			this.inlineActionsToolbar = this._register(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
-				ariaLabel: localize('chat.input.actions', 'Chat input actions'),
-				actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
-			}));
-			this.inlineActionsToolbar.element.classList.add('ash-chat-input-toolbars');
-			this.inputFooter.append(this.inputToolbar.element);
-			this._register(installChatInputLayout(this.inputContainer, this.input, this.inlineActionsToolbar.element, this.attachmentToolbar.element, options.inlineEdit ? 'stacked' : 'adaptive'));
-		} else {
-			this.inputContainer.append(editorHost, this.inputToolbar.element);
 		}
 		this.secondaryToolbarContainer = options.renderSecondaryToolbar === false
 			? undefined
@@ -618,11 +606,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.inputContainer.classList.remove('focused');
 			setChatInputStackInputFocused(this.inputContainer, false);
 		}));
-		this._register(addDisposableListener(this.inputContainer, 'submit', (event) => {
-			event.preventDefault();
-			if (options.inlineEdit) void this.acceptInput().catch(options.inlineEdit.reportError);
-			else void this.commands.executeCommand(this.followUpCommand(), this.executionContext()).catch(() => undefined);
-		}));
 		this._register(this.input.onDidChange(() => {
 			if (!this.applyingHistory && this.draftSkills) this.draftSkills = { text: this.input.value, references: this.skills.referencesIn(this.input.value, this.draftSkills.references) };
 			this.textRevision++;
@@ -634,7 +617,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}));
 		if (!options.inlineEdit) this._register(addDisposableListener(this.input.element, 'keydown', event => this.handleHistoryKey(event), true));
 
-		this._register(this.input.onDidSubmit(() => this.inputContainer.requestSubmit()));
 		this._register(this.inlineContext.onDidChangeReferences(() => {
 			this.draftRevision++;
 			this.renderToolbar();
@@ -1882,6 +1864,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (action.presentation === 'model') {
 			return this.modelPickerActionItem = this.instantiationService.createInstance(ModelPickerActionItem, action, {
 				configureInMenu: this.options.configureModelInMenu,
+				alternateModelAction: this.options.alternateModelAction,
 				onDidChangePresentation: this.modelPickerPresentationChanged.event,
 				getModels: () => this.state.models,
 				getSelectedModel: () => this.state.selectedModel,
@@ -1902,7 +1885,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				this.renderToolbarActions();
 			}, () => this.mode === 'agent' && !this.state.aiDisabled ? this.state.selectedAgent : undefined);
 		}
-		return new ChatInputButtonViewItem(action);
+		return undefined;
 	}
 
 	private executionContext(): IChatExecuteActionContext {
@@ -2212,23 +2195,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 }
 
-class ChatInputAction implements IAction {
-	constructor(
-		readonly id: string,
-		public label: string,
-		public tooltip: string,
-		readonly icon: Icon | undefined,
-		readonly enabled: boolean,
-		readonly presentation: ChatInputToolbarPresentation,
-		readonly callback: () => void,
-		readonly checked: boolean | undefined = undefined,
-	) { }
-
-	run(): void {
-		this.callback();
-	}
-}
-
 class SelectorAction extends ChatInputAction {
 	readonly actions: readonly IAction[] | (() => Promise<readonly IAction[]>);
 
@@ -2266,24 +2232,6 @@ class ChatAttachContextActionViewItem extends ButtonActionViewItem {
 		super.render(container);
 		this.button.domNode.setAttribute('aria-haspopup', 'dialog');
 		this.button.domNode.setAttribute('aria-expanded', 'false');
-	}
-}
-
-class ChatInputButtonViewItem extends ButtonActionViewItem {
-	private readonly presentation: ChatInputToolbarPresentation;
-
-	constructor(action: ChatInputAction) {
-		super(action, { buttonStyles: defaultButtonStyles });
-		this.presentation = action.presentation;
-	}
-
-	override render(container: HTMLElement): void {
-		super.render(container);
-		container.classList.add(`ash-chat-input-${this.presentation}`);
-		container.classList.toggle('disabled', !this.action.enabled);
-		this.button.toggleClassName('ash-chat-input-action', true);
-		this.button.toggleClassName(`ash-chat-input-${this.presentation}-action`, true);
-		this.button.toggleClassName('disabled', !this.action.enabled);
 	}
 }
 

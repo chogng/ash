@@ -895,6 +895,52 @@ suite('ChatGPT shared service', () => {
 		chat.newChat(); assert.equal(chat.state.get().draft, 'new draft');
 		await chat.select('two'); assert.equal(chat.state.get().draft, 'two draft');
 	});
+	test('a model-routed chat copies only new draft text and keeps task-like follow-ups on ChatGPT', async () => {
+		const requests: { model: string; conversation?: string; text: string; }[] = [];
+		const instantiation = {
+			createInstance: () => { throw new Error('An explicit ChatGPT model must not start a Cowork task'); },
+		} as unknown as IInstantiationService;
+		using chat = fixture(async (path, _signal, request) => {
+			if (path.includes('/models?')) {
+				return Response.json(simpleChatGPTModelCatalog([{ slug: 'model', title: 'Model' }, { slug: 'chosen', title: 'Chosen' }]));
+			}
+			if (path.endsWith('/conversation/one')) {
+				return Response.json({ ...await response(path).json(), default_model_slug: 'model' });
+			}
+			if (path.includes('/.headers/')) return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' });
+			if (path.endsWith('/prepare')) return Response.json({ conduit_token: 'fixture' });
+			if (path.endsWith('/f/conversation')) {
+				const body = JSON.parse(String(request.body));
+				requests.push({ model: body.model, conversation: body.conversation_id, text: body.messages[0].content.parts[0] });
+				return new Response('data: {"conversation_id":"bound","message":{"id":"reply","author":{"role":"assistant"},"content":{"parts":["Answer"]}}}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+			}
+			return response(path);
+		}, { values: new Map(), instantiation });
+		await chat.reload();
+		await chat.select('one');
+		chat.setDraft('Existing conversation draft');
+		await chat.newChatWithModel('chosen', '请把访谈整理成一份报告');
+		assert.equal(selectedChatConversationId(chat.state.get()), undefined);
+		assert.equal(chat.state.get().model, 'chosen');
+		assert.deepEqual(chat.state.get().messages, []);
+		assert.deepEqual(chat.state.get().attachments, []);
+		await assert.rejects(chat.newChatWithModel('model', 'Another draft'), /already has a draft/);
+		await chat.select('one');
+		assert.equal(chat.state.get().model, 'model');
+		chat.newChat();
+		assert.equal(chat.state.get().model, 'chosen');
+		assert.equal(chat.state.get().draft, '请把访谈整理成一份报告');
+		await chat.send();
+		chat.setDraft('再写一份报告');
+		await chat.send();
+		assert.deepEqual(requests, [
+			{ model: 'chosen', conversation: undefined, text: '请把访谈整理成一份报告' },
+			{ model: 'chosen', conversation: 'bound', text: '再写一份报告' },
+		]);
+		await chat.select('one');
+		assert.equal(chat.state.get().draft, 'Existing conversation draft');
+	});
+
 	test('the same Send action starts a local task, then binds a normal question to that conversation', async () => {
 		const values = new Map<string, string>();
 		const routes: string[] = [];
@@ -967,7 +1013,7 @@ suite('ChatGPT shared service', () => {
 			get thread() { return thread; },
 			async send(text: string, _mode: string, _skills: unknown, contexts: readonly { content: string; }[]) {
 				assert.equal(text, 'Write a report');
-				assert.match(contexts[0]!.content, /one reply/u);
+				assert.equal(contexts, undefined);
 				assert.ok([...values.values()].some(value => value.includes('cowork-thread')), 'Task reference is stored before dispatch');
 				thread = { turns: [{ status: 'running', items: [{ type: 'plan', itemId: 'plan', text: 'Collect sources' }] }] } as unknown as Thread;
 				changed.fire();
@@ -994,6 +1040,11 @@ suite('ChatGPT shared service', () => {
 		let historyFails = false;
 		let revised = false;
 		const respond = async (path: string) => {
+			if (path.includes('/.headers/')) return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' });
+			if (path.endsWith('/prepare')) return Response.json({ conduit_token: 'fixture' });
+			if (path.endsWith('/f/conversation')) {
+				return new Response('data: {"conversation_id":"one","message":{"id":"reply","author":{"role":"assistant"},"content":{"parts":["one reply"]}}}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+			}
 			if (path.endsWith('/conversation/one')) {
 				if (historyFails) return new Response(null, { status: 503 });
 				if (revised) return Response.json({
@@ -1006,7 +1057,6 @@ suite('ChatGPT shared service', () => {
 		};
 		using chat = fixture(respond, shared);
 		await chat.reload();
-		await chat.select('one');
 		const localId = chat.state.get().localConversationId;
 		chat.setDraft('Write a report');
 		const running = chat.send();
@@ -1017,7 +1067,10 @@ suite('ChatGPT shared service', () => {
 		assert.equal(chat.state.get().coworkTasks.length, 0);
 		await finish.complete();
 		await running;
-		await chat.select('one');
+		await chat.select(`local:${localId}`);
+		chat.setDraft('What is a report?');
+		await chat.send();
+		assert.equal(chat.state.get().conversationId, 'one');
 		assert.equal(chat.state.get().localConversationId, localId);
 		assert.equal(chat.state.get().draft, '');
 		revised = true;

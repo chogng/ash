@@ -9,7 +9,7 @@ import { ModelPickerWidget, type ModelPickerPresentation } from '../../../browse
 declare global {
 	interface Window {
 		ashModelPickerIntegration: {
-			configure(options: { thinking?: boolean; disabled?: boolean; singleLevel?: boolean; longTitle?: boolean; secondWithoutThinking?: boolean; emphasizedLevel?: string; }): void;
+			configure(options: { thinking?: boolean; disabled?: boolean; singleLevel?: boolean; longTitle?: boolean; secondWithoutThinking?: boolean; emphasizedLevel?: string; ashModels?: boolean; }): void;
 			dispose(): void;
 		};
 	}
@@ -48,6 +48,7 @@ window.ashModelPickerIntegration = {
 		presentation = {
 			...presentation, disabled: options.disabled ?? false,
 			models: options.longTitle ? [{ id: 'one', title: 'A very long model title '.repeat(15) }, { id: 'two', title: 'Second model' }] : presentation.models,
+			loadAshModels: options.ashModels ? async () => [{ title: 'Ash fixture model', run: () => render('ash') }] : undefined,
 			thinking: options.thinking ? {
 				levels: options.singleLevel ? levels.slice(0, 1) : levels,
 				selectedLevel: options.singleLevel ? 'low' : 'extraHigh',

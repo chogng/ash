@@ -5,6 +5,7 @@ import { PromptTimelineGutterRail } from './promptTimelineGutterRail.js';
 import { PromptTimelineRulerRail } from './promptTimelineRulerRail.js';
 import type { PromptTimelineModel } from './promptTimelineModel.js';
 import type { IPromptTimelineActions, IPromptTimelineRail } from './promptTimelineRail.js';
+import './media/promptTimeline.css';
 
 export class PromptTimelineWidgetContrib extends Disposable {
 	private readonly rail = this._register(new MutableDisposable<IPromptTimelineRail>());

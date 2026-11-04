@@ -1,12 +1,14 @@
 import '../media/sessionsViewPane.css';
-import { h } from '../../../../../base/browser/dom.js';
+import { getWindow, h } from '../../../../../base/browser/dom.js';
+import { observeResize } from '../../../../../base/browser/observer.js';
+import { AnimationFrameScheduler } from '../../../../../base/browser/scheduler.js';
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../../workbench/browser/parts/views/viewPane.js';
 import { SessionsViewRegistry } from '../../../../common/views.js';
 import { localize } from '../../../../../nls.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
-import { SessionsList } from './sessionsList.js';
+import { SessionsList, type SessionsListPresentation } from './sessionsList.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 
@@ -25,12 +27,16 @@ export function registerSessionsNavigation(): IDisposable {
 	return registrations;
 }
 
-class SessionsNavigationView extends ViewPane {
+export class SessionsNavigationView extends ViewPane {
 	private list: SessionsList;
 	private hiddenListState: ReturnType<SessionsList['getViewState']> | undefined;
-	constructor(mode: 'chat' | 'code', parent: HTMLElement, options: IViewPaneOptions, @ISessionsManagementService management: ISessionsManagementService, @IInstantiationService instantiation: IInstantiationService) {
-		super(parent, options);
+	private readonly embedded: boolean;
+	constructor(presentation: SessionsListPresentation, parent: HTMLElement, options: IViewPaneOptions, @ISessionsManagementService management: ISessionsManagementService, @IInstantiationService instantiation: IInstantiationService) {
+		const embedded = typeof presentation !== 'string';
+		super(parent, embedded ? { ...options, headerSize: 32, minimumBodySize: 0 } : options);
+		this.embedded = embedded;
 		this.contentElement.classList.add('ash-sessions-navigation-view');
+		this.contentElement.classList.toggle('embedded', embedded);
 		const loading = this._register(new MutableDisposable());
 		const updateLoading = (): void => {
 			if (management.state === 'loading' && management.sessions.length > 0 && !loading.value) {
@@ -41,9 +47,22 @@ class SessionsNavigationView extends ViewPane {
 		this._register(management.onDidChange(updateLoading));
 		updateLoading();
 		const title = localize({ bundle: 'ash.sessions', key: 'sessions.list.header' }, 'Sessions');
-		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), title, mode);
+		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), title, presentation);
 		this.list = lists.get();
 		this.contentElement.append(this.list.element);
+		const sizeObserver = this._register(new MutableDisposable());
+		if (embedded) {
+			const measure = this._register(new AnimationFrameScheduler(getWindow(this.element), () => {
+				if (this.list.element.isConnected) this.minimumBodySize = this.list.element.offsetHeight;
+			}));
+			const observeList = (list: SessionsList): void => {
+				sizeObserver.value = observeResize(list.element, () => measure.schedule());
+				measure.schedule();
+			};
+			observeList(this.list);
+			this._register(lists.onDidChange(observeList));
+			this._register(this.onDidChangeBodyVisibility(visible => { if (visible) measure.schedule(); }));
+		}
 		this._register(lists.onDidChange(list => {
 			const previous = this.list;
 			const state = this.hiddenListState ?? previous.getViewState();
@@ -53,6 +72,7 @@ class SessionsNavigationView extends ViewPane {
 			else { this.hiddenListState = state; }
 		}));
 	}
+	public override get maximumSize(): number { return this.embedded ? this.minimumSize : super.maximumSize; }
 	public override setVisible(visible: boolean): void {
 		if (!visible && this.isVisible()) { this.hiddenListState = this.list.getViewState(); }
 		super.setVisible(visible);
