@@ -237,16 +237,25 @@ fn codex_owned_credentials_are_reloaded_without_a_competing_refresh() {
 fn switching_users_in_the_same_workspace_revokes_old_requests_and_rejects_stale_contexts() {
     let home = tempfile::tempdir().unwrap();
     write(home.path(), "user-1", &access("one", 4_000_000_000));
+    let first = session(
+        home.path(),
+        Arc::new(Client::default()),
+        ChatGptAuthManagement::Codex,
+    );
     let mut session = session(
         home.path(),
         Arc::new(Client::default()),
         ChatGptAuthManagement::Codex,
     );
     let old = session.context().to_owned();
+    let scope = session.cache_scope().unwrap();
+    assert_ne!(first.context(), old);
+    assert_eq!(first.cache_scope().as_deref(), Some(scope.as_str()));
     session.authorize("aaaa", &old).unwrap();
     write(home.path(), "user-2", &access("two", 4_000_000_000));
     assert!(session.synchronize().unwrap());
     assert_ne!(session.context(), old);
+    assert_ne!(session.cache_scope().unwrap(), scope);
     assert!(matches!(
         session.recover("aaaa"),
         Err(ChatGptWebAuthError::AccountChanged)
@@ -260,6 +269,7 @@ fn switching_users_in_the_same_workspace_revokes_old_requests_and_rejects_stale_
         .unwrap();
     std::fs::remove_file(home.path().join("auth.json")).unwrap();
     assert!(session.synchronize().unwrap());
+    assert!(session.cache_scope().is_none());
     assert!(matches!(
         session.recover("bbbb"),
         Err(ChatGptWebAuthError::AccountChanged)

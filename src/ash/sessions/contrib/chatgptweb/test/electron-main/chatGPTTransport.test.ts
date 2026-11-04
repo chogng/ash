@@ -17,11 +17,11 @@ import { ChatGPTAuthenticationError } from '../../common/chatGPTTransport.js';
 import type { IChatGPTVerificationRuntime } from '../../electron-main/chatGPTVerificationRuntime.js';
 
 import type { IChatGPTAuthentication, IChatGPTAuthorization } from '../../electron-main/chatGPTAuthentication.js';
-import type { IChatGPTTransport } from '../../common/chatGPTTransport.js';
+import type { ChatGPTAuthenticationContext, IChatGPTTransport } from '../../common/chatGPTTransport.js';
 import type { IServerChannel } from '../../../../../base/parts/ipc/common/ipc.js';
 
 class Authentication extends Disposable implements IChatGPTAuthentication {
-	private readonly changes = this._register(new Emitter<string | undefined>());
+	private readonly changes = this._register(new Emitter<ChatGPTAuthenticationContext | undefined>());
 	public readonly onDidChangeContext = this.changes.event;
 	public context = 'a'.repeat(32);
 	public headers = new Headers({ Authorization: 'Bearer fixture-one', 'ChatGPT-Account-Id': 'account-one' });
@@ -33,7 +33,7 @@ class Authentication extends Disposable implements IChatGPTAuthentication {
 		super();
 		this._register(toDisposable(() => { for (const controller of this.grants.values()) { controller.abort(); } this.grants.clear(); }));
 	}
-	public async getContext(): Promise<string> { return this.context; }
+	public async getContext(): Promise<ChatGPTAuthenticationContext> { return { id: this.context }; }
 	public async authorize(id: string, context: string, signal: AbortSignal): Promise<IChatGPTAuthorization> {
 		signal.throwIfAborted();
 		if (!this.available || context !== this.context || this.grants.has(id)) { throw new ChatGPTAuthenticationError('Private owner failure'); }
@@ -50,7 +50,7 @@ class Authentication extends Disposable implements IChatGPTAuthentication {
 		this.context = 'b'.repeat(32);
 		for (const controller of this.grants.values()) { controller.abort(); }
 		this.grants.clear();
-		this.changes.fire(this.context);
+		this.changes.fire({ id: this.context });
 	}
 }
 
@@ -60,7 +60,7 @@ async function fixture(run: (auth: Authentication) => Promise<void>): Promise<vo
 	assert.equal(auth.grants.size, 0, 'Every HTTP request must release its private authorization');
 }
 function adapt(transport: ChatGPTTransport, auth: Authentication): IChatGPTTransport {
-	return { request: (id, request) => transport.request(id, request, auth.context), read: id => transport.read(id), cancel: id => transport.cancel(id) };
+	return { getCacheScope: async () => undefined, request: (id, request) => transport.request(id, request, auth.context), read: id => transport.read(id), cancel: id => transport.cancel(id) };
 }
 function scopedChannel(transport: ChatGPTTransport, auth: Authentication): IServerChannel<string> {
 	const actual = transport.getChannel();

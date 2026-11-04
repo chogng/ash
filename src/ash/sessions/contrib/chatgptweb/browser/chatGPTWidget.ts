@@ -12,7 +12,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { ChatContentMarkdownRenderer } from '../../../../workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
 import type { ChatGPTMessage, ChatGPTResource } from './chatGPTClient.js';
 import { ChatAttachmentsContentPart, type IChatAttachmentResource } from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatAttachmentsContentPart.js';
-import { IChatGPTService, type ChatGPTState } from './chatGPTService.js';
+import { IChatGPTService, pendingCreationStatus, type ChatGPTState } from './chatGPTService.js';
 import { completeChatGPTRichContent, getChatGPTMarkdownRenderOptions } from './chatGPTRichContent.js';
 import { ChatGPTInputWidget } from './chatGPTInputWidget.js';
 import './media/chatGPTWidget.css';
@@ -210,7 +210,7 @@ export class ChatGPTWidget extends Disposable {
 		this.error.textContent = state.error;
 		this.error.hidden = !state.error;
 		this.status.textContent = loading ? localize('sessions.loadingConversation', 'Loading conversation…') : state.sending ? localize('sessions.chatgpt.replying', 'ChatGPT is replying…') :
-			state.coworkStarting ? localize('sessions.chat.coworkPreparing', 'Preparing Cowork task…') : state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : '';
+			state.coworkStarting ? localize('sessions.chat.coworkPreparing', 'Preparing Cowork task…') : state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : pendingCreationStatus(state);
 		this.status.hidden = !this.status.textContent;
 		this.messages.setAttribute('aria-busy', String(state.sending || state.loading?.kind === 'conversation'));
 		const ids = new Set(state.messages.filter(message => !message.activity).map(message => message.id));

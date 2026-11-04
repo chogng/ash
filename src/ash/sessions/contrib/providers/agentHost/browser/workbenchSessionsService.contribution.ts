@@ -1,4 +1,4 @@
-import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
+import { Lazy } from '../../../../../base/common/lazy.js';
 import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
 import { IAgentExecutionSettingsService } from '../../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IChatService } from '../../../../../workbench/services/chat/common/chatService.js';
@@ -23,6 +23,7 @@ import { selectionFromWorkspace } from '../../../../common/agentHostSessionWorks
 import { WorkspacePicker } from '../../../chat/browser/sessionWorkspacePicker.js';
 import { IDevContainerAgentHostService } from '../../../../common/devContainerAgentHostService.js';
 import { DevContainerAgentHostService } from '../../remoteAgentHost/browser/devContainerAgentHostService.js';
+import { SessionsSearchService } from './sessionsSearchService.js';
 
 class WorkbenchSessionsManagementService extends SessionsManagementService {
 	constructor(@IWorkspaceContextService workspace: IWorkspaceContextService, @IInstantiationService instantiationService: IInstantiationService, @ISessionsProvidersService providers: ISessionsProvidersService) {
@@ -69,8 +70,22 @@ class WorkbenchPrimaryProviderServices extends SessionProviderServices {
 	}
 }
 
+class WorkbenchSessionProviderScopeService extends SessionProviderScopeService {
+	constructor(
+		@IWorkspaceContextService workspace: IWorkspaceContextService,
+		@ISessionPrimaryProviderServices primary: SessionProviderServices,
+		@ISessionsProvidersService providers: ISessionsProvidersService,
+		@ISessionsManagementService management: ISessionsManagementService,
+		@IInstantiationService instantiation: IInstantiationService,
+	) {
+		// Search needs the registered scope service to route directories and fence provider changes.
+		const search = new Lazy(() => instantiation.createInstance(SessionsSearchService, LOCAL_AGENT_HOST_PROVIDER_ID, () => workspace.getWorkspace()));
+		super(LOCAL_AGENT_HOST_PROVIDER_ID, scope => search.value.forScope(scope), primary, providers, management, instantiation);
+	}
+}
+
 registerSingleton(ISessionPrimaryProviderServices, WorkbenchPrimaryProviderServices, InstantiationType.Delayed);
-registerSingleton(ISessionProviderScopeService, new SyncDescriptor(SessionProviderScopeService, [LOCAL_AGENT_HOST_PROVIDER_ID], true));
+registerSingleton(ISessionProviderScopeService, WorkbenchSessionProviderScopeService, InstantiationType.Delayed);
 registerSingleton(IChatService, SessionsChatService, InstantiationType.Delayed);
 registerSingleton(ISessionsManagementService, WorkbenchSessionsManagementService, InstantiationType.Delayed);
 registerSingleton(IDevContainerAgentHostService, DevContainerAgentHostService, InstantiationType.Delayed);

@@ -34,6 +34,7 @@ impl AppServer {
             &HostCredentialResponse::Ready {
                 version: 1,
                 context: session.context().into(),
+                cache_scope: session.cache_scope(),
             },
         )?;
         let (sender, commands) = mpsc::sync_channel(32);
@@ -71,6 +72,7 @@ impl AppServer {
                     &mut writer,
                     &HostCredentialResponse::Changed {
                         context: session.context().into(),
+                        cache_scope: session.cache_scope(),
                     },
                 )?;
             }
@@ -87,6 +89,7 @@ impl AppServer {
                     &mut writer,
                     &HostCredentialResponse::Changed {
                         context: session.context().into(),
+                        cache_scope: session.cache_scope(),
                     },
                 )?;
             }

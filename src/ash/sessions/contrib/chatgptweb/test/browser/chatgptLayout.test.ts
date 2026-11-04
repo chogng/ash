@@ -54,6 +54,71 @@ suite('chatgptweb browser component', () => {
 		});
 	}
 
+	test('ChatGPT refreshes the visible history when the window comes back online', async () => {
+		const { page } = browserTests;
+		let changed = false;
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/conversations?*', route => changed
+			? route.fulfill({ json: { items: [{ id: 'remote-new', title: 'New on another device' }], total: 1 } })
+			: route.fallback());
+		await page.route('**/service/backend-api/conversation/fixture-chat', route => changed
+			? route.fulfill({ status: 404 })
+			: route.fallback());
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		const previous = page.getByRole('button', { name: 'Synthetic conversation', exact: true });
+		await previous.click();
+		await expect(page.locator('.ash-chatgpt-widget')).toContainText('Synthetic answer');
+
+		changed = true;
+		await page.evaluate(() => window.dispatchEvent(new Event('online')));
+		await expect(page.getByRole('button', { name: 'New on another device', exact: true })).toBeVisible();
+		await expect(previous).toHaveCount(0);
+		await expect(page.locator('.ash-chatgpt-widget')).not.toContainText('Synthetic answer');
+	});
+
+	test('ChatGPT saves an offline first message and automatically sends it after reconnection', async () => {
+		const { page } = browserTests;
+		let posts = 0;
+		let deletes = 0;
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/f/conversation', route => {
+			posts++;
+			return route.fulfill({ contentType: 'text/event-stream', body: 'data: {"conversation_id":"offline-created"}\n\ndata: [DONE]\n\n' });
+		});
+		await page.route('**/service/backend-api/conversation/offline-created', route => route.fulfill({
+			json: {
+				title: 'Cloud title', current_node: 'reply',
+				mapping: { reply: { parent: null, message: { id: 'reply', author: { role: 'assistant' }, content: { parts: ['Cloud reply'] } } } },
+			}
+		}));
+		await page.route('**/service/backend-api/conversation/id/fixture-chat', route => {
+			if (route.request().method() === 'DELETE') { deletes++; return route.fulfill({ status: 204 }); }
+			return route.fallback();
+		});
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		const original = page.getByRole('button', { name: 'Synthetic conversation', exact: true });
+		await expect(original).toBeVisible();
+		await page.context().setOffline(true);
+		const row = page.locator('.ash-chatgpt-navigation-row').filter({ has: original });
+		await row.hover();
+		await row.getByRole('button', { name: '更多操作', exact: true }).click();
+		await page.getByRole('menuitem', { name: '删除', exact: true }).click();
+		await page.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click();
+		await expect(original).toHaveCount(0);
+		await fillMessage(page, 'Offline first question');
+		await page.getByRole('button', { name: '发送', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Offline first question', exact: true })).toBeVisible();
+		await expect(page.locator('.ash-chatgpt-widget')).toContainText('已保存到此设备');
+		expect(posts).toBe(0);
+		expect(deletes).toBe(0);
+		await page.context().setOffline(false);
+		await expect(page.getByRole('button', { name: 'Cloud title', exact: true })).toBeVisible();
+		await expect(page.locator('.ash-chatgpt-widget')).toContainText('Cloud reply');
+		expect(posts).toBe(1);
+		expect(deletes).toBe(1);
+		await expect(original).toHaveCount(0);
+	});
+
 	test('ChatGPT welcome announces once per visible draft and honors the verbosity setting', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);

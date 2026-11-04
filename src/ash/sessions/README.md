@@ -21,9 +21,18 @@ A task can start a local conversation before a reply backend is available.
 Chat persists the local identity, latest backend message snapshot, and Cowork
 task references anchored to messages. The first backend reply binds the
 existing local conversation and its tasks to the remote history. Backend history replaces its
-snapshot independently of task references. A restored cache is shown only
-after the connected backend lists the conversation, or after a successful
-history read. The Cowork Thread owns execution, approvals and artifact bytes.
+snapshot independently of task references. The profile keeps the last loaded
+sidebar index and opened conversation snapshots under an opaque user and
+workspace scope verified by the native credential owner. Chat shows that cache
+while refreshing from the backend and requires a current history read before
+continuing a restored conversation. The visible sidebar refreshes on focus,
+network recovery and a foreground interval. Refresh checks the loaded portion
+of the catalog and verifies omitted conversations individually before removing
+their snapshots. An account-scoped outbox persists offline first text messages
+and deletions. Ash records a creation's stable message ID before submitting it
+and checks cloud history if the result is ambiguous. A deletion stays hidden
+locally while it retries and after acknowledgement. The Cowork Thread owns
+execution, approvals and artifact bytes.
 Chat reopens that Thread by reference and does not duplicate the task journal.
 
 The profile-scoped Rust ChatGPT Web authentication owner supplies request-bound
@@ -35,7 +44,7 @@ headers and handles same-account 401 recovery once. External Codex credentials r
 read-only; a failure never switches the selected source. Each window's account login
 adapter retains its own completion route while sharing the profile owner. Main no longer reads
 `auth.json`; credential headers never cross renderer RPC or the HTTP result channel.
-The renderer carries only an opaque authentication context. Account changes or owner
+The renderer carries an opaque request context and cache scope. Account changes or owner
 connection loss revoke pending requests and retire Chromium cookies; the ChatGPT
 model drops the old account's history, conversation IDs and attachments while
 preserving local unsent draft text. A definite HTTP 401 may be retried once after

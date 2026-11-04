@@ -15,13 +15,14 @@ import { SyncDescriptor } from '../../../../../platform/instantiation/common/des
 import { IMainProcessService } from '../../../../../platform/ipc/common/mainProcessService.js';
 import type { IChannel } from '../../../../../base/parts/ipc/common/ipc.js';
 import { ChatGPTAuthenticationError, IChatGPTTransport, type ChatGPTRequest } from '../../common/chatGPTTransport.js';
-import { ChatGPTService, IChatGPTService } from '../../browser/chatGPTService.js';
+import { ChatGPTService, IChatGPTService, selectedChatConversationId } from '../../browser/chatGPTService.js';
 import { ElectronChatGPTTransport } from '../../electron-browser/electronChatGPTTransport.js';
 
-function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>, retained?: string, onDidChangeAuthentication?: Event<void>, shared?: { values: Map<string, string>; instantiation: IInstantiationService; }) {
+function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>, options?: { values: Map<string, string>; instantiation?: IInstantiationService; cacheScope?: () => string | undefined; onDidChangeAuthentication?: Event<void>; }) {
 	const requests = new Map<string, { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array>; }>();
 	const transport: IChatGPTTransport = {
-		onDidChangeAuthentication,
+		onDidChangeAuthentication: options?.onDidChangeAuthentication,
+		async getCacheScope() { return options?.cacheScope ? options.cacheScope() : 'a'.repeat(64); },
 		async request(id, request) {
 			const pending = { controller: new AbortController(), reader: undefined as ReadableStreamDefaultReader<Uint8Array> | undefined };
 			requests.set(id, pending);
@@ -32,8 +33,8 @@ function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRe
 		async read(id) { const result = await requests.get(id)?.reader?.read(); return !result || result.done ? null : VSBuffer.wrap(new Uint8Array(result.value)); },
 		async cancel(id) { const request = requests.get(id); requests.delete(id); request?.controller.abort(); await request?.reader?.cancel().catch(() => { }); },
 	};
-	const values = shared?.values ?? new Map<string, string>(retained ? [['sessions.chatgpt.conversation', retained]] : []);
-	return new ChatGPTService(transport, { get: (key: string) => values.get(key), keys: () => [...values.keys()], store: (key: string, value: string) => { values.set(key, value); }, remove: (key: string) => { values.delete(key); }, flush: async () => { } } as unknown as IStorageService, shared?.instantiation);
+	const values = options?.values ?? new Map<string, string>();
+	return new ChatGPTService(transport, { get: (key: string) => values.get(key), keys: () => [...values.keys()], store: (key: string, value: string) => { values.set(key, value); }, remove: (key: string) => { values.delete(key); }, flush: async () => { } } as unknown as IStorageService, options?.instantiation);
 }
 function response(path: string): Response {
 	assert.ok(!path.endsWith('/me'), 'The chat must not request an account identity');
@@ -73,8 +74,7 @@ suite('ChatGPT shared service', () => {
 		await ready.error(new Error('IPC connection closed'));
 		await pending;
 		assert.equal(requests, 0);
-		assert.equal(cancellations.length, 4);
-		assert.equal(new Set(cancellations).size, 4);
+		assert.deepEqual(cancellations, []);
 	});
 
 	test('account changes discard old history and file bindings, cancel a pending read and preserve local draft text', async () => {
@@ -88,7 +88,7 @@ suite('ChatGPT shared service', () => {
 			if (account === 'old' && path.endsWith('/two')) { oldSignal = signal; await entered.complete(); await release.p; }
 			if (account === 'new' && path.includes('/conversations?')) { return Response.json({ items: [{ id: 'new-account-chat', title: 'New account chat' }], total: 1 }); }
 			return response(path);
-		}, undefined, changes.event);
+		}, { onDidChangeAuthentication: changes.event, values: new Map(), cacheScope: () => (account === 'old' ? 'a' : 'b').repeat(64) });
 		await chat.reload(); await chat.select('one');
 		chat.setDraft('Local unsent draft');
 		const oldRead = chat.select('two');
@@ -133,11 +133,13 @@ suite('ChatGPT shared service', () => {
 	test('reopening retries failed initialization without duplicating pending or successful loads', async () => {
 		let rejected = true;
 		let modelRequests = 0;
+		let entered = new DeferredPromise<void>();
 		let pending = new DeferredPromise<void>();
 		let completed = new DeferredPromise<void>();
 		using chat = fixture(async path => {
 			if (path.includes('/models?')) {
 				modelRequests++;
+				void entered.complete();
 				await pending.p;
 				if (rejected) { return new Response(null, { status: 401 }); }
 			}
@@ -149,6 +151,7 @@ suite('ChatGPT shared service', () => {
 
 		chat.initialize();
 		chat.initialize();
+		await entered.p;
 		assert.equal(modelRequests, 1);
 		await pending.complete();
 		await completed.p;
@@ -156,10 +159,12 @@ suite('ChatGPT shared service', () => {
 		assert.match(chat.state.get().error, /401/u);
 
 		rejected = false;
+		entered = new DeferredPromise<void>();
 		pending = new DeferredPromise<void>();
 		completed = new DeferredPromise<void>();
 		chat.initialize();
 		chat.initialize();
+		await entered.p;
 		assert.equal(modelRequests, 2);
 		await pending.complete();
 		await completed.p;
@@ -175,14 +180,22 @@ suite('ChatGPT shared service', () => {
 	test('New while the first authentication/catalog read is pending keeps initialization alive', async () => {
 		const ready = new DeferredPromise<void>();
 		const connected = new DeferredPromise<void>();
+		const first = new DeferredPromise<void>();
+		const second = new DeferredPromise<void>();
 		const signals: AbortSignal[] = [];
 		using chat = fixture(async (path, signal) => {
-			if (path.includes('/models?')) { signals.push(signal); await ready.p; }
+			if (path.includes('/models?')) {
+				signals.push(signal);
+				void (signals.length === 1 ? first : second).complete();
+				await ready.p;
+			}
 			return response(path);
 		});
 		using listener = chat.state.onDidChange(state => { if (state.connected) { void connected.complete(); } });
 		chat.initialize();
+		await first.p;
 		chat.newChat();
+		await second.p;
 		assert.equal(signals.length, 2);
 		assert.ok(signals[0]!.aborted);
 		assert.equal(chat.state.get().busy, true);
@@ -305,8 +318,81 @@ suite('ChatGPT shared service', () => {
 		assert.equal(chat.state.get().conversationId, 'one');
 	});
 
+	test('reopens cached sidebar groups and history before the network answers, and refreshes on retry', async () => {
+		const values = new Map<string, string>();
+		using initial = fixture(async (path, _signal, request) => {
+			if (request.method === 'PATCH') { return Response.json({ success: true }); }
+			if (path.includes('/pins?')) { return Response.json([{ item: { id: 'one', title: 'One' } }]); }
+			if (path.includes('/gizmos/snorlax/sidebar?')) {
+				return Response.json({ items: [{ gizmo: { id: 'g-p-project', display: { name: 'Project' } } }], cursor: null });
+			}
+			if (path.includes('/conversations?')) {
+				return Response.json({ items: [{ id: 'one', title: 'One' }, { id: 'two', title: 'Two', gizmo_id: 'g-p-project' }, { id: 'archived', title: 'Archived' }], total: 3 });
+			}
+			return response(path);
+		}, { values });
+		await initial.reload();
+		await initial.select('two');
+		await initial.select('one');
+		await initial.rename('one', 'Renamed pin');
+		await initial.archive('archived');
+		initial.dispose();
+
+		const entered = new DeferredPromise<void>();
+		const release = new DeferredPromise<void>();
+		let offline = true;
+		using reopened = fixture(async path => {
+			if (offline) {
+				void entered.complete();
+				await release.p;
+				return new Response(null, { status: 503 });
+			}
+			if (path.endsWith('/conversation/two')) {
+				return Response.json({
+					title: 'Fresh title', current_node: 'reply', mapping: {
+						reply: { parent: null, message: { id: 'reply', author: { role: 'assistant' }, content: { parts: ['Fresh reply'] } } },
+					}
+				});
+			}
+			return response(path);
+		}, { values });
+		const pending = reopened.reload();
+		await entered.p;
+		assert.deepEqual(reopened.state.get().conversations.map(item => [item.id, item.title, item.pinned, item.projectId]), [
+			['one', 'Renamed pin', true, undefined], ['two', 'Two', false, 'g-p-project'],
+		]);
+		assert.deepEqual(reopened.state.get().projects, [{ id: 'g-p-project', title: 'Project' }]);
+		assert.equal(reopened.state.get().title, 'Renamed pin');
+		assert.equal(reopened.state.get().messages[0]?.text, 'one reply');
+		await reopened.select('two');
+		assert.equal(reopened.state.get().messages[0]?.text, 'two reply');
+		await release.complete();
+		await pending;
+		assert.equal(reopened.state.get().connected, false);
+		assert.equal(reopened.state.get().uncertain, true);
+		assert.equal(reopened.state.get().messages[0]?.text, 'two reply');
+
+		offline = false;
+		await reopened.reload();
+		assert.equal(reopened.state.get().connected, true);
+		assert.equal(reopened.state.get().uncertain, false);
+		assert.equal(reopened.state.get().messages[0]?.text, 'Fresh reply');
+
+		for (const scope of [() => 'b'.repeat(64), () => undefined]) {
+			using differentAccount = fixture(async () => new Response(null, { status: 503 }), { values, cacheScope: scope });
+			await differentAccount.reload();
+			assert.deepEqual(differentAccount.state.get().conversations, []);
+			assert.deepEqual(differentAccount.state.get().messages, []);
+		}
+	});
+
 	test('cold restore and followup remain usable when only the recent list is rate-limited', async () => {
 		let sends = 0;
+		const legacyTimeline = 'sessions.chat.timeline.v1:chatgpt-web:one';
+		const values = new Map([
+			['sessions.chatgpt.conversation', 'one'],
+			[legacyTimeline, JSON.stringify({ localId: 'legacy-local-id', tasks: [], history: { title: 'Legacy title', parentId: 'legacy-reply', messages: [] } })],
+		]);
 		using chat = fixture(async (path, _signal, request) => {
 			if (path.includes('/conversations?')) { return new Response(null, { status: 429 }); }
 			if (path.includes('/.headers/')) { return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' }); }
@@ -317,16 +403,238 @@ suite('ChatGPT shared service', () => {
 				return new Response('data: {"conversation_id":"one","message":{"id":"next","author":{"role":"assistant"},"content":{"parts":["Still connected"]}}}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
 			}
 			return response(path);
-		}, 'one');
+		}, { values });
 		await chat.reload();
 		assert.equal(chat.state.get().connected, true);
 		assert.equal(chat.state.get().conversationId, 'one');
+		assert.equal(chat.state.get().localConversationId, 'legacy-local-id');
+		assert.equal(values.has(legacyTimeline), false);
 		assert.equal(chat.state.get().messages[0]?.text, 'one reply');
 		assert.equal(chat.state.get().conversations[0]?.id, 'one');
 		assert.match(chat.state.get().error, /conversation list.*continue the current chat/u);
 		chat.setDraft('Continue after reopening'); await chat.send();
 		assert.equal(sends, 1); assert.equal(chat.state.get().error, '');
 	});
+
+	test('refresh synchronizes cloud additions, edits and confirmed deletions across loaded pages and disk', async () => {
+		const values = new Map<string, string>();
+		let ids = ['one', 'two', 'older'];
+		let unavailable = false;
+		let revised = false;
+		const respond = async (path: string): Promise<Response> => {
+			if (path.includes('/conversations?')) {
+				const offset = Number(new URL(path, 'https://fixture.invalid').searchParams.get('offset'));
+				return Response.json({ items: ids.slice(offset, offset + 2).map(id => ({ id, title: id })), total: ids.length });
+			}
+			if (path.endsWith('/conversation/two')) {
+				if (unavailable) { return new Response(null, { status: 503 }); }
+				if (!ids.includes('two')) { return new Response(null, { status: 404 }); }
+				if (revised) {
+					return Response.json({
+						title: 'two', current_node: 'new-turn', mapping: {
+							'new-turn': { parent: null, message: { id: 'new-turn', author: { role: 'assistant' }, content: { parts: ['Updated remotely'] } } },
+						}
+					});
+				}
+			}
+			return response(path);
+		};
+		using chat = fixture(respond, { values });
+		await chat.reload();
+		await chat.loadMore();
+		await chat.select('two');
+		chat.setDraft('Unsent text');
+		revised = true;
+		await chat.refresh();
+		assert.equal(chat.state.get().messages[0]?.text, 'Updated remotely');
+		assert.equal(chat.state.get().draft, 'Unsent text');
+
+		ids = ['new', 'one', 'older'];
+		unavailable = true;
+		await chat.refresh();
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ['new', 'one', 'older', 'two']);
+		assert.equal(chat.state.get().conversationId, 'two');
+		assert.equal(chat.state.get().messages[0]?.text, 'Updated remotely');
+		unavailable = false;
+		await chat.refresh();
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ids);
+		assert.equal(chat.state.get().conversationId, undefined);
+		assert.equal(chat.state.get().draft, 'Unsent text');
+		assert.ok(![...values.keys()].some(key => key.startsWith('sessions.chat.timeline.v1:') && key.endsWith(':two')));
+
+		using offline = fixture(async () => new Response(null, { status: 503 }), { values });
+		await offline.reload();
+		assert.deepEqual(offline.state.get().conversations.map(item => item.id), ids);
+		assert.deepEqual(offline.state.get().messages, []);
+	});
+
+	test('a remote snapshot in flight cannot undo an acknowledged local delete', async () => {
+		const entered = new DeferredPromise<void>();
+		const released = new DeferredPromise<void>();
+		let held = false;
+		let deleted = false;
+		using chat = fixture(async (path, _signal, request) => {
+			if (path.includes('/conversations?') && held) {
+				void entered.complete();
+				await released.p;
+				return response(path);
+			}
+			if (request.method === 'DELETE') {
+				assert.ok(path.endsWith('/conversation/id/two'));
+				deleted = true;
+				return new Response(null, { status: 204 });
+			}
+			return response(path);
+		});
+		await chat.reload();
+		held = true;
+		const stale = chat.refresh();
+		await entered.p;
+		await chat.deleteConversation('two');
+		await released.complete();
+		await stale;
+		assert.ok(deleted);
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ['one']);
+	});
+
+	test('offline creation and deletion survive restart, retry safely and suppress stale cloud rows', async () => {
+		const values = new Map<string, string>();
+		let available = false;
+		let deleteRequests = 0;
+		let postRequests = 0;
+		const preparedIds: string[] = [];
+		const respond = async (path: string, _signal: AbortSignal, request: ChatGPTRequest): Promise<Response> => {
+			if (request.method === 'DELETE') {
+				assert.ok(path.endsWith('/conversation/id/two'));
+				deleteRequests++;
+				return new Response(null, { status: available ? 204 : 503 });
+			}
+			if (path.endsWith('/prepare')) {
+				preparedIds.push(JSON.parse(String(request.body)).messages[0].id);
+				return available ? Response.json({ conduit_token: 'proof' }) : new Response(null, { status: 503 });
+			}
+			if (path.includes('/.headers/')) { return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' }); }
+			if (path.endsWith('/f/conversation')) {
+				postRequests++;
+				return new Response('data: {"conversation_id":"created-offline"}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+			}
+			return response(path);
+		};
+		using initial = fixture(respond, { values });
+		await initial.reload();
+		initial.setNetworkAvailable(false);
+		initial.setDraft('Cancel this before it is sent');
+		await initial.send();
+		await initial.deleteConversation(selectedChatConversationId(initial.state.get())!);
+		initial.setDraft('Keep this offline chat');
+		await initial.send();
+		await initial.deleteConversation('two');
+		const pendingId = selectedChatConversationId(initial.state.get());
+		assert.ok(pendingId?.startsWith('pending:'));
+		assert.equal(initial.state.get().pendingCreation, 'queued');
+		assert.equal(postRequests, 0);
+		assert.equal(deleteRequests, 0);
+		initial.dispose();
+
+		using otherAccount = fixture(respond, { values, cacheScope: () => 'b'.repeat(64) });
+		await otherAccount.reload();
+		assert.deepEqual(otherAccount.state.get().conversations.map(item => item.id), ['one', 'two']);
+		assert.equal(postRequests, 0);
+
+		using reopened = fixture(respond, { values });
+		reopened.setNetworkAvailable(false);
+		await reopened.reload();
+		assert.equal(selectedChatConversationId(reopened.state.get()), pendingId);
+		assert.equal(reopened.state.get().messages[0]?.text, 'Keep this offline chat');
+		assert.deepEqual(reopened.state.get().conversations.map(item => item.id), [pendingId, 'one']);
+		reopened.setNetworkAvailable(true);
+		await reopened.refresh();
+		assert.equal(postRequests, 0);
+		assert.equal(deleteRequests, 1);
+		assert.equal(reopened.state.get().pendingCreation, 'queued');
+		available = true;
+		await reopened.refresh();
+		await reopened.refresh();
+		assert.equal(postRequests, 1);
+		assert.equal(deleteRequests, 2);
+		assert.equal(preparedIds.length, 2);
+		assert.equal(preparedIds[0], preparedIds[1]);
+		assert.equal(reopened.state.get().conversationId, 'created-offline');
+		assert.ok(!reopened.state.get().conversations.some(item => item.id === 'two' || item.id.startsWith('pending:')));
+		reopened.dispose();
+		using restarted = fixture(respond, { values });
+		await restarted.reload();
+		assert.ok(!restarted.state.get().conversations.some(item => item.id === 'two'));
+		assert.equal(postRequests, 1);
+		assert.equal(deleteRequests, 2);
+	});
+
+	for (const cancelled of [false, true]) {
+		test(`an ambiguous creation reconciles by message ID after restart without posting again (${cancelled ? 'deleted offline' : 'retained'})`, async () => {
+			const values = new Map<string, string>();
+			let messageId: string | undefined;
+			let indexed = false;
+			let posts = 0;
+			let deletes = 0;
+			const respond = async (path: string, _signal: AbortSignal, request: ChatGPTRequest): Promise<Response> => {
+				if (request.method === 'DELETE') {
+					assert.ok(path.endsWith('/conversation/id/cloud-created'));
+					deletes++;
+					return new Response(null, { status: 204 });
+				}
+				if (path.endsWith('/prepare')) { return Response.json({ conduit_token: 'proof' }); }
+				if (path.includes('/.headers/')) { return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' }); }
+				if (path.endsWith('/f/conversation')) {
+					posts++;
+					messageId = JSON.parse(String(request.body)).messages[0].id;
+					throw new Error('Connection lost after accepting message');
+				}
+				if (path.includes('/conversations?') && indexed) {
+					return Response.json({ items: [{ id: 'cloud-created', title: 'Accepted on cloud' }, { id: 'one', title: 'One' }], total: 2 });
+				}
+				if (path.endsWith('/conversation/cloud-created') && messageId) {
+					return Response.json({
+						title: 'Accepted on cloud', current_node: messageId, mapping: {
+							[messageId]: { parent: null, message: { id: messageId, author: { role: 'user' }, content: { parts: ['Saved question'] } } },
+						}
+					});
+				}
+				return response(path);
+			};
+			using initial = fixture(respond, { values });
+			initial.setNetworkAvailable(false);
+			await initial.reload();
+			initial.setDraft('Saved question');
+			await initial.send();
+			initial.setNetworkAvailable(true);
+			await initial.refresh();
+			assert.equal(posts, 1);
+			assert.equal(initial.state.get().pendingCreation, 'submitted');
+			initial.dispose();
+
+			using reopened = fixture(respond, { values });
+			await reopened.reload();
+			await reopened.refresh();
+			assert.equal(posts, 1);
+			assert.equal(reopened.state.get().pendingCreation, 'submitted');
+			if (cancelled) {
+				reopened.setNetworkAvailable(false);
+				await reopened.deleteConversation(selectedChatConversationId(reopened.state.get())!);
+				reopened.setNetworkAvailable(true);
+				assert.equal(deletes, 0);
+			}
+			indexed = true;
+			await reopened.refresh();
+			assert.equal(posts, 1);
+			assert.equal(deletes, cancelled ? 1 : 0);
+			assert.equal(reopened.state.get().conversationId, cancelled ? undefined : 'cloud-created');
+			assert.equal(reopened.state.get().pendingCreation, undefined);
+			assert.equal(reopened.state.get().messages[0]?.id, cancelled ? undefined : messageId);
+			assert.equal(reopened.state.get().conversations.some(item => item.id === 'cloud-created'), !cancelled);
+			assert.ok(!reopened.state.get().conversations.some(item => item.id.startsWith('pending:')));
+		});
+	}
+
 	test('conversation actions commit after confirmation and keep drafts and selected title consistent', async () => {
 		const writes: { method: string; path: string; body: unknown; }[] = [];
 		let reject = false;
@@ -571,7 +879,7 @@ suite('ChatGPT shared service', () => {
 			return response(path);
 		};
 		const shared = { values, instantiation };
-		using chat = fixture(respond, undefined, undefined, shared);
+		using chat = fixture(respond, shared);
 		await chat.reload();
 		chat.setDraft('请把访谈整理成一份报告');
 		await chat.send();
@@ -585,7 +893,7 @@ suite('ChatGPT shared service', () => {
 		await chat.select(localRow.id);
 		assert.equal(chat.state.get().localConversationId, localId);
 		chat.dispose();
-		using reopened = fixture(respond, undefined, undefined, shared);
+		using reopened = fixture(respond, shared);
 		await reopened.reload();
 		assert.equal(reopened.state.get().localConversationId, localId);
 		assert.equal(reopened.state.get().coworkTasks[0]?.threadId, 'cowork-thread');
@@ -652,7 +960,7 @@ suite('ChatGPT shared service', () => {
 			}
 			return response(path);
 		};
-		using chat = fixture(respond, undefined, undefined, shared);
+		using chat = fixture(respond, shared);
 		await chat.reload();
 		await chat.select('one');
 		const localId = chat.state.get().localConversationId;
@@ -680,7 +988,7 @@ suite('ChatGPT shared service', () => {
 		assert.equal(chat.state.get().messages[0]?.text, 'Updated backend reply');
 		assert.match(chat.getAccessibleContent(), /file:\/\/\/report\.md/u);
 		chat.dispose();
-		using reopened = fixture(respond, undefined, undefined, shared);
+		using reopened = fixture(respond, shared);
 		await reopened.reload();
 		assert.equal(reopened.state.get().localConversationId, localId);
 		assert.equal(reopened.state.get().messages[0]?.text, 'Updated backend reply');

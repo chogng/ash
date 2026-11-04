@@ -1,7 +1,7 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { addDisposableListener, getActiveElement, getWindow, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
-import { AnimationFrameScheduler } from '../../../../base/browser/scheduler.js';
+import { AnimationFrameScheduler, disposableWindowInterval } from '../../../../base/browser/scheduler.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { DisposableStore, toDisposable, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
@@ -177,7 +177,23 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 			scheduleLoad();
 		};
 		this._register(autorun(reader => render(chat.state.read(reader))));
+		const window = getWindow(root);
+		chat.setNetworkAvailable(window.navigator.onLine);
 		chat.initialize();
+		const refresh = (): void => {
+			if (chat.state.get().pendingSync || document.visibilityState === 'visible' && this.isVisible()) { void chat.refresh(); }
+		};
+		let blurred = false;
+		this._register(addDisposableListener(window, 'blur', () => { blurred = true; }));
+		this._register(addDisposableListener(window, 'focus', () => {
+			if (!blurred) { return; }
+			blurred = false;
+			refresh();
+		}));
+		this._register(addDisposableListener(window, 'offline', () => chat.setNetworkAvailable(false)));
+		this._register(addDisposableListener(window, 'online', () => { chat.setNetworkAvailable(true); refresh(); }));
+		this._register(addDisposableListener(document, 'visibilitychange', refresh));
+		this._register(disposableWindowInterval(window, refresh, 60_000));
 	}
 
 	private groups(state: ChatGPTState): readonly ConversationGroup[] {
@@ -297,7 +313,7 @@ export class ChatGPTNavigationView extends ViewPane {
 			}, conversation.pinned ? Lxicon.pinned : Lxicon.unpin);
 		const bar = this.rows.add(new ActionBar(row, {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
-			actions: [more, { ...pin, checked: conversation.pinned === true }],
+			actions: conversation.id.startsWith('pending:') ? [more] : [more, { ...pin, checked: conversation.pinned === true }],
 			ariaLabel: localize('sessions.chatgpt.conversationActions', 'Actions for {0}', conversation.title),
 			actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
 		}));
@@ -319,9 +335,11 @@ export class ChatGPTNavigationView extends ViewPane {
 		row.classList.add('menu-open');
 		let trigger = row.querySelector<HTMLButtonElement>('.ash-chatgpt-conversation-actions button')!;
 		trigger.setAttribute('aria-expanded', 'true');
+		const state = this.chat.state.get();
+		const deleteOnly = conversation.id.startsWith('pending:') || !conversation.local && (!state.connected || !state.networkAvailable);
 		let projects: readonly IAction[];
 		try {
-			projects = (conversation.local ? [] : await this.chat.listProjects(controller.signal)).map(project => ({
+			projects = (conversation.local || deleteOnly ? [] : await this.chat.listProjects(controller.signal)).map(project => ({
 				...this.action(`move.${project.id}`, project.title, () => this.chat.moveToProject(conversation.id, project.id)),
 				checked: project.id === conversation.projectId,
 			}));
@@ -345,7 +363,9 @@ export class ChatGPTNavigationView extends ViewPane {
 		this.menuRow = row;
 		this.contextMenus.showContextMenu({
 			getAnchor: () => trigger,
-			getActions: () => [
+			getActions: () => deleteOnly ? [
+				this.action('delete', localize('sessions.chatgpt.delete', 'Delete'), () => this.deleteConversation(conversation)),
+			] : [
 				this.action('rename', localize('sessions.chatgpt.rename', 'Rename'), () => this.rename(conversation)),
 				...(conversation.local ? [] : [this.action('share', localize('sessions.chatgpt.share', 'Share'), () => this.share(conversation))]),
 				this.action('archive', localize('sessions.chatgpt.archive', 'Archive'), () => this.chat.archive(conversation.id)),

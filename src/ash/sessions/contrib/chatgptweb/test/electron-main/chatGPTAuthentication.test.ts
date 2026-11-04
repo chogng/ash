@@ -51,7 +51,7 @@ function owner(respond: (request: HostCredentialRequest, carrier: Carrier) => vo
 			enabled: true, launcher: {
 				description: 'private credential fixture', initializeTimeoutMs: 50,
 				validate() { }, launch() {
-					if (ready) { queueMicrotask(() => carrier.send({ kind: 'ready', version: 1, context })); }
+					if (ready) { queueMicrotask(() => carrier.send({ kind: 'ready', version: 1, context, cacheScope: '1'.repeat(64) })); }
 					return carrier as unknown as ChildProcessWithoutNullStreams;
 				},
 			}
@@ -62,7 +62,7 @@ function owner(respond: (request: HostCredentialRequest, carrier: Carrier) => vo
 suite('ChatGPT native authentication consumer', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('renderer cancellation during the initial owner handshake cannot dispatch a late HTTP request', async () => {
-		const ready = new DeferredPromise<string>();
+		const ready = new DeferredPromise<{ id: string; }>();
 		const entered = new DeferredPromise<void>();
 		let requests = 0;
 		using transport = new ElectronChatGPTTransport({
@@ -79,12 +79,12 @@ suite('ChatGPT native authentication consumer', () => {
 		const pending = createChatGPTFetch(transport)('/service/backend-api/models', { signal: controller.signal });
 		await entered.p;
 		controller.abort();
-		await ready.complete(context);
+		await ready.complete({ id: context });
 		await assert.rejects(pending);
 		assert.equal(requests, 0);
 	});
 	test('disposal owns cancellation once and late fetch cleanup cannot use the closed IPC connection', async () => {
-		const ready = new DeferredPromise<string>();
+		const ready = new DeferredPromise<{ id: string; }>();
 		const entered = new DeferredPromise<void>();
 		const cancellations: string[] = [];
 		let closed = false;
@@ -107,7 +107,7 @@ suite('ChatGPT native authentication consumer', () => {
 		transport.dispose();
 		closed = true;
 		controller.abort();
-		await ready.complete(context);
+		await ready.complete({ id: context });
 		await assert.rejects(pending);
 		assert.equal(cancellations.length, 1);
 		assert.equal(callsAfterClose, 0);
@@ -115,7 +115,7 @@ suite('ChatGPT native authentication consumer', () => {
 	test('a native authorization and recovery stay private and release their request binding', async () => {
 		const fixture = owner();
 		using authentication = fixture.authentication;
-		assert.equal(await authentication.getContext(), context);
+		assert.deepEqual(await authentication.getContext(), { id: context, cacheScope: '1'.repeat(64) });
 		const lease = await authentication.authorize('aaaa', context, new AbortController().signal);
 		assert.equal(lease.headers.get('Authorization'), 'Bearer private-owner-token');
 		assert.equal((await lease.recoverUnauthorized())?.get('Authorization'), 'Bearer private-rotated-token');
@@ -133,7 +133,7 @@ suite('ChatGPT native authentication consumer', () => {
 			if (request.kind === 'release') { carrier.send({ kind: 'released' }); }
 		});
 		using authentication = fixture.authentication;
-		const lease = await authentication.authorize('aaaa', await authentication.getContext(), new AbortController().signal);
+		const lease = await authentication.authorize('aaaa', (await authentication.getContext()).id, new AbortController().signal);
 		assert.equal(lease.headers.get('X-OpenAI-Fedramp'), 'true');
 		assert.equal((await lease.recoverUnauthorized())?.get('X-OpenAI-Fedramp'), 'true');
 		lease.dispose();
@@ -145,7 +145,7 @@ suite('ChatGPT native authentication consumer', () => {
 			if (request.kind === 'release') { carrier.send({ kind: 'released' }); }
 		});
 		using authentication = fixture.authentication;
-		await assert.rejects(authentication.authorize('aaaa', await authentication.getContext(), new AbortController().signal), ChatGPTAuthenticationError);
+		await assert.rejects(authentication.authorize('aaaa', (await authentication.getContext()).id, new AbortController().signal), ChatGPTAuthenticationError);
 	});
 
 	test('account changes abort an old lease and reject late authorization replies from its context', async () => {
@@ -156,15 +156,16 @@ suite('ChatGPT native authentication consumer', () => {
 		});
 		using authentication = fixture.authentication;
 		await authentication.start();
-		const changes: (string | undefined)[] = [];
-		using listener = authentication.onDidChangeContext(value => changes.push(value));
+		const changes: Awaited<ReturnType<ChatGPTAuthentication['getContext']>>[] = [];
+		using listener = authentication.onDidChangeContext(value => { if (value) { changes.push(value); } });
 		const pending = authentication.authorize('aaaa', context, new AbortController().signal);
 		await entered.p;
-		fixture.carrier.send({ kind: 'changed', context: rotatedContext });
+		const changed = { id: rotatedContext, cacheScope: '2'.repeat(64) };
+		fixture.carrier.send({ kind: 'changed', context: changed.id, cacheScope: changed.cacheScope });
 		fixture.carrier.send({ kind: 'authorized', headers: { Authorization: 'Bearer private-stale-token' } });
 		await assert.rejects(pending);
-		assert.deepEqual(changes, [rotatedContext]);
-		assert.equal(await authentication.getContext(), rotatedContext);
+		assert.deepEqual(changes, [changed]);
+		assert.deepEqual(await authentication.getContext(), changed);
 		await assert.rejects(authentication.authorize('bbbb', context, new AbortController().signal), ChatGPTAuthenticationError);
 	});
 

@@ -6,7 +6,7 @@ import { simpleChatGPTModelCatalog } from '../../../fixtures/chatGPTModels.js';
 import { chatGPTAuthDocument } from '../../../fixtures/chatGPTAuth.js';
 
 declare global {
-	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; };
+	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; };
 }
 
 /** Keep production IPC, Rust authentication, transport, verification and UI; replace only service I/O. */
@@ -19,6 +19,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		await fs.writeFile(path.join(home, 'auth.json'), authentication);
 		let sends = 0; let step = 0; let reply: ReadableStreamDefaultController<Uint8Array> | undefined;
 		let cancelledInitializations = 0;
+		let offline = false;
 		const initializing = new Set<() => void>();
 		const message = (id: string, role: string, text: string) => ({ id, author: { role }, content: { content_type: 'text', parts: [text] } });
 		const live: Record<string, { parent: string | null; message: ReturnType<typeof message>; }> = {};
@@ -33,6 +34,7 @@ async function installService(application: ElectronApplication, holdInitializati
 			get sends() { return sends; },
 			get pendingInitializations() { return initializing.size; },
 			get cancelledInitializations() { return cancelledInitializations; },
+			setOffline(value) { offline = value; },
 			releaseInitialization() {
 				holdInitialization = false;
 				for (const release of [...initializing]) { release(); }
@@ -61,6 +63,7 @@ async function installService(application: ElectronApplication, holdInitializati
 			storage.fetch = async (input, init) => {
 				const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
 				if (url.hostname !== 'chatgpt.com') { throw new Error('Unexpected fixture origin'); }
+				if (offline) { return new Response(null, { status: 503 }); }
 				if (url.pathname.endsWith('/models')) {
 					if (holdInitialization) {
 						await new Promise<void>((resolve, reject) => {
@@ -130,6 +133,24 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			expect(await application.evaluate(() => globalThis.ashNativeFixture.pendingInitializations)).toBe(0);
 			expect(driver.diagnostics.errors).toEqual([]);
 			await testInfo.attach('chatgpt-after-initialization-close', { body: await page.screenshot(), contentType: 'image/png' });
+		});
+
+		test('reopens the ChatGPT sidebar and selected conversation from disk when the service is offline', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench }) => {
+			const application = browser as ElectronApplication;
+			await installService(application);
+			const page = await workbench.openAgentsWindow(target.kind);
+			await page.getByRole('button', { name: 'First native history', exact: true }).click();
+			await expect(page.locator('.ash-chatgpt-widget')).toContainText('History one answer');
+			await application.evaluate(() => globalThis.ashNativeFixture.setOffline(true));
+
+			const reopened = await workbench.reopenAgentsWindow(application, page);
+			const history = reopened.locator('.ash-chatgpt-navigation');
+			const editor = reopened.locator('.ash-chatgpt-widget');
+			await expect(editor.locator('.ash-chatgpt-error')).toContainText('503');
+			await expect(history.getByRole('button', { name: 'First native history', exact: true })).toHaveAttribute('aria-current', 'page');
+			await expect(history.getByRole('button', { name: 'Second native history', exact: true })).toBeVisible();
+			await expect(history.getByRole('button', { name: 'Pinned native history', exact: true })).toBeVisible();
+			await expect(editor).toContainText('History one answer');
 		});
 	});
 

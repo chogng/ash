@@ -100,6 +100,7 @@ const configuration = resources.add(new InMemoryConfigurationService());
 if (dictation) await configuration.updateValue('dictation.backend', 'cloud');
 const services = resources.add(new InstantiationService(new ServiceCollection(
 	[IChatGPTTransport, {
+		async getCacheScope() { return 'a'.repeat(64); },
 		async request(id, request) {
 			const controller = new AbortController();
 			const pending = { controller, reader: undefined as ReadableStreamDefaultReader<Uint8Array> | undefined };
