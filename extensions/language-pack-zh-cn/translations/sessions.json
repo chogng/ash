@@ -16,7 +16,6 @@
     "sessions.nestedChat.sourceUnavailable": "源对话不可用。",
     "sessions.nestedChat.unavailable": "新对话不可用。",
     "sessions.list.nestedChatsHelp": "在会话侧栏中，同一会话中的对话显示在主行下方。按 Tab 聚焦对话，再按 Enter 打开。从命令面板运行“在当前会话中新建对话”可打开并行草稿。发送第一条消息时，新对话会沿用源对话的 Agent。",
-    "sessions.list.nestedChats": "{0} 中的对话",
     "sessions.list.untitledChat": "未命名对话",
     "sessions.chat.compareAgents": "比较 Agent…",
     "sessions.compare.openChat": "打开一个活动对话以比较 Agent。",

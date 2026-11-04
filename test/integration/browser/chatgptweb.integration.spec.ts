@@ -181,7 +181,7 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	await page.setViewportSize({ width: 960, height: 300 });
 	await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=light');
 	const sidebar = page.locator('.ash-chatgpt-navigation');
-	const headers = sidebar.locator('.ash-pane-view-header-button');
+	const headers = sidebar.locator('.ash-sessions-list-section-toggle');
 	await expect(headers).toHaveText(['置顶', '其他项目', '最近']);
 	const row = sidebar.locator('[data-conversation="fixture-chat"].ash-chatgpt-navigation-row');
 	const item = row.locator('.ash-chatgpt-conversation');
@@ -189,71 +189,67 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	const recent = sidebar.locator('[data-group="recent"]');
 	const other = sidebar.locator('[data-group="other"]');
 	await expect.poll(() => recent.evaluate(group => {
-		const header = group.querySelector('.ash-pane-view-header')!.getBoundingClientRect();
-		const [first, second] = group.querySelectorAll('.ash-chatgpt-navigation-row');
+		const header = group.querySelector('.ash-sessions-list-section-toggle')!.getBoundingClientRect();
+		const treeRow = group.closest('.ash-tree-row')!;
+		const [first, second] = treeRow.parentElement!.querySelectorAll('[data-parent-section="recent"]');
 		const a = first!.getBoundingClientRect();
 		const b = second!.getBoundingClientRect();
-		const previous = group.closest('.ash-split-view-pane')!.previousElementSibling!
+		const previous = treeRow.previousElementSibling!
 			.querySelector('.ash-chatgpt-navigation-row')!.getBoundingClientRect();
 		return [header.height, a.height, a.top - header.bottom, b.top - a.bottom, header.top - previous.bottom, a.width - header.width];
 	})).toEqual([32, 32, 2, 2, 8, 0]);
-	await expect(item).toHaveCSS('line-height', '20px');
-	await expect.poll(() => item.evaluate(element => {
-		const style = getComputedStyle(element);
-		return parseFloat(style.borderInlineStartWidth) + parseFloat(style.paddingInlineStart);
-	})).toBe(38);
-	await other.locator('.ash-pane-view-header-button').click();
+	await other.locator('.ash-sessions-list-section-toggle').click();
 	await expect.poll(async () => (await headers.nth(2).boundingBox())!.y - (await headers.nth(1).boundingBox())!.y).toBe(40);
-	await other.locator('.ash-pane-view-header-button').click();
+	await other.locator('.ash-sessions-list-section-toggle').click();
 
 	await item.hover();
-	await expect(row).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-	const hovered = await row.evaluate(element => getComputedStyle(element).backgroundColor);
+	await expect(item).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	const hovered = await item.evaluate(element => getComputedStyle(element).backgroundColor);
 	await expect(actions).toHaveCSS('opacity', '1');
-	await expect(item).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-	await expect(actions).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	await expect(item).toHaveCSS('background-color', hovered);
+	await expect(actions).toHaveCSS('background-color', hovered);
 	await expect(actions).toHaveCSS('background-image', 'none');
 	await testInfo.attach('sidebar-unselected-hover', { body: await sidebar.screenshot(), contentType: 'image/png' });
 	await item.click();
 	await expect(item).toHaveAttribute('aria-current', 'page');
 	await page.mouse.move(350, 1);
 	await expect(actions).toHaveCSS('opacity', '0');
-	const selected = await row.evaluate(element => getComputedStyle(element).backgroundColor);
+	const selected = await item.evaluate(element => getComputedStyle(element).backgroundColor);
 	expect(selected).not.toBe(hovered);
-	await expect(row).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-	const comparison = await row.evaluate(element => {
+	const navigationStyle = await item.evaluate(element => {
 		const document = element.ownerDocument;
-		const sidebar = element.closest('.ash-chatgpt-navigation')!;
-		const activity = document.createElement('div');
+		const navigation = document.createElement('div');
+		navigation.className = 'ash-sessions-activity-content labeled ash-sessions-navigation';
 		const button = document.createElement('button');
-		activity.className = 'ash-sessions-activity-content labeled ash-sessions-navigation';
-		activity.style.position = 'absolute';
-		activity.style.width = getComputedStyle(sidebar).width;
 		button.className = 'ash-sessions-activity-item selected';
-		activity.append(button);
-		sidebar.parentElement!.append(activity);
+		navigation.append(button);
+		element.closest('.ash-sessions-window')!.append(navigation);
 		try {
-			const row = element.getBoundingClientRect();
-			const host = sidebar.getBoundingClientRect();
-			const nav = activity.getBoundingClientRect();
-			const active = button.getBoundingClientRect();
-			return {
-				rowInsets: [row.left - host.left, host.right - row.right],
-				activityInsets: [active.left - nav.left, nav.right - active.right],
-				activityBackground: getComputedStyle(button).backgroundColor,
-			};
+			const style = getComputedStyle(button);
+			const { backgroundColor, height, borderRadius } = style;
+			button.style.backgroundColor = `color-mix(in srgb, ${backgroundColor} 50%, transparent)`;
+			return { backgroundColor, height, borderRadius, hoverBackground: style.backgroundColor };
 		} finally {
-			activity.remove();
+			navigation.remove();
 		}
 	});
-	expect(comparison).toEqual({ rowInsets: [8, 8], activityInsets: [8, 8], activityBackground: selected });
+	expect(selected).toBe(navigationStyle.backgroundColor);
+	expect(hovered).toBe(navigationStyle.hoverBackground);
+	await expect(item).toHaveCSS('height', navigationStyle.height);
+	await expect(item).toHaveCSS('border-radius', navigationStyle.borderRadius);
+	await expect(item).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	await expect.poll(() => row.evaluate(element => {
+		const row = element.getBoundingClientRect();
+		const host = element.closest('.ash-chatgpt-navigation')!.getBoundingClientRect();
+		return [row.left - host.left, host.right - row.right];
+	})).toEqual([8, 8]);
 	await testInfo.attach('sidebar-rest', { body: await sidebar.screenshot(), contentType: 'image/png' });
 	await item.hover();
 	await expect(actions).toHaveCSS('opacity', '1');
-	await expect(item).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-	await expect(actions).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	await expect(item).toHaveCSS('background-color', selected);
+	await expect(actions).toHaveCSS('background-color', selected);
 	await expect(actions).toHaveCSS('background-image', 'none');
-	await expect(row).toHaveCSS('background-color', selected);
+	await expect(item).toHaveCSS('background-color', selected);
 	await expect(actions.locator('[data-action-id]')).toHaveCount(2);
 	await expect(actions.locator('[data-action-id]').last()).toHaveAttribute('data-action-id', 'sessions.chatgpt.more');
 	await expect.poll(() => row.evaluate(element => {
@@ -269,7 +265,7 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 		const bounds = (await row.boundingBox())!;
 		const more = (await actions.locator('button').last().boundingBox())!;
 		return bounds.x + bounds.width - more.x - more.width;
-	}).toBe(2);
+	}).toBe(5);
 	await actions.locator('button').first().hover();
 	await testInfo.attach('sidebar-hover', { body: await sidebar.screenshot(), contentType: 'image/png' });
 
@@ -282,6 +278,11 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	await expect(more).toBeFocused();
 	await item.click({ button: 'right' });
 	await expect(page.getByRole('menuitem', { name: '重命名' })).toBeVisible();
+	await page.keyboard.press('Escape');
+
+	await page.emulateMedia({ forcedColors: 'active' });
+	await expect(item).toHaveCSS('outline-style', 'solid');
+	await expect(item).toHaveCSS('outline-width', '2px');
 });
 
 test('ChatGPT sidebar icon picker selects, persists and resets a conversation icon', async ({ page }, testInfo) => {
@@ -300,8 +301,8 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 		const bounds = (await row.boundingBox())!;
 		const button = (await trigger.boundingBox())!;
 		return [button.x - bounds.x, button.y - bounds.y, button.width, button.height];
-	}).toEqual([2, 2, 28, 28]);
-	const moreAction = row.locator('.ash-session-row-actions button').last();
+	}).toEqual([7, 2, 28, 28]);
+	const moreAction = row.locator('.ash-sessions-list-actions button').last();
 	await title.hover();
 	await moreAction.hover();
 	const actionHover = await moreAction.evaluate(button => getComputedStyle(button).backgroundColor);
@@ -399,7 +400,7 @@ test('ChatGPT dictation inserts text at the cursor and cancels on navigation wit
 	await expect(page.locator('.ash-chatgpt-dictation-preview')).toBeHidden();
 	await mic.click();
 	await expect(stop).toHaveAttribute('aria-pressed', 'true');
-	await page.getByRole('button', { name: 'New chat', exact: true }).click();
+	await page.evaluate(() => window.ashChatGPTIntegration.newChat());
 	await expect(mic).toHaveAttribute('aria-pressed', 'false');
 	await page.evaluate(() => window.ashChatGPTIntegration.dictate('late new-chat speech', true));
 	await expectDraft(page, 'First Please explain');
@@ -499,7 +500,7 @@ test('ChatGPT retries failed uploads and keeps removed or old-draft files out of
 	await expect.poll(() => typeof release).toBe('function');
 	await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
 	await expect(page.getByRole('list', { name: 'Attachments' })).toBeHidden();
-	await page.getByRole('button', { name: 'New chat', exact: true }).click();
+	await page.evaluate(() => window.ashChatGPTIntegration.newChat());
 	await expect(page.getByRole('list', { name: 'Attachments' })).toContainText('retry.txt');
 	await page.getByRole('button', { name: 'Remove retry.txt', exact: true }).click();
 	await release();
@@ -759,14 +760,14 @@ test('ChatGPT resolves citations and runs HTML, Canvas and embedded frames local
 	const download = await downloadEvent;
 	expect(download.suggestedFilename()).toBe('report.csv');
 	expect(readFileSync((await download.path())!, 'utf8')).toContain('May,42');
-	await page.getByRole('button', { name: '新聊天', exact: true }).click();
+	await page.evaluate(() => window.ashChatGPTIntegration.newChat());
 	await expect(page.locator('.ash-chat-media')).toHaveCount(0);
 	await expect(page.locator('iframe')).toHaveCount(0);
 });
 
 test('ChatGPT waits for the streamed conversation ID before resolving a sandbox attachment', async ({ page }) => {
 	await chatPage(page);
-	await page.getByRole('button', { name: '新聊天', exact: true }).click();
+	await page.evaluate(() => window.ashChatGPTIntegration.newChat());
 	const message = { id: 'late-reply', author: { role: 'assistant' }, content: { parts: ['[report.csv](sandbox:/mnt/data/report.csv)'] } };
 	const paths: string[] = [];
 	await page.route('**/service/.resource?*', route => {

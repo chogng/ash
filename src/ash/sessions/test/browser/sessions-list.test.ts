@@ -81,7 +81,14 @@ test('SessionsList keeps session buttons and focus while refreshing', async () =
 	assert.equal(actions.length, 7);
 	assert.ok(actions.every(action => action.enabled), 'Every new chat item exposes all actions before sending');
 	for (const action of actions.slice(0, 5)) await action.run();
-	assert.deepEqual(executed.map(args => args[1]), Array.from({ length: 5 }, () => ({ untitledSessionId: 'first' })));
+	const target = { untitledSessionId: 'first' };
+	assert.deepEqual(executed, [
+		['sessions.list.togglePin', target],
+		['agentSession.rename', target],
+		['agentSession.addToProject', target],
+		['agentSession.moveToGroup', target],
+		['sessions.openInNewWindow', { kind: 'untitled', session: untitledSessions[0] }],
+	]);
 	menu!.onHide?.(false);
 
 	buttons[0].focus();
@@ -236,8 +243,8 @@ test('SessionsList updates passive status without changing row identity or selec
 	assert.equal(more.getAttribute('aria-expanded'), 'true');
 	const actions = menu!.getActions().filter(action => action.id !== 'ash.actions.separator');
 	assert.deepEqual(actions.map(action => action.id), [
-		'sessions.list.togglePin', 'agentSession.rename', 'agentSession.archive',
-		'agentSession.addToProject', 'agentSession.moveToGroup', 'agentSession.delete', 'sessions.openInNewWindow',
+		'sessions.list.togglePin', 'agentSession.rename', 'agentSession.addToProject',
+		'agentSession.moveToGroup', 'sessions.openInNewWindow', 'agentSession.archive', 'agentSession.delete',
 	]);
 	actions[1]!.run();
 	assert.deepEqual(executed, [['agentSession.rename', 'background']]);
@@ -246,7 +253,7 @@ test('SessionsList updates passive status without changing row identity or selec
 	button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
 	assert.equal(more.getAttribute('aria-expanded'), 'true');
 	await menu!.getActions()[0]!.run();
-	assert.ok(button.closest('[data-section="pinned"]'));
+	assert.ok(button.closest('[data-parent-section="pinned"]'));
 	assert.equal(dom.window.document.activeElement, button);
 	menu!.onHide?.(false);
 	list.dispose();
@@ -418,7 +425,7 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 		github, groups, storage, emptyProjects, commands, context, listCustomViews, listMenus, listNotifications,
 		new SessionsListModelService(storage), new SessionSectionOrderService(storage));
 	const sectionNames = (list: SessionsList) => Array.from(list.domNode.querySelectorAll('[data-section^="group:"] > h3'), heading => heading.textContent);
-	const rows = (list: SessionsList) => Array.from(list.domNode.querySelectorAll('[data-section="group:quality"] [data-row-order-id]'), row => row.getAttribute('data-row-order-id'));
+	const rows = (list: SessionsList) => Array.from(list.domNode.querySelectorAll('[data-parent-section="group:quality"][data-row-order-id]'), row => row.getAttribute('data-row-order-id'));
 	const moveUp = async (button: HTMLButtonElement) => {
 		button.focus();
 		button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
@@ -480,7 +487,7 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	destination.dispatchEvent(new dom.window.Event('drop', { bubbles: true, cancelable: true }));
 	await Promise.resolve();
 	assert.deepEqual(rows(restored), ['one']);
-	assert.equal(restored.domNode.querySelector('[data-section="group:release"] [data-row-order-id="two"]'), source);
+	assert.equal(restored.domNode.querySelector('[data-parent-section="group:release"][data-row-order-id="two"]'), source);
 
 });
 
@@ -600,11 +607,11 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	await submenuAction(code, 'sessions.list.groupBy', 'sessions.list.groupBy.status').run();
 	const working = chat.domNode.querySelector('[data-section="grouping:status:working"]')!;
 	assert.equal(working.querySelector('h3 button')?.textContent, '进行中');
-	assert.equal(working.querySelector('[data-row-order-id]')?.getAttribute('data-row-order-id'), 'manual');
+	assert.equal(chat.domNode.querySelector('[data-parent-section="grouping:status:working"][data-row-order-id]')?.getAttribute('data-row-order-id'), 'manual');
 	assert.equal(submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.status').checked, true);
 	assert.deepEqual(repositoryReads, []);
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.projects').run();
-	assert.equal(chat.domNode.querySelector('[data-section="grouping:projects:release"] [data-row-order-id]')?.getAttribute('data-row-order-id'), 'manual');
+	assert.equal(chat.domNode.querySelector('[data-parent-section="grouping:projects:release"][data-row-order-id]')?.getAttribute('data-row-order-id'), 'manual');
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.environment').run();
 	assert.equal(chat.domNode.querySelector('[data-section="grouping:environment:local"] h3 button')?.textContent, '本地');
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.repository').run();

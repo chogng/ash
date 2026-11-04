@@ -12,7 +12,7 @@ import { addDisposableListener, getWindow, h } from '../../../../../base/browser
 import { appendIcon, getRegisteredIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
-import { AbstractDisposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { AbstractDisposable, Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { MOVE_CHAT_TO_SESSION_ACTION_ID } from '../sessionsActions.js';
 import { SessionActionFeedback } from '../sessionActionFeedback.js';
 import { getSessionsListEntries } from './sessionsListFilters.js';
@@ -36,7 +36,10 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../../pla
 import { IProjectService, type Project } from '../../../../../platform/projects/common/projectService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
-import { generateUuid } from '../../../../../base/common/uuid.js';
+import { WorkbenchObjectTree } from '../../../../../platform/list/browser/listService.js';
+import type { ObjectTreeElement } from '../../../../../base/browser/ui/tree/objectTreeModel.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { Menus } from '../../../../browser/menus.js';
 import { ActionBar } from '../../../../../base/browser/ui/actionbar/actionbar.js';
@@ -65,6 +68,10 @@ interface SessionBucket {
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends DomWidget {
 	private readonly search: SessionsListSearch;
+	private readonly tree: SessionsListTree;
+	private syncingCollapse = false;
+	private branches: readonly ObjectTreeElement<HTMLElement>[] = [];
+	private readonly parents = new Map<HTMLElement, ObjectTreeElement<HTMLElement> | undefined>();
 	private readonly feedback = this._register(new SessionActionFeedback());
 	private readonly workingIcon: ISessionStatusIcon = {
 		label: localize('sessions.management.working', 'Working'),
@@ -108,6 +115,7 @@ export class SessionsList extends DomWidget {
 		@IHoverService private readonly hoverService?: IHoverService,
 		@ISessionProviderScopeService private readonly providerScopes?: ISessionProviderScopeService,
 		@IInstantiationService private readonly instantiation?: IInstantiationService,
+		@IConfigurationService configuration?: IConfigurationService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -122,6 +130,13 @@ export class SessionsList extends DomWidget {
 		header.append(heading);
 		this.list = h(ownerDocument, 'div');
 		this.list.className = 'ash-sessions-list-items';
+		const config = configuration ?? this._register(new InMemoryConfigurationService());
+		this.tree = this._register(new SessionsListTree(this.list, title, config));
+		this._register(this.tree.onDidChangeCollapseState(({ element, collapsed }) => {
+			const key = element.dataset.section;
+			if (key === undefined || this.search.hasQuery || this.syncingCollapse) return;
+			this.storage.store(this.collapseKey(key), collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
+		}));
 		this.search = this._register(new SessionsListSearch(this.domNode, this.list, () => this.render(), () => {
 			const row = [...this.list.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => !button.closest('[hidden]'));
 			row?.focus();
@@ -142,9 +157,10 @@ export class SessionsList extends DomWidget {
 			const index = buttons.indexOf(ownerDocument.activeElement as HTMLButtonElement);
 			if (index < 0) return;
 			event.preventDefault();
+			event.stopPropagation();
 			const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : Math.max(0, Math.min(buttons.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
 			buttons[next]?.focus();
-		}));
+		}, true));
 		this.registerOrderingDragAndDrop();
 		this._register(sessionService.onDidChange(() => this.render()));
 		this._register(storage.onDidChangeValue(event => {
@@ -295,11 +311,12 @@ export class SessionsList extends DomWidget {
 		this.render();
 		this.list.scrollTop = state.top;
 		if (state.focus?.startsWith('navigation:')) this.navigationButtons.get(state.focus.slice('navigation:'.length))?.focus();
-		else if (state.focus?.startsWith('section:')) this.sections.get(state.focus.slice('section:'.length))?.button.focus({ preventScroll: true });
 		else if (state.focus) {
-			const item = this.items.get(state.focus)?.domNode;
-			const collapsed = item?.closest<HTMLElement>('[hidden]');
-			(collapsed?.parentElement?.querySelector<HTMLButtonElement>('h3 button') ?? item?.querySelector<HTMLButtonElement>('.ash-sessions-list-item'))?.focus({ preventScroll: true });
+			let row = state.focus.startsWith('section:')
+				? this.sections.get(state.focus.slice('section:'.length))?.domNode
+				: this.items.get(state.focus)?.domNode;
+			while (row && !this.list.contains(row)) row = this.parents.get(row)?.element;
+			if (row) this.tree.focusRow(row, true);
 		}
 	}
 
@@ -329,10 +346,10 @@ export class SessionsList extends DomWidget {
 			const target = (event.target as Element | null)?.closest<HTMLElement>(`${selector}, [data-section]`);
 			if (!source || !target || source === target || !this.list.contains(source)) return;
 			const attribute = source.dataset.rowOrderId ? 'rowOrderId' : 'sectionOrderId';
-			if (source.parentElement === target.parentElement && target.dataset[attribute]) return { target, attribute } as const;
+			if (this.parents.get(source) === this.parents.get(target) && target.dataset[attribute]) return { target, attribute } as const;
 			if (attribute !== 'rowOrderId') return;
-			const section = target.closest<HTMLElement>('[data-section]')?.dataset.section;
-			const from = source.parentElement?.closest<HTMLElement>('[data-section]')?.dataset.section;
+			const section = target.dataset.section ?? this.parents.get(target)?.element.dataset.section;
+			const from = this.parents.get(source)?.element.dataset.section;
 			if (section !== from && (section === 'pinned' || section === 'recent'
 				|| this.groups.groups.some(group => group.kind !== 'comparison' && section === `group:${group.sectionId}`))) {
 				return { target, attribute, section } as const;
@@ -343,7 +360,7 @@ export class SessionsList extends DomWidget {
 			referenceDrag.clear();
 			const item = handle?.dataset.item ? this.items.get(handle.dataset.item) : undefined;
 			source = item
-				? (item.presentation.matches(selector) ? item.presentation : undefined)
+				? (item.domNode.matches(selector) ? item.domNode : undefined)
 				: handle?.closest<HTMLElement>(selector) ?? undefined;
 			const conversation = item?.target;
 			if (conversation && event.dataTransfer) {
@@ -388,26 +405,26 @@ export class SessionsList extends DomWidget {
 			if (this.isDisposed) return;
 			this.listModel.unpinSession(session);
 		}
-		const item = this.items.get(`session:${id}`)?.presentation;
+		const item = this.items.get(`session:${id}`)?.domNode;
 		if (item && targetId) this.moveOrderedItem(item, 'rowOrderId', targetId);
 	}
 
 	private moveOrderedItem(element: HTMLElement, attribute: 'rowOrderId' | 'sectionOrderId', targetId: string): void {
-		const parent = element.parentElement;
+		const parent = this.parents.get(element);
 		const id = element.dataset[attribute];
-		if (!parent || !id) return;
+		if (!id) return;
 		const ids = this.orderedSiblingIds(parent, attribute);
 		if (attribute === 'rowOrderId') {
-			const section = parent.closest<HTMLElement>('[data-section]')?.dataset.section ?? '';
+			const section = parent?.element.dataset.section ?? '';
 			this.listModel.moveSession(`${this.mode}:${section}`, ids, id, targetId);
 		} else {
 			this.sectionOrder.reorder(this.mode, ids, id, targetId);
 		}
 	}
 
-	private orderedSiblingIds(parent: HTMLElement, attribute: 'rowOrderId' | 'sectionOrderId'): string[] {
-		return Array.from(parent.children).flatMap(child => {
-			const id = (child as HTMLElement).dataset[attribute];
+	private orderedSiblingIds(parent: ObjectTreeElement<HTMLElement> | undefined, attribute: 'rowOrderId' | 'sectionOrderId'): string[] {
+		return (parent ? parent.children ?? [] : this.branches).flatMap(({ element }) => {
+			const id = element.dataset[attribute];
 			return id ? [id] : [];
 		});
 	}
@@ -415,8 +432,8 @@ export class SessionsList extends DomWidget {
 	private orderActions(element: HTMLElement, kind: 'row' | 'section'): IAction[] {
 		const attribute = kind === 'row' ? 'rowOrderId' : 'sectionOrderId';
 		const id = element.dataset[attribute];
-		const parent = element.parentElement;
-		if (!id || !parent) {
+		const parent = this.parents.get(element);
+		if (!id) {
 			return [];
 		}
 		const ids = this.orderedSiblingIds(parent, attribute);
@@ -512,7 +529,7 @@ export class SessionsList extends DomWidget {
 			menuActionOptions: { arg: selection },
 			contextKeyService: context,
 			getAnchor: () => anchor,
-			getActions: () => [...this.orderActions(item.presentation, 'row'), ...sessionActions, ...this.automationVisibilityActions(selection), ...createSessionItemActions(selection, this.commands, this.listModel, this.notifications,
+			getActions: () => [...this.orderActions(item.domNode, 'row'), ...sessionActions, ...this.automationVisibilityActions(selection), ...createSessionItemActions(selection, this.commands, this.listModel, this.notifications,
 				() => this.commands.executeCommand('sessions.openInNewWindow', selection),
 				sessionId => this.restoreViewState({ top: this.list.scrollTop, focus: `session:${sessionId}` })).map(action => action.id !== 'agentSession.archive' ? action : {
 					...action,
@@ -525,15 +542,25 @@ export class SessionsList extends DomWidget {
 		});
 	}
 
+	private collapseKey(key: string): string {
+		return `sessions.list.${this.mode}.collapsed.${key}`;
+	}
+
 	private readTree(): readonly ISessionsListTreeNode[] {
-		const nodes = new Map<Element, SessionListItem | SessionListSection>();
-		for (const [, item] of this.items) nodes.set(item.presentation, item);
-		for (const [, section] of this.sections) nodes.set(section.domNode, section);
-		const readChildren = (parent: HTMLElement): readonly ISessionsListTreeNode[] => Array.from(parent.children).flatMap(element => {
-			const node = nodes.get(element);
-			return node ? [node.describe(readChildren)] : [];
+		const read = (branches: readonly ObjectTreeElement<HTMLElement>[]): ISessionsListTreeNode[] => branches.flatMap(branch => {
+			const { element } = branch;
+			const children = read(branch.children ?? []);
+			const key = element.dataset.section;
+			if (key !== undefined) {
+				return [{
+					id: key, kind: 'section', label: this.sections.get(key)!.title,
+					collapsed: this.tree.isCollapsed(SessionsListTree.id(element)) ?? false, children,
+				}];
+			}
+			const item = this.items.get(element.dataset.item ?? '');
+			return item ? [item.describe(children)] : [];
 		});
-		return readChildren(this.list);
+		return read(this.branches);
 	}
 
 	private resetRepositoryGroups(): void {
@@ -645,12 +672,14 @@ export class SessionsList extends DomWidget {
 		};
 		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], subgroup = false, open?: () => void, group?: SessionGroup): HTMLElement => {
 			activeSections.add(key);
-			const storageKey = `sessions.list.${this.mode}.collapsed.${key}`;
-			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, subgroup, collapsed => {
-				if (!this.search.hasQuery) this.storage.store(storageKey, collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
-			}));
-			section.update(title, reorderChildren(children, ids => this.listModel.getSessionOrder(`${this.mode}:${key}`, ids), 'rowOrderId'),
-				!this.search.hasQuery && this.storage.getBoolean(storageKey, StorageScope.PROFILE, false), open, group);
+			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, subgroup,
+				collapsed => this.tree.setSectionCollapsed(key, collapsed)));
+			section.update(title, reorderChildren(children, ids => this.listModel.getSessionOrder(`${this.mode}:${key}`, ids), 'rowOrderId'), {
+				open,
+				actionLabel: open ? localize('sessions.list.openComparison', 'Open comparison {0}', title) : undefined,
+				icon: group?.icon ? getRegisteredIcon(group.icon, ownerDocument) : undefined,
+				color: group?.color ? `var(${colorCssVariable(group.color)})` : undefined,
+			});
 			if (group) {
 				section.domNode.dataset.sectionOrderId = key;
 				section.button.draggable = true;
@@ -714,12 +743,11 @@ export class SessionsList extends DomWidget {
 				child.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: chat.threadId } }, child, anchor));
 				return child.domNode;
 			});
-			item.updateChats([...children, ...(nestedDrafts.get(session.sessionId) ?? [])]);
-			delete item.domNode.dataset.rowOrderId;
-			item.presentation.dataset.rowOrderId = session.sessionId;
+			item.children = [...children, ...(nestedDrafts.get(session.sessionId) ?? [])];
+			item.domNode.dataset.rowOrderId = session.sessionId;
 			item.domNode.draggable = true;
-			if (this.listModel.isSessionPinned(session)) pinned.push(item.presentation);
-			else remaining.set(session.sessionId, item.presentation);
+			if (this.listModel.isSessionPinned(session)) pinned.push(item.domNode);
+			else remaining.set(session.sessionId, item.domNode);
 		}
 		const projects: HTMLElement[] = [];
 		const chatGroups: HTMLElement[] = [];
@@ -793,7 +821,29 @@ export class SessionsList extends DomWidget {
 			for (const key of this.items.keys()) if (!present.has(key)) this.items.deleteAndDispose(key);
 			for (const key of this.sections.keys()) if (!activeSections.has(key)) this.sections.deleteAndDispose(key);
 		}
-		reconcileChildren(this.list, ordered);
+		this.parents.clear();
+		const project = (element: HTMLElement, parent?: ObjectTreeElement<HTMLElement>): ObjectTreeElement<HTMLElement> => {
+			const key = element.dataset.section;
+			const section = key === undefined ? undefined : this.sections.get(key);
+			const item = this.items.get(element.dataset.item ?? '');
+			const children: ObjectTreeElement<HTMLElement>[] = [];
+			const branch = { element, children, collapsible: !!section, collapsed: !!section && !this.search.hasQuery && this.storage.getBoolean(this.collapseKey(key!), StorageScope.PROFILE, false) };
+			this.parents.set(element, parent);
+			if (parent) element.dataset.parentSection = parent.element.dataset.section ?? parent.element.dataset.parentSection ?? '';
+			else delete element.dataset.parentSection;
+			for (const child of section?.children ?? item?.children ?? []) children.push(project(child, branch));
+			return branch;
+		};
+		this.branches = ordered.map(element => project(element));
+		this.syncingCollapse = true;
+		try {
+			this.tree.setChildren(this.branches);
+			for (const [key, section] of this.sections) {
+				if (this.parents.has(section.domNode)) this.tree.setSectionCollapsed(key, !this.search.hasQuery && this.storage.getBoolean(this.collapseKey(key), StorageScope.PROFILE, false));
+			}
+		} finally {
+			this.syncingCollapse = false;
+		}
 		if (focused?.isConnected && !focused.closest('[hidden]') && ownerDocument.activeElement !== focused) focused.focus({ preventScroll: true });
 	}
 	private async openComparison(sessionIds: readonly string[]): Promise<void> {
@@ -817,14 +867,6 @@ export class SessionsList extends DomWidget {
 
 }
 
-/** Retain rows and headings during refreshes so keyboard focus and scroll do not jump. */
-function reconcileChildren(parent: HTMLElement, children: readonly HTMLElement[]): void {
-	for (let index = 0; index < children.length; index++) {
-		if (parent.childNodes[index] !== children[index]) parent.insertBefore(children[index], parent.childNodes[index] ?? null);
-	}
-	while (parent.childNodes.length > children.length) parent.lastChild!.remove();
-}
-
 /** Project an order into movable slots while retaining fixed siblings in place. */
 function reorderChildren(children: readonly HTMLElement[], order: (ids: readonly string[]) => readonly string[], attribute: 'rowOrderId' | 'sectionOrderId'): HTMLElement[] {
 	const movable = new Map<string, HTMLElement>();
@@ -838,113 +880,15 @@ function reorderChildren(children: readonly HTMLElement[], order: (ids: readonly
 	return children.map(child => child.dataset[attribute] ? ordered[next++]! : child);
 }
 
-class SessionListSection extends AbstractDisposable {
-	readonly domNode: HTMLElement;
-	readonly button: HTMLButtonElement;
-	private readonly body: HTMLElement;
-	private readonly label: HTMLElement;
-	private readonly icon: HTMLElement;
-	private readonly appearanceIcon: HTMLElement;
-	private collapsed = false;
-	private open: (() => void) | undefined;
-	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
-	private readonly listeners: { dispose(): void; }[];
-
-	describe(readChildren: (parent: HTMLElement) => readonly ISessionsListTreeNode[]): ISessionsListTreeNode {
-		return {
-			id: this.domNode.dataset.section!, kind: 'section', label: this.label.textContent ?? '',
-			collapsed: this.collapsed, children: readChildren(this.body)
-		};
-	}
-
-	constructor(document: Document, key: string, private readonly subgroup: boolean, toggle: (collapsed: boolean) => void) {
-		super();
-		this.domNode = h(document, 'section', { className: subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section' });
-		this.domNode.dataset.section = key;
-		const heading = h(document, 'h3');
-		this.button = h(document, 'button', { className: 'ash-sessions-list-section-toggle' });
-		this.button.type = 'button';
-		this.icon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
-		this.appearanceIcon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
-		this.label = h(document, 'span', { className: 'ash-sessions-list-section-label' });
-		this.button.append(...(subgroup ? [this.icon, this.label] : [this.label, this.icon]));
-		heading.append(this.button);
-		this.body = h(document, 'div', { className: 'ash-sessions-list-section-body' });
-		this.body.id = `ash-sessions-list-${generateUuid()}`;
-		this.button.setAttribute('aria-controls', this.body.id);
-		this.domNode.append(heading, this.body);
-		this.listeners = [
-			addDisposableListener(this.button, 'click', () => { if (this.open) this.open(); else toggle(!this.collapsed); }),
-			addDisposableListener(this.button, 'contextmenu', event => {
-				if (!this.contextMenu) return;
-				event.preventDefault();
-				this.contextMenu({ x: event.clientX, y: event.clientY, targetWindow: getWindow(this.button) });
-			}),
-			addDisposableListener(this.button, 'keydown', event => {
-				if (this.contextMenu && (event.key === 'ContextMenu' || event.key === 'F10' && event.shiftKey)) {
-					event.preventDefault();
-					event.stopPropagation();
-					this.contextMenu(this.button);
-					return;
-				}
-				if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-				event.preventDefault();
-				toggle(event.key === 'ArrowLeft');
-			}),
-		];
-	}
-
-	setContextMenu(menu: (anchor: ContextMenuAnchor) => void): void {
-		this.contextMenu = menu;
-		this.button.setAttribute('aria-haspopup', 'menu');
-	}
-
-	update(title: string, children: readonly HTMLElement[], collapsed: boolean, open?: () => void, group?: SessionGroup): void {
-		this.open = open;
-		this.label.textContent = title;
-		this.button.title = open ? localize('sessions.list.openComparison', 'Open comparison {0}', title) : title;
-		if (open) this.button.setAttribute('aria-label', this.button.title);
-		else this.button.removeAttribute('aria-label');
-		this.collapsed = collapsed;
-		this.button.setAttribute('aria-expanded', String(!collapsed));
-		const customIcon = group?.icon && getRegisteredIcon(group.icon, this.icon.ownerDocument);
-		const icon = this.subgroup ? collapsed ? Lxicon.folder : Lxicon.folderOpened : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
-		if (this.icon.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
-			this.icon.replaceChildren(); appendIcon(icon, this.icon);
-		}
-		const color = group?.color ? `var(${colorCssVariable(group.color)})` : '';
-		this.icon.style.color = customIcon ? '' : color;
-		if (customIcon) {
-			if (this.appearanceIcon.firstElementChild?.getAttribute('data-ash-icon-id') !== customIcon.id) {
-				this.appearanceIcon.replaceChildren();
-				appendIcon(customIcon, this.appearanceIcon);
-			}
-			this.appearanceIcon.style.color = color;
-			if (!this.appearanceIcon.parentElement) this.label.before(this.appearanceIcon);
-		} else {
-			this.appearanceIcon.remove();
-		}
-		if (collapsed && this.body.contains(this.domNode.ownerDocument.activeElement)) this.button.focus({ preventScroll: true });
-		this.body.hidden = collapsed;
-		reconcileChildren(this.body, children);
-	}
-
-	protected override disposeCore(): void {
-		for (const listener of this.listeners) listener.dispose();
-		this.domNode.remove();
-	}
-}
-
 class SessionListItem extends AbstractDisposable {
 	readonly domNode: HTMLElement;
 	target: { readonly sessionId: string; readonly threadId: string; } | undefined;
 	private readonly button: HTMLButtonElement;
 	private readonly actions: ActionBar;
+	private readonly row: SessionListRowRenderer;
 	private readonly label: HTMLSpanElement;
 	private readonly pullRequest: HTMLSpanElement;
-	private chats: HTMLElement | undefined;
-	private wrapper: HTMLElement | undefined;
-	get presentation(): HTMLElement { return this.chats?.childElementCount ? this.wrapper! : this.domNode; }
+	children: readonly HTMLElement[] = [];
 	private readonly management: HTMLSpanElement;
 	private managementDescription: string | undefined;
 	private pullRequestDescription = '';
@@ -955,39 +899,20 @@ class SessionListItem extends AbstractDisposable {
 	private readonly contextListeners;
 	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
 
-	describe(readChildren: (parent: HTMLElement) => readonly ISessionsListTreeNode[]): ISessionsListTreeNode {
+	describe(children: readonly ISessionsListTreeNode[]): ISessionsListTreeNode {
 		const id = this.domNode.dataset.item!;
 		const kind = id.startsWith('session:') ? 'session' : id.startsWith('chat:') ? 'chat' : id.startsWith('project:') ? 'project' : 'draft';
 		return {
 			id, kind, label: this.label.textContent ?? '', ...this.target,
-			...(this.chats?.childElementCount ? { children: readChildren(this.chats) } : {})
+			...(children.length ? { children } : {})
 		};
-	}
-
-	updateChats(children: readonly HTMLElement[]): void {
-		if (!children.length) {
-			this.chats?.replaceChildren();
-			return;
-		}
-		const group = this.chats ??= h(this.domNode.ownerDocument, 'div', { className: 'ash-sessions-list-nested-chats' });
-		group.setAttribute('role', 'group');
-		group.setAttribute('aria-label', localize('sessions.list.nestedChats', 'Conversations in {0}', this.label.textContent ?? ''));
-		const wrapper = this.wrapper ??= h(this.domNode.ownerDocument, 'div');
-		if (!group.parentElement) wrapper.append(group);
-		if (this.domNode.parentElement !== wrapper) wrapper.prepend(this.domNode);
-		reconcileChildren(group, children);
 	}
 
 	constructor(ownerDocument: Document, icon?: ThemeIcon, readonly leadingIcon?: SessionLeadingIcon) {
 		super();
-		this.domNode = h(ownerDocument, 'div', { className: 'ash-sessions-list-row' });
-		this.button = h(ownerDocument, 'button', { className: 'ash-sessions-list-item' });
-		this.button.type = 'button';
-		if (leadingIcon) {
-			this.domNode.classList.add('has-leading-icon');
-			this.domNode.append(leadingIcon.element);
-		}
-		this.domNode.append(this.button);
+		this.row = new SessionListRowRenderer(ownerDocument, leadingIcon?.element);
+		this.domNode = this.row.element;
+		this.button = this.row.button;
 		this.actions = new ActionBar(this.domNode, {
 			ariaLabel: localize('sessions.list.actions', 'Chat actions'),
 			actions: [{
@@ -1092,7 +1017,173 @@ class SessionListItem extends AbstractDisposable {
 		this.clickListener.dispose();
 		this.actions.dispose();
 		for (const listener of this.contextListeners) listener.dispose();
-		this.wrapper?.remove();
+		this.row.dispose();
+	}
+}
+
+export class SessionListSection extends AbstractDisposable {
+	readonly domNode: HTMLElement;
+	readonly button: HTMLButtonElement;
+	children: readonly HTMLElement[] = [];
+	private readonly label: HTMLElement;
+	private readonly icon: HTMLElement;
+	private readonly appearanceIcon: HTMLElement;
+	private open: (() => void) | undefined;
+	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
+	private readonly listeners: { dispose(): void; }[];
+
+	get title(): string { return this.label.textContent ?? ''; }
+
+	constructor(document: Document, key: string, private readonly subgroup: boolean, toggle: (collapsed?: boolean) => void) {
+		super();
+		this.domNode = h(document, 'section', { className: subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section' });
+		this.domNode.dataset.section = key;
+		sectionRenderers.set(this.domNode, this);
+		const heading = h(document, 'h3');
+		this.button = h(document, 'button', { className: 'ash-sessions-list-section-toggle' });
+		this.button.type = 'button';
+		this.icon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
+		this.appearanceIcon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
+		this.label = h(document, 'span', { className: 'ash-sessions-list-section-label' });
+		this.button.append(...(subgroup ? [this.icon, this.label] : [this.label, this.icon]));
+		heading.append(this.button);
+		this.domNode.append(heading);
+		this.listeners = [
+			addDisposableListener(this.button, 'click', event => { event.stopPropagation(); if (this.open) this.open(); else toggle(); }),
+			addDisposableListener(this.button, 'contextmenu', event => {
+				if (!this.contextMenu) return;
+				event.preventDefault();
+				this.contextMenu({ x: event.clientX, y: event.clientY, targetWindow: getWindow(this.button) });
+			}),
+			addDisposableListener(this.button, 'keydown', event => {
+				if (this.contextMenu && (event.key === 'ContextMenu' || event.key === 'F10' && event.shiftKey)) {
+					event.preventDefault();
+					event.stopPropagation();
+					this.contextMenu(this.button);
+					return;
+				}
+				if (event.key === 'Enter' || event.key === ' ') { event.stopPropagation(); return; }
+				if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+				event.preventDefault();
+				event.stopPropagation();
+				toggle(event.key === 'ArrowLeft');
+			}),
+		];
+	}
+
+	setContextMenu(menu: (anchor: ContextMenuAnchor) => void): void {
+		this.contextMenu = menu;
+		this.button.setAttribute('aria-haspopup', 'menu');
+	}
+
+	update(title: string, children: readonly HTMLElement[], options?: { readonly open?: () => void; readonly actionLabel?: string; readonly icon?: Icon; readonly color?: string; }): void {
+		this.open = options?.open;
+		this.label.textContent = title;
+		this.button.title = options?.actionLabel ?? title;
+		if (options?.actionLabel) this.button.setAttribute('aria-label', options.actionLabel);
+		else this.button.removeAttribute('aria-label');
+		this.children = children;
+		const customIcon = options?.icon;
+		const color = options?.color ?? '';
+		this.icon.style.color = customIcon ? '' : color;
+		if (customIcon) {
+			if (this.appearanceIcon.firstElementChild?.getAttribute('data-ash-icon-id') !== customIcon.id) {
+				this.appearanceIcon.replaceChildren();
+				appendIcon(customIcon, this.appearanceIcon);
+			}
+			this.appearanceIcon.style.color = color;
+			if (!this.appearanceIcon.parentElement) this.label.before(this.appearanceIcon);
+		} else {
+			this.appearanceIcon.remove();
+		}
+	}
+
+	renderCollapse(collapsed: boolean): void {
+		this.button.setAttribute('aria-expanded', String(!collapsed));
+		const icon = this.subgroup ? collapsed ? Lxicon.folder : Lxicon.folderOpened : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
+		if (this.icon.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
+			this.icon.replaceChildren();
+			appendIcon(icon, this.icon);
+		}
+	}
+
+	protected override disposeCore(): void {
+		for (const listener of this.listeners) listener.dispose();
 		this.domNode.remove();
 	}
 }
+
+export class SessionListRowRenderer extends Disposable {
+	readonly element: HTMLElement;
+	readonly button: HTMLButtonElement;
+
+	constructor(document: Document, leading?: HTMLElement) {
+		super();
+		this.element = h(document, 'div', { className: 'ash-sessions-list-row' });
+		this.button = h(document, 'button', { className: 'ash-sessions-list-item', attributes: { type: 'button' } });
+		if (leading) {
+			this.element.classList.add('has-leading-icon');
+			this.element.append(leading);
+		}
+		this.element.append(this.button);
+		// The tree owns navigation between rows. Embedded controls own activation within a row.
+		this._register(addDisposableListener(this.element, 'click', event => event.stopPropagation()));
+		this._register(addDisposableListener(this.element, 'keydown', event => {
+			if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+		}));
+		this._register(toDisposable(() => this.element.remove()));
+	}
+}
+
+/** Shared tree renderer for the retained controls supplied by each session sidebar. */
+export class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
+	constructor(container: HTMLElement, title: string, configurationService: IConfigurationService) {
+		super(container, {
+			configurationService,
+			ariaLabel: title,
+			accessibilityProvider: {
+				getAriaLabel: element => {
+					const title = element.querySelector('h3, .ash-sessions-list-item');
+					return title?.getAttribute('aria-label') ?? title?.textContent ?? element.textContent ?? '';
+				},
+			},
+			scrolling: 'external',
+			expandOnDoubleClick: false,
+			indent: 0,
+			indentGuides: 'none',
+			modelOptions: { identityProvider: { getId: SessionsListTree.id } },
+			reuseRows: true,
+			renderElement: element => element,
+			renderTwistie: (element, state) => {
+				if (element.dataset.section !== undefined) sectionRenderers.get(element)?.renderCollapse(!state.expanded);
+			},
+		});
+		this.element.classList.add('ash-sessions-list-tree');
+		this.element.tabIndex = -1;
+	}
+
+	static id(element: HTMLElement): string {
+		return element.dataset.section === undefined ? element.dataset.item ?? element.className : `section:${element.dataset.section}`;
+	}
+
+	setSectionCollapsed(key: string, collapsed?: boolean): void {
+		const id = `section:${key}`;
+		const current = this.isCollapsed(id);
+		if (current === undefined || current === collapsed) return;
+		if (collapsed ?? !current) {
+			const active = this.element.ownerDocument.activeElement;
+			const section = this.getVisibleElements().find(element => element.dataset.section === key);
+			this.collapse(id);
+			if (active && !active.isConnected && section) this.focusRow(section, true);
+		} else {
+			this.expand(id);
+		}
+	}
+
+	focusRow(row: HTMLElement, preventScroll = false): void {
+		const target = row.isConnected ? row : this.getVisibleElements().find(element => element.dataset.section === row.dataset.parentSection);
+		target?.querySelector<HTMLButtonElement>('.ash-sessions-list-item, .ash-sessions-list-section-toggle')?.focus({ preventScroll });
+	}
+}
+
+const sectionRenderers = new WeakMap<HTMLElement, SessionListSection>();
