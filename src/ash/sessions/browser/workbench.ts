@@ -956,6 +956,14 @@ export abstract class Workbench extends Disposable {
 				return selected?.kind === 'session' ? { sessionId: selected.active.session.sessionId, threadId: selected.active.threadId } : undefined;
 			},
 			getConversations: () => sessions.sessions.filter(session => session.status === 'active').flatMap(session => session.chats.filter(chat => chat.status === 'active').map(chat => ({ providerId: session.providerId ?? provider.id, sessionId: session.backendSessionId ?? session.sessionId, threadId: session.backendSessionId ? providerScopes.getScope(session.sessionId).backendIdentity(chat.threadId) : chat.threadId, title: chat.title ?? session.title }))),
+			getConversationsForReference: () => sessions.sessions.filter(session => session.status === 'active').flatMap(session =>
+				session.chats.filter(chat => chat.status === 'active').map(chat => ({
+					providerId: session.providerId ?? provider.id,
+					providerLabel: session.providerLabel,
+					sessionId: session.sessionId,
+					threadId: chat.threadId,
+					title: chat.title ?? session.title,
+				}))),
 			appendToActiveDraft: text => {
 				void this.showChat().then(() => {
 					sessionsPart!.appendToDraft(text);

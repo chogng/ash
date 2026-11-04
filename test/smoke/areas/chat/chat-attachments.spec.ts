@@ -1,6 +1,29 @@
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 
+test('Dragging an editor tab into Chat captures unsaved content', { tag: ['@browser-ui'] }, async ({ workbench }) => {
+	await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+	const group = workbench.editors.groupAt(0);
+	const content = 'Unsaved text from the editor tab';
+	await group.editor.waitForEditorFocus();
+	await group.editor.waitForTypeInEditor(content);
+	const tab = group.tabs.filter({ hasText: 'Untitled-1' });
+	const chat = workbench.page.locator('.ash-chat-view-pane .ash-chat:visible');
+	const input = chat.getByRole('textbox', { name: 'Chat message', exact: true });
+	await input.focus();
+	await tab.dragTo(chat.locator('form.ash-chat-input-container'));
+	const reference = chat.getByRole('button', { name: 'Open Untitled-1', exact: true });
+	await expect(reference).toBeVisible();
+	await expect(input).toBeFocused();
+	await expect(tab).toBeVisible();
+	await input.press('ControlOrMeta+z');
+	await expect(reference).toHaveCount(0);
+	await input.press('ControlOrMeta+Shift+z');
+	await reference.click();
+	await group.editor.waitForEditorContents(text => text === content);
+	await expect(group.editor.input).toHaveAttribute('aria-readonly', 'true');
+});
+
 test('Attachment resource gestures reach the Workbench file, editor and clipboard owners', { tag: ['@browser-ui'] }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.evaluate(async () => {
@@ -12,7 +35,7 @@ test('Attachment resource gestures reach the Workbench file, editor and clipboar
 		await writer.close();
 		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
 	});
-	await workbench.editors.groupAt(0).welcome.getByRole('button', { name: 'Open folder', exact: true }).click();
+	await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
 	const file = page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true });
 	await expect(file).toBeVisible();
 	const resource = (await file.locator('[data-resource]').getAttribute('data-resource'))!;

@@ -71,6 +71,7 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../../../../platform/accessibility/browser/accessibilityService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { IChatService } from '../../../../services/chat/common/chatService.js';
 import type { IChatWidgetModel } from '../../browser/widget/chatWidget.js';
 import type { IWillShutdownEvent } from '../../../../services/lifecycle/common/lifecycle.js';
 import type { IChatDraftStorage } from '../../browser/widget/input/chatInputPart.js';
@@ -165,6 +166,9 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 	partServices.registerSingleton(IMenuService, () => partServices.createInstance(MenuService));
 	partServices.registerInstance(INotificationService, notifications);
 	partServices.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+	if (!partServices.has(IChatService)) partServices.registerInstance(IChatService, {
+		readThread: async () => { throw new Error('Unexpected transcript read'); },
+	} as unknown as IChatService);
 	partServices.registerInstance(IKeybindingService, { lookupKeybinding: () => undefined } as unknown as IKeybindingService);
 	partServices.registerSingleton(IContextMenuService, () => partServices.createInstance(BrowserContextMenuService));
 	const contextView = inputResources.add(new BrowserContextViewService(document.body));

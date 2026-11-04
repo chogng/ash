@@ -17,7 +17,7 @@ import { IChatContextService } from '../../../src/ash/workbench/contrib/chat/bro
 import { ChatContextKeys } from '../../../src/ash/workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { IChatWidgetService, type IChatWidget, type IWorkspacePickerItem } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
 import { OpenWorkspacePickerAction } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatExecuteActions.js';
-import { ChatContextContributions } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatContext.js';
+import { ChatContextContributions, ChatReferenceContextContribution } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatContext.js';
 import { ChatReferenceAttachmentWidgetContribution } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatReferenceAttachmentWidget.contribution.js';
 import { startSnapshotFixture } from './snapshotFixture.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
@@ -897,6 +897,7 @@ part = resources.add(services.createInstance(ChatInputPart, document.querySelect
 	} : undefined,
 }));
 resources.add(services.createInstance(ChatContextContributions));
+resources.add(services.createInstance(ChatReferenceContextContribution));
 if (new URLSearchParams(location.search).has('notices')) {
 	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 	services.registerSingleton(IChatTipService, () => services.createInstance(ChatTipService));

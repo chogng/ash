@@ -10,6 +10,50 @@ suite('sessions browser component', () => {
 	const browserTests = useBrowserTests();
 	const runtimeErrors = new WeakMap<Page, string[]>();
 
+	for (const locale of ['en', 'zh-CN']) test(`conversation drops stay on their owning host in ${locale}`, async () => {
+		const { page } = browserTests;
+		await page.goto(`/sessions.html?multiHost&sideThreads&locale=${locale}`);
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const sidebar = page.locator('.ash-sessions-list:visible');
+		const source = (name: string) => sidebar.getByRole('button', { name, exact: true });
+		await source('Task from Host A').click();
+		const composer = page.locator('.ash-sessions-chat-slot.active form.ash-chat-input-container');
+		const input = composer.getByRole('textbox');
+		await expect(input).toBeVisible();
+		const references = composer.locator('.ash-chat-reference-attachment');
+		const otherChat = sidebar.getByRole('group', {
+			name: locale === 'zh-CN' ? 'Task from Host A 中的对话' : 'Conversations in Task from Host A',
+		}).getByRole('button', { name: 'Follow-up chat', exact: true });
+
+		await source('Task from Host A').dragTo(composer);
+		await source('Task from Host B').dragTo(composer);
+		await expect(references).toHaveCount(0);
+		const reads = () => page.evaluate(() => window.ashSessionsIntegration.multiHost!.calls.filter(call => call.method === 'read' && call.threadId === 'side').map(call => call.host));
+		expect(await reads()).toEqual([]);
+
+		await otherChat.dragTo(composer);
+		const reference = composer.getByRole('button', { name: `${locale === 'zh-CN' ? '打开' : 'Open'} Follow-up chat`, exact: true });
+		await expect(reference).toBeVisible();
+		await expect(input).toBeFocused();
+		expect(await reads()).toEqual(['Host A']);
+		await input.press('ControlOrMeta+z');
+		await expect(reference).toHaveCount(0);
+		await input.press('ControlOrMeta+Shift+z');
+		await expect(reference).toBeVisible();
+		expect(await reads()).toEqual(['Host A']);
+
+		await input.press('ControlOrMeta+z');
+		await composer.getByRole('button', { name: locale === 'zh-CN' ? '添加上下文' : 'Add context', exact: true }).press('Enter');
+		const search = page.getByRole('dialog', { name: locale === 'zh-CN' ? '搜索附件' : 'Search attachments', exact: true }).getByRole('combobox');
+		await search.fill(locale === 'zh-CN' ? '会话' : 'Sessions');
+		await search.press('Enter');
+		const picker = page.getByRole('dialog', { name: locale === 'zh-CN' ? '选择会话' : 'Select a session', exact: true });
+		await expect(picker.getByRole('option', { name: /Follow-up chat/u })).toHaveCount(1);
+		await picker.getByRole('combobox').press('Enter');
+		await expect(reference).toBeVisible();
+		expect(await reads()).toEqual(['Host A', 'Host A']);
+	});
+
 
 	async function expectActivityIconSize(navigation: Locator, size: number, horizontal = false): Promise<void> {
 		await expect.poll(() => navigation.evaluate(element => element.classList.contains('horizontal'))).toBe(horizontal);

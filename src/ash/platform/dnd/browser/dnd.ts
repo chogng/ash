@@ -1,6 +1,7 @@
 import type { ISandboxGlobals } from '../../../base/parts/sandbox/electron-browser/sandboxTypes.js';
 import type { URI } from '../../../base/common/uri.js';
 import type { ITextEditorSelection } from '../../editor/common/editor.js';
+import { containsDragType } from '../../../base/browser/dnd.js';
 
 export interface IResourceStat {
 	readonly resource: URI;
@@ -17,6 +18,16 @@ export const CodeDataTransfers = {
 	SCM_HISTORY_ITEM: 'scm-history-item',
 	CHAT_REFERENCE: 'application/vnd.code.chat-reference',
 } as const;
+
+/** A session drag lends an identity to this renderer without exposing its transcript. */
+export class DraggedChatReferenceIdentifier {
+	constructor(readonly resource: URI) { }
+}
+
+export function extractChatReferenceDropData(event: DragEvent): DraggedChatReferenceIdentifier | undefined {
+	if (!containsDragType(event, CodeDataTransfers.CHAT_REFERENCE)) return undefined;
+	return LocalSelectionTransfer.getInstance<DraggedChatReferenceIdentifier>().getData(DraggedChatReferenceIdentifier.prototype)?.[0];
+}
 
 /** Returns the desktop path associated with a browser File, when available. */
 export function getPathForFile(file: File): string | undefined {

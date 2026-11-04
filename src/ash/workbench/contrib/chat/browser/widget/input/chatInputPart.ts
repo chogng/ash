@@ -655,7 +655,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			stopEvent(event);
 			void this.attachFiles(files);
 		}, true));
-		this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages())).addOverlay(this.inputContainer, this.inputContainer);
+		this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages(), () => this.state.conversation)).addOverlay(this.inputContainer, this.inputContainer);
 		this._register(this.executeMenu.onDidChange(() => this.renderToolbarActions()));
 		this._register(presentations.onDidChange(menu => { if (menu === MenuId.ChatExecute) this.renderToolbarActions(); }));
 		this.renderToolbarActions();

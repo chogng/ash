@@ -19,7 +19,7 @@ import { registerChatFileTreeActions } from './actions/chatFileTreeActions.js';
 import { registerNewChatActions } from './actions/chatNewActions.js';
 import { ExportAgentHostDebugLogsAction } from './actions/exportAgentHostDebugLogsAction.js';
 import { registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { ChatContextContributions } from './actions/chatContext.js';
+import { ChatContextContributions, ChatReferenceContextContribution } from './actions/chatContext.js';
 import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
 import { ChatLayoutService } from './widget/chatLayoutService.js';
 import { registerChatCopyActions } from './actions/chatCopyActions.js';
@@ -230,6 +230,7 @@ Registry.as<IConfigurationMigrationRegistry>(WorkbenchExtensions.ConfigurationMi
 }]);
 registerSingleton(IChatContextPickService, ChatContextPickService, InstantiationType.Delayed);
 registerWorkbenchContribution(ChatContextContributions.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatContextContributions));
+registerWorkbenchContribution(ChatReferenceContextContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatReferenceContextContribution));
 registerSingleton(IChatAttachmentResolveService, ChatAttachmentResolveService, InstantiationType.Delayed);
 registerSingleton(IChatPasteTargetService, ChatPasteTargetService, InstantiationType.Delayed);
 registerSingleton(IChatAttachmentWidgetRegistry, ChatAttachmentWidgetRegistry, InstantiationType.Delayed);

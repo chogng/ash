@@ -54,6 +54,8 @@ import { SessionLeadingIcon } from '../../../../browser/ui/sessionLeadingIcon.js
 import type { ISessionStatusIcon } from '../../../../browser/sessionStatusIcon.js';
 import { createSessionSummaryHover, getSessionSummaryHoverData } from '../sessionHoverContent.js';
 import { IHoverService, type IManagedHover } from '../../../../../platform/hover/browser/hoverService.js';
+import { LocalChatSessionUri } from '../../../../../workbench/contrib/chat/common/model/chatUri.js';
+import { fillChatReferenceDragData } from '../../../../browser/dnd.js';
 
 interface SessionBucket {
 	readonly id: string;
@@ -321,6 +323,7 @@ export class SessionsList extends DomWidget {
 
 	private registerOrderingDragAndDrop(): void {
 		const selector = '[data-row-order-id], [data-section-order-id]';
+		const referenceDrag = this._register(new MutableDisposable());
 		let source: HTMLElement | undefined;
 		const destination = (event: DragEvent) => {
 			const target = (event.target as Element | null)?.closest<HTMLElement>(`${selector}, [data-section]`);
@@ -337,9 +340,18 @@ export class SessionsList extends DomWidget {
 		};
 		this._register(addDisposableListener(this.list, 'dragstart', event => {
 			const handle = (event.target as Element | null)?.closest<HTMLElement>('[draggable="true"]');
-			source = handle?.closest<HTMLElement>(selector) ?? undefined;
+			referenceDrag.clear();
+			const item = handle?.dataset.item ? this.items.get(handle.dataset.item) : undefined;
+			source = item
+				? (item.presentation.matches(selector) ? item.presentation : undefined)
+				: handle?.closest<HTMLElement>(selector) ?? undefined;
+			const conversation = item?.target;
+			if (conversation && event.dataTransfer) {
+				referenceDrag.value = fillChatReferenceDragData(event.dataTransfer, LocalChatSessionUri.forSession(conversation.sessionId, conversation.threadId));
+				event.dataTransfer.effectAllowed = source ? 'copyMove' : 'copy';
+			}
 			if (source && event.dataTransfer) {
-				event.dataTransfer.effectAllowed = 'move';
+				if (!conversation) event.dataTransfer.effectAllowed = 'move';
 				event.dataTransfer.setData('application/x-ash-session-order', '');
 			}
 		}));
@@ -359,7 +371,10 @@ export class SessionsList extends DomWidget {
 			}
 			source = undefined;
 		}));
-		this._register(addDisposableListener(this.list, 'dragend', () => { source = undefined; }));
+		this._register(addDisposableListener(this.list.ownerDocument, 'dragend', () => {
+			source = undefined;
+			referenceDrag.clear();
+		}, true));
 	}
 
 	private async moveToSection(id: string, section: string, targetId?: string): Promise<void> {
@@ -692,6 +707,7 @@ export class SessionsList extends DomWidget {
 				const child = itemFor(`chat:${JSON.stringify([session.sessionId, chat.threadId])}`, Lxicon.chat, true);
 				child.leadingIcon?.setStatus(chat.management?.status === 'working' ? this.workingIcon : undefined);
 				child.target = { sessionId: session.sessionId, threadId: chat.threadId };
+				child.domNode.draggable = true;
 				child.update(chat.title || localize('sessions.list.untitledChat', 'Untitled Chat'), current?.threadId === chat.threadId,
 					() => this.viewService.openSession(session.sessionId, chat.threadId), chat.management);
 				child.updateSummary(this.hoverService, getSessionSummaryHoverData(session, chat));
