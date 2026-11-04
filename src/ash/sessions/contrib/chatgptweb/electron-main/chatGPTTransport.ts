@@ -131,29 +131,10 @@ export class ChatGPTTransport extends Disposable {
 		signal.throwIfAborted();
 		const headersOnly = request.path.startsWith('/service/.headers/');
 		const url = new URL(request.path.replace(headersOnly ? '/service/.headers' : '/service', ''), 'https://chatgpt.com');
-		const runtime = this.getRuntime(context);
 		if (headersOnly) {
-			try {
-				const script = await this.options.readVerificationScript(signal);
-				if (script.length > 128 * 1024) { throw new Error('ChatGPT verification script exceeds the limit'); }
-				const proofSignal = AbortSignal.any([signal, AbortSignal.timeout(35_000)]);
-				const value = await raceCancellationError(runtime.prepareHeaders(script, proofSignal), proofSignal);
-				if (!isRecord(value)) { throw new Error('Invalid ChatGPT verification headers'); }
-				const headers: Record<string, string> = {};
-				for (const name of proofHeaders) {
-					const token = value[name];
-					if (token === undefined) { continue; }
-					if (typeof token !== 'string' || !token || token.length > 65536 || /[\r\n\0]/u.test(token)) { throw new Error('Invalid ChatGPT verification header'); }
-					headers[name] = token;
-				}
-				if (!headers[proofHeaders[0]]) { throw new Error('ChatGPT verification headers are unavailable'); }
-				return Response.json(headers);
-			} catch {
-				signal.throwIfAborted();
-				if (this.runtime === runtime) { runtime.dispose(); this.runtime = undefined; }
-				return new Response(null, { status: 428 });
-			}
+			return this.prepareVerification(context, signal);
 		}
+		const runtime = this.getRuntime(context);
 		signal.throwIfAborted();
 		try {
 			const response = await this.fetchAuthorized(runtime, url, { method: request.method, headers: request.headers, body: request.body instanceof VSBuffer ? request.body.buffer : request.body, credentials: 'include', redirect: 'error', signal }, authorization);
@@ -198,6 +179,54 @@ export class ChatGPTTransport extends Disposable {
 		throw new Error('ChatGPT resource redirected too many times');
 	}
 
+	private async prepareVerification(context: string, signal: AbortSignal): Promise<Response> {
+		// Only the proof request can be retried here. The message has not been submitted.
+		for (let attempt = 1; attempt <= 2; attempt++) {
+			signal.throwIfAborted();
+			const runtime = this.getRuntime(context);
+			const started = Date.now();
+			let phase: 'script' | 'runtime' | 'headers' = 'script';
+			const deadline = AbortSignal.timeout(35_000);
+			const proofSignal = AbortSignal.any([signal, deadline]);
+			let failedPhase: string | undefined;
+			try {
+				const script = await raceCancellationError(this.options.readVerificationScript(proofSignal), proofSignal);
+				if (script.length > 128 * 1024) { throw new Error('ChatGPT verification script exceeds the limit'); }
+				phase = 'runtime';
+				const value = await raceCancellationError(runtime.prepareHeaders(script, proofSignal), proofSignal);
+				if (!isRecord(value)) { throw new Error('Invalid ChatGPT verification headers'); }
+				const stage = value.failedPhase;
+				if (stage === 'discovery' || stage === 'import' || stage === 'requirements' || stage === 'headers') {
+					failedPhase = stage;
+					throw new Error('ChatGPT verification did not complete');
+				}
+				phase = 'headers';
+				const headers: Record<string, string> = {};
+				for (const name of proofHeaders) {
+					const token = value[name];
+					if (token === undefined) { continue; }
+					if (typeof token !== 'string' || !token || token.length > 65536 || /[\r\n\0]/u.test(token)) { throw new Error('Invalid ChatGPT verification header'); }
+					headers[name] = token;
+				}
+				if (!headers[proofHeaders[0]]) { throw new Error('ChatGPT verification headers are unavailable'); }
+				if (attempt > 1) {
+					this.logService.info('chatgpt', 'ChatGPT send verification recovered', { attempt, durationMs: Date.now() - started, requests: runtime.verificationRequests });
+				}
+				return Response.json(headers);
+			} catch {
+				signal.throwIfAborted();
+				const timedOut = deadline.aborted;
+				this.logService.warn('chatgpt', 'ChatGPT send verification did not complete', {
+					attempt, phase: failedPhase ?? (phase === 'runtime' ? runtime.verificationPhase ?? phase : phase),
+					timedOut, durationMs: Date.now() - started, requests: runtime.verificationRequests,
+				});
+				if (this.runtime === runtime) { runtime.dispose(); this.runtime = undefined; }
+				if (!timedOut) break;
+			}
+		}
+		return new Response(null, { status: 428 });
+	}
+
 	private async fetchAuthorized(runtime: IChatGPTVerificationRuntime, url: URL, init: RequestInit, authorization: IChatGPTAuthorization): Promise<Response> {
 		const send = (credentials: Headers): Promise<Response> => {
 			const headers = new Headers(init.headers);
@@ -217,7 +246,7 @@ export class ChatGPTTransport extends Disposable {
 	}
 
 	private getRuntime(context: string): IChatGPTVerificationRuntime {
-		if (this.runtime && this.runtimeContext !== context) { this.runtime.dispose(); this.runtime = undefined; }
+		if (this.runtime && (this.runtime.isDisposed || this.runtimeContext !== context)) { this.runtime.dispose(); this.runtime = undefined; }
 		this.runtimeContext = context;
 		return this.runtime ??= this.options.createRuntime(async url => {
 			// Empty values remove stale account routing and credentials from Chromium

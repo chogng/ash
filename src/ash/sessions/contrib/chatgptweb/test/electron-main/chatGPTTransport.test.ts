@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { mock } from 'node:test';
 import { suite, test } from 'mocha';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
@@ -13,6 +14,7 @@ import { ElectronChatGPTTransport } from '../../electron-browser/electronChatGPT
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { ChatGPTTransport } from '../../electron-main/chatGPTTransport.js';
 import { createChatGPTFetch } from '../../browser/chatGPTFetch.js';
+import { ChatGPTClient } from '../../browser/chatGPTClient.js';
 import { ChatGPTAuthenticationError } from '../../common/chatGPTTransport.js';
 import type { IChatGPTVerificationRuntime } from '../../electron-main/chatGPTVerificationRuntime.js';
 
@@ -70,7 +72,7 @@ function scopedChannel(transport: ChatGPTTransport, auth: Authentication): IServ
 	};
 }
 function runtime(fetcher: typeof fetch, prepareHeaders: IChatGPTVerificationRuntime['prepareHeaders'] = async () => ({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'fixture-proof' })): IChatGPTVerificationRuntime {
-	return { session: { fetch: fetcher }, prepareHeaders, dispose() { }, [Symbol.dispose]() { this.dispose(); } };
+	return { isDisposed: false, session: { fetch: fetcher }, prepareHeaders, dispose() { }, [Symbol.dispose]() { this.dispose(); } };
 }
 
 suite('ChatGPT transport', () => {
@@ -357,6 +359,44 @@ suite('ChatGPT transport', () => {
 		const failed = await fetcher('/service/.headers/backend-api/f/conversation', { method: 'POST' });
 		assert.equal(failed.status, 428); await failed.text();
 		assert.equal(calls, 0); assert.equal(disposed, 1);
+	}));
+	for (const recover of [true, false]) test(`retries a Main verification timeout once and ${recover ? 'submits only once' : 'leaves the message unsent'}`, async () => fixture(async auth => {
+		let runtimes = 0, proofs = 0, preparations = 0, submissions = 0, disposed = 0;
+		const deadlines: AbortController[] = [];
+		const timeout = mock.method(AbortSignal, 'timeout', (milliseconds: number) => {
+			assert.equal(milliseconds, 35_000);
+			const deadline = new AbortController();
+			deadlines.push(deadline);
+			return deadline.signal;
+		});
+		using restoreTimeout = toDisposable(() => timeout.mock.restore());
+		const fetcher = (async (url, init) => {
+			if (String(url).endsWith('/prepare')) { preparations++; return Response.json({ conduit_token: 'fixture' }); }
+			assert.equal(new Headers(init?.headers).get('OpenAI-Sentinel-Chat-Requirements-Token'), 'proof');
+			submissions++;
+			return new Response('data: [DONE]\n\n', { headers: { 'content-type': 'text/event-stream' } });
+		}) as typeof fetch;
+		using transport = new ChatGPTTransport({
+			authentication: auth, readVerificationScript: async () => '', createRuntime: () => {
+				runtimes++;
+				return {
+					...runtime(fetcher, async () => {
+						const attempt = proofs++;
+						if (attempt > 0 && recover) return { 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' };
+						queueMicrotask(() => deadlines[attempt].abort(new DOMException('Timed out', 'TimeoutError')));
+						return new Promise(() => { });
+					}),
+					dispose() { disposed++; },
+				};
+			},
+		}, new NullLoggerService());
+		const client = new ChatGPTClient(createChatGPTFetch(adapt(transport, auth)));
+		const send = async () => {
+			for await (const _ of client.send({ text: 'fixture', model: 'fixture', parentId: 'parent', messageId: 'message' }, new AbortController().signal)) { /* Drain the reply. */ }
+		};
+		if (recover) await send();
+		else await assert.rejects(send(), /verification could not finish/u);
+		assert.deepEqual({ runtimes, proofs, preparations, submissions, disposed }, { runtimes: 2, proofs: 2, preparations: 1, submissions: recover ? 1 : 0, disposed: recover ? 1 : 2 });
 	}));
 	test('cancels pending verification and streamed reads across the pull transport', async () => fixture(async auth => {
 		let verifying!: () => void, finish!: () => void;

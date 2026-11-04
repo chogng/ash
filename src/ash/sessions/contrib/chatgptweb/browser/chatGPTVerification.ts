@@ -13,14 +13,13 @@ export function installChatGPTVerification(): void {
 		}
 		return originalFetch(input, init);
 	};
-	const target = globalThis as typeof globalThis & { __ashPrepareChatGPTHeaders?: () => Promise<Record<string, string>>; };
-	target.__ashPrepareChatGPTHeaders = async () => {
-		const signal = AbortSignal.timeout(25_000);
+	type Phase = 'discovery' | 'import' | 'requirements' | 'headers';
+	const prepare = async (setPhase: (phase: Phase) => void): Promise<Record<string, string>> => {
 		let moduleUrl: string | undefined;
+		let inspectedEntry: string | undefined;
 		// Discover the resource loaded by the current official page, rather than pinning a
-		// build hash or relying on minified export names that change between releases.
-		for (let attempt = 0; attempt < 50; attempt++) {
-			signal.throwIfAborted();
+		// build hash. Main owns the deadline and closes the page if discovery stalls.
+		while (!moduleUrl) {
 			const resources = performance.getEntriesByType('resource').map(entry => entry.name);
 			moduleUrl = resources.find(name => {
 				const url = new URL(name);
@@ -31,8 +30,9 @@ export function installChatGPTVerification(): void {
 			// without depending on composer visibility, a user gesture, or a fixed build hash.
 			if (!moduleUrl) {
 				const entry = resources.find(name => new URL(name).origin === location.origin && /\/native-initial-sentinel-prewarm-[\w-]+\.js$/u.test(new URL(name).pathname));
-				if (entry) {
-					const response = await originalFetch(entry, { credentials: 'omit', signal });
+				if (entry && entry !== inspectedEntry) {
+					inspectedEntry = entry;
+					const response = await originalFetch(entry, { credentials: 'omit' });
 					if (!response.ok || !response.body) { throw new Error('Verification entry is unavailable'); }
 					const reader = response.body.getReader();
 					const decoder = new TextDecoder();
@@ -52,15 +52,16 @@ export function installChatGPTVerification(): void {
 					if (reference) { moduleUrl = new URL(reference, entry).href; }
 				}
 			}
-			if (moduleUrl) { break; }
-			await new Promise<void>(resolve => setTimeout(resolve, 200));
+			if (!moduleUrl) { await new Promise<void>(resolve => setTimeout(resolve, 200)); }
 		}
-		if (!moduleUrl) { throw new Error('Verification runtime is unavailable'); }
+		setPhase('import');
 		const module: unknown = await import(/* @vite-ignore */ moduleUrl);
 		if (!module || typeof module !== 'object') { throw new Error('Invalid verification module'); }
 		const api: unknown = Object.values(module).find(value => value && typeof value === 'object' && typeof value.finalizeChatRequirements === 'function');
 		if (!api || typeof api !== 'object' || !('finalizeChatRequirements' in api) || typeof api.finalizeChatRequirements !== 'function') { throw new Error('Verification API is unavailable'); }
-		const value: unknown = await api.finalizeChatRequirements({ requestSignal: signal });
+		setPhase('requirements');
+		const value: unknown = await api.finalizeChatRequirements({ requestSignal: new AbortController().signal });
+		setPhase('headers');
 		if (!value || typeof value !== 'object') { throw new Error('Invalid verification result'); }
 		const headers: Record<string, string> = {};
 		for (const [field, header] of [
@@ -76,5 +77,15 @@ export function installChatGPTVerification(): void {
 		}
 		if (!headers['OpenAI-Sentinel-Chat-Requirements-Token']) { throw new Error('Verification did not finish'); }
 		return headers;
+	};
+	const target = globalThis as typeof globalThis & { __ashPrepareChatGPTHeaders?: () => Promise<Record<string, string> | { failedPhase: Phase; }>; };
+	target.__ashPrepareChatGPTHeaders = async () => {
+		let phase: Phase = 'discovery';
+		try {
+			return await prepare(next => { phase = next; });
+		} catch {
+			// Report the fixed stage, never an SDK error that could include request data.
+			return { failedPhase: phase };
+		}
 	};
 }
