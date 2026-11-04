@@ -1,4 +1,4 @@
-.ash-code-conversation {
+.ash-sessions-chat-content {
 	display: flex;
 	position: relative;
 	flex: 1;
@@ -7,22 +7,27 @@
 	overflow: hidden;
 }
 
-.ash-sessions-chat-grid.split .ash-code-conversation {
+.ash-sessions-chat-grid.split .ash-sessions-chat-content {
 	--ash-sessions-chat-content-inset: var(--ash-spacing-size240);
 }
 
-.ash-code-conversation > .ash-chat {
+.ash-sessions-chat-content > .ash-chat {
 	flex: 1;
 	min-width: 0;
 	min-height: 0;
 }
 
-.ash-code-conversation > .ash-chat > .ash-chat-list-widget .ash-chat-transcript,
-.ash-code-conversation > .ash-chat > .ash-sessions-chat-input.chat-composer {
+.ash-sessions-chat-content
+	> .ash-chat
+	> .ash-chat-list-widget
+	.ash-chat-transcript,
+.ash-sessions-chat-content
+	> .ash-chat
+	> .ash-sessions-chat-input.chat-composer {
 	padding-inline: var(--ash-sessions-chat-content-inset);
 }
 
-.ash-code-conversation .ash-chat-list-widget > .ash-chat-sticky-prompt {
+.ash-sessions-chat-content .ash-chat-list-widget > .ash-chat-sticky-prompt {
 	inset-inline: var(--ash-sessions-chat-content-inset);
 }
 

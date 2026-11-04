@@ -150,7 +150,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const reopened = await workbench.reopenAgentsWindow(application, page);
 			const history = reopened.locator('.ash-chatgpt-navigation');
 			const editor = reopened.locator('.ash-chatgpt-widget');
-			await expect(editor.locator('.ash-chatgpt-error')).toContainText('503');
+			await expect(editor.locator('.ash-chat-input-notification-message')).toContainText('503');
 			await expect(history.getByRole('button', { name: 'First native history', exact: true })).toHaveAttribute('aria-current', 'page');
 			await expect(history.getByRole('button', { name: 'Second native history', exact: true })).toBeVisible();
 			await expect(history.getByRole('button', { name: 'Pinned native history', exact: true })).toBeVisible();
@@ -215,10 +215,12 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const chatGPTCard = editor.locator('.ash-chat-input-container.ash-chat-input-adaptive');
 			const chatGPTCardStyle = await chatGPTCard.evaluate(cardStyle);
 			const chatGPTCardBounds = await chatGPTCard.boundingBox();
-			await editor.locator('.ash-sessions-model-picker').press('ArrowDown');
-			const modelMenu = page.getByRole('menu', { name: locale === 'en' ? 'Choose model' : '选择模型', exact: true });
+			await editor.locator('.ash-chat-input-model-action').press('ArrowDown');
+			const modelMenu = page.getByRole('dialog', { name: locale === 'en' ? 'Choose a chat model' : '选择聊天模型', exact: true });
 			await expect(modelMenu.getByRole('menuitemradio', { name: 'Fixture model', exact: true })).toBeVisible();
-			await modelMenu.getByRole('group', { name: 'Ash', exact: true }).getByRole('menuitem', { name: model.model, exact: true }).click();
+			await modelMenu.getByText(locale === 'en' ? 'New Ash Chat with Model…' : '选择模型新建 Ash 对话…', { exact: true }).click();
+			await expect(page.getByRole('dialog', { name: locale === 'en' ? 'Choose a model for a new chat' : '选择新对话的模型', exact: true })).toBeVisible();
+			await commands.select(model.model);
 			const mode = page.locator('.ash-window-mode-control');
 			const chatMode = mode.getByRole('button', { name: locale === 'en' ? 'Chat / Agents' : '聊天 / Agents', exact: true });
 			const ash = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
@@ -255,7 +257,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(editor).toBeVisible();
 			expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(0);
 			await editor.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
-			const answer = editor.locator('.ash-chatgpt-turn.assistant').last();
+			const answer = editor.locator('.ash-chat-item-agentMessage').last();
 			await expect(answer).toContainText('First chunk');
 			await expect(editor.getByRole('button', { name: locale === 'en' ? 'Stop' : '停止', exact: true })).toBeVisible();
 			await page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: locale === 'en' ? 'New' : '新建', exact: true }).click();
@@ -268,7 +270,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(answer).toContainText('First chunk, second chunk, complete');
 			await composer.waitForEditorContents(text => text.trim() === '');
 			await expect(editor.getByRole('button', { name: locale === 'en' ? 'Stop' : '停止', exact: true })).toBeHidden();
-			await expect(editor.locator('.ash-chatgpt-error')).toBeHidden();
+			await expect(editor.locator('.ash-chat-input-notification-message')).toBeHidden();
 			for (const mode of ['complete', 'stop', 'voice-recovery'] as const) {
 				if (mode === 'voice-recovery') {
 					await page.evaluate(() => {
@@ -279,13 +281,13 @@ for (const locale of ['en', 'zh-CN'] as const) {
 						window.addEventListener('pagehide', () => { void context.close(); }, { once: true });
 					});
 					await editor.getByRole('button', { name: locale === 'en' ? 'Voice conversation' : '语音对话', exact: true }).click();
-					await expect(editor.locator('.ash-chatgpt-error')).toContainText('404');
+					await expect(editor.locator('.ash-chat-input-notification-message')).toContainText('404');
 					await expect(editor.getByRole('button', { name: locale === 'en' ? 'Stop voice conversation' : '停止语音对话', exact: true })).toHaveCount(0);
 				}
 				await composer.waitForEditorFocus(); await composer.waitForTypeInEditor(`Follow up after ${mode}`);
 				await editor.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
 				const count = mode === 'complete' ? 2 : mode === 'stop' ? 3 : 4;
-				await expect(editor.locator('.ash-chatgpt-turn.assistant')).toHaveCount(count);
+				await expect(editor.locator('.ash-chat-item-agentMessage')).toHaveCount(count);
 				await expect(answer).toContainText('First chunk');
 				if (mode === 'stop') { await editor.getByRole('button', { name: locale === 'en' ? 'Stop' : '停止', exact: true }).click(); }
 				else {
@@ -294,7 +296,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 					await expect(answer).toContainText('First chunk, second chunk, complete');
 				}
 				await expect(editor.getByRole('button', { name: locale === 'en' ? 'Stop' : '停止', exact: true })).toBeHidden();
-				await expect(editor.locator('.ash-chatgpt-error')).toBeHidden();
+				await expect(editor.locator('.ash-chat-input-notification-message')).toBeHidden();
 				await composer.waitForEditorContents(text => text.trim() === '');
 			}
 			const history = page.locator('.ash-chatgpt-navigation');
@@ -309,7 +311,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(editor).toContainText('History one answer');
 			await composer.waitForEditorContents(text => text === 'Draft in first history');
 			await page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: locale === 'en' ? 'New' : '新建', exact: true }).click();
-			await expect(editor.locator('.ash-chatgpt-turn')).toHaveCount(0);
+			await expect(editor.locator('.ash-chat-item')).toHaveCount(0);
 			await composer.waitForEditorContents(text => text.trim() === '');
 			await composer.waitForEditorFocus();
 			await expect(editor).toBeVisible();
@@ -318,7 +320,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(editor).toContainText('History one answer');
 			await composer.waitForEditorContents(text => text === 'Draft in first history');
 			await page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: locale === 'en' ? 'New' : '新建', exact: true }).click();
-			await expect(editor.locator('.ash-chatgpt-turn')).toHaveCount(0);
+			await expect(editor.locator('.ash-chat-item')).toHaveCount(0);
 			await composer.waitForEditorContents(text => text === 'Independent new chat draft');
 			await history.getByRole('button', { name: 'First native history', exact: true }).click();
 			await input.focus(); await page.keyboard.press('Alt+F1');

@@ -7,6 +7,7 @@ import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../
 import { ModelPickerWidget } from './modelPickerWidget.js';
 
 export interface IModelPickerDelegate {
+	canSelectModel?(): boolean;
 	readonly configureInMenu?: boolean;
 	readonly alternateModelAction?: IAction;
 	readonly onDidChangePresentation: Event<void>;
@@ -16,7 +17,7 @@ export interface IModelPickerDelegate {
 	isAutomaticModel(): boolean;
 	getModelsError(): string | undefined;
 	selectModel(model: ModelRef): Promise<void>;
-	selectAutomaticModel(): Promise<void>;
+	selectAutomaticModel?(): Promise<void>;
 	selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
 	openSettings(): Promise<void>;
 }

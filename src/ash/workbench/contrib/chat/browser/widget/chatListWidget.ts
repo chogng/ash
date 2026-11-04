@@ -47,6 +47,8 @@ interface ChatListWidgetOptions {
 	readonly createRequestInput?: (options: ChatRequestInputOptions) => IChatInputPart;
 	readonly createRequestEditor?: (options: ChatInputEditorOptions) => IChatInputEditor;
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
+	readonly showPromptTimeline?: boolean;
+	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;
 	readonly onDidChangeFindVisibility?: (visible: boolean) => void;
 	readonly getHistoryState?: () => { readonly loading: boolean; readonly error?: string; } | undefined;
 	readonly loadOlderHistory?: () => Promise<void>;
@@ -156,13 +158,16 @@ export class ChatListWidget extends DomWidget {
 		}
 		updateOverlap();
 		if (host && composerForm) {
-			const resize = new host.ownerDocument.defaultView!.ResizeObserver(updateOverlap);
+			// Updating the list margin changes an observed box. Apply it outside observer delivery.
+			const layout = new RunOnceScheduler(updateOverlap, 0);
+			const resize = new host.ownerDocument.defaultView!.ResizeObserver(() => layout.schedule());
 			resize.observe(this.element);
 			resize.observe(host);
 			resize.observe(composerForm);
 			if (host.parentElement) resize.observe(host.parentElement);
 			this.scrollToLatestHostObserver.value = toDisposable(() => {
 				resize.disconnect();
+				layout.dispose();
 				this.element.style.removeProperty(overlapProperty);
 				this.element.classList.remove('ash-chat-transcript-overlaps-composer');
 			});
@@ -263,6 +268,7 @@ export class ChatListWidget extends DomWidget {
 		this.transcript.tabIndex = -1;
 		this.transcript.setAttribute('aria-label', this.accessibilityProvider.getWidgetAriaLabel());
 		this.transcript.setAttribute('aria-live', 'polite');
+		this.transcript.setAttribute('aria-busy', 'false');
 		const scrollToLatestLabel = localize('chat.scrollToLatest', 'Scroll to Latest');
 		this.scrollToLatestButton = this._register(new Button(this.element, {
 			...defaultButtonStyles,
@@ -283,16 +289,19 @@ export class ChatListWidget extends DomWidget {
 			this.reveal(prompt);
 		}));
 		const promptTimelineChanges = options.promptTimelineChanges;
-		if (promptTimelineChanges) {
+		if (options.showPromptTimeline || promptTimelineChanges) {
 			this.promptTimeline = this._register(instantiationService.createInstance(PromptTimelineWidgetContrib,
 				this.element, this.scrollable.scrollableElement, {
 				reveal: (id: string) => {
 					const prompt = this.renderedItems.get(id)?.item;
-					if (prompt) { this.focus(prompt); this.reveal(prompt); }
+					if (prompt) {
+						this.focus(prompt);
+						this.revealItem(id, undefined, true);
+					}
 				},
 				changes: (id: string) => {
 					const prompt = this.renderedItems.get(id)?.item;
-					return prompt && promptTimelineChanges(prompt);
+					return prompt && promptTimelineChanges?.(prompt);
 				},
 			}, () => this.renderPromptTimeline()));
 		}
@@ -420,6 +429,11 @@ export class ChatListWidget extends DomWidget {
 			return;
 		}
 		this.reconcile(items);
+	}
+
+	setBusy(busy: boolean): void {
+		const value = String(busy);
+		if (this.transcript.getAttribute('aria-busy') !== value) this.transcript.setAttribute('aria-busy', value);
 	}
 
 	private reconcile(items: readonly IChatListItem[]): void {
@@ -617,7 +631,7 @@ export class ChatListWidget extends DomWidget {
 		if (this.visible) { this.layout(anchor, false); }
 	}
 
-	private revealItem(id: string, target?: { readonly top: number; readonly bottom: number; }): void {
+	private revealItem(id: string, target?: { readonly top: number; readonly bottom: number; }, alignToTop = false): void {
 		const row = this.renderedItems.get(id);
 		if (!row || !this.visible) { return; }
 		row.markdownPart?.setViewportVisible(true);
@@ -630,7 +644,8 @@ export class ChatListWidget extends DomWidget {
 			const bounds = target ?? row.element.getBoundingClientRect();
 			const top = viewport.top + overlay + 8;
 			const bottom = viewport.bottom + Math.min(0, parseFloat(this.element.ownerDocument.defaultView!.getComputedStyle(this.element).marginBlockEnd));
-			const next = computeRevealScrollTop(this.scrollable.state.top, Math.max(1, bottom - top - 8), bounds.top - top, bounds.bottom - top);
+			const next = alignToTop ? this.scrollable.state.top + bounds.top - viewport.top
+				: computeRevealScrollTop(this.scrollable.state.top, Math.max(1, bottom - top - 8), bounds.top - top, bounds.bottom - top);
 			if (next !== undefined) { this.scrollable.scrollTo(0, next); }
 			this.readingPosition = this.readingAnchor();
 			this.updateStickyPrompt();
@@ -799,7 +814,7 @@ export class ChatListWidget extends DomWidget {
 			const next = this.promptModel.prompts[index];
 			const nextTop = next ? this.promptModel.bounds(next).top : Infinity;
 			const previous = this.promptModel.prompts[index - 1];
-			this.promptTimeline?.setActive(nextTop <= viewport.top ? next?.id : previous?.id);
+			this.promptTimeline?.setActive(nextTop <= viewport.top + 1 ? next?.id : previous?.id);
 			if (viewport.height > 0 && nextTop >= viewport.top + this.stickyPrompt.domNode.offsetHeight
 				&& this.configurationService.getValue<boolean>(PROMPT_TIMELINE_STICKY_SCROLL_SETTING) !== false) {
 				prompt = previous;

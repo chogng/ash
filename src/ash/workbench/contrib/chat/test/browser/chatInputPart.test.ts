@@ -2217,11 +2217,14 @@ suite('chatInput browser component', () => {
 		})).toEqual({ text, contexts });
 		expect(await page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: original }] });
 		await expect(input).toBeFocused();
-		await expect(page.locator('[data-action-id="ash.chat.input.send"]')).toHaveCount(text ? 1 : 0);
+		const send = page.locator('[data-action-id="ash.chat.input.send"] button');
 		if (text) {
+			await expect(send).toBeEnabled();
 			await input.press('Enter');
 			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: original }, { text }] });
 			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('');
+		} else {
+			await expect(send).toBeDisabled();
 		}
 	});
 
@@ -2283,7 +2286,9 @@ suite('chatInput browser component', () => {
 		await expect(microphone).toBeEnabled();
 		await page.evaluate(() => window.ashChatInputIntegration.emitDictation('Still recognizing', false));
 		await expect(page.locator('.ash-chat-dictation-preview')).toHaveText('Still recognizing');
-		await expect(composer.locator('[data-action-id="ash.chat.input.send"]')).toHaveCount(outcome === 'failure' ? 1 : 0);
+		const send = composer.locator('[data-action-id="ash.chat.input.send"] button');
+		if (outcome === 'failure') await expect(send).toBeEnabled();
+		else await expect(send).toBeDisabled();
 		await input.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dictationState().stops)).toBe(1);
 		await input.press('Enter');
@@ -4910,7 +4915,7 @@ suite('chatInput browser component', () => {
 		await expect(toolbar.locator('[data-action-id="ash.chat.input.voice"]')).toHaveCount(0);
 		const sendButton = toolbar.locator('[data-action-id="ash.chat.input.send"] button');
 		await expect(sendButton.locator('[data-ash-icon-id="arrow-up"]')).toHaveCount(1);
-		await expect(sendButton).toHaveCSS('border-radius', '50%');
+		await expect(sendButton).toHaveCSS('border-radius', '8px');
 		const messageLayout = await rightActionLayout('ash.chat.input.send');
 		expect(messageLayout.micLeft).toBeGreaterThan(messageLayout.toolbarMiddle);
 		expect(messageLayout.gap).toBeGreaterThanOrEqual(0);

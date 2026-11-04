@@ -12,6 +12,10 @@
 	background: var(--ash-editor-background);
 }
 
+.ash-chat[hidden] {
+	display: none;
+}
+
 .ash-chat-list-widget {
 	min-height: 0;
 	flex: 1 1 auto;

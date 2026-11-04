@@ -838,8 +838,8 @@ suite('ChatGPT shared service', () => {
 			['0', 'gpt-6-instant', undefined], ['1', 'gpt-6-thinking', 'standard'], ['2', 'gpt-6-thinking', 'extended'],
 			['6', 'gpt-6-thinking', 'max'], ['3', 'gpt-6-pro', undefined],
 		] as const) {
-			chat.setModelPreset(preset);
-			chat.setModelPreset('unknown');
+			chat.setModel('latest', preset);
+			chat.setModel('latest', 'unknown');
 			assert.equal(chat.state.get().modelPreset, preset);
 			chat.setDraft('Use selected preset');
 			await chat.send();
@@ -849,7 +849,7 @@ suite('ChatGPT shared service', () => {
 		assert.equal(sent.length, 10);
 		chat.setModel('5.6');
 		assert.equal(chat.state.get().modelPreset, '3');
-		chat.setModelPreset('6');
+		chat.setModel('5.6', '6');
 		chat.setDraft('Use other family');
 		await chat.send();
 		assert.ok(sent.slice(-2).every(body => body.model === 'gpt-5-6-thinking' && body.thinking_effort === 'max'));

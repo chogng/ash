@@ -361,6 +361,15 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 				lifetime.add(this.markdownRenderer.render(markdown, options, element));
 			}
 			wrapTablesWithScrollable(element);
+			for (const rich of element.querySelectorAll<HTMLElement>('.ash-chat-rich')) {
+				for (const variant of rich.classList) {
+					const color = /^(background|border)-rgba-(\d{1,3})-(\d{1,3})-(\d{1,3})-([01](?:p\d+)?)$/u.exec(variant);
+					if (!color) continue;
+					const value = `rgba(${color[2]}, ${color[3]}, ${color[4]}, ${color[5].replace('p', '.')})`;
+					if (color[1] === 'background') rich.style.backgroundColor = value;
+					else rich.style.borderColor = value;
+				}
+			}
 			// Fingerprints belong to sanitized source before editor widgets or provider labels decorate it.
 			const nodes = [...element.childNodes];
 			// Async formula nodes belong to their render lifetime and cannot be transplanted after disposal.

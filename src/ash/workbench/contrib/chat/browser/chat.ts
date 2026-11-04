@@ -52,7 +52,9 @@ export interface IWorkspacePickerDelegate {
 /** Host routing receives the accepted snapshot before model send; the live editor may already hold another draft. */
 export interface IChatWidgetViewOptions {
 	readonly showWelcome?: boolean;
+	readonly welcomeTitle?: import('../../../../base/common/observable.js').IObservable<string | undefined>;
 	readonly configureModelInMenu?: boolean;
+	readonly showPromptTimeline?: boolean;
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;

@@ -38,6 +38,15 @@ export interface IChatListItem {
 	readonly id: string;
 	readonly type: ThreadItem['type'] | 'turnError' | 'advisor' | 'hook' | 'voiceTranscript';
 	readonly content?: readonly ChatContentPart[];
+	/** Resources whose bytes are supplied by the conversation's resource reader. */
+	readonly resources?: readonly {
+		readonly uri: string;
+		readonly name: string;
+		readonly kind: 'image' | 'audio' | 'video' | 'document' | 'html';
+		readonly mimeType?: string;
+		readonly frameOrigin?: string;
+	}[];
+	readonly markdown?: { readonly supportHtml: boolean; };
 	readonly attachmentSource?: { readonly sessionId: string; readonly threadId: string; readonly itemId: string; readonly kind: 'item' | 'toolResult'; };
 	readonly hookPart?: IChatHookPart;
 	readonly toolInvocation?: IChatToolInvocation;
@@ -45,6 +54,8 @@ export interface IChatListItem {
 	/** Exact Core-accepted context body, independent of any current composer draft. */
 	readonly contextText?: string;
 	readonly contextSourceUrl?: string;
+	readonly contextEntries?: readonly { readonly id: string; readonly label: string; readonly text: string; }[];
+	readonly conversationLink?: { readonly label: string; readonly sessionId: string; readonly threadId: string; };
 	readonly transient: boolean;
 	readonly isError?: boolean;
 	readonly label?: string;

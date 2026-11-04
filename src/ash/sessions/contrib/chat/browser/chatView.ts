@@ -31,7 +31,7 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 	) {
 		super();
-		this.element = h(ownerDocument, 'div', { className: 'ash-code-conversation ash-sessions-chat-content' });
+		this.element = h(ownerDocument, 'div', { className: 'ash-sessions-chat-content' });
 		this._register(toDisposable(() => this.element.remove()));
 	}
 

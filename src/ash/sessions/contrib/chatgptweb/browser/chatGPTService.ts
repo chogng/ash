@@ -129,6 +129,7 @@ export function isCoworkSubmission(state: ChatGPTState): boolean {
 
 export interface IChatGPTService {
 	readonly state: IObservable<ChatGPTState>;
+	readonly newDraftRevision: number;
 	initialize(): void;
 	refresh(): Promise<void>;
 	setNetworkAvailable(available: boolean): void;
@@ -148,8 +149,7 @@ export interface IChatGPTService {
 	share(id: string): Promise<string | undefined>;
 	listProjects(signal: AbortSignal): Promise<readonly ChatGPTProject[]>;
 	setDraft(value: string): void;
-	setModel(value: string): void;
-	setModelPreset(value: string): void;
+	setModel(value: string, preset?: string): void;
 	attachFiles(files: readonly File[]): Promise<void>;
 	removeAttachment(id: string): void;
 	retryAttachment(id: string): Promise<void>;
@@ -201,6 +201,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private readonly recentIds = new Set<string>();
 
 	public readonly state: IObservable<ChatGPTState> = this.model;
+	private draftRevision = 0;
+	public get newDraftRevision(): number { return this.draftRevision; }
 	private readonly client: ChatGPTClient;
 	private readonly replyBackend: ChatGPTReplyBackend;
 	constructor(@IChatGPTTransport private readonly transport: IChatGPTTransport, @IStorageService private readonly storage: IStorageService, @IInstantiationService private readonly instantiation?: IInstantiationService) {
@@ -462,17 +464,12 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.drafts.set(key, { ...this.drafts.get(key), text: draft, attachments: this.model.get().attachments });
 		this.update({ draft });
 	}
-	public setModel(model: string): void {
+	public setModel(model: string, preset?: string): void {
 		const state = this.model.get();
 		const selected = state.models.find(entry => entry.id === model);
 		if (!selected || state.busy || state.sending || state.voice !== 'idle') { return; }
-		this.selectModel({ model, modelPreset: this.resolveModelPreset(selected, state.modelPreset) }, state);
-	}
-	public setModelPreset(modelPreset: string): void {
-		const state = this.model.get();
-		const selected = state.models.find(entry => entry.id === state.model);
-		if (state.busy || state.sending || state.voice !== 'idle' || !selected?.presets.some(preset => preset.id === modelPreset)) { return; }
-		this.selectModel({ model: state.model, modelPreset }, state);
+		if (preset !== undefined && !selected.presets.some(option => option.id === preset)) { return; }
+		this.selectModel({ model, modelPreset: this.resolveModelPreset(selected, preset ?? state.modelPreset) }, state);
 	}
 
 	private selectModel(selection: NonNullable<ChatGPTDraft['selection']>, state: ChatGPTState): void {
@@ -1252,6 +1249,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.operation?.abort();
 		this.refreshOperation?.abort();
 		this.generation++;
+		this.draftRevision++;
 		this.taskWatchers.clear();
 		const draft = this.drafts.get(this.newConversationId);
 		const selected = models.find(model => model.id === draft?.selection?.model);

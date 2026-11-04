@@ -109,7 +109,7 @@ export class TabbedModelPicker extends Disposable {
 				const hadFocus = document.activeElement === automatic.input;
 				automatic.busy = true;
 				try {
-					if (value) { await this.delegate.selectAutomaticModel(); }
+					if (value) { await this.delegate.selectAutomaticModel?.(); }
 					else {
 						const model = this.delegate.getSelectedModel() ?? this.delegate.getModels()[0]?.model;
 						if (model) { await this.delegate.selectModel(model); }
@@ -213,13 +213,13 @@ export class TabbedModelPicker extends Disposable {
 				root.append(error);
 				return resources;
 			},
-			renderHeader: configureInMenu ? container => {
+			renderHeader: configureInMenu && this.delegate.selectAutomaticModel ? container => {
 				container.classList.add('ash-chat-model-picker-automatic');
 				return renderAutomatic(container);
 			} : undefined,
 			renderFooter: (container, _tab, sidePanel) => {
 				const resources = new DisposableStore();
-				if (!configureInMenu) { resources.add(renderAutomatic(container)); }
+				if (!configureInMenu && this.delegate.selectAutomaticModel) { resources.add(renderAutomatic(container)); }
 				const effortSection = h(document, 'div', { className: 'ash-chat-model-picker-section' });
 				const moreSection = h(document, 'div', { className: configureInMenu ? 'ash-chat-model-picker-section' : '' });
 				const fastSection = h(document, 'div', { className: 'ash-chat-model-picker-section' });

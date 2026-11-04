@@ -20,7 +20,7 @@ export class ModelPickerWidget extends Disposable {
 	private configurationButton: HTMLElement | undefined;
 	private readonly nameHover = this._register(new MutableDisposable<IManagedHover>());
 	private readonly configurationHover = this._register(new MutableDisposable<IManagedHover>());
-	private enabled = true;
+	private actionEnabled = true;
 	private picker: TabbedModelPicker | undefined;
 
 	constructor(
@@ -76,7 +76,14 @@ export class ModelPickerWidget extends Disposable {
 	}
 
 	public setEnabled(enabled: boolean): void {
-		this.enabled = enabled;
+		this.actionEnabled = enabled;
+		this.updateAvailability();
+	}
+
+	private get enabled(): boolean { return this.actionEnabled && this.delegate.canSelectModel?.() !== false; }
+
+	private updateAvailability(): void {
+		const enabled = this.enabled;
 		for (const button of [this.nameButton, this.configurationButton]) {
 			if (!button) continue;
 			button.setAttribute('aria-disabled', String(!enabled));
@@ -102,7 +109,7 @@ export class ModelPickerWidget extends Disposable {
 			target: this.configurationButton!, content: this.configurationButton!.getAttribute('aria-label')!, groupId: this.hoverGroupId,
 		});
 		if (this.configurationButton!.hidden && this.configurationButton!.ownerDocument.activeElement === this.configurationButton) { this.focus(); }
-		this.setEnabled(this.enabled);
+		this.updateAvailability();
 	}
 
 	public get visible(): boolean { return this.picker?.isVisible ?? false; }

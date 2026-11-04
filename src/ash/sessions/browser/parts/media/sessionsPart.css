@@ -7,7 +7,7 @@
 }
 
 .ash-workbench-sessions .ash-sessions-chat-slot,
-.ash-workbench-sessions .ash-code-conversation > .ash-chat,
+.ash-workbench-sessions .ash-sessions-chat-content > .ash-chat,
 .ash-workbench-sessions .ash-sessions-chat-slot > .ash-chat {
 	background: var(--ash-sessions-conversation-background);
 }

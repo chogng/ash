@@ -233,6 +233,11 @@ article.ash-chat-user-message > pre {
 	outline-offset: var(--ash-strokeThickness);
 }
 
+.ash-chat-defer-completed .ash-chat-item-agentMessage:not([data-transient]) {
+	content-visibility: auto;
+	contain-intrinsic-size: auto 160px;
+}
+
 .ash-chat-context summary {
 	overflow-wrap: anywhere;
 	cursor: pointer;

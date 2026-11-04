@@ -1,5 +1,13 @@
 {
   "ash": {
+    "chat.input.attachFiles": "添加文件",
+    "chat.input.stopReply": "停止",
+    "chat.input.stagedFiles": "附件",
+    "chat.input.fileUploading": "正在上传…",
+    "chat.input.fileUploadFailed": "上传失败",
+    "chat.input.fileReady": "已就绪",
+    "chat.input.retryFile": "重试 {0}",
+    "chat.input.removeFile": "移除 {0}",
     "chat.context.viewSnapshot": "查看附件快照",
     "chat.transfer.openInWorkspace": "聊天：在另一个工作区打开对话",
     "chat.transfer.noTrustedWorkspace": "最近使用的工作区中没有其他受信任的本地工作区。",
@@ -993,6 +1001,7 @@
     "chat.attach.files": "添加附件",
     "chat.attach.remove": "移除 {0}",
     "chat.attach.drop": "拖入文件、文件夹或引用以附加上下文",
+    "chat.attach.dropFiles": "拖放文件以添加为附件",
     "chat.attach.empty": "{0} 是空文件",
     "chat.attach.binary": "{0} 必须是 UTF-8 文本文件或 PNG、JPEG、GIF、WebP 图片",
     "chat.attach.failed": "无法添加附件：{0}",

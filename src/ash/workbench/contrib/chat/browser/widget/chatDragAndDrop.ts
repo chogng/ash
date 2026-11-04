@@ -46,18 +46,19 @@ export class ChatDragAndDrop extends Disposable {
 		super();
 	}
 
-	public addOverlay(target: HTMLElement, overlayContainer: HTMLElement): void {
+	public addOverlay(target: HTMLElement, overlayContainer: HTMLElement, canDropFilesOnly?: () => boolean): void {
 		const resources = this._register(new DisposableStore());
 		const overlay = h(target.ownerDocument, 'div');
 		overlay.className = 'ash-chat-drop-overlay';
-		overlay.textContent = localize('chat.attach.drop', 'Drop files, folders or references to attach');
+		overlay.textContent = canDropFilesOnly ? localize('chat.attach.dropFiles', 'Drop files to attach') : localize('chat.attach.drop', 'Drop files, folders or references to attach');
 		overlay.hidden = true;
 		overlayContainer.append(overlay);
 		resources.add(toDisposable(() => overlay.remove()));
 		resources.add(addDisposableListener(target, 'dragover', event => {
-			const canDrop = containsDragType(event, CodeDataTransfers.CHAT_REFERENCE)
-				? this.getChatReference(event) !== undefined
-				: hasResourceTransfer(event) || getDraggedEditors(event).length > 0;
+			const canDrop = canDropFilesOnly ? canDropFilesOnly() && containsDragType(event, DataTransfers.FILES)
+				: containsDragType(event, CodeDataTransfers.CHAT_REFERENCE)
+					? this.getChatReference(event) !== undefined
+					: hasResourceTransfer(event) || getDraggedEditors(event).length > 0;
 			if (!canDrop) {
 				overlay.hidden = true;
 				return;
@@ -76,6 +77,15 @@ export class ChatDragAndDrop extends Disposable {
 		resources.add(addDisposableListener(target, 'drop', event => {
 			overlay.hidden = true;
 			if (!event.dataTransfer) return;
+			if (canDropFilesOnly) {
+				const files = [...event.dataTransfer.files];
+				if (files.length && canDropFilesOnly()) {
+					event.preventDefault();
+					event.stopPropagation();
+					void this.target.attachFiles(files);
+				}
+				return;
+			}
 			if (containsDragType(event, CodeDataTransfers.CHAT_REFERENCE)) {
 				const conversation = this.getChatReference(event);
 				if (!conversation) return;

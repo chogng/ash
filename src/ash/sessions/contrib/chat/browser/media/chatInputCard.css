@@ -1,5 +1,6 @@
 .ash-sessions-chat-content {
 	/* Center the composer and transcript while the scroll viewport spans the pane. */
+	--ash-sessions-chat-host-inset: var(--ash-sessions-editor-tool-inset, 0px);
 	--ash-sessions-chat-content-bottom: calc(
 		var(--ash-spacing-size120) - var(--ash-sessions-chat-host-inset, 0px)
 	);
@@ -43,11 +44,11 @@
 	box-shadow: none;
 }
 
-.ash-sessions-chat-input-footer {
+.ash-sessions-chat-input > .ash-chat-input-footer {
 	padding-top: var(--ash-spacing-size80);
 	gap: var(--ash-actionBar-gap);
 }
 
-.ash-sessions-chat-input-footer > .ash-chat-input-toolbars {
+.ash-sessions-chat-input > .ash-chat-input-footer > .ash-chat-input-toolbars {
 	width: auto;
 }
