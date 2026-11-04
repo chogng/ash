@@ -1,0 +1,44 @@
+name: PSEC Windows client x64 VM acceptance
+
+on:
+  push:
+    branches: [codex/windows-x64-psec-vm-20261104]
+    paths: [".github/workflows/psec-client-x64-vm.yml"]
+
+permissions: {}
+
+jobs:
+  client-x64:
+    name: Windows 11 x64 PSEC positive
+    runs-on: [self-hosted, Windows, X64, ash-psec-x64-20261104]
+    timeout-minutes: 20
+    steps:
+      - name: Verify and run the candidate from the mounted test image
+        shell: powershell
+        run: |
+          $inventory = Get-Content -Raw -LiteralPath 'C:\psec-probe.json' | ConvertFrom-Json
+          $inventory | ConvertTo-Json -Depth 6
+          if ($inventory.architecture -ne 'X64' -or $inventory.psec.status -ne 'advertised') {
+            throw 'Expected a Windows client x64 with advertised PSEC'
+          }
+          $volume = Get-Volume -FileSystemLabel ASHPSECKIT
+          $test = Join-Path ($volume.DriveLetter + ':\') 'run.ps1'
+          & powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File $test
+          $testExit = $LASTEXITCODE
+          $report = 'C:\psec-candidate-report'
+          Get-Content -LiteralPath (Join-Path $report 'tests.log')
+          $summary = Get-Content -Raw -LiteralPath (Join-Path $report 'summary.json') | ConvertFrom-Json
+          $summary | ConvertTo-Json -Depth 8
+          if ($testExit -ne 0 -or $summary.status -ne 'passed' -or $summary.tests.Count -ne 20 -or $summary.commit -ne 'e5e9389e976d30621da4281856b0bb22bfefc2c1') {
+            throw 'The Windows x64 candidate did not pass the complete positive suite'
+          }
+      - name: Upload Windows client x64 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: psec-client-x64-e5e9389e97
+          path: |
+            C:\psec-probe.json
+            C:\psec-candidate-report\
+          if-no-files-found: error
+          retention-days: 14
