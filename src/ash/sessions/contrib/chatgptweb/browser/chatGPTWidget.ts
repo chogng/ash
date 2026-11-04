@@ -1,5 +1,6 @@
 import { ChatCoworkTaskContent } from './chatCoworkTaskContent.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { observeElementSize } from '../../../../base/browser/observer.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { type IRenderedMarkdown } from '../../../../base/browser/markdownRenderer.js';
@@ -11,7 +12,6 @@ import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ChatContentMarkdownRenderer } from '../../../../workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
 import { wrapTablesWithScrollable } from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownTableScrolling.js';
-import '../../../../workbench/contrib/chat/browser/widget/media/chatListWidget.css';
 import type { ChatGPTMessage, ChatGPTResource } from './chatGPTClient.js';
 import { ChatAttachmentsContentPart, type IChatAttachmentResource } from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatAttachmentsContentPart.js';
 import { IChatGPTService, pendingCreationStatus, type ChatGPTState } from './chatGPTService.js';
@@ -59,7 +59,7 @@ export class ChatGPTWidget extends Disposable {
 		this.markdownRenderer = this._register(instantiation.createInstance(ChatContentMarkdownRenderer));
 		root.className = 'ash-chatgpt-widget';
 		root.tabIndex = -1;
-		const main = this.element('main', 'ash-chatgpt-main ash-chat-transcript-viewport');
+		const main = this.element('main', 'ash-chatgpt-main');
 		this.scroll.append(this.welcome, this.messages);
 		this.messages.setAttribute('role', 'log');
 		this.messages.setAttribute('aria-label', localize('sessions.chatgpt.conversation', 'Conversation'));
@@ -84,6 +84,11 @@ export class ChatGPTWidget extends Disposable {
 		footer.append(this.error, this.status);
 		main.append(this.scroll, this.jumpButton, footer);
 		root.append(main);
+		this._register(observeElementSize(footer, ({ height }) => {
+			// Let messages scroll behind the composer, with room to reveal the last line.
+			main.style.setProperty('--ash-chatgpt-footer-height', `${height}px`);
+			if (this.followOutput) { this.scroll.scrollTop = this.scroll.scrollHeight; }
+		}));
 		this._register(autorun(reader => this.render(this.chat.state.read(reader))));
 		this._register(this.configuration.onDidChangeConfiguration(event => {
 			if ([NEW_SESSION_WELCOME_PHRASES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_MESSAGES_SETTING, 'accessibility.verbosity.newSessionWelcome'].some(key => event.affectsConfiguration(key))) {

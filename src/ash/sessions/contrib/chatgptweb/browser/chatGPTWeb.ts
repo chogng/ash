@@ -28,6 +28,7 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 			return layout.openEntry({
 				id: 'chatgpt', activityContext: 'sessions.activity.chatgptSelected', content: 'editor',
 				sidebarContainerId: chatGPTNavigationContainerId, showEditorTabs: false,
+				useConversationBackground: true,
 				editorInput: {
 					resource: URI.from({ scheme: 'ash-chatgpt', path: '/page' }), label: localize('sessions.chatgpt.title', 'ChatGPT'),
 					showBreadcrumbs: false, readOnly: true, capabilities: EditorInputCapabilities.CannotClose,

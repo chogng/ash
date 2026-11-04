@@ -1,4 +1,5 @@
-.ash-workbench[data-color-scheme="light"] .ash-desktop-editor-area {
+.ash-workbench[data-color-scheme="light"] .ash-desktop-editor-area,
+.ash-sessions-editor-conversation-surface .ash-desktop-editor-area {
 	background: var(--ash-sessions-conversation-background);
 }
 
@@ -80,12 +81,25 @@
 	> .ash-workbench-part {
 	position: relative;
 	overflow: hidden;
-	border-radius: var(--ash-cornerRadius-xLarge);
 	background: var(--ash-editor-background);
+}
+
+.ash-desktop-editor-area
+	.ash-tool-editor-workspace:not(.ash-product-page-host)
+	.ash-workbench-part-frame
+	> .ash-workbench-part {
+	border-radius: var(--ash-cornerRadius-xLarge);
 	box-shadow:
 		0 0 0 var(--ash-strokeThickness) var(--ash-editorGroup-border),
 		0 2px 8px
 			color-mix(in srgb, var(--ash-sessions-inputShadow) 45%, transparent);
+}
+
+.ash-sessions-editor-conversation-surface
+	.ash-product-page-host
+	> .ash-workbench-part-frame
+	> .ash-workbench-part {
+	background: transparent;
 }
 
 .ash-desktop-editor-area
@@ -97,7 +111,7 @@
 
 :is(.hc-black, .hc-light)
 	.ash-desktop-editor-area
-	.ash-tool-editor-workspace
+	.ash-tool-editor-workspace:not(.ash-product-page-host)
 	.ash-workbench-part-frame
 	> .ash-workbench-part {
 	box-shadow: none;

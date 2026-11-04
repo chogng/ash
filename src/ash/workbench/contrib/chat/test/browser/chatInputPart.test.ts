@@ -3927,7 +3927,7 @@ suite('chatInput browser component', () => {
 			await expect(trigger).toHaveAttribute('aria-description', lowCopy);
 			await expect(trigger).toHaveText(chinese ? '低' : 'Low');
 			await trigger.press('ArrowDown');
-			await expect(menu.locator('legend')).toHaveText(chinese ? ['推理强度', '上下文大小', '速度'] : ['Thinking Level', 'Context Size', 'Speed']);
+			await expect(menu.locator('legend')).toHaveText(chinese ? ['推理强度', '上下文大小', '速度'] : ['Effort', 'Context Size', 'Speed']);
 			const contextDefault = menu.getByRole('radio', { name: chinese ? '272K（默认）' : '272K (Default)', exact: true });
 			const expanded = menu.getByRole('radio', { name: '872K', exact: true });
 			const low = menu.getByRole('radio', { name: chinese ? '低' : 'Low', exact: true });
@@ -3978,7 +3978,7 @@ suite('chatInput browser component', () => {
 			await expect(trigger).toHaveAccessibleName(modelOptions === 'effort' ? 'Model options: Low' : 'Model options');
 			await trigger.press('ArrowDown');
 			const menu = page.locator('.ash-chat-model-card-configurable');
-			await expect(menu.locator('legend')).toHaveText(modelOptions === 'effort' ? 'Thinking Level' : 'Context Size');
+			await expect(menu.locator('legend')).toHaveText(modelOptions === 'effort' ? 'Effort' : 'Context Size');
 			await expect(menu.getByRole('radiogroup')).toHaveCount(1);
 			await expect(menu.getByRole('radio')).toHaveCount(2);
 			const last = menu.getByRole('radio').last();

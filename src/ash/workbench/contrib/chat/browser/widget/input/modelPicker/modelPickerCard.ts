@@ -111,7 +111,7 @@ export class ModelCard extends DomWidget {
 		this.choices.length = 0;
 		container.replaceChildren();
 		if (entry.supportedReasoningEfforts?.length) {
-			const group = this.createGroup(localize('chat.modelPicker.thinkingEffort', 'Thinking Level'));
+			const group = this.createGroup(localize('chat.modelPicker.thinkingEffort', 'Effort'));
 			for (const option of modelPickerEffortOptions(entry, this.options!.getSelectedReasoningEffort())) {
 				this.addChoice(group, 'effort', option.label, option.description,
 					() => modelPickerEffortOptions(this.entry!, this.options!.getSelectedReasoningEffort()).some(current => current.effort === option.effort && current.checked),

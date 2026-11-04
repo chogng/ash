@@ -463,7 +463,7 @@ suite('Workbench localization', () => {
 			[
 				localization.translate('ash', 'chat.modelPicker.auto', 'Auto'),
 				localization.translate('ash', 'chat.modelPicker.addModels', 'Add Models'),
-				localization.translate('ash', 'chat.modelPicker.thinkingEffort', 'Thinking Level'),
+				localization.translate('ash', 'chat.modelPicker.thinkingEffort', 'Effort'),
 			],
 			['自动', '添加模型', '推理强度'],
 		);

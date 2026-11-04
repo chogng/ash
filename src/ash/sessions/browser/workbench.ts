@@ -337,7 +337,7 @@ import { SessionsPreferences } from '../contrib/preferences/browser/sessionsPref
 import type { SessionsProfile } from '../common/sessionsProfile.js';
 import { RETURN_TO_WORKBENCH_COMMAND_ID } from '../common/windowNavigation.js';
 import { OPEN_ASH_WINDOW_COMMAND_ID } from '../common/sessionCommands.js';
-import { SessionsConfiguration, type SessionsLayoutStyle } from '../common/configuration.js';
+import { SessionsConfiguration } from '../common/configuration.js';
 import { SessionsManagementService } from '../services/sessions/browser/sessionsManagementService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { ISessionsService, SessionsService } from '../services/sessions/browser/sessionsService.js';
@@ -712,7 +712,6 @@ export abstract class Workbench extends Disposable {
 
 		let sessionsPart: SessionsPart | undefined;
 		const layout = this.layoutService = this._register(services.createInstance(layoutConstructor, this.domNode, {
-			activityBarLocation: configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation),
 			focus: () => sessionsPart?.focus(),
 		}));
 		services.registerInstance(IAgentWorkbenchLayoutService, layout);
@@ -1131,12 +1130,12 @@ export abstract class Workbench extends Disposable {
 			if (event.affectsConfiguration(SessionsConfiguration.activityBarLocation)) {
 				const location = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
 				setActivityBarLocation(location);
-				layout.setActivityBarLocation(location);
+				layout.layout();
 			}
 		}));
 		// Browser integration resolves editor and view services; install it after the window graph is complete.
 		if (options.createAppToolsHost) this._register(options.createAppToolsHost(services));
-		this._register(new SessionsModernUIContribution(this.domNode, layout, configurationService));
+		this._register(new SessionsModernUIContribution(this.domNode, configurationService));
 		this._register(registerLayoutActions(layout, view, contextKeys, editor));
 		this._register(registerAddFileAsContextAction(this.sessionsPart));
 		this._register(registerSessionsTerminalContribution(layout, contextKeys, editor));
@@ -1246,10 +1245,8 @@ function sameWorkspace(first: SessionWorkspaceSelection, second: SessionWorkspac
 export interface IAgentWorkbenchLayoutService extends ILayoutService {
 	getSideBarPosition(): Position;
 	createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, Part>): void;
-	setActivityBarLocation(location: ActivityBarPosition): void;
 	layout(dimension?: IDimension): void;
 	readonly onDidChangePartVisibility: Event<SessionsPartVisibilityChangeEvent>;
-	setLayoutStyle(style: SessionsLayoutStyle): void;
 	/** Determines which center absorbs window resizing; supporting Parts retain their user widths. */
 	setPrimaryPart(partId: 'sessions' | 'editor'): void;
 	setCustomViewVisible(visible: boolean): void;

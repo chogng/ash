@@ -186,7 +186,7 @@ export class DesktopEditorParts extends EditorParts {
 		const productPage = this.filesPart.isGroupVisible(this.pageGroupId);
 		this.area.syncVisible([...this.hosts]
 			.filter(([tool, part]) => (!productPage || tool === 'files') && part.groups.some(group => part.isGroupVisible(group.id)))
-			.map(([tool]) => tool), this.toolForGroup(this.activeGroup.id), !productPage);
+			.map(([tool]) => tool), this.toolForGroup(this.activeGroup.id), productPage);
 	}
 
 	private toolForGroup(groupId: number): DesktopEditorTool {

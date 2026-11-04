@@ -1,6 +1,5 @@
 .ash-chatgpt-widget {
 	height: 100%;
-	background: var(--ash-editor-background, Canvas);
 	color: var(--ash-foreground, CanvasText);
 	font:
 		var(--ash-fontSize-body1, 13px)/1.5 system-ui,
@@ -39,7 +38,6 @@
 }
 
 .ash-chatgpt-main {
-	--ash-chat-transcript-overlap: var(--ash-spacing-size80);
 	display: flex;
 	flex-direction: column;
 	flex: 1;
@@ -51,12 +49,15 @@
 	flex: 1;
 	min-height: 0;
 	overflow: auto;
+	scrollbar-color: var(--ash-scrollbarSlider-background) transparent;
 	padding: 20px 24px;
 	overflow-anchor: none;
-	scroll-padding-block-start: var(--ash-chat-transcript-overlap);
 }
-.ash-chatgpt-widget.empty .ash-chatgpt-main {
-	--ash-chat-transcript-overlap: 0px;
+.ash-chatgpt-widget:not(.empty) .ash-chatgpt-scroll {
+	margin-block-end: calc(-1 * var(--ash-chatgpt-footer-height, 0px));
+	padding-block-end: calc(20px + var(--ash-chatgpt-footer-height, 0px));
+	scroll-padding-block-end: var(--ash-chatgpt-footer-height, 0px);
+	isolation: isolate;
 }
 .ash-chatgpt-welcome {
 	margin: 0 auto;
@@ -167,10 +168,27 @@
 	border-radius: var(--ash-cornerRadius-medium);
 }
 .ash-chatgpt-footer {
+	position: relative;
+	flex-shrink: 0;
 	width: 100%;
 	max-width: 808px;
 	margin: 0 auto;
 	padding: 12px 24px 20px;
+}
+.ash-chatgpt-widget:not(.empty) .ash-chatgpt-footer {
+	pointer-events: none;
+}
+.ash-chatgpt-footer
+	> :is(.ash-chatgpt-composer, .ash-chatgpt-error, .ash-chatgpt-status) {
+	pointer-events: auto;
+}
+.ash-chatgpt-widget:not(.empty)
+	.ash-chatgpt-footer
+	> :is(.ash-chatgpt-error, .ash-chatgpt-status) {
+	background: var(
+		--ash-sessions-conversation-background,
+		var(--ash-editor-background, Canvas)
+	);
 }
 .ash-chatgpt-error {
 	margin: 12px 0 0;
@@ -185,9 +203,13 @@
 }
 .ash-chatgpt-jump {
 	position: absolute;
+	z-index: 1;
 	bottom: 180px;
 	align-self: center;
-	background: var(--ash-editor-background, Canvas);
+	background: var(
+		--ash-sessions-conversation-background,
+		var(--ash-editor-background, Canvas)
+	);
 	border-color: var(--ash-widget-border, GrayText);
 }
 .ash-chatgpt-widget.optimize-scrolling .ash-chatgpt-turn.complete {

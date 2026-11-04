@@ -84,7 +84,7 @@ export const SessionsConfiguration = Object.freeze({
 			included: false,
 			valueType: 'select',
 			get title() { return localize('sessions.layoutStyle.title', 'Layout style'); },
-			get description() { return localize('sessions.layoutStyle.description', 'Choose an inset frame (Modern) or edge-to-edge regions (Flat).'); },
+			get description() { return localize('sessions.layoutStyle.description', 'Choose rounded lower corners (Modern) or square corners (Flat).'); },
 			get options() {
 				return [
 					{ value: 'modern', label: localize('sessions.layoutStyle.modern', 'Modern') },

@@ -134,7 +134,11 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 			if (event.kind === 'activeGroupChanged') { revealActiveEditor(); }
 			else if (event.kind === 'groupChanged' && event.groupId === editor.activeGroup.id && event.event.kind === 'activeEditorChanged') { revealActiveEditor(true); }
 		}));
-		this._register(toDisposable(() => { for (const key of this.activityKeys.values()) { key.reset(); } }));
+		const container = this.layout.mainContainer;
+		this._register(toDisposable(() => {
+			container.classList.remove('ash-sessions-editor-conversation-surface');
+			for (const key of this.activityKeys.values()) { key.reset(); }
+		}));
 		const workspaceMode = SessionsWorkspaceModeContext.bindTo(this.contextKeys);
 		this._register(toDisposable(() => workspaceMode.reset()));
 		this._register(autorun(reader => workspaceMode.set(this.workspaceMode.read(reader))));
@@ -150,6 +154,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		this._register(autorun(reader => {
 			const entry = this.activeEntry.read(reader);
 			const covered = this.customViews.activeCustomView.read(reader) !== undefined;
+			container.classList.toggle('ash-sessions-editor-conversation-surface', !covered && entry?.content === 'editor' && entry.useConversationBackground === true);
 			this.contextKeys.bufferChangeEvents(() => {
 				for (const key of this.activityKeys.values()) key.reset();
 				if (!entry) return;

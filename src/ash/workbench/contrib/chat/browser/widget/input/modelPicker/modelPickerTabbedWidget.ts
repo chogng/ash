@@ -250,7 +250,7 @@ export class TabbedModelPicker extends Disposable {
 						)));
 						if (effortActions.length) {
 							configurationResources.add(new Menu(effortSection, [new SubmenuAction(
-								'chat.modelPicker.effort', localize('chat.modelPicker.thinkingEffort', 'Thinking Level'), effortActions, Lxicon.brain,
+								'chat.modelPicker.effort', localize('chat.modelPicker.thinkingEffort', 'Effort'), effortActions, Lxicon.brain,
 							)], {
 								buttonStyles: defaultButtonStyles,
 								keybindingLabelStyles: defaultKeybindingLabelStyles,
@@ -410,7 +410,7 @@ export class TabbedModelPicker extends Disposable {
 					return new AccessibleContentProvider(AccessibleViewProviderId.ChatModelConfiguration, { type },
 						() => type === AccessibleViewType.Help
 							? configureInMenu
-								? localize('chat.modelPicker.menuHelp', 'Model picker. Type to filter models. Use Up and Down Arrow to browse, Enter to select, and Right Arrow on a model to open its details. Tab to the Thinking Level submenu and press Right Arrow to choose a level. Tab to Fast Mode and press Space to toggle it. Auto enables automatic model selection. More Models opens Language Models management. Escape closes the current menu.')
+								? localize('chat.modelPicker.menuHelp', 'Model picker. Type to filter models. Use Up and Down Arrow to browse, Enter to select, and Right Arrow on a model to open its details. Tab to the Effort submenu and press Right Arrow to choose a level. Tab to Fast Mode and press Space to toggle it. Auto enables automatic model selection. More Models opens Language Models management. Escape closes the current menu.')
 								: localize('chat.modelPicker.help', 'Model picker. All enabled models appear in one list. Type in search to filter models across all providers. Up and Down Arrow browse models and Enter selects one. Right Arrow opens model information and supported thinking, context and speed settings. Tab moves between controls; arrow keys change a focused option group. Applying settings selects that model. Back to models or Alt+Left Arrow returns to the retained list and search. Auto enables automatic model selection. Escape closes the picker. Add Models opens Language Models management.')
 							: root.innerText,
 						() => { if (active.isConnected) { active.focus(); } }, AccessibilityVerbositySettingId.ChatModelConfiguration);

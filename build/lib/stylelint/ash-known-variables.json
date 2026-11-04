@@ -341,6 +341,7 @@
 		"--ash-chat-transcript-composer-overlap",
 		"--ash-chat-transcript-overlap",
 		"--ash-chat-transcript-surface",
+		"--ash-chatgpt-footer-height",
 		"--ash-checkbox-background",
 		"--ash-checkbox-border",
 		"--ash-checkbox-foreground",

@@ -60,6 +60,20 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.service.newSessionCommand, undefined);
 	});
 
+	test('projects the conversation surface only while its editor page is visible', async () => {
+		using fixture = new EntryFixture();
+		const surface = () => fixture.container.classList.contains('ash-sessions-editor-conversation-surface');
+		await fixture.service.openEntry({ ...chatEntry, content: 'editor', useConversationBackground: true });
+		assert.equal(surface(), true);
+		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+		fixture.customViews.showCustomView('automations');
+		assert.equal(surface(), false);
+		fixture.customViews.hideCustomView();
+		assert.equal(surface(), true);
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(surface(), false);
+	});
+
 	for (const saved of [undefined, 'sessions.show.removedFeature']) {
 		test(`restores the Desktop New entry when the saved entry is ${saved ?? 'absent'}`, async () => {
 			using fixture = new EntryFixture();
@@ -462,6 +476,7 @@ class TestCustomView extends AbstractCustomView {
 
 class EntryFixture extends Disposable {
 	private readonly dom = new JSDOM('', { url: 'https://entry-layout.test' });
+	public readonly container = this.dom.window.document.body;
 	private readonly services = this._register(new InstantiationService());
 	public readonly storage = this._register(new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'sessions', backend: this.dom.window.localStorage, flushInterval: 0 }));
 	public readonly lifecycle = this._register(new TestLifecycle(undefined, new NullLoggerService(), this.storage));
@@ -576,6 +591,7 @@ class EntryFixture extends Disposable {
 			onDidPaneCompositeOpen: Event.None, getActivePaneComposite: () => ({ focus: () => { this.focused = 'details'; } }),
 		} as unknown as IPaneCompositePartService);
 		this.services.registerInstance(ILayoutService, {
+			mainContainer: this.container,
 			onDidChangePartVisibility: Event.None, onDidLayoutMainContainer: Event.None,
 			isPartVisible: (id: string) => this.visible.get(id) ?? false,
 			isPartRequested: (id: string) => this.visible.get(id) ?? false,

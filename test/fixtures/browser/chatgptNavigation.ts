@@ -177,7 +177,7 @@ window.ashChatGPTIntegration = {
 	dictationStops: () => dictationStops,
 	setVisible: visible => widget.setVisible(visible),
 };
-widget = resources.add(services.createInstance(ChatGPTWidget, document.getElementById('editor')!));
+widget = resources.add(services.createInstance(ChatGPTWidget, document.getElementById('chatgpt')!));
 if (parameters.has('screenReader')) { services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled); }
 widget.setVisible(true);
 const host = document.getElementById('navigation')!;

@@ -731,7 +731,7 @@
     "sessions.changes.verbosity.title": "更改无障碍帮助",
     "sessions.changes.verbosity.description": "更改视图获得焦点时，播报如何打开无障碍帮助。",
     "sessions.layoutStyle.title": "布局样式",
-    "sessions.layoutStyle.description": "选择内嵌边框（Modern）或贴边布局（Flat）。",
+    "sessions.layoutStyle.description": "选择底部圆角（Modern）或直角（Flat）。",
     "sessions.layoutStyle.modern": "Modern",
     "sessions.layoutStyle.flat": "Flat",
     "sessions.settings.title": "会话设置",

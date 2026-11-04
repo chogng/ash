@@ -5,12 +5,13 @@ import { isRecord } from '../../../base/common/types.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { Part } from '../../../workbench/browser/part.js';
-import { WorkbenchPartView } from '../../../workbench/browser/workbenchPartView.js';
+import { NoWorkbenchPartFrameInsets, WorkbenchPartView } from '../../../workbench/browser/workbenchPartView.js';
 import type { EditorPart } from '../../../workbench/browser/parts/editor/editorPart.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
 import './media/desktopEditorArea.css';
 
 const toolFrameInset = 6;
+const toolFrameInsets = { top: toolFrameInset, right: toolFrameInset, bottom: toolFrameInset, left: toolFrameInset };
 
 export type DesktopEditorTool = 'files' | 'changes' | 'browser' | 'terminal' | 'chat';
 export const desktopEditorTools: readonly DesktopEditorTool[] = ['files', 'changes', 'browser', 'terminal', 'chat'];
@@ -27,7 +28,7 @@ class ToolPartView extends WorkbenchPartView<DesktopEditorTool> implements ISeri
 	constructor(tool: DesktopEditorTool, private readonly editor: EditorPart, private readonly container: HTMLElement) {
 		super(tool, editor);
 		container.append(this.frame);
-		this.setFrameInsets({ top: toolFrameInset, right: toolFrameInset, bottom: toolFrameInset, left: toolFrameInset });
+		this.setFrameInsets(toolFrameInsets);
 	}
 	public override get element(): HTMLElement { return this.container; }
 	public focus(): void { this.editor.focus(); }
@@ -224,12 +225,17 @@ export class DesktopEditorArea extends Part {
 		this.applyVisibility();
 	}
 
-	public syncVisible(tools: readonly DesktopEditorTool[], active = this.active, place = true): void {
+	public syncVisible(tools: readonly DesktopEditorTool[], active: DesktopEditorTool | undefined, productPage: boolean): void {
+		const files = this.views.get('files')!;
+		const frameChanged = files.element.classList.contains('ash-product-page-host') !== productPage;
+		files.element.classList.toggle('ash-product-page-host', productPage);
+		files.setFrameInsets(productPage ? NoWorkbenchPartFrameInsets : toolFrameInsets);
+		const place = !productPage;
 		if (active && !tools.includes(active)) active = undefined;
 		const previous = this.desired;
 		const restoring = this.restoringPlacement;
 		this.restoringPlacement = undefined;
-		const changed = active !== this.active || tools.length !== previous.size || tools.some(tool => !previous.has(tool));
+		const changed = frameChanged || active !== this.active || tools.length !== previous.size || tools.some(tool => !previous.has(tool));
 		if (!restoring && place) {
 			const layout = this.withDesiredVisibility(this.saveLayout());
 			for (const tool of previous) {

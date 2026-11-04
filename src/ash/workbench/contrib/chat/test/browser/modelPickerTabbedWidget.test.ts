@@ -11,9 +11,9 @@ suite('model picker browser component', () => {
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		await page.locator('.ash-chat-input-model-action').press('ArrowDown');
 		const picker = page.locator('.ash-chat-model-picker');
-		const effort = picker.getByRole('menuitem', { name: 'Thinking Level' });
+		const effort = picker.getByRole('menuitem', { name: 'Effort' });
 		await effort.press('ArrowRight');
-		const submenu = page.getByRole('menu', { name: 'Thinking Level' });
+		const submenu = page.getByRole('menu', { name: 'Effort' });
 		await expect(submenu.getByRole('menuitemradio', { name: 'Low' })).toBeFocused();
 		await submenu.evaluate(element => { element.parentElement!.dataset.testSharedSidePanel = 'true'; });
 		const panel = page.locator('[data-test-shared-side-panel]');
@@ -26,7 +26,7 @@ suite('model picker browser component', () => {
 		await expect(panel.locator('.ash-action-widget-side-preview')).toBeVisible();
 		await expect(submenu).toHaveCount(0);
 		await effort.press('ArrowRight');
-		await expect(panel.getByRole('menu', { name: 'Thinking Level' })).toBeVisible();
+		await expect(panel.getByRole('menu', { name: 'Effort' })).toBeVisible();
 		await expect(panel.locator('.ash-action-widget-side-preview')).toHaveCount(0);
 		await page.keyboard.press('Escape');
 		await expect(effort).toBeFocused();
@@ -240,7 +240,7 @@ suite('model picker browser component', () => {
 			await expect(ultra).toBeChecked();
 			const context = picker.getByRole('radiogroup', { name: chinese ? '上下文大小' : 'Context Size', exact: true });
 			await expect(context.getByRole('radio').first()).toBeChecked();
-			const thinking = picker.getByRole('radiogroup', { name: chinese ? '推理强度' : 'Thinking Level', exact: true });
+			const thinking = picker.getByRole('radiogroup', { name: chinese ? '推理强度' : 'Effort', exact: true });
 			await expect(thinking.getByRole('radio').first()).toBeChecked();
 			await standard.focus();
 			await standard.press('Space');

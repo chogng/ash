@@ -328,7 +328,7 @@ Cowork owns its conversation widget, model preferences, welcome layout and draft
 lifecycle. Its input uses the Workbench Chat input component, editor, attachment
 model, model picker and dictation services, with explicit picker placement options.
 The shared Workbench model picker owns both model and configuration triggers,
-menus, keyboard focus and disposal. Thinking level and context size use the same
+menus, keyboard focus and disposal. Effort and context size use the same
 configuration menu; Sessions retains its composer styling.
 Conversation rendering remains separate from Code; both use the shared model catalog
 and platform controls.

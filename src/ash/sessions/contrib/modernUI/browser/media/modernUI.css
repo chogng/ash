@@ -1,11 +1,3 @@
-.ash-sessions-window.modern-ui .ash-sessions-content-frame {
-	display: block;
-	border: var(--ash-strokeThickness) solid var(--ash-border);
-	border-radius: var(--ash-cornerRadius-xLarge);
-	box-shadow: 0 2px 8px
-		color-mix(in srgb, var(--ash-widget-shadow) 50%, transparent);
-}
-
 .ash-sessions-window.modern-ui
 	:is(
 		.ash-workbench-sidebar,
@@ -17,22 +9,11 @@
 }
 
 .ash-sessions-window.modern-ui .ash-sessions-frame-start {
-	border-top-left-radius: var(--ash-cornerRadius-xLarge);
 	border-bottom-left-radius: var(--ash-cornerRadius-xLarge);
 }
 
 .ash-sessions-window.modern-ui .ash-sessions-frame-end {
-	border-top-right-radius: var(--ash-cornerRadius-xLarge);
 	border-bottom-right-radius: var(--ash-cornerRadius-xLarge);
-}
-
-.ash-sessions-window.modern-ui
-	.ash-sessions-workbench-layout[data-panel-visible="true"][data-panel-maximized="false"][data-panel-position="top"]
-	.ash-sessions-frame-end:not(.ash-workbench-panel),
-.ash-sessions-window.modern-ui
-	.ash-sessions-workbench-layout[data-panel-visible="true"][data-panel-maximized="false"][data-panel-position="bottom"]
-	.ash-workbench-panel.ash-sessions-frame-end {
-	border-top-right-radius: 0;
 }
 
 .ash-sessions-window.modern-ui
@@ -45,25 +26,10 @@
 }
 
 .ash-sessions-window.modern-ui
-	.ash-sessions-workbench-layout[data-panel-visible="true"][data-panel-maximized="false"][data-panel-position="top"]
-	.ash-sessions-frame-start:not(.ash-workbench-panel, .ash-workbench-sidebar),
-.ash-sessions-window.modern-ui
-	.ash-sessions-workbench-layout[data-panel-visible="true"][data-panel-maximized="false"][data-panel-position="bottom"]
-	.ash-workbench-panel.ash-sessions-frame-start {
-	border-top-left-radius: 0;
-}
-
-.ash-sessions-window.modern-ui
 	.ash-sessions-workbench-layout[data-panel-visible="true"][data-panel-maximized="false"][data-panel-position="bottom"]
 	.ash-sessions-frame-start:not(.ash-workbench-panel, .ash-workbench-sidebar),
 .ash-sessions-window.modern-ui
 	.ash-sessions-workbench-layout[data-panel-visible="true"][data-panel-maximized="false"][data-panel-position="top"]
 	.ash-workbench-panel.ash-sessions-frame-start {
 	border-bottom-left-radius: 0;
-}
-
-.ash-sessions-window.modern-ui:is(.hc-black, .hc-light)
-	.ash-sessions-content-frame {
-	border-color: var(--ash-contrastBorder);
-	box-shadow: none;
 }

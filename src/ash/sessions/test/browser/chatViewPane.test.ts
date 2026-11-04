@@ -994,14 +994,14 @@ test('Chat title and history switching retain conversations and drafts', async (
 	const reopenedPicker = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-picker')!;
 	assert.deepEqual(
 		[...reopenedPicker.querySelectorAll('.ash-chat-model-picker-section button')].map(button => button.getAttribute('aria-label')),
-		['Thinking Level', 'More Models'],
+		['Effort', 'More Models'],
 	);
-	const effort = reopenedPicker.querySelector<HTMLButtonElement>('[aria-label="Thinking Level"]')!;
+	const effort = reopenedPicker.querySelector<HTMLButtonElement>('[aria-label="Effort"]')!;
 	assert.ok(effort.querySelector('.ash-icon-brain'));
 	const openEffort = (): HTMLElement => {
 		effort.focus();
 		effort.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
-		return dom.window.document.querySelector<HTMLElement>('[role="menu"][aria-label="Thinking Level"]')!;
+		return dom.window.document.querySelector<HTMLElement>('[role="menu"][aria-label="Effort"]')!;
 	};
 	const effortMenu = openEffort();
 	assert.deepEqual([...effortMenu.querySelectorAll('[role="menuitemradio"]')].map(item => item.getAttribute('aria-label')), ['Low', 'Medium', 'High']);
@@ -1320,6 +1320,15 @@ test('Cowork composer submits the exact Skill reference through the shared input
 	});
 	await input.acceptInput('$commit staged changes');
 	assert.deepEqual(submissions, [{ text: '$commit staged changes', skills: [skill] }]);
+});
+
+test('Sessions editor provider honors the height of an inline request editor', async () => {
+	using fixture = await sessionsWidgetFixture();
+	using editor = fixture.input.createEditor({
+		container: document.body, placeholder: '', ariaLabel: 'Edit request',
+		height: { minimum: 420, maximum: 420 },
+	});
+	assert.equal(editor.element.style.minHeight, '420px');
 });
 
 for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with Enter and replaces dictation with Stop task in ${locale}`, async () => {

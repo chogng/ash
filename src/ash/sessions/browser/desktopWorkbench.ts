@@ -20,9 +20,7 @@ import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import type { LogService } from '../../platform/log/common/logServiceImpl.js';
 import type { Part } from '../../workbench/browser/part.js';
 import { WorkbenchPartView } from '../../workbench/browser/workbenchPartView.js';
-import { ActivityBarPosition } from '../../workbench/common/configuration.js';
 import type { ExtensionColorThemeService } from '../../workbench/services/extensions/browser/extensionColorThemeService.js';
-import type { SessionsLayoutStyle } from '../common/configuration.js';
 import { sessionsPartIds, type SessionsPartId } from '../common/layoutConstants.js';
 import {
 	Workbench,
@@ -282,8 +280,6 @@ export interface SessionsWorkbenchLayoutOptions {
 	readonly initialDimension?: IDimension;
 	readonly initialState?: SessionsWorkbenchLayoutState;
 	readonly focus?: () => void;
-	readonly layoutStyle?: SessionsLayoutStyle;
-	readonly activityBarLocation?: ActivityBarPosition;
 }
 
 /** Adapts retained Workbench Parts to the window Grid. */
@@ -325,12 +321,6 @@ class SessionsWorkbenchPartView extends WorkbenchPartView<SessionsPartId> {
 		// The split clips the overflow at the tool boundary. The conversation
 		// still lays out its transcript and composer at their readable width.
 		this.part.domNode.style.minWidth = enabled ? `${conversationContentMinimumWidth}px` : '';
-	}
-	public override get preferredWidth(): number | undefined {
-		// Side-panel defaults and stored widths include the window frame insets.
-		return this.partId === 'sidebar' || this.partId === 'auxiliarybar'
-			? this.part.preferredWidth
-			: super.preferredWidth;
 	}
 	public get priority(): LayoutPriority {
 		return this.partId === 'customview' ||
@@ -388,10 +378,7 @@ export class DesktopWorkbenchLayout
 	private readonly partVisibility = new Map<SessionsPartId, boolean>();
 	private readonly _onDidChangePartVisibility = this._register(new Emitter<SessionsPartVisibilityChangeEvent>());
 	private readonly compositionChanged = this._register(new Emitter<void>());
-	private layoutStyle: SessionsLayoutStyle;
-	private activityBarLocation: ActivityBarPosition;
 	private readonly layoutPolicy = new SessionsLayoutPolicy();
-	private readonly frameDomNode: HTMLDivElement;
 	private sidePaneWidth: number;
 	private detailsWidth: number;
 	private conversationWidth: number;
@@ -409,16 +396,10 @@ export class DesktopWorkbenchLayout
 	) {
 		super({ root: container, focus: options.focus });
 		this.initialDimension = resolveSessionsInitialDimension(container, options.initialDimension);
-		this.layoutStyle = options.layoutStyle ?? 'modern';
-		this.activityBarLocation = options.activityBarLocation ?? ActivityBarPosition.DEFAULT;
 		this.domNode = h(container.ownerDocument, 'div');
 		this.domNode.className = 'ash-sessions-workbench-layout';
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
-		this.frameDomNode = h(container.ownerDocument, 'div');
-		this.frameDomNode.className = 'ash-sessions-content-frame';
-		this.frameDomNode.setAttribute('aria-hidden', 'true');
-		this.domNode.append(this.frameDomNode);
 		this.stateModel = new SessionsWorkbenchLayoutStateModel(
 			storageService,
 			options.initialState ?? createDefaultSessionsWorkbenchLayoutState(this.layoutPolicy, this.initialDimension),
@@ -476,12 +457,11 @@ export class DesktopWorkbenchLayout
 			}
 		}));
 		const state = this.stateModel.state;
-		this.projectFrameInsets(state.auxiliarybar.visible);
+		this.updateContentCorners(state.auxiliarybar.visible);
 		this.rebuildGrid(state, this.initialDimension);
 		this._register(
 			this.view('titlebar').part.onDidChangeConstraints(() => {
-				// Grid follows Part constraints; overlays and the decorative frame need the same new offset.
-				this.projectFrameInsets();
+				// Grid and overlays follow the titlebar's new height.
 				if (this.grid.width > 0 && this.grid.height > 0)
 					this.layout(new Dimension(this.grid.width, this.grid.height));
 			}),
@@ -555,7 +535,7 @@ export class DesktopWorkbenchLayout
 				)
 					this.conversationWidth = this.getViewSize(this.view('sessions')).width;
 
-				this.projectFrameInsets();
+				this.updateContentCorners();
 				this.updateTitlebarSurface();
 				this.publishPartVisibility();
 				this.saveState();
@@ -576,23 +556,6 @@ export class DesktopWorkbenchLayout
 		} finally { this.partUpdateDepth--; }
 	}
 
-	setLayoutStyle(style: SessionsLayoutStyle): void {
-		if (this.layoutStyle === style) return;
-		this.layoutStyle = style;
-		this.projectFrameInsets();
-		if (this.grid.width > 0 && this.grid.height > 0) {
-			this.layout(new Dimension(this.grid.width, this.grid.height));
-		}
-	}
-
-	setActivityBarLocation(location: ActivityBarPosition): void {
-		if (this.activityBarLocation === location) return;
-		this.activityBarLocation = location;
-		this.projectFrameInsets();
-		if (this.grid.width > 0 && this.grid.height > 0) this.layout(new Dimension(this.grid.width, this.grid.height));
-		else this.publishPartVisibility();
-	}
-
 	override layout(dimension: IDimension = getContainerDimension(this.mainContainer)): void {
 		assertDimension(dimension);
 		if (this.responsiveLayout) return;
@@ -604,7 +567,7 @@ export class DesktopWorkbenchLayout
 			this.partUpdateDepth++;
 			try {
 				this.layoutTools(dimension);
-				this.projectFrameInsets();
+				this.updateContentCorners();
 				this.compositionChanged.fire();
 				const editor = this.view('editor').part;
 				const initialWidth = !this.compactTools && this.primaryPart === 'sessions' && this.isPartVisible('editor') && editor instanceof DesktopEditorArea
@@ -661,17 +624,14 @@ export class DesktopWorkbenchLayout
 		const sidebar = wanted('sidebar') ? this.view('sidebar').minimumWidth : 0;
 		const details = wanted('auxiliarybar') ? this.view('auxiliarybar').part.minimumWidth : 0;
 		const conversationView = this.view('sessions');
-		// Count the window edges once, regardless of which Part currently owns the inset.
-		const frame = this.layoutPolicy.getFrameMetrics(this.layoutStyle);
-		const workspaceWidth = dimension.width - frame.rightEdge
-			- (!sidebar && this.activityBarLocation !== ActivityBarPosition.DEFAULT ? frame.leftEdge : 0);
+		const workspaceWidth = dimension.width;
 		const eligible = !this.customViewVisible && wanted('editor') && area.hasTools;
 		const overflow = eligible && this.primaryPart === 'sessions' && conversationView.part instanceof SessionsPart;
 		const conversation = wanted('sessions')
 			? overflow ? conversationSlotMinimumWidth : conversationView.part.minimumWidth
 			: 0;
 		const wasCompact = this.compactTools;
-		const availableHeight = dimension.height - this.titlebarHeight - frame.rightEdge;
+		const availableHeight = dimension.height - this.titlebarHeight;
 		this.compactTools = eligible && (workspaceWidth < sidebar + details + conversation + area.expandedMinimumWidth
 			|| availableHeight < area.expandedMinimumHeight);
 		const stack = this.compactTools && area.stackedMinimumHeight <= availableHeight
@@ -703,7 +663,7 @@ export class DesktopWorkbenchLayout
 		} finally {
 			try {
 				if (this.partUpdateDepth === 1) {
-					this.projectFrameInsets();
+					this.updateContentCorners();
 					if (!wasMaximized && !this.grid.hasMaximizedView() && this.isViewVisible(this.view('auxiliarybar')))
 						this.resizeView(
 							this.view('auxiliarybar'),
@@ -738,7 +698,7 @@ export class DesktopWorkbenchLayout
 		const state = this.state;
 		const dimension = new Dimension(this.grid.width, this.grid.height);
 		this.primaryPart = partId;
-		this.projectFrameInsets(state.auxiliarybar.visible);
+		this.updateContentCorners(state.auxiliarybar.visible);
 		this.compositionChanged.fire();
 		// View priorities already follow the composition. Retain the Grid so titlebar
 		// transitions and focus survive switching between Chat and Code.
@@ -882,39 +842,11 @@ export class DesktopWorkbenchLayout
 		);
 	}
 
-	private projectFrameInsets(auxiliarybarVisible = this.isPartVisible('auxiliarybar')): void {
-		const { leftEdge, rightEdge } = this.layoutPolicy.getFrameMetrics(this.layoutStyle);
-		const contentBottom = rightEdge;
-		const contentRight = rightEdge;
-		this.view('titlebar').setFrameInsets({ top: 0, right: 0, bottom: 0, left: 0 });
+	private updateContentCorners(auxiliarybarVisible = this.isPartVisible('auxiliarybar')): void {
 		const sidebarVisible = this.compactTools ? this.isPartVisible('sidebar') : this.desiredVisibility.sidebar && !this.unavailableParts.has('sidebar');
 		const editorVisible =
 			!this.customViewVisible && (this.compactTools ? this.isPartVisible('editor') : this.desiredVisibility.editor && !this.unavailableParts.has('editor'));
 		const sessionsVisible = !this.customViewVisible && (this.compactTools ? this.isPartVisible('sessions') : !this.unavailableParts.has('sessions'));
-		const contentLeftEdge = this.activityBarLocation === ActivityBarPosition.DEFAULT ? 0 : leftEdge;
-		const contentLeft = sidebarVisible ? 0 : contentLeftEdge;
-		this.view('sidebar').setFrameInsets({ top: 0, right: 0, bottom: rightEdge, left: contentLeftEdge });
-		this.view('sessions').setFrameInsets({
-			top: 0,
-			right: auxiliarybarVisible || editorVisible ? 0 : contentRight,
-			bottom: contentBottom,
-			left: contentLeft,
-		});
-		this.view('auxiliarybar').setFrameInsets({ top: 0, right: contentRight, bottom: contentBottom, left: 0 });
-		this.view('editor').setFrameInsets({
-			top: 0,
-			right: !auxiliarybarVisible ? contentRight : 0,
-			bottom: contentBottom,
-			left: !sessionsVisible ? contentLeft : 0,
-		});
-
-		if (this.views.has('customview'))
-			this.view('customview').setFrameInsets({
-				top: 0,
-				right: rightEdge,
-				bottom: rightEdge,
-				left: sidebarVisible ? 0 : contentLeftEdge,
-			});
 		const mainPart: SessionsPartId = this.customViewVisible
 			? 'customview'
 			: sessionsVisible
@@ -941,11 +873,6 @@ export class DesktopWorkbenchLayout
 				partId === lastPart,
 			);
 		}
-		// One decorative outline spans the retained Parts; it never intercepts their input or sashes.
-		this.frameDomNode.style.top = `${this.mainContainerOffset.top}px`;
-		this.frameDomNode.style.left = `${contentLeftEdge}px`;
-		this.frameDomNode.style.right = `${rightEdge}px`;
-		this.frameDomNode.style.bottom = `${rightEdge}px`;
 	}
 
 	private updateTitlebarSurface(): void {

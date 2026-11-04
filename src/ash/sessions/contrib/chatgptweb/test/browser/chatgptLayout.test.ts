@@ -156,12 +156,41 @@ suite('chatgptweb browser component', () => {
 			const geometry = await title.evaluate(element => {
 				const bounds = element.getBoundingClientRect();
 				const parent = element.parentElement!;
-				return { width: bounds.width, available: parent.clientWidth, overflow: parent.scrollWidth > parent.clientWidth, wrap: getComputedStyle(element).overflowWrap, color: getComputedStyle(element).color, background: getComputedStyle(element.closest('.ash-chatgpt-widget')!).backgroundColor };
+				return { width: bounds.width, available: parent.clientWidth, overflow: parent.scrollWidth > parent.clientWidth, wrap: getComputedStyle(element).overflowWrap, color: getComputedStyle(element).color, background: getComputedStyle(element.closest('#editor')!).backgroundColor };
 			});
 			expect(geometry.wrap).toBe('anywhere');
 			expect(geometry.width).toBeLessThanOrEqual(geometry.available);
 			expect(geometry.overflow).toBe(false);
 			expect(geometry.color).not.toBe(geometry.background);
+		}
+	});
+
+	test('ChatGPT scrolls a long transcript over the page background', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page, 'Synthetic reply.\n\n'.repeat(100));
+		for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
+			await page.goto(`/chatgptNavigation.html?theme=${theme}`);
+			await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+			const widget = page.locator('.ash-chatgpt-widget');
+			const transcript = widget.locator('.ash-chatgpt-scroll');
+			await expect(widget).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			expect(await widget.locator('main').evaluate(element => getComputedStyle(element, '::before').content)).toBe('none');
+			await expect(transcript).toHaveCSS('scrollbar-color', /^rgba?\(.+\) rgba\(0, 0, 0, 0\)$/u);
+			await expect.poll(() => transcript.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+			await transcript.evaluate(element => { element.scrollTop = 0; });
+			await transcript.hover();
+			await page.mouse.wheel(0, 300);
+			await expect.poll(() => transcript.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+
+			const footer = widget.locator('.ash-chatgpt-footer');
+			await expect.poll(async () => {
+				const [scrollBounds, footerBounds] = await Promise.all([transcript.boundingBox(), footer.boundingBox()]);
+				return scrollBounds!.y + scrollBounds!.height - footerBounds!.y;
+			}).toBeGreaterThan(0);
+			await expect(footer).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await transcript.evaluate(element => { element.scrollTop = element.scrollHeight; });
+			const lastLine = transcript.locator('.ash-chatgpt-message-body p').last();
+			expect((await lastLine.boundingBox())!.y + (await lastLine.boundingBox())!.height).toBeLessThan((await footer.boundingBox())!.y);
 		}
 	});
 
