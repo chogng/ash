@@ -150,6 +150,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 			onDidChange.fire();
 			return untitledSession;
 		},
+		async resolveNewSessionTarget() { return { providerId: 'test', workspace: { type: 'current' as const } }; },
 		restoreUntitledSession(session) {
 			untitledSessions = [session, ...untitledSessions];
 			onDidChange.fire();

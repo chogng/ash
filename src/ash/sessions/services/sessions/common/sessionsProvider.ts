@@ -43,6 +43,8 @@ export interface ISessionsProvider extends IDisposable {
 	/** Cancels pending acquisition and releases it before the next lease can be acquired. */
 	unsubscribe(sessionId: SessionId): Promise<void>;
 	currentWorkspace(): SessionWorkspaceSelection;
+	/** Probes an inherited directory without prompting or changing its grant. */
+	canReuseWorkspace?(target: SessionExecutionTarget, devContainer?: boolean): Promise<boolean>;
 	/** Available checkouts on this provider's host, preserving execution authority. */
 	getWorktrees?(workspace: SessionExecutionTarget, token: CancellationToken, includeOtherRepositories?: boolean): Promise<readonly {
 		readonly label: string;

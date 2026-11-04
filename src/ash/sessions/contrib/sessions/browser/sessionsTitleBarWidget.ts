@@ -206,8 +206,11 @@ export class SessionsTitleBarWidget extends Disposable {
 		}), () => contextKeys.getValue(modeKey));
 		this._register(autorun(reader => {
 			const selection = sessions.getSelection(reader).activeSelection;
-			element.hidden = !!customViews.activeCustomView.read(reader) || (environment.runtime === 'electron' && mode.read(reader) !== 'code');
+			const codeMode = mode.read(reader) === 'code';
 			const count = indicator.blockedSessions.read(reader).length;
+			const covered = !!customViews.activeCustomView.read(reader);
+			element.hidden = covered || (environment.runtime === 'electron' && !codeMode)
+				|| (codeMode && selection?.kind === 'untitled' && count === 0);
 			menuButton.hidden = !selection || count > 0;
 			button.domNode.classList.toggle('ash-sessions-titlebar-editable', !menuButton.hidden);
 			if (edit && (element.hidden || count || edit.key !== JSON.stringify(renameTarget(selection)))) {

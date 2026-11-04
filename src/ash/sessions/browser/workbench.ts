@@ -22,6 +22,7 @@ import { SessionConversationLinks } from './agentHost/sessionConversationLinks.j
 import { SessionsAgentThreadService } from './agentHost/sessionsAgentThreadService.js';
 import { SessionsSearchService } from '../contrib/providers/agentHost/browser/sessionsSearchService.js';
 import { SessionFileSystemContribution } from '../contrib/providers/agentHost/browser/sessionFileSystemContribution.js';
+import { hasDevelopmentPermissions } from '../../platform/workspace/common/workspaceTrust.js';
 import { ISessionFolderAuthorizationService, sessionWorkspaceUri } from '../common/sessionWorkspace.js';
 import { ISessionProviderScopeService, ISessionPrimaryProviderServices, SessionProviderScopeService, SessionProviderServices, captureInstructionImports, type ISessionProviderScope } from './agentHost/sessionProviderScopeService.js';
 import { SessionsChatService } from './agentHost/sessionsChatService.js';
@@ -140,7 +141,7 @@ import { ILocalGitService } from '../../platform/git/common/localGitService.js';
 import { AppServerPluginManagementService } from '../../workbench/services/extensionManagement/browser/appServerPluginManagementService.js';
 import { IAppServerRemoteAgentService } from '../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { AppServerRemoteAgentService } from '../../workbench/services/remote/browser/appServerRemoteAgentService.js';
-import { autorun } from '../../base/common/observable.js';
+import { autorun, observableFromEvent, observableSignalFromEvent } from '../../base/common/observable.js';
 import { CustomViewGridPart } from './parts/customViewGridPart.js';
 import { ICustomViewService } from '../services/customView/browser/customViewService.js';
 import { ICustomViewGridPartService } from '../services/customView/browser/customViewGridPartService.js';
@@ -195,7 +196,8 @@ import { TextResourcePropertiesService } from '../../workbench/services/textreso
 import { CoworkPaneFactory } from '../contrib/cowork/browser/cowork.contribution.js';
 import { ISessionsConversationService } from '../services/sessions/common/sessionsConversation.js';
 import { ChatTipService, IChatTipService } from '../../workbench/contrib/chat/browser/chatTipService.js';
-import { migrateNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
+import { NewSessionDraftVisibleContext } from '../common/contextkeys.js';
+import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
 import { NativeAccessibilityService } from '../../workbench/services/accessibility/electron-browser/accessibilityService.js';
@@ -544,6 +546,11 @@ export abstract class Workbench extends Disposable {
 		const folderAuthorization = services.get(ISessionFolderAuthorizationService);
 		const provider = this._register(primaryHostServices.createInstance(AppServerSessionsProvider, {
 			workspace: options.workspaceSelection,
+			isWorkspaceTrusted: async target => {
+				if (target.type === 'local') return folderAuthorization.isTrusted(target.root);
+				const directory = await options.api.workspaceTrust.readDirectory(target.root);
+				return hasDevelopmentPermissions(directory.permissions ?? directory.inheritedWorkspacePermissions);
+			},
 			authorizeWorkspace: (target, signal) => folderAuthorization.authorize(
 				target.root, signal, target.type === 'ssh' ? { api: options.api, label: target.host }
 				: target.type === 'remote' ? { api: options.api, label: target.authority } : undefined),
@@ -889,6 +896,27 @@ export abstract class Workbench extends Disposable {
 			} satisfies SessionsPartOptions),
 		);
 		services.registerInstance(ISessionsConversationService, sessionsPart);
+		const newSessionDraftVisible = NewSessionDraftVisibleContext.bindTo(contextKeys);
+		const conversationVisible = observableFromEvent(this, layout.onDidChangePartVisibility, () => layout.isPartVisible('sessions'));
+		const draftChanged = observableSignalFromEvent(this, listener => storage.onDidChangeValue(event => {
+			const active = view.activeSelection;
+			if (active?.kind === 'untitled' && event.scope === StorageScope.WORKSPACE
+				&& event.key === `sessions.inputDraft:untitled:${active.session.untitledSessionId}`) listener(event);
+		}));
+		this._register(autorun(reader => {
+			const active = view.getSelection(reader).activeSelection;
+			const visible = conversationVisible.read(reader);
+			draftChanged.read(reader);
+			let emptyDraft = false;
+			if (visible && active?.kind === 'untitled' && !active.session.forkSource) {
+				try {
+					const draft = readNewChatDraftState(storage, `untitled:${active.session.untitledSessionId}`, chatInputStatePersistence);
+					emptyDraft = !draft || (!draft.text.trim() && draft.contexts.length === 0);
+				} catch { /* The composer owns reporting unreadable drafts. */ }
+			}
+			newSessionDraftVisible.set(emptyDraft);
+		}));
+		this._register(toDisposable(() => newSessionDraftVisible.reset()));
 		const part = sessionsPart;
 		this._register(autorun(reader => {
 			const { visibleSelections, activeSelection } = view.getSelection(reader);

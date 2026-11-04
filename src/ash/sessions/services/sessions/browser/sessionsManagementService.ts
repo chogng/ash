@@ -10,11 +10,13 @@ import { canceled, isCancellationError } from '../../../../base/common/errors.js
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { observableValue } from '../../../../base/common/observable.js';
-import type { IActiveSessionThread, IUntitledChatSession, ISession, SessionManagementInfo, SessionEnvironmentSelection, ModelRef, SessionId, SessionWorkspaceSelection, ThreadId } from '../common/session.js';
+import type { IActiveSessionThread, IUntitledChatSession, ISession, SessionManagementInfo, SessionEnvironmentSelection, ModelRef, SessionId, SessionWorkspaceSelection, SessionExecutionTarget, ThreadId } from '../common/session.js';
 import type { ISessionsManagementService, SessionsManagementState } from '../common/sessionsManagement.js';
 import type { ISessionCreateOptions, ISessionsProvider } from '../common/sessionsProvider.js';
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 import { localize } from '../../../../nls.js';
+import { selectionFromResource } from '../../../common/agentHostSessionWorkspace.js';
+import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { ISessionsProvidersService } from './sessionsProvidersService.js';
 import { backendSession, parseSessionIdentity, projectSession, sessionIdentity, threadIdentity } from '../common/sessionIdentity.js';
 
@@ -250,13 +252,13 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		await this.owner(sessionId).interrupt(backendSession(session, this.defaultProviderId), parseSessionIdentity(threadId, this.defaultProviderId).backendSessionId);
 	}
 
-	createUntitledSession(title = localize('chat.title.new', 'New Chat'), workspace?: SessionWorkspaceSelection, providerId?: string, activate = true, forkSource?: IUntitledChatSession['forkSource']): IUntitledChatSession {
+	createUntitledSession(title = localize('chat.title.new', 'New Chat'), workspace?: SessionWorkspaceSelection, providerId?: string, activate = true, forkSource?: IUntitledChatSession['forkSource'], options?: { readonly devContainer?: boolean; }): IUntitledChatSession {
 		const provider = this.creationProvider(workspace, providerId);
 		if (!workspace) {
 			const current = provider.currentWorkspace();
 			workspace = (activate && !forkSource ? this.recentWorkspaces?.getSelected(provider.id, current) : undefined) ?? current;
 		}
-		const session = { untitledSessionId: createUuid(), providerId: provider.id, title, model: undefined, agent: undefined, workspace, ...(forkSource ? { forkSource } : {}) };
+		const session = { untitledSessionId: createUuid(), providerId: provider.id, title, model: undefined, agent: undefined, workspace, ...(forkSource ? { forkSource } : {}), ...(options?.devContainer ? { devContainer: true } : {}) };
 		this._untitledSessions = [session, ...this._untitledSessions];
 		if (activate) {
 			this.selectionRevision++;
@@ -265,6 +267,50 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		}
 		this._onDidChange.fire();
 		return session;
+	}
+
+	async resolveNewSessionTarget(): ReturnType<ISessionsManagementService['resolveNewSessionTarget']> {
+		const draft = this.activeUntitledSession;
+		const session = draft ? undefined : this.active?.session;
+		const providerId = draft?.providerId ?? session?.providerId ?? this.defaultProviderId;
+		const provider = this.providers.getProvider(providerId);
+		if (provider && this.isAvailableForNewSession(provider)) {
+			// Use the Session's creation workspace, which can differ from its chat's managed worktree.
+			const workspace = session?.workspace;
+			const runtime = workspace?.runtime;
+			const source = runtime?.providerId === 'ash.dev-containers'
+				? { authorityId: runtime.hostAuthority ?? 'local', root: runtime.workspace }
+				: workspace && !runtime ? workspace : undefined;
+			const target = draft?.workspace ?? (source ? selectionFromResource(sessionWorkspaceUri(source)) : undefined);
+			const devContainer = draft?.devContainer === true || runtime?.providerId === 'ash.dev-containers';
+			if (target && target.type !== 'current' && await this.canReuseWorkspace(provider, target, devContainer)
+				&& this.isAvailableForNewSession(provider)) {
+				return { providerId, workspace: target, ...(devContainer ? { devContainer: true } : {}) };
+			}
+		}
+		const fallback = provider && this.isAvailableForNewSession(provider) ? provider : this.requireProvider(this.defaultProviderId);
+		if (!this.isAvailableForNewSession(fallback)) return { providerId: this.defaultProviderId, workspace: { type: 'current' } };
+		const current = fallback.currentWorkspace();
+		const recent = this.recentWorkspaces?.getSelected(fallback.id, current);
+		for (const target of [recent, current]) {
+			if (target && target.type !== 'current' && await this.canReuseWorkspace(fallback, target)
+				&& this.isAvailableForNewSession(fallback)) {
+				return { providerId: fallback.id, workspace: target };
+			}
+		}
+		return { providerId: this.isAvailableForNewSession(fallback) ? fallback.id : this.defaultProviderId, workspace: { type: 'current' } };
+	}
+
+	private isAvailableForNewSession(provider: ISessionsProvider): boolean {
+		return this.providers.getProvider(provider.id) === provider
+			&& (!provider.connectionStatus || provider.connectionStatus.get() === 'connected');
+	}
+
+	private async canReuseWorkspace(provider: ISessionsProvider, workspace: Exclude<SessionWorkspaceSelection, { type: 'current'; }>, devContainer = false): Promise<boolean> {
+		const targets = workspace.type === 'multiple' ? workspace.folders.map(folder => folder.target) : [workspace];
+		const check = async (target: SessionExecutionTarget): Promise<boolean> =>
+			target.type !== 'provider' && (await provider.canReuseWorkspace?.(target, devContainer).catch(() => false) ?? !devContainer);
+		return (await Promise.all(targets.map(check))).every(Boolean);
 	}
 
 	selectUntitledSession(untitledSessionId: string): void {

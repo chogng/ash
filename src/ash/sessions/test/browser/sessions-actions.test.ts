@@ -130,9 +130,27 @@ test('navigation New uses the active entry owner before the default ChatGPT entr
 test('Code navigation New creates a Session and opens its workspace without the shared Chat view', async () => {
 	using services = new InstantiationService();
 	const calls: string[] = [];
-	services.registerInstance(IContextKeyService, { getValue: () => 'code' } as unknown as IContextKeyService);
+	const target = { providerId: 'test', workspace: { type: 'local', root: '/project' } } as const;
+	let revision = 0;
+	let switchDuringProbe = false;
+	let switchPageDuringProbe = false;
+	using contextChanged = new Emitter<{ keys: ReadonlySet<string>; affectsSome: () => boolean; }>();
+	services.registerInstance(ISessionsManagementService, {
+		async resolveNewSessionTarget() {
+			if (switchDuringProbe) revision++;
+			if (switchPageDuringProbe) contextChanged.fire({ keys: new Set(['sessions.activity.customizeSelected']), affectsSome: () => true });
+			return target;
+		}
+	} as unknown as ISessionsManagementService);
+	services.registerInstance(IContextKeyService, { getValue: () => 'code', onDidChangeContext: contextChanged.event } as unknown as IContextKeyService);
 	services.registerInstance(ISessionsLayoutService, { newSessionCommand: undefined } as ISessionsLayoutService);
-	services.registerInstance(ISessionsService, { openNewSession: () => { calls.push('create'); return { untitledSessionId: 'draft' }; } } as unknown as ISessionsService);
+	services.registerInstance(ISessionsService, {
+		get navigationRevision() { return revision; }, openNewSession: (_title: undefined, options: unknown) => {
+			assert.deepEqual(options, target);
+			calls.push('create');
+			return { untitledSessionId: 'draft' };
+		}
+	} as unknown as ISessionsService);
 	using providers = new SessionsProvidersService();
 	services.registerInstance(ISessionsProvidersService, providers);
 	services.registerInstance(ILayoutService, { focus: () => calls.push('focus') } as unknown as ILayoutService);
@@ -141,6 +159,14 @@ test('Code navigation New creates a Session and opens its workspace without the 
 	services.registerInstance(ICommandService, commands);
 	await commands.executeCommand('sessions.newSession');
 	assert.deepEqual(calls, ['create', 'code', 'focus']);
+	calls.length = 0;
+	switchDuringProbe = true;
+	await commands.executeCommand('sessions.newSession');
+	assert.deepEqual(calls, []);
+	switchDuringProbe = false;
+	switchPageDuringProbe = true;
+	await commands.executeCommand('sessions.newSession');
+	assert.deepEqual(calls, []);
 });
 
 test('shared Chat commands coexist with Sessions actions and delegate to the window owner', async () => {
@@ -156,10 +182,11 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 		openSession: (sessionId: string, threadId: string) => opened.push(`${sessionId}/${threadId}`),
 	} as unknown as ISessionsService);
 	services.registerInstance(ISessionsManagementService, {
+		resolveNewSessionTarget: async () => ({ providerId: 'test', workspace: { type: 'current' } }),
 		sessions: [{ sessionId: 'session', title: 'Session', status: 'active', chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }] }],
 	} as unknown as ISessionsManagementService);
 	services.registerInstance(IConfigurationService, { getValue: () => false } as unknown as IConfigurationService);
-	services.registerInstance(IContextKeyService, { getValue: () => 'code' } as unknown as IContextKeyService);
+	services.registerInstance(IContextKeyService, { getValue: () => 'code', onDidChangeContext: Event.None } as unknown as IContextKeyService);
 	services.registerInstance(ISessionsLayoutService, { newSessionCommand: undefined } as unknown as ISessionsLayoutService);
 	services.registerInstance(ILayoutService, { focus: () => focus.push('composer') } as unknown as ILayoutService);
 	using code = CommandsRegistry.register('sessions.open.code', () => { focus.push('code'); });
@@ -171,7 +198,7 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 	} as unknown as IChatSessionNavigationService);
 	assert.equal(NEW_CHAT_COMMAND_ID, 'workbench.action.chat.newChat');
 	assert.equal(await commands.executeCommand('workbench.action.chat.newChat'), true);
-	assert.deepEqual(created, [undefined]);
+	assert.deepEqual(created, ['test']);
 	assert.deepEqual(focus, ['code', 'composer']);
 	await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
 	assert.deepEqual(input.picker?.items.map(item => item.label), ['Session']);

@@ -813,6 +813,8 @@ class FakeSessionService implements ISessionsManagementService {
 		return draft;
 	}
 
+	async resolveNewSessionTarget() { return { providerId: 'test', workspace: { type: 'current' as const } }; }
+
 	selectUntitledSession(untitledSessionId: string): void {
 		if (!this._untitledSessions.some(session => session.untitledSessionId === untitledSessionId)) throw new Error('Draft unavailable');
 		this.activeUntitledSessionId = untitledSessionId;

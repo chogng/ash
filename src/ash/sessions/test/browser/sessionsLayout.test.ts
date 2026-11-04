@@ -282,6 +282,28 @@ suite('sessions browser component', () => {
 		await expect(page.locator('.ash-sessions-update-spinner')).toBeHidden();
 	});
 
+	test('Code New hides the draft title and hands off selection to an existing conversation in Chinese', async function () {
+		const { page } = browserTests;
+		await page.goto('/sessions.html?multiHost&locale=zh-CN&inheritWorkspace');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const newSession = page.locator('[data-action-id="sessions.newSession"] button');
+		const conversation = page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true });
+		const sessionTitle = page.locator('.ash-sessions-titlebar-widget');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+		await expect(newSession).toHaveText('新建');
+		await newSession.click();
+		await expect(newSession).toHaveAttribute('aria-current', 'page');
+		await expect(sessionTitle).toBeHidden();
+		await conversation.click();
+		await expect(conversation).toHaveAttribute('aria-current', 'page');
+		await expect(newSession).not.toHaveAttribute('aria-current');
+		await expect(sessionTitle.getByRole('button', { name: '重命名会话（Task from Host A）' })).toBeVisible();
+		await expect(sessionTitle.getByRole('button', { name: '更多会话操作' })).toBeVisible();
+		await newSession.click();
+		await expect(page.locator('.ash-sessions-chat-slot.active .ash-sessions-environment-picker')).toContainText('Host A');
+		await expect(page.locator('.ash-sessions-chat-slot.active .ash-sessions-workspace-picker')).toContainText('inherited-project');
+	});
+
 	test('Sessions navigation icons and surface controls follow the selected component', async function () {
 		const { page } = browserTests;
 		const activityBar = page.locator('[data-part="activitybar"]');
@@ -290,7 +312,7 @@ suite('sessions browser component', () => {
 		const activityNavigation = page.locator('.ash-sessions-activity-content');
 		await expectActivityIconSize(activityNavigation, 18);
 		await expect(activityNavigation.getByRole('button', { name: 'New' }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'add');
-		await expect(activityNavigation.getByRole('button', { name: 'New' })).not.toHaveAttribute('aria-current');
+		await expect(activityNavigation.getByRole('button', { name: 'New' })).toHaveAttribute('aria-current', 'page');
 		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code' }).locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'code');
 		await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code' })).not.toHaveAttribute('aria-pressed', 'true');
 		await expect(page.locator('.ash-sessions-sidebar-tabs')).toHaveCount(0);
@@ -335,33 +357,32 @@ suite('sessions browser component', () => {
 		await expect(projects).toHaveAttribute('aria-current', 'page');
 		await expect(page.locator('.ash-projects')).toBeVisible();
 		await chat.click();
-		await expect(chat).not.toHaveAttribute('aria-current');
+		await expect(chat).toHaveAttribute('aria-current', 'page');
 		await expect(page.locator('.ash-sessions-list:visible')).toBeVisible();
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await page.mouse.move(400, 180);
-		await expect(chat).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(chat).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 		await expect(page.locator('.ash-sessions-list [data-item^="untitled:"]')).toHaveCount(0);
 		await page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor .stanza-editor').getByRole('textbox').focus();
 		await page.keyboard.insertText('Navigation draft');
+		await expect(chat).not.toHaveAttribute('aria-current');
 		const selectedBackground = Color.Format.CSS.formatRGB(lightColorTheme.getColor(menuHoverBackground)!);
 		await expect(page.locator('.ash-sessions-list-item[aria-current="page"]').first()).toHaveCSS('background-color', selectedBackground);
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 			await chat.click();
 			await page.mouse.move(400, 180);
-			await expect(chat).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			const selectedBackground = await chat.evaluate(element => getComputedStyle(element).backgroundColor);
+			expect(selectedBackground).not.toBe('rgba(0, 0, 0, 0)');
+			if (theme.includes('high-contrast')) await expect(chat).toHaveCSS('outline-style', 'solid');
 			await chat.hover();
-			if (theme.includes('high-contrast')) {
-				await expect(chat).toHaveCSS('outline-style', 'solid');
-			} else {
-				await expect(chat).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-			}
+			await expect(chat).toHaveCSS('background-color', selectedBackground);
 			await projects.hover();
 			await expect(projects).not.toHaveAttribute('aria-current');
 			await chat.focus();
 			await chat.press('ArrowDown');
 			await expect(chat).not.toBeFocused();
-			await expect(chat).not.toHaveAttribute('aria-current');
+			await expect(chat).toHaveAttribute('aria-current', 'page');
 			if (theme.includes('high-contrast')) {
 				await expect(projects).toHaveCSS('outline-style', 'solid');
 				await expect(activityNavigation.locator('button:focus')).toHaveCSS('outline-style', 'solid');

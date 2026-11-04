@@ -104,6 +104,7 @@ export function installMultiHostSessionsFixture(): {
 				child.registerInstance(IAgentConnection, {
 					...host,
 					appServer: { ...host.appServer, getConnectionState: async () => 'ready' },
+					localGit: { ...host.localGit, readRepositoryContexts: async () => [] },
 					completions: sideChatHostSwitch ? {
 						onDidChangeConnection: Event.None,
 						getTriggerCharacters: () => ['$'],
@@ -144,6 +145,9 @@ export function installMultiHostSessionsFixture(): {
 					usage: { inputTokens: 0, outputTokens: 0 }, joins: [], children: [],
 				};
 				if (nestedDraft) session = { ...session, agentTree: [sourceAgent] };
+				if (params.has('inheritWorkspace') && name === 'Host A') {
+					session = { ...session, workspace: { authorityId: 'local', root: '/workspace/inherited-project' } };
+				}
 				const catalogSession = () => nestedDraft ? { ...session, agentTree: undefined } : session;
 				if (params.has('blockedTitlebar') && name === 'Host B') {
 					session = { ...session, management: { status: 'needsInput', statusChangedAtUnixMs: 1 } };

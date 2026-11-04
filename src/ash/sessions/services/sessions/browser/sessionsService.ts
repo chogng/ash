@@ -5,7 +5,7 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { autorun, transaction, type IReader } from '../../../../base/common/observable.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import type { IUntitledChatSession, SessionId, ThreadId } from '../common/session.js';
+import type { IUntitledChatSession, SessionWorkspaceSelection, SessionId, ThreadId } from '../common/session.js';
 import { ISessionsManagementService } from '../common/sessionsManagement.js';
 import { WELCOME_COMPLETE_KEY } from '../../../common/welcome.js';
 import { ICustomViewService } from '../../customView/browser/customViewService.js';
@@ -33,7 +33,7 @@ export interface ISessionsService {
 	openThread(sessionId: SessionId, threadId: ThreadId, options?: { readonly sideBySide?: boolean; }): Promise<void>;
 	openSession(sessionId: SessionId, threadId: ThreadId): void;
 	openUntitledSession(untitledSessionId: string): void;
-	openNewSession(title?: string, options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; readonly forkSource?: IUntitledChatSession['forkSource']; }): IUntitledChatSession;
+	openNewSession(title?: string, options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; readonly workspace?: SessionWorkspaceSelection; readonly devContainer?: boolean; readonly forkSource?: IUntitledChatSession['forkSource']; }): IUntitledChatSession;
 	activateSelection(selection: SessionsViewSelection, options?: { readonly source: 'restore'; }): void;
 	closeVisibleSelection(selection: SessionsViewSelection): void;
 	reopenLastClosedItem(): Promise<void>;
@@ -186,8 +186,8 @@ export class SessionsService extends Disposable implements ISessionsService {
 		}
 	}
 	openUntitledSession(untitledSessionId: string): void { this.activate({ kind: 'untitled', untitledSessionId }); }
-	openNewSession(title = localize({ bundle: 'ash', key: 'chat.sessions.new' }, 'New Session'), options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; readonly forkSource?: IUntitledChatSession['forkSource']; }): IUntitledChatSession {
-		const session = this.sessionService.createUntitledSession(title, undefined, options?.providerId, true, options?.forkSource);
+	openNewSession(title = localize({ bundle: 'ash', key: 'chat.sessions.new' }, 'New Session'), options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; readonly workspace?: SessionWorkspaceSelection; readonly devContainer?: boolean; readonly forkSource?: IUntitledChatSession['forkSource']; }): IUntitledChatSession {
+		const session = this.sessionService.createUntitledSession(title, options?.workspace, options?.providerId, true, options?.forkSource, options);
 		this.select({ kind: 'untitled', session }, options?.sideBySide ? 'add' : 'open', options?.source === 'restore' ? 'automatic' : 'explicit');
 		return session;
 	}

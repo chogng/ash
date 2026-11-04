@@ -28,6 +28,7 @@ export interface AppServerSessionsProviderHost {
 	readonly id?: string;
 	readonly label?: string;
 	readonly workspace: () => SessionWorkspaceSelection;
+	readonly isWorkspaceTrusted?: (target: SessionExecutionTarget) => Promise<boolean>;
 	readonly authorizeWorkspace?: (target: SessionExecutionTarget, signal: AbortSignal) => Promise<boolean>;
 	readonly selectWorkspace: (folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]) => Promise<SessionExecutionTarget | undefined>;
 }
@@ -271,6 +272,13 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		if (!this.host.authorizeWorkspace || target.type === 'provider') return true;
 		const source = buildAgentHostSessionWorkspace(target);
 		return !!source && this.ownsSourceAuthority(source.authorityId) && this.host.authorizeWorkspace(target, signal);
+	}
+
+	public async canReuseWorkspace(target: SessionExecutionTarget, devContainer = false): Promise<boolean> {
+		const workspace = buildAgentHostSessionWorkspace(target)!;
+		if (!this.ownsSourceAuthority(workspace.authorityId)) return false;
+		if (this.host.isWorkspaceTrusted && !await this.host.isWorkspaceTrusted(target)) return false;
+		return !devContainer || this.isDevContainerWorkspaceAvailable(sessionWorkspaceUri(workspace));
 	}
 
 	public isDevContainerWorkspaceAvailable(workspaceUri: URI, token = CancellationToken.None): Promise<boolean> {

@@ -31,7 +31,8 @@ export interface ISessionsManagementService {
 	selectThread(sessionId: SessionId, threadId: ThreadId): void;
 	interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	/** Background presentations can retain a draft without changing foreground selection. */
-	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection, providerId?: string, activate?: boolean, forkSource?: IUntitledChatSession['forkSource']): IUntitledChatSession;
+	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection, providerId?: string, activate?: boolean, forkSource?: IUntitledChatSession['forkSource'], options?: { readonly devContainer?: boolean; }): IUntitledChatSession;
+	resolveNewSessionTarget(): Promise<{ readonly providerId: string; readonly workspace: SessionWorkspaceSelection; readonly devContainer?: boolean; }>;
 	restoreUntitledSession(session: IUntitledChatSession): void;
 	selectUntitledSession(untitledSessionId: string): void;
 	discardUntitledSession(untitledSessionId: string): void;

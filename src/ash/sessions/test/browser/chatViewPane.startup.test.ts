@@ -187,6 +187,8 @@ class PendingSessionService implements ISessionsManagementService {
 		return session;
 	}
 
+	async resolveNewSessionTarget() { return { providerId: 'test', workspace: { type: 'current' as const } }; }
+
 	selectUntitledSession(untitledSessionId: string): void { this._activeUntitledSessionId = untitledSessionId; }
 	restoreUntitledSession(session: IUntitledChatSession): void { this._untitledSessions = [session, ...this._untitledSessions]; }
 	discardUntitledSession(_untitledSessionId: string): void { }

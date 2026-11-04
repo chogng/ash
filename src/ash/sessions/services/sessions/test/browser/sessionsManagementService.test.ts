@@ -42,6 +42,74 @@ test('refresh reloads the catalog while retaining the selected unsent draft', as
 	assert.deepEqual(service.untitledSessions, [draft]);
 });
 
+test('Code New inherits the current Session directory without copying its model', async () => {
+	const workspace = { type: 'ssh', host: 'build-host', root: '/project' } as const;
+	const fallback = { ...workspace, root: '/default' };
+	const fake = sessionHost([{ ...session('existing', 'root'), executionTarget: workspace, model: { provider: 'test', model: 'old' } }], undefined, () => fallback);
+	using management = createManagement(fake);
+	await management.initialize();
+	assert.equal(management.active?.session.sessionId, 'existing');
+
+	const target = await management.resolveNewSessionTarget();
+	const draft = management.createUntitledSession(undefined, target.workspace, target.providerId);
+	assert.deepEqual(draft.workspace, workspace);
+	assert.equal(draft.model, undefined);
+	assert.equal(draft.agent, undefined);
+	assert.deepEqual((await management.resolveNewSessionTarget()).workspace, workspace);
+	fake.setConnectionState('crashed');
+	assert.deepEqual((await management.resolveNewSessionTarget()).workspace, { type: 'current' });
+});
+
+test('Code New falls back to the host default without an inheritable workspace', async () => {
+	const fallback = { type: 'local', root: '/default' } as const;
+	const fake = sessionHost([{ ...session('existing', 'root'), executionTarget: null }], undefined, () => fallback);
+	using management = createManagement(fake);
+	await management.initialize();
+	assert.equal(management.active?.session.sessionId, 'existing');
+	assert.deepEqual((await management.resolveNewSessionTarget()).workspace, fallback);
+});
+
+test('Code New skips an inaccessible Session directory and checks the host fallback without requesting a grant', async () => {
+	const missing = { type: 'local', root: '/missing' } as const;
+	const fallback = { type: 'local', root: '/default' } as const;
+	const fake = sessionHost([{ ...session('existing', 'root'), executionTarget: missing }], undefined, () => fallback);
+	const checked: string[] = [];
+	using management = new SessionsManagementService(createProvider(fake, undefined, undefined, async target => {
+		checked.push(target.root);
+		if (target.root === missing.root) throw new Error('Directory unavailable');
+		return true;
+	}));
+	await management.initialize();
+	assert.deepEqual((await management.resolveNewSessionTarget()).workspace, fallback);
+	assert.deepEqual(checked, ['/missing', '/default']);
+});
+
+test('Code New recovers a remote Dev Container source and defers preparation until first send', async () => {
+	const workspace = { type: 'ssh', host: 'build-host', root: '/source' } as const;
+	const executionTarget = { type: 'provider', providerId: 'ash.dev-containers', workspace: '/source', root: '/workspace', hostAuthority: 'ssh+build-host' } as const;
+	const fake = sessionHost([{ ...session('existing', 'root'), executionTarget }], undefined, () => workspace);
+	const operations: unknown[] = [];
+	let available = true;
+	fake.host.session.invokeRuntime = async (_provider, request) => {
+		operations.push(request);
+		return { type: 'availability', available };
+	};
+	using scope = new InstantiationService();
+	scope.registerInstance(IAgentSessionService, fake.host.session);
+	using containers = scope.createInstance(DevContainerAgentHostService);
+	using management = createManagement(fake, containers);
+	await management.initialize();
+	const target = await management.resolveNewSessionTarget();
+	assert.deepEqual(target.workspace, workspace);
+	assert.equal(target.devContainer, true);
+	const draft = management.createUntitledSession(undefined, target.workspace, target.providerId, true, undefined, target);
+	assert.equal(draft.devContainer, true);
+	assert.deepEqual(operations, [{ operation: 'probe', workspace: '/source' }]);
+	management.selectThread('existing', 'root');
+	available = false;
+	assert.equal((await management.resolveNewSessionTarget()).devContainer, undefined);
+});
+
 test('independent conversation drafts create their own root worktree only on materialization', async () => {
 	const fake = sessionHost([]);
 	const requests: import('../../../../../platform/agentHost/common/agent.js').SessionCreateParams[] = [];
@@ -733,7 +801,7 @@ test('a failed catalog restoration retries on the next ready connection', async 
 	assert.equal(service.error, undefined);
 });
 
-function createProvider(fake: ReturnType<typeof sessionHost>, omitted?: unknown, containers?: IDevContainerAgentHostService): AppServerSessionsProvider {
+function createProvider(fake: ReturnType<typeof sessionHost>, omitted?: unknown, containers?: IDevContainerAgentHostService, isWorkspaceTrusted?: (target: SessionExecutionTarget) => Promise<boolean>): AppServerSessionsProvider {
 	using services = new InstantiationService();
 	if (omitted !== IAgentConnection) { services.registerInstance(IAgentConnection, fake.host as unknown as IAgentConnection); }
 	if (omitted !== IAppServerApi) { services.registerInstance(IAppServerApi, fake.appServer); }
@@ -748,7 +816,7 @@ function createProvider(fake: ReturnType<typeof sessionHost>, omitted?: unknown,
 			getTargets: async () => [], stopContainer: async () => { }, removeContainer: async () => { },
 		} as IDevContainerAgentHostService);
 	}
-	return services.createInstance(AppServerSessionsProvider, { workspace: fake.host.workspace, selectWorkspace: fake.host.selectWorkspace });
+	return services.createInstance(AppServerSessionsProvider, { workspace: fake.host.workspace, selectWorkspace: fake.host.selectWorkspace, isWorkspaceTrusted });
 }
 
 function createManagement(fake: ReturnType<typeof sessionHost>, containers?: IDevContainerAgentHostService): SessionsManagementService {

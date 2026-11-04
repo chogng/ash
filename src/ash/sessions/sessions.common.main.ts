@@ -99,6 +99,8 @@ import { ICommandService } from '../platform/commands/common/commands.js';
 import { ContextKeyExpr } from '../platform/contextkey/common/contextkey.js';
 import { localize2 } from '../nls.js';
 import { Menus } from './browser/menus.js';
+import { ChatGPTNewDraftContext, NewSessionDraftVisibleContext } from './common/contextkeys.js';
+import { ASH_CHAT_SELECTED_CONTEXT } from './contrib/chat/common/constants.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
 import { IWebWorkerService } from '../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../platform/webWorker/browser/webWorkerServiceImpl.js';
@@ -107,14 +109,22 @@ import { WebWorkerService } from '../platform/webWorker/browser/webWorkerService
 registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed);
 
 MenusRegistry.appendMenuItem(Menus.ActivityBar, {
-	command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add },
+	command: {
+		id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.or(
+			ContextKeyExpr.and(NewSessionDraftVisibleContext.isEqualTo(true), ContextKeyExpr.or(
+				ContextKeyExpr.has('sessions.activity.chatSelected'),
+				ContextKeyExpr.has(ASH_CHAT_SELECTED_CONTEXT),
+			)),
+			ContextKeyExpr.and(ChatGPTNewDraftContext.isEqualTo(true), ContextKeyExpr.has('sessions.activity.chatgptSelected')),
+		)
+	},
 	group: 'navigation', order: 10,
 });
 
 MenusRegistry.appendMenuItems([
 	{
 		id: Menus.CodeActivityBar,
-		item: { command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add }, group: 'navigation', order: 10 },
+		item: { command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.and(NewSessionDraftVisibleContext.isEqualTo(true), ContextKeyExpr.has('sessions.activity.codeSelected')) }, group: 'navigation', order: 10 },
 	},
 	{
 		id: Menus.CodeActivityBar,

@@ -4,8 +4,9 @@ import { Disposable, DisposableStore, toDisposable } from '../../../../../base/c
 import { observableValue, type IObservable } from '../../../../../base/common/observable.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ChatGPTNewDraftContext } from '../../../../common/contextkeys.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
@@ -29,6 +30,8 @@ import { DefaultSettings } from '../../../../../workbench/services/preferences/c
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../../common/views.js';
+
+const newChatState = { conversations: [], messages: [], coworkTasks: [] } satisfies Partial<ChatGPTState>;
 
 const testStorage = { get: () => undefined, store() { } } as unknown as IStorageService;
 
@@ -58,7 +61,8 @@ suite('ChatGPT entry', () => {
 		let initialized = 0;
 		const services = resources.add(new InstantiationService(new ServiceCollection(
 			[IStorageService, testStorage],
-			[IChatGPTService, { initialize: () => initialized++ } as unknown as IChatGPTService],
+			[IContextKeyService, resources.add(new ContextKeyService())],
+			[IChatGPTService, { state: observableValue('chatgpt', newChatState), initialize: () => initialized++ } as unknown as IChatGPTService],
 			[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
 			[IEditorService, {} as IEditorService],
 			[ISessionsLayoutService, { openEntry: async (entry, _arg, options) => { entries.push({ entry, source: options?.source }); } } as ISessionsLayoutService],
@@ -85,9 +89,11 @@ suite('ChatGPT entry', () => {
 		let entry: ISessionsEntry | undefined;
 		let created = 0;
 		let focused = 0;
+		const state = observableValue<Partial<ChatGPTState>>('chatgpt', { ...newChatState, conversationId: 'existing' });
 		const services = resources.add(new InstantiationService(new ServiceCollection(
 			[IStorageService, testStorage],
-			[IChatGPTService, { initialize() { }, newChat: () => { created++; } } as unknown as IChatGPTService],
+			[IContextKeyService, resources.add(new ContextKeyService())],
+			[IChatGPTService, { state, initialize() { }, newChat: () => { created++; state.set(newChatState); } } as unknown as IChatGPTService],
 			[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
 			[IEditorService, { focusActiveEditor: () => { focused++; } } as unknown as IEditorService],
 			[ISessionsLayoutService, { openEntry: async value => { entry = value; } } as ISessionsLayoutService],
@@ -95,8 +101,15 @@ suite('ChatGPT entry', () => {
 		resources.add(services.createInstance(ChatGPTWebContribution));
 		await services.invokeFunction(CommandsRegistry.getCommand('sessions.show.chatgptNative')!, undefined);
 		assert.ok(entry?.newSessionCommand);
+		const contexts = services.get(IContextKeyService);
+		assert.equal(contexts.getValue(ChatGPTNewDraftContext.key), false);
 		await services.invokeFunction(CommandsRegistry.getCommand(entry.newSessionCommand)!, undefined);
 		assert.deepEqual({ created, focused }, { created: 1, focused: 1 });
+		assert.equal(contexts.getValue(ChatGPTNewDraftContext.key), true);
+		state.set({ ...newChatState, pendingCreation: 'queued' });
+		assert.equal(contexts.getValue(ChatGPTNewDraftContext.key), false);
+		state.set({ ...newChatState, conversationId: 'existing' });
+		assert.equal(contexts.getValue(ChatGPTNewDraftContext.key), false);
 	});
 
 	test('Desktop New preserves the selected chat on restore and creates a draft only on explicit New', async () => {
@@ -105,7 +118,8 @@ suite('ChatGPT entry', () => {
 		const entries: { entry: ISessionsEntry; source?: string; }[] = [];
 		const services = resources.add(new InstantiationService(new ServiceCollection(
 			[IStorageService, testStorage],
-			[IChatGPTService, { initialize() { }, newChat: () => { created++; } } as unknown as IChatGPTService],
+			[IContextKeyService, resources.add(new ContextKeyService())],
+			[IChatGPTService, { state: observableValue('chatgpt', newChatState), initialize() { }, newChat: () => { created++; } } as unknown as IChatGPTService],
 			[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
 			[IEditorService, {} as IEditorService],
 			[ISessionsLayoutService, { openEntry: async (entry, _arg, options) => { entries.push({ entry, source: options?.source }); } } as ISessionsLayoutService],
@@ -122,10 +136,15 @@ suite('ChatGPT entry', () => {
 
 	test('Ash uses the Code conversation renderer inside the Chat workspace and restores it from the mode toggle', async () => {
 		const values = new Map<string, string>();
+		using contexts = new ContextKeyService();
 		const entries: ISessionsEntry[] = [];
 		using services = new InstantiationService(new ServiceCollection(
 			[IStorageService, { get: (key: string) => values.get(key), store: (key: string, value: string) => { values.set(key, value); } } as unknown as IStorageService],
 			[ICommandService, { executeCommand: (id: string, ...args: unknown[]) => services.invokeFunction(CommandsRegistry.getCommand(id)!, ...args) } as ICommandService],
+			[IContextKeyService, contexts],
+			[IChatGPTService, { state: observableValue('chatgpt', newChatState), initialize() { } } as unknown as IChatGPTService],
+			[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
+			[IEditorService, {} as IEditorService],
 			[ISessionsLayoutService, { openEntry: async entry => { entries.push(entry); } } as ISessionsLayoutService],
 		));
 		using contribution = services.createInstance(ChatWorkspaceContribution);
@@ -193,6 +212,7 @@ suite('ChatGPT entry', () => {
 	test('unified search projects the live ChatGPT catalogue and opens the exact conversation after navigation', async () => {
 		using resources = new DisposableStore();
 		const state = observableValue('chatgpt-search', {
+			...newChatState,
 			conversations: [{ id: 'one', title: 'Design review', projectId: 'g-p-project', pinned: false }],
 			projects: [{ id: 'g-p-project', title: 'Website project' }],
 		});
@@ -200,6 +220,7 @@ suite('ChatGPT entry', () => {
 		const opened: string[] = [];
 		const services = resources.add(new InstantiationService(new ServiceCollection(
 			[IStorageService, testStorage],
+			[IContextKeyService, resources.add(new ContextKeyService())],
 			[IChatGPTService, { state, initialize() { }, select: async (id: string) => { opened.push(id); } } as unknown as IChatGPTService],
 			[ISessionsSearchService, {
 				registerSource: value => { source = value; return toDisposable(() => { source = undefined; }); },
