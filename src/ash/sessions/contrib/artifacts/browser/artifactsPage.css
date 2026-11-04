@@ -6,7 +6,6 @@
 	min-height: 0;
 	min-width: 0;
 	color: var(--ash-foreground);
-	background: var(--ash-editor-background);
 	font-size: var(--ash-fontSize-body1);
 }
 .ash-creator[hidden],

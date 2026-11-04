@@ -17,6 +17,11 @@
 	min-height: 0;
 }
 
+.ash-reply-chat-editor > .ash-chat {
+	--ash-chat-transcript-surface: var(--ash-sessions-conversation-background);
+	background: var(--ash-chat-transcript-surface);
+}
+
 .ash-sessions-chat-content
 	> .ash-chat
 	> .ash-chat-list-widget

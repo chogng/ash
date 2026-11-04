@@ -26,8 +26,6 @@ export interface ISessionsEntry {
 	/** Overrides workspace navigation; omission retains its current sidebar or opens the registered default on startup. */
 	readonly sidebarContainerId?: string;
 	readonly showEditorTabs?: boolean;
-	/** Use the Sessions conversation surface for this editor page. */
-	readonly useConversationBackground?: boolean;
 	readonly detailsContainerId?: string;
 	readonly editorInput?: IResourceEditorInput;
 	readonly restoreCommand: string;

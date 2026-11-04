@@ -60,20 +60,6 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.service.newSessionCommand, undefined);
 	});
 
-	test('projects the conversation surface only while its editor page is visible', async () => {
-		using fixture = new EntryFixture();
-		const surface = () => fixture.container.classList.contains('ash-sessions-editor-conversation-surface');
-		await fixture.service.openEntry({ ...chatEntry, content: 'editor', useConversationBackground: true });
-		assert.equal(surface(), true);
-		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
-		fixture.customViews.showCustomView('automations');
-		assert.equal(surface(), false);
-		fixture.customViews.hideCustomView();
-		assert.equal(surface(), true);
-		await fixture.service.openEntry(documentEntry);
-		assert.equal(surface(), false);
-	});
-
 	for (const saved of [undefined, 'sessions.show.removedFeature']) {
 		test(`restores the Desktop New entry when the saved entry is ${saved ?? 'absent'}`, async () => {
 			using fixture = new EntryFixture();

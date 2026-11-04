@@ -5,7 +5,6 @@
 	min-height: 0;
 	height: 100%;
 	color: var(--ash-foreground);
-	background: var(--ash-editor-background);
 	font-size: var(--ash-fontSize-body1);
 	overflow: auto;
 	user-select: none;

@@ -3,6 +3,9 @@ import { expect, type Page } from '@playwright/test';
 import { expectVisibleFocusOutline } from '../../../../../../../test/fixtures/browser/focusOutline.js';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
+import { Color } from '../../../../../base/common/color.js';
+import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
+import { sessionsConversationBackground } from '../../../../common/theme.js';
 
 suite('chatgptweb browser component', () => {
 	const browserTests = useBrowserTests();
@@ -297,12 +300,14 @@ suite('chatgptweb browser component', () => {
 	test('ChatGPT scrolls a long transcript over the page background', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page, 'Synthetic reply.\n\n'.repeat(100));
-		for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
+		for (const [theme, colorTheme] of Object.entries({ light: lightColorTheme, dark: darkColorTheme, hcLight: highContrastLightColorTheme, hcDark: highContrastDarkColorTheme })) {
 			await page.goto(`/chatgptNavigation.html?theme=${theme}`);
 			await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
 			const widget = page.locator('.ash-chatgpt-widget');
 			const transcript = widget.locator('.ash-chat-transcript-scrollable > .ash-scrollbar-viewport');
 			await expect(widget).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			const background = Color.Format.CSS.formatRGB(colorTheme.getColor(sessionsConversationBackground)!);
+			await expect(widget.locator('.ash-chat')).toHaveCSS('background-color', background);
 			await expect.poll(() => transcript.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
 			await transcript.evaluate(element => { element.scrollTop = 0; });
 			await transcript.hover();

@@ -4,7 +4,6 @@
 	flex-direction: column;
 	min-height: 0;
 	color: var(--ash-foreground);
-	background: var(--ash-editor-background);
 }
 
 .ash-customize-catalog {

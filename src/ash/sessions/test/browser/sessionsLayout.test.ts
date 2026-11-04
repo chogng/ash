@@ -1,7 +1,10 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { EditorGroup } from '../../../../../test/automation/editors.js';
 import { QuickAccess } from '../../../../../test/automation/quickaccess.js';
+import { Color } from '../../../base/common/color.js';
 import { StorageTarget } from '../../../platform/storage/common/storage.js';
+import { lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import { menuHoverBackground } from '../../../platform/theme/common/colors/menuColors.js';
 import { suite, test, setup, teardown } from 'mocha';
 import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
 import { DOCS_EDITOR_SETTING } from '../../contrib/artifacts/common/creator.js';
@@ -340,7 +343,8 @@ suite('sessions browser component', () => {
 		await expect(page.locator('.ash-sessions-list [data-item^="untitled:"]')).toHaveCount(0);
 		await page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor .stanza-editor').getByRole('textbox').focus();
 		await page.keyboard.insertText('Navigation draft');
-		await expect(page.locator('.ash-sessions-list-item[aria-current="page"]').first()).toHaveCSS('background-color', 'rgb(240, 240, 240)');
+		const selectedBackground = Color.Format.CSS.formatRGB(lightColorTheme.getColor(menuHoverBackground)!);
+		await expect(page.locator('.ash-sessions-list-item[aria-current="page"]').first()).toHaveCSS('background-color', selectedBackground);
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 			await chat.click();
@@ -365,8 +369,6 @@ suite('sessions browser component', () => {
 			await projects.click();
 			const surface = page.locator('.ash-projects');
 			await expect(surface).toBeVisible();
-			await expect(surface).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-			expect(await surface.evaluate(element => getComputedStyle(element).color !== getComputedStyle(element).backgroundColor)).toBe(true);
 			if (!await surface.getByRole('searchbox').isVisible()) {
 				await surface.getByRole('button', { name: 'Search projects', exact: true }).click();
 			}
@@ -374,6 +376,30 @@ suite('sessions browser component', () => {
 			await expect(surface.getByRole('searchbox')).toBeFocused();
 			await expect(surface.locator('.ash-toolbar-search-field')).toHaveCSS('border-top-style', 'solid');
 			await expect(activityNavigation).toBeVisible();
+		}
+	});
+
+	test('Projects, Artifacts and Customize show the shared editor area background', async function () {
+		const { page } = browserTests;
+		const navigation = page.locator('.ash-sessions-activity-content');
+		const editorArea = page.locator('.ash-desktop-editor-area');
+		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+			for (const [label, selector] of [['Projects', '.ash-projects'], ['Artifacts', '.ash-creator'], ['Customize', '.ash-customize']]) {
+				await navigation.getByRole('button', { name: label, exact: true }).click();
+				const pageSurface = editorArea.locator(selector);
+				await expect(pageSurface).toBeVisible();
+				const backgroundOwner = await pageSurface.evaluate(element => {
+					for (let current: Element | null = element; current; current = current.parentElement) {
+						if (getComputedStyle(current).backgroundColor !== 'rgba(0, 0, 0, 0)') {
+							return current.classList.contains('ash-desktop-editor-area');
+						}
+					}
+					return false;
+				});
+				expect(backgroundOwner, `${label} uses the editor area background in ${theme}`).toBe(true);
+				await expect(pageSurface).not.toHaveCSS('color', await editorArea.evaluate(element => getComputedStyle(element).backgroundColor));
+			}
 		}
 	});
 

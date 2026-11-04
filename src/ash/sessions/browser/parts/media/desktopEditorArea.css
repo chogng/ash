@@ -1,5 +1,4 @@
-.ash-workbench[data-color-scheme="light"] .ash-desktop-editor-area,
-.ash-sessions-editor-conversation-surface .ash-desktop-editor-area {
+.ash-workbench[data-color-scheme="light"] .ash-desktop-editor-area {
 	background: var(--ash-sessions-conversation-background);
 }
 
@@ -95,18 +94,17 @@
 			color-mix(in srgb, var(--ash-sessions-inputShadow) 45%, transparent);
 }
 
-.ash-sessions-editor-conversation-surface
-	.ash-product-page-host
+.ash-desktop-editor-area
+	.ash-product-page-host:has(
+		.ash-editor-pane-host:not([hidden])
+			> :is(.ash-projects, .ash-customize),
+		.ash-editor-pane-host:not([hidden])
+			> .ash-creator
+			> .ash-creator-home:not([hidden])
+	)
 	> .ash-workbench-part-frame
 	> .ash-workbench-part {
 	background: transparent;
-}
-
-.ash-sessions-editor-conversation-surface
-	.ash-sessions-chat-content
-	> .ash-chat {
-	background: transparent;
-	--ash-chat-transcript-surface: var(--ash-sessions-conversation-background);
 }
 
 .ash-desktop-editor-area

@@ -3,7 +3,7 @@ import { IChatSlashCommandService } from '../../../src/ash/workbench/contrib/cha
 import { IActionViewItemService } from '../../../src/ash/platform/actions/browser/actionViewItemService.js';
 import { IChatPasteTargetService, IChatWidgetService } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
 import { ChatTimelineStorage } from '../../../src/ash/sessions/browser/chatTimelineStorage.js';
-import { ISessionProviderScopeService } from '../../../src/ash/sessions/browser/agentHost/sessionProviderScopeService.js';
+import { ISessionPrimaryProviderServices, ISessionProviderScopeService, type SessionProviderServices } from '../../../src/ash/sessions/browser/agentHost/sessionProviderScopeService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
@@ -183,6 +183,7 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 		return [];
 	} } as unknown as ILanguageModelsService],
 	[ISessionProviderScopeService, { getProviderScope: () => { throw new Error('This fixture has no Ash model provider'); } } as unknown as ISessionProviderScopeService],
+	[ISessionPrimaryProviderServices, { models: { onDidChangeModels: Event.None, listModels: async () => [] } } as unknown as SessionProviderServices],
 	[IThemeService, theme],
 	[IContextViewService, resources.add(new BrowserContextViewService(document.body))],
 	[IVoiceCodeTranscriptionBackendService, dictation ? createTestDictationBackend(resources, dictation) : undefined],

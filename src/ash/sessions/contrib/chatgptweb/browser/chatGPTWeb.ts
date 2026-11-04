@@ -52,7 +52,6 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 			await layout.openEntry({
 				id: 'chatgpt', activityContext: chatGPTSelectedContext, content: 'editor',
 				sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, showEditorTabs: false,
-				useConversationBackground: true,
 				editorInput: {
 					resource: URI.from({ scheme: chatGPTReplyEditor.scheme, path: '/page' }), label: chatGPTReplyEditor.title(),
 					showBreadcrumbs: false, readOnly: true, capabilities: EditorInputCapabilities.CannotClose,
