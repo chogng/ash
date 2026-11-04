@@ -218,6 +218,7 @@ impl Query {
                     "{}\n{}\n\n{}",
                     request.tool_name, request.review.reason, preview
                 ),
+                required: true,
                 choices: vec![
                     QueryChoice {
                         label: "Skip results".into(),
