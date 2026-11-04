@@ -90,6 +90,7 @@ fn root(threads: &ThreadController) -> ash_core::ThreadSnapshot {
             core_api::StartThreadRequest {
                 execution_target: None,
                 branch_name: None,
+                worktree_start: None,
                 agent: None,
                 agent_id: None,
                 command_id: CommandId::new("root").unwrap(),

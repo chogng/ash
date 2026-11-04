@@ -73,6 +73,7 @@ fn legacy_goal_failure_does_not_block_startup_or_other_goal_recovery() {
                     command_id: CommandId::new(name).unwrap(),
                     title: name.into(),
                     branch_name: None,
+                    worktree_start: None,
                     execution_target: None,
                 })
                 .unwrap(),
@@ -330,6 +331,7 @@ fn initial_directory_opens_before_recovered_tool_continuations_resume() {
                 command_id: CommandId::new("recovery-thread").unwrap(),
                 title: "Interrupted process".into(),
                 branch_name: None,
+                worktree_start: None,
                 execution_target: None,
             })
             .unwrap();

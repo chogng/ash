@@ -168,7 +168,11 @@ pub(crate) fn queued_message(command: crate::app::AppCommand) -> ::queue::Queued
         .into_iter()
         .map(|input| match input {
             crate::thread::composer::ChatInputItem::Context { name, content } => {
-                ash_protocol::UserInput::Context { name, content }
+                ash_protocol::UserInput::Context {
+                    name,
+                    content,
+                    source_url: None,
+                }
             }
             crate::thread::composer::ChatInputItem::Text(text) => {
                 ash_protocol::UserInput::Text { text }

@@ -44,6 +44,7 @@ export interface IChatListItem {
 	readonly text: string;
 	/** Exact Core-accepted context body, independent of any current composer draft. */
 	readonly contextText?: string;
+	readonly contextSourceUrl?: string;
 	readonly transient: boolean;
 	readonly isError?: boolean;
 	readonly label?: string;
@@ -304,6 +305,7 @@ export function chatListItem(item: ThreadItem, transient = false): IChatListItem
 				type: item.type,
 				text: item.name,
 				contextText: item.content,
+				contextSourceUrl: item.sourceUrl ?? undefined,
 				transient,
 			};
 		case 'userImage': return { id: item.itemId, type: item.type, text: localize('chat.media.image', 'Image'), transient, content: [{ type: 'imageUrl', url: item.url, detail: 'auto' }] };

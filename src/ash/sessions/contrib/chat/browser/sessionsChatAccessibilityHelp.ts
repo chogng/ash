@@ -3,6 +3,7 @@ import { localize } from '../../../../nls.js';
 /** Product-specific help appended by the shared input's accessibility provider. */
 export function getSessionsChatAccessibilityHelp(): string {
 	return [
+		localize({ bundle: 'ash.sessions', key: 'sessions.github.newFromPullRequestHelp' }, 'In Code, choose New Session from Pull Request in the Command Palette. Select a local GitHub checkout and a pull request. The new session opens when its worktree and snapshot are ready. Use Tab to reach the pull request attachment and Enter to open it in a browser. Sending the first message saves the attachment with that message.'),
 		localize({ bundle: 'ash', key: 'sessions.closeSplitHelp' }, 'When conversations are side by side, use Tab to reach Close Session in the pane you want to close. Press Enter or Space to close it and move focus to the remaining conversation.'),
 		localize({ bundle: 'ash', key: 'sessions.layout.sideChatHelp' }, 'In Code, open More Actions at the right end of the title bar and choose Side Chat to open a new conversation in a tab in the right tool area. Focus moves to the new input. Use the editor tabs to switch between side chats.'),
 		localize('sessions.chat.tipHelp', 'In a new Code conversation, the tip appears above the input when only one Chat pane is visible. Use Dismiss tip to close it, or turn off Show Chat tips in Settings.'),

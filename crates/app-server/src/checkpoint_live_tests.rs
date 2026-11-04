@@ -112,6 +112,7 @@ fn manual_compaction_persists_before_restart_and_preserves_the_next_request() {
             core_api::StartThreadRequest {
                 execution_target: None,
                 branch_name: None,
+                worktree_start: None,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new("compaction-thread").unwrap(),
@@ -603,6 +604,7 @@ fn observe_luna_usage_after_same_thread_restart() -> Vec<Exchange> {
             core_api::StartThreadRequest {
                 execution_target: None,
                 branch_name: None,
+                worktree_start: None,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new(format!("luna-resume-{nonce}")).unwrap(),
@@ -803,6 +805,7 @@ fn luna_cache_survives_fork_and_message_restore_after_restart() {
             core_api::StartThreadRequest {
                 execution_target: None,
                 branch_name: None,
+                worktree_start: None,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new(format!("luna-cache-{nonce}")).unwrap(),

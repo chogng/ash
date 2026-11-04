@@ -107,3 +107,4 @@ pub use view::ThreadView;
 pub use view::TurnView;
 pub use worktree::ThreadWorktreeBinder;
 pub use worktree::ThreadWorktreeBindingRequest;
+pub use worktree::WorktreeStart;

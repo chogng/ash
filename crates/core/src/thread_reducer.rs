@@ -2740,13 +2740,15 @@ fn validate_steered_items(
                 ash_protocol::UserInput::Context {
                     name: input_name,
                     content: input_content,
+                    source_url: input_url,
                 },
                 ThreadItem::UserContext {
                     name: item_name,
                     content: item_content,
+                    source_url: item_url,
                     ..
                 },
-            ) => input_name == item_name && input_content == item_content,
+            ) => input_name == item_name && input_content == item_content && input_url == item_url,
             (
                 ash_protocol::UserInput::AudioAttachment { attachment: input },
                 ThreadItem::UserAudioAttachment {

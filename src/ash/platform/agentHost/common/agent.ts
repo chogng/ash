@@ -29,7 +29,7 @@ export interface SessionMutationParams {
 
 export type AgentInput =
 	| { readonly type: 'text'; readonly text: string; }
-	| { readonly type: 'context'; readonly name: string; readonly content: string; }
+	| { readonly type: 'context'; readonly name: string; readonly content: string; readonly sourceUrl?: string; }
 	| { readonly type: 'toolSelection'; readonly disabled: string[]; }
 	| { readonly type: 'image'; readonly url: string; }
 	| { readonly type: 'imageAttachment'; readonly attachment: ChatImageAttachment; }
@@ -97,7 +97,15 @@ export interface SessionReadParams {
 	readonly sessionId: string;
 }
 
+export interface SessionWorktreeStart {
+	readonly remote: string;
+	readonly remoteIdentity: string;
+	readonly reference: string;
+	readonly commit: string;
+}
+
 export interface SessionCreateParams {
+	readonly worktreeStart?: SessionWorktreeStart;
 	readonly environmentVariables?: Readonly<Record<string, string>>;
 	readonly commandId: string;
 	readonly title: string;
@@ -440,6 +448,7 @@ export type ThreadItem =
 		readonly turnId: string;
 		readonly name: string;
 		readonly content: string;
+		readonly sourceUrl?: string | null;
 	}
 	| { readonly type: 'userImage'; readonly clientId?: string | null; readonly itemId: string; readonly turnId: string; readonly url: string; }
 	| {

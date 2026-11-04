@@ -10,11 +10,12 @@ import { isCancellationError } from '../../../../../base/common/errors.js';
 import { HasSpeechProvider, TextToSpeechInProgress } from '../../../speech/common/speechService.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ChatResourceGroupWidget } from './chatContentParts/chatResourceGroupWidget.js';
+import { DefaultChatAttachmentWidget } from '../attachments/chatAttachmentWidgets.js';
+import { URI } from '../../../../../base/common/uri.js';
 import { ChatAttachmentsContentPart } from './chatContentParts/chatAttachmentsContentPart.js';
 import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
-import type { URI } from '../../../../../base/common/uri.js';
 import type { ChatTurnErrorAction, IChatListItem } from '../../common/model/chatViewModel.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
@@ -112,8 +113,9 @@ export class ChatListItemRenderer extends Disposable {
 			this.item = item;
 			return 'unchanged';
 		}
-		if (this.context && item.type === 'userContext' && item.contextText !== undefined) {
-			this.context.summary.textContent = item.text;
+		if (this.context && item.type === 'userContext' && item.contextText !== undefined
+			&& item.contextSourceUrl === this.item.contextSourceUrl && (!item.contextSourceUrl || item.text === this.item.text)) {
+			if (!item.contextSourceUrl) this.context.summary.textContent = item.text;
 			this.context.content.setAttribute('aria-label', item.text);
 			if (this.item.contextText !== item.contextText) this.context.content.textContent = item.contextText;
 			this.item = item;
@@ -455,10 +457,17 @@ export class ChatListItemRenderer extends Disposable {
 			const label = h(article.ownerDocument, 'div');
 			label.className = `${this.options.classPrefix}-item-label`;
 			label.textContent = this.accessibilityProvider.getAriaLabel(item);
+			if (item.contextSourceUrl?.startsWith('https://')) {
+				const source = URI.parse(item.contextSourceUrl);
+				disposables.add(this.instantiationService.createInstance(DefaultChatAttachmentWidget, {
+					id: item.id, kind: 'transcriptContext', name: item.text, resource: source,
+					resolve: async () => ({ name: item.text, content: item.contextText! }),
+				}, { supportsDeletion: false, shouldFocusClearButton: false }, article));
+			}
 			const disclosure = h(article.ownerDocument, 'details');
 			disclosure.className = 'ash-chat-context';
 			const summary = h(article.ownerDocument, 'summary');
-			summary.textContent = item.text;
+			summary.textContent = item.contextSourceUrl ? localize('chat.context.viewSnapshot', 'View attachment snapshot') : item.text;
 			const content = h(article.ownerDocument, 'pre');
 			content.textContent = item.contextText;
 			content.tabIndex = 0;
@@ -549,7 +558,7 @@ export class ChatListItemRenderer extends Disposable {
 }
 
 function sameItem(left: IChatListItem, right: IChatListItem): boolean {
-	return left.id === right.id && left.type === right.type && left.text === right.text && left.contextText === right.contextText
+	return left.id === right.id && left.type === right.type && left.text === right.text && left.contextText === right.contextText && left.contextSourceUrl === right.contextSourceUrl
 		&& left.requestSource?.sessionId === right.requestSource?.sessionId && left.requestSource?.threadId === right.requestSource?.threadId
 		&& left.requestSource?.turnId === right.requestSource?.turnId && left.requestSource?.itemId === right.requestSource?.itemId
 		&& left.hookPart?.run === right.hookPart?.run

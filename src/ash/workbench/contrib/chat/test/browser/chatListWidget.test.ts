@@ -519,6 +519,33 @@ for (const classPrefix of ['ash-chat', 'ash-cowork']) {
 	});
 }
 
+
+test('a saved pull request context opens the original PR above the first message', async () => {
+	using resources = new DisposableStore();
+	const services = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+	const url = 'https://github.com/team/repo/pull/7';
+	const opened: string[] = [];
+	services.get(IOpenerService).setDefaultExternalOpener({ openExternal: async href => { opened.push(href); return true; } });
+	const container = document.createElement('main');
+	document.body.append(container);
+	resources.add(toDisposable(() => container.remove()));
+	using widget = services.createInstance(ChatListWidget, container, {});
+	widget.render(chatTranscriptListItems([
+		{ type: 'item', entryId: 'pr', turnId: 'first', transient: false, item: { type: 'userContext', itemId: 'pr', turnId: 'first', name: '#7 Review', content: '{"patch":"saved"}', sourceUrl: url } },
+		{ type: 'item', entryId: 'message', turnId: 'first', transient: false, item: { type: 'userMessage', itemId: 'message', turnId: 'first', text: 'Review this PR' } },
+	]));
+	const button = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent?.includes('#7 Review'));
+	const message = Array.from(container.querySelectorAll('article')).find(row => row.textContent?.includes('Review this PR'));
+	assert.ok(button && message);
+	assert.ok(button.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING);
+	assert.equal(container.querySelector('.ash-chat-context pre')?.textContent, '{"patch":"saved"}');
+	button.focus();
+	assert.equal(document.activeElement, button);
+	button.click();
+	await Promise.resolve();
+	assert.deepEqual(opened, [url]);
+});
+
 suite('Chat message copy ownership', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('the actual row command copies current raw text and releases feedback after removal', async () => {

@@ -490,6 +490,7 @@ fn file_glob_session_target_requires_that_sessions_directory_authorization() {
         .start_thread(core_api::StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: ash_protocol::CommandId::new("glob-session").unwrap(),

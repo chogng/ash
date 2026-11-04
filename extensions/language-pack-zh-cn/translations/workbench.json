@@ -2969,6 +2969,7 @@
     "openEditors": "打开的编辑器"
   },
   "ash.workbench": {
+    "sessions.worktreeStartUnavailable": "此执行主机无法从拉取请求准备会话。",
     "sessions.environment.variablesRuntimeUnavailable": "此执行主机无法向会话应用环境变量。",
     "browser.auth.title": "浏览器身份验证",
     "browser.auth.proxy": "登录代理 {0}",

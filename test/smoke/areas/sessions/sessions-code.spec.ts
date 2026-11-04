@@ -53,6 +53,25 @@ test('Code Sessions consumes the shared JSON extension for settings completion, 
 	await expect(page.locator('.stanza-editor-hover:visible')).toContainText('Set the editor text size in pixels');
 });
 
+
+test.extend({ openWorkspace: false })('Code offers New Session from Pull Request in the Chinese sidebar and Command Palette', { tag: ['@electron-ui'] }, async ({ target, workbench, restartWorkbench }) => {
+	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
+	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+	await language.fill('简体中文');
+	await language.press('Enter');
+	({ workbench } = await restartWorkbench());
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+	const more = page.locator('.ash-sessions-list-more').getByRole('button', { name: '更多会话操作', exact: true });
+	await more.press('Enter');
+	await expect(page.getByRole('menuitem', { name: '从拉取请求新建会话', exact: true })).toBeVisible();
+	await page.keyboard.press('Escape');
+	const commands = new QuickAccess(page);
+	await commands.open('>sessions.newSessionFromPullRequest');
+	await expect(commands.items.filter({ hasText: '从拉取请求新建会话' })).toHaveCount(1);
+	await commands.close();
+});
+
 for (const locale of ['en', 'zh-CN']) {
 	test(`Sessions browser tabs support keyboard selection, reload and Main cleanup in ${locale}`, { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
 		if (locale === 'zh-CN') {

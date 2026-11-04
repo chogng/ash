@@ -1,5 +1,6 @@
 {
   "ash": {
+    "chat.context.viewSnapshot": "查看附件快照",
     "chat.transfer.openInWorkspace": "聊天：在另一个工作区打开对话",
     "chat.transfer.noTrustedWorkspace": "最近使用的工作区中没有其他受信任的本地工作区。",
     "chat.transfer.pickWorkspace": "选择要打开此对话的受信任工作区",

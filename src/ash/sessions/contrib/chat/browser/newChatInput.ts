@@ -122,6 +122,8 @@ export class NewChatInputWidget extends ChatInputPart {
 			write: (identity, draft) => writeNewChatDraftState(storage, draft, identity, chatInputStatePersistence),
 			flush: () => storage.flush(),
 		}, lifecycle.onWillShutdown);
+		this._register(this.onDidChangeInput(() => this.renderStatus()));
+		this.renderStatus();
 	}
 
 	public async persistDraftForHostChange(): Promise<void> {
@@ -144,7 +146,13 @@ export class NewChatInputWidget extends ChatInputPart {
 		if (!state.aiDisabled && this.model.untitledSessionId !== undefined && state.phase === 'loading' && !state.error) {
 			return '';
 		}
-		return super.statusText(state);
+
+		const status = super.statusText(state);
+		if (!status && state.phase === 'ready' && !state.inputBlocked && this.model.threadId
+			&& this.contexts.some(context => context.kind === 'transcriptContext' && context.id === 'initial-pr:' + this.model.threadId)) {
+			return localize({ bundle: 'ash.sessions', key: 'sessions.github.pullRequestDraftReady' }, 'The pull request worktree is ready. Its snapshot is attached to your first message.');
+		}
+		return status;
 	}
 
 }

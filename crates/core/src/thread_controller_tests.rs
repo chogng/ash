@@ -3897,6 +3897,7 @@ fn steering_preserves_frozen_context_and_tool_selection_through_replay() {
                 text: "Edited queued text".into(),
             },
             UserInput::Context {
+                source_url: None,
                 name: "frozen".into(),
                 content: "Captured original bytes".into(),
             },

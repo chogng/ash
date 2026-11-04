@@ -237,6 +237,7 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 			if (params.environmentVariables && result.environmentApplied !== true) {
 				throw new Error(localize({ bundle: 'ash.workbench', key: 'sessions.environment.variablesRuntimeUnavailable' }, 'This execution host cannot apply environment variables to a session.'));
 			}
+			if (params.worktreeStart && result.worktreeStartApplied !== true) throw new Error(localize({ bundle: 'ash.workbench', key: 'sessions.worktreeStartUnavailable' }, 'This execution host cannot prepare a session from a pull request.'));
 			return toSessionResult(result, remoteHost);
 		}),
 		async saveEnvironmentProfile(environmentId, variables) {
@@ -1262,7 +1263,7 @@ async function withHostResourceInput<T>(connection: AppServerProtocolClient, sna
 	const generation = connection.generation;
 	using leases = new DisposableStore();
 	for (const [index, item] of input.entries()) {
-		if (item.type !== 'context') { continue; }
+		if (item.type !== 'context' || item.sourceUrl) { continue; }
 		if (signal) { throwIfCancelled(signal); }
 		const lease = await snapshots.createSnapshot(item.content);
 		if (lease) {

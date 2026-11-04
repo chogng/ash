@@ -117,6 +117,7 @@ fn team_rpc_keeps_member_identity_across_tasks_and_restart() {
                 .resolve_root_agent(&ash_protocol::AgentRoleSelection::Default)
                 .unwrap(),
             branch_name: None,
+            worktree_start: None,
         })
         .unwrap();
     let attach = serde_json::json!({

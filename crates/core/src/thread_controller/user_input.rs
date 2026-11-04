@@ -13,7 +13,11 @@ use std::sync::Arc;
 use crate::CoreError;
 pub(super) enum ValidatedUserInput<'a> {
     Text(&'a str),
-    Context { name: &'a str, content: &'a str },
+    Context {
+        name: &'a str,
+        content: &'a str,
+        source_url: Option<&'a str>,
+    },
     Image(&'a ImageAttachmentRef),
     Audio(&'a AudioAttachmentRef),
 }
@@ -82,10 +86,10 @@ pub(super) fn validate<'a>(
             UserInput::Text { .. } => Some(Err(CoreError::InvalidInput(
                 "Turn text input must not be empty".into(),
             ))),
-            UserInput::Context { name, content }
+            UserInput::Context { name, content, source_url }
                 if !name.trim().is_empty() && !content.trim().is_empty() =>
             {
-                Some(Ok(ValidatedUserInput::Context { name, content }))
+                Some(Ok(ValidatedUserInput::Context { name, content, source_url: source_url.as_deref() }))
             }
             UserInput::Context { .. } => Some(Err(CoreError::InvalidInput(
                 "Turn context input must have a non-empty name and content".into(),
@@ -212,7 +216,12 @@ pub(super) fn thread_items(
                 turn_id: turn_id.clone(),
                 text: (*text).to_owned(),
             },
-            ValidatedUserInput::Context { name, content } => ThreadItem::UserContext {
+            ValidatedUserInput::Context {
+                name,
+                content,
+                source_url,
+            } => ThreadItem::UserContext {
+                source_url: source_url.map(str::to_owned),
                 client_id: Some(command_id.clone()),
                 item_id: next_item_id(),
                 turn_id: turn_id.clone(),

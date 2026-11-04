@@ -265,6 +265,7 @@ impl Fixture {
             .start_thread(StartThreadRequest {
                 execution_target: None,
                 branch_name: None,
+                worktree_start: None,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new(command_id).unwrap(),

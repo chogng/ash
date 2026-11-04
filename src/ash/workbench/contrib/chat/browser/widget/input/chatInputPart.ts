@@ -1712,7 +1712,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.renderFooter();
 	}
 
-	private renderStatus(): void {
+	protected renderStatus(): void {
 		const text = this.statusText(this.state);
 		const error = !this.state.aiDisabled && !this.state.inputBlocked && (this.state.error || (this.state.phase === 'error' ? text : ''));
 		this.notificationVisible.set(this.visible && !this.state.aiDisabled && !this.state.inputBlocked, undefined);

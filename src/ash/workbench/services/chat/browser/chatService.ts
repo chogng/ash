@@ -198,7 +198,7 @@ export class ChatService extends Disposable implements IChatService {
 			if (!('clientId' in item) || item.clientId !== firstMessage.clientId) continue;
 			switch (item.type) {
 				case 'userMessage': input.push({ type: 'text', text: item.itemId === firstMessage.itemId ? options.text : item.text }); break;
-				case 'userContext': input.push({ type: 'context', name: item.name, content: item.content }); break;
+				case 'userContext': input.push({ type: 'context', name: item.name, content: item.content, ...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {}) }); break;
 				case 'userImage': input.push({ type: 'image', url: item.url }); break;
 				case 'userImageAttachment': input.push({ type: 'imageAttachment', attachment: item.attachment }); break;
 				case 'userAudioAttachment': input.push({ type: 'audioAttachment', attachment: item.attachment }); break;
@@ -532,7 +532,7 @@ function toContextInput(context: ResolvedChatContext): AgentInput {
 		}
 		return { type: 'toolSelection', disabled };
 	}
-	return { type: 'context', name: context.name, content: context.content };
+	return { type: 'context', name: context.name, content: context.content, ...(context.sourceUrl ? { sourceUrl: context.sourceUrl } : {}) };
 }
 
 function turnInput(options: StartTurnOptions): AgentInput[] {
@@ -544,7 +544,8 @@ function turnInput(options: StartTurnOptions): AgentInput[] {
 
 function messageInput(text: string, contexts: readonly ResolvedChatContext[] = []): AgentInput[] {
 	// Contexts without a composer position, including older drafts, retain their prefix placement.
-	const input = contexts.filter(context => !context.reference).map(toContextInput);
+	const input = contexts.filter(context => !context.reference && !context.sourceUrl).map(toContextInput);
+	const linked = contexts.filter(context => context.sourceUrl).map(toContextInput);
 	const inline = contexts.filter(context => context.reference).sort((a, b) => a.reference!.start - b.reference!.start);
 	let offset = 0;
 	for (const context of inline) {
@@ -555,12 +556,13 @@ function messageInput(text: string, contexts: readonly ResolvedChatContext[] = [
 		const before = text.slice(offset, start);
 		// Core rejects empty text items. Preserve meaningful spans verbatim, but omit whitespace-only gaps.
 		if (before.trim()) input.push({ type: 'text', text: before });
-		input.push(toContextInput(context));
+		// Linked context is shown before the message, regardless of its composer label position.
+		if (!context.sourceUrl) input.push(toContextInput(context));
 		offset = end;
 	}
 	const after = text.slice(offset);
 	if (after.trim()) input.push({ type: 'text', text: after });
-	return input;
+	return [...linked, ...input];
 }
 
 function toTurnChangeSummary(summary: TurnChangeSetSummaryDto): TurnChangeSetSummary {

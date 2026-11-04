@@ -7,6 +7,7 @@ import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type { IMarkdownString } from '../../../../base/common/htmlContent.js';
 
 export interface ResolvedChatContext {
+	readonly sourceUrl?: string;
 	readonly name: string;
 	readonly content: string;
 	/** UTF-16 offsets in the untrimmed submitted text, replacing the visible attachment label. */
@@ -37,7 +38,8 @@ export interface ChatContextAttachment {
 /** Carry composer positions alongside the captured content without changing the shared snapshot. */
 export async function resolveChatContextAttachment(attachment: ChatContextAttachment): Promise<ResolvedChatContext> {
 	const snapshot = await attachment.resolve();
-	return attachment.reference ? { ...snapshot, reference: attachment.reference } : snapshot;
+	const sourceUrl = attachment.kind === 'transcriptContext' && attachment.resource?.scheme === 'https' ? attachment.resource.toString() : undefined;
+	return { ...snapshot, ...(sourceUrl ? { sourceUrl } : {}), ...(attachment.reference ? { reference: attachment.reference } : {}) };
 }
 
 /** A host-owned producer borrows the destination draft's cancellation signal. */

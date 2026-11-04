@@ -1618,6 +1618,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         }
         if let Some(home) = &self.home {
             let context = UserInput::Context {
+                source_url: None,
                 name: "ash-home".into(),
                 content: home.root().display().to_string(),
             };
@@ -2233,6 +2234,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         let agent_tree = view.agent_tree;
         Ok(ash_app_server_protocol::protocol::session::SessionResult {
             environment_applied: None,
+            worktree_start_applied: None,
             session,
             agent_tree,
         })
@@ -2312,17 +2314,42 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                             )));
                         }
                         UserInput::Context {
+                            source_url: None,
                             name: "issue".into(),
                             content: format!("[issue #{number}]"),
                         }
                     }
                     InputItem::Text { text } => UserInput::Text { text },
-                    InputItem::Context { name, content } => UserInput::Context { name, content },
+                    InputItem::Context {
+                        name,
+                        content,
+                        source_url,
+                    } => {
+                        if source_url.as_ref().is_some_and(|source| {
+                            source.len() > 4096
+                                || url::Url::parse(source).map_or(true, |url| {
+                                    url.scheme() != "https"
+                                        || url.host_str().is_none()
+                                        || !url.username().is_empty()
+                                        || url.password().is_some()
+                                })
+                        }) {
+                            return Err(core_error(core_api::CoreError::InvalidInput(
+                                "context source must be an HTTPS URL without credentials".into(),
+                            )));
+                        }
+                        UserInput::Context {
+                            name,
+                            content,
+                            source_url,
+                        }
+                    }
                     InputItem::HostResource { name, resource } => {
                         let owner = owner.ok_or_else(|| {
                             RpcError::new(-32602, AppServerErrorName::InvalidParams)
                         })?;
                         UserInput::Context {
+                            source_url: None,
                             name,
                             content: self.context.read_host_context(owner, &resource)?,
                         }

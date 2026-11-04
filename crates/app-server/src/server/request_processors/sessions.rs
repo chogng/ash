@@ -492,6 +492,12 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                 )));
             }
         };
+        let has_worktree_start = params.worktree_start.is_some();
+        if has_worktree_start && params.branch_name.is_none() {
+            return Err(core_error(core_api::CoreError::InvalidInput(
+                "a pinned worktree requires a branch name".into(),
+            )));
+        }
         if params.branch_name.is_some() && self.git_turn_changes.is_none() {
             return Err(core_error(core_api::CoreError::InvalidInput(
                 "creating a named worktree requires a Git worktree runtime".into(),
@@ -530,6 +536,12 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                 || params.title != existing.title
                 || existing_execution_target != execution_target
                 || (expected_agent_id != existing.agent_id && !legacy_creation)
+                || params.worktree_start.as_ref().is_some_and(|start| {
+                    self.git_turn_changes
+                        .as_ref()
+                        .and_then(|runtime| runtime.binding(&existing.thread_id))
+                        .is_none_or(|binding| binding.target_head() != start.commit)
+                })
                 || params.branch_name.as_deref().is_some_and(|name| {
                     self.git_turn_changes
                         .as_ref()
@@ -562,6 +574,12 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                     title: params.title,
                     agent,
                     branch_name: params.branch_name,
+                    worktree_start: params.worktree_start.map(|start| core_api::WorktreeStart {
+                        remote: start.remote,
+                        remote_identity: start.remote_identity,
+                        reference: start.reference,
+                        commit: start.commit,
+                    }),
                     execution_target,
                 })
                 .map_err(core_error)?;
@@ -593,6 +611,7 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         self.updates.publish_session_changed(&created.session_id);
         let mut result = self.context.session_result(&created.session_id)?;
         result.environment_applied = has_environment.then_some(true);
+        result.worktree_start_applied = has_worktree_start.then_some(true);
         Ok(result)
     }
 

@@ -336,6 +336,7 @@ fn turn_input_items_preserve_ordered_text_context_image_and_skill_shapes() {
             text: "describe".into(),
         },
         InputItem::Context {
+            source_url: None,
             name: "Git commit abc1234".into(),
             content: "diff --git a/file b/file".into(),
         },

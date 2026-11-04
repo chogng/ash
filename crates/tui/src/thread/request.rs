@@ -197,6 +197,7 @@ where
                 let mut input = materialize_submission(client, submission)?;
                 if let Some((window, context)) = ide {
                     input.push(InputItem::Context {
+                        source_url: None,
                         name: "Ash IDE context".into(),
                         content: serde_json::to_string(
                             &serde_json::json!({ "window": window, "context": context }),
@@ -258,7 +259,11 @@ where
     let mut input = Vec::with_capacity(submission.input.len());
     for item in submission.input {
         input.push(match item {
-            ChatInputItem::Context { name, content } => InputItem::Context { name, content },
+            ChatInputItem::Context { name, content } => InputItem::Context {
+                name,
+                content,
+                source_url: None,
+            },
             ChatInputItem::Attachment(attachment) => InputItem::ImageAttachment { attachment },
             ChatInputItem::Text(text) => InputItem::Text { text },
             ChatInputItem::AudioAttachment(attachment) => InputItem::AudioAttachment { attachment },

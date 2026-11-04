@@ -276,6 +276,7 @@ fn clearing_directories_keeps_home_instructions_in_model_requests() {
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("create-home-thread").unwrap(),
@@ -367,6 +368,7 @@ fn managed_thread_turn_uses_instructions_after_workspace_rebinding() {
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("rebound-instructions-thread").unwrap(),
@@ -990,6 +992,7 @@ fn dirs_are_session_scoped_and_removable() {
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("create-add-dir-session").unwrap(),
@@ -1000,6 +1003,7 @@ fn dirs_are_session_scoped_and_removable() {
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("create-other-add-dir-session").unwrap(),
@@ -1055,6 +1059,7 @@ fn cwd_directory_can_be_added_explicitly() {
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("create-primary-add-dir-session").unwrap(),
@@ -1093,6 +1098,7 @@ fn dir_mutation_requires_a_directory_grants_host_connection() {
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("create-capability-add-dir-session").unwrap(),
@@ -1158,6 +1164,7 @@ fn projectless_session_terminal_uses_its_grant_without_enabling_an_unscoped_term
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("projectless-terminal-session").unwrap(),
@@ -1300,6 +1307,7 @@ fn directory_grants_are_revision_bound_and_filter_capability_snapshots() {
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("create-permission-add-dir-session").unwrap(),
@@ -2227,6 +2235,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("create-revocation-thread").unwrap(),
@@ -2496,6 +2505,7 @@ fn active_turn_blocks_directory_root_switch_without_changing_authority() {
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("create-thread").unwrap(),
@@ -2564,6 +2574,7 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("create-active-add-dir-thread").unwrap(),
@@ -2644,6 +2655,7 @@ fn session_directory_move_changes_future_context_only_for_that_session() {
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("create-first-cwd-thread").unwrap(),
@@ -2654,6 +2666,7 @@ fn session_directory_move_changes_future_context_only_for_that_session() {
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("create-second-cwd-thread").unwrap(),
@@ -2706,6 +2719,7 @@ fn session_files_copy_within_the_selected_directory_and_reject_ambiguous_targets
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("session-file-copy-thread").unwrap(),
@@ -3621,6 +3635,7 @@ fn permission_requests_follow_core_interaction_enforce_subset_and_expire_on_comp
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("permission-create-thread").unwrap(),
@@ -3842,6 +3857,7 @@ fn reusable_approvals_follow_core_and_bind_the_exact_action() {
             .start_thread(StartThreadRequest {
                 execution_target: None,
                 branch_name: None,
+                worktree_start: None,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new("reusable-thread").unwrap(),
@@ -4121,6 +4137,7 @@ fn remote_network_connections_require_the_exact_core_approval_before_upstream_io
             .start_thread(StartThreadRequest {
                 execution_target: None,
                 branch_name: None,
+                worktree_start: None,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new("remote-network-thread").unwrap(),
@@ -4312,6 +4329,7 @@ fn start_directory_approval(server: &AppServer) -> ash_protocol::ThreadId {
         .start_thread(StartThreadRequest {
             execution_target: None,
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: None,
             command_id: CommandId::new("directory-reopen-thread").unwrap(),
@@ -4559,6 +4577,7 @@ fn filesystem_resource_routes_are_independent_of_selection_and_never_grant_acces
                     title: name.into(),
                     execution_target: None,
                     branch_name: None,
+                    worktree_start: None,
                     agent_id: None,
                     agent: None,
                 },

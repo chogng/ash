@@ -166,6 +166,7 @@ fn spawn_reuses_an_explicit_agent_identity_across_sessions() {
             StartThreadRequest {
                 execution_target: None,
                 branch_name: None,
+                worktree_start: None,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new("create-member").unwrap(),
@@ -1233,6 +1234,7 @@ fn fixture_with_profile(
             StartThreadRequest {
                 execution_target: None,
                 branch_name: None,
+                worktree_start: None,
                 agent_id: None,
                 agent,
                 command_id: CommandId::new("create-parent").unwrap(),

@@ -49,6 +49,7 @@ fn runtime_wait_resumes_model_once_and_cancelled_wait_never_resumes_it() {
                 StartThreadRequest {
                     execution_target: None,
                     branch_name: None,
+                    worktree_start: None,
                     agent_id: None,
                     agent: None,
                     command_id: CommandId::new("start").unwrap(),

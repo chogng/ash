@@ -35,6 +35,7 @@ fn response() -> SessionResult {
     threads[2].status = ash_protocol::ThreadStatus::Archived;
     SessionResult {
         environment_applied: None,
+        worktree_start_applied: None,
         session: Session {
             source: None,
             model: None,

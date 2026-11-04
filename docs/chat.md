@@ -52,7 +52,7 @@ host 查询的触发条件由 `editor/chatInputCompletionUtils.ts / isAtTriggerC
 | 内联附件的 prompt rebasing                                      | Ash 的引用标签直接保存在正文中。`ChatDynamicVariableModel.variables` 提供当前偏移。`chatVariables.ts` 负责复制选区和可移交草稿的坐标投影。 |
 | `attachments/chatVariables.ts`                                  | 发送直接读取当前输入的变量。按会话查找变量和工具选择的服务仍无消费者。                                                                     |
 | `attachments/chatImplicitContext.ts`                            | 已确认采用显式附加文件的行为。原当前编辑器推荐控件仅由单测实例化。                                                                         |
-| `attachments/transcriptContextAttachmentWidget.contribution.ts` | 会话选择器产生 `chatReference`，对应上游的会话引用控件。独立的 `transcriptContext` 类型仍无生产来源。                                      |
+| `attachments/transcriptContextAttachmentWidget.contribution.ts` | 从 PR 新建会话生成 `transcriptContext`。Ash 的通用来源控件渲染草稿和首条请求中的 PR 卡片，`chatReference` 仍用于引用已有对话。             |
 
 `ChatInlineAttachments.refresh` 接收 Ash 现有引用快照及移除回调；`getPillReferences`、`openActivePill` 与 `layout` 分别服务输入字体／Tab 策略、Alt+Enter 和原输入布局。该公开输入形状适配 Ash 领域模型，不宣称与上游类型签名完全兼容。其余无消费者的补全匹配／排序 helper 也不单独导出。
 

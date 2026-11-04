@@ -7,6 +7,7 @@ fn text_edits_and_cancel_are_revision_checked_and_preserve_frozen_input() {
     let store = QueueStore::open(&root.path().join("state.sqlite")).unwrap();
     let mut request = input("editable");
     let context = UserInput::Context {
+        source_url: None,
         name: "snapshot".into(),
         content: "immutable".into(),
     };
@@ -453,6 +454,7 @@ fn delivery_edits_preserve_frozen_context_and_atomically_promote_immediate_messa
     let turn = protocol::TurnId::new("active-turn").unwrap();
     request.steer_turn = Some(turn.clone());
     let context = UserInput::Context {
+        source_url: None,
         name: "captured".into(),
         content: "original bytes".into(),
     };

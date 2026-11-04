@@ -418,6 +418,7 @@ where
         title,
         execution_target,
         branch_name: None,
+        worktree_start: None,
         environment_variables: None,
     })?;
     let thread_id = current_conversation_thread(&session.session)

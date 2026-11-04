@@ -437,9 +437,9 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		return this._active ?? this.startNewSession();
 	}
 
-	async startNewSession(title = 'New Chat'): Promise<IActiveSessionThread> {
-		const revision = ++this.selectionRevision;
-		const active = await this.createSession(title, this.creationProvider().currentWorkspace());
+	async startNewSession(title = 'New Chat', background?: Parameters<ISessionsManagementService['startNewSession']>[1]): Promise<IActiveSessionThread> {
+		const revision = background ? undefined : ++this.selectionRevision;
+		const active = await this.createSession(title, background?.workspace ?? this.creationProvider().currentWorkspace(), undefined, createUuid(), background?.providerId, background?.creation);
 		this._sessions = [active.session, ...this._sessions.filter(session => session.sessionId !== active.session.sessionId)];
 		if (revision === this.selectionRevision) {
 			this._active = active;
@@ -449,6 +449,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		else this._onDidChange.fire();
 		return active;
 	}
+
 
 	canChangeDirectory(sessionId: SessionId): boolean {
 		const session = this._sessions.find(candidate => candidate.sessionId === sessionId);
