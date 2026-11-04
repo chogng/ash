@@ -81,6 +81,7 @@ import { ISpeechService } from '../../../workbench/contrib/speech/common/speechS
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
+import { IApprovalEnvironmentService } from '../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { IFileTextModelService } from '../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import assert from 'node:assert/strict';
 import { test, teardown, suiteTeardown } from 'mocha';
@@ -1232,6 +1233,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		services.registerInstance(INotificationService, notices);
 		services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 		services.registerSingleton(IChatTipService, () => services.createInstance(ChatTipService));
+		services.registerInstance(IApprovalEnvironmentService, undefined);
 		services.registerInstance(ISessionsGitHubService, {
 			onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], initialize() { },
 			attachIssue: async () => { }, detachIssue: async () => { }, attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { },

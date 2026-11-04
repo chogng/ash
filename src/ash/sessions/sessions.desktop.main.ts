@@ -28,7 +28,7 @@ import '../workbench/services/menubar/electron-browser/menubarService.js';
 import '../workbench/services/process/electron-browser/processService.js';
 import '../workbench/contrib/processExplorer/electron-browser/processExplorer.contribution.js';
 import './browser/parts/menubar.contribution.js';
-import './contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js';
+import './contrib/openAgentsWindow/electron-browser/openAgentsWindowKeybindingTip.js';
 import { registerOpenAgentsWindowCommand } from './contrib/openAgentsWindow/electron-browser/openAgentsWindowCommand.js';
 import { OpenAshWindowAction } from './electron-browser/actions/ashActions.js';
 import { MenusRegistry, registerAction2 } from '../platform/actions/common/actions.js';

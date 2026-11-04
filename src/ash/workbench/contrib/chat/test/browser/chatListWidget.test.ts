@@ -110,6 +110,8 @@ test('Workbench and Cowork tips use injected Markdown opening and preserve dismi
 	let visible = true;
 	const tips = {
 		onDidDismissTip: dismissed.event,
+		onDidChangeTips: dismissed.event,
+		registerTipProvider: () => toDisposable(() => { }),
 		getWelcomeTip: () => visible ? { id: 'documentation', content: new MarkdownString('[Docs](https://example.com/tip)') } : undefined,
 		dismissTip: () => { visible = false; dismissed.fire(); },
 	};

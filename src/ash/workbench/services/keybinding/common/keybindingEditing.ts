@@ -1,15 +1,20 @@
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { applyEdits, setProperty } from '../../../../base/common/jsonEdit.js';
+import { parseKeybinding } from '../../../../base/common/keybindingParser.js';
+import { resolveKeybinding } from '../../../../base/common/keybindings.js';
+import { isMacintosh, isWindows, operatingSystem } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
+import { toElectronAccelerator } from '../../../../platform/keybinding/common/electronAccelerator.js';
 import type { ResolvedKeybindingItem } from '../../../../platform/keybinding/common/resolvedKeybindingItem.js';
 import { IFileTextModelService } from '../../textmodelResolver/common/textModelResourceService.js';
 import { IUserDataProfileService } from '../../userDataProfile/common/userDataProfile.js';
 import { parseUserKeybindings } from './keybindingIO.js';
 
 export interface IKeybindingEditingService {
-	editKeybinding(item: ResolvedKeybindingItem, key: string, when: string | undefined): Promise<void>;
+	addKeybinding(item: ResolvedKeybindingItem, key: string, when: string | undefined, systemWide?: boolean): Promise<void>;
+	editKeybinding(item: ResolvedKeybindingItem, key: string | undefined, when: string | undefined, systemWide?: boolean): Promise<void>;
 	removeKeybinding(item: ResolvedKeybindingItem): Promise<void>;
 }
 
@@ -29,15 +34,19 @@ export class KeybindingsEditingService extends Disposable implements IKeybinding
 		this._register(toDisposable(() => this.lifetime.abort()));
 	}
 
-	public editKeybinding(item: ResolvedKeybindingItem, key: string, when: string | undefined): Promise<void> {
-		return this.edit(item, item.isDefault ? 'add' : 'edit', key, when);
+	public addKeybinding(item: ResolvedKeybindingItem, key: string, when: string | undefined, systemWide?: boolean): Promise<void> {
+		return this.edit(item, 'add', key, when, systemWide);
+	}
+
+	public editKeybinding(item: ResolvedKeybindingItem, key: string | undefined, when: string | undefined, systemWide?: boolean): Promise<void> {
+		return this.edit(item, item.isDefault ? 'add' : 'edit', key, when, systemWide);
 	}
 
 	public removeKeybinding(item: ResolvedKeybindingItem): Promise<void> {
 		return this.edit(item, 'remove');
 	}
 
-	private edit(item: ResolvedKeybindingItem, operation: 'add' | 'edit' | 'remove', key?: string, when?: string): Promise<void> {
+	private edit(item: ResolvedKeybindingItem, operation: 'add' | 'edit' | 'remove', key?: string, when?: string, systemWide?: boolean): Promise<void> {
 		this.assertNotDisposed();
 		const result = this.pending.then(async () => {
 			const resource = this.profiles.currentProfile.keybindingsResource;
@@ -50,8 +59,25 @@ export class KeybindingsEditingService extends Disposable implements IKeybinding
 			let source = model.getValue();
 			const bindings = parseUserKeybindings(source);
 			const formatting = { insertSpaces: true, tabSize: 2, eol: source.includes('\r\n') ? '\r\n' : '\n' };
+			const platformKey = isMacintosh ? 'mac' : isWindows ? 'win' : 'linux';
+			if (systemWide) {
+				const entry = item.userBinding?.entry;
+				const override = entry?.[platformKey];
+				const effectiveKey = key ?? (override === undefined ? entry?.key : override);
+				const parsed = effectiveKey && parseKeybinding(effectiveKey);
+				if (!parsed || !toElectronAccelerator(resolveKeybinding(parsed, operatingSystem))) {
+					throw new Error(localize('keybindings.systemWideInvalid', 'Record a single key combination supported by system-wide shortcuts.'));
+				}
+			}
 			if (operation === 'add') {
-				source = applyEdits(source, setProperty(source, [bindings.length], { key, command: item.command, ...(item.commandArgs === undefined ? {} : { args: item.commandArgs }), ...(when ? { when } : {}) }, formatting));
+				const entry = {
+					key,
+					command: item.command,
+					...(item.commandArgs === undefined ? {} : { args: item.commandArgs }),
+					...(when ? { when } : {}),
+					...(systemWide ? { systemWide } : {}),
+				};
+				source = applyEdits(source, setProperty(source, [bindings.length], entry, formatting));
 			} else {
 				const identity = item.userBinding;
 				if (!identity || JSON.stringify(bindings[identity.index]) !== JSON.stringify(identity.entry)) {
@@ -60,8 +86,14 @@ export class KeybindingsEditingService extends Disposable implements IKeybinding
 				if (operation === 'remove') {
 					source = applyEdits(source, setProperty(source, [identity.index], undefined, formatting));
 				} else {
-					source = applyEdits(source, setProperty(source, [identity.index, 'key'], key, formatting));
+					if (key !== undefined) {
+						const keyField = systemWide !== undefined && identity.entry[platformKey] !== undefined ? platformKey : 'key';
+						source = applyEdits(source, setProperty(source, [identity.index, keyField], key, formatting));
+					}
 					source = applyEdits(source, setProperty(source, [identity.index, 'when'], when, formatting));
+					if (systemWide !== undefined) {
+						source = applyEdits(source, setProperty(source, [identity.index, 'systemWide'], systemWide || undefined, formatting));
+					}
 				}
 			}
 			parseUserKeybindings(source);

@@ -1047,7 +1047,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IPreferencesService, {
 			openSettings: options => preferences.open(options),
 			openUserSettings: options => workbenchPreferences.openUserSettings(options),
-			openGlobalKeybindingSettings: textual => workbenchPreferences.openGlobalKeybindingSettings(textual),
+			openGlobalKeybindingSettings: (textual, options) => workbenchPreferences.openGlobalKeybindingSettings(textual, options),
 		});
 		this._register(new WorkbenchEditorContextKeysHandler(contextKeys, editors, editors));
 		services.registerInstance(IHistoryService, this._register(services.createInstance(HistoryService)));

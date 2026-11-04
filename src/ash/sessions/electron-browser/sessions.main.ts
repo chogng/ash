@@ -20,7 +20,7 @@ import { AppServerProtocolClient } from '../../platform/agentHost/browser/appSer
 import { AppServerTextDocumentHost } from '../../workbench/services/textfile/browser/appServerTextDocumentHost.js';
 import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
 import { FileDialogService } from '../../workbench/services/dialogs/electron-browser/fileDialogService.js';
-import { OpenAgentsWindowSystemWideKeybindingContribution } from '../contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js';
+import { OpenAgentsWindowSystemWideKeybindingTip } from '../contrib/openAgentsWindow/electron-browser/openAgentsWindowKeybindingTip.js';
 import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
 import { URI } from '../../base/common/uri.js';
 import { IFileService } from '../../platform/files/common/files.js';
@@ -289,7 +289,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					SessionsApplicationBadge.ID,
 					SessionsWindowNotifier.ID,
 					'workbench.contrib.nativeWindow',
-					OpenAgentsWindowSystemWideKeybindingContribution.ID,
+					OpenAgentsWindowSystemWideKeybindingTip.ID,
 					'workbench.contrib.chatScreenshot',
 					'workbench.contrib.agentsWindowInvitation',
 					'chat.edits.editorOverlay',

@@ -14,10 +14,10 @@ test('welcome tip dismissal persists once and follows other profile writers unti
 		services.registerInstance(IStorageService, storage);
 		using tips = services.createInstance(ChatTipService);
 		let dismissals = 0;
-		using listener = tips.onDidDismissTip(() => dismissals++);
+		using listener = tips.onDidChangeTips(() => dismissals++);
 		assert.equal(tips.getWelcomeTip()?.id, 'attach-files');
-		tips.dismissTip();
-		tips.dismissTip();
+		tips.dismissTip('attach-files');
+		tips.dismissTip('attach-files');
 		assert.deepEqual({ tip: tips.getWelcomeTip(), dismissals, stored: storage.get('chat.dismissedWelcomeTip', StorageScope.PROFILE) }, { tip: undefined, dismissals: 1, stored: 'attach-files' });
 		storage.store('chat.dismissedWelcomeTip', 'other', StorageScope.WORKSPACE, StorageTarget.USER);
 		assert.equal(dismissals, 1);

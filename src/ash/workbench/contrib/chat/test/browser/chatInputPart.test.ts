@@ -4139,11 +4139,21 @@ suite('chatInput browser component', () => {
 			await expect(auto).toBeFocused();
 			await expect(search).toBeVisible();
 			await expect(picker.getByRole('menuitemradio')).toHaveCount(2);
-			await page.locator('.ash-chat-input-configuration-action').click();
+			const options = page.locator('.ash-chat-input-configuration-action');
+			await expect(options).toBeVisible();
+			const bounds = (await options.boundingBox())!;
+			// The open list consumes the outside click before the options trigger can receive it.
+			await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+			await expect(picker).toHaveCount(0);
+			await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+			await expect(options).toHaveAttribute('aria-expanded', 'false');
+			await options.click();
+			await expect(picker).toHaveCount(1);
 			await expect(picker.locator('.ash-chat-model-card-configurable')).toBeVisible();
 			await page.keyboard.press('Escape');
 			await expect(picker).toHaveCount(0);
-			await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+			await expect(options).toHaveAttribute('aria-expanded', 'false');
+			await expect(options).toBeFocused();
 			await trigger.click();
 			await expect(picker).toBeVisible();
 			await page.evaluate(() => window.ashChatInputIntegration.dispose());
