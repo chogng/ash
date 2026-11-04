@@ -6,14 +6,15 @@ import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { chromium, type Browser, type Page, type TestInfo } from '@playwright/test';
+import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
 import { test as base, expect } from '../../../automation/test.js';
 import { Workbench } from '../../../automation/workbench.js';
+import { parseJsonc } from '../../../../src/ash/base/common/jsonc.js';
 import { developmentAshPackagePath } from '../../../../src/ash/platform/environment/node/developmentArtifacts.js';
 
 const repository = resolve(import.meta.dirname, '../../../..');
 const execute = promisify(execFile);
-// Self hosting deliberately opens this checkout. The normal fixture must never
-// remove it or rewrite its launch.json; only the application profiles are isolated.
+// Native and Web self hosting open this checkout without rewriting its launch.json.
 const test = base.extend<{ selfHostToolchain: void; }>({
 	selfHostToolchain: [async ({ }, use) => {
 		// The application home stays disposable. Build tasks share only the host's
@@ -57,6 +58,8 @@ const desktopTest = test.extend<{ debugTarget: { directory: string; profile: str
 			const ports = servers.map(server => (server.address() as AddressInfo).port);
 			const profile = join(directory, 'profile');
 			const replacements: Array<readonly [string, string]> = [
+				['${workspaceFolder}/.build/desktop/dev/profile', profile],
+				['${workspaceFolder}/.build/desktop/dev/debug-user-data', join(directory, 'user-data')],
 				['${workspaceFolder}/.build/desktop/debug/profile', profile],
 				['${workspaceFolder}/.build/desktop/debug/user-data', join(directory, 'user-data')],
 				['--folder=${workspaceFolder}', `--folder=${directory}`],
@@ -78,23 +81,21 @@ const desktopTest = test.extend<{ debugTarget: { directory: string; profile: str
 				return value;
 			};
 			await mkdir(join(directory, '.vscode'));
-			for (const name of ['launch.json', 'tasks.json']) {
-				const source = JSON.parse(await readFile(join(repository, '.vscode', name), 'utf8'));
-				if (name === 'tasks.json') {
-					// Terminals stay authorized to the synthetic workspace. The actual
-					// builders resolve this checkout through pnpm's directory option.
-					for (const task of source.tasks) {
-						if (task.command?.startsWith('pnpm ')) {
-							task.args = ['--dir', repository, ...task.command.slice('pnpm '.length).split(' ')];
-							task.command = 'pnpm';
-							task.type = 'process';
-						} else if (task.command === 'node') {
-							task.args[0] = join(repository, task.args[0]);
-						}
-					}
+			const launch = parseJsonc(await readFile(join(repository, '.vscode/launch.json'), 'utf8'), 'launch.json');
+			await writeFile(join(directory, '.vscode/launch.json'), JSON.stringify(replace(launch)));
+			const tasks = JSON.parse(await readFile(join(repository, '.vscode/tasks.json'), 'utf8'));
+			// Terminals stay authorized to the synthetic workspace. The actual
+			// builders resolve this checkout through pnpm's directory option.
+			for (const task of tasks.tasks) {
+				if (task.command?.startsWith('pnpm ')) {
+					task.args = ['--dir', repository, ...task.command.slice('pnpm '.length).split(' ')];
+					task.command = 'pnpm';
+					task.type = 'process';
+				} else if (task.command === 'node') {
+					task.args[0] = join(repository, task.args[0]);
 				}
-				await writeFile(join(directory, '.vscode', name), JSON.stringify(replace(source)));
 			}
+			await writeFile(join(directory, '.vscode/tasks.json'), JSON.stringify(replace(tasks)));
 			await writeFile(join(directory, 'selfhost.txt'), 'Isolated Desktop debug task fixture.\n');
 			await Promise.all(servers.map(server => new Promise<void>((resolveClosed, reject) => server.close(error => error ? reject(error) : resolveClosed()))));
 			await use({ directory, profile, endpoint: `http://127.0.0.1:${ports[1]}` });
@@ -131,7 +132,7 @@ async function breakpoint(workbench: Workbench, file: string, token: string): Pr
 	await openQuick(workbench, join(repository, file));
 	await workbench.quickaccess.select(file.split('/').at(-1)!);
 	const editor = workbench.editors.groupAt(0).editor;
-	await expect(editor.element).toBeVisible();
+	await editor.waitForEditorContents(contents => contents.includes(lines[0]!));
 	await editor.input.focus();
 	await openQuick(workbench, `:${line}`);
 	await workbench.quickaccess.input.press('Enter');
@@ -147,6 +148,16 @@ async function start(workbench: Workbench, name: string): Promise<void> {
 	}
 	await openQuick(workbench, `debug ${name}`);
 	await workbench.quickaccess.select(name);
+}
+
+async function startDesktopCompound(workbench: Workbench, name: string): Promise<void> {
+	await workbench.page.bringToFront();
+	if (!await workbench.page.locator('[data-view-container-id="ash.debug"]').isVisible()) {
+		await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
+	}
+	await workbench.page.getByRole('button', { name: /^Debug configuration:/ }).click();
+	await workbench.page.getByRole('menu').getByRole('menuitemradio', { name: `${name} (compound)`, exact: true }).click();
+	await workbench.page.keyboard.press('F5');
 }
 
 async function readyTarget(page: Page): Promise<void> {
@@ -206,13 +217,7 @@ desktopTest('Desktop Stop releases its Renderer and Rust watcher before the next
 	let failed = false;
 	try {
 		for (const [name, entry] of [['Ash', '/workbench.html'], ['Ash Agents', '/sessions.html']] as const) {
-			await workbench.page.bringToFront();
-			if (!await workbench.page.locator('[data-view-container-id="ash.debug"]').isVisible()) {
-				await workbench.page.getByRole('tab', { name: 'Run and Debug', exact: true }).first().click();
-			}
-			await workbench.page.getByRole('button', { name: /^Debug configuration:/ }).click();
-			await workbench.page.getByRole('menu').getByText(name, { exact: true }).click();
-			await workbench.page.keyboard.press('F5');
+			await startDesktopCompound(workbench, name);
 			await expect.poll(async () => {
 				try {
 					const targets = await (await fetch(`${debugTarget.endpoint}/json/list`)).json() as Array<{ url: string; }>;
@@ -268,15 +273,30 @@ base('Stop cancels a pre-launch build and its already started task dependencies 
 	expect(existsSync(join(root, 'unexpected'))).toBe(false);
 });
 
-test('Ash self hosts Electron main and renderer source breakpoints and releases debug targets', { tag: ['@electron-app-server'] }, async ({ workbench }, info) => {
-	test.setTimeout(360_000);
-	const page = workbench.page;
+desktopTest('Ash self hosts Electron main and renderer source breakpoints and releases debug targets', { tag: ['@electron-app-server'] }, async ({ application, debugTarget }, info) => {
+	desktopTest.setTimeout(360_000);
+	// Mount the original sources for source maps while loading only the fixture's
+	// launch configuration, which redirects the debugger away from developer history.
+	const source = join(repository, 'src');
+	const workspaceFile = join(debugTarget.directory, 'selfhost.code-workspace');
+	await writeFile(workspaceFile, JSON.stringify({ folders: [{ path: '.' }, { path: source }] }));
+	if (!('windows' in application)) throw new Error('Desktop self hosting requires Electron');
+	const opened = application.waitForEvent('window');
+	await application.evaluate(({ app }, file) => {
+		app.emit('second-instance', {} as never, [process.execPath, app.getAppPath(), '--workspace', file, '--new-window'], process.cwd(), {});
+	}, workspaceFile);
+	const page = await opened;
+	const prompt = directoryPermissionPrompt(page);
+	await expect(prompt.locator('.ash-dialog-detail')).toContainText(source);
+	await prompt.getByRole('button', { name: 'Trust Folder', exact: true }).click();
+	const workbench = new Workbench(page);
+	await workbench.waitForReady();
 	let browser: Browser | undefined;
 	let failed = false;
 	const pane = page.locator('[data-view-container-id="ash.debug"]');
 	try {
 		await breakpoint(workbench, 'src/ash/code/electron-main/main.ts', 'const profileRoot = resolveHome();');
-		await start(workbench, 'Ash');
+		await startDesktopCompound(workbench, 'Ash');
 		await expect(pane.locator('.ash-debug-frame.selected')).toContainText('main.ts:', { timeout: 120_000 });
 		await expandScope(workbench, 'Local');
 		await expect(pane.locator('.ash-debug-variables')).toContainText('developmentLauncher');
@@ -286,9 +306,9 @@ test('Ash self hosts Electron main and renderer source breakpoints and releases 
 		await pane.getByRole('button', { name: 'Remove breakpoint', exact: true }).click();
 		await command(workbench, 'workbench.action.debug.continue');
 		await expect.poll(async () => {
-			try { return (await fetch('http://127.0.0.1:9222/json/list')).ok; } catch { return false; }
+			try { return (await fetch(`${debugTarget.endpoint}/json/list`)).ok; } catch { return false; }
 		}, { timeout: 60_000 }).toBe(true);
-		browser = await chromium.connectOverCDP('http://127.0.0.1:9222');
+		browser = await chromium.connectOverCDP(debugTarget.endpoint);
 		await expect.poll(() => browser!.contexts()[0]!.pages().some(candidate => candidate.url().includes('workbench.html')), { timeout: 60_000 }).toBe(true);
 		const target = browser.contexts()[0]!.pages().find(candidate => candidate.url().includes('workbench.html'))!;
 		expect(target).toBeDefined();
@@ -319,13 +339,13 @@ test('Ash self hosts Electron main and renderer source breakpoints and releases 
 		await expect(targetWorkbench.terminal.activeInstance).toBeVisible({ timeout: 30_000 });
 		await command(workbench, 'workbench.action.debug.stopAll');
 		await expect(pane.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
-		await expect.poll(async () => fetch('http://127.0.0.1:9222/json/list').then(() => true, () => false)).toBe(false);
+		await expect.poll(async () => fetch(`${debugTarget.endpoint}/json/list`).then(() => true, () => false)).toBe(false);
 	} catch (error) {
 		failed = true;
 		await info.attach('debug-state-before-cleanup', { body: await page.locator('body').innerText(), contentType: 'text/plain' });
 		throw error;
 	} finally {
-		await finish(workbench, info, failed, browser);
+		await finish(workbench, info, failed, browser, debugTarget.profile);
 	}
 });
 
