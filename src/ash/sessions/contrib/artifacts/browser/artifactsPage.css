@@ -45,12 +45,6 @@
 	gap: var(--ash-spacing-size120);
 	margin-bottom: var(--ash-spacing-size320);
 }
-.ash-artifacts-toolbar > .ash-artifacts-filters {
-	--ash-tab-height: var(--ash-spacing-size320);
-	--ash-tab-border-radius: var(--ash-cornerRadius-large);
-	--ash-tabList-itemContentInset: var(--ash-spacing-size120);
-	--ash-actionBar-gap: var(--ash-spacing-size80);
-}
 .ash-artifacts-actions {
 	--ash-actionBar-gap: var(--ash-spacing-size80);
 
@@ -191,9 +185,6 @@
 	margin: 0;
 	color: var(--ash-description-foreground);
 	line-height: 1.5;
-}
-.ash-creator.compact .ash-artifacts-toolbar > .ash-artifacts-filters {
-	--ash-actionBar-gap: var(--ash-spacing-size20);
 }
 .ash-creator.compact .ash-artifacts-actions {
 	width: 100%;

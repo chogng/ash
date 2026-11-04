@@ -1,0 +1,12 @@
+.ash-sessions-filter-tabs {
+	--ash-tab-height: var(--ash-spacing-size280);
+	--ash-tab-border-radius: var(--ash-cornerRadius-large);
+	--ash-tabList-itemContentInset: var(--ash-spacing-size120);
+	--ash-actionBar-gap: var(--ash-spacing-size40);
+	--ash-tabList-activeBackground: var(--ash-toolbar-hoverBackground);
+	--ash-tabList-hoverBackground: color-mix(
+		in srgb,
+		var(--ash-tabList-activeBackground) 50%,
+		transparent
+	);
+}

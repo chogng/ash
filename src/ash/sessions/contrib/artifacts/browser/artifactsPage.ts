@@ -1,6 +1,7 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
+import '../../../browser/ui/filterTabs.css';
 import './artifactsPage.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
@@ -137,7 +138,7 @@ export class ArtifactsPage extends Disposable {
 				this.renderArtifacts();
 			},
 		}));
-		filters.element.classList.add('ash-artifacts-filters');
+		filters.element.classList.add('ash-sessions-filter-tabs');
 		filters.setTabs(tabs, this.filter);
 		const searchLabel = localize('sessions.artifacts.search', 'Search artifacts');
 		this.search = h(ownerDocument, 'input', {

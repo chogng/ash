@@ -90,7 +90,7 @@ suite('sessions browser component', () => {
 		await expect(all).toHaveAttribute('aria-selected', 'true');
 		await expect(panel).toHaveAccessibleName('全部');
 		await expect(shared).toHaveAttribute('aria-controls', (await panel.getAttribute('id'))!);
-		await expect(navigation).toHaveCSS('height', '32px');
+		await expect(navigation).toHaveCSS('height', '28px');
 		await creator.screenshot({ path: info.outputPath('artifacts-filters-zh-CN.png') });
 
 		await all.focus();
