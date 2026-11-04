@@ -106,7 +106,7 @@
 }
 
 .ash-sessions-activity-content.labeled .ash-sessions-navigation {
-	gap: var(--ash-spacing-size40);
+	gap: var(--ash-spacing-size20);
 }
 
 .ash-sessions-activity-bottom.labeled {
