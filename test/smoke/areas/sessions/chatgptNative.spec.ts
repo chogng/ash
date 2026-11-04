@@ -168,10 +168,10 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(modelButton).toHaveText('Fixture model');
 		await expect(modelButton).toBeEnabled();
 		await modelButton.press('ArrowDown');
-		await page.getByRole('dialog', { name: '选择聊天模型', exact: true })
-			.getByText('选择模型新建 Ash 对话…', { exact: true }).click();
-		const commands = new QuickAccess(page);
-		await commands.select(ashFixtureModel.model);
+		const picker = page.getByRole('dialog', { name: '选择聊天模型', exact: true });
+		await expect(picker.getByRole('menuitemradio', { name: 'Fixture model', exact: true })).toBeVisible();
+		await expect(picker.getByText('选择模型新建 Ash 对话…', { exact: true })).toHaveCount(0);
+		await picker.getByRole('menuitemradio', { name: ashFixtureModel.model, exact: true }).click();
 
 		const ash = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 		const ashComposer = new Editor(ash);
@@ -201,7 +201,7 @@ test.describe('Unified Chat sidebar', () => {
 			await expect(editor.getByRole('button', { name: '停止', exact: true })).toBeHidden();
 		};
 
-		await commands.runCommand('sessions.open.chatgpt');
+		await page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: '新建', exact: true }).click();
 		await sendChatGPT('First ChatGPT message');
 		const chatGPTRow = sidebar.locator('[data-source="chatgpt"][data-conversation="fixture-live"] .ash-sessions-list-item');
 		await expect(chatGPTRow).toHaveAttribute('aria-current', 'page');
@@ -328,9 +328,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await editor.locator('.ash-chat-input-model-action').press('ArrowDown');
 			const modelMenu = page.getByRole('dialog', { name: locale === 'en' ? 'Choose a chat model' : '选择聊天模型', exact: true });
 			await expect(modelMenu.getByRole('menuitemradio', { name: 'Fixture model', exact: true })).toBeVisible();
-			await modelMenu.getByText(locale === 'en' ? 'New Ash Chat with Model…' : '选择模型新建 Ash 对话…', { exact: true }).click();
-			await expect(page.getByRole('dialog', { name: locale === 'en' ? 'Choose a model for a new chat' : '选择新对话的模型', exact: true })).toBeVisible();
-			await commands.select(model.model);
+			await expect(modelMenu.getByText(locale === 'en' ? 'New Ash Chat with Model…' : '选择模型新建 Ash 对话…', { exact: true })).toHaveCount(0);
+			await modelMenu.getByRole('menuitemradio', { name: model.model, exact: true }).click();
 			const mode = page.locator('.ash-window-mode-control');
 			const chatMode = mode.getByRole('button', { name: locale === 'en' ? 'Chat / Agents' : '聊天 / Agents', exact: true });
 			const ash = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
@@ -346,11 +345,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(ash.locator('.ash-chat-input-model-action')).toHaveText(model.model);
 			const ashDraftId = await ash.getAttribute('data-untitled-session-id');
 			expect(ashDraftId).toBeTruthy();
-			await ash.locator('.ash-chat-input-model-action').press('ArrowDown');
-			await page.getByRole('dialog', { name: locale === 'en' ? 'Choose a chat model' : '选择聊天模型', exact: true })
-				.getByText(locale === 'en' ? 'New ChatGPT Chat with Model…' : '选择模型新建 ChatGPT 对话…', { exact: true }).click();
-			await expect(page.getByRole('dialog', { name: locale === 'en' ? 'Choose a model for a new chat' : '选择新对话的模型', exact: true })).toBeVisible();
-			await commands.select('Fixture model');
+			await page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: locale === 'en' ? 'New' : '新建', exact: true }).click();
 			await expect(editor).toBeVisible();
 			await composer.waitForEditorContents(text => text === 'Hello from native UI');
 			const sidebar = page.locator('.ash-chatgpt-navigation');
@@ -363,6 +358,11 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(ash).toHaveAttribute('data-untitled-session-id', ashDraftId!);
 			await ashComposer.waitForEditorContents(text => text === 'Hello from native UI');
 			await expect(codeMode).toHaveAttribute('aria-pressed', 'true');
+			await ash.locator('.ash-chat-input-model-action').press('ArrowDown');
+			await expect(modelMenu.getByRole('menuitemradio', { name: model.model, exact: true })).toBeVisible();
+			await expect(modelMenu.getByRole('menuitemradio', { name: 'Fixture model', exact: true })).toHaveCount(0);
+			await expect(modelMenu.getByText(locale === 'en' ? 'New ChatGPT Chat with Model…' : '选择模型新建 ChatGPT 对话…', { exact: true })).toHaveCount(0);
+			await page.keyboard.press('Escape');
 			await ashComposer.waitForEditorFocus();
 			await page.keyboard.press('Enter');
 			await expect(ash).toContainText('Answer from Ash');

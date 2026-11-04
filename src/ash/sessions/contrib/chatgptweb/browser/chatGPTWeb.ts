@@ -34,10 +34,6 @@ export const chatGPTReplyEditor = {
 		hint: () => localize('sessions.chatgpt.navigationHint', 'Press Alt+F1 for ChatGPT accessibility help.'),
 	},
 	scrollOptimizationSetting: chatGPTScrollOptimization,
-	alternateModel: {
-		source: 'chatgpt',
-		label: () => localize('sessions.newChatModel.useAsh', 'New Ash Chat with Model…'),
-	},
 } satisfies ReplyChatEditorOptions;
 export const chatGPTSelectedContext = 'sessions.activity.chatgptSelected';
 

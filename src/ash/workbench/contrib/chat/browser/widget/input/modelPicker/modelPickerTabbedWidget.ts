@@ -305,9 +305,7 @@ export class TabbedModelPicker extends Disposable {
 						if (!resources.isDisposed) { refreshConfiguration(); }
 					}
 				};
-				const alternate = this.delegate.alternateModelAction;
 				const actions = manageModels && manageModelsLabel ? [{ ...manageModels, label: manageModelsLabel, run: () => { this.hide(); return manageModels.run(); } }] : [];
-				if (alternate) actions.push({ ...alternate, run: () => { this.hide(); return alternate.run(); } });
 				resources.add(new Menu(moreSection, actions, {
 					buttonStyles: defaultButtonStyles, keybindingLabelStyles: defaultKeybindingLabelStyles
 				}, defaultMenuStyles));
@@ -315,7 +313,7 @@ export class TabbedModelPicker extends Disposable {
 					const hasModels = this.delegate.getModels().length > 0;
 					container.classList.toggle('ash-chat-model-picker-footer', hasModels);
 					container.classList.toggle('has-divider', hasModels && !configureInMenu);
-					moreSection.hidden = !alternate && (!manageModels || !hasModels || (!configureInMenu && this.delegate.isAutomaticModel()));
+					moreSection.hidden = !manageModels || !hasModels || (!configureInMenu && this.delegate.isAutomaticModel());
 					refreshConfiguration();
 				};
 				refreshFooter();

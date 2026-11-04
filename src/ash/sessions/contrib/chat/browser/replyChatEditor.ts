@@ -15,7 +15,7 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { EditorPane, EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
-import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
@@ -25,7 +25,7 @@ import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widg
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { ChatInputEditorOptions } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { NEW_CHAT_WITH_MODEL_COMMAND, NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING, SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
+import { NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING, SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
 import { getNewSessionWelcomePhrases, type INewSessionWelcomeMessagesConfiguration } from '../common/welcomePhrases.js';
 import './media/chatInput.css';
 import './media/chatInputCard.css';
@@ -34,7 +34,6 @@ import './media/chatView.css';
 export interface IReplyChatEditorModel extends IChatWidgetModel {
 	newChat(): void;
 	readWelcomeDraft(reader: IReader): { readonly id: string; readonly revision: number; } | undefined;
-	getUnsentDraftText(): string | undefined;
 }
 
 export interface ReplyChatEditorOptions {
@@ -51,10 +50,6 @@ export interface ReplyChatEditorOptions {
 		readonly hint: () => string;
 	};
 	readonly scrollOptimizationSetting: string;
-	readonly alternateModel: {
-		readonly source: string;
-		readonly label: () => string;
-	};
 }
 
 export function registerReplyChatEditor(options: ReplyChatEditorOptions): void {
@@ -122,15 +117,6 @@ export class ReplyChatEditor extends EditorPane {
 						useWorkbenchModelManagement: false,
 						renderSecondaryToolbar: false, draftStorage: 'host',
 						inputLabel: this.options.inputLabel(),
-						alternateModelAction: CommandsRegistry.hasCommand(NEW_CHAT_WITH_MODEL_COMMAND) ? {
-							id: NEW_CHAT_WITH_MODEL_COMMAND,
-							label: this.options.alternateModel.label(),
-							tooltip: '', enabled: true,
-							run: () => this.commands.executeCommand(NEW_CHAT_WITH_MODEL_COMMAND, {
-								source: this.options.alternateModel.source,
-								text: model.getUnsentDraftText(),
-							}),
-						} : undefined,
 					});
 					input.element.classList.add('ash-sessions-chat-input', 'chat-composer');
 					input.composerForm.classList.add('ash-sessions-chat-input-card', 'floating-card');

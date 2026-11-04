@@ -104,6 +104,12 @@ export function selectedChatConversationId(state: ChatGPTState): string | undefi
 	return state.conversationId ?? state.conversations.find(item => item.local && (item.id === localId || item.id === `pending:${state.localConversationId}`))?.id;
 }
 
+export function canUseCodeModels(state: ChatGPTState): boolean {
+	// Existing conversations and drafts with provider-owned attachments keep their reply route.
+	return !selectedChatConversationId(state) && !state.pendingCreation && !state.uncertain
+		&& state.loading?.kind !== 'conversation' && !state.messages.length && !state.coworkTasks.length && !state.attachments.length;
+}
+
 export function canQueueChatGPTCreation(state: ChatGPTState): boolean {
 	return state.canQueue && !selectedChatConversationId(state) && !state.uncertain && !!state.draft.trim() && !state.attachments.length
 		&& (!state.explicitDraftModel || state.models.some(model => model.id === state.model));
@@ -127,8 +133,6 @@ export interface IChatGPTService {
 	setNetworkAvailable(available: boolean): void;
 	reload(): Promise<void>;
 	newChat(): void;
-	listNewChatModels(signal: AbortSignal): Promise<readonly ChatGPTModel[]>;
-	newChatWithModel(modelId: string, draftText?: string): Promise<void>;
 	select(id: string): Promise<void>;
 	loadMore(): Promise<void>;
 	rename(id: string, title: string): Promise<void>;
@@ -1148,38 +1152,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.openNewChat();
 	}
 
-	public async listNewChatModels(signal: AbortSignal): Promise<readonly ChatGPTModel[]> {
-		const request = AbortSignal.any([signal, this.management.signal, AbortSignal.timeout(15_000)]);
-		request.throwIfAborted();
-		const state = this.model.get();
-		if (state.connected && state.models.length) return state.models;
-		const catalog = await this.client.models(request);
-		request.throwIfAborted();
-		return catalog.models;
-	}
-
-	public async newChatWithModel(modelId: string, draftText?: string): Promise<void> {
-		const account = this.management.signal;
-		const models = await this.listNewChatModels(account);
-		account.throwIfAborted();
-		const model = models.find(candidate => candidate.id === modelId);
-		if (!model) throw new Error(localize('sessions.newChatModel.unavailable', 'The selected model is no longer available.'));
-		const state = this.model.get();
-		if (this.isDisposed || state.sending || state.managing || state.voice !== 'idle') {
-			throw new Error(localize('sessions.newChatModel.chatGPTBusy', 'Finish the current ChatGPT operation before opening a new ChatGPT chat.'));
-		}
-		const draft = this.drafts.get(this.newConversationId);
-		if (draftText?.trim() && ((draft?.text && draft.text !== draftText) || draft?.attachments.length)) {
-			throw new Error(localize('sessions.newChatModel.chatGPTDraftConflict', 'The new ChatGPT chat already has a draft. Open it before copying text from another service.'));
-		}
-		this.drafts.set(this.newConversationId, {
-			text: draftText?.trim() ? draftText : draft?.text ?? '', attachments: draft?.attachments ?? [],
-			selection: { model: model.id, modelPreset: model.defaultPreset },
-		});
-		this.openNewChat(models);
-	}
-
-	private openNewChat(models = this.model.get().models): void {
+	private openNewChat(): void {
+		const models = this.model.get().models;
 		this.operation?.abort();
 		this.refreshOperation?.abort();
 		this.generation++;

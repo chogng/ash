@@ -180,7 +180,6 @@ export interface ChatInputPartOptions {
 	readonly inlineEdit?: { readonly descriptionId: string; readonly initialHeight: number; readonly reportError: (error: unknown) => void; };
 	readonly renderSecondaryToolbar?: boolean;
 	/** Opens a fresh conversation through a model route supplied by the host. */
-	readonly alternateModelAction?: IAction;
 	/** Host-owned permission policy presented immediately after the mode picker. */
 	readonly primaryPermissionPicker?: {
 		readonly action: IAction;
@@ -1959,7 +1958,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			return this.modelPickerActionItem = this.instantiationService.createInstance(ModelPickerActionItem, action, {
 				configureInMenu: this.options.configureModelInMenu,
 				useWorkbenchModelManagement: this.options.useWorkbenchModelManagement,
-				alternateModelAction: this.options.alternateModelAction,
 				onDidChangePresentation: this.modelPickerPresentationChanged.event,
 				getModels: () => this.state.models,
 				canSelectModel: () => this.state.canSelectModel !== false,

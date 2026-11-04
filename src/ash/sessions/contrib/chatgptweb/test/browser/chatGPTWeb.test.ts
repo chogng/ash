@@ -1,16 +1,14 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
-import { DeferredPromise } from '../../../../../base/common/async.js';
-import { Emitter } from '../../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { observableValue, type IObservable } from '../../../../../base/common/observable.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
-import { IQuickInputService, type IQuickPickDidAcceptEvent, type IQuickPickItem, type IQuickPickSeparator } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
@@ -18,10 +16,10 @@ import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessio
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
-import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, NEW_CHAT_WITH_MODEL_COMMAND, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
+import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, OPEN_ASH_CHAT_WITH_MODEL_COMMAND, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
 import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
 import { ChatGPTWebContribution, chatGPTScrollOptimization } from '../../browser/chatGPTWeb.js';
-import { IChatGPTService, coworkTaskStatus } from '../../browser/chatGPTService.js';
+import { IChatGPTService, coworkTaskStatus, type ChatGPTState } from '../../browser/chatGPTService.js';
 import { ISessionsSearchService } from '../../../search/browser/searchService.js';
 import type { SearchResult } from '../../../search/browser/searchModel.js';
 import { ChatWorkspaceContribution } from '../../../../electron-browser/chatWorkspace.contribution.js';
@@ -138,6 +136,7 @@ suite('ChatGPT entry', () => {
 			assert.equal(entry.workspaceMode, 'chat');
 			assert.equal(entry.activityContext, ASH_CHAT_SELECTED_CONTEXT);
 			assert.equal(entry.conversationKind, 'code');
+			assert.equal(entry.newSessionCommand, 'sessions.open.new');
 			assert.equal(entry.sidebarContainerId, CHAT_WORKSPACE_NAVIGATION_ID);
 			assert.equal(entry.restoreCommand, SHOW_ASH_CHAT_COMMAND);
 		}
@@ -146,32 +145,23 @@ suite('ChatGPT entry', () => {
 	test('choosing an Ash model from ChatGPT creates a separate Ash draft with the chosen model and plain text', async () => {
 		const values = new Map<string, string>();
 		const storage = { get: (key: string) => values.get(key), store: (key: string, value: string) => { values.set(key, value); } } as unknown as IStorageService;
-		using accept = new Emitter<IQuickPickDidAcceptEvent>();
-		using hide = new Emitter<void>();
-		const loaded = new DeferredPromise<readonly (IQuickPickItem | IQuickPickSeparator)[]>();
-		let pickersOpened = 0;
-		let modelItems: readonly (IQuickPickItem | IQuickPickSeparator)[] = [];
-		const picker = {
-			activeItems: [], selectedItems: [] as IQuickPickItem[], show() { pickersOpened++; }, dispose() { }, [Symbol.dispose]() { },
-			onDidAccept: accept.event, onDidHide: hide.event,
-			get items() { return modelItems; },
-			set items(items: readonly (IQuickPickItem | IQuickPickSeparator)[]) {
-				modelItems = items;
-				void loaded.complete(items);
-			},
-		};
+		let mode = 'code';
+		const state = observableValue<ChatGPTState>('draft', {
+			localConversationId: 'chatgpt-draft', draft: 'Unsent prompt', voice: 'idle',
+			conversations: [], messages: [], coworkTasks: [], attachments: [],
+		} as unknown as ChatGPTState);
 		const model = { provider: 'fixture-provider', model: 'fixture-model' };
 		const calls: unknown[][] = [];
 		using services = new InstantiationService(new ServiceCollection(
 			[IConfigurationService, { getValue: () => false } as unknown as IConfigurationService],
-			[IQuickInputService, { createQuickPick: () => picker } as unknown as IQuickInputService],
+			[IContextKeyService, { getValue: (key: string) => key === 'sessions.workspaceMode' ? mode : key === 'sessions.activity.chatgptSelected' } as unknown as IContextKeyService],
 			[ISessionProviderScopeService, {
 				getProviderScope: (provider: string) => {
 					assert.equal(provider, LOCAL_AGENT_HOST_PROVIDER_ID);
 					return { assertCurrent() { }, services: { models: { listModels: async () => [{ model, displayName: 'Fixture model', longContext: null }] } } };
 				}
 			} as unknown as ISessionProviderScopeService],
-			[IChatGPTService, {} as IChatGPTService],
+			[IChatGPTService, { state, newDraftRevision: 1 } as unknown as IChatGPTService],
 			[ICommandService, { executeCommand: async (id: string) => { calls.push([id]); } } as ICommandService],
 			[ISessionsManagementService, {
 				createUntitledSession: (_title, _workspace, provider, activate) => { calls.push(['create', provider, activate]); return { untitledSessionId: 'new' }; },
@@ -181,22 +171,23 @@ suite('ChatGPT entry', () => {
 			[IStorageService, storage],
 			[ILayoutService, { focus: () => { calls.push(['focus']); } } as ILayoutService],
 		));
-		const opening = Promise.resolve(services.invokeFunction(CommandsRegistry.getCommand(NEW_CHAT_WITH_MODEL_COMMAND)!, { source: 'chatgpt', text: 'Unsent prompt' }));
-		try {
-			const items = await Promise.race([loaded.p, opening.then(() => { throw new Error('Model picker closed before loading'); })]);
-			const choice = items.find((item): item is IQuickPickItem => !('type' in item));
-			assert.ok(choice);
-			picker.selectedItems = [choice];
-			accept.fire({ inBackground: false });
-			await opening;
-		} finally { hide.fire(); }
+		const command = CommandsRegistry.getCommand(OPEN_ASH_CHAT_WITH_MODEL_COMMAND)!;
+		await services.invokeFunction(command, model);
+		assert.deepEqual(calls, []);
+
+		mode = 'chat';
+		await assert.rejects(async () => services.invokeFunction(command, { provider: 'chatgpt', model: 'fixture' }), /no longer available/);
+		assert.deepEqual(calls, []);
+
+		const draft = state.get();
+		state.set({ ...draft, conversationId: 'existing' }, undefined);
+		await services.invokeFunction(command, model);
+		assert.deepEqual(calls, []);
+		state.set(draft, undefined);
+
+		await services.invokeFunction(command, model);
 		assert.deepEqual(calls, [['create', LOCAL_AGENT_HOST_PROVIDER_ID, false], ['model', 'new', model], [SHOW_ASH_CHAT_COMMAND], ['open', 'new'], ['focus']]);
 		assert.deepEqual(readNewChatDraftState(storage, 'untitled:new', chatInputStatePersistence), { text: 'Unsent prompt', mode: 'agent', contexts: [] });
-		calls.length = 0;
-		await services.invokeFunction(CommandsRegistry.getCommand(NEW_CHAT_WITH_MODEL_COMMAND)!, { source: 'chatgpt', model, text: 'Direct selection' });
-		assert.deepEqual(calls, [['create', LOCAL_AGENT_HOST_PROVIDER_ID, false], ['model', 'new', model], [SHOW_ASH_CHAT_COMMAND], ['open', 'new'], ['focus']]);
-		assert.deepEqual(readNewChatDraftState(storage, 'untitled:new', chatInputStatePersistence), { text: 'Direct selection', mode: 'agent', contexts: [] });
-		assert.equal(pickersOpened, 1);
 	});
 
 	test('unified search projects the live ChatGPT catalogue and opens the exact conversation after navigation', async () => {

@@ -9,7 +9,7 @@
 
 ## 通过模型选择会话路径
 
-**New Chat with Model…** 按来源展示 Ash 和 ChatGPT 的模型目录。每个选项携带自己的来源和模型标识。选择 Ash 模型会在 Chat 模式打开一个原生会话草稿。选择 ChatGPT 模型会通过 Web 适配器打开一个 ChatGPT 草稿。双方的模型菜单也可以进入另一条路径的选型入口。现有会话内选择模型时，模型选择仍归该会话的后端。跨后端选择会新建草稿，现有会话的历史和附件留在原会话。相关路由见 [`newChatModelAction.ts`](../../electron-browser/actions/newChatModelAction.ts)。
+Chat 模式的「新建」打开一个可选 ChatGPT 或 Code 模型的草稿。在无附件的新草稿里直接选 Code 模型，会在 Chat 模式打开一个 Ash 草稿并带上未发送的文字。已有会话的模型选择归各自的后端。Code 模式只使用原生模型目录。相关路由见 [`newChatModelAction.ts`](../../electron-browser/actions/newChatModelAction.ts)。
 
 ## 适配器与共享界面的边界
 

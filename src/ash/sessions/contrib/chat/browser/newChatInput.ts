@@ -28,8 +28,8 @@ import { IChatInputNotificationService } from '../../../../workbench/contrib/cha
 import { IVoiceModeOnboardingService } from '../../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { IChatAttachmentResolveService } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
-import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
-import { NEW_CHAT_WITH_MODEL_COMMAND, SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
 import { IApprovalEnvironmentService } from '../../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../../../workbench/contrib/chat/common/chat.js';
@@ -83,13 +83,6 @@ export class NewChatInputWidget extends ChatInputPart {
 			}),
 		}, [], {
 			layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', configureModelInMenu: true, renderSecondaryToolbar: false, draftStorage: 'host',
-			alternateModelAction: CommandsRegistry.hasCommand(NEW_CHAT_WITH_MODEL_COMMAND) ? {
-				id: NEW_CHAT_WITH_MODEL_COMMAND,
-				label: localize('sessions.newChatModel.useChatGPT', 'New ChatGPT Chat with Model…'),
-				tooltip: '',
-				enabled: true,
-				run: () => commands.executeCommand(NEW_CHAT_WITH_MODEL_COMMAND, { source: 'ash', text: this.untitledPromptText() }),
-			} : undefined,
 			attachGitHubReference: (kind, signal) => attachSessionGitHubReference(kind, model, github, quickInput, signal),
 			primaryPermissionPicker: {
 				action: {
@@ -146,15 +139,6 @@ export class NewChatInputWidget extends ChatInputPart {
 		this.renderStatus();
 	}
 
-	private untitledPromptText(): string | undefined {
-		if (!this.model.untitledSessionId || this.model.sessionId || this.model.isNestedDraft || this.model.items.length) return undefined;
-		const { text: draft, contexts } = this.snapshotDraftReferences();
-		let text = draft;
-		const references = contexts.flatMap(context => context.reference ? [context.reference] : []).sort((a, b) => b.start - a.start);
-		for (const { start, end } of references) text = text.slice(0, start) + text.slice(end);
-		return text;
-	}
-
 	public async persistDraftForHostChange(): Promise<void> {
 		const id = this.model.untitledSessionId;
 		const snapshot = await this.captureDraft();
@@ -163,10 +147,7 @@ export class NewChatInputWidget extends ChatInputPart {
 	}
 
 	protected override getAccessibilityHelpContent(): string {
-		return super.getAccessibilityHelpContent() + '\n' + getSessionsChatAccessibilityHelp()
-			+ (CommandsRegistry.hasCommand(NEW_CHAT_WITH_MODEL_COMMAND)
-				? '\n' + localize('sessions.newChatModel.ashHelp', 'The model picker offers New ChatGPT Chat with Model to open a separate conversation. A new unsent draft can copy its text. Attachments and conversation history stay with their original chat.')
-				: '');
+		return super.getAccessibilityHelpContent() + '\n' + getSessionsChatAccessibilityHelp();
 	}
 
 	/** Composition slots owned by this input; the Sessions widget places surrounding surfaces. */

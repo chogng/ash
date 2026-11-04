@@ -10,7 +10,6 @@ export interface IModelPickerDelegate {
 	canSelectModel?(): boolean;
 	readonly configureInMenu?: boolean;
 	readonly useWorkbenchModelManagement?: boolean;
-	readonly alternateModelAction?: IAction;
 	readonly onDidChangePresentation: Event<void>;
 	getModels(): readonly ModelCatalogEntry[];
 	getSelectedModel(): ModelRef | undefined;

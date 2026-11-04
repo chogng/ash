@@ -950,7 +950,7 @@ suite('ChatGPT shared service', () => {
 		chat.newChat(); assert.equal(chat.state.get().draft, 'new draft');
 		await chat.select('two'); assert.equal(chat.state.get().draft, 'two draft');
 	});
-	test('a model-routed chat copies only new draft text and keeps task-like follow-ups on ChatGPT', async () => {
+	test('a new ChatGPT draft retains its chosen model for task-like prompts and follow-ups', async () => {
 		const requests: { model: string; conversation?: string; text: string; }[] = [];
 		const instantiation = {
 			createInstance: () => { throw new Error('An explicit ChatGPT model must not start a Cowork task'); },
@@ -974,12 +974,13 @@ suite('ChatGPT shared service', () => {
 		await chat.reload();
 		await chat.select('one');
 		chat.setDraft('Existing conversation draft');
-		await chat.newChatWithModel('chosen', '请把访谈整理成一份报告');
+		chat.newChat();
+		chat.setModel('chosen');
+		chat.setDraft('请把访谈整理成一份报告');
 		assert.equal(selectedChatConversationId(chat.state.get()), undefined);
 		assert.equal(chat.state.get().model, 'chosen');
 		assert.deepEqual(chat.state.get().messages, []);
 		assert.deepEqual(chat.state.get().attachments, []);
-		await assert.rejects(chat.newChatWithModel('model', 'Another draft'), /already has a draft/);
 		await chat.select('one');
 		assert.equal(chat.state.get().model, 'model');
 		chat.newChat();
