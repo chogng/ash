@@ -82,13 +82,21 @@
 	outline-offset: -1px;
 }
 
-.ash-sessions-list-items {
-	display: flex;
-	min-height: 0;
+.ash-sessions-list-items.ash-list-scrollable {
+	--ash-list-row-inset-end: max(
+		var(--ash-spacing-size120),
+		var(--ash-scrollbar-vertical-size)
+	);
 	flex: 1 1 auto;
-	flex-direction: column;
-	gap: var(--ash-spacing-size40);
-	overflow: auto;
+	margin-inline-end: calc(-1 * var(--ash-spacing-size120));
+}
+
+.ash-sessions-list-items.ash-list-scrollable
+	> .ash-scrollbar-track-vertical
+	> .ash-scrollbar-thumb {
+	/* Inset the paint while keeping the full thumb available for dragging. */
+	border: var(--ash-strokeThickness) solid transparent;
+	background-clip: padding-box;
 }
 
 .ash-sessions-list-item.has-management {

@@ -12,7 +12,3 @@
 	flex: 0 0 auto;
 	padding-inline: 0;
 }
-
-.ash-sessions-navigation-view.embedded .ash-sessions-list-items {
-	overflow: visible;
-}

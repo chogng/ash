@@ -219,8 +219,10 @@ test('SessionsList updates passive status without changing row identity or selec
 	using list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), undefined, hoverService);
 	const button = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 	button.focus();
-	const items = list.domNode.querySelector<HTMLDivElement>('.ash-sessions-list-items')!;
-	items.scrollTop = 37;
+	const viewport = list.domNode.querySelector<HTMLDivElement>('.ash-sessions-list-items > .ash-scrollbar-viewport')!;
+	Object.defineProperties(viewport, { clientHeight: { value: 80 }, scrollHeight: { value: 160 } });
+	viewport.scrollTop = 37;
+	viewport.dispatchEvent(new dom.window.Event('scroll'));
 	assert.equal(button.querySelector('.ash-sessions-list-management')?.textContent, 'Working');
 	assert.equal(button.hasAttribute('title'), false);
 	assert.equal((summaries.get(button) as HTMLElement).children[1].textContent, 'Working');
@@ -234,7 +236,7 @@ test('SessionsList updates passive status without changing row identity or selec
 	assert.equal(button.querySelector('[data-ash-icon-id="git-pull-request-error"]')?.getAttribute('aria-hidden'), 'true');
 	assert.equal(button.getAttribute('aria-current'), 'false');
 	assert.equal(dom.window.document.activeElement, button);
-	assert.equal(items.scrollTop, 37);
+	assert.equal(list.getViewState().top, 37);
 	assert.deepEqual(opened, []);
 	const more = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-actions button')!;
 	assert.equal(more.getAttribute('aria-haspopup'), 'menu');

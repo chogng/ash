@@ -134,10 +134,11 @@ export class SessionsList extends DomWidget {
 		const heading = h(ownerDocument, 'h2', { className: 'ash-sessions-list-title' });
 		heading.textContent = title;
 		header.append(heading);
-		this.list = h(ownerDocument, 'div');
-		this.list.className = 'ash-sessions-list-items';
 		const config = configuration ?? this._register(new InMemoryConfigurationService());
-		this.tree = this._register(new SessionsListTree(this.list, title, config));
+		// Embedded Sessions shares Chat's viewport with the conversation history.
+		this.tree = this._register(new SessionsListTree(this.domNode, title, config, this.entry ? 'external' : 'managed'));
+		this.list = this.tree.domNode;
+		this.list.classList.add('ash-sessions-list-items');
 		this._register(this.tree.onDidChangeCollapseState(({ element, collapsed }) => {
 			const key = element.dataset.section;
 			if (key === undefined || this.search.hasQuery || this.syncingCollapse) return;
@@ -317,7 +318,7 @@ export class SessionsList extends DomWidget {
 		const item = [...this.items].find(([, item]) => item.domNode.contains(active));
 		const section = [...this.sections].find(([, section]) => section.button === active);
 		const navigation = [...this.navigationButtons].find(([, button]) => button.domNode === active);
-		return { top: this.list.scrollTop, focus: navigation ? `navigation:${navigation[0]}` : section ? `section:${section[0]}` : item?.[0] };
+		return { top: this.tree.scrollTop, focus: navigation ? `navigation:${navigation[0]}` : section ? `section:${section[0]}` : item?.[0] };
 	}
 
 	public closeIconPickers(): void {
@@ -326,7 +327,7 @@ export class SessionsList extends DomWidget {
 
 	public restoreViewState(state: ReturnType<SessionsList['getViewState']>): void {
 		this.render();
-		this.list.scrollTop = state.top;
+		this.tree.scrollTop = state.top;
 		if (state.focus?.startsWith('navigation:')) this.navigationButtons.get(state.focus.slice('navigation:'.length))?.focus();
 		else if (state.focus) {
 			let row = state.focus.startsWith('section:')
@@ -548,7 +549,7 @@ export class SessionsList extends DomWidget {
 			getAnchor: () => anchor,
 			getActions: () => [...this.orderActions(item.domNode, 'row'), ...sessionActions, ...this.automationVisibilityActions(selection), ...createSessionItemActions(selection, this.commands, this.listModel, this.notifications,
 				() => this.commands.executeCommand('sessions.openInNewWindow', selection),
-				sessionId => this.restoreViewState({ top: this.list.scrollTop, focus: `session:${sessionId}` })).map(action => action.id !== 'agentSession.archive' ? action : {
+				sessionId => this.restoreViewState({ top: this.tree.scrollTop, focus: `session:${sessionId}` })).map(action => action.id !== 'agentSession.archive' ? action : {
 					...action,
 					run: () => this.feedback.archive(item.domNode, () => action.run()),
 				})],
@@ -824,7 +825,7 @@ export class SessionsList extends DomWidget {
 		}
 		const showEmpty = orderedRecent.length === 0 && pinned.length === 0 && chatGroups.length === 0;
 		const loading = this.sessionService.state === 'loading';
-		this.list.setAttribute('aria-busy', String(loading || this.projectsLoading));
+		this.tree.element.setAttribute('aria-busy', String(loading || this.projectsLoading));
 		const emptyStatus = loading ? localize('sessions.list.loading', 'Loading sessions…') : this.sessionService.error
 			?? (this.search.hasQuery ? localize({ bundle: 'ash.sessions', key: 'sessions.list.searchEmpty' }, 'No matching sessions.') : undefined);
 		if (showEmpty && emptyStatus) { this.empty.textContent = emptyStatus; }
@@ -1155,7 +1156,7 @@ export class SessionListRowRenderer extends Disposable {
 
 /** Shared tree renderer for the retained controls supplied by each session sidebar. */
 export class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
-	constructor(container: HTMLElement, title: string, configurationService: IConfigurationService) {
+	constructor(container: HTMLElement, title: string, configurationService: IConfigurationService, scrolling: 'external' | 'managed' = 'external') {
 		super(container, {
 			configurationService,
 			ariaLabel: title,
@@ -1165,7 +1166,7 @@ export class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
 					return title?.getAttribute('aria-label') ?? title?.textContent ?? element.textContent ?? '';
 				},
 			},
-			scrolling: 'external',
+			scrolling,
 			expandOnDoubleClick: false,
 			indent: 0,
 			indentGuides: 'none',
