@@ -12,5 +12,5 @@
 }
 
 .ash-session-status-icon-progress {
-	color: var(--ash-textLink-foreground);
+	color: var(--ash-accent-foreground);
 }

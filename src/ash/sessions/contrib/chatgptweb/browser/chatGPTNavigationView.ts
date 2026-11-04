@@ -270,6 +270,9 @@ export class ChatGPTNavigationView extends ViewPane {
 		this.bodySizeUpdate = this._register(new AnimationFrameScheduler(getWindow(this.element), () => this.updateBodySize()));
 		this._register(observeResize(this.element, () => this.bodySizeUpdate.schedule()));
 		this.element.classList.add('ash-chatgpt-navigation-group');
+		// The split allocation includes this gap, but the pane's clipping box
+		// ends before it, including while the closing rows are still painted.
+		this.element.style.marginBlockEnd = `${conversationGroupGap}px`;
 		this.element.dataset.group = key;
 		this.element.setAttribute('role', 'group');
 		this.element.setAttribute('aria-label', options.title);

@@ -121,7 +121,7 @@ export class ViewPaneContainer extends Composite {
 			this.scrollable = this._register(new ScrollableElement(element, { direction: 'vertical', vertical: 'auto', tabIndex: -1 }));
 			this.scrollable.element.classList.add('ash-view-pane-scrollable');
 		}
-		this.paneView = this._register(new PaneView(this.scrollable?.contentElement ?? element));
+		this.paneView = this._register(new PaneView(this.scrollable?.contentElement ?? element, { contentSized: this.contentSized }));
 		this.model = options.model;
 		this.localizationService = options.localizationService;
 		this.onDidFailCreateView = options.onDidFailCreateView ??
@@ -153,9 +153,7 @@ export class ViewPaneContainer extends Composite {
 	layout(dimension: IDimension): void {
 		this.dimension = dimension;
 		if (this.contentSized) {
-			const height = this.mountedPanes.reduce((total, pane) => total + pane.minimumSize, 0);
-			this.paneView.element.style.height = `${height}px`;
-			this.paneView.layout(height, this.paneView.element.clientWidth || dimension.width);
+			this.paneView.layout(dimension.height, this.paneView.element.clientWidth || dimension.width);
 			this.scrollable!.layout();
 		} else { this.paneView.layout(dimension.height, dimension.width); }
 		this.didLayout = true;
@@ -278,7 +276,6 @@ export class ViewPaneContainer extends Composite {
 				);
 				this.viewsAdded.fire([pane]);
 				item.listenToLayout(() => {
-					if (this.contentSized && this.dimension && !this.syncing) this.layout(this.dimension);
 					this.saveState();
 					this.notifyConstraintsChanged();
 				}, this.contentSized);

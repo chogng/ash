@@ -1,5 +1,5 @@
 import { shouldRunCowork } from '../../../browser/chatTaskRouting.js';
-import { ChatTimelineStorage, type ChatTimelineTask } from '../../../browser/chatTimelineStorage.js';
+import { ChatTimelineStorage, type ChatTimeline, type ChatTimelineTask } from '../../../browser/chatTimelineStorage.js';
 import { ChatCoworkTasks } from '../../cowork/browser/chatCoworkTasks.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { Thread } from '../../../../workbench/services/chat/common/chatService.js';
@@ -23,6 +23,8 @@ import type { ChatGPTVoiceSession } from './chatGPTVoiceSession.js';
 export const chatGPTNavigationContainerId = 'sessions.chatgpt.navigation';
 const selectedConversationKey = 'sessions.chatgpt.conversation';
 const catalogKey = 'sessions.chatgpt.catalog.v1';
+const historyFreshnessMs = 60_000;
+type HistoryValidation = Pick<ChatGPTHistory, 'parentId' | 'model' | 'thinkingEffort'> & { readonly validatedAt: number; };
 
 function isMissingConversation(error: unknown): boolean {
 	return error instanceof ChatGPTRequestError && (error.status === 404 || error.status === 410);
@@ -172,6 +174,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private voiceCreatedConversation = false;
 	private voiceStopping: Promise<void> | undefined;
 	private operation: AbortController | undefined;
+	private conversationRead: { readonly id: string; readonly generation: number; readonly promise: Promise<void>; } | undefined;
+	// Disk snapshots can paint on startup. Only this window's successful reads
+	// establish which continuation nodes are still fresh enough to reuse.
+	private readonly historyValidations = new Map<string, HistoryValidation>();
 	private refreshOperation: AbortController | undefined;
 	private outbox: ChatGPTOutbox | undefined;
 	private syncingOutbox: Promise<void> | undefined;
@@ -213,6 +219,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		for (const upload of this.uploads.values()) { upload.abort(); }
 		this.uploads.clear(); this.attachmentFiles.clear(); this.drafts.clear();
 		this.localIdsByRemoteId.clear();
+		this.historyValidations.clear();
 		this.taskLaunch.clear();
 		this.taskWatchers.clear();
 		this.newConversationId = crypto.randomUUID();
@@ -399,6 +406,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			this.drafts.delete(localId);
 		}
 		this.localIdsByRemoteId.delete(id);
+		this.historyValidations.delete(id);
 		this.forgetConversationIcon(id);
 		this.remoteTimeline?.remove(id);
 		this.timeline.remove(id);
@@ -457,6 +465,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (this.isDisposed || !state.connected || !state.networkAvailable || state.pendingCreation || state.busy || state.sending || state.uncertain || state.voice !== 'idle' || state.draft.trim() || state.attachments.length) { return; }
 		if (!window.navigator.userActivation?.isActive) { return; }
 		this.refreshOperation?.abort();
+		if (state.conversationId) this.historyValidations.delete(state.conversationId);
 		const controller = new AbortController();
 		this.voiceController = controller;
 		this.voiceMessageId = undefined;
@@ -603,9 +612,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		].filter(Boolean).join('\n'));
 		return [state.title, pendingCreationStatus(state), ...messages, ...cowork, ...state.voiceTranscript.map(item => `${item.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT'}: ${item.text}`), state.error].filter(Boolean).join('\n\n');
 	}
-	private restoreCachedTimeline(remoteId: string): void {
-		const timeline = this.remoteTimeline ?? (this.model.get().connected ? this.timeline : undefined);
-		const saved = timeline?.read(remoteId);
+	private restoreCachedTimeline(remoteId: string, saved: ChatTimeline | undefined, validation?: HistoryValidation): void {
 		if (!saved?.history) return;
 		const { title, parentId, messages } = saved.history;
 		this.bindConversation(remoteId, saved.localId);
@@ -614,7 +621,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			conversationId: remoteId, localConversationId: saved.localId,
 			title: this.model.get().conversations.find(item => item.id === remoteId)?.title ?? title,
 			parentId, messages, coworkTasks: saved.tasks,
-			draft: draft?.text ?? '', attachments: draft?.attachments ?? [], uncertain: true, stopped: false,
+			draft: draft?.text ?? '', attachments: draft?.attachments ?? [], uncertain: !validation, stopped: false,
+			...(validation ? this.historyModel(validation) : {}),
 		});
 		this.rememberConversation(remoteId);
 		this.watchCoworkTasks();
@@ -626,6 +634,17 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const { title, parentId, messages } = history;
 		const timeline = this.timelineFor(history.id);
 		timeline.write(history.id, { localId, tasks: tasks ?? timeline.read(history.id)?.tasks ?? [], history: { title, parentId, messages } });
+	}
+
+	private markHistoryValidated({ id, parentId, model, thinkingEffort }: ChatGPTHistory): void {
+		this.historyValidations.set(id, { parentId, model, thinkingEffort, validatedAt: Date.now() });
+	}
+
+	private freshHistory(id: string, parentId: string): HistoryValidation | undefined {
+		const validation = this.historyValidations.get(id);
+		if (!validation || validation.parentId !== parentId) return undefined;
+		const age = Date.now() - validation.validatedAt;
+		return age >= 0 && age < historyFreshnessMs ? validation : undefined;
 	}
 
 	private watchCoworkTasks(): void {
@@ -887,11 +906,13 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		}
 		const selected = this.model.get().localConversationId === entry.localId;
 		this.bindConversation(history.id, entry.localId);
-		this.persistHistory(history);
 		outbox.removeCreation(entry.localId);
 		if (selected) {
 			this.restoreHistory(history, true, this.model.get().busy);
 			this.rememberConversation(history.id);
+		} else {
+			this.persistHistory(history);
+			this.markHistoryValidated(history);
 		}
 		this.rememberHistory(history);
 	}
@@ -934,6 +955,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	}
 
 	private restoreCatalog(scope: string): void {
+		this.historyValidations.clear();
 		this.cacheScope = scope;
 		this.remoteTimeline = new ChatTimelineStorage(this.storage, `chatgpt-web:${scope}`);
 		this.outbox = new ChatGPTOutbox(this.storage, scope);
@@ -1002,11 +1024,16 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.rememberHistory({ id: remoteId, title: local.title ?? this.model.get().title });
 	}
 
-	private beginOperation(): { signal: AbortSignal; generation: number; } {
+	private cancelReads(): void {
 		this.refreshOperation?.abort();
 		this.operation?.abort();
+		this.generation++;
+	}
+
+	private beginOperation(): { signal: AbortSignal; generation: number; } {
+		this.cancelReads();
 		this.operation = new AbortController();
-		return { signal: AbortSignal.any([this.operation.signal, AbortSignal.timeout(30_000)]), generation: ++this.generation };
+		return { signal: AbortSignal.any([this.operation.signal, AbortSignal.timeout(30_000)]), generation: this.generation };
 	}
 
 	private async loadCatalog(background?: AbortController): Promise<void> {
@@ -1027,7 +1054,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 					const entry = this.outbox?.creation(retained.slice('pending:'.length));
 					if (entry && !entry.cancelled) { this.restorePendingCreation(entry); }
 				} else if (retained && !retained.startsWith('local:') && this.model.get().conversations.some(item => item.id === retained)) {
-					this.restoreCachedTimeline(retained);
+					this.restoreCachedTimeline(retained, this.remoteTimeline?.read(retained));
 				}
 			}
 			if (!this.model.get().networkAvailable) {
@@ -1114,6 +1141,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				if (!background || state.uncertain || state.parentId !== value.parentId || state.title !== value.title || !equals(state.messages, value.messages)) {
 					this.restoreHistory(value, !!background);
 					this.rememberConversation(value.id);
+				} else {
+					this.markHistoryValidated(value);
 				}
 				if (listError && !items.has(value.id) && !value.archived) { this.rememberHistory(value); }
 			} else if (history?.status === 'rejected' && !background) {
@@ -1161,15 +1190,15 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 
 	public async select(id: string): Promise<void> {
 		if (this.isDisposed || this.model.get().sending || this.model.get().managing || this.outbox?.isDeleted(id)) { return; }
+		const account = this.management;
 		await this.endVoice(true);
+		const current = this.model.get();
+		if (this.isDisposed || account !== this.management || current.sending || current.managing || this.outbox?.isDeleted(id)) { return; }
 		if (id.startsWith('pending:')) {
 			const entry = this.outbox?.creation(id.slice('pending:'.length));
 			if (entry && !entry.cancelled) {
-				const state = this.model.get();
-				if (state.connected || state.loading?.kind !== 'history') {
-					this.operation?.abort();
-					this.refreshOperation?.abort();
-					this.generation++;
+				if (current.connected || current.loading?.kind !== 'history') {
+					this.cancelReads();
 					this.update({ busy: false, loading: undefined });
 				}
 				this.restorePendingCreation(entry);
@@ -1177,23 +1206,49 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			return;
 		}
 		if (id.startsWith('local:')) {
-			this.operation?.abort();
-			this.refreshOperation?.abort();
-			this.generation++;
+			this.cancelReads();
 			this.restoreLocalConversation(id);
 			return;
 		}
-		const current = this.model.get();
-		if (current.conversationId !== id && current.conversations.some(item => item.id === id)) {
-			this.restoreCachedTimeline(id);
-		}
-		if (!current.connected && current.loading?.kind === 'history' && current.conversations.some(item => item.id === id)) {
+		const pending = this.conversationRead;
+		if (pending?.id === id && pending.generation === this.generation) { return pending.promise; }
+
+		const listed = current.conversations.some(item => item.id === id);
+		const alreadySelected = current.conversationId === id;
+		if (alreadySelected && current.connected && !current.uncertain && current.loading?.kind !== 'conversation' && this.freshHistory(id, current.parentId)) return;
+
+		const timeline = this.remoteTimeline ?? (current.connected ? this.timeline : undefined);
+		const saved = listed || alreadySelected ? timeline?.read(id) : undefined;
+		if (!current.connected && current.loading?.kind === 'history' && listed) {
 			// Keep the initial refresh running when opening an already listed chat.
+			if (!alreadySelected) this.restoreCachedTimeline(id, saved);
 			this.rememberConversation(id);
 			return;
 		}
+
+		const validation = saved?.history && current.connected && (!alreadySelected || !current.uncertain)
+			? this.freshHistory(id, saved.history.parentId) : undefined;
+		if (saved?.history && (validation || !current.networkAvailable)) {
+			this.cancelReads();
+			if (!alreadySelected) this.restoreCachedTimeline(id, saved, validation);
+			this.update({ busy: false, loading: undefined, error: '', uncertain: !validation });
+			return;
+		}
+
+		if (!alreadySelected) this.restoreCachedTimeline(id, saved);
 		const { signal, generation } = this.beginOperation();
-		this.update({ busy: true, loading: { kind: 'conversation', id }, error: '' });
+		const promise = this.validateConversation(id, signal, generation);
+		const read = this.conversationRead = { id, generation, promise };
+		try { await promise; }
+		finally { if (this.conversationRead === read) this.conversationRead = undefined; }
+	}
+
+	private async validateConversation(id: string, signal: AbortSignal, generation: number): Promise<void> {
+		const state = this.model.get();
+		this.update({
+			busy: true, loading: { kind: 'conversation', id }, error: '',
+			uncertain: state.conversationId === id || state.uncertain,
+		});
 		try {
 			const history = await this.client.history(id, signal);
 			if (generation !== this.generation) { return; }
@@ -1221,18 +1276,24 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const sameConversation = state.localConversationId === localId && (state.conversationId === history.id || !state.conversationId);
 		this.bindConversation(history.id, localId);
 		this.persistHistory(history, saved?.tasks);
+		this.markHistoryValidated(history);
 		if (legacy) { this.timeline.remove(history.id); }
-		const selected = state.models.find(model => history.model !== undefined && model.modelIds.includes(history.model)) ?? state.models.find(model => model.id === state.model);
-		const preset = selected?.presets.find(preset => preset.model === history.model && preset.thinkingEffort === history.thinkingEffort)
-			?? selected?.presets.find(preset => preset.model === history.model && preset.thinkingEffort === undefined)
-			?? selected?.presets.find(preset => preset.model === history.model);
 		this.update({
 			coworkTasks: sameConversation ? state.coworkTasks : saved?.tasks ?? [], localConversationId: localId, draft: this.drafts.get(localId)?.text ?? '', attachments: this.drafts.get(localId)?.attachments ?? [], conversationId: history.id, title: history.title, messages: history.messages, parentId: history.parentId,
-			...(!preserveModel ? { model: selected?.id ?? state.model, modelPreset: preset?.id ?? this.resolveModelPreset(selected, state.modelPreset) } : {}),
+			...(!preserveModel ? this.historyModel(history) : {}),
 			...(!preserveLoading ? { busy: false, loading: undefined } : {}),
 			uncertain: false, stopped: false,
 		});
 		if (!sameConversation) { this.watchCoworkTasks(); }
+	}
+
+	private historyModel(history: Pick<ChatGPTHistory, 'model' | 'thinkingEffort'>): Pick<ChatGPTState, 'model' | 'modelPreset'> {
+		const state = this.model.get();
+		const selected = state.models.find(model => history.model !== undefined && model.modelIds.includes(history.model)) ?? state.models.find(model => model.id === state.model);
+		const preset = selected?.presets.find(preset => preset.model === history.model && preset.thinkingEffort === history.thinkingEffort)
+			?? selected?.presets.find(preset => preset.model === history.model && preset.thinkingEffort === undefined)
+			?? selected?.presets.find(preset => preset.model === history.model);
+		return { model: selected?.id ?? state.model, modelPreset: preset?.id ?? this.resolveModelPreset(selected, state.modelPreset) };
 	}
 
 	/** An accepted turn already supplies its canonical title and ID; do not refetch every recent chat. */
@@ -1298,6 +1359,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		} : undefined;
 		if (creation && (!state.connected || !state.networkAvailable)) { await this.queueCreation(creation); return; }
 		if (!preset || !state.connected || !state.networkAvailable || state.uncertain || (!text && !state.attachments.length) || state.attachments.some(attachment => attachment.status !== 'ready') || !state.model) { return; }
+		if (state.conversationId) this.historyValidations.delete(state.conversationId);
 		const controller = this.stream = new AbortController();
 		const messageId = creation?.messageId ?? crypto.randomUUID();
 		const draftKey = this.draftKey();
@@ -1341,6 +1403,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 					const history = await this.client.history(currentId, signal);
 					if (this.stream !== controller || controller.signal.aborted) { return; }
 					this.persistHistory(history);
+					this.markHistoryValidated(history);
 					this.update({ title: history.title, parentId: history.parentId, messages: history.messages });
 					this.rememberHistory(history);
 				} catch (error) { if (!controller.signal.aborted) { this.update({ error: this.errorText(error) }); } }

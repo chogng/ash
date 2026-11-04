@@ -294,7 +294,8 @@ suite('chatgptweb browser component', () => {
 				await conversation.click();
 				await expect(editor.locator('.ash-chatgpt-messages')).toHaveAttribute('aria-busy', 'true');
 				await expect(navigation.locator('.ash-chatgpt-navigation-list')).toHaveAttribute('aria-busy', 'false');
-				await expect(conversation).toBeEnabled();
+				// The row's accessible name includes its status during the read.
+				await expect(navigation.locator('button[data-conversation="fixture-chat"]')).toBeEnabled();
 				await expect(editor.locator('.ash-chatgpt-welcome')).toBeHidden();
 				await page.screenshot({ path: browserTests.info.outputPath(`chat-independent-loading-${locale}.png`) });
 			} finally { releaseConversation(); }
@@ -967,6 +968,8 @@ suite('chatgptweb browser component', () => {
 			await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveText(['Second project chat']);
 			await toggle(recent).focus(); await page.keyboard.press('ArrowRight');
 			await expect(toggle(recent)).toHaveAttribute('aria-expanded', 'true');
+			await page.keyboard.press('Tab');
+			await expect(recent.locator('.ash-session-row-leading button')).toBeFocused();
 			await page.keyboard.press('Tab');
 			await expect(recent.getByRole('button', { name: 'Recent chat', exact: true })).toBeFocused();
 			await toggle(first).focus(); await page.keyboard.press('Enter');

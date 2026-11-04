@@ -2,6 +2,7 @@ import type { IInstantiationService } from '../../../../../platform/instantiatio
 import type { Thread } from '../../../../../workbench/services/chat/common/chatService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import { suite, test } from 'mocha';
 import { chatGPTModelCatalog, simpleChatGPTModelCatalog } from '../../../../../../../test/fixtures/chatGPTModels.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
@@ -383,6 +384,49 @@ suite('ChatGPT shared service', () => {
 			await differentAccount.reload();
 			assert.deepEqual(differentAccount.state.get().conversations, []);
 			assert.deepEqual(differentAccount.state.get().messages, []);
+		}
+	});
+
+	test('opens the local snapshot and shares one history read after its freshness expires', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		try {
+			const entered = new DeferredPromise<void>();
+			const release = new DeferredPromise<void>();
+			let reads = 0;
+			using chat = fixture(async path => {
+				if (!path.endsWith('/conversation/one') || ++reads === 1) return response(path);
+				void entered.complete();
+				await release.p;
+				return Response.json({
+					title: 'Updated chat', current_node: 'new-reply', mapping: {
+						'new-reply': { parent: null, message: { id: 'new-reply', author: { role: 'assistant' }, content: { parts: ['Updated reply'] } } },
+					},
+				});
+			});
+			await chat.reload();
+			await chat.select('one');
+			await chat.select('two');
+			await chat.select('one');
+			assert.equal(chat.state.get().messages[0]?.text, 'one reply');
+			assert.equal(chat.state.get().uncertain, false);
+			assert.equal(reads, 1);
+
+			await chat.select('two');
+			mock.timers.tick(60_000);
+			const opening = chat.select('one');
+			await entered.p;
+			const repeated = Array.from({ length: 8 }, () => chat.select('one'));
+			assert.equal(chat.state.get().conversationId, 'one');
+			assert.equal(chat.state.get().messages[0]?.text, 'one reply');
+			assert.equal(chat.state.get().uncertain, true);
+			await release.complete();
+			await Promise.all([opening, ...repeated]);
+			assert.equal(chat.state.get().messages[0]?.text, 'Updated reply');
+			assert.equal(chat.state.get().uncertain, false);
+			await chat.select('one');
+			assert.equal(reads, 2);
+		} finally {
+			mock.timers.reset();
 		}
 	});
 
