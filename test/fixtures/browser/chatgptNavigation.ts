@@ -21,8 +21,10 @@ import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.j
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { ChatGPTService, IChatGPTService } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.js';
-import { ChatGPTNavigationViewPaneContainer } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTNavigationView.js';
-import { ChatGPTEditorPane } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTEditor.js';
+import { ChatGPTNavigationSource } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTNavigationView.js';
+import { ChatNavigationViewPaneContainer } from '../../../src/ash/sessions/contrib/sessions/browser/views/chatNavigationView.js';
+import { ReplyChatEditor } from '../../../src/ash/sessions/contrib/chat/browser/replyChatEditor.js';
+import { chatGPTReplyEditor } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTWeb.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
@@ -112,7 +114,7 @@ if (parameters.has('workRow')) {
 if (parameters.has('legacyCollapsed')) {
 	for (const key of ['recent', 'projects', 'g-p-unloaded']) { storage.store(`sessions.chatgpt.navigation.collapsed.${key}`, true, StorageScope.PROFILE, StorageTarget.MACHINE); }
 }
-let widget: ChatGPTEditorPane;
+let widget: ReplyChatEditor;
 let transcript: ((text: string, final: boolean) => void) | undefined;
 let dictationStops = 0;
 const dictation: TestDictationCapture | undefined = parameters.has('dictation') ? {
@@ -221,12 +223,12 @@ window.ashChatGPTIntegration = {
 	dictationStops: () => dictationStops,
 	setVisible: visible => widget.setVisible(visible),
 };
-widget = resources.add(services.createInstance(ChatGPTEditorPane));
+widget = resources.add(services.createInstance(ReplyChatEditor, chatGPTReplyEditor));
 widget.create(document.getElementById('editor')!);
 if (parameters.has('screenReader')) { services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled); }
 widget.setVisible(true);
 const host = document.getElementById('navigation')!;
-const descriptor = { id: 'sessions.chatgpt.navigation', title: 'ChatGPT', location: ViewContainerLocation.Sidebar, ctorDescriptor: new SyncDescriptor(ChatGPTNavigationViewPaneContainer) };
+const descriptor = { id: 'sessions.chatgpt.navigation', title: 'ChatGPT', location: ViewContainerLocation.Sidebar, ctorDescriptor: new SyncDescriptor(ChatNavigationViewPaneContainer, [[new SyncDescriptor(ChatGPTNavigationSource)]]) };
 resources.add(SessionsViewRegistry.registerViewContainer(descriptor));
 const descriptors = resources.add(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
 const view = resources.add(services.createInstance(descriptor.ctorDescriptor, host, {

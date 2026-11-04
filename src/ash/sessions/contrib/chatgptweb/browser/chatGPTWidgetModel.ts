@@ -1,21 +1,21 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { canceled } from '../../../../base/common/errors.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { autorun } from '../../../../base/common/observable.js';
+import { autorun, type IReader } from '../../../../base/common/observable.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
-import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import type { IReplyChatEditorModel } from '../../chat/browser/replyChatEditor.js';
 import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { chatListItem, type IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import type { ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ChatSubmissionOptions } from '../../../../workbench/services/chat/common/chatService.js';
-import { decodeChatGPTReply } from './chatGPTRichContent.js';
+import { decodeChatGPTReply } from '../../chat/browser/chatGPTRichContent.js';
 import type { ChatReplyMessage } from '../../../common/chatReplyBackend.js';
-import { canQueueChatGPTCreation, coworkTaskStatus, IChatGPTService, isCoworkSubmission, pendingCreationStatus, type ChatGPTState } from './chatGPTService.js';
+import { canQueueChatGPTCreation, coworkTaskStatus, IChatGPTService, isCoworkSubmission, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from './chatGPTService.js';
 
 /** Projects the provider's one conversation record into the existing Chat widget. */
-export class ChatGPTWidgetModel extends Disposable implements IChatWidgetModel {
+export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorModel {
 	private readonly changed = this._register(new Emitter<void>());
 	private readonly composerChanged = this._register(new Emitter<void>());
 	readonly onDidChange = this.changed.event;
@@ -66,14 +66,27 @@ export class ChatGPTWidgetModel extends Disposable implements IChatWidgetModel {
 	get untitledSessionId(): string | undefined { return this.backend.state.get().conversationId ? undefined : this.localId; }
 	get items(): readonly IChatListItem[] { return this.currentItems; }
 
-	readonly draft: NonNullable<IChatWidgetModel['draft']> = {
+	newChat(): void { this.backend.newChat(); }
+
+	readWelcomeDraft(reader: IReader): { readonly id: string; readonly revision: number; } | undefined {
+		const state = this.backend.state.read(reader);
+		if (state.conversationId || state.coworkTasks.length || state.messages.length || state.loading?.kind === 'conversation') return undefined;
+		return { id: state.localConversationId, revision: this.backend.newDraftRevision };
+	}
+
+	getUnsentDraftText(): string | undefined {
+		const state = this.backend.state.get();
+		return selectedChatConversationId(state) || state.pendingCreation || state.messages.length ? undefined : state.draft;
+	}
+
+	readonly draft: NonNullable<IReplyChatEditorModel['draft']> = {
 		setText: text => this.backend.setDraft(text),
 		attachFiles: files => this.backend.attachFiles(files),
 		retryFile: id => this.backend.retryAttachment(id),
 		removeFile: id => this.backend.removeAttachment(id),
 	};
 
-	get voice(): NonNullable<IChatWidgetModel['voice']> {
+	get voice(): NonNullable<IReplyChatEditorModel['voice']> {
 		const thisModel = this;
 		return {
 			get isAvailable() { return thisModel.voiceAvailable; },

@@ -4,7 +4,7 @@ import { getDocument } from '../../../../base/browser/dom.js';
 import { renderAsPlaintext, renderWorkbenchMarkdown } from '../../../../base/browser/markdownRenderer.js';
 import { htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
 import { localize } from '../../../../nls.js';
-import type { ChatGPTReference, ChatGPTResource } from './chatGPTClient.js';
+import type { ChatReplyReference, ChatReplyResource } from '../../../common/chatReplyBackend.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 
@@ -227,7 +227,7 @@ function tokenize(this: TokenizerThis, source: string, level: 'block' | 'inline'
 	return { type: 'chatgptRichContent', raw: leading + content.raw, tag: content.tag, tokens, inline, literal: literal ? renderAsPlaintext(body) : undefined, hasBody: !!body };
 }
 
-function referenceMarkup(ids: readonly string[], references: readonly ChatGPTReference[]): string {
+function referenceMarkup(ids: readonly string[], references: readonly ChatReplyReference[]): string {
 	const selected = [...new Set(ids)].flatMap(id => {
 		const exact = references.find(reference => reference.id === id);
 		const candidates = references.filter(reference => reference.id.replace(/^turn\d+/u, '') === id.replace(/^turn\d+/u, ''));
@@ -238,9 +238,9 @@ function referenceMarkup(ids: readonly string[], references: readonly ChatGPTRef
 	return `<details class="ash-chat-citation"><summary>${selected.map(reference => `[${references.indexOf(reference) + 1}]`).join(' ')}</summary>${selected.map(reference => `<div><a href="${escapeHTML(reference.url)}">${escapeHTML(reference.title)}</a><p>${escapeHTML(reference.snippet)}</p></div>`).join('')}</details>`;
 }
 
-function createRichContentExtension(references: readonly ChatGPTReference[] = [], collectResource?: (resource: ChatGPTResource) => void, conversationId?: string): MarkedExtension {
+function createRichContentExtension(references: readonly ChatReplyReference[] = [], collectResource?: (resource: ChatReplyResource) => void, conversationId?: string): MarkedExtension {
 	const fallback = (): string => `<a href="https://chatgpt.com/${conversationId ? `c/${encodeURIComponent(conversationId)}` : ''}">${escapeHTML(fallbackText())}</a>`;
-	const resourceMarkup = (resource: ChatGPTResource): string => {
+	const resourceMarkup = (resource: ChatReplyResource): string => {
 		collectResource?.(resource);
 		return escapeHTML(resource.name).replace(/\$/gu, '&#36;').replace(/\\/gu, '&#92;');
 	};
@@ -256,7 +256,7 @@ function createRichContentExtension(references: readonly ChatGPTReference[] = []
 			link(token) {
 				if (/^(?:sandbox:|file-service:|sediment:)/u.test(token.href)) {
 					const mimeType = getMediaOrTextMime(token.href);
-					let kind: ChatGPTResource['kind'] = 'document';
+					let kind: ChatReplyResource['kind'] = 'document';
 					if (mimeType?.startsWith('image/')) kind = 'image';
 					else if (mimeType?.startsWith('audio/')) kind = 'audio';
 					else if (mimeType?.startsWith('video/')) kind = 'video';
@@ -358,8 +358,8 @@ function createRichContentExtension(references: readonly ChatGPTReference[] = []
 }
 
 /** Decode the wire syntax before the shared Chat renderer consumes the response. */
-export function decodeChatGPTReply(text: string, references?: readonly ChatGPTReference[], conversationId?: string): { readonly text: string; readonly resources: readonly ChatGPTResource[]; } {
-	const resources: ChatGPTResource[] = [];
+export function decodeChatGPTReply(text: string, references?: readonly ChatReplyReference[], conversationId?: string): { readonly text: string; readonly resources: readonly ChatReplyResource[]; } {
+	const resources: ChatReplyResource[] = [];
 	const decoder = new Marked(createRichContentExtension(references, resource => resources.push(resource), conversationId));
 	const parser = new decoder.Parser(decoder.defaults);
 	const decode = (source: string, tokens: readonly Token[], inline: boolean): string => {
@@ -389,7 +389,7 @@ export function decodeChatGPTReply(text: string, references?: readonly ChatGPTRe
 }
 
 /** The accessible view retains component text and arrows without exposing markup. */
-export function getChatGPTRichContentText(source: string, references?: readonly ChatGPTReference[]): string {
+export function getChatGPTRichContentText(source: string, references?: readonly ChatReplyReference[]): string {
 	const html = renderWorkbenchMarkdown({ value: source, supportHtml: true }, false, { markedExtensions: [createRichContentExtension(references)] });
 	return renderAsPlaintext(html, { useLinkFormatter: true });
 }

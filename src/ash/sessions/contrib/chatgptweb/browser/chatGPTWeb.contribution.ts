@@ -10,22 +10,20 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { Menus } from '../../../browser/menus.js';
 import { ActivityBarItemContext } from '../../../common/contextkeys.js';
-import { registerEditorPane } from '../../../../workbench/browser/editor.js';
-import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
-import { ChatGPTEditorPane } from './chatGPTEditor.js';
+import { registerChatGPTAccessibility } from '../../chat/browser/chatGPTAccessibility.js';
+import { registerReplyChatEditor } from '../../chat/browser/replyChatEditor.js';
 import { IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { ElectronChatGPTTransport } from '../electron-browser/electronChatGPTTransport.js';
-import { ChatGPTWebContribution, chatGPTScrollOptimization } from './chatGPTWeb.js';
+import { ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization } from './chatGPTWeb.js';
 import { ChatGPTService, IChatGPTService, chatGPTNavigationContainerId } from './chatGPTService.js';
-import { ChatGPTNavigationViewPaneContainer } from './chatGPTNavigationView.js';
+import { ChatGPTNavigationSource } from './chatGPTNavigationView.js';
+import { AshChatNavigationSource } from '../../chat/browser/ashChatNavigationSource.js';
+import { ChatNavigationViewPaneContainer } from '../../sessions/browser/views/chatNavigationView.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
-import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
-import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { getActiveElement } from '../../../../base/browser/dom.js';
-import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IAccountService } from '../../../../platform/accounts/common/accountService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProgressService } from '../../../../platform/progress/common/progress.js';
@@ -35,9 +33,14 @@ import './newChatModelAction.js';
 
 registerSingleton(IChatGPTService, ChatGPTService, InstantiationType.Delayed);
 registerSingleton(IChatGPTTransport, ElectronChatGPTTransport, InstantiationType.Delayed);
-registerEditorPane({ id: 'sessions.editor.chatgpt', name: 'ChatGPT', canOpen: input => input.resource.scheme === 'ash-chatgpt' ? EditorPaneMatch.Default : EditorPaneMatch.None, create: options => options.instantiationService!.createInstance(ChatGPTEditorPane) });
+registerReplyChatEditor(chatGPTReplyEditor);
 SessionsViewRegistry.registerViewContainer({
-	id: chatGPTNavigationContainerId, ctorDescriptor: new SyncDescriptor(ChatGPTNavigationViewPaneContainer), mergeViewWithContainerWhenSingleView: false, title: 'ChatGPT', localizationKey: { bundle: 'ash', key: 'sessions.chatgpt.title' }, location: ViewContainerLocation.Sidebar, isDefault: true, order: 2,
+	id: chatGPTNavigationContainerId,
+	ctorDescriptor: new SyncDescriptor(ChatNavigationViewPaneContainer, [[
+		new SyncDescriptor(ChatGPTNavigationSource),
+		new SyncDescriptor(AshChatNavigationSource),
+	]]),
+	mergeViewWithContainerWhenSingleView: false, title: 'ChatGPT', localizationKey: { bundle: 'ash', key: 'sessions.chatgpt.title' }, location: ViewContainerLocation.Sidebar, isDefault: true, order: 2,
 });
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
@@ -52,26 +55,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	},
 });
 
-for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
-	AccessibleViewRegistry.register({
-		type, priority: 100, name: `sessionsChatGPT${type}`, when: ContextKeyExpr.has('chatGPTFocused'),
-		getProvider: accessor => {
-			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-			const chat = accessor.get(IChatGPTService);
-			return new AccessibleContentProvider(AccessibleViewProviderId.ChatGPT, { type }, () => type === AccessibleViewType.Help
-				? localize('sessions.chatgpt.navigationHelp', 'ChatGPT conversations are in the window sidebar. Projects, Artifacts and Customize keep this list. Opening a conversation returns to ChatGPT. Use New at the top of the sidebar to start a chat. Use Search at the top of the sidebar, then select Sessions to find loaded ChatGPT conversations by title or project name. Use Tab to reach the conversation list. Arrow keys, Home and End move within the list; Enter opens a conversation. Press Shift+F10 to open its actions menu, or Tab to reach the change icon, pin and more actions. Scrolling near the bottom automatically loads more conversations. If loading fails, scroll again to retry. Accessibility commands open help and a selectable text view of the current chat; closing the view returns focus here. Enter sends a message; Shift+Enter inserts a line break. Select Stop to interrupt a reply. Use the New button context menu to sign in to Ash, select the Codex login, sign out of Ash or reload ChatGPT. Independent Ash sign-in renews automatically. Codex login is managed by Codex. Drafts are retained when switching conversations. Use window separators to resize the sidebar and the title bar to show or hide it.')
-				+ '\n\n' + localize('sessions.chatgpt.actionsHelp', 'Conversation rows reveal More actions and Pin on hover or keyboard focus. Use Tab to reach the action bar and Left and Right Arrow to move between More and Pin. The More menu offers Rename, Share, Archive, Delete and Move to project. Move to project contains a submenu of projects; Right Arrow opens it, Left Arrow returns, and Escape closes the menu. Delete and Share require confirmation. Pinned, each project and Recent are sibling panes in the sidebar. Pinned chats appear once, above their projects. Unpinning returns a chat to its project or Recent. Pane headings are buttons: Enter or Space toggles them, Left Arrow collapses and Right Arrow expands. Each pane remembers its collapsed state across restarts and workspaces. Search opens separately and keeps these states unchanged.')
-				+ '\n\n' + localize('sessions.chatgpt.inputHelp', 'The message input expands above the inline controls when text wraps. Use Tab and Shift+Tab to move between the message, Attach files, the inline toolbar and the model picker below. In the inline toolbar, use Left and Right Arrow to move between dictation and the primary action. Choose files with Attach files, or paste and drop files into the input. Attachments show upload status; failed uploads offer Retry and all attachments offer Remove. Sending waits until every attachment is ready. Files can be sent without text. The rightmost button starts voice conversation when the draft is empty, sends when there is text or an attachment, and stops the current reply or voice conversation. Voice uses the microphone and plays replies; leaving ChatGPT or switching conversations stops voice. Dictation inserts completed phrases at the cursor without sending. Select Stop dictation to finish or press Escape to discard unfinished speech. Switching conversations or leaving ChatGPT cancels dictation. While loading, replying or in voice conversation, the message input is read-only. The model button opens a searchable list of available models and thinking presets. Use Up and Down Arrow to browse, Enter to select a preset, and Escape to close the list.')
-				+ '\n\n' + localize('sessions.chatgpt.richContentHelp', 'Press Enter on a citation number to expand source details. Media provides playback controls; attachments can be previewed, opened or downloaded here. Use Tab to move between interactive preview controls. Charts support type, zoom and series controls; focus a chart and use Left and Right Arrow to read data points.')
-				+ '\n\n' + localize('sessions.chatgpt.executionHelp', 'Tool activity updates a single execution row. Press Enter or Space on its summary to expand the steps, then expand a step to read its original input or result. The execution row collapses when the answer starts and remains available above the answer. Failed steps remain indicated in the summary.')
-				+ '\n\n' + localize('sessions.chatgpt.promptTimelineHelp', 'The prompt timeline appears when the conversation has at least two prompts and the pane is wide enough. In the left gutter, focus Show prompts and press Enter or Space to open the list. Use Up and Down Arrow, Home or End to move between prompts. In Overview ruler mode, Tab to a marker and activate it to see its prompts. Activate a prompt to jump to its original message. Escape closes the list and returns focus to its control.')
-				+ '\n\n' + localize('sessions.newChatModel.chatGPTHelp', 'In the model picker, choose New Ash Chat with Model, then select a model to open an Ash chat. Reopen Ash chats from the sidebar in Code mode. A new unsent draft can copy its text. Attachments and conversation history stay with their original chat.')
-				+ '\n\n' + localize('sessions.chatgpt.offlineHelp', 'While offline, Send in a new chat saves its first text message on this device. Delete removes a conversation from the sidebar. Ash syncs these changes when the connection returns. A saved chat is read-only until ChatGPT confirms it.')
-				+ '\n\n' + localize('sessions.chat.coworkHelp', 'Use the same input to ask questions or describe work to do. Clear text requests for actions or deliverables may run with Cowork. Progress and results appear in the conversation. Select Open Cowork task when the task needs input.')
-				: chat.getAccessibleContent(), () => focused?.focus(), AccessibilityVerbositySettingId.ChatGPT);
-		},
-	});
-}
+registerChatGPTAccessibility(chatGPTReplyEditor.accessibility.focusContext, IChatGPTService);
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: chatGPTScrollOptimization, defaultValue: true, scope: ConfigurationScope.APPLICATION,

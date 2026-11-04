@@ -3,6 +3,7 @@ import type { ElectronApplication } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { Editor } from '../../../automation/editor.js';
+import type { Workbench } from '../../../automation/workbench.js';
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { simpleChatGPTModelCatalog } from '../../../fixtures/chatGPTModels.js';
 import { chatGPTAuthDocument } from '../../../fixtures/chatGPTAuth.js';
@@ -114,6 +115,140 @@ async function installService(application: ElectronApplication, holdInitializati
 	}, { catalog: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]), authentication: chatGPTAuthDocument(), holdInitialization });
 }
 
+const ashFixtureModel = { provider: 'custom-chat-routing-fixture', model: 'ash-routing-fixture' };
+
+function createAshModelServer(ashRequests: string[]) {
+	return createServer(async (request, response) => {
+		if (request.method === 'GET') {
+			response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ data: [{ id: ashFixtureModel.model }] }));
+			return;
+		}
+		const chunks: Buffer[] = [];
+		for await (const chunk of request) chunks.push(Buffer.from(chunk));
+		ashRequests.push((JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string; }).model);
+		response.writeHead(200, { 'Content-Type': 'text/event-stream' }).end('data: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Answer from Ash"},"finish_reason":null}]}\n\ndata: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
+	});
+}
+
+async function configureAshModel(catalog: ReturnType<typeof createAshModelServer>, application: ElectronApplication, workbench: Workbench, workspace: string): Promise<void> {
+	await new Promise<void>(resolve => catalog.listen(0, '127.0.0.1', resolve));
+	const address = catalog.address();
+	if (!address || typeof address === 'string') throw new Error('Ash model fixture has no port');
+	const connection = await connectProfile(application, undefined, workspace, workbench.page);
+	try {
+		const config = await connection.client.request(APP_SERVER_METHODS['config/read'], {});
+		await connection.client.request(APP_SERVER_METHODS['provider/configure'], {
+			commandId: 'chat-routing-fixture', expectedRevision: config.revision, config: {
+				connection: ashFixtureModel.provider, provider: ashFixtureModel.provider, baseUrl: `http://127.0.0.1:${address.port}/v1`,
+				custom: { name: 'Ash routing fixture', protocol: 'chatCompletions', order: 0, contextWindow: 272_000 },
+				modelContext: { [ashFixtureModel.model]: { contextWindow: 272_000 } },
+			},
+		});
+		await connection.client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: ashFixtureModel.provider, apiKey: 'isolated-fixture-key' });
+	} finally { await connection.close(); }
+	const settings = await readUserSettings(workbench.page);
+	await writeUserSettings(workbench.page, JSON.stringify({ ...JSON.parse(settings.content), 'models.hidden': [{ ...ashFixtureModel, visible: true }] }), settings.revision);
+}
+
+test.describe('Unified Chat sidebar', () => {
+	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN' } });
+
+	test('opens and continues ChatGPT and Ash conversations from the same list', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
+		const application = browser as ElectronApplication;
+		await installService(application);
+		const ashRequests: string[] = [];
+		await using catalog = createAshModelServer(ashRequests);
+		await configureAshModel(catalog, application, workbench, testWorkspace.directory);
+		const page = await workbench.openAgentsWindow(target.kind);
+		const sidebar = page.locator('.ash-chatgpt-navigation');
+		const editor = page.locator('.ash-chatgpt-widget');
+		const chatGPTComposer = new Editor(editor);
+		const chatMode = page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true });
+		const modelButton = editor.locator('.ash-chat-input-model-action');
+		await expect(modelButton).toHaveText('Fixture model');
+		await expect(modelButton).toBeEnabled();
+		await modelButton.press('ArrowDown');
+		await page.getByRole('dialog', { name: '选择聊天模型', exact: true })
+			.getByText('选择模型新建 Ash 对话…', { exact: true }).click();
+		const commands = new QuickAccess(page);
+		await commands.select(ashFixtureModel.model);
+
+		const ash = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		const ashComposer = new Editor(ash);
+		await ashComposer.waitForEditorFocus();
+		await ashComposer.waitForTypeInEditor('First Ash message');
+		await page.keyboard.press('Enter');
+		await expect(ash).toContainText('Answer from Ash');
+		const ashSessionId = await ash.getAttribute('data-session-id');
+		expect(ashSessionId).toBeTruthy();
+		const ashRow = sidebar.locator(`[data-source="ash"][data-conversation="${ashSessionId}"]`);
+		const ashTitle = ashRow.locator('.ash-sessions-list-item');
+		await expect(ashTitle).toHaveAttribute('aria-current', 'page');
+		await expect(ashRow).toHaveAttribute('data-parent-section', 'recent');
+
+		let expectedSends = 0;
+		const sendChatGPT = async (text: string, whileStreaming?: () => Promise<void>): Promise<void> => {
+			await chatGPTComposer.waitForEditorFocus();
+			await chatGPTComposer.waitForTypeInEditor(text);
+			await editor.getByRole('button', { name: '发送', exact: true }).click();
+			await expect.poll(() => application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(++expectedSends);
+			const answer = editor.locator('.ash-chat-item-agentMessage').last();
+			await expect(answer).toContainText('First chunk');
+			await whileStreaming?.();
+			await application.evaluate(() => globalThis.ashNativeFixture.advance());
+			await application.evaluate(() => globalThis.ashNativeFixture.advance());
+			await expect(answer).toContainText('First chunk, second chunk, complete');
+			await expect(editor.getByRole('button', { name: '停止', exact: true })).toBeHidden();
+		};
+
+		await commands.runCommand('sessions.open.chatgpt');
+		await sendChatGPT('First ChatGPT message');
+		const chatGPTRow = sidebar.locator('[data-source="chatgpt"][data-conversation="fixture-live"] .ash-sessions-list-item');
+		await expect(chatGPTRow).toHaveAttribute('aria-current', 'page');
+		await expect(ashTitle).not.toHaveAttribute('aria-current', 'page');
+
+		await ashTitle.press('Enter');
+		await expect(chatMode).toHaveAttribute('aria-pressed', 'true');
+		await expect(ashTitle).toHaveAttribute('aria-current', 'page');
+		await expect(chatGPTRow).not.toHaveAttribute('aria-current', 'page');
+		await expect(ash).toHaveAttribute('data-session-id', ashSessionId!);
+		await expect(ash).toContainText('First Ash message');
+		await ashComposer.waitForEditorFocus();
+		await ashComposer.waitForTypeInEditor('Follow up with Ash');
+		await page.keyboard.press('Enter');
+		await expect(ash.locator('.ash-chat-item-agentMessage')).toHaveCount(2);
+		await expect.poll(() => ashRequests).toEqual([ashFixtureModel.model, ashFixtureModel.model]);
+		expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(1);
+
+		await ashRow.getByRole('button', { name: '置顶聊天', exact: true }).press('Enter');
+		await expect(ashRow).toHaveAttribute('data-parent-section', 'pinned');
+		await expect(ashTitle).toBeFocused();
+		await page.keyboard.press('Alt+F1');
+		const help = page.locator('.ash-accessible-view-content');
+		await expect(help).toHaveValue(/ChatGPT 和 Ash 对话共用窗口侧栏/u);
+		await expect(help).toHaveValue(/Ash 会话的更多菜单提供重命名、归档和删除/u);
+		await page.keyboard.press('Escape');
+		await expect(ashTitle).toBeFocused();
+		await chatGPTRow.click();
+		await expect(chatGPTRow).toHaveAttribute('aria-current', 'page');
+		await expect(ashTitle).not.toHaveAttribute('aria-current', 'page');
+		await expect(editor).toContainText('First ChatGPT message');
+		const chatGPTInput = editor.getByRole('textbox', { name: '询问 ChatGPT', exact: true });
+		await chatGPTInput.press('Alt+F2');
+		await expect(help).toHaveValue(/First ChatGPT message[\s\S]*First chunk, second chunk, complete/u);
+		await page.keyboard.press('Escape');
+		await expect(chatGPTInput).toBeFocused();
+		await sendChatGPT('Follow up with ChatGPT', async () => {
+			await ashTitle.click();
+			await expect(ash).toContainText('Follow up with Ash');
+			await chatGPTRow.click();
+			await expect(editor.getByRole('button', { name: '停止', exact: true })).toBeVisible();
+		});
+		expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(2);
+		expect(ashRequests).toEqual([ashFixtureModel.model, ashFixtureModel.model]);
+	});
+});
+
 for (const locale of ['en', 'zh-CN'] as const) {
 	test.describe(`ChatGPT initialization lifecycle in ${locale}`, () => {
 		test.use({ openWorkspace: false, useDefaultLanguageServer: false, electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': locale } });
@@ -169,35 +304,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				const restarted = await restartWorkbench(); application = restarted.application as ElectronApplication; workbench = restarted.workbench;
 			}
 			await installService(application);
-			const model = { provider: 'custom-chat-routing-fixture', model: 'ash-routing-fixture' };
+			const model = ashFixtureModel;
 			const ashRequests: string[] = [];
-			await using catalog = createServer(async (request, response) => {
-				if (request.method === 'GET') {
-					response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ data: [{ id: model.model }] }));
-					return;
-				}
-				const chunks: Buffer[] = [];
-				for await (const chunk of request) chunks.push(Buffer.from(chunk));
-				ashRequests.push((JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string; }).model);
-				response.writeHead(200, { 'Content-Type': 'text/event-stream' }).end('data: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"Answer from Ash"},"finish_reason":null}]}\n\ndata: {"id":"ash-chat","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
-			});
-			await new Promise<void>(resolve => catalog.listen(0, '127.0.0.1', resolve));
-			const address = catalog.address();
-			if (!address || typeof address === 'string') throw new Error('Ash model fixture has no port');
-			const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
-			try {
-				const config = await connection.client.request(APP_SERVER_METHODS['config/read'], {});
-				await connection.client.request(APP_SERVER_METHODS['provider/configure'], {
-					commandId: 'chat-routing-fixture', expectedRevision: config.revision, config: {
-						connection: model.provider, provider: model.provider, baseUrl: `http://127.0.0.1:${address.port}/v1`,
-						custom: { name: 'Ash routing fixture', protocol: 'chatCompletions', order: 0, contextWindow: 272_000 },
-						modelContext: { [model.model]: { contextWindow: 272_000 } },
-					},
-				});
-				await connection.client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: model.provider, apiKey: 'isolated-fixture-key' });
-			} finally { await connection.close(); }
-			const settings = await readUserSettings(workbench.page);
-			await writeUserSettings(workbench.page, JSON.stringify({ ...JSON.parse(settings.content), 'models.hidden': [{ ...model, visible: true }] }), settings.revision);
+			await using catalog = createAshModelServer(ashRequests);
+			await configureAshModel(catalog, application, workbench, testWorkspace.directory);
 			const page = await workbench.openAgentsWindow(target.kind); const commands = new QuickAccess(page);
 			await expect(page.locator('[data-action-id="sessions.open.chatgpt"]')).toHaveCount(0);
 			await expect(page.locator('[data-action-id="sessions.newSession"] button:not([aria-current])')).toBeVisible();

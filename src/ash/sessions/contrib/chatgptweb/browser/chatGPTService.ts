@@ -17,7 +17,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { ChatGPTAuthenticationError, IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { ChatGPTClient, ChatGPTRequestError, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTModel, type ChatGPTFile, type ChatGPTProject, type ChatGPTHistory } from './chatGPTClient.js';
 import { createChatGPTFetch } from './chatGPTFetch.js';
-import { getChatGPTRichContentText } from './chatGPTRichContent.js';
+import { getChatGPTRichContentText } from '../../chat/browser/chatGPTRichContent.js';
 import type { ChatGPTVoiceSession } from './chatGPTVoiceSession.js';
 
 export const chatGPTNavigationContainerId = 'sessions.chatgpt.navigation';

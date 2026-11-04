@@ -8,9 +8,12 @@ is canonical for the renderer implementation and extension points.
 UI design and style boundaries are defined in [Sessions style](STYLE.md).
 
 The Desktop `contrib/chatgptweb` contribution owns the ChatGPT entry and the
-Chat workspace's New action. Ash renders the conversation, composer, model
-selection, attachments and history sidebar. `ChatGPTService` remains the window's
-single owner for drafts, selected conversation, history and streamed replies.
+Chat workspace's New action. Its reply adapter supplies the conversation data and
+operations to the Sessions `ReplyChatEditor`, which owns the compact composer and
+transcript through the shared Chat widget. The Chat sidebar combines ChatGPT
+history with local Ash conversations and opens each row through its source
+adapter. `ChatGPTService` owns drafts, selected conversation, history and
+streamed replies for the window.
 The `ash-chatgpt` editor resource and conversation storage keys stay stable
 across entry restoration. Previous native-experiment restore commands resolve
 to this same entry without creating or sending a new conversation.
