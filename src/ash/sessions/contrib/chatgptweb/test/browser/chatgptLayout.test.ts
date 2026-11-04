@@ -261,11 +261,11 @@ suite('chatgptweb browser component', () => {
 					return { left: bounds.left - list.left, right: list.right - bounds.right };
 				})).toEqual({ left: inset, right: inset });
 			};
-			await expectInsets(8);
-			await list.evaluate(node => { node.style.paddingInline = '12px'; });
 			await expectInsets(12);
+			await list.evaluate(node => { node.style.paddingInline = '16px'; });
+			await expectInsets(16);
 			await list.evaluate(node => node.style.removeProperty('padding-inline'));
-			await expectInsets(8);
+			await expectInsets(12);
 			await header.hover();
 			await expect(header).toHaveCSS('border-radius', '8px');
 		});
@@ -390,6 +390,11 @@ suite('chatgptweb browser component', () => {
 			const viewport = scrollable.locator(':scope > .ash-scrollbar-viewport');
 			const scrollbar = scrollable.getByRole('scrollbar', { name: 'Vertical scrollbar' });
 			await expect(scrollbar).toHaveAttribute('aria-disabled', 'false');
+			await expect(list).toHaveCSS('padding', '12px');
+			const sidebar = page.locator('.ash-chatgpt-navigation');
+			await expect(sidebar).toHaveCSS('padding', '0px');
+			const [sidebarBounds, scrollbarBounds] = await Promise.all([sidebar.boundingBox(), scrollbar.boundingBox()]);
+			expect(scrollbarBounds!.x + scrollbarBounds!.width).toBe(sidebarBounds!.x + sidebarBounds!.width);
 			expect(await viewport.evaluate(element => getComputedStyle(element).scrollbarWidth)).toBe('none');
 			expect(await list.evaluate(element => getComputedStyle(element).overflowY)).toBe('visible');
 			await expect(page.locator('.ash-chatgpt-navigation').getByRole('searchbox')).toHaveCount(0);
