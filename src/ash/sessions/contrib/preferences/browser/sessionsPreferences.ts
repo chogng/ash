@@ -3,7 +3,7 @@ import { ExecutionSettingsModel } from './executionSettingsModel.js';
 import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browser/githubSettingsModel.js';
 import { TraceSettingsModel } from '../../../../workbench/contrib/trace/browser/traceSettingsModel.js';
 import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferences/browser/settingsSectionRenderer.js';
-import { ChatConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
+import { ChatConfiguration, ChatInputConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
 import './media/sessionsPreferences.css';
 import '../../../../workbench/services/extensions/browser/resourceEditorAccessibility.js';
 import '../../../../workbench/contrib/preferences/browser/media/settingsCard.css';
@@ -561,11 +561,14 @@ export class SessionsPreferences extends Disposable {
 	private sections(modelContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, dictationContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, customizeContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, githubContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, traceContent: SettingsPageRenderer<ISetting | SettingsSectionReference>, management: ReadonlyMap<string, SettingsPageRenderer<ISetting | SettingsSectionReference>>): readonly SettingsSection[] {
 		const defaults = new DefaultSettings();
 		const appearanceSettings: readonly ISetting[] = [
-			SESSIONS_LAYOUT_SCOPE_SETTING,
-			SessionsConfiguration.layoutStyle,
-			SessionsConfiguration.activityBarLocation,
-			SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP,
-		].map(id => defaults.get(id));
+			...[SESSIONS_LAYOUT_SCOPE_SETTING, SessionsConfiguration.layoutStyle, SessionsConfiguration.activityBarLocation].map(id => defaults.get(id)),
+			{
+				...defaults.get(ChatInputConfiguration.fontSize),
+				title: localize('sessions.settings.messageInputFontSize', 'User message font size'),
+				description: localize('sessions.settings.messageInputFontSize.description', 'Set the font size in pixels for the message input, sent user messages, and inline editing. The IDE shares this user setting for its message input.'),
+			},
+			...[SESSIONS_DIFF_VIEW_MODE, SESSIONS_DIFF_WORD_WRAP, SESSIONS_EDITOR_WORD_WRAP].map(id => defaults.get(id)),
+		];
 		const generalSettings: readonly ISetting[] = [
 			...defaults.all.filter(setting => setting.id === STARTUP_WINDOW_SETTING || setting.id === ChatConfiguration.TipsEnabled),
 			displayLanguageSetting(defaults.get(LocalizationConfiguration.locale), this.localeService, this.languagePackService, this.localizationService, this.configurationService),

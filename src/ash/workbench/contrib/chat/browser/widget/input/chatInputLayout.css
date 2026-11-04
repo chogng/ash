@@ -1,0 +1,35 @@
+.ash-chat-input-container.ash-chat-input-adaptive {
+	display: grid;
+	grid-template-columns: max-content minmax(0, 1fr) max-content;
+	grid-template-areas: "attachments editor actions";
+	align-items: center;
+	row-gap: var(--ash-spacing-size80);
+}
+
+.ash-chat-input-container.ash-chat-input-adaptive.expanded {
+	grid-template-areas:
+		"editor editor editor"
+		"attachments . actions";
+}
+
+.ash-chat-input-adaptive > .ash-chat-input-editor-host {
+	grid-area: editor;
+}
+
+.ash-chat-input-adaptive > .ash-chat-input-inline-toolbar {
+	grid-area: actions;
+	width: auto;
+	margin-block-start: 0;
+	margin-inline-start: var(--ash-spacing-size80);
+}
+
+.ash-chat-input-adaptive > .ash-chat-input-attachment-toolbar {
+	grid-area: attachments;
+	margin-inline-start: 0;
+	margin-inline-end: var(--ash-spacing-size80);
+}
+
+.ash-chat-input-adaptive.expanded
+	> :is(.ash-chat-input-inline-toolbar, .ash-chat-input-attachment-toolbar) {
+	margin-inline: 0;
+}

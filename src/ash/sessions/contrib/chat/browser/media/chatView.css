@@ -1,4 +1,8 @@
 .ash-code-conversation {
+	/* Center the content within the pane while the scroll viewport spans it. */
+	--ash-sessions-chat-content-inset: calc(
+		var(--ash-spacing-size240) + max(0px, (100% - 950px) / 2)
+	);
 	display: flex;
 	position: relative;
 	flex: 1;
@@ -7,13 +11,27 @@
 	overflow: hidden;
 }
 
+.ash-sessions-chat-grid.split .ash-code-conversation {
+	--ash-sessions-chat-content-inset: var(--ash-spacing-size240);
+}
+
 .ash-code-conversation > .ash-chat {
 	flex: 1;
 	min-width: 0;
 	min-height: 0;
 }
 
+.ash-code-conversation > .ash-chat > .ash-chat-list-widget .ash-chat-transcript,
+.ash-code-conversation > .ash-chat > .ash-sessions-chat-input.chat-composer {
+	padding-inline: var(--ash-sessions-chat-content-inset);
+}
+
+.ash-code-conversation .ash-chat-list-widget > .ash-chat-sticky-prompt {
+	inset-inline: var(--ash-sessions-chat-content-inset);
+}
+
 .ash-session-side-chat-editor {
+	--ash-chat-transcript-overlap: var(--ash-spacing-size80);
 	display: flex;
 	width: 100%;
 	height: 100%;

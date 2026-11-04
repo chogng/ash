@@ -1047,7 +1047,7 @@ test('Chat typography updates preserve the draft and selection, resize the input
 	await assert.rejects(configuration.updateValue(ChatInputConfiguration.fontSize, 7));
 	await assert.rejects(configuration.updateValue(ChatInputConfiguration.lineHeight, 7));
 	await configuration.updateValue(ChatInputConfiguration.lineHeight, 0);
-	assert.equal(font.lineHeight, `${codeEditor.getOption(EditorOption.fontInfo).lineHeight}px`);
+	assert.equal(font.lineHeight, '27px');
 	for (const key of Object.values(ChatInputConfiguration)) await configuration.updateValue(key, undefined);
 	await waitFor(() => editor.element.style.height === '120px');
 	assert.equal(font.fontFamily, family);

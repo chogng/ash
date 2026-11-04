@@ -1,4 +1,4 @@
-import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h } from '../../../../../../base/browser/dom.js';
 import { Emitter, type Event } from '../../../../../../base/common/event.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { RunOnceScheduler } from '../../../../../../base/common/async.js';
@@ -13,11 +13,13 @@ export interface ChatInputEditorOptions {
 	readonly container: HTMLElement;
 	readonly placeholder: string;
 	readonly ariaLabel: string;
+	readonly ariaDescribedBy?: string;
 	readonly slashCommands?: SlashCommandCatalog;
-	readonly skills: SkillSelectorCatalog;
+	readonly skills?: SkillSelectorCatalog;
+	readonly submitWithModifier?: boolean;
 	/** Backend discovery is registered by the owning composer. */
 	readonly hostCompletions?: boolean;
-	readonly height?: { readonly minimum: number; readonly maximum: number; };
+	readonly height?: { readonly minimum?: number; readonly maximum?: number; };
 	/** Move to the next control with Tab instead of inserting indentation. */
 	readonly tabFocusMode?: boolean;
 }
@@ -36,9 +38,14 @@ export interface IChatInputEditor extends IDisposable {
 	value: string;
 	getSelection(): ChatInputEditorSelection;
 	setSelection(selection: ChatInputEditorSelection): void;
+	setReadOnly(readOnly: boolean): void;
 	isAtHistoryBoundary(direction: 'previous' | 'next'): boolean;
 	/** Insert recognized text at the current selection using the editor's edit lifecycle. */
 	insertText(text: string): void;
+	/** Whether the current draft fits on one visual line at the proposed editor width in CSS pixels. */
+	fitsOnSingleLine?(width: number): boolean;
+	/** Sets the row layout and reports whether the editor needs a new layout. */
+	setCompactLayout?(compact: boolean, rightPadding: number): boolean;
 	/** Rich inputs expose their own model for reference decorations and undo tracking. */
 	getModel?(): ITextModel;
 	/** Rich inputs render context actions in the space reserved by reference decorations. */
@@ -97,6 +104,7 @@ class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 	readonly onDidSubmit = this._onDidSubmit.event;
 	private readonly minimumHeight: number;
 	private readonly maximumHeight: number;
+	private textMeasurement: CanvasRenderingContext2D | null | undefined;
 
 	constructor(options: ChatInputEditorOptions) {
 		super();
@@ -109,13 +117,15 @@ class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 		this.element.style.height = `${this.minimumHeight}px`;
 		this.element.placeholder = options.placeholder;
 		this.element.setAttribute('aria-label', options.ariaLabel);
+		if (options.ariaDescribedBy) this.element.setAttribute('aria-describedby', options.ariaDescribedBy);
 		options.container.append(this.element);
 		this._register(addDisposableListener(this.element, 'input', () => {
 			this.layout();
 			this._onDidChange.fire(this.value);
 		}));
 		this._register(addDisposableListener(this.element, 'keydown', (event) => {
-			if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+			if (event.key !== 'Enter' || event.shiftKey || event.isComposing || this.element.readOnly
+				|| (options.submitWithModifier && !event.ctrlKey && !event.metaKey)) return;
 			event.preventDefault();
 			event.stopPropagation();
 			this._onDidSubmit.fire();
@@ -148,6 +158,10 @@ class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 		this.element.setSelectionRange(Math.min(selection.anchor, selection.active), Math.max(selection.anchor, selection.active), selection.anchor > selection.active ? 'backward' : 'forward');
 	}
 
+	setReadOnly(readOnly: boolean): void {
+		this.element.readOnly = readOnly;
+	}
+
 	isAtHistoryBoundary(direction: 'previous' | 'next'): boolean {
 		if (this.element.selectionStart !== this.element.selectionEnd) return false;
 		const offset = this.element.selectionStart;
@@ -165,6 +179,28 @@ class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 		this.element.setRangeText(separator + text, this.element.selectionStart, this.element.selectionEnd, 'end');
 		this.layout();
 		this._onDidChange.fire(this.value);
+	}
+
+	fitsOnSingleLine(width: number): boolean {
+		const text = this.value;
+		if (!text) return true;
+		if (text.includes('\n')) return false;
+		if (this.textMeasurement === undefined) {
+			this.textMeasurement = h(this.element.ownerDocument, 'canvas').getContext('2d');
+		}
+		const context = this.textMeasurement;
+		if (!context) return false;
+		const style = getWindow(this.element).getComputedStyle(this.element);
+		context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+		context.letterSpacing = style.letterSpacing === 'normal' ? '0px' : style.letterSpacing;
+		const tabSize = parseFloat(style.tabSize);
+		const tabWidth = Math.max(1, style.tabSize.endsWith('px') ? tabSize : tabSize * context.measureText(' ').width);
+		const runs = text.split('\t');
+		let textWidth = context.measureText(runs[0]).width;
+		for (const run of runs.slice(1)) {
+			textWidth = (Math.floor(textWidth / tabWidth) + 1) * tabWidth + context.measureText(run).width;
+		}
+		return textWidth <= width;
 	}
 
 	layout(): void {

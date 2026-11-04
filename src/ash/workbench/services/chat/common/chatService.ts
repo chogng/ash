@@ -293,6 +293,7 @@ export interface RewriteChatRequestOptions {
 	readonly turnId: string;
 	readonly itemId: string;
 	readonly text: string;
+	readonly contexts?: readonly ResolvedChatContext[];
 	readonly commandId: string;
 }
 

@@ -452,7 +452,7 @@ let olderHistoryLoads = 0;
 const historyWires = new Map<string, string>();
 let historyDecodeTiming = { parseMs: 0, schemaMs: 0, bytes: 0 };
 let requestEditMode = false;
-const requestEdits: { readonly text: string; readonly commandId: string; readonly itemId: string; }[] = [];
+const requestEdits: { readonly text: string; readonly commandId: string; readonly itemId: string; readonly contexts?: readonly { readonly name: string; readonly content: string; }[]; }[] = [];
 let completeRequestEdit: ((failure?: boolean) => void) | undefined;
 let lifecycleSessions: SessionsManagementService | undefined;
 let lifecycleCommands: CommandService | undefined;
@@ -661,7 +661,7 @@ declare global {
 			showFind(query?: string): void;
 			runNavigationCommand(command: string): Promise<void>;
 			prepareRequestEditing(cowork: boolean): void;
-			requestEdits(): readonly { readonly text: string; readonly commandId: string; readonly itemId: string; }[];
+			requestEdits(): readonly { readonly text: string; readonly commandId: string; readonly itemId: string; readonly contexts?: readonly { readonly name: string; readonly content: string; }[]; }[];
 			finishRequestEdit(failure?: boolean): void;
 			readingState(): ReturnType<ChatListWidget['getViewState']>;
 			delayAttachments(value: boolean): void;

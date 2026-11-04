@@ -27,9 +27,11 @@ export class DOMLineBreaksComputerFactory implements ILineBreaksComputerFactory 
 		wrappingIndent: WrappingIndent,
 		wordBreak: 'normal' | 'keepAll',
 		_wrapOnEscapedLineFeeds: boolean,
+		wrappingWidth = Math.max(0, wrappingColumn) * fontInfo.typicalHalfwidthCharacterWidth,
 	): ILineBreaksComputer {
 		if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('DOM line-break tab size must be a positive safe integer');
 		if (!Number.isSafeInteger(wrappingColumn) || wrappingColumn < -1) throw new RangeError('DOM line-break wrapping column must be -1 or a non-negative safe integer');
+		if (!isFiniteNumber(wrappingWidth) || wrappingWidth < 0) throw new RangeError('DOM line-break wrapping width must be finite and non-negative');
 		if (!isWrappingIndent(wrappingIndent)) throw new TypeError('Unknown editor wrapping indent mode');
 		const requests: number[] = [];
 		const measure = createTextMeasurement(this.targetWindow, this.textMeasurer, fontInfo, tabSize);
@@ -44,6 +46,7 @@ export class DOMLineBreaksComputerFactory implements ILineBreaksComputerFactory 
 				fontInfo,
 				tabSize,
 				wrappingColumn,
+				wrappingWidth,
 				wrappingIndent,
 				wordBreak,
 				measure,
@@ -58,6 +61,7 @@ function computeLineBreaks(
 	fontInfo: FontInfo,
 	tabSize: number,
 	wrappingColumn: number,
+	wrapWidth: number,
 	wrappingIndent: WrappingIndent,
 	wordBreak: 'normal' | 'keepAll',
 	measure: (text: string) => number,
@@ -65,7 +69,6 @@ function computeLineBreaks(
 	const injectedTexts = context.getLineInjectedText(lineNumber);
 	const text = LineInjectedText.applyInjectedText(context.getLineContent(lineNumber), injectedTexts);
 	if (wrappingColumn === -1) return injectedTexts ? createProjectionData(text, injectedTexts, [text.length], tabSize, 0) : null;
-	const wrapWidth = wrappingColumn * fontInfo.typicalHalfwidthCharacterWidth;
 	const wrappedTextIndentLength = computeWrappedTextIndentLength(text, wrappingColumn, wrappingIndent, tabSize);
 	const wrappedTextIndentWidth = wrappedTextIndentLength * fontInfo.spaceWidth;
 	const breakOffsets: number[] = [];
@@ -126,13 +129,14 @@ function getPreferredBreaks(text: string, boundaries: readonly number[], wordBre
 		const after = text.slice(offset, boundaries[index + 1]);
 		if (/\S/u.test(before)) hasContent = true;
 		if (hasContent && /^\s+$/u.test(before)) preferred.add(offset);
-		if (!CJK_GRAPHEME.test(before) || !CJK_GRAPHEME.test(after)) continue;
-		if (wordBreak === 'normal') preferred.add(offset);
+		if (wordBreak === 'normal' && CJK_GRAPHEME.test(after)
+			&& (CJK_GRAPHEME.test(before) || CJK_CLOSING_PUNCTUATION.test(before))) preferred.add(offset);
 	}
 	return preferred;
 }
 
 const CJK_GRAPHEME = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+const CJK_CLOSING_PUNCTUATION = /^[、。，．？！；：…」』】）》〉〕］｝]/u;
 
 function createProjectionData(
 	text: string,
@@ -169,15 +173,18 @@ function computeWrappedTextIndentLength(text: string, wrappingColumn: number, wr
 function createCanvasMeasurement(targetWindow: Window | undefined, fontInfo: FontInfo, tabSize: number): (text: string) => number {
 	if (!targetWindow) throw new ReferenceError('DOM line-break factory target window is no longer available');
 	const canvas = h(targetWindow.document, 'canvas');
+	canvas.lang = targetWindow.document.documentElement.lang;
 	const context = canvas.getContext('2d');
-	if (!context) throw new Error('DOM line-break measurement requires a 2D canvas context');
-	context.font = `${fontInfo.fontWeight} ${fontInfo.fontSize}px ${fontInfo.getMassagedFontFamily()}`;
+	if (context) {
+		context.font = `${fontInfo.fontWeight} ${fontInfo.fontSize}px ${fontInfo.getMassagedFontFamily()}`;
+	}
 	return text => {
 		let width = 0;
 		const segments = text.split('\t');
 		for (const segment of segments.entries()) {
 			const [index, value] = segment;
-			width += context.measureText(value).width + [...value].length * fontInfo.letterSpacing;
+			const characterCount = context && fontInfo.letterSpacing === 0 ? 0 : [...value].length;
+			width += (context?.measureText(value).width ?? characterCount * fontInfo.typicalHalfwidthCharacterWidth) + characterCount * fontInfo.letterSpacing;
 			if (index + 1 < segments.length) {
 				const tabStopWidth = fontInfo.spaceWidth * tabSize;
 				width = (Math.floor(width / tabStopWidth) + 1) * tabStopWidth;

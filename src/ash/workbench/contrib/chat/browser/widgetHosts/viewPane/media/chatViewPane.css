@@ -10,6 +10,15 @@
 	background: var(--ash-auxiliaryBar-background);
 }
 
+.ash-chat-view,
+.ash-chat-editor {
+	--ash-chat-transcript-overlap: var(--ash-spacing-size80);
+}
+
+.ash-chat-view {
+	--ash-chat-transcript-surface: var(--ash-auxiliaryBar-background);
+}
+
 .ash-chat-body {
 	position: relative;
 	display: flex;
@@ -23,6 +32,7 @@
 /* Share the selected tab's surface; List mode keeps the mounting host's background. */
 .ash-chat-body.has-session-tabs {
 	background: var(--ash-editor-background);
+	--ash-chat-transcript-surface: var(--ash-editor-background);
 }
 
 .ash-chat-pane-host {

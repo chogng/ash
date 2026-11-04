@@ -1766,6 +1766,87 @@ test('a hidden cleared composer does not overwrite the active renderer draft dur
 });
 suite('chatInput browser component', () => {
 	const browserTests = useBrowserTests();
+	test('Compact chat input uses the available line width with a proportional font', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode&compact');
+		const composer = page.locator('.ash-chat-input-part.compact > .ash-chat-input-container');
+		const editor = page.locator('.ash-chat-input-editor');
+		const input = editor.getByRole('textbox');
+		await input.focus();
+		await page.keyboard.insertText('Review the draft');
+		await expect(composer).not.toHaveClass(/\bexpanded\b/u);
+		const nearEdge = await editor.evaluate(element => {
+			const style = getComputedStyle(element.querySelector('.stanza-editor-line-text')!);
+			const context = element.ownerDocument.createElement('canvas').getContext('2d')!;
+			context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+			let text = 'Review the draft. ';
+			const width = element.clientWidth - 3;
+			while (context.measureText(text + 'Draft ').width <= width) text += 'Draft ';
+			while (context.measureText(text + 'i').width <= width) text += 'i';
+			return text;
+		});
+		await input.press('ControlOrMeta+a');
+		await page.keyboard.insertText(nearEdge);
+		await expect(composer).not.toHaveClass(/\bexpanded\b/u);
+		await expect(editor.locator('.stanza-editor-line-text')).toHaveCount(1);
+		await input.press('End');
+		await expect.poll(() => editor.evaluate(element => {
+			const line = element.querySelector('.stanza-editor-line-text')!;
+			const range = element.ownerDocument.createRange();
+			range.selectNodeContents(line);
+			return element.getBoundingClientRect().right - range.getBoundingClientRect().right;
+		})).toBeLessThan(7);
+		await input.pressSequentially('12345');
+		await expect(composer).toHaveClass(/\bexpanded\b/u);
+		const expectCaretAtEnd = async (lastText: string): Promise<void> => {
+			const lastLine = editor.locator('.stanza-editor-line-text').last();
+			await expect(lastLine).toHaveText(lastText);
+			await expect.poll(() => lastLine.evaluate(line => {
+				const range = line.ownerDocument.createRange();
+				range.selectNodeContents(line);
+				const end = range.getBoundingClientRect();
+				const caret = line.closest('.stanza-editor')!.querySelector('.stanza-editor-caret')!.getBoundingClientRect();
+				return Math.max(Math.abs(end.right - caret.x), Math.abs((end.top + end.bottom - caret.top - caret.bottom) / 2));
+			})).toBeLessThan(2);
+		};
+		await expectCaretAtEnd(nearEdge + '12345');
+		const wrappedText = 'In this sample conversation, describe how the notification preferences behave for a new account. Include the default setting and what someone will see the first time they open the preferences panel, then summarize the result.';
+		const scrollbar = editor.locator('.ash-scrollbar-track-vertical');
+		await input.press('ControlOrMeta+a');
+		await page.keyboard.insertText(wrappedText);
+		await expect(composer).toHaveClass(/\bexpanded\b/u);
+		await expect(editor.locator('.stanza-editor-line-text').nth(1)).toBeVisible();
+		await expect(scrollbar).toHaveAttribute('aria-valuemax', '0');
+		await expect.poll(() => editor.evaluate(element => {
+			const [first, second] = element.querySelectorAll('.stanza-editor-line-text');
+			const nextWord = second.textContent!.trim().split(/\s+/u)[0];
+			const range = element.ownerDocument.createRange();
+			range.selectNodeContents(first);
+			const font = getComputedStyle(first);
+			const canvas = element.ownerDocument.createElement('canvas').getContext('2d')!;
+			canvas.font = `${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
+			const unused = element.getBoundingClientRect().right - range.getBoundingClientRect().right;
+			return unused - canvas.measureText(nextWord).width;
+		})).toBeLessThan(24);
+		await input.press('ControlOrMeta+a');
+		await page.keyboard.insertText('Scrollable draft\n'.repeat(24));
+		await expect(scrollbar).toHaveCSS('width', '8px');
+		await expect(scrollbar).toHaveAttribute('aria-valuemax', /^[1-9]\d*$/u);
+		await expect.poll(() => editor.evaluate(element => {
+			const track = element.querySelector('.ash-scrollbar-track-vertical')!;
+			return track.getBoundingClientRect().left - element.getBoundingClientRect().right;
+		})).toBeCloseTo(0, 0);
+		await input.press('ControlOrMeta+a');
+		await page.keyboard.insertText(wrappedText);
+		await expect(scrollbar).toHaveAttribute('aria-valuemax', '0');
+		await expect(composer).toHaveClass(/\bexpanded\b/u);
+		await expect(input).toBeFocused();
+		await input.press('ControlOrMeta+a');
+		await page.keyboard.insertText('Review the draft');
+		await expect(composer).not.toHaveClass(/\bexpanded\b/u);
+		await expect(input).toBeFocused();
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`Host input completions attach a captured file, undo and send in ${locale}`, async () => {
 			const { page } = browserTests;

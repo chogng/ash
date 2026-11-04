@@ -197,7 +197,10 @@ export class ChatService extends Disposable implements IChatService {
 		for (const item of turn.items) {
 			if (!('clientId' in item) || item.clientId !== firstMessage.clientId) continue;
 			switch (item.type) {
-				case 'userMessage': input.push({ type: 'text', text: item.itemId === firstMessage.itemId ? options.text : item.text }); break;
+				case 'userMessage':
+					if (item.itemId === firstMessage.itemId) input.push(...messageInput(options.text, options.contexts));
+					else input.push({ type: 'text', text: item.text });
+					break;
 				case 'userContext': input.push({ type: 'context', name: item.name, content: item.content, ...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {}) }); break;
 				case 'userImage': input.push({ type: 'image', url: item.url }); break;
 				case 'userImageAttachment': input.push({ type: 'imageAttachment', attachment: item.attachment }); break;

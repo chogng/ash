@@ -182,6 +182,7 @@ export interface EditorLayoutInfo {
 	readonly isWordWrapMinified: boolean;
 	readonly isViewportWrapping: boolean;
 	readonly wrappingColumn: number;
+	readonly wrappingWidth: number;
 	readonly verticalScrollbarWidth: number;
 	readonly horizontalScrollbarHeight: number;
 	readonly overviewRuler: OverviewRulerPosition;
@@ -1564,11 +1565,17 @@ export class EditorLayoutInfoComputer extends EditorOptionDefinition<EditorOptio
 			contentLeft += minimapLayout.minimapWidth;
 		}
 		const contentWidth = remainingWidth - minimapLayout.minimapWidth;
-		const viewportColumn = Math.max(1, Math.floor((contentWidth - scrollbar.verticalScrollbarSize - 2) / typicalHalfwidthCharacterWidth));
+		const viewportWrappingWidth = Math.max(0, contentWidth - scrollbar.verticalScrollbarSize - 2);
+		const viewportColumn = Math.max(1, Math.floor(viewportWrappingWidth / typicalHalfwidthCharacterWidth));
 		const verticalArrowSize = scrollbar.verticalHasArrows ? scrollbar.arrowSize : 0;
+		let wrappingWidth = Math.max(0, wrappingColumn) * typicalHalfwidthCharacterWidth;
 		if (isViewportWrapping) {
 			wrappingColumn = Math.max(1, viewportColumn);
-			if (wordWrap === 'bounded') wrappingColumn = Math.min(wrappingColumn, wordWrapColumn);
+			wrappingWidth = viewportWrappingWidth;
+			if (wordWrap === 'bounded') {
+				wrappingColumn = Math.min(wrappingColumn, wordWrapColumn);
+				wrappingWidth = Math.min(wrappingWidth, wordWrapColumn * typicalHalfwidthCharacterWidth);
+			}
 		}
 		return {
 			width: outerWidth,
@@ -1587,6 +1594,7 @@ export class EditorLayoutInfoComputer extends EditorOptionDefinition<EditorOptio
 			isWordWrapMinified,
 			isViewportWrapping,
 			wrappingColumn,
+			wrappingWidth,
 			verticalScrollbarWidth: scrollbar.verticalScrollbarSize,
 			horizontalScrollbarHeight: scrollbar.horizontalScrollbarSize,
 			overviewRuler: {
@@ -1629,6 +1637,7 @@ function defaultEditorLayoutInfo(): EditorLayoutInfo {
 		isWordWrapMinified: false,
 		isViewportWrapping: false,
 		wrappingColumn: -1,
+		wrappingWidth: 0,
 		verticalScrollbarWidth: 0,
 		horizontalScrollbarHeight: 0,
 		overviewRuler: Object.freeze({ top: 0, width: 0, height: 0, right: 0 }),

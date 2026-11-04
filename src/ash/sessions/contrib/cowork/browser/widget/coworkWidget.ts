@@ -27,6 +27,7 @@ import type { AgentInteractionDecision, ApprovalMode, ChatAgent, ChatMode, Model
 import type { ChatInputDelegate } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { IChatInputPart } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import type { ChatInputEditorOptions } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import type { ChatTurnErrorAction } from '../../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ChatListWidget } from '../../../../../workbench/contrib/chat/browser/widget/chatListWidget.js';
 import type { ChatInputState } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
@@ -133,6 +134,7 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		} : undefined));
 		this.goalBanner = new ChatGoalBannerWidget(ownerDocument);
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
+			createRequestEditor: (options: ChatInputEditorOptions) => this.input.createEditor(options),
 			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),
 			imageResourceLoader,
 			classPrefix: 'ash-cowork',

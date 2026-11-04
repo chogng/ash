@@ -416,6 +416,7 @@ configurationRegistry.registerConfiguration<number>({
 configurationRegistry.registerConfiguration<number>({
 	key: ChatInputConfiguration.lineHeight,
 	defaultValue: 20,
+	agentsWindow: { default: 0 },
 	scope: ConfigurationScope.APPLICATION,
 	schema: { anyOf: [{ const: 0 }, { type: 'integer', minimum: 8, maximum: 80 }] },
 	parse(value: unknown): number {
@@ -425,7 +426,7 @@ configurationRegistry.registerConfiguration<number>({
 	setting: {
 		valueType: 'number', minimum: 0, maximum: 80,
 		get title() { return localize('chat.input.lineHeight.title', 'Line height'); },
-		get description() { return localize('chat.input.lineHeight.description', 'Set the message input line height in pixels. The default is 20. Use 0 to calculate it from the font size.'); },
+		get description() { return localize('chat.input.lineHeight.description', 'Set the message input line height in pixels. Use 0 to calculate it from the font size.'); },
 	},
 });
 

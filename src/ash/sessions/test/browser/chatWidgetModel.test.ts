@@ -793,11 +793,12 @@ for (const steering of ['afterOutput', 'early', 'contextOnly'] as const) test(`e
 	f.threadApi.read = async () => ({ ...read, thread: { ...read.thread, turns: [{ ...turn, items }] } });
 	const rewrites: unknown[] = [];
 	f.threadApi.rewrite = async options => { rewrites.push(options); return { sessionId: options.sessionId, threadId: 'edited' }; };
-	assert.deepEqual(await f.chat.rewriteRequest({ sessionId: 'session', threadId: 'A', turnId: turn.turnId, itemId: 'original-input', text: 'Edited\nrequest', commandId: 'same-edit' }), { sessionId: 'session', threadId: 'edited' });
+	assert.deepEqual(await f.chat.rewriteRequest({ sessionId: 'session', threadId: 'A', turnId: turn.turnId, itemId: 'original-input', text: 'Edited\nrequest', commandId: 'same-edit', contexts: [{ name: 'New file', content: 'New snapshot' }] }), { sessionId: 'session', threadId: 'edited' });
 	assert.deepEqual(rewrites, [{
 		sessionId: 'session', threadId: 'A', beforeTurnId: turn.turnId, commandId: 'same-edit', title: read.thread.title, input: [
 			{ type: 'context', name: 'Original file', content: 'Accepted snapshot' },
-			{ type: 'imageAttachment', attachment: image }, { type: 'audioAttachment', attachment: audio }, { type: 'text', text: 'Edited\nrequest' },
+			{ type: 'imageAttachment', attachment: image }, { type: 'audioAttachment', attachment: audio },
+			{ type: 'context', name: 'New file', content: 'New snapshot' }, { type: 'text', text: 'Edited\nrequest' },
 			{ type: 'text', text: 'Following original text' },
 		]
 	}]);

@@ -18,7 +18,7 @@ import { EditorVisualLineProjection, type EditorVisualLine } from './modelLinePr
 export interface IViewModelLines extends IDisposable {
 	readonly projection: EditorVisualLineProjection;
 	createCoordinatesConverter(): ICoordinatesConverter;
-	setWrappingSettings(fontInfo: FontInfo, wrappingStrategy: 'simple' | 'advanced', wrappingColumn: number, wrappingIndent: WrappingIndent, wordBreak: 'normal' | 'keepAll'): boolean;
+	setWrappingSettings(fontInfo: FontInfo, wrappingStrategy: 'simple' | 'advanced', wrappingColumn: number, wrappingIndent: WrappingIndent, wordBreak: 'normal' | 'keepAll', wrappingWidth?: number): boolean;
 	setTabSize(tabSize: number): boolean;
 	getHiddenAreas(): Range[];
 	setHiddenAreas(ranges: readonly Range[]): boolean;
@@ -152,9 +152,9 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 		return new ViewModelCoordinatesConverter(this.model, this);
 	}
 
-	setWrappingSettings(fontInfo: FontInfo, wrappingStrategy: 'simple' | 'advanced', wrappingColumn: number, wrappingIndent: WrappingIndent, wordBreak: 'normal' | 'keepAll'): boolean {
+	setWrappingSettings(fontInfo: FontInfo, wrappingStrategy: 'simple' | 'advanced', wrappingColumn: number, wrappingIndent: WrappingIndent, wordBreak: 'normal' | 'keepAll', wrappingWidth?: number): boolean {
 		const nextWrapping = wrappingColumn > 0 ? EditorLineWrapping.On : EditorLineWrapping.Off;
-		const nextWidth = Math.max(0, wrappingColumn) * fontInfo.typicalHalfwidthCharacterWidth;
+		const nextWidth = wrappingWidth ?? Math.max(0, wrappingColumn) * fontInfo.typicalHalfwidthCharacterWidth;
 		// Resizing can recompute an equivalent FontInfo object. Its identity must
 		// not trigger document-wide line-break measurement when metrics are unchanged.
 		const changed = !this.fontInfo.equals(fontInfo) || this.wrapping !== nextWrapping || this.wrapWidth !== nextWidth || this.currentWrappingIndent !== wrappingIndent || this.currentWordBreak !== wordBreak || this.currentWrappingStrategy !== wrappingStrategy;
@@ -351,6 +351,7 @@ export class ViewModelLinesFromProjectedModel extends Disposable implements ICur
 			this.currentWrappingIndent,
 			this.currentWordBreak,
 			false,
+			this.wrapWidth,
 		);
 	}
 
@@ -682,29 +683,31 @@ class ViewModelCoordinatesConverter implements ICoordinatesConverter {
 	}
 
 	public convertViewRangeToModelRange(viewRange: Range): Range {
-		const range = this.validateViewRange(viewRange, this.model.getFullModelRange());
+		if (viewRange.isEmpty()) {
+			return Range.fromPositions(this.convertViewPositionToModelPosition(viewRange.getStartPosition()));
+		}
+		const start = this.lines.normalizePosition(viewRange.getStartPosition(), PositionAffinity.Left);
+		const end = this.lines.normalizePosition(viewRange.getEndPosition(), PositionAffinity.Right);
 		return Range.fromPositions(
-			this.convertViewPositionToModelPosition(range.getStartPosition()),
-			this.convertViewPositionToModelPosition(range.getEndPosition()),
+			this.convertViewPositionToModelPosition(start),
+			this.convertViewPositionToModelPosition(end),
 		);
 	}
 
 	public validateViewPosition(viewPosition: Position, expectedModelPosition: Position): Position {
 		const expected = this.convertModelPositionToViewPosition(expectedModelPosition);
-		return expected.equals(viewPosition) ? expected : this.lines.normalizePosition(viewPosition, PositionAffinity.None);
+		if (expected.equals(viewPosition)) return expected;
+		const candidate = this.lines.normalizePosition(viewPosition, PositionAffinity.None);
+		// An old view coordinate can stay in bounds after rewrapping but point to a different character.
+		return this.lines.projection.convertViewPositionToModelPosition(candidate).equals(expectedModelPosition) ? candidate : expected;
 	}
 
 	public validateViewRange(viewRange: Range, expectedModelRange: Range): Range {
+		const start = this.validateViewPosition(viewRange.getStartPosition(), expectedModelRange.getStartPosition());
 		// A caret on one side of injected text must stay collapsed; opposite affinities select the injection.
-		if (viewRange.isEmpty()) {
-			return Range.fromPositions(this.validateViewPosition(viewRange.getStartPosition(), expectedModelRange.getStartPosition()));
-		}
-		const expected = this.convertModelRangeToViewRange(expectedModelRange);
-		if (expected.equalsRange(viewRange)) return expected;
-		return Range.fromPositions(
-			this.lines.normalizePosition(viewRange.getStartPosition(), PositionAffinity.Left),
-			this.lines.normalizePosition(viewRange.getEndPosition(), PositionAffinity.Right),
-		);
+		if (expectedModelRange.isEmpty()) return Range.fromPositions(start);
+		const end = this.validateViewPosition(viewRange.getEndPosition(), expectedModelRange.getEndPosition());
+		return Range.fromPositions(start, end);
 	}
 
 	public convertModelPositionToViewPosition(modelPosition: Position, affinity: PositionAffinity = PositionAffinity.None): Position {

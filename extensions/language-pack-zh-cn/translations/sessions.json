@@ -741,6 +741,8 @@
     "sessions.settings.general": "通用",
     "sessions.settings.account": "账号",
     "sessions.settings.appearance": "外观",
+    "sessions.settings.messageInputFontSize": "用户消息字号",
+    "sessions.settings.messageInputFontSize.description": "设置输入框、已发送的用户消息和原地编辑框的字号（像素）。IDE 的消息输入框共用此设置。",
     "sessions.settings.design": "设计",
     "sessions.settings.customize": "自定义",
     "sessions.customize.tabs": "自定义标签页",

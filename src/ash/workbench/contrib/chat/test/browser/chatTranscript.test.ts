@@ -14,31 +14,91 @@ suite('chatTranscript browser component', () => {
 				window.ashChatTranscriptIntegration.prepareRequestEditing(cowork);
 			}, { cowork, theme });
 			const chat = page.locator('#app-chat');
-			const draft = chat.locator(cowork ? '.stanza-editor-input' : '.ash-chat-textarea-input');
+			const composer = chat.locator(':scope > .ash-chat-input-part');
+			const draft = composer.locator(cowork ? '.stanza-editor-input' : '.ash-chat-textarea-input');
+			const draftClickTarget = cowork ? composer.locator('.stanza-editor-line-text') : draft;
 			if (cowork) { await draft.focus(); await page.keyboard.insertText('Unsent private draft'); }
 			else await draft.fill('Unsent private draft');
+			const card = chat.locator('.ash-chat-user-message > pre');
+			const editor = chat.locator('.ash-chat-request-editor');
 			const edit = chat.getByRole('button', { name: locale === 'en' ? 'Edit message' : '编辑消息', exact: true });
+			await expect(card).toHaveText('Original request');
 			await edit.focus();
 			await page.keyboard.press('Enter');
 			const input = chat.getByRole('textbox', { name: locale === 'en' ? 'Edit request' : '编辑请求', exact: true });
+			const expectEditText = async (value: string): Promise<void> => {
+				if (cowork) {
+					await expect.poll(async () => (await editor.locator('.stanza-editor-line-text').allTextContents()).join('\n').replaceAll('\u00a0', ' ')).toBe(value);
+				} else {
+					await expect(input).toHaveValue(value);
+				}
+			};
+			const replaceEditText = async (value: string): Promise<void> => {
+				await input.press('ControlOrMeta+a');
+				await page.keyboard.insertText(value);
+			};
 			await expect(input).toBeFocused();
-			await expect(input).toHaveValue('Original request');
-			await input.fill('Cancelled change');
+			const description = locale === 'en' ? 'Sending creates a new chat from before this request.' : '发送后将从此请求之前创建新聊天';
+			await expect(input).toHaveAccessibleDescription(new RegExp(description));
+			await expect(editor.getByText(description)).toBeHidden();
+			await expectEditText('Original request');
+			await expect(card).toBeHidden();
+			await replaceEditText('Cancelled change');
 			await page.keyboard.press('Escape');
 			await expect(input).toHaveCount(0);
 			await expect(edit).toBeFocused();
-			await edit.press('Space');
-			await input.fill('Edited\nrequest');
+			await card.evaluate(element => {
+				const selection = element.ownerDocument.getSelection()!;
+				selection.selectAllChildren(element);
+				element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+			});
+			await expect(editor).toHaveCount(0);
+			expect(await page.evaluate(() => document.getSelection()!.toString())).toBe('Original request');
+			await page.evaluate(() => document.getSelection()!.removeAllRanges());
+			const cardTop = (await card.boundingBox())!.y;
+			await card.click();
+			await expect(input).toBeFocused();
+			await expectEditText('Original request');
+			await expect(card).toBeHidden();
+			expect(Math.abs((await editor.boundingBox())!.y - cardTop)).toBeLessThan(1);
+			const textArea = editor.locator('.ash-chat-input-editor-host');
+			const toolbar = editor.locator('.ash-chat-input-toolbars');
+			const toolbarOffset = async (): Promise<number> => {
+				const text = (await textArea.boundingBox())!;
+				return (await toolbar.boundingBox())!.y - text.y - text.height;
+			};
+			await expect.poll(toolbarOffset).toBeLessThan(0);
+			await replaceEditText('Review the sample workspace and summarize the changes. '.repeat(12));
+			await expect.poll(toolbarOffset).toBeGreaterThan(0);
+			await expect(input).toBeFocused();
+			await expect(editor.getByRole('button', { name: locale === 'en' ? 'Cancel edit' : '取消编辑', exact: true })).toHaveCount(0);
+			await replaceEditText('Discarded by outside click');
+			await expect.poll(toolbarOffset).toBeLessThan(0);
+			await editor.click({ position: { x: 3, y: 3 } });
+			await expect(editor).toBeVisible();
+			await draftClickTarget.click();
+			await expect(editor).toHaveCount(0);
+			await expect(draft).toBeFocused();
+			await expect(card).toHaveText('Original request');
+			await card.click();
+			await expectEditText('Original request');
+			await replaceEditText('Edited');
+			await input.press('Enter');
+			await page.keyboard.insertText('request');
+			await expectEditText('Edited\nrequest');
 			await chat.screenshot({ path: browserTests.info.outputPath('request-editor.png') });
 			await expect(chat.locator('.ash-chat-request-editor')).toHaveJSProperty('scrollWidth', await chat.locator('.ash-chat-request-editor').evaluate(element => element.clientWidth));
 			await input.press('Control+Enter');
 			await expect(chat.locator('.ash-chat-request-editor')).toHaveAttribute('aria-busy', 'true');
 			const send = chat.getByRole('button', { name: locale === 'en' ? 'Send edited request' : '发送编辑后的请求', exact: true });
 			await expect(send).toBeDisabled();
+			await draftClickTarget.click();
+			await expect(editor).toHaveAttribute('aria-busy', 'true');
+			await input.focus();
 			await page.evaluate(() => window.ashChatTranscriptIntegration.finishRequestEdit(true));
-			await expect(chat.locator('.ash-chat-request-editor [role="status"]')).toContainText('Synthetic edit failure');
+			await expect(chat.locator('.ash-chat-request-editor > [role="status"]')).toContainText('Synthetic edit failure');
 			await expect(input).toBeFocused();
-			await expect(input).toHaveValue('Edited\nrequest');
+			await expectEditText('Edited\nrequest');
 			await input.press('Control+Enter');
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.requestEdits().length)).toBe(2);
 			const edits = await page.evaluate(() => window.ashChatTranscriptIntegration.requestEdits());
@@ -49,6 +109,24 @@ suite('chatTranscript browser component', () => {
 			await expect(edit).toBeFocused();
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('Unsent private draft');
 			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([]);
+			if (!cowork) {
+				await card.click();
+				await expect(editor.locator('.ash-chat-input-part')).toHaveCount(1);
+				await expect(editor.getByRole('button', { name: locale === 'en' ? 'Add context' : '添加上下文' })).toBeVisible();
+				await input.evaluate(element => {
+					const data = new DataTransfer();
+					data.items.add(new File(['Synthetic attachment content'], 'sample.txt', { type: 'text/plain' }));
+					element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true }));
+				});
+				await expect.poll(() => input.inputValue()).toContain('sample.txt');
+				await input.press('Control+Enter');
+				await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.requestEdits().length)).toBe(3);
+				const [attached] = (await page.evaluate(() => window.ashChatTranscriptIntegration.requestEdits()))[2].contexts ?? [];
+				expect(attached).toMatchObject({ name: 'sample.txt', content: 'Synthetic attachment content' });
+				await page.evaluate(() => window.ashChatTranscriptIntegration.finishRequestEdit());
+				await expect(editor).toHaveCount(0);
+				await expect(draft).toHaveValue('Unsent private draft');
+			}
 			await chat.screenshot({ path: browserTests.info.outputPath('request-editing.png') });
 		});
 	}
@@ -681,6 +759,8 @@ suite('chatTranscript browser component', () => {
 				const text = '**Hello** 汉字\n\n[link](https://example.com)\n\n<unsafe>raw source</unsafe>';
 				await page.evaluate(({ text, cowork }) => window.ashChatTranscriptIntegration.showCopiedMessage(text, cowork), { text, cowork });
 				const row = page.locator('[data-item-id="copy-response"]');
+				await expect(row).toHaveAccessibleName('Ash');
+				await expect(row.getByText('Ash', { exact: true })).toHaveCount(0);
 				const button = row.getByRole('button', { name: locale === 'zh-CN' ? '复制消息' : 'Copy message', exact: true });
 				await expect(row.getByRole('button', { name: locale === 'zh-CN' ? '朗读' : 'Read aloud', exact: true })).toHaveCount(0);
 				for (const theme of ['dark', 'light', 'hc'] as const) {

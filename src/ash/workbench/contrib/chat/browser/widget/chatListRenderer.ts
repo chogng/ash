@@ -9,6 +9,8 @@ import { CancellationTokenSource } from '../../../../../base/common/cancellation
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { HasSpeechProvider, TextToSpeechInProgress } from '../../../speech/common/speechService.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
+import { ChatInputEditors, type ChatInputEditorOptions, type IChatInputEditor } from './input/chatInputEditorRegistry.js';
+import { installChatInputLayout } from './input/chatInputLayout.js';
 import { ChatResourceGroupWidget } from './chatContentParts/chatResourceGroupWidget.js';
 import { DefaultChatAttachmentWidget } from '../attachments/chatAttachmentWidgets.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -35,8 +37,21 @@ import { captureAnimationTarget, triggerClickAnimation, ClickAnimation } from '.
 import { ChatResponseFeedbackStoragePrefix, ChatUpvoteAnimationSettingId, isResponseHelpful, type ChatUpvoteAnimation } from '../../common/chatResponseFeedback.js';
 import { MarkHelpfulActionId } from '../actions/chatTitleActions.js';
 
+import type { IChatInputPart } from './input/chatInputPart.js';
+import type { ResolvedChatContext } from '../../../../services/chat/common/chatContextService.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+
+export interface ChatRequestInputOptions {
+	readonly container: HTMLElement;
+	readonly descriptionId: string;
+	readonly submit: (text: string, contexts: readonly ResolvedChatContext[]) => Promise<void>;
+	readonly reportError: (error: unknown) => void;
+}
+
 interface ChatListItemRendererOptions {
 	readonly classPrefix: string;
+	readonly createRequestInput?: (options: ChatRequestInputOptions) => IChatInputPart;
+	readonly createRequestEditor?: (options: ChatInputEditorOptions) => IChatInputEditor;
 	readonly deferCodeBlockModels: boolean;
 	readonly isVisible: () => boolean;
 	/** Borrowed view state remains owned by the list across row replacements. */
@@ -61,7 +76,6 @@ export class ChatListItemRenderer extends Disposable {
 	public getLastFocusedFileTree() { return this.toolPart?.getLastFocusedFileTree() ?? this.resources.value?.getLastFocusedFileTree(); }
 	inViewport = true;
 	private readonly edit = this._register(new MutableDisposable<DisposableStore>());
-	private editButton: Button | undefined;
 	private copyButton: Button | undefined;
 	private updateReadAloud: (() => void) | undefined;
 	private updateHelpful: (() => void) | undefined;
@@ -201,7 +215,7 @@ export class ChatListItemRenderer extends Disposable {
 		} else { this.resourceChanges.clear(); this.resources.clear(); }
 	}
 
-	private renderCopyAction(lifetime: DisposableStore): void {
+	private renderCopyAction(lifetime: DisposableStore): HTMLElement {
 		const actions = h(this.element.ownerDocument, 'div');
 		actions.className = 'ash-chat-message-actions';
 		const button = lifetime.add(new Button(actions, {
@@ -241,7 +255,7 @@ export class ChatListItemRenderer extends Disposable {
 			this.renderReadAloudAction(actions, lifetime);
 			if (!this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key)) this.renderHelpfulAction(actions, lifetime);
 		}
-		if (this.item.requestSource) this.renderEditAction(actions, lifetime);
+		return actions;
 	}
 
 	private renderHelpfulAction(actions: HTMLElement, lifetime: DisposableStore): void {
@@ -283,81 +297,143 @@ export class ChatListItemRenderer extends Disposable {
 		}));
 	}
 
-	private renderEditAction(actions: HTMLElement, lifetime: DisposableStore): void {
-		const edit = lifetime.add(new Button(actions, {
+	private renderEditAction(requestText: HTMLElement, lifetime: DisposableStore, actions?: HTMLElement): void {
+		const edit = actions ? lifetime.add(new Button(actions, {
 			...defaultButtonStyles, label: localize('chat.edit.label', 'Edit message'), presentation: 'quiet', size: 'small',
-		}));
-		this.editButton = edit;
-		lifetime.add(edit.onDidClick(() => {
+		})) : undefined;
+		const editTarget = edit?.domNode ?? requestText;
+		requestText.classList.add('ash-chat-request-editable');
+		const open = (): void => {
 			if (this.edit.value || !this.item.requestSource || !this.options.isVisible()) return;
 			const source = this.item.requestSource;
 			const store = new DisposableStore();
 			this.edit.value = store;
 			const editor = h(this.element.ownerDocument, 'div');
 			editor.className = 'ash-chat-request-editor';
-			const input = h(editor.ownerDocument, 'textarea');
-			input.setAttribute('aria-label', localize('chat.edit.input', 'Edit request'));
-			input.value = this.item.text;
-			input.rows = Math.min(12, Math.max(3, input.value.split('\n').length));
-			const explanation = h(editor.ownerDocument, 'p');
+			const editorHost = h(editor.ownerDocument, 'div');
+			editorHost.className = 'ash-chat-input-editor-host';
+			const explanation = h(editor.ownerDocument, 'span');
 			explanation.id = createUuid();
-			input.setAttribute('aria-describedby', explanation.id);
+			explanation.hidden = true;
 			explanation.textContent = localize('chat.edit.description', 'Sending creates a new chat from before this request. Its context and attachments are kept; the original chat and draft stay available.');
-			const controls = h(editor.ownerDocument, 'div');
-			controls.className = 'ash-chat-message-actions';
-			const send = store.add(new Button(controls, { ...defaultButtonStyles, label: localize('chat.edit.resend', 'Send edited request'), size: 'small' }));
-			const cancel = store.add(new Button(controls, { ...defaultButtonStyles, label: localize('chat.edit.cancel', 'Cancel edit'), presentation: 'quiet', size: 'small' }));
-			const feedback = h(editor.ownerDocument, 'span');
+			const feedback = h(editor.ownerDocument, 'div');
 			feedback.setAttribute('role', 'status');
-			controls.append(feedback);
-			editor.append(input, explanation, controls);
-			this.element.append(editor);
-			edit.enabled = false;
-			store.add(toDisposable(() => { editor.remove(); edit.enabled = true; }));
-			const close = (): void => {
-				const restoreFocus = this.options.isVisible() && editor.contains(editor.ownerDocument.activeElement);
+			editor.append(explanation, feedback);
+			requestText.before(editor);
+			requestText.hidden = true;
+			if (actions) actions.hidden = true;
+			store.add(toDisposable(() => {
+				editor.remove();
+				requestText.hidden = false;
+				if (actions) actions.hidden = false;
+			}));
+			const close = (restoreFocus = true): void => {
+				const returnToEdit = restoreFocus && this.options.isVisible() && editor.contains(editor.ownerDocument.activeElement);
 				this.edit.clear();
-				if (restoreFocus) edit.focus();
+				if (returnToEdit) editTarget.focus();
 				this.options.onDidChangeHeight();
 				this.options.onDidChangeContent();
 			};
 			let pending = false;
-			let attempt: { text: string; commandId: string; } | undefined;
-			const submit = async (): Promise<void> => {
-				if (pending || !input.value.trim() || this.isDisposed || !this.options.isVisible()) return;
-				if (attempt?.text !== input.value) attempt = { text: input.value, commandId: createUuid() };
+			let attempt: { signature: string; commandId: string; } | undefined;
+			const reportError = (error: unknown): void => {
+				if (this.edit.value === store) feedback.textContent = localize('chat.edit.failed', 'Could not send the edited request: {0}', String(error));
+			};
+			const submit = async (text: string, contexts: readonly ResolvedChatContext[] = []): Promise<void> => {
+				if (pending || !text.trim() || this.isDisposed || !this.options.isVisible()) return;
+				const signature = JSON.stringify([text, contexts]);
+				if (attempt?.signature !== signature) attempt = { signature, commandId: createUuid() };
 				pending = true;
-				input.readOnly = true;
-				send.enabled = cancel.enabled = false;
 				editor.setAttribute('aria-busy', 'true');
 				feedback.textContent = '';
 				try {
-					await this.commands.executeCommand('workbench.action.chat.resendRequest', { ...source, ...attempt });
-					if (!this.isDisposed) close();
-				} catch (error) {
-					if (!this.isDisposed) feedback.textContent = localize('chat.edit.failed', 'Could not send the edited request: {0}', String(error));
+					await this.commands.executeCommand('workbench.action.chat.resendRequest', { ...source, text, commandId: attempt.commandId, contexts });
+					if (this.edit.value === store) close();
 				} finally {
 					pending = false;
-					if (!this.isDisposed && this.edit.value === store) {
-						input.readOnly = false;
-						send.enabled = !!input.value.trim();
-						cancel.enabled = true;
-						editor.removeAttribute('aria-busy');
-						const active = editor.ownerDocument.activeElement;
-						if (this.options.isVisible() && (editor.contains(active) || active === editor.ownerDocument.body)) input.focus();
-					}
+					if (this.edit.value === store) editor.removeAttribute('aria-busy');
 				}
 			};
-			store.add(send.onDidClick(() => void submit()));
-			store.add(cancel.onDidClick(close));
-			store.add(addDisposableListener(input, 'input', () => { send.enabled = !!input.value.trim(); }));
+			try {
+				if (this.options.createRequestInput) {
+					const input = store.add(this.options.createRequestInput({ container: editor, descriptionId: explanation.id, submit, reportError }));
+					input.appendToDraft(this.item.text);
+					input.focus();
+				} else {
+					editor.classList.add('ash-chat-input-container');
+					const controls = h(editor.ownerDocument, 'div', { className: 'ash-chat-input-toolbars' });
+					const send = store.add(new Button(controls, {
+						...defaultButtonStyles, label: localize('chat.edit.resend', 'Send edited request'), icon: Lxicon.arrowUp, iconOnly: true,
+					}));
+					send.domNode.classList.add('ash-chat-input-action', 'ash-chat-input-send-action');
+					editor.prepend(editorHost, controls);
+					const options: ChatInputEditorOptions = {
+						container: editorHost, placeholder: '', ariaLabel: localize('chat.edit.input', 'Edit request'),
+						ariaDescribedBy: explanation.id, submitWithModifier: true, height: { minimum: 0 }, tabFocusMode: true,
+					};
+					const input = store.add(this.options.createRequestEditor?.(options) ?? ChatInputEditors.create(options));
+					input.value = this.item.text;
+					send.enabled = !!input.value.trim();
+					store.add(installChatInputLayout(editor, input, controls));
+					const sendEdit = async (): Promise<void> => {
+						if (pending || !input.value.trim()) return;
+						input.setReadOnly(true);
+						send.enabled = false;
+						try { await submit(input.value); }
+						catch (error) { reportError(error); }
+						finally {
+							if (this.edit.value === store) {
+								input.setReadOnly(false);
+								send.enabled = !!input.value.trim();
+								const active = editor.ownerDocument.activeElement;
+								if (this.options.isVisible() && (editor.contains(active) || active === editor.ownerDocument.body)) input.focus();
+							}
+						}
+					};
+					store.add(send.onDidClick(() => void sendEdit()));
+					store.add(input.onDidChange(() => { send.enabled = !!input.value.trim() && !pending; }));
+					store.add(input.onDidSubmit(() => void sendEdit()));
+					input.layout();
+					input.focus();
+					input.setSelection({ anchor: input.value.length, active: input.value.length });
+				}
+			} catch (error) {
+				this.edit.clear();
+				throw error;
+			}
+			// Wait until the outside click finishes so collapsing the editor does not move its target.
+			const quickInput = this.instantiationService.getOptional(IQuickInputService);
+			const dismiss = store.add(new RunOnceScheduler(() => { if (!pending) close(false); }, 0));
+			let pressedInside = false;
+			store.add(addDisposableListener(editor.ownerDocument, 'pointerdown', event => {
+				pressedInside = event.composedPath().includes(editor) || !!quickInput?.currentQuickInput;
+			}, true));
+			store.add(addDisposableListener(editor.ownerDocument, 'click', event => {
+				if (!pending && event.detail > 0 && !pressedInside && !event.composedPath().includes(editor)) dismiss.schedule();
+			}, true));
 			store.add(addDisposableListener(editor, 'keydown', event => {
 				if (event.isComposing) return;
 				if (event.key === 'Escape' && !pending) { event.preventDefault(); event.stopPropagation(); close(); }
-				else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.isComposing) { event.preventDefault(); void submit(); }
 			}));
-			input.focus();
 			this.options.onDidChangeHeight(); this.options.onDidChangeContent();
+		};
+		if (edit) {
+			lifetime.add(edit.onDidClick(open));
+		} else {
+			requestText.tabIndex = 0;
+			requestText.setAttribute('role', 'button');
+			requestText.setAttribute('aria-description', localize('chat.edit.label', 'Edit message'));
+			lifetime.add(addDisposableListener(requestText, 'keydown', event => {
+				if (event.isComposing || (event.key !== 'Enter' && event.key !== ' ')) return;
+				event.preventDefault();
+				event.stopPropagation();
+				if (!event.repeat) open();
+			}));
+		}
+		lifetime.add(addDisposableListener(requestText, 'click', event => {
+			// Keep drag-to-select available on the message text.
+			const selection = requestText.ownerDocument.getSelection();
+			if (event.button === 0 && (!selection || selection.isCollapsed)) open();
 		}));
 	}
 
@@ -482,11 +558,14 @@ export class ChatListItemRenderer extends Disposable {
 			this.context = { disclosure, summary, content };
 			return;
 		}
-		const label = h(this.element.ownerDocument, item.type === 'advisor' ? 'summary' : 'div');
-		label.className = `${this.options.classPrefix}-item-label`;
-		label.textContent = this.accessibilityProvider.getAriaLabel(item);
 		const body = item.type === 'advisor' ? h(this.element.ownerDocument, 'details') : article;
-		if (item.type !== 'reasoning') {
+		if (item.type === 'userMessage' || item.type === 'agentMessage') {
+			if (item.type === 'userMessage') article.classList.add('ash-chat-user-message');
+			article.setAttribute('aria-label', this.accessibilityProvider.getAriaLabel(item));
+		} else if (item.type !== 'reasoning') {
+			const label = h(article.ownerDocument, item.type === 'advisor' ? 'summary' : 'div');
+			label.className = `${this.options.classPrefix}-item-label`;
+			label.textContent = this.accessibilityProvider.getAriaLabel(item);
 			body.append(label);
 		}
 		if (body !== article) {
@@ -496,6 +575,7 @@ export class ChatListItemRenderer extends Disposable {
 			article.append(body);
 		}
 		let markdownPart: ChatMarkdownContentPart | undefined;
+		let requestText: HTMLElement | undefined;
 		if (item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor') {
 			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
@@ -540,6 +620,7 @@ export class ChatListItemRenderer extends Disposable {
 			const content = h(this.element.ownerDocument, 'pre');
 			content.textContent = item.text;
 			body.append(content);
+			if (item.type === 'userMessage') requestText = content;
 		}
 		const attachments = h(article.ownerDocument, 'div');
 		body.append(attachments);
@@ -553,7 +634,12 @@ export class ChatListItemRenderer extends Disposable {
 		}
 		this.markdownPart = markdownPart;
 		this.attachments = attachments;
-		if (item.type === 'agentMessage' || item.type === 'userMessage') this.renderCopyAction(disposables);
+		if (item.type === 'agentMessage') {
+			this.renderCopyAction(disposables);
+		} else if (requestText) {
+			const actions = this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key) ? undefined : this.renderCopyAction(disposables);
+			if (item.requestSource) this.renderEditAction(requestText, disposables, actions);
+		}
 	}
 }
 

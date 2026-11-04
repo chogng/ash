@@ -11,18 +11,12 @@
 /* One composer is retained while navigation changes the surrounding Parts. */
 .ash-chat > .ash-chat-input-part.ash-sessions-chat-input.chat-composer {
 	--ash-chat-input-min-height: 0px;
-	--ash-chat-input-padding: var(--ash-spacing-size80)
-		var(--ash-spacing-size120);
 	--ash-chat-input-border: var(--ash-border);
 	--ash-chat-input-focus-border: var(--ash-border);
 	--ash-chat-input-shadow: var(--ash-sessions-inputShadow);
 	--ash-chat-input-radius: var(--ash-cornerRadius-xLarge);
 	--ash-chat-input-toolbar-gap: var(--ash-spacing-size80);
-	width: 100%;
-	max-width: 728px;
-	align-self: center;
-	margin-top: auto;
-	padding: 0 var(--ash-spacing-size240) var(--ash-spacing-size120);
+	padding-block: 0 var(--ash-spacing-size120);
 }
 
 /* Keep Code quiet at rest; use the notification's soft elevation during interaction. */

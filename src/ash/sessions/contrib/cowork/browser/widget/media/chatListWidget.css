@@ -30,10 +30,6 @@
 	font-weight: var(--ash-fontWeight-semiBold);
 	text-transform: uppercase;
 }
-.ash-cowork-item-userMessage pre {
-	border-radius: var(--ash-cornerRadius-medium);
-	background: var(--ash-input-background);
-}
 .ash-cowork-item pre {
 	overflow-wrap: anywhere;
 	margin: 0;

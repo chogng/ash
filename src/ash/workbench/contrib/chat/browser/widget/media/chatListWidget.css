@@ -8,6 +8,42 @@
 	flex: 1 1 auto;
 }
 
+/* Continue the fixed chat header over the leading edge of the scrolling transcript. */
+.ash-chat-transcript-viewport::before {
+	content: "";
+	position: absolute;
+	inset: 0 0 auto;
+	block-size: var(--ash-chat-transcript-overlap, 0px);
+	z-index: 1;
+	pointer-events: none;
+	background: linear-gradient(
+		to bottom,
+		var(--ash-chat-transcript-surface, var(--ash-editor-background)),
+		transparent
+	);
+}
+
+:where([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-chat-transcript-viewport::before {
+	display: none;
+}
+
+@media (forced-colors: active) {
+	.ash-chat-transcript-viewport::before {
+		display: none;
+	}
+}
+
+.ash-chat-transcript-viewport > .ash-scrollbar-viewport {
+	scroll-padding-block-start: var(--ash-chat-transcript-overlap, 0px);
+}
+
+.ash-chat-transcript-viewport
+	> .ash-scrollbar-viewport
+	> .ash-chat-transcript-content {
+	padding-block-start: max(6px, var(--ash-chat-transcript-overlap, 0px));
+}
+
 .ash-chat-transcript {
 	padding: 6px 12px 16px;
 }
@@ -35,16 +71,36 @@
 	font-weight: var(--ash-fontWeight-semiBold);
 	text-transform: uppercase;
 }
-.ash-chat-item-userMessage pre {
-	border-radius: var(--ash-cornerRadius-medium);
-	background: var(--ash-input-background);
-}
 .ash-chat-item pre {
 	overflow-wrap: anywhere;
 	margin: 0;
 	padding: 8px;
 	font: inherit;
 	white-space: pre-wrap;
+}
+article.ash-chat-user-message > pre {
+	box-sizing: border-box;
+	font-size: var(--ash-chat-request-font-size, inherit);
+	inline-size: fit-content;
+	max-inline-size: 90%;
+	margin-inline-start: auto;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	text-align: left;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, transparent);
+	border-radius: var(--ash-cornerRadius-xLarge);
+	background-color: color-mix(
+		in srgb,
+		var(--ash-foreground) 8%,
+		var(--ash-chat-transcript-surface, var(--ash-editor-background))
+	);
+}
+.ash-chat-request-editable {
+	cursor: text;
+}
+.ash-chat-request-editable:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
 .ash-chat-list-widget .ash-markdown pre {
 	font-family: var(--ash-chat-code-font-family);
@@ -122,6 +178,9 @@
 	gap: 4px;
 	margin: 4px 0;
 }
+.ash-chat-user-message > .ash-chat-message-actions {
+	justify-content: flex-end;
+}
 .ash-chat-message-copy-status,
 .ash-chat-message-read-status {
 	min-width: 0;
@@ -129,6 +188,7 @@
 	overflow-wrap: anywhere;
 }
 
+.ash-chat-message-actions[hidden],
 .ash-chat-message-actions > .ash-button[hidden] {
 	display: none;
 }
@@ -139,29 +199,26 @@
 }
 
 .ash-chat-request-editor {
-	margin-top: var(--ash-spacing-size120);
+	--ash-chat-input-min-height: 0px;
+	--ash-chat-input-padding: var(--ash-spacing-size80)
+		var(--ash-spacing-size120);
+	--ash-chat-input-radius: var(--ash-cornerRadius-xLarge);
 }
-.ash-chat-request-editor textarea {
-	box-sizing: border-box;
-	width: 100%;
-	resize: vertical;
-	padding: var(--ash-spacing-size80);
-	font: inherit;
-	color: var(--ash-input-foreground);
-	background: var(--ash-input-background);
-	border: var(--ash-strokeThickness) solid
-		var(--ash-input-border, var(--ash-contrastBorder));
-	border-radius: var(--ash-cornerRadius-small);
+.ash-chat-request-editor .ash-chat-input-container:focus-within,
+.ash-chat-request-editor.ash-chat-input-container:focus-within {
+	border-color: var(--ash-focusBorder);
 }
-.ash-chat-request-editor textarea:focus-visible {
-	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
-	outline-offset: calc(-1 * var(--ash-strokeThickness));
+.ash-chat-request-editor > .ash-chat-input-toolbars {
+	justify-content: flex-end;
 }
-.ash-chat-request-editor p {
-	margin: var(--ash-spacing-size80) 0;
-	color: var(--ash-description-foreground);
+.ash-chat-request-editor > [role="status"] {
+	grid-column: 1 / -1;
+	color: var(--ash-error-foreground);
+	overflow-wrap: anywhere;
 }
-
+.ash-chat-request-editor > [role="status"]:empty {
+	position: absolute;
+}
 .ash-chat-item:focus-visible {
 	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
 	outline-offset: calc(-1 * var(--ash-strokeThickness));
