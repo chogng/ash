@@ -4,7 +4,6 @@ import { Emitter, type Event } from '../../../base/common/event.js';
 import { BugIndicatingError, onUnexpectedError } from '../../../base/common/errors.js';
 import { StringSHA1 } from '../../../base/common/hash.js';
 import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
-import * as strings from '../../../base/common/strings.js';
 import { URI } from '../../../base/common/uri.js';
 import { LengthEdit, LengthReplacement } from '../core/edits/lengthEdit.js';
 import { TextEdit } from '../core/edits/textEdit.js';
@@ -20,6 +19,7 @@ import { DEFAULT_WORD_REGEXP, getWordAtText, type IWordAtPosition } from '../cor
 import { compressConsecutiveTextChanges, TextModelChangeReason, type TextChange, type TextModelChange, type TextModelContentChange, type TextSnapshot } from '../core/textChange.js';
 import { TextEditHistoryMergeMode, type ISingleEditOperation } from '../core/editOperation.js';
 import { TextLength } from '../core/text/textLength.js';
+import { isInteriorPositionAfterHighSurrogate } from '../core/text/positionToOffsetImpl.js';
 import { canCoalesceHistoryEdits, canReplaceHistoryEdits, coalesceHistoryUndoEdits, normalizeInverseEdits, replaceHistoryUndoEdits, type OffsetTextEdit } from './historyCoalescing.js';
 import { guessIndentation } from './indentationGuesser.js';
 import { findNextTextMatch, findTextMatches, TextSearchPatternKind, type TextSearchMatch, type TextModelSearchQuery } from './textModelSearch.js';
@@ -866,7 +866,7 @@ export class TextModel implements ITextModel {
 	validatePosition(position: IPosition): Position {
 		this.assertNotDisposed();
 		const bounded = this.clampPosition(position);
-		return this.isInsideSurrogatePair(bounded)
+		return isInteriorPositionAfterHighSurrogate(this.buffer, bounded)
 			? new Position(bounded.lineNumber, bounded.column - 1)
 			: bounded;
 	}
@@ -876,8 +876,8 @@ export class TextModel implements ITextModel {
 		const lifted = Range.lift(range);
 		const start = this.clampPosition(lifted.getStartPosition());
 		const end = this.clampPosition(lifted.getEndPosition());
-		const startInside = this.isInsideSurrogatePair(start);
-		const endInside = this.isInsideSurrogatePair(end);
+		const startInside = isInteriorPositionAfterHighSurrogate(this.buffer, start);
+		const endInside = isInteriorPositionAfterHighSurrogate(this.buffer, end);
 		if (start.equals(end) && startInside) {
 			return new Range(start.lineNumber, start.column - 1, end.lineNumber, end.column - 1);
 		}
@@ -902,7 +902,8 @@ export class TextModel implements ITextModel {
 		if (lifted.startColumn < 1 || lifted.endColumn < 1) return false;
 		if (lifted.startColumn > this.getLineMaxColumn(lifted.startLineNumber)) return false;
 		if (lifted.endColumn > this.getLineMaxColumn(lifted.endLineNumber)) return false;
-		return !this.isInsideSurrogatePair(lifted.getStartPosition()) && !this.isInsideSurrogatePair(lifted.getEndPosition());
+		return !isInteriorPositionAfterHighSurrogate(this.buffer, lifted.getStartPosition())
+			&& !isInteriorPositionAfterHighSurrogate(this.buffer, lifted.getEndPosition());
 	}
 
 	private clampPosition(position: IPosition): Position {
@@ -911,11 +912,6 @@ export class TextModel implements ITextModel {
 		if (rawLine < 1) return new Position(1, 1);
 		if (rawLine > this.lineCount) return new Position(this.lineCount, this.getLineMaxColumn(this.lineCount));
 		return new Position(rawLine, Math.min(Math.max(rawColumn, 1), this.getLineMaxColumn(rawLine)));
-	}
-
-	private isInsideSurrogatePair(position: IPosition): boolean {
-		if (position.column <= 1 || position.column >= this.getLineMaxColumn(position.lineNumber)) return false;
-		return strings.isHighSurrogate(this.buffer.getLineCharCode(position.lineNumber, position.column - 2));
 	}
 
 	getLanguageIdAtPosition(lineNumber: number, column: number): string {
