@@ -951,6 +951,7 @@ export abstract class Workbench extends Disposable {
 				focusConversation(sessionId, threadId);
 			},
 			getActiveConversation: () => {
+				if (!layout.isPartVisible('sessions')) return undefined;
 				const selected = view.activeSelection;
 				return selected?.kind === 'session' ? { sessionId: selected.active.session.sessionId, threadId: selected.active.threadId } : undefined;
 			},
@@ -969,7 +970,7 @@ export abstract class Workbench extends Disposable {
 					sessionsPart!.focus();
 				}).catch(error => notificationService.error(String(error)));
 			},
-			captureActiveDraft: () => sessionsPart!.captureActiveDraft(),
+			captureActiveDraft: () => layout.isPartVisible('sessions') ? sessionsPart!.captureActiveDraft() : Promise.resolve(undefined),
 			openConversation: async (sessionId, threadId, providerId) => {
 				if (providerId !== undefined) {
 					sessionId = sessionIdentity(providerId, sessionId, provider.id);

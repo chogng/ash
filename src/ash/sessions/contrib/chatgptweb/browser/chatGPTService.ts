@@ -1,4 +1,3 @@
-import { shouldRunCowork } from '../../../browser/chatTaskRouting.js';
 import { ChatTimelineStorage, type ChatTimeline, type ChatTimelineTask } from '../../../browser/chatTimelineStorage.js';
 import { ChatCoworkTasks } from '../../cowork/browser/chatCoworkTasks.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -17,10 +16,9 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { ChatGPTAuthenticationError, IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { ChatGPTClient, ChatGPTRequestError, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTModel, type ChatGPTFile, type ChatGPTProject, type ChatGPTHistory } from './chatGPTClient.js';
 import { createChatGPTFetch } from './chatGPTFetch.js';
-import { getChatGPTRichContentText } from '../../chat/browser/chatGPTRichContent.js';
+import { getChatGPTRichContentText } from './chatGPTRichContent.js';
 import type { ChatGPTVoiceSession } from './chatGPTVoiceSession.js';
 
-export const chatGPTNavigationContainerId = 'sessions.chatgpt.navigation';
 const selectedConversationKey = 'sessions.chatgpt.conversation';
 const catalogKey = 'sessions.chatgpt.catalog.v1';
 const historyFreshnessMs = 60_000;
@@ -68,7 +66,6 @@ export function coworkTaskStatus(task: ChatCoworkTaskView): string {
 
 export interface ChatGPTState {
 	readonly coworkTasks: readonly ChatCoworkTaskView[];
-	readonly coworkStarting: boolean;
 	readonly localConversationId: string;
 	readonly draft: string;
 	readonly attachments: readonly ChatGPTAttachment[];
@@ -89,7 +86,7 @@ export interface ChatGPTState {
 	readonly models: readonly ChatGPTModel[];
 	readonly model: string;
 	readonly modelPreset?: string;
-	/** Explicit model routing suppresses automatic Cowork for this unbound draft. */
+	/** An explicit draft choice must still resolve before a new message can be queued. */
 	readonly explicitDraftModel?: boolean;
 	readonly conversationId?: string;
 	readonly title: string;
@@ -122,11 +119,6 @@ export function pendingCreationStatus(state: ChatGPTState): string {
 	return '';
 }
 
-export function isCoworkSubmission(state: ChatGPTState): boolean {
-	return !state.conversationId && !state.pendingCreation && !state.explicitDraftModel
-		&& state.attachments.length === 0 && shouldRunCowork(state.draft);
-}
-
 export interface IChatGPTService {
 	readonly state: IObservable<ChatGPTState>;
 	readonly newDraftRevision: number;
@@ -146,7 +138,8 @@ export interface IChatGPTService {
 	archive(id: string): Promise<void>;
 	deleteConversation(id: string): Promise<void>;
 	moveToProject(id: string, projectId: string): Promise<void>;
-	share(id: string): Promise<string | undefined>;
+	share(id: string, messageId?: string): Promise<string | undefined>;
+	readResponseAudio(id: string, messageId: string, signal: AbortSignal): Promise<Blob>;
 	listProjects(signal: AbortSignal): Promise<readonly ChatGPTProject[]>;
 	setDraft(value: string): void;
 	setModel(value: string, preset?: string): void;
@@ -166,7 +159,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private newConversationId = crypto.randomUUID();
 	private readonly localIdsByRemoteId = new Map<string, string>();
 	private readonly model = observableValue<ChatGPTState>('chatgpt', {
-		coworkTasks: [], coworkStarting: false, localConversationId: this.newConversationId, draft: '', attachments: [], voice: 'idle', voiceTranscript: [], connected: false, busy: false, loading: undefined, sending: false, conversations: [], projects: [], hasMore: false,
+		coworkTasks: [], localConversationId: this.newConversationId, draft: '', attachments: [], voice: 'idle', voiceTranscript: [], connected: false, busy: false, loading: undefined, sending: false, conversations: [], projects: [], hasMore: false,
 		models: [], model: '', title: 'ChatGPT', parentId: crypto.randomUUID(), messages: [], error: '', uncertain: false, stopped: false, managing: false,
 		networkAvailable: true, canQueue: false, pendingSync: false,
 	});
@@ -174,7 +167,6 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private remoteTimeline: ChatTimelineStorage | undefined;
 	private cacheScope: string | undefined;
 	private readonly taskWatchers = this._register(new DisposableStore());
-	private readonly taskLaunch = this._register(new DisposableStore());
 	private readonly drafts = new Map<string, ChatGPTDraft>();
 	private readonly attachmentFiles = new Map<string, File>();
 	private readonly uploads = new Map<string, AbortController>();
@@ -233,7 +225,6 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.uploads.clear(); this.attachmentFiles.clear(); this.drafts.clear();
 		this.localIdsByRemoteId.clear();
 		this.historyValidations.clear();
-		this.taskLaunch.clear();
 		this.taskWatchers.clear();
 		this.newConversationId = crypto.randomUUID();
 		this.drafts.set(this.newConversationId, { text: draft, attachments: [] });
@@ -246,7 +237,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		// User-authored draft text stays local. Conversation IDs, files and history
 		// belong to the retired account and cannot be reused with its successor.
 		this.update({
-			coworkTasks: [], coworkStarting: false, localConversationId: this.newConversationId, draft, attachments: [], connected: false, busy: false, sending: false, managing: false,
+			coworkTasks: [], localConversationId: this.newConversationId, draft, attachments: [], connected: false, busy: false, sending: false, managing: false,
 			loading: undefined, conversations: this.localConversations(), projects: [], models: [], model: '', modelPreset: undefined,
 			conversationId: undefined, messages: [], parentId: crypto.randomUUID(), title: 'ChatGPT',
 			voice: 'idle', voiceTranscript: [], uncertain: false, stopped: false, hasMore: false, error: '',
@@ -278,7 +269,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 
 	public async refresh(): Promise<void> {
 		const state = this.model.get();
-		if (this.isDisposed || !state.networkAvailable || this.refreshOperation || this.syncingOutbox || state.busy || state.sending || state.managing || state.coworkStarting || state.voice !== 'idle') { return; }
+		if (this.isDisposed || !state.networkAvailable || this.refreshOperation || this.syncingOutbox || state.busy || state.sending || state.managing || state.voice !== 'idle') { return; }
 		if (!state.connected) {
 			if (this.cacheScope) { await this.loadCatalog(); await this.syncOutbox(); }
 			return;
@@ -387,7 +378,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private async removeConversation(id: string, deleted: boolean): Promise<void> {
 		if (id.startsWith('local:')) {
 			const state = this.model.get();
-			if (state.coworkStarting || state.sending || state.managing) return;
+			if (state.sending || state.managing) return;
 			const wasSelected = selectedChatConversationId(state) === id;
 			if (deleted) {
 				this.timeline.remove(id);
@@ -437,12 +428,16 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		});
 	}
 
-	public share(id: string): Promise<string | undefined> { return this.manage(id, signal => this.client.share(id, signal)); }
+	public share(id: string, messageId?: string): Promise<string | undefined> { return this.manage(id, signal => this.client.share(id, signal, messageId)); }
+
+	public readResponseAudio(id: string, messageId: string, signal: AbortSignal): Promise<Blob> {
+		return this.client.readResponseAudio(id, messageId, AbortSignal.any([signal, this.management.signal, AbortSignal.timeout(30_000)]));
+	}
 
 	/** Serialize writes independently of history reads; navigation must not abort a possibly accepted mutation. */
 	private async manage<T>(id: string, operation: (signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
 		const state = this.model.get();
-		if (this.isDisposed || !state.connected || state.busy || state.sending || state.coworkStarting || state.managing || state.voice !== 'idle' || !state.conversations.some(item => item.id === id)) { return undefined; }
+		if (this.isDisposed || !state.connected || state.busy || state.sending || state.managing || state.voice !== 'idle' || !state.conversations.some(item => item.id === id)) { return undefined; }
 		this.refreshOperation?.abort();
 		this.update({ managing: true, error: '' });
 		const management = this.management;
@@ -697,67 +692,6 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const state = this.model.get();
 		if (state.localConversationId !== localId) return;
 		this.update({ coworkTasks: state.coworkTasks.map(entry => entry.threadId === task.threadId && entry.sessionId === task.sessionId ? { ...entry, ...change } : entry) });
-	}
-
-	private async runCoworkTask(state: ChatGPTState): Promise<void> {
-		const id = state.conversationId ?? `local:${state.localConversationId}`;
-		const prompt = state.draft.trim();
-		if (!this.instantiation) return;
-		if (!state.conversationId && this.newConversationId === state.localConversationId) this.newConversationId = crypto.randomUUID();
-		this.update({ coworkStarting: true, error: '' });
-		const controller = new AbortController();
-		const lifetime = this.taskLaunch.add(new DisposableStore());
-		lifetime.add(toDisposable(() => controller.abort()));
-		const storage = this.timelineFor(id);
-		let task: ChatTimelineTask | undefined;
-		try {
-			const tasks = this.instantiation.createInstance(ChatCoworkTasks);
-			const { sessionId, threadId, model } = await tasks.prepare(prompt, controller.signal, lifetime);
-			if (controller.signal.aborted) return;
-			task = { prompt, sessionId, threadId, afterMessageId: state.messages.at(-1)?.id };
-			const timeline = storage.read(id) ?? { localId: state.localConversationId, tasks: [], title: prompt.slice(0, 80) };
-			storage.write(id, { ...timeline, tasks: [...timeline.tasks, task] });
-			if (!state.conversationId) {
-				this.update({ conversations: this.withLocalConversations(this.model.get().conversations) });
-				if (this.draftKey() === state.localConversationId) {
-					this.rememberConversation(id);
-					this.update({ title: timeline.title ?? state.title });
-				}
-			}
-			await this.storage.flush();
-			if (controller.signal.aborted) return;
-			if (this.model.get().localConversationId === state.localConversationId) {
-				const visible = this.model.get().coworkTasks;
-				if (!visible.some(entry => entry.sessionId === sessionId && entry.threadId === threadId)) {
-					this.update({ coworkTasks: [...visible, task] });
-					this.watchCoworkTask(state.localConversationId, task);
-				}
-			}
-			const recent = state.messages.filter(message => !message.activity).slice(-12)
-				.map(message => `${message.role}: ${message.text.slice(0, 2000)}`).join('\n');
-			await model.send(prompt, 'agent', undefined, recent ? [{ name: localize('sessions.chat.coworkContext', 'Conversation context'), content: recent }] : undefined, { signal: controller.signal });
-			if (controller.signal.aborted) return;
-			const retainedDraft = this.drafts.get(state.localConversationId);
-			if (retainedDraft?.text === state.draft && !retainedDraft.attachments.length) {
-				this.drafts.delete(state.localConversationId);
-				if (this.draftKey() === state.localConversationId) this.update({ draft: '' });
-			}
-		} catch (error) {
-			if (controller.signal.aborted) return;
-			const message = this.errorText(error);
-			const timeline = task && storage.read(id);
-			if (task && timeline) {
-				const failed = task;
-				storage.write(id, { ...timeline, tasks: timeline.tasks.map(entry => entry.threadId === failed.threadId && entry.sessionId === failed.sessionId ? { ...entry, error: message } : entry) });
-				this.updateCoworkTask(state.localConversationId, task, { error: message });
-			} else if (this.draftKey() === state.localConversationId) {
-				this.update({ error: message });
-			}
-		} finally {
-			if (!controller.signal.aborted) this.update({ coworkStarting: false });
-			this.taskLaunch.delete(lifetime);
-			lifetime.dispose();
-		}
 	}
 
 	private localConversations(): ChatGPTConversation[] {
@@ -1231,7 +1165,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const model = models.find(candidate => candidate.id === modelId);
 		if (!model) throw new Error(localize('sessions.newChatModel.unavailable', 'The selected model is no longer available.'));
 		const state = this.model.get();
-		if (this.isDisposed || state.sending || state.managing || state.coworkStarting || state.voice !== 'idle') {
+		if (this.isDisposed || state.sending || state.managing || state.voice !== 'idle') {
 			throw new Error(localize('sessions.newChatModel.chatGPTBusy', 'Finish the current ChatGPT operation before opening a new ChatGPT chat.'));
 		}
 		const draft = this.drafts.get(this.newConversationId);
@@ -1419,12 +1353,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	public async send(): Promise<void> {
 		const state = this.model.get();
 		const text = state.draft.trim();
-		if (this.isDisposed || state.pendingCreation || state.coworkStarting || state.busy || state.sending || state.managing || state.voice !== 'idle') return;
+		if (this.isDisposed || state.pendingCreation || state.busy || state.sending || state.managing || state.voice !== 'idle') return;
 		this.refreshOperation?.abort();
-		if (this.instantiation && isCoworkSubmission(state)) {
-			await this.runCoworkTask(state);
-			return;
-		}
 		const preset = state.models.find(model => model.id === state.model)?.presets.find(preset => preset.id === state.modelPreset);
 		const creation = canQueueChatGPTCreation(state) ? {
 			localId: state.localConversationId, text, messageId: crypto.randomUUID(), parentId: state.parentId,

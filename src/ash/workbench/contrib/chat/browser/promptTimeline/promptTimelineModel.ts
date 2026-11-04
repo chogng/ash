@@ -33,7 +33,7 @@ export class PromptTimelineModel<T extends PromptTimelinePrompt = PromptTimeline
 		let high = this.prompts.length;
 		while (low < high) {
 			const middle = (low + high) >>> 1;
-			if (this.getRow(this.prompts[middle].id).getBoundingClientRect().bottom <= top) low = middle + 1;
+			if (this.bounds(this.prompts[middle]).top <= top) low = middle + 1;
 			else high = middle;
 		}
 		return low;

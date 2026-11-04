@@ -11,7 +11,7 @@ import '../workbench/contrib/browserView/electron-browser/browserView.contributi
 import './contrib/canvases/electron-browser/sessionCanvases.contribution.js';
 import '../workbench/services/browserView/electron-browser/playwrightWorkbenchService.js';
 import './contrib/browserView/browser/sessionBrowserView.contribution.js';
-import './contrib/chatgptweb/browser/chatGPTWeb.contribution.js';
+import './electron-browser/chatWorkspace.contribution.js';
 import './sessions.common.main.js';
 import '../platform/update/common/update.config.contribution.js';
 import '../workbench/services/update/electron-browser/updateService.js';

@@ -143,17 +143,30 @@ export class ChatGPTClient {
 		await this.consume(`/conversation/id/${encodeURIComponent(id)}`, signal, 'DELETE');
 	}
 
-	async share(id: string, signal: AbortSignal): Promise<string> {
-		const history = await this.history(id, signal);
+	async share(id: string, signal: AbortSignal, messageId?: string): Promise<string> {
+		const node = messageId ?? (await this.history(id, signal)).parentId;
 		const response = await this.request('/share/v2/create', signal, {
 			method: 'POST', headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ conversation_id: id, current_node_id: history.parentId, is_anonymous: true }),
+			body: JSON.stringify({ conversation_id: id, current_node_id: node, is_anonymous: true }),
 		});
 		const value: unknown = await response.json();
 		if (!isRecord(value) || typeof value.share_url !== 'string') { throw this.invalidResponse(); }
 		const url = new URL(value.share_url);
 		if (url.origin !== 'https://chatgpt.com' || !url.pathname.startsWith('/share/') || url.username || url.password || url.hash) { throw this.invalidResponse(); }
 		return url.href;
+	}
+
+	async readResponseAudio(id: string, messageId: string, signal: AbortSignal): Promise<Blob> {
+		const query = new URLSearchParams({ conversation_id: id, message_id: messageId, voice: 'juniper', format: 'mp3' });
+		const response = await this.request('/synthesize?' + query, signal);
+		if (!/^audio\/(?:mpeg|mp3)(?:;|$)/iu.test(response.headers.get('content-type') ?? '')) {
+			await response.body?.cancel();
+			throw this.invalidResponse();
+		}
+		const audio = await response.blob();
+		signal.throwIfAborted();
+		if (!audio.size) throw this.invalidResponse();
+		return audio;
 	}
 
 	private async consume(path: string, signal: AbortSignal, method: string, body?: object): Promise<void> {

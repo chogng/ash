@@ -11,6 +11,11 @@ suite('model picker browser component', () => {
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		await page.locator('.ash-chat-input-model-action').press('ArrowDown');
 		const picker = page.locator('.ash-chat-model-picker');
+		const searchBounds = await picker.locator('.ash-action-widget-filter').boundingBox();
+		const autoBounds = await picker.locator('.ash-chat-model-picker-automatic').boundingBox();
+		const modelBounds = await picker.getByRole('menuitemradio', { name: 'Test Model', exact: true }).boundingBox();
+		expect(searchBounds!.y + searchBounds!.height).toBeLessThanOrEqual(autoBounds!.y);
+		expect(autoBounds!.y + autoBounds!.height).toBeLessThanOrEqual(modelBounds!.y);
 		const effort = picker.getByRole('menuitem', { name: 'Effort' });
 		await effort.press('ArrowRight');
 		const submenu = page.getByRole('menu', { name: 'Effort' });

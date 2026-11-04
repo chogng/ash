@@ -72,17 +72,20 @@ suite('Desktop tool EditorParts', () => {
 		const workspace = frame.parentElement!;
 		await editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
 		assert.equal(frame.style.paddingTop, '6px');
+		assert.equal(workspace.style.getPropertyValue('--ash-sessions-editor-tool-inset'), '6px');
 
 		const pageGroupId = editor.pageGroupId;
 		await editor.openEditor({ resource: URI.parse('ash-chatgpt:/page') }, { pinned: true }, { groupId: pageGroupId });
 		assert.equal(workspace.classList.contains('ash-product-page-host'), true);
 		assert.equal(frame.style.paddingTop, '0px');
 		assert.equal(frame.style.paddingLeft, '0px');
+		assert.equal(workspace.style.getPropertyValue('--ash-sessions-editor-tool-inset'), '0px');
 
 		editor.setGroupVisible(pageGroupId, false);
 		assert.equal(workspace.classList.contains('ash-product-page-host'), false);
 		assert.equal(frame.style.paddingTop, '6px');
 		assert.equal(frame.style.paddingLeft, '6px');
+		assert.equal(workspace.style.getPropertyValue('--ash-sessions-editor-tool-inset'), '6px');
 	});
 
 	test('splitting Files creates a local group without changing other tool hosts', async () => {

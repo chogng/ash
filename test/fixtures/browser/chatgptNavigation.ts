@@ -170,12 +170,18 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	} satisfies IExtensionHostApi],
 	[IConfigurationService, configuration],
 	[IContextKeyService, resources.add(new ContextKeyService())],
-	[IOpenerService, { open: async () => true } as unknown as IOpenerService],
+	[IOpenerService, { open: async (url: string, options?: { openExternal?: boolean }) => {
+		if (options?.openExternal) document.body.dataset.openedExternal = url;
+		return true;
+	} } as unknown as IOpenerService],
 	[IEditorService, { focusActiveEditor: () => widget.focus() } as unknown as IEditorService],
 	[IAgentThreadService, {} as IAgentThreadService],
 	[IChatService, {} as IChatService],
 	[IChatSessionNavigationService, {} as IChatSessionNavigationService],
-	[ILanguageModelsService, { listModelProviders: async () => [] } as unknown as ILanguageModelsService],
+	[ILanguageModelsService, { listModelProviders: async () => {
+		document.body.dataset.nativeModelProvidersRead = 'true';
+		return [];
+	} } as unknown as ILanguageModelsService],
 	[ISessionProviderScopeService, { getProviderScope: () => { throw new Error('This fixture has no Ash model provider'); } } as unknown as ISessionProviderScopeService],
 	[IThemeService, theme],
 	[IContextViewService, resources.add(new BrowserContextViewService(document.body))],
@@ -228,7 +234,7 @@ widget.create(document.getElementById('editor')!);
 if (parameters.has('screenReader')) { services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled); }
 widget.setVisible(true);
 const host = document.getElementById('navigation')!;
-const descriptor = { id: 'sessions.chatgpt.navigation', title: 'ChatGPT', location: ViewContainerLocation.Sidebar, ctorDescriptor: new SyncDescriptor(ChatNavigationViewPaneContainer, [[new SyncDescriptor(ChatGPTNavigationSource)]]) };
+const descriptor = { id: 'sessions.chatgpt.navigation', title: 'ChatGPT', location: ViewContainerLocation.Sidebar, ctorDescriptor: new SyncDescriptor(ChatNavigationViewPaneContainer, [[new SyncDescriptor(ChatGPTNavigationSource)], undefined]) };
 resources.add(SessionsViewRegistry.registerViewContainer(descriptor));
 const descriptors = resources.add(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
 const view = resources.add(services.createInstance(descriptor.ctorDescriptor, host, {

@@ -15,7 +15,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { ChatGPTTransport } from '../../electron-main/chatGPTTransport.js';
 import { createChatGPTFetch } from '../../browser/chatGPTFetch.js';
 import { ChatGPTClient } from '../../browser/chatGPTClient.js';
-import { ChatGPTAuthenticationError } from '../../common/chatGPTTransport.js';
+import { ChatGPTAuthenticationError, type ChatGPTResponse } from '../../common/chatGPTTransport.js';
 import type { IChatGPTVerificationRuntime } from '../../electron-main/chatGPTVerificationRuntime.js';
 
 import type { IChatGPTAuthentication, IChatGPTAuthorization } from '../../electron-main/chatGPTAuthentication.js';
@@ -324,6 +324,24 @@ suite('ChatGPT transport', () => {
 			await assert.rejects(channel.call('', 'request', [randomUUID(), { path: '/service/backend-api' + path, method, headers: {}, body }]), TypeError);
 		}
 		assert.equal(calls.length, 8);
+	}));
+
+	test('only permits ChatGPT response audio with one valid conversation and message', async () => fixture(async auth => {
+		const audio = new Uint8Array([0x49, 0x44, 0x33]);
+		using transport = new ChatGPTTransport({
+			authentication: auth, readVerificationScript: async () => '', createRuntime: () => runtime(async () =>
+				new Response(audio, { headers: { 'Content-Type': 'audio/mpeg' } })),
+		}, new NullLoggerService());
+		const channel = scopedChannel(transport, auth);
+		const id = randomUUID();
+		const path = '/service/backend-api/synthesize?conversation_id=chat&message_id=reply&voice=juniper&format=mp3';
+		const response = await channel.call<ChatGPTResponse>('', 'request', [id, { path, method: 'GET', headers: {} }]);
+		assert.equal(response.status, 200);
+		assert.deepEqual((await channel.call<VSBuffer>('', 'read', [id])).buffer, audio);
+		await channel.call('', 'cancel', [id]);
+		for (const badPath of [path + '&message_id=other', path.replace('message_id=reply', 'message_id=%2F'), path.replace('format=mp3', 'format=html')]) {
+			await assert.rejects(channel.call('', 'request', [randomUUID(), { path: badPath, method: 'GET', headers: {} }]), TypeError);
+		}
 	}));
 
 	test('validates IPC routes, methods, headers, sizes and operation shapes', async () => fixture(async auth => {

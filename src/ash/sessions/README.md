@@ -7,8 +7,8 @@ is canonical for the renderer implementation and extension points.
 
 UI design and style boundaries are defined in [Sessions style](STYLE.md).
 
-The Desktop `contrib/chatgptweb` contribution owns the ChatGPT entry and the
-Chat workspace's New action. Its reply adapter supplies the conversation data and
+The desktop Chat workspace composes the Ash and ChatGPT entries. The
+`contrib/chatgptweb` adapter supplies the ChatGPT conversation data and
 operations to the Sessions `ReplyChatEditor`, which owns the compact composer and
 transcript through the shared Chat widget. The Chat sidebar combines ChatGPT
 history with local Ash conversations and opens each row through its source
@@ -18,13 +18,11 @@ The `ash-chatgpt` editor resource and conversation storage keys stay stable
 across entry restoration. Previous native-experiment restore commands resolve
 to this same entry without creating or sending a new conversation.
 
-Chat routes explicit text requests for actions or deliverables to Cowork
-through the same composer used for questions. The route is decided locally.
-A task can start a local conversation before a reply backend is available.
-Chat persists the local identity, latest backend message snapshot, and Cowork
-task references anchored to messages. The first backend reply binds the
-existing local conversation and its tasks to the remote history. Backend history replaces its
-snapshot independently of task references. The profile keeps the last loaded
+The selected model source determines where a message is sent. ChatGPT Web
+sends through its reply backend. Older ChatGPT conversations may contain
+references to Cowork tasks. The adapter reads their existing status and can bind
+a legacy local conversation to a ChatGPT history without losing those references.
+The profile keeps the last loaded
 sidebar index and opened conversation snapshots under an opaque user and
 workspace scope verified by the native credential owner. Chat shows that cache
 while refreshing from the backend and requires a current history read before

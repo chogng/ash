@@ -3,6 +3,8 @@ import { parseInlineFileReference } from '../../common/widget/annotations.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ChatLayoutTrace } from './chatLayoutTrace.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
+import { ActionBar } from '../../../../../base/browser/ui/actionbar/actionbar.js';
+import type { IAction } from '../../../../../base/common/actions.js';
 import { ICommandService, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
@@ -51,6 +53,14 @@ export interface ChatRequestInputOptions {
 	readonly reportError: (error: unknown) => void;
 }
 
+/** The conversation model supplies response capabilities and any destination-specific labels. */
+export interface ChatResponseActions {
+	readonly readAloud: (window: Window & typeof globalThis, signal: AbortSignal) => Promise<void>;
+	readonly forkLabel: string;
+	readonly fork: () => Promise<void>;
+	readonly share: () => Promise<void>;
+}
+
 interface ChatListItemRendererOptions {
 	readonly classPrefix: string;
 	readonly createRequestInput?: (options: ChatRequestInputOptions) => IChatInputPart;
@@ -71,6 +81,8 @@ interface ChatListItemRendererOptions {
 	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void;
 	readonly onDidRequestLink?: (target: string) => void;
 	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;
+	readonly getResponseLinkOpener?: (item: IChatListItem) => ((target: string) => Promise<void>) | undefined;
+	readonly getResponseActions?: (item: IChatListItem) => ChatResponseActions | undefined;
 	readonly imageResourceLoader?: (resource: URI) => Promise<Blob>;
 }
 
@@ -83,6 +95,8 @@ export class ChatListItemRenderer extends Disposable {
 	inViewport = true;
 	private readonly edit = this._register(new MutableDisposable<DisposableStore>());
 	private copyButton: Button | undefined;
+	private readonly responsePlayback = this._register(new MutableDisposable());
+	private updateResponseActions: (() => void) | undefined;
 	private updateReadAloud: (() => void) | undefined;
 	private updateHelpful: (() => void) | undefined;
 	private readonly reading = this._register(new MutableDisposable<IDisposable & { readonly source: CancellationTokenSource; readonly item: IChatListItem; }>());
@@ -179,13 +193,18 @@ export class ChatListItemRenderer extends Disposable {
 		const reading = this.reading.value;
 		if (reading && (reading.item.text !== this.item.text || reading.item.attachmentSource?.sessionId !== this.item.attachmentSource?.sessionId || reading.item.attachmentSource?.threadId !== this.item.attachmentSource?.threadId)) this.reading.clear();
 		this.updateReadAloud?.();
+		this.updateResponseActions?.();
 		this.updateHelpful?.();
 		this.renderAttachments();
 		this.renderMemoryReferences();
 	}
 
 	public setVisible(visible: boolean): void {
-		if (!visible) this.reading.clear();
+		if (!visible) {
+			this.reading.clear();
+			this.responsePlayback.clear();
+			this.updateResponseActions?.();
+		}
 		this.media.value?.setVisible(visible);
 		this.toolPart?.setVisible(visible);
 		if (this.thinkingPart) {
@@ -239,41 +258,117 @@ export class ChatListItemRenderer extends Disposable {
 		const button = lifetime.add(new Button(actions, {
 			...defaultButtonStyles,
 			label: localize('chat.message.copy', 'Copy message'),
+			title: localize('chat.message.copy', 'Copy message'),
 			icon: Lxicon.copy,
 			presentation: 'quiet',
 			size: 'small',
 			enabled: this.item.text.length > 0,
 		}));
 		this.copyButton = button;
-		const feedback = h(this.element.ownerDocument, 'span');
-		feedback.className = 'ash-chat-message-copy-status';
-		feedback.setAttribute('role', 'status');
-		actions.append(feedback);
+		const copy = this.createCopyHandler(actions, lifetime, button.domNode);
+		lifetime.add(button.onDidClick(() => void copy()));
 		this.element.append(actions);
-		const clear = lifetime.add(new RunOnceScheduler(() => { feedback.textContent = ''; }, 2000));
-		let copying = false;
-		lifetime.add(button.onDidClick(() => {
-			if (copying || this.isDisposed || !this.options.isVisible() || !this.item.text) return;
-			const item = this.item;
-			const context = { type: item.type, text: item.text };
-			copying = true;
-			button.domNode.setAttribute('aria-busy', 'true');
-			clear.cancel();
-			feedback.textContent = '';
-			void this.commands.executeCommand('workbench.action.chat.copyItem', context).then(() => {
-				if (this.isDisposed || this.item !== item) return;
-				feedback.textContent = localize('chat.message.copied', 'Message copied.');
-				clear.schedule();
-			}, error => {
-				if (this.isDisposed || this.item !== item) return;
-				feedback.textContent = localize('chat.message.copyFailed', 'Could not copy message: {0}', String(error));
-			}).finally(() => { copying = false; if (!this.isDisposed) button.domNode.removeAttribute('aria-busy'); });
-		}));
 		if (this.item.type === 'agentMessage') {
 			this.renderReadAloudAction(actions, lifetime);
 			if (!this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key)) this.renderHelpfulAction(actions, lifetime);
 		}
 		return actions;
+	}
+
+	private createCopyHandler(actions: HTMLElement, lifetime: DisposableStore, busyTarget?: HTMLElement): () => Promise<void> {
+		const feedback = h(this.element.ownerDocument, 'span');
+		feedback.className = 'ash-chat-message-copy-status';
+		feedback.setAttribute('role', 'status');
+		actions.append(feedback);
+		const clear = lifetime.add(new RunOnceScheduler(() => { feedback.textContent = ''; }, 2000));
+		let copying = false;
+		return async () => {
+			if (copying || this.isDisposed || !this.options.isVisible() || !this.item.text) return;
+			const item = this.item;
+			const context = { type: item.type, text: item.text };
+			copying = true;
+			busyTarget?.setAttribute('aria-busy', 'true');
+			clear.cancel();
+			feedback.textContent = '';
+			try {
+				await this.commands.executeCommand('workbench.action.chat.copyItem', context);
+				if (this.isDisposed || this.item !== item) return;
+				feedback.textContent = localize('chat.message.copied', 'Message copied.');
+				clear.schedule();
+			} catch (error) {
+				if (this.isDisposed || this.item !== item) return;
+				feedback.textContent = localize('chat.message.copyFailed', 'Could not copy message: {0}', String(error));
+			} finally {
+				copying = false;
+				busyTarget?.removeAttribute('aria-busy');
+			}
+		};
+	}
+
+	private renderResponseActionBar(lifetime: DisposableStore): void {
+		const actions = h(this.element.ownerDocument, 'div', { className: 'ash-chat-message-actions' });
+		this.element.append(actions);
+		const bar = lifetime.add(new ActionBar(actions, {
+			ariaLabel: localize('chat.message.actions', 'Response actions'),
+			actionViewItemOptions: { iconOnly: true, buttonStyles: defaultButtonStyles, buttonPresentation: 'quiet' },
+		}));
+		const copy = this.createCopyHandler(actions, lifetime);
+		const action = (id: string, label: string, icon: IAction['icon'], run: () => unknown): IAction => ({
+			id, label, tooltip: label, icon, enabled: true, run: () => {
+				if (!this.isDisposed && this.options.isVisible()) return run();
+			},
+		});
+		const copyAction = action('chat.response.copy', localize('chat.message.copy', 'Copy message'), Lxicon.copy, copy);
+		const disabledCopy = { ...copyAction, enabled: false };
+		const getActions = () => this.options.getResponseActions?.(this.item);
+		const read = action('chat.response.readAloud', localize('chat.message.readAloud', 'Read aloud'), Lxicon.unmute, async () => {
+			const available = getActions();
+			if (!available || this.responsePlayback.value) return;
+			const controller = new AbortController();
+			const playback = toDisposable(() => controller.abort());
+			this.responsePlayback.value = playback;
+			update();
+			try {
+				await available.readAloud(getWindow(this.element), controller.signal);
+			} catch (error) {
+				if (!controller.signal.aborted && !isCancellationError(error) && !this.isDisposed) {
+					this.instantiationService.getOptional(INotificationService)?.error(localize('chat.message.readAloudFailed', 'Could not read response aloud: {0}', String(error)));
+				}
+			} finally {
+				if (this.responsePlayback.value === playback) {
+					this.responsePlayback.clear();
+					update();
+				}
+			}
+		});
+		const stop = action(read.id, localize('chat.message.stopReadAloud', 'Stop reading aloud'), Lxicon.mute, () => {
+			this.responsePlayback.clear();
+			update();
+		});
+		let fork: IAction | undefined;
+		const share = action('chat.response.share', localize('chat.message.share', 'Share response'), Lxicon.share, () => getActions()?.share());
+		const update = (): void => {
+			const available = getActions();
+			const next = [this.item.text ? copyAction : disabledCopy];
+			if (available) {
+				if (fork?.label !== available.forkLabel) {
+					fork = action('chat.response.fork', available.forkLabel, Lxicon.fork, () => getActions()?.fork());
+				}
+				next.push(this.responsePlayback.value ? stop : read, fork, share);
+			}
+			if (next.length !== bar.length() || next.some((entry, index) => bar.getAction(index) !== entry)) bar.setActions(next);
+		};
+		this.updateResponseActions = update;
+		lifetime.add(bar.onDidRun(event => {
+			if (event.error && !this.isDisposed) this.instantiationService.getOptional(INotificationService)?.error(String(event.error));
+		}));
+		lifetime.add(addDisposableListener(this.element, 'keydown', event => {
+			if (event.key !== 'Escape' || !this.responsePlayback.value) return;
+			this.responsePlayback.clear();
+			update();
+			event.preventDefault();
+			event.stopPropagation();
+		}));
 	}
 
 	private renderHelpfulAction(actions: HTMLElement, lifetime: DisposableStore): void {
@@ -525,7 +620,7 @@ export class ChatListItemRenderer extends Disposable {
 	}
 
 	private renderMemoryReferences(): void {
-		if (!this.options.onDidRequestMemoryReference) return;
+		if (!this.options.onDidRequestMemoryReference || this.options.getResponseLinkOpener?.(this.item)) return;
 		const references = [...new Set(this.item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])].filter(reference => reference.length <= 4096).slice(0, 8);
 		for (const [reference] of this.memoryReferences) {
 			if (!references.includes(reference)) this.memoryReferences.deleteAndDispose(reference);
@@ -617,6 +712,7 @@ export class ChatListItemRenderer extends Disposable {
 		let markdownPart: ChatMarkdownContentPart | undefined;
 		let requestText: HTMLElement | undefined;
 		if (item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor') {
+			const openResponseLink = this.options.getResponseLinkOpener?.(item);
 			const markdown = disposables.add(this.instantiationService.createInstance(ChatMarkdownContentPart, {
 				ownerDocument: this.element.ownerDocument,
 				getChatItem: () => this.item,
@@ -625,8 +721,10 @@ export class ChatListItemRenderer extends Disposable {
 				markdown: { value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true },
 				markedOptions: { breaks: true },
 				fillInIncompleteTokens: item.transient,
-				actionHandler: this.options.onDidRequestLink ? (target: string) => this.options.onDidRequestLink!(target) : undefined,
-				sanitizerConfig: {
+				actionHandler: openResponseLink
+					? (target: string) => { void openResponseLink(target).catch(error => this.instantiationService.getOptional(INotificationService)?.error(String(error))); }
+					: this.options.onDidRequestLink,
+				sanitizerConfig: openResponseLink ? undefined : {
 					allowedLinkSchemes: { augment: [OPEN_SESSION_LINK_SCHEME] },
 					resolveFileLink: item.type === 'agentMessage' && this.options.onDidRequestLink
 						? (href: string) => parseInlineFileReference(href) ? href : undefined
@@ -688,7 +786,8 @@ export class ChatListItemRenderer extends Disposable {
 		this.markdownPart = markdownPart;
 		this.attachments = attachments;
 		if (item.type === 'agentMessage') {
-			this.renderCopyAction(disposables);
+			if (this.options.getResponseActions) this.renderResponseActionBar(disposables);
+			else this.renderCopyAction(disposables);
 		} else if (requestText) {
 			const actions = this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key) ? undefined : this.renderCopyAction(disposables);
 			if (item.requestSource) this.renderEditAction(requestText, disposables, actions);

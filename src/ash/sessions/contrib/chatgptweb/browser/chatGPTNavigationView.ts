@@ -1,20 +1,20 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { disposableWindowInterval } from '../../../../base/browser/scheduler.js';
-import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { derived, observableFromEvent } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
-import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 import { ASH_CHAT_SELECTED_CONTEXT } from '../../chat/common/constants.js';
 import type { ChatNavigationEntry, ChatNavigationSnapshot, ChatNavigationSource } from '../../sessions/browser/views/chatNavigationView.js';
+import { shareChatGPTConversation } from './chatGPTShare.js';
 import type { ChatGPTConversation } from './chatGPTClient.js';
 import { IChatGPTService, selectedChatConversationId } from './chatGPTService.js';
 
@@ -56,7 +56,7 @@ export class ChatGPTNavigationSource implements ChatNavigationSource {
 			const state = chat.state.read(reader);
 			const current = selectedChatConversationId(state);
 			const showSelection = !ashSelected.read(reader);
-			const coworkRunning = state.coworkStarting || state.coworkTasks.some(task => {
+			const coworkRunning = state.coworkTasks.some(task => {
 				const status = task.thread?.turns.at(-1)?.status;
 				return status === 'created' || status === 'running' || status === 'cancelling';
 			});
@@ -147,7 +147,7 @@ export class ChatGPTNavigationSource implements ChatNavigationSource {
 			await this.rename(conversation);
 			restoreFocus();
 		})];
-		if (!conversation.local) actions.push(this.action('share', localize('sessions.chatgpt.share', 'Share'), () => this.share(conversation)));
+		if (!conversation.local) actions.push(this.action('share', localize('sessions.chatgpt.share', 'Share'), () => shareChatGPTConversation(this.chat, this.dialogs, this.clipboard, conversation.id, conversation.title)));
 		actions.push(this.action('archive', localize('sessions.chatgpt.archive', 'Archive'), () => this.chat.archive(conversation.id)), remove);
 		if (!conversation.local) {
 			let projects: readonly IAction[];
@@ -184,17 +184,4 @@ export class ChatGPTNavigationSource implements ChatNavigationSource {
 		if (result.confirmed) { await this.chat.deleteConversation(conversation.id); }
 	}
 
-	private async share(conversation: ChatGPTConversation): Promise<void> {
-		const result = await this.dialogs.confirm({
-			message: localize('sessions.chatgpt.shareConfirm', 'Share “{0}”?', conversation.title),
-			detail: localize('sessions.chatgpt.shareDetail', 'Anyone with the link may be able to read this chat. A share link will be created and copied.'),
-			primaryButton: localize('sessions.chatgpt.share', 'Share'),
-		});
-		if (!result.confirmed) { return; }
-		const url = await this.chat.share(conversation.id);
-		if (url) {
-			try { await this.clipboard.writeText(url); status(localize('sessions.chatgpt.shareCopied', 'Share link copied.')); }
-			catch { await this.dialogs.info(localize('sessions.chatgpt.shareLink', 'Share link'), url); }
-		}
-	}
 }

@@ -18,13 +18,13 @@ import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessio
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
-import { ASH_CHAT_SELECTED_CONTEXT, NEW_CHAT_WITH_MODEL_COMMAND, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
+import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, NEW_CHAT_WITH_MODEL_COMMAND, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
 import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
 import { ChatGPTWebContribution, chatGPTScrollOptimization } from '../../browser/chatGPTWeb.js';
-import { IChatGPTService, chatGPTNavigationContainerId, coworkTaskStatus } from '../../browser/chatGPTService.js';
+import { IChatGPTService, coworkTaskStatus } from '../../browser/chatGPTService.js';
 import { ISessionsSearchService } from '../../../search/browser/searchService.js';
 import type { SearchResult } from '../../../search/browser/searchModel.js';
-import '../../browser/chatGPTWeb.contribution.js';
+import { ChatWorkspaceContribution } from '../../../../electron-browser/chatWorkspace.contribution.js';
 import { localize, setNlsMessages } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { DefaultSettings } from '../../../../../workbench/services/preferences/common/settingsModels.js';
@@ -54,7 +54,7 @@ suite('ChatGPT entry', () => {
 	});
 
 	test('open and restore use a normal editor resource and independent sidebar without a BrowserView', async () => {
-		assert.equal(SessionsViewRegistry.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id, chatGPTNavigationContainerId);
+		assert.equal(SessionsViewRegistry.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id, CHAT_WORKSPACE_NAVIGATION_ID);
 		using resources = new DisposableStore();
 		const entries: { entry: ISessionsEntry; source?: string; }[] = [];
 		let initialized = 0;
@@ -75,7 +75,7 @@ suite('ChatGPT entry', () => {
 			assert.equal(entry.id, 'chatgpt');
 			assert.equal(entry.restoreCommand, 'sessions.show.chatgpt');
 			assert.equal(entry.editorInput!.label, 'ChatGPT');
-			assert.equal(entry.sidebarContainerId, chatGPTNavigationContainerId);
+			assert.equal(entry.sidebarContainerId, CHAT_WORKSPACE_NAVIGATION_ID);
 			assert.equal(entry.content, 'editor');
 			assert.equal(entry.showEditorTabs, false);
 			assert.equal(entry.editorInput!.resource.scheme, 'ash-chatgpt');
@@ -127,12 +127,10 @@ suite('ChatGPT entry', () => {
 		const entries: ISessionsEntry[] = [];
 		using services = new InstantiationService(new ServiceCollection(
 			[IStorageService, { get: (key: string) => values.get(key), store: (key: string, value: string) => { values.set(key, value); } } as unknown as IStorageService],
-			[IChatGPTService, { initialize() { } } as IChatGPTService],
-			[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
-			[IEditorService, {} as IEditorService],
+			[ICommandService, { executeCommand: (id: string, ...args: unknown[]) => services.invokeFunction(CommandsRegistry.getCommand(id)!, ...args) } as ICommandService],
 			[ISessionsLayoutService, { openEntry: async entry => { entries.push(entry); } } as ISessionsLayoutService],
 		));
-		using contribution = services.createInstance(ChatGPTWebContribution);
+		using contribution = services.createInstance(ChatWorkspaceContribution);
 		await services.invokeFunction(CommandsRegistry.getCommand(SHOW_ASH_CHAT_COMMAND)!, 'restore');
 		await services.invokeFunction(CommandsRegistry.getCommand(SHOW_CHAT_WORKSPACE_COMMAND)!);
 		assert.equal(entries.length, 2);
@@ -140,7 +138,7 @@ suite('ChatGPT entry', () => {
 			assert.equal(entry.workspaceMode, 'chat');
 			assert.equal(entry.activityContext, ASH_CHAT_SELECTED_CONTEXT);
 			assert.equal(entry.conversationKind, 'code');
-			assert.equal(entry.sidebarContainerId, chatGPTNavigationContainerId);
+			assert.equal(entry.sidebarContainerId, CHAT_WORKSPACE_NAVIGATION_ID);
 			assert.equal(entry.restoreCommand, SHOW_ASH_CHAT_COMMAND);
 		}
 	});

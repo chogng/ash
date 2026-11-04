@@ -102,6 +102,13 @@
 	background: transparent;
 }
 
+.ash-sessions-editor-conversation-surface
+	.ash-sessions-chat-content
+	> .ash-chat {
+	background: transparent;
+	--ash-chat-transcript-surface: var(--ash-sessions-conversation-background);
+}
+
 .ash-desktop-editor-area
 	.ash-code-editor-groups
 	.ash-editor-group:not(.ash-code-page-group) {

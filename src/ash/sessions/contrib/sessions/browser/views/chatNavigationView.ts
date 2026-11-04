@@ -13,7 +13,7 @@ import { Disposable, DisposableMap, MutableDisposable, toDisposable, type IDispo
 import { autorun, type IObservable } from '../../../../../base/common/observable.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
-import { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import type { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IMenuService } from '../../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
@@ -60,13 +60,20 @@ export interface ChatNavigationSource {
 	loadMore?(retry: boolean): void;
 }
 
+export const chatNavigationFocusContext = 'chatNavigationFocused';
+
+interface ChatNavigationAccessibilityHint {
+	readonly verbositySetting: AccessibilityVerbositySettingId;
+	hint(): string;
+}
+
 export class ChatNavigationViewPaneContainer extends PaneComposite {
 	private readonly sections = this._register(new DisposableMap<string, SessionListSection>());
 	private readonly rows = this._register(new DisposableMap<string, ChatNavigationRow>());
 	private readonly opening = this._register(new MutableDisposable());
 	private scheduleLoad: () => void = () => { };
 
-	constructor(adapters: readonly SyncDescriptor<ChatNavigationSource>[], parent: HTMLElement, options: PaneCompositeOptions,
+	constructor(adapters: readonly SyncDescriptor<ChatNavigationSource>[], accessibility: ChatNavigationAccessibilityHint | undefined, parent: HTMLElement, options: PaneCompositeOptions,
 		@IConfigurationService configuration: IConfigurationService,
 		@IStorageService storage: IStorageService,
 		@IThemeService theme: IThemeService,
@@ -82,12 +89,14 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 		const root = this.element;
 		const document = root.ownerDocument;
 		root.classList.add('ash-chatgpt-navigation');
-		this.scopedContextKeyService.createKey('chatGPTFocused', true);
-		this._register(addDisposableListener(root, 'focusin', event => {
-			if (!root.contains(event.relatedTarget as Node) && configuration.getValue<boolean>(AccessibilityVerbositySettingId.ChatGPT)) {
-				status(localize('sessions.chatgpt.navigationHint', 'Press Alt+F1 for ChatGPT accessibility help.'));
-			}
-		}));
+		this.scopedContextKeyService.createKey(chatNavigationFocusContext, true);
+		if (accessibility) {
+			this._register(addDisposableListener(root, 'focusin', event => {
+				if (!root.contains(event.relatedTarget as Node) && configuration.getValue<boolean>(accessibility.verbositySetting)) {
+					status(accessibility.hint());
+				}
+			}));
+		}
 		const scrollable = this.scrollable!;
 		scrollable.element.classList.add('ash-chatgpt-navigation-scrollable');
 		const list = h(document, 'div', { className: 'ash-chatgpt-navigation-list' });

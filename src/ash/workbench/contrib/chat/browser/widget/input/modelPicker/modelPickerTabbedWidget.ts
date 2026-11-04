@@ -69,10 +69,9 @@ export class TabbedModelPicker extends Disposable {
 		this.showing.value = session;
 		const document = anchor.ownerDocument;
 		const pickerId = `chatModelPicker-${++nextPickerId}`;
-		const addModels = createManageModelsAction(this.commands);
-		const manageModels = configureInMenu
-			? { ...addModels, label: localize('chat.modelPicker.moreModels', 'More Models') }
-			: addModels;
+		const useWorkbenchModelManagement = this.delegate.useWorkbenchModelManagement !== false;
+		const manageModels = useWorkbenchModelManagement ? createManageModelsAction(this.commands) : undefined;
+		const manageModelsLabel = configureInMenu ? localize('chat.modelPicker.moreModels', 'More Models') : manageModels?.label;
 		const empty = h(document, 'div');
 		const welcome = session.add(new MutableDisposable<ModelPickerWelcome>());
 		let welcomeKey: string | undefined;
@@ -81,11 +80,11 @@ export class TabbedModelPicker extends Disposable {
 			label: this.delegate.getModelsError()
 				? localize('chat.modelPicker.loadFailed', 'Could not load models')
 				: localize('chat.modelPicker.noModels', 'No models available'),
-			message: localize('chat.modelPicker.noModelsPlaceholder', 'Set up models in Settings'),
-			action: {
+			message: useWorkbenchModelManagement ? localize('chat.modelPicker.noModelsPlaceholder', 'Set up models in Settings') : '',
+			action: useWorkbenchModelManagement ? {
 				label: localize('chat.modelPicker.openSettings', 'Open Settings'),
 				run: () => { this.hide(); void this.delegate.openSettings(); },
-			},
+			} : undefined,
 		}];
 		const focusWelcome = (): void => welcome.value?.element.querySelector<HTMLElement>('button')?.focus();
 		const error = h(document, 'div');
@@ -136,9 +135,16 @@ export class TabbedModelPicker extends Disposable {
 			resources.add(this.delegate.onDidChangePresentation(refresh));
 			return resources;
 		};
+		const header = h(document, 'div', { className: 'ash-chat-model-picker-header' });
+		header.append(empty);
+		if (configureInMenu && this.delegate.selectAutomaticModel) {
+			const automaticContainer = h(document, 'div', { className: 'ash-chat-model-picker-automatic' });
+			session.add(renderAutomatic(automaticContainer));
+			header.append(automaticContainer);
+		}
 		this.widget.show<ModelCatalogEntry>({
 			user: pickerId, anchor, width: 240,
-			isBodyCollapsed: () => this.delegate.isAutomaticModel() && this.delegate.getModels().length > 0,
+			isBodyCollapsed: () => !configureInMenu && this.delegate.isAutomaticModel() && this.delegate.getModels().length > 0,
 			focusFooter: () => automaticSwitch?.focus(),
 			tabs: [], initialTab: '',
 			createActionList: () => {
@@ -166,7 +172,7 @@ export class TabbedModelPicker extends Disposable {
 						showFilter: true, filterVisible: models.length > 0 && !this.delegate.isAutomaticModel(),
 						filterPlaceholder: localize('chat.modelPicker.search', 'Search models'),
 						focusFilterOnOpen: true, filterAsCombobox: true,
-						itemsVisible: models.length > 0 && !this.delegate.isAutomaticModel(), header: empty,
+						itemsVisible: models.length > 0 && !this.delegate.isAutomaticModel(), header,
 						accessibilityHelp: () => this.accessibleViewService.show(AccessibleViewType.Help),
 					},
 				};
@@ -213,10 +219,6 @@ export class TabbedModelPicker extends Disposable {
 				root.append(error);
 				return resources;
 			},
-			renderHeader: configureInMenu && this.delegate.selectAutomaticModel ? container => {
-				container.classList.add('ash-chat-model-picker-automatic');
-				return renderAutomatic(container);
-			} : undefined,
 			renderFooter: (container, _tab, sidePanel) => {
 				const resources = new DisposableStore();
 				if (!configureInMenu && this.delegate.selectAutomaticModel) { resources.add(renderAutomatic(container)); }
@@ -234,7 +236,7 @@ export class TabbedModelPicker extends Disposable {
 					const entry = this.delegate.isAutomaticModel() ? undefined : selected && this.findModel(selected);
 					const efforts = entry?.supportedReasoningEfforts?.length
 						? modelPickerEffortOptions(entry, this.delegate.getSelectedReasoningEffort()) : [];
-					const acceleration = entry?.accelerationOptions?.find(option => option.name === 'Fast');
+					const acceleration = useWorkbenchModelManagement ? entry?.accelerationOptions?.find(option => option.name === 'Fast') : undefined;
 					const key = JSON.stringify([entry?.model, efforts.map(option => option.value), acceleration?.id]);
 					if (key !== configurationKey) {
 						const active = document.activeElement;
@@ -304,7 +306,7 @@ export class TabbedModelPicker extends Disposable {
 					}
 				};
 				const alternate = this.delegate.alternateModelAction;
-				const actions = [{ ...manageModels, run: () => { this.hide(); return manageModels.run(); } }];
+				const actions = manageModels && manageModelsLabel ? [{ ...manageModels, label: manageModelsLabel, run: () => { this.hide(); return manageModels.run(); } }] : [];
 				if (alternate) actions.push({ ...alternate, run: () => { this.hide(); return alternate.run(); } });
 				resources.add(new Menu(moreSection, actions, {
 					buttonStyles: defaultButtonStyles, keybindingLabelStyles: defaultKeybindingLabelStyles
@@ -313,7 +315,7 @@ export class TabbedModelPicker extends Disposable {
 					const hasModels = this.delegate.getModels().length > 0;
 					container.classList.toggle('ash-chat-model-picker-footer', hasModels);
 					container.classList.toggle('has-divider', hasModels && !configureInMenu);
-					moreSection.hidden = !alternate && (!hasModels || (!configureInMenu && this.delegate.isAutomaticModel()));
+					moreSection.hidden = !alternate && (!manageModels || !hasModels || (!configureInMenu && this.delegate.isAutomaticModel()));
 					refreshConfiguration();
 				};
 				refreshFooter();
@@ -333,12 +335,18 @@ export class TabbedModelPicker extends Disposable {
 			if (!this.delegate.getModels().length) { focusWelcome(); }
 			else if (hadWelcomeFocus && empty.hidden) { popupRoot?.querySelector<HTMLElement>('[role="combobox"]')?.focus(); }
 		}));
-		void this.languageModels.listModelProviders().then(providers => {
-			if (session.isDisposed) { return; }
-			this.providers = providers;
-			this.widget.refreshActiveList();
-		}).catch(() => { /* Catalog IDs remain valid provider labels while metadata is unavailable. */ });
-		if (!this.delegate.getModels().length) { focusWelcome(); }
+		if (useWorkbenchModelManagement) {
+			void this.languageModels.listModelProviders().then(providers => {
+				if (session.isDisposed) { return; }
+				this.providers = providers;
+				this.widget.refreshActiveList();
+			}).catch(() => { /* Catalog IDs remain valid provider labels while metadata is unavailable. */ });
+		}
+		if (!this.delegate.getModels().length) {
+			focusWelcome();
+		} else if (this.delegate.isAutomaticModel()) {
+			automaticSwitch?.focus();
+		}
 		if (detailsModel) {
 			const entry = this.findModel(detailsModel);
 			if (entry) { this.showDetails(entry); }
@@ -351,6 +359,7 @@ export class TabbedModelPicker extends Disposable {
 
 	private showDetails(entry: ModelCatalogEntry): void {
 		this.detailsModel = entry.model;
+		const useWorkbenchModelManagement = this.delegate.useWorkbenchModelManagement !== false;
 		this.widget.showDetails({
 			label: localize('chat.modelPicker.details', '{0} details', entry.displayName),
 			backLabel: localize('chat.modelPicker.back', 'Back to models'),
@@ -369,16 +378,16 @@ export class TabbedModelPicker extends Disposable {
 						if (resources.isDisposed || selected?.provider !== entry.model.provider || selected.model !== entry.model.model) { return; }
 						await this.delegate.selectReasoningEffort(effort);
 					},
-					onAccelerationChange: async acceleration => {
+					onAccelerationChange: useWorkbenchModelManagement ? async acceleration => {
 						await this.selectForConfiguration(entry);
 						if (resources.isDisposed) { return; }
 						await this.languageModels.setModelPreferences(entry.model, { acceleration });
-					},
-					onLongContextChange: async longContext => {
+					} : undefined,
+					onLongContextChange: useWorkbenchModelManagement ? async longContext => {
 						await this.selectForConfiguration(entry);
 						if (resources.isDisposed) { return; }
 						await this.languageModels.setModelPreferences(entry.model, { longContext });
-					},
+					} : undefined,
 				} satisfies IModelCardOptions);
 				const attach = (card: ModelCard): void => {
 					this.activeCard = card;
@@ -412,9 +421,11 @@ export class TabbedModelPicker extends Disposable {
 					if (!(active instanceof HTMLElement) || !root.contains(active)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.ChatModelConfiguration, { type },
 						() => type === AccessibleViewType.Help
-							? configureInMenu
-								? localize('chat.modelPicker.menuHelp', 'Model picker. Type to filter models. Use Up and Down Arrow to browse, Enter to select, and Right Arrow on a model to open its details. Tab to the Effort submenu and press Right Arrow to choose a level. Tab to Fast Mode and press Space to toggle it. Auto enables automatic model selection. More Models opens Language Models management. Escape closes the current menu.')
-								: localize('chat.modelPicker.help', 'Model picker. All enabled models appear in one list. Type in search to filter models across all providers. Up and Down Arrow browse models and Enter selects one. Right Arrow opens model information and supported thinking, context and speed settings. Tab moves between controls; arrow keys change a focused option group. Applying settings selects that model. Back to models or Alt+Left Arrow returns to the retained list and search. Auto enables automatic model selection. Escape closes the picker. Add Models opens Language Models management.')
+							? this.delegate.useWorkbenchModelManagement === false
+								? localize('chat.modelPicker.hostCatalogHelp', 'Type to filter this chat’s models. Use Up and Down Arrow to browse, Enter to select, and Right Arrow to open model details. Tab to the action for starting a separate chat when available. Escape closes the picker.')
+								: configureInMenu
+									? localize('chat.modelPicker.menuHelp', 'Model picker. Type to filter models. Use Up and Down Arrow to browse, Enter to select, and Right Arrow on a model to open its details. Tab to the Effort submenu and press Right Arrow to choose a level. Tab to Fast Mode and press Space to toggle it. Auto enables automatic model selection. More Models opens Language Models management. Escape closes the current menu.')
+									: localize('chat.modelPicker.help', 'Model picker. All enabled models appear in one list. Type in search to filter models across all providers. Up and Down Arrow browse models and Enter selects one. Right Arrow opens model information and supported thinking, context and speed settings. Tab moves between controls; arrow keys change a focused option group. Applying settings selects that model. Back to models or Alt+Left Arrow returns to the retained list and search. Auto enables automatic model selection. Escape closes the picker. Add Models opens Language Models management.')
 							: root.innerText,
 						() => { if (active.isConnected) { active.focus(); } }, AccessibilityVerbositySettingId.ChatModelConfiguration);
 				},

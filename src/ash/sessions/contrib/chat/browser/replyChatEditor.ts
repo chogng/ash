@@ -119,6 +119,7 @@ export class ReplyChatEditor extends EditorPane {
 						}),
 					}, [], {
 						layout: 'compact', modePicker: 'hidden', modelPickerPosition: 'trailing',
+						useWorkbenchModelManagement: false,
 						renderSecondaryToolbar: false, draftStorage: 'host',
 						inputLabel: this.options.inputLabel(),
 						alternateModelAction: CommandsRegistry.hasCommand(NEW_CHAT_WITH_MODEL_COMMAND) ? {

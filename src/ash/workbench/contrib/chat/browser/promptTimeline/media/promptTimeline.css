@@ -2,18 +2,25 @@
 	position: absolute;
 	z-index: 1;
 	inset: 0 var(--ash-spacing-size120) auto;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
 	visibility: hidden;
-	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
-	overflow: hidden;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size120);
 	border: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, transparent);
 	border-radius: var(--ash-cornerRadius-small);
-	background: var(--ash-editor-widgetBackground);
-	color: var(--ash-description-foreground);
+	background: color-mix(
+		in srgb,
+		var(--ash-foreground) 8%,
+		var(--ash-chat-transcript-surface, var(--ash-editor-background))
+	);
+	box-shadow: 0 var(--ash-spacing-size40) var(--ash-spacing-size60)
+		calc(-1 * var(--ash-spacing-size40)) var(--ash-widget-shadow);
+	color: var(--ash-foreground);
 	font: inherit;
 	text-align: start;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 	cursor: pointer;
 }
 
@@ -22,7 +29,32 @@
 }
 
 .ash-chat-sticky-prompt:hover {
-	color: var(--ash-foreground);
+	background: color-mix(
+		in srgb,
+		var(--ash-foreground) 12%,
+		var(--ash-chat-transcript-surface, var(--ash-editor-background))
+	);
+}
+
+.ash-chat-sticky-prompt-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-chat-sticky-prompt-count {
+	color: var(--ash-description-foreground);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+:where([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-chat-sticky-prompt {
+	background: var(
+		--ash-chat-transcript-surface,
+		var(--ash-editor-background)
+	);
+	box-shadow: none;
 }
 
 .ash-chat-sticky-prompt:focus-visible {

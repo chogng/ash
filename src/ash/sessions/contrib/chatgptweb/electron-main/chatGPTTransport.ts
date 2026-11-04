@@ -17,6 +17,8 @@ const conversationPath = (path: string): boolean => /^\/backend-api\/conversatio
 const renamePath = (path: string): boolean => /^\/backend-api\/conversation\/id\/[^/]+\/rename$/u.test(path);
 const deletePath = (path: string): boolean => /^\/backend-api\/conversation\/id\/[^/]+$/u.test(path);
 const filePath = (path: string): boolean => /^\/backend-api\/(?:files\/[^/]+(?:\/download)?|conversation\/[^/]+\/(?:interpreter\/download|files\/[^/]+(?:\/download)?)|estuary\/content)$/u.test(path);
+const synthesisPath = '/backend-api/synthesize';
+const validIdentifier = (value: unknown): boolean => typeof value === 'string' && /^[A-Za-z0-9_-]{1,240}$/u.test(value);
 const proofHeaders = ['OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token'];
 const requestHeaders = new Set(['accept', 'content-type', 'x-conduit-token', 'x-ms-blob-type', ...proofHeaders.map(name => name.toLowerCase())]);
 interface PendingRequest {
@@ -147,7 +149,8 @@ export class ChatGPTTransport extends Disposable {
 			}
 			const contentType = response.headers.get('content-type') ?? '';
 			const sdp = url.pathname === '/realtime/vp' && /^text\/plain(?:;|$)/iu.test(contentType);
-			if (response.status !== 204 && !sdp && !/^(?:application\/(?:[\w.-]+\+)?json|text\/event-stream)(?:;|$)/iu.test(contentType)) {
+			const audio = url.pathname === synthesisPath && /^audio\/(?:mpeg|mp3)(?:;|$)/iu.test(contentType);
+			if (response.status !== 204 && !sdp && !audio && !/^(?:application\/(?:[\w.-]+\+)?json|text\/event-stream)(?:;|$)/iu.test(contentType)) {
 				await response.body?.cancel();
 				return new Response(null, { status: response.ok ? 502 : response.status });
 			}
@@ -293,10 +296,14 @@ function readRequest(value: unknown): ChatGPTRequest {
 		return value as unknown as ChatGPTRequest;
 	}
 	const url = new URL(value.path.replace(headersOnly ? '/service/.headers' : '/service', ''), 'https://chatgpt.com');
+	const query = url.searchParams;
+	const synthesis = url.pathname === synthesisPath && query.size === 4
+		&& validIdentifier(query.get('conversation_id')) && validIdentifier(query.get('message_id'))
+		&& query.get('voice') === 'juniper' && query.get('format') === 'mp3';
 	const allowed = url.origin === 'https://chatgpt.com' && !/%(?:2f|5c|00|25)/iu.test(url.pathname) && (headersOnly
 		? value.method === 'POST' && url.pathname === '/backend-api/f/conversation' && !url.search && value.body === undefined
 		: value.method === 'GET'
-			? readPaths.has(url.pathname) || conversationPath(url.pathname)
+			? readPaths.has(url.pathname) || conversationPath(url.pathname) || synthesis
 			: !url.search && (value.method === 'POST'
 				? writePaths.has(url.pathname) || uploadedPath(url.pathname) || renamePath(url.pathname)
 				: value.method === 'PATCH' ? conversationPath(url.pathname)

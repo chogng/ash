@@ -4,7 +4,7 @@ import { PromptTimelineWidgetContrib } from '../promptTimeline/promptTimelineWid
 import { getImageGenerationBatch, isImageGenerationToolInvocation } from './chatContentParts/toolInvocationParts/chatToolPartUtilities.js';
 import { ChatImageGenerationBatchPart } from './chatContentParts/chatImageGenerationBatchPart.js';
 import type { IChatContentPart } from './chatContentParts/chatContentParts.js';
-import { ChatListItemRenderer, type ChatRequestInputOptions } from './chatListRenderer.js';
+import { ChatListItemRenderer, type ChatRequestInputOptions, type ChatResponseActions } from './chatListRenderer.js';
 import { cloneVisibleSelection, sanitizeChatClipboardFragment } from './chatClipboard.js';
 import { ChatLayoutTrace } from './chatLayoutTrace.js';
 import { ILoggerService } from '../../../../../platform/log/common/log.js';
@@ -49,6 +49,8 @@ interface ChatListWidgetOptions {
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
 	readonly showPromptTimeline?: boolean;
 	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;
+	readonly getResponseLinkOpener?: (item: IChatListItem) => ((target: string) => Promise<void>) | undefined;
+	readonly getResponseActions?: (item: IChatListItem) => ChatResponseActions | undefined;
 	readonly onDidChangeFindVisibility?: (visible: boolean) => void;
 	readonly getHistoryState?: () => { readonly loading: boolean; readonly error?: string; } | undefined;
 	readonly loadOlderHistory?: () => Promise<void>;
@@ -104,7 +106,7 @@ export class ChatListWidget extends DomWidget {
 	private readonly stickyPrompt: PromptTimelineStickyHeader;
 	private promptModel = new PromptTimelineModel<IChatListItem>([], id => this.renderedItems.get(id)!.element);
 	private readonly promptTimeline: PromptTimelineWidgetContrib | undefined;
-	private pinnedPrompt: IChatListItem | undefined;
+	private pinnedPrompt: { readonly item: IChatListItem; readonly index: number; readonly total: number; } | undefined;
 	private readonly layoutTrace: ChatLayoutTrace;
 	private readonly renderedItems = this._register(new DisposableMap<string, ChatListItemRenderer>());
 	private readonly imageBatches = this._register(new DisposableMap<string, RenderedImageBatch>());
@@ -283,10 +285,10 @@ export class ChatListWidget extends DomWidget {
 		this._register(this.scrollToLatestButton.onDidClick(() => this.scrollToLatest()));
 		this.stickyPrompt = this._register(new PromptTimelineStickyHeader(this.scrollable.scrollableElement));
 		this._register(this.stickyPrompt.onDidActivate(() => {
-			const prompt = this.pinnedPrompt;
+			const prompt = this.pinnedPrompt?.item;
 			if (!prompt) return;
 			this.focus(prompt);
-			this.reveal(prompt);
+			this.revealItem(prompt.id, undefined, true);
 		}));
 		const promptTimelineChanges = options.promptTimelineChanges;
 		if (options.showPromptTimeline || promptTimelineChanges) {
@@ -807,27 +809,37 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	private updateStickyPrompt(): void {
-		let prompt: IChatListItem | undefined;
+		let item: IChatListItem | undefined;
+		let index = 0;
+		const { prompts } = this.promptModel;
+		const total = prompts.length;
 		if (this.visible && !this.transcript.style.paddingTop) {
 			const viewport = this.scrollable.scrollableElement.getBoundingClientRect();
-			const index = this.promptModel.firstPromptAfter(viewport.top);
-			const next = this.promptModel.prompts[index];
-			const nextTop = next ? this.promptModel.bounds(next).top : Infinity;
-			const previous = this.promptModel.prompts[index - 1];
-			this.promptTimeline?.setActive(nextTop <= viewport.top + 1 ? next?.id : previous?.id);
-			if (viewport.height > 0 && nextTop >= viewport.top + this.stickyPrompt.domNode.offsetHeight
+			index = this.promptModel.firstPromptAfter(viewport.top);
+			const active = prompts[index - 1];
+			this.promptTimeline?.setActive((active ?? prompts[0])?.id);
+			// Keep the original row at the top when revealing it. Pin only after
+			// it crosses the edge by enough to absorb fractional scroll positions.
+			if (viewport.height > 0 && active && this.promptModel.bounds(active).top < viewport.top - 2
 				&& this.configurationService.getValue<boolean>(PROMPT_TIMELINE_STICKY_SCROLL_SETTING) !== false) {
-				prompt = previous;
+				item = active;
 			}
 		}
-		if (this.pinnedPrompt === prompt) return;
-		this.pinnedPrompt = prompt;
-		if (prompt) {
-			this.stickyPrompt.update(prompt.text);
-		} else if (this.stickyPrompt.domNode === this.element.ownerDocument.activeElement && this.visible) {
-			this.transcript.focus({ preventScroll: true });
+		const pinned = this.pinnedPrompt;
+		if (item) {
+			if (pinned?.item === item && pinned.index === index && pinned.total === total) {
+				return;
+			}
+			this.pinnedPrompt = { item, index, total };
+			this.stickyPrompt.update(item.text, index, total);
+			this.stickyPrompt.setVisible(true);
+		} else if (pinned) {
+			this.pinnedPrompt = undefined;
+			if (this.stickyPrompt.domNode === this.element.ownerDocument.activeElement && this.visible) {
+				this.transcript.focus({ preventScroll: true });
+			}
+			this.stickyPrompt.setVisible(false);
 		}
-		this.stickyPrompt.setVisible(!!prompt);
 	}
 
 	private readingAnchor(): ReadingAnchor | undefined {

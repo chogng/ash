@@ -122,6 +122,67 @@ suite('chatgptweb browser component', () => {
 		await expect(handle).toBeHidden();
 	});
 
+	test('ChatGPT response actions are icon-only and address the selected reply', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page, 'memory:fixture\n\n[Local file](file:///workspace/private.ts)\n\n[Web source](https://example.test/source)');
+		await page.addInitScript(() => {
+			window.Audio = function () { return document.createElement('audio'); } as unknown as typeof Audio;
+			HTMLMediaElement.prototype.play = async function () { document.body.dataset.audioPlaying = 'true'; };
+			HTMLMediaElement.prototype.pause = function () { document.body.dataset.audioPlaying = 'false'; };
+		});
+		let read: URLSearchParams | undefined;
+		let share: unknown;
+		await page.route('**/service/backend-api/synthesize?*', route => {
+			read = new URL(route.request().url()).searchParams;
+			return route.fulfill({ contentType: 'audio/mpeg', body: 'synthetic' });
+		});
+		await page.route('**/service/backend-api/share/v2/create', route => {
+			share = route.request().postDataJSON();
+			return route.fulfill({ json: { share_url: 'https://chatgpt.com/share/fixture-response' } });
+		});
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		const chat = page.locator('.ash-chatgpt-widget .ash-chat');
+		await expect(chat).toBeVisible();
+		await expect(chat.locator('[data-untitled-session-id]')).toHaveCount(0);
+		expect(await chat.getAttribute('data-untitled-session-id')).toBeNull();
+		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+		await expect(chat.getByText('memory:fixture', { exact: true })).toBeVisible();
+		await expect(chat.getByRole('button', { name: /打开.*记忆/ })).toHaveCount(0);
+		await expect(chat.getByRole('link', { name: 'Local file' })).toHaveCount(0);
+		await chat.getByRole('link', { name: 'Web source' }).click();
+		await expect(page.locator('body')).toHaveAttribute('data-opened-external', 'https://example.test/source');
+		const toolbar = page.getByRole('toolbar', { name: '回复操作', exact: true });
+		const copy = toolbar.getByRole('button', { name: '复制消息' });
+		const readAloud = toolbar.getByRole('button', { name: '朗读', exact: true });
+		const fork = toolbar.getByRole('button', { name: '在 ChatGPT 中创建分支' });
+		const shareResponse = toolbar.getByRole('button', { name: '分享回复' });
+		await expect(toolbar.getByRole('button')).toHaveCount(4);
+		await expect(toolbar).toHaveText('', { useInnerText: true });
+		await copy.focus();
+		await page.keyboard.press('ArrowRight');
+		await expect(readAloud).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(page.locator('body')).toHaveAttribute('data-audio-playing', 'true');
+		expect(read?.get('conversation_id')).toBe('fixture-chat');
+		expect(read?.get('message_id')).toBe('previous-reply');
+		await expect(toolbar.getByRole('button', { name: '停止朗读' })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(page.locator('body')).toHaveAttribute('data-audio-playing', 'false');
+		await page.keyboard.press('ArrowRight');
+		await expect(fork).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(page.locator('body')).toHaveAttribute('data-opened-external', 'https://chatgpt.com/branch/fixture-chat/previous-reply');
+		await page.keyboard.press('ArrowRight');
+		await expect(shareResponse).toBeFocused();
+		await page.keyboard.press('Enter');
+		const dialog = page.getByRole('dialog');
+		await expect(dialog).toContainText('截至这条回复');
+		expect(share).toBeUndefined();
+		await dialog.getByRole('button', { name: '分享', exact: true }).click();
+		await expect(page.locator('body')).toHaveAttribute('data-copied-link', 'https://chatgpt.com/share/fixture-response');
+		expect(share).toEqual({ conversation_id: 'fixture-chat', current_node_id: 'previous-reply', is_anonymous: true });
+	});
+
 	test('ChatGPT refreshes the visible history when the window comes back online', async () => {
 		const { page } = browserTests;
 		let changed = false;
@@ -646,6 +707,8 @@ suite('chatgptweb browser component', () => {
 			await picker.click();
 			await expect(page.getByRole('slider')).toHaveCount(0);
 			await expect(page.getByRole('menuitemradio', { name: 'Fixture model' })).toHaveAttribute('aria-checked', 'true');
+			expect(await page.locator('body').getAttribute('data-native-model-providers-read')).toBeNull();
+			await expect(page.getByRole('menuitem', { name: /Add Models|More Models|添加模型|更多模型/ })).toHaveCount(0);
 			await expect(page.getByRole('combobox')).toBeFocused();
 			await page.getByRole('menuitemradio', { name: 'Second model' }).click();
 			await expect(picker).toHaveText('Second model');

@@ -10,39 +10,22 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { Menus } from '../../../browser/menus.js';
 import { ActivityBarItemContext } from '../../../common/contextkeys.js';
-import { registerChatGPTAccessibility } from '../../chat/browser/chatGPTAccessibility.js';
+import { registerChatGPTAccessibility } from './chatGPTAccessibility.js';
 import { registerReplyChatEditor } from '../../chat/browser/replyChatEditor.js';
 import { IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { ElectronChatGPTTransport } from '../electron-browser/electronChatGPTTransport.js';
-import { ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization } from './chatGPTWeb.js';
-import { ChatGPTService, IChatGPTService, chatGPTNavigationContainerId } from './chatGPTService.js';
-import { ChatGPTNavigationSource } from './chatGPTNavigationView.js';
-import { AshChatNavigationSource } from '../../chat/browser/ashChatNavigationSource.js';
-import { ChatNavigationViewPaneContainer } from '../../sessions/browser/views/chatNavigationView.js';
+import { ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization, chatGPTSelectedContext } from './chatGPTWeb.js';
+import { ChatGPTService, IChatGPTService } from './chatGPTService.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
-import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
-import { ViewContainerLocation } from '../../../../workbench/common/views.js';
-import { SessionsViewRegistry } from '../../../common/views.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IAccountService } from '../../../../platform/accounts/common/accountService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProgressService } from '../../../../platform/progress/common/progress.js';
 import { signInChatGPT } from './chatGPTLogin.js';
-import '../../chat/browser/chat.contribution.js';
-import './newChatModelAction.js';
 
 registerSingleton(IChatGPTService, ChatGPTService, InstantiationType.Delayed);
 registerSingleton(IChatGPTTransport, ElectronChatGPTTransport, InstantiationType.Delayed);
 registerReplyChatEditor(chatGPTReplyEditor);
-SessionsViewRegistry.registerViewContainer({
-	id: chatGPTNavigationContainerId,
-	ctorDescriptor: new SyncDescriptor(ChatNavigationViewPaneContainer, [[
-		new SyncDescriptor(ChatGPTNavigationSource),
-		new SyncDescriptor(AshChatNavigationSource),
-	]]),
-	mergeViewWithContainerWhenSingleView: false, title: 'ChatGPT', localizationKey: { bundle: 'ash', key: 'sessions.chatgpt.title' }, location: ViewContainerLocation.Sidebar, isDefault: true, order: 2,
-});
-
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ChatGPT, defaultValue: true,
 	parse(value: unknown): boolean {
@@ -77,7 +60,7 @@ registerAction2(class OpenChatGPT extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.open.chatgpt', title: localize2('sessions.chatgpt.title', 'ChatGPT'), icon: Lxicon.openai,
-			toggled: ContextKeyExpr.has('sessions.activity.chatgptSelected'),
+			toggled: ContextKeyExpr.has(chatGPTSelectedContext),
 			f1: true,
 		});
 	}
@@ -100,7 +83,7 @@ registerAction2(class ReloadChatGPT extends Action2 {
 			id: 'sessions.chatgpt.reload',
 			title: localize2('sessions.chatgpt.reload', 'ChatGPT: Reload'),
 			shortTitle: localize2('sessions.chatgpt.reloadShort', 'Reload'),
-			menu: { id: Menus.ActivityBarContext, when: ContextKeyExpr.and(ActivityBarItemContext.isEqualTo('sessions.newSession'), ContextKeyExpr.has('sessions.activity.chatgptSelected')), group: 'navigation' },
+			menu: { id: Menus.ActivityBarContext, when: ContextKeyExpr.and(ActivityBarItemContext.isEqualTo('sessions.newSession'), ContextKeyExpr.has(chatGPTSelectedContext)), group: 'navigation' },
 			f1: true,
 		});
 	}
@@ -111,7 +94,7 @@ registerAction2(class ReloadChatGPT extends Action2 {
 
 const authenticationMenu = {
 	id: Menus.ActivityBarContext,
-	when: ContextKeyExpr.and(ActivityBarItemContext.isEqualTo('sessions.newSession'), ContextKeyExpr.has('sessions.activity.chatgptSelected')),
+	when: ContextKeyExpr.and(ActivityBarItemContext.isEqualTo('sessions.newSession'), ContextKeyExpr.has(chatGPTSelectedContext)),
 	group: 'authentication',
 };
 

@@ -47,6 +47,27 @@
 	display: none;
 }
 
+.ash-chat-model-picker-header {
+	display: contents;
+}
+
+.ash-chat-model-picker .ash-action-widget-filter {
+	position: relative;
+}
+
+.ash-chat-model-picker .ash-action-widget-filter::after {
+	content: "";
+	position: absolute;
+	inset-inline: var(--ash-menu-divider-inset, var(--ash-spacing-size80));
+	inset-block-end: 0;
+	border-block-end: var(
+		--ash-action-widget-divider,
+		var(--ash-strokeThickness) solid
+			var(--ash-contrastBorder, var(--ash-widget-border))
+	);
+	pointer-events: none;
+}
+
 .ash-chat-model-picker-empty {
 	display: flex;
 	min-height: 160px;

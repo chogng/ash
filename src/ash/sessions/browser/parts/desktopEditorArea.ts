@@ -5,7 +5,7 @@ import { isRecord } from '../../../base/common/types.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { Part } from '../../../workbench/browser/part.js';
-import { NoWorkbenchPartFrameInsets, WorkbenchPartView } from '../../../workbench/browser/workbenchPartView.js';
+import { NoWorkbenchPartFrameInsets, WorkbenchPartView, type WorkbenchPartFrameInsets } from '../../../workbench/browser/workbenchPartView.js';
 import type { EditorPart } from '../../../workbench/browser/parts/editor/editorPart.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
 import './media/desktopEditorArea.css';
@@ -28,11 +28,15 @@ class ToolPartView extends WorkbenchPartView<DesktopEditorTool> implements ISeri
 	constructor(tool: DesktopEditorTool, private readonly editor: EditorPart, private readonly container: HTMLElement) {
 		super(tool, editor);
 		container.append(this.frame);
-		container.style.setProperty('--ash-sessions-editor-tool-inset', `${toolFrameInset}px`);
 		this.setFrameInsets(toolFrameInsets);
 	}
 	public override get element(): HTMLElement { return this.container; }
 	public focus(): void { this.editor.focus(); }
+	public override setFrameInsets(insets: WorkbenchPartFrameInsets): void {
+		super.setFrameInsets(insets);
+		// The chat composer offsets its padding by the actual symmetric frame inset.
+		this.container.style.setProperty('--ash-sessions-editor-tool-inset', `${insets.left}px`);
+	}
 	public override get minimumWidth(): number {
 		// The session composer needs its usable width inside the tool frame.
 		return this.partId === 'chat' ? Math.max(super.minimumWidth, EDITOR_PART_MINIMUM_WIDTH + 2 * toolFrameInset) : super.minimumWidth;

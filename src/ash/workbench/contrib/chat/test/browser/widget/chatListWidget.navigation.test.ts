@@ -39,21 +39,29 @@ suite('Chat transcript navigation', () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html?locale=zh-CN');
 		await page.evaluate(messages => window.ashChatTranscriptIntegration.renderItems(
-			messages.map(item => item.type === 'agentMessage' ? { ...item, text: (item.text + '\n\n').repeat(100) } : item)
+			messages.map(item => item.type === 'agentMessage' ? { ...item, text: (item.text + '\n\n').repeat(100) }
+				: item.id === 'first' ? { ...item, text: 'First request\nSecond line\nThird line' } : item)
 		), messages);
 		const viewport = page.locator('.ash-chat-transcript-scrollable > .ash-scrollbar-viewport');
 		await viewport.evaluate(element => { element.scrollTop = 0; });
 		const pinned = page.locator('.ash-chat-sticky-prompt');
 		await expect(pinned).toBeHidden();
-		await viewport.evaluate(element => { element.scrollTop = 200; });
-		await expect(pinned).toHaveAccessibleName('跳转到用户消息：First request');
+		await viewport.evaluate(element => {
+			const first = element.querySelector('[data-item-id="first"]')!;
+			element.scrollTop += first.getBoundingClientRect().top - element.getBoundingClientRect().top + 5;
+		});
+		await expect(pinned).toHaveAccessibleName('跳转到第 1 条用户消息，共 2 条：First request Second line Third line');
+		await expect(pinned.locator('.ash-chat-sticky-prompt-count')).toHaveText('1/2');
 		expect(await pinned.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
 		await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
-		await expect(pinned).toHaveAccessibleName('跳转到用户消息：Second request');
+		await expect(pinned).toHaveAccessibleName('跳转到第 2 条用户消息，共 2 条：Second request');
+		await expect(pinned.locator('.ash-chat-sticky-prompt-count')).toHaveText('2/2');
 		await pinned.focus();
 		await pinned.press('Enter');
-		await expect(page.locator('[data-item-id="second"]')).toBeFocused();
+		const second = page.locator('[data-item-id="second"]');
+		await expect(second).toBeFocused();
 		await expect(pinned).toBeHidden();
+		expect(Math.abs((await second.boundingBox())!.y - (await viewport.boundingBox())!.y)).toBeLessThanOrEqual(1);
 	});
 
 	test('navigates loaded prompts and opens a turn review directly from its counts', async () => {

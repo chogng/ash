@@ -974,7 +974,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(modelPicker?.closest('.ash-context-view')?.parentElement, contextViewService.container);
 	assert.equal(modelButton?.getAttribute('aria-expanded'), 'true');
 	assert.equal(modelPicker?.querySelector<HTMLInputElement>('input[role="combobox"]')?.placeholder, 'Search models');
-	assert.equal(modelPicker?.querySelector('input')?.getAttribute('aria-label'), 'Auto');
+	assert.equal(modelPicker?.querySelector('.ash-switch input')?.getAttribute('aria-label'), 'Auto');
 	assert.match(modelPicker?.textContent ?? '', /GPT-6\.1 Sol/);
 	assert.match(modelPicker?.querySelector('[role=menuitemradio]')?.getAttribute('aria-description') ?? '', /128,000 context tokens/);
 	assert.match(modelPicker?.querySelector('[role=menuitemradio]')?.getAttribute('aria-description') ?? '', /Thinking: Low, Medium, High/);

@@ -171,6 +171,8 @@ export interface ChatInputPartOptions {
 	readonly modePicker: 'visible' | 'hidden';
 	readonly modelPickerPosition: 'leading' | 'trailing';
 	readonly configureModelInMenu?: boolean;
+	/** The host supplies its own catalog and model settings when false. */
+	readonly useWorkbenchModelManagement?: boolean;
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	/** Keep attachment and dictation or stop beside the editor; submit with Enter and keep configuration below. */
 	readonly layout?: 'compact';
@@ -1956,6 +1958,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (action.presentation === 'model') {
 			return this.modelPickerActionItem = this.instantiationService.createInstance(ModelPickerActionItem, action, {
 				configureInMenu: this.options.configureModelInMenu,
+				useWorkbenchModelManagement: this.options.useWorkbenchModelManagement,
 				alternateModelAction: this.options.alternateModelAction,
 				onDidChangePresentation: this.modelPickerPresentationChanged.event,
 				getModels: () => this.state.models,

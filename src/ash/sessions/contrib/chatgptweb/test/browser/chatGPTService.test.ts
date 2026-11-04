@@ -996,97 +996,45 @@ suite('ChatGPT shared service', () => {
 		assert.equal(chat.state.get().draft, 'Existing conversation draft');
 	});
 
-	test('the same Send action starts a local task, then binds a normal question to that conversation', async () => {
-		const values = new Map<string, string>();
-		const routes: string[] = [];
-		const model = {
-			onDidChange: Event.None,
-			send: async (text: string) => { routes.push(`cowork:${text}`); },
-		};
+	test('a task-like prompt in a default ChatGPT draft is sent through ChatGPT', async () => {
+		const prompt = '请把访谈整理成一份报告';
+		const requests: { text: string; model: string; }[] = [];
+		let nativeCalls = 0;
 		const instantiation = {
-			createInstance: () => ({
-				prepare: async () => ({ sessionId: 'cowork-session', threadId: 'cowork-thread', model }),
-				resolve: async () => ({ session: { sessionId: 'cowork-session' }, threadId: 'cowork-thread' }),
-				createModel: () => model,
-			})
+			createInstance: () => { nativeCalls++; throw new Error('Native task creation must not run'); },
 		} as unknown as IInstantiationService;
-		let connected = false;
-		const respond = async (path: string, _signal: AbortSignal, request: ChatGPTRequest) => {
-			if (!connected && path.includes('/models?')) return new Response(null, { status: 401 });
+		using chat = fixture(async (path, _signal, request) => {
 			if (path.includes('/.headers/')) return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' });
 			if (path.endsWith('/prepare')) return Response.json({ conduit_token: 'fixture' });
 			if (path.endsWith('/f/conversation')) {
 				const body = JSON.parse(String(request.body));
-				assert.equal(body.conversation_id, undefined);
-				routes.push(`reply:${body.messages[0].content.parts[0]}`);
+				requests.push({ text: body.messages[0].content.parts[0], model: body.model });
 				return new Response('data: {"conversation_id":"bound","message":{"id":"reply","author":{"role":"assistant"},"content":{"parts":["Answer"]}}}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
 			}
 			return response(path);
-		};
-		const shared = { values, instantiation };
-		using chat = fixture(respond, shared);
+		}, { values: new Map(), instantiation });
 		await chat.reload();
-		chat.setDraft('请把访谈整理成一份报告');
+		chat.setDraft(prompt);
 		await chat.send();
-		assert.deepEqual(routes, ['cowork:请把访谈整理成一份报告']);
-		const localId = chat.state.get().localConversationId;
-		const localRow = chat.state.get().conversations.find(item => item.local);
-		assert.ok(localRow);
-		assert.equal(chat.state.get().conversationId, undefined);
-		chat.newChat();
-		assert.notEqual(chat.state.get().localConversationId, localId);
-		await chat.select(localRow.id);
-		assert.equal(chat.state.get().localConversationId, localId);
-		chat.dispose();
-		using reopened = fixture(respond, shared);
-		await reopened.reload();
-		assert.equal(reopened.state.get().localConversationId, localId);
-		assert.equal(reopened.state.get().coworkTasks[0]?.threadId, 'cowork-thread');
-		connected = true;
-		await reopened.reload();
-		reopened.setDraft('Can you explain how to write a report?');
-		await reopened.send();
-		assert.deepEqual(routes, ['cowork:请把访谈整理成一份报告', 'reply:Can you explain how to write a report?']);
-		assert.equal(reopened.state.get().localConversationId, localId);
-		assert.equal(reopened.state.get().conversationId, 'bound');
-		assert.equal(reopened.state.get().coworkTasks[0]?.threadId, 'cowork-thread');
-		assert.ok(!reopened.state.get().conversations.some(item => item.id === localRow.id));
-		await reopened.select('two');
-		await reopened.select('bound');
-		assert.equal(reopened.state.get().localConversationId, localId);
-		assert.equal(reopened.state.get().coworkTasks[0]?.threadId, 'cowork-thread');
+		assert.deepEqual(requests, [{ text: prompt, model: 'model' }]);
+		assert.equal(nativeCalls, 0);
+		assert.equal(chat.state.get().conversationId, 'bound');
 	});
 
-	test('Cowork progress and artifacts stay with the local Chat through navigation, refresh and restart', async () => {
+	test('saved Cowork references survive navigation, refresh and restart', async () => {
 		using changed = new Emitter<void>();
-		const dispatched = new DeferredPromise<void>();
-		const finish = new DeferredPromise<void>();
-		const values = new Map<string, string>();
-		let thread: Thread | undefined;
+		const localId = 'legacy-conversation';
+		const values = new Map([[
+			`sessions.chat.timeline.v1:chatgpt-web:local:${localId}`,
+			JSON.stringify({ localId, tasks: [{ sessionId: 'cowork-session', threadId: 'cowork-thread', prompt: 'Write a report' }] }),
+		]]);
+		let thread = { turns: [{ status: 'running', items: [{ type: 'plan', itemId: 'plan', text: 'Collect sources' }] }] } as unknown as Thread;
 		const taskModel = {
 			onDidChange: changed.event,
 			get thread() { return thread; },
-			async send(text: string, _mode: string, _skills: unknown, contexts: readonly { content: string; }[]) {
-				assert.equal(text, 'Write a report');
-				assert.equal(contexts, undefined);
-				assert.ok([...values.values()].some(value => value.includes('cowork-thread')), 'Task reference is stored before dispatch');
-				thread = { turns: [{ status: 'running', items: [{ type: 'plan', itemId: 'plan', text: 'Collect sources' }] }] } as unknown as Thread;
-				changed.fire();
-				await dispatched.complete();
-				await finish.p;
-				thread = {
-					turns: [{
-						status: 'completed', items: [{
-							type: 'toolResult', itemId: 'result', content: [{ type: 'artifact', artifact: { source: { type: 'resourceLink', uri: 'file:///report.md' } } }],
-						}]
-					}]
-				} as unknown as Thread;
-				changed.fire();
-			},
 		};
 		const instantiation = {
 			createInstance: () => ({
-				prepare: async () => ({ sessionId: 'cowork-session', threadId: 'cowork-thread', model: taskModel }),
 				resolve: async () => ({ session: { sessionId: 'cowork-session' }, threadId: 'cowork-thread' }),
 				createModel: () => taskModel,
 			})
@@ -1112,16 +1060,18 @@ suite('ChatGPT shared service', () => {
 		};
 		using chat = fixture(respond, shared);
 		await chat.reload();
-		const localId = chat.state.get().localConversationId;
-		chat.setDraft('Write a report');
-		const running = chat.send();
-		await dispatched.p;
+		await chat.select(`local:${localId}`);
 		assert.equal(chat.state.get().coworkTasks[0]?.thread?.turns[0]?.status, 'running');
 		assert.match(chat.getAccessibleContent(), /Collect sources/u);
 		await chat.select('two');
 		assert.equal(chat.state.get().coworkTasks.length, 0);
-		await finish.complete();
-		await running;
+		thread = {
+			turns: [{
+				status: 'completed', items: [{
+					type: 'toolResult', itemId: 'result', content: [{ type: 'artifact', artifact: { source: { type: 'resourceLink', uri: 'file:///report.md' } } }],
+				}]
+			}]
+		} as unknown as Thread;
 		await chat.select(`local:${localId}`);
 		chat.setDraft('What is a report?');
 		await chat.send();

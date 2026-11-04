@@ -1,18 +1,26 @@
 import { Emitter } from '../../../../base/common/event.js';
+import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { raceCancellationError } from '../../../../base/common/async.js';
 import { canceled } from '../../../../base/common/errors.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { isPortableLinkTarget } from '../../../../base/common/htmlContent.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun, type IReader } from '../../../../base/common/observable.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
+import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
 import type { IReplyChatEditorModel } from '../../chat/browser/replyChatEditor.js';
+import type { ChatResponseActions } from '../../../../workbench/contrib/chat/browser/widget/chatListRenderer.js';
 import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { chatListItem, type IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import type { ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ChatSubmissionOptions } from '../../../../workbench/services/chat/common/chatService.js';
-import { decodeChatGPTReply } from '../../chat/browser/chatGPTRichContent.js';
+import { decodeChatGPTReply } from './chatGPTRichContent.js';
 import type { ChatReplyMessage } from '../../../common/chatReplyBackend.js';
-import { canQueueChatGPTCreation, coworkTaskStatus, IChatGPTService, isCoworkSubmission, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from './chatGPTService.js';
+import { canQueueChatGPTCreation, coworkTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from './chatGPTService.js';
+import { shareChatGPTConversation } from './chatGPTShare.js';
 
 /** Projects the provider's one conversation record into the existing Chat widget. */
 export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorModel {
@@ -23,6 +31,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 
 	readonly sessionId = undefined;
 	readonly threadId = undefined;
+	readonly untitledSessionId = undefined;
 	readonly goal = undefined;
 	private generation = 0;
 	private draftRevision = 0;
@@ -33,15 +42,24 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	private transcriptState: ChatGPTState | undefined;
 	private readonly decoded = new WeakMap<ChatReplyMessage, { readonly conversationId: string | undefined; readonly reply: ReturnType<typeof decodeChatGPTReply>; }>();
 	private sources = new Map<string, { readonly messageId: string; readonly conversationId: string | undefined; }>();
+	private readonly playback = this._register(new MutableDisposable());
 
-	constructor(@IChatGPTService private readonly backend: IChatGPTService) {
+	constructor(
+		@IChatGPTService private readonly backend: IChatGPTService,
+		@IClipboardService private readonly clipboard: IClipboardService,
+		@IDialogService private readonly dialogs: IDialogService,
+		@IOpenerService private readonly opener: IOpenerService,
+	) {
 		super();
 		this._register(autorun(reader => {
 			const state = backend.state.read(reader);
 			const switched = this.localId !== state.localConversationId || this.draftRevision !== backend.newDraftRevision;
 			this.draftRevision = backend.newDraftRevision;
 			this.localId = state.localConversationId;
-			if (switched) this.generation++;
+			if (switched) {
+				this.generation++;
+				this.playback.clear();
+			}
 			if (this.catalog !== state.models) {
 				this.catalog = state.models;
 				this.entries = state.models.flatMap(family => family.presets.map(preset => ({
@@ -63,7 +81,6 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	}
 
 	get composerGeneration(): number { return this.generation; }
-	get untitledSessionId(): string | undefined { return this.backend.state.get().conversationId ? undefined : this.localId; }
 	get items(): readonly IChatListItem[] { return this.currentItems; }
 
 	newChat(): void { this.backend.newChat(); }
@@ -100,14 +117,14 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	private get voiceAvailable(): boolean {
 		const state = this.backend.state.get();
 		return state.connected && state.networkAvailable && !state.pendingCreation && !state.busy && !state.sending
-			&& !state.managing && !state.coworkStarting && !state.uncertain;
+			&& !state.managing && !state.uncertain;
 	}
 
 	get inputState(): ChatInputState {
 		const state = this.backend.state.get();
 		const voice = state.voice !== 'idle';
 		const loading = state.loading?.kind === 'conversation';
-		const canSend = !state.pendingCreation && (isCoworkSubmission(state) || canQueueChatGPTCreation(state)
+		const canSend = !state.pendingCreation && (canQueueChatGPTCreation(state)
 			|| state.connected && state.networkAvailable && !state.uncertain && state.attachments.every(file => file.status === 'ready'));
 		return {
 			draftIdentity: { id: state.localConversationId, generation: this.generation },
@@ -118,7 +135,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 			},
 			mode: 'ask',
 			phase: loading ? 'loading' : state.sending ? 'submitting' : 'ready',
-			inputBlocked: !canSend || state.busy || state.managing || state.coworkStarting || voice,
+			inputBlocked: !canSend || state.busy || state.managing || voice,
 			canInterrupt: state.sending,
 			interruptKind: 'reply',
 			error: state.error || undefined,
@@ -127,12 +144,11 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 					: state.voice === 'stopping' ? localize('sessions.chatgpt.voiceStopping', 'Finishing voice conversation…')
 						: loading ? localize('sessions.loadingConversation', 'Loading conversation…')
 							: state.sending ? localize('sessions.chatgpt.replying', 'ChatGPT is replying…')
-								: state.coworkStarting ? localize('sessions.chat.coworkPreparing', 'Preparing Cowork task…')
-									: state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : pendingCreationStatus(state),
+								: state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : pendingCreationStatus(state),
 			queuedMessages: 0,
 			approvalMode: 'manual',
 			models: this.entries,
-			canSelectModel: !state.busy && !state.sending && !state.managing && !state.coworkStarting && !voice,
+			canSelectModel: !state.busy && !state.sending && !state.managing && !voice,
 			selectedModel: this.entries.find(entry => entry.model.model === JSON.stringify([state.model, state.modelPreset]))?.model,
 			isAutomaticModel: false,
 			slashCommands: [],
@@ -159,6 +175,63 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	}
 
 	interrupt(): Promise<void> { return this.backend.stop(); }
+
+	getResponseLinkOpener(item: IChatListItem): ((target: string) => Promise<void>) | undefined {
+		// Embedded Cowork output has a real Ash source. Web replies use the adapter's link policy.
+		return item.attachmentSource ? undefined : this.openWebResponseLink;
+	}
+
+	private readonly openWebResponseLink = async (target: string): Promise<void> => {
+		if (isPortableLinkTarget(target)) {
+			await this.opener.open(target, { openExternal: true, fromUserGesture: true });
+		}
+	};
+
+	getResponseActions(item: IChatListItem): ChatResponseActions | undefined {
+		const state = this.backend.state.get();
+		const source = this.sources.get(item.id);
+		if (item.transient || item.isError || !source?.conversationId || source.conversationId !== state.conversationId
+			|| !state.connected || !state.networkAvailable || state.loading?.kind === 'conversation' || state.uncertain) return undefined;
+		const { conversationId, messageId } = source;
+		return {
+			readAloud: (window, signal) => this.readResponseAloud(conversationId, messageId, window, signal),
+			forkLabel: localize('sessions.chatgpt.forkResponse', 'Fork in ChatGPT'),
+			fork: async () => {
+				const url = `https://chatgpt.com/branch/${encodeURIComponent(conversationId)}/${encodeURIComponent(messageId)}`;
+				if (!await this.opener.open(url, { openExternal: true })) {
+					throw new Error(localize('sessions.chatgpt.openForkFailed', 'Could not open the conversation branch in ChatGPT.'));
+				}
+			},
+			share: () => shareChatGPTConversation(this.backend, this.dialogs, this.clipboard, conversationId, state.title, messageId),
+		};
+	}
+
+	private async readResponseAloud(conversationId: string, messageId: string, window: Window & typeof globalThis, signal: AbortSignal): Promise<void> {
+		const controller = new AbortController();
+		const playback = toDisposable(() => controller.abort());
+		this.playback.value = playback;
+		const lifetime = AbortSignal.any([signal, controller.signal]);
+		try {
+			const blob = await this.backend.readResponseAudio(conversationId, messageId, lifetime);
+			lifetime.throwIfAborted();
+			const url = window.URL.createObjectURL(blob);
+			using audioLifetime = new DisposableStore();
+			const audio = new window.Audio(url);
+			audioLifetime.add(toDisposable(() => {
+				audio.pause();
+				audio.removeAttribute('src');
+				audio.load();
+				window.URL.revokeObjectURL(url);
+			}));
+			const finished = new Promise<void>((resolve, reject) => {
+				audioLifetime.add(addDisposableListener(audio, 'ended', () => resolve()));
+				audioLifetime.add(addDisposableListener(audio, 'error', () => reject(new Error(localize('sessions.chatgpt.playResponseFailed', 'ChatGPT audio could not be played.')))));
+			});
+			await raceCancellationError(Promise.all([audio.play(), finished]), lifetime);
+		} finally {
+			if (this.playback.value === playback) this.playback.clear();
+		}
+	}
 
 	readResponseResource(item: IChatListItem, resource: URI, signal: AbortSignal): Promise<Blob> {
 		const source = this.sources.get(item.id);

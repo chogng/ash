@@ -11,7 +11,7 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IMarkdownRendererService, MarkdownRendererService } from '../../../../../platform/markdown/browser/markdownRenderer.js';
 import { ChatContentMarkdownRenderer } from '../../../../../workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
-import { decodeChatGPTReply, getChatGPTRichContentText } from '../../../chat/browser/chatGPTRichContent.js';
+import { decodeChatGPTReply, getChatGPTRichContentText } from '../../browser/chatGPTRichContent.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import type { ChatGPTReference } from '../../browser/chatGPTClient.js';
 
