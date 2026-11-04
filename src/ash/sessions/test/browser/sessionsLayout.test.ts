@@ -333,6 +333,103 @@ suite('sessions browser component', () => {
 		}
 	});
 
+	for (const locale of ['en', 'zh-CN']) test(`Agent Window shortcuts open from Accounts and Settings (${locale})`, async function () {
+		const { page } = browserTests;
+		const chinese = locale === 'zh-CN';
+		if (chinese) await page.goto('/sessions.html?catalog&locale=zh-CN');
+		const accounts = page.getByRole('button', { name: chinese ? '账户' : 'Accounts', exact: true });
+		const label = chinese ? '快捷键' : 'Keyboard Shortcuts';
+		await accounts.press('Enter');
+		const menuItem = page.getByRole('menuitem', { name: label, exact: true });
+		await expect(menuItem.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'record-keys');
+		await menuItem.press('Enter');
+		const modal = page.getByRole('dialog', { name: chinese ? 'Agent 窗口快捷键' : 'Agent Window Keyboard Shortcuts' });
+		const shortcuts = modal.getByRole('region');
+		const search = modal.getByRole('searchbox', { name: chinese ? '搜索 Agent 窗口快捷键' : 'Search Agent Window shortcuts' });
+		await expect(search).toBeFocused();
+		await expect(shortcuts).toHaveCSS('overflow-y', 'auto');
+		const headings = shortcuts.getByRole('heading');
+		const [left, right] = await Promise.all([headings.nth(0).boundingBox(), headings.nth(1).boundingBox()]);
+		expect(right!.x).toBeGreaterThan(left!.x);
+		expect(right!.y).toBe(left!.y);
+		const viewport = page.viewportSize()!;
+		await page.setViewportSize({ width: 600, height: viewport.height });
+		const [first, second] = await Promise.all([headings.nth(0).boundingBox(), headings.nth(1).boundingBox()]);
+		expect(second!.x).toBe(first!.x);
+		expect(second!.y).toBeGreaterThan(first!.y);
+		await page.setViewportSize(viewport);
+		await expect(shortcuts.getByRole('heading', { name: chinese ? '新建 Code 会话' : 'New Code Conversation' })).toBeVisible();
+		const picker = shortcuts.getByRole('listitem').filter({ hasText: chinese ? '聚焦工作区选择器' : 'Focus Workspace Picker' });
+		await expect(picker.locator('kbd')).toHaveCount(4);
+		for (const [heading, command, keyCount] of chinese ? [
+			['会话', '在侧栏中搜索会话', 2],
+			['Code 终端', '切换终端', 2],
+			['设计画布', '切换到钢笔工具', 1],
+			['设计图层', '移动选中的图层 10 像素', 8],
+			['设计矢量编辑', '联集', 3],
+			['设计文本编辑', '结束文本编辑', 3],
+			['设计原型预览', '按页滚动原型预览', 2],
+		] as const : [
+			['Conversations', 'Search sessions in the sidebar', 2],
+			['Terminal in Code', 'Toggle terminal', 2],
+			['Design Canvas', 'Switch to the pen tool', 1],
+			['Design Layers', 'Move selected layers by ten pixels', 8],
+			['Design Vector Editing', 'Union selection', 3],
+			['Design Text Editing', 'Finish editing text', 3],
+			['Design Prototype Preview', 'Scroll the prototype preview by a page', 2],
+		] as const) {
+			const group = shortcuts.getByRole('heading', { name: heading, exact: true }).locator('+ ul');
+			await expect(group.getByRole('listitem').filter({ hasText: command }).locator('kbd')).toHaveCount(keyCount);
+		}
+		const designCanvas = shortcuts.getByRole('heading', { name: chinese ? '设计画布' : 'Design Canvas', exact: true }).locator('+ ul');
+		await expect(designCanvas.getByRole('listitem').filter({ hasText: chinese ? '保存设计' : 'Save design' }).locator('kbd')).toHaveCount(2);
+		await expect(shortcuts.getByText(chinese ? '保存' : 'Save', { exact: true })).toHaveCount(0);
+		await shortcuts.getByRole('heading', { name: chinese ? '设计原型预览' : 'Design Prototype Preview' }).scrollIntoViewIfNeeded();
+		await expect(search).toBeInViewport();
+		await search.fill(chinese ? '切换终端' : 'toggle terminal');
+		await expect(shortcuts.getByRole('heading')).toHaveText(chinese ? 'Code 终端' : 'Terminal in Code');
+		await expect(shortcuts.getByRole('listitem')).toHaveCount(1);
+		await search.fill('primary+k');
+		await expect(shortcuts.getByRole('listitem')).toHaveCount(2);
+		await search.fill('primary + k primary + f');
+		await expect(shortcuts.getByRole('heading')).toHaveText(chinese ? '新建 Code 会话' : 'New Code Conversation');
+		await expect(shortcuts.getByRole('listitem')).toHaveCount(1);
+		await expect(picker).toBeVisible();
+		if ((await picker.locator('kbd').allTextContents()).includes('⌘')) {
+			await search.fill('⌘ K ⌘ F');
+			await expect(shortcuts.getByRole('listitem')).toHaveCount(1);
+			await expect(picker).toBeVisible();
+		}
+		await search.fill(chinese ? '设计原型预览' : 'design prototype preview');
+		await expect(shortcuts.getByRole('heading')).toHaveText(chinese ? '设计原型预览' : 'Design Prototype Preview');
+		await expect(shortcuts.getByRole('listitem')).toHaveCount(3);
+		await search.fill('Page Up');
+		await expect(shortcuts.getByRole('listitem')).toHaveCount(1);
+		await search.fill('+');
+		await expect(shortcuts.getByRole('listitem')).toHaveCount(1);
+		await expect(shortcuts.getByRole('listitem').filter({ hasText: chinese ? '放大' : 'Zoom in' })).toBeVisible();
+		await search.fill(chinese ? '拆分编辑器' : 'split editor');
+		await expect(shortcuts.getByRole('heading')).toHaveCount(0);
+		await expect(shortcuts.getByText(chinese ? '没有符合搜索条件的 Agent 窗口快捷键。' : 'No Agent Window shortcuts match your search.')).toBeVisible();
+		await search.press('Escape');
+		await expect(search).toBeFocused();
+		await expect(search).toHaveValue('');
+		await expect(shortcuts.getByRole('heading')).toHaveCount(9);
+		await page.keyboard.press('Escape');
+		await expect(modal).toHaveCount(0);
+		await expect(accounts).toBeFocused();
+		await accounts.click();
+		await page.getByRole('menuitem', { name: chinese ? '设置' : 'Settings', exact: true }).click();
+		const settings = page.locator('.ash-sessions-settings');
+		await settings.getByRole('navigation').getByRole('button', { name: label, exact: true }).click();
+		await settings.locator('.ash-sessions-settings-page').getByRole('button', { name: label, exact: true }).click();
+		await expect(modal).toBeVisible();
+		await expect(search).toBeFocused();
+		await expect(settings).toHaveCount(0);
+		await modal.getByRole('button', { name: chinese ? '关闭' : 'Close', exact: true }).click();
+		await expect(modal).toHaveCount(0);
+	});
+
 	suite('Sessions settings components', () => {
 		setup(async function () {
 			const { page } = browserTests;
@@ -443,7 +540,7 @@ suite('sessions browser component', () => {
 			await navigation.getByRole('button', { name: 'Keyboard Shortcuts', exact: true }).click();
 			await expect(settingsPage.getByRole('heading', { name: 'Keyboard Shortcuts' }).first()).toBeVisible();
 			await expect(settingsPage.getByRole('button', { name: 'Keyboard Shortcuts', exact: true })).toBeVisible();
-			await expect(settingsPage.getByRole('button', { name: 'Preferences: Open Keyboard Shortcuts (JSON)', exact: true })).toBeVisible();
+			await expect(settingsPage.getByRole('button', { name: 'Preferences: Open Keyboard Shortcuts (JSON)', exact: true })).toHaveCount(0);
 			await navigation.getByRole('button', { name: 'Appearance' }).click();
 			await expect(settings.getByRole('heading', { name: 'Appearance' })).toBeVisible();
 			await expect(settings.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);

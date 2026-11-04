@@ -1011,7 +1011,11 @@ export abstract class Workbench extends Disposable {
 			return { container, services: scope, context };
 		};
 		const filesScope = createToolScope('files');
-		const filesEditor = this._register(filesScope.services.createInstance(DesktopMainEditorPart, filesScope.container, { ...editorOptions, contextKeyService: filesScope.context }));
+		const filesEditor = this._register(filesScope.services.createInstance(DesktopMainEditorPart, filesScope.container, {
+			...editorOptions,
+			contextKeyService: filesScope.context,
+			modalContainer: this.domNode,
+		}));
 		filesScope.services.registerInstance(IEditorPart, filesEditor);
 		const tools = new Map<Exclude<DesktopEditorTool, 'files'>, DesktopToolEditorPart>();
 		for (const tool of ['changes', 'browser', 'terminal', 'chat'] as const) {

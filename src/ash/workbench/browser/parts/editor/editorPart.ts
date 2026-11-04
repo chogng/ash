@@ -132,6 +132,8 @@ export const IEditorPart =
 /** Named collaborators used to construct the editor region. */
 export interface IEditorPartOptions {
 	readonly hideTabs?: boolean;
+	/** Hosts modal editors outside an editor region that can be hidden independently. */
+	readonly modalContainer?: HTMLElement;
 	/** Waits for resource-owned save recovery before reading dirty state or releasing a pane. */
 	readonly beforeCloseEditor?: (resource: URI) => Promise<boolean>;
 	/** Ash extension: reuse the editor host for single-content groups without changing ordinary multi-tab editors. */
@@ -279,7 +281,7 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			this.tabDragAndDrop,
 		));
 		this.modalEditor = this._register(instantiationService.createInstance(ModalEditorPart, {
-			container,
+			container: options.modalContainer ?? container,
 			registry: this.groupOptions.registry,
 			resolveOpenError: this.groupOptions.resolveOpenError,
 			onWillOpenEditor: this.groupOptions.onWillOpenEditor,

@@ -1,3 +1,4 @@
+import { designCanvasShortcutKeys, designVectorShortcutKeys } from '../designShortcutKeys.js';
 import { describeDesignEffect } from '../designEffectLabels.js';
 import { designEffects } from '../../common/model/designEffects.js';
 import { designPaints } from '../../common/model/designPaint.js';
@@ -324,7 +325,15 @@ export class DesignEditorWidget extends Disposable {
 	public handleLayerKeyDown(event: KeyboardEvent): boolean {
 		if (event.defaultPrevented || this.documentController.isBusy || this.mode === DesignMode.Code || this.mode === DesignMode.Motion || this.input.isGesturing) { return false; }
 		const vectorKey = event.code.startsWith('Key') ? event.code.slice(3).toLowerCase() : event.key.toLowerCase();
-		const vectorAction = event.altKey && event.shiftKey ? ({ f: 'vectorFlatten', u: 'vectorunion', s: 'vectorsubtract', i: 'vectorintersect', e: 'vectorexclude' } as Record<string, string>)[vectorKey] : (event.ctrlKey || event.metaKey) && event.altKey && vectorKey === 'o' ? 'vectorOutline' : (event.ctrlKey || event.metaKey) && vectorKey === 'e' ? (event.shiftKey ? 'vectorOutline' : 'vectorFlatten') : undefined;
+		const vectorAction = event.altKey && event.shiftKey ? ({
+			[designVectorShortcutKeys.flatten]: 'vectorFlatten',
+			[designVectorShortcutKeys.union]: 'vectorunion',
+			[designVectorShortcutKeys.subtract]: 'vectorsubtract',
+			[designVectorShortcutKeys.intersect]: 'vectorintersect',
+			[designVectorShortcutKeys.exclude]: 'vectorexclude',
+		} as Record<string, string>)[vectorKey] : (event.ctrlKey || event.metaKey) && event.altKey && vectorKey === designVectorShortcutKeys.outline
+			? 'vectorOutline' : (event.ctrlKey || event.metaKey) && vectorKey === designVectorShortcutKeys.transform
+				? event.shiftKey ? 'vectorOutline' : 'vectorFlatten' : undefined;
 		if (vectorAction) { const action = this.properties.getActions().find(action => action.id === `sessions.design.${vectorAction}`); if (action?.enabled) { void action.run(); } event.preventDefault(); event.stopPropagation(); return true; }
 		if ((event.ctrlKey || event.metaKey) && event.altKey && (event.code === 'KeyK' || event.key.toLowerCase() === 'k')) { this.createComponent(); }
 		else if ((event.ctrlKey || event.metaKey) && event.altKey && (event.code === 'KeyB' || event.key.toLowerCase() === 'b')) { this.detachInstance(); }
@@ -558,7 +567,7 @@ export class DesignEditorWidget extends Disposable {
 			const path = this.selectedShape; this.commands.vector.update({ ...path, widthPoints: path.widthPoints?.filter(point => !this.selection.widthPointIds.has(point.id)) }); this.selection.widthPointIds.clear(); this.render(); event.preventDefault(); return;
 		}
 		if ((event.key === 'Enter' || event.key === 'F2') && this.selectedShapes.length === 1 && this.selectedShapes[0].kind === 'text') { event.preventDefault(); this.text.edit(this.selectedShapes[0].id); return; }
-		if (event.shiftKey && event.code === 'KeyB' && this.selection.editingVector && this.selectedShape?.kind === 'path' && this.selectedShape.network) { this.selection.paintingVector = !this.selection.paintingVector; this.render(); event.preventDefault(); return; }
+		if (event.shiftKey && event.code === designVectorShortcutKeys.paintRegions && this.selection.editingVector && this.selectedShape?.kind === 'path' && this.selectedShape.network) { this.selection.paintingVector = !this.selection.paintingVector; this.render(); event.preventDefault(); return; }
 		if (this.selection.editingGradient && this.selectedShape && !this.commands.components.isInstanceChild(this.selectedShape.id)) {
 			const shape = this.selectedShape, paints = designPaints(shape), paint = paints.find(paint => paint.id === this.selection.paintId) ?? paints[0];
 			if (paint && paint.type !== 'solid') {
@@ -605,17 +614,17 @@ export class DesignEditorWidget extends Disposable {
 			else { this.camera.panBy(-direction.x * KEYBOARD_PAN_DISTANCE, -direction.y * KEYBOARD_PAN_DISTANCE); this.applyTransform(); }
 		} else {
 			switch (event.key.toLowerCase()) {
-				case 'f': this.addFrame(); break;
-				case 'i': void this.importImage(); break;
-				case 'v': this.setTool(DesignTool.Select); break;
-				case 'h': this.setTool(DesignTool.Hand); break;
-				case 'r': this.addShape('rectangle'); break;
-				case 'e': this.addShape('ellipse'); break;
-				case 't': this.setTool(DesignTool.Text); break;
-				case 'p': this.setTool(DesignTool.Pen); break;
-				case 'g': this.groupSelected(); break;
-				case 'u': this.ungroupSelected(); break;
-				case 'n': {
+				case designCanvasShortcutKeys.addFrame: this.addFrame(); break;
+				case designCanvasShortcutKeys.importImage: void this.importImage(); break;
+				case designCanvasShortcutKeys.selectTool: this.setTool(DesignTool.Select); break;
+				case designCanvasShortcutKeys.handTool: this.setTool(DesignTool.Hand); break;
+				case designCanvasShortcutKeys.addRectangle: this.addShape('rectangle'); break;
+				case designCanvasShortcutKeys.addEllipse: this.addShape('ellipse'); break;
+				case designCanvasShortcutKeys.textTool: this.setTool(DesignTool.Text); break;
+				case designCanvasShortcutKeys.penTool: this.setTool(DesignTool.Pen); break;
+				case designCanvasShortcutKeys.group: this.groupSelected(); break;
+				case designCanvasShortcutKeys.ungroup: this.ungroupSelected(); break;
+				case designCanvasShortcutKeys.addToSelection: {
 					const shapes = getDesignShapeEntries(this.documentController.model.value.shapes).map(entry => entry.shape);
 					const next = shapes.find(shape => !this.selection.ids.has(shape.id));
 					if (next) { this.selection.add(next.id); this.announceSelection(); this.render(); }
@@ -631,9 +640,9 @@ export class DesignEditorWidget extends Disposable {
 					this.render();
 					break;
 				}
-				case '=': case '+': this.zoomAtCenter(KEYBOARD_ZOOM_FACTOR); break;
-				case '-': case '_': this.zoomAtCenter(1 / KEYBOARD_ZOOM_FACTOR); break;
-				case '0': this.camera.reset(); this.applyTransform(); break;
+				case designCanvasShortcutKeys.zoomIn: case designCanvasShortcutKeys.zoomInAlternate: this.zoomAtCenter(KEYBOARD_ZOOM_FACTOR); break;
+				case designCanvasShortcutKeys.zoomOut: case designCanvasShortcutKeys.zoomOutAlternate: this.zoomAtCenter(1 / KEYBOARD_ZOOM_FACTOR); break;
+				case designCanvasShortcutKeys.resetZoom: this.camera.reset(); this.applyTransform(); break;
 				default: return;
 			}
 		}

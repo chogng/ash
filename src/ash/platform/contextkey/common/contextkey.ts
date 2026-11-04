@@ -83,6 +83,7 @@ class Expression implements ContextKeyExpression {
 		readonly evaluate: (context: Context) => boolean,
 		readonly keys: () => ReadonlySet<string>,
 		private readonly text: string,
+		readonly requiresTruthyKeyFrom: (keys: ReadonlySet<string>) => boolean = () => false,
 	) { }
 
 	serialize(): string { return this.text; }
@@ -90,6 +91,11 @@ class Expression implements ContextKeyExpression {
 
 /** Factory functions for context expressions used by contributions. */
 export const ContextKeyExpr = {
+	/** Proves that each way to satisfy the expression requires a truthy key from the given set. */
+	requiresTruthyKeyFrom(expression: ContextKeyExpression, keys: ReadonlySet<string>): boolean {
+		return expression instanceof Expression && expression.requiresTruthyKeyFrom(keys);
+	},
+
 	deserialize(source: string | null | undefined): ContextKeyExpression | undefined {
 		return source == null ? undefined : new Parser().parse(source);
 	},
@@ -107,6 +113,7 @@ export const ContextKeyExpr = {
 			(context) => Boolean(context.getValue(key)),
 			() => new Set([key]),
 			key,
+			keys => keys.has(key),
 		);
 	},
 
@@ -191,6 +198,7 @@ export const ContextKeyExpr = {
 			defined,
 			(context) => defined.every((expression) => expression.evaluate(context)),
 			'&&',
+			keys => defined.some(expression => ContextKeyExpr.requiresTruthyKeyFrom(expression, keys)),
 		);
 	},
 
@@ -205,6 +213,7 @@ export const ContextKeyExpr = {
 			defined,
 			(context) => defined.some((expression) => expression.evaluate(context)),
 			'||',
+			keys => defined.every(expression => ContextKeyExpr.requiresTruthyKeyFrom(expression, keys)),
 		);
 	},
 };
@@ -213,12 +222,13 @@ function combineExpressions(
 	expressions: readonly ContextKeyExpression[],
 	evaluate: (context: Context) => boolean,
 	operator: string,
+	requiresTruthyKeyFrom: (keys: ReadonlySet<string>) => boolean,
 ): ContextKeyExpression {
 	const keys = new Set<string>();
 	for (const expression of expressions) {
 		for (const key of expression.keys()) keys.add(key);
 	}
-	return new Expression(evaluate, () => keys, expressions.map(expression => `(${expression.serialize()})`).join(` ${operator} `));
+	return new Expression(evaluate, () => keys, expressions.map(expression => `(${expression.serialize()})`).join(` ${operator} `), requiresTruthyKeyFrom);
 }
 
 function membershipValueEquals(value: ContextKeyValue, candidate: unknown): boolean {
