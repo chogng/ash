@@ -1656,6 +1656,137 @@ fn ssh_buffered_response_cannot_complete_an_id_already_finished_by_route_failure
 
 #[cfg(unix)]
 #[test]
+fn gateway_delivers_one_config_change_with_multiple_directory_routes() {
+    use std::net::Shutdown;
+    use std::os::unix::net::UnixStream;
+    use std::time::Duration;
+
+    let profile = tempfile::tempdir().unwrap();
+    std::fs::write(
+        profile.path().join("config.toml"),
+        "schemaVersion = 12\n[grep]\nbackend = \"ripgrep\"\n",
+    )
+    .unwrap();
+    let directories = [tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap()];
+    let options = ash_app_server_daemon::ConnectionOptions::new(
+        profile.path(),
+        None,
+        ash_app_server_daemon::GrantSource::HostConfiguration,
+        None,
+    );
+    let registry = Arc::new(
+        ProfileAppServerRegistry::open(options.clone(), ash_app_server_diff::compute).unwrap(),
+    );
+    let server = registry.server_for(options).unwrap();
+    let (mut client, host) = UnixStream::pair().unwrap();
+    client
+        .set_read_timeout(Some(Duration::from_secs(3)))
+        .unwrap();
+    let mut reader = BufReader::new(client.try_clone().unwrap());
+    let served = thread::spawn(move || {
+        serve(
+            registry,
+            server,
+            BufReader::new(host.try_clone().unwrap()),
+            host,
+            RemoteLaunch::from_environment(),
+        )
+    });
+    let mut changes = Vec::new();
+    let mut call = |id, method, params| {
+        writeln!(
+            client,
+            "{}",
+            serde_json::json!({"jsonrpc":"2.0","id":id,"method":method,"params":params})
+        )
+        .unwrap();
+        loop {
+            let mut line = String::new();
+            assert_ne!(reader.read_line(&mut line).unwrap(), 0);
+            let message: Value = serde_json::from_str(&line).unwrap();
+            if message["id"] == id {
+                return message;
+            }
+            if message["method"] == "config/changed" {
+                changes.push(message["params"].clone());
+            }
+        }
+    };
+    let initialized = call(
+        1,
+        "initialize",
+        serde_json::json!({"clientInfo":{"name":"config-notifications-test","version":"1"},"capabilities":{"notifications":true,"directoryGrantsHost":{"version":1}}}),
+    );
+    assert!(initialized["result"].is_object(), "{initialized}");
+    let granted = call(
+        2,
+        "env/dirs/set",
+        serde_json::json!({"dirs":directories.iter().enumerate().map(|(index, dir)| {
+        serde_json::json!({"id":format!("config-dir-{index}"),"path":dir.path(),"grant":{"type":"host","permissions":["readFiles"]}})
+    }).collect::<Vec<_>>() }),
+    );
+    assert!(granted["result"].is_object(), "{granted}");
+    for (index, dir) in directories.iter().enumerate() {
+        let created = call(
+            3 + index as u64,
+            "session/create",
+            serde_json::json!({
+                "commandId":format!("config-directory-{index}"),"title":"Config test",
+                "executionTarget":{"type":"local","root":dir.path()}
+            }),
+        );
+        assert!(created["result"].is_object(), "{created}");
+    }
+    let before = call(5, "config/read", serde_json::json!({}));
+    let revision = before["result"]["revision"].as_u64().unwrap();
+    let updated = call(
+        6,
+        "config/update",
+        serde_json::json!({
+            "commandId":"change-default-model","expectedRevision":revision,
+            "model":{"provider":"openai","model":"gpt-6-luna"}
+        }),
+    );
+    assert_eq!(updated["result"]["revision"], revision + 1, "{updated}");
+    let expected = serde_json::json!({
+        "revision":updated["result"]["revision"], "generation":updated["result"]["generation"]
+    });
+    if !changes.is_empty() {
+        client
+            .set_read_timeout(Some(Duration::from_millis(300)))
+            .unwrap();
+    }
+    loop {
+        let mut line = String::new();
+        match reader.read_line(&mut line) {
+            Ok(0) => break,
+            Ok(_) => {
+                let message: Value = serde_json::from_str(&line).unwrap();
+                if message["method"] == "config/changed" {
+                    changes.push(message["params"].clone());
+                    client
+                        .set_read_timeout(Some(Duration::from_millis(300)))
+                        .unwrap();
+                }
+            }
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                ) =>
+            {
+                break;
+            }
+            Err(error) => panic!("failed to read gateway notification: {error}"),
+        }
+    }
+    client.shutdown(Shutdown::Write).unwrap();
+    served.join().unwrap().unwrap();
+    assert_eq!(changes, [expected]);
+}
+
+#[cfg(unix)]
+#[test]
 fn directory_resources_remain_on_their_creating_gateway_connection() {
     use base64::Engine;
     let profile = tempfile::tempdir().unwrap();

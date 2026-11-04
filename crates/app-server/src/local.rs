@@ -843,6 +843,7 @@ impl std::error::Error for OpenAppServerError {}
 /// terminal, Git, language, and execution services remain in separately composed [`AppServer`]
 /// instances.
 pub struct LocalProfileRuntime {
+    config_notifications: Arc<crate::server::config_runtime::ConfigSubscription>,
     ide_registry: Arc<crate::ide_registry::IdeRegistry>,
     diagnostics: diagnostics::Diagnostics,
     pub(crate) build_info: build_info::BuildInfo,
@@ -987,7 +988,16 @@ impl LocalProfileRuntime {
             crate::managed::probe_runtime,
         )
         .map_err(open_error)?;
+        let updates = Arc::new(UpdateBroker::default());
+        // Directory runtimes reconcile their own services, while the profile publishes
+        // each committed configuration generation once to the shared update broker.
+        let config_updates = Arc::clone(&updates);
+        let config_notifications =
+            crate::server::config_runtime::ConfigSubscription::start(&config, move |change| {
+                config_updates.publish_config_changed(change)
+            });
         Ok(Self {
+            config_notifications: Arc::new(config_notifications),
             terminal_host: None,
             ide_registry: Arc::new(crate::ide_registry::IdeRegistry::default()),
             editor_extension_policy,
@@ -1021,7 +1031,7 @@ impl LocalProfileRuntime {
             secrets,
             mcp_oauth_transports: Arc::default(),
             plugin_authority,
-            updates: Arc::new(UpdateBroker::default()),
+            updates,
             update_scopes: Mutex::new(BTreeMap::new()),
             extension_packages: Mutex::new(None),
             github_authentication: Mutex::new(None),
@@ -1924,7 +1934,7 @@ pub fn open_app_server_with_codebase_providers(
             .map_err(open_error)?,
     ));
     let state_runtime = Arc::clone(&state_runtime);
-    let mut server = match &profile_runtime {
+    let server = match &profile_runtime {
         Some(runtime) => AppServer::new_with_updates(
             threads,
             agent_model.clone(),
@@ -1962,8 +1972,15 @@ pub fn open_app_server_with_codebase_providers(
         ),
     ))
     .with_approval_review_model(Some(approval_review_model))
-    .with_capability_network_policy(network_policy.clone())
-    .with_config_store(Arc::clone(&config))
+    .with_capability_network_policy(network_policy.clone());
+    let mut server = if let Some(profile) = &profile_runtime {
+        server.with_profile_config_store(
+            Arc::clone(&config),
+            Arc::clone(&profile.config_notifications),
+        )
+    } else {
+        server.with_config_store(Arc::clone(&config))
+    }
     .with_extension_state_store(extension_state)
     .with_backup_store(Arc::new(
         ash_state::SqliteBackupStore::open(&database_path).map_err(open_error)?,

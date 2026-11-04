@@ -111,7 +111,7 @@ mod collaboration_operations;
 mod collaboration_runtime;
 #[path = "server/request_processors/configuration.rs"]
 mod config_operations;
-mod config_runtime;
+pub(crate) mod config_runtime;
 #[path = "server/request_processors/connectors.rs"]
 mod connector_operations;
 mod connector_runtime;
@@ -655,11 +655,14 @@ impl ConnectionNotifications {
 
     /// Drains all currently queued notifications as JSON-RPC messages.
     pub fn drain(&self) -> Vec<String> {
-        self.listener
-            .drain()
+        self.drain_values()
             .into_iter()
             .map(serialize_response)
             .collect()
+    }
+
+    pub(crate) fn drain_values(&self) -> Vec<Value> {
+        self.listener.drain()
     }
 
     /// Closes this notification source and wakes blocked listeners.
@@ -1932,7 +1935,30 @@ impl AppServer {
         }
     }
 
-    pub fn with_config_store(mut self, config: Arc<ConfigStore>) -> Self {
+    pub fn with_config_store(self, config: Arc<ConfigStore>) -> Self {
+        let notifications =
+            config_runtime::ConfigNotifications::Standalone(Arc::clone(&self.updates));
+        self.install_config_store(config, notifications)
+    }
+
+    pub(crate) fn with_profile_config_store(
+        self,
+        config: Arc<ConfigStore>,
+        subscription: Arc<config_runtime::ConfigSubscription>,
+    ) -> Self {
+        self.install_config_store(
+            config,
+            config_runtime::ConfigNotifications::Profile {
+                _subscription: subscription,
+            },
+        )
+    }
+
+    fn install_config_store(
+        mut self,
+        config: Arc<ConfigStore>,
+        notifications: config_runtime::ConfigNotifications,
+    ) -> Self {
         let mut builder =
             ash_extension_api::ExtensionRegistryBuilder::from_registry(&self.agent_extensions);
         builder.lifecycle_observer(
@@ -1949,7 +1975,7 @@ impl AppServer {
         self.agent_extensions.config_changed(0);
         self._config_watcher = Some(config_runtime::ConfigWatcher::start(
             &config,
-            Arc::clone(&self.updates),
+            notifications,
             Arc::clone(&self.agent_extensions),
             self.local_hook_runtime(),
         ));

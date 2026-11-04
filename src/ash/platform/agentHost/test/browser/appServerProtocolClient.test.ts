@@ -76,6 +76,59 @@ class ProtocolTransport implements AppServerTransport {
 
 const flushHandlers = (): Promise<void> => new Promise<void>(resolve => setImmediate(resolve));
 
+test('Concurrent config reads share one request and retry after rejection', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = toDisposable(() => client.dispose());
+	await client.connect();
+
+	const reads = Array.from({ length: 110 }, () => appServerRequest(client, 'config/read', {}));
+	const requests = () => transport.frames.filter(frame => frame.method === 'config/read');
+	assert.equal(requests().length, 1);
+	const rejected = Promise.all(reads.map(read => assert.rejects(read, /ServerOverloaded/)));
+	transport.frame({ id: requests()[0]?.id, error: { code: -32000, message: 'ServerOverloaded', data: { kind: 'ServerOverloaded' } } });
+	await rejected;
+
+	const retry = assert.rejects(appServerRequest(client, 'config/read', {}), /connection replaced/);
+	assert.equal(requests().length, 2);
+	client.disconnect();
+	await retry;
+});
+
+test('Config reads stay ordered across writes, change notifications and reconnects', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = new DisposableStore();
+	cleanup.add(toDisposable(() => client.dispose()));
+	await client.connect();
+
+	const pending: Promise<unknown>[] = [appServerRequest(client, 'config/read', {})];
+	pending.push(appServerRequest(client, 'config/update', { commandId: 'model-switch', expectedRevision: 1, model: { provider: 'openai', model: 'next' } }));
+	pending.push(appServerRequest(client, 'config/read', {}));
+	cleanup.add(client.onNotification(event => {
+		if (event.method === 'config/changed') {
+			pending.push(appServerRequest(client, 'config/read', {}), appServerRequest(client, 'config/read', {}));
+		}
+	}));
+	const change = { method: 'config/changed', params: { revision: 2, generation: 2 } };
+	transport.frame(change);
+	transport.frame(change);
+	assert.equal(pending.length, 5);
+	assert.deepEqual(transport.frames.map(frame => frame.method).filter(method => typeof method === 'string' && method.startsWith('config/')), [
+		'config/read', 'config/update', 'config/read', 'config/read',
+	]);
+
+	const rejected = Promise.all(pending.map(request => assert.rejects(request, /connection replaced/)));
+	client.disconnect();
+	await client.connect();
+	transport.frame(change);
+	const afterReconnect = Promise.all(pending.slice(5).map(request => assert.rejects(request, /connection replaced/)));
+	assert.equal(pending.length, 7);
+	assert.equal(transport.frames.filter(frame => frame.method === 'config/read').length, 4);
+	client.disconnect();
+	await Promise.all([rejected, afterReconnect]);
+});
+
 test('File domain invalidations reach only their filesystem connection and release with their consumers', async () => {
 	const transport = new ProtocolTransport();
 	const otherTransport = new ProtocolTransport();

@@ -95,6 +95,7 @@ fn real_hook_processes_publish_results_and_replay_without_reexecution() {
                     root: directory.path().to_path_buf(),
                 }),
                 branch_name: None,
+                worktree_start: None,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new("hook-test-create").unwrap(),
