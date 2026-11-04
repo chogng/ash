@@ -1309,7 +1309,7 @@ for (const locale of ['en', 'zh-CN'])
 		await expect(groups).toHaveText(chinese ? ['置顶', '项目', '最近使用'] : ['Pinned', 'Projects', 'Recents']);
 		await expect(recent).toHaveAttribute('aria-expanded', 'true');
 		await expect(pinned.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
-		await expect(list.locator('.ash-sessions-list-more')).toHaveCount(0);
+		await expect(list.getByRole('button', { name: chinese ? '更多会话操作' : 'More Sessions Actions', exact: true })).toBeVisible();
 		const projectToggle = projects.locator(':scope > h3 button');
 		const projectChevron = projectToggle.locator('.ash-sessions-list-section-icon');
 		await expect(projectChevron).toHaveCSS('width', '16px');

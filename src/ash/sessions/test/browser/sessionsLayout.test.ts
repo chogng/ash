@@ -844,6 +844,62 @@ suite('sessions browser component', () => {
 		} finally { await ide.close(); }
 	});
 
+	for (const locale of ['en', 'zh-CN']) test(`Sessions sidebar keeps one heading alongside its menu in both modes (${locale})`, async function () {
+		const { page } = browserTests;
+		const chinese = locale === 'zh-CN';
+		if (chinese) {
+			await page.goto('/sessions.html?catalog&locale=zh-CN');
+		}
+		const list = page.locator('.ash-sessions-list:visible');
+		const modes = page.locator('.ash-window-mode-control').getByRole('button');
+		for (const mode of [modes.nth(0), modes.nth(1)]) {
+			await mode.click();
+			const heading = list.getByRole('heading', { level: 2 });
+			const more = list.getByRole('button', { name: chinese ? '更多会话操作' : 'More Sessions Actions', exact: true });
+			const add = list.getByRole('button', { name: chinese ? '新建分组…' : 'New group…', exact: true });
+			await expect(more.locator('[data-ash-icon-id="list-filter"]')).toBeVisible();
+			await expect(add.locator('[data-ash-icon-id="add"]')).toBeVisible();
+			await expect(heading).toHaveText(chinese ? '会话' : 'Sessions');
+			await expect(heading).toBeVisible();
+			const titleBounds = (await heading.boundingBox())!;
+			const actionBounds = (await more.boundingBox())!;
+			expect(actionBounds.width).toBe(actionBounds.height);
+			const addBounds = (await add.boundingBox())!;
+			expect(addBounds.x).toBeGreaterThanOrEqual(actionBounds.x + actionBounds.width);
+			expect(addBounds.width).toBe(actionBounds.width);
+			expect(addBounds.height).toBe(actionBounds.height);
+			await expect(heading).toHaveCSS('font-weight', '400');
+			expect(titleBounds.x + titleBounds.width).toBeLessThan(actionBounds.x);
+			expect(titleBounds.y + titleBounds.height / 2).toBeCloseTo(actionBounds.y + actionBounds.height / 2, 0);
+			await more.press('Enter');
+			await expect(more).toHaveAttribute('aria-expanded', 'true');
+			const group = page.getByRole('menuitem', { name: chinese ? '分组方式' : 'Group By', exact: true });
+			await expect(group).toBeFocused();
+			await group.press('ArrowRight');
+			await expect(page.getByRole('menuitemradio', { name: chinese ? '状态' : 'Status', exact: true })).toBeVisible();
+			await page.keyboard.press('ArrowLeft');
+			await expect(group).toBeFocused();
+			await page.keyboard.press('Escape');
+			await expect(more).toHaveAttribute('aria-expanded', 'false');
+			await expect(more).toBeFocused();
+		}
+
+		const add = list.getByRole('button', { name: chinese ? '新建分组…' : 'New group…', exact: true });
+		const prompt = page.locator('.ash-quick-input-host').getByRole('textbox');
+		const group = list.getByRole('button', { name: 'Sidebar fixture group', exact: true });
+		await add.press('Enter');
+		await expect(prompt).toBeFocused();
+		await prompt.fill('Sidebar fixture group');
+		await prompt.press('Escape');
+		await expect(add).toBeFocused();
+		await expect(group).toHaveCount(0);
+		await add.press('Enter');
+		await prompt.fill('  Sidebar fixture group  ');
+		await prompt.press('Enter');
+		await expect(group).toBeVisible();
+		await expect(add).toBeFocused();
+	});
+
 	for (const locale of ['en', 'zh-CN']) test(`Sessions typography stays independent of IDE defaults (${locale})`, async function () {
 		const { page, context, info: testInfo } = browserTests;
 		const chinese = locale === 'zh-CN';

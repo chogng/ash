@@ -1,7 +1,7 @@
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsMenuActiveConversationContext } from '../../../../common/contextkeys.js';
-import { ISessionsListModelService, type ISessionsListTreeNode } from '../../../../services/sessions/browser/sessionsListModelService.js';
-import { Separator, type IAction } from '../../../../../base/common/actions.js';
+import { ISessionsListModelService, type ISessionsListTreeNode, type SessionGrouping, type SessionSortDirection, type SessionSortMode } from '../../../../services/sessions/browser/sessionsListModelService.js';
+import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
@@ -24,7 +24,7 @@ import { IGitHubService } from '../../../github/browser/githubService.js';
 import { getPullRequestLabel } from '../../../github/common/types.js';
 import { getHighestPriorityPullRequestIcon } from '../../../../../workbench/common/chatPullRequest.js';
 import { sessionManagementLabel } from '../../../../browser/sessionManagementLabels.js';
-import type { SessionManagementInfo } from '../../../../services/sessions/common/session.js';
+import type { ISession, SessionManagementInfo } from '../../../../services/sessions/common/session.js';
 import type { ThemeIcon } from '../../../../../base/common/themables.js';
 import { colorCssVariable } from '../../../../../platform/theme/common/colorUtils.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
@@ -40,11 +40,21 @@ import { generateUuid } from '../../../../../base/common/uuid.js';
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { Menus } from '../../../../browser/menus.js';
 import { ActionBar } from '../../../../../base/browser/ui/actionbar/actionbar.js';
+import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
+import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
+import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import { DropdownMenuActionViewItem } from '../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { createSessionItemActions } from '../../../../browser/agentSessionsModel.js';
 import type { SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
 import { createSessionSummaryHover, getSessionSummaryHoverData } from '../sessionHoverContent.js';
 import { IHoverService, type IManagedHover } from '../../../../../platform/hover/browser/hoverService.js';
+
+interface SessionBucket {
+	readonly id: string;
+	readonly label: string;
+}
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends DomWidget {
@@ -52,11 +62,12 @@ export class SessionsList extends DomWidget {
 	private readonly feedback = this._register(new SessionActionFeedback());
 	private readonly rowMenuContext = this._register(new MutableDisposable<IScopedContextKeyService>());
 	readonly domNode: HTMLElement;
-	private readonly heading: HTMLHeadingElement;
 	private readonly list: HTMLDivElement;
 	private readonly items = this._register(new DisposableMap<string, SessionListItem>());
 	private readonly sections = this._register(new DisposableMap<string, SessionListSection>());
 	private projects: readonly Project[] = [];
+	private readonly repositoryGroups = new Map<string, SessionBucket | undefined>();
+	private readonly repositoryLookup = new MutableDisposable<CancellationTokenSource>();
 	private projectLoad = 0;
 	private projectsFailed = false;
 	private projectsLoading = false;
@@ -84,6 +95,7 @@ export class SessionsList extends DomWidget {
 		@ISessionSectionOrderService private readonly sectionOrder: ISessionSectionOrderService,
 		@IContextKeyService private readonly contextKeys?: IContextKeyService,
 		@IHoverService private readonly hoverService?: IHoverService,
+		@ISessionProviderScopeService private readonly providerScopes?: ISessionProviderScopeService,
 	) {
 		super();
 		const ownerDocument = container.ownerDocument;
@@ -92,8 +104,10 @@ export class SessionsList extends DomWidget {
 		this.domNode.tabIndex = -1;
 		this.domNode.dataset.mode = mode;
 		this.navigation = h(ownerDocument, 'nav', { className: 'ash-sessions-list-navigation', attributes: { 'aria-label': localize('sessions.list.navigation', 'Sessions navigation') } });
-		this.heading = h(ownerDocument, 'h2');
-		this.heading.textContent = title;
+		const header = h(ownerDocument, 'header', { className: 'ash-sessions-list-header' });
+		const heading = h(ownerDocument, 'h2', { className: 'ash-sessions-list-title' });
+		heading.textContent = title;
+		header.append(heading);
 		this.list = h(ownerDocument, 'div');
 		this.list.className = 'ash-sessions-list-items';
 		this.search = this._register(new SessionsListSearch(this.domNode, this.list, () => this.render(), () => {
@@ -107,7 +121,7 @@ export class SessionsList extends DomWidget {
 		this.projectError.type = 'button';
 		this.projectError.textContent = localize('sessions.list.projectsRetry', 'Could not load projects. Retry');
 		this._register(addDisposableListener(this.projectError, 'click', () => { void this.loadProjects(); }));
-		this.domNode.append(this.navigation, this.heading, this.list);
+		this.domNode.append(this.navigation, header, this.list);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener(this.list, 'keydown', event => {
@@ -125,70 +139,50 @@ export class SessionsList extends DomWidget {
 			if (event.scope === StorageScope.PROFILE && event.key.startsWith(`sessions.list.${mode}.collapsed.`)
 				|| event.scope === StorageScope.WORKSPACE && event.key.startsWith('sessions.inputDraft:untitled:')) this.render();
 		}));
-		this._register(listModel.onDidChange(() => this.render()));
+		this._register(listModel.onDidChange(() => {
+			if (listModel.grouping !== 'repository') {
+				this.resetRepositoryGroups();
+			}
+			this.render();
+		}));
+		if (providerScopes) {
+			this._register(providerScopes.onDidChangeScopes(() => {
+				this.resetRepositoryGroups();
+				this.render();
+			}));
+		}
+		this._register(toDisposable(() => this.resetRepositoryGroups()));
 		this._register(sectionOrder.onDidChange(() => this.render()));
 		this._register(viewService.onDidChange(() => this.render()));
 		this._register(github.onDidChange(() => this.render()));
 		this._register(groups.onDidChange(() => this.render()));
 		const menu = this._register(menus.createMenu(Menus.SidebarSessionsHeader));
 
-		const more = this._register(new Button(this.domNode, {
-			...defaultButtonStyles, icon: Lxicon.ellipsis, iconOnly: true, presentation: 'quiet', size: 'small',
-			label: localize('sessions.list.moreActions', 'More Sessions Actions'),
-			onClick: event => {
-				more.domNode.setAttribute('aria-expanded', 'true');
-				this.contextMenus.showContextMenu({
-					getAnchor: () => more.domNode,
-					getActions: () => {
-						const mode = listModel.automationSessionsMode;
-						const checked = mode === 'always';
-						const label = localize('sessions.list.showAutomationSessions', 'Show Automation Sessions');
-						return Separator.join([{
-							id: 'sessions.list.search',
-							label: localize({ bundle: 'ash.sessions', key: 'sessions.list.inlineSearch' }, 'Search sessions in the sidebar'),
-							tooltip: '',
-							enabled: true,
-							run: () => this.search.open(),
-						}], [{
-							id: 'sessions.list.toggleAutomationSessions',
-							label,
-							tooltip: label,
-							enabled: true,
-							checked,
-							run: () => listModel.setAutomationSessionsMode(checked ? 'never' : 'always'),
-						}, {
-							id: 'sessions.list.showAutomationSessionsAfterReply',
-							label: localize('sessions.list.showAutomationSessionsAfterReply', 'Show Automation Sessions After Reply'),
-							tooltip: '',
-							enabled: true,
-							checked: mode === 'afterReply',
-							run: () => listModel.setAutomationSessionsMode(mode === 'afterReply' ? 'never' : 'afterReply'),
-						}], [{
-							id: 'sessions.list.sortByCreated',
-							label: localize('sessions.list.sortByCreated', 'Sort by Creation Time'),
-							tooltip: '',
-							enabled: true,
-							checked: listModel.sortMode === 'created',
-							run: () => listModel.setSortMode('created'),
-						}, {
-							id: 'sessions.list.sortByUpdated',
-							label: localize('sessions.list.sortByUpdated', 'Sort by Last Update'),
-							tooltip: '',
-							enabled: true,
-							checked: listModel.sortMode === 'updated',
-							run: () => listModel.setSortMode('updated'),
-						}], ...menu.getActions().filter(([group]) => group !== 'navigation').map(([, actions]) => [...actions]));
-					},
-					getMenuClassName: () => 'ash-sessions-list-menu',
-					autoSelectFirstItem: event.detail === 0,
-					onHide: () => more.domNode.setAttribute('aria-expanded', 'false'),
-				});
-			},
+		const moreLabel = localize('sessions.list.moreActions', 'More Sessions Actions');
+		const createGroupLabel = localize('sessions.list.newGroup', 'New group…');
+		const headerActions = this._register(new ActionBar(header, {
+			ariaLabel: localize('sessions.list.headerActions', 'Sessions List Actions'),
+			actions: [
+				{ id: 'sessions.list.headerMore', label: moreLabel, tooltip: moreLabel, icon: Lxicon.listFilter, enabled: true, run: () => { } },
+				{
+					id: 'sessionsViewPane.createGroup', label: createGroupLabel, tooltip: createGroupLabel, icon: Lxicon.add, enabled: true,
+					run: () => this.commands.executeCommand('sessionsViewPane.createGroup').catch(error => this.notifications.error(String(error))),
+				},
+			],
+			actionViewItemOptions: { iconOnly: true, buttonStyles: defaultButtonStyles, buttonPresentation: 'quiet' },
+			actionViewItemProvider: (action, options) => action.id === 'sessions.list.headerMore' ? new DropdownMenuActionViewItem(
+				action,
+				() => this.getHeaderActions(menu.getActions()),
+				{
+					showContextMenu: delegate => this.contextMenus.showContextMenu({
+						...delegate, getMenuClassName: () => 'ash-sessions-list-menu',
+						getCheckedActionsRepresentation: item => item.id.startsWith('sessions.list.groupBy.') || item.id.startsWith('sessions.list.sort') ? 'radio' : 'checkbox',
+					})
+				},
+				options,
+			) : undefined,
 		}));
-		this.domNode.insertBefore(more.domNode, this.list);
-		more.domNode.classList.add('ash-sessions-list-more');
-		more.domNode.setAttribute('aria-haspopup', 'menu');
-		more.domNode.setAttribute('aria-expanded', 'false');
+		headerActions.domNode.classList.add('ash-sessions-list-more');
 		const updateNavigation = (): void => {
 			const actions = menu.getActions().filter(([group]) => group === 'navigation').flatMap(([, actions]) => actions);
 			this.navigationActions.clear();
@@ -219,6 +213,51 @@ export class SessionsList extends DomWidget {
 		this.render();
 		this._register(projectService.onDidChange(() => { void this.loadProjects(); }));
 		void this.loadProjects();
+	}
+
+	private getHeaderActions(contributed: readonly MenuActionGroup[]): readonly IAction[] {
+		const model = this.listModel;
+		const choice = (id: string, label: string, checked: boolean, run: () => void): IAction => ({ id, label, tooltip: '', enabled: true, checked, run });
+		const group = (value: SessionGrouping, label: string): IAction =>
+			choice(`sessions.list.groupBy.${value}`, label, model.grouping === value, () => model.setGrouping(value));
+		const sort = (value: SessionSortMode, label: string): IAction =>
+			choice(`sessions.list.sortBy.${value}`, label, model.sortMode === value, () => model.setSortMode(value));
+		const direction = (value: SessionSortDirection, label: string): IAction =>
+			choice(`sessions.list.sortDirection.${value}`, label, model.sortDirection === value, () => model.setSortDirection(value));
+		const automation = model.automationSessionsMode;
+		return Separator.join([
+			new SubmenuAction('sessions.list.groupBy', localize('sessions.list.groupBy', 'Group By'), [
+				group('projects', localize('projects.title', 'Projects')),
+				group('repository', localize('sessions.list.groupRepository', 'Repository')),
+				group('status', localize('sessions.list.groupStatus', 'Status')),
+				group('environment', localize('sessions.list.groupEnvironment', 'Environment')),
+				new Separator(),
+				group('none', localize('sessions.list.groupNone', 'None')),
+			]),
+			new SubmenuAction('sessions.list.sortBy', localize('sessions.list.sortBy', 'Sort By'), [
+				sort('name', localize('sessions.list.sortName', 'Name')),
+				sort('updated', localize('sessions.list.sortUpdated', 'Last Updated')),
+				sort('created', localize('sessions.list.sortCreated', 'Date Created')),
+				new Separator(),
+				direction('ascending', localize('sessions.list.sortAscending', 'Ascending')),
+				direction('descending', localize('sessions.list.sortDescending', 'Descending')),
+			]),
+			new SubmenuAction('sessions.list.show', localize('sessions.list.show', 'Show'), [
+				choice('sessions.list.showComparisonGroups', localize('sessions.list.showComparisonGroups', 'Comparison Groups'),
+					model.showComparisonGroups, () => model.setShowComparisonGroups(!model.showComparisonGroups)),
+				new Separator(),
+				choice('sessions.list.toggleAutomationSessions', localize('sessions.list.showAutomationSessions', 'Show Automation Sessions'),
+					automation === 'always', () => model.setAutomationSessionsMode(automation === 'always' ? 'never' : 'always')),
+				choice('sessions.list.showAutomationSessionsAfterReply', localize('sessions.list.showAutomationSessionsAfterReply', 'Show Automation Sessions After Reply'),
+					automation === 'afterReply', () => model.setAutomationSessionsMode(automation === 'afterReply' ? 'never' : 'afterReply')),
+			]),
+		], [{
+			id: 'sessions.list.search',
+			label: localize({ bundle: 'ash.sessions', key: 'sessions.list.inlineSearch' }, 'Search sessions in the sidebar'),
+			tooltip: '',
+			enabled: true,
+			run: () => this.search.open(),
+		}], ...contributed.filter(([group]) => group !== 'navigation').map(([, actions]) => [...actions]));
 	}
 
 	focus(): void {
@@ -468,6 +507,87 @@ export class SessionsList extends DomWidget {
 		return readChildren(this.list);
 	}
 
+	private resetRepositoryGroups(): void {
+		this.repositoryLookup.value?.cancel();
+		this.repositoryLookup.clear();
+		this.repositoryGroups.clear();
+	}
+
+	private repositoryKey(session: ISession): string {
+		return JSON.stringify([session.sessionId, session.workspace?.authorityId, session.workspace?.root]);
+	}
+
+	private async loadRepositoryGroups(sessions: readonly ISession[]): Promise<void> {
+		const scopes = this.providerScopes;
+		if (!scopes || this.repositoryLookup.value) {
+			return;
+		}
+		const missing = sessions.filter(session => session.workspace && !this.repositoryGroups.has(this.repositoryKey(session)));
+		if (!missing.length) {
+			return;
+		}
+		const lookup = this.repositoryLookup.value = new CancellationTokenSource();
+		const token = lookup.token;
+		await Promise.resolve();
+		for (const session of missing) {
+			if (token.isCancellationRequested || this.isDisposed) {
+				return;
+			}
+			const workspace = session.workspace!;
+			let bucket: SessionBucket | undefined;
+			try {
+				const scope = scopes.getScope(session.sessionId);
+				const root = sessionWorkspaceUri(workspace);
+				const repositories = await scope.services.host.localGit.readRepositoryContexts({
+					sessionId: scope.backendIdentity(session.sessionId), path: workspace.root,
+				}, token);
+				scope.assertCurrent();
+				const repository = repositories
+					.filter(repo => extUriBiasedIgnorePathCase.isEqualOrParent(root, sessionWorkspaceUri({ ...workspace, root: repo.rootPath })))
+					.sort((left, right) => right.rootPath.length - left.rootPath.length)[0];
+				if (repository) {
+					const remote = repository.remotes.find(remote => remote.name === 'origin' && remote.identity)?.identity
+						?? repository.remotes.find(remote => remote.identity)?.identity;
+					bucket = remote
+						? { id: JSON.stringify([remote.host, remote.owner, remote.repository]), label: `${remote.owner}/${remote.repository}` }
+						: { id: JSON.stringify([workspace.authorityId, repository.rootPath]), label: repository.label };
+				}
+			} catch {
+				// Some hosts cannot inspect Git metadata for a session's directory.
+			}
+			if (token.isCancellationRequested || this.isDisposed) {
+				return;
+			}
+			this.repositoryGroups.set(this.repositoryKey(session), bucket);
+		}
+		this.repositoryLookup.clear();
+		this.render();
+	}
+
+	private sessionBucket(session: ISession, grouping: Exclude<SessionGrouping, 'none'>, projects: ReadonlyMap<string, Project>): SessionBucket {
+		switch (grouping) {
+			case 'projects': {
+				const project = projects.get(session.sessionId);
+				return project ? { id: project.id, label: project.name } : { id: '', label: localize('sessions.list.noProjectGroup', 'No Project') };
+			}
+			case 'repository':
+				return this.repositoryGroups.get(this.repositoryKey(session)) ?? { id: '', label: localize('sessions.list.noRepositoryGroup', 'No Repository Information') };
+			case 'status':
+				return { id: session.management?.status ?? '', label: sessionManagementLabel(session.management) ?? localize('sessions.list.unknownStatusGroup', 'Unknown Status') };
+			case 'environment': {
+				const workspace = session.workspace;
+				if (workspace?.runtime) {
+					const runtime = workspace.runtime;
+					return { id: JSON.stringify([runtime.providerId, runtime.hostAuthority, runtime.workspace]), label: runtime.workspace };
+				}
+				if (workspace) {
+					return { id: workspace.authorityId, label: workspace.authorityId === 'local' ? localize('sessions.list.localEnvironmentGroup', 'Local') : session.providerLabel || workspace.authorityId };
+				}
+				return { id: '', label: localize('sessions.list.noEnvironmentGroup', 'No Environment') };
+			}
+		}
+	}
+
 	private render(): void {
 		const ownerDocument = this.domNode.ownerDocument;
 		const focused = this.list.contains(ownerDocument.activeElement) ? ownerDocument.activeElement as HTMLElement : undefined;
@@ -568,6 +688,9 @@ export class SessionsList extends DomWidget {
 		}
 		if (this.projectsFailed && !this.search.hasQuery) projects.push(this.projectError);
 		for (const group of this.groups.groups) {
+			if (group.kind === 'comparison' && !this.listModel.showComparisonGroups) {
+				continue;
+			}
 			const members: HTMLElement[] = [];
 			for (const id of group.sessionIds) {
 				const item = remaining.get(id);
@@ -578,7 +701,38 @@ export class SessionsList extends DomWidget {
 				group.kind === 'comparison' ? () => { void this.openComparison(group.sessionIds); } : undefined, group));
 		}
 		const orderedRecent = reorderChildren(recent, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId');
-		orderedRecent.push(...remaining.values());
+		const grouping = this.listModel.grouping;
+		if (grouping === 'none') {
+			orderedRecent.push(...remaining.values());
+		} else {
+			const projectsBySession = new Map<string, Project>();
+			if (grouping === 'projects') {
+				for (const project of this.projects) {
+					for (const id of project.sessionIds) {
+						if (!projectsBySession.has(id)) {
+							projectsBySession.set(id, project);
+						}
+					}
+				}
+			}
+			const ungrouped = catalog.filter(session => remaining.has(session.sessionId));
+			if (grouping === 'repository') {
+				void this.loadRepositoryGroups(ungrouped);
+			}
+			const buckets = new Map<string, { readonly label: string; readonly rows: HTMLElement[]; }>();
+			for (const session of ungrouped) {
+				const { id, label } = this.sessionBucket(session, grouping, projectsBySession);
+				let bucket = buckets.get(id);
+				if (!bucket) {
+					bucket = { label, rows: [] };
+					buckets.set(id, bucket);
+				}
+				bucket.rows.push(remaining.get(session.sessionId)!);
+			}
+			for (const [id, bucket] of [...buckets].sort((left, right) => left[1].label.localeCompare(right[1].label))) {
+				orderedRecent.push(sectionFor(`grouping:${grouping}:${id}`, bucket.label, bucket.rows, true));
+			}
+		}
 		const showEmpty = orderedRecent.length === 0 && pinned.length === 0 && chatGroups.length === 0;
 		const loading = this.sessionService.state === 'loading';
 		this.list.setAttribute('aria-busy', String(loading || this.projectsLoading));

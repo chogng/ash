@@ -40,7 +40,8 @@ class SessionsNavigationView extends ViewPane {
 		};
 		this._register(management.onDidChange(updateLoading));
 		updateLoading();
-		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), options.title, mode);
+		const title = localize({ bundle: 'ash.sessions', key: 'sessions.list.header' }, 'Sessions');
+		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), title, mode);
 		this.list = lists.get();
 		this.contentElement.append(this.list.element);
 		this._register(lists.onDidChange(list => {

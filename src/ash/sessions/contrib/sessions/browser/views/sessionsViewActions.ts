@@ -79,6 +79,28 @@ registerAction2(class AddSessionToProjectAction extends Action2 {
 	}
 });
 
+async function promptForSessionGroupName(input: IQuickInputService): Promise<string | undefined> {
+	const name = await input.input({
+		title: localize('sessions.list.groupName', 'Group name'),
+		validateInput: async value => !value.trim() || value.trim().length > 128 ? localize('sessions.list.invalidGroup', 'Enter a name with 1 to 128 characters.') : undefined,
+	});
+	return name?.trim();
+}
+
+registerAction2(class CreateSessionGroupAction extends Action2 {
+	constructor() {
+		super({ id: 'sessionsViewPane.createGroup', title: localize2('sessions.list.newGroup', 'New group…'), icon: Lxicon.add });
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const groups = accessor.get(ISessionGroupsService);
+		const name = await promptForSessionGroupName(accessor.get(IQuickInputService));
+		if (name !== undefined) {
+			await groups.create(name);
+		}
+	}
+});
+
 registerAction2(class MoveSessionToGroupAction extends Action2 {
 	constructor() { super({ id: 'agentSession.moveToGroup', title: localize2('sessions.list.moveToGroup', 'Move to group') }); }
 
@@ -93,13 +115,10 @@ registerAction2(class MoveSessionToGroupAction extends Action2 {
 		]);
 		if (!selected) return;
 		if (selected.create) {
-			const name = await input.input({
-				title: localize('sessions.list.groupName', 'Group name'),
-				validateInput: async value => !value.trim() || value.trim().length > 128 ? localize('sessions.list.invalidGroup', 'Enter a name with 1 to 128 characters.') : undefined,
-			});
+			const name = await promptForSessionGroupName(input);
 			if (name === undefined) return;
 			const session = await target.resolve();
-			await groups.move(session.sessionId, (await groups.create(name.trim())).sectionId);
+			await groups.move(session.sessionId, (await groups.create(name)).sectionId);
 		} else await groups.move((await target.resolve()).sessionId, selected.id || null);
 	}
 });

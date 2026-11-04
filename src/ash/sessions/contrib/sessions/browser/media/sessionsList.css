@@ -8,12 +8,23 @@
 	background: var(--ash-sideBar-background);
 }
 
-.ash-sessions-list h2 {
-	position: absolute;
-	width: 1px;
-	height: 1px;
+.ash-sessions-list-header {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding-inline-start: var(--ash-spacing-size120);
+}
+
+.ash-sessions-list-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin: 0;
 	overflow: hidden;
-	clip-path: inset(50%);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-regular);
+	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
@@ -39,7 +50,20 @@
 }
 
 .ash-sessions-list-more {
-	align-self: flex-end;
+	flex: 0 0 auto;
+}
+
+.ash-sessions-list-more .ash-button {
+	box-sizing: border-box;
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	min-width: 0;
+	min-height: 0;
+	padding: 0;
+}
+
+.ash-sessions-list-more .ash-dropdown-menu-indicator {
+	display: none;
 }
 
 .ash-sessions-list-search {

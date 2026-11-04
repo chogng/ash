@@ -41,20 +41,20 @@ test('Agents Window can publish and clear its application badge', { tag: ['@elec
 	}, APPLICATION_BADGE_CHANNEL);
 });
 
-test(
-	'Code sidebar retains Recents expansion with no projects',
+emptyWorkspaceTest(
+	'Code sidebar shows its Sessions heading and retains Recents expansion',
 	{ tag: ['@electron-ui'] },
 	async ({ target, workbench }, testInfo) => {
 		const page = await workbench.openAgentsWindow(target.kind);
 		const list = page.locator('.ash-sessions-list:visible');
-		const headings = list.locator(':scope > .ash-sessions-list-items > section > h3 button');
 		const recent = list.locator('[data-section=recent] > h3 button');
 		const modes = page.locator('.ash-window-mode-control');
 		await modes.getByRole('button', { name: 'Code', exact: true }).click();
 		await page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor').getByRole('textbox').focus();
 		await page.keyboard.type('Sidebar fixture draft');
-		await expect(headings).toHaveText(['Recents']);
-		await expect(list.locator('.ash-sessions-list-more')).toHaveCount(0);
+		await expect(list.getByRole('heading', { level: 2, name: 'Sessions', exact: true })).toBeVisible();
+		await expect(list.getByRole('button', { name: 'More Sessions Actions', exact: true })).toBeVisible();
+		await expect(recent).toHaveText('Recents');
 		await expect(recent).toHaveAttribute('aria-expanded', 'true');
 		await recent.focus();
 		await recent.press('ArrowLeft');

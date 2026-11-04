@@ -7,7 +7,8 @@ import { StorageScope, StorageTarget } from '../../../platform/storage/common/st
 import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import type { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
-import type { IProjectService } from '../../../platform/projects/common/projectService.js';
+import type { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
+import type { IProjectService, Project } from '../../../platform/projects/common/projectService.js';
 import type { ICommandService } from '../../../platform/commands/common/commands.js';
 import type { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import type { INotificationService } from '../../../platform/notification/common/notification.js';
@@ -24,6 +25,7 @@ import type { IResolvedSessionPullRequest } from '../../contrib/github/common/ty
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { SubmenuAction, type IAction } from '../../../base/common/actions.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
@@ -498,7 +500,11 @@ test('The sidebar filters durable automation metadata and preserves the active s
 		sessionId, title: sessionId, status: 'active', nextApprovalMode: 'manual',
 		chats: [{ threadId: 'root', status: 'active', origin: { type: 'root' } }],
 	});
-	const manual = makeSession('manual');
+	const manual: ISession = {
+		...makeSession('manual'),
+		workspace: { authorityId: 'local', root: '/workspace/repo/folder' },
+		management: { status: 'working', statusChangedAtUnixMs: 1 },
+	};
 	const automated: ISession = { ...makeSession(remoteId), source: 'automation' };
 	const catalog = [manual, makeSession('run'), automated];
 	const management = { sessions: catalog, untitledSessions: [], state: 'ready', onDidChange: Event.None } as unknown as ISessionsManagementService;
@@ -507,15 +513,49 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	const github = { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as import('../../contrib/github/browser/githubService.js').IGitHubService;
 	let menu: IContextMenuDelegate | undefined;
 	const context = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
+	const project: Project = {
+		id: 'release', name: 'Release', revision: 1, archived: false, sessionCount: 1,
+		description: '', materials: [], sessionIds: ['manual'],
+	};
+	const projects = { onDidChange: Event.None, list: async () => [project], read: async () => project } as unknown as IProjectService;
+	const repositoryReads: unknown[] = [];
+	const scopes = {
+		onDidChangeScopes: Event.None,
+		getScope: () => ({
+			backendIdentity: (id: string) => id,
+			assertCurrent() { },
+			services: {
+				host: {
+					localGit: {
+						readRepositoryContexts: async (directory: unknown) => {
+							repositoryReads.push(directory);
+							return [{
+								label: 'repo', rootPath: '/workspace/repo',
+								remotes: [{ name: 'origin', identity: { host: 'git.example', owner: 'team', repository: 'repo' } }],
+							}];
+						},
+					}
+				}
+			},
+		}),
+	} as unknown as ISessionProviderScopeService;
 	const makeList = (mode: 'chat' | 'code') => new SessionsList(dom.window.document.body, 'Sessions', mode, management, view,
-		github, emptyGroups, storage, emptyProjects, listCommands, context, listCustomViews, listMenus, listNotifications,
-		new SessionsListModelService(storage), new SessionSectionOrderService(storage));
+		github, emptyGroups, storage, projects, listCommands, context, listCustomViews, listMenus, listNotifications,
+		new SessionsListModelService(storage), new SessionSectionOrderService(storage), undefined, undefined, scopes);
 	const rows = (list: SessionsList) => Array.from(list.domNode.querySelectorAll<HTMLElement>('[data-row-order-id]'), row => row.dataset.rowOrderId);
-	const filter = (list: SessionsList) => {
-		list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-more')!.click();
-		const action = menu?.getActions().find(candidate => candidate.id === 'sessions.list.toggleAutomationSessions');
-		assert.equal(action?.label, '显示自动化会话');
-		return action!;
+	const submenuAction = (list: SessionsList, submenu: string, id: string): IAction => {
+		list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-more button')!.click();
+		const show = menu?.getActions().find(candidate => candidate.id === submenu);
+		assert.ok(show instanceof SubmenuAction);
+		menu?.onHide?.(true);
+		const action = show.actions.find(candidate => candidate.id === id);
+		assert.ok(action);
+		return action;
+	};
+	const filter = (list: SessionsList): IAction => {
+		const action = submenuAction(list, 'sessions.list.show', 'sessions.list.toggleAutomationSessions');
+		assert.equal(action.label, '显示自动化会话');
+		return action;
 	};
 
 	using code = makeList('code');
@@ -536,8 +576,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	assert.deepEqual(rows(code), ['manual', 'run']);
 	assert.deepEqual(rows(chat), ['manual', 'run']);
 
-	chat.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-more')!.click();
-	await menu!.getActions().find(action => action.id === 'sessions.list.showAutomationSessionsAfterReply')!.run();
+	await submenuAction(chat, 'sessions.list.show', 'sessions.list.showAutomationSessionsAfterReply').run();
 	assert.deepEqual(rows(chat), ['manual', 'run']);
 	const listModel = new SessionsListModelService(storage);
 	listModel.recordAutomationSessionReply(automated);
@@ -553,4 +592,25 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	assert.deepEqual(rows(chat), ['manual', 'run']);
 	listModel.setAutomationSessionOverride(automated, undefined);
 	assert.deepEqual(rows(chat), ['manual', 'run', remoteId]);
+
+	await submenuAction(code, 'sessions.list.sortBy', 'sessions.list.sortBy.name').run();
+	await submenuAction(code, 'sessions.list.sortBy', 'sessions.list.sortDirection.descending').run();
+	assert.deepEqual(rows(chat), [...catalog].sort((left, right) => right.title.localeCompare(left.title)).map(session => session.sessionId));
+
+	await submenuAction(code, 'sessions.list.groupBy', 'sessions.list.groupBy.status').run();
+	const working = chat.domNode.querySelector('[data-section="grouping:status:working"]')!;
+	assert.equal(working.querySelector('h3 button')?.textContent, '进行中');
+	assert.equal(working.querySelector('[data-row-order-id]')?.getAttribute('data-row-order-id'), 'manual');
+	assert.equal(submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.status').checked, true);
+	assert.deepEqual(repositoryReads, []);
+	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.projects').run();
+	assert.equal(chat.domNode.querySelector('[data-section="grouping:projects:release"] [data-row-order-id]')?.getAttribute('data-row-order-id'), 'manual');
+	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.environment').run();
+	assert.equal(chat.domNode.querySelector('[data-section="grouping:environment:local"] h3 button')?.textContent, '本地');
+	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.repository').run();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(repositoryReads, Array.from({ length: 2 }, () => ({ sessionId: 'manual', path: '/workspace/repo/folder' })));
+	assert.ok([...chat.domNode.querySelectorAll('[data-section^="grouping:repository:"] > h3 button')].some(button => button.textContent === 'team/repo'));
+	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.none').run();
+	assert.equal(chat.domNode.querySelector('[data-section^="grouping:"]'), null);
 });

@@ -62,6 +62,10 @@ A caller can acquire a disposable reveal of a session row or its archive action 
 
 ## Grouping
 
+### Sidebar grouping
+
+The sidebar may group otherwise ungrouped conversations under Chats or Recents by project membership, repository, management status or execution environment. Pins and explicit group membership take precedence. Hiding comparison groups displays their attempts as ordinary conversations and preserves the saved comparison membership. Repository grouping reads metadata through the session's authorized host. Environment grouping uses the saved session execution authority and runtime workspace.
+
 ### Workspace grouping
 
 User-created groups and workspace sections share a user-managed order below the fixed sections. Workspace capping may initially hide inactive workspaces; search and explicit user promotion reveal them.
