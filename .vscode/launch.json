@@ -43,14 +43,14 @@
 				"--inspect-brk=127.0.0.1:9229",
 				"--remote-debugging-address=127.0.0.1",
 				"--remote-debugging-port=9222",
-				"--user-data-dir=${workspaceFolder}/.build/desktop/debug/user-data"
+				"--user-data-dir=${workspaceFolder}/.build/desktop/dev/debug-user-data"
 			],
 			"autoAttachChildProcesses": false,
 			"outFiles": ["${workspaceFolder}/.build/desktop/main/**/*.js"],
 			"console": "integratedTerminal",
 			"env": {
 				"ASH_RENDERER_URL": "http://127.0.0.1:5183",
-				"ASH_HOME": "${workspaceFolder}/.build/desktop/debug/profile",
+				"ASH_HOME": "${workspaceFolder}/.build/desktop/dev/profile",
 				"ASH_DEV_APP_SERVER_RELOAD": "1"
 			},
 			"outputCapture": "std"
@@ -70,7 +70,7 @@
 				"--inspect-brk=127.0.0.1:9229",
 				"--remote-debugging-address=127.0.0.1",
 				"--remote-debugging-port=9222",
-				"--user-data-dir=${workspaceFolder}/.build/desktop/debug/user-data",
+				"--user-data-dir=${workspaceFolder}/.build/desktop/dev/debug-user-data",
 				"--folder=${workspaceFolder}"
 			],
 			"autoAttachChildProcesses": false,
@@ -78,7 +78,7 @@
 			"console": "integratedTerminal",
 			"env": {
 				"ASH_RENDERER_URL": "http://127.0.0.1:5183",
-				"ASH_HOME": "${workspaceFolder}/.build/desktop/debug/profile",
+				"ASH_HOME": "${workspaceFolder}/.build/desktop/dev/profile",
 				"ASH_DEV_AGENTS_WINDOW": "1",
 				"ASH_DEV_APP_SERVER_RELOAD": "1"
 			},
@@ -99,14 +99,14 @@
 				"--inspect-brk=127.0.0.1:9229",
 				"--remote-debugging-address=127.0.0.1",
 				"--remote-debugging-port=9222",
-				"--user-data-dir=${workspaceFolder}/.build/desktop/debug/user-data"
+				"--user-data-dir=${workspaceFolder}/.build/desktop/dev/debug-user-data"
 			],
 			"autoAttachChildProcesses": false,
 			"outFiles": ["${workspaceFolder}/.build/desktop/main/**/*.js"],
 			"console": "integratedTerminal",
 			"env": {
 				"ASH_RENDERER_URL": "http://127.0.0.1:5183",
-				"ASH_HOME": "${workspaceFolder}/.build/desktop/debug/profile",
+				"ASH_HOME": "${workspaceFolder}/.build/desktop/dev/profile",
 				"ASH_DEV_APP_SERVER_RELOAD": "0"
 			},
 			"outputCapture": "std"

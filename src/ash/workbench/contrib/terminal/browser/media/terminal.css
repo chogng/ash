@@ -96,6 +96,10 @@
 	color: var(--ash-foreground);
 }
 
+.ash-terminal-tabs .ash-tab-list-scroll-content > .ash-action-bar.vertical {
+	--ash-actionBar-gap: 0px;
+}
+
 .ash-terminal-tabs .ash-tab {
 	position: relative;
 	display: flex;
@@ -219,7 +223,45 @@
 	color: var(--ash-terminal-foreground);
 }
 
-.ash-terminal-editor > .ash-terminal-instance {
-	width: 100%;
-	height: 100%;
+.ash-terminal-editor .ash-terminal-group-pane {
+	box-sizing: border-box;
+	padding-block-start: var(--ash-spacing-size80);
+}
+
+.ash-terminal-editor[role="status"] {
+	box-sizing: border-box;
+	padding: var(--ash-spacing-size80);
+}
+
+.ash-terminal-editor-split-pane {
+	position: relative;
+}
+
+.ash-terminal-editor-split-pane > .ash-terminal-editor-close-pane {
+	position: absolute;
+	inset-block-start: var(--ash-spacing-size40);
+	/* Leave room for xterm's 14px scrollbar and overview ruler. */
+	inset-inline-end: var(--ash-spacing-size200);
+	z-index: 1;
+	inline-size: 24px;
+	padding: 0;
+	background-color: transparent;
+}
+
+.ash-terminal-editor-close-pane .ash-icon {
+	inline-size: var(--ash-lxiconFontSize-compact);
+	block-size: var(--ash-lxiconFontSize-compact);
+	font-size: var(--ash-lxiconFontSize-compact);
+}
+
+@media (hover: hover) {
+	.ash-terminal-editor-split-pane:not(:hover)
+		> .ash-terminal-editor-close-pane:not(:focus-visible) {
+		opacity: 0;
+		pointer-events: none;
+	}
+}
+
+.ash-terminal-editor-split-pane > .ash-terminal-editor-close-pane:hover {
+	background-color: var(--ash-toolbar-hoverBackground);
 }

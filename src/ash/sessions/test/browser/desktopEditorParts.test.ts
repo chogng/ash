@@ -65,6 +65,29 @@ suite('Desktop tool EditorParts', () => {
 		assert.equal(pages.activeInput, input);
 	});
 
+	test('lays out a product page flush and restores the Files card when switching back', async () => {
+		using hosts = fixture();
+		const { editor, files } = hosts;
+		const frame = files.domNode.parentElement!;
+		const workspace = frame.parentElement!;
+		await editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
+		assert.equal(frame.style.paddingTop, '6px');
+		assert.equal(workspace.style.getPropertyValue('--ash-sessions-editor-tool-inset'), '6px');
+
+		const pageGroupId = editor.pageGroupId;
+		await editor.openEditor({ resource: URI.parse('ash-chatgpt:/page') }, { pinned: true }, { groupId: pageGroupId });
+		assert.equal(workspace.classList.contains('ash-product-page-host'), true);
+		assert.equal(frame.style.paddingTop, '0px');
+		assert.equal(frame.style.paddingLeft, '0px');
+		assert.equal(workspace.style.getPropertyValue('--ash-sessions-editor-tool-inset'), '0px');
+
+		editor.setGroupVisible(pageGroupId, false);
+		assert.equal(workspace.classList.contains('ash-product-page-host'), false);
+		assert.equal(frame.style.paddingTop, '6px');
+		assert.equal(frame.style.paddingLeft, '6px');
+		assert.equal(workspace.style.getPropertyValue('--ash-sessions-editor-tool-inset'), '6px');
+	});
+
 	test('splitting Files creates a local group without changing other tool hosts', async () => {
 		using hosts = fixture();
 		await hosts.editor.openEditor({ resource: URI.file('/fixture/a.txt') }, { pinned: true });
@@ -170,8 +193,7 @@ suite('Desktop tool EditorParts', () => {
 		await togglePreview();
 		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.HORIZONTAL, [Orientation.VERTICAL, 'files', 'browser'], 'changes']);
 		await togglePreview();
-		const filesGroup = hosts.files.fileGroups[0]!;
-		hosts.editor.moveToolToEdge(Direction.Up, filesGroup.id);
+		hosts.area.moveTool('changes', 'files', Direction.Down);
 		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.VERTICAL, 'files', 'changes']);
 		await togglePreview();
 		assert.deepEqual(visible(hosts.area.saveLayout()), [Orientation.VERTICAL, 'files', 'browser', 'changes']);
@@ -208,6 +230,23 @@ suite('Desktop tool EditorParts', () => {
 		(invalid.toolParts!.parts.browser.groups as number[]).push(invalid.toolParts!.parts.files.groups[0]!);
 		await assert.rejects(hosts.editor.applyWorkingSet(invalid), /Invalid tool editor group identity/);
 		assert.equal(hosts.editor.activePane, pane);
+	});
+
+	test('restores a working set with a hidden Files group whose legacy size is zero', async () => {
+		using source = fixture();
+		const files = source.files.fileGroups[0]!;
+		source.editor.setGroupVisible(files.id, false);
+		const browserResource = URI.parse('ash-browser:/fixture');
+		await source.editor.openEditor({ resource: browserResource }, { pinned: true });
+		const saved = source.editor.saveWorkingSet('hidden-files');
+		const snapshot = { ...saved, groups: saved.groups.map(group => group.id === files.id ? { ...group, size: 0 } : group) };
+
+		using target = fixture();
+		await target.editor.applyWorkingSet(snapshot);
+
+		assert.deepEqual(target.files.fileGroups.map(group => ({ visible: target.files.isGroupVisible(group.id), tabs: group.inputs.length })), [{ visible: false, tabs: 0 }]);
+		assert.equal(target.editor.activePart, target.tools.get('browser'));
+		assert.equal(target.editor.activeGroup.activeInput?.resource.toString(), browserResource.toString());
 	});
 
 	test('migrates legacy group identities and vertical tool geometry together', async () => {

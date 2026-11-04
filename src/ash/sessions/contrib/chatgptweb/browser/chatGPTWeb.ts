@@ -1,18 +1,43 @@
-import { Disposable } from '../../../../base/common/lifecycle.js';
-import { derived } from '../../../../base/common/observable.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { autorun, derived } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { ChatGPTNewDraftContext } from '../../../common/contextkeys.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
+import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import type { IWorkbenchContribution } from '../../../../workbench/common/contributions.js';
 import { EditorInputCapabilities } from '../../../../workbench/common/editor.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
-import { IChatGPTService, chatGPTNavigationContainerId } from './chatGPTService.js';
+import { CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID } from '../../chat/common/constants.js';
+import type { ReplyChatEditorOptions } from '../../chat/browser/replyChatEditor.js';
+import { ChatGPTWidgetModel } from './chatGPTWidgetModel.js';
+import { IChatGPTService, selectedChatConversationId } from './chatGPTService.js';
 import { ISessionsSearchService } from '../../search/browser/searchService.js';
 import type { SearchResult } from '../../search/browser/searchModel.js';
 
 export const chatGPTScrollOptimization = 'sessions.chatgpt.optimizeScrolling';
+
+export const chatGPTReplyEditor = {
+	id: 'sessions.editor.chatgpt',
+	scheme: 'ash-chatgpt',
+	name: 'ChatGPT',
+	rootClass: 'ash-chatgpt-widget',
+	title: () => localize('sessions.chatgpt.title', 'ChatGPT'),
+	inputLabel: () => localize('sessions.chatgpt.prompt', 'Ask ChatGPT'),
+	model: new SyncDescriptor(ChatGPTWidgetModel),
+	accessibility: {
+		focusContext: 'chatGPTFocused',
+		verbositySetting: AccessibilityVerbositySettingId.ChatGPT,
+		hint: () => localize('sessions.chatgpt.navigationHint', 'Press Alt+F1 for ChatGPT accessibility help.'),
+	},
+	scrollOptimizationSetting: chatGPTScrollOptimization,
+} satisfies ReplyChatEditorOptions;
+export const chatGPTSelectedContext = 'sessions.activity.chatgptSelected';
 
 export class ChatGPTWebContribution extends Disposable implements IWorkbenchContribution {
 	public static readonly ID = 'sessions.chatgpt.web';
@@ -21,19 +46,29 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 		@IChatGPTService chat: IChatGPTService,
 		@ISessionsSearchService search: ISessionsSearchService,
 		@IEditorService editors: IEditorService,
+		@IStorageService storage: IStorageService,
+		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
-		const showChat = (source?: unknown) => {
+		const newDraft = ChatGPTNewDraftContext.bindTo(contextKeys);
+		this._register(autorun(reader => {
+			const state = chat.state.read(reader);
+			newDraft.set(!selectedChatConversationId(state) && !state.pendingCreation && !state.messages.length
+				&& !state.coworkTasks.length && state.loading?.kind !== 'conversation');
+		}));
+		this._register(toDisposable(() => newDraft.reset()));
+		const showChat = async (source?: unknown) => {
 			chat.initialize();
-			return layout.openEntry({
-				id: 'chatgpt', activityContext: 'sessions.activity.chatgptSelected', content: 'editor',
-				sidebarContainerId: chatGPTNavigationContainerId, showEditorTabs: false,
+			await layout.openEntry({
+				id: 'chatgpt', activityContext: chatGPTSelectedContext, content: 'editor',
+				sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, showEditorTabs: false,
 				editorInput: {
-					resource: URI.from({ scheme: 'ash-chatgpt', path: '/page' }), label: localize('sessions.chatgpt.title', 'ChatGPT'),
+					resource: URI.from({ scheme: chatGPTReplyEditor.scheme, path: '/page' }), label: chatGPTReplyEditor.title(),
 					showBreadcrumbs: false, readOnly: true, capabilities: EditorInputCapabilities.CannotClose,
 				},
 				restoreCommand: 'sessions.show.chatgpt', newSessionCommand: 'sessions.chatgpt.newChat', focus: 'editor',
 			}, undefined, source === 'restore' ? { source } : undefined);
+			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'chatgpt', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		};
 		this._register(search.registerSource(derived<readonly SearchResult[]>(reader => {
 			const state = chat.state.read(reader);

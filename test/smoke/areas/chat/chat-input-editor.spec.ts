@@ -153,11 +153,17 @@ test('Chat mode changes reach the input and keyboard help restores its selected 
 	if (!await page.locator('.ash-chat-view-pane').isVisible()) {
 		await page.getByRole('button', { name: 'Show Secondary Side Bar', exact: true }).click();
 	}
-	const picker = page.locator('.ash-chat-view-pane .ash-chat:visible [data-action-id="ash.chat.input.mode"] button');
-	for (const name of ['Plan', 'Agent']) {
+	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
+	const picker = chat.locator('[data-action-id="ash.chat.input.mode"] button');
+	const welcome = chat.locator('.ash-chat-welcome');
+	await expect(welcome.getByRole('heading', { name: 'Build with Agent' })).toBeVisible();
+	await expect(chat.locator('.ash-chat-list-widget')).toHaveCSS('display', 'none');
+	await expect(chat.getByRole('textbox', { name: 'Chat message' })).toBeVisible();
+	for (const [name, title] of [['Plan', 'Start a conversation'], ['Ask', 'Ask about your code'], ['Agent', 'Build with Agent']]) {
 		await picker.press('ArrowDown');
 		await page.getByRole('menuitemradio', { name, exact: true }).click();
 		await expect(picker).toHaveText(name);
+		await expect(welcome.getByRole('heading', { name: title, exact: true })).toBeVisible();
 	}
 	await picker.press('ArrowDown');
 	const widget = page.locator('.ash-action-widget.ash-chat-input-mode-menu');

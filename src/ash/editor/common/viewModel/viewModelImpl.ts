@@ -88,7 +88,7 @@ export class ViewModel extends Disposable implements IViewModel {
 			: this._register(new ViewModelLinesFromProjectedModel(model, lineBreaksComputerFactory, fontInfo, model.getOptions().tabSize, {
 				editorId,
 				wrapping: wrappingColumn > 0 ? EditorLineWrapping.On : EditorLineWrapping.Off,
-				wrapWidth: Math.max(0, wrappingColumn) * fontInfo.typicalHalfwidthCharacterWidth,
+				wrapWidth: this.getAdvancedWrappingWidth(wrappingColumn) ?? Math.max(0, wrappingColumn) * fontInfo.typicalHalfwidthCharacterWidth,
 				wrappingIndent: options.get(EditorOption.wrappingIndent),
 			}));
 		this.coordinatesConverter = this.lines.createCoordinatesConverter();
@@ -113,12 +113,14 @@ export class ViewModel extends Disposable implements IViewModel {
 		}
 		this._register(configuration.onDidChangeFast(event => {
 			this.viewLayout.onConfigurationChanged(event);
+			const wrappingColumn = this.getWrappingColumn();
 			this.lines.setWrappingSettings(
 				configuration.options.get(EditorOption.fontInfo),
 				configuration.options.get(EditorOption.wrappingStrategy),
-				this.getWrappingColumn(),
+				wrappingColumn,
 				configuration.options.get(EditorOption.wrappingIndent),
 				configuration.options.get(EditorOption.wordBreak),
+				this.getAdvancedWrappingWidth(wrappingColumn),
 			);
 			if (CursorConfiguration.shouldRecreate(event)) this.recreateCursorConfiguration();
 			this.events.emitSingleViewEvent(new viewEvents.ViewConfigurationChangedEvent(event));
@@ -670,6 +672,12 @@ export class ViewModel extends Disposable implements IViewModel {
 		return wrapping.isViewportWrapping && options.get(EditorOption.layoutInfo).contentWidth <= 0
 			? -1
 			: wrapping.wrappingColumn;
+	}
+
+	private getAdvancedWrappingWidth(wrappingColumn: number): number | undefined {
+		const options = this.configuration.options;
+		if (wrappingColumn < 1 || options.get(EditorOption.wrappingStrategy) !== 'advanced') return undefined;
+		return options.get(EditorOption.layoutInfo).wrappingWidth;
 	}
 
 	private recreateCursorConfiguration(): void {

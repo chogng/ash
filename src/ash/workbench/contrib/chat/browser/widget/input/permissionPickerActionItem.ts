@@ -1,6 +1,8 @@
 import { addDisposableListener, stopEvent } from '../../../../../../base/browser/dom.js';
+import { KeybindingLabel } from '../../../../../../base/browser/ui/keybindinglabel/keybindinglabel.js';
 import type { IAction } from '../../../../../../base/common/actions.js';
 import type { Event } from '../../../../../../base/common/event.js';
+import { Keybinding, logicalKey, resolveKeybinding } from '../../../../../../base/common/keybindings.js';
 import { DisposableStore, type IDisposable } from '../../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
@@ -9,6 +11,7 @@ import { IActionWidgetService } from '../../../../../../platform/actionWidget/br
 import type { IActionWidgetDropdownActionProvider } from '../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
+import { defaultKeybindingLabelStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { ChatInputPickerActionViewItem } from './chatInputPickerActionItem.js';
 
 /** Shared permission presentation; the composer owns the selected mode and confirmation policy. */
@@ -60,7 +63,14 @@ export class PermissionPickerActionItem extends ChatInputPickerActionViewItem {
 		const popup = new DisposableStore();
 		const buttons = Array.from(menu.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'));
 		for (const [index, button] of buttons.entries()) {
-			button.setAttribute('aria-keyshortcuts', String(index + 1));
+			const key = String(index + 1);
+			button.setAttribute('aria-keyshortcuts', key);
+			const shortcut = popup.add(new KeybindingLabel(button, {
+				...defaultKeybindingLabelStyles,
+				keybinding: resolveKeybinding(Keybinding.single(logicalKey(key))),
+				presentation: 'keycap',
+			}));
+			shortcut.element.setAttribute('aria-hidden', 'true');
 		}
 		popup.add(addDisposableListener(menu, 'keydown', event => {
 			if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) { return; }

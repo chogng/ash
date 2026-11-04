@@ -284,7 +284,7 @@ class InlineChatAttachmentWidget extends Disposable {
 				content = instantiation.createInstance(ToolSetOrToolItemAttachmentWidget, attachment, options, host);
 			} else {
 				content = registry.createWidget(attachment, options, host);
-				if (!content && attachment.kind === 'sessionReference') throw new Error('Missing Chat reference attachment widget registration');
+				if (!content && attachment.kind === 'chatReference') throw new Error('Missing Chat reference attachment widget registration');
 				content ??= instantiation.createInstance(DefaultChatAttachmentWidget, attachment, options, host);
 			}
 		} catch (error) {

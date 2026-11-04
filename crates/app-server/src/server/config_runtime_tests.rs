@@ -1,3 +1,5 @@
+use super::ConfigNotifications;
+use super::ConfigSubscription;
 use super::ConfigWatcher;
 use super::UpdateBroker;
 use ash_config::ConfigCommandRequest;
@@ -42,7 +44,7 @@ fn config_changes_reach_each_current_extension_registry_once() {
     let (third_sender, third_receiver) = mpsc::channel();
     let watcher = ConfigWatcher::start(
         &config,
-        Arc::new(UpdateBroker::default()),
+        ConfigNotifications::Standalone(Arc::new(UpdateBroker::default())),
         registry(first_sender),
         None,
     );
@@ -70,6 +72,37 @@ fn config_changes_reach_each_current_extension_registry_once() {
     assert!(first_receiver.try_recv().is_err());
     assert!(second_receiver.try_recv().is_err());
     assert!(third_receiver.try_recv().is_err());
+}
+
+#[test]
+fn profile_config_changes_keep_publishing_while_a_directory_watcher_is_live() {
+    let directory = tempfile::tempdir().unwrap();
+    let config = ConfigStore::open(directory.path().join("config.sqlite3")).unwrap();
+    let (published, changes) = mpsc::channel();
+    let subscription = Arc::new(ConfigSubscription::start(&config, move |change| {
+        published.send(change).unwrap();
+    }));
+    let (observed, extension_changes) = mpsc::channel();
+    let watcher = ConfigWatcher::start(
+        &config,
+        ConfigNotifications::Profile {
+            _subscription: subscription,
+        },
+        registry(observed),
+        None,
+    );
+
+    update_gui(&config, 0);
+    let change = changes.recv_timeout(Duration::from_secs(2)).unwrap();
+    assert_eq!(change.generation.get(), 1);
+    assert_eq!(
+        extension_changes
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap(),
+        1
+    );
+    drop(watcher);
+    assert_eq!(changes.try_recv(), Err(mpsc::TryRecvError::Disconnected));
 }
 
 fn update_gui(config: &ConfigStore, revision: u64) {

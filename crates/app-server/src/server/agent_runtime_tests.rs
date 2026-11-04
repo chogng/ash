@@ -482,6 +482,7 @@ fn recovered_spawn_with_document_context(documents: bool) {
             StartThreadRequest {
                 execution_target: None,
                 branch_name: None,
+                worktree_start: None,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new("create-parent").unwrap(),

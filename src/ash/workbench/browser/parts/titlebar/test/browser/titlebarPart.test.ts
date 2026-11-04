@@ -275,6 +275,7 @@ test('title service shares the resolved title with its registered part and relea
 		get hasFocus() { return focused; },
 		onDidChangeFocus: focusChanged.event,
 		async restart() { }, async openWindow() { },
+		showToast: async () => ({ supported: false, clicked: false }),
 		async getScreenshot() { return undefined; },
 	});
 	services.registerInstance(IDebugService, {

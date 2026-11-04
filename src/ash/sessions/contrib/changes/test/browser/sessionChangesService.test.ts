@@ -85,24 +85,31 @@ suite('Session Changes opening and capture contract', () => {
 		const responseChanges = new SessionsChatResponseFileChangesService(model as unknown as ChatWidgetModel, service, {
 			error: (error: unknown) => assert.fail(String(error)),
 		} as unknown as INotificationService);
-		const [file] = responseChanges.getChangesForRequest({
+		const turn = responseChanges.getChangesForRequest({
 			id: 'prompt', type: 'userMessage', text: 'Delete file', transient: false,
 			requestSource: { sessionId: 'session', threadId: 'thread', turnId: 'turn', itemId: 'prompt' },
 		});
+		assert.deepEqual({ files: turn?.files, insertions: turn?.insertions, deletions: turn?.deletions }, { files: 1, insertions: 0, deletions: 2 });
+		const file = turn?.fileDiffs[0];
 		assert.equal(file?.path, 'deleted.ts');
 		await file?.review();
 		assert.deepEqual((opened[1]?.input as SessionChangesEditorInput).changesetSelection, { kind: 'id', id: 'capture' });
 		assert.deepEqual(opened[1]?.options?.viewState, viewState);
+		await turn?.review();
+		const turnInput = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(EditorInputSerializers.serialize(opened[2]!.input)))) as SessionChangesEditorInput;
+		assert.deepEqual(turnInput.changesetSelection, { kind: 'turn', turnId: 'turn' });
+		assert.equal(opened[2]?.options?.viewState, undefined);
 		model.composerGeneration++;
 		await file?.review();
-		assert.equal(opened.length, 2);
+		await turn?.review();
+		assert.equal(opened.length, 3);
 
 		await assert.rejects(service.openChangesEditor(URI.parse('ash-session:/session?thread=missing')));
-		assert.equal(opened.length, 2);
+		assert.equal(opened.length, 3);
 		assert.deepEqual(changeset.operations.get().map(operation => ({ id: operation.id, scopes: operation.scopes, status: operation.status })), [{ id: 'preview', scopes: [SessionChangesetOperationScope.Changeset, SessionChangesetOperationScope.Resource], status: SessionChangesetOperationStatus.Idle }]);
 		await changeset.invokeOperation('preview', { kind: 'resource', resource: change.modifiedUri });
 		assert.deepEqual(prepared, [{ selections: [{ changeSetId: 'capture', expectedRevision: 3, paths: ['deleted.ts'] }], message: 'Delete file' }]);
-		assert.equal(opened[2]?.input.resource.scheme, 'ash-multi-diff');
+		assert.equal(opened[3]?.input.resource.scheme, 'ash-multi-diff');
 		currentDetails = { ...details, summary: { ...details.summary, captureState: 'open', revision: 4 } };
 		const unsealed = await service.resolveChangeset(session, 'capture');
 		assert.equal(unsealed.operations.get()[0]?.status, SessionChangesetOperationStatus.Disabled);

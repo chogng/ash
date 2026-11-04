@@ -2,6 +2,8 @@ import { ResolvedKeybindingItem } from '../../../../../platform/keybinding/commo
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import { suite, test, setup, teardown } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
@@ -12,13 +14,18 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { INativeHostApi, INativeSystemWideKeybinding, INativeSystemWideKeybindingResult, IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../../workbench/common/contributions.js';
 import { INativeHostService } from '../../../../../workbench/common/services.js';
+import { ChatTipService, IChatTipService } from '../../../../../workbench/contrib/chat/browser/chatTipService.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../../../../workbench/contrib/chat/common/constants.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
+import { IKeybindingEditingService } from '../../../../../workbench/services/keybinding/common/keybindingEditing.js';
 import { TestNotificationService } from '../../../../../workbench/services/notification/test/common/testNotificationService.js';
+import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { OpenAgentsWindowSystemWideKeybindingContribution } from '../../electron-browser/openAgentsWindow.contribution.js';
 import { registerOpenAgentsWindowCommand } from '../../electron-browser/openAgentsWindowCommand.js';
+import { OpenAgentsWindowSystemWideKeybindingTip } from '../../electron-browser/openAgentsWindowKeybindingTip.js';
 
 class TestKeybindingService extends Disposable implements IKeybindingService {
 	public enableKeybindingHoldMode(): Promise<void> | undefined { return undefined; }
@@ -63,6 +70,7 @@ class Fixture extends Disposable {
 		const host: INativeHostApi = {
 			onDidSuspendOS: () => ({ dispose() { } }),
 			onDidResumeOS: () => ({ dispose() { } }),
+			showToast: async () => ({ supported: false, clicked: false }),
 			getScreenshot: async () => { throw new Error('Unused screenshot capability'); },
 			moveTerminalToWindow: async () => { throw new Error('Unexpected terminal transfer'); },
 			takeTerminalTransfer: async () => undefined,
@@ -126,6 +134,24 @@ class Fixture extends Disposable {
 		const host = this._register(WorkbenchContributionsRegistry.createHost(this.services, error => { throw error; }, [OpenAgentsWindowSystemWideKeybindingContribution.ID]));
 		host.advance(WorkbenchPhase.AfterRestored);
 	}
+
+	public startTip(ownerWindow: Window, offerRecommendedKey: boolean): IChatTipService {
+		const storage = this._register(new BrowserStorageService({ ownerWindow, workspaceId: 'test', backend: ownerWindow.localStorage, flushInterval: 0 }));
+		this.services.registerInstance(IStorageService, storage);
+		const tips = this._register(this.services.createInstance(ChatTipService));
+		this.services.registerInstance(IChatTipService, tips);
+		this.services.registerInstance(IKeybindingEditingService, {
+			addKeybinding: async (item, key, when, systemWide) => {
+				assert.equal(item.command, OPEN_AGENTS_WINDOW_COMMAND_ID);
+				assert.equal(systemWide, true);
+				await this.resource.updateKeybindings([...this.resource.bindings, binding(key, { when })]);
+			},
+			editKeybinding: async () => { assert.fail('Expected to add a user shortcut'); },
+			removeKeybinding: async () => { assert.fail('Expected to add a user shortcut'); },
+		});
+		this._register(this.services.createInstance(OpenAgentsWindowSystemWideKeybindingTip, offerRecommendedKey));
+		return tips;
+	}
 }
 
 function binding(key: string, extras: Partial<IUserFriendlyKeybinding> = {}): IUserFriendlyKeybinding {
@@ -146,7 +172,7 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 		await flush();
 		assert.deepEqual(fixture.payloads, [[]]);
 		using incompleteServices = new InstantiationService();
-		assert.throws(() => incompleteServices.createInstance(OpenAgentsWindowSystemWideKeybindingContribution), /Unknown service|Missing service/);
+		assert.throws(() => incompleteServices.createInstance(OpenAgentsWindowSystemWideKeybindingContribution, undefined), /Unknown service|Missing service/);
 	});
 
 	test('selects across all commands before filtering and keeps direct command arguments', async () => {
@@ -228,6 +254,39 @@ suite('OpenAgentsWindowSystemWideKeybindingContribution', () => {
 		await flush();
 		assert.deepEqual({ attempts: fixture.payloads.length, messages: fixture.notifications.model.getNotifications().length }, { attempts: 1, messages: 0 });
 	});
+
+	for (const registered of [true, false]) {
+		test(`shortcut onboarding ${registered ? 'confirms' : 'withholds confirmation after'} the Electron registration result`, async () => {
+			const dom = new JSDOM('<!doctype html>', { url: 'https://ash.test' });
+			try {
+				using fixture = new Fixture();
+				using aria = setARIAContainer(dom.window.document.body);
+				const tips = fixture.startTip(dom.window as unknown as Window, true);
+				using commands = new CommandService(fixture.services);
+				await flush();
+				assert.match(tips.getWelcomeTip()?.content.value ?? '', /Enable/);
+				const result = promiseWithResolvers<INativeSystemWideKeybindingResult>();
+				fixture.result = result.promise;
+				await commands.executeCommand('sessions.action.enableOpenAgentsWindowSystemWideKeybinding');
+				mock.timers.tick(100);
+				await flush();
+				assert.deepEqual(fixture.payloads.map(payload => payload.map(binding => binding.userSettingsLabel)), [[], ['ctrl+cmd+a']]);
+				assert.match(tips.getWelcomeTip()?.content.value ?? '', /Enable/);
+				result.resolve({ failed: registered ? [] : ['ctrl+cmd+a'] });
+				await flush();
+				if (registered) {
+					assert.match(tips.getWelcomeTip()?.content.value ?? '', /enabled.*Manage shortcut/);
+					await fixture.resource.updateKeybindings([]);
+					assert.match(tips.getWelcomeTip()?.content.value ?? '', /Enable/);
+				} else {
+					assert.equal(tips.getWelcomeTip()?.id, 'attach-files');
+					assert.equal(fixture.notifications.model.getNotifications().length, 1);
+				}
+			} finally {
+				dom.window.close();
+			}
+		});
+	}
 
 	test('Sessions command forwards options without adding palette or default keybinding entries', async () => {
 		using fixture = new Fixture();

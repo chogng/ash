@@ -13,7 +13,7 @@ function createServices(provider?: IUpdateProvider, restart = async (): Promise<
 	const services = new InstantiationService();
 	services.registerInstance(IBrowserWorkbenchEnvironmentService, { isBuilt: true, argvResource: URI.from({ scheme: Schemas.vscodeUserData, path: '/user/argv.json' }), webviewExternalEndpoint: 'https://{{uuid}}.example.test', options: { updateProvider: provider } });
 	services.registerInstance(IHostService, {
-		getWindows: async () => [], reload: async () => { throw new Error('Unexpected reload in this fixture'); }, hasFocus: true, onDidChangeFocus: Event.None, restart, async openWindow() { }, async getScreenshot() { return undefined; }
+		getWindows: async () => [], reload: async () => { throw new Error('Unexpected reload in this fixture'); }, hasFocus: true, onDidChangeFocus: Event.None, restart, async openWindow() { }, showToast: async () => ({ supported: false, clicked: false }), async getScreenshot() { return undefined; }
 	});
 	return services;
 }

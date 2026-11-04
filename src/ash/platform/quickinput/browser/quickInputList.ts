@@ -19,6 +19,7 @@ import type { IAction } from '../../../base/common/actions.js';
 import { Checkbox } from '../../../base/browser/ui/toggle/toggle.js';
 import { IContextMenuService } from '../../contextview/browser/contextView.js';
 import { quickInputButtonsToActionArrays } from './quickInputUtils.js';
+import { colorCssVariable } from '../../theme/common/colorUtils.js';
 
 export interface QuickInputListActiveChangeEvent<TItem> {
 	readonly item: TItem | undefined;
@@ -381,6 +382,7 @@ export class QuickInputList<TItem extends IQuickPickItem>
 			const registeredIcon = iconId ? getRegisteredIcon(iconId, ownerDocument) : undefined;
 			const icon = registeredIcon ? appendIcon(registeredIcon, content) : h(ownerDocument, 'span');
 			icon.classList.add(...classes);
+			if (item.iconColor) icon.style.color = `var(${colorCssVariable(item.iconColor.id)})`;
 			icon.setAttribute('aria-hidden', 'true');
 			content.append(icon);
 		}

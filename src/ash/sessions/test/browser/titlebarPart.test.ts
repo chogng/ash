@@ -250,7 +250,7 @@ test('Sessions titlebar initializes localized actions and closes the application
 const layoutTestResources = new DisposableStore();
 suiteTeardown(() => layoutTestResources.dispose());
 
-test('Sessions layout follows titlebar constraints for content, frame and overlay offsets', () => {
+test('Sessions layout follows titlebar constraints for content and overlay offsets', () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	using browserLifetime = toDisposable(() => browser.window.close());
 	using globals = installEditorTestDom(browser, ['Node', 'Element', 'HTMLElement']);
@@ -274,7 +274,6 @@ test('Sessions layout follows titlebar constraints for content, frame and overla
 		titlebar.setHeight(height);
 		assert.equal(layout.getPartSize('titlebar').height, height);
 		assert.equal(layout.mainContainerOffset.top, height);
-		assert.equal(layout.domNode.querySelector<HTMLElement>('.ash-sessions-content-frame')!.style.top, `${height}px`);
 		assert.equal(layout.getPartSize('sessions').height, 800 - height);
 	}
 });

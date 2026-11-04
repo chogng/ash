@@ -16,7 +16,7 @@ import {
 	drawBezierPath,
 	rightClickCanvasShape,
 } from '../../../automation/design.js';
-import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/creator/common/model/document.js';
+import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/artifacts/common/model/document.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { captureElectronMenu } from '../../../automation/menus.js';
 import type { IKeyboardLayoutDefinition } from '../../../../src/ash/platform/keyboardLayout/common/keyboardLayout.js';
@@ -41,20 +41,20 @@ test('Agents Window can publish and clear its application badge', { tag: ['@elec
 	}, APPLICATION_BADGE_CHANNEL);
 });
 
-test(
-	'Code sidebar retains Recents expansion with no projects',
+emptyWorkspaceTest(
+	'Code sidebar shows its Sessions heading and retains Recents expansion',
 	{ tag: ['@electron-ui'] },
 	async ({ target, workbench }, testInfo) => {
 		const page = await workbench.openAgentsWindow(target.kind);
 		const list = page.locator('.ash-sessions-list:visible');
-		const headings = list.locator(':scope > .ash-sessions-list-items > section > h3 button');
 		const recent = list.locator('[data-section=recent] > h3 button');
 		const modes = page.locator('.ash-window-mode-control');
 		await modes.getByRole('button', { name: 'Code', exact: true }).click();
 		await page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor').getByRole('textbox').focus();
 		await page.keyboard.type('Sidebar fixture draft');
-		await expect(headings).toHaveText(['Recents']);
-		await expect(list.locator('.ash-sessions-list-more')).toHaveCount(0);
+		await expect(list.getByRole('heading', { level: 2, name: 'Sessions', exact: true })).toBeVisible();
+		await expect(list.getByRole('button', { name: 'More Sessions Actions', exact: true })).toBeVisible();
+		await expect(recent).toHaveText('Recents');
 		await expect(recent).toHaveAttribute('aria-expanded', 'true');
 		await recent.focus();
 		await recent.press('ArrowLeft');
@@ -1092,15 +1092,14 @@ test('Sessions permission shortcuts use shared keycaps and keep numeric activati
 	const keys = menu.locator('.ash-keybinding-label-keycap kbd');
 	await expect(keys).toHaveText(['1', '2', '3']);
 	await expect(menu.getByRole('menuitemradio').first()).toHaveAttribute('aria-keyshortcuts', '1');
-	expect(
-		await keys.evaluateAll(keys =>
-			keys.map(key => ({ height: getComputedStyle(key).height, fontSize: getComputedStyle(key).fontSize })),
-		),
-	).toEqual([
-		{ height: '20px', fontSize: '12px' },
-		{ height: '20px', fontSize: '12px' },
-		{ height: '20px', fontSize: '12px' },
-	]);
+	const keycapStyles = await keys.evaluateAll(keys => keys.map(key => {
+		const style = getComputedStyle(key);
+		return { height: style.height, fontSize: style.fontSize, labelSize: style.getPropertyValue('--ash-fontSize-label1').trim() };
+	}));
+	for (const { height, fontSize, labelSize } of keycapStyles) {
+		expect(height).toBe('20px');
+		expect(fontSize).toBe(labelSize);
+	}
 	await page.keyboard.press('1');
 	const automatic = composer.getByRole('button', { name: 'Permissions: Auto', exact: true });
 	await expect(automatic).toBeFocused();
@@ -1126,6 +1125,11 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	let composer = page.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)').first();
 	let editor = new Editor(composer);
+	if (target.kind === 'electron') {
+		await composer.locator('.ash-chat-input-tip')
+			.filter({ hasText: 'to open the Agents Window from any app' })
+			.getByRole('button', { name: 'Dismiss tip', exact: true }).click();
+	}
 	await expect(composer.locator('[data-action-id="ash.chat.input.attach"] button')).toHaveAccessibleName(
 		'Add context',
 	);
@@ -1154,7 +1158,12 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 		'Review operations automatically; ask you when uncertain',
 	);
 	await expect(permissionMenu.locator('.ash-keybinding-label-keycap')).toHaveText(['1', '2', '3']);
-	await expect(permissionMenu.getByRole('menuitem', { name: /Prepare review environment/u })).toBeVisible();
+	const prepareReview = permissionMenu.getByRole('menuitem', { name: /Prepare review environment/u });
+	if (target.appServerMode === 'disabled') {
+		await expect(prepareReview).toHaveCount(0);
+	} else {
+		await expect(prepareReview).toBeVisible();
+	}
 	await page.keyboard.press('Alt+F1');
 	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/press 1, 2, or 3/u);
 	await page.keyboard.press('Escape');

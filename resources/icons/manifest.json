@@ -137,6 +137,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "brain",
+      "file": "brain.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "briefcase",
       "file": "briefcase.svg",
       "rendering": "symbolic"
@@ -952,11 +957,6 @@
       "rendering": "symbolic"
     },
     {
-      "id": "lighting-filled",
-      "file": "lighting-filled.svg",
-      "rendering": "symbolic"
-    },
-    {
       "id": "lightning",
       "file": "lightning.svg",
       "rendering": "symbolic"
@@ -1074,6 +1074,11 @@
     {
       "id": "open-in-product",
       "file": "open-in-product.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "open-in-window",
+      "file": "open-in-window.svg",
       "rendering": "symbolic"
     },
     {
@@ -1319,6 +1324,16 @@
     {
       "id": "settings",
       "file": "settings.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "share",
+      "file": "share.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "sign-out",
+      "file": "sign-out.svg",
       "rendering": "symbolic"
     },
     {

@@ -17,7 +17,7 @@ import { localize } from '../../nls.js';
 import type { SkillReference } from '../../platform/agentHost/common/appServerApi.js';
 import type { ResolvedChatContext } from '../../workbench/services/chat/common/chatContextService.js';
 import type { SessionHistoryBindingDiagnostic } from '../services/sessions/browser/sessionOpenTelemetryService.js';
-import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from '../services/sessions/common/session.js';
+import { findAgentNode, type IActiveSessionThread, type ISession, type IUntitledChatSession, type ModelRef, type SessionId, type ThreadId } from '../services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { chatTranscriptListItems, type IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
 import type { ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
@@ -166,6 +166,11 @@ export class ChatWidgetModel extends Disposable {
 
 	get inputState(): ChatInputState {
 		const pendingInteraction = activeTurn(this._thread)?.pendingInteraction;
+		const active = this.activeSession;
+		const forkSource = this.selection.kind === 'untitled' ? this.selection.session.forkSource : undefined;
+		const agentSession = forkSource ? this.sessionService.sessions.find(session => session.sessionId === forkSource.sessionId) : active?.session;
+		const agentThreadId = forkSource?.threadId ?? active?.threadId;
+		const agentTree = agentSession?.agentTree;
 		return {
 			draftIdentity: { id: this.composerIdentity, generation: this.composerGeneration },
 			mode: this.mode,
@@ -190,9 +195,9 @@ export class ChatWidgetModel extends Disposable {
 			selectedModel: this.selectedModel,
 			selectedReasoningEffort: this.selectedReasoningEffort,
 			isAutomaticModel: this.isAutomaticModel,
-			selectedAgent: this.selection.kind === 'untitled' ? this.selection.session.agent : undefined,
-			agentName: this.selection.kind === 'session' ? this.selection.active.session.agentTree?.find(node => node.threadId === this.threadId)?.role?.name : undefined,
-			canSelectAgent: this.selection.kind === 'untitled',
+			selectedAgent: this.selection.kind === 'untitled' && !forkSource ? this.selection.session.agent : undefined,
+			agentName: agentTree && agentThreadId ? findAgentNode(agentTree, agentThreadId)?.role?.name : undefined,
+			canSelectAgent: this.selection.kind === 'untitled' && !forkSource,
 			interaction: this.interaction,
 			pendingUserInputRequestId: pendingInteraction?.kind === 'userInput' ? pendingInteraction.requestId : undefined,
 		};

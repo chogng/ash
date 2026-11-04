@@ -23,8 +23,23 @@ export interface ChatInputServerCommandInvocation {
 	readonly argumentsText: string;
 }
 
+/** A conversation-owned draft can include files already staged at its backing service. */
+export interface IChatInputDraft {
+	readonly text: string;
+	readonly readOnly: boolean;
+	readonly canAttachFiles: boolean;
+	readonly files: readonly {
+		readonly id: string;
+		readonly name: string;
+		readonly status: 'uploading' | 'ready' | 'failed';
+		readonly error?: string;
+	}[];
+}
+
 /** State required to render the input area for the selected Thread. */
 export interface ChatInputState {
+	readonly draft?: IChatInputDraft;
+	readonly status?: string;
 	readonly conversation?: { readonly sessionId: string; readonly threadId: string; };
 	/** Generation changes on navigation, but stays stable when first send materializes a draft. */
 	readonly draftIdentity?: { readonly id: string; readonly generation: number; };
@@ -37,6 +52,7 @@ export interface ChatInputState {
 	readonly aiDisabled?: boolean;
 	readonly error?: string;
 	readonly canInterrupt: boolean;
+	readonly interruptKind?: 'reply';
 	readonly approvalMode: ApprovalMode;
 	readonly contextUsage?: ChatContextUsage;
 	readonly changes?: ChatChangesStatistics;
@@ -44,6 +60,7 @@ export interface ChatInputState {
 	readonly changesScope?: 'workspace' | 'conversation';
 	readonly changesError?: string;
 	readonly models: readonly ModelCatalogEntry[];
+	readonly canSelectModel?: boolean;
 	readonly modelsError?: string;
 	readonly slashCommands: readonly SlashCommandDefinition[];
 	readonly skillSelectors: readonly SkillSelectorDefinition[];
@@ -64,6 +81,12 @@ export interface ChatInputState {
 
 /** Operations that the input area may request from its owning Chat pane. */
 export interface ChatInputDelegate {
+	readonly draft?: {
+		setText(text: string): void;
+		attachFiles(files: readonly File[]): Promise<void>;
+		retryFile(id: string): Promise<void>;
+		removeFile(id: string): void;
+	};
 	readonly voiceConversation?: { readonly isAvailable: boolean; readonly isActive: boolean; readonly isConnected: boolean; toggle(): Promise<void>; interrupt(): Promise<void>; };
 	/** Carries the original composer lifetime through the host’s asynchronous context resolution. */
 	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ChatContextAttachment[], submissionSignal?: AbortSignal, queue?: ChatRequestQueueKind): Promise<void>;
@@ -75,7 +98,7 @@ export interface ChatInputDelegate {
 	readWorkspaceChanges?(): Promise<ChatChangesStatistics | undefined>;
 	selectModel(model: ModelRef): Promise<void>;
 	selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
-	selectAutomaticModel(): Promise<void>;
+	selectAutomaticModel?(): Promise<void>;
 	listAgents(): Promise<readonly ChatAgent[]>;
 	selectAgent(agent: ChatAgent | undefined): void;
 	selectMode(mode: ChatMode): void;

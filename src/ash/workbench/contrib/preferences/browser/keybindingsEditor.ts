@@ -1,5 +1,6 @@
 import {
 	defaultButtonStyles,
+	defaultCheckboxStyles,
 	defaultInputBoxStyles,
 	defaultKeybindingLabelStyles,
 } from '../../../../platform/theme/browser/defaultStyles.js';
@@ -16,12 +17,14 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { KeybindingLabel } from '../../../../base/browser/ui/keybindinglabel/keybindinglabel.js';
 import { Table } from '../../../../base/browser/ui/table/tableWidget.js';
+import { Checkbox } from '../../../../base/browser/ui/toggle/toggle.js';
 import type { ITableColumn, ITableRenderer } from '../../../../base/browser/ui/table/table.js';
 import { observeElementSize } from '../../../../base/browser/observer.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../base/common/keybindingLabels.js';
 import { Keybinding, KeybindingChordKind, logicalKey, MAX_KEYBINDING_CHORDS } from '../../../../base/common/keybindings.js';
 import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { isNative } from '../../../../base/common/platform.js';
 import { localize } from '../../../../nls.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -32,6 +35,7 @@ import { IContextKeyService, type IScopedContextKeyService } from '../../../../p
 import { KeybindingContextKeys, IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
+import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../chat/common/constants.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IKeybindingEditingService } from '../../../services/keybinding/common/keybindingEditing.js';
 import { isKeybindingsEditorInput, KeybindingsEditorInput } from '../../../services/preferences/browser/keybindingsEditorInput.js';
@@ -74,6 +78,8 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 	private recorderError: HTMLParagraphElement | undefined;
 	private readonly recorderLabel = this._register(new MutableDisposable<KeybindingLabel>());
 	private keyInput: InputBox | undefined;
+	private systemWideCheckbox: Checkbox | undefined;
+	private systemWideHelp: HTMLParagraphElement | undefined;
 	private scopedContext: IScopedContextKeyService | undefined;
 	private recordingContext: IContextKey<boolean> | undefined;
 	private editingItem: KeyboardShortcutItem | undefined;
@@ -529,7 +535,7 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 					item.commandLabel,
 					item.keyLabel || localize('keybindings.sourceUnassigned', 'Unassigned'),
 					item.when || localize('keybindings.always', 'Always'),
-					item.sourceLabel,
+					shortcutSourceLabel(item),
 				),
 			},
 		});
@@ -574,6 +580,35 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.recorderError.setAttribute('role', 'alert');
 		this.recorderError.hidden = true;
 		dialog.append(this.recorderTitle, this.keyInput.element, this.recorderPreview, this.recorderError, help);
+		if (isNative) {
+			const systemWideCheckbox = this.systemWideCheckbox = this._register(new Checkbox(dialog, {
+				...defaultCheckboxStyles,
+				label: localize('keybindings.systemWide', 'System-wide'),
+			}));
+			const systemWideHelp = this.systemWideHelp = h(ownerDocument, 'p');
+			systemWideHelp.id = `${help.id}-system-wide`;
+			systemWideHelp.className = 'ash-keybindings-recorder-help';
+			systemWideHelp.textContent = localize('keybindings.systemWideHelp', 'System-wide shortcuts work while Ash runs, even when another app has focus. Record a single key combination. Any When condition is ignored. Tab switches between the recorder and the checkbox. Press Enter to save.');
+			systemWideCheckbox.input.setAttribute('aria-describedby', systemWideHelp.id);
+			dialog.append(systemWideHelp);
+			this._register(addDisposableListener(systemWideCheckbox.input, 'keydown', event => {
+				if (event.ctrlKey || event.altKey || event.metaKey) return;
+				switch (event.key) {
+					case 'Tab':
+						stopEvent(event);
+						this.keyInput?.focus();
+						break;
+					case 'Enter':
+						stopEvent(event);
+						void this.saveEditingItem();
+						break;
+					case 'Escape':
+						stopEvent(event);
+						if (!this.saving) this.closeRecorder();
+						break;
+				}
+			}));
+		}
 		recorder.append(dialog);
 		this._register(addDisposableListener(recorder, 'mousedown', event => {
 			if (event.target === recorder && !this.saving) this.closeRecorder();
@@ -591,10 +626,19 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.editingItem = item;
 		// Record a replacement without changing the selected rule's context or arguments.
 		this.recordedChords.length = 0;
-		this.recorder.querySelector('[role="dialog"]')?.setAttribute('aria-label', item.key
+		const dialog = this.recorder.querySelector('[role="dialog"]');
+		dialog?.setAttribute('aria-label', item.key
 			? localize('keybindings.editTitle', 'Edit keybinding for {0}', item.commandLabel)
 			: localize('keybindings.addTitle', 'Add keybinding for {0}', item.commandLabel));
 		this.keyInput.value = '';
+		const supportsSystemWide = item.command === OPEN_AGENTS_WINDOW_COMMAND_ID;
+		if (this.systemWideCheckbox && this.systemWideHelp) {
+			this.systemWideCheckbox.element.hidden = !supportsSystemWide;
+			this.systemWideHelp.hidden = !supportsSystemWide;
+			this.systemWideCheckbox.checked = item.keybindingItem.userBinding?.entry.systemWide === true;
+			const help = dialog?.getAttribute('aria-describedby');
+			if (help) this.keyInput.inputElement.setAttribute('aria-describedby', supportsSystemWide ? `${help} ${this.systemWideHelp.id}` : help);
+		}
 		this.recorderLabel.clear();
 		if (this.recorderError) this.recorderError.hidden = true;
 		this.recorder.hidden = false;
@@ -629,14 +673,16 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		// dialog's only focus target active after that handler has run.
 		if (event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey) {
 			stopEvent(event);
-			this.keyInput?.focus();
+			const checkbox = this.visibleSystemWideCheckbox();
+			if (checkbox?.enabled) checkbox.focus();
+			else this.keyInput?.focus();
 			return;
 		}
 		stopEvent(event);
 		if (this.saving || event.repeat || event.isComposing || event.key === 'Process' || !this.keyInput) return;
 		const unmodified = !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey;
 		if (unmodified && event.key === 'Enter') {
-			if (this.recordedChords.length) void this.saveEditingItem();
+			void this.saveEditingItem();
 			return;
 		}
 		if (unmodified && event.key === 'Escape') {
@@ -705,12 +751,20 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 	private async saveEditingItem(): Promise<void> {
 		const item = this.editingItem;
 		if (!item || !this.keyInput || this.saving) return;
+		const checkbox = this.visibleSystemWideCheckbox();
+		const systemWide = checkbox && (checkbox.checked || item.keybindingItem.userBinding?.entry.systemWide === true)
+			? checkbox.checked
+			: undefined;
+		const key = this.recordedChords.join(' ') || undefined;
+		if (!key && (systemWide === undefined || !item.keybindingItem.userBinding)) {
+			if (checkbox?.checked) this.setStatus(localize('keybindings.systemWideInvalid', 'Record a single key combination supported by system-wide shortcuts.'), true);
+			return;
+		}
 		this.setSaving(true);
 		this.setStatus(localize('keybindings.recordingSaving', 'Saving keybinding…'), false);
 		try {
-			const key = this.recordedChords.join(' ');
-			if (!this.keybindingService.resolveUserBinding(key)) throw new TypeError(localize('keybindings.invalidKey', 'Enter a valid keybinding before saving.'));
-			await this.keybindingEditingService.editKeybinding(item.keybindingItem, key, item.when || undefined);
+			if (key && !this.keybindingService.resolveUserBinding(key)) throw new TypeError(localize('keybindings.invalidKey', 'Enter a valid keybinding before saving.'));
+			await this.keybindingEditingService.editKeybinding(item.keybindingItem, key, item.when || undefined, systemWide);
 			if (this.isDisposed || this.editingItem !== item) return;
 			// The saved row can be replaced by the asynchronous file watcher.
 			this.closeRecorder(false);
@@ -739,7 +793,13 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.saving = saving;
 		this.recorder?.setAttribute('aria-busy', String(saving));
 		if (this.keyInput) this.keyInput.enabled = !saving;
+		if (this.systemWideCheckbox) this.systemWideCheckbox.enabled = !saving;
 		for (const button of this.actionButtons) button.enabled = !saving;
+	}
+
+	private visibleSystemWideCheckbox(): Checkbox | undefined {
+		const checkbox = this.systemWideCheckbox;
+		return checkbox?.element.hidden === false ? checkbox : undefined;
 	}
 
 	private async removeItem(item: KeyboardShortcutItem): Promise<void> {
@@ -801,12 +861,18 @@ function shortcutTextRenderer(column: 'when' | 'source'): ITableRenderer<Keyboar
 			return { element, hover: new MutableDisposable<IManagedHover>() };
 		},
 		renderElement: (item, _index, template) => {
-			const content = column === 'when' ? item.when : item.sourceLabel;
+			const content = column === 'when' ? item.when : shortcutSourceLabel(item);
 			template.element.textContent = content;
 			template.hover.value = content ? getHoverDelegate().setupHover({ target: template.element, content }) : undefined;
 		},
 		disposeTemplate: template => template.hover.dispose(),
 	};
+}
+
+function shortcutSourceLabel(item: KeyboardShortcutItem): string {
+	return item.keybindingItem.userBinding?.entry.systemWide
+		? localize('keybindings.systemWideSource', '{0} (system-wide)', item.sourceLabel)
+		: item.sourceLabel;
 }
 
 /** Command IDs supplement names only when the free-text query matches the ID. */

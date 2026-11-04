@@ -1,6 +1,15 @@
 .ash-chat-input-changes {
 	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
 	min-width: 0;
+}
+
+.ash-chat-input-changes > .ash-chat-scroll-to-latest.ash-button {
+	position: static;
+	flex: none;
+	margin-inline: 0;
+	box-shadow: none;
 }
 
 .ash-chat-input-changes[hidden] {

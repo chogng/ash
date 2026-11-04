@@ -28,6 +28,7 @@ fn task(server: &crate::AppServer, name: &str) -> (ThreadId, TurnId) {
             core_api::StartThreadRequest {
                 execution_target: None,
                 branch_name: None,
+                worktree_start: None,
                 agent_id: None,
                 agent: None,
                 command_id: ash_protocol::CommandId::new(format!("create-{name}")).unwrap(),

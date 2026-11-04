@@ -1,3 +1,9 @@
+import { IChatResponseResourceFileSystemProvider } from '../../../src/ash/workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
+import { IChatSlashCommandService } from '../../../src/ash/workbench/contrib/chat/common/participants/chatSlashCommands.js';
+import { IActionViewItemService } from '../../../src/ash/platform/actions/browser/actionViewItemService.js';
+import { IChatPasteTargetService, IChatWidgetService } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
+import { ChatTimelineStorage } from '../../../src/ash/sessions/browser/chatTimelineStorage.js';
+import { ISessionPrimaryProviderServices, ISessionProviderScopeService, type SessionProviderServices } from '../../../src/ash/sessions/browser/agentHost/sessionProviderScopeService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
@@ -15,8 +21,23 @@ import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.j
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { ChatGPTService, IChatGPTService } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.js';
-import { ChatGPTNavigationViewPaneContainer } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTNavigationView.js';
-import { ChatGPTWidget } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTWidget.js';
+import { ChatGPTNavigationSource } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTNavigationView.js';
+import { ChatNavigationViewPaneContainer } from '../../../src/ash/sessions/contrib/sessions/browser/views/chatNavigationView.js';
+import { ReplyChatEditor } from '../../../src/ash/sessions/contrib/chat/browser/replyChatEditor.js';
+import { chatGPTReplyEditor } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTWeb.js';
+import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
+import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { IVoiceModeOnboardingService } from '../../../src/ash/workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
+import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
+import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
+import { IChatContextService } from '../../../src/ash/workbench/contrib/chat/browser/contextContrib/chatContextService.js';
+import { ChatAttachmentResolveService, IChatAttachmentResolveService } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
+import { IImageEditorService } from '../../../src/ash/workbench/services/imageEditor/common/imageEditorService.js';
+import { createDisconnectedAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/browser/appServerAgentService.js';
+import { IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
+import { IMessageHistoryService } from '../../../src/ash/platform/messageHistory/common/messageHistory.js';
+import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
 import { IChatGPTTransport } from '../../../src/ash/sessions/contrib/chatgptweb/common/chatGPTTransport.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
@@ -25,8 +46,10 @@ import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/ex
 import { normalizeExtensionHostSnapshot } from '../../../src/ash/platform/extensions/browser/extensionHostProtocol.js';
 import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { bindTestColorTheme } from './themeFixture.js';
+import '../../../src/ash/workbench/browser/style.js';
 import '../../../src/ash/sessions/browser/media/workbench.css';
 import '../../../src/ash/sessions/browser/media/style.css';
+import '../../../src/ash/sessions/browser/parts/activitybar/media/activityBarPart.css';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
@@ -43,6 +66,9 @@ import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio, type TestDictationCapture } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
+import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
+import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
 
 import { BrowserContextMenuService } from '../../../src/ash/platform/contextview/browser/contextMenuService.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
@@ -79,10 +105,16 @@ const themes = { light: lightColorTheme, dark: darkColorTheme, hcDark: highContr
 const theme = resources.add(new TestThemeService(themes[(parameters.get('theme') ?? 'dark') as keyof typeof themes]));
 const requests = new Map<string, { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array>; }>();
 const storage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: parameters.get('workspace') ?? 'chatgpt-navigation-fixture', profileId: 'chatgpt-navigation-fixture' }));
+if (parameters.has('workRow')) {
+	const timeline = new ChatTimelineStorage(storage, 'chatgpt-web');
+	if (!timeline.read('local:fixture-work')) {
+		timeline.write('local:fixture-work', { localId: 'fixture-work', title: 'Synthetic Work', tasks: [] });
+	}
+}
 if (parameters.has('legacyCollapsed')) {
 	for (const key of ['recent', 'projects', 'g-p-unloaded']) { storage.store(`sessions.chatgpt.navigation.collapsed.${key}`, true, StorageScope.PROFILE, StorageTarget.MACHINE); }
 }
-let widget: ChatGPTWidget;
+let widget: ReplyChatEditor;
 let transcript: ((text: string, final: boolean) => void) | undefined;
 let dictationStops = 0;
 const dictation: TestDictationCapture | undefined = parameters.has('dictation') ? {
@@ -99,7 +131,18 @@ configurationRegistry.registerConfiguration({ key: 'markdown.math.macros', defau
 const configuration = resources.add(new InMemoryConfigurationService());
 if (dictation) await configuration.updateValue('dictation.backend', 'cloud');
 const services = resources.add(new InstantiationService(new ServiceCollection(
+	...getSingletonServiceDescriptors().filter(([id]) =>
+		id === IChatWidgetService || id === IActionViewItemService || id === IChatSlashCommandService
+		|| id === IChatPasteTargetService || id === IChatResponseResourceFileSystemProvider),
+	[IAgentVoiceService, undefined],
+	[IMessageHistoryService, undefined],
+	[IVoiceModeOnboardingService, { showIfNeeded() { }, registerHost: () => toDisposable(() => { }) } as unknown as IVoiceModeOnboardingService],
+	[IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService],
+	[INotificationService, resources.add(new TestNotificationService())],
+	[IImageEditorService, {} as IImageEditorService],
+	[IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService()],
 	[IChatGPTTransport, {
+		async getCacheScope() { return 'a'.repeat(64); },
 		async request(id, request) {
 			const controller = new AbortController();
 			const pending = { controller, reader: undefined as ReadableStreamDefaultReader<Uint8Array> | undefined };
@@ -127,9 +170,20 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	} satisfies IExtensionHostApi],
 	[IConfigurationService, configuration],
 	[IContextKeyService, resources.add(new ContextKeyService())],
-	[IOpenerService, { open: async () => true } as unknown as IOpenerService],
+	[IOpenerService, { open: async (url: string, options?: { openExternal?: boolean }) => {
+		if (options?.openExternal) document.body.dataset.openedExternal = url;
+		return true;
+	} } as unknown as IOpenerService],
 	[IEditorService, { focusActiveEditor: () => widget.focus() } as unknown as IEditorService],
 	[IAgentThreadService, {} as IAgentThreadService],
+	[IChatService, {} as IChatService],
+	[IChatSessionNavigationService, {} as IChatSessionNavigationService],
+	[ILanguageModelsService, { listModelProviders: async () => {
+		document.body.dataset.nativeModelProvidersRead = 'true';
+		return [];
+	} } as unknown as ILanguageModelsService],
+	[ISessionProviderScopeService, { getProviderScope: () => { throw new Error('This fixture has no Ash model provider'); } } as unknown as ISessionProviderScopeService],
+	[ISessionPrimaryProviderServices, { models: { onDidChangeModels: Event.None, listModels: async () => [] } } as unknown as SessionProviderServices],
 	[IThemeService, theme],
 	[IContextViewService, resources.add(new BrowserContextViewService(document.body))],
 	[IVoiceCodeTranscriptionBackendService, dictation ? createTestDictationBackend(resources, dictation) : undefined],
@@ -141,8 +195,17 @@ registerTestDictationOnboarding(services);
 registerTestComponentServices(services);
 resources.add(CommandsRegistry.register('sessions.show.chatgpt', () => { }));
 const commands = resources.add(new CommandService(services));
+const menuService = new MenuService(commands, services.get(IContextKeyService));
+services.registerInstance(IMenuService, menuService);
+services.registerInstance(IChatAttachmentResolveService, new ChatAttachmentResolveService(
+	{} as ConstructorParameters<typeof ChatAttachmentResolveService>[0],
+	{} as ConstructorParameters<typeof ChatAttachmentResolveService>[1],
+	{} as ConstructorParameters<typeof ChatAttachmentResolveService>[2],
+	{} as ConstructorParameters<typeof ChatAttachmentResolveService>[3],
+	services.get(IChatContextService),
+));
 services.registerInstance(IContextMenuService, resources.add(new BrowserContextMenuService(
-	new MenuService(commands, services.get(IContextKeyService)), services.get(IContextKeyService),
+	menuService, services.get(IContextKeyService),
 	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService,
 	services.get(IContextViewService), resources.add(new TestNotificationService()),
 )));
@@ -167,11 +230,12 @@ window.ashChatGPTIntegration = {
 	dictationStops: () => dictationStops,
 	setVisible: visible => widget.setVisible(visible),
 };
-widget = resources.add(services.createInstance(ChatGPTWidget, document.getElementById('editor')!));
+widget = resources.add(services.createInstance(ReplyChatEditor, chatGPTReplyEditor));
+widget.create(document.getElementById('editor')!);
 if (parameters.has('screenReader')) { services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled); }
 widget.setVisible(true);
 const host = document.getElementById('navigation')!;
-const descriptor = { id: 'sessions.chatgpt.navigation', title: 'ChatGPT', location: ViewContainerLocation.Sidebar, ctorDescriptor: new SyncDescriptor(ChatGPTNavigationViewPaneContainer) };
+const descriptor = { id: 'sessions.chatgpt.navigation', title: 'ChatGPT', location: ViewContainerLocation.Sidebar, ctorDescriptor: new SyncDescriptor(ChatNavigationViewPaneContainer, [[new SyncDescriptor(ChatGPTNavigationSource)], undefined]) };
 resources.add(SessionsViewRegistry.registerViewContainer(descriptor));
 const descriptors = resources.add(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
 const view = resources.add(services.createInstance(descriptor.ctorDescriptor, host, {

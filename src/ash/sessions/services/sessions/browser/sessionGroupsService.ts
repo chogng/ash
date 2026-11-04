@@ -14,6 +14,8 @@ export interface SessionGroup {
 	readonly name: string;
 	readonly kind?: 'comparison';
 	readonly sessionIds: readonly string[];
+	readonly icon?: string;
+	readonly color?: string;
 }
 
 /** Profile presentation state; session lifecycle and history remain in the product backend. */
@@ -22,6 +24,7 @@ export interface ISessionGroupsService {
 	readonly onDidChange: import('../../../../base/common/event.js').Event<void>;
 	create(name: string, signal?: AbortSignal, kind?: SessionGroup['kind']): Promise<SessionGroup>;
 	rename(sectionId: string, name: string, signal?: AbortSignal): Promise<void>;
+	setGroupAppearance(sectionId: string, property: 'icon' | 'color', value: string | undefined): Promise<void>;
 	delete(sectionId: string, signal?: AbortSignal): Promise<void>;
 	move(sessionId: string, sectionId: string | null, signal?: AbortSignal): Promise<void>;
 	reorder(sectionId: string, sessionIds: readonly string[], signal?: AbortSignal): Promise<void>;
@@ -62,6 +65,7 @@ export class SessionGroupsService extends Disposable implements ISessionGroupsSe
 		for (const group of groups) {
 			if (!isRecord(group) || typeof group.sectionId !== 'string' || !group.sectionId || sections.has(group.sectionId) || (group.kind !== undefined && group.kind !== 'comparison') || typeof group.name !== 'string' || !group.name.trim() || group.name.length > 128 || !Array.isArray(group.sessionIds) || group.sessionIds.length > 1000) throw new Error('Invalid saved session group');
 			sections.add(group.sectionId);
+			if (!isAppearanceId(group.icon) || !isAppearanceId(group.color)) throw new Error('Invalid saved session group appearance');
 			for (const id of group.sessionIds) {
 				if (typeof id !== 'string' || !id || sessions.has(id)) throw new Error('Invalid saved session group membership');
 				sessions.add(id);
@@ -78,6 +82,7 @@ export class SessionGroupsService extends Disposable implements ISessionGroupsSe
 			if (signal) throwIfCancelled(signal);
 			this.reload();
 			const groups = update(this.groups);
+			if (groups === this.groups) return;
 			this.storage.store(STORAGE_KEY, JSON.stringify(groups), StorageScope.PROFILE, StorageTarget.USER);
 			this.reload();
 			await this.storage.flush();
@@ -95,6 +100,15 @@ export class SessionGroupsService extends Disposable implements ISessionGroupsSe
 	}
 	async rename(sectionId: string, name: string, signal?: AbortSignal): Promise<void> {
 		await this.change(groups => { findGroup(groups, sectionId); return groups.map(group => group.sectionId === sectionId ? { ...group, name: validName(name) } : group); }, signal);
+	}
+	async setGroupAppearance(sectionId: string, property: 'icon' | 'color', value: string | undefined): Promise<void> {
+		if (!isAppearanceId(value)) throw new Error('Invalid session group appearance');
+		await this.change(groups => {
+			const group = groups.find(candidate => candidate.sectionId === sectionId);
+			// The group can disappear in another window while the picker is open.
+			if (!group || group.kind === 'comparison' || group[property] === value) return groups;
+			return groups.map(candidate => candidate === group ? { ...candidate, [property]: value } : candidate);
+		});
 	}
 	async delete(sectionId: string, signal?: AbortSignal): Promise<void> {
 		await this.change(groups => { findGroup(groups, sectionId); return groups.filter(group => group.sectionId !== sectionId); }, signal);
@@ -119,6 +133,10 @@ export class SessionGroupsService extends Disposable implements ISessionGroupsSe
 		}, signal);
 	}
 }
+function isAppearanceId(value: unknown): boolean {
+	return value === undefined || typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9.-]{0,127}$/.test(value);
+}
+
 function validName(name: string): string {
 	if (!name.trim() || name.length > 128) throw new Error('Section name must contain 1–128 characters');
 	return name.trim();

@@ -99,7 +99,7 @@ for (const [name, value] of Object.entries({
 }
 Object.defineProperty(browserEnvironment.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
 const { SessionsPart } = await import('../../browser/parts/sessionsPart.js');
-await import('../../contrib/creator/browser/creatorEditor.contribution.js');
+await import('../../contrib/artifacts/browser/creatorEditor.contribution.js');
 await import('../../../workbench/contrib/chat/browser/chat.shared.contribution.js');
 const { NewChatWidget } = await import('../../contrib/chat/browser/newChatWidget.js');
 const { CoworkPaneFactory } = await import('../../contrib/cowork/browser/cowork.contribution.js');
@@ -150,6 +150,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 			onDidChange.fire();
 			return untitledSession;
 		},
+		async resolveNewSessionTarget() { return { providerId: 'test', workspace: { type: 'current' as const } }; },
 		restoreUntitledSession(session) {
 			untitledSessions = [session, ...untitledSessions];
 			onDidChange.fire();

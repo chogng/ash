@@ -14,31 +14,106 @@ suite('chatTranscript browser component', () => {
 				window.ashChatTranscriptIntegration.prepareRequestEditing(cowork);
 			}, { cowork, theme });
 			const chat = page.locator('#app-chat');
-			const draft = chat.locator(cowork ? '.stanza-editor-input' : '.ash-chat-textarea-input');
+			const composer = chat.locator(':scope > .ash-chat-input-part');
+			const draft = composer.locator(cowork ? '.stanza-editor-input' : '.ash-chat-textarea-input');
+			const draftClickTarget = cowork ? composer.locator('.stanza-editor-line-text') : draft;
 			if (cowork) { await draft.focus(); await page.keyboard.insertText('Unsent private draft'); }
 			else await draft.fill('Unsent private draft');
+			const card = chat.locator('.ash-chat-user-message > pre');
+			const editor = chat.locator('.ash-chat-request-editor');
 			const edit = chat.getByRole('button', { name: locale === 'en' ? 'Edit message' : '编辑消息', exact: true });
+			await expect(card).toHaveText('Original request');
 			await edit.focus();
 			await page.keyboard.press('Enter');
 			const input = chat.getByRole('textbox', { name: locale === 'en' ? 'Edit request' : '编辑请求', exact: true });
+			const expectEditText = async (value: string): Promise<void> => {
+				if (cowork) {
+					await expect.poll(async () => (await editor.locator('.stanza-editor-line-text').allTextContents()).join('\n').replaceAll('\u00a0', ' ')).toBe(value);
+				} else {
+					await expect(input).toHaveValue(value);
+				}
+			};
+			const replaceEditText = async (value: string): Promise<void> => {
+				await input.press('ControlOrMeta+a');
+				await page.keyboard.insertText(value);
+			};
 			await expect(input).toBeFocused();
-			await expect(input).toHaveValue('Original request');
-			await input.fill('Cancelled change');
+			const description = locale === 'en' ? 'Sending creates a new chat from before this request.' : '发送后将从此请求之前创建新聊天';
+			await expect(input).toHaveAccessibleDescription(new RegExp(description));
+			await expect(editor.getByText(description)).toBeHidden();
+			await expectEditText('Original request');
+			await expect(card).toBeHidden();
+			const send = editor.getByRole('button', { name: locale === 'en' ? 'Send edited request' : '发送编辑后的请求', exact: true });
+			if (!cowork) {
+				await expect(send).toBeEnabled();
+				await expect(send).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				await expect.poll(() => send.evaluate(button => {
+					const { width, height } = button.getBoundingClientRect();
+					const radius = parseFloat(getComputedStyle(button).borderTopLeftRadius);
+					return width === height && radius > 0 && radius < width / 2;
+				})).toBe(true);
+				await input.press('ControlOrMeta+a');
+				await input.press('Backspace');
+				await expect(send).toBeDisabled();
+				await expect(send).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			}
+			await replaceEditText('Cancelled change');
 			await page.keyboard.press('Escape');
 			await expect(input).toHaveCount(0);
 			await expect(edit).toBeFocused();
-			await edit.press('Space');
-			await input.fill('Edited\nrequest');
+			await card.evaluate(element => {
+				const selection = element.ownerDocument.getSelection()!;
+				selection.selectAllChildren(element);
+				element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+			});
+			await expect(editor).toHaveCount(0);
+			expect(await page.evaluate(() => document.getSelection()!.toString())).toBe('Original request');
+			await page.evaluate(() => document.getSelection()!.removeAllRanges());
+			const cardTop = (await card.boundingBox())!.y;
+			await card.click();
+			await expect(input).toBeFocused();
+			await expectEditText('Original request');
+			await expect(card).toBeHidden();
+			expect(Math.abs((await editor.boundingBox())!.y - cardTop)).toBeLessThan(1);
+			const textArea = editor.locator('.ash-chat-input-editor-host');
+			const toolbar = editor.locator('.ash-chat-input-toolbars');
+			const toolbarOffset = async (): Promise<number> => {
+				const text = (await textArea.boundingBox())!;
+				return (await toolbar.boundingBox())!.y - text.y - text.height;
+			};
+			if (cowork) await expect.poll(toolbarOffset).toBeLessThan(0);
+			else await expect.poll(toolbarOffset).toBeGreaterThan(0);
+			await replaceEditText('Review the sample workspace and summarize the changes. '.repeat(12));
+			await expect.poll(toolbarOffset).toBeGreaterThan(0);
+			await expect(input).toBeFocused();
+			await expect(editor.getByRole('button', { name: locale === 'en' ? 'Cancel edit' : '取消编辑', exact: true })).toHaveCount(0);
+			await replaceEditText('Discarded by outside click');
+			if (cowork) await expect.poll(toolbarOffset).toBeLessThan(0);
+			else await expect.poll(toolbarOffset).toBeGreaterThan(0);
+			await editor.click({ position: { x: 3, y: 3 } });
+			await expect(editor).toBeVisible();
+			await draftClickTarget.click();
+			await expect(editor).toHaveCount(0);
+			await expect(draft).toBeFocused();
+			await expect(card).toHaveText('Original request');
+			await card.click();
+			await expectEditText('Original request');
+			await replaceEditText('Edited');
+			await input.press('Enter');
+			await page.keyboard.insertText('request');
+			await expectEditText('Edited\nrequest');
 			await chat.screenshot({ path: browserTests.info.outputPath('request-editor.png') });
 			await expect(chat.locator('.ash-chat-request-editor')).toHaveJSProperty('scrollWidth', await chat.locator('.ash-chat-request-editor').evaluate(element => element.clientWidth));
 			await input.press('Control+Enter');
 			await expect(chat.locator('.ash-chat-request-editor')).toHaveAttribute('aria-busy', 'true');
-			const send = chat.getByRole('button', { name: locale === 'en' ? 'Send edited request' : '发送编辑后的请求', exact: true });
 			await expect(send).toBeDisabled();
+			await draftClickTarget.click();
+			await expect(editor).toHaveAttribute('aria-busy', 'true');
+			await input.focus();
 			await page.evaluate(() => window.ashChatTranscriptIntegration.finishRequestEdit(true));
-			await expect(chat.locator('.ash-chat-request-editor [role="status"]')).toContainText('Synthetic edit failure');
+			await expect(chat.locator('.ash-chat-request-editor > [role="status"]')).toContainText('Synthetic edit failure');
 			await expect(input).toBeFocused();
-			await expect(input).toHaveValue('Edited\nrequest');
+			await expectEditText('Edited\nrequest');
 			await input.press('Control+Enter');
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.requestEdits().length)).toBe(2);
 			const edits = await page.evaluate(() => window.ashChatTranscriptIntegration.requestEdits());
@@ -49,9 +124,270 @@ suite('chatTranscript browser component', () => {
 			await expect(edit).toBeFocused();
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft())).toBe('Unsent private draft');
 			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([]);
+			if (!cowork) {
+				await card.click();
+				await expect(editor.locator('.ash-chat-input-part')).toHaveCount(1);
+				await expect(editor.getByRole('button', { name: locale === 'en' ? 'Add context' : '添加上下文' })).toBeVisible();
+				await input.evaluate(element => {
+					const data = new DataTransfer();
+					data.items.add(new File(['Synthetic attachment content'], 'sample.txt', { type: 'text/plain' }));
+					element.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true }));
+				});
+				await expect.poll(() => input.inputValue()).toContain('sample.txt');
+				await input.press('Control+Enter');
+				await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.requestEdits().length)).toBe(3);
+				const [attached] = (await page.evaluate(() => window.ashChatTranscriptIntegration.requestEdits()))[2].contexts ?? [];
+				expect(attached).toMatchObject({ name: 'sample.txt', content: 'Synthetic attachment content' });
+				await page.evaluate(() => window.ashChatTranscriptIntegration.finishRequestEdit());
+				await expect(editor).toHaveCount(0);
+				await expect(draft).toHaveValue('Unsent private draft');
+			}
 			await chat.screenshot({ path: browserTests.info.outputPath('request-editing.png') });
 		});
 	}
+
+	test('A long request keeps its bubble position when the edit toolbar is added', async function () {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?richInput&sessions');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.prepareRequestEditing(false,
+			Array.from({ length: 20 }, (_, index) => `Review the sample workspace and summarize its changes. Request line ${index + 1}.`).join('\n')));
+		const chat = page.locator('#app-chat');
+		const bubble = chat.locator('.ash-chat-user-message > pre');
+		const following = chat.getByText('Following response', { exact: true });
+		await following.scrollIntoViewIfNeeded();
+		await expect(following).toBeInViewport();
+		const original = (await bubble.boundingBox())!;
+		const followingTop = (await following.boundingBox())!.y;
+		await page.mouse.click(original.x + original.width / 2, original.y + original.height / 2);
+		const edit = chat.locator('.ash-chat-request-editor');
+		await expect(edit.getByRole('textbox', { name: 'Edit request' })).toBeFocused();
+		await expect.poll(async () => {
+			const bounds = (await edit.boundingBox())!;
+			const followingShift = (await following.boundingBox())!.y - followingTop;
+			return {
+				leftShift: Math.round(bounds.x - original.x),
+				topShift: Math.round(bounds.y - original.y),
+				widthChange: Math.round(bounds.width - original.width),
+				grewDownward: bounds.height > original.height,
+				pushedResponseDown: followingShift > 0 && Math.abs(followingShift - (bounds.height - original.height)) < 1,
+			};
+		}).toEqual({ leftShift: 0, topShift: 0, widthChange: 0, grewDownward: true, pushedResponseDown: true });
+		await page.keyboard.press('Escape');
+		await expect(bubble).toBeFocused();
+		await expect.poll(async () => Math.round((await bubble.boundingBox())!.y - original.y)).toBe(0);
+	});
+
+	test('Editing the unanswered last request preserves the bottom layout', async function () {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?richInput&sessions');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.prepareRequestEditing(false,
+			'Inspect the sample workspace and summarize its changes. 请检查示例工作区并总结改动。'.repeat(22), true));
+		const chat = page.locator('#app-chat');
+		const viewport = chat.locator('.ash-chat-transcript-viewport > .ash-scrollbar-viewport');
+		const bubble = chat.locator('.ash-chat-user-message > pre');
+		const edit = chat.locator('.ash-chat-request-editor');
+		const scrollToBottom = () => viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
+		const metrics = () => viewport.evaluate(element => {
+			const bubble = element.querySelector('.ash-chat-request-editor, .ash-chat-user-message > pre:not([hidden])')!;
+			return {
+				top: element.scrollTop,
+				maximum: element.scrollHeight - element.clientHeight,
+				bubbleTop: Math.round(bubble.getBoundingClientRect().top - element.getBoundingClientRect().top),
+				gap: Math.round(element.getBoundingClientRect().bottom - bubble.getBoundingClientRect().bottom),
+			};
+		});
+		// Simulate the read-only layout wrapping into a taller block than the editor.
+		await bubble.evaluate(element => { element.style.lineHeight = '36px'; });
+		await chat.scrollIntoViewIfNeeded();
+		await scrollToBottom();
+		await expect.poll(async () => {
+			const { top, maximum } = await metrics();
+			return top > 0 && top === maximum;
+		}).toBe(true);
+		const original = await metrics();
+		for (const scrollWhileEditing of [false, true]) {
+			const bounds = (await bubble.boundingBox())!;
+			const visible = (await viewport.boundingBox())!;
+			await page.mouse.click(bounds.x + bounds.width / 2, (Math.max(bounds.y, visible.y, 0) + Math.min(bounds.y + bounds.height, visible.y + visible.height)) / 2);
+			await expect(edit.getByRole('textbox', { name: 'Edit request' })).toBeFocused();
+			await expect.poll(async () => (await metrics()).bubbleTop).toBe(original.bubbleTop);
+			if (scrollWhileEditing) {
+				await scrollToBottom();
+				await chat.locator(':scope > .ash-chat-input-part .ash-chat-input-container').click({ position: { x: 7, y: 7 } });
+				await expect(edit).toHaveCount(0);
+			} else {
+				await page.keyboard.press('Escape');
+				await expect(bubble).toBeFocused();
+			}
+			await expect.poll(metrics).toEqual(original);
+		}
+	});
+
+	for (const locale of ['en', 'zh-CN']) test(`Chat follows replies only when enabled, at the bottom, and outside an inline edit (${locale})`, async function () {
+		const { page } = browserTests;
+		await page.goto(`/chatTranscript.html?richInput&sessions&locale=${locale}`);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.prepareRequestEditing(false, 'Edit this request', true));
+		const chat = page.locator('#app-chat');
+		const viewport = chat.locator('.ash-chat-transcript-viewport > .ash-scrollbar-viewport');
+		const jump = chat.getByRole('button', { name: locale === 'zh-CN' ? '跳到最新输出' : 'Scroll to Latest', exact: true });
+		await chat.scrollIntoViewIfNeeded();
+		const scroll = (offset: number) => viewport.evaluate((element, offset) => {
+			element.scrollTop = element.scrollHeight - element.clientHeight - offset;
+		}, offset);
+		const position = () => viewport.evaluate(element => ({ top: element.scrollTop, gap: element.scrollHeight - element.clientHeight - element.scrollTop }));
+		const reply = async (index: number) => {
+			await page.evaluate(index => window.ashChatTranscriptIntegration.appendChatItem({
+				id: `live-${index}`, type: 'agentMessage', text: `New reply ${index}\n\n` + 'More response text.\n\n'.repeat(8), transient: true,
+			}), index);
+			await expect(chat.getByText(`New reply ${index}`, { exact: true })).toBeAttached();
+		};
+		await scroll(0);
+		await reply(1);
+		await expect.poll(async () => (await position()).gap).toBeLessThan(1);
+		await expect(jump).toBeHidden();
+		await scroll(20);
+		await expect(jump).toBeVisible();
+		await scroll(20);
+		await expect.poll(async () => (await position()).gap).toBe(20);
+		const reading = await position();
+		await reply(2);
+		await expect.poll(position).toMatchObject({ top: reading.top });
+		await expect.poll(async () => (await position()).gap).toBeGreaterThan(20);
+		await expect(jump).toBeVisible();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setConversationChanges(true));
+		const changes = chat.locator('.ash-chat-input-changes');
+		await expect(changes.locator('.ash-chat-changes-pill')).toBeVisible();
+		await expect(changes.locator('.ash-chat-scroll-to-latest')).toBeVisible();
+		await jump.press('Enter');
+		await expect.poll(async () => (await position()).gap).toBeLessThan(1);
+		await expect(jump).toBeHidden();
+		await expect(chat.getByRole('log')).toBeFocused();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setConversationChanges(false));
+		await expect(changes).toBeHidden();
+		await chat.locator('.ash-chat-user-message > pre').click();
+		const edit = chat.locator('.ash-chat-request-editor');
+		await expect(edit).toBeVisible();
+		await scroll(0);
+		await expect.poll(async () => (await position()).gap).toBeLessThan(1);
+		const editing = await position();
+		await reply(3);
+		await expect.poll(position).toMatchObject({ top: editing.top });
+		await expect.poll(async () => (await position()).gap).toBeGreaterThan(20);
+		await scroll(0);
+		await page.keyboard.press('Escape');
+		await expect(edit).toHaveCount(0);
+		await reply(4);
+		await expect.poll(async () => (await position()).gap).toBeLessThan(1);
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setAutoFollowReplies(false));
+		const disabled = await position();
+		await reply(5);
+		await expect.poll(position).toMatchObject({ top: disabled.top });
+		await expect.poll(async () => (await position()).gap).toBeGreaterThan(20);
+		await expect(changes.locator('.ash-chat-changes-pill')).toBeHidden();
+		await expect(changes.locator('.ash-chat-scroll-to-latest')).toBeVisible();
+		await jump.click();
+		await expect.poll(async () => (await position()).gap).toBeLessThan(1);
+		const manuallyRevealed = await position();
+		await reply(6);
+		await expect.poll(position).toMatchObject({ top: manuallyRevealed.top });
+		await expect(jump).toBeVisible();
+	});
+
+	test('Chat keeps its reading position and bottom following as file changes come and go', async function () {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?richInput&sessions');
+		await page.evaluate(() => window.ashChatTranscriptIntegration.prepareRequestEditing(false, 'Review the workspace', true));
+		const chat = page.locator('#app-chat');
+		const viewport = chat.locator('.ash-chat-transcript-viewport > .ash-scrollbar-viewport');
+		const composer = chat.locator(':scope > .ash-chat-input-part .ash-chat-input-container');
+		const row = chat.locator('.ash-chat-input-changes');
+		const summary = row.locator('.ash-chat-changes-pill');
+		const jump = row.getByRole('button', { name: 'Scroll to Latest' });
+		const position = () => viewport.evaluate(element => ({ top: element.scrollTop, gap: element.scrollHeight - element.clientHeight - element.scrollTop }));
+		const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+		const changes = async (visible: boolean) => {
+			await page.evaluate(visible => window.ashChatTranscriptIntegration.setConversationChanges(visible), visible);
+			if (visible) await expect(summary).toBeVisible();
+			else await expect(summary).toBeHidden();
+			await settle();
+		};
+		const reply = (id: string) => page.evaluate(id => window.ashChatTranscriptIntegration.appendChatItem({
+			id, type: 'agentMessage', text: 'Streaming reply text.\n\n'.repeat(20), transient: true,
+		}), id);
+
+		await chat.scrollIntoViewIfNeeded();
+		await reply('before-toggle');
+		await expect.poll(async () => (await position()).gap).toBeLessThan(1);
+		await viewport.evaluate(element => { element.scrollTop -= 140; });
+		await expect(jump).toBeVisible();
+		await settle();
+		const readingTop = (await position()).top;
+		const rowTop = (await row.boundingBox())!.y;
+		const composerTop = (await composer.boundingBox())!.y;
+		for (const visible of [true, false, true, false]) {
+			await changes(visible);
+			await expect(jump).toBeVisible();
+			expect(Math.abs((await position()).top - readingTop)).toBeLessThan(1);
+			expect(Math.abs((await row.boundingBox())!.y - rowTop)).toBeLessThan(1);
+			expect(Math.abs((await composer.boundingBox())!.y - composerTop)).toBeLessThan(1);
+		}
+		await jump.click();
+		await expect(row).toBeHidden();
+		for (const [index, visible] of [true, false, true, false].entries()) {
+			await page.evaluate(({ index, visible }) => {
+				window.ashChatTranscriptIntegration.setConversationChanges(visible);
+				window.ashChatTranscriptIntegration.appendChatItem({
+					id: `follow-during-toggle-${index}`, type: 'agentMessage', text: 'Another streaming update.\n\n'.repeat(20), transient: true,
+				});
+			}, { index, visible });
+			await settle();
+			await expect.poll(async () => (await position()).gap).toBeLessThan(1);
+			await expect(jump).toBeHidden();
+		}
+		await reply('follow-after-toggles');
+		await expect.poll(async () => (await position()).gap).toBeLessThan(1);
+
+		await page.evaluate(() => window.ashChatTranscriptIntegration.setAutoFollowReplies(false));
+		await viewport.evaluate(element => { element.scrollTop -= 140; });
+		await expect(jump).toBeVisible();
+		await changes(true);
+		await changes(false);
+		await jump.click();
+		await expect(row).toBeHidden();
+		await expect.poll(async () => (await position()).gap).toBeLessThan(1);
+		const manuallyRevealed = (await position()).top;
+		await reply('remain-paused-after-toggles');
+		await expect(jump).toBeVisible();
+		await expect.poll(async () => (await position()).top).toBe(manuallyRevealed);
+	});
+
+	test('Chat blocks another inline editor while the current edit is submitting', async function () {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html?richInput&sessions');
+		await page.evaluate(() => {
+			window.ashChatTranscriptIntegration.prepareRequestEditing(false);
+			window.ashChatTranscriptIntegration.appendChatItem({
+				id: 'second-request', type: 'userMessage', text: 'Second request', transient: false,
+				requestSource: { sessionId: 'app-session', threadId: 'app-thread', turnId: 'second-turn', itemId: 'second-item' },
+			});
+		});
+		const chat = page.locator('#app-chat');
+		const edit = chat.locator('.ash-chat-request-editor');
+		const first = chat.getByRole('button', { name: 'Original request', exact: true });
+		const second = chat.getByRole('button', { name: 'Second request', exact: true });
+		await first.click();
+		await edit.getByRole('textbox').press('Control+Enter');
+		await expect(edit).toHaveAttribute('aria-busy', 'true');
+		await second.click();
+		await expect(edit).toHaveCount(1);
+		await expect(second).toBeVisible();
+		await page.evaluate(() => window.ashChatTranscriptIntegration.finishRequestEdit(true));
+		await expect(edit).not.toHaveAttribute('aria-busy', 'true');
+		await second.click();
+		await expect(edit).toHaveCount(1);
+		await expect(first).toBeVisible();
+		await expect(second).toHaveCount(0);
+	});
 
 	for (const locale of ['en', 'zh-CN']) for (const theme of ['dark', 'light', 'hc'] as const) {
 		test(`Chat bounded history pagination preserves keyboard focus, draft and reading position in ${locale} ${theme}`, async function () {
@@ -247,6 +583,10 @@ suite('chatTranscript browser component', () => {
 			}
 			await page.evaluate(() => { document.querySelector<HTMLElement>('main')!.style.width = '180px'; });
 			expect(await tool.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+			const copyCommand = tool.getByRole('button', { name: locale === 'en' ? 'Copy command and arguments' : '复制命令与参数', exact: true });
+			const copyLabel = copyCommand.locator('.ash-button-label');
+			await expect(copyCommand).toBeVisible();
+			expect(await copyLabel.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 			await summary.press('Space');
 			await expect(tool).not.toHaveAttribute('open');
 			await summary.press('Space');
@@ -681,6 +1021,8 @@ suite('chatTranscript browser component', () => {
 				const text = '**Hello** 汉字\n\n[link](https://example.com)\n\n<unsafe>raw source</unsafe>';
 				await page.evaluate(({ text, cowork }) => window.ashChatTranscriptIntegration.showCopiedMessage(text, cowork), { text, cowork });
 				const row = page.locator('[data-item-id="copy-response"]');
+				await expect(row).toHaveAccessibleName('Ash');
+				await expect(row.getByText('Ash', { exact: true })).toHaveCount(0);
 				const button = row.getByRole('button', { name: locale === 'zh-CN' ? '复制消息' : 'Copy message', exact: true });
 				await expect(row.getByRole('button', { name: locale === 'zh-CN' ? '朗读' : 'Read aloud', exact: true })).toHaveCount(0);
 				for (const theme of ['dark', 'light', 'hc'] as const) {

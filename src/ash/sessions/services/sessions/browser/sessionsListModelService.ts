@@ -1,3 +1,4 @@
+import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
 import type { Event } from '../../../../base/common/event.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
@@ -5,7 +6,9 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { readStoredOrder, resolveSectionOrder, storeReorderedIds } from './sessionSectionOrderService.js';
 import type { ISession } from '../common/session.js';
 
-export type SessionSortMode = 'created' | 'updated';
+export type SessionSortMode = 'name' | 'created' | 'updated';
+export type SessionSortDirection = 'ascending' | 'descending';
+export type SessionGrouping = 'none' | 'projects' | 'repository' | 'status' | 'environment';
 export type AutomationSessionsListMode = 'always' | 'afterReply' | 'never';
 export type SessionsListMode = 'chat' | 'code';
 export interface ISessionsListTreeNode {
@@ -22,6 +25,12 @@ export interface ISessionsListModelService {
 	readonly onDidChange: Event<void>;
 	readonly sortMode: SessionSortMode;
 	setSortMode(mode: SessionSortMode): void;
+	readonly sortDirection: SessionSortDirection;
+	setSortDirection(direction: SessionSortDirection): void;
+	readonly grouping: SessionGrouping;
+	setGrouping(grouping: SessionGrouping): void;
+	readonly showComparisonGroups: boolean;
+	setShowComparisonGroups(show: boolean): void;
 	readonly automationSessionsMode: AutomationSessionsListMode;
 	setAutomationSessionsMode(mode: AutomationSessionsListMode): void;
 	getAutomationSessionOverride(session: ISession): 'show' | 'hide' | undefined;
@@ -33,6 +42,8 @@ export interface ISessionsListModelService {
 	isSessionPinned(session: ISession): boolean;
 	pinSession(session: ISession): void;
 	unpinSession(session: ISession): void;
+	getRowIcon(rowId: string): string | undefined;
+	setRowIcon(rowId: string, iconId: string | undefined): void;
 	registerTree(mode: SessionsListMode, read: () => readonly ISessionsListTreeNode[]): IDisposable;
 	readTree(mode: SessionsListMode): readonly ISessionsListTreeNode[] | undefined;
 }
@@ -43,8 +54,12 @@ const automationVisibilityKey = 'sessions.list.showAutomationSessions';
 const automationOverridePrefix = 'sessions.list.automationOverride.';
 const automationReplyPrefix = 'sessions.list.automationReply.';
 const sortModeKey = 'sessions.list.sortMode';
+const sortDirectionKey = 'sessions.list.sortDirection';
+const groupingKey = 'sessions.list.grouping';
+const comparisonGroupsKey = 'sessions.list.showComparisonGroups';
 const manualOrderPrefix = 'sessions.list.manualOrder.';
 const pinnedSessionPrefix = 'sessions.list.pinned.';
+const rowIconPrefix = 'sessions.list.rowIcon.';
 
 /** Owns profile-local list filters, pins, and manual row order. */
 export class SessionsListModelService implements ISessionsListModelService {
@@ -65,19 +80,53 @@ export class SessionsListModelService implements ISessionsListModelService {
 	constructor(@IStorageService private readonly storage: IStorageService) {
 		this.onDidChange = (listener, thisArgs, disposables) => storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && (event.key === automationVisibilityKey || event.key === sortModeKey
+				|| event.key === sortDirectionKey || event.key === groupingKey || event.key === comparisonGroupsKey
 				|| event.key.startsWith(automationOverridePrefix) || event.key.startsWith(automationReplyPrefix)
-				|| event.key.startsWith(pinnedSessionPrefix) || event.key.startsWith(manualOrderPrefix))) {
+				|| event.key.startsWith(pinnedSessionPrefix) || event.key.startsWith(manualOrderPrefix) || event.key.startsWith(rowIconPrefix))) {
 				listener.call(thisArgs);
 			}
 		}, undefined, disposables);
 	}
 
 	get sortMode(): SessionSortMode {
-		return this.storage.get(sortModeKey, StorageScope.PROFILE) === 'created' ? 'created' : 'updated';
+		const value = this.storage.get(sortModeKey, StorageScope.PROFILE);
+		return value === 'created' || value === 'name' ? value : 'updated';
 	}
 
 	setSortMode(mode: SessionSortMode): void {
 		this.storage.store(sortModeKey, mode, StorageScope.PROFILE, StorageTarget.USER);
+	}
+
+	get sortDirection(): SessionSortDirection {
+		const value = this.storage.get(sortDirectionKey, StorageScope.PROFILE);
+		if (value === 'ascending' || value === 'descending') {
+			return value;
+		}
+		return this.sortMode === 'name' ? 'ascending' : 'descending';
+	}
+
+	setSortDirection(direction: SessionSortDirection): void {
+		this.storage.store(sortDirectionKey, direction, StorageScope.PROFILE, StorageTarget.USER);
+	}
+
+	get grouping(): SessionGrouping {
+		const value = this.storage.get(groupingKey, StorageScope.PROFILE);
+		switch (value) {
+			case 'projects': case 'repository': case 'status': case 'environment': return value;
+			default: return 'none';
+		}
+	}
+
+	setGrouping(grouping: SessionGrouping): void {
+		this.storage.store(groupingKey, grouping, StorageScope.PROFILE, StorageTarget.USER);
+	}
+
+	get showComparisonGroups(): boolean {
+		return this.storage.getBoolean(comparisonGroupsKey, StorageScope.PROFILE, true);
+	}
+
+	setShowComparisonGroups(show: boolean): void {
+		this.storage.store(comparisonGroupsKey, show, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
 	get automationSessionsMode(): AutomationSessionsListMode {
@@ -124,7 +173,14 @@ export class SessionsListModelService implements ISessionsListModelService {
 
 	private manualOrderKey(scope: string): string {
 		// Existing orders were saved while using the catalog's updated-time order.
-		return manualOrderPrefix + (this.sortMode === 'created' ? `created:${scope}` : scope);
+		const mode = this.sortMode;
+		if (mode === 'updated' && this.sortDirection === 'descending') {
+			return manualOrderPrefix + scope;
+		}
+		if (mode === 'created' && this.sortDirection === 'descending') {
+			return manualOrderPrefix + `created:${scope}`;
+		}
+		return manualOrderPrefix + `${mode}:${this.sortDirection}:${scope}`;
 	}
 
 	isSessionPinned(session: ISession): boolean {
@@ -133,6 +189,15 @@ export class SessionsListModelService implements ISessionsListModelService {
 
 	pinSession(session: ISession): void {
 		this.storage.store(pinnedSessionPrefix + session.sessionId, true, StorageScope.PROFILE, StorageTarget.USER);
+	}
+
+	getRowIcon(rowId: string): string | undefined {
+		return this.storage.get(rowIconPrefix + rowId, StorageScope.PROFILE);
+	}
+
+	setRowIcon(rowId: string, iconId: string | undefined): void {
+		if (iconId !== undefined && !getLxiconDefinition(iconId)) { return; }
+		this.storage.store(rowIconPrefix + rowId, iconId, StorageScope.PROFILE, StorageTarget.MACHINE);
 	}
 
 	unpinSession(session: ISession): void {

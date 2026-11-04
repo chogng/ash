@@ -74,7 +74,8 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	private workingCopies: IWorkingCopyService | undefined;
 	private document = ConfigurationModel.createEmptyModel(configurationModelLog);
 
-	readonly onDidChangeConfiguration = this.changeEmitter.event;
+	protected readonly configurationChanges = this.changeEmitter.event;
+	readonly onDidChangeConfiguration = this.configurationChanges;
 
 	constructor(
 		options: WorkspaceServiceOptions = {},
@@ -378,7 +379,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		};
 	}
 
-	private resolveSection(section: string, overrides?: IConfigurationOverrides): unknown {
+	protected resolveSection(section: string, overrides?: IConfigurationOverrides): unknown {
 		if (overrides === undefined) {
 			const base = this.effectiveConfiguration, workspace = this.workspaceConfiguration, policy = this.policyConfiguration;
 			// Layers are immutable snapshots. Reuse their combined read model until

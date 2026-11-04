@@ -22,6 +22,7 @@ export class ScopedSessionConversationPane extends Disposable implements ISessio
 	focus(): void { this.pane.focus(); }
 	startVoiceConversation(): Promise<void> { return this.pane.startVoiceConversation(); }
 	addContext(...args: Parameters<ISessionsConversationPane['addContext']>): void { this.pane.addContext(...args); }
+	acquireContext(...args: Parameters<ISessionsConversationPane['acquireContext']>): ReturnType<ISessionsConversationPane['acquireContext']> { return this.pane.acquireContext(...args); }
 	appendToDraft(...args: Parameters<ISessionsConversationPane['appendToDraft']>): void { this.pane.appendToDraft(...args); }
 	captureDraft(): ReturnType<ISessionsConversationPane['captureDraft']> { return this.pane.captureDraft(); }
 	restoreDraft(...args: Parameters<ISessionsConversationPane['restoreDraft']>): void { this.pane.restoreDraft(...args); }

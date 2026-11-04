@@ -1,5 +1,5 @@
 import { QuickAccess } from '../../automation/quickaccess.js';
-import { parseDesignDocument } from '../../../src/ash/sessions/contrib/creator/common/model/document.js';
+import { parseDesignDocument } from '../../../src/ash/sessions/contrib/artifacts/common/model/document.js';
 import { expect, test as base, type Page, type Locator } from '@playwright/test';
 import { paintColor, paintPixel, clickCanvasMenu, inspectCanvasMenu, drawBezierPath, rightClickCanvasShape } from '../../automation/design.js';
 

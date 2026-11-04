@@ -81,6 +81,7 @@ import { ISpeechService } from '../../../workbench/contrib/speech/common/speechS
 import { SpeechService } from '../../../workbench/contrib/speech/browser/speechService.js';
 import { createTestEditorServices } from '../../../workbench/test/common/testEditorServices.js';
 import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/browser/githubService.js';
+import { IApprovalEnvironmentService } from '../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { IFileTextModelService } from '../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import assert from 'node:assert/strict';
 import { test, teardown, suiteTeardown } from 'mocha';
@@ -518,6 +519,7 @@ test('Quick Chat retains its independent composer through hide, materialization 
 	await waitFor(() => dom.window.document.querySelector('.ash-quick-chat textarea') !== null);
 	const original = dom.window.document.querySelector<HTMLElement>('.ash-quick-chat .ash-chat')!;
 	const input = original.querySelector<HTMLTextAreaElement>('textarea')!;
+	assert.equal(original.querySelector<HTMLElement>('.ash-chat-welcome')?.hidden, true);
 	const contextKeys = services.get(IContextKeyService);
 	assert.equal(contextKeys.getContext(input).getValue(ChatContextKeys.inChatSession.key), true);
 	assert.equal(contextKeys.getContext(input).getValue(ChatContextKeys.inChatInput.key), true);
@@ -632,6 +634,7 @@ test('100 catalog sessions instantiate only opened conversations and reconnect t
 test('Chat title and history switching retain conversations and drafts', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	dom.window.HTMLElement.prototype.scrollTo = () => { };
+	Object.defineProperty(dom.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	const subscriptionModel = {
 		model: { provider: 'openai', model: 'gpt-6.1-sol' },
@@ -958,8 +961,9 @@ test('Chat title and history switching retain conversations and drafts', async (
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
 		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, subscriptionModel.displayName);
-		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-label'), subscriptionModel.displayName);
-		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.getAttribute('aria-label'), 'Model options: Medium');
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-effort')?.textContent, 'Medium');
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-label'), `${subscriptionModel.displayName} Medium`);
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.hidden, true);
 		assert.equal(inputToolbar?.querySelector('.ash-chat-input-model-access-badge'), null);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='workbench.action.chat.toggleSpeechToText'] button")?.disabled, true);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.voice'] button")?.disabled, true);
@@ -971,12 +975,13 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(modelPicker?.getAttribute('aria-label'), 'Choose a chat model');
 	assert.equal(modelPicker?.closest('.ash-context-view')?.parentElement, contextViewService.container);
 	assert.equal(modelButton?.getAttribute('aria-expanded'), 'true');
-	assert.equal(modelPicker?.querySelector<HTMLInputElement>('input')?.placeholder, 'Search models');
+	assert.equal(modelPicker?.querySelector<HTMLInputElement>('input[role="combobox"]')?.placeholder, 'Search models');
+	assert.equal(modelPicker?.querySelector('.ash-switch input')?.getAttribute('aria-label'), 'Auto');
 	assert.match(modelPicker?.textContent ?? '', /GPT-6\.1 Sol/);
 	assert.match(modelPicker?.querySelector('[role=menuitemradio]')?.getAttribute('aria-description') ?? '', /128,000 context tokens/);
 	assert.match(modelPicker?.querySelector('[role=menuitemradio]')?.getAttribute('aria-description') ?? '', /Thinking: Low, Medium, High/);
 	assert.equal(modelPicker?.classList.contains('ash-action-widget'), true);
-	const modelSearch = modelPicker?.querySelector<HTMLInputElement>('input');
+	const modelSearch = modelPicker?.querySelector<HTMLInputElement>('input[role="combobox"]');
 	assert.ok(modelSearch);
 	modelSearch.value = 'no-such-model';
 	modelSearch.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
@@ -987,20 +992,63 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(dom.window.document.activeElement, modelPicker?.querySelector('[role=menuitemradio]'));
 	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(firstChatPane.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-expanded'), 'false');
-	firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-	const effortCard = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-card-configurable');
-	assert.ok(effortCard);
-	assert.equal(effortCard.querySelector('legend')?.textContent, 'Thinking Level');
-	assert.deepEqual([...effortCard.querySelectorAll<HTMLInputElement>('input[type="radio"]')].map(input => input.getAttribute('aria-label')), ['Low', 'Medium', 'High']);
-	assert.equal(effortCard.querySelector('input:checked')?.getAttribute('aria-label'), 'Medium');
-	assert.equal(effortCard.querySelector('input:checked')?.getAttribute('aria-description'), null);
-	effortCard.querySelector<HTMLInputElement>('input[aria-label="High"]')!.click();
-	await waitFor(() => firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.getAttribute('aria-label') === 'Model options: High');
-	firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-	assert.equal(dom.window.document.querySelector('.ash-chat-model-card-configurable input:checked')?.getAttribute('aria-label'), 'High');
-	dom.window.document.querySelector<HTMLInputElement>('.ash-chat-model-card-configurable input[aria-label="Medium"]')!.click();
-	await waitFor(() => firstChatPane.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.getAttribute('aria-label') === 'Model options: Medium');
-	dom.window.document.querySelector('.ash-chat-model-picker')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	modelButton!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+	const reopenedPicker = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-picker')!;
+	assert.deepEqual(
+		[...reopenedPicker.querySelectorAll('.ash-chat-model-picker-section button')].map(button => button.getAttribute('aria-label')),
+		['Effort', 'More Models'],
+	);
+	const effort = reopenedPicker.querySelector<HTMLButtonElement>('[aria-label="Effort"]')!;
+	assert.ok(effort.querySelector('.ash-icon-brain'));
+	const openEffort = (): HTMLElement => {
+		effort.focus();
+		effort.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+		return dom.window.document.querySelector<HTMLElement>('[role="menu"][aria-label="Effort"]')!;
+	};
+	const effortMenu = openEffort();
+	assert.deepEqual([...effortMenu.querySelectorAll('[role="menuitemradio"]')].map(item => item.getAttribute('aria-label')), ['Low', 'Medium', 'High']);
+	assert.equal(effortMenu.querySelector('[aria-checked="true"]')?.getAttribute('aria-label'), 'Medium');
+	effortMenu.querySelector<HTMLButtonElement>('[aria-label="High"]')!.click();
+	await waitFor(() => effortMenu.querySelector('[aria-checked="true"]')?.getAttribute('aria-label') === 'High');
+	assert.equal(modelButton?.querySelector('.ash-chat-input-model-effort')?.textContent, 'High');
+	openEffort().querySelector<HTMLButtonElement>('[aria-label="Medium"]')!.click();
+	await waitFor(() => effortMenu.querySelector('[aria-checked="true"]')?.getAttribute('aria-label') === 'Medium');
+	assert.equal(modelButton?.querySelector('.ash-chat-input-model-effort')?.textContent, 'Medium');
+	openEffort();
+	assert.ok(effortMenu.contains(dom.window.document.activeElement), dom.window.document.activeElement?.outerHTML.slice(0, 500));
+	const tab = new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+	dom.window.document.activeElement!.dispatchEvent(tab);
+	assert.equal(tab.defaultPrevented, false);
+	assert.equal(dom.window.document.activeElement, effort);
+	assert.equal(effort.getAttribute('aria-expanded'), 'false');
+
+	openEffort();
+	const sidePanel = effortMenu.closest<HTMLElement>('.ash-context-view')!;
+	const modelRow = reopenedPicker.querySelector('.ash-tabbed-action-list-panel [role="menuitemradio"]')!;
+	const move = (target: Element, x: number, y: number): void => {
+		target.dispatchEvent(new dom.window.MouseEvent('mousemove', { bubbles: true, clientX: x, clientY: y }));
+	};
+	sidePanel.getBoundingClientRect = () => new dom.window.DOMRect(0, 0, 100, 100);
+	move(effort, 160, 90);
+	move(modelRow, 140, 70);
+	await nextTask();
+	assert.equal(effort.getAttribute('aria-expanded'), 'true');
+	sidePanel.dispatchEvent(new dom.window.MouseEvent('mouseenter'));
+	await nextTask();
+	assert.equal(sidePanel.firstElementChild, effortMenu);
+
+	move(effort, 160, 90);
+	move(modelRow, 170, 70);
+	await waitFor(() => !!sidePanel.querySelector('.ash-action-widget-side-preview'));
+	assert.equal(effort.getAttribute('aria-expanded'), 'false');
+	assert.equal(effortMenu.isConnected, false);
+	openEffort();
+	assert.equal(sidePanel.firstElementChild, effortMenu);
+	assert.equal(sidePanel.querySelector('.ash-action-widget-side-preview'), null);
+	assert.equal(effort.getAttribute('aria-expanded'), 'true');
+	effortMenu.querySelector('[role="menuitemradio"]')!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	assert.equal(dom.window.document.activeElement, effort);
+	reopenedPicker.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(dom.window.document.querySelector('.ash-chat-model-picker'), null);
 	shownContextMenuActions = [];
 	firstChatPane.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.click();
@@ -1190,6 +1238,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 		services.registerInstance(INotificationService, notices);
 		services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 		services.registerSingleton(IChatTipService, () => services.createInstance(ChatTipService));
+		services.registerInstance(IApprovalEnvironmentService, undefined);
 		services.registerInstance(ISessionsGitHubService, {
 			onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], initialize() { },
 			attachIssue: async () => { }, detachIssue: async () => { }, attachPullRequest: async () => { throw new Error('Unexpected PR attachment'); }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { },
@@ -1277,6 +1326,15 @@ test('Cowork composer submits the exact Skill reference through the shared input
 	assert.deepEqual(submissions, [{ text: '$commit staged changes', skills: [skill] }]);
 });
 
+test('Sessions editor provider honors the height of an inline request editor', async () => {
+	using fixture = await sessionsWidgetFixture();
+	using editor = fixture.input.createEditor({
+		container: document.body, placeholder: '', ariaLabel: 'Edit request',
+		height: { minimum: 420, maximum: 420 },
+	});
+	assert.equal(editor.element.style.minHeight, '420px');
+});
+
 for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with Enter and replaces dictation with Stop task in ${locale}`, async () => {
 	initializeTestLocalization(locale);
 	try {
@@ -1292,11 +1350,16 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with
 		assert.equal(form.querySelector('[data-action-id="ash.chat.input.model"]'), null);
 		assert.ok(footer.querySelector('[data-action-id="ash.chat.input.model"]'));
 		assert.equal(footer.querySelector('[data-action-id="ash.chat.input.send"]'), null);
-		assert.equal(form.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		const sendButton = '[data-action-id="ash.chat.input.send"] button';
+		assert.equal(form.querySelector<HTMLButtonElement>(sendButton)?.disabled, true);
 		fixture.input.appendToDraft('Keep this text');
 		assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep this text');
 		assert.deepEqual(sent, []);
-		assert.ok(form.querySelector('[data-action-id="ash.chat.input.send"] button'));
+		assert.equal(form.querySelector<HTMLButtonElement>(sendButton)?.disabled, false);
+		const actions = form.querySelector('.ash-chat-input-toolbars.ash-chat-input-inline-toolbar');
+		assert.ok(actions);
+		assert.ok(actions.contains(form.querySelector(sendButton)));
+		assert.ok(actions.contains(form.querySelector('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')));
 		const ring = footer.querySelector<HTMLButtonElement>('.ash-chat-context-usage-button')!;
 		assert.equal(ring.hidden, false);
 		assert.equal(ring.disabled, true);
@@ -1733,6 +1796,9 @@ test('an empty Session list opens an untitled session and persists it on its fir
 	const input = untitledPane.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input');
 	assert.ok(input);
 	assert.equal(untitledPane.classList.contains('empty'), true);
+	const welcome = untitledPane.querySelector<HTMLElement>('.ash-chat-welcome')!;
+	assert.equal(welcome.hidden, false);
+	assert.equal(welcome.querySelector('h2')?.textContent, 'Build with Agent');
 	let contextResolutions = 0;
 	pane.toggleSessionsSidebar();
 	assert.equal(pane.element.querySelector('.ash-chat-body')?.classList.contains('sessions-stacked'), false);
@@ -1755,6 +1821,7 @@ test('an empty Session list opens an untitled session and persists it on its fir
 	}));
 	assert.equal(untitledPane.classList.contains('empty'), false);
 	assert.equal(untitledPane.classList.contains('has-conversation'), true);
+	assert.equal(welcome.hidden, true);
 	assert.ok(untitledPane.querySelector(':scope > .ash-chat-list-widget'));
 	assert.ok(untitledPane.querySelector(':scope > .ash-chat-input-part'));
 	await waitFor(() => fake.turnStartRequests.length === 1);
@@ -1951,6 +2018,7 @@ test('failed first send keeps the untitled session and its input draft', async (
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains('empty'), true);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains('has-conversation'), false);
+	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-welcome')?.hidden, false);
 	assert.match(pane.element.querySelector<HTMLElement>('.ash-chat-input-notification-message')?.textContent ?? '', /Cannot create Session/);
 
 	dom.window.close();
@@ -5739,6 +5807,25 @@ for (const locale of ['en', 'zh-CN']) test(`Chat editor borrows one composer and
 		assert.deepEqual((await restored.pane.captureActiveDraft())!.draft, draft);
 		assert.equal(restored.fake.turnStartRequests.length, 0);
 	} finally { initializeTestLocalization('en'); }
+});
+
+test('Chat welcome follows draft navigation in Chinese', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		const { resources, pane, sessions, chatPane } = await createNavigationInputPane();
+		using fixture = resources;
+		assert.equal(chatPane.querySelector<HTMLElement>('.ash-chat-welcome')?.hidden, true);
+		const draft = sessions.createUntitledSession();
+		const draftPane = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat:not([hidden])')!;
+		const welcome = draftPane.querySelector<HTMLElement>('.ash-chat-welcome')!;
+		assert.equal(draftPane.dataset.untitledSessionId, draft.untitledSessionId);
+		assert.equal(welcome.hidden, false);
+		assert.equal(welcome.querySelector('h2')?.textContent, '与智能体一起开发');
+		assert.equal(welcome.querySelector('p')?.textContent, '请核实 AI 生成的回复中的重要细节。');
+		sessions.selectThread('session-1', 'thread-1');
+		assert.equal(draftPane.hidden, true);
+		assert.equal(chatPane.hidden, false);
+	} finally { resetNlsResolver(); }
 });
 
 for (const locale of ['en', 'zh-CN']) {

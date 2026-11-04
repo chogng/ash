@@ -116,6 +116,7 @@ suite('Terminal Quick Access', () => {
 		services.registerInstance(ITerminalGroupService, { async showPanel() { } } as ITerminalGroupService);
 		services.registerInstance(ITerminalEditorService, {
 			async openEditor() { throw new Error('This scenario reveals panel terminals'); },
+			async splitPane() { throw new Error('Quick Access does not split terminal editors'); },
 			async splitInstance() { throw new Error('Quick Access does not split terminals'); },
 			async detachInstance() { throw new Error('Quick Access does not move terminals'); },
 			getInstanceFromResource() { throw new Error('Quick Access uses instance identity'); },

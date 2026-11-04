@@ -7,7 +7,7 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IAppServerProcessLauncher } from '../../../../platform/agentHost/electron-main/appServerProcessLauncher.js';
 import type { AppServerConnectionState } from '../../../../platform/agentHost/common/appServerApi.js';
-import { ChatGPTAuthenticationError } from '../common/chatGPTTransport.js';
+import { ChatGPTAuthenticationError, type ChatGPTAuthenticationContext } from '../common/chatGPTTransport.js';
 
 export interface IChatGPTAuthorization extends IDisposable {
 	readonly headers: Headers;
@@ -17,15 +17,15 @@ export interface IChatGPTAuthorization extends IDisposable {
 
 /** Private host capability. Header values never enter the renderer transport. */
 export interface IChatGPTAuthentication extends IDisposable {
-	readonly onDidChangeContext: Event<string | undefined>;
-	getContext(): Promise<string>;
+	readonly onDidChangeContext: Event<ChatGPTAuthenticationContext | undefined>;
+	getContext(): Promise<ChatGPTAuthenticationContext>;
 	authorize(id: string, context: string, signal: AbortSignal): Promise<IChatGPTAuthorization>;
 }
 
 /** A native-only carrier to the existing Rust authentication owner, without JSON-RPC. */
 export class ChatGPTAuthentication extends Disposable implements IChatGPTAuthentication {
 	private readonly carrier = this._register(new MutableDisposable<DisposableStore>());
-	private readonly changes = this._register(new Emitter<string | undefined>());
+	private readonly changes = this._register(new Emitter<ChatGPTAuthenticationContext | undefined>());
 	public readonly onDidChangeContext = this.changes.event;
 	private readonly states = this._register(new Emitter<AppServerConnectionState>());
 	public readonly onStateChange = this.states.event;
@@ -36,7 +36,7 @@ export class ChatGPTAuthentication extends Disposable implements IChatGPTAuthent
 	private starting: Promise<void> | undefined;
 	private pending: DeferredPromise<HostCredentialResponse> | undefined;
 	private ready: DeferredPromise<void> | undefined;
-	private context: string | undefined;
+	private context: ChatGPTAuthenticationContext | undefined;
 	private generation = 0;
 	private queued = 0;
 
@@ -45,7 +45,7 @@ export class ChatGPTAuthentication extends Disposable implements IChatGPTAuthent
 		this._register(toDisposable(() => { void this.stop(); }));
 	}
 
-	public async getContext(): Promise<string> {
+	public async getContext(): Promise<ChatGPTAuthenticationContext> {
 		await this.start();
 		if (!this.context) { throw unavailable(); }
 		return this.context;
@@ -92,15 +92,15 @@ export class ChatGPTAuthentication extends Disposable implements IChatGPTAuthent
 					const frame = decodeHostCredentialResponse(JSON.parse(text.slice(0, end)));
 					text = text.slice(end + 1);
 					if (frame.kind === 'ready') {
-						if (ready.isSettled || !validContext(frame.context)) { throw unavailable(); }
-						this.context = frame.context;
+						if (ready.isSettled) { throw unavailable(); }
+						this.context = readContext(frame.context, frame.cacheScope);
 						this.setState('ready');
 						void ready.complete();
 					} else if (frame.kind === 'changed') {
-						if (!ready.isSettled || !validContext(frame.context)) { throw unavailable(); }
-						this.context = frame.context;
+						if (!ready.isSettled) { throw unavailable(); }
+						this.context = readContext(frame.context, frame.cacheScope);
 						this.revoke();
-						this.changes.fire(frame.context);
+						this.changes.fire(this.context);
 					} else {
 						const pending = this.pending;
 						if (!pending) { throw unavailable(); }
@@ -133,7 +133,7 @@ export class ChatGPTAuthentication extends Disposable implements IChatGPTAuthent
 		const authorize = async (): Promise<IChatGPTAuthorization> => {
 			await this.start();
 			signal.throwIfAborted();
-			if (context !== this.context || this.leases.has(id)) { throw unavailable(); }
+			if (context !== this.context?.id || this.leases.has(id)) { throw unavailable(); }
 			const controller = new AbortController();
 			this.leases.set(id, controller);
 			const combined = AbortSignal.any([signal, controller.signal]);
@@ -146,14 +146,14 @@ export class ChatGPTAuthentication extends Disposable implements IChatGPTAuthent
 			try {
 				const response = await this.call({ kind: 'authorize', requestId: id, context });
 				combined.throwIfAborted();
-				if (response.kind !== 'authorized' || context !== this.context) { throw unavailable(); }
+				if (response.kind !== 'authorized' || context !== this.context?.id) { throw unavailable(); }
 				return {
 					headers: readHeaders(response.headers), signal: combined,
 					recoverUnauthorized: async () => {
 						combined.throwIfAborted();
 						const recovered = await this.call({ kind: 'recover', requestId: id });
 						combined.throwIfAborted();
-						if (recovered.kind !== 'recovered' || context !== this.context) { throw unavailable(); }
+						if (recovered.kind !== 'recovered' || context !== this.context?.id) { throw unavailable(); }
 						return recovered.headers === null ? undefined : readHeaders(recovered.headers);
 					},
 					dispose: () => release.dispose(), [Symbol.dispose]: () => release.dispose(),
@@ -209,7 +209,10 @@ export class ChatGPTAuthentication extends Disposable implements IChatGPTAuthent
 }
 
 function unavailable(): ChatGPTAuthenticationError { return new ChatGPTAuthenticationError('ChatGPT authentication owner is unavailable'); }
-function validContext(value: string): boolean { return /^[a-f0-9]{32}$/u.test(value); }
+function readContext(id: string, cacheScope: string | undefined): ChatGPTAuthenticationContext {
+	if (!/^[a-f0-9]{32}$/u.test(id) || (cacheScope !== undefined && !/^[a-f0-9]{64}$/u.test(cacheScope))) { throw unavailable(); }
+	return { id, cacheScope };
+}
 function readHeaders(value: Readonly<Record<string, string>>): Headers {
 	const headers = new Headers();
 	for (const [name, header] of Object.entries(value)) {

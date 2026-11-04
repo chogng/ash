@@ -40,6 +40,9 @@ import {
 import { showMessageBox } from '../../dialogs/electron-browser/dialog.js';
 import { normalizeExternalUrl } from '../../opener/common/opener.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
+import { CANCEL_TOAST_CHANNEL, SHOW_TOAST_CHANNEL } from '../common/native.js';
+import { isRecord } from '../../../base/common/types.js';
+import { onUnexpectedError } from '../../../base/common/errors.js';
 import {
 	AGENT_HOST_EDITOR_STATE_CHANNEL, AGENT_HOST_EDITOR_UPDATE_CHANNEL, AGENT_HOST_EDITOR_STATE_CHANGED_CHANNEL,
 	AGENTS_WINDOW_INVITATION_CLAIM_CHANNEL, AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL, AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL,
@@ -50,6 +53,19 @@ export function createNativeHostApi(mainProcessService: IMainProcessService): IN
 	const colors = mainProcessService.getChannel('colorScheme');
 	const power = mainProcessService.getChannel('powerMonitor');
 	return {
+		async showToast(options, token) {
+			if (token.isCancellationRequested) return { supported: true, clicked: false };
+			const pending = invoke<unknown>(SHOW_TOAST_CHANNEL, options);
+			const cancellation = token.onCancellationRequested(() => {
+				void invoke(CANCEL_TOAST_CHANNEL, options.id).catch(onUnexpectedError);
+			});
+			try {
+				const value = await pending;
+				if (!isRecord(value) || typeof value.supported !== 'boolean' || typeof value.clicked !== 'boolean'
+					|| (value.suppressed !== undefined && typeof value.suppressed !== 'boolean')) throw new TypeError('Invalid native toast result');
+				return { supported: value.supported, clicked: value.clicked, suppressed: value.suppressed };
+			} finally { cancellation.dispose(); }
+		},
 		onDidSuspendOS: listener => power.listen<void>('onDidSuspendOS')(listener),
 		onDidResumeOS: listener => power.listen<void>('onDidResumeOS')(listener),
 		async getScreenshot(rect) {

@@ -98,6 +98,7 @@ export class SessionGridLayout extends Disposable {
 				});
 			}
 			this.items = next;
+			this.element.classList.toggle('split', next.length > 1);
 			for (const item of next) {
 				item.element.classList.toggle('active', item.entry.id === active);
 				item.element.setAttribute('aria-current', item.entry.id === active ? 'true' : 'false');

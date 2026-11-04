@@ -663,6 +663,7 @@ fn session_commands_fork_archive_and_restore_the_exact_session() {
         .client()
         .create_session(SessionCreateParams {
             branch_name: None,
+            worktree_start: None,
             agent_id: None,
             agent: Default::default(),
             command_id: CommandId::new("create-cli-fixture").unwrap(),

@@ -17,7 +17,7 @@ import { IChatContextService } from '../../../src/ash/workbench/contrib/chat/bro
 import { ChatContextKeys } from '../../../src/ash/workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { IChatWidgetService, type IChatWidget, type IWorkspacePickerItem } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
 import { OpenWorkspacePickerAction } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatExecuteActions.js';
-import { ChatContextContributions } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatContext.js';
+import { ChatContextContributions, ChatReferenceContextContribution } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatContext.js';
 import { ChatReferenceAttachmentWidgetContribution } from '../../../src/ash/workbench/contrib/chat/browser/attachments/chatReferenceAttachmentWidget.contribution.js';
 import { startSnapshotFixture } from './snapshotFixture.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
@@ -319,6 +319,7 @@ let releaseScreenshot: (() => void) | undefined;
 services.registerInstance(IHostService, {
 		getWindows: async () => [],
 	hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, reload: async () => { }, openWindow: async () => { },
+	showToast: async () => ({ supported: false, clicked: false }),
 	async getScreenshot() {
 		screenshotCalls++;
 		screenshotVisibleOverlays.push([...document.querySelectorAll('dialog[open], [role="dialog"]')].filter(element => element.checkVisibility()).length);
@@ -370,7 +371,11 @@ services.registerInstance(IChatSessionNavigationService, {
 	createNewConversation: () => { throw new Error('Unexpected draft creation'); },
 	revision: 0,
 	getActiveConversation: () => ({ sessionId: 'active-session', threadId: 'active-thread' }),
-	getConversations: () => [{ sessionId: 'active-session', threadId: 'active-thread', title: 'Current session' }, { sessionId: 'previous-session', threadId: 'previous-thread', title: 'Earlier design' }],
+	getConversations: () => [
+		{ sessionId: composerWidget.sessionId!, threadId: composerWidget.threadId!, title: 'Current session' },
+		{ sessionId: 'active-session', threadId: 'active-thread', title: 'Active elsewhere' },
+		{ sessionId: 'previous-session', threadId: 'previous-thread', title: 'Earlier design' },
+	],
 	startVoiceConversation: async () => { throw new Error("Unexpected voice start"); },
 	appendToActiveDraft: () => { }, captureActiveDraft: async () => undefined, openConversation: async (sessionId, threadId) => { recordDestination({ sessionId, threadId }); },
 });
@@ -880,6 +885,7 @@ part = resources.add(services.createInstance(ChatInputPart, document.querySelect
 	layout: new URLSearchParams(location.search).has('compact') ? 'compact' : undefined,
 	modePicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
+	configureModelInMenu: new URLSearchParams(location.search).has('modelMenuConfiguration'),
 	renderSecondaryToolbar: !cowork,
 	workspacePickerDelegate: new URLSearchParams(location.search).has('workspacePicker') ? {
 		getWorkspaces: () => workspaceChoices,
@@ -891,6 +897,7 @@ part = resources.add(services.createInstance(ChatInputPart, document.querySelect
 	} : undefined,
 }));
 resources.add(services.createInstance(ChatContextContributions));
+resources.add(services.createInstance(ChatReferenceContextContribution));
 if (new URLSearchParams(location.search).has('notices')) {
 	services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 	services.registerSingleton(IChatTipService, () => services.createInstance(ChatTipService));

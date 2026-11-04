@@ -55,6 +55,10 @@ pub enum ThreadItem {
         turn_id: TurnId,
         name: String,
         content: String,
+        /// Optional HTTPS link shown with the saved attachment.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        source_url: Option<String>,
     },
     UserImage {
         #[serde(default, skip_serializing_if = "Option::is_none")]

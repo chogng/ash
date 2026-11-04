@@ -29,6 +29,7 @@ test('An inline object replaces a source range only in the view and wraps as a w
 	assert.deepEqual(coordinates.convertViewPositionToModelPosition(end), new Position(1, 29));
 	assert.deepEqual(coordinates.convertViewRangeToModelRange(Range.fromPositions(start)), new Range(1, 8, 1, 8));
 	assert.deepEqual(coordinates.convertViewRangeToModelRange(Range.fromPositions(end)), new Range(1, 29, 1, 29));
+	assert.deepEqual(coordinates.convertViewRangeToModelRange(Range.fromPositions(start, end)), new Range(1, 8, 1, 29));
 	assert.deepEqual(lines.normalizePosition(start, PositionAffinity.Right), start);
 	assert.deepEqual(lines.normalizePosition(end, PositionAffinity.Left), end);
 	assert.equal(model.getValue(), 'Before settings.json (14-15) after');
@@ -49,6 +50,42 @@ test('A collapsed view range stays outside injected text without selecting its r
 	const viewEnd = coordinates.convertModelPositionToViewPosition(modelEnd, PositionAffinity.Right);
 	assert.deepEqual(viewEnd, new Position(1, 7));
 	assert.deepEqual(coordinates.validateViewRange(Range.fromPositions(viewEnd), Range.fromPositions(modelEnd)), Range.fromPositions(viewEnd));
+});
+
+test('Rewrapping keeps the caret at the same model position', () => {
+	using model = new TextModel('abcdefghijklmnopqrst');
+	using lines = createViewModelLines(model, new FixedTextMeasurer(), { wrapping: EditorLineWrapping.Off, wrapWidth: 100 });
+	const coordinates = lines.createCoordinatesConverter();
+	const position = new Position(1, model.getLineMaxColumn(1));
+	const oldViewPosition = coordinates.convertModelPositionToViewPosition(position);
+	lines.setWrappingSettings(TEST_FONT_INFO, 'advanced', 10, WrappingIndent.None, 'normal');
+	const rewrapped = coordinates.validateViewPosition(oldViewPosition, position);
+	assert.ok(rewrapped.lineNumber > oldViewPosition.lineNumber);
+	assert.deepEqual(coordinates.convertViewPositionToModelPosition(rewrapped), position);
+	const wrapBoundary = new Position(1, 11);
+	const endOfFirstRow = coordinates.convertModelPositionToViewPosition(wrapBoundary, PositionAffinity.Left);
+	assert.deepEqual(coordinates.validateViewPosition(endOfFirstRow, wrapBoundary), endOfFirstRow);
+});
+
+test('Rewrapping keeps both ends of a selection anchor at the same model range', () => {
+	using model = new TextModel('abcdefghijklmnopqrst');
+	using lines = createViewModelLines(model, new FixedTextMeasurer(), { wrapping: EditorLineWrapping.Off, wrapWidth: 100 });
+	const coordinates = lines.createCoordinatesConverter();
+	const anchor = new Range(1, 5, 1, 17);
+	const oldViewRange = coordinates.convertModelRangeToViewRange(anchor);
+	lines.setWrappingSettings(TEST_FONT_INFO, 'advanced', 10, WrappingIndent.None, 'normal');
+	const rewrapped = coordinates.validateViewRange(oldViewRange, anchor);
+	assert.deepEqual(coordinates.convertViewRangeToModelRange(rewrapped), anchor);
+});
+
+test('Measured wrapping uses the remaining width below a full editor column', () => {
+	using model = new TextModel('abcdef');
+	const measurer = new class extends FixedTextMeasurer {
+		override measureLineWidth(text: string): number { return text.length * 9; }
+	}();
+	using lines = createViewModelLines(model, measurer, { wrapping: EditorLineWrapping.On, wrapWidth: 39 });
+	assert.equal(lines.getViewLineContent(1), 'abcd');
+	assert.equal(lines.getViewLineContent(2), 'ef');
 });
 
 test('DOM wrapping reserves injected control widths instead of measuring their placeholder glyphs', () => {
@@ -171,6 +208,16 @@ test('DOM soft wrapping prefers word boundaries and honors keepAll for CJK text'
 	assert.deepEqual(Array.from({ length: cjkLines.getLineCount() }, (_, index) => cjkLines.getLineContent(index + 1)), ['a ', '中文测试']);
 	cjk.setValue('a 中文测试很多');
 	assert.deepEqual(Array.from({ length: cjkLines.getLineCount() }, (_, index) => cjkLines.getLineContent(index + 1)), ['a ', '中文测试', '很多']);
+});
+
+test('DOM soft wrapping can fill a line through CJK closing punctuation', () => {
+	using model = new TextModel('甲乙丙。丁戊');
+	using lines = createViewModelLines(model, new FixedTextMeasurer(), {
+		wrapping: EditorLineWrapping.On,
+		wrapWidth: 40,
+	});
+	assert.equal(lines.getLineContent(1), '甲乙丙。');
+	assert.equal(lines.getLineContent(2), '丁戊');
 });
 
 test('view-model lines expose wrapped cursor rows and convert positions through the same projection', () => {

@@ -16,7 +16,8 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { SESSIONS_LAYOUT_SCOPE_SETTING } from '../../../../common/chatLayout.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { LogService } from '../../../../../platform/log/common/logServiceImpl.js';
 import { CustomViewService, ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -330,10 +331,13 @@ suite('DesktopLayoutController', () => {
 		fixture.editor.pending = pending.p;
 		fixture.sessions.openSession('b', 'b-thread');
 		await fixture.editor.started.p;
-		await pending.error(new Error('Restore cancelled'));
+		const failure = new Error('Could not restore the Files grid');
+		await pending.error(failure);
 		await fixture.controller.whenSettled();
 		await fixture.open('c');
-		assert.deepEqual({ errors: fixture.errors, current: fixture.editor.current }, { errors: ['Could not restore the editors for this session: Error: Restore cancelled'], current: 'empty' });
+		assert.deepEqual(fixture.errors, ['Could not restore the editors for this session. See the Window log for details.']);
+		assert.deepEqual(fixture.loggedErrors, [failure]);
+		assert.equal(fixture.editor.current, 'empty');
 	});
 
 	test('disposal stops queued restores and unregisters editor visibility automation', async () => {
@@ -474,6 +478,7 @@ class LayoutFixture extends Disposable {
 	public readonly editor = this._register(new TestEditors());
 	public readonly workspace = this._register(new TestWorkspaceService({ id: 'a', folders: [] }));
 	public readonly errors: string[] = [];
+	public readonly loggedErrors: unknown[] = [];
 	public readonly partsChanged = this._register(new Emitter<void>());
 	public readonly panelOpened = this._register(new Emitter<string>());
 	public panelVisible = false;
@@ -508,6 +513,7 @@ class LayoutFixture extends Disposable {
 			hidePart: (part: string) => { if (part === 'auxiliarybar') { this.auxiliaryVisible = false; } else { this.editorVisible = false; } },
 		} as unknown as ILayoutService);
 		this.services.registerInstance(INotificationService, { error: (message: string) => this.errors.push(message) } as unknown as INotificationService);
+		this.services.registerInstance(ILogService, this._register(new LogService({ sinks: [{ log: entry => this.loggedErrors.push(entry.error) }] })));
 		this._register(this.sessions.onDidChange(() => {
 			const selected = this.sessions.activeSelection;
 			if (this.followWorkspace && selected?.kind === 'session') {

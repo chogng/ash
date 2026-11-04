@@ -353,6 +353,7 @@ fn ephemeral_session_state_ignores_and_does_not_append_durable_history() {
     durable
         .create_session(SessionCreateParams {
             branch_name: None,
+            worktree_start: None,
             environment_variables: None,
             agent_id: None,
             agent: ash_protocol::AgentRoleSelection::Default,
@@ -378,6 +379,7 @@ fn ephemeral_session_state_ignores_and_does_not_append_durable_history() {
     ephemeral
         .create_session(SessionCreateParams {
             branch_name: None,
+            worktree_start: None,
             environment_variables: None,
             agent_id: None,
             agent: ash_protocol::AgentRoleSelection::Default,
@@ -475,6 +477,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
     let session = client
         .create_session(SessionCreateParams {
             branch_name: None,
+            worktree_start: None,
             environment_variables: None,
             agent_id: None,
             agent: ash_protocol::AgentRoleSelection::Default,

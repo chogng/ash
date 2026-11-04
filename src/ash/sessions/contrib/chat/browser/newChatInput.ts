@@ -20,7 +20,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IChatSpeechToTextService } from '../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IVoiceInputModeService } from '../../../../workbench/contrib/chat/browser/voiceInputMode/voiceInputMode.js';
 import { IDictationOnboardingService } from '../../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
-import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
 import type { ChatInputDelegate, ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { IChatInputNoticeHubService } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputNoticeHub.js';
@@ -29,7 +29,10 @@ import { IVoiceModeOnboardingService } from '../../../../workbench/contrib/agent
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { IChatAttachmentResolveService } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
+import { IApprovalEnvironmentService } from '../../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
+import { OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../../../workbench/contrib/chat/common/chat.js';
 import { getSessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -42,7 +45,7 @@ export class NewChatInputWidget extends ChatInputPart {
 	constructor(
 		container: HTMLElement,
 		delegate: ChatInputDelegate,
-		private readonly model: IChatWidgetModel,
+		private readonly model: ChatWidgetModel,
 		@IChatSpeechToTextService speechToText: IChatSpeechToTextService,
 		@IVoiceInputModeService voiceInputMode: IVoiceInputModeService,
 		@IDictationOnboardingService onboarding: IDictationOnboardingService,
@@ -68,6 +71,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		@IChatContextService providedContexts: IChatContextService,
 		@ICommandService commands: ICommandService,
 		@IGitHubService github: IGitHubService,
+		@IApprovalEnvironmentService approvalEnvironment: IApprovalEnvironmentService | undefined,
 	) {
 		super(container, delegate, contextMenus, contextViews, accessibleViews, notifications, {
 			create: options => instantiationService.createInstance(ChatInputEditor, {
@@ -75,10 +79,10 @@ export class NewChatInputWidget extends ChatInputPart {
 				placeholder: localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question'),
 				tabFocusMode: true,
 				// Let the row center the actual text height beside its 28px controls.
-				height: { minimum: 0, maximum: 240 },
+				height: options.height ?? SESSIONS_COMPACT_INPUT_HEIGHT,
 			}),
 		}, [], {
-			layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, draftStorage: 'host',
+			layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', configureModelInMenu: true, renderSecondaryToolbar: false, draftStorage: 'host',
 			attachGitHubReference: (kind, signal) => attachSessionGitHubReference(kind, model, github, quickInput, signal),
 			primaryPermissionPicker: {
 				action: {
@@ -93,14 +97,23 @@ export class NewChatInputWidget extends ChatInputPart {
 				},
 				onDidChange: model.onDidChange,
 				actionProvider: {
-					getActions: () => approvalModeDefinitions.map(definition => ({
-						id: definition.id,
-						label: localize(definition.label.key, definition.label.text),
-						tooltip: localize(definition.description.key, definition.description.text),
-						enabled: true,
-						checked: definition.id === model.inputState.approvalMode,
-						run: () => commands.executeCommand(`sessions.chat.permission.${definition.id}`, model),
-					})),
+					getActions: () => [
+						...approvalModeDefinitions.map(definition => ({
+							id: definition.id,
+							label: localize(definition.label.key, definition.label.text),
+							tooltip: localize(definition.description.key, definition.description.text),
+							enabled: true,
+							checked: definition.id === model.inputState.approvalMode,
+							run: () => commands.executeCommand(`sessions.chat.permission.${definition.id}`, model),
+						})),
+						...(approvalEnvironment ? [{
+							id: OPEN_GUARDIAN_SETUP_COMMAND_ID,
+							label: localize('approvalEnvironment.title', 'Prepare review environment…'),
+							tooltip: '',
+							enabled: true,
+							run: () => commands.executeCommand(OPEN_GUARDIAN_SETUP_COMMAND_ID, model),
+						}] : []),
+					],
 				},
 			},
 		}, instantiationService, speechToText, voiceInputMode, onboarding, quickInput, menuService, attachmentResolver, contextKeys, noticeHub, inputNotifications, voiceOnboarding, configuration, presentations, chatWidgets, commands, clientCommands, imageEditors, providedContexts);
@@ -122,6 +135,8 @@ export class NewChatInputWidget extends ChatInputPart {
 			write: (identity, draft) => writeNewChatDraftState(storage, draft, identity, chatInputStatePersistence),
 			flush: () => storage.flush(),
 		}, lifecycle.onWillShutdown);
+		this._register(this.onDidChangeInput(() => this.renderStatus()));
+		this.renderStatus();
 	}
 
 	public async persistDraftForHostChange(): Promise<void> {
@@ -144,7 +159,13 @@ export class NewChatInputWidget extends ChatInputPart {
 		if (!state.aiDisabled && this.model.untitledSessionId !== undefined && state.phase === 'loading' && !state.error) {
 			return '';
 		}
-		return super.statusText(state);
+
+		const status = super.statusText(state);
+		if (!status && state.phase === 'ready' && !state.inputBlocked && this.model.threadId
+			&& this.contexts.some(context => context.kind === 'transcriptContext' && context.id === 'initial-pr:' + this.model.threadId)) {
+			return localize({ bundle: 'ash.sessions', key: 'sessions.github.pullRequestDraftReady' }, 'The pull request worktree is ready. Its snapshot is attached to your first message.');
+		}
+		return status;
 	}
 
 }

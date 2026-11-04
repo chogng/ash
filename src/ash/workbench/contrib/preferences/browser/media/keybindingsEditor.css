@@ -146,6 +146,10 @@
 	white-space: nowrap;
 }
 
+.ash-keybindings-recorder-dialog > .ash-checkbox[hidden] {
+	display: none;
+}
+
 .ash-keybindings-recorder-error {
 	margin: var(--ash-spacing-size80) 0 0;
 	color: var(--ash-error-foreground);

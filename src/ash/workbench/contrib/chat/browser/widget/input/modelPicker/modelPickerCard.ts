@@ -11,8 +11,8 @@ import { getMaxContextLabel, renderModelDescription } from './modelPickerDetails
 export interface IModelCardOptions {
 	getSelectedReasoningEffort(): ModelReasoningEffort | undefined;
 	onReasoningEffortChange(effort: ModelReasoningEffort | undefined): Promise<void>;
-	onLongContextChange(longContext: boolean): Promise<void>;
-	onAccelerationChange(acceleration: string | null): Promise<void>;
+	onLongContextChange?(longContext: boolean): Promise<void>;
+	onAccelerationChange?(acceleration: string | null): Promise<void>;
 }
 
 let nextCardId = 0;
@@ -111,14 +111,15 @@ export class ModelCard extends DomWidget {
 		this.choices.length = 0;
 		container.replaceChildren();
 		if (entry.supportedReasoningEfforts?.length) {
-			const group = this.createGroup(localize('chat.modelPicker.thinkingEffort', 'Thinking Level'));
+			const group = this.createGroup(localize('chat.modelPicker.thinkingEffort', 'Effort'));
 			for (const option of modelPickerEffortOptions(entry, this.options!.getSelectedReasoningEffort())) {
 				this.addChoice(group, 'effort', option.label, option.description,
 					() => modelPickerEffortOptions(this.entry!, this.options!.getSelectedReasoningEffort()).some(current => current.effort === option.effort && current.checked),
 					() => this.options!.onReasoningEffortChange(option.value));
 			}
 		}
-		if (entry.longContext !== null) {
+		const setLongContext = this.options!.onLongContextChange;
+		if (setLongContext && entry.longContext !== null) {
 			const group = this.createGroup(localize('chat.modelPicker.contextSize', 'Context Size'));
 			for (const longContext of [false, true]) {
 				const tokens = longContext ? entry.maximumContextWindow : entry.defaultContextWindow;
@@ -127,16 +128,17 @@ export class ModelCard extends DomWidget {
 					label = longContext ? getModelConfigValueLabel(tokens) : localize('chat.modelPicker.defaultContext', '{0} (Default)', getModelConfigValueLabel(tokens));
 				}
 				this.addChoice(group, 'context', label, undefined, () => this.entry!.longContext === longContext,
-					() => this.options!.onLongContextChange(longContext));
+					() => setLongContext(longContext));
 			}
 		}
 		const acceleration = modelPickerAccelerationOptions(entry);
-		if (acceleration.length) {
+		const setAcceleration = this.options!.onAccelerationChange;
+		if (setAcceleration && acceleration.length) {
 			const group = this.createGroup(localize('chat.modelPicker.speed', 'Speed'));
 			for (const option of acceleration) {
 				this.addChoice(group, 'acceleration', option.label, option.description,
 					() => modelPickerAccelerationOptions(this.entry!).some(current => current.value === option.value && current.checked),
-					() => this.options!.onAccelerationChange(option.value));
+					() => setAcceleration(option.value));
 			}
 		}
 		if (this.choices.length === 0) {

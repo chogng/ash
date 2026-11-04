@@ -371,8 +371,9 @@ export async function watchHost(onReady: (ready: boolean, output?: string) => vo
 }
 
 async function prepareHostBuild(): Promise<void> {
-	await prepareHostOutput();
+	// A changed compiler root set can clear the main output, including native helpers.
 	await Promise.all(projects.map(project => prepareIncrementalOutput(join(sourceRoot, project))));
+	await prepareHostOutput();
 }
 
 async function prepareHostLogs(signal?: AbortSignal): Promise<void> {

@@ -128,10 +128,14 @@ export function parseEditorWorkingSet(value: EditorWorkingSet, lastGroupId: numb
 		}
 		sizeTotal += group.size;
 	}
-	if (sizeTotal <= 0) throw new TypeError('Invalid editor working set layout');
 	if (value.layout !== undefined) {
 		if (groupIds.size !== value.groups.length) throw new TypeError('Editor Grid layout requires an ID for every group');
-		value = { ...value, layout: parseEditorWorkingSetLayout(value.layout, groupIds) };
+		return { ...value, layout: parseEditorWorkingSetLayout(value.layout, groupIds) };
+	}
+	if (sizeTotal === 0) {
+		// A snapshot of hidden groups can have no measurable area for the legacy split.
+		const size = 1 / value.groups.length;
+		return { ...value, groups: value.groups.map(group => ({ ...group, size })) };
 	}
 	return value;
 }

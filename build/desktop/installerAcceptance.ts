@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
-import { AshApplicationId } from '../../src/ash/code/common/application.ts';
+import { AshApplicationId, AshWindowsToastActivatorClsid } from '../../src/ash/code/common/application.ts';
 import { runPython } from '../python.ts';
 import { writeInstallationManifest } from './installationManifest.ts';
 
@@ -22,6 +22,7 @@ if (import.meta.main) {
 				`/DBundleDir=${bundle}`,
 				'/DAppVersion=0.0.0',
 				`/DAppUserId=${AshApplicationId}`,
+				`/DToastActivatorClsid=${AshWindowsToastActivatorClsid.slice(1, -1)}`,
 				`/DIconPath=${resolve('resources/win32/ash.ico')}`,
 				`/O${resolve('.build/installer-acceptance')}`,
 				resolve('build/desktop/win32/ash.iss'),

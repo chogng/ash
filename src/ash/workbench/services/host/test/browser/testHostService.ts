@@ -3,6 +3,7 @@ import { Event } from '../../../../../base/common/event.js';
 import type { VSBuffer } from '../../../../../base/common/buffer.js';
 import type { IOpenEmptyWindowOptions, IOpenWindowOptions, IWindowOpenable } from '../../../../../platform/window/common/window.js';
 import type { IHostService } from '../../browser/host.js';
+import type { IToastResult } from '../../../../../platform/native/common/native.js';
 
 /** Records host requests without opening windows in service tests. */
 export class TestHostService implements IHostService {
@@ -22,4 +23,5 @@ export class TestHostService implements IHostService {
 	async restart(): Promise<void> { throw new Error('Unexpected host restart'); }
 	async reload(): Promise<void> { throw new Error('Unexpected host reload'); }
 	async getScreenshot(): Promise<VSBuffer | undefined> { return undefined; }
+	async showToast(): Promise<IToastResult> { return { supported: false, clicked: false }; }
 }

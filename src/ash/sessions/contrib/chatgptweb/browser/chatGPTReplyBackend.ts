@@ -5,10 +5,10 @@ import { ChatGPTRequestError, type ChatGPTClient } from './chatGPTClient.js';
 export class ChatGPTReplyBackend implements IChatReplyBackend {
 	constructor(private readonly client: ChatGPTClient) { }
 
-	async *streamReply(request: ChatReplyRequest, signal: AbortSignal): AsyncGenerator<ChatReplyUpdate> {
+	async *streamReply(request: ChatReplyRequest, signal: AbortSignal, beforeSubmit?: () => Promise<void>): AsyncGenerator<ChatReplyUpdate> {
 		let acknowledged = false;
 		try {
-			for await (const update of this.client.send(request, signal)) {
+			for await (const update of this.client.send(request, signal, beforeSubmit)) {
 				acknowledged = true;
 				yield update;
 			}

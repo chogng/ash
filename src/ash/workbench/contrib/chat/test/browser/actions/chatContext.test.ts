@@ -19,7 +19,7 @@ import { DisposableStore, toDisposable } from '../../../../../../base/common/lif
 import { setARIAContainer } from '../../../../../../base/browser/ui/aria/aria.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import type { IQuickPick, IQuickPickItem } from '../../../../../../platform/quickinput/common/quickInput.js';
-import { ChatContextContributions, pickChatContextItem } from '../../../browser/actions/chatContext.js';
+import { ChatContextContributions, ChatReferenceContextContribution, pickChatContextItem } from '../../../browser/actions/chatContext.js';
 import { ImageEditorService } from '../../../../../services/imageEditor/browser/imageEditorService.js';
 import { IImageEditorService } from '../../../../../services/imageEditor/common/imageEditorService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
@@ -107,6 +107,7 @@ suite('Registered attachment source contracts', () => {
 		services.registerInstance(ILanguageModelToolsService, { isAvailable: false, onDidChangeTools: Event.None } as ILanguageModelToolsService);
 		services.registerInstance(IQuickInputService, pickerHost(resources));
 		const contribution = resources.add(services.createInstance(ChatContextContributions));
+		const references = resources.add(services.createInstance(ChatReferenceContextContribution));
 		assert.deepEqual([...contexts.items].map(source => source.label), ['Image from Clipboard', 'Screenshot…', 'Sessions…', 'Tools…']);
 		const screenshot = [...contexts.items].find(source => source.commandId === ScreenshotCommandId)!;
 		assert.equal(screenshot.type, 'valuePick');
@@ -115,6 +116,7 @@ suite('Registered attachment source contracts', () => {
 		assert.equal(await screenshot.asAttachment(undefined, signal), undefined);
 		assert.deepEqual(requests, [signal]);
 		contribution.dispose();
+		references.dispose();
 		assert.deepEqual([...contexts.items], []);
 	});
 

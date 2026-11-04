@@ -5,6 +5,7 @@ use crate::server::message_queue::OutboundSender;
 use crate::server::request_dispatch::IncomingRequest;
 use crate::server::request_dispatch::RequestDispatchHandle;
 use crate::server::request_dispatch::RequestLane;
+use ash_app_server_protocol::protocol::registry::ServerNotificationMethod;
 use ash_async_utils::CancellationSource;
 use serde_json::Value;
 use std::io;
@@ -124,9 +125,15 @@ impl<'scope> LocalTarget<'scope> {
             let notification_output = outbound.clone();
             scope.spawn(move || {
                 while notifications.wait() {
-                    for notification in notifications.drain() {
+                    for notification in notifications.drain_values() {
+                        // The profile route already forwards this profile-wide event.
+                        if notification["method"]
+                            == ServerNotificationMethod::ConfigChanged.as_str()
+                        {
+                            continue;
+                        }
                         if notification_output
-                            .send(tag_host_request(notification, route_id).into())
+                            .send(tag_host_request(notification.to_string(), route_id).into())
                             .is_err()
                         {
                             return;

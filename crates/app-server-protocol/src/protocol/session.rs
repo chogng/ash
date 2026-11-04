@@ -67,10 +67,23 @@ pub struct SessionCreateParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub branch_name: Option<String>,
+    /// Pins the linked worktree to a remote ref instead of the current checkout.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub worktree_start: Option<SessionWorktreeStart>,
     /// Environment overrides supplied by the user for processes in this Session.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub environment_variables: Option<SessionEnvironmentVariables>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SessionWorktreeStart {
+    pub remote: String,
+    pub remote_identity: String,
+    pub reference: String,
+    pub commit: String,
 }
 
 #[derive(Clone, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -490,6 +503,10 @@ pub struct SessionResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub environment_applied: Option<bool>,
+    /// Confirms the requested pinned worktree was applied.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub worktree_start_applied: Option<bool>,
     pub session: Session,
     pub agent_tree: AgentTreeProjection,
 }

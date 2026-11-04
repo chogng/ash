@@ -3,6 +3,7 @@ import type { IObservable } from '../../../../base/common/observable.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { IActiveSessionThread, IUntitledChatSession, ISession, SessionEnvironmentSelection, ModelRef, SessionId, ThreadId, SessionWorkspaceSelection } from './session.js';
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
+import type { ISessionCreateOptions } from './sessionsProvider.js';
 
 export type SessionsManagementState = 'loading' | 'ready' | 'creating' | 'stopping' | 'archiving' | 'error';
 
@@ -30,7 +31,8 @@ export interface ISessionsManagementService {
 	selectThread(sessionId: SessionId, threadId: ThreadId): void;
 	interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	/** Background presentations can retain a draft without changing foreground selection. */
-	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection, providerId?: string, activate?: boolean, forkSource?: IUntitledChatSession['forkSource']): IUntitledChatSession;
+	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection, providerId?: string, activate?: boolean, forkSource?: IUntitledChatSession['forkSource'], options?: { readonly devContainer?: boolean; }): IUntitledChatSession;
+	resolveNewSessionTarget(): Promise<{ readonly providerId: string; readonly workspace: SessionWorkspaceSelection; readonly devContainer?: boolean; }>;
 	restoreUntitledSession(session: IUntitledChatSession): void;
 	selectUntitledSession(untitledSessionId: string): void;
 	discardUntitledSession(untitledSessionId: string): void;
@@ -43,7 +45,7 @@ export interface ISessionsManagementService {
 	cancelUntitledSessionPreparation(untitledSessionId: string): void;
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void;
 	ensureActiveThread(): Promise<IActiveSessionThread>;
-	startNewSession(title?: string): Promise<IActiveSessionThread>;
+	startNewSession(title?: string, background?: { readonly workspace: SessionWorkspaceSelection; readonly providerId: string; readonly creation: ISessionCreateOptions; }): Promise<IActiveSessionThread>;
 	stopSession(sessionId: SessionId): Promise<void>;
 	archiveSession(sessionId: SessionId): Promise<void>;
 	/** Restores the canonical catalog entry without changing foreground selection or drafts. */

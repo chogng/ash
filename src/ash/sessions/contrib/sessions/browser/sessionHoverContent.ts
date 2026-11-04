@@ -3,7 +3,8 @@ import { getNLSLanguage, localize } from '../../../../nls.js';
 import type { IChat, ISession } from '../../../services/sessions/common/session.js';
 
 export function getSessionSummaryHoverData(session: ISession, chat?: IChat): readonly string[] {
-	const workspace = chat?.workspace ?? session.workspace;
+	// An explicitly directoryless chat must not display the session's execution target.
+	const workspace = chat?.workspace === undefined ? session.workspace : chat.workspace;
 	const provider = session.providerLabel ?? session.application?.label;
 	const updatedAt = chat?.updatedAt;
 	const details: string[] = [];

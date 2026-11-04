@@ -239,8 +239,9 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 			await page.evaluate(() => { globalThis.uiHotReloadEvidence.chat.setVisible(true); });
 			await expect.poll(() => host.locator('.ash-scrollbar-viewport').first().evaluate(element => element.scrollTop)).toBeCloseTo(readingTop, 0);
 			const search = host.locator('.ash-sessions-list input[type="search"]');
+			const sidebarViewport = host.locator('.ash-sessions-list-items > .ash-scrollbar-viewport');
 			await search.fill('Draft');
-			await host.locator('.ash-sessions-list-items').evaluate(element => { element.scrollTop = 70; });
+			await sidebarViewport.evaluate(element => { element.scrollTop = 70; });
 			for (const version of ['first', 'second']) {
 				if (version === 'second') await host.getByRole('button', { name: 'Draft 3', exact: true }).focus();
 				await page.evaluate(() => {
@@ -248,13 +249,13 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 					evidence.previous = evidence.sidebar.element.querySelector('.ash-sessions-list')!;
 					evidence.previousButton = evidence.previous.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 				});
-				const top = await host.locator('.ash-sessions-list-items').evaluate(element => element.scrollTop);
+				const top = await sidebarViewport.evaluate(element => element.scrollTop);
 				await patch('sidebar', 'this.domNode.className = "ash-sessions-list";', 'this.domNode.dataset.hotReloadVersion', version);
 				await expect(host.locator('.ash-sessions-list')).toHaveAttribute('data-hot-reload-version', version);
 				await expect(host.locator('.ash-sessions-list')).toHaveCount(1);
 				await expect(search).toHaveValue('Draft');
 				await expect(host.getByRole('button', { name: 'Draft 3', exact: true })).toHaveAttribute('aria-current', 'page');
-				expect(await host.locator('.ash-sessions-list-items').evaluate(element => element.scrollTop)).toBe(top);
+				expect(await sidebarViewport.evaluate(element => element.scrollTop)).toBe(top);
 				if (version === 'first') await expect(search).toBeFocused();
 				else await expect(host.getByRole('button', { name: 'Draft 3', exact: true })).toBeFocused();
 				await page.evaluate(() => { globalThis.uiHotReloadEvidence.previousButton!.click(); });
@@ -263,14 +264,14 @@ for (const chatSurface of ['code', 'cowork'] as const) {
 			}
 			await host.getByRole('button', { name: 'Draft 3', exact: true }).press('Enter');
 			expect(await page.evaluate(() => globalThis.uiHotReloadEvidence.opened)).toEqual(['chat', 'draft-3']);
-			const sidebarTop = await host.locator('.ash-sessions-list-items').evaluate(element => element.scrollTop);
+			const sidebarTop = await sidebarViewport.evaluate(element => element.scrollTop);
 			await page.evaluate(() => { globalThis.uiHotReloadEvidence.sidebar.setVisible(false); globalThis.uiHotReloadEvidence.editor.focus(); });
 			await patch('sidebar', 'this.domNode.className = "ash-sessions-list";', 'this.domNode.dataset.hotReloadVersion', 'hidden');
 			await expect(host.locator('.ash-sessions-list')).toHaveAttribute('data-hot-reload-version', 'hidden');
 			expect(await page.evaluate(() => globalThis.uiHotReloadEvidence.editor.hasTextFocus())).toBe(true);
 			await page.evaluate(() => { globalThis.uiHotReloadEvidence.sidebar.setVisible(true); });
 			await expect(search).toHaveValue('Draft');
-			expect(await host.locator('.ash-sessions-list-items').evaluate(element => element.scrollTop)).toBe(sidebarTop);
+			expect(await sidebarViewport.evaluate(element => element.scrollTop)).toBe(sidebarTop);
 			expect(await page.evaluate(() => globalThis.uiHotReloadEvidence.editor.hasTextFocus())).toBe(true);
 			const retained = await page.evaluate(() => {
 				const evidence = globalThis.uiHotReloadEvidence;

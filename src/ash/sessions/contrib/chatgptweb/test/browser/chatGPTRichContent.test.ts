@@ -11,7 +11,7 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IMarkdownRendererService, MarkdownRendererService } from '../../../../../platform/markdown/browser/markdownRenderer.js';
 import { ChatContentMarkdownRenderer } from '../../../../../workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
-import { completeChatGPTRichContent, getChatGPTMarkdownRenderOptions, getChatGPTRichContentText } from '../../browser/chatGPTRichContent.js';
+import { decodeChatGPTReply, getChatGPTRichContentText } from '../../browser/chatGPTRichContent.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import type { ChatGPTReference } from '../../browser/chatGPTClient.js';
 
@@ -22,8 +22,7 @@ function render(value: string, references?: readonly ChatGPTReference[]): string
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(IMarkdownRendererService, services.createInstance(MarkdownRendererService));
 	using resultRenderer = services.createInstance(ChatContentMarkdownRenderer);
-	using result = resultRenderer.render({ value, supportHtml: true, isTrusted: false }, getChatGPTMarkdownRenderOptions('assistant', references));
-	completeChatGPTRichContent(result.element, 'fixture');
+	using result = resultRenderer.render({ value: decodeChatGPTReply(value, references, 'fixture').text, supportHtml: true, isTrusted: false });
 	return result.element.innerHTML;
 }
 
@@ -60,7 +59,7 @@ suite('ChatGPT rich content', () => {
 		const references = [{ id: 'turn2search1', title: 'CSV documentation', url: 'https://docs.python.org/3/library/csv.html', snippet: 'Read and write tabular data.' }];
 		const source = 'A <Cite refs={[["turn2search1"]]}/> B urlPython docsturn2search1 C citeturn2search1\n\n`citeturn2search1`';
 		const root = document.createElement('div'); root.innerHTML = render(source, references);
-		assert.equal(root.querySelectorAll('details.ash-chatgpt-citation').length, 2);
+		assert.equal(root.querySelectorAll('details.ash-chat-citation').length, 2);
 		assert.match(root.querySelector('details')?.textContent ?? '', /CSV documentation[\s\S]*Read and write tabular data/u);
 		assert.equal(root.querySelector('a')?.href, references[0]!.url);
 		assert.equal(root.querySelector('code')?.textContent, 'citeturn2search1');
@@ -81,7 +80,7 @@ suite('ChatGPT rich content', () => {
 		const html = render(source);
 		assert.match(html, /<code>&lt;box&gt;inline&lt;\/box&gt;<\/code>/u);
 		assert.match(html, /&lt;box&gt;fenced&lt;\/box&gt;/u);
-		assert.doesNotMatch(html, /ash-chatgpt-rich/u);
+		assert.doesNotMatch(html, /ash-chat-rich/u);
 		assert.match(getChatGPTRichContentText(source), /<box>inline<\/box>[\s\S]*<box>fenced<\/box>/u);
 		const nested = render('<box>\n  ```python\n  if ready:\n      run()\n  ```\n</box>');
 		assert.match(nested, /if ready:\n {4}run\(\)/u);
@@ -107,20 +106,21 @@ suite('ChatGPT rich content', () => {
 		const html = render(source);
 		const root = document.createElement('div'); root.innerHTML = html;
 		assert.match(root.textContent ?? '', /Panel title[\s\S]*Card body[\s\S]*Sales[\s\S]*Tail/u);
-		const chart = JSON.parse(root.querySelector<HTMLElement>('[data-chatgpt-resource]')!.dataset.chatgptResource!);
+		const chart = decodeChatGPTReply(source).resources[0]!;
 		const chartHtml = decodeURIComponent(chart.uri.slice(chart.uri.indexOf(',') + 1));
 		assert.match(chartHtml, /"month":"May","amount":42/u);
 		assert.equal(root.querySelectorAll('details').length, 2);
-		assert.doesNotMatch(html, /ash-chatgpt-rich-fallback/u);
+		assert.doesNotMatch(html, /ash-chat-rich-fallback/u);
 		assert.doesNotMatch(html, /<\/?(?:FuturePanel|FutureCard|Chart)\b/u);
 		assert.match(getChatGPTRichContentText(source), /Card body[\s\S]*Sales[\s\S]*May[\s\S]*42/u);
 	});
 
 	test('retains unfamiliar card properties and chart schemas without evaluating expressions', () => {
 		const root = document.createElement('div');
-		root.innerHTML = render('<FutureCard value={42} description="Score"/>\n\n<Chart data={missingValues()}/>\n\n<Chart title="Unknown schema" data={{"points":{"May":42},"caption":"Retained caption"}}/>');
+		const source = '<FutureCard value={42} description="Score"/>\n\n<Chart data={missingValues()}/>\n\n<Chart title="Unknown schema" data={{"points":{"May":42},"caption":"Retained caption"}}/>';
+		root.innerHTML = render(source);
 		assert.match(root.textContent ?? '', /Score[\s\S]*42[\s\S]*missingValues\(\)/u);
-		const chart = JSON.parse(root.querySelector<HTMLElement>('[data-chatgpt-resource]')!.dataset.chatgptResource!);
+		const chart = decodeChatGPTReply(source).resources[0]!;
 		const html = decodeURIComponent(chart.uri.slice(chart.uri.indexOf(',') + 1));
 		assert.match(html, /Retained caption/u);
 		assert.match(html, /&quot;points&quot;[\s\S]*&quot;May&quot;: 42/u);
@@ -135,23 +135,25 @@ suite('ChatGPT rich content', () => {
 	});
 
 	test('shows media and opaque components without running or loading their source', () => {
-		const html = render('<svg><title>Architecture</title><text>Node A</text><path d="M0 0"/></svg>\n\n<video src="https://invalid.test/movie" title="Demo"/>\n\n<img src="file:///private.png" alt="Picture"/>\n\n<icon name="arrow-right"/><icon name="new-icon"/><icon name="constructor"/>');
+		const source = '<svg><title>Architecture</title><text>Node A</text><path d="M0 0"/></svg>\n\n<video src="https://invalid.test/movie" title="Demo"/>\n\n<img src="file:///private.png" alt="Picture"/>\n\n<icon name="arrow-right"/><icon name="new-icon"/><icon name="constructor"/>';
+		const html = render(source);
 		assert.match(html, /Architecture[\s\S]*Node A[\s\S]*Demo[\s\S]*Picture[\s\S]*→[\s\S]*new-icon[\s\S]*constructor/u);
 		assert.doesNotMatch(html, /<video|<img|src=/u);
-		assert.equal((html.match(/data-chatgpt-resource/gu) ?? []).length, 2);
+		assert.equal(decodeChatGPTReply(source).resources.length, 2);
 	});
 
 	test('retains remote images as loadable resources while allowing embedded raster images', () => {
-		const html = render('![Diagram](https://invalid.test/private-image)\n\n![Local](file:///private.png)\n\n![Embedded](data:image/png;base64,AAAA)');
+		const source = '![Diagram](https://invalid.test/private-image)\n\n![Local](file:///private.png)\n\n![Embedded](data:image/png;base64,AAAA)';
+		const html = render(source);
 		assert.match(html, /Diagram[\s\S]*Local[\s\S]*<img src="data:image\/png;base64,AAAA"/u);
-		assert.equal((html.match(/data-chatgpt-resource/gu) ?? []).length, 2);
+		assert.equal(decodeChatGPTReply(source).resources.length, 2);
 		assert.doesNotMatch(html, /src="(?:https|file)/u);
 	});
 
 	test('keeps paragraphs when wrappers are unmatched or stream chunks end inside an opening tag', () => {
 		const html = render('Before\n\n<FutureCard>\nFirst paragraph\n\nSecond paragraph\n\n<Chart title="unfinished');
 		assert.match(html, /Before[\s\S]*First paragraph[\s\S]*Second paragraph/u);
-		assert.doesNotMatch(html, /ash-chatgpt-rich-fallback/u);
+		assert.doesNotMatch(html, /ash-chat-rich-fallback/u);
 		assert.doesNotMatch(html, /<FutureCard|<Chart/u);
 		assert.match(render('<box>'.repeat(40) + 'Deep content' + '</box>'.repeat(40)), /Deep content/u);
 	});

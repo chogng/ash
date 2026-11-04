@@ -118,6 +118,8 @@ export class SessionsBrowserMain extends Disposable {
 					'chat.promptActions',
 					'workbench.contrib.chatSetup',
 					'workbench.contrib.chatContextContribution',
+					'workbench.contrib.chatReferenceAttachmentWidgetFactory',
+					'chat.sessionReferenceContext',
 					'workbench.contrib.dataChannels',
 					'workbench.contrib.output',
 					'workbench.contrib.logs',

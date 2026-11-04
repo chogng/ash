@@ -369,7 +369,7 @@ fn submission(
     let mut display = Vec::new();
     for item in input {
         match item {
-            ash_protocol::UserInput::Context { name, content } => {
+            ash_protocol::UserInput::Context { name, content, .. } => {
                 values.push(crate::thread::composer::ChatInputItem::Context {
                     name: name.clone(),
                     content: content.clone(),

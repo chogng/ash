@@ -1,5 +1,6 @@
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
-import { IChatTipService } from '../../chatTipService.js';
+import { equals } from '../../../../../../base/common/objects.js';
+import { IChatTipService, type IChatTip } from '../../chatTipService.js';
 import { ChatTipContentPart } from '../chatContentParts/chatTipContentPart.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { ChatInputNoticeHost, ChatInputNoticeLane } from './chatInputNoticeHost.js';
@@ -16,6 +17,7 @@ export interface IChatInputTipPresenterOptions {
 export class ChatInputTipPresenter extends Disposable {
 	private readonly part = this._register(new MutableDisposable<DisposableStore>());
 	private currentPart: ChatTipContentPart | undefined;
+	private currentTip: IChatTip | undefined;
 	private readonly claim = this._register(new MutableDisposable());
 	private leading = false;
 
@@ -24,12 +26,12 @@ export class ChatInputTipPresenter extends Disposable {
 		this.options.container.classList.add(chatInputStackSlotClass);
 		this.options.container.hidden = true;
 		setChatInputStackSlot(this.options.container, ChatInputStackSlot.Empty);
-		this._register(registerChatInputNoticeAccessibleViews(this.options.container));
+		this._register(registerChatInputNoticeAccessibleViews(this.options.container, this.options.focusInput));
 		this._register(toDisposable(() => {
 			this.options.container.hidden = true;
 			setChatInputStackSlot(this.options.container, ChatInputStackSlot.Empty);
 		}));
-		this._register(tips.onDidDismissTip(() => this.update()));
+		this._register(tips.onDidChangeTips(() => this.update()));
 		this.update();
 	}
 
@@ -38,12 +40,15 @@ export class ChatInputTipPresenter extends Disposable {
 	}
 
 	public update(): void {
-		const tip = this.options.isEligible() ? this.tips.getWelcomeTip() : undefined;
+		const eligible = this.options.isEligible();
+		const tip = eligible ? this.tips.getWelcomeTip() : undefined;
 		if (!tip) {
+			if (eligible && this.currentPart?.domNode.contains(this.options.container.ownerDocument.activeElement)) this.options.focusInput();
 			this.claim.clear();
 			this.part.clear();
 			return;
 		}
+		if (this.currentTip?.id === tip.id && equals({ ...this.currentTip.content }, { ...tip.content })) return;
 		if (!this.claim.value) {
 			this.claim.value = this.noticeHost.occupy(ChatInputNoticeLane.Tip, {
 				focusTarget: {
@@ -58,16 +63,17 @@ export class ChatInputTipPresenter extends Disposable {
 				},
 			});
 		}
-		if (this.part.value) return;
+		const hadFocus = this.currentPart?.domNode.contains(this.options.container.ownerDocument.activeElement);
 		const scope = new DisposableStore();
 		this.part.value = scope;
+		this.currentTip = tip;
 		const parts = ChatTipContentPart.instantiateObservable(this.instantiation, scope, this.options.container.ownerDocument, tip, () => {
 			this.options.focusInput();
-			this.tips.dismissTip();
+			this.tips.dismissTip(tip.id);
 		});
 		const render = (part: ChatTipContentPart): void => {
 			const previous = this.currentPart;
-			const hadFocus = previous?.domNode.contains(this.options.container.ownerDocument.activeElement);
+			const replacingFocusedPart = previous?.domNode.contains(this.options.container.ownerDocument.activeElement);
 			if (previous?.domNode.parentNode === this.options.container) {
 				previous.domNode.replaceWith(part.domNode);
 			} else {
@@ -75,12 +81,16 @@ export class ChatInputTipPresenter extends Disposable {
 			}
 			this.currentPart = part;
 			part.domNode.tabIndex = -1;
-			if (hadFocus) {
+			if (replacingFocusedPart) {
 				part.domNode.querySelector('button')?.focus();
 			}
 		};
 		scope.add(parts.onDidChange(render));
 		render(parts.get());
-		scope.add(toDisposable(() => { this.currentPart = undefined; }));
+		if (hadFocus) this.currentPart?.domNode.querySelector<HTMLElement>('a, button')?.focus();
+		scope.add(toDisposable(() => {
+			this.currentPart = undefined;
+			this.currentTip = undefined;
+		}));
 	}
 }

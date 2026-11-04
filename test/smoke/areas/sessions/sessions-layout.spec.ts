@@ -4,61 +4,40 @@ import { QuickAccess } from '../../../automation/quickaccess.js';
 import { readStorageEntries, seedStorageOnNextLoad } from '../../../automation/storage.js';
 import { StorageScope, StorageTarget } from '../../../../src/ash/platform/storage/common/storage.js';
 
-test('Sessions content shares one raised card with equal right and bottom margins', async ({ application, target, workbench }) => {
-	let page = await workbench.openAgentsWindow(target.kind);
-	const card = page.locator('.ash-sessions-content-card');
-	const sidebar = page.locator('[data-part="sidebar"]');
-	const sessions = page.locator('[data-part="sessions"]');
-	const titlebar = page.locator('[data-part="titlebar"]');
-	await expect(card).toBeVisible();
-	await expect(card).toHaveAttribute('aria-hidden', 'true');
-	await expect(card).toHaveCSS('pointer-events', 'none');
-	await expect(card).toHaveCSS('border-radius', '12px');
-	// Chromium rounds strokes to device pixels at Windows display scaling.
-	expect(await card.evaluate(element => Math.round(parseFloat(getComputedStyle(element).borderRightWidth)))).toBe(1);
-	await expect(card).not.toHaveCSS('box-shadow', 'none');
-	await expect(page.locator('[data-part="activitybar"]')).toHaveCount(0);
-	const expectCardGeometry = async (): Promise<void> => {
-		await expect.poll(() => page.evaluate(() => {
-			const card = document.querySelector<HTMLElement>('.ash-sessions-content-card')!.getBoundingClientRect();
-			const layout = document.querySelector<HTMLElement>('.ash-sessions-workbench-layout')!.getBoundingClientRect();
-			const start = document.querySelector<HTMLElement>('.ash-sessions-frame-start')!.getBoundingClientRect();
-			const end = document.querySelector<HTMLElement>('.ash-sessions-frame-end')!.getBoundingClientRect();
-			return [layout.right - card.right, layout.bottom - card.bottom, card.left - start.left, card.right - end.right, card.bottom - start.bottom, card.bottom - end.bottom].map(Math.round);
-		})).toEqual([4, 4, 0, 0, 0, 0]);
-	};
-	await expectCardGeometry();
-	await expect(sidebar).toHaveCSS('border-top-left-radius', '12px');
-	await expect(sessions).toHaveCSS('border-bottom-right-radius', '12px');
-	await expect(sessions).toHaveCSS('border-right-width', '0px');
-	await expect(page.locator('.ash-sessions-chat-slot:visible').last()).toHaveCSS('border-right-width', '0px');
-	await page.locator('[data-action-id="sessions.newSession"] button').click();
-	await expect(page.locator('.ash-sessions-chat-slot:visible')).toHaveCount(1);
-	await expect.poll(async () => {
-		const part = (await sessions.boundingBox())!;
-		const pane = (await page.locator('.ash-sessions-chat-slot:visible').boundingBox())!;
-		return [pane.x - part.x, pane.width - part.width].map(Math.round);
-	}).toEqual([0, 0]);
-	await expect(page.locator('.ash-sessions-chat-slot:visible').last()).toHaveCSS('border-right-width', '0px');
-	await titlebar.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
-	await expect(sessions).toHaveCSS('border-top-left-radius', '12px');
-	await expectCardGeometry();
-	await page.setViewportSize({ width: 900, height: 700 });
-	await expectCardGeometry();
-	await titlebar.getByRole('button', { name: 'Show sidebar', exact: true }).click();
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(page.locator('[data-part="auxiliarybar"]')).toBeVisible();
-	// Code Details shares the editor's outer frame and keeps its own content below the tabs.
-	await expect(page.locator('[data-part="editor"]')).toHaveClass(/ash-sessions-frame-end/u);
-	await expect(page.locator('[data-part="editor"]')).toHaveCSS('border-bottom-right-radius', '12px');
-	await expectCardGeometry();
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await page.locator('[data-action-id="sessions.activity.more"] button').click();
-	await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
+test('Sessions content reaches the window edge with a sidebar divider', async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	const layout = page.locator('.ash-sessions-workbench-layout');
+	const sidebar = layout.locator('[data-part="sidebar"]');
+	const content = layout.locator(':is([data-part="editor"], [data-part="sessions"]):visible');
+	const titlebar = layout.locator('[data-part="titlebar"]');
 	await expect(sidebar).toBeVisible();
-	await expect(sidebar).toHaveCSS('border-top-left-radius', '12px');
-	await expect(sessions).toHaveCSS('border-bottom-right-radius', '12px');
-	await expectCardGeometry();
+	await expect(content).toBeVisible();
+	await expect(layout.locator('.ash-sessions-content-frame, .ash-sessions-content-card')).toHaveCount(0);
+	await expect(sidebar).toHaveCSS('border-right-style', 'solid');
+	await expect(sidebar).not.toHaveCSS('border-right-color', 'rgba(0, 0, 0, 0)');
+	await expect(content).toHaveCSS('border-right-width', '0px');
+
+	const expectEdges = async (sidebarVisible: boolean): Promise<void> => {
+		await expect.poll(async () => {
+			const [windowBounds, contentBounds, titleBounds, sidebarBounds] = await Promise.all([
+				layout.boundingBox(), content.boundingBox(), titlebar.boundingBox(), sidebar.boundingBox(),
+			]);
+			const left = sidebarVisible ? sidebarBounds!.x + sidebarBounds!.width : windowBounds!.x;
+			return [
+				contentBounds!.x - left,
+				contentBounds!.y - (titleBounds!.y + titleBounds!.height),
+				windowBounds!.x + windowBounds!.width - (contentBounds!.x + contentBounds!.width),
+				windowBounds!.y + windowBounds!.height - (contentBounds!.y + contentBounds!.height),
+			].map(Math.round);
+		}).toEqual([0, 0, 0, 0]);
+	};
+	await expectEdges(true);
+	await titlebar.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
+	await expect(sidebar).toBeHidden();
+	await expectEdges(false);
+	await titlebar.getByRole('button', { name: 'Show sidebar', exact: true }).click();
+	await expect(sidebar).toBeVisible();
+	await expectEdges(true);
 });
 
 test('Sessions shared layout preserves user geometry across views, resize and reload', async ({ application, target, workbench }) => {

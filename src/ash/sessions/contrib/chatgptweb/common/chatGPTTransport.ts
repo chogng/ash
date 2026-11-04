@@ -9,6 +9,11 @@ export class ChatGPTAuthenticationError extends Error {
 	public override readonly name = 'ChatGPTAuthenticationError';
 }
 
+export interface ChatGPTAuthenticationContext {
+	readonly id: string;
+	readonly cacheScope?: string;
+}
+
 /** Transport data stays inside the ChatGPT client and its host adapter; UI consumers use ChatGPTService. */
 export interface ChatGPTRequest {
 	readonly path: string;
@@ -24,6 +29,7 @@ export interface ChatGPTResponse {
 
 export interface IChatGPTTransport {
 	readonly onDidChangeAuthentication?: Event<void>;
+	getCacheScope(): Promise<string | undefined>;
 	request(id: string, request: ChatGPTRequest): Promise<ChatGPTResponse>;
 	/** Pulling one chunk at a time keeps streamed replies bounded and preserves backpressure. */
 	read(id: string): Promise<VSBuffer | null>;

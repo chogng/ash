@@ -33,14 +33,19 @@ EditorInputSerializers.registerStatic({
 	serialize: input => ({
 		resource: input.resource.toString(),
 		changesetId: input instanceof SessionChangesEditorInput
-			? (input.changesetSelection?.kind === 'transient' ? input.changesetSelection.changeset.id : input.changesetSelection?.id)
+			? (input.changesetSelection?.kind === 'transient' ? input.changesetSelection.changeset.id
+				: input.changesetSelection?.kind === 'id' ? input.changesetSelection.id : undefined)
 			: undefined,
+		turnId: input instanceof SessionChangesEditorInput && input.changesetSelection?.kind === 'turn' ? input.changesetSelection.turnId : undefined,
 	}),
 	deserialize: value => {
 		const record = requireRecord(value, 'session Changes input');
 		const resource = URI.parse(requireString(record.resource, 'session Changes resource'));
 		if (resource.scheme !== 'ash-session-changes' || !resource.path.startsWith('/') || resource.path.length < 2) {
 			throw new TypeError('Invalid session Changes resource');
+		}
+		if (record.turnId !== undefined) {
+			return new SessionChangesEditorInput(resource, { kind: 'turn', turnId: requireString(record.turnId, 'session Turn ID') });
 		}
 		return new SessionChangesEditorInput(resource, record.changesetId === undefined ? undefined : { kind: 'id', id: requireString(record.changesetId, 'session changeset ID') });
 	},

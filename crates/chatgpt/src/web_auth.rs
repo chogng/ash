@@ -16,6 +16,7 @@ use ash_login::LoginId;
 use ash_login::LoginMethod;
 use ash_login::LoginService;
 use ash_secrets::SecretStore;
+use sha2::Digest;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -261,6 +262,18 @@ impl ChatGptWebAuthSession {
 
     pub fn context(&self) -> &str {
         &self.context
+    }
+
+    /// A stable, non-secret cache namespace for the user and workspace.
+    pub fn cache_scope(&self) -> Option<String> {
+        let Principal::Account { identity, .. } = &self.principal else {
+            return None;
+        };
+        let key = format!(
+            "ash-chatgpt-web\0{}\0{}",
+            identity.user_id, identity.account_id
+        );
+        Some(format!("{:x}", sha2::Sha256::digest(key.as_bytes())))
     }
 
     /// Revokes request bindings when identity or local connection availability changes.

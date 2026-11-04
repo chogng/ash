@@ -180,6 +180,7 @@ fn parallel_spawn_without_intent_fails_before_allocating_a_directory() {
             delegation_id: DelegationId::new("parallel-missing-intent").unwrap(),
         },
         branch_name: None,
+        worktree_start: None,
     };
     assert!(
         matches!(runtime.provision(&request), Err(CoreError::Policy(message)) if message.contains("immutable binding intent"))
@@ -312,6 +313,7 @@ fn parallel_spawn_uses_the_durable_frozen_tree_after_the_parent_changes() {
         session_id: session.clone(),
         thread_id: ThreadId::new("parallel-frozen-child").unwrap(),
         branch_name: None,
+        worktree_start: None,
         origin: ThreadOrigin::AgentSpawn {
             parent_thread_id: root.clone(),
             parent_sequence: 1,
@@ -417,6 +419,7 @@ fn parallel_spawn_uses_the_durable_frozen_tree_after_the_parent_changes() {
         session_id: session,
         thread_id: ThreadId::new("parallel-review-child").unwrap(),
         branch_name: None,
+        worktree_start: None,
         origin: ThreadOrigin::AgentSpawn {
             parent_thread_id: root,
             parent_sequence: 1,

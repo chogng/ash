@@ -205,6 +205,7 @@ impl AppServer {
                             command_id: session_command.clone(),
                             title: job.issue.title.clone(),
                             branch_name: None,
+                            worktree_start: None,
                             agent_id: None,
                             agent: None,
                             execution_target: Some(ash_protocol::SessionExecutionTarget::Local {
@@ -243,6 +244,7 @@ impl AppServer {
                 thread_id: snapshot.thread_id.clone(),
                 origin: ash_protocol::ThreadOrigin::Root,
                 branch_name: None,
+                worktree_start: None,
             })
             .map_err(|error| error.to_string())?;
         }

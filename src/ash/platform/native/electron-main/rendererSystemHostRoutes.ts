@@ -1,15 +1,51 @@
 import type { IAuxiliaryWindowsMainService } from '../../auxiliaryWindow/electron-main/auxiliaryWindows.js';
 import { collectElectronMemory } from '../../memory/electron-main/electronMemoryCollector.js';
 import { URI } from '../../../base/common/uri.js';
-import type { BrowserWindow } from 'electron/main';
+import { toDisposable } from '../../../base/common/lifecycle.js';
+import { generateUuid } from '../../../base/common/uuid.js';
+import { Notification, type BrowserWindow } from 'electron/main';
 import { ElectronMainClipboardService } from '../../clipboard/electron-main/electronMainClipboardService.js';
 import { ElectronOpenerService } from '../../opener/electron-main/electronOpenerService.js';
 import type { IpcRoute } from '../../ipc/electron-main/trustedIpcRouter.js';
 import type { DialogRequest } from '../../dialogs/common/dialogs.js';
 import { validateScreenshotRectangle } from '../common/nativeHost.js';
 import { getScreenshot } from './nativeHostMainService.js';
+import { nativeToastRoutes, type INativeToast } from './nativeToast.js';
+import type { IToastOptions } from '../common/native.js';
 import type { DirectoryPermissionRequest } from '../../workspace/common/workspaceTrust.js';
 import { validateDirectoryPermissionRequest } from '../../workspace/common/workspaceIpc.js';
+
+let windowsToastActivations: Map<string, () => void> | undefined;
+
+function toastText(value: string): string {
+	return value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ud800-\udfff\ufffe\uffff]/gu, '')
+		.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+function createNativeToast({ title, body }: IToastOptions): INativeToast | undefined {
+	if (!Notification.isSupported()) return undefined;
+	if (process.platform !== 'win32') return { notification: new Notification({ title, body }) };
+
+	// Notification Center can activate a toast after its WinRT banner has timed out.
+	// Give the OS callback an opaque key that is valid only for this live request.
+	if (!windowsToastActivations) {
+		windowsToastActivations = new Map();
+		Notification.handleActivation(details => {
+			if (details.type === 'click') windowsToastActivations?.get(details.arguments)?.();
+		});
+	}
+	const activations = windowsToastActivations;
+	const key = `ash-toast:${generateUuid()}`;
+	const text = [title, body].filter((value): value is string => value !== undefined).map(value => `<text>${toastText(value)}</text>`).join('');
+	const toastXml = `<toast launch="${key}" activationType="foreground"><visual><binding template="ToastGeneric">${text}</binding></visual></toast>`;
+	return {
+		notification: new Notification({ title, body, toastXml }),
+		onDidActivate: listener => {
+			activations.set(key, listener);
+			return toDisposable(() => { activations.delete(key); });
+		},
+	};
+}
 
 export function rendererSystemHostRoutes(
 	window: BrowserWindow,
@@ -41,6 +77,19 @@ export function rendererSystemHostRoutes(
 		return { resources, operation };
 	};
 	return [
+		...nativeToastRoutes(
+			createNativeToast,
+			reset => {
+				window.webContents.once('destroyed', reset);
+				window.webContents.on('render-process-gone', reset);
+				window.webContents.on('did-start-navigation', event => {
+					if (event.isMainFrame && !event.isSameDocument) reset();
+				});
+			},
+			// Chromium can retain DOM focus while the native window is minimized.
+			() => (!window.isMinimized() && window.isFocused()) || auxiliaryWindows.getWindows().some(candidate =>
+				candidate.parentId === window.id && !candidate.win.isMinimized() && candidate.win.isFocused()),
+		),
 		{ channel: 'ash:memory:collect', validate: value => { if (value !== undefined) { throw new Error('Unexpected memory collection arguments'); } }, invoke: () => collectElectronMemory(window) },
 		{ channel: 'ash:host:openExternal', validate: text, invoke: value => opener.openExternal(value as string) },
 		{

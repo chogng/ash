@@ -12,6 +12,7 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { LocalChatSessionUri } from '../../common/model/chatUri.js';
 import { Schemas } from '../../../../../base/common/network.js';
 import { REVEAL_IN_EXPLORER_COMMAND_ID } from '../../../files/browser/fileConstants.js';
 import { TerminalCommandId } from '../../../terminal/common/terminal.js';
@@ -103,6 +104,7 @@ function getDefaultAttachmentIcon(kind: string): Icon {
 		case 'symbol': return Lxicon.code;
 		case 'debug': return Lxicon.bug;
 		case 'issue': return Lxicon.issues;
+		case 'transcriptContext':
 		case 'pullRequest': return Lxicon.gitPullRequest;
 		default: return Lxicon.file;
 	}
@@ -721,23 +723,21 @@ export class ChatReferenceAttachmentWidget extends Disposable implements IChatAt
 		container.append(element);
 		this._register(toDisposable(() => element.remove()));
 		const resource = attachment.resource;
-		const parameters = resource?.scheme === Schemas.internal && resource.authority === 'chat-session' ? new URLSearchParams(resource.query) : undefined;
-		const sessionId = parameters?.get('sessionId');
-		const threadId = parameters?.get('threadId');
+		const conversation = resource && LocalChatSessionUri.parse(resource);
 		const source = this._register(new Button(element, {
 			...defaultButtonStyles,
 			label: attachment.name,
 			ariaLabel: localize('chat.context.open', 'Open {0}', attachment.name),
-			enabled: !!(sessionId && threadId),
+			enabled: !!conversation,
 			size: 'small',
 			presentation: 'quiet',
 		}));
 		source.domNode.classList.add('ash-chat-reference-attachment-source');
 		const open = async () => {
-			if (this.isDisposed || this.opening || !sessionId || !threadId) return;
+			if (this.isDisposed || this.opening || !conversation) return;
 			this.opening = true;
 			try {
-				await navigation.openConversation(sessionId, threadId);
+				await navigation.openConversation(conversation.sessionId, conversation.threadId);
 				if (!this.isDisposed) this.opened.fire();
 			} catch (error) {
 				if (!this.isDisposed) notifications.error(localize('chat.context.openFailed', 'Could not open {0}: {1}', attachment.name, String(error)));

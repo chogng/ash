@@ -20,7 +20,7 @@ import { AppServerProtocolClient } from '../../platform/agentHost/browser/appSer
 import { AppServerTextDocumentHost } from '../../workbench/services/textfile/browser/appServerTextDocumentHost.js';
 import { IChatEditingService } from '../../workbench/contrib/chat/common/editing/chatEditingService.js';
 import { FileDialogService } from '../../workbench/services/dialogs/electron-browser/fileDialogService.js';
-import { OpenAgentsWindowSystemWideKeybindingContribution } from '../contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js';
+import { OpenAgentsWindowSystemWideKeybindingTip } from '../contrib/openAgentsWindow/electron-browser/openAgentsWindowKeybindingTip.js';
 import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
 import { URI } from '../../base/common/uri.js';
 import { IFileService } from '../../platform/files/common/files.js';
@@ -43,7 +43,7 @@ import { createSessionsWorkbench } from '../browser/workbenchFactory.js';
 import { isMacintosh } from '../../base/common/platform.js';
 import { NativeMenubarControl } from '../../workbench/electron-browser/parts/titlebar/menubarControl.js';
 import { Menus } from '../browser/menus.js';
-import { TitlebarPart } from '../browser/parts/titlebarPart.js';
+import { getSessionsTitlebarBackground, TitlebarPart } from '../browser/parts/titlebarPart.js';
 import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
 import { RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL } from '../../platform/window/common/window.js';
@@ -73,6 +73,7 @@ import { IConfigurationService } from '../../platform/configuration/common/confi
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
 import '../contrib/sessions/electron-browser/sessions.contribution.js';
 import { SessionsApplicationBadge } from '../contrib/sessions/electron-browser/sessionsApplicationBadge.js';
+import { SessionsWindowNotifier } from '../contrib/sessions/browser/sessionsWindowNotifier.js';
 
 /** Starts the Code-specific Electron Sessions page. */
 export async function main(profile: SessionsProfile): Promise<IDisposable> {
@@ -286,8 +287,9 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.sessionsMouseNavigation',
 					'sessions.automationSessionsListing',
 					SessionsApplicationBadge.ID,
+					SessionsWindowNotifier.ID,
 					'workbench.contrib.nativeWindow',
-					OpenAgentsWindowSystemWideKeybindingContribution.ID,
+					OpenAgentsWindowSystemWideKeybindingTip.ID,
 					'workbench.contrib.chatScreenshot',
 					'workbench.contrib.agentsWindowInvitation',
 					'chat.edits.editorOverlay',
@@ -299,6 +301,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'chat.promptActions',
 					'workbench.contrib.chatSetup',
 					'workbench.contrib.chatContextContribution',
+					'workbench.contrib.chatReferenceAttachmentWidgetFactory',
+					'chat.sessionReferenceContext',
 					'workbench.contrib.dataChannels',
 					'workbench.contrib.output',
 					'workbench.contrib.logs',
@@ -317,6 +321,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.sessionBrowserViewController',
 					'workbench.contrib.sessionBrowserNetwork',
 					'sessions.chatgpt.web',
+					'sessions.chatWorkspace',
 					'workbench.contrib.browserView.restore',
 					'workbench.contrib.chatAccessibilitySignals',
 					'workbench.contrib.speechAccessibilitySignal',
@@ -396,7 +401,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			}),
 		);
 		requestDrain();
-		sessions.add(bindWindowControlTheme(workbench.themeService, api.nativeHost));
+		sessions.add(bindWindowControlTheme(workbench.themeService, api.nativeHost, getSessionsTitlebarBackground));
 		const activeWorkbench = workbench;
 		sessions.add(addDisposableListener(window, 'pagehide', () => {
 			void activeWorkbench.shutdown('pageHide').catch(error => console.error('Failed to shut down Sessions Workbench', error)).finally(() => sessions.dispose());

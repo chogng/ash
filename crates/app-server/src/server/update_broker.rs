@@ -1108,7 +1108,7 @@ impl UpdateBroker {
         });
     }
 
-    pub(super) fn publish_config_changed(&self, change: ConfigChange) {
+    pub(crate) fn publish_config_changed(&self, change: ConfigChange) {
         let Ok(mut state) = self.state.lock() else {
             return;
         };

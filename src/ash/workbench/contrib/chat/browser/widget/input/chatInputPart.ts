@@ -18,6 +18,7 @@ import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../../../../base/browser/ui/dialog/dialog.js';
 import { defaultInputBoxStyles, defaultCheckboxStyles, defaultDialogStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { LocalChatSessionUri } from '../../../common/model/chatUri.js';
+import { restoreChatVariableEntry } from '../../../common/attachments/chatVariableEntries.js';
 import type { IWorkspacePickerDelegate } from '../../chat.js';
 import { WorkspacePickerActionItem } from './workspacePickerActionItem.js';
 import { captureChatDraft } from '../../../../../services/chat/common/chatContextService.js';
@@ -39,6 +40,7 @@ import { ChatPasteProvidersFeature } from './editor/chatPasteProviders.js';
 import { AgentHostInputCompletions, type AgentHostInputCompletionHost } from './editor/agentHostInputCompletions.js';
 import { ChatDragAndDrop } from '../chatDragAndDrop.js';
 import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
+import { ChatInputAction, ChatInputSurface } from './chatInputSurface.js';
 import { toErrorMessage } from '../../../../../../base/common/errorMessage.js';
 import { ChatChangesPill } from './chatChangesPill.js';
 import { ChatWorkingLogo } from '../chatWorkingLogo.js';
@@ -58,7 +60,7 @@ import { notifyDictationSubmitted } from '../../speechToText/dictationSession.js
 import { IDictationOnboardingService } from '../../speechToText/dictationOnboarding.js';
 import { addDisposableListener, h, stopEvent } from '../../../../../../base/browser/dom.js';
 import { ActionViewItem, ButtonActionViewItem } from '../../../../../../base/browser/ui/actionbar/actionViewItems.js';
-import type { IAction } from '../../../../../../base/common/actions.js';
+import { Action, type IAction } from '../../../../../../base/common/actions.js';
 import { Separator } from '../../../../../../base/common/actions.js';
 import type { Icon } from '../../../../../../base/common/icon.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../../base/common/lifecycle.js';
@@ -88,6 +90,7 @@ import { createToolSelectionAttachment } from '../../actions/chatToolPicker.js';
 import { status as announceStatus } from '../../../../../../base/browser/ui/aria/aria.js';
 import { ChatAttachmentModel } from '../../attachments/chatAttachmentModel.js';
 import { ChatDynamicVariableModel } from '../../attachments/chatDynamicVariables.js';
+import { projectChatDraftReferences } from '../../attachments/chatVariables.js';
 import { ChatWidgetPasteTarget } from '../../attachments/chatWidgetPasteTarget.js';
 import { createChatFileAttachments, IChatAttachmentResolveService } from '../../attachments/chatAttachmentResolveService.js';
 import { CopyPasteController } from '../../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
@@ -98,7 +101,7 @@ import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog, type
 import { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import { isChatQuestionAnswerValid } from '../../../common/model/chatQuestionValidation.js';
 import type { ChatInputDelegate, ChatInputState } from './chatInput.js';
-import { ChatInputEditors, type IChatInputEditor, type IChatInputEditorProvider } from './chatInputEditorRegistry.js';
+import { CHAT_INPUT_DEFAULT_MAX_HEIGHT, ChatInputEditors, type ChatInputEditorOptions, type IChatInputEditor, type IChatInputEditorProvider } from './chatInputEditorRegistry.js';
 import { ChatInputPickerResponsiveLayout } from './chatInputPickerResponsiveLayout.js';
 import {
 	chatInputStackClass, chatInputStackSlotClass, ChatInputStackSlot,
@@ -130,8 +133,6 @@ import { ChatConfiguration } from '../../../common/constants.js';
 import { ChatRequestQueueKind } from '../../../../../services/chat/common/chatService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 
-type ChatInputToolbarPresentation = 'mode' | 'model' | 'mic' | 'voice' | 'send' | 'interrupt';
-
 interface ChatInputToolbarState {
 	readonly voiceAvailable: boolean;
 	readonly voiceActive: boolean;
@@ -142,6 +143,7 @@ interface ChatInputToolbarState {
 	readonly canInterrupt: boolean;
 	readonly inputKind: 'message' | 'command';
 	readonly models: readonly ModelCatalogEntry[];
+	readonly canSelectModel?: boolean;
 	readonly selectedModel?: ModelRef;
 	readonly selectedReasoningEffort?: ModelReasoningEffort;
 	readonly isAutomaticModel: boolean;
@@ -168,10 +170,16 @@ const approvalModeIcons: Record<ChatInputState['approvalMode'], Icon> = {
 export interface ChatInputPartOptions {
 	readonly modePicker: 'visible' | 'hidden';
 	readonly modelPickerPosition: 'leading' | 'trailing';
+	readonly configureModelInMenu?: boolean;
+	/** The host supplies its own catalog and model settings when false. */
+	readonly useWorkbenchModelManagement?: boolean;
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	/** Keep attachment and dictation or stop beside the editor; submit with Enter and keep configuration below. */
 	readonly layout?: 'compact';
+	readonly inputLabel?: string;
+	readonly inlineEdit?: { readonly descriptionId: string; readonly initialHeight: number; readonly reportError: (error: unknown) => void; };
 	readonly renderSecondaryToolbar?: boolean;
+	/** Opens a fresh conversation through a model route supplied by the host. */
 	/** Host-owned permission policy presented immediately after the mode picker. */
 	readonly primaryPermissionPicker?: {
 		readonly action: IAction;
@@ -194,6 +202,10 @@ export interface IChatDraftStorage {
 /** Input operations consumed by a Chat pane, independent of its product's composer layout. */
 export interface IChatInputPart extends IDisposable {
 	readonly inputEditor?: IChatInputEditor['codeEditor'];
+	readonly isSubmitting?: boolean;
+	readonly changesActionsHost?: HTMLElement;
+	readonly composerForm?: HTMLElement;
+	createEditor(options: ChatInputEditorOptions): IChatInputEditor;
 	readonly attachmentModel: ChatAttachmentModel;
 	readonly element: HTMLElement;
 	/** Retires asynchronous input work without clearing or restoring the next conversation’s draft. */
@@ -261,18 +273,23 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private renderedToolIdentity: string | undefined;
 	private confirmationCarousel: ChatToolConfirmationCarouselPart | undefined;
 	private readonly elicitationFocused: IContextKey<boolean>;
+	private readonly stagedFiles = this._register(new DisposableStore());
+	private readonly stagedFileList?: HTMLElement;
+	private filePicker?: HTMLInputElement;
+	private applyingModelDraft = false;
 	private readonly attachContext = this._register(new MutableDisposable<AttachContextAction>());
-	private readonly attachAction: IAction = {
-		id: 'ash.chat.input.attach', label: localize('chat.context.add', 'Add context'), tooltip: localize('chat.context.add', 'Add context'), icon: Lxicon.add, enabled: true,
-		run: () => {
-			// The command creates the picker owner only when this composer opens it.
-			this.attachContext.value ??= this.instantiationService.createInstance(AttachContextAction, {
-				container: this.inputContainer, target: this, focusInput: () => this.focus(), supportsImages: () => this.supportsImages(),
-				attachGitHubReference: this.options.attachGitHubReference,
-			});
-			return this.attachContext.value.run(this.element.querySelector<HTMLElement>('[data-action-id="ash.chat.input.attach"] button') ?? undefined);
-		},
-	};
+	private readonly attachAction = this._register(new Action('ash.chat.input.attach', '', '', true, () => {
+		if (this.filePicker) {
+			this.filePicker.click();
+			return;
+		}
+		// The command creates the picker owner only when this composer opens it.
+		this.attachContext.value ??= this.instantiationService.createInstance(AttachContextAction, {
+			container: this.inputContainer, target: this, focusInput: () => this.focus(), supportsImages: () => this.supportsImages(),
+			attachGitHubReference: this.options.attachGitHubReference,
+		});
+		return this.attachContext.value.run(this.element.querySelector<HTMLElement>('[data-action-id="ash.chat.input.attach"] button') ?? undefined);
+	}));
 	public readonly attachmentModel = this._register(new ChatAttachmentModel());
 	private readonly inlineContext: ChatDynamicVariableModel;
 	private readonly pasteTarget: ChatWidgetPasteTarget;
@@ -340,7 +357,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		contextViewService: IContextViewService,
 		private readonly accessibleViewService: IAccessibleViewService,
 		private readonly notifications: INotificationService,
-		editorProvider: Pick<IChatInputEditorProvider, 'create'> = ChatInputEditors,
+		private readonly editorProvider: Pick<IChatInputEditorProvider, 'create'> = ChatInputEditors,
 		private readonly additionalActions: readonly IAction[] = [],
 		private readonly options: ChatInputPartOptions,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
@@ -367,6 +384,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.slashCommands = new SlashCommandCatalog(delegate.executeServerCommand ? DesktopSlashCommands : [], []);
 		const ownerDocument = container.ownerDocument;
 		this.delegate = delegate;
+		this.attachAction.label = delegate.draft ? localize('chat.input.attachFiles', 'Attach files') : localize('chat.context.add', 'Add context');
+		this.attachAction.tooltip = this.attachAction.label;
+		this.attachAction.icon = Lxicon.add;
 		this.slashCommands.setClientCommands(clientCommands.getCommands());
 		this._register(clientCommands.onDidChangeCommands(() => this.slashCommands.setClientCommands(clientCommands.getCommands())));
 		this.history = this._register(instantiationService.createInstance(ChatHistoryNavigator<InputHistoryDraft>));
@@ -417,23 +437,61 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const interactionContext = this._register(context.createScoped(this.interaction));
 		this.elicitationFocused = interactionContext.createKey('chatElicitationFocused', false);
 		this.interaction.setAttribute('aria-live', 'polite');
-		this.inputContainer = h(ownerDocument, 'form');
-		this.inputContainer.className = `ash-chat-input-container ${chatInputStackSlotClass}`;
-		setChatInputStackSlot(this.inputContainer, ChatInputStackSlot.Standalone);
-		const editorHost = h(ownerDocument, 'div');
-		editorHost.className = 'ash-chat-input-editor-host';
-		// Editor scopes inherit their DOM ancestors when they are constructed.
-		this.element.append(this.inputContainer);
-		this.inputContainer.append(editorHost);
-		ChatContextKeys.inChatInput.bindTo(this._register(context.createScoped(editorHost))).set(true);
-		this.input = this._register(editorProvider.create({
-			container: editorHost,
-			placeholder: 'Ask Ash',
-			ariaLabel: 'Chat message',
-			slashCommands: this.slashCommands,
-			skills: this.skills,
-			hostCompletions: true,
+		const surface = this._register(new ChatInputSurface(this.element, contextMenuService, {
+			createEditor: editorHost => {
+				ChatContextKeys.inChatInput.bindTo(this._register(context.createScoped(editorHost))).set(true);
+				return editorProvider.create({
+					container: editorHost,
+					placeholder: options.inlineEdit ? '' : 'Ask Ash',
+					ariaLabel: options.inputLabel ?? (options.inlineEdit ? localize('chat.edit.input', 'Edit request') : 'Chat message'),
+					ariaDescribedBy: options.inlineEdit?.descriptionId,
+					submitWithModifier: options.inlineEdit ? true : undefined,
+					tabFocusMode: options.inlineEdit ? true : undefined,
+					// Different wrapping in the editor can shorten the message. Keep its
+					// original text height so the transcript cannot clamp its scroll position.
+					height: options.inlineEdit ? { minimum: options.inlineEdit.initialHeight, maximum: Math.max(CHAT_INPUT_DEFAULT_MAX_HEIGHT, options.inlineEdit.initialHeight) } : undefined,
+					slashCommands: this.slashCommands,
+					skills: this.skills,
+					hostCompletions: true,
+				});
+			},
+			submit: () => {
+				if (options.inlineEdit) void this.acceptInput().catch(options.inlineEdit.reportError);
+				else if (this.delegate.draft) void this.acceptInput().catch(error => this.notifications.error(error));
+				else void this.commands.executeCommand(this.followUpCommand(), this.executionContext()).catch(() => undefined);
+			},
+			modelPickerPosition: options.modelPickerPosition,
+			layout: options.layout,
+			compactLayout: options.inlineEdit ? 'stacked' : undefined,
+			actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
 		}));
+		this.inputContainer = surface.form;
+		this.inputContainer.classList.add(chatInputStackSlotClass);
+		setChatInputStackSlot(this.inputContainer, ChatInputStackSlot.Standalone);
+		this.input = surface.editor;
+		if (delegate.draft) {
+			const filePicker = this.filePicker = h(ownerDocument, 'input');
+			filePicker.type = 'file';
+			filePicker.multiple = true;
+			filePicker.hidden = true;
+			this.inputContainer.append(filePicker);
+			this._register(addDisposableListener(filePicker, 'change', () => {
+				const files = [...filePicker.files ?? []];
+				filePicker.value = '';
+				void this.attachFiles(files);
+			}));
+			this.stagedFileList = h(ownerDocument, 'div');
+			this.stagedFileList.className = 'ash-chat-staged-files';
+			this.stagedFileList.setAttribute('role', 'list');
+			this.stagedFileList.setAttribute('aria-label', localize('chat.input.stagedFiles', 'Attachments'));
+			this.stagedFileList.setAttribute('aria-live', 'polite');
+			this.inputContainer.before(this.stagedFileList);
+		}
+		this.inputToolbar = surface.toolbar;
+		this.attachmentToolbar = surface.attachmentToolbar;
+		this.inlineActionsToolbar = surface.inlineActionsToolbar;
+		this.inputFooter = surface.footer;
+		this.pickerResponsiveLayout = this._register(new ChatInputPickerResponsiveLayout(this.inputToolbar.element));
 		const updateCursorAtTop = (): void => cursorAtTop.set(this.input.isAtHistoryBoundary('previous'));
 		this._register(this.input.onDidChange(updateCursorAtTop));
 		if (this.input.codeEditor) {
@@ -449,7 +507,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (this.input.codeEditor) {
 			this.inputDecorations = this._register(new InputEditorDecorations(this.input.codeEditor,
 				() => this.visible && this.mode === 'agent' && !this.state.aiDisabled ? this.state.selectedAgent : undefined));
-			this._register(instantiationService.createInstance(BuiltinDynamicCompletions, this.input, {
+			if (!delegate.draft) this._register(instantiationService.createInstance(BuiltinDynamicCompletions, this.input, {
 				getAttachments: () => this.contexts,
 				getSessionId: () => this.state.conversation?.sessionId,
 				acquire: (prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal: AbortSignal) => this.attachmentModel.acquireContext(prepare, AbortSignal.any([signal, this.inputLifecycle.signal]), (attachments) => {
@@ -464,7 +522,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				}),
 			}));
 		}
-		if (this.input.codeEditor && this.input.getModel) {
+		if (!delegate.draft && this.input.codeEditor && this.input.getModel) {
 			this._register(instantiationService.createInstance(ChatPasteProvidersFeature, this.input, () => this.inputLifecycle.signal, () => this.supportsImages()));
 			const completions = this._register(instantiationService.createInstance(AgentHostInputCompletions, this.input.getModel(), {
 				currentLifecycle: () => this.inputLifecycle.signal,
@@ -474,31 +532,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				acceptResource: (resource, isDirectory, replacement, signal) => this.acceptResourceCompletion(resource, isDirectory, replacement, signal),
 			} satisfies AgentHostInputCompletionHost));
 			completions.register();
-		}
-		this.inputToolbar = this._register(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
-			ariaLabel: localize('chat.input.actions', 'Chat input actions'),
-			actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
-		}));
-		this.inputToolbar.element.classList.add('ash-chat-input-toolbars');
-		this.inputToolbar.element.classList.toggle('model-picker-trailing', options.modelPickerPosition === 'trailing');
-		this.pickerResponsiveLayout = this._register(new ChatInputPickerResponsiveLayout(this.inputToolbar.element));
-		if (options.layout === 'compact') {
-			this.element.classList.add('compact');
-			this.inputFooter = h(ownerDocument, 'div', { className: 'ash-chat-input-footer' });
-			this.attachmentToolbar = this._register(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
-				ariaLabel: localize('chat.context.add', 'Add context'),
-				actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
-			}));
-			this.attachmentToolbar.element.classList.add('ash-chat-input-inline-toolbar');
-			this.inputContainer.append(editorHost);
-			this.inlineActionsToolbar = this._register(new WorkbenchToolBar(this.inputContainer, contextMenuService, {
-				ariaLabel: localize('chat.input.actions', 'Chat input actions'),
-				actionViewItemProvider: action => this.createToolbarViewItem(action, contextViewService),
-			}));
-			this.inlineActionsToolbar.element.classList.add('ash-chat-input-inline-toolbar', 'ash-chat-input-toolbars');
-			this.inputFooter.append(this.inputToolbar.element);
-		} else {
-			this.inputContainer.append(editorHost, this.inputToolbar.element);
 		}
 		this.secondaryToolbarContainer = options.renderSecondaryToolbar === false
 			? undefined
@@ -586,7 +619,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (!this.secondaryToolbarContainer) this.element.append(this.status);
 		this.element.append(this.dictationPreview, this.interaction, this.changesPill.domNode, this.inputContainer);
 		if (this.canvasPills) { this.element.insertBefore(this.canvasPills.domNode, this.changesPill.domNode); }
-		if (this.inputFooter) this.element.append(this.inputFooter);
+		if (this.inputFooter && !options.inlineEdit) this.element.append(this.inputFooter);
 		if (this.secondaryToolbarContainer) this.element.append(this.secondaryToolbarContainer);
 		refreshChatInputStack(this.element);
 		this.updateOnboardingHosts();
@@ -603,11 +636,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.inputContainer.classList.remove('focused');
 			setChatInputStackInputFocused(this.inputContainer, false);
 		}));
-		this._register(addDisposableListener(this.inputContainer, 'submit', (event) => {
-			event.preventDefault();
-			void this.commands.executeCommand(this.followUpCommand(), this.executionContext()).catch(() => undefined);
-		}));
 		this._register(this.input.onDidChange(() => {
+			if (!this.applyingModelDraft && this.state.draft?.text !== this.input.value) this.delegate.draft?.setText(this.input.value);
 			if (!this.applyingHistory && this.draftSkills) this.draftSkills = { text: this.input.value, references: this.skills.referencesIn(this.input.value, this.draftSkills.references) };
 			this.textRevision++;
 			this.draftRevision++;
@@ -616,9 +646,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.renderStatus();
 			this.renderToolbar();
 		}));
-		this._register(addDisposableListener(this.input.element, 'keydown', event => this.handleHistoryKey(event), true));
+		if (!options.inlineEdit) this._register(addDisposableListener(this.input.element, 'keydown', event => this.handleHistoryKey(event), true));
 
-		this._register(this.input.onDidSubmit(() => this.inputContainer.requestSubmit()));
 		this._register(this.inlineContext.onDidChangeReferences(() => {
 			this.draftRevision++;
 			this.renderToolbar();
@@ -644,7 +673,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			stopEvent(event);
 			void this.attachFiles(files);
 		}, true));
-		this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages())).addOverlay(this.inputContainer, this.inputContainer);
+		this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages(), () => this.state.conversation))
+			.addOverlay(this.inputContainer, this.inputContainer, delegate.draft ? () => this.state.draft?.canAttachFiles === true : undefined);
 		this._register(this.executeMenu.onDidChange(() => this.renderToolbarActions()));
 		this._register(presentations.onDidChange(menu => { if (menu === MenuId.ChatExecute) this.renderToolbarActions(); }));
 		this.renderToolbarActions();
@@ -705,6 +735,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			return;
 		}
 		if (event.key === 'Escape' && this.input.element.querySelector('.stanza-editor-completion:not([hidden])')) return;
+		if (event.key === 'Escape' && this.dictationSession.isActive) {
+			stopEvent(event);
+			void this.dictationSession.cancel().catch(() => undefined);
+			return;
+		}
 		if (event.key === 'Escape' && this.history.active) {
 			stopEvent(event);
 			const draft = this.history.restore();
@@ -794,6 +829,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private async submit(draft: InputHistoryDraft, textRevision: number, lifecycle: AbortSignal, operation: () => Promise<void>): Promise<void> {
 		if (this.input.codeEditor) notifyDictationSubmitted(this.input.codeEditor);
 		this.logDictationSample(true, draft.text);
+		if (this.delegate.draft) {
+			// The model consumes the draft only after its backing service accepts it.
+			await operation();
+			return;
+		}
+		if (this.options.inlineEdit) {
+			this.input.setReadOnly(true);
+			try { await operation(); }
+			finally { if (!this.isDisposed && !lifecycle.aborted) this.input.setReadOnly(false); }
+			return;
+		}
 		const kind = this.parseInput(this.commandText(draft.text, draft.attachments)).kind === 'command' ? 'command' : 'agent';
 		const recordHistory = () => void this.history.record(draft.text, kind).catch(error => {
 			if (!this.isDisposed && !lifecycle.aborted) this.notifications.error(localize('chat.history.saveFailed', 'Could not save input history: {0}', String(error)));
@@ -839,6 +885,15 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	get inputEditor(): IChatInputEditor['codeEditor'] { return this.input.codeEditor; }
 
+	get isSubmitting(): boolean { return this.submitting; }
+
+	get changesActionsHost(): HTMLElement { return this.changesPill.domNode; }
+	get composerForm(): HTMLElement { return this.inputContainer; }
+
+	public createEditor(options: ChatInputEditorOptions): IChatInputEditor {
+		return this.editorProvider.create(options);
+	}
+
 	addContext(attachment: ChatContextAttachment): void {
 		if (attachment.lifetime === 'source') this.attachmentModel.addContext(attachment);
 		else {
@@ -850,7 +905,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 
 	protected get contexts(): readonly ChatContextAttachment[] {
-		return this.pasteTarget.inlineReferences;
+		return this.inlineContext.variables;
 	}
 
 	private setInputValue(value: string): void {
@@ -951,6 +1006,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	async attachFiles(files: readonly File[], signal?: AbortSignal): Promise<void> {
 		if (this.isDisposed || !this.visible || files.length === 0) return;
 		try {
+			if (this.delegate.draft) {
+				if (this.state.draft?.canAttachFiles && !signal?.aborted) await this.delegate.draft.attachFiles(files);
+				return;
+			}
 			await this.acquireContext(draftSignal => createChatFileAttachments(files, draftSignal, () => this.supportsImages(), this.attachmentResolver), signal);
 			if (!this.isDisposed && this.visible && !signal?.aborted) announceStatus(localize('chat.context.filesAdded', 'Added {0} attachments', files.length));
 		} catch (error) {
@@ -960,20 +1019,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	/** Persistence and handoff retain user references; live producer references stay with their owner. */
 	protected snapshotDraftReferences(): { text: string; contexts: readonly ChatContextAttachment[]; } {
-		let text = this.input.value;
-		let attachments = this.contexts.filter(attachment => attachment.lifetime !== 'source');
-		// App references belong to their live producer. Removing their labels from the
-		// transferred text also shifts the positions of any user references that follow.
-		for (const attachment of [...this.contexts].reverse()) {
-			if (attachment.lifetime !== 'source' || !attachment.reference) continue;
-			const { start, end } = attachment.reference;
-			text = text.slice(0, start) + text.slice(end);
-			attachments = attachments.map(context => context.reference && context.reference.start >= end ? {
-				...context,
-				reference: { start: context.reference.start - (end - start), end: context.reference.end - (end - start) },
-			} : context);
-		}
-		return { text, contexts: attachments };
+		return projectChatDraftReferences(this.input.value, this.contexts);
 	}
 
 	async captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
@@ -1013,6 +1059,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			// captured snapshots even when their visible labels stay unchanged.
 			this.input.setSelection({ anchor: previous.length, active: previous.length });
 			this.input.insertText(suffix);
+			// The transcript restores its reading position as soon as the edit opens.
+			// Measure the populated editor before the viewport can clamp to a shorter row.
+			if (this.options.inlineEdit) this.input.layout();
 		}
 		this.renderToolbar();
 	}
@@ -1035,15 +1084,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const inline: ChatContextAttachment[] = [];
 		const legacyReferences: ChatContextAttachment[] = [];
 		for (const context of draft.contexts) {
-			const attachment: ChatContextAttachment = {
-				id: context.id,
-				kind: context.kind,
-				terminalSnapshot: context.terminalSnapshot,
-				name: context.name,
-				resource: context.resource ? URI.parse(context.resource) : undefined,
-				...(context.reference ? { reference: context.reference } : {}),
-				resolve: async () => ({ name: context.name, content: context.content, ...(context.kind === 'image' || context.kind === 'instruction' || context.kind === 'toolSelection' ? { kind: context.kind } : {}) }),
-			};
+			const attachment = restoreChatVariableEntry(context);
 			if (attachment.reference) inline.push(attachment);
 			else legacyReferences.push(attachment);
 		}
@@ -1069,10 +1110,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			const tools = this.contexts.filter(context => context.kind === 'toolSelection');
 			this.setInputValue(value);
 			this.pasteTarget.addAttachments(tools);
-			this.setReferenceState(this.inlineContext.getInputState());
+			this.setReferenceState(this.inlineContext.variables);
 		}
 		// Interim speech is not part of the draft until stopping flushes the transcript.
-		if (!this.dictationSession.isActive && !this.commandText().trim() && !this.attachmentModel.hasPendingContext && !this.contexts.some(attachment => attachment.kind !== 'toolSelection')) return;
+		if (!this.dictationSession.isActive && !this.commandText().trim() && !this.state.draft?.files.length && !this.attachmentModel.hasPendingContext && !this.contexts.some(attachment => attachment.kind !== 'toolSelection')) return;
 		const lifecycle = this.inputLifecycle.signal;
 		this.submitting = true;
 		this.renderToolbar();
@@ -1100,7 +1141,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			const contexts = (input.kind === 'message' || input.kind === 'command' && input.binding.origin === 'client') && this.attachmentModel.hasPendingContext
 				? [...new Map([...draft.attachments, ...await this.attachmentModel.resolvePendingContext()].map(attachment => [attachment.id, attachment])).values()] : draft.attachments;
 			// Workspace values are captured at Send, independently of editable draft references and history.
-			const requestContexts: readonly ChatContextAttachment[] = input.kind === 'message' || input.kind === 'command' && input.binding.origin === 'client'
+			const requestContexts: readonly ChatContextAttachment[] = !this.options.inlineEdit && !this.delegate.draft && (input.kind === 'message' || input.kind === 'command' && input.binding.origin === 'client')
 				? [...contexts, ...this.providedContexts.getWorkspaceContextItems().map(item => ({
 					id: item.id, kind: item.kind, name: item.name,
 					resolve: async () => ({ name: item.name, content: item.modelDescription ? `${item.modelDescription}\n\n${item.value}` : item.value }),
@@ -1109,7 +1150,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			const localCommand = input.kind === 'command' && input.binding.origin === 'local';
 			// Preparation can outlast the permission to send. Recheck before consuming the draft or recording history.
 			if (this.isSubmissionBlocked(localCommand)) return;
-			if (!this.commandText(draft.text, contexts).trim() && !contexts.some(attachment => attachment.kind !== 'toolSelection')) return;
+			if (!this.commandText(draft.text, contexts).trim() && !this.state.draft?.files.length && !contexts.some(attachment => attachment.kind !== 'toolSelection')) return;
 			if ((input.kind === 'message' || input.kind === 'command' && input.binding.origin === 'client') && !this.supportsImages() && contexts.some(attachment => attachment.kind === 'image')) {
 				throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 			}
@@ -1308,7 +1349,21 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.skills.setSkills(state.skillSelectors);
 			this.skillSelectors = state.skillSelectors;
 		}
+		const previousDraft = this.state.draft;
 		this.state = state;
+		if (state.draft) {
+			if (previousDraft?.readOnly === false && state.draft.readOnly) {
+				void this.dictationSession.cancel().catch(() => undefined);
+			}
+			this.input.setReadOnly(state.draft.readOnly);
+			this.attachAction.enabled = state.draft.canAttachFiles;
+			if (state.draft.text !== this.input.value) {
+				this.applyingModelDraft = true;
+				try { this.setInputValue(state.draft.text); }
+				finally { this.applyingModelDraft = false; }
+			}
+			if (previousDraft?.files !== state.draft.files || previousDraft.readOnly !== state.draft.readOnly) this.renderStagedFiles();
+		}
 		this.inputDecorations?.update();
 		this.updateOnboardingHosts();
 		this.conversation.set(state.conversation, undefined);
@@ -1436,6 +1491,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	/** Persistent tool configuration labels must not enable Send or obscure a leading slash command. */
 	private parseInput(text: string): SlashCommandInput {
+		if (this.options.inlineEdit) return { kind: 'message', text };
 		const input = parseSlashCommandInput(text, this.slashCommands);
 		return this.delegate.executeServerCommand || input.kind === 'command' && input.binding.origin === 'client' ? input : { kind: 'message', text };
 	}
@@ -1447,13 +1503,42 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		return text.trim();
 	}
 
+	private renderStagedFiles(): void {
+		const list = this.stagedFileList;
+		const state = this.state.draft;
+		const draft = this.delegate.draft;
+		if (!list || !state || !draft) return;
+		const focused = list.ownerDocument.activeElement;
+		const focusedFile = focused instanceof HTMLElement && list.contains(focused) ? focused.closest<HTMLElement>('[data-file-id]')?.dataset.fileId : undefined;
+		this.stagedFiles.clear();
+		list.replaceChildren();
+		list.hidden = !state.files.length;
+		for (const file of state.files) {
+			const row = h(list.ownerDocument, 'div', { className: 'ash-chat-staged-file', attributes: { role: 'listitem' }, dataset: { fileId: file.id } });
+			const status = file.status === 'uploading' ? localize('chat.input.fileUploading', 'Uploading…')
+				: file.status === 'failed' ? localize('chat.input.fileUploadFailed', 'Upload failed') : localize('chat.input.fileReady', 'Ready');
+			row.append(h(list.ownerDocument, 'span', { className: 'ash-chat-staged-file-name' }, file.name), h(list.ownerDocument, 'span', {}, status));
+			if (file.error) row.append(h(list.ownerDocument, 'div', {}, file.error));
+			if (file.status === 'failed') {
+				const retry = this.stagedFiles.add(new Button(row, { ...defaultButtonStyles, label: localize('chat.input.retryFile', 'Retry {0}', file.name), size: 'small', presentation: 'quiet' }));
+				retry.enabled = !state.readOnly;
+				this.stagedFiles.add(retry.onDidClick(() => { this.focus(); void draft.retryFile(file.id).catch(error => this.notifications.error(error)); }));
+			}
+			const remove = this.stagedFiles.add(new Button(row, { ...defaultButtonStyles, label: localize('chat.input.removeFile', 'Remove {0}', file.name), size: 'small', presentation: 'quiet' }));
+			remove.enabled = !state.readOnly;
+			this.stagedFiles.add(remove.onDidClick(() => { this.focus(); draft.removeFile(file.id); }));
+			list.append(row);
+			if (focusedFile === file.id && !state.readOnly) remove.focus();
+		}
+	}
+
 	private isSubmissionBlocked(localCommand: boolean): boolean {
 		return this.state.phase === 'submitting' || (!localCommand && (this.state.inputBlocked === true || this.state.phase === 'loading'));
 	}
 
 	private renderToolbar(): void {
 		const input = this.parseInput(this.commandText());
-		const canSubmitIntent = input.kind === 'message' ? input.text.trim().length > 0 || this.attachmentModel.hasPendingContext || this.contexts.some(attachment => attachment.kind !== 'toolSelection') : true;
+		const canSubmitIntent = this.options.inlineEdit ? input.kind === 'message' && !!input.text.trim() : input.kind === 'message' ? input.text.trim().length > 0 || !!this.state.draft?.files.length || this.attachmentModel.hasPendingContext || this.contexts.some(attachment => attachment.kind !== 'toolSelection') : true;
 		const localCommand = input.kind === 'command' && input.binding.origin === 'local';
 		const state: ChatInputToolbarState = {
 			voiceAvailable: !this.state.aiDisabled && this.delegate.voiceConversation?.isAvailable === true,
@@ -1465,6 +1550,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			canInterrupt: this.state.canInterrupt,
 			inputKind: input.kind === 'message' ? 'message' : 'command',
 			models: this.state.models,
+			canSelectModel: this.state.canSelectModel,
 			selectedModel: this.state.selectedModel,
 			selectedReasoningEffort: this.state.selectedReasoningEffort,
 			isAutomaticModel: this.state.isAutomaticModel,
@@ -1482,6 +1568,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			state.canInterrupt === this.toolbarState.canInterrupt &&
 			state.inputKind === this.toolbarState.inputKind &&
 			state.models === this.toolbarState.models &&
+			state.canSelectModel === this.toolbarState.canSelectModel &&
 			sameModel(state.selectedModel, this.toolbarState.selectedModel) &&
 			state.selectedReasoningEffort === this.toolbarState.selectedReasoningEffort &&
 			state.isAutomaticModel === this.toolbarState.isAutomaticModel &&
@@ -1564,19 +1651,21 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const segmentedVoice = !this.inlineActionsToolbar && !this.state.aiDisabled && (voice?.isAvailable || voice?.isActive) &&
 			(isVoiceInputModeAvailable(this.voiceInputMode) === 'both' || this.voiceInputMode.voiceAvailable.get() && voice?.isConnected);
 		const trailingActions: IAction[] = [];
-		const executionActions = this.executeMenu.getActions({ arg: this.executionContext() }).flatMap(([, actions]) => actions);
+		const executionActions = this.options.inlineEdit || this.delegate.draft ? [] : this.executeMenu.getActions({ arg: this.executionContext() }).flatMap(([, actions]) => actions);
+		const keepSendVisible = this.inlineActionsToolbar && !this.delegate.draft && !this.toolbarState.canInterrupt && !voice?.isActive;
+		const canSubmitDictation = !!this.delegate.draft && this.dictationSession.isActive && !this.submitting && !this.isSubmissionBlocked(false);
 		if (executionActions.length) {
 			trailingActions.push(...executionActions);
-		} else if (this.toolbarState.hasInput) {
-			const label = localize('chat.input.send', 'Send');
-			const tooltip = this.toolbarState.inputKind === 'command' ? localize('chat.input.runCommand', 'Run command') : localize('chat.input.sendMessage', 'Send message');
-			trailingActions.push(new ChatInputAction('ash.chat.input.send', label, tooltip, Lxicon.arrowUp, this.toolbarState.canSubmit, 'send', () => this.inputContainer.requestSubmit()));
-		} else if (!this.inlineActionsToolbar && !segmentedVoice && this.configuration.getValue<boolean>(AgentsVoiceSettingId.ShowButton) !== false) {
+		} else if (this.toolbarState.hasInput || keepSendVisible || canSubmitDictation) {
+			const label = this.options.inlineEdit ? localize('chat.edit.resend', 'Send edited request') : localize('chat.input.send', 'Send');
+			const tooltip = this.options.inlineEdit ? label : this.toolbarState.inputKind === 'command' ? localize('chat.input.runCommand', 'Run command') : localize('chat.input.sendMessage', 'Send message');
+			trailingActions.push(new ChatInputAction('ash.chat.input.send', label, tooltip, Lxicon.arrowUp, this.toolbarState.canSubmit || canSubmitDictation, 'send', () => this.inputContainer.requestSubmit()));
+		} else if ((!this.inlineActionsToolbar || this.delegate.draft && !voice?.isActive) && !segmentedVoice && this.configuration.getValue<boolean>(AgentsVoiceSettingId.ShowButton) !== false) {
 			const label = voice?.isActive ? localize('chat.voice.stop', 'Stop voice conversation') : localize('chat.input.voice', 'Voice conversation');
 			trailingActions.push(new ChatInputAction('ash.chat.input.voice', label, voice?.isAvailable || voice?.isActive ? label : localize('chat.input.voiceUnavailable', 'Voice conversation is unavailable'), Lxicon.voiceMode, voice?.isAvailable === true || voice?.isActive === true, 'voice', () => voice?.toggle()));
 		}
 		if (this.toolbarState.canInterrupt) {
-			const label = localize('chat.input.stopTask', 'Stop task');
+			const label = this.state.interruptKind === 'reply' ? localize('chat.input.stopReply', 'Stop') : localize('chat.input.stopTask', 'Stop task');
 			trailingActions.push(new ChatInputAction('ash.chat.input.interrupt', label, label, this.inlineActionsToolbar ? Lxicon.stopCircle : Lxicon.close, true, this.inlineActionsToolbar ? 'mic' : 'interrupt', () => void this.interrupt()));
 		}
 		if (this.delegate.voiceConversation?.isActive) {
@@ -1601,7 +1690,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		} else if (this.dictationSession.showButton) {
 			dictationActions.push(micAction);
 		}
-		const inputActions = this.toolbarState.inputKind === 'command' ? modeActions : [...additionalActions, ...modeActions, this.modelAction, ...(this.inlineActionsToolbar ? [] : dictationActions)];
+		const inputActions = this.options.inlineEdit ? [] : this.toolbarState.inputKind === 'command' ? modeActions : [...additionalActions, ...modeActions, this.modelAction, ...(this.inlineActionsToolbar ? [] : dictationActions)];
 		this.attachmentToolbar?.setActions([this.attachAction]);
 		const showInlineDictation = trailingActions.length === 0
 			|| executionActions.length === 0 && !this.toolbarState.canInterrupt && !voice?.isActive;
@@ -1730,10 +1819,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.renderFooter();
 	}
 
-	private renderStatus(): void {
+	protected renderStatus(): void {
 		const text = this.statusText(this.state);
-		const error = !this.state.aiDisabled && !this.state.inputBlocked && (this.state.error || (this.state.phase === 'error' ? text : ''));
-		this.notificationVisible.set(this.visible && !this.state.aiDisabled && !this.state.inputBlocked, undefined);
+		const showNotifications = !this.state.aiDisabled && (!this.state.inputBlocked || !!this.delegate.draft);
+		const error = showNotifications && (this.state.error || (this.state.phase === 'error' ? text : ''));
+		this.notificationVisible.set(this.visible && showNotifications, undefined);
 		if (error) {
 			this.inputNotifications.setNotification({
 				id: this.notificationId('model'), inputUri: this.notificationUri,
@@ -1866,14 +1956,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (!(action instanceof ChatInputAction)) return undefined;
 		if (action.presentation === 'model') {
 			return this.modelPickerActionItem = this.instantiationService.createInstance(ModelPickerActionItem, action, {
+				configureInMenu: this.options.configureModelInMenu,
+				useWorkbenchModelManagement: this.options.useWorkbenchModelManagement,
 				onDidChangePresentation: this.modelPickerPresentationChanged.event,
 				getModels: () => this.state.models,
+				canSelectModel: () => this.state.canSelectModel !== false,
 				getSelectedModel: () => this.state.selectedModel,
 				getSelectedReasoningEffort: () => this.state.selectedReasoningEffort,
 				isAutomaticModel: () => this.state.isAutomaticModel,
 				getModelsError: () => this.state.modelsError,
 				selectModel: (model: ModelRef) => this.delegate.selectModel(model),
-				selectAutomaticModel: () => this.delegate.selectAutomaticModel(),
+				selectAutomaticModel: this.delegate.selectAutomaticModel,
 				selectReasoningEffort: (effort: ModelReasoningEffort | undefined) => this.delegate.selectReasoningEffort(effort),
 				openSettings: () => this.delegate.openModelSettings(),
 			});
@@ -1886,7 +1979,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				this.renderToolbarActions();
 			}, () => this.mode === 'agent' && !this.state.aiDisabled ? this.state.selectedAgent : undefined);
 		}
-		return new ChatInputButtonViewItem(action);
+		return undefined;
 	}
 
 	private executionContext(): IChatExecuteActionContext {
@@ -2176,8 +2269,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	protected statusText(state: ChatInputState): string {
 		if (state.aiDisabled) return localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.');
-		if (state.inputBlocked && state.phase !== 'loading') return '';
 		if (state.error) return state.error;
+		if (state.status !== undefined) return state.status;
+		if (state.inputBlocked && state.phase !== 'loading') return '';
 		if (this.dictationSession.isStarting) return localize('chat.input.dictationStarting', 'Starting dictation…');
 		if (this.dictationSession.isActive && this.speechToText.state === ChatSpeechToTextState.Transcribing) return localize('chat.input.dictationTranscribing', 'Transcribing…');
 		if (this.dictationSession.isActive) return localize('chat.input.dictationListening', 'Listening…');
@@ -2193,23 +2287,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				if (state.activeMode && state.activeMode !== state.mode) return localize('chat.input.modeChangeQueued', 'Working in {0}. The next message will be queued in {1} mode.', state.activeMode, state.mode);
 				return state.canInterrupt ? localize('chat.input.working', 'Working…') : '';
 		}
-	}
-}
-
-class ChatInputAction implements IAction {
-	constructor(
-		readonly id: string,
-		public label: string,
-		public tooltip: string,
-		readonly icon: Icon | undefined,
-		readonly enabled: boolean,
-		readonly presentation: ChatInputToolbarPresentation,
-		readonly callback: () => void,
-		readonly checked: boolean | undefined = undefined,
-	) { }
-
-	run(): void {
-		this.callback();
 	}
 }
 
@@ -2250,24 +2327,6 @@ class ChatAttachContextActionViewItem extends ButtonActionViewItem {
 		super.render(container);
 		this.button.domNode.setAttribute('aria-haspopup', 'dialog');
 		this.button.domNode.setAttribute('aria-expanded', 'false');
-	}
-}
-
-class ChatInputButtonViewItem extends ButtonActionViewItem {
-	private readonly presentation: ChatInputToolbarPresentation;
-
-	constructor(action: ChatInputAction) {
-		super(action, { buttonStyles: defaultButtonStyles });
-		this.presentation = action.presentation;
-	}
-
-	override render(container: HTMLElement): void {
-		super.render(container);
-		container.classList.add(`ash-chat-input-${this.presentation}`);
-		container.classList.toggle('disabled', !this.action.enabled);
-		this.button.toggleClassName('ash-chat-input-action', true);
-		this.button.toggleClassName(`ash-chat-input-${this.presentation}-action`, true);
-		this.button.toggleClassName('disabled', !this.action.enabled);
 	}
 }
 

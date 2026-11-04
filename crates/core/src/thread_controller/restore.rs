@@ -205,6 +205,7 @@ impl ThreadController {
             thread_id: thread_id.clone(),
             origin: origin.clone(),
             branch_name: None,
+            worktree_start: None,
         })?;
         self.create_thread_with_history(
             CreateThreadRequest {

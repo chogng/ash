@@ -5,10 +5,12 @@ import type { IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, 
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 import type { IAutomationStore } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
+import type { SessionWorktreeStart } from '../../../../platform/agentHost/common/agent.js';
 
 export interface ISessionCreateOptions {
 	readonly devContainer?: boolean;
 	readonly branchName?: string;
+	readonly worktreeStart?: SessionWorktreeStart;
 	readonly environmentVariables?: Readonly<Record<string, string>>;
 	readonly additionalFolders?: readonly SessionExecutionTarget[];
 	readonly token: CancellationToken;
@@ -41,6 +43,8 @@ export interface ISessionsProvider extends IDisposable {
 	/** Cancels pending acquisition and releases it before the next lease can be acquired. */
 	unsubscribe(sessionId: SessionId): Promise<void>;
 	currentWorkspace(): SessionWorkspaceSelection;
+	/** Probes an inherited directory without prompting or changing its grant. */
+	canReuseWorkspace?(target: SessionExecutionTarget, devContainer?: boolean): Promise<boolean>;
 	/** Available checkouts on this provider's host, preserving execution authority. */
 	getWorktrees?(workspace: SessionExecutionTarget, token: CancellationToken, includeOtherRepositories?: boolean): Promise<readonly {
 		readonly label: string;

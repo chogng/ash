@@ -24,6 +24,7 @@ fn fixture() -> (Arc<InMemoryThreadStore>, ThreadController, ThreadSnapshot) {
             StartThreadRequest {
                 execution_target: None,
                 branch_name: None,
+                worktree_start: None,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new("root").unwrap(),

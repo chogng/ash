@@ -74,6 +74,7 @@ export const allowedMarkdownHtmlAttributes = Object.freeze([
 	'disabled',
 	'href',
 	'aria-label',
+	{ attributeName: 'open', shouldKeep: (element: Element) => element.tagName === 'DETAILS' },
 	{ attributeName: 'height', shouldKeep: isImageDimension },
 	'rel',
 	'src',

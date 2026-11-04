@@ -4,11 +4,15 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { localize } from '../../../../nls.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { ILogService, type ILogService as LogService } from '../../../../platform/log/common/log.js';
+import type { INativeSystemWideKeybinding } from '../../../../platform/native/common/nativeHost.js';
 import { INotificationService, type INotificationService as NotificationService } from '../../../../platform/notification/common/notification.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../../../workbench/contrib/chat/common/constants.js';
 import { selectSystemWideKeybindings } from '../../../../workbench/contrib/keybindings/electron-browser/systemWideKeybindings.js';
-import { SystemWideKeybindingsSynchronizer } from '../../../../workbench/contrib/keybindings/electron-browser/systemWideKeybindingsSynchronizer.js';
+import {
+	type ISystemWideKeybindingsSynchronizerOptions,
+	SystemWideKeybindingsSynchronizer,
+} from '../../../../workbench/contrib/keybindings/electron-browser/systemWideKeybindingsSynchronizer.js';
 
 /** Keeps the desktop's global Open Agents Window shortcut in step with user keybindings. */
 export class OpenAgentsWindowSystemWideKeybindingContribution extends Disposable {
@@ -17,13 +21,14 @@ export class OpenAgentsWindowSystemWideKeybindingContribution extends Disposable
 	private lastIgnoredWhen = '';
 
 	constructor(
+		onRegistration: ((candidates: readonly INativeSystemWideKeybinding[], failed: readonly string[] | undefined) => void) | undefined,
 		@IKeybindingService resource: IKeybindingService,
 		@INotificationService private readonly notifications: NotificationService,
 		@ILogService private readonly log: LogService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
-		this._register(instantiationService.createInstance(SystemWideKeybindingsSynchronizer, {
+		const options: ISystemWideKeybindingsSynchronizerOptions = {
 			getCandidates: () => {
 				const selection = selectSystemWideKeybindings(
 					resource.getKeybindings().flatMap(item => item.userBinding ? [item.userBinding.entry] : []),
@@ -46,9 +51,16 @@ export class OpenAgentsWindowSystemWideKeybindingContribution extends Disposable
 				this.lastIgnoredWhen = ignoredWhen;
 				return selection.candidates.filter(binding => binding.commandId === OPEN_AGENTS_WINDOW_COMMAND_ID);
 			},
-			onRegistrationFailuresChanged: (failed: readonly string[]) => this.reportFailures(failed),
-			onError: (error: unknown) => this.log.error('[OpenAgentsWindow] Unable to sync system-wide shortcuts', error),
-		}));
+			onRegistrationResult: (candidates, failed) => {
+				this.reportFailures(failed);
+				onRegistration?.(candidates, failed);
+			},
+			onError: (error, candidates) => {
+				this.log.error('[OpenAgentsWindow] Unable to sync system-wide shortcuts', error);
+				onRegistration?.(candidates, undefined);
+			},
+		};
+		this._register(instantiationService.createInstance(SystemWideKeybindingsSynchronizer, options));
 	}
 
 	private reportFailures(failedLabels: readonly string[]): void {
@@ -63,5 +75,5 @@ export class OpenAgentsWindowSystemWideKeybindingContribution extends Disposable
 registerWorkbenchContribution(
 	OpenAgentsWindowSystemWideKeybindingContribution.ID,
 	WorkbenchPhase.AfterRestored,
-	accessor => accessor.get(IInstantiationService).createInstance(OpenAgentsWindowSystemWideKeybindingContribution),
+	accessor => accessor.get(IInstantiationService).createInstance(OpenAgentsWindowSystemWideKeybindingContribution, undefined),
 );

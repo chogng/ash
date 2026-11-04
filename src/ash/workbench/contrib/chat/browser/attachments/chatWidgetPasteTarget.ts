@@ -2,11 +2,13 @@ import { CancellationError } from '../../../../../base/common/errors.js';
 import { AbstractDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
+import type { IRange } from '../../../../../editor/common/core/range.js';
 import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
 import { IChatPasteTargetService, type IChatPasteTarget } from '../chat.js';
 import type { IChatInputEditor } from '../widget/input/chatInputEditorRegistry.js';
 import type { ChatDynamicVariableModel } from './chatDynamicVariables.js';
 import type { ChatAttachmentModel } from './chatAttachmentModel.js';
+import { projectCopiedChatReferences, type IChatCopiedInlinePrompt } from './chatVariables.js';
 
 /** Binds paste admission to the original input without retaining another copy of its references. */
 export class ChatWidgetPasteTarget extends AbstractDisposable implements IChatPasteTarget {
@@ -28,9 +30,13 @@ export class ChatWidgetPasteTarget extends AbstractDisposable implements IChatPa
 		return this.model.attachments;
 	}
 
-	public get inlineReferences(): readonly ChatContextAttachment[] {
-		// All manually attached context is inline in Ash; positions stay with the reference model.
-		return this.references.getInputState();
+	public getCopiedInlinePrompt(ranges: readonly IRange[], copiedText: string): IChatCopiedInlinePrompt | undefined {
+		const model = this.input.getModel?.();
+		if (!model || this.isDisposed || this.targets.getTarget(this.inputUri) !== this) {
+			return undefined;
+		}
+
+		return projectCopiedChatReferences(model, ranges, copiedText, this.references.variables);
 	}
 
 	public addAttachments(entries: readonly ChatContextAttachment[], signal?: AbortSignal): readonly ChatContextAttachment[] {
@@ -57,7 +63,7 @@ export class ChatWidgetPasteTarget extends AbstractDisposable implements IChatPa
 			this.assertCurrent(signal);
 			if (entry.lifetime === 'source') {
 				this.model.addContext(entry);
-				return this.references.getInputState().find(reference => reference.id === entry.id)!;
+				return this.references.variables.find(reference => reference.id === entry.id)!;
 			}
 			return this.references.addReference({ ...entry, reference: undefined }, false);
 		});

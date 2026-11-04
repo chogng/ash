@@ -31,7 +31,7 @@ test('Model options combine thinking effort, context size and speed and save pre
 	const menu = picker.locator('.ash-chat-model-card-configurable');
 	await expect(menu.getByRole('heading', { name: /^GPT-6[- ]Astra$/ })).toBeVisible();
 	await expect(menu.locator('h3 .ash-icon')).toHaveCount(0);
-	await expect(menu.locator('legend')).toHaveText(['Thinking Level', 'Context Size', 'Speed']);
+	await expect(menu.locator('legend')).toHaveText(['Effort', 'Context Size', 'Speed']);
 	await picker.screenshot({ path: testInfo.outputPath('model-picker-details.png') });
 	const high = menu.getByRole('radio', { name: 'High', exact: true });
 	await high.focus();

@@ -7,6 +7,7 @@ import { ChatAuxiliaryWindow } from '../../../src/ash/workbench/contrib/chat/bro
 import { BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 import { ChatMarkdownContentPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.js';
+import { wrapTablesWithScrollable } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownTableScrolling.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { IImageEditorService } from '../../../src/ash/workbench/services/imageEditor/common/imageEditorService.js';
 import { ImageEditorService } from '../../../src/ash/workbench/services/imageEditor/browser/imageEditorService.js';
@@ -102,6 +103,8 @@ import { ChatWidget, type IChatWidgetModel } from '../../../src/ash/workbench/co
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { IContextViewService, IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
+import { IContextKeyService } from '../../../src/ash/platform/contextkey/common/contextkey.js';
+import { IsSessionsWindowContext } from '../../../src/ash/workbench/common/contextkeys.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { ISpeechService, SpeechToTextStatus, type ISpeechToTextEvent } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
@@ -348,10 +351,14 @@ const openedAppLinks: { uri: string; options: unknown; }[] = [];
 const appServices = resources.add(services.createChild());
 appServices.registerInstance(IOpenerService, { open: async (uri: URI, options: unknown) => { openedAppLinks.push({ uri: uri.toString(), options }); return true; } } as unknown as IOpenerService);
 const listOptions = {
-	promptTimelineFiles: new URLSearchParams(location.search).has('promptTimeline')
-		? (prompt: IChatListItem) => prompt.id === 'second' ? [{
-			id: 'change', path: 'src/example.ts', review: () => { root.dataset.reviewedPrompt = prompt.id; },
-		}] : [] : undefined,
+	promptTimelineChanges: new URLSearchParams(location.search).has('promptTimeline')
+		? (prompt: IChatListItem) => prompt.id === 'second' ? {
+			files: 1, insertions: 2, deletions: 1,
+			review: () => { root.dataset.reviewedTurn = prompt.id; },
+			fileDiffs: [{
+				id: 'change', path: 'src/example.ts', review: () => { root.dataset.reviewedPrompt = prompt.id; },
+			}],
+		} : undefined : undefined,
 	imageResourceLoader: async () => { imageReads++; return new Blob([new Uint8Array(imageBytes)], { type: 'image/png' }); } };
 let rendererItems: readonly IChatListItem[] = [];
 let list = resources.add(appServices.createInstance(ChatListWidget, root, listOptions));
@@ -433,6 +440,7 @@ let appRequests = false;
 let allowAppCsp = false;
 let appCallMode: 'read' | 'delay' | 'error' = 'read';
 let appItems: readonly IChatListItem[] = [];
+let hasConversationChanges = false;
 let appChat: ChatWidget | CoworkWidget | undefined;
 let composerServices: InstantiationService | undefined;
 let dictationEvents: Emitter<ISpeechToTextEvent> | undefined;
@@ -452,7 +460,7 @@ let olderHistoryLoads = 0;
 const historyWires = new Map<string, string>();
 let historyDecodeTiming = { parseMs: 0, schemaMs: 0, bytes: 0 };
 let requestEditMode = false;
-const requestEdits: { readonly text: string; readonly commandId: string; readonly itemId: string; }[] = [];
+const requestEdits: { readonly text: string; readonly commandId: string; readonly itemId: string; readonly contexts?: readonly { readonly name: string; readonly content: string; }[]; }[] = [];
 let completeRequestEdit: ((failure?: boolean) => void) | undefined;
 let lifecycleSessions: SessionsManagementService | undefined;
 let lifecycleCommands: CommandService | undefined;
@@ -660,8 +668,11 @@ declare global {
 			setUpvoteAnimation(value: string): Promise<void>;
 			showFind(query?: string): void;
 			runNavigationCommand(command: string): Promise<void>;
-			prepareRequestEditing(cowork: boolean): void;
-			requestEdits(): readonly { readonly text: string; readonly commandId: string; readonly itemId: string; }[];
+			prepareRequestEditing(cowork: boolean, text?: string, unanswered?: boolean): void;
+			setAutoFollowReplies(enabled: boolean): Promise<void>;
+			appendChatItem(item: IChatListItem): void;
+			setConversationChanges(visible: boolean): void;
+			requestEdits(): readonly { readonly text: string; readonly commandId: string; readonly itemId: string; readonly contexts?: readonly { readonly name: string; readonly content: string; }[]; }[];
 			finishRequestEdit(failure?: boolean): void;
 			readingState(): ReturnType<ChatListWidget['getViewState']>;
 			delayAttachments(value: boolean): void;
@@ -855,13 +866,21 @@ window.ashChatTranscriptIntegration = {
 	},
 	renderItems: items => { rendererItems = items; list.render(items); },
 	setUpvoteAnimation: value => services.get(IConfigurationService).updateValue('chat.upvoteAnimation', value),
-	prepareRequestEditing: cowork => {
+	prepareRequestEditing: (cowork, text, unanswered) => {
 		requestEditMode = true;
 		window.ashChatTranscriptIntegration.showChatApp(false, cowork);
 		requestEdits.length = 0;
-		appItems = [{ id: 'presentation-entry', type: 'userMessage', text: 'Original request', transient: false, requestSource: { sessionId: 'app-session', threadId: 'app-thread', turnId: 'original-turn', itemId: 'backend-request' } }];
+		const request: IChatListItem = { id: 'presentation-entry', type: 'userMessage', text: text ?? 'Original request', transient: false, requestSource: { sessionId: 'app-session', threadId: 'app-thread', turnId: 'original-turn', itemId: 'backend-request' } };
+		appItems = text === undefined ? [request] : [
+			{ id: 'preceding-answer', type: 'agentMessage', text: 'Earlier response\n\n'.repeat(15), transient: false },
+			request,
+			...(unanswered ? [] : [{ id: 'following-answer', type: 'agentMessage' as const, text: 'Following response', transient: false }]),
+		];
 		chatChanges.fire();
 	},
+	setAutoFollowReplies: enabled => services.get(IConfigurationService).updateValue('chat.autoFollowReplies', enabled),
+	appendChatItem: item => { appItems = [...appItems, item]; chatChanges.fire(); },
+	setConversationChanges: visible => { hasConversationChanges = visible; chatChanges.fire(); },
 	requestEdits: () => requestEdits,
 	finishRequestEdit: failure => completeRequestEdit?.(failure),
 	readingState: () => list.getViewState(),
@@ -903,6 +922,7 @@ window.ashChatTranscriptIntegration = {
 		}
 		using renderer = services.createInstance(ChatContentMarkdownRenderer);
 		using expected = renderer.render({ value, supportThemeIcons: true, supportAlertSyntax: true }, { fillInIncompleteTokens: !complete, codeBlockRendererSync: codeNode });
+		wrapTablesWithScrollable(expected.element);
 		// Provider completion is asynchronous; compare formula identity and syntax here.
 		for (const element of [copy, expected.element]) for (const formula of element.querySelectorAll<HTMLElement>('.ash-katex-container')) formula.textContent = formula.dataset.latex!;
 		let layoutError = 0;
@@ -1129,6 +1149,9 @@ window.ashChatTranscriptIntegration = {
 		window.ashChatTranscriptIntegration.showApp('read', false, withMedia);
 		root.hidden = true;
 		const chatServices = resources.add(services.createChild());
+		if (new URLSearchParams(location.search).has('sessions')) {
+			IsSessionsWindowContext.bindTo(chatServices.get(IContextKeyService)).set(true);
+		}
 		chatServices.registerInstance(IAccessibleViewService, accessibleView);
 		chatServices.registerInstance(ILanguageModelsService, { onDidChangeModels: Event.None, isModelVisible: () => true } as unknown as ILanguageModelsService);
 		chatServices.registerInstance(IChatSessionNavigationService, {
@@ -1137,14 +1160,15 @@ window.ashChatTranscriptIntegration = {
 			getActiveConversation: () => ({ sessionId: 'app-session', threadId: 'app-thread' }),
 			openConversation: async () => { if (!requestEditMode) throw new Error('Unexpected conversation navigation'); },
 		} as unknown as IChatSessionNavigationService);
+		chatServices.registerInstance(IChatService, {
+			rewriteRequest: async options => {
+				if (!requestEditMode) { throw new Error('Unexpected request edit'); }
+				requestEdits.push(options);
+				await new Promise<void>((resolve, reject) => { completeRequestEdit = failure => failure ? reject(new Error('Synthetic edit failure')) : resolve(); });
+				return { sessionId: options.sessionId, threadId: 'edited-thread' };
+			}
+		} as IChatService);
 		if (requestEditMode) {
-			chatServices.registerInstance(IChatService, {
-				rewriteRequest: async options => {
-					requestEdits.push(options);
-					await new Promise<void>((resolve, reject) => { completeRequestEdit = failure => failure ? reject(new Error('Synthetic edit failure')) : resolve(); });
-					return { sessionId: options.sessionId, threadId: 'edited-thread' };
-				}
-			} as IChatService);
 			chatServices.registerSingleton(ICommandService, () => chatServices.createInstance(StandaloneCommandService));
 		}
 		chatServices.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected link opening'); } } as unknown as IOpenerService);
@@ -1189,7 +1213,7 @@ window.ashChatTranscriptIntegration = {
 			},
 			get inputState() {
 				const aiDisabled = services.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId);
-				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, changes: hasConversationChanges ? { files: 1, additions: 1, deletions: 1 } : undefined };
 			},
 			send: async (text, mode, _skills, contexts, submissionOptions) => { appChatMessages.push({ text, mode, contexts, ...(submissionOptions ? { commandId: submissionOptions.commandId, source: submissionOptions.source } : {}) }); },
 			executeServerCommand: async () => { }, interrupt: async () => { }, refreshChanges: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },

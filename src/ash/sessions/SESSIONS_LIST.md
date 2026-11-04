@@ -10,16 +10,18 @@ This specification defines stable placement and state-ownership rules. Row styli
 
 ## Ownership
 
-| Concern                                       | Owner                              |
-| --------------------------------------------- | ---------------------------------- |
-| Session catalog and lifecycle                 | `ISessionsManagementService`       |
-| Pins, manual row order, and automation filter | `ISessionsListModelService`        |
-| Sidebar collapse state                        | `SessionsList` via profile storage |
-| Custom groups and membership                  | `ISessionGroupsService`            |
-| Top-level group/workspace order               | `ISessionSectionOrderService`      |
-| Tree composition and presentation             | `SessionsView` and `SessionsList`  |
+| Concern                                       | Owner                                            |
+| --------------------------------------------- | ------------------------------------------------ |
+| Session catalog and lifecycle                 | `ISessionsManagementService`                     |
+| Pins, manual row order, and automation filter | `ISessionsListModelService`                      |
+| Sidebar collapse state                        | `WorkbenchObjectTree`, persisted by each sidebar |
+| Custom groups and membership                  | `ISessionGroupsService`                          |
+| Top-level group/workspace order               | `ISessionSectionOrderService`                    |
+| Tree composition and presentation             | `SessionsView` and `SessionsList`                |
 
 Chat and Code consume the same session selection and pins. Chat presents flat conversation rows in top-level custom groups and a remaining conversation section beside pinned conversations and project entries. Code lists project entries separately from Recents, which includes unpinned conversations across workspaces and projects. Explicit custom groups remain inside Recents. Each mode owns separate section expansion state. Project records and membership remain owned by `IProjectService`; the sidebar holds only a disposable projection.
+
+The Desktop Chat sidebar projects ChatGPT history and active local Ash sessions into one tree using the shared Sessions list renderers. Pins and Recents contain entries from both sources, and ChatGPT project groups retain their original membership. Each source owns its history and actions, including its pin state. Opening a row delegates to its source. The sidebar retains its existing profile collapse state.
 
 List-owned state is local presentation state. It is not synchronized back to a provider and must not mutate provider timestamps or metadata.
 
@@ -62,6 +64,10 @@ A caller can acquire a disposable reveal of a session row or its archive action 
 
 ## Grouping
 
+### Sidebar grouping
+
+The sidebar may group otherwise ungrouped conversations under Chats or Recents by project membership, repository, management status or execution environment. Pins and explicit group membership take precedence. Hiding comparison groups displays their attempts as ordinary conversations and preserves the saved comparison membership. Repository grouping reads metadata through the session's authorized host. Environment grouping uses the saved session execution authority and runtime workspace.
+
 ### Workspace grouping
 
 User-created groups and workspace sections share a user-managed order below the fixed sections. Workspace capping may initially hide inactive workspaces; search and explicit user promotion reveal them.
@@ -98,13 +104,14 @@ Filters compose across session type, status, archive/read state, and provider. T
 
 ## Drag and drop
 
-Drag and drop changes only list-owned presentation state or opens sessions through the appropriate service:
+The target determines which service handles the drop.
 
 - sessions may reorder within valid sections;
 - sessions may move into user-created groups;
 - non-archived sessions may move into the pinned section;
 - user groups and workspace sections may reorder where the grouping mode allows;
 - dropping sessions on the Sessions grid opens them through `ISessionsService`.
+- dropping a conversation on another composer on the same host attaches a transcript snapshot through that composer's context acquisition.
 
 Archived and fixed sections are not reorder targets. Multi-selection preserves relative order.
 

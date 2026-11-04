@@ -1,3 +1,4 @@
+import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
 import { IUriIdentityService } from '../../../../../platform/uriIdentity/common/uriIdentity.js';
@@ -623,9 +624,11 @@ test('Multi-diff pane inherits word wrap and routes the toggle command to its vi
 	using resources = new DisposableStore();
 	const services = createCodeEditorServices(resources);
 	registerDialogs(services, resources);
+	IsSessionsWindowContext.bindTo(services.get(IContextKeyService)).set(true);
 
 	const configuration = services.get(IConfigurationService);
 	await configuration.updateValue(CodeEditorConfiguration.wordWrap, EditorLineWrapping.On);
+	await configuration.updateValue('diffEditor.useInlineViewWhenSpaceIsLimited', false);
 	services.registerInstance(ITextModelResourceService, models);
 	const pane = registerMultiDiffTestServices(services).createInstance(MultiDiffEditor, {});
 	pane.create(parent);
@@ -647,6 +650,10 @@ test('Multi-diff pane inherits word wrap and routes the toggle command to its vi
 	assert.equal(editor.classList.contains('word-wrapped'), false);
 	await configuration.updateValue(CodeEditorConfiguration.diffWordWrap, 'on');
 	assert.equal(editor.classList.contains('word-wrapped'), true);
+	await waitForPane(() => !!pane.getControl());
+	assert.equal(pane.getControl()!.element.classList.contains('inline-view'), false);
+	await configuration.updateValue('diffEditor.renderSideBySide', false);
+	await waitForPane(() => pane.getControl()?.element.classList.contains('inline-view') === true);
 	pane.dispose();
 	dom.window.close();
 });

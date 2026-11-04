@@ -1,3 +1,4 @@
+import '../../../browser/ui/filterTabs.css';
 import './searchDialog.css';
 import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
@@ -96,6 +97,7 @@ export class SessionsSearchDialog extends Disposable {
 				onActivate: category => this.model.setCategory(category),
 			}),
 		);
+		categories.element.classList.add('ash-sessions-filter-tabs');
 		const body = h(document, 'section', { className: 'ash-sessions-search-body' });
 		const resultsHost = h(document, 'div', { className: 'ash-sessions-search-results' });
 		this.results = this._register(

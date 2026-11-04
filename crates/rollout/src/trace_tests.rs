@@ -71,6 +71,7 @@ fn trace_contains_the_complete_nested_history_prefix_closure() {
             core_api::StartThreadRequest {
                 execution_target: None,
                 branch_name: None,
+                worktree_start: None,
                 agent_id: None,
                 agent: None,
                 command_id: ash_protocol::CommandId::new("root").unwrap(),

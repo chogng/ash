@@ -25,6 +25,25 @@
 	flex: 1 1 auto;
 }
 
+.ash-chat-input-model-label {
+	display: flex;
+	align-items: baseline;
+	min-width: 0;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-chat-input-model-effort {
+	color: var(--ash-muted-foreground);
+}
+
+[data-color-scheme="light"] .ash-chat-input-model-effort {
+	color: color-mix(
+		in srgb,
+		var(--ash-muted-foreground) 92%,
+		var(--ash-editor-background)
+	);
+}
+
 .ash-chat-model-picker-control > .ash-chat-input-configuration-action {
 	max-width: 96px;
 	flex: 0 0 auto;
@@ -45,6 +64,27 @@
 
 .ash-chat-model-picker [hidden] {
 	display: none;
+}
+
+.ash-chat-model-picker-header {
+	display: contents;
+}
+
+.ash-chat-model-picker .ash-action-widget-filter {
+	position: relative;
+}
+
+.ash-chat-model-picker .ash-action-widget-filter::after {
+	content: "";
+	position: absolute;
+	inset-inline: var(--ash-menu-divider-inset, var(--ash-spacing-size80));
+	inset-block-end: 0;
+	border-block-end: var(
+		--ash-action-widget-divider,
+		var(--ash-strokeThickness) solid
+			var(--ash-contrastBorder, var(--ash-widget-border))
+	);
+	pointer-events: none;
 }
 
 .ash-chat-model-picker-empty {
@@ -94,20 +134,10 @@
 }
 
 .ash-chat-model-picker-footer {
-	/* Clip the footer menu's background without clipping the popup's details flyout. */
-	border-radius: 0 0 var(--ash-cornerRadius-large)
-		var(--ash-cornerRadius-large);
+	/* Match the popup's lower corners while leaving its details flyout unclipped. */
+	border-bottom-left-radius: inherit;
+	border-bottom-right-radius: inherit;
 	overflow: hidden;
-}
-
-.ash-chat-model-picker-details-menu {
-	position: absolute;
-	z-index: 1;
-	width: 180px;
-	max-height: calc(100vh - var(--ash-spacing-size160));
-	overflow-y: auto;
-	max-width: calc(100vw - var(--ash-spacing-size160));
-	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
 }
 
 .ash-chat-model-card:focus-visible {
@@ -135,11 +165,45 @@
 	color: var(--ash-error-foreground);
 }
 
-.ash-chat-model-picker-footer > .ash-switch {
+.ash-chat-model-picker-footer > .ash-switch,
+.ash-chat-model-picker-automatic > .ash-switch,
+.ash-chat-model-picker-section > .ash-switch {
 	box-sizing: border-box;
 	width: 100%;
 	min-height: var(--ash-spacing-size360);
 	padding: var(--ash-spacing-size40) var(--ash-spacing-size120);
+}
+
+.ash-chat-model-picker-fast-label {
+	display: flex;
+	align-items: center;
+	/* Align with the adjacent menu row's inset and icon spacing. */
+	padding-inline-start: var(--ash-spacing-size60);
+	gap: var(--ash-spacing-size60);
+}
+
+.ash-chat-model-picker-fast-label > .ash-icon {
+	flex-shrink: 0;
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-chat-model-picker-section:empty {
+	display: none;
+}
+
+.ash-chat-model-picker-section {
+	position: relative;
+	padding-block-start: var(--ash-strokeThickness);
+}
+
+.ash-chat-model-picker-section::before {
+	content: "";
+	position: absolute;
+	inset-inline: var(--ash-menu-divider-inset, 0px);
+	inset-block-start: 0;
+	border-block-start: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	pointer-events: none;
 }
 
 .ash-chat-model-picker-footer > .ash-button {

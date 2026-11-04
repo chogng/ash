@@ -1,6 +1,7 @@
 import { localize2 } from '../../../../nls.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
-import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ActiveEditorGroupEmptyContext, ActiveEditorLastInGroupContext, ActiveEditorPinnedContext, ActiveEditorStickyContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, EditorTabsFocusContext, EditorsVisibleContext, MultipleEditorGroupsContext, MultipleEditorsSelectedInGroupContext } from '../../../common/contextkeys.js';
@@ -14,6 +15,11 @@ import { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 
 export const CLOSE_EDITOR_COMMAND_ID = 'workbench.action.closeActiveEditor';
 export const CLOSE_EDITOR_GROUP_COMMAND_ID = 'workbench.action.closeGroup';
+
+MenusRegistry.appendMenuItem(MenuId.ModalEditorTitle, {
+	command: { id: CLOSE_EDITOR_COMMAND_ID, title: localize2({ bundle: 'ash', key: 'workbench.closeEditor' }, 'Close'), icon: Lxicon.close },
+	group: 'navigation', order: 100, when: EditorPartModalVisibleContext.isEqualTo(true),
+});
 
 registerAction2(class CloseActiveEditorAction extends Action2 {
 	constructor() {

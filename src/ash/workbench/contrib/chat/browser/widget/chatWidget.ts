@@ -1,3 +1,4 @@
+import type { ChatRequestInputOptions, ChatResponseActions } from './chatListRenderer.js';
 import { ChatGoalBannerWidget } from './input/chatGoalBannerWidget.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { parseInlineFileReference } from '../../common/widget/annotations.js';
@@ -13,6 +14,7 @@ import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/comm
 import { localize } from '../../../../../nls.js';
 import './media/chat.css';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { autorun } from '../../../../../base/common/observable.js';
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../../base/common/errors.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
@@ -50,7 +52,7 @@ import { OPEN_CHAT_CHANGES_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ChatQueueEditor } from './input/chatInputPart.js';
-import { ChatInputEditors } from './input/chatInputEditorRegistry.js';
+import { ChatInputEditors, type ChatInputEditorOptions } from './input/chatInputEditorRegistry.js';
 import { ChatRequestOriginPart } from './chatContentParts/chatRequestOriginPart.js';
 import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
@@ -58,6 +60,7 @@ import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts
 import { VoiceSessionController, pickVoiceConversation } from '../voiceClient/voiceSessionController.js';
 import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agent.js';
 import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions, type IChatWidgetViewOptions } from '../chat.js';
+import { ChatViewWelcomePart } from '../viewsWelcome/chatViewWelcomeController.js';
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {
@@ -71,24 +74,36 @@ export interface IChatWidgetModel extends IDisposable {
 	readonly goal: ThreadGoal | undefined;
 	readonly items: readonly IChatListItem[];
 	readonly inputState: ChatInputState;
+	readonly draft?: ChatInputDelegate['draft'];
+	readonly voice?: {
+		readonly isAvailable: boolean;
+		readonly isActive: boolean;
+		readonly isConnected: boolean;
+		start(window: Window & typeof globalThis): Promise<void>;
+		stop(): Promise<void>;
+	};
+	readResponseResource?(item: IChatListItem, resource: URI, signal: AbortSignal): Promise<Blob>;
+	/** The model can supply link handling for rows that belong to a different conversation backend. */
+	getResponseLinkOpener?(item: IChatListItem): ((target: string) => Promise<void>) | undefined;
+	getResponseActions?(item: IChatListItem): ChatResponseActions | undefined;
 	readonly historyStatus?: IChatSessionHistoryStatus;
 	readonly olderHistory?: { readonly loading: boolean; readonly error?: string; };
 	loadOlderHistory?(): Promise<void>;
 	prepareConversation?(): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void>;
-	executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void>;
+	executeServerCommand?(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void>;
 	/** Rejects on failure so Stop and Send can preserve the unsent draft. */
 	interrupt(): Promise<void>;
-	refreshChanges(): Promise<void>;
+	refreshChanges?(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
-	selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
-	selectAutomaticModel(): Promise<void>;
-	listAgents(): Promise<readonly ChatAgent[]>;
-	selectAgent(agent: ChatAgent | undefined): void;
-	selectMode(mode: ChatMode): void;
-	selectApprovalMode(mode: ApprovalMode): void;
-	resolveInteraction(response: AgentInteractionDecision, expectedRequestId?: string): Promise<void>;
-	retryFailedTurn(turnId: string): Promise<void>;
+	selectReasoningEffort?(effort: ModelReasoningEffort | undefined): Promise<void>;
+	selectAutomaticModel?(): Promise<void>;
+	listAgents?(): Promise<readonly ChatAgent[]>;
+	selectAgent?(agent: ChatAgent | undefined): void;
+	selectMode?(mode: ChatMode): void;
+	selectApprovalMode?(mode: ApprovalMode): void;
+	resolveInteraction?(response: AgentInteractionDecision, expectedRequestId?: string): Promise<void>;
+	retryFailedTurn?(turnId: string): Promise<void>;
 }
 
 /** Owns the content and interaction state for one local or durable Chat tab. */
@@ -99,8 +114,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	readonly onDidHide = this.hidden.event;
 	private readonly visibilityChanged = this._register(new Emitter<void>());
 	readonly onDidChangeVisibility = this.visibilityChanged.event;
-	private readonly voiceSessionController: VoiceSessionController;
-	private readonly voiceWidget: AgentsVoiceWidget;
+	private readonly voiceSessionController: VoiceSessionController | undefined;
+	private readonly voiceWidget: AgentsVoiceWidget | undefined;
 	readonly model: TModel;
 	private listWidget: ChatListWidget;
 	private readonly queueEditor = this._register(new MutableDisposable<ChatQueueEditor>());
@@ -114,7 +129,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	private readonly historyAction: Button;
 	private historyRecovery: { readonly status: IChatSessionHistoryStatus; readonly generation: number; } | undefined;
 	private submittedMessage = false;
-	private displayedThreadId: ThreadId | undefined;
+	private readonly welcome: ChatViewWelcomePart;
+	private displayedConversationId: string | undefined;
 
 	constructor(
 		container: HTMLElement,
@@ -140,7 +156,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	) {
 		super();
 		this.model = this._register(model);
-		this.voiceSessionController = this._register(instantiationService.createInstance(VoiceSessionController, async (request: AgentVoiceTaskRequest, signal: AbortSignal) => {
+		const modelVoice = model.voice;
+		const voiceClient = this.voiceSessionController = modelVoice ? undefined : this._register(instantiationService.createInstance(VoiceSessionController, async (request: AgentVoiceTaskRequest, signal: AbortSignal) => {
 			if (signal.aborted || this.isDisposed || this.model.sessionId !== request.sessionId || this.model.threadId !== request.threadId) throw canceled();
 			// The original composer/model owns mode, queue, steering and approval. Speech remains low-trust context.
 			await this.model.send(localize('chat.voice.task.submit', 'Handle the request I just spoke.'), this.model.inputState.mode, undefined, [{ name: localize('chat.voice.task.context', 'Voice request'), content: request.transcript }], { commandId: request.commandId, source: { sessionId: request.sessionId, threadId: request.threadId }, signal });
@@ -218,7 +235,35 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			}));
 		}
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
-			promptTimelineFiles: this.viewOptions?.promptTimelineFiles,
+			createRequestInput: ({ container, descriptionId, initialHeight, submit, reportError }: ChatRequestInputOptions) => {
+				const delegate: ChatInputDelegate = {
+					...inputDelegate,
+					voiceConversation: undefined,
+					executeServerCommand: undefined,
+					openChanges: undefined,
+					readWorkspaceChanges: undefined,
+					send: async (text, _mode, _skills, contexts, signal) => {
+						const resolved = await Promise.all((contexts ?? []).map(resolveChatContextAttachment));
+						if (signal?.aborted) throw canceled();
+						await submit(text, resolved);
+					},
+				};
+				const part = scopedInstantiation.createInstance(ChatInputPart, container, delegate, contextMenuService, contextViewService, accessibleViewService, notifications, { create: (options: ChatInputEditorOptions) => this.input.createEditor(options) }, [], {
+					layout: 'compact', modePicker: 'hidden', modelPickerPosition: 'trailing',
+					renderSecondaryToolbar: false, draftStorage: 'host', inlineEdit: { descriptionId, initialHeight, reportError },
+				});
+				const state = this.model.inputState;
+				part.render({
+					...state, phase: 'ready', canInterrupt: false, queuedMessages: 0, draftIdentity: undefined,
+					interaction: undefined, pendingUserInputRequestId: undefined, toolInvocation: undefined, toolInvocations: undefined,
+				});
+				return part;
+			},
+			promptTimelineChanges: this.viewOptions?.promptTimelineChanges,
+			showPromptTimeline: this.viewOptions?.showPromptTimeline,
+			readResponseResource: model.readResponseResource?.bind(model),
+			getResponseLinkOpener: model.getResponseLinkOpener?.bind(model),
+			getResponseActions: model.getResponseActions?.bind(model),
 			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),
 			getHistoryState: () => this.model.olderHistory,
 			loadOlderHistory: async () => { await this.model.loadOlderHistory?.(); },
@@ -255,9 +300,15 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			onDidRequestErrorAction: (action: ChatTurnErrorAction) => void this.handleTurnErrorAction(action).catch(() => undefined),
 		});
 		this.listWidget = listWidgets.get();
-		const voiceClient = this.voiceSessionController;
 		const inputDelegate: ChatInputDelegate = {
-			voiceConversation: {
+			draft: model.draft,
+			voiceConversation: modelVoice ? {
+				get isAvailable() { return modelVoice.isAvailable && !model.inputState.aiDisabled; },
+				get isActive() { return modelVoice.isActive; },
+				get isConnected() { return modelVoice.isConnected; },
+				toggle: () => this.runVoice(() => modelVoice.isActive ? modelVoice.stop() : modelVoice.start(ownerDocument.defaultView!)),
+				interrupt: () => this.runVoice(() => modelVoice.stop()),
+			} : voiceClient && {
 				get isAvailable() { return voiceClient.isAvailable && !model.inputState.aiDisabled; },
 				get isActive() { return voiceClient.isActive; },
 				get isConnected() { return voiceClient.isConnected; },
@@ -271,40 +322,41 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
 				: invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
-			executeServerCommand: (invocation, submissionSignal) => invocation.name === 'advisor' && !invocation.argumentsText.trim()
+			executeServerCommand: model.executeServerCommand && ((invocation, submissionSignal) => invocation.name === 'advisor' && !invocation.argumentsText.trim()
 				? commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID)
-				: this.model.executeServerCommand(invocation.name, invocation.argumentsText, submissionSignal),
+				: model.executeServerCommand!(invocation.name, invocation.argumentsText, submissionSignal)),
 			interrupt: () => this.model.interrupt(),
-			openChanges: async revision => {
+			openChanges: model.refreshChanges && (async revision => {
 				try { await commandService.executeCommand(OPEN_CHAT_CHANGES_COMMAND_ID, this.model.sessionId, this.model.threadId, revision); }
-				finally { void this.model.refreshChanges(); }
-			},
-			readWorkspaceChanges: () => readWorkspaceChanges(commandService),
+				finally { void model.refreshChanges!(); }
+			}),
+			readWorkspaceChanges: model.refreshChanges && (() => readWorkspaceChanges(commandService)),
 			selectModel: (model) => this.model.selectModel(model),
-			selectReasoningEffort: effort => this.model.selectReasoningEffort(effort),
-			selectAutomaticModel: () => this.model.selectAutomaticModel(),
-			listAgents: () => this.model.listAgents(),
-			selectAgent: agent => this.model.selectAgent(agent),
-			selectMode: mode => this.model.selectMode(mode),
-			selectApprovalMode: async mode => {
+			selectReasoningEffort: effort => model.selectReasoningEffort?.(effort) ?? Promise.resolve(),
+			selectAutomaticModel: model.selectAutomaticModel?.bind(model),
+			listAgents: () => model.listAgents?.() ?? Promise.resolve([]),
+			selectAgent: agent => model.selectAgent?.(agent),
+			selectMode: mode => model.selectMode?.(mode),
+			selectApprovalMode: model.selectApprovalMode && (async mode => {
 				const generation = this.model.composerGeneration;
 				const identity = this.model.threadId ?? this.model.untitledSessionId;
 				await applyAgentHostCompletionAction(mode, confirmation => dialogs.confirm(confirmation),
 					() => !this.isDisposed && generation === this.model.composerGeneration
 						&& identity === (this.model.threadId ?? this.model.untitledSessionId) && !this.model.inputState.aiDisabled,
-					selected => this.model.selectApprovalMode(selected));
-			},
+					selected => model.selectApprovalMode!(selected));
+			}),
 			openModelSettings: (category = 'models') => commandService.executeCommand(OpenSettingsCommandId, { section: category }),
-			resolveInteraction: (response, expectedRequestId) => this.model.resolveInteraction(response, expectedRequestId),
+			resolveInteraction: (response, expectedRequestId) => model.resolveInteraction?.(response, expectedRequestId) ?? Promise.resolve(),
 		};
 		this.input = this._register(createInputPart
 			? createInputPart(this.element, inputDelegate)
-			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading', get workspacePickerDelegate() { return viewOptions?.workspacePickerDelegate; } }));
+			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading', configureModelInMenu: viewOptions?.configureModelInMenu, get workspacePickerDelegate() { return viewOptions?.workspacePickerDelegate; } }));
+		this.listWidget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm);
 		this._register(widgets.register(this));
-		this._register(scopedInstantiation.createInstance(ChatRequestOriginPart, this.element, model));
+		if (model.prepareConversation || model.sessionId) this._register(scopedInstantiation.createInstance(ChatRequestOriginPart, this.element, model));
 		const voiceContainer = h(ownerDocument, 'div');
 		let hold: string | undefined;
-		this.voiceWidget = this._register(instantiationService.createInstance(AgentsVoiceWidget, voiceContainer, {
+		this.voiceWidget = voiceClient && this._register(instantiationService.createInstance(AgentsVoiceWidget, voiceContainer, {
 			openSession: () => this.input.focus(),
 			toggleMute: () => { void this.runVoice(() => voiceClient.setMuted(!voiceClient.isMuted)); },
 			toggleInputMode: () => { void this.runVoice(() => voiceClient.setInputMode(voiceClient.inputMode === 'pushToTalk' ? 'openMic' : 'pushToTalk')); },
@@ -315,20 +367,26 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			closeWindow: () => this.input.focus(),
 			showSessionsPicker: () => this.input.focus(),
 		}, { showClose: false, showOnboarding: false, inputBoxLayout: true }));
-		this.element.append(this.goalBanner.domNode, this.olderHistoryElement, this.listWidget.element, this.historyStatusElement, voiceContainer, this.input.element);
+		this.welcome = new ChatViewWelcomePart(ownerDocument);
+		if (viewOptions?.welcomeTitle) this._register(autorun(reader => {
+			viewOptions.welcomeTitle!.read(reader);
+			this.updateConversationState();
+		}));
+		this.element.append(this.goalBanner.domNode, this.olderHistoryElement, this.welcome.element, this.listWidget.element, this.historyStatusElement, voiceContainer, this.input.element);
 		this._register(listWidgets.onDidChange(widget => {
 			const previous = this.listWidget;
 			const state = previous.getViewState();
 			previous.element.replaceWith(widget.element);
 			this.listWidget = widget;
+			widget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm);
 			widget.restoreViewState(state, this.model.items);
 		}));
 		this._register(this.model.onDidChangeComposer(() => { this.input.invalidatePendingInput(); this.listWidget.resetFind(); }));
 		this._register(this.model.onDidChange(() => {
-			if (this.model.inputState.aiDisabled && this.voiceSessionController.isActive) void this.runVoice(() => this.voiceSessionController.disconnect());
+			if (this.model.inputState.aiDisabled && voiceClient?.isActive) void this.runVoice(() => voiceClient.disconnect());
 			this.render();
 		}));
-		this._register(this.voiceSessionController.onDidChange(() => { if (!this.isDisposed) this.render(); }));
+		if (voiceClient) this._register(voiceClient.onDidChange(() => { if (!this.isDisposed) this.render(); }));
 		this._register(toDisposable(() => this.element.remove()));
 		this.render();
 	}
@@ -381,7 +439,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.element.hidden = !visible;
 		if (wasVisible !== visible) { this.visibilityChanged.fire(); }
 		if (wasVisible && !visible) this.hidden.fire();
-		if (!visible && this.voiceSessionController.isActive) void this.runVoice(() => this.voiceSessionController.disconnect());
+		if (!visible && this.model.voice?.isActive) void this.runVoice(() => this.model.voice!.stop());
+		const voiceClient = this.voiceSessionController;
+		if (!visible && voiceClient?.isActive) void this.runVoice(() => voiceClient.disconnect());
 		this.input.setVisible(visible);
 		this.listWidget.setVisible(visible);
 	}
@@ -393,8 +453,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	/** A floating control starts through this Chat's original source and task dispatcher. */
 	startVoiceConversation(): Promise<void> {
 		if (this.model.inputState.aiDisabled) return Promise.reject(new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.')));
+		if (this.model.voice) return this.model.voice.start(this.element.ownerDocument.defaultView!);
 		this.voiceOnboarding.showIfNeeded();
-		return this.voiceSessionController.connect(getActiveWindow(), (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal));
+		return this.voiceSessionController!.connect(getActiveWindow(), (connections, signal) => pickVoiceConversation(this.quickInput, connections, signal));
 	}
 
 	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>, signal?: AbortSignal): Promise<readonly ChatContextAttachment[]> {
@@ -478,7 +539,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	public async retryFailedTurn(turnId?: string): Promise<void> {
 		if (this.isDisposed || !this.visible || this.model.inputState.aiDisabled) { return; }
 		const action = [...this.model.items].reverse().find(item => item.action?.type === 'retry' && (!turnId || item.action.turnId === turnId))?.action;
-		if (action?.type === 'retry') { await this.model.retryFailedTurn(action.turnId); }
+		if (action?.type === 'retry') { await this.model.retryFailedTurn?.(action.turnId); }
 	}
 
 	private async handleTurnErrorAction(action: ChatTurnErrorAction): Promise<void> {
@@ -499,31 +560,39 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	}
 
 	private render(): void {
-		if (this.displayedThreadId !== this.model.threadId) {
-			this.displayedThreadId = this.model.threadId;
+		const conversationId = this.model.threadId ?? this.model.inputState.draftIdentity?.id;
+		if (this.displayedConversationId !== conversationId) {
+			this.displayedConversationId = conversationId;
 			this.submittedMessage = false;
 		}
 		this.syncIdentity();
-		this.voiceSessionController.setSource(this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined, this.model.untitledSessionId);
 		const voice = this.voiceSessionController;
-		const focused = this.element.ownerDocument.activeElement;
-		if (!voice.isActive && this.voiceWidget.element.contains(focused)) this.input.focus();
-		this.voiceWidget.element.hidden = !voice.isActive;
-		this.voiceWidget.setConnected(voice.isConnected);
-		this.voiceWidget.setConnecting(voice.isActive && !voice.isConnected);
-		this.voiceWidget.setMuted(voice.isMuted);
-		this.voiceWidget.setInputMode(voice.inputMode);
-		this.voiceWidget.setVoiceState(voice.isListening ? 'listening' : 'idle');
-		this.voiceWidget.setStatusText(voice.isConnected
-			? voice.isMuted ? localize('agentsVoice.mutedStatus', 'Microphone muted') : voice.inputMode === 'pushToTalk'
-				? voice.isListening ? localize('agentsVoice.listening', 'Listening…') : localize('agentsVoice.readyPtt', 'Press and hold to speak')
-				: localize('agentsVoice.listening', 'Listening…')
-			: localize('agentsVoice.connecting', 'Connecting…'));
+		const voiceWidget = this.voiceWidget;
+		if (voice && voiceWidget) {
+			voice.setSource(this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined, this.model.untitledSessionId);
+			const focused = this.element.ownerDocument.activeElement;
+			if (!voice.isActive && voiceWidget.element.contains(focused)) this.input.focus();
+			voiceWidget.element.hidden = !voice.isActive;
+			voiceWidget.setConnected(voice.isConnected);
+			voiceWidget.setConnecting(voice.isActive && !voice.isConnected);
+			voiceWidget.setMuted(voice.isMuted);
+			voiceWidget.setInputMode(voice.inputMode);
+			voiceWidget.setVoiceState(voice.isListening ? 'listening' : 'idle');
+			voiceWidget.setStatusText(voice.isConnected
+				? voice.isMuted ? localize('agentsVoice.mutedStatus', 'Microphone muted') : voice.inputMode === 'pushToTalk'
+					? voice.isListening ? localize('agentsVoice.listening', 'Listening…') : localize('agentsVoice.readyPtt', 'Press and hold to speak')
+					: localize('agentsVoice.listening', 'Listening…')
+				: localize('agentsVoice.connecting', 'Connecting…'));
+		}
 		this.goalBanner.setGoal(this.model.goal);
 		this.renderHistoryStatus();
 		this.renderOlderHistory();
 		const items = this.model.items;
 		this.updateConversationState(items.length > 0);
+		if (this.model.draft) {
+			const { phase } = this.model.inputState;
+			this.listWidget.setBusy(phase === 'loading' || phase === 'submitting');
+		}
 		this.listWidget.render(items);
 		this.input.render({ ...this.model.inputState, toolInvocations: this.model.items.flatMap(item => item.toolInvocation ? [item.toolInvocation] : []), toolInvocation: this.model.items.find(item => item.toolInvocation?.call.itemId === this.model.inputState.interaction?.itemId)?.toolInvocation, conversation: this.model.sessionId && this.model.threadId ? { sessionId: this.model.sessionId, threadId: this.model.threadId } : undefined });
 	}
@@ -597,6 +666,19 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const hasConversation = this.submittedMessage || hasTranscript;
 		this.element.classList.toggle('empty', !hasConversation);
 		this.element.classList.toggle('has-conversation', hasConversation);
+		const input = this.model.inputState;
+		const welcomeTitle = this.viewOptions?.welcomeTitle?.get();
+		const showWelcome = this.viewOptions?.showWelcome !== false && !hasConversation && !input.aiDisabled
+			&& (this.viewOptions?.welcomeTitle ? !!welcomeTitle : this.model.untitledSessionId !== undefined && !input.inputBlocked)
+			&& !this.voiceSessionController?.isActive;
+		this.welcome.render(showWelcome ? {
+			title: welcomeTitle ?? (input.mode === 'ask'
+				? localize('chat.welcome.ask', 'Ask about your code')
+				: input.mode === 'agent'
+					? localize('chat.welcome.agent', 'Build with Agent')
+					: localize('chat.welcome.start', 'Start a conversation')),
+			message: localize('chat.welcome.verify', 'Check important details in AI-generated responses.'),
+		} : undefined);
 	}
 
 	private syncIdentity(): void {

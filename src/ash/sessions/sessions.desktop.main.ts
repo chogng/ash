@@ -11,7 +11,7 @@ import '../workbench/contrib/browserView/electron-browser/browserView.contributi
 import './contrib/canvases/electron-browser/sessionCanvases.contribution.js';
 import '../workbench/services/browserView/electron-browser/playwrightWorkbenchService.js';
 import './contrib/browserView/browser/sessionBrowserView.contribution.js';
-import './contrib/chatgptweb/browser/chatGPTWeb.contribution.js';
+import './electron-browser/chatWorkspace.contribution.js';
 import './sessions.common.main.js';
 import '../platform/update/common/update.config.contribution.js';
 import '../workbench/services/update/electron-browser/updateService.js';
@@ -28,7 +28,7 @@ import '../workbench/services/menubar/electron-browser/menubarService.js';
 import '../workbench/services/process/electron-browser/processService.js';
 import '../workbench/contrib/processExplorer/electron-browser/processExplorer.contribution.js';
 import './browser/parts/menubar.contribution.js';
-import './contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js';
+import './contrib/openAgentsWindow/electron-browser/openAgentsWindowKeybindingTip.js';
 import { registerOpenAgentsWindowCommand } from './contrib/openAgentsWindow/electron-browser/openAgentsWindowCommand.js';
 import { OpenAshWindowAction } from './electron-browser/actions/ashActions.js';
 import { MenusRegistry, registerAction2 } from '../platform/actions/common/actions.js';

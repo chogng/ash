@@ -29,6 +29,42 @@ for (const [original, formatted] of [
 	});
 }
 
+for (const { boundary, original, formatted, expectedRange, expectedText } of [
+	{
+		boundary: 'start after a lone high surrogate',
+		original: 'a\uD800x',
+		formatted: 'a\uD800y',
+		expectedRange: new Range(1, 1, 1, 4),
+		expectedText: 'a\uD800y',
+	},
+	{
+		boundary: 'end after a lone high surrogate',
+		original: 'aX\uD83Dy',
+		formatted: 'bX😀y',
+		expectedRange: new Range(1, 1, 1, 5),
+		expectedText: 'bX😀y',
+	},
+	{
+		boundary: 'line end after a lone high surrogate',
+		original: 'AB\uD83D\nnext',
+		formatted: 'AB\uD83DX\nnext',
+		expectedRange: new Range(1, 4, 1, 4),
+		expectedText: 'X',
+	},
+]) {
+	test(`minimal formatting respects the model boundary at ${boundary}`, async () => {
+		using model = new TextModel(original);
+		using worker = new EditorWorker();
+		const result = await run(worker, model, 1, EDITOR_WORKER_MINIMAL_EDITS_LANE, {
+			edits: [{ range: model.getFullModelRange(), text: formatted }],
+		});
+		assert.ok(Array.isArray(result));
+		model.applyEdits(result);
+		assert.equal(model.getValue(), formatted);
+		assert.deepEqual(result, [{ range: expectedRange, text: expectedText }]);
+	});
+}
+
 test('value navigation includes the final character when the word pattern excludes numbers', async () => {
 	using model = new TextModel('version 2');
 	using worker = new EditorWorker();

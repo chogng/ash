@@ -147,6 +147,7 @@ impl<'a> InstructionRequestProcessor<'a> {
                     .body_at(Path::new(path), &source.root, &source.files)
             {
                 return Ok(UserInput::Context {
+                    source_url: None,
                     name: path.into(),
                     content: ash_core::HarnessInstruction::new(
                         match source.scope {

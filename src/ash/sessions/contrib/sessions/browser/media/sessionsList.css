@@ -8,12 +8,23 @@
 	background: var(--ash-sideBar-background);
 }
 
-.ash-sessions-list h2 {
-	position: absolute;
-	width: 1px;
-	height: 1px;
+.ash-sessions-list-header {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding-inline-start: var(--ash-spacing-size120);
+}
+
+.ash-sessions-list-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin: 0;
 	overflow: hidden;
-	clip-path: inset(50%);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-regular);
+	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
@@ -39,7 +50,20 @@
 }
 
 .ash-sessions-list-more {
-	align-self: flex-end;
+	flex: 0 0 auto;
+}
+
+.ash-sessions-list-more .ash-button {
+	box-sizing: border-box;
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	min-width: 0;
+	min-height: 0;
+	padding: 0;
+}
+
+.ash-sessions-list-more .ash-dropdown-menu-indicator {
+	display: none;
 }
 
 .ash-sessions-list-search {
@@ -58,30 +82,21 @@
 	outline-offset: -1px;
 }
 
-.ash-sessions-list-items {
-	display: flex;
-	min-height: 0;
+.ash-sessions-list-items.ash-list-scrollable {
+	--ash-list-row-inset-end: max(
+		var(--ash-spacing-size120),
+		var(--ash-scrollbar-vertical-size)
+	);
 	flex: 1 1 auto;
-	flex-direction: column;
-	gap: var(--ash-spacing-size40);
-	overflow: auto;
+	margin-inline-end: calc(-1 * var(--ash-spacing-size120));
 }
 
-.ash-sessions-list-item {
-	width: 100%;
-	display: flex;
-	min-width: 0;
-	min-height: var(--ash-spacing-size320);
-	align-items: center;
-	gap: var(--ash-spacing-size120);
-	padding: var(--ash-spacing-size40) var(--ash-spacing-size120);
-	border: 0;
-	border-radius: var(--ash-cornerRadius-large);
-	color: var(--ash-foreground);
-	background: transparent;
-	cursor: pointer;
-	font-size: var(--ash-fontSize-body1);
-	text-align: left;
+.ash-sessions-list-items.ash-list-scrollable
+	> .ash-scrollbar-track-vertical
+	> .ash-scrollbar-thumb {
+	/* Inset the paint while keeping the full thumb available for dragging. */
+	border: var(--ash-strokeThickness) solid transparent;
+	background-clip: padding-box;
 }
 
 .ash-sessions-list-item.has-management {
@@ -108,14 +123,6 @@
 	display: none;
 }
 
-.ash-sessions-list-label {
-	flex: 1;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
 .ash-sessions-list-pr {
 	display: inline-flex;
 	flex: 0 0 auto;
@@ -132,6 +139,74 @@
 	font-size: var(--ash-lxiconFontSize-compact);
 }
 
+.ash-sessions-empty {
+	margin: var(--ash-spacing-size80) var(--ash-spacing-size20);
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-sessions-list-tree.ash-tree {
+	--ash-list-row-padding-end: 0px;
+}
+
+.ash-sessions-list-tree .ash-tree-row {
+	background: transparent;
+}
+
+.ash-sessions-list-tree
+	.ash-tree-row
+	> .ash-tree-row-inner
+	> :is(.ash-tree-indent, .ash-tree-twistie) {
+	display: none;
+}
+
+.ash-sessions-list-tree .ash-tree-contents {
+	display: block;
+	margin-left: calc(-1 * var(--ash-spacing-size80));
+}
+
+.ash-sessions-list-tree .ash-tree-row:has([data-parent-section]) {
+	margin-block-start: var(--ash-spacing-size20);
+}
+
+.ash-sessions-list-items .ash-tree-row[data-tree-depth="3"] .ash-tree-contents {
+	padding-inline-start: var(--ash-spacing-size240);
+}
+
+.ash-sessions-list-items .ash-tree-row[data-tree-depth="4"] .ash-tree-contents {
+	padding-inline-start: calc(2 * var(--ash-spacing-size240));
+}
+
+.ash-sessions-list-tree
+	.ash-tree-row:has(.ash-sessions-list-section):not(:first-child) {
+	margin-block-start: var(--ash-spacing-size80);
+}
+
+.ash-sessions-list-item {
+	width: 100%;
+	display: flex;
+	min-width: 0;
+	min-height: var(--ash-spacing-size320);
+	align-items: center;
+	gap: var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size120);
+	border: 0;
+	border-radius: var(--ash-cornerRadius-large);
+	color: var(--ash-foreground);
+	background: transparent;
+	cursor: pointer;
+	font-size: var(--ash-fontSize-body1);
+	text-align: left;
+}
+
+.ash-sessions-list-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .ash-sessions-list-row:is(:hover, :focus-within, .menu-visible)
 	> .ash-sessions-list-item {
 	background: var(--sessions-row-background);
@@ -139,7 +214,7 @@
 
 .ash-sessions-list-row.selected > .ash-sessions-list-item {
 	color: var(--ash-foreground);
-	background: var(--ash-sessions-selectionBackground);
+	background: var(--sessions-row-background);
 }
 
 .ash-sessions-list-item:focus-visible {
@@ -147,10 +222,12 @@
 	outline-offset: -1px;
 }
 
-.ash-sessions-empty {
-	margin: var(--ash-spacing-size80) var(--ash-spacing-size20);
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label1);
+@media (forced-colors: active) {
+	.ash-sessions-list-row.selected
+		> .ash-sessions-list-item:not(:focus-visible) {
+		outline: 2px solid Highlight;
+		outline-offset: -2px;
+	}
 }
 
 .ash-sessions-list-section,
@@ -159,17 +236,8 @@
 	flex: 0 0 auto;
 }
 
-.ash-sessions-list-section + .ash-sessions-list-section {
-	margin-top: var(--ash-spacing-size160);
-}
-
-/* The list gap contributes the remaining 4px between these sections. */
-.ash-sessions-list-section[data-section="projects"]
-	+ .ash-sessions-list-section[data-section="recent"] {
-	margin-top: var(--ash-spacing-size120);
-}
-
-.ash-sessions-list-section h3 {
+.ash-sessions-list-section > h3,
+.ash-sessions-list-subgroup > h3 {
 	margin: 0;
 	font: inherit;
 }
@@ -206,30 +274,6 @@
 	outline-offset: -1px;
 }
 
-.ash-sessions-list-section:is(
-		[data-section="projects"],
-		[data-section="recent"]
-	)
-	> h3
-	> .ash-sessions-list-section-toggle
-	> .ash-sessions-list-section-icon {
-	width: var(--ash-lxiconFontSize);
-	height: var(--ash-lxiconFontSize);
-	font-size: var(--ash-lxiconFontSize);
-}
-
-@media (hover: hover) {
-	.ash-sessions-list-section:is(
-			[data-section="projects"],
-			[data-section="recent"]
-		)
-		> h3
-		> .ash-sessions-list-section-toggle:not(:hover, :focus-visible)
-		> .ash-sessions-list-section-icon {
-		opacity: 0;
-	}
-}
-
 .ash-sessions-list-section-icon,
 .ash-sessions-list-item > .ash-icon {
 	display: inline-flex;
@@ -251,41 +295,44 @@
 	white-space: nowrap;
 }
 
-.ash-sessions-list-section-body {
-	display: flex;
-	flex-direction: column;
-	gap: var(--ash-spacing-size20);
-}
-
-.ash-sessions-list-nested-chats,
-.ash-sessions-list-subgroup > .ash-sessions-list-section-body {
-	padding-inline-start: var(--ash-spacing-size240);
-}
-
-.ash-sessions-list-section-body[hidden] {
-	display: none;
-}
-
 .ash-sessions-list-row {
 	position: relative;
 	min-width: 0;
 	--sessions-row-background: var(--ash-sideBar-background);
 }
 
+.ash-sessions-list-row > .ash-session-leading-icon {
+	position: absolute;
+	z-index: 1;
+	inset-block-start: 50%;
+	inset-inline-start: calc(
+		var(--ash-spacing-size120) +
+			(var(--ash-lxiconFontSize-large) - var(--ash-spacing-size280)) / 2
+	);
+	transform: translateY(-50%);
+}
+
+.ash-sessions-list-row.has-leading-icon > .ash-sessions-list-item {
+	padding-inline-start: calc(
+		2 * var(--ash-spacing-size120) + var(--ash-lxiconFontSize-large)
+	);
+}
+
 .ash-sessions-list-row:hover,
 .ash-sessions-list-row:focus-within,
 .ash-sessions-list-row.menu-visible {
-	--sessions-row-background: var(--ash-list-hoverBackground);
+	--sessions-row-background: var(--ash-sessions-sidebar-hover-background);
 }
 
 .ash-sessions-list-row.selected {
-	--sessions-row-background: var(--ash-sessions-selectionBackground);
+	--sessions-row-background: var(--ash-sessions-sidebar-selection-background);
 }
 
 .ash-sessions-list-row .ash-sessions-list-actions {
 	position: absolute;
 	inset-inline-end: var(--ash-strokeThickness);
-	top: var(--ash-spacing-size40);
+	top: 50%;
+	transform: translateY(-50%);
 	height: 28px;
 	padding-inline-end: var(--ash-spacing-size40);
 	border-radius: 0 var(--ash-cornerRadius-large) var(--ash-cornerRadius-large)
@@ -344,6 +391,6 @@
 	display: none;
 }
 
-.ash-sessions-list-actions .ash-button-label {
+.ash-sessions-list-actions :is(.ash-button-label, .ash-action-label-text) {
 	display: none;
 }

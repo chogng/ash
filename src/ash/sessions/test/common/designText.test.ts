@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
-import { DesignModel } from '../../contrib/creator/common/model/designModel.js';
-import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/creator/common/model/document.js';
-import { designTextSegments, designTextStyleAt, formatDesignText, parseDesignTextProperties, parseDesignTextStyle, replaceDesignText, updateDesignText, type DesignTextShape } from '../../contrib/creator/common/model/designText.js';
-import { resolveDesignLayout } from '../../contrib/creator/common/model/layout.js';
+import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';
+import { DesignModel } from '../../contrib/artifacts/common/model/designModel.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/artifacts/common/model/document.js';
+import { designTextSegments, designTextStyleAt, formatDesignText, parseDesignTextProperties, parseDesignTextStyle, replaceDesignText, updateDesignText, type DesignTextShape } from '../../contrib/artifacts/common/model/designText.js';
+import { resolveDesignLayout } from '../../contrib/artifacts/common/model/layout.js';
 
 function text(content = 'Hello world'): DesignTextShape { return { id: generateUuid(), kind: 'text', text: content, x: 0, y: 0, width: 100, height: 24, rotation: 0, fill: '#000000', fontSize: 20 }; }
 function find(model: DesignModel, id: string): DesignTextShape { return flattenDesignShapes(model.value.shapes).find(shape => shape.id === id) as DesignTextShape; }

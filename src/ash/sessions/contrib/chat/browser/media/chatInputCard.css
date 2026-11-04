@@ -1,0 +1,54 @@
+.ash-sessions-chat-content {
+	/* Center the composer and transcript while the scroll viewport spans the pane. */
+	--ash-sessions-chat-host-inset: var(--ash-sessions-editor-tool-inset, 0px);
+	--ash-sessions-chat-content-bottom: calc(
+		var(--ash-spacing-size120) - var(--ash-sessions-chat-host-inset, 0px)
+	);
+	--ash-sessions-chat-content-inset: calc(
+		var(--ash-spacing-size240) - var(--ash-sessions-chat-host-inset, 0px) +
+			max(
+				0px,
+				(100% + 2 * var(--ash-sessions-chat-host-inset, 0px) - 950px) /
+					2
+			)
+	);
+}
+
+.ash-sessions-chat-input-card {
+	--ash-chat-input-min-height: 0px;
+	--ash-chat-input-border: var(--ash-border);
+	--ash-chat-input-focus-border: var(--ash-border);
+	--ash-chat-input-shadow: var(--ash-sessions-inputShadow);
+	--ash-chat-input-radius: var(--ash-cornerRadius-xLarge);
+	--ash-chat-input-toolbar-gap: var(--ash-spacing-size80);
+}
+
+.ash-sessions-chat-input-card.stacked {
+	--ash-chat-input-padding: var(--ash-spacing-size160);
+}
+
+.ash-sessions-chat-input-card.ash-chat-input-adaptive.floating-card {
+	box-shadow: none;
+}
+
+.ash-sessions-chat-input-card.ash-chat-input-adaptive.floating-card:is(
+		:hover,
+		:focus-within,
+		.focused
+	) {
+	box-shadow: var(--ash-sessions-soft-shadow);
+}
+
+.ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-sessions-chat-input-card.ash-chat-input-adaptive.floating-card {
+	box-shadow: none;
+}
+
+.ash-sessions-chat-input > .ash-chat-input-footer {
+	padding-top: var(--ash-spacing-size80);
+	gap: var(--ash-actionBar-gap);
+}
+
+.ash-sessions-chat-input > .ash-chat-input-footer > .ash-chat-input-toolbars {
+	width: auto;
+}

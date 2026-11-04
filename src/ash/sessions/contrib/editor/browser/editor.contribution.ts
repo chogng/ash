@@ -1,15 +1,26 @@
-import { Direction } from '../../../../base/browser/ui/grid/grid.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
+import { status } from '../../../../base/browser/ui/aria/aria.js';
+import { Schemas } from '../../../../base/common/network.js';
+import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { resolveCommandsContext } from '../../../../workbench/browser/parts/editor/editorCommandsContext.js';
+import { AppServerAvailableContext, EditorGroupEditorsCountContext, EditorPartModalVisibleContext, IsSessionsWindowContext, ResourceSchemeContext } from '../../../../workbench/common/contextkeys.js';
+import { IChatAttachmentResolveService } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
+import { IEditorGroupsService } from '../../../../workbench/services/editor/common/editorGroupsService.js';
+import { ITerminalEditorService, ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
+import { TerminalEditor } from '../../../../workbench/contrib/terminal/browser/terminalEditor.js';
+import { TerminalEditorInput } from '../../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
+import type { SessionsPart } from '../../../browser/parts/sessionsPart.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { autorun } from '../../../../base/common/observable.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
-import { MenusRegistry, MenuId } from '../../../../platform/actions/common/actions.js';
+import { Action2, MenusRegistry, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ContextKeyExpr, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
-import { localize2 } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { Menus } from '../../../browser/menus.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../layout/browser/desktopLayoutController.js';
@@ -23,6 +34,11 @@ const filesVisibleContext = new RawContextKey<boolean>('sessions.filesVisible', 
 const changesVisibleContext = new RawContextKey<boolean>('sessions.changesVisible', false);
 const codeContext = new RawContextKey<boolean>('sessions.desktopCode', false);
 const supportedDetailsContext = new RawContextKey<boolean>('sessions.supportedDetails', false);
+const terminalTool = ContextKeyExpr.equals('sessions.editorTool', 'terminal');
+const nonTerminalTool = ContextKeyExpr.notEquals('sessions.editorTool', 'terminal');
+const splitTerminalDown = 'ash.sessions.splitTerminalDown';
+const closeTerminalPane = 'ash.sessions.closeTerminalPane';
+
 /** Window-owned editor commands and menu state derive from the existing layout owner. */
 export class EditorTitleMenuBridgeContribution extends Disposable {
 	constructor(
@@ -43,6 +59,12 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 				if ('command' in item && navigationCommands.has(item.command.id)) { continue; }
 				// The dedicated layout toolbar owns card controls; group-layout commands remain available in overflow.
 				const layoutItem = 'command' in item && layoutCommands.has(item.command.id);
+				if ('command' in item && item.command.id === 'workbench.action.splitEditor') {
+					mirrored.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
+						...item, group: '9_layout', when: ContextKeyExpr.and(item.when, nonTerminalTool),
+					}));
+					continue;
+				}
 				mirrored.add(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, layoutItem ? { ...item, group: '9_layout' } : item));
 			}
 		};
@@ -90,6 +112,40 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			});
 		const toolGroup = (arg: unknown): number => isRecord(arg) && typeof arg.groupId === 'number'
 			&& editor.groups.some(group => group.id === arg.groupId) ? arg.groupId : editor.activeGroup.id;
+		this._register(CommandsRegistry.register(splitTerminalDown, async (accessor, ...args) => {
+			const { groupedEditors: [source], preserveFocus } = resolveCommandsContext(args, accessor.get(IEditorGroupsService));
+			const input = source?.group.activeInput;
+			if (input instanceof TerminalEditorInput) await accessor.get(ITerminalEditorService).splitPane(input, preserveFocus);
+		}));
+		this._register(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
+			command: {
+				id: splitTerminalDown,
+				title: localize2('workbench.splitEditorDown', 'Split Down'),
+				icon: Lxicon.splitVertical,
+				precondition: AppServerAvailableContext.isEqualTo(true),
+			},
+			when: ContextKeyExpr.and(codeContext.isEqualTo(true), terminalTool),
+			group: '9_layout',
+			order: 100000,
+		}));
+		this._register(CommandsRegistry.register(closeTerminalPane, async (accessor, ...args) => {
+			const { groupedEditors: [source] } = resolveCommandsContext(args, accessor.get(IEditorGroupsService));
+			const pane = editor.groups.find(group => group.id === source?.group.id)?.activePane;
+			if (!(pane instanceof TerminalEditor)) return;
+			const instance = pane.getControl();
+			if (instance) await accessor.get(ITerminalService).safeDisposeTerminal(instance);
+		}));
+		this._register(MenusRegistry.appendMenuItem(Menus.SessionsEditorTitle, {
+			command: {
+				id: closeTerminalPane,
+				title: localize2('terminal.editor.closePane', 'Close Current Pane'),
+				icon: Lxicon.close,
+				precondition: AppServerAvailableContext.isEqualTo(true),
+			},
+			when: ContextKeyExpr.and(codeContext.isEqualTo(true), terminalTool, ContextKeyExpr.notEquals(EditorGroupEditorsCountContext.key, 0)),
+			group: '9_layout',
+			order: 100001,
+		}));
 		this._register(CommandsRegistry.register('ash.sessions.toggleChangesFileList', arg => {
 			const pane = editor.groups.find(group => group.id === toolGroup(arg))?.activePane;
 			if (pane instanceof SessionChangesEditor) { pane.toggleFileList(); }
@@ -125,25 +181,38 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 			),
 		);
 		const codeWhen = codeContext.isEqualTo(true);
-		this._register(MenusRegistry.appendMenuItem(Menus.SessionsEditorHeaderLayout, {
-			submenu: Menus.SessionsToolMove,
-			title: localize2({ bundle: 'ash', key: 'sessions.layout.moveTool' }, 'Move tool'),
-			when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.has('sessions.editorTool')),
-			group: 'layout',
+		const modalVisible = EditorPartModalVisibleContext.isEqualTo(true);
+		const modalToEditor = ContextKeyExpr.and(codeWhen, modalVisible);
+		this._register(registerAction2(class OpenModalEditorInEditorAction extends Action2 {
+			constructor() {
+				super({
+					id: 'workbench.action.agentSessions.openModalEditorInEditor',
+					title: localize2({ bundle: 'ash.workbench', key: 'sessions.editor.openModalInEditor' }, 'Open in Editor Area'),
+					icon: Lxicon.linkExternal,
+					precondition: modalToEditor,
+					menu: { id: MenuId.ModalEditorTitle, group: 'navigation', order: 98, when: modalToEditor },
+				});
+			}
+			override run(): Promise<void> { return (editor as DesktopEditorParts).moveModalEditorToMain(); }
 		}));
-		for (const [direction, id, title] of [
-			[Direction.Left, 'left', localize2({ bundle: 'ash', key: 'sessions.layout.moveToolLeft' }, 'Move left')],
-			[Direction.Right, 'right', localize2({ bundle: 'ash', key: 'sessions.layout.moveToolRight' }, 'Move right')],
-			[Direction.Up, 'up', localize2({ bundle: 'ash', key: 'sessions.layout.moveToolUp' }, 'Move up')],
-			[Direction.Down, 'down', localize2({ bundle: 'ash', key: 'sessions.layout.moveToolDown' }, 'Move down')],
-		] as const) {
-			const command = `ash.sessions.moveTool.${id}`;
-			this._register(CommandsRegistry.register(command, arg => run(async () => {
-				(editor as DesktopEditorParts).moveToolToEdge(direction, toolGroup(arg));
-			})));
-			this._register(MenusRegistry.appendMenuItem(Menus.SessionsToolMove, { command: { id: command, title } }));
-		}
-
+		const openInModal = ContextKeyExpr.and(codeWhen, EditorPartModalVisibleContext.isEqualTo(false),
+			ContextKeyExpr.or(...[Schemas.file, Schemas.ashRemote, Schemas.untitled, 'ash-session-changes'].map(scheme => ResourceSchemeContext.isEqualTo(scheme))));
+		this._register(registerAction2(class OpenActiveEditorInModalAction extends Action2 {
+			constructor() {
+				super({
+					id: 'workbench.action.agentSessions.openEditorInModal',
+					title: localize2({ bundle: 'ash.workbench', key: 'sessions.editor.openInModal' }, 'Open in Modal Editor'),
+					f1: true,
+					precondition: openInModal,
+				});
+			}
+			override run(): Promise<void> { return (editor as DesktopEditorParts).openActiveEditorInModal(); }
+		}));
+		this._register(MenusRegistry.appendMenuItem(Menus.SessionsEditorHeaderPrimary, {
+			command: { id: 'workbench.action.quickOpen', title: localize2('workbench.editor.goToFile', 'Go to File'), icon: Lxicon.search },
+			when: ContextKeyExpr.and(codeWhen, ContextKeyExpr.equals('sessions.editorTool', 'files'), EditorGroupEditorsCountContext.isEqualTo(0)),
+			group: 'navigation',
+		}));
 		const editorShown = ContextKeyExpr.and(codeWhen, editorVisibleContext.isEqualTo(true));
 		const editorHidden = ContextKeyExpr.and(codeWhen, editorVisibleContext.isEqualTo(false));
 		const toggleSidePane = {
@@ -246,7 +315,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					id: MenuId.EditorTitle,
 					item: {
 						command: { ...toggleDetails, icon: Lxicon.listUnordered },
-						when: codeWhen,
+						when: ContextKeyExpr.and(codeWhen, nonTerminalTool),
 						group: 'navigation',
 						order: 90,
 					},
@@ -255,7 +324,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					id: MenuId.EditorTitle,
 					item: {
 						command: { ...hideEditor, icon: Lxicon.layoutSidebarRightOffSession },
-						when: editorShown,
+						when: ContextKeyExpr.and(editorShown, nonTerminalTool),
 						group: 'navigation',
 						order: 91,
 					},
@@ -264,7 +333,7 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 					id: MenuId.EditorTitle,
 					item: {
 						command: { ...showEditor, icon: Lxicon.layoutSidebarRightSession },
-						when: editorHidden,
+						when: ContextKeyExpr.and(editorHidden, nonTerminalTool),
 						group: 'navigation',
 						order: 91,
 					},
@@ -289,4 +358,41 @@ export class EditorTitleMenuBridgeContribution extends Disposable {
 		);
 		updateContext();
 	}
+}
+
+
+/** Adds the selected editor contents to the draft that was active when invoked. */
+export function registerAddFileAsContextAction(sessions: SessionsPart) {
+	const schemes: ReadonlySet<string> = new Set([Schemas.file, Schemas.ashRemote, Schemas.untitled]);
+	const when = ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ContextKeyExpr.notEquals('config.chat.disableAIFeatures', true),
+		ContextKeyExpr.or(...Array.from(schemes, scheme => ResourceSchemeContext.isEqualTo(scheme))));
+	return registerAction2(class AddFileAsContextAction extends Action2 {
+		constructor() {
+			super({
+				id: 'workbench.action.agentSessions.addFileAsContext',
+				title: localize2({ bundle: 'ash.workbench', key: 'sessions.editor.addFileAsContext' }, 'Add File as Context'),
+				icon: Lxicon.paperclip,
+				precondition: when,
+				menu: [
+					{ id: Menus.SessionsEditorTitle, when, group: 'navigation', order: 100 },
+					{ id: MenuId.EditorTitleContext, when, group: 'z_chat' },
+				],
+			});
+		}
+
+		override async run(accessor: ServicesAccessor, ...args: readonly unknown[]): Promise<void> {
+			const { groupedEditors } = resolveCommandsContext(args, accessor.get(IEditorGroupsService));
+			const inputs = groupedEditors.flatMap(({ editors }) => editors).filter(input => schemes.has(input.resource.scheme));
+			if (!inputs.length) return;
+			const resolver = accessor.get(IChatAttachmentResolveService);
+			const accepted = await sessions.acquireContext(async signal => {
+				const attachments = await Promise.all(inputs.map(input => resolver.resolveEditorAttachContext(input, signal)));
+				return attachments.filter(attachment => attachment !== undefined);
+			}).catch(error => {
+				if (!isCancellationError(error)) throw error;
+				return [];
+			});
+			if (accepted.length) status(localize({ bundle: 'ash.workbench', key: 'sessions.editor.filesAttached' }, 'Added {0} file(s) to the conversation draft.', accepted.length));
+		}
+	});
 }

@@ -416,6 +416,7 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
             directory: home.path().to_string_lossy().into_owned(),
             input: vec![
                 ash_protocol::UserInput::Context {
+                    source_url: None,
                     name: "Voice request".into(),
                     content: proposal["transcript"].as_str().unwrap().into(),
                 },

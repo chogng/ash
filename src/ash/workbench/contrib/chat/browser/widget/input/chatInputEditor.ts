@@ -18,7 +18,8 @@ import { EditorCoreCommandId } from '../../../../../../editor/browser/coreComman
 import { Position } from '../../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../../../editor/common/model/textModel.js';
-import { type ChatInputEditorOptions, type IChatInputEditor } from './chatInputEditorRegistry.js';
+import { LineInjectedText } from '../../../../../../editor/common/textModelEvents.js';
+import { CHAT_INPUT_DEFAULT_MAX_HEIGHT, type ChatInputEditorOptions, type IChatInputEditor } from './chatInputEditorRegistry.js';
 import { CHAT_INPUT_LANGUAGE_ID, createChatCommandCompletionProvider, createChatSkillCompletionProvider } from './editor/chatInputCompletions.js';
 import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
 import { InputEditorCommandArgumentHint } from './editor/chatInputCommandArgumentHint.js';
@@ -29,15 +30,18 @@ import { EditorContributionInstantiation } from '../../../../../../editor/browse
 import '../../../../../../editor/contrib/placeholderText/browser/placeholderText.css';
 
 const CHAT_INPUT_EDITOR_PADDING = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
+const CHAT_INPUT_CARET_INSET = 2;
+const CHAT_INPUT_SCROLLBAR_WIDTH = 8;
 // The input container owns the inset; editor heights exclude it to avoid applying it twice.
 const CHAT_INPUT_MIN_HEIGHT = 40;
-const CHAT_INPUT_MAX_HEIGHT = 314;
 
 /** Stanza-backed embedded editor hosted by the Chat input part. */
 export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	readonly element: HTMLDivElement;
 	private readonly model = this._register(new TextModel('', { languageId: CHAT_INPUT_LANGUAGE_ID }));
 	private readonly editor: CodeEditorWidget;
+	private readonly verticalScrollbarSize: number;
+	private scrollbarInset = 0;
 	public get codeEditor(): CodeEditorWidget { return this.editor; }
 	private readonly _onDidChange = this._register(new Emitter<string>());
 	private readonly _onDidSubmit = this._register(new Emitter<void>());
@@ -56,7 +60,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	) {
 		super();
 		this.minimumHeight = options.height?.minimum ?? CHAT_INPUT_MIN_HEIGHT;
-		this.maximumHeight = options.height?.maximum ?? CHAT_INPUT_MAX_HEIGHT;
+		this.maximumHeight = options.height?.maximum ?? CHAT_INPUT_DEFAULT_MAX_HEIGHT;
 		this.tabFocusMode = options.tabFocusMode ?? false;
 		this.height = this.minimumHeight;
 		this.element = h(options.container.ownerDocument, 'div');
@@ -66,7 +70,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		options.container.append(this.element);
 		const completionProviders = [
 			...(options.slashCommands ? [createChatCommandCompletionProvider(options.slashCommands, options.hostCompletions)] : []),
-			...(options.hostCompletions ? [] : [createChatSkillCompletionProvider(options.skills)]),
+			...(!options.hostCompletions && options.skills ? [createChatSkillCompletionProvider(options.skills)] : []),
 		];
 		// Keep basic text commands alongside Chat features; unrelated editor features add work to every Chat tab.
 		const contributionIds = [EditorCoreCommandId.selectAll, 'editor.contrib.codeServices', 'editor.contrib.suggestController', 'editor.contrib.hover', CopyPasteController.ID, LinkDetector.ID, 'chatTokenDeleter'];
@@ -83,7 +87,9 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			folding: false,
 			overviewRulerLanes: 0,
 			scrollBeyondLastLine: false,
+			revealHorizontalRightPadding: CHAT_INPUT_CARET_INSET,
 			lineWrapping: EditorLineWrapping.On,
+			wrappingStrategy: 'advanced',
 			tabFocusMode: this.tabFocusMode,
 			contributionIds,
 			// Plain-text hosts do not activate the full editor feature package.
@@ -91,6 +97,11 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			completionProviders,
 			completionWidgetContainer: this.element,
 		}));
+		this.verticalScrollbarSize = this.editor.getOption(EditorOption.scrollbar).verticalScrollbarSize;
+		if (options.ariaDescribedBy) {
+			const { textArea, element } = this.editor.controller;
+			(textArea ?? element).setAttribute('aria-describedby', options.ariaDescribedBy);
+		}
 		this.inlineAttachments = this._register(instantiationService.createInstance(ChatInlineAttachments, this.editor));
 		if (options.slashCommands) { this._register(new InputEditorCommandArgumentHint(this.editor, options.slashCommands)); }
 		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));
@@ -104,7 +115,8 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 			this._onDidChange.fire(this.value);
 		}));
 		this._register(addDisposableListener(this.editor.controller.element, 'keydown', event => {
-			if (event.defaultPrevented || event.isComposing || event.key !== 'Enter' || event.shiftKey) return;
+			if (event.defaultPrevented || event.isComposing || event.key !== 'Enter' || event.shiftKey
+				|| (options.submitWithModifier && !event.ctrlKey && !event.metaKey)) return;
 			if (event.altKey && !event.ctrlKey && !event.metaKey) {
 				stopEvent(event);
 				this.inlineAttachments.openActivePill();
@@ -185,30 +197,65 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 		this.editor.pushUndoStop();
 	}
 
+	fitsOnSingleLine(width: number): boolean {
+		if (this.model.lineCount !== 1) return false;
+		const font = this.editor.getOption(EditorOption.fontInfo);
+		const layout = this.editor.getOption(EditorOption.layoutInfo);
+		// The compact editor keeps a caret inset, with no space reserved for a scrollbar.
+		const contentWidth = width - (layout.width - layout.contentWidth) - CHAT_INPUT_CARET_INSET;
+		const injected = this.model.getLineInjectedText(1);
+		const line = LineInjectedText.applyInjectedText(this.model.getLineContent(1), injected);
+		let measuredWidth = 0;
+		let offset = 0;
+		for (const range of LineInjectedText.getFixedWidthInjectedTextRanges(injected)) {
+			measuredWidth += this.editor.view.measureTextWidth(line.slice(offset, range.startOffset)) + range.widthInEm * font.fontSize;
+			offset = range.endOffset;
+		}
+		measuredWidth += this.editor.view.measureTextWidth(line.slice(offset));
+		return measuredWidth <= contentWidth;
+	}
+
+	setCompactLayout(compact: boolean, rightPadding: number): boolean {
+		const wordWrap = compact ? 'off' : 'on';
+		const scrollbarInset = compact ? 0 : Math.min(rightPadding, CHAT_INPUT_SCROLLBAR_WIDTH);
+		if (this.editor.getOption(EditorOption.wordWrap) === wordWrap && this.scrollbarInset === scrollbarInset) return false;
+		this.scrollbarInset = scrollbarInset;
+		this.editor.updateOptions({ wordWrap, scrollbar: { verticalScrollbarSize: scrollbarInset } });
+		return true;
+	}
+
 	layout(): void {
-		const width = this.element.clientWidth;
-		if (width <= 0) return;
+		const textWidth = this.element.clientWidth;
+		if (textWidth <= 0) return;
+		// Adaptive inputs place the scrollbar in the form's right padding, outside the text width.
+		const width = textWidth + this.scrollbarInset;
+		const hadScrollbar = this.scrollbarInset === 0 && this.editor.getOption(EditorOption.scrollbar).verticalScrollbarSize > 0;
+		const scrollTop = hadScrollbar ? this.editor.getScrollTop() : 0;
+		// Check fit at full width so a scrollbar cannot keep itself visible after text is deleted.
+		if (hadScrollbar) this.editor.updateOptions({ scrollbar: { verticalScrollbarSize: 0 } });
 		this.editor.layout({ width, height: this.height });
+		const contentHeight = this.editor.getBottomForLineNumber(this.model.lineCount) + CHAT_INPUT_EDITOR_PADDING.bottom;
+		const needsScrollbar = this.scrollbarInset === 0 && contentHeight > this.maximumHeight;
+		if (needsScrollbar) this.editor.updateOptions({ scrollbar: { verticalScrollbarSize: this.verticalScrollbarSize } });
+		const height = Math.min(this.maximumHeight, Math.max(this.minimumHeight, contentHeight));
+		if (height !== this.height) {
+			this.height = height;
+			this.element.style.height = `${height}px`;
+			this.editor.layout({ width, height });
+		}
+		if (hadScrollbar && needsScrollbar) this.editor.setScrollTop(scrollTop);
 		this.inlineAttachments.layout();
-		this.syncHeight();
 	}
 
 	private getFontOptions(): Pick<CodeEditorWidgetOptions, 'fontFamily' | 'fontSize' | 'lineHeight'> {
+		const fontSize = this.configurationService.getValue<number>(ChatInputConfiguration.fontSize);
+		const configuredLineHeight = this.configurationService.getValue<number>(ChatInputConfiguration.lineHeight);
+		const lineHeight = configuredLineHeight === 0 ? Math.round(fontSize * 1.5) : configuredLineHeight;
 		const hasAttachmentControls = this.inlineAttachments?.getPillReferences().some(attachment => attachment.kind !== 'file' && attachment.kind !== 'codeSelection') ?? false;
 		return {
 			fontFamily: this.configurationService.getValue<string>(ChatInputConfiguration.fontFamily) || DEFAULT_FONT_FAMILY,
-			fontSize: this.configurationService.getValue<number>(ChatInputConfiguration.fontSize),
-			lineHeight: Math.max(hasAttachmentControls ? 28 : 0, this.configurationService.getValue<number>(ChatInputConfiguration.lineHeight)),
+			fontSize,
+			lineHeight: Math.max(hasAttachmentControls ? 28 : 0, lineHeight),
 		};
-	}
-
-	private syncHeight(): void {
-		if (this.element.clientWidth <= 0) return;
-		const contentHeight = this.editor.getBottomForLineNumber(this.model.lineCount) + CHAT_INPUT_EDITOR_PADDING.bottom;
-		const height = Math.min(this.maximumHeight, Math.max(this.minimumHeight, contentHeight));
-		if (height === this.height) return;
-		this.height = height;
-		this.element.style.height = `${height}px`;
-		this.layout();
 	}
 }

@@ -7,3 +7,8 @@
 	min-height: 0;
 	flex: 1 1 auto;
 }
+
+.ash-sessions-navigation-view.embedded > .ash-sessions-list {
+	flex: 0 0 auto;
+	padding-inline: 0;
+}

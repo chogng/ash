@@ -96,7 +96,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 		const infoCommand = {
 			id: 'ash.sessions.toggleInfo',
 			title: localize2({ bundle: 'ash', key: 'sessions.info.toggle' }, 'Toggle session information'),
-			icon: Lxicon.info,
+			icon: Lxicon.railSession,
 			toggled: ContextKeyExpr.equals('sessions.infoVisible', true),
 		};
 		this._register(
@@ -107,7 +107,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 						command: infoCommand,
 						when: ContextKeyExpr.equals('sessions.toolsAvailable', true),
 						group: 'navigation',
-						order: 2,
+						order: -1,
 					},
 				})),
 			),
@@ -336,6 +336,12 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 				localize('sessions.handoff.noActiveChat', 'Agents Window has no active chat for the draft.'),
 			);
 		this.activeView.activeChat.addContext(attachment);
+	}
+
+	acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>): Promise<readonly ChatContextAttachment[]> {
+		const view = this.activeView;
+		if (!view || this.popouts.has(view)) return Promise.resolve([]);
+		return view.activeChat.acquireContext(prepare);
 	}
 
 	appendToDraft(text: string): void {

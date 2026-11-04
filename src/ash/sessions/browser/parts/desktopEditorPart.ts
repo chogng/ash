@@ -195,13 +195,16 @@ export class DesktopMainEditorPart extends EditorPart {
 		this.layoutDetails();
 	}
 
+	public resolveDefaultGroup(input: IResourceEditorInput) {
+		const groups = this.fileGroups;
+		const existing = groups.find(group => group.inputs.some(candidate => candidate.resource.toString() === input.resource.toString()));
+		return existing ?? groups.find(group => group === this.activeGroup) ?? groups[0]
+			?? this.addGroup(this.activeGroup.id, Direction.Right);
+	}
+
 	public override async openEditor(input: IResourceEditorInput, options: EditorOpenOptions = {}, target?: EditorOpenTarget): Promise<IEditorPane> {
 		if (target === undefined) {
-			const groups = this.fileGroups;
-			const existing = groups.find(group => group.inputs.some(candidate => candidate.resource.toString() === input.resource.toString()));
-			const group = existing ?? groups.find(group => group === this.activeGroup) ?? groups[0]
-				?? this.addGroup(this.activeGroup.id, Direction.Right);
-			target = { groupId: group.id };
+			target = { groupId: this.resolveDefaultGroup(input).id };
 		}
 		if (typeof target === 'object' && !options.inactive) this.setGroupVisible(target.groupId, true);
 		return super.openEditor(input, options, target);

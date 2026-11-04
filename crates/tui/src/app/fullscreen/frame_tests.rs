@@ -92,6 +92,7 @@ fn input_history_search_and_cancel_preserve_the_composer() {
             text: "find the input history owner".into(),
             kind: InputKind::Agent,
             thread_id: None,
+            scope: None,
         })
         .unwrap();
     let (notify, wake) = mpsc::channel();
@@ -1295,6 +1296,7 @@ fn agent_thread_switcher_starts_at_the_empty_input_cursor_column() {
         session_id,
         title: "Session".into(),
         status: SessionStatus::Active,
+        source: None,
         execution_target: None,
         model: None,
         manager: Default::default(),

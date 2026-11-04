@@ -4,6 +4,7 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import type { Event } from '../../../../base/common/event.js';
 import type { IObservable } from '../../../../base/common/observable.js';
 import type { URI } from '../../../../base/common/uri.js';
+import type { SessionsConversationKind } from '../../sessions/common/sessionsConversation.js';
 
 export interface ISessionEditorWorkingSetState {
 	readonly owner: { readonly sessionResource: URI; readonly chatResource: URI | undefined; } | undefined;
@@ -18,6 +19,8 @@ export interface ISessionsEntry {
 	readonly workspaceMode?: 'chat' | 'code' | 'current';
 	readonly activityContext: string;
 	readonly content: 'conversation' | 'documents' | 'editor';
+	/** A conversation entry can select a renderer independently of its workspace mode. */
+	readonly conversationKind?: SessionsConversationKind;
 	/** Starts hidden on entry; user actions may reveal the shared conversation without replacing the editor or side views. */
 	readonly conversation?: 'optional';
 	/** Overrides workspace navigation; omission retains its current sidebar or opens the registered default on startup. */

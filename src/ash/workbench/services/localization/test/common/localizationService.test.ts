@@ -127,13 +127,9 @@ suite('Workbench localization', () => {
 		assert.deepEqual(
 			[
 				localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'),
-				localize(
-					'sessions.layout.restoreFailed',
-					'Could not restore the editors for this session: {0}',
-					'Cancelled',
-				),
+				localize('sessions.layout.restoreFailed', 'Could not restore the editors for this session. See the Window log for details.'),
 			],
-			['保存的会话编辑器布局无效。', '无法恢复此会话的编辑器：Cancelled'],
+			['保存的会话编辑器布局无效。', '无法恢复此会话的编辑器。详情请查看窗口日志。'],
 		);
 		assert.deepEqual(
 			[
@@ -463,7 +459,7 @@ suite('Workbench localization', () => {
 			[
 				localization.translate('ash', 'chat.modelPicker.auto', 'Auto'),
 				localization.translate('ash', 'chat.modelPicker.addModels', 'Add Models'),
-				localization.translate('ash', 'chat.modelPicker.thinkingEffort', 'Thinking Level'),
+				localization.translate('ash', 'chat.modelPicker.thinkingEffort', 'Effort'),
 			],
 			['自动', '添加模型', '推理强度'],
 		);

@@ -8,6 +8,7 @@ import { NotificationActionRunner } from '../../../src/ash/workbench/browser/par
 import { NotificationsToasts } from '../../../src/ash/workbench/browser/parts/notifications/notificationsToasts.js';
 import { IHostService } from '../../../src/ash/workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../src/ash/workbench/services/host/test/browser/testHostService.js';
+import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { ViewsRegistry } from '../../../src/ash/workbench/common/views.js';
 import { ProgressService } from '../../../src/ash/workbench/services/progress/browser/progressService.js';
@@ -113,6 +114,7 @@ const progressCommands = lifetime.add(new CommandService(services));
 const toastServices = lifetime.add(new InstantiationService());
 toastServices.registerInstance(INotificationService, backendNotifications);
 toastServices.registerInstance(IHostService, new TestHostService());
+toastServices.registerInstance(IOpenerService, { async open() { throw new Error('Unexpected notification link'); } } as unknown as IOpenerService);
 toastServices.registerInstance(IClipboardService, lifetime.add(new BrowserClipboardService(navigator.clipboard)));
 toastServices.registerInstance(IConfigurationService, lifetime.add(new InMemoryConfigurationService()));
 toastServices.registerInstance(IContextMenuService, { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { throw new Error('Unexpected notification menu'); }, hideContextMenu() { } } satisfies IContextMenuService);
@@ -192,6 +194,7 @@ let startupDiscoveryGate: DeferredPromise<void> | undefined;
 let startupStatusGate: DeferredPromise<void> | undefined;
 let startupStateReads = 0;
 const status = () => ({ repositoryId: 'root', streamInstanceId: 'stream', revision, historyRevision: incomingHistoryRevision, path: '', head: { type: 'branch', name: 'main', objectId: headObjectId, upstream }, changes: clean ? [] : [{ path: 'one.ts', originalPath: null, indexStatus: revision > 1 ? 'modified' : 'unmodified', worktreeStatus: revision > 1 ? 'unmodified' : 'modified', conflicted: false, submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false } }, ...(includeUntracked ? [{ path: 'new.ts', originalPath: null, indexStatus: 'unmodified', worktreeStatus: 'untracked', conflicted: false, submodule: { isSubmodule: false, commitChanged: false, trackedChanges: false, untrackedChanges: false } }] : [])] });
+const connection = { isAvailable: true, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), connectionGeneration: 1 } satisfies IAppServerApi;
 const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 	request: async (method, params): Promise<JsonValue> => {
 		calls.push({ method, params });
@@ -275,7 +278,7 @@ const backend = lifetime.add(new MainThreadExtensionBackend(catalog, {
 			default: throw new Error(`Unexpected domain request ${method}`);
 		}
 	}
-}, { isAvailable: true, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => ({ dispose() { } }), connectionGeneration: 1 } satisfies IAppServerApi, { subscribe: listener => configurationEvents.event(listener) }, workspace, configuration, lifetime.add(new ProgressService(lifetime.add(new StatusbarService()), backendNotifications, progressCommands, {} as never, {} as never, {} as never)),
+}, connection, { subscribe: listener => configurationEvents.event(listener) }, workspace, configuration, lifetime.add(new ProgressService(lifetime.add(new StatusbarService()), backendNotifications, progressCommands, {} as never, {} as never, {} as never)),
 	{ groups: [], onDidChangeEditors: Event.None } as unknown as IEditorPart,
 	{ listCodeEditors: () => [], onCodeEditorAdd: Event.None, onCodeEditorRemove: Event.None } as unknown as ICodeEditorService));
 const unavailable = (method: string): never => { throw new Error(`Unexpected remote host request ${method}`); };
@@ -293,7 +296,7 @@ let decorationInvalidations = 0;
 const scmContexts = lifetime.add(new ContextKeyService());
 services.registerInstance(IContextKeyService, scmContexts);
 const timeline = lifetime.add(new TimelineService(scmContexts, {} as IViewsService, new NullLoggerService()));
-const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(String(error)), CommandsRegistry, host, scm, view, commands, resolvers, quickDiff, { registerDecorationsProvider: (provider: IDecorationsProvider) => { decorationProviders.add(provider); lifetime.add(provider.onDidChange(() => decorationInvalidations++)); return toDisposable(() => { decorationProviders.delete(provider); }); } } as unknown as IDecorationsService, scmContexts, timeline, { activeGroup: { inputs: [] } } as unknown as IEditorPart));
+const bridge = lifetime.add(new MainThreadSCM(10_000, error => errors.push(String(error)), CommandsRegistry, host, scm, view, commands, resolvers, quickDiff, { registerDecorationsProvider: (provider: IDecorationsProvider) => { decorationProviders.add(provider); lifetime.add(provider.onDidChange(() => decorationInvalidations++)); return toDisposable(() => { decorationProviders.delete(provider); }); } } as unknown as IDecorationsService, scmContexts, timeline, { activeGroup: { inputs: [] } } as unknown as IEditorPart, connection, workspace));
 const hostChanges = host.onDidChange(() => { void host.list().then(snapshot => bridge.update(snapshot)); });
 lifetime.add(toDisposable(() => hostChanges.dispose()));
 let scmUpdateGate: DeferredPromise<void> | undefined;

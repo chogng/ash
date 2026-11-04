@@ -6,8 +6,8 @@ import { INativeHostService } from '../../../common/services.js';
 
 export interface ISystemWideKeybindingsSynchronizerOptions {
 	readonly getCandidates: () => readonly INativeSystemWideKeybinding[];
-	readonly onRegistrationFailuresChanged: (failed: readonly string[]) => void;
-	readonly onError: (error: unknown) => void;
+	readonly onRegistrationResult: (candidates: readonly INativeSystemWideKeybinding[], failed: readonly string[]) => void;
+	readonly onError: (error: unknown, candidates: readonly INativeSystemWideKeybinding[]) => void;
 }
 
 /** Synchronizes a window's user shortcuts after each resource change. */
@@ -31,8 +31,9 @@ export class SystemWideKeybindingsSynchronizer extends Disposable {
 			if (this.isDisposed) {
 				return;
 			}
+			let candidates: readonly INativeSystemWideKeybinding[] = [];
 			try {
-				const candidates = this.options.getCandidates();
+				candidates = this.options.getCandidates();
 				const payload = JSON.stringify(candidates);
 				if (payload === this.synchronizedPayload) {
 					return;
@@ -42,12 +43,12 @@ export class SystemWideKeybindingsSynchronizer extends Disposable {
 					return;
 				}
 				this.synchronizedPayload = result.failed.length === 0 ? payload : undefined;
-				this.options.onRegistrationFailuresChanged(result.failed);
+				this.options.onRegistrationResult(candidates, result.failed);
 			} catch (error) {
 				// An IPC failure can happen after Main applied the payload, so the next update must resend it.
 				this.synchronizedPayload = undefined;
 				if (!this.isDisposed) {
-					this.options.onError(error);
+					this.options.onError(error, candidates);
 				}
 			}
 		});

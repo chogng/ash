@@ -34,6 +34,7 @@ export interface ChatGPTHistory {
 	readonly parentId: string;
 	readonly model?: string;
 	readonly thinkingEffort?: string;
+	readonly archived?: boolean;
 	readonly messages: readonly ChatGPTMessage[];
 }
 interface ChatGPTStreamFrame extends ChatGPTStreamUpdate { readonly resumeToken?: string; readonly handoff?: boolean; readonly finished?: boolean; }
@@ -142,17 +143,30 @@ export class ChatGPTClient {
 		await this.consume(`/conversation/id/${encodeURIComponent(id)}`, signal, 'DELETE');
 	}
 
-	async share(id: string, signal: AbortSignal): Promise<string> {
-		const history = await this.history(id, signal);
+	async share(id: string, signal: AbortSignal, messageId?: string): Promise<string> {
+		const node = messageId ?? (await this.history(id, signal)).parentId;
 		const response = await this.request('/share/v2/create', signal, {
 			method: 'POST', headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ conversation_id: id, current_node_id: history.parentId, is_anonymous: true }),
+			body: JSON.stringify({ conversation_id: id, current_node_id: node, is_anonymous: true }),
 		});
 		const value: unknown = await response.json();
 		if (!isRecord(value) || typeof value.share_url !== 'string') { throw this.invalidResponse(); }
 		const url = new URL(value.share_url);
 		if (url.origin !== 'https://chatgpt.com' || !url.pathname.startsWith('/share/') || url.username || url.password || url.hash) { throw this.invalidResponse(); }
 		return url.href;
+	}
+
+	async readResponseAudio(id: string, messageId: string, signal: AbortSignal): Promise<Blob> {
+		const query = new URLSearchParams({ conversation_id: id, message_id: messageId, voice: 'juniper', format: 'mp3' });
+		const response = await this.request('/synthesize?' + query, signal);
+		if (!/^audio\/(?:mpeg|mp3)(?:;|$)/iu.test(response.headers.get('content-type') ?? '')) {
+			await response.body?.cancel();
+			throw this.invalidResponse();
+		}
+		const audio = await response.blob();
+		signal.throwIfAborted();
+		if (!audio.size) throw this.invalidResponse();
+		return audio;
 	}
 
 	private async consume(path: string, signal: AbortSignal, method: string, body?: object): Promise<void> {
@@ -188,6 +202,7 @@ export class ChatGPTClient {
 		}
 		return {
 			id, title: typeof value.title === 'string' ? value.title : 'ChatGPT', parentId: value.current_node,
+			...(value.is_archived === true ? { archived: true } : {}),
 			model: typeof value.default_model_slug === 'string' ? value.default_model_slug : undefined, thinkingEffort, messages: messages.reverse(),
 		};
 	}
@@ -210,7 +225,7 @@ export class ChatGPTClient {
 			method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream', 'x-ms-blob-type': 'BlockBlob' }, body: file, signal,
 		});
 		if (!response.ok) { throw new ChatGPTRequestError(response.status, localize('sessions.chatgpt.uploadFailed', 'File upload failed ({0}).', response.status)); }
-		await response.body?.cancel();
+		await response.body?.cancel().catch(() => undefined);
 		for (let attempt = 0; attempt < 20; attempt++) {
 			const confirmed: unknown = await (await this.request(`/files/${encodeURIComponent(metadata.file_id)}/uploaded`, signal, {
 				method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
@@ -258,7 +273,7 @@ export class ChatGPTClient {
 		}
 	}
 
-	async *send(input: ChatReplyRequest, signal: AbortSignal): AsyncGenerator<ChatGPTStreamUpdate> {
+	async *send(input: ChatReplyRequest, signal: AbortSignal, beforeSubmit?: () => Promise<void>): AsyncGenerator<ChatGPTStreamUpdate> {
 		const images = input.files?.filter(file => file.width !== undefined && file.height !== undefined) ?? [];
 		const content = images.length ? {
 			content_type: 'multimodal_text', parts: [
@@ -290,6 +305,7 @@ export class ChatGPTClient {
 		for (const name of ['OpenAI-Sentinel-Chat-Requirements-Token', 'OpenAI-Sentinel-Proof-Token', 'OpenAI-Sentinel-Turnstile-Token']) {
 			if (typeof verification[name] === 'string') { verificationHeaders[name] = verification[name]; }
 		}
+		if (beforeSubmit) { await beforeSubmit(); }
 		let response = await this.request('/f/conversation', signal, {
 			method: 'POST', headers: { ...verificationHeaders, Accept: 'text/event-stream', 'Content-Type': 'application/json', 'x-conduit-token': preparation.conduit_token }, body: JSON.stringify(body),
 		});
@@ -359,6 +375,7 @@ export class ChatGPTClient {
 		const response = await this.fetcher(`/service${headersOnly ? '/.headers' : ''}/backend-api` + path, { ...init, signal, cache: 'no-store' });
 		if (signal.aborted) { await response.body?.cancel(); signal.throwIfAborted(); }
 		if (response.ok) { return response; }
+		await response.body?.cancel();
 		throw this.requestError(response.status);
 	}
 

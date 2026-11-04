@@ -7,6 +7,9 @@
 #ifndef AppUserId
   #error AppUserId must match the Electron application ID
 #endif
+#ifndef ToastActivatorClsid
+  #error ToastActivatorClsid must match the Electron Toast Activator CLSID
+#endif
 #ifndef IconPath
   #error IconPath must point to resources/win32/ash.ico
 #endif
@@ -40,8 +43,8 @@ Source: "{#BundleDir}\resources\bin\ash-app-server-daemon.exe"; DestName: "ash-i
 Source: "{#BundleDir}\resources\installation-files.json"; Flags: dontcopy
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\Ash.exe"; IconFilename: "{app}\Ash.exe"; AppUserModelID: "{#AppUserId}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\Ash.exe"; IconFilename: "{app}\Ash.exe"; AppUserModelID: "{#AppUserId}"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\Ash.exe"; IconFilename: "{app}\Ash.exe"; AppUserModelID: "{#AppUserId}"; AppUserModelToastActivatorCLSID: "{#ToastActivatorClsid}"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\Ash.exe"; IconFilename: "{app}\Ash.exe"; AppUserModelID: "{#AppUserId}"; AppUserModelToastActivatorCLSID: "{#ToastActivatorClsid}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\Ash.exe"; Flags: nowait postinstall skipifsilent; Description: "{code:LaunchDescription}"

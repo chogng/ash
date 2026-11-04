@@ -26,7 +26,7 @@
 
 .ash-view-pane-container.content-sized .ash-pane-view-container {
 	flex: none;
-	overflow: hidden;
+	overflow: visible;
 }
 
 .ash-view-pane-header-title-with-description {

@@ -592,6 +592,12 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 		}
 	}
 
+	/** Restores the navigation cursor without replacing the editor selection or scroll. */
+	public restoreChangeRow(rowIndex: number): void {
+		const row = this.modelBinding?.model.diff?.rows.get(rowIndex);
+		this.activeChangeRow = row && row.kind !== LineDiffKind.Unchanged ? rowIndex : -1;
+	}
+
 	/** Selects one changed row in this comparison; the caller may announce collection-wide navigation. */
 	public revealChangeRow(rowIndex: number, announce = true): void {
 		const rows = this.modelBinding?.model.diff?.rows;

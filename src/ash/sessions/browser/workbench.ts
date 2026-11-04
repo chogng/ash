@@ -1,3 +1,6 @@
+import { IDiffEditorCommandsService } from '../../workbench/browser/parts/editor/diffEditorCommandsService.js';
+import { SessionsDiffEditorCommandsService } from '../contrib/editor/browser/diffEditor.sessions.contribution.js';
+import { registerAddFileAsContextAction } from '../contrib/editor/browser/editor.contribution.js';
 import { ISessionSectionOrderService, SessionSectionOrderService } from '../services/sessions/browser/sessionSectionOrderService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../services/sessions/browser/sessionsListModelService.js';
 import { ISymphonyBackendService } from '../../platform/symphony/common/symphonyService.js';
@@ -19,8 +22,9 @@ import { SessionConversationLinks } from './agentHost/sessionConversationLinks.j
 import { SessionsAgentThreadService } from './agentHost/sessionsAgentThreadService.js';
 import { SessionsSearchService } from '../contrib/providers/agentHost/browser/sessionsSearchService.js';
 import { SessionFileSystemContribution } from '../contrib/providers/agentHost/browser/sessionFileSystemContribution.js';
+import { hasDevelopmentPermissions } from '../../platform/workspace/common/workspaceTrust.js';
 import { ISessionFolderAuthorizationService, sessionWorkspaceUri } from '../common/sessionWorkspace.js';
-import { ISessionProviderScopeService, ISessionPrimaryProviderServices, SessionProviderScopeService, SessionProviderServices, captureInstructionImports } from './agentHost/sessionProviderScopeService.js';
+import { ISessionProviderScopeService, ISessionPrimaryProviderServices, SessionProviderScopeService, SessionProviderServices, captureInstructionImports, type ISessionProviderScope } from './agentHost/sessionProviderScopeService.js';
 import { SessionsChatService } from './agentHost/sessionsChatService.js';
 import { SessionsLanguageModelsService } from './agentHost/sessionsLanguageModelsService.js';
 import { SessionsPromptsService } from './agentHost/sessionsPromptsService.js';
@@ -137,7 +141,7 @@ import { ILocalGitService } from '../../platform/git/common/localGitService.js';
 import { AppServerPluginManagementService } from '../../workbench/services/extensionManagement/browser/appServerPluginManagementService.js';
 import { IAppServerRemoteAgentService } from '../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { AppServerRemoteAgentService } from '../../workbench/services/remote/browser/appServerRemoteAgentService.js';
-import { autorun } from '../../base/common/observable.js';
+import { autorun, observableFromEvent, observableSignalFromEvent } from '../../base/common/observable.js';
 import { CustomViewGridPart } from './parts/customViewGridPart.js';
 import { ICustomViewService } from '../services/customView/browser/customViewService.js';
 import { ICustomViewGridPartService } from '../services/customView/browser/customViewGridPartService.js';
@@ -163,7 +167,7 @@ import { Event } from '../../base/common/event.js';
 import { SessionsViewRegistry } from '../common/views.js';
 import { openExtensionsView, registerExtensionsViewContainer } from '../../workbench/contrib/extensions/browser/extensionsViewlet.js';
 import { ViewContainerLocation } from '../../workbench/common/views.js';
-import { DesignEditorService, IDesignEditorService } from '../contrib/creator/browser/designEditorService.js';
+import { DesignEditorService, IDesignEditorService } from '../contrib/artifacts/browser/designEditorService.js';
 import { Disposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { ILanguageService } from '../../editor/common/languages/language.js';
 import { LanguageService } from '../../editor/common/services/languageService.js';
@@ -192,7 +196,8 @@ import { TextResourcePropertiesService } from '../../workbench/services/textreso
 import { CoworkPaneFactory } from '../contrib/cowork/browser/cowork.contribution.js';
 import { ISessionsConversationService } from '../services/sessions/common/sessionsConversation.js';
 import { ChatTipService, IChatTipService } from '../../workbench/contrib/chat/browser/chatTipService.js';
-import { migrateNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
+import { NewSessionDraftVisibleContext } from '../common/contextkeys.js';
+import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
 import { NativeAccessibilityService } from '../../workbench/services/accessibility/electron-browser/accessibilityService.js';
@@ -334,12 +339,13 @@ import { SessionsPreferences } from '../contrib/preferences/browser/sessionsPref
 import type { SessionsProfile } from '../common/sessionsProfile.js';
 import { RETURN_TO_WORKBENCH_COMMAND_ID } from '../common/windowNavigation.js';
 import { OPEN_ASH_WINDOW_COMMAND_ID } from '../common/sessionCommands.js';
-import { SessionsConfiguration, type SessionsLayoutStyle } from '../common/configuration.js';
+import { SessionsConfiguration } from '../common/configuration.js';
 import { SessionsManagementService } from '../services/sessions/browser/sessionsManagementService.js';
 import { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { ISessionsService, SessionsService } from '../services/sessions/browser/sessionsService.js';
 import { ISessionsLayoutService } from '../services/layout/common/sessionsLayoutService.js';
 import { registerLayoutActions } from './layoutActions.js';
+import { registerSessionsTerminalContribution } from '../contrib/terminal/browser/sessionsTerminalContribution.js';
 import { ITerminalProcessService, TerminalLocation } from '../../platform/terminal/common/terminal.js';
 import { ITerminalService, ITerminalEditorService } from '../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalService } from '../../workbench/contrib/terminal/browser/terminalService.js';
@@ -540,6 +546,11 @@ export abstract class Workbench extends Disposable {
 		const folderAuthorization = services.get(ISessionFolderAuthorizationService);
 		const provider = this._register(primaryHostServices.createInstance(AppServerSessionsProvider, {
 			workspace: options.workspaceSelection,
+			isWorkspaceTrusted: async target => {
+				if (target.type === 'local') return folderAuthorization.isTrusted(target.root);
+				const directory = await options.api.workspaceTrust.readDirectory(target.root);
+				return hasDevelopmentPermissions(directory.permissions ?? directory.inheritedWorkspacePermissions);
+			},
 			authorizeWorkspace: (target, signal) => folderAuthorization.authorize(
 				target.root, signal, target.type === 'ssh' ? { api: options.api, label: target.host }
 				: target.type === 'remote' ? { api: options.api, label: target.authority } : undefined),
@@ -643,12 +654,13 @@ export abstract class Workbench extends Disposable {
 		} else services.registerSingleton(ILanguageDiagnosticsService, createDiagnostics);
 		services.registerInstance(IAppServerHookApi, options.api.hooks);
 		services.registerInstance(ISessionPrimaryProviderServices, this._register(primaryHostServices.createInstance(SessionProviderServices)));
-		const providerScopes = this._register(services.createInstance(SessionProviderScopeService, provider.id));
+		const providerScopes = this._register(services.createInstance(SessionProviderScopeService, provider.id,
+			(scope: ISessionProviderScope) => search.forScope(scope)));
 		services.registerInstance(ISessionProviderScopeService, providerScopes);
+		const search = services.createInstance(SessionsSearchService, provider.id, options.workspace);
 		services.registerInstance(IInstructionService, { ...options.api.instructions, captureImports: sessionId => captureInstructionImports(providerScopes.getScope(sessionId), sessionId) });
 		this._register(services.createInstance(SessionFileSystemContribution, provider.id));
 		if (options.api.appServer.isAvailable) {
-			const search = services.createInstance(SessionsSearchService, provider.id, options.workspace);
 			services.registerInstance(IFileSearchService, search);
 			services.registerInstance(IAgentHostInputCompletionService, search);
 			services.registerInstance(IContentSearchService, search);
@@ -707,7 +719,6 @@ export abstract class Workbench extends Disposable {
 
 		let sessionsPart: SessionsPart | undefined;
 		const layout = this.layoutService = this._register(services.createInstance(layoutConstructor, this.domNode, {
-			activityBarLocation: configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation),
 			focus: () => sessionsPart?.focus(),
 		}));
 		services.registerInstance(IAgentWorkbenchLayoutService, layout);
@@ -854,7 +865,7 @@ export abstract class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.sidebarHelp', 'Expanded navigation shows icons and names in the sidebar, with Accounts at the bottom. Use the title bar sidebar toggle to hide the entire sidebar, including navigation, Accounts and the workspace mode control; expanding restores them. On Desktop in Chat mode, New opens ChatGPT and focuses its message input. In Code and Browser, New creates an Agent session. In Chat, the list below contains Pinned, Projects and Chats. In Code, it contains Pinned and Recents. Enter or Space toggles a group, Left Arrow collapses it and Right Arrow expands it. Code subgroups use folder icons and their chat rows have leading icons. Use Up and Down Arrow, Home and End to move through visible rows. Right-click a chat or press Shift+F10 to pin or unpin it. Expansion is saved separately for Chat and Code. Fork Conversation is available in the Command Palette. Input tips appear above the message input.') + ' ' + localize('sessions.list.menuHelp', 'Hover or focus a chat to reveal More actions, or press Shift+F10. The menu offers pin, rename, archive, add to project, move to group, delete and open in new window. Every chat item supports these actions before its first message. Organizing a chat preserves its draft and does not send a message. A separate Agent chat window keeps the same conversation and draft. Return to main window or close it to bring the chat back; Keep window on top pins the desktop window above others.') + ' ' + localize('sessions.list.automationFilterHelp', 'Open More Sessions Actions and choose Show Automation Sessions to include conversations created by automation runs. Automations keeps its run history when this filter is off.') + ' ' + localize('sessions.search.navigationHelp', 'In the Chat sidebar, Search below New opens a categorized search panel. Type a name to filter sessions, projects and schedules. Use arrow keys to choose a result and Enter to open it; Escape closes Search and restores focus.') + ' ' + localize('sessions.chatgpt.activityHelp', 'On Desktop, New starts a ChatGPT conversation and focuses its message input. ChatGPT offers model selection, attachments, dictation, voice conversation, Send and Stop. Switching conversations and pages retains their drafts, and reopening restores the last selected chat. Login uses the existing Codex account credentials. Press Alt+F1 for help.') + ' ' + localize({ bundle: 'ash', key: 'windowMode.help' }, 'The title bar workspace mode control switches between Chat / Agents and Code in this window, retaining the current session and draft. Each workspace has its own sidebar. The workspace mode control is visible only while the sidebar is expanded. Code navigation contains New, Automations, Collab and Symphony. New creates a session in the current workspace. Navigation order is saved separately for Chat and Code. Select the current mode again to return from a product page to its conversation. Use arrow keys, Home and End to focus a mode, then Enter or Space to switch pages. In narrow title bars, Back and Forward are available in the Go menu.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. New focuses the message input: ChatGPT in Desktop Chat mode, or an Agent session in Code and Browser. Chat keeps a flat conversation list; Code groups conversations by workspace or connected Agent host. In a new Code conversation, use the Run on menu to choose its host before sending. Use arrow keys and Enter to choose, or Escape to close the menu. Each draft keeps its chosen host when switching conversations. Code custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Each ChatGPT conversation and Agent session retains its own history, unsent text and attachments when switching pages. Each session restores its editor tabs. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Files opens the file tree in its editor group. Opening a document shows the editor; closing the last document hides it and keeps Files visible. Use arrow keys on separators to resize. Collab opens the channel preview and Calls in the sidebar. Settings > Agents manages roles and teams. Use Left and Right to move between its tabs, then Enter or Space to open a view. Projects and Creator are product pages selected from the Activity Bar. Projects retains its search and selected project. Materials are organized inside each project. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens Settings, Account, Open IDE and Keyboard Shortcuts. On Desktop, Open IDE opens or focuses the IDE while keeping the Agents window and its unsent drafts open. Use arrow keys to move through the menu, Enter to choose an action and Escape to close it and return focus to Accounts.') + ' ' + localize('sessions.update.help', 'After an update finishes downloading, Restart to Update remains above Accounts. Tab to the button and press Enter or Space to install the update and restart.') + ' ' + localize('sessions.activity.moreHelp', 'In the Code sidebar, open More to find Collab, Symphony and other navigation items. Use Up or Down Arrow to browse, Enter to open an item, or Escape to return to More. Press Right Arrow and Enter to pin or unpin a focused item. It stays in More. You can also unpin it from its sidebar context menu.') + ' ' + localize('customize.activityHelp', 'Customize opens Skills, Connectors and Plugins. Switch between Yours and Discover, search resources and open details to manage them.') + ' ' + localize('automations.activityHelp', 'Automations opens schedules and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('pinnedCanvas.activityHelp', 'Use Add Canvas to Sidebar from a Canvas tab menu or the Command Palette to keep a registered Canvas in navigation. Choose its sidebar item to open the full page without switching conversations. Its page header and sidebar context menu offer Go to Chat, Reconnect Canvas, Remove from Sidebar and Close Canvas. Removing a pin keeps its page in the conversation. Up to five Canvases can be pinned.') + ' ' + localize('agentTrace.activityHelp', 'View Execution Trace opens saved execution from the conversation menu or Command Palette.') + (options.api.agentHosts ? ' ' + localize({ bundle: 'ash.workbench', key: 'agentHosts.help' }, 'Use Agents: Manage Connected Hosts in the Command Palette. In Remote Environments, use Tab to reach the connection actions and Escape to close the dialog.') : ''),
+					() => localize('sessions.activity.sidebarHelp', 'Expanded navigation shows icons and names in the sidebar, with Accounts at the bottom. Use the title bar sidebar toggle to hide the entire sidebar, including navigation, Accounts and the workspace mode control; expanding restores them. On Desktop in Chat mode, New opens ChatGPT and focuses its message input. In Code and Browser, New creates an Agent session. In Chat, the list below contains Pinned, Projects and Chats. In Code, it contains Pinned and Recents. Enter or Space toggles a group, Left Arrow collapses it and Right Arrow expands it. Code subgroups use folder icons and their chat rows have leading icons. Use Up and Down Arrow, Home and End to move through visible rows. Right-click a chat or press Shift+F10 to pin or unpin it. Expansion is saved separately for Chat and Code. Fork Conversation is available in the Command Palette. Input tips appear above the message input.') + ' ' + localize('sessions.list.menuHelp', 'Use Tab to reach the change icon button on a saved conversation. Hover or focus a chat to reveal More actions, or press Shift+F10. The menu offers pin, rename, archive, add to project, move to group, delete and open in new window. Every chat item supports these actions before its first message. Organizing a chat preserves its draft and does not send a message. A separate Agent chat window keeps the same conversation and draft. Return to main window or close it to bring the chat back; Keep window on top pins the desktop window above others.') + ' ' + localize('sessions.list.automationFilterHelp', 'Open More Sessions Actions to find Group By, Sort By, and Show. Use Right Arrow to enter a submenu and Left Arrow to return. Sort By offers a sort field and direction. Show controls comparison groups and automation conversations. Automations keeps its run history when automation conversations are hidden. Choose New group next to More Sessions Actions, enter a name, and press Enter to create it. Escape cancels the prompt.') + ' ' + localize('sessions.list.groupAppearanceHelp', 'Focus a group title and press Shift+F10 to change its icon or color. Select Default in the picker to reset it.') + ' ' + localize('sessions.search.navigationHelp', 'In the Chat sidebar, Search below New opens a categorized search panel. Type a name to filter sessions, projects and schedules. Use arrow keys to choose a result and Enter to open it; Escape closes Search and restores focus.') + ' ' + localize('sessions.chatgpt.activityHelp', 'On Desktop, New starts a ChatGPT conversation and focuses its message input. ChatGPT offers model selection, attachments, dictation, voice conversation, Send and Stop. Switching conversations and pages retains their drafts, and reopening restores the last selected chat. Login uses the existing Codex account credentials. Press Alt+F1 for help.') + ' ' + localize({ bundle: 'ash', key: 'windowMode.help' }, 'The title bar workspace mode control switches between Chat / Agents and Code in this window, retaining the current session and draft. Each workspace has its own sidebar. The workspace mode control is visible only while the sidebar is expanded. Code navigation contains New, Automations, Collab and Symphony. New creates a session in the current workspace. Navigation order is saved separately for Chat and Code. Select the current mode again to return from a product page to its conversation. Use arrow keys, Home and End to focus a mode, then Enter or Space to switch pages. In narrow title bars, Back and Forward are available in the Go menu.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. New focuses the message input: ChatGPT in Desktop Chat mode, or an Agent session in Code and Browser. Chat keeps a flat conversation list; Code groups conversations by workspace or connected Agent host. In a new Code conversation, use the Run on menu to choose its host before sending. Use arrow keys and Enter to choose, or Escape to close the menu. Each draft keeps its chosen host when switching conversations. Code custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Each ChatGPT conversation and Agent session retains its own history, unsent text and attachments when switching pages. Each session restores its editor tabs. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Files opens the file tree in its editor group. Opening a document shows the editor; closing the last document hides it and keeps Files visible. Use arrow keys on separators to resize. Collab opens the channel preview and Calls in the sidebar. Settings > Agents manages roles and teams. Use Left and Right to move between its tabs, then Enter or Space to open a view. Projects and Creator are product pages selected from the Activity Bar. Projects retains its search and selected project. Materials are organized inside each project. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens Settings, Account, Open IDE and Keyboard Shortcuts. On Desktop, Open IDE opens or focuses the IDE while keeping the Agents window and its unsent drafts open. Use arrow keys to move through the menu, Enter to choose an action and Escape to close it and return focus to Accounts.') + ' ' + localize('sessions.update.help', 'After an update finishes downloading, Restart to Update remains above Accounts. Tab to the button and press Enter or Space to install the update and restart.') + ' ' + localize('sessions.activity.moreHelp', 'In the Code sidebar, open More to find Collab, Symphony and other navigation items. Use Up or Down Arrow to browse, Enter to open an item, or Escape to return to More. Press Right Arrow and Enter to pin or unpin a focused item. It stays in More. You can also unpin it from its sidebar context menu.') + ' ' + localize('customize.activityHelp', 'Customize opens Skills, Connectors and Plugins. Switch between Yours and Discover, search resources and open details to manage them.') + ' ' + localize('automations.activityHelp', 'Automations opens schedules and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('pinnedCanvas.activityHelp', 'Use Add Canvas to Sidebar from a Canvas tab menu or the Command Palette to keep a registered Canvas in navigation. Choose its sidebar item to open the full page without switching conversations. Its page header and sidebar context menu offer Go to Chat, Reconnect Canvas, Remove from Sidebar and Close Canvas. Removing a pin keeps its page in the conversation. Up to five Canvases can be pinned.') + ' ' + localize('agentTrace.activityHelp', 'View Execution Trace opens saved execution from the conversation menu or Command Palette.') + (options.api.agentHosts ? ' ' + localize({ bundle: 'ash.workbench', key: 'agentHosts.help' }, 'Use Agents: Manage Connected Hosts in the Command Palette. In Remote Environments, use Tab to reach the connection actions and Escape to close the dialog.') : ''),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
@@ -885,6 +896,27 @@ export abstract class Workbench extends Disposable {
 			} satisfies SessionsPartOptions),
 		);
 		services.registerInstance(ISessionsConversationService, sessionsPart);
+		const newSessionDraftVisible = NewSessionDraftVisibleContext.bindTo(contextKeys);
+		const conversationVisible = observableFromEvent(this, layout.onDidChangePartVisibility, () => layout.isPartVisible('sessions'));
+		const draftChanged = observableSignalFromEvent(this, listener => storage.onDidChangeValue(event => {
+			const active = view.activeSelection;
+			if (active?.kind === 'untitled' && event.scope === StorageScope.WORKSPACE
+				&& event.key === `sessions.inputDraft:untitled:${active.session.untitledSessionId}`) listener(event);
+		}));
+		this._register(autorun(reader => {
+			const active = view.getSelection(reader).activeSelection;
+			const visible = conversationVisible.read(reader);
+			draftChanged.read(reader);
+			let emptyDraft = false;
+			if (visible && active?.kind === 'untitled' && !active.session.forkSource) {
+				try {
+					const draft = readNewChatDraftState(storage, `untitled:${active.session.untitledSessionId}`, chatInputStatePersistence);
+					emptyDraft = !draft || (!draft.text.trim() && draft.contexts.length === 0);
+				} catch { /* The composer owns reporting unreadable drafts. */ }
+			}
+			newSessionDraftVisible.set(emptyDraft);
+		}));
+		this._register(toDisposable(() => newSessionDraftVisible.reset()));
 		const part = sessionsPart;
 		this._register(autorun(reader => {
 			const { visibleSelections, activeSelection } = view.getSelection(reader);
@@ -947,17 +979,26 @@ export abstract class Workbench extends Disposable {
 				focusConversation(sessionId, threadId);
 			},
 			getActiveConversation: () => {
+				if (!layout.isPartVisible('sessions')) return undefined;
 				const selected = view.activeSelection;
 				return selected?.kind === 'session' ? { sessionId: selected.active.session.sessionId, threadId: selected.active.threadId } : undefined;
 			},
 			getConversations: () => sessions.sessions.filter(session => session.status === 'active').flatMap(session => session.chats.filter(chat => chat.status === 'active').map(chat => ({ providerId: session.providerId ?? provider.id, sessionId: session.backendSessionId ?? session.sessionId, threadId: session.backendSessionId ? providerScopes.getScope(session.sessionId).backendIdentity(chat.threadId) : chat.threadId, title: chat.title ?? session.title }))),
+			getConversationsForReference: () => sessions.sessions.filter(session => session.status === 'active').flatMap(session =>
+				session.chats.filter(chat => chat.status === 'active').map(chat => ({
+					providerId: session.providerId ?? provider.id,
+					providerLabel: session.providerLabel,
+					sessionId: session.sessionId,
+					threadId: chat.threadId,
+					title: chat.title ?? session.title,
+				}))),
 			appendToActiveDraft: text => {
 				void this.showChat().then(() => {
 					sessionsPart!.appendToDraft(text);
 					sessionsPart!.focus();
 				}).catch(error => notificationService.error(String(error)));
 			},
-			captureActiveDraft: () => sessionsPart!.captureActiveDraft(),
+			captureActiveDraft: () => layout.isPartVisible('sessions') ? sessionsPart!.captureActiveDraft() : Promise.resolve(undefined),
 			openConversation: async (sessionId, threadId, providerId) => {
 				if (providerId !== undefined) {
 					sessionId = sessionIdentity(providerId, sessionId, provider.id);
@@ -1006,7 +1047,11 @@ export abstract class Workbench extends Disposable {
 			return { container, services: scope, context };
 		};
 		const filesScope = createToolScope('files');
-		const filesEditor = this._register(filesScope.services.createInstance(DesktopMainEditorPart, filesScope.container, { ...editorOptions, contextKeyService: filesScope.context }));
+		const filesEditor = this._register(filesScope.services.createInstance(DesktopMainEditorPart, filesScope.container, {
+			...editorOptions,
+			contextKeyService: filesScope.context,
+			modalContainer: this.domNode,
+		}));
 		filesScope.services.registerInstance(IEditorPart, filesEditor);
 		const tools = new Map<Exclude<DesktopEditorTool, 'files'>, DesktopToolEditorPart>();
 		for (const tool of ['changes', 'browser', 'terminal', 'chat'] as const) {
@@ -1030,6 +1075,7 @@ export abstract class Workbench extends Disposable {
 		this._register(new EditorContextKeyController(contextKeys, editorParts, EditorPanes, languageService));
 		const editors = this._register(new BrowserEditorService(editorParts));
 		services.registerInstance(IEditorService, editors);
+		services.registerSingleton(IDiffEditorCommandsService, () => services.createInstance(SessionsDiffEditorCommandsService));
 		services.registerInstance(IEditorGroupsService, editors);
 		// The browser host resolves Workbench browsing, which borrows the window's editor services.
 		if (options.createBrowserHost) { this._register(options.createBrowserHost(services)); }
@@ -1037,7 +1083,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IPreferencesService, {
 			openSettings: options => preferences.open(options),
 			openUserSettings: options => workbenchPreferences.openUserSettings(options),
-			openGlobalKeybindingSettings: textual => workbenchPreferences.openGlobalKeybindingSettings(textual),
+			openGlobalKeybindingSettings: (textual, options) => workbenchPreferences.openGlobalKeybindingSettings(textual, options),
 		});
 		this._register(new WorkbenchEditorContextKeysHandler(contextKeys, editors, editors));
 		services.registerInstance(IHistoryService, this._register(services.createInstance(HistoryService)));
@@ -1087,7 +1133,7 @@ export abstract class Workbench extends Disposable {
 					command: {
 						id: 'ash.sessions.toggleBrowser', title: localize2('sessions.cards.toggleBrowser', 'Toggle browser pane'),
 						icon: Lxicon.browserExplore, toggled: ContextKeyExpr.equals('sessions.browserVisible', true),
-					}, when: ContextKeyExpr.equals('sessions.toolsAvailable', true), group: 'navigation', order: 1.5
+					}, when: ContextKeyExpr.equals('sessions.toolsAvailable', true), group: 'navigation', order: 4.5
 				},
 			}))));
 		}
@@ -1113,13 +1159,15 @@ export abstract class Workbench extends Disposable {
 			if (event.affectsConfiguration(SessionsConfiguration.activityBarLocation)) {
 				const location = configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation);
 				setActivityBarLocation(location);
-				layout.setActivityBarLocation(location);
+				layout.layout();
 			}
 		}));
 		// Browser integration resolves editor and view services; install it after the window graph is complete.
 		if (options.createAppToolsHost) this._register(options.createAppToolsHost(services));
-		this._register(new SessionsModernUIContribution(this.domNode, layout, configurationService));
+		this._register(new SessionsModernUIContribution(this.domNode, configurationService));
 		this._register(registerLayoutActions(layout, view, contextKeys, editor));
+		this._register(registerAddFileAsContextAction(this.sessionsPart));
+		this._register(registerSessionsTerminalContribution(layout, contextKeys, editor));
 		const contributions = this._register(WorkbenchContributionsRegistry.createHost(services, undefined, options.contributionIds));
 		contributions.advance(WorkbenchPhase.BlockStartup);
 		contributions.advance(WorkbenchPhase.BlockRestore);
@@ -1226,10 +1274,8 @@ function sameWorkspace(first: SessionWorkspaceSelection, second: SessionWorkspac
 export interface IAgentWorkbenchLayoutService extends ILayoutService {
 	getSideBarPosition(): Position;
 	createWorkbenchLayout(parts: ReadonlyMap<SessionsPartId, Part>): void;
-	setActivityBarLocation(location: ActivityBarPosition): void;
 	layout(dimension?: IDimension): void;
 	readonly onDidChangePartVisibility: Event<SessionsPartVisibilityChangeEvent>;
-	setLayoutStyle(style: SessionsLayoutStyle): void;
 	/** Determines which center absorbs window resizing; supporting Parts retain their user widths. */
 	setPrimaryPart(partId: 'sessions' | 'editor'): void;
 	setCustomViewVisible(visible: boolean): void;

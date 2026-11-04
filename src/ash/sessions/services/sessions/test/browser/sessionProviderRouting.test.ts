@@ -10,7 +10,7 @@ import { IOpenerService } from '../../../../../platform/opener/common/opener.js'
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import '../../../../browser/workbenchChat.contribution.js';
-import { IAgentConnection } from '../../../../../platform/agentHost/common/agentService.js';
+import { IAgentConnection, IAgentHostInputCompletionService } from '../../../../../platform/agentHost/common/agentService.js';
 import { createTestLanguageModelToolsService } from '../../../../../workbench/contrib/chat/test/common/tools/testLanguageModelToolsService.js';
 import { ILanguageModelToolsService } from '../../../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { IInstructionService } from '../../../../../platform/instructions/common/instructionService.js';
@@ -47,10 +47,11 @@ import { SessionsSearchService } from '../../../../contrib/providers/agentHost/b
 import { ISessionsManagementService } from '../../common/sessionsManagement.js';
 import type { ISessionsProvider } from '../../common/sessionsProvider.js';
 import { sessionIdentity } from '../../common/sessionIdentity.js';
+import type { IWorkspace } from '../../../../../platform/workspace/common/workspace.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
-function fixture() {
+function fixture(primaryWorkspace: () => IWorkspace = () => ({ id: 'primary', folders: [] })) {
 	const lifetime = new DisposableStore();
 	const registry = lifetime.add(new SessionsProvidersService());
 	const root = lifetime.add(new InstantiationService());
@@ -85,13 +86,32 @@ function fixture() {
 	lifetime.add(registry.registerProvider(primary));
 	const registration = lifetime.add(registry.registerProvider(remote));
 	const management = { onDidChange: changed.event, sessions: [] as ISession[] } as unknown as ISessionsManagementService;
-	const scopes = lifetime.add(new SessionProviderScopeService('primary', lifetime.add(new SessionProviderServices(primaryChat, models, prompts, execution, primaryHost, tools)), registry, management, root));
+	const scopes = lifetime.add(new SessionProviderScopeService('primary', scope => search.forScope(scope),
+		lifetime.add(new SessionProviderServices(primaryChat, models, prompts, execution, primaryHost, tools)), registry, management, root));
+	const search = new SessionsSearchService('primary', primaryWorkspace, scopes, registry);
 	return {
 		lifetime, registry, remote, remoteHost, primaryHost, remoteChat, primaryChat, registration, scopes, goals, models, execution, tools, management, changed,
 		sessionId: sessionIdentity('remote', 'same', 'primary'), threadId: sessionIdentity('remote', 'thread', 'primary'),
 		[Symbol.dispose]: () => lifetime.dispose(),
 	};
 }
+
+test('a scoped draft completes on its own host without passing window folders from another host', async () => {
+	const folder = { id: 'primary', uri: URI.file('/primary'), name: 'Primary', index: 0 };
+	using context = fixture(() => ({ id: 'primary', folders: [folder] }));
+	using scope = context.scopes.createScope(undefined, 'remote');
+	const calls: unknown[] = [];
+	Object.assign(context.remoteHost.completions, {
+		getTriggerCharacters: () => ['$'],
+		complete: async (request: unknown) => { calls.push(request); return []; },
+	});
+	const completions = scope.get(IAgentHostInputCompletionService);
+	assert.deepEqual(completions.getTriggerCharacters(), ['$']);
+	await completions.complete({
+		text: '$', offset: 1, directories: [{ resource: folder.uri, target: { type: 'workspace', dirId: folder.id } }],
+	}, new AbortController().signal);
+	assert.deepEqual(calls, [{ text: '$', offset: 1, directories: [] }]);
+});
 
 test('Chat and goal events qualify the exact remote Session and Thread while backend calls remain raw', async () => {
 	using context = fixture();

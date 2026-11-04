@@ -35,7 +35,7 @@ const { CommandRegistry, CommandsRegistry, ICommandService } = await import('../
 const { CommandService } = await import('../../../workbench/services/commands/common/commandService.js');
 const { IEditorService } = await import('../../../workbench/services/editor/common/editorService.js');
 const { ISessionsLayoutService } = await import('../../services/layout/common/sessionsLayoutService.js');
-const { IDesignEditorService } = await import('../../contrib/creator/browser/designEditorService.js');
+const { IDesignEditorService } = await import('../../contrib/artifacts/browser/designEditorService.js');
 const { URI } = await import('../../../base/common/uri.js');
 const { DisposableStore } = await import('../../../base/common/lifecycle.js');
 const { Menus } = await import('../../browser/menus.js');
@@ -158,8 +158,24 @@ test('Chat navigation includes Search and selects New, Projects, Creator and Cus
 		), [['New', 'Search', 'Projects', 'Artifacts', 'Customize'], ['Accounts']]);
 		assert.ok(buttons.every(button => !button.classList.contains('icon-only')));
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item > button.ash-sessions-activity-item').length, 5);
-		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 0);
+		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
+		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
+		assert.ok(buttons[0]?.classList.contains('selected'));
+		const contextKeys = services.get(IContextKeyService);
+		contextKeys.setContext('sessions.activity.newSessionDraftVisible', false);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), null);
+		contextKeys.bufferChangeEvents(() => {
+			contextKeys.setContext('sessions.activity.chatSelected', false);
+			contextKeys.setContext('sessions.activity.chatgptSelected', true);
+		});
+		assert.equal(buttons[0]?.getAttribute('aria-current'), null);
+		contextKeys.setContext('sessions.activity.chatgptNewDraft', true);
+		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
+		contextKeys.bufferChangeEvents(() => {
+			contextKeys.setContext('sessions.activity.chatgptSelected', false);
+			contextKeys.setContext('sessions.activity.chatSelected', true);
+			contextKeys.setContext('sessions.activity.newSessionDraftVisible', true);
+		});
 		buttons[2]?.click();
 		assert.equal(buttons[2]?.getAttribute('aria-current'), 'page');
 		assert.equal(buttons[0]?.getAttribute('aria-current'), null);
@@ -171,7 +187,8 @@ test('Chat navigation includes Search and selects New, Projects, Creator and Cus
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
 		buttons[0]?.click();
 		assert.deepEqual(selectedActions, ['chat', 'projects', 'creator', 'customize', 'chat']);
-		assert.equal(buttons[0]?.getAttribute('aria-current'), null);
+		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
+		assert.equal(buttons[4]?.getAttribute('aria-current'), null);
 		buttons[5]?.click();
 		await Promise.resolve();
 		assert.equal(accountAnchor, buttons[5]);
@@ -194,7 +211,7 @@ test('Chat navigation includes Search and selects New, Projects, Creator and Cus
 		assert.equal(accountHost.querySelector('button')!.classList.contains('icon-only'), false);
 		assert.equal(navigationHost.querySelector('button')!.classList.contains('icon-only'), false);
 		assert.equal(ownerDocument.activeElement, navigationHost.querySelector('button'), 'Changing placement retains navigation focus');
-		assert.equal(navigationHost.querySelector('button')!.getAttribute('aria-current'), null);
+		assert.equal(navigationHost.querySelector('button')!.getAttribute('aria-current'), 'page');
 		accountHost.querySelector<HTMLButtonElement>('button')!.click();
 		assert.equal(accountAnchor, accountHost.querySelector('button'));
 		bar.setLocation(ActivityBarPosition.HIDDEN, undefined);
@@ -313,7 +330,7 @@ test('navigation order survives a new window and includes new menu contributions
 	assert.deepEqual([...restored.domNode.querySelectorAll('button')].slice(0, 5).map(button => button.textContent), ['New', 'Search', 'Artifacts', 'Projects', 'Customize']);
 	using contribution = MenusRegistry.appendMenuItem(Menus.ActivityBar, { command: { id: 'test.activity', title: 'Test action', icon: Lxicon.chat2 }, order: 60 });
 	assert.deepEqual([...restored.domNode.querySelectorAll('button')].map(button => button.textContent), ['New', 'Search', 'Artifacts', 'Projects', 'Customize', 'Test action', 'Accounts']);
-	assert.equal(restored.domNode.querySelector('button')!.getAttribute('aria-current'), null);
+	assert.equal(restored.domNode.querySelector('button')!.getAttribute('aria-current'), 'page');
 });
 
 test('navigation and ordering labels use the Chinese language catalog', async () => {
@@ -437,6 +454,7 @@ function registerMenus(services: InstanceType<typeof InstantiationService>): Ins
 	const commands = resources.add(new CommandService(services, registry));
 	services.registerInstance(ICommandService, commands);
 	services.registerInstance(IMenuService, services.createInstance(MenuService));
+	contexts.setContext('sessions.activity.newSessionDraftVisible', true);
 	const keys = new Map(['chat', 'collaboration', 'teams', 'projects', 'code', 'creator', 'symphony', 'customize'].map(id => [id, contexts.createKey<boolean>(`sessions.activity.${id}Selected`, id === 'chat')]));
 	const select = (id: string): void => contexts.bufferChangeEvents(() => { contexts.setContext('sessions.workspaceMode', ['code', 'collaboration', 'teams', 'symphony'].includes(id) ? 'code' : 'chat'); for (const [candidate, key] of keys) { key.set(candidate === id); } });
 	services.registerInstance(ISessionsLayoutService, { openEntry: async (entry: { id: string; }) => select(entry.id) } as unknown as import('../../services/layout/common/sessionsLayoutService.js').ISessionsLayoutService);
@@ -448,6 +466,6 @@ function registerMenus(services: InstanceType<typeof InstantiationService>): Ins
 		resources.add(registry.register(`sessions.show.${id}`, () => select(id)));
 	}
 	services.registerInstance(IEditorService, { openEditor: async (input: { resource: { scheme: string; }; }) => select(input.resource.scheme === 'ash-projects' ? 'projects' : 'creator') } as unknown as import('../../../workbench/services/editor/common/editorService.js').IEditorService);
-	services.registerInstance(IDesignEditorService, { input: { resource: URI.parse('ash-design:/canvas') } } as unknown as import('../../contrib/creator/browser/designEditorService.js').IDesignEditorService);
+	services.registerInstance(IDesignEditorService, { input: { resource: URI.parse('ash-design:/canvas') } } as unknown as import('../../contrib/artifacts/browser/designEditorService.js').IDesignEditorService);
 	return resources;
 }

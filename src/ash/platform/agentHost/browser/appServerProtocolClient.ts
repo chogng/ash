@@ -1,5 +1,5 @@
 import { AppServerFrame, WEB_APP_SERVER_PROTOCOL_VERSION, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, type AppServerTransport } from '../common/appServerTransport.js';
-import { APP_SERVER_METHODS, type AppServerMethod, type AppServerMethodDefinition, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from '../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_METHODS, type AppServerMethod, type AppServerMethodDefinition, type ConfigChanged, type InitializeResult, type MethodParams, type MethodResult, type ServerCapabilities, type ServerNotification } from '../../../../../.build/protocol/typescript/index.js';
 import { VSBuffer } from '../../../base/common/buffer.js';
 import { canceled, isCancellationError, toError } from '../../../base/common/errors.js';
 import { isRecord } from '../../../base/common/types.js';
@@ -74,6 +74,8 @@ export class AppServerProtocolClient {
 	private readonly readyWaiters = new Set<(error?: Error) => void>();
 	private readonly notificationListeners = new Set<(notification: ServerNotification) => void>();
 	private readonly pending = new Map<number, PendingRequest>();
+	private pendingConfigRead: Promise<MethodResult<AppServerMethod>> | undefined;
+	private lastConfigChange: ConfigChanged | undefined;
 	private readonly handlers = new Map<AppServerServerRequestMethod, (params: never, context: AppServerRequestContext) => unknown | Promise<unknown>>();
 	private readonly inbound = new Map<JsonRpcId, AbortController>();
 	private readonly bufferedCalls: DecodedAppServerCall[] = [];
@@ -222,12 +224,18 @@ export class AppServerProtocolClient {
 	/** The signal retires result payloads; settlement still tracks remote completion.
 	 * Callers own method-specific remote cancellation and must preserve write outcomes.
 	 */
-	request<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, options?: { readonly timeoutMs?: number; readonly signal?: AbortSignal; }): Promise<MethodResult<M>> {
+	request<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, options?: { readonly timeoutMs?: number; readonly signal?: AbortSignal; }): Promise<MethodResult<M>>;
+	request(definition: AppServerMethodDefinition<AppServerMethod>, params: MethodParams<AppServerMethod>, options?: { readonly timeoutMs?: number; readonly signal?: AbortSignal; }): Promise<MethodResult<AppServerMethod>> {
 		// Abort listeners can reenter before the final state event is published.
 		if (options?.signal?.aborted) return Promise.reject(canceled());
 		if (this.restartDrain) return Promise.reject(new AppServerConnectionStoppedError('App Server connection replaced'));
 		if (this.disposed || this.isClosing || this.receiving?.closed || this._state !== 'ready') return Promise.reject(new Error(`App Server is not ready: ${this.isClosing || this.receiving?.closed ? 'closing' : this._state}`));
-		return this.requestRaw(definition, params, options ? positiveInteger(options.timeoutMs, this.options.requestTimeoutMs, 'timeoutMs') : this.options.requestTimeoutMs, options?.signal);
+		const shareConfigRead = definition.method === 'config/read' && !options && isRecord(params) && !Object.keys(params).length;
+		if (shareConfigRead && this.pendingConfigRead) return this.pendingConfigRead;
+		const timeout = options ? positiveInteger(options.timeoutMs, this.options.requestTimeoutMs, 'timeoutMs') : this.options.requestTimeoutMs;
+		// A later read must stay behind any intervening request that can change configuration.
+		this.pendingConfigRead = undefined;
+		return this.requestRaw(definition, params, timeout, options?.signal, shareConfigRead);
 	}
 
 	onStateChange(listener: (state: AppServerConnectionState, error?: Error) => void): IDisposable {
@@ -265,7 +273,7 @@ export class AppServerProtocolClient {
 		}
 	}
 
-	private requestRaw<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, timeoutMs: number, signal?: AbortSignal): Promise<MethodResult<M>> {
+	private requestRaw<M extends AppServerMethod>(definition: AppServerMethodDefinition<M>, params: MethodParams<M>, timeoutMs: number, signal?: AbortSignal, shareConfigRead = false): Promise<MethodResult<M>> {
 		if (this.pending.size >= 128) {
 			return Promise.reject(new Error('App Server request limit reached'));
 		}
@@ -297,6 +305,13 @@ export class AppServerProtocolClient {
 				pending.abortListener = toDisposable(() => signal.removeEventListener('abort', abort));
 			}
 		});
+		if (shareConfigRead) {
+			this.pendingConfigRead = promise;
+			const clear = () => {
+				if (this.pendingConfigRead === promise) this.pendingConfigRead = undefined;
+			};
+			void promise.then(clear, clear);
+		}
 		try {
 			const frame = JSON.stringify({ jsonrpc: '2.0', id, method: definition.method, params });
 			this.transport.send(WEB_APP_SERVER_FRAME_EVENT, { frame });
@@ -506,6 +521,12 @@ export class AppServerProtocolClient {
 			return;
 		}
 		const notification = { method: wireNotification.method, params: wireNotification.params } as ServerNotification;
+		if (notification.method === 'config/changed') {
+			const change = notification.params;
+			if (this.lastConfigChange?.revision === change.revision && this.lastConfigChange.generation === change.generation) return;
+			this.lastConfigChange = change;
+			this.pendingConfigRead = undefined;
+		}
 		for (const listener of this.notificationListeners) {
 			try {
 				listener(notification);
@@ -556,6 +577,8 @@ export class AppServerProtocolClient {
 			// Retire every request before notifying cancellation listeners, which can
 			// synchronously dispose this client or complete another host operation.
 			this.pending.clear();
+			this.pendingConfigRead = undefined;
+			this.lastConfigChange = undefined;
 			this.inbound.clear();
 			void this.restartDrain?.complete();
 			this.restartDrain = undefined;

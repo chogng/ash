@@ -10,12 +10,6 @@
 	);
 }
 
-.ash-workbench[data-color-scheme="light"] .ash-sessions-titlebar {
-	--ash-sessions-titlebar-background: var(
-		--ash-sessions-conversation-background
-	);
-}
-
 .ash-sessions-titlebar::after {
 	/* Continue the sidebar's border paint at the same Grid edge. */
 	content: "";
@@ -37,7 +31,7 @@
 	width: 100%;
 	flex-direction: row;
 	align-items: center;
-	padding: 0 var(--ash-spacing-size160) 0 var(--ash-spacing-size80);
+	padding: 0 var(--ash-spacing-size40) 0 var(--ash-spacing-size80);
 }
 
 .ash-sessions-titlebar-left {
@@ -72,6 +66,11 @@
 	-webkit-app-region: no-drag;
 }
 
+.ash-sessions-titlebar-right > .ash-toolbar:empty {
+	/* An empty toolbar must not leave its sibling spacing at the window edge. */
+	display: none;
+}
+
 .ash-sessions-titlebar-page-content {
 	display: flex;
 	flex: 1;
@@ -94,8 +93,14 @@
 	display: flex;
 	flex: 1;
 	min-width: 0;
-	justify-content: center;
+	align-self: stretch;
 	align-items: center;
+	padding-inline-start: var(--ash-spacing-size40);
+}
+
+.ash-sessions-titlebar-session-content.session-menu-open {
+	/* Let the open menu receive outside clicks in the window's drag region. */
+	-webkit-app-region: no-drag;
 }
 
 .ash-sessions-titlebar-page-content:not(:empty)

@@ -1,20 +1,30 @@
-import type { IChatListItem } from '../../common/model/chatViewModel.js';
+import type { IChangesStats } from '../../../../browser/changesStatsWidget.js';
 
-export interface PromptFileDiff {
+interface PromptFileDiff {
 	readonly id: string;
 	readonly path: string;
 	readonly review: () => void;
 }
 
+export interface PromptTurnChanges extends IChangesStats {
+	readonly fileDiffs: readonly PromptFileDiff[];
+	review(): void | Promise<void>;
+}
+
+export interface PromptTimelinePrompt {
+	readonly id: string;
+	readonly text: string;
+}
+
 export interface PromptTick {
-	readonly prompt: IChatListItem;
+	readonly prompt: PromptTimelinePrompt;
 	readonly position: number;
 }
 
 /** Derives navigation from the same rendered rows the transcript uses for reveal. */
-export class PromptTimelineModel {
+export class PromptTimelineModel<T extends PromptTimelinePrompt = PromptTimelinePrompt> {
 	constructor(
-		readonly prompts: readonly IChatListItem[],
+		readonly prompts: readonly T[],
 		private readonly getRow: (id: string) => HTMLElement,
 	) { }
 
@@ -23,13 +33,13 @@ export class PromptTimelineModel {
 		let high = this.prompts.length;
 		while (low < high) {
 			const middle = (low + high) >>> 1;
-			if (this.getRow(this.prompts[middle].id).getBoundingClientRect().bottom <= top) low = middle + 1;
+			if (this.bounds(this.prompts[middle]).top <= top) low = middle + 1;
 			else high = middle;
 		}
 		return low;
 	}
 
-	bounds(prompt: IChatListItem): DOMRect {
+	bounds(prompt: PromptTimelinePrompt): DOMRect {
 		return this.getRow(prompt.id).getBoundingClientRect();
 	}
 

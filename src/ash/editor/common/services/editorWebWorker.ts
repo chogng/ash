@@ -10,6 +10,7 @@ import { getTextWordSegments } from '../core/textSegmentation.js';
 import { AbstractDisposable } from '../../../base/common/lifecycle.js';
 import { normalizeTextLineEndings, type TextSnapshot } from '../core/textChange.js';
 import { StringText } from '../core/text/abstractText.js';
+import { isInteriorPositionAfterHighSurrogate } from '../core/text/positionToOffsetImpl.js';
 import { TextReplacement } from '../core/edits/textEdit.js';
 import { TokenizationStateStore } from '../model/textModelTokens.js';
 import type { TextModel } from '../model/textModel.js';
@@ -68,7 +69,15 @@ function computeMoreMinimalEdits(snapshot: TextSnapshot, request: EditorWorkerMi
 			continue;
 		}
 		const replacement = new TextReplacement(range, text).removeCommonPrefixAndSuffix(document);
-		if (!replacement.isEmpty) result.push(Object.freeze({ range: replacement.range, text: replacement.text }));
+		if (replacement.isEmpty) continue;
+		const positions = document.getTransformer();
+		// Model validation would widen or move this range without restoring the trimmed text.
+		if (isInteriorPositionAfterHighSurrogate(positions, replacement.range.getStartPosition())
+			|| isInteriorPositionAfterHighSurrogate(positions, replacement.range.getEndPosition())) {
+			result.push(Object.freeze({ range, text }));
+		} else {
+			result.push(Object.freeze({ range: replacement.range, text: replacement.text }));
+		}
 	}
 	if (eol !== undefined) {
 		if (result.length > 0) {

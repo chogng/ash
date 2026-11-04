@@ -218,6 +218,7 @@ fn dashboard_simulates_navigation_and_transient_details() {
         generation,
         result: Ok(ash_app_server_protocol::protocol::session::SessionResult {
             environment_applied: None,
+            worktree_start_applied: None,
             session: session(),
             agent_tree: tree,
         }),

@@ -2326,6 +2326,8 @@ use crate::protocol::session::SessionTraceReadResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::SessionUnsubscribeParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::session::SessionWorktreeStart;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::session::ThreadHistoryBoundary;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::session::ThreadSnapshotHistory;
@@ -7102,6 +7104,7 @@ typescript_bindings! {
     SessionCreateParams,
     ComparisonForkParams,
     SessionEnvironmentVariables,
+    SessionWorktreeStart,
     SessionEnvironmentProfileReadParams,
     SessionEnvironmentProfileReadResult,
     SessionEnvironmentProfileSaveParams,

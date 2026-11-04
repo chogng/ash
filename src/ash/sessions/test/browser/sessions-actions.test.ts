@@ -33,6 +33,8 @@ import { IContextKeyService } from '../../../platform/contextkey/browser/context
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { ISessionsLayoutService } from '../../services/layout/common/sessionsLayoutService.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
+import { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
+import '../../contrib/sessions/browser/views/sessionGroupAppearancePicker.js';
 
 registerNewChatActions();
 registerChatActions();
@@ -128,9 +130,27 @@ test('navigation New uses the active entry owner before the default ChatGPT entr
 test('Code navigation New creates a Session and opens its workspace without the shared Chat view', async () => {
 	using services = new InstantiationService();
 	const calls: string[] = [];
-	services.registerInstance(IContextKeyService, { getValue: () => 'code' } as unknown as IContextKeyService);
+	const target = { providerId: 'test', workspace: { type: 'local', root: '/project' } } as const;
+	let revision = 0;
+	let switchDuringProbe = false;
+	let switchPageDuringProbe = false;
+	using contextChanged = new Emitter<{ keys: ReadonlySet<string>; affectsSome: () => boolean; }>();
+	services.registerInstance(ISessionsManagementService, {
+		async resolveNewSessionTarget() {
+			if (switchDuringProbe) revision++;
+			if (switchPageDuringProbe) contextChanged.fire({ keys: new Set(['sessions.activity.customizeSelected']), affectsSome: () => true });
+			return target;
+		}
+	} as unknown as ISessionsManagementService);
+	services.registerInstance(IContextKeyService, { getValue: () => 'code', onDidChangeContext: contextChanged.event } as unknown as IContextKeyService);
 	services.registerInstance(ISessionsLayoutService, { newSessionCommand: undefined } as ISessionsLayoutService);
-	services.registerInstance(ISessionsService, { openNewSession: () => { calls.push('create'); return { untitledSessionId: 'draft' }; } } as unknown as ISessionsService);
+	services.registerInstance(ISessionsService, {
+		get navigationRevision() { return revision; }, openNewSession: (_title: undefined, options: unknown) => {
+			assert.deepEqual(options, target);
+			calls.push('create');
+			return { untitledSessionId: 'draft' };
+		}
+	} as unknown as ISessionsService);
 	using providers = new SessionsProvidersService();
 	services.registerInstance(ISessionsProvidersService, providers);
 	services.registerInstance(ILayoutService, { focus: () => calls.push('focus') } as unknown as ILayoutService);
@@ -139,6 +159,14 @@ test('Code navigation New creates a Session and opens its workspace without the 
 	services.registerInstance(ICommandService, commands);
 	await commands.executeCommand('sessions.newSession');
 	assert.deepEqual(calls, ['create', 'code', 'focus']);
+	calls.length = 0;
+	switchDuringProbe = true;
+	await commands.executeCommand('sessions.newSession');
+	assert.deepEqual(calls, []);
+	switchDuringProbe = false;
+	switchPageDuringProbe = true;
+	await commands.executeCommand('sessions.newSession');
+	assert.deepEqual(calls, []);
 });
 
 test('shared Chat commands coexist with Sessions actions and delegate to the window owner', async () => {
@@ -154,10 +182,11 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 		openSession: (sessionId: string, threadId: string) => opened.push(`${sessionId}/${threadId}`),
 	} as unknown as ISessionsService);
 	services.registerInstance(ISessionsManagementService, {
+		resolveNewSessionTarget: async () => ({ providerId: 'test', workspace: { type: 'current' } }),
 		sessions: [{ sessionId: 'session', title: 'Session', status: 'active', chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }] }],
 	} as unknown as ISessionsManagementService);
 	services.registerInstance(IConfigurationService, { getValue: () => false } as unknown as IConfigurationService);
-	services.registerInstance(IContextKeyService, { getValue: () => 'code' } as unknown as IContextKeyService);
+	services.registerInstance(IContextKeyService, { getValue: () => 'code', onDidChangeContext: Event.None } as unknown as IContextKeyService);
 	services.registerInstance(ISessionsLayoutService, { newSessionCommand: undefined } as unknown as ISessionsLayoutService);
 	services.registerInstance(ILayoutService, { focus: () => focus.push('composer') } as unknown as ILayoutService);
 	using code = CommandsRegistry.register('sessions.open.code', () => { focus.push('code'); });
@@ -169,7 +198,7 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 	} as unknown as IChatSessionNavigationService);
 	assert.equal(NEW_CHAT_COMMAND_ID, 'workbench.action.chat.newChat');
 	assert.equal(await commands.executeCommand('workbench.action.chat.newChat'), true);
-	assert.deepEqual(created, [undefined]);
+	assert.deepEqual(created, ['test']);
 	assert.deepEqual(focus, ['code', 'composer']);
 	await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
 	assert.deepEqual(input.picker?.items.map(item => item.label), ['Session']);
@@ -308,6 +337,68 @@ test('Session Details opens a localized read-only snapshot of active user sessio
 	} finally { resetNlsResolver(); }
 });
 
+test('Moving a conversation follows its destination only if navigation stayed on the original conversation', async () => {
+	using services = new InstantiationService();
+	using commands = new CommandService(services);
+	const source: ISession = { sessionId: 'source', title: 'Source', status: 'active', nextApprovalMode: 'manual', chats: [] };
+	const destination: ISession = { ...source, sessionId: 'destination', title: 'Destination' };
+	const calls: string[][] = [];
+	let navigationRevision = 0;
+	let navigateDuringMove = false;
+	services.registerInstance(IQuickInputService, new TestQuickInputService(['Destination', 'Destination']));
+	services.registerInstance(ISessionsService, {
+		activeSelection: { kind: 'session', active: { session: source, threadId: 'thread' } },
+		get navigationRevision() { return navigationRevision; },
+		openThread: async (...ids: string[]) => { calls.push(['open', ...ids]); },
+	} as unknown as ISessionsService);
+	services.registerInstance(ISessionsManagementService, {
+		getChatMoveDestinations: (sessionId: string, threadId: string) => sessionId === source.sessionId && threadId === 'thread' ? [destination] : [],
+		moveChat: async (...ids: string[]) => {
+			calls.push(['move', ...ids]);
+			if (navigateDuringMove) navigationRevision++;
+		},
+	} as unknown as ISessionsManagementService);
+
+	const context = { sessionId: source.sessionId, threadId: 'thread' };
+	await commands.executeCommand('sessions.list.moveChatToSession', context);
+	navigateDuringMove = true;
+	await commands.executeCommand('sessions.list.moveChatToSession', context);
+
+	assert.deepEqual(calls, [
+		['move', 'source', 'thread', 'destination'],
+		['open', 'destination', 'thread'],
+		['move', 'source', 'thread', 'destination'],
+	]);
+});
+
+test('The group appearance picker localizes choices and saves or resets the selected field', async () => {
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		using services = new InstantiationService();
+		using commands = new CommandService(services);
+		const input = new TestQuickInputService(['聊天', '红色', '默认', null]);
+		services.registerInstance(IQuickInputService, input);
+		const updates: unknown[][] = [];
+		services.registerInstance(ISessionGroupsService, {
+			groups: [{ sectionId: 'review', name: 'Review', sessionIds: [], color: 'charts.orange' }],
+			setGroupAppearance: async (...args: unknown[]) => { updates.push(args); },
+		} as unknown as ISessionGroupsService);
+		await commands.executeCommand('sessions.list.changeGroupAppearance', 'review', 'icon');
+		assert.equal(input.picker?.ariaLabel, '更改分组图标');
+		assert.ok(input.picker?.items.some(item => item.id === 'circle-filled' && item.iconClass));
+		await commands.executeCommand('sessions.list.changeGroupAppearance', 'review', 'color');
+		assert.equal(input.picker?.activeItems[0]?.id, 'charts.orange');
+		assert.deepEqual(input.picker?.items.filter(item => item.iconColor).map(item => item.iconColor?.id), [
+			'terminal.ansiBlack', 'terminal.ansiRed', 'terminal.ansiGreen', 'terminal.ansiYellow',
+			'terminal.ansiBlue', 'terminal.ansiMagenta', 'terminal.ansiCyan', 'terminal.ansiWhite', 'charts.orange',
+		]);
+		await commands.executeCommand('sessions.list.changeGroupAppearance', 'review', 'icon');
+		await commands.executeCommand('sessions.list.changeGroupAppearance', 'review', 'color');
+		assert.deepEqual(updates, [['review', 'icon', 'chat'], ['review', 'color', 'terminal.ansiRed'], ['review', 'icon', undefined]]);
+	} finally { resetNlsResolver(); }
+});
+
 class TestQuickInputService implements IQuickInputService {
 	readonly quickAccess = quickInputServiceTestControls.quickAccess;
 	readonly onShow = quickInputServiceTestControls.onShow;
@@ -323,12 +414,16 @@ class TestQuickInputService implements IQuickInputService {
 	createQuickWidget = quickInputServiceTestControls.createQuickWidget;
 
 	picker: TestQuickPick<IQuickPickItem> | undefined;
-	constructor(private readonly labels: string[] = []) { }
+	constructor(private readonly labels: (string | null)[] = []) { }
 
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		const picker = new TestQuickPick<TItem>(() => {
 			const label = this.labels.shift();
-			if (label) picker.chooseItem(label);
+			if (label) {
+				picker.chooseItem(label);
+			} else if (label === null) {
+				picker.hide();
+			}
 		});
 		this.picker = picker as unknown as TestQuickPick<IQuickPickItem>;
 		return picker;

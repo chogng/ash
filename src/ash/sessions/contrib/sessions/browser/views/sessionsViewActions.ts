@@ -1,6 +1,5 @@
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { captureSessionActionTarget } from '../../../../browser/sessionActionsService.js';
-import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { Menus } from '../../../../browser/menus.js';
@@ -9,7 +8,7 @@ import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
-import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
@@ -19,7 +18,7 @@ import { IProjectService } from '../../../../../platform/projects/common/project
 import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
 import { writeNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
-import { isRecord } from '../../../../../base/common/types.js';
+import { pickSessionDestination } from '../sessionsPicker.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 
@@ -80,6 +79,28 @@ registerAction2(class AddSessionToProjectAction extends Action2 {
 	}
 });
 
+async function promptForSessionGroupName(input: IQuickInputService): Promise<string | undefined> {
+	const name = await input.input({
+		title: localize('sessions.list.groupName', 'Group name'),
+		validateInput: async value => !value.trim() || value.trim().length > 128 ? localize('sessions.list.invalidGroup', 'Enter a name with 1 to 128 characters.') : undefined,
+	});
+	return name?.trim();
+}
+
+registerAction2(class CreateSessionGroupAction extends Action2 {
+	constructor() {
+		super({ id: 'sessionsViewPane.createGroup', title: localize2('sessions.list.newGroup', 'New group…'), icon: Lxicon.add });
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const groups = accessor.get(ISessionGroupsService);
+		const name = await promptForSessionGroupName(accessor.get(IQuickInputService));
+		if (name !== undefined) {
+			await groups.create(name);
+		}
+	}
+});
+
 registerAction2(class MoveSessionToGroupAction extends Action2 {
 	constructor() { super({ id: 'agentSession.moveToGroup', title: localize2('sessions.list.moveToGroup', 'Move to group') }); }
 
@@ -94,13 +115,10 @@ registerAction2(class MoveSessionToGroupAction extends Action2 {
 		]);
 		if (!selected) return;
 		if (selected.create) {
-			const name = await input.input({
-				title: localize('sessions.list.groupName', 'Group name'),
-				validateInput: async value => !value.trim() || value.trim().length > 128 ? localize('sessions.list.invalidGroup', 'Enter a name with 1 to 128 characters.') : undefined,
-			});
+			const name = await promptForSessionGroupName(input);
 			if (name === undefined) return;
 			const session = await target.resolve();
-			await groups.move(session.sessionId, (await groups.create(name.trim())).sectionId);
+			await groups.move(session.sessionId, (await groups.create(name)).sectionId);
 		} else await groups.move((await target.resolve()).sessionId, selected.id || null);
 	}
 });
@@ -122,40 +140,6 @@ registerAction2(class ChangeSessionDirectoryAction extends Action2 {
 		if (folder?.scheme === 'file') await sessions.changeDirectory(argument, folder.fsPath);
 	}
 });
-
-registerAction2(class MoveChatToSessionAction extends Action2 {
-	constructor() { super({ id: 'agentSession.moveChatToSession', title: localize2({ bundle: 'ash.sessions', key: 'sessions.list.moveChat' }, 'Move Conversation to Session…') }); }
-
-	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
-		if (!isRecord(argument) || typeof argument.sessionId !== 'string' || typeof argument.threadId !== 'string') return;
-		const { sessionId, threadId } = argument;
-		const sessions = accessor.get(ISessionsManagementService);
-		const view = accessor.get(ISessionsService);
-		const input = accessor.get(IQuickInputService);
-		const destinations = sessions.getChatMoveDestinations?.(sessionId, threadId);
-		if (!destinations?.length || !sessions.moveChat) return;
-		const selected = await pickSessionDestination(input, localize({ bundle: 'ash.sessions', key: 'sessions.list.moveChat' }, 'Move Conversation to Session…'),
-			destinations.map(session => ({ label: session.title, id: session.sessionId, description: session.workspace?.root })));
-		if (!selected) return;
-		const active = view.activeSelection;
-		const follow = active?.kind === 'session' && active.active.session.sessionId === sessionId && active.active.threadId === threadId;
-		const revision = view.navigationRevision;
-		await sessions.moveChat(sessionId, threadId, selected.id);
-		if (follow && revision === view.navigationRevision) await view.openThread(selected.id, threadId);
-	}
-});
-
-async function pickSessionDestination(input: IQuickInputService, title: string, items: readonly (IQuickPickItem & { id: string; create?: boolean; })[]) {
-	using resources = new DisposableStore();
-	const picker = resources.add(input.createQuickPick<(typeof items)[number]>());
-	picker.ariaLabel = picker.placeholder = title;
-	picker.items = items;
-	return await new Promise<(typeof items)[number] | undefined>(resolve => {
-		resources.add(picker.onDidAccept(() => { const item = picker.selectedItems[0]; if (item) { resolve(item); picker.hide(); } }));
-		resources.add(picker.onDidHide(() => resolve(undefined)));
-		picker.show();
-	});
-}
 
 registerAction2(class OpenSessionInNewWindowAction extends Action2 {
 	constructor() { super({ id: 'sessions.openInNewWindow', title: localize2('sessions.list.openWindow', 'Open in new window') }); }

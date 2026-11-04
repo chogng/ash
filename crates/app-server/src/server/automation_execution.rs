@@ -160,6 +160,7 @@ impl AppServer {
                         }
                         None => match self.agent_runtime().start_thread(StartThreadRequest {
                             branch_name: None,
+                            worktree_start: None,
                             agent_id: None,
                             agent: None,
                             command_id: session_command.clone(),

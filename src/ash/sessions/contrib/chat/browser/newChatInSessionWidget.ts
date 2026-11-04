@@ -6,7 +6,7 @@ import { NewChatWidget } from './newChatWidget.js';
 /** Uses the shared Code composer while the child conversation is still an unsent draft. */
 export class NewChatInSessionWidget extends NewChatWidget {
 	protected override renderDraftNotice(container: HTMLElement): void {
-		const message = localize('sessions.nestedChat.notice', 'Start a parallel conversation from this conversation’s code and history.');
+		const message = localize('sessions.nestedChat.notice', 'Start a parallel conversation with the same Agent, code, and history.');
 		const notice = this._register(new ChatInputNoticeWidget({
 			container,
 			variant: ChatInputNoticeVariant.Onboarding,

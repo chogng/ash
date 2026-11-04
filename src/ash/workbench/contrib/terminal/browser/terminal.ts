@@ -16,6 +16,7 @@ import type { ITerminalCapabilityStore, ITerminalCommand } from '../../../../pla
 import type { ITerminalSerializedState } from '../../../services/terminal/common/terminal.js';
 import type { ITerminalProcessCreation, ITerminalReconnectLease } from '../../../../platform/terminal/common/terminal.js';
 import type { ITerminalTabLayoutInfoById } from '../../../../platform/terminal/common/terminal.js';
+import type { TerminalEditorInput } from './terminalEditorInput.js';
 import type { IExtensionTerminalProfile, ITerminalProfile as IShellProfile } from '../../../../platform/terminal/common/terminal.js';
 import type { EditorGroupId } from '../../../services/editor/common/editorState.js';
 
@@ -127,6 +128,8 @@ export type ICreateTerminalOptions = Omit<Partial<ITerminalCreateOptions>, 'conf
 	readonly cwd?: string | URI;
 	readonly location?: ITerminalLocationOptions;
 	readonly skipContributedProfileCheck?: boolean;
+	/** Leave a resolved editor terminal unplaced until its caller reveals it. */
+	readonly deferEditorOpen?: boolean;
 	/** Do not select the created instance, including intermediate provider-created instances. */
 	readonly preserveFocus?: boolean;
 };
@@ -303,6 +306,7 @@ export const enum TerminalDataTransfers {
 /** Editor operations for the same window-owned terminal instances. */
 export interface ITerminalEditorService {
 	openEditor(instance: ITerminalInstance, editorOptions?: TerminalEditorLocation): Promise<void>;
+	splitPane(input: TerminalEditorInput, preserveFocus: boolean): Promise<void>;
 	splitInstance(instanceToSplit: ITerminalInstance, shellLaunchConfig?: ICreateTerminalOptions['config']): Promise<ITerminalInstance>;
 	detachInstance(instance: ITerminalInstance): Promise<void>;
 	getInstanceFromResource(resource: URI): ITerminalInstance | undefined;

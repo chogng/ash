@@ -134,7 +134,9 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 			if (event.kind === 'activeGroupChanged') { revealActiveEditor(); }
 			else if (event.kind === 'groupChanged' && event.groupId === editor.activeGroup.id && event.event.kind === 'activeEditorChanged') { revealActiveEditor(true); }
 		}));
-		this._register(toDisposable(() => { for (const key of this.activityKeys.values()) { key.reset(); } }));
+		this._register(toDisposable(() => {
+			for (const key of this.activityKeys.values()) { key.reset(); }
+		}));
 		const workspaceMode = SessionsWorkspaceModeContext.bindTo(this.contextKeys);
 		this._register(toDisposable(() => workspaceMode.reset()));
 		this._register(autorun(reader => workspaceMode.set(this.workspaceMode.read(reader))));
@@ -181,7 +183,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				? previousEntry.workspaceMode ?? 'chat'
 				: options?.source === 'restore' ? this.storage.get(activeEntryModeKey, StorageScope.WORKSPACE) : undefined;
 			if (!sharedWorkspace || !previousEntry) {
-				await this.conversation.setConversationKind(entry.content === 'documents' || (sharedWorkspace && retainedMode === 'code') ? 'code' : 'cowork');
+				await this.conversation.setConversationKind(entry.conversationKind ?? (entry.content === 'documents' || (sharedWorkspace && retainedMode === 'code') ? 'code' : 'cowork'));
 			}
 			if (this.isDisposed) { return; }
 			this.saveVisibility();

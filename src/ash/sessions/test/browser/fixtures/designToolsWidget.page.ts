@@ -18,8 +18,8 @@ import { TestThemeService } from '../../../../platform/theme/test/common/testThe
 import { CommandService } from '../../../../workbench/services/commands/common/commandService.js';
 import { TestNotificationService } from '../../../../workbench/services/notification/test/common/testNotificationService.js';
 import { bindTestColorTheme } from '../../../../../../test/fixtures/browser/themeFixture.js';
-import { DesignToolsWidget } from '../../../contrib/creator/browser/widget/designToolsWidget.js';
-import { DesignMode, DesignTool } from '../../../contrib/creator/common/config/editorConfiguration.js';
+import { DesignToolsWidget } from '../../../contrib/artifacts/browser/widget/designToolsWidget.js';
+import { DesignMode, DesignTool } from '../../../contrib/artifacts/common/config/editorConfiguration.js';
 
 declare global {
 	interface Window {

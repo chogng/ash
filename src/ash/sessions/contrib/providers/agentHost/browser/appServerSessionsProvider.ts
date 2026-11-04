@@ -9,7 +9,7 @@ import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.j
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
-import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, SessionId, SessionWorkspaceSelection, ThreadId } from '../../../../services/sessions/common/session.js';
+import { findAgentNode, type AgentThreadExecutionStatus, type AgentTreeNode, type IActiveSessionThread, type ISession, type ModelRef, type SessionExecutionTarget, type SessionId, type SessionWorkspaceSelection, type ThreadId } from '../../../../services/sessions/common/session.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../../common/agentHostSessionsProvider.js';
 import type { AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -28,6 +28,7 @@ export interface AppServerSessionsProviderHost {
 	readonly id?: string;
 	readonly label?: string;
 	readonly workspace: () => SessionWorkspaceSelection;
+	readonly isWorkspaceTrusted?: (target: SessionExecutionTarget) => Promise<boolean>;
 	readonly authorizeWorkspace?: (target: SessionExecutionTarget, signal: AbortSignal) => Promise<boolean>;
 	readonly selectWorkspace: (folders: readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]) => Promise<SessionExecutionTarget | undefined>;
 }
@@ -273,6 +274,13 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		return !!source && this.ownsSourceAuthority(source.authorityId) && this.host.authorizeWorkspace(target, signal);
 	}
 
+	public async canReuseWorkspace(target: SessionExecutionTarget, devContainer = false): Promise<boolean> {
+		const workspace = buildAgentHostSessionWorkspace(target)!;
+		if (!this.ownsSourceAuthority(workspace.authorityId)) return false;
+		if (this.host.isWorkspaceTrusted && !await this.host.isWorkspaceTrusted(target)) return false;
+		return !devContainer || this.isDevContainerWorkspaceAvailable(sessionWorkspaceUri(workspace));
+	}
+
 	public isDevContainerWorkspaceAvailable(workspaceUri: URI, token = CancellationToken.None): Promise<boolean> {
 		if (!this.ownsSourceAuthority(workspaceUri.scheme === 'file' ? 'local' : workspaceUri.authority)) return Promise.resolve(false);
 		return this.containers.isAvailable(devContainerSourcePath(workspaceUri), token);
@@ -306,9 +314,10 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		const target = await this.rendererHost.thread.fork({ sessionId, threadId, title, commandId: creationId, target: 'thread' });
 		this.assertCurrentConnection(generation, epoch);
 		if (target.sessionId !== sessionId) throw new Error(localize('sessions.nestedChat.unavailable', 'The new conversation is unavailable.'));
-		const session = await this.readCatalog(sessionId);
+		const result = await this.sessionApi.read({ sessionId });
 		this.assertCurrentConnection(generation, epoch);
-		if (!session?.chats.some(chat => chat.threadId === target.threadId)) {
+		const session = toSession(result.session, [], undefined, result.agentTree.roots);
+		if (session.sessionId !== sessionId || !session.chats.some(chat => chat.threadId === target.threadId)) {
 			throw new Error(localize('sessions.nestedChat.unavailable', 'The new conversation is unavailable.'));
 		}
 		return { session, threadId: target.threadId };
@@ -346,7 +355,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		if (additional.length && (!this.sessionApi.addWorkspaceFolder || additional.some(folder => !this.ownsSourceAuthority(buildAgentHostSessionWorkspace(folder)!.authorityId)))) {
 			throw new Error(localize('sessions.environment.foldersUnavailable', 'The selected host cannot access every environment folder.'));
 		}
-		const created = await this.sessionApi.create({ commandId: `desktop-session-${creationId}`, title, executionTarget, branchName: options?.branchName, environmentVariables: options?.environmentVariables, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
+		const created = await this.sessionApi.create({ commandId: `desktop-session-${creationId}`, title, executionTarget, branchName: options?.branchName, worktreeStart: options?.worktreeStart, environmentVariables: options?.environmentVariables, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
 		// Creation also subscribes this connection to the new Session on the server.
 		if (this.isDisposed && generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) {
 			await this.sessionApi.unsubscribe({ sessionId: created.session.sessionId });
@@ -532,15 +541,6 @@ function executionStatus(status: TurnStatus | undefined): AgentThreadExecutionSt
 		case 'interrupted': return 'cancelled';
 		case undefined: return 'idle';
 	}
-}
-
-function findAgentNode(nodes: readonly AgentTreeNode[], threadId: ThreadId): AgentTreeNode | undefined {
-	for (const node of nodes) {
-		if (node.threadId === threadId) return node;
-		const child = findAgentNode(node.children, threadId);
-		if (child) return child;
-	}
-	return undefined;
 }
 
 function canInterrupt(node: AgentTreeNode): boolean {

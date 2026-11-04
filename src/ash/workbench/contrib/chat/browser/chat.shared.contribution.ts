@@ -19,7 +19,7 @@ import { registerChatFileTreeActions } from './actions/chatFileTreeActions.js';
 import { registerNewChatActions } from './actions/chatNewActions.js';
 import { ExportAgentHostDebugLogsAction } from './actions/exportAgentHostDebugLogsAction.js';
 import { registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { ChatContextContributions } from './actions/chatContext.js';
+import { ChatContextContributions, ChatReferenceContextContribution } from './actions/chatContext.js';
 import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
 import { ChatLayoutService } from './widget/chatLayoutService.js';
 import { registerChatCopyActions } from './actions/chatCopyActions.js';
@@ -230,6 +230,7 @@ Registry.as<IConfigurationMigrationRegistry>(WorkbenchExtensions.ConfigurationMi
 }]);
 registerSingleton(IChatContextPickService, ChatContextPickService, InstantiationType.Delayed);
 registerWorkbenchContribution(ChatContextContributions.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatContextContributions));
+registerWorkbenchContribution(ChatReferenceContextContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatReferenceContextContribution));
 registerSingleton(IChatAttachmentResolveService, ChatAttachmentResolveService, InstantiationType.Delayed);
 registerSingleton(IChatPasteTargetService, ChatPasteTargetService, InstantiationType.Delayed);
 registerSingleton(IChatAttachmentWidgetRegistry, ChatAttachmentWidgetRegistry, InstantiationType.Delayed);
@@ -257,6 +258,22 @@ registerWorkbenchContribution(ChatSetupContribution.ID, WorkbenchPhase.BlockStar
 const configurationRegistry = Registry.as<IConfigurationRegistry>(Extensions.Configuration);
 configurationRegistry.registerConfiguration(agentsWindowGraphicConfiguration);
 configurationRegistry.registerConfiguration(chatUpvoteAnimationConfiguration);
+
+configurationRegistry.registerConfiguration<boolean>({
+	key: ChatConfiguration.AutoFollowReplies,
+	defaultValue: true,
+	scope: ConfigurationScope.APPLICATION,
+	schema: { type: 'boolean' },
+	parse(value: unknown): boolean {
+		if (typeof value === 'boolean') { return value; }
+		throw new TypeError(localize('chat.autoFollowReplies.invalid', 'The Chat auto-follow setting must be a boolean.'));
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('chat.autoFollowReplies.title', 'Automatically follow new replies'); },
+		get description() { return localize('chat.autoFollowReplies.description', 'Follow new replies when the conversation is at the bottom. Scrolling up or editing a message pauses following.'); },
+	},
+});
 
 configurationRegistry.registerConfiguration<boolean>({
 	key: ChatConfiguration.TipsEnabled,
@@ -416,6 +433,7 @@ configurationRegistry.registerConfiguration<number>({
 configurationRegistry.registerConfiguration<number>({
 	key: ChatInputConfiguration.lineHeight,
 	defaultValue: 20,
+	agentsWindow: { default: 0 },
 	scope: ConfigurationScope.APPLICATION,
 	schema: { anyOf: [{ const: 0 }, { type: 'integer', minimum: 8, maximum: 80 }] },
 	parse(value: unknown): number {
@@ -425,7 +443,7 @@ configurationRegistry.registerConfiguration<number>({
 	setting: {
 		valueType: 'number', minimum: 0, maximum: 80,
 		get title() { return localize('chat.input.lineHeight.title', 'Line height'); },
-		get description() { return localize('chat.input.lineHeight.description', 'Set the message input line height in pixels. The default is 20. Use 0 to calculate it from the font size.'); },
+		get description() { return localize('chat.input.lineHeight.description', 'Set the message input line height in pixels. Use 0 to calculate it from the font size.'); },
 	},
 });
 

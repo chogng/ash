@@ -44,7 +44,7 @@ const { DesktopMainEditorPart } = await import('../../browser/parts/desktopEdito
 const { DesktopWorkbenchLayout } = await import('../../../sessions/browser/desktopWorkbench.js');
 const { SessionsModernUIContribution } = await import('../../../sessions/contrib/modernUI/browser/modernUI.contribution.js');
 const { SessionsConfiguration } = await import('../../../sessions/common/configuration.js');
-const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
+const { WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
 const { TestConfigurationService: WorkbenchConfigurationService } = await import('../../../workbench/services/configuration/test/common/testServices.js');
 
 type SessionsPartId = import('../../common/layoutConstants.js').SessionsPartId;
@@ -541,24 +541,22 @@ test('Sessions layout owns a fixed Sessions-first Part topology', () => {
 	dom.window.close();
 });
 
-test('Sessions layout style changes without changing the IDE preference or visible Parts', async () => {
+test('Sessions layout styles share edge-to-edge Part geometry and have an independent preference', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const container = h(dom.window.document, 'main');
 	dom.window.document.body.append(container);
 	const parts = createParts(dom.window.document);
 	const configuration = new WorkbenchConfigurationService();
 	const layout = createLayout(container, parts, { initialDimension: new Dimension(1_200, 800) });
-	const appearance = new SessionsModernUIContribution(container, layout, configuration);
-	const sessionsFrame = parts.get('sessions')!.domNode.parentElement as HTMLElement;
-	const surface = () => ({
-		style: container.dataset.layoutStyle,
-		leftInset: sessionsFrame.style.paddingLeft,
-		rightInset: sessionsFrame.style.paddingRight,
-		bottomInset: sessionsFrame.style.paddingBottom,
-	});
+	const appearance = new SessionsModernUIContribution(container, configuration);
+	const sessions = parts.get('sessions') as TestSessionsPart;
 	try {
 		layout.layout(new Dimension(1_200, 800));
-		assert.deepEqual(surface(), { style: 'flat', leftInset: '0px', rightInset: '0px', bottomInset: '0px' });
+		assert.equal(container.dataset.layoutStyle, 'modern');
+		assert.equal(container.classList.contains('modern-ui'), true);
+		await configuration.updateValue(SessionsConfiguration.layoutStyle, 'flat');
+		assert.equal(container.dataset.layoutStyle, 'flat');
+		assert.deepEqual(sessions.layouts.at(-1), layout.getPartSize('sessions'));
 		assert.equal(container.classList.contains('modern-ui'), false);
 		assert.equal(configuration.getValue(WorkbenchConfiguration.layoutStyle), 'modern');
 		assert.equal(layout.isPartVisible('auxiliarybar'), true);
@@ -566,8 +564,8 @@ test('Sessions layout style changes without changing the IDE preference or visib
 		assert.equal(container.dataset.layoutStyle, 'flat');
 		await configuration.updateValue(SessionsConfiguration.layoutStyle, 'modern');
 		layout.hidePart('auxiliarybar');
-		assert.equal(sessionsFrame.style.paddingRight, '4px');
-		assert.equal(sessionsFrame.style.paddingBottom, '4px');
+		assert.deepEqual(sessions.layouts.at(-1), layout.getPartSize('sessions'));
+		assert.equal(sessions.layouts.at(-1)?.height, 800 - WorkbenchWindowBarHeight);
 	} finally {
 		appearance.dispose();
 		layout.dispose();
@@ -628,7 +626,7 @@ test('Sessions compound composition changes lay out Parts once at the completed 
 		assert.deepEqual(sessions.layouts, []);
 		assert.deepEqual(completed, []);
 	});
-	assert.deepEqual(sessions.layouts, [new Dimension(1_200 - 4, 800 - WorkbenchWindowBarHeight - 4)]);
+	assert.deepEqual(sessions.layouts, [new Dimension(1_200, 800 - WorkbenchWindowBarHeight)]);
 	assert.deepEqual(completed, [new Dimension(1_200, 800)]);
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();
@@ -674,29 +672,16 @@ test('Sessions navigation collapses with the sidebar without reserving an icon r
 	const container = h(dom.window.document, 'main');
 	dom.window.document.body.append(container);
 	const parts = createParts(dom.window.document);
-	const layout = createLayout(container, parts, {
-		initialDimension: new Dimension(1_200, 800),
-		activityBarLocation: ActivityBarPosition.TOP,
-	});
+	const layout = createLayout(container, parts, { initialDimension: new Dimension(1_200, 800) });
 	layout.hidePart('auxiliarybar');
 	try {
 		layout.layout(new Dimension(1_200, 800));
 		assert.equal(container.querySelector('[data-part="activitybar"]'), null);
-		assert.equal(parts.get('sidebar')!.domNode.parentElement?.style.paddingLeft, '6px');
-		const expandedWidth = layout.getPartSize('sessions').width;
-		layout.setActivityBarLocation(ActivityBarPosition.DEFAULT);
-		assert.equal(parts.get('sidebar')!.domNode.parentElement?.style.paddingLeft, '0px');
-		assert.equal(layout.getPartSize('sessions').width >= expandedWidth, true);
+		const expandedWidth = layout.getPartSize('sidebar').width;
 		layout.hidePart('sidebar');
 		assert.equal(layout.getPartSize('sessions').width, 1_200);
-		assert.equal(layout.domNode.querySelector<HTMLElement>('.ash-sessions-content-frame')!.style.left, '0px');
-		layout.setActivityBarLocation(ActivityBarPosition.BOTTOM);
-		layout.setActivityBarLocation(ActivityBarPosition.DEFAULT);
-		assert.equal(container.querySelector('[data-part="activitybar"]'), null, 'Position changes and grid rebuilds do not create a separate navigation Part');
-		assert.equal(layout.getPartSize('sessions').width, 1_200);
 		layout.showPart('sidebar');
-		layout.setActivityBarLocation(ActivityBarPosition.HIDDEN);
-		assert.equal(parts.get('sidebar')!.domNode.parentElement?.style.paddingLeft, '6px');
+		assert.equal(layout.getPartSize('sidebar').width, expandedWidth);
 	} finally {
 		layout.dispose();
 		for (const part of parts.values()) part.dispose();

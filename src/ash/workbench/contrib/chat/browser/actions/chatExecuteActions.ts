@@ -162,6 +162,13 @@ export function registerChatExecuteActions(): DisposableStore {
 			for (const key of ['sessionId', 'threadId', 'turnId', 'itemId', 'text', 'commandId']) {
 				if (typeof value[key] !== 'string' || !(value[key] as string).trim()) throw new TypeError(invalid);
 			}
+			if (value.contexts !== undefined && (!Array.isArray(value.contexts) || !value.contexts.every(context => {
+				if (!context || typeof context !== 'object' || typeof context.name !== 'string' || typeof context.content !== 'string') return false;
+				if (context.kind !== undefined && context.kind !== 'image' && context.kind !== 'instruction' && context.kind !== 'toolSelection') return false;
+				const reference = context.reference;
+				return reference === undefined || !!reference && typeof reference === 'object'
+					&& Number.isSafeInteger(reference.start) && Number.isSafeInteger(reference.end);
+			}))) throw new TypeError(invalid);
 			const options = value as unknown as RewriteChatRequestOptions;
 			const navigation = accessor.get(IChatSessionNavigationService);
 			const revision = navigation.revision;

@@ -47,6 +47,10 @@ export class ChatChangesPill extends Disposable {
 			onClick: openChanges,
 		}));
 		this.button.domNode.classList.add('ash-chat-changes-pill');
+		this.button.hidden = true;
+		const observer = new container.ownerDocument.defaultView!.MutationObserver(() => this.updateRowVisibility());
+		observer.observe(this.domNode, { childList: true, subtree: true, attributeFilter: ['hidden'] });
+		this._register(toDisposable(() => observer.disconnect()));
 		this.counts = h(container.ownerDocument, 'span', { className: 'ash-chat-changes-statistics' });
 		this.counts.setAttribute('aria-hidden', 'true');
 		this.button.domNode.append(this.counts);
@@ -103,11 +107,11 @@ export class ChatChangesPill extends Disposable {
 		const statistics = this.statistics.get();
 		// Only confirmed file changes belong in the composer summary.
 		const visible = this.enabled && !this.error && statistics !== undefined && statistics.files > 0;
-		if (!visible && this.domNode.contains(this.domNode.ownerDocument.activeElement)) {
+		if (!visible && this.button.domNode === this.domNode.ownerDocument.activeElement) {
 			this.focusInput();
 		}
-		this.domNode.hidden = !visible;
-		setChatInputStackSlot(this.domNode, visible ? ChatInputStackSlot.Standalone : ChatInputStackSlot.Empty);
+		this.button.hidden = !visible;
+		this.updateRowVisibility();
 		if (!visible || !statistics) return;
 		this.counts.classList.toggle('partial', statistics?.partial === true);
 		this.button.label = getChangesStatsFilesLabel(statistics.files);
@@ -119,5 +123,12 @@ export class ChatChangesPill extends Disposable {
 			this.button.domNode.setAttribute('aria-label', label);
 			this.button.setTitle(label);
 		}
+	}
+
+	private updateRowVisibility(): void {
+		const hidden = !this.domNode.querySelector(':scope > button:not([hidden])');
+		if (this.domNode.hidden === hidden) return;
+		this.domNode.hidden = hidden;
+		setChatInputStackSlot(this.domNode, hidden ? ChatInputStackSlot.Empty : ChatInputStackSlot.Standalone);
 	}
 }

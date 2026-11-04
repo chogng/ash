@@ -182,6 +182,7 @@ fn start_session<T: ash_app_server_client::JsonRpcTransport>(
         .create_session(
             ash_app_server_protocol::protocol::session::SessionCreateParams {
                 branch_name: None,
+                worktree_start: None,
                 environment_variables: None,
                 agent_id: None,
                 command_id: command_id.clone(),

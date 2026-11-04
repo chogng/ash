@@ -142,10 +142,6 @@ export class ChatDynamicVariableModel extends Disposable {
 		return this.references.find(reference => reference.id === entry.id)!;
 	}
 
-	getInputState(): readonly ChatContextAttachment[] {
-		return this.references;
-	}
-
 	setInputState(contexts: readonly ChatContextAttachment[]): void {
 		this.history.clear();
 		this.text = this.input.value;

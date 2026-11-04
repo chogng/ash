@@ -22,7 +22,7 @@ import { ContextKeyService, IContextKeyService } from '../../../../../platform/c
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
@@ -462,6 +462,7 @@ class TestCustomView extends AbstractCustomView {
 
 class EntryFixture extends Disposable {
 	private readonly dom = new JSDOM('', { url: 'https://entry-layout.test' });
+	public readonly container = this.dom.window.document.body;
 	private readonly services = this._register(new InstantiationService());
 	public readonly storage = this._register(new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'sessions', backend: this.dom.window.localStorage, flushInterval: 0 }));
 	public readonly lifecycle = this._register(new TestLifecycle(undefined, new NullLoggerService(), this.storage));
@@ -547,6 +548,7 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, materializedSessions: observableValue('materialized', new Map()), state: 'loading' } as unknown as ISessionsManagementService);
 		this.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 		this.services.registerInstance(INotificationService, { error: (message: string) => { this.errors.push(message); } } as unknown as INotificationService);
+		this.services.registerInstance(ILogService, new NullLoggerService());
 		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
 		this.services.registerInstance(ISessionsConversationService, {
 			openInNewWindow: async () => { throw new Error('Unexpected popup'); },
@@ -576,6 +578,7 @@ class EntryFixture extends Disposable {
 			onDidPaneCompositeOpen: Event.None, getActivePaneComposite: () => ({ focus: () => { this.focused = 'details'; } }),
 		} as unknown as IPaneCompositePartService);
 		this.services.registerInstance(ILayoutService, {
+			mainContainer: this.container,
 			onDidChangePartVisibility: Event.None, onDidLayoutMainContainer: Event.None,
 			isPartVisible: (id: string) => this.visible.get(id) ?? false,
 			isPartRequested: (id: string) => this.visible.get(id) ?? false,

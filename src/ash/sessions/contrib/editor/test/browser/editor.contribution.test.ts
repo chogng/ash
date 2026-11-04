@@ -1,18 +1,21 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
+import { MenuId, MenuItemAction, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { MenuService } from '../../../../../platform/actions/common/menuService.js';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
+import { ITerminalEditorService } from '../../../../../workbench/contrib/terminal/browser/terminal.js';
+import { TerminalEditorInput } from '../../../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
+import { IEditorGroupsService } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { Menus } from '../../../../browser/menus.js';
@@ -89,7 +92,7 @@ test('editor contributions follow layout state, serialize open commands without 
 	using layoutMenu = menus.createMenu(Menus.TitleBarRightLayout);
 	const changesAction = () => layoutMenu.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.toggleChanges')!;
 	const headerActions = () => headerLayout.getActions().flatMap(([, actions]) => actions);
-	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.toggleDetails', 'ash.sessions.maximizeTool', 'ash.sessions.hideTool', 'submenu.SessionsToolMove']);
+	assert.deepEqual(headerActions().map(action => action.id), ['ash.sessions.toggleDetails', 'ash.sessions.maximizeTool', 'ash.sessions.hideTool']);
 	const desktopIds = () => desktopTitle.getActions().flatMap(([, actions]) => actions).map(action => action.id);
 	assert.deepEqual(desktopIds(), title.getActions().flatMap(([, actions]) => actions).map(action => action.id));
 	const dynamic = MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
@@ -112,6 +115,10 @@ test('editor contributions follow layout state, serialize open commands without 
 
 	await commands.executeCommand('ash.sessions.showEditor');
 	assert.deepEqual(titleState(), [['Toggle details', true, true], ['Hide editor', true, undefined]]);
+	contextKeys.setContext('sessions.editorTool', 'terminal');
+	assert.ok(!desktopIds().includes('ash.sessions.toggleDetails'));
+	assert.ok(!desktopIds().includes('ash.sessions.hideEditor'));
+	contextKeys.setContext('sessions.editorTool', 'files');
 	await commands.executeCommand('ash.sessions.toggleDetails');
 	assert.equal(contextKeys.getValue('sessions.detailsVisible'), false);
 	assert.equal(contextKeys.getValue('sessions.filesVisible'), true, 'Files remains selected while its editor is visible without the attached tree');
@@ -181,11 +188,48 @@ test('editor contributions follow layout state, serialize open commands without 
 		documentContent.set(true, undefined);
 		using translated = services.createInstance(EditorTitleMenuBridgeContribution, controller, context);
 		assert.deepEqual(titleState().map(([label]) => label), ['切换详情', '显示编辑器']);
-		assert.deepEqual(headerActions().map(action => action.label), ['切换详情', '切换工具区域大小', '隐藏工具区域', '移动工具']);
+		assert.deepEqual(headerActions().map(action => action.label), ['切换详情', '切换工具区域大小', '隐藏工具区域']);
 		assert.deepEqual(addTab.getActions(), []);
 		assert.equal(palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === NEW_FILE_TAB_COMMAND_ID)?.label, '打开文件标签');
 		assert.equal(changesAction().label, '更改');
+		contextKeys.setContext('sessions.editorTool', 'terminal');
+		assert.equal(desktopTitle.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.splitTerminalDown')?.label, '向下拆分');
+		contextKeys.setContext('groupEditorsCount', 1);
+		assert.equal(desktopTitle.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.closeTerminalPane')?.label, '关闭当前窗格');
 	} finally {
 		resetNlsResolver();
 	}
+});
+
+test('the Terminal title split targets the current tab without creating an editor group', async () => {
+	using services = new InstantiationService();
+	using contextKeys = new ContextKeyService();
+	using commands = new CommandService(services);
+	contextKeys.setContext('sessions.editorTool', 'terminal');
+	contextKeys.setContext('appServerAvailable', true);
+	services.registerInstance(IContextKeyService, contextKeys);
+	const input = new TerminalEditorInput(URI.parse('vscode-terminal:/test/1'));
+	const source = { id: 1, activeInput: input, inputs: [input], selectedInputs: [input] };
+	services.registerInstance(IEditorGroupsService, { getGroup: () => source } as unknown as IEditorGroupsService);
+	services.registerInstance(ILayoutService, { isPartVisible: () => false, onDidLayoutMainContainer: Event.None } as unknown as IAgentWorkbenchLayoutService);
+	services.registerInstance(IEditorPart, { groups: [source], onDidChangeEditors: Event.None } as unknown as IEditorPart);
+	let splitInput: TerminalEditorInput | undefined;
+	services.registerInstance(ITerminalEditorService, {
+		async splitPane(input: TerminalEditorInput, preserveFocus: boolean) {
+			assert.equal(preserveFocus, false);
+			splitInput = input;
+		},
+	} as ITerminalEditorService);
+	using contribution = services.createInstance(EditorTitleMenuBridgeContribution, { supportsDetails: true }, {
+		isDocumentContent: true,
+		documentContent: observableValue('document content', true),
+	});
+	const menus = new MenuService(commands, contextKeys);
+	using title = menus.createMenu(Menus.SessionsEditorTitle);
+	const split = title.getActions({ arg: { groupId: source.id } }).flatMap(([, actions]) => actions)
+		.find(action => action instanceof MenuItemAction && action.id === 'ash.sessions.splitTerminalDown');
+	assert.ok(split instanceof MenuItemAction);
+	assert.equal(split.label, 'Split Down');
+	await split.run();
+	assert.equal(splitInput, input);
 });

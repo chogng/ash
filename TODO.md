@@ -58,9 +58,15 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 主窗修复复测（GPU 开启）。旧原生尺寸对根容器的限制已收窄为一个物理像素。125% 完整自托管场景通过，1,782 帧未发现按钮偏移，松手后及应用缩放 0、+1、−1 均与 Win32 客户区对齐。150% 仍有右侧标题栏按钮距边缘的偏移，稳定状态通过。100% 和 200% 的界面隔离场景通过。继续验证 150% 标题栏边距、辅助窗物理边界及 Agents 会话弹窗。见 [125% 日志](.build/ash-playwright-mcp/windows-resize/ide-125-gpu-final.log) 和 [150% 日志](.build/ash-playwright-mcp/windows-resize/ide-150-gpu-final.log)。
 
+## Terminal · 滚动命令的渲染就绪边界
+
+- [ ] **修复候选 · 终端冷加载期间的滚动命令**：`src/ash/workbench/contrib/terminal/browser/terminalActions.ts` 的六个滚动命令在 active instance 已有 screen 且未 disposed 时直接读取 `screen.raw.buffer`；但 `terminalInstance.ts` 在异步 `initialize` 前就暴露 screen，而 `xterm/xtermTerminal.ts` 的 `raw` 在模块加载完成前会抛错。参考 [VS Code 在 renderer 附着前保护终端滚动](https://github.com/microsoft/vscode/pull/339330)（2026-11-04 已合并，稳定 1.145.0 尚不包含），沿现有终端 owner 补安全的就绪检查，避免冷加载时由命令面板／命令调用触发异常。此处是静态调用链确认，尚未运行 Ash 时序复现，不宣称全部终端命令受影响。
+  - 范围与前提：区分 screen 对象存在、底层 Terminal 已初始化和 renderer 已 open；恢复终端可先有缓冲而未打开 DOM，滚动命令不为就绪而强制 reveal／open。未就绪时安全返回，若选择等待则绑定原实例并重查释放／活动身份，不在异步完成后滚动另一个终端。不改 PTY、输出恢复或持久化，不额外排队；已退出和只读终端的可见历史仍可滚动，alternate buffer 保持现有边界。
+  - 验收：在 `src/ash/workbench/contrib/terminal/test/browser/terminalActions.test.ts` 补 screen 已存在但 raw 尚不可用、初始化完成但恢复 renderer 未 open、等待中关闭／切换 active instance，以及正常就绪、已退出／只读和 alternate buffer 六组边界；使用受控延迟的真实初始化路径复核冷开终端时触发六个滚动命令无异常、无意外打开面板、不修改输入，原终端可见后滚动正常。不要把现有完整 fake raw 或 undefined screen 测试算作该竞态通过。
+
 ## 上下文菜单 · 原生窗口按钮避让
 
-- [ ] **验收剩余 · 原生窗口按钮与浮动菜单**：[共享浮动菜单避让](https://github.com/chogng/ash/commit/d25ce1a8a0fd7458cef050b4c361b772d9a467e3) 已在 `src/ash/base/browser/ui/contextview/contextview.ts` 接入目标窗口可见 WCO 几何及 `geometrychange`，由 `windowControlsOverlay.ts` 先向下、再横移、最后按视口回退；子菜单沿既有 ContextView 复用。原“只按完整 viewport 定位、未消费按钮区域”的实现缺口已消除，保留原生 Windows 主／辅助窗口的实际遮挡与点击验收。参考 [VS Code 菜单避让窗口按钮](https://github.com/microsoft/vscode/pull/345326)（2026-11-02 已合并，稳定 1.144.0 尚不包含），不重复建立另一套定位器。
+- [ ] **验收剩余 · 原生窗口按钮与浮动菜单**：[共享浮动菜单避让](https://github.com/chogng/ash/commit/d25ce1a8a0fd7458cef050b4c361b772d9a467e3) 已在 `src/ash/base/browser/ui/contextview/contextview.ts` 接入目标窗口可见 WCO 几何及 `geometrychange`，由 `windowControlsOverlay.ts` 先向下、再横移、最后按视口回退；子菜单沿既有 ContextView 复用。原“只按完整 viewport 定位、未消费按钮区域”的实现缺口已消除，保留原生 Windows 主／辅助窗口的实际遮挡与点击验收。参考 [VS Code 菜单避让窗口按钮](https://github.com/microsoft/vscode/pull/345326)（2026-11-02 已合并，稳定 1.145.0 尚不包含），不重复建立另一套定位器。
   - 已有证据与边界：`windowControlsOverlay.test.ts` 覆盖左右按钮区、高菜单、偏移 viewport 与无效几何；`contextview.test.ts` 覆盖 owner window、可见性更新和隐藏后释放监听；`menu.browser.test.ts` 覆盖多级菜单、主题和键盘。浏览器 fixture 注入 WCO 几何，不能等同原生按钮命中验收；提交记录的 Electron IPC smoke／构建通过也不替代该场景。当前窗口配置证据来自 Electron `windowImpl.ts`，不据此宣称 Rust 原生宿主／DirectComposition 的按钮区域已覆盖。
   - 剩余验收：在实际 Windows 自定义标题栏，以 Activity Bar 顶部账户／管理入口右键菜单及键盘子菜单核对主窗口和弹出窗口，包含缩放、窄窗口、高菜单、全屏／system 标题栏及 WCO 隐藏或不可用；菜单不被按钮遮住且可点击，焦点、Escape 和取消保持可用。分别记录真实宿主、API 可用性和几何来源；Rust 原生宿主按其现有按钮／命中契约另记覆盖，不为此新增跨宿主模拟层。本项不替代已有窗口缩放布局或原生宿主切换验收。
 
@@ -138,10 +144,11 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 ## AgentHost · TODO
 
-- [ ] **修复候选 · 保留 Provider 流错误的稳定分类**：沿 `crates/ash-api/src/requests.rs`、endpoint decoder、`crates/app-server/src/model_provider_error.rs` 到 `crates/core/src/turn/executor.rs` 核对两条独立缺口，避免将可诊断的失败降为通用无效响应。既有配置／认证／限流提示已存在，不重复建设错误展示层；以下依据静态调用链，尚未运行真实端点验收，各出处的合并与发布状态分别标注。
+- [ ] **修复候选 · 保留 Provider 流错误的稳定分类**：沿 `crates/ash-api/src/requests.rs`、endpoint decoder、`crates/app-server/src/model_provider_error.rs` 到 `crates/core/src/turn/executor.rs` 核对以下独立缺口，避免将可诊断的失败降为通用无效响应。既有配置／认证／限流提示已存在，不重复建设错误展示层；以下依据静态调用链，尚未运行真实端点验收，各出处的合并与发布状态分别标注。
   - **Chat Completions 错误帧**：`crates/ash-api/src/sse/openai_chat_completions.rs` 未识别 `error` envelope，无 `choices` 时直接忽略；若随后结束或只有 `[DONE]`，错误会变为缺少终态的 `InvalidResponse`。参考 [流错误分类保留](https://github.com/zed-industries/zed/pull/66038)（2026-10-23 已合并 main，已进入 [v1.27.0-pre](https://github.com/zed-industries/zed/releases/tag/v1.27.0-pre) 预发布，稳定 v1.26.2 尚不包含），在普通 chunk／usage 处理前识别经确认的错误帧并接回已有分类入口，不照搬上游类型装箱修复。Core 对无效响应只立即重试一次，而 transient 有等待及独立重试预算；须让额度／认证错误终止并给出正确恢复方向、过载沿原 transient 策略处理，而非一概关闭重试。
   - **Responses 模型不可用代码**：`requests.rs` 仍按正文子串识别，裸 `model_not_found` 从 `error`／`response.failed` 落为 `InvalidResponse`，同样可能多发一次请求；HTTP 403 则在读取该代码前归为认证错误。参考 [模型不可用终态错误](https://github.com/openai/codex/pull/56445)（2026-10-23 已合并，已包含于 [Codex 0.165.0](https://github.com/openai/codex/releases/tag/rust-v0.165.0)），优先识别可信协议结构中的精确 code，并沿现有稳定错误契约给出更换模型／检查模型访问的恢复方向，不凭自然语言子串推断、不自动切换模型。HTTP 400／404 与含 `invalid_request_error` 的现有路径本已不可重试，不能把所有模型不存在都描述为重试缺陷；未知 403 仍保留原认证语义。
-  - **范围与验收**：在 `crates/ash-api/src/sse/openai_chat_completions_tests.rs`、`crates/ash-api/src/endpoint/responses/events_tests.rs` 和 `crates/app-server/src/model_provider_error_tests.rs` 补受控错误帧与完整 Core 调用次数断言；覆盖错误出现在首帧／部分输出之后、缺少／附带 `[DONE]`、普通 usage-only 帧、嵌套 `response.failed`、SSE／WebSocket 共用解码、400／403／404、取消、未知或畸形错误。额度／认证／已确认模型不可用不额外调用，过载仍按预算等待，终态与历史恢复提示一致；保留既有上下文溢出处理、错误正文截断和脱敏，不把原始 provider 正文直传 UI 或新增账号／provider 抽象。
+  - **Responses 预算耗尽代码**：当已配置的 Responses 端点实际返回精确 `budget_reached` 流错误且未同时命中现有额度／无效请求正文分类，也会沿 `error`／`response.failed` 落为 `InvalidResponse` 并立即重试一次。参考 [预算耗尽终态分类](https://github.com/openai/codex/pull/59228)（2026-11-03 已合并；尚未包含于 [Codex 0.166.0](https://github.com/openai/codex/releases/tag/rust-v0.166.0)），在同一精确 code 分类入口保留不可重试结果与有界提示，不新增错误架构、不自动换模型或推断额度恢复时间。HTTP 400 的现有路径本已不可重试；含 `usage_limit`／`insufficient_quota`／`invalid_request_error` 等已命中分类的正文不算本缺口。此项为静态协议与调用链核对，未断言真实端点已发生故障。
+  - **范围与验收**：在 `crates/ash-api/src/sse/openai_chat_completions_tests.rs`、`crates/ash-api/src/endpoint/responses/events_tests.rs` 和 `crates/app-server/src/model_provider_error_tests.rs` 补受控错误帧与完整 Core 调用次数断言；覆盖错误出现在首帧／部分输出之后、缺少／附带 `[DONE]`、普通 usage-only 帧、嵌套 `response.failed`、SSE／WebSocket 共用解码、400／403／404、取消、未知或畸形错误。额度／认证／已确认模型不可用不额外调用，过载仍按预算等待，终态与历史恢复提示一致；保留既有上下文溢出处理、错误正文截断和脱敏，不把原始 provider 正文直传 UI 或新增账号／provider 抽象。补精确 `budget_reached` 的顶层／嵌套错误帧、部分输出后失败、携带 retry-after 后跟 completed、已有额度／无效请求正文命中及 HTTP 400 场景，断言终态不多调用模型；未知 code 与正常 transient 的原重试策略不变。
 
 - [ ] **修复候选 · 兼容 Chat Completions 的结构化流内容**：`crates/ash-api/src/sse/openai_chat_completions.rs` 仍把 `delta.content` 限定为字符串，已启用 native streaming 的 OpenAI-compatible 端点遇到 text/thinking 数组会报错；参考 [Zed 混合流适配](https://github.com/zed-industries/zed/pull/65915)（已合并 main，已包含于 [Zed v1.26.2](https://github.com/zed-industries/zed/releases/tag/v1.26.2) 稳定版），沿现有 decoder 与 terminal assembly 支持经确认的结构化内容，保持思考与正文分离。不新增 provider 抽象或账号接线。
   - 兼容与验收：记录的 string／thinking-array／text-array 交替流应完整结束，实时事件顺序与最终输出一致；覆盖空 thinking、可选 closed、usage、tool-call 分片、取消和严格 DONE。同步参照 [推理字段选择](https://github.com/zed-industries/zed/pull/65926)（已包含于 [Zed v1.26.2](https://github.com/zed-industries/zed/releases/tag/v1.26.2) 稳定版）验证 reasoning／reasoning_content 的明确优先级与空值回退，不按全局文本去重；Ash 当前只读后者，不把上游双发缺陷误写成已复现 Ash 问题。保留原有 DeepSeek／Kimi／GLM 行为，对未知内容类型明确报错；本条依据静态核对，真实 provider 回归待实施时验收。
@@ -164,7 +171,7 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 ## Sessions · TODO
 
-- [ ] **Sessions contribution 对齐余项** · 多对话会话的目录切换还需跨 Thread 原子提交执行目标并保留各自的工作区。远程和 Provider 会话还需对接其拥有方的目录选择和授权契约。通知、分组外观、自动化进度和目录呈现仍需核对生产调用链。
+- [ ] **Sessions contribution 对齐余项** · 多对话会话的目录切换还需跨 Thread 原子提交执行目标并保留各自的工作区。远程和 Provider 会话还需对接其拥有方的目录选择和授权契约。列表撤销通知需先由归档、分组和筛选各自提供可撤销操作。常驻列表提示和存储清理提示分别缺少对应的引导和清理建议生产方。
 
 - [ ] **New Environment · Cloud 与 WSL 验收** · Cloud 需要可路由的 Sessions provider 与目标发现和创建契约。仍需在 Windows 实机验证 WSL 首次连接及环境变量注入。
 
@@ -264,7 +271,7 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
   - 前提与验收：适配 rusqlite 而非照搬 SQLx；保持 Durable 至少现有 FULL 耐久性，DELETE 评估 EXTRA，不将 WAL 改为上游 NORMAL。覆盖本地新库、NFS 新库、已有 WAL／DELETE、初始化中断、目录探测失败、多个 owner 重开和持锁并发，确认实际 pragma 返回值与错误可诊断；对回滚 journal 的读写竞争及吞吐做基线测量。是否正式支持多主机共用 profile 属单独产品决定，不由此候选授权。
   - 上游后续已合并[已有库迁移与初始化门禁](https://github.com/openai/codex/pull/57225)及[迁移权限说明](https://github.com/openai/codex/pull/57226)（2026-10-26，已包含于 [Codex 0.166.0](https://github.com/openai/codex/releases/tag/rust-v0.166.0)）：迁移要求所有主机的客户端停用、跨客户端锁有效，并保留 WAL 备份和中断恢复；替换文件仅保留 mode bits，不继承原 owner／group／扩展 ACL。此处仍不授权 Ash 自动迁移或照搬 unsafe 开关；若之后单独批准迁移，再将锁竞争、恢复、权限变化披露与失败不触发损坏重建纳入验收，不能把初始化 journal 选择等同于已有数据安全转换。
 
-  - 目录判定补充：参考 [本地与网络目录 journal 区分](https://github.com/microsoft/vscode/pull/345014)（2026-10-29 已合并，稳定 1.144.0 尚不包含），把 Windows UNC／映射网络盘、Linux 网络挂载／FUSE、目录解析或探测失败，以及既有 WAL 库移到另一类目录后的重开加入上述验证矩阵；仅看路径形式或新库初始化不足以确认实际模式。按数据库实际目录核实各平台探测能力，不能把上游 macOS 默认视为本地直接当作 Ash 保证。保持现有 Durable FULL，不采用上游 NORMAL 或自动切换旧库；被连接锁阻止时保留原库并明确诊断实际 journal，不能宣称目录已适配。此补充仍是支持范围与失败诊断验证，不批准网络 profile、多主机共用或迁移实现。
+  - 目录判定补充：参考 [本地与网络目录 journal 区分](https://github.com/microsoft/vscode/pull/345014)（2026-10-29 已合并，已包含于 [VS Code 1.145.0](https://github.com/microsoft/vscode/releases/tag/1.145.0)），把 Windows UNC／映射网络盘、Linux 网络挂载／FUSE、目录解析或探测失败，以及既有 WAL 库移到另一类目录后的重开加入上述验证矩阵；仅看路径形式或新库初始化不足以确认实际模式。按数据库实际目录核实各平台探测能力，不能把上游 macOS 默认视为本地直接当作 Ash 保证。保持现有 Durable FULL，不采用上游 NORMAL 或自动切换旧库；被连接锁阻止时保留原库并明确诊断实际 journal，不能宣称目录已适配。此补充仍是支持范围与失败诊断验证，不批准网络 profile、多主机共用或迁移实现。
 
 ### 共享登录记录格式兼容（前提变化，暂缓）
 

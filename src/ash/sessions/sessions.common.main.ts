@@ -4,6 +4,7 @@ import '../workbench/contrib/workspace/browser/workspace.contribution.js';
 import './contrib/workspace/browser/workspace.contribution.js';
 import './contrib/chat/browser/chat.contribution.js';
 import './contrib/chat/browser/newSessionAction.js';
+import './contrib/github/browser/createSessionFromPullRequestAction.js';
 import './contrib/chat/browser/openSessionLinkOpener.contribution.js';
 import '../workbench/contrib/accessibility/browser/accessibility.contribution.js';
 import '../workbench/contrib/debug/browser/debug.service.contribution.js';
@@ -27,6 +28,7 @@ import '../workbench/contrib/commands/common/commands.contribution.js';
 import '../workbench/contrib/extensions/browser/extensions.contribution.js';
 import '../workbench/contrib/chat/browser/aiCustomization/customizationMarketplace.contribution.js';
 import '../workbench/contrib/preferences/browser/preferences.contribution.js';
+import './contrib/preferences/browser/sessionsKeyboardShortcuts.contribution.js';
 import '../workbench/contrib/advisor/browser/advisor.contribution.js';
 import '../workbench/contrib/authentication/browser/authentication.contribution.js';
 import '../workbench/contrib/issue/browser/issue.contribution.js';
@@ -61,15 +63,15 @@ import './contrib/fileTreeView/browser/fileTreeView.contribution.js';
 import './contrib/cowork/browser/cowork.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
 import './contrib/trace/browser/trace.contribution.js';
-import './contrib/creator/browser/creatorEditor.contribution.js';
-import './contrib/creator/browser/creator.contribution.js';
-import './contrib/creator/contrib/design/browser/design.contribution.js';
-import './contrib/creator/contrib/whiteboard/browser/whiteboard.contribution.js';
-import './contrib/creator/contrib/slides/browser/slides.contribution.js';
-import './contrib/creator/contrib/brand/browser/brand.contribution.js';
-import './contrib/creator/contrib/sites/browser/sites.contribution.js';
-import './contrib/creator/contrib/make/browser/make.contribution.js';
-import './contrib/creator/contrib/prototype/browser/prototype.contribution.js';
+import './contrib/artifacts/browser/creatorEditor.contribution.js';
+import './contrib/artifacts/browser/artifacts.contribution.js';
+import './contrib/artifacts/contrib/design/browser/design.contribution.js';
+import './contrib/artifacts/contrib/whiteboard/browser/whiteboard.contribution.js';
+import './contrib/artifacts/contrib/slides/browser/slides.contribution.js';
+import './contrib/artifacts/contrib/brand/browser/brand.contribution.js';
+import './contrib/artifacts/contrib/sites/browser/sites.contribution.js';
+import './contrib/artifacts/contrib/make/browser/make.contribution.js';
+import './contrib/artifacts/contrib/prototype/browser/prototype.contribution.js';
 import './contrib/projects/browser/projects.contribution.js';
 import './contrib/customize/browser/customize.contribution.js';
 import './contrib/symphony/browser/symphony.contribution.js';
@@ -97,6 +99,8 @@ import { ICommandService } from '../platform/commands/common/commands.js';
 import { ContextKeyExpr } from '../platform/contextkey/common/contextkey.js';
 import { localize2 } from '../nls.js';
 import { Menus } from './browser/menus.js';
+import { ChatGPTNewDraftContext, NewSessionDraftVisibleContext } from './common/contextkeys.js';
+import { ASH_CHAT_SELECTED_CONTEXT } from './contrib/chat/common/constants.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
 import { IWebWorkerService } from '../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../platform/webWorker/browser/webWorkerServiceImpl.js';
@@ -105,14 +109,22 @@ import { WebWorkerService } from '../platform/webWorker/browser/webWorkerService
 registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed);
 
 MenusRegistry.appendMenuItem(Menus.ActivityBar, {
-	command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add },
+	command: {
+		id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.or(
+			ContextKeyExpr.and(NewSessionDraftVisibleContext.isEqualTo(true), ContextKeyExpr.or(
+				ContextKeyExpr.has('sessions.activity.chatSelected'),
+				ContextKeyExpr.has(ASH_CHAT_SELECTED_CONTEXT),
+			)),
+			ContextKeyExpr.and(ChatGPTNewDraftContext.isEqualTo(true), ContextKeyExpr.has('sessions.activity.chatgptSelected')),
+		)
+	},
 	group: 'navigation', order: 10,
 });
 
 MenusRegistry.appendMenuItems([
 	{
 		id: Menus.CodeActivityBar,
-		item: { command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add }, group: 'navigation', order: 10 },
+		item: { command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.and(NewSessionDraftVisibleContext.isEqualTo(true), ContextKeyExpr.has('sessions.activity.codeSelected')) }, group: 'navigation', order: 10 },
 	},
 	{
 		id: Menus.CodeActivityBar,

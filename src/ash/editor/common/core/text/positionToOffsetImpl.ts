@@ -1,11 +1,20 @@
 import { findLastIdxMonotonous } from '../../../../base/common/arraysFind.js';
 import { CharCode } from '../../../../base/common/charCode.js';
-import { Position } from '../position.js';
+import { isHighSurrogate } from '../../../../base/common/strings.js';
+import { Position, type IPosition } from '../position.js';
 import { Range } from '../range.js';
 import { OffsetRange } from '../ranges/offsetRange.js';
 import { TextLength } from '../text/textLength.js';
 import { StringEdit, StringReplacement } from '../edits/stringEdit.js';
 import type { TextEdit, TextReplacement } from '../edits/textEdit.js';
+
+/** Model validation adjusts interior positions after any high surrogate, including an unpaired one. */
+export function isInteriorPositionAfterHighSurrogate(text: {
+	getLineLength(lineNumber: number): number;
+	getLineCharCode(lineNumber: number, index: number): number;
+}, { lineNumber, column }: IPosition): boolean {
+	return column > 1 && column <= text.getLineLength(lineNumber) && isHighSurrogate(text.getLineCharCode(lineNumber, column - 2));
+}
 
 /** Shared coordinate conversion contract for strings and line-based models. */
 export abstract class PositionOffsetTransformerBase {
@@ -89,5 +98,10 @@ export class PositionOffsetTransformer extends PositionOffsetTransformerBase {
 
 	getLineLength(lineNumber: number): number {
 		return this.lineEndOffsetByLineIdx[lineNumber - 1]! - this.lineStartOffsetByLineIdx[lineNumber - 1]!;
+	}
+
+	getLineCharCode(lineNumber: number, index: number): number {
+		const offset = this.lineStartOffsetByLineIdx[lineNumber - 1]! + index;
+		return index >= 0 && offset < this.lineEndOffsetByLineIdx[lineNumber - 1]! ? this.text.charCodeAt(offset) : NaN;
 	}
 }

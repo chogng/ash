@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { DesignModel } from '../../contrib/creator/common/model/designModel.js';
-import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
-import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/creator/common/model/document.js';
-import { defaultPrototypeTransition, type PrototypeFrame, type PrototypeInteraction, type PrototypeStep } from '../../contrib/creator/common/model/prototype.js';
-import { PrototypePlayback, prototypeProgress, samplePrototypeTransition, smartAnimate } from '../../contrib/creator/common/model/prototypePlayback.js';
+import { DesignModel } from '../../contrib/artifacts/common/model/designModel.js';
+import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/artifacts/common/model/document.js';
+import { defaultPrototypeTransition, type PrototypeFrame, type PrototypeInteraction, type PrototypeStep } from '../../contrib/artifacts/common/model/prototype.js';
+import { PrototypePlayback, prototypeProgress, samplePrototypeTransition, smartAnimate } from '../../contrib/artifacts/common/model/prototypePlayback.js';
 
 function screen(name: string, children: readonly DesignShape[] = []): PrototypeFrame { return { id: generateUuid(), kind: 'frame', name, x: 0, y: 0, width: 390, height: 844, rotation: 0, fill: '#ffffff', clip: true, children }; }
 function box(name: string, x = 0): DesignShape { return { id: generateUuid(), kind: 'rectangle', name, x, y: 20, width: 80, height: 40, rotation: 0, fill: '#000000' }; }
@@ -178,7 +178,7 @@ test('Prototype flow starting points belong to placed instances and survive main
 });
 
 test('Prototype expressions follow precedence, preserve variable identities and reject coercion or executable syntax', async () => {
-	const { parsePrototypeExpression: parse, evaluatePrototypeExpression: evaluate, formatPrototypeExpression: format } = await import('../../contrib/creator/common/model/prototypeExpression.js');
+	const { parsePrototypeExpression: parse, evaluatePrototypeExpression: evaluate, formatPrototypeExpression: format } = await import('../../contrib/artifacts/common/model/prototypeExpression.js');
 	const { variables } = prototypeResources();
 	const calc = (text: string) => evaluate(parse(text, variables), id => id === variables[0].id ? 3 : undefined);
 	assert.equal(calc('count + 2 * 4'), 11); assert.equal(calc('(count + 2) * 4'), 20);
@@ -203,7 +203,7 @@ function prototypeResources() {
 }
 
 test('Prototype chains evaluate conditions after prior writes and yield animations in order', async () => {
-	const { parsePrototypeExpression: parse } = await import('../../contrib/creator/common/model/prototypeExpression.js');
+	const { parsePrototypeExpression: parse } = await import('../../contrib/artifacts/common/model/prototypeExpression.js');
 	const resources = prototypeResources(), a = screen('Home'), b = screen('Cart'), c = screen('Confirmation');
 	const write: PrototypeStep = { action: 'setVariable', variableId: resources.variables[0].id, value: parse('count + 1', resources.variables), transition: defaultPrototypeTransition };
 	const conditional: PrototypeStep = {
@@ -221,7 +221,7 @@ test('Prototype chains evaluate conditions after prior writes and yield animatio
 });
 
 test('Prototype writes and modes update bindings and aliases across navigation, reset only on restart or snapshot restore', async () => {
-	const { parsePrototypeExpression: parse } = await import('../../contrib/creator/common/model/prototypeExpression.js');
+	const { parsePrototypeExpression: parse } = await import('../../contrib/artifacts/common/model/prototypeExpression.js');
 	const resources = prototypeResources(), collection = resources.collections[0], variable = resources.variables[0];
 	const a = screen('Home', [{ ...box('Size'), bindings: { width: resources.variables[1].id } }]), b = screen('Other', a.children.map(child => ({ ...child, id: generateUuid() })));
 	const doc = documentFromShapes([a, b], { documentId: generateUuid(), artifactId: generateUuid(), resources }), saved = serializeDesignDocument(doc), player = new PrototypePlayback(doc.shapes, a.id, resources), snapshot = player.snapshot();
@@ -235,7 +235,7 @@ test('Prototype writes and modes update bindings and aliases across navigation, 
 });
 
 test('Prototype conditionals use the first matching branch, nest, and keep missing references or invalid results inert', async () => {
-	const { parsePrototypeExpression: parse } = await import('../../contrib/creator/common/model/prototypeExpression.js');
+	const { parsePrototypeExpression: parse } = await import('../../contrib/artifacts/common/model/prototypeExpression.js');
 	const resources = prototypeResources(), a = screen('Home'), b = screen('Yes'), c = screen('Else');
 	const nested: PrototypeStep = { action: 'conditional', transition: defaultPrototypeTransition, branches: [{ condition: parse('count > 0', resources.variables), actions: [interaction('navigate', b.id).actions[0]] }, { actions: [interaction('navigate', c.id).actions[0]] }] };
 	const player = new PrototypePlayback([a, b, c], a.id, resources);
@@ -246,7 +246,7 @@ test('Prototype conditionals use the first matching branch, nest, and keep missi
 });
 
 test('Prototype action trees round trip, freeze, remap conditional wires on duplication, and remove only deleted target actions', async () => {
-	const { parsePrototypeExpression: parse } = await import('../../contrib/creator/common/model/prototypeExpression.js');
+	const { parsePrototypeExpression: parse } = await import('../../contrib/artifacts/common/model/prototypeExpression.js');
 	const resources = prototypeResources(), b = screen('Target'), c = screen('Other');
 	const nested: PrototypeStep = { action: 'conditional', transition: defaultPrototypeTransition, branches: [{ condition: parse('count > 0', resources.variables), actions: [interaction('navigate', b.id).actions[0], interaction('overlay', c.id).actions[0]] }, { actions: [] }] };
 	const a = { ...screen('Home'), interactions: [{ ...interaction('back'), actions: [nested, interaction('url', undefined, { url: 'https://example.com' }).actions[0]] }] };
@@ -277,7 +277,7 @@ test('Prototype persistence migrates single actions and rejects malformed action
 });
 
 test('Custom springs handle under, critical and over damping, preserve overshoot and derive mass-dependent duration', async () => {
-	const { springProgress, prototypeTransitionDuration } = await import('../../contrib/creator/common/model/prototypePlayback.js');
+	const { springProgress, prototypeTransitionDuration } = await import('../../contrib/artifacts/common/model/prototypePlayback.js');
 	const base = { mass: 1, stiffness: 100, damping: 8, initialVelocity: 0 };
 	assert.equal(springProgress(0, base), 0); assert.ok(springProgress(0.35, base) > 1);
 	for (const damping of [8, 20, 45]) { for (const initialVelocity of [-4, 0, 5]) { const spring = { ...base, damping, initialVelocity }; assert.ok(Number.isFinite(springProgress(0.2, spring))); assert.ok(Math.abs(springProgress(20, spring) - 1) < 0.001); } }
@@ -348,7 +348,7 @@ test('Prototype horizontal scrolling leaves sticky positioning inactive and fixe
 });
 
 test('Scroll to resolves nested viewports, scaled groups and conditional chains without rewriting authored geometry', async () => {
-	const { prototypeScrollTargets } = await import('../../contrib/creator/common/model/prototypeScroll.js');
+	const { prototypeScrollTargets } = await import('../../contrib/artifacts/common/model/prototypeScroll.js');
 	const target = { ...box('Target'), x: 20, y: 50 };
 	const group: DesignShape = { ...box('Group'), kind: 'group', x: 10, y: 300, width: 200, height: 200, contentWidth: 100, contentHeight: 100, children: [target] };
 	const source = box('Button'), page = { ...screen('Page', [source, group, { ...box('Footer'), y: 1000 }]), height: 200, overflowDirection: 'vertical' as const };
@@ -438,7 +438,7 @@ test('Scroll to inherited component targets resolves the placed instance and sav
 });
 
 test('Scroll ranges ignore fixed overflow and clipped nested contents; rotated input follows local axes', async () => {
-	const { prototypeScrollRange } = await import('../../contrib/creator/common/model/prototypeScroll.js');
+	const { prototypeScrollRange } = await import('../../contrib/artifacts/common/model/prototypeScroll.js');
 	const fixed = { ...box('Fixed'), y: 1000, scrollPosition: 'fixed' as const }, clipped = { ...screen('Clipped', [{ ...box('Hidden overflow'), y: 2000 }]), height: 100 };
 	const page = { ...screen('Page', [fixed, clipped]), height: 200, overflowDirection: 'vertical' as const };
 	assert.deepEqual(prototypeScrollRange(page), { x: 0, y: 0 });

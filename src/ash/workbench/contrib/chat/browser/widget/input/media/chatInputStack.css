@@ -33,3 +33,20 @@
 .ash-chat-input-stack-input-focused > .ash-chat-input-stack-docked {
 	border-color: var(--ash-chat-input-focus-border, var(--ash-focusBorder));
 }
+.ash-chat-staged-files:not([hidden]) {
+	display: grid;
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size80);
+}
+
+.ash-chat-staged-file {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-chat-staged-file-name {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}

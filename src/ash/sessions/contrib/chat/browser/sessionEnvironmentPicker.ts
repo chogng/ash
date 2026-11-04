@@ -131,6 +131,7 @@ export class SessionEnvironmentPicker extends Disposable {
 		const openNewEnvironment = () => this.showNewEnvironment(draft, loadCatalog());
 		this.dropdown.showItems({
 			requireIdle: true,
+			restoreFocusOnSelect: true,
 			load: () => this.buildItems(draft, [], [], openNewEnvironment),
 			refresh: async (token, publish) => {
 				let saved: readonly RemoteConnectionDefinition[] = [];
@@ -303,9 +304,9 @@ export class SessionEnvironmentPicker extends Disposable {
 
 	private async applyEnvironment(draft: IUntitledChatSession, providerId: string, environment: SessionEnvironmentSelection): Promise<void> {
 		if (!this.isCurrent(draft)) return;
-		await this.persistDraft();
 		const provider = this.providers.getProvider(providerId) as IAgentHostSessionsProvider | undefined;
-		if (!this.isCurrent(draft) || !provider || !await this.authorizeFolders(provider, environment.folders)) return;
+		if (!provider || !await this.authorizeFolders(provider, environment.folders) || !this.isCurrent(draft)) return;
+		await this.persistDraft();
 		if (!this.isCurrent(draft) || this.providers.getProvider(providerId) !== provider) return;
 		this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, environment.folders[0], { providerId, environment });
 	}
@@ -444,12 +445,12 @@ export class SessionEnvironmentPicker extends Disposable {
 
 	private async select(draft: IUntitledChatSession, provider: ISessionsProvider): Promise<void> {
 		if ((provider.id === draft.providerId && !draft.environment) || !this.isCurrent(draft)) return;
-		await this.persistDraft();
-		if (!this.isCurrent(draft) || this.providers.getProvider(provider.id) !== provider || provider.connectionStatus?.get() === 'disconnected') return;
+		if (this.providers.getProvider(provider.id) !== provider || provider.connectionStatus?.get() === 'disconnected') return;
 		const workspace = provider.currentWorkspace();
 		const folders = workspace.type === 'current' ? [] : workspace.type === 'multiple' ? workspace.folders.map(folder => folder.target) : [workspace];
-		if (!await this.authorizeFolders(provider as IAgentHostSessionsProvider, folders)) return;
-		if (!this.isCurrent(draft) || this.providers.getProvider(provider.id) !== provider) return;
+		if (!await this.authorizeFolders(provider as IAgentHostSessionsProvider, folders) || !this.isCurrent(draft)) return;
+		await this.persistDraft();
+		if (!this.isCurrent(draft) || this.providers.getProvider(provider.id) !== provider || provider.connectionStatus?.get() === 'disconnected') return;
 		this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, undefined, { providerId: provider.id, clearEnvironment: true });
 	}
 

@@ -7,6 +7,7 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { IUntitledChatSession } from '../../../services/sessions/common/session.js';
 
 // Shared Chat actions reach this window's creation policy through its navigation service.
@@ -33,7 +34,8 @@ registerAction2(class NewSessionFromNavigationAction extends Action2 {
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const commands = accessor.get(ICommandService);
-		const mode = accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key);
+		const contextKeys = accessor.get(IContextKeyService);
+		const mode = contextKeys.getValue(SessionsWorkspaceModeContext.key);
 		const entryCommand = accessor.get(ISessionsLayoutService).newSessionCommand;
 		if (entryCommand) {
 			await commands.executeCommand(entryCommand);
@@ -43,10 +45,26 @@ registerAction2(class NewSessionFromNavigationAction extends Action2 {
 			await commands.executeCommand('sessions.open.new');
 			return;
 		}
-		const created = await commands.executeCommand<IUntitledChatSession | undefined>(NewChatInSessionsWindowAction.ID);
+		const layout = accessor.get(ILayoutService);
+		let created: IUntitledChatSession | undefined;
+		if (mode === 'code') {
+			const sessions = accessor.get(ISessionsService);
+			const revision = sessions.navigationRevision;
+			let pageChanged = false;
+			using pageListener = contextKeys.onDidChangeContext(event => {
+				for (const key of event.keys) {
+					if (key.startsWith('sessions.activity.') && key.endsWith('Selected')) pageChanged = true;
+				}
+			});
+			const target = await accessor.get(ISessionsManagementService).resolveNewSessionTarget();
+			if (pageChanged || revision !== sessions.navigationRevision || contextKeys.getValue(SessionsWorkspaceModeContext.key) !== mode) return;
+			created = sessions.openNewSession(undefined, target);
+		} else {
+			created = await commands.executeCommand<IUntitledChatSession | undefined>(NewChatInSessionsWindowAction.ID);
+		}
 		if (created) {
 			await commands.executeCommand(mode === 'code' ? 'sessions.open.code' : 'sessions.open.chat');
-			accessor.get(ILayoutService).focus();
+			layout.focus();
 		}
 	}
 });

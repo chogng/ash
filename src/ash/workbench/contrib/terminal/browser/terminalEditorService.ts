@@ -24,7 +24,8 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 		this._register(editors.onDidActiveEditorChange(() => {
 			const input = editors.activeEditor;
 			if (input instanceof TerminalEditorInput) {
-				const instance = this.getInstanceFromResource(input.resource);
+				const instance = (input.activeResource && this.getInstanceFromResource(input.activeResource))
+					?? input.panes.get().map(pane => this.getInstanceFromResource(pane.resource)).find(Boolean);
 				if (instance && !this.backgroundOpens.has(instance)) terminals.setActiveInstance(instance);
 			}
 		}));
@@ -35,6 +36,12 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 
 	async openEditor(instance: ITerminalInstance, editorOptions?: import('./terminal.js').TerminalEditorLocation): Promise<void> {
 		if (!this.terminals.instances.includes(instance) || !instance.resource) return;
+		const resource = instance.resource;
+		const existing = this.editorGroups.groups.flatMap(group => group.inputs)
+			.find((input): input is TerminalEditorInput => input instanceof TerminalEditorInput
+				&& (input.contains(resource) || input.resource.path === resource.path));
+		// The tab keeps its original identity even when that shell moves to the panel.
+		const returningPane = existing && !existing.contains(resource) ? existing : undefined;
 		const previousTarget = instance.target;
 		instance.target = TerminalLocation.Editor;
 		if (editorOptions?.preserveFocus) {
@@ -43,9 +50,12 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 			this.backgroundOpens.set(instance, (this.backgroundOpens.get(instance) ?? 0) + 1);
 		}
 		try {
-			await this.editors.openEditor(new TerminalEditorInput(instance.resource, instance, this.terminals.onDidChangeInstances), { pinned: true, ignoreError: true, preserveFocus: editorOptions?.preserveFocus }, editorOptions?.viewColumn === undefined ? undefined : { groupId: editorOptions.viewColumn });
+			returningPane?.addPane(resource, returningPane.panes.get());
+			if (existing && !editorOptions?.preserveFocus) existing.activeResource = resource;
+			await this.editors.openEditor(existing ?? new TerminalEditorInput(resource, instance, this.terminals.onDidChangeInstances), { pinned: true, ignoreError: true, preserveFocus: editorOptions?.preserveFocus, ...(existing ? { revealIfOpened: true } : {}) }, editorOptions?.viewColumn === undefined ? undefined : { groupId: editorOptions.viewColumn });
 			if (!editorOptions?.preserveFocus && this.terminals.instances.includes(instance)) this.terminals.setActiveInstance(instance);
 		} catch (error) {
+			returningPane?.removePane(resource);
 			if (this.terminals.instances.includes(instance)) instance.target = previousTarget;
 			throw error;
 		} finally {
@@ -58,17 +68,44 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 	}
 
 	async detachInstance(instance: ITerminalInstance): Promise<void> {
+		const resource = instance.resource;
+		if (!resource) return;
 		for (const group of this.editorGroups.groups) {
 			for (const input of [...group.inputs]) {
-				if (input instanceof TerminalEditorInput && input.resource.path === instance.resource?.path) {
+				if (!(input instanceof TerminalEditorInput) || !input.contains(resource)) continue;
+				if (input.panes.get().some(pane => pane.resource.path !== resource.path && this.getInstanceFromResource(pane.resource))) {
+					input.removePane(resource);
+				} else {
 					await group.closeEditor(input, { skipConfirmation: true, reason: 'move' });
 				}
 			}
 		}
 	}
 
+	async splitPane(input: TerminalEditorInput, preserveFocus: boolean): Promise<void> {
+		const instance = await this.terminals.createTerminal({
+			location: TerminalLocation.Editor,
+			deferEditorOpen: true,
+			skipContributedProfileCheck: true,
+		});
+		if (this.isDisposed || !instance.resource || !this.terminals.instances.includes(instance)
+			|| !this.editorGroups.groups.some(group => group.inputs.includes(input))) {
+			await this.terminals.closeTerminal(instance);
+			throw canceled();
+		}
+		const resource = instance.resource;
+		const livePanes = input.panes.get().filter(pane => this.getInstanceFromResource(pane.resource));
+		input.addPane(resource, livePanes);
+		const active = this.editors.activeEditorPane;
+		if (!preserveFocus && this.editors.activeEditor === input && active) {
+			input.activeResource = resource;
+			active.focus();
+		}
+	}
+
 	async splitInstance(instanceToSplit: ITerminalInstance, shellLaunchConfig?: ICreateTerminalOptions['config']): Promise<ITerminalInstance> {
-		const source = this.editorGroups.groups.find(group => group.inputs.some(input => input instanceof TerminalEditorInput && input.resource.path === instanceToSplit.resource?.path));
+		const resource = instanceToSplit.resource;
+		const source = resource && this.editorGroups.groups.find(group => group.inputs.some(input => input instanceof TerminalEditorInput && input.contains(resource)));
 		if (!source || instanceToSplit.target !== TerminalLocation.Editor || instanceToSplit.state !== 'running' || instanceToSplit.isReadOnly || !this.terminals.instances.includes(instanceToSplit)) throw canceled();
 		using lifetime = new DisposableStore();
 		let retired = false;
@@ -82,7 +119,7 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 				config: shellLaunchConfig ?? instanceToSplit.shellLaunchConfig,
 				location: { parentTerminal: instanceToSplit, viewColumn: destination.id },
 			});
-			if (this.isDisposed || retired || !this.terminals.instances.includes(instanceToSplit) || !this.editorGroups.getGroup(source.id)?.inputs.some(input => input instanceof TerminalEditorInput && input.resource.path === instanceToSplit.resource?.path)) throw canceled();
+			if (this.isDisposed || retired || !this.terminals.instances.includes(instanceToSplit) || !this.editorGroups.getGroup(source.id)?.inputs.some(input => input instanceof TerminalEditorInput && input.contains(resource))) throw canceled();
 			return created;
 		} catch (error) {
 			if (created && this.terminals.instances.includes(created)) await this.terminals.closeTerminal(created);
@@ -109,9 +146,11 @@ export class TerminalEditorService extends Disposable implements ITerminalEditor
 	}
 
 	private closeTerminalIfUnhosted(input: TerminalEditorInput): void {
-		const instance = this.getInstanceFromResource(input.resource);
-		if (!instance || instance.target !== TerminalLocation.Editor) return;
-		if (this.editorGroups.groups.some(group => group.inputs.some(other => other.resource.path === input.resource.path && other.editorId === TerminalEditorInput.ID))) return;
-		void this.terminals.closeTerminal(instance).catch(onUnexpectedError);
+		for (const { resource } of input.panes.get()) {
+			const instance = this.getInstanceFromResource(resource);
+			if (instance?.target !== TerminalLocation.Editor) continue;
+			if (this.editorGroups.groups.some(group => group.inputs.some(other => other instanceof TerminalEditorInput && other.contains(resource)))) continue;
+			void this.terminals.closeTerminal(instance).catch(onUnexpectedError);
+		}
 	}
 }

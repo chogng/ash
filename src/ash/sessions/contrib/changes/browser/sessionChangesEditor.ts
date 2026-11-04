@@ -62,6 +62,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	private visible = false;
 	private detailsFocused = false;
 	private detailsVisible = true;
+	private turnDetailsVisible = false;
 	private revision = 0;
 	private inputRequest = 0;
 	private readonly pending = this._register(new MutableDisposable<IDisposable & { readonly signal: AbortSignal; completion?: Promise<void>; }>());
@@ -141,6 +142,7 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			this.clearInput();
 		}
 		this.input = input;
+		this.turnDetailsVisible = false;
 		this.details?.setVisible(this.visible && this.showFileList);
 		const inputRequest = ++this.inputRequest;
 		let loading = this.refresh(signal);
@@ -217,13 +219,19 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 	}
 
 	private get showFileList(): boolean {
-		return this.detailsVisible && this.hasThread;
+		return this.hasThread && (this.isTurnReview ? this.turnDetailsVisible : this.detailsVisible);
+	}
+
+	private get isTurnReview(): boolean {
+		return this.input instanceof SessionChangesEditorInput && this.input.changesetSelection?.kind === 'turn';
 	}
 
 	public toggleFileList(): void {
 		if (!this.details || !this.hasThread) { return; }
-		this.detailsVisible = !this.detailsVisible;
-		if (!this.detailsVisible && this.details.element.contains(this.domNode.ownerDocument.activeElement)) {
+		// A Turn review starts with the captured comparison; the list browses the whole conversation.
+		if (this.isTurnReview) this.turnDetailsVisible = !this.turnDetailsVisible;
+		else this.detailsVisible = !this.detailsVisible;
+		if (!this.showFileList && this.details.element.contains(this.domNode.ownerDocument.activeElement)) {
 			this.domNode.focus();
 		}
 		this.details.setVisible(this.visible && this.showFileList);
@@ -389,8 +397,17 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 		try {
 			const selected = input instanceof SessionChangesEditorInput ? input.changesetSelection : undefined;
 			let comparison: MultiDiffEditorInput;
-			if (selected?.kind === 'transient') {
-				const changes = selected.changeset.isEnabled.get() ? selected.changeset.changes.get() : [];
+			if (selected?.kind === 'transient' || selected?.kind === 'turn') {
+				const read = <T>(promise: Promise<T>) => raceCancellationError(promise, controller.signal);
+				const sessionResource = new SessionChangesEditorInput(input.resource).sessionResource;
+				const changesets = selected.kind === 'transient' ? [selected.changeset] : await Promise.all(
+					(await read(this.chat.listTurnChanges(session.sessionId, threadId)))
+						.filter(capture => capture.turnId === selected.turnId && capture.captureState !== 'discarded' && capture.statistics.files > 0)
+						.map(capture => read(this.changesService.resolveChangeset(sessionResource, capture.changeSetId))),
+				);
+				if (this.isDisposed || revision !== this.revision || controller.signal.aborted) { return; }
+				const changes = changesets.flatMap(changeset => changeset.isEnabled.get()
+					? changeset.changes.get().map(change => ({ change, canReview: changeset.capabilities?.review === true })) : []);
 				if (!changes.length) {
 					this.comparison.clear();
 					this.comparisonInput = undefined;
@@ -399,13 +416,13 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 					this.messageDomNode.textContent = localize('sessions.changes.empty', 'No changes in this conversation.');
 					return;
 				}
-				const items = await Promise.all(changes.map(async change => {
+				const items = await Promise.all(changes.map(async ({ change, canReview }) => {
 					const contents = await raceCancellationError(this.chat.readTurnChangeFile(change.summary.sessionId, change.summary.threadId, change.summary.changeSetId, change.file.path), controller.signal);
 					if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
 					return {
 						label: change.file.path, binary: contents.binary,
 						contextKeys: {
-							'sessions.changesCanReview': selected.changeset.capabilities?.review === true,
+							'sessions.changesCanReview': canReview,
 							'sessions.changesCanPreview': change.summary.captureState === 'sealed' && !change.summary.committedPaths.includes(change.file.path) && change.summary.commitState !== 'queued' && change.summary.commitState !== 'committing',
 						},
 						original: { resource: change.originalUri, initialText: contents.before ?? '', readOnly: true },
@@ -414,14 +431,17 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 				}));
 				if (this.isDisposed || revision !== this.revision || controller.signal.aborted) { return; }
 				// File reads target a live capture. Keep their contents paired with the revision supplied by the snapshot.
-				const captures = new Map(changes.map(change => [JSON.stringify([change.summary.sessionId, change.summary.threadId, change.summary.changeSetId]), change.summary]));
+				const captures = new Map(changes.map(({ change }) => [JSON.stringify([change.summary.sessionId, change.summary.threadId, change.summary.changeSetId]), change.summary]));
 				await Promise.all([...captures.values()].map(async summary => {
 					const current = await raceCancellationError(this.chat.readTurnChange(summary.sessionId, summary.threadId, summary.changeSetId), controller.signal);
 					if (current.summary.revision !== summary.revision || current.summary.captureState === 'discarded') {
 						throw new Error(localize('sessions.changes.captureChanged', 'This Turn capture changed while loading. Reopen its changes to review the latest revision.'));
 					}
 				}));
-				comparison = createMultiDiffEditorInput(input.resource, items, selected.changeset.label, { kind: 'snapshot', label: selected.changeset.label });
+				const label = selected.kind === 'transient' ? selected.changeset.label : localize('sessions.changes.turn', 'Turn {0}', selected.turnId);
+				const resource = selected.kind === 'transient' ? input.resource
+					: input.resource.with({ scheme: 'ash-multi-diff', fragment: selected.turnId });
+				comparison = createMultiDiffEditorInput(resource, items, label, { kind: 'snapshot', label });
 			} else if (!selected?.id) {
 				comparison = await createThreadMultiDiffEditorInput(this.chat, session.sessionId, threadId, undefined, controller.signal);
 				comparison = { ...comparison, items: comparison.items.map(item => ({ ...item, contextKeys: { ...item.contextKeys, 'sessions.changesCanReview': true } })) };

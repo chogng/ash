@@ -4,6 +4,20 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/c
 import { ContextKeyExpr, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { ContextKeyService } from '../../browser/contextKeyService.js';
 
+test('a shared alternative cannot satisfy the proof of a window-scoped shortcut', () => {
+	const windowKeys = new Set(['isSessionsWindow', 'sessionsDesignCanvasActive']);
+	for (const [condition, expected] of [
+		['isSessionsWindow && editorFocus', true],
+		['(isSessionsWindow || sessionsDesignCanvasActive) && editorFocus', true],
+		['isSessionsWindow || editorFocus', false],
+		['editorFocus && !isSessionsWindow', false],
+		['isSessionsWindow && (editorFocus || terminalFocus)', true],
+	] as const) {
+		const when = ContextKeyExpr.deserialize(condition)!;
+		assert.equal(ContextKeyExpr.requiresTruthyKeyFrom(when, windowKeys), expected, condition);
+	}
+});
+
 test('serialized shortcut conditions retain values, operators and grouping after editing', () => {
 	using context = new ContextKeyService();
 	const expressions = [

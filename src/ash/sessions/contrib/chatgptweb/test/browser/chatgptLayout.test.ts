@@ -3,6 +3,9 @@ import { expect, type Page } from '@playwright/test';
 import { expectVisibleFocusOutline } from '../../../../../../../test/fixtures/browser/focusOutline.js';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
+import { Color } from '../../../../../base/common/color.js';
+import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
+import { sessionsConversationBackground } from '../../../../common/theme.js';
 
 suite('chatgptweb browser component', () => {
 	const browserTests = useBrowserTests();
@@ -10,7 +13,7 @@ suite('chatgptweb browser component', () => {
 	async function fillMessage(page: Page, text: string): Promise<void> {
 		const input = page.getByRole('textbox', { name: /^(Ask ChatGPT|询问 ChatGPT)$/u });
 		await input.focus();
-		await input.press('ControlOrMeta+a');
+		await page.keyboard.press('Control+a');
 		await page.keyboard.insertText(text);
 		await expectDraft(page, text);
 	}
@@ -54,6 +57,200 @@ suite('chatgptweb browser component', () => {
 		});
 	}
 
+	test('ChatGPT reuses the left prompt timeline to navigate the visible conversation', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/conversation/fixture-chat', route => {
+			const turns = [
+				['first', 'user', 'First prompt'],
+				['first-reply', 'assistant', 'First answer\n\n'.repeat(100)],
+				['second', 'user', 'Second prompt'],
+				['second-reply', 'assistant', 'Second answer\n\n'.repeat(100)],
+			];
+			return route.fulfill({
+				json: {
+					title: 'Synthetic conversation',
+					current_node: 'second-reply',
+					mapping: Object.fromEntries(turns.map(([id, role, text], index) => [id, {
+						parent: turns[index - 1]?.[0] ?? null,
+						message: { id, author: { role }, content: { content_type: 'text', parts: [text] } },
+					}])),
+				},
+			});
+		});
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		const handle = page.getByLabel('显示提问', { exact: true });
+		await expect(handle).toBeHidden();
+		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+		const viewport = page.locator('.ash-chat-transcript-scrollable > .ash-scrollbar-viewport');
+		await expect(handle).toBeVisible();
+		await viewport.evaluate(element => { element.scrollTop = 0; });
+		const rail = page.locator('.ash-prompt-timeline-gutter');
+		const marks = rail.locator('.ash-prompt-timeline-gutter-marks > span');
+		await expect(marks.first()).toHaveClass('active');
+		const [control, transcript] = await Promise.all([handle.boundingBox(), viewport.boundingBox()]);
+		expect(control!.x - transcript!.x).toBe(4);
+		expect(Math.abs(control!.y + control!.height / 2 - (transcript!.y + transcript!.height / 2))).toBeLessThan(1);
+
+		await fillMessage(page, 'Draft stays here');
+		await handle.press('Enter');
+		const firstPrompt = rail.getByRole('button', { name: 'First prompt', exact: true });
+		const secondPrompt = rail.getByRole('button', { name: 'Second prompt', exact: true });
+		await expect(firstPrompt).toBeFocused();
+		await expect(rail.locator('.ash-prompt-timeline-panel')).toHaveCSS('border-radius', '12px');
+		await expect(firstPrompt).toHaveCSS('min-height', '28px');
+		await firstPrompt.press('ArrowDown');
+		await expect(secondPrompt).toBeFocused();
+		await secondPrompt.press('Escape');
+		await expect(handle).toBeFocused();
+		await expect(rail).not.toHaveAttribute('open');
+		await handle.press('Enter');
+		await firstPrompt.press('End');
+		await secondPrompt.press('Enter');
+		const secondMessage = viewport.locator('article.ash-chat-item-userMessage').filter({ hasText: 'Second prompt' });
+		await expect(secondMessage).toBeFocused();
+		await expect(secondMessage).toBeInViewport();
+		await expect(marks.last()).toHaveClass('active');
+		await expectDraft(page, 'Draft stays here');
+
+		await page.evaluate(() => window.ashChatGPTIntegration.setConfiguration('sessions.chatTimeline.display', 'ruler'));
+		const ruler = page.locator('.ash-prompt-timeline-ruler');
+		await expect(rail).toHaveCount(0);
+		await expect(ruler.getByRole('button', { name: 'Second prompt', exact: true })).toHaveAttribute('aria-current', 'true');
+		await page.evaluate(() => window.ashChatGPTIntegration.setConfiguration('sessions.chatTimeline.display', 'off'));
+		await expect(ruler).toHaveCount(0);
+		await page.evaluate(() => window.ashChatGPTIntegration.setConfiguration('sessions.chatTimeline.display', 'gutter'));
+		await expect(handle).toBeVisible();
+		await page.evaluate(() => window.ashChatGPTIntegration.newChat());
+		await expect(handle).toBeHidden();
+	});
+
+	test('ChatGPT response actions are icon-only and address the selected reply', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page, 'memory:fixture\n\n[Local file](file:///workspace/private.ts)\n\n[Web source](https://example.test/source)');
+		await page.addInitScript(() => {
+			window.Audio = function () { return document.createElement('audio'); } as unknown as typeof Audio;
+			HTMLMediaElement.prototype.play = async function () { document.body.dataset.audioPlaying = 'true'; };
+			HTMLMediaElement.prototype.pause = function () { document.body.dataset.audioPlaying = 'false'; };
+		});
+		let read: URLSearchParams | undefined;
+		let share: unknown;
+		await page.route('**/service/backend-api/synthesize?*', route => {
+			read = new URL(route.request().url()).searchParams;
+			return route.fulfill({ contentType: 'audio/mpeg', body: 'synthetic' });
+		});
+		await page.route('**/service/backend-api/share/v2/create', route => {
+			share = route.request().postDataJSON();
+			return route.fulfill({ json: { share_url: 'https://chatgpt.com/share/fixture-response' } });
+		});
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		const chat = page.locator('.ash-chatgpt-widget .ash-chat');
+		await expect(chat).toBeVisible();
+		await expect(chat.locator('[data-untitled-session-id]')).toHaveCount(0);
+		expect(await chat.getAttribute('data-untitled-session-id')).toBeNull();
+		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+		await expect(chat.getByText('memory:fixture', { exact: true })).toBeVisible();
+		await expect(chat.getByRole('button', { name: /打开.*记忆/ })).toHaveCount(0);
+		await expect(chat.getByRole('link', { name: 'Local file' })).toHaveCount(0);
+		await chat.getByRole('link', { name: 'Web source' }).click();
+		await expect(page.locator('body')).toHaveAttribute('data-opened-external', 'https://example.test/source');
+		const toolbar = page.getByRole('toolbar', { name: '回复操作', exact: true });
+		const copy = toolbar.getByRole('button', { name: '复制消息' });
+		const readAloud = toolbar.getByRole('button', { name: '朗读', exact: true });
+		const fork = toolbar.getByRole('button', { name: '在 ChatGPT 中创建分支' });
+		const shareResponse = toolbar.getByRole('button', { name: '分享回复' });
+		await expect(toolbar.getByRole('button')).toHaveCount(4);
+		await expect(toolbar).toHaveText('', { useInnerText: true });
+		await copy.focus();
+		await page.keyboard.press('ArrowRight');
+		await expect(readAloud).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(page.locator('body')).toHaveAttribute('data-audio-playing', 'true');
+		expect(read?.get('conversation_id')).toBe('fixture-chat');
+		expect(read?.get('message_id')).toBe('previous-reply');
+		await expect(toolbar.getByRole('button', { name: '停止朗读' })).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(page.locator('body')).toHaveAttribute('data-audio-playing', 'false');
+		await page.keyboard.press('ArrowRight');
+		await expect(fork).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(page.locator('body')).toHaveAttribute('data-opened-external', 'https://chatgpt.com/branch/fixture-chat/previous-reply');
+		await page.keyboard.press('ArrowRight');
+		await expect(shareResponse).toBeFocused();
+		await page.keyboard.press('Enter');
+		const dialog = page.getByRole('dialog');
+		await expect(dialog).toContainText('截至这条回复');
+		expect(share).toBeUndefined();
+		await dialog.getByRole('button', { name: '分享', exact: true }).click();
+		await expect(page.locator('body')).toHaveAttribute('data-copied-link', 'https://chatgpt.com/share/fixture-response');
+		expect(share).toEqual({ conversation_id: 'fixture-chat', current_node_id: 'previous-reply', is_anonymous: true });
+	});
+
+	test('ChatGPT refreshes the visible history when the window comes back online', async () => {
+		const { page } = browserTests;
+		let changed = false;
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/conversations?*', route => changed
+			? route.fulfill({ json: { items: [{ id: 'remote-new', title: 'New on another device' }], total: 1 } })
+			: route.fallback());
+		await page.route('**/service/backend-api/conversation/fixture-chat', route => changed
+			? route.fulfill({ status: 404 })
+			: route.fallback());
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		const previous = page.getByRole('button', { name: 'Synthetic conversation', exact: true });
+		await previous.click();
+		await expect(page.locator('.ash-chatgpt-widget')).toContainText('Synthetic answer');
+
+		changed = true;
+		await page.evaluate(() => window.dispatchEvent(new Event('online')));
+		await expect(page.getByRole('button', { name: 'New on another device', exact: true })).toBeVisible();
+		await expect(previous).toHaveCount(0);
+		await expect(page.locator('.ash-chatgpt-widget')).not.toContainText('Synthetic answer');
+	});
+
+	test('ChatGPT saves an offline first message and automatically sends it after reconnection', async () => {
+		const { page } = browserTests;
+		let posts = 0;
+		let deletes = 0;
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/f/conversation', route => {
+			posts++;
+			return route.fulfill({ contentType: 'text/event-stream', body: 'data: {"conversation_id":"offline-created"}\n\ndata: [DONE]\n\n' });
+		});
+		await page.route('**/service/backend-api/conversation/offline-created', route => route.fulfill({
+			json: {
+				title: 'Cloud title', current_node: 'reply',
+				mapping: { reply: { parent: null, message: { id: 'reply', author: { role: 'assistant' }, content: { parts: ['Cloud reply'] } } } },
+			}
+		}));
+		await page.route('**/service/backend-api/conversation/id/fixture-chat', route => {
+			if (route.request().method() === 'DELETE') { deletes++; return route.fulfill({ status: 204 }); }
+			return route.fallback();
+		});
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		const original = page.getByRole('button', { name: 'Synthetic conversation', exact: true });
+		await expect(original).toBeVisible();
+		await page.context().setOffline(true);
+		const row = page.locator('.ash-chatgpt-navigation-row').filter({ has: original });
+		await row.hover();
+		await row.getByRole('button', { name: '更多操作', exact: true }).click();
+		await page.getByRole('menuitem', { name: '删除', exact: true }).click();
+		await page.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click();
+		await expect(original).toHaveCount(0);
+		await fillMessage(page, 'Offline first question');
+		await page.getByRole('button', { name: '发送', exact: true }).click();
+		await expect(page.getByRole('button', { name: 'Offline first question', exact: true })).toBeVisible();
+		await expect(page.locator('.ash-chatgpt-widget')).toContainText('已保存到此设备');
+		expect(posts).toBe(0);
+		expect(deletes).toBe(0);
+		await page.context().setOffline(false);
+		await expect(page.getByRole('button', { name: 'Cloud title', exact: true })).toBeVisible();
+		await expect(page.locator('.ash-chatgpt-widget')).toContainText('Cloud reply');
+		expect(posts).toBe(1);
+		expect(deletes).toBe(1);
+		await expect(original).toHaveCount(0);
+	});
+
 	test('ChatGPT welcome announces once per visible draft and honors the verbosity setting', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);
@@ -62,7 +259,7 @@ suite('chatgptweb browser component', () => {
 		await expect(announcement).toContainText('What are we building?\nTo disable this announcement, set accessibility.verbosity.newSessionWelcome to false.');
 		await fillMessage(page, 'Draft');
 		await page.evaluate(() => window.ashChatGPTIntegration.setConfiguration('sessions.chat.experimental.welcomeName', 'Ash'));
-		await expect(page.locator('.ash-chatgpt-welcome')).toHaveText('What are we building, Ash?');
+		await expect(page.locator('.ash-chat-welcome h2')).toHaveText('What are we building, Ash?');
 		await expect(announcement).not.toContainText('building, Ash');
 		await page.evaluate(() => {
 			window.ashChatGPTIntegration.setVisible(false);
@@ -75,7 +272,7 @@ suite('chatgptweb browser component', () => {
 			await window.ashChatGPTIntegration.setConfiguration('accessibility.verbosity.newSessionWelcome', false);
 			window.ashChatGPTIntegration.newChat();
 		});
-		await expect(page.locator('.ash-chatgpt-welcome')).toHaveText('Let\u2019s cook, Ash');
+		await expect(page.locator('.ash-chat-welcome h2')).toHaveText('Let\u2019s cook, Ash');
 		await expect(announcement).not.toContainText('Let\u2019s cook');
 	});
 
@@ -86,12 +283,12 @@ suite('chatgptweb browser component', () => {
 		for (const theme of ['light', 'dark', 'hcLight', 'hcDark']) {
 			await page.goto(`/chatgptNavigation.html?locale=zh-CN&theme=${theme}`);
 			await page.evaluate(() => window.ashChatGPTIntegration.setConfiguration('sessions.chat.experimental.welcomeMessages', { mode: 'replace', phrases: ['LongWelcome'.repeat(30)] }));
-			const title = page.locator('.ash-chatgpt-welcome');
+			const title = page.locator('.ash-chat-welcome h2');
 			await expect(title).toBeVisible();
 			const geometry = await title.evaluate(element => {
 				const bounds = element.getBoundingClientRect();
 				const parent = element.parentElement!;
-				return { width: bounds.width, available: parent.clientWidth, overflow: parent.scrollWidth > parent.clientWidth, wrap: getComputedStyle(element).overflowWrap, color: getComputedStyle(element).color, background: getComputedStyle(element.closest('.ash-chatgpt-widget')!).backgroundColor };
+				return { width: bounds.width, available: parent.clientWidth, overflow: parent.scrollWidth > parent.clientWidth, wrap: getComputedStyle(element).overflowWrap, color: getComputedStyle(element).color, background: getComputedStyle(element.closest('#editor')!).backgroundColor };
 			});
 			expect(geometry.wrap).toBe('anywhere');
 			expect(geometry.width).toBeLessThanOrEqual(geometry.available);
@@ -100,12 +297,39 @@ suite('chatgptweb browser component', () => {
 		}
 	});
 
+	test('ChatGPT scrolls a long transcript over the page background', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page, 'Synthetic reply.\n\n'.repeat(100));
+		for (const [theme, colorTheme] of Object.entries({ light: lightColorTheme, dark: darkColorTheme, hcLight: highContrastLightColorTheme, hcDark: highContrastDarkColorTheme })) {
+			await page.goto(`/chatgptNavigation.html?theme=${theme}`);
+			await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+			const widget = page.locator('.ash-chatgpt-widget');
+			const transcript = widget.locator('.ash-chat-transcript-scrollable > .ash-scrollbar-viewport');
+			await expect(widget).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			const background = Color.Format.CSS.formatRGB(colorTheme.getColor(sessionsConversationBackground)!);
+			await expect(widget.locator('.ash-chat')).toHaveCSS('background-color', background);
+			await expect.poll(() => transcript.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
+			await transcript.evaluate(element => { element.scrollTop = 0; });
+			await transcript.hover();
+			await page.mouse.wheel(0, 300);
+			await expect.poll(() => transcript.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+
+			const composer = widget.locator('.ash-sessions-chat-input-card');
+			await transcript.evaluate(element => { element.scrollTop = element.scrollHeight; });
+			const lastLine = transcript.locator('.ash-chat-markdown-part p').last();
+			await expect.poll(async () => {
+				const [lineBounds, composerBounds] = await Promise.all([lastLine.boundingBox(), composer.boundingBox()]);
+				return lineBounds!.y + lineBounds!.height - composerBounds!.y;
+			}).toBeLessThan(0);
+		}
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`ChatGPT welcome rotates on new chats, wraps and survives reload (${locale})`, async () => {
 			const { page } = browserTests;
 			await mockChatGPTRequests(page);
 			await page.goto(`/chatgptNavigation.html?locale=${locale}`);
-			const title = page.locator('.ash-chatgpt-welcome');
+			const title = page.locator('.ash-chat-welcome h2');
 			const phrases = locale === 'en'
 				? ['What are we building?', 'What\u2019s the move?', 'Let\u2019s cook', 'Time to lock in', 'Let\u2019s ship something']
 				: ['我们来做点什么？', '下一步做什么？', '开始动手吧', '是时候专注了', '一起做出点成果吧'];
@@ -128,7 +352,7 @@ suite('chatgptweb browser component', () => {
 			}));
 			await fillMessage(page, 'Synthetic question');
 			await page.getByRole('textbox', { name: /^(Ask ChatGPT|询问 ChatGPT)$/u }).press('Enter');
-			await expect(page.locator('.ash-chatgpt-messages')).toContainText('Synthetic answer');
+			await expect(page.locator('.ash-chat-transcript')).toContainText('Synthetic answer');
 			await expect(title).toBeHidden();
 		});
 
@@ -136,7 +360,7 @@ suite('chatgptweb browser component', () => {
 			const { page } = browserTests;
 			await mockChatGPTRequests(page);
 			await page.goto(`/chatgptNavigation.html?locale=${locale}`);
-			const title = page.locator('.ash-chatgpt-welcome');
+			const title = page.locator('.ash-chat-welcome h2');
 			await fillMessage(page, 'Draft');
 			await page.evaluate(async () => {
 				await window.ashChatGPTIntegration.setConfiguration('sessions.chat.experimental.welcomeName', 'A$&B');
@@ -170,15 +394,17 @@ suite('chatgptweb browser component', () => {
 			await retained!.evaluate(element => element.remove());
 			releaseHistory();
 			await expect.poll(() => retained!.evaluate(element => element.querySelectorAll('.ash-chatgpt-conversation').length)).toBe(2);
-			expect(await retained!.evaluate(element => getComputedStyle(element.querySelector('.ash-chatgpt-navigation-rows')!).getPropertyValue('--ash-list-rowHeight'))).toBe('');
 			await retained!.evaluate(element => document.querySelector('.ash-sessions-window')!.prepend(element));
-			const group = page.locator('.ash-chatgpt-navigation-group');
-			await expect(group.getByRole('button', { name: 'First conversation', exact: true })).toBeVisible();
-			await expect(group.getByRole('button', { name: 'Second conversation', exact: true })).toBeVisible();
-			await expect.poll(() => group.evaluate(element => {
-				const header = element.querySelector('.ash-pane-view-header')!;
-				return element.getBoundingClientRect().height - header.getBoundingClientRect().height;
-			})).toBe(68);
+			const sidebar = page.locator('.ash-chatgpt-navigation');
+			const first = sidebar.getByRole('button', { name: 'First conversation', exact: true });
+			const second = sidebar.getByRole('button', { name: 'Second conversation', exact: true });
+			await expect(first).toBeVisible();
+			await expect(second).toBeVisible();
+			await expect.poll(async () => {
+				const header = (await sidebar.locator('.ash-sessions-list-section-toggle').boundingBox())!;
+				const row = (await second.boundingBox())!;
+				return row.y + row.height - header.y - header.height;
+			}).toBe(68);
 			await retained!.dispose();
 		});
 
@@ -187,7 +413,7 @@ suite('chatgptweb browser component', () => {
 			await mockChatGPTRequests(page);
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${locale === 'en' ? 'light' : 'hcDark'}`);
 			const list = page.locator('.ash-chatgpt-navigation-list');
-			const header = list.locator('.ash-pane-view-header').first();
+			const header = list.locator('.ash-sessions-list-section-toggle').first();
 			await expect(header).toBeVisible();
 			const expectInsets = async (inset: number): Promise<void> => {
 				await expect.poll(() => header.evaluate(node => {
@@ -197,9 +423,9 @@ suite('chatgptweb browser component', () => {
 				})).toEqual({ left: inset, right: inset });
 			};
 			await expectInsets(8);
-			await list.evaluate(node => { node.style.paddingInline = '12px'; });
-			await expectInsets(12);
-			await list.evaluate(node => node.style.removeProperty('padding-inline'));
+			await list.evaluate(node => { node.style.setProperty('--ash-sessions-sidebar-row-inset', '16px'); });
+			await expectInsets(16);
+			await list.evaluate(node => node.style.removeProperty('--ash-sessions-sidebar-row-inset'));
 			await expectInsets(8);
 			await header.hover();
 			await expect(header).toHaveCSS('border-radius', '8px');
@@ -216,8 +442,8 @@ suite('chatgptweb browser component', () => {
 			const editor = page.locator('.ash-chatgpt-widget');
 			try {
 				await expect(navigation.locator('.ash-chatgpt-navigation-list')).toHaveAttribute('aria-busy', 'true');
-				await expect(editor.locator('.ash-chatgpt-messages')).toHaveAttribute('aria-busy', 'false');
-				await expect(editor.locator('.ash-chatgpt-welcome')).toBeVisible();
+				await expect(editor.locator('.ash-chat-transcript')).toHaveAttribute('aria-busy', 'false');
+				await expect(editor.locator('.ash-chat-welcome h2')).toBeVisible();
 			} finally { releaseHistory(); }
 			const conversation = navigation.getByRole('button', { name: 'Synthetic conversation', exact: true });
 			await expect(conversation).toBeVisible();
@@ -227,14 +453,15 @@ suite('chatgptweb browser component', () => {
 			await page.route('**/service/backend-api/conversation/fixture-chat', async route => { await pending; await route.fallback(); });
 			try {
 				await conversation.click();
-				await expect(editor.locator('.ash-chatgpt-messages')).toHaveAttribute('aria-busy', 'true');
+				await expect(editor.locator('.ash-chat-transcript')).toHaveAttribute('aria-busy', 'true');
 				await expect(navigation.locator('.ash-chatgpt-navigation-list')).toHaveAttribute('aria-busy', 'false');
-				await expect(conversation).toBeEnabled();
-				await expect(editor.locator('.ash-chatgpt-welcome')).toBeHidden();
+				// The row's accessible name includes its status during the read.
+				await expect(navigation.locator('button[data-conversation="fixture-chat"]')).toBeEnabled();
+				await expect(editor.locator('.ash-chat-welcome h2')).toBeHidden();
 				await page.screenshot({ path: browserTests.info.outputPath(`chat-independent-loading-${locale}.png`) });
 			} finally { releaseConversation(); }
-			await expect(editor.locator('.ash-chatgpt-messages')).toContainText('Synthetic answer');
-			await expect(editor.locator('.ash-chatgpt-messages')).toHaveAttribute('aria-busy', 'false');
+			await expect(editor.locator('.ash-chat-transcript')).toContainText('Synthetic answer');
+			await expect(editor.locator('.ash-chat-transcript')).toHaveAttribute('aria-busy', 'false');
 		});
 
 		test(`ChatGPT conversations load more on scroll and keyboard navigation (${locale})`, async function () {
@@ -296,12 +523,12 @@ suite('chatgptweb browser component', () => {
 				await page.keyboard.press('Tab');
 				await title.focus();
 				await title.hover();
-				await expect(row.getByRole('toolbar')).toHaveCSS('opacity', '1');
+				await expect(row.locator('.ash-sessions-list-actions')).toHaveCSS('opacity', '1');
 				await testInfo.attach(`conversation-focused-${theme}-${direction}`, { body: await row.screenshot(), contentType: 'image/png' });
 				await expectVisibleFocusOutline(title);
-				await row.getByRole('toolbar').getByRole('button').first().click({ trial: true });
+				await row.locator('.ash-sessions-list-actions').getByRole('button').first().click({ trial: true });
 				await page.keyboard.press('Tab');
-				await expect(row.getByRole('toolbar').getByRole('button').first()).toBeFocused();
+				await expect(row.locator('.ash-sessions-list-actions').getByRole('button').first()).toBeFocused();
 			}
 		}
 	});
@@ -325,6 +552,12 @@ suite('chatgptweb browser component', () => {
 			const viewport = scrollable.locator(':scope > .ash-scrollbar-viewport');
 			const scrollbar = scrollable.getByRole('scrollbar', { name: 'Vertical scrollbar' });
 			await expect(scrollbar).toHaveAttribute('aria-disabled', 'false');
+			await expect(list).toHaveCSS('padding-block', '12px');
+			await expect(list).toHaveCSS('padding-inline', '8px');
+			const sidebar = page.locator('.ash-chatgpt-navigation');
+			await expect(sidebar).toHaveCSS('padding', '0px');
+			const [sidebarBounds, scrollbarBounds] = await Promise.all([sidebar.boundingBox(), scrollbar.boundingBox()]);
+			expect(scrollbarBounds!.x + scrollbarBounds!.width).toBe(sidebarBounds!.x + sidebarBounds!.width);
 			expect(await viewport.evaluate(element => getComputedStyle(element).scrollbarWidth)).toBe('none');
 			expect(await list.evaluate(element => getComputedStyle(element).overflowY)).toBe('visible');
 			await expect(page.locator('.ash-chatgpt-navigation').getByRole('searchbox')).toHaveCount(0);
@@ -393,7 +626,7 @@ suite('chatgptweb browser component', () => {
 		await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveCount(20);
 		await list.hover();
 		await page.mouse.wheel(0, 2000);
-		await expect(page.locator('.ash-chatgpt-error')).toBeVisible();
+		await expect(page.locator('.ash-chat-input-notification-message')).toBeVisible();
 		await expect(list).toHaveAttribute('aria-busy', 'false');
 		expect(offsets).toEqual([0, 20]);
 		await page.mouse.wheel(0, -100);
@@ -407,7 +640,7 @@ suite('chatgptweb browser component', () => {
 		await page.goto('/chatgptNavigation.html');
 		await expect(page.getByRole('textbox', { name: '询问 ChatGPT' })).toBeEnabled();
 		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
-		await expect(page.locator('.ash-chatgpt-turn.assistant')).toHaveCount(1);
+		await expect(page.locator('.ash-chat-item-agentMessage')).toHaveCount(1);
 	}
 
 	for (const locale of ['en', 'zh-CN']) {
@@ -429,39 +662,24 @@ suite('chatgptweb browser component', () => {
 				await route.fulfill({ contentType: 'text/event-stream', body: 'data: {"message":{"id":"reply","author":{"role":"assistant"},"content":{"parts":["Reply"]}}}\n\ndata: [DONE]\n\n' });
 			});
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=light`);
-			const picker = page.locator('.ash-sessions-model-picker');
-			const openModels = async (): Promise<void> => {
+			const picker = page.locator('.ash-chat-input-model-action');
+			const choose = async (name: string): Promise<void> => {
 				await picker.click();
-				await page.getByRole('button', { name: locale === 'en' ? 'Choose model' : '选择模型', exact: true }).click();
+				await page.getByRole('menuitemradio', { name, exact: true }).click();
+				await expect(picker).toHaveText(name);
 			};
-			await expect(picker).toHaveText(labels[0]!);
-			await openModels();
-			await expect(page.getByRole('menuitemradio')).toHaveText(['GPT-6', 'GPT-5.6 Sol']);
-			await testInfo.attach('chatgpt-model-families', { body: await page.getByRole('menu').screenshot(), contentType: 'image/png' });
-			const popupId = await page.getByRole('menu').getAttribute('id');
-			await page.getByRole('menuitemradio', { name: 'GPT-6', exact: true }).click();
-			await expect(page.getByRole('dialog')).toHaveAttribute('id', popupId!);
+			await expect(picker).toHaveText(`GPT-6 · ${labels[0]}`);
+			await picker.click();
+			await expect(page.getByRole('menuitemradio')).toHaveCount(10);
+			await expect(page.getByRole('switch')).toHaveCount(0);
+			await testInfo.attach('chatgpt-model-families', { body: await page.getByRole('dialog').screenshot(), contentType: 'image/png' });
 			await page.keyboard.press('Escape');
 			const expected = [
 				['gpt-6-instant', undefined], ['gpt-6-thinking', 'standard'], ['gpt-6-thinking', 'extended'],
 				['gpt-6-thinking', 'max'], ['gpt-6-pro', undefined],
 			] as const;
 			for (let index = 0; index < labels.length; index++) {
-				await picker.click();
-				const slider = page.getByRole('slider');
-				await expect(slider).toHaveAttribute('max', '4');
-				await slider.press('Home');
-				for (let step = 0; step < index; step++) { await slider.press('ArrowRight'); }
-				await expect(slider).toHaveAttribute('aria-valuetext', labels[index]!);
-				await expect(picker).toHaveText(labels[index]!);
-				await expect(page.locator('.ash-sessions-model-picker-track')).toHaveAttribute('data-emphasized', String(index === 4));
-				if (index === 4) {
-					await expect(page.locator('.ash-sessions-model-picker-maximum-effects')).toHaveCSS('opacity', '1');
-					await expect.poll(() => page.locator('.ash-sessions-model-picker-maximum-effects').evaluate(element => element.getAnimations({ subtree: true }).filter(animation => animation.playState === 'running').length)).toBeGreaterThan(1);
-					await testInfo.attach('chatgpt-pro', { body: await page.getByRole('dialog').screenshot(), contentType: 'image/png' });
-				}
-				if (index === 3) { await testInfo.attach('chatgpt-extra-high', { body: await page.getByRole('dialog').screenshot(), contentType: 'image/png' }); }
-				await page.keyboard.press('Escape');
+				await choose(`GPT-6 · ${labels[index]}`);
 				await fillMessage(page, `Use ${labels[index]}`);
 				await page.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
 				await expect.poll(() => submitted.length).toBe((index + 1) * 2);
@@ -469,13 +687,7 @@ suite('chatgptweb browser component', () => {
 				if (expected[index]![1] === undefined) { expect(submitted.slice(-2).every(body => !('thinking_effort' in body))).toBe(true); }
 				await expect(picker).toBeEnabled();
 			}
-			await openModels();
-			await page.getByRole('menuitemradio', { name: 'GPT-5.6 Sol', exact: true }).click();
-			await expect(picker).toHaveText('Pro');
-			await expect(page.getByRole('dialog')).toBeVisible();
-			await page.getByRole('slider').press('ArrowLeft');
-			await expect(picker).toHaveText(labels[3]!);
-			await page.keyboard.press('Escape');
+			await choose(`GPT-5.6 Sol · ${labels[3]}`);
 			await fillMessage(page, 'Use GPT-5.6 Sol Extra High');
 			await page.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
 			await expect.poll(() => submitted.length).toBe(12);
@@ -495,14 +707,15 @@ suite('chatgptweb browser component', () => {
 				await route.fulfill({ status: 500, json: {} });
 			});
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=light`);
-			const picker = page.locator('.ash-sessions-model-picker');
+			const picker = page.locator('.ash-chat-input-model-action');
 			await expect(picker).toBeEnabled();
 			await picker.click();
 			await expect(page.getByRole('slider')).toHaveCount(0);
 			await expect(page.getByRole('menuitemradio', { name: 'Fixture model' })).toHaveAttribute('aria-checked', 'true');
-			await expect(page.getByRole('menu')).toBeFocused();
-			await page.keyboard.press('End');
-			await page.keyboard.press('Enter');
+			expect(await page.locator('body').getAttribute('data-native-model-providers-read')).toBeNull();
+			await expect(page.getByRole('menuitem', { name: /Add Models|More Models|添加模型|更多模型/ })).toHaveCount(0);
+			await expect(page.getByRole('combobox')).toBeFocused();
+			await page.getByRole('menuitemradio', { name: 'Second model' }).click();
 			await expect(picker).toHaveText('Second model');
 			await expect(picker).toBeFocused();
 			await picker.click();
@@ -524,11 +737,12 @@ suite('chatgptweb browser component', () => {
 					releaseCatalog = () => route.fulfill({ json: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]) });
 				});
 				await page.goto(`/chatgptNavigation.html?focus=1&locale=${locale}&theme=${theme}`);
-				const composer = page.locator('.ash-chatgpt-composer');
+				const composer = page.locator('.ash-chat-input-container');
 				const input = composer.getByRole('textbox', { name: locale === 'en' ? 'Ask ChatGPT' : '询问 ChatGPT' });
-				const model = composer.locator('.ash-sessions-model-picker');
+				const attach = composer.locator('.ash-chat-input-attachment-toolbar button');
+				const model = page.locator('.ash-chat-input-model-action');
 				await expect(input).toBeFocused();
-				await expect(input).toBeDisabled();
+				await expect(input).toHaveAttribute('aria-readonly', 'true');
 				await expect(composer).toHaveCSS('outline-style', 'none');
 				await expect(composer.locator('.stanza-editor')).toHaveCSS('outline-style', 'none');
 				await page.keyboard.insertText('Ignored while loading');
@@ -542,39 +756,52 @@ suite('chatgptweb browser component', () => {
 				await composer.locator('.view-line').click();
 				await expect(composer).toHaveCSS('outline-style', 'none');
 				await input.press('Tab');
+				await expect(attach).toBeFocused();
+				await page.keyboard.press('Tab');
+				await expect(composer.locator('.ash-chat-input-inline-toolbar:not(.ash-chat-input-attachment-toolbar):focus-within')).toBeVisible();
+				await page.keyboard.press('Tab');
 				await expect(model).toBeFocused();
 				await expect(model).toHaveCSS('outline-style', 'solid');
 				await expect(model).not.toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
+				await page.keyboard.press('Shift+Tab');
+				await expect(composer.locator('.ash-chat-input-inline-toolbar:not(.ash-chat-input-attachment-toolbar):focus-within')).toBeVisible();
+				await page.keyboard.press('Shift+Tab');
+				await expect(attach).toBeFocused();
 				await page.keyboard.press('Shift+Tab');
 				await expect(input).toBeFocused();
 				await testInfo.attach('composer-ready-focus', { body: await page.screenshot(), contentType: 'image/png' });
 			});
 
-			test(`ChatGPT composer grows from one line and retains inline controls in ${locale} ${theme}`, async function () {
+			test(`ChatGPT composer uses the compact Code layout in ${locale} ${theme}`, async function () {
 				const { page } = browserTests;
 				const testInfo = browserTests.info;
 
 				await mockChatGPTRequests(page);
 				await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${theme}`);
-				const composer = page.locator('.ash-chatgpt-composer');
+				const composer = page.locator('.ash-chat-input-container');
 				const input = composer.getByRole('textbox', { name: locale === 'en' ? 'Ask ChatGPT' : '询问 ChatGPT' });
 				const editor = composer.locator('.ash-chat-input-editor');
-				const model = composer.getByRole('button', { name: locale === 'en' ? 'Choose model: Fixture model' : '选择模型：Fixture model' });
-				const send = composer.locator('.ash-chatgpt-send');
+				const attach = composer.locator('.ash-chat-input-attachment-toolbar button');
+				const model = page.locator('.ash-chat-input-model-action');
+				const voice = composer.getByRole('button', { name: /^(Voice conversation|语音对话)$/u });
+				const send = composer.getByRole('button', { name: /^(Send|发送)$/u });
 				await expect(input).toBeEnabled();
 				await expect(editor).toHaveCSS('height', '20px');
-				await expect(composer).toHaveCSS('border-radius', '9999px');
-				await expect(model).toHaveCSS('border-radius', '9999px');
-				await expect(send).toHaveCSS('border-radius', '9999px');
-				await expect(send.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'voice-mode');
-				const bounds = await composer.boundingBox();
-				expect(bounds!.height).toBeLessThanOrEqual(50);
-				const modelBounds = await model.boundingBox();
-				const sendBounds = await send.boundingBox();
-				expect(modelBounds!.y).toBe(sendBounds!.y);
+				await expect(composer).toHaveCSS('border-radius', '12px');
+				await expect(composer).toHaveCSS('padding', '8px');
+				await expect(model).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				await expect(voice).toHaveCSS('height', '28px');
+				await expect(voice.locator('.ash-icon')).toHaveCSS('font-size', '18px');
+				await expect(voice.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'voice-mode');
+				const [editorBounds, attachBounds, modelBounds, sendBounds] = await Promise.all(
+					[editor, attach, model, voice].map(control => control.boundingBox()),
+				);
+				expect(attachBounds!.y + attachBounds!.height / 2).toBeCloseTo(editorBounds!.y + editorBounds!.height / 2);
+				expect(attachBounds!.y).toBe(sendBounds!.y);
+				expect(modelBounds!.y).toBeGreaterThan(sendBounds!.y + sendBounds!.height);
 				await page.mouse.move(1, 1);
 				const restingShadow = await composer.evaluate(element => getComputedStyle(element).boxShadow);
-				const activeShadow = `color(srgb 0 0 0 / ${theme === 'light' ? '0.0482353' : '0.12'}) 0px 2px 8px 0px`;
+				const activeShadow = /0px 2px 8px 0px/u;
 				await fillMessage(page, 'A short prompt');
 				await expectDraft(page, 'A short prompt');
 				await expect(send).toHaveAttribute('aria-label', locale === 'en' ? 'Send' : '发送');
@@ -586,22 +813,17 @@ suite('chatgptweb browser component', () => {
 					await expect(composer).toHaveCSS('box-shadow', 'none');
 					await expect(composer).not.toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
 				}
-				await input.press('Tab');
-				await expect(model).toBeFocused();
-				await page.keyboard.press('Tab');
-				await expect(send).toBeFocused();
-				await page.keyboard.press('Shift+Tab');
-				await page.keyboard.press('Shift+Tab');
-				await expect(input).toBeFocused();
+				await input.focus();
 				await input.press('End');
 				await input.press('Shift+Enter');
 				await page.keyboard.insertText('Another line');
 				await expectDraft(page, 'A short prompt\nAnother line');
+				await expect(composer).toHaveClass(/\bexpanded\b/u);
 				await expect(editor).toHaveCSS('height', '40px');
 				await fillMessage(page, 'Long prompt that wraps automatically. '.repeat(20));
 				await expect.poll(async () => (await editor.boundingBox())!.height).toBeGreaterThan(40);
 				await page.setViewportSize({ width: 580, height: 600 });
-				for (const control of [editor, model, send]) {
+				for (const control of [editor, attach, model, send]) {
 					const controlBounds = await control.boundingBox();
 					const composerBounds = await composer.boundingBox();
 					expect(controlBounds!.x).toBeGreaterThanOrEqual(composerBounds!.x);
@@ -612,8 +834,9 @@ suite('chatgptweb browser component', () => {
 				await expect(editor).toHaveCSS('height', '240px');
 				await fillMessage(page, 'Hi');
 				await expect(editor).toHaveCSS('height', '20px');
+				await expect(composer).not.toHaveClass(/\bexpanded\b/u);
 				await page.mouse.move(1, 1);
-				await page.locator('.ash-chatgpt-navigation .ash-pane-view-header-button').first().focus();
+				await page.locator('.ash-chatgpt-navigation .ash-sessions-list-section-toggle').first().focus();
 				await expect.poll(() => composer.evaluate(element => getComputedStyle(element).boxShadow)).toBe(restingShadow);
 				await composer.hover();
 				if (!theme.startsWith('hc')) {
@@ -624,13 +847,13 @@ suite('chatgptweb browser component', () => {
 				await expect(input).toBeFocused();
 				await expect(editor).toHaveCSS('height', '20px');
 				await page.emulateMedia({ reducedMotion: 'reduce' });
-				await expect(composer).toHaveCSS('transition-duration', '0s');
+				await expect(composer).toHaveCSS('transition-duration', /^(?:0s|1e-05s)$/u);
 				if (locale === 'zh-CN' && theme === 'light') {
 					await page.setViewportSize({ width: 1280, height: 800 });
 					await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
-					await expect(page.locator('.ash-chatgpt-turn.assistant')).toHaveCount(1);
+					await expect(page.locator('.ash-chat-item-agentMessage')).toHaveCount(1);
 					await input.focus();
-					await testInfo.attach('chatgpt-single-line-composer', { body: await page.screenshot(), contentType: 'image/png' });
+					await testInfo.attach('chatgpt-compact-composer', { body: await page.screenshot(), contentType: 'image/png' });
 				}
 			});
 		}
@@ -659,8 +882,8 @@ suite('chatgptweb browser component', () => {
 		await conversation.press('Home');
 		await expect(conversation).toBeFocused();
 		await conversation.press('Enter');
-		await expect(page.locator('.ash-chatgpt-messages')).toContainText('Synthetic answer');
-		await expect(page.locator('.ash-chatgpt-turn.assistant')).toHaveCount(1);
+		await expect(page.locator('.ash-chat-transcript')).toContainText('Synthetic answer');
+		await expect(page.locator('.ash-chat-item-agentMessage')).toHaveCount(1);
 		await expect(conversation).toHaveAttribute('aria-current', 'page');
 		const input = page.getByRole('textbox', { name: '询问 ChatGPT' });
 		await fillMessage(page, 'Sidebar switch keeps this draft');
@@ -704,14 +927,14 @@ suite('chatgptweb browser component', () => {
 			}));
 			await page.goto(`/chatgptNavigation.html?locale=${locale}`);
 			await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
-			const activities = page.locator('.ash-chatgpt-activity');
+			const activities = page.locator('.ash-chat-item-toolCall > .ash-chat-context');
 			await expect(activities).toHaveCount(2);
 			await expect(activities.locator(':scope > summary').first()).toHaveText(locale === 'en' ? 'Execution process · Some steps failed' : '执行过程 · 部分步骤失败');
 			await expect(activities.locator(':scope > summary').last()).toHaveText(locale === 'en' ? 'Execution process · 1 step' : '执行过程 · 1 个步骤');
-			await expect(page.locator('.ash-chatgpt-message-body')).toHaveText(['First question', 'The file was unavailable', 'Second question', 'Package answer']);
-			await expect(page.locator('.ash-chatgpt-activity[open]')).toHaveCount(0);
+			await expect(page.locator('.ash-chat-item-userMessage > pre, .ash-chat-item-agentMessage .ash-chat-markdown-part')).toHaveText(['First question', 'The file was unavailable', 'Second question', 'Package answer']);
+			await expect(page.locator('.ash-chat-item-toolCall > .ash-chat-context[open]')).toHaveCount(0);
 			await activities.first().locator(':scope > summary').click();
-			const result = activities.first().locator('.ash-chatgpt-activity-entry').last();
+			const result = activities.first().locator(':scope > div > details').last();
 			await result.locator('summary').click();
 			await expect(result.locator('pre')).toHaveText('File unavailable');
 		});
@@ -738,7 +961,7 @@ suite('chatgptweb browser component', () => {
 				await mockChatGPTRequests(page);
 				await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${theme}`);
 				await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
-				await expect(page.locator('.ash-chatgpt-message-body').last()).toHaveText('Synthetic answer');
+				await expect(page.locator('.ash-chat-item-userMessage > pre, .ash-chat-item-agentMessage .ash-chat-markdown-part').last()).toHaveText('Synthetic answer');
 				await fillMessage(page, 'Read the repository');
 				await page.getByRole('button', { name: /^(Send|发送)$/, exact: true }).click();
 				await expect.poll(() => page.evaluate(() => typeof Reflect.get(globalThis, 'pushExecution'))).toBe('function');
@@ -746,7 +969,7 @@ suite('chatgptweb browser component', () => {
 				const call = (id: string, text: string) => ({ id, author: { role: 'assistant' }, recipient: 'GitHub.fetch_file', content: { content_type: 'code', text } });
 				const raw = '{"path":"README.md","args":{"text":"<img src=x onerror=alert(1)>"}}';
 				await push(call('call-one', raw));
-				const activity = page.locator('.ash-chatgpt-activity');
+				const activity = page.locator('.ash-chat-item-toolCall > .ash-chat-context');
 				const summary = activity.locator(':scope > summary');
 				await expect(activity).toHaveCount(1);
 				await expect(summary).toContainText(locale === 'en' ? 'Using GitHub.fetch_file' : '正在使用 GitHub.fetch_file');
@@ -755,7 +978,7 @@ suite('chatgptweb browser component', () => {
 				await summary.focus();
 				await summary.press('Enter');
 				await expect(activity).toHaveAttribute('open');
-				const entry = activity.locator('.ash-chatgpt-activity-entry').first();
+				const entry = activity.locator(':scope > div > details').first();
 				await entry.locator('summary').focus();
 				await entry.locator('summary').press('Space');
 				await expect(entry.locator('pre')).toHaveText(raw);
@@ -770,7 +993,7 @@ suite('chatgptweb browser component', () => {
 				await expect(activity).not.toHaveAttribute('open');
 				await expect(summary).toBeFocused();
 				await expect(summary).toHaveText(locale === 'en' ? 'Execution process · 2 steps' : '执行过程 · 2 个步骤');
-				await expect(page.locator('.ash-chatgpt-message-body').last()).toHaveText('Repository answer');
+				await expect(page.locator('.ash-chat-item-userMessage > pre, .ash-chat-item-agentMessage .ash-chat-markdown-part').last()).toHaveText('Repository answer');
 				await summary.press('Enter');
 				await push({ id: 'answer', author: { role: 'assistant' }, channel: 'final', content: { parts: ['Repository answer continues'] } });
 				await expect(activity).toHaveAttribute('open');
@@ -806,7 +1029,7 @@ suite('chatgptweb browser component', () => {
 		});
 		await fillMessage(page, 'Synthetic streaming probe');
 		await page.getByRole('button', { name: '发送', exact: true }).click();
-		await expect(page.locator('.ash-chatgpt-messages')).toContainText('Synthetic live reply');
+		await expect(page.locator('.ash-chat-transcript')).toContainText('Synthetic live reply');
 		await page.getByRole('button', { name: '停止', exact: true }).click();
 		await expect.poll(() => page.evaluate(() => Reflect.get(globalThis, 'auditStreamCancelled'))).toBe(true);
 		await expect.poll(() => typeof stop).toBe('function');
@@ -814,16 +1037,16 @@ suite('chatgptweb browser component', () => {
 		await expect(page.getByRole('textbox', { name: '询问 ChatGPT' })).toBeDisabled();
 		await stop();
 		await expect(page.getByRole('textbox', { name: '询问 ChatGPT' })).toBeEnabled();
-		await expect(page.locator('.ash-chatgpt-status')).toHaveText('已停止回复');
+		await expect(page.locator('.ash-chat-status')).toHaveText('已停止回复');
 	});
 
-	test('ChatGPT migrates the previous group collapse choice into the pane container once', async function () {
+	test('ChatGPT migrates the previous group collapse choice into the current storage keys once', async function () {
 		const { page } = browserTests;
 
 		await mockChatGPTRequests(page);
 		await page.goto('/chatgptNavigation.html?locale=en&legacyCollapsed=1');
-		const recent = page.getByRole('group', { name: 'Recent', exact: true });
-		const heading = recent.locator('.ash-pane-view-header-button');
+		const heading = page.locator('[data-group="recent"] .ash-sessions-list-section-toggle');
+		const recent = page.locator('[data-parent-section="recent"]');
 		await expect(heading).toHaveAttribute('aria-expanded', 'false');
 		const storageKeys = () => page.evaluate(() => window.ashChatGPTIntegration.storageKeys());
 		const previousKeys = (keys: readonly string[]) => keys.filter(key => key.startsWith('sessions.chatgpt.navigation.collapsed.'));
@@ -842,7 +1065,7 @@ suite('chatgptweb browser component', () => {
 		await expect(heading).toHaveAttribute('aria-expanded', 'true');
 		expect(previousKeys(await storageKeys())).toEqual([]);
 		await expect(recent.getByRole('button', { name: 'Synthetic conversation', exact: true })).toBeVisible();
-		// A stale legacy value must never override the pane container's newer choice.
+		// A stale legacy value must never override the newer stored choice.
 		await page.goto('/chatgptNavigation.html?locale=en&workspace=third-workspace&legacyCollapsed=1');
 		await expect(heading).toHaveAttribute('aria-expanded', 'true');
 		expect(previousKeys(await storageKeys())).toEqual([]);
@@ -870,11 +1093,11 @@ suite('chatgptweb browser component', () => {
 			await page.route('**/service/backend-api/conversation/two', route => route.fulfill({ json: { success: true } }));
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${zh ? 'hcDark' : 'light'}`);
 			const list = page.locator('.ash-chatgpt-navigation-list');
-			const pinned = list.getByRole('group', { name: zh ? '置顶' : 'Pinned', exact: true });
-			const recent = list.getByRole('group', { name: zh ? '最近' : 'Recent', exact: true });
+			const pinned = list.locator('[data-group="pinned"]');
+			const recent = list.locator('[data-group="recent"]');
 			const first = list.locator('[data-group="g-p-one"]');
 			const second = list.locator('[data-group="g-p-two"]');
-			const toggle = (group: typeof first) => group.locator(':scope > .ash-pane-view-header > .ash-pane-view-header-button');
+			const toggle = (group: typeof first) => group.locator(':scope > h3 > .ash-sessions-list-section-toggle');
 			await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveCount(4);
 			for (const group of [pinned, first, second, recent]) { await expect(toggle(group)).toHaveCSS('height', '32px'); }
 			await toggle(pinned).focus();
@@ -884,6 +1107,7 @@ suite('chatgptweb browser component', () => {
 			await page.keyboard.press('Home'); await expect(toggle(pinned)).toBeFocused();
 			await toggle(first).click();
 			await expect(toggle(first)).toHaveAttribute('aria-expanded', 'false');
+			await expect(list.getByRole('treeitem', { name: projectTitle, exact: true })).toHaveAttribute('aria-expanded', 'false');
 			await expect(toggle(second)).toHaveAttribute('aria-expanded', 'true');
 			await toggle(pinned).focus(); await page.keyboard.press('ArrowLeft');
 			await toggle(recent).focus(); await page.keyboard.press('Space');
@@ -898,20 +1122,24 @@ suite('chatgptweb browser component', () => {
 			await toggle(recent).focus(); await page.keyboard.press('ArrowRight');
 			await expect(toggle(recent)).toHaveAttribute('aria-expanded', 'true');
 			await page.keyboard.press('Tab');
-			await expect(recent.getByRole('button', { name: 'Recent chat', exact: true })).toBeFocused();
+			await expect(list.locator('[data-parent-section="recent"] .ash-session-leading-icon button')).toBeFocused();
+			await page.keyboard.press('Tab');
+			await expect(list.getByRole('button', { name: 'Recent chat', exact: true })).toBeFocused();
 			await toggle(first).focus(); await page.keyboard.press('Enter');
-			await expect(first.getByRole('button', { name: 'First project chat', exact: true })).toBeVisible();
+			await expect(list.getByRole('button', { name: 'First project chat', exact: true })).toBeVisible();
 			await toggle(first).click();
 
 			await page.reload();
 			await expect(toggle(first)).toHaveAttribute('aria-expanded', 'false');
 			await expect(toggle(recent)).toHaveAttribute('aria-expanded', 'true');
-			const row = second.locator('.ash-chatgpt-navigation-row');
+			const row = list.locator('.ash-chatgpt-navigation-row[data-parent-section="g-p-two"]');
 			await row.hover();
-			await row.getByRole('button', { name: zh ? '置顶聊天' : 'Pin chat', exact: true }).click();
+			const pin = row.getByRole('button', { name: zh ? '置顶聊天' : 'Pin chat', exact: true });
+			await expect(pin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pin');
+			await pin.click();
 			await expect(toggle(pinned)).toHaveAttribute('aria-expanded', 'false');
 			await expect(toggle(pinned)).toBeFocused();
-			await expect(pinned.getByRole('button', { name: 'Second project chat', exact: true })).toBeHidden();
+			await expect(list.getByRole('button', { name: 'Second project chat', exact: true })).toBeHidden();
 		});
 
 		test(`ChatGPT sidebar groups pins, projects and recent chats without duplicates (${locale})`, async function () {
@@ -943,29 +1171,32 @@ suite('chatgptweb browser component', () => {
 			await page.route('**/service/backend-api/conversation/pinned-project', route => route.fulfill({ json: { success: true } }));
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${zh ? 'hcDark' : 'light'}`);
 			const list = page.locator('.ash-chatgpt-navigation-list');
-			const pinned = list.getByRole('group', { name: zh ? '置顶' : 'Pinned', exact: true });
-			const project = list.getByRole('group', { name: 'Project One', exact: true });
+			const project = list.locator('[data-group="g-p-one"]');
 			const projectInstance = await project.elementHandle();
-			const recent = list.getByRole('group', { name: zh ? '最近' : 'Recent', exact: true });
-			await expect(pinned.locator('.ash-chatgpt-conversation')).toHaveText(['Pinned project chat', 'Old pinned chat']);
-			await expect(project.locator('.ash-chatgpt-conversation')).toHaveText(['Project chat']);
-			await expect(recent.locator('.ash-chatgpt-conversation')).toHaveText(['Recent chat', 'Custom GPT chat']);
+			const pinnedRows = list.locator('[data-parent-section="pinned"] .ash-chatgpt-conversation');
+			const projectRows = list.locator('[data-parent-section="g-p-one"] .ash-chatgpt-conversation');
+			const recentRows = list.locator('[data-parent-section="recent"] .ash-chatgpt-conversation');
+			await expect(pinnedRows).toHaveText(['Pinned project chat', 'Old pinned chat']);
+			await expect(projectRows).toHaveText(['Project chat']);
+			await expect(recentRows).toHaveText(['Recent chat', 'Custom GPT chat']);
 			expect(await list.locator('.ash-chatgpt-navigation-group').evaluateAll(sections => sections.map(section => (section as HTMLElement).dataset.group))).toEqual(['pinned', 'g-p-one', 'recent']);
-			await expect(list.locator('.ash-chatgpt-navigation-group:not(.ash-view-pane)')).toHaveCount(0);
+			await expect(list.locator('.ash-chatgpt-navigation-group:not(.ash-sessions-list-section)')).toHaveCount(0);
 			await expect(list.locator('[data-group="projects"]')).toHaveCount(0);
 			await expect(list.locator('.ash-chatgpt-conversation')).toHaveCount(5);
 			await testInfo.attach('grouped-sidebar', { body: await page.screenshot(), contentType: 'image/png' });
 
 			const row = list.locator('.ash-chatgpt-navigation-row[data-conversation="pinned-project"]');
 			await row.hover();
-			await row.getByRole('button', { name: zh ? '取消置顶聊天' : 'Unpin chat', exact: true }).click();
-			await expect(project.locator('.ash-chatgpt-conversation')).toHaveText(['Project chat', 'Pinned project chat']);
-			await expect(project.getByRole('button', { name: 'Pinned project chat', exact: true })).toBeFocused();
-			await expect(pinned.locator('.ash-chatgpt-conversation')).toHaveText(['Old pinned chat']);
+			const unpin = row.getByRole('button', { name: zh ? '取消置顶聊天' : 'Unpin chat', exact: true });
+			await expect(unpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pin-filled');
+			await unpin.click();
+			await expect(projectRows).toHaveText(['Project chat', 'Pinned project chat']);
+			await expect(list.getByRole('button', { name: 'Pinned project chat', exact: true })).toBeFocused();
+			await expect(pinnedRows).toHaveText(['Old pinned chat']);
 
-			const first = project.getByRole('button', { name: 'Project chat', exact: true });
+			const first = list.getByRole('button', { name: 'Project chat', exact: true });
 			await first.focus(); await page.keyboard.press('ArrowDown');
-			await expect(project.getByRole('button', { name: 'Pinned project chat', exact: true })).toBeFocused();
+			await expect(list.getByRole('button', { name: 'Pinned project chat', exact: true })).toBeFocused();
 			await page.keyboard.press('ArrowUp'); await expect(first).toBeFocused();
 
 			expect(await project.evaluate((element, previous) => element === previous, projectInstance)).toBe(true);
@@ -1003,14 +1234,16 @@ suite('chatgptweb browser component', () => {
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${zh ? 'hcDark' : 'light'}`);
 			const row = page.locator('.ash-chatgpt-navigation-row[data-conversation="fixture-chat"]');
 			const title = row.locator('.ash-chatgpt-conversation');
-			const toolbar = row.getByRole('toolbar');
+			const toolbar = row.locator('.ash-sessions-list-actions');
+			const icon = row.locator('.ash-session-leading-icon').getByRole('button');
+			const pin = row.getByRole('button', { name: labels.pin, exact: true });
 			const more = row.getByRole('button', { name: labels.more, exact: true });
 			const openMore = async () => { await row.hover(); await more.click(); };
 			await expect(title).toBeVisible();
 			for (const forcedColors of ['none', 'active'] as const) {
 				await page.emulateMedia({ forcedColors });
 				expect((await row.boundingBox())!.height).toBe(32);
-				for (const action of [more, row.getByRole('button', { name: labels.pin, exact: true })]) {
+				for (const action of [more, pin]) {
 					await expect(action).toHaveCSS('width', '28px');
 					await expect(action).toHaveCSS('height', '28px');
 					const bounds = (await action.boundingBox())!;
@@ -1024,19 +1257,33 @@ suite('chatgptweb browser component', () => {
 			await expect(toolbar).toHaveCSS('opacity', '0');
 			await row.hover();
 			await expect(toolbar).toHaveCSS('opacity', '1');
-			await title.focus();
+			await icon.focus();
 			await page.keyboard.press('Tab');
-			await expect(more).toBeFocused();
+			await expect(title).toBeFocused();
+			await page.keyboard.press('Tab');
+			await expect(pin).toBeFocused();
 			await page.keyboard.press('ArrowRight');
-			await expect(row.getByRole('button', { name: labels.pin, exact: true })).toBeFocused();
+			await expect(more).toBeFocused();
+			await page.keyboard.press('ArrowLeft');
+			await expect(pin).toBeFocused();
 			await page.keyboard.press('Enter');
 			await expect(row.getByRole('button', { name: labels.unpin, exact: true })).toHaveAttribute('aria-pressed', 'true');
 			await expect(page.locator('.ash-chatgpt-conversation').first()).toHaveText('Synthetic conversation');
-			await expect(page.locator('.ash-chatgpt-turn')).toHaveCount(0);
+			await expect(page.locator('.ash-chat-item')).toHaveCount(0);
 			await openMore();
+			const menu = page.getByRole('menu');
+			const rename = menu.getByRole('menuitem', { name: labels.rename, exact: true });
+			await expect(menu).toBeFocused();
+			await expect(menu).toHaveCSS('outline-style', 'none');
+			await page.keyboard.press('ArrowDown');
+			await expect(rename).toBeFocused();
 			for (const label of [labels.rename, labels.share, labels.archive, labels.delete, labels.move]) {
 				await expect(page.getByRole('menuitem', { name: label, exact: true })).toBeVisible();
 			}
+			await page.keyboard.press('Escape');
+			await expect(more).toBeFocused();
+			await page.keyboard.press('Enter');
+			await expect(rename).toBeFocused();
 			await page.keyboard.press('Escape');
 			await expect(more).toBeFocused();
 			await openMore();

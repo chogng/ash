@@ -11,6 +11,7 @@ import type { IChatListItem } from '../../../../common/model/chatViewModel.js';
 import { BaseChatToolInvocationSubPart } from './chatToolInvocationSubPart.js';
 import { ChatToolOutputSubPart } from './chatToolOutputPart.js';
 import { Emitter } from '../../../../../../../base/common/event.js';
+import '../media/chatTerminalToolProgressPart.css';
 
 /** Command coordinates come from the frozen binding; command output remains literal evidence. */
 export class ChatTerminalToolProgressPart extends BaseChatToolInvocationSubPart {
@@ -52,6 +53,7 @@ export class ChatTerminalToolProgressPart extends BaseChatToolInvocationSubPart 
 				});
 			},
 		}));
+		this.copy.domNode.classList.add('ash-chat-tool-copy-command');
 		this.output = this._register(instantiation.createInstance(ChatToolOutputSubPart, document));
 		this._register(this.output.onDidChangeHeight(() => this.changedHeight.fire()));
 		this.domNode.append(this.command, this.directory, actions, this.output.domNode);

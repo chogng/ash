@@ -2,10 +2,12 @@
 	min-width: 0;
 	min-height: 0;
 	background: var(--ash-sessions-conversation-background);
+	--ash-chat-transcript-overlap: var(--ash-spacing-size80);
+	--ash-chat-transcript-surface: var(--ash-sessions-conversation-background);
 }
 
 .ash-workbench-sessions .ash-sessions-chat-slot,
-.ash-workbench-sessions .ash-code-conversation > .ash-chat,
+.ash-workbench-sessions .ash-sessions-chat-content > .ash-chat,
 .ash-workbench-sessions .ash-sessions-chat-slot > .ash-chat {
 	background: var(--ash-sessions-conversation-background);
 }

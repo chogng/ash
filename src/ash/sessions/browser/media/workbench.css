@@ -29,13 +29,6 @@
 	--ash-sash-feedback-cross-offset: calc(var(--ash-strokeThickness) / -2);
 }
 
-.ash-sessions-content-frame {
-	display: none;
-	position: absolute;
-	z-index: 1;
-	pointer-events: none;
-}
-
 .ash-sessions-window .ash-feedback-host {
 	position: absolute;
 	z-index: 1000;

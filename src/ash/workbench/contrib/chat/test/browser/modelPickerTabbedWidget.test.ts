@@ -5,6 +5,38 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 suite('model picker browser component', () => {
 	const browserTests = useBrowserTests();
 
+	test('effort submenu and model preview replace each other on the same surface', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?modelMenuConfiguration');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		await page.locator('.ash-chat-input-model-action').press('ArrowDown');
+		const picker = page.locator('.ash-chat-model-picker');
+		const searchBounds = await picker.locator('.ash-action-widget-filter').boundingBox();
+		const autoBounds = await picker.locator('.ash-chat-model-picker-automatic').boundingBox();
+		const modelBounds = await picker.getByRole('menuitemradio', { name: 'Test Model', exact: true }).boundingBox();
+		expect(searchBounds!.y + searchBounds!.height).toBeLessThanOrEqual(autoBounds!.y);
+		expect(autoBounds!.y + autoBounds!.height).toBeLessThanOrEqual(modelBounds!.y);
+		const effort = picker.getByRole('menuitem', { name: 'Effort' });
+		await effort.press('ArrowRight');
+		const submenu = page.getByRole('menu', { name: 'Effort' });
+		await expect(submenu.getByRole('menuitemradio', { name: 'Low' })).toBeFocused();
+		await submenu.evaluate(element => { element.parentElement!.dataset.testSharedSidePanel = 'true'; });
+		const panel = page.locator('[data-test-shared-side-panel]');
+		await page.keyboard.press('Tab');
+		await expect(picker.getByRole('menuitem', { name: 'More Models' })).toBeFocused();
+		await expect(panel).toBeHidden();
+
+		await effort.press('ArrowRight');
+		await picker.getByRole('menuitemradio', { name: 'Test Model', exact: true }).hover();
+		await expect(panel.locator('.ash-action-widget-side-preview')).toBeVisible();
+		await expect(submenu).toHaveCount(0);
+		await effort.press('ArrowRight');
+		await expect(panel.getByRole('menu', { name: 'Effort' })).toBeVisible();
+		await expect(panel.locator('.ash-action-widget-side-preview')).toHaveCount(0);
+		await page.keyboard.press('Escape');
+		await expect(effort).toBeFocused();
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`model controls and details use model names and open documentation in ${locale}`, async () => {
 			const { page } = browserTests;
@@ -34,7 +66,7 @@ suite('model picker browser component', () => {
 			await expect(picker).toBeVisible();
 			await card.press('Alt+ArrowLeft');
 			await picker.getByRole('menuitemradio', { name: 'Test Model', exact: true }).hover();
-			const preview = picker.locator('.ash-chat-model-picker-details-menu');
+			const preview = page.locator('.ash-action-widget-side-preview');
 			await expect(preview).toBeVisible();
 			await expect(preview.locator('.ash-chat-model-card-context')).toHaveText(chinese ? '最大上下文：872K' : 'Max context: 872K');
 			await preview.getByRole('link', { name: 'Documentation', exact: true }).click();
@@ -213,7 +245,7 @@ suite('model picker browser component', () => {
 			await expect(ultra).toBeChecked();
 			const context = picker.getByRole('radiogroup', { name: chinese ? '上下文大小' : 'Context Size', exact: true });
 			await expect(context.getByRole('radio').first()).toBeChecked();
-			const thinking = picker.getByRole('radiogroup', { name: chinese ? '推理强度' : 'Thinking Level', exact: true });
+			const thinking = picker.getByRole('radiogroup', { name: chinese ? '推理强度' : 'Effort', exact: true });
 			await expect(thinking.getByRole('radio').first()).toBeChecked();
 			await standard.focus();
 			await standard.press('Space');

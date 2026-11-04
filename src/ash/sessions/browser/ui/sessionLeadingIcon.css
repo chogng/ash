@@ -1,0 +1,28 @@
+.ash-session-leading-icon {
+	display: grid;
+	width: var(--ash-spacing-size280);
+	height: var(--ash-spacing-size280);
+	place-items: center;
+}
+
+.ash-session-leading-icon .ash-action-label {
+	box-sizing: border-box;
+	width: var(--ash-spacing-size280);
+	height: var(--ash-spacing-size280);
+	min-height: 0;
+	padding: 0;
+}
+
+.ash-session-leading-graphic {
+	width: var(--ash-lxiconFontSize-large);
+	height: var(--ash-lxiconFontSize-large);
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-session-leading-graphic
+	> .ash-session-status-icon-layer
+	> :is(.ash-icon, svg) {
+	width: 100%;
+	height: 100%;
+	font-size: inherit;
+}

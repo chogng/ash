@@ -283,6 +283,7 @@ fn memories_are_recollected_after_preflight_compaction_and_revocation() {
             core_api::StartThreadRequest {
                 execution_target: None,
                 branch_name: None,
+                worktree_start: None,
                 command_id: CommandId::new("thread").unwrap(),
                 title: "Memory preparation test".into(),
                 agent_id: None,

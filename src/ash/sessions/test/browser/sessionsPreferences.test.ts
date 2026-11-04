@@ -1,3 +1,4 @@
+import { OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID } from '../../common/sessionCommands.js';
 import { IChatWidgetService } from '../../../workbench/contrib/chat/browser/chat.js';
 import { ChatWidgetService } from '../../../workbench/contrib/chat/browser/widget/chatWidgetService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
@@ -115,7 +116,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		this.dispatchEvent(new window.Event('close'));
 	};
 	await import('../../browser/activityBarAccessibility.js');
-	await import('../../contrib/creator/browser/creatorEditor.contribution.js');
+	await import('../../contrib/artifacts/browser/creatorEditor.contribution.js');
 	const [{ SessionsPreferences }, { testConfigurationService }, { ContextKeyService }] = await Promise.all([
 		import('../../contrib/preferences/browser/sessionsPreferences.js'),
 		import('../../../workbench/services/configuration/test/common/testServices.js'),
@@ -285,12 +286,14 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 			if (options?.groupId !== undefined || options?.openToSide) assert.equal(editorRevealing, false, 'document layout settles before the group opens');
 			preferenceOpens.push({ user: options });
 		},
-		openGlobalKeybindingSettings: async textual => {
-			assert.equal(window.document.querySelector('dialog[open]'), null);
-			if (pendingShortcut) await pendingShortcut;
-			if (rejectShortcut) throw new Error('shortcut editor unavailable');
-			preferenceOpens.push({ keybindings: textual });
-		},
+		openGlobalKeybindingSettings: async () => { assert.fail('Agent Window shortcuts must use the Sessions command'); },
+	});
+	let shortcutsOpened = 0;
+	using shortcutsCommand = CommandsRegistry.register(OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID, async () => {
+		assert.equal(window.document.querySelector('dialog[open]'), null);
+		if (pendingShortcut) await pendingShortcut;
+		if (rejectShortcut) throw new Error('shortcut editor unavailable');
+		shortcutsOpened++;
 	});
 	services.registerInstance(IAccountService, {
 		readRateLimits: async (provider, accountId) => ({
@@ -602,7 +605,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		await assert.rejects(configuration.updateValue('sessions.design.usePointerCursor', 'false'), /必须是布尔值/u);
 		await preferences.open({ section: 'keyboard-shortcuts' });
 		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '快捷键'));
-		assert.ok(window.document.querySelector('.ash-sessions-settings-page')?.textContent?.includes('搜索命令和快捷键、查看默认绑定、录制按键'));
+		assert.ok(window.document.querySelector('.ash-sessions-settings-page')?.textContent?.includes('查看仅在 Agent 窗口中生效的快捷键。'));
 		await preferences.open({ section: 'customize' });
 		assert.ok([...window.document.querySelectorAll<HTMLButtonElement>('.ash-sessions-settings-page button')].some(button => button.textContent === '打开工作台设置'));
 
@@ -632,9 +635,9 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	const revealsBeforeShortcuts = editorReveals;
 	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
 	assert.equal(editorReveals, revealsBeforeShortcuts, 'the shortcut modal preserves the underlying entry and document working set');
-	await openCategoryAction('keyboard-shortcuts', 'Preferences: Open Keyboard Shortcuts (JSON)');
+	assert.equal(shortcutsOpened, 1);
 	await openCategoryAction('customize', 'Preferences: Open User Settings (JSON)');
-	assert.deepEqual(preferenceOpens, [{ keybindings: false }, { keybindings: true }, { user: { jsonEditor: true } }]);
+	assert.deepEqual(preferenceOpens, [{ user: { jsonEditor: true } }]);
 	await openCategoryAction('customize', 'Open Workbench Settings');
 	await openCategoryAction('browser', 'Open Browser settings');
 	await openCategoryAction('tab', 'Open Tab settings');
@@ -644,7 +647,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		{ section: null, target: 'modalGroup' }, { section: 'browser', target: 'modalGroup' },
 		{ section: 'editor-opening', target: 'modalGroup' }, { section: 'editor-language', target: 'modalGroup' }, { section: 'terminal', target: 'modalGroup' },
 	]);
-	assert.equal(editorReveals, 2);
+	assert.equal(editorReveals, 1);
 	let accountOpens = 0;
 	using manageAccounts = CommandsRegistry.register('workbench.action.manageAccounts', () => {
 		assert.equal(window.document.querySelector('dialog[open]'), null);
@@ -652,7 +655,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	});
 	await openCategoryAction('account', 'Manage Accounts');
 	assert.equal(accountOpens, 1, 'Account delegates to the existing account command');
-	assert.equal(editorReveals, 2, 'account management preserves the current Sessions entry');
+	assert.equal(editorReveals, 1, 'account management preserves the current Sessions entry');
 	const editSettingOpen = preferences.open({ section: 'appearance' });
 	const editSettingMenu = openCopyMenu();
 	const editSetting = [...editSettingMenu.menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === 'Edit in settings.json');
@@ -673,7 +676,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(configuration.getValue('workbench.settings.editor'), 'json');
 	await preferences.open({ jsonEditor: true });
 	assert.deepEqual(preferenceOpens.at(-1), { user: { jsonEditor: true } });
-	assert.equal(editorReveals, 4);
+	assert.equal(editorReveals, 3);
 	const explicitUI = preferences.open({ jsonEditor: false });
 	assert.ok(window.document.querySelector('dialog[open]'), 'explicit UI remains available with a JSON default');
 	window.document.querySelector<HTMLDialogElement>('dialog[open]')!.close();
@@ -681,24 +684,24 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await preferences.open({ target: 5, query: '@lang:plaintext @id:editor.fontSize' });
 	assert.deepEqual(preferenceOpens.at(-1), { user: { target: 5, query: '@lang:plaintext @id:editor.fontSize', jsonEditor: false } });
 	assert.equal(window.document.querySelector('dialog[open]'), null, 'scoped settings use the shared Workbench pane');
-	assert.equal(editorReveals, 4);
+	assert.equal(editorReveals, 3);
 	await configuration.updateValue('workbench.settings.editor', 'ui');
 	await preferences.open({ groupId: 7, query: '@id:editor.fontSize', jsonEditor: false });
 	assert.deepEqual(preferenceOpens.at(-1), { user: { groupId: 7, query: '@id:editor.fontSize', jsonEditor: false } });
-	assert.equal(editorReveals, 5, 'explicit group requests reveal the document host');
+	assert.equal(editorReveals, 4, 'explicit group requests reveal the document host');
 	await preferences.open({ openToSide: true, query: '@id:editor.fontFamily', jsonEditor: false });
 	assert.deepEqual(preferenceOpens.at(-1), { user: { openToSide: true, query: '@id:editor.fontFamily', jsonEditor: false } });
-	assert.equal(editorReveals, 6);
+	assert.equal(editorReveals, 5);
 	const cancelledOpen = preferences.open({ section: 'keyboard-shortcuts' });
-	const callsBeforeCancel = preferenceOpens.length;
+	const callsBeforeCancel = shortcutsOpened;
 	window.document.querySelector<HTMLDialogElement>('dialog')!.dispatchEvent(new window.Event('cancel', { cancelable: true }));
 	await cancelledOpen;
 	assert.equal(window.document.querySelector('dialog'), null);
-	assert.equal(preferenceOpens.length, callsBeforeCancel, 'cancelling Settings cannot open or edit a profile resource');
+	assert.equal(shortcutsOpened, callsBeforeCancel, 'cancelling Settings cannot open or edit a profile resource');
 	rejectShortcut = true;
 	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
 	assert.equal(notifications.model.getNotifications().at(-1)?.message, 'Could not open preferences: Error: shortcut editor unavailable');
-	assert.equal(editorReveals, 6, 'a failed open cannot reveal an unrelated editor');
+	assert.equal(editorReveals, 5, 'a failed open cannot reveal an unrelated editor');
 	const notificationsBeforeShutdown = notifications.model.getNotifications().length;
 	let rejectLateOpen!: (error: Error) => void;
 	pendingShortcut = new Promise<void>((_resolve, reject) => { rejectLateOpen = reject; });
@@ -708,7 +711,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await pendingShortcut.catch(() => { });
 	await Promise.resolve();
 	assert.equal(notifications.model.getNotifications().length, notificationsBeforeShutdown, 'late opens cannot notify a retired window');
-	assert.equal(editorReveals, 6);
+	assert.equal(editorReveals, 5);
 	changed.dispose();
 	browser.window.close();
 	assert.deepEqual(unexpectedErrors, [], 'Preferences interactions must not leave a stale UI after a listener error');

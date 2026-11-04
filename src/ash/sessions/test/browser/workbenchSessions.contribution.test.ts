@@ -8,7 +8,8 @@ import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/l
 import { IPromptsService } from '../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
 import { ISessionPrimaryProviderServices, ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
-import { IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
+import { IAgentConnection, IAgentHostInputCompletionService } from '../../../platform/agentHost/common/agentService.js';
+import type { AgentHostInputCompletionRequest } from '../../../platform/agentHost/common/agent.js';
 import { NEW_FILE_TAB_COMMAND_ID } from '../../common/sessionCommands.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { IAgentSessionActionsService } from '../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
@@ -24,6 +25,7 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../../../platform/instantiation/common/serviceCollection.js';
 import type { IWorkbenchHost } from '../../../workbench/browser/rendererApi.js';
 import { IAgentSessionService, IAgentThreadService, IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
 import { IAgentModelsService } from '../../../platform/models/common/agentModels.js';
@@ -106,8 +108,14 @@ test('Sessions Files contribution opens its editor through the invoking window',
 test('Sessions registers its regular Workbench service and starts its catalog', async () => {
 	let subscriptions = 0;
 	let catalogLoads = 0;
+	const completionRequests: AgentHostInputCompletionRequest[] = [];
 	const api = {
 		...createDisconnectedRendererApi(),
+		completions: {
+			onDidChangeConnection: Event.None,
+			getTriggerCharacters: () => ['$'],
+			async complete(request: AgentHostInputCompletionRequest) { completionRequests.push(request); return []; },
+		},
 		session: {
 			...createDisconnectedRendererApi().session,
 			onDidChangeSession: () => { subscriptions++; return toDisposable(() => { }); },
@@ -116,7 +124,9 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 		},
 		model: { async readModel() { return null; } },
 	} as unknown as IWorkbenchHost;
-	using services = new InstantiationService();
+	const registrations = getSingletonServiceDescriptors().filter(([id]) =>
+		[ISessionsManagementService, IChatSessionNavigationService, IDevContainerAgentHostService, ISessionProviderScopeService, ISessionPrimaryProviderServices, IChatService].some(service => service === id));
+	using services = new InstantiationService(new ServiceCollection(...registrations));
 	using providers = new SessionsProvidersService();
 	services.registerInstance(ISessionsProvidersService, providers);
 	services.registerInstance(IAgentConnection, api);
@@ -139,11 +149,6 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	services.registerInstance(IEditorService, {} as IEditorService);
 	services.registerInstance(IViewsService, { openView: async () => { throw new Error('Draft capture must not reveal Chat'); }, focusView: async () => false, getViewWithId: () => undefined } as unknown as IViewsService);
 	services.registerInstance(IMultiDiffSourceResolverService, new MultiDiffSourceResolverService());
-	for (const [id, descriptor] of getSingletonServiceDescriptors()) {
-		if ([ISessionsManagementService, IChatSessionNavigationService, IDevContainerAgentHostService, ISessionProviderScopeService, ISessionPrimaryProviderServices, IChatService].some(service => service === id)) {
-			services.registerSingleton(id, () => services.createInstance(descriptor));
-		}
-	}
 	const sessions = services.get(ISessionsManagementService);
 	const navigation = services.get(IChatSessionNavigationService);
 	assert.ok(services.get(IChatService) instanceof SessionsChatService);
@@ -155,6 +160,12 @@ test('Sessions registers its regular Workbench service and starts its catalog', 
 	await sessions.initialize();
 	assert.equal(subscriptions, 2); // The provider and the ambient Chat backend each consume Session changes.
 	assert.equal(catalogLoads, 1);
+	using scope = services.get(ISessionProviderScopeService).createScope();
+	const completions = scope.get(IAgentHostInputCompletionService);
+	assert.deepEqual(completions.getTriggerCharacters(), ['$']);
+	const request = { text: '$', offset: 1, directories: [] };
+	await completions.complete(request, new AbortController().signal);
+	assert.deepEqual(completionRequests, [request]);
 });
 
 test('Open in Agents uses the visible untitled chat instead of an older active session', () => {

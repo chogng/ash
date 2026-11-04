@@ -4,7 +4,7 @@
 
 .ash-remote-environments-address {
 	color: var(--ash-description-foreground);
-	font-weight: normal;
+	font-weight: var(--ash-fontWeight-regular);
 }
 
 .ash-remote-environments table {

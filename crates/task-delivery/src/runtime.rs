@@ -282,6 +282,7 @@ impl Runtime {
                 directory: directory.clone(),
                 input: vec![
                     UserInput::Context {
+                        source_url: None,
                         name: "task-delivery-source".into(),
                         content: format!(
                             "{origin}\nGit HEAD: {}\nDisk tree: {}\n\n{}",

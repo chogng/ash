@@ -3,12 +3,60 @@
 	max-width: 100%;
 }
 
+.ash-sessions-titlebar-widget:not([hidden]) {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size40);
+}
+
+.ash-sessions-titlebar-title {
+	min-width: 0;
+}
+
+.ash-sessions-titlebar-widget .ash-button.ash-sessions-titlebar-menu {
+	flex-shrink: 0;
+	box-sizing: border-box;
+	inline-size: var(--ash-spacing-size280);
+	block-size: var(--ash-spacing-size280);
+	padding: 0;
+}
+
 .ash-sessions-titlebar-widget .ash-button {
 	max-width: 100%;
+}
+
+.ash-sessions-titlebar-widget .ash-button.ash-sessions-titlebar-editable {
+	padding: var(--ash-spacing-size20) var(--ash-spacing-size40);
 }
 
 .ash-sessions-titlebar-widget .ash-button-label {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.ash-sessions-titlebar-rename {
+	box-sizing: border-box;
+	field-sizing: content;
+	min-width: min(64px, 100%);
+	max-width: 100%;
+	min-height: 28px;
+	padding: var(--ash-spacing-size20) var(--ash-spacing-size40);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, transparent);
+	border-radius: var(
+		--ash-button-border-radius,
+		var(--ash-cornerRadius-small)
+	);
+	background: var(--ash-input-background);
+	color: var(--ash-input-foreground);
+	font: inherit;
+	font-size: var(--ash-button-small-font-size, var(--ash-fontSize-label2));
+	user-select: text;
+	-webkit-app-region: no-drag;
+}
+
+.ash-sessions-titlebar-rename:focus {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
 }

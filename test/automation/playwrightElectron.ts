@@ -223,7 +223,7 @@ export async function launchElectron(options: ElectronLaunchOptions, onMilestone
 			await Promise.race([ready, prompt.waitFor({ state: 'visible' })]);
 			if (await prompt.isVisible()) {
 				await page.locator('.ash-workbench').waitFor({ state: 'visible' });
-				await prompt.getByRole('button', { name: /^(?:Trust Folder(?: & Enable Features)?|信任文件夹)$/u }).click();
+				await prompt.getByRole('button', { name: /^(?:Trust Folder(?: & Enable Features)?|Trust and Open|信任文件夹|信任并打开)$/u }).click();
 				onMilestone?.('trust-accepted');
 			}
 		}

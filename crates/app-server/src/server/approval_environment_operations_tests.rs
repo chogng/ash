@@ -343,6 +343,7 @@ fn thread_scope_uses_its_worktree_even_when_another_directory_is_selected() {
                 command_id: ash_protocol::CommandId::new("start").unwrap(),
                 title: "Worktree".into(),
                 branch_name: None,
+                worktree_start: None,
                 execution_target: None,
             },
         )

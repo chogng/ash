@@ -631,6 +631,62 @@ impl GitClient {
         .await
     }
 
+    /// Fetches an exact remote revision without changing a branch, index or checkout.
+    pub async fn fetch_remote_tree(
+        &self,
+        repository: &GitRepository,
+        remote: &str,
+        remote_identity: &str,
+        reference: &str,
+        expected_commit: &str,
+    ) -> GitResult<crate::GitTreeId> {
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        static NEXT_FETCH: AtomicU64 = AtomicU64::new(0);
+        self.require_remote_identity(repository, remote, remote_identity)
+            .await?;
+        self.validate_ref(repository, reference).await?;
+        if !reference.starts_with("refs/") || !valid_commit_identity(expected_commit) {
+            return Err(invalid(
+                "expected a complete remote ref and commit identity",
+            ));
+        }
+        let scratch = format!(
+            "refs/ash/fetch/{}/{}",
+            std::process::id(),
+            NEXT_FETCH.fetch_add(1, Ordering::Relaxed)
+        );
+        let root = repository.worktree_root();
+        let fetched = async {
+            self.run_mutation(
+                root,
+                [
+                    "fetch",
+                    "--no-tags",
+                    "--no-write-fetch-head",
+                    "--",
+                    remote,
+                    &format!("{reference}:{scratch}"),
+                ],
+            )
+            .await?
+            .require_success()?;
+            let commit = self.resolve_commit(repository, &scratch).await?;
+            if commit != expected_commit {
+                return Err(invalid("remote commit changed since selection"));
+            }
+            self.resolve_tree(repository, &commit).await
+        }
+        .await;
+        let cleanup = self
+            .run_mutation(root, ["update-ref", "-d", &scratch])
+            .await
+            .and_then(|result| result.require_success());
+        let tree = fetched?;
+        cleanup?;
+        Ok(tree)
+    }
+
     pub(crate) async fn validate_ref(
         &self,
         repository: &GitRepository,

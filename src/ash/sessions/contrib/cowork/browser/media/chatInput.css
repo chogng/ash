@@ -10,13 +10,6 @@
 
 /* One composer is retained while navigation changes the surrounding Parts. */
 .ash-cowork > .ash-chat-input-part.ash-sessions-cowork-input.cowork-composer {
-	--ash-chat-input-min-height: 0px;
-	--ash-chat-input-padding: var(--ash-spacing-size160);
-	--ash-chat-input-border: var(--ash-border);
-	--ash-chat-input-focus-border: var(--ash-border);
-	--ash-chat-input-shadow: var(--ash-sessions-inputShadow);
-	--ash-chat-input-radius: var(--ash-cornerRadius-xLarge);
-	--ash-chat-input-toolbar-gap: var(--ash-spacing-size80);
 	width: 100%;
 	max-width: 728px;
 	align-self: center;

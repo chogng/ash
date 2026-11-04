@@ -269,7 +269,7 @@ export class Pane extends Disposable implements IView {
 /** A collection of independent panes backed by the shared constrained SplitView. */
 export class PaneView extends Disposable {
 	readonly element: HTMLElement;
-	private readonly scrollable: ScrollableElement;
+	private readonly scrollable: ScrollableElement | undefined;
 	private readonly splitView: SplitView;
 	private readonly panes: Pane[] = [];
 	private readonly animationReset = this._register(new RunOnceScheduler(() => {
@@ -281,13 +281,20 @@ export class PaneView extends Disposable {
 	readonly onDidSashChange: Event<number>;
 	readonly onDidSashReset: Event<number>;
 
-	constructor(container: HTMLElement) {
+	constructor(container: HTMLElement, options: { readonly contentSized?: boolean; } = {}) {
 		super();
-		// Minimum pane sizes may exceed the host; keep that overflow in the shared themed viewport.
-		this.scrollable = this._register(new ScrollableElement(container, { direction: 'vertical', tabIndex: -1 }));
-		this.element = this.scrollable.element;
+		if (options.contentSized) {
+			// The outer container already scrolls. Let the split supply its content
+			// height without allocating a second viewport on every pane change.
+			this.element = h(container.ownerDocument, 'div');
+			container.append(this.element);
+			this._register(toDisposable(() => this.element.remove()));
+		} else {
+			this.scrollable = this._register(new ScrollableElement(container, { direction: 'vertical', tabIndex: -1 }));
+			this.element = this.scrollable.element;
+		}
 		this.element.classList.add('ash-pane-view-container');
-		this.splitView = this._register(new SplitView(this.scrollable.contentElement, { proportionalLayout: false, orientation: Orientation.VERTICAL, styles: { separatorBorder: 'var(--ash-border)' }, }));
+		this.splitView = this._register(new SplitView(this.scrollable?.contentElement ?? this.element, { proportionalLayout: false, orientation: Orientation.VERTICAL, styles: { separatorBorder: 'var(--ash-border)' }, }));
 		this.onDidSashChange = this.splitView.onDidSashChange;
 		this.onDidSashReset = this.splitView.onDidSashReset;
 		this._register(this.onDidSashReset(index => this.splitView.resetSash(index)));
@@ -324,7 +331,7 @@ export class PaneView extends Disposable {
 				wasCollapsed = collapsed;
 				const contentHeightChanged = this.didLayout && this.updateContentHeight();
 				listener(requestedSize);
-				if (contentHeightChanged) this.scrollable.layout();
+				if (contentHeightChanged) this.scrollable?.layout();
 				this.updateSashLabels();
 			}),
 			layout: (height, offset, width) => {
@@ -333,7 +340,7 @@ export class PaneView extends Disposable {
 			},
 		}, size, index);
 		this.panes.splice(index, 0, pane);
-		if (this.didLayout && this.updateContentHeight()) this.scrollable.layout();
+		if (this.didLayout && this.updateContentHeight()) this.scrollable?.layout();
 		this.updateSashLabels();
 	}
 
@@ -344,7 +351,7 @@ export class PaneView extends Disposable {
 		this.panes.splice(index, 1);
 		this.splitView.removeView(index);
 		pane.element.remove();
-		if (this.didLayout && this.updateContentHeight()) this.scrollable.layout();
+		if (this.didLayout && this.updateContentHeight()) this.scrollable?.layout();
 		this.updateSashLabels();
 	}
 
@@ -371,19 +378,22 @@ export class PaneView extends Disposable {
 	}
 
 	layout(height: number, width: number): void {
+		// Content-sized panes take their minimum sizes and contribute their
+		// height to the parent scrollable; only a viewport needs a fixed height.
+		if (!this.scrollable) height = 0;
 		// Expansion notifies the parent constraints after SplitView has started its transition.
 		// A repeated allocation must not cancel that transition or lay out every body again.
 		if (this.didLayout && this.height === height && this.width === width) return;
 		this.height = height;
 		this.width = width;
-		this.element.style.height = `${height}px`;
+		if (this.scrollable) this.element.style.height = `${height}px`;
 		this.didLayout = true;
 		this.animationReset.cancel();
 		this.splitView.element.classList.remove('animated');
 		this.updateContentHeight();
 		// SplitView fits the viewport; its constraints already retain overflowing minimum sizes.
 		this.splitView.layout(height, width);
-		this.scrollable.layout();
+		this.scrollable?.layout();
 		this.updateSashLabels();
 	}
 

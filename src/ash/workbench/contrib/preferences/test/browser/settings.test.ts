@@ -1996,7 +1996,7 @@ test('font preferences show translated labels and the actual platform defaults',
 		const appearance = layout.createSettingsLayout(defaults.all).find(category => category.id === 'chat-appearance')!;
 		assert.equal(appearance.descriptor.label, '外观');
 		assert.equal(appearance.descriptor.description, '设置聊天消息、消息输入框和代码块的显示方式。');
-		assert.deepEqual(appearance.groups.map(group => group.title), ['消息正文', '消息输入', '代码块']);
+		assert.deepEqual(appearance.groups.map(group => group.title), ['消息正文', '消息输入', '代码块', '对话']);
 		assert.deepEqual(appearance.groups[0]!.settings.map(setting => setting.id), ['chat.upvoteAnimation', 'chat.fontFamily', 'chat.fontSize']);
 		assert.deepEqual(
 			appearance.groups[1]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
@@ -2010,6 +2010,9 @@ test('font preferences show translated labels and the actual platform defaults',
 			appearance.groups[0]!.settings.map(setting => [setting.id, setting.title, setting.configuration.defaultValue]),
 			[['chat.upvoteAnimation', '有用回复动画', 'floatingThumbs'], ['chat.fontFamily', '字体', 'default'], ['chat.fontSize', '字号', 13]],
 		);
+		const follow = appearance.groups[3]!.settings.find(setting => setting.id === 'chat.autoFollowReplies')!;
+		assert.equal(follow.title, '自动跟随新回复');
+		assert.equal(follow.configuration.defaultValue, true);
 		const inputFamily = defaults.get('chat.input.fontFamily');
 		assert.equal(inputFamily.valueType === 'text' && inputFamily.placeholder, '系统默认');
 		assert.deepEqual(
@@ -2179,7 +2182,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	const tabStyleSetting = defaults.get(WorkbenchConfiguration.modernUIEditorTabStyle);
 	assert.equal(tabStyleSetting.valueType, 'select');
 	if (tabStyleSetting.valueType === 'select') {
-		assert.equal(tabStyleSetting.configuration.defaultValue, 'connected');
+		assert.equal(tabStyleSetting.configuration.defaultValue, 'pill');
 		assert.deepEqual(
 			tabStyleSetting.options.map(option => option.value),
 			['connected', 'pill'],
@@ -3363,6 +3366,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		onDidChangeFocus: Event.None,
 		openWindow: async () => { },
 		restart: async () => { },
+		showToast: async () => ({ supported: false, clicked: false }),
 		getScreenshot: async () => undefined,
 	});
 
@@ -3429,11 +3433,12 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 	assert.equal(root.querySelector('[data-settings-category-id="chat-code-blocks"]'), null);
 	assert.deepEqual(
 		[...root.querySelectorAll('.ash-settings-content-tree h4')].map(heading => heading.textContent),
-		['Appearance', 'Messages', 'Message input', 'Code blocks'],
+		['Appearance', 'Messages', 'Message input', 'Code blocks', 'Conversation'],
 	);
 	for (const key of ['chat.fontFamily', 'chat.fontSize', 'chat.input.fontFamily', 'chat.input.fontSize', 'chat.input.lineHeight', 'chat.editor.fontFamily', 'chat.editor.fontSize', 'chat.editor.lineHeight', 'chat.editor.wordWrap', 'chat.upvoteAnimation']) {
 		assert.ok(root.querySelector(`[data-settings-item-id="${key}"]`), key);
 	}
+	assert.equal(root.querySelector('[data-settings-item-id="chat.autoFollowReplies"] [role="switch"]')?.getAttribute('aria-checked'), 'true');
 	await preferences.openSettings({ section: 'extensions' });
 	const extensionCategory = root.querySelector('[data-settings-category-id="extensions"]')!;
 	assert.equal(extensionCategory.closest('.ash-tree-row')?.getAttribute('aria-level'), '2');

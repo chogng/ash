@@ -47,7 +47,12 @@ test('Sessions sidebar hides blank drafts and restores parked content drafts', {
 	await expect(drafts()).toHaveAttribute('data-item', `untitled:${identity}`);
 	await expect(active()).toHaveAttribute('data-untitled-session-id', identity!);
 	await new Editor(active()).waitForEditorContents(text => text === 'Keep this unsent sidebar draft');
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	const modes = page.locator('.ash-window-mode-control');
+	await modes.getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	if (target.kind === 'electron') {
+		await expect(page.locator('.ash-chatgpt-navigation-list')).toBeVisible();
+		await modes.getByRole('button', { name: 'Code', exact: true }).click();
+	}
 	await expect(drafts()).toHaveCount(1);
 	editor = new Editor(active());
 	await editor.waitForEditorFocus();

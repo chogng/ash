@@ -33,9 +33,15 @@ pub enum HostCredentialResponse {
         #[ts(type = "1")]
         version: u32,
         context: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        cache_scope: Option<String>,
     },
     Changed {
         context: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        cache_scope: Option<String>,
     },
     Authorized {
         headers: BTreeMap<String, String>,

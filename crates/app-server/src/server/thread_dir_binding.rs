@@ -623,11 +623,57 @@ impl ThreadWorktreeBinder for GitTurnChangesRuntime {
                     .branch_name
                     .as_deref()
                     .is_some_and(|name| binding.target_branch() != Some(name))
+                || request
+                    .worktree_start
+                    .as_ref()
+                    .is_some_and(|start| binding.target_head() != start.commit)
             {
                 return Err(CoreError::CommandConflict);
             }
             self.bind_thread_services(&request.thread_id, &binding)?;
             return Ok(());
+        }
+
+        if let Some(start) = &request.worktree_start {
+            let name = request
+                .branch_name
+                .as_ref()
+                .filter(|_| matches!(request.origin, ThreadOrigin::Root))
+                .ok_or_else(|| {
+                    CoreError::InvalidInput("a pinned worktree requires a new root branch".into())
+                })?;
+            let tree_id = self
+                .dirs
+                .runtime
+                .block_on(async {
+                    let git = ash_git::GitClient::system();
+                    let repository = git.open_repository(&self.dirs.root).await?;
+                    git.fetch_remote_tree(
+                        &repository,
+                        &start.remote,
+                        &start.remote_identity,
+                        &start.reference,
+                        &start.commit,
+                    )
+                    .await
+                })
+                .map_err(|error| {
+                    CoreError::InvalidInput(format!(
+                        "cannot fetch the selected worktree commit: {error}"
+                    ))
+                })?;
+            return self.provision_source(
+                request,
+                ManagedDirSource::ImmutableTree {
+                    source_directory: self.dirs.root.clone(),
+                    tree_id: tree_id.as_str().to_owned(),
+                    repository_trees: BTreeMap::new(),
+                },
+                ManagedDirTarget::NewBranch {
+                    name: name.clone(),
+                    base_object_id: Some(start.commit.clone()),
+                },
+            );
         }
         let (source, mut target) = self.source_for(request)?;
         if let Some(name) = &request.branch_name {

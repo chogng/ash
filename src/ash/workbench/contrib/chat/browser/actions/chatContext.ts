@@ -31,6 +31,7 @@ import { IChatSessionNavigationService } from '../../../../services/chat/common/
 import { convertBufferToScreenshotVariable } from '../attachments/chatScreenshotContext.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { readLocalRepositories } from '../../../github/common/localRepository.js';
+import { captureChatReference } from '../../common/attachments/chatVariableEntries.js';
 
 /** Registers stateless sources once; each invocation borrows its composer's state. */
 export class ChatContextContributions extends Disposable {
@@ -45,7 +46,6 @@ export class ChatContextContributions extends Disposable {
 			const sources = [
 				instantiation.createInstance(ClipboardImageContextValuePick),
 				instantiation.createInstance(ScreenshotContextValuePick),
-				instantiation.createInstance(SessionReferenceContextPickerPick),
 				instantiation.createInstance(ToolsContextPickerPick),
 			];
 			for (const source of sources) {
@@ -226,34 +226,33 @@ class SessionReferenceContextPickerPick implements IChatContextPickerItem {
 	) { }
 	public asPicker(widget?: IChatWidget): IChatContextPicker {
 		const current = widget ?? this.navigation.getActiveConversation();
-		const conversations = this.navigation.getConversations().filter(item => !current || item.sessionId !== current.sessionId || item.threadId !== current.threadId);
+		const references = this.navigation.getConversationsForReference?.();
+		const destination = current && references?.find(item => item.sessionId === current.sessionId && item.threadId === current.threadId);
+		const conversations = (references ?? this.navigation.getConversations()).filter(item =>
+			(!destination || item.providerId === destination.providerId) &&
+			(!current || item.sessionId !== current.sessionId || item.threadId !== current.threadId));
 		const controller = new AbortController();
 		return {
 			placeholder: localize('chat.context.selectSession', 'Select a session'),
 			picks: picksWithPromiseFn(async query => [...filterQuickPickItems(conversations.map(conversation => ({
 				label: conversation.title,
 				description: conversation.providerLabel,
-				asAttachment: () => this.captureConversation(conversation, controller.signal),
+				asAttachment: () => captureChatReference(this.chat, conversation, controller.signal),
 			})), query)]),
 			dispose: () => controller.abort(),
 		};
 	}
+}
 
-	private async captureConversation(conversation: { readonly sessionId: string; readonly threadId: string; readonly title: string; }, signal: AbortSignal): Promise<ChatContextAttachment[]> {
-		if (signal.aborted) return [];
-		const { sessionId, threadId, title } = conversation;
-		// Chat owns transcript reads. No subscription or second session catalog is created for an attachment.
-		const snapshot = await this.chat.readThread(sessionId, threadId);
-		if (signal.aborted) return [];
-		const messages = snapshot.transcript.entries.flatMap(entry => {
-			if (entry.type !== 'item' || entry.transient) return [];
-			const item = entry.item;
-			if (item.type === 'userMessage') return [`User: ${item.text}`];
-			if (item.type === 'agentMessage') return [`Assistant: ${item.text}`];
-			return [];
-		}).join('\n\n');
-		const content = `Conversation: ${title}\nSession: ${sessionId}\nThread: ${threadId}\n\n${messages.length > 100_000 ? `[Earlier messages omitted]\n${messages.slice(-100_000)}` : messages}`;
-		return [{ id: `session:${sessionId}:${threadId}`, kind: 'sessionReference', name: title, resource: URI.from({ scheme: Schemas.internal, authority: 'chat-session', query: new URLSearchParams({ sessionId, threadId }).toString() }), resolve: async () => ({ name: title, content }) }];
+export class ChatReferenceContextContribution extends Disposable {
+	static readonly ID = 'chat.sessionReferenceContext';
+
+	constructor(
+		@IInstantiationService instantiation: IInstantiationService,
+		@IChatContextPickService contexts: IChatContextPickService,
+	) {
+		super();
+		this._register(contexts.registerChatContextItem(instantiation.createInstance(SessionReferenceContextPickerPick)));
 	}
 }
 

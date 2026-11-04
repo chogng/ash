@@ -6,7 +6,7 @@ import { editorBackground } from '../../platform/theme/common/colors/editorColor
 import { localize } from '../../nls.js';
 
 // Sessions-only colors stay here; Agent colors shared by both windows belong in workbench/common/agentsColors.ts.
-registerColor('sessions.conversation.background', {
+export const sessionsConversationBackground = registerColor('sessions.conversation.background', {
 	dark: editorBackground,
 	light: '#fdfcfb',
 	hcDark: editorBackground,

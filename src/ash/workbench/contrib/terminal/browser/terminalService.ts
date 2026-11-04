@@ -120,6 +120,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 			await this.whenConnected;
 		}
 		const location = options.location ?? this.getDefaultLocation();
+		const deferEditorOpen = options.deferEditorOpen === true && isEditorLocation(location);
 		const preserveFocus = options.preserveFocus ?? (isEditorLocation(location) && typeof location === 'object' && location.preserveFocus);
 		const parent = typeof location === 'object' && 'parentTerminal' in location ? await location.parentTerminal
 			: typeof location === 'object' && 'splitActiveTerminal' in location && location.splitActiveTerminal ? this.activeInstance : undefined;
@@ -231,18 +232,18 @@ export class TerminalService extends Disposable implements ITerminalService {
 			};
 		}
 		assertCurrent();
-		const instance = await this.createTerminalCore(launch, isEditorLocation(location) ? TerminalLocation.Editor : undefined, !preserveFocus);
-		return this.placeCreatedTerminal(instance, location, parent, assertCurrent);
+		const instance = await this.createTerminalCore(launch, isEditorLocation(location) ? TerminalLocation.Editor : undefined, !preserveFocus && !deferEditorOpen);
+		return this.placeCreatedTerminal(instance, location, parent, assertCurrent, deferEditorOpen);
 	}
 
-	private async placeCreatedTerminal(instance: ITerminalInstance, location: ITerminalLocationOptions | undefined, parent: ITerminalInstance | undefined, assertCurrent: () => void, editorAlreadyOpened = false): Promise<ITerminalInstance> {
+	private async placeCreatedTerminal(instance: ITerminalInstance, location: ITerminalLocationOptions | undefined, parent: ITerminalInstance | undefined, assertCurrent: () => void, skipEditorOpen = false): Promise<ITerminalInstance> {
 		try {
 			assertCurrent();
 			if (!this.instances.includes(instance)) throw new CancellationError();
 			if (isEditorLocation(location)) {
 				// Extension providers can finish opening the requested editor during
 				// recursive creation. Keep placement with that completed operation.
-				if (!editorAlreadyOpened) await this.terminalEditors.openEditor(instance, typeof location === 'object' ? location : undefined);
+				if (!skipEditorOpen) await this.terminalEditors.openEditor(instance, typeof location === 'object' ? location : undefined);
 			}
 			else if (parent) this.groups.joinInstances([parent, instance]);
 			return instance;

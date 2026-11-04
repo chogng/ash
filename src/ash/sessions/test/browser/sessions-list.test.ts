@@ -7,7 +7,8 @@ import { StorageScope, StorageTarget } from '../../../platform/storage/common/st
 import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import type { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
-import type { IProjectService } from '../../../platform/projects/common/projectService.js';
+import type { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
+import type { IProjectService, Project } from '../../../platform/projects/common/projectService.js';
 import type { ICommandService } from '../../../platform/commands/common/commands.js';
 import type { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import type { INotificationService } from '../../../platform/notification/common/notification.js';
@@ -24,6 +25,7 @@ import type { IResolvedSessionPullRequest } from '../../contrib/github/common/ty
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { SubmenuAction, type IAction } from '../../../base/common/actions.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { DeferredPromise } from '../../../base/common/async.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
@@ -79,7 +81,14 @@ test('SessionsList keeps session buttons and focus while refreshing', async () =
 	assert.equal(actions.length, 7);
 	assert.ok(actions.every(action => action.enabled), 'Every new chat item exposes all actions before sending');
 	for (const action of actions.slice(0, 5)) await action.run();
-	assert.deepEqual(executed.map(args => args[1]), Array.from({ length: 5 }, () => ({ untitledSessionId: 'first' })));
+	const target = { untitledSessionId: 'first' };
+	assert.deepEqual(executed, [
+		['sessions.list.togglePin', target],
+		['agentSession.rename', target],
+		['agentSession.addToProject', target],
+		['agentSession.moveToGroup', target],
+		['sessions.openInNewWindow', { kind: 'untitled', session: untitledSessions[0] }],
+	]);
 	menu!.onHide?.(false);
 
 	buttons[0].focus();
@@ -210,8 +219,10 @@ test('SessionsList updates passive status without changing row identity or selec
 	using list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), undefined, hoverService);
 	const button = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 	button.focus();
-	const items = list.domNode.querySelector<HTMLDivElement>('.ash-sessions-list-items')!;
-	items.scrollTop = 37;
+	const viewport = list.domNode.querySelector<HTMLDivElement>('.ash-sessions-list-items > .ash-scrollbar-viewport')!;
+	Object.defineProperties(viewport, { clientHeight: { value: 80 }, scrollHeight: { value: 160 } });
+	viewport.scrollTop = 37;
+	viewport.dispatchEvent(new dom.window.Event('scroll'));
 	assert.equal(button.querySelector('.ash-sessions-list-management')?.textContent, 'Working');
 	assert.equal(button.hasAttribute('title'), false);
 	assert.equal((summaries.get(button) as HTMLElement).children[1].textContent, 'Working');
@@ -225,7 +236,7 @@ test('SessionsList updates passive status without changing row identity or selec
 	assert.equal(button.querySelector('[data-ash-icon-id="git-pull-request-error"]')?.getAttribute('aria-hidden'), 'true');
 	assert.equal(button.getAttribute('aria-current'), 'false');
 	assert.equal(dom.window.document.activeElement, button);
-	assert.equal(items.scrollTop, 37);
+	assert.equal(list.getViewState().top, 37);
 	assert.deepEqual(opened, []);
 	const more = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-actions button')!;
 	assert.equal(more.getAttribute('aria-haspopup'), 'menu');
@@ -234,8 +245,8 @@ test('SessionsList updates passive status without changing row identity or selec
 	assert.equal(more.getAttribute('aria-expanded'), 'true');
 	const actions = menu!.getActions().filter(action => action.id !== 'ash.actions.separator');
 	assert.deepEqual(actions.map(action => action.id), [
-		'sessions.list.togglePin', 'agentSession.rename', 'agentSession.archive',
-		'agentSession.addToProject', 'agentSession.moveToGroup', 'agentSession.delete', 'sessions.openInNewWindow',
+		'sessions.list.togglePin', 'agentSession.rename', 'agentSession.addToProject',
+		'agentSession.moveToGroup', 'sessions.openInNewWindow', 'agentSession.archive', 'agentSession.delete',
 	]);
 	actions[1]!.run();
 	assert.deepEqual(executed, [['agentSession.rename', 'background']]);
@@ -244,7 +255,7 @@ test('SessionsList updates passive status without changing row identity or selec
 	button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
 	assert.equal(more.getAttribute('aria-expanded'), 'true');
 	await menu!.getActions()[0]!.run();
-	assert.ok(button.closest('[data-section="pinned"]'));
+	assert.ok(button.closest('[data-parent-section="pinned"]'));
 	assert.equal(dom.window.document.activeElement, button);
 	menu!.onHide?.(false);
 	list.dispose();
@@ -280,7 +291,7 @@ test('The localized keyboard menu targets the saved Session folder and the origi
 	const row = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => button.textContent === 'Move me')!;
 	row.focus();
 	row.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
-	const action = menu?.getActions().find(action => action.id === 'agentSession.moveChatToSession');
+	const action = menu?.getActions().find(action => action.id === 'sessions.list.moveChatToSession');
 	assert.equal(action?.label, '将对话移到会话…');
 	await action?.run();
 	const target = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => button.textContent === 'target')!;
@@ -290,7 +301,7 @@ test('The localized keyboard menu targets the saved Session folder and the origi
 	assert.equal(change?.label, '更改会话文件夹…');
 	await change?.run();
 	assert.deepEqual(invoked, [
-		['agentSession.moveChatToSession', { sessionId: 'source', threadId: 'original' }],
+		['sessions.list.moveChatToSession', { sessionId: 'source', threadId: 'original' }],
 		['agentSession.changeDirectory', 'target'],
 	]);
 });
@@ -308,6 +319,9 @@ test('Session hover localizes workspace and provider without translating their v
 			threadId: 'child', status: 'active', origin: { type: 'root' },
 			workspace: { authorityId: 'remote', root: '/child-workspace' },
 		}), ['工作区：/child-workspace', '提供方：Provider name']);
+		assert.deepEqual(getSessionSummaryHoverData(session, {
+			threadId: 'directoryless', status: 'active', origin: { type: 'root' }, workspace: null,
+		}), ['提供方：Provider name']);
 	} finally {
 		resetNlsResolver();
 	}
@@ -390,7 +404,7 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	const view = { onDidChange: Event.None } as unknown as ISessionsService;
 	using groupsChanged = new Emitter<void>();
 	let groupEntries = [
-		{ sectionId: 'quality', name: 'Quality', sessionIds: ['one', 'two'] },
+		{ sectionId: 'quality', name: 'Quality', sessionIds: ['one', 'two'], icon: 'chat', color: 'charts.blue' },
 		{ sectionId: 'release', name: 'Release', sessionIds: ['three'] },
 	];
 	const groups = {
@@ -407,11 +421,13 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	const github = { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as import('../../contrib/github/browser/githubService.js').IGitHubService;
 	let menu: IContextMenuDelegate | undefined;
 	const context = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
+	const appearanceCommands: unknown[][] = [];
+	const commands = { executeCommand: async (...args: unknown[]) => { appearanceCommands.push(args); } } as ICommandService;
 	const makeList = (mode: 'chat' | 'code') => new SessionsList(dom.window.document.body, 'Sessions', mode, management, view,
-		github, groups, storage, emptyProjects, listCommands, context, listCustomViews, listMenus, listNotifications,
+		github, groups, storage, emptyProjects, commands, context, listCustomViews, listMenus, listNotifications,
 		new SessionsListModelService(storage), new SessionSectionOrderService(storage));
 	const sectionNames = (list: SessionsList) => Array.from(list.domNode.querySelectorAll('[data-section^="group:"] > h3'), heading => heading.textContent);
-	const rows = (list: SessionsList) => Array.from(list.domNode.querySelectorAll('[data-section="group:quality"] [data-row-order-id]'), row => row.getAttribute('data-row-order-id'));
+	const rows = (list: SessionsList) => Array.from(list.domNode.querySelectorAll('[data-parent-section="group:quality"][data-row-order-id]'), row => row.getAttribute('data-row-order-id'));
 	const moveUp = async (button: HTMLButtonElement) => {
 		button.focus();
 		button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
@@ -426,6 +442,14 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	{
 		using list = makeList('code');
 		assert.deepEqual(sectionNames(list), ['Quality', 'Release']);
+		const groupTitle = list.domNode.querySelector<HTMLButtonElement>('[data-section="group:quality"] > h3 button')!;
+		assert.ok(groupTitle.querySelector('[data-ash-icon-id="chat"]'));
+		groupTitle.focus();
+		groupTitle.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
+		const appearance = menu?.getActions().find(action => action.id === 'sessions.list.changeGroupAppearance.color');
+		assert.equal(appearance?.label, '更改分组颜色');
+		await appearance?.run();
+		assert.deepEqual(appearanceCommands, [['sessions.list.changeGroupAppearance', 'quality', 'color']]);
 		await moveUp(list.domNode.querySelector<HTMLButtonElement>('[data-section="group:release"] > h3 button')!);
 		await moveUp(list.domNode.querySelector<HTMLButtonElement>('[data-item="session:two"] button')!);
 		assert.deepEqual(sectionNames(list), ['Release', 'Quality']);
@@ -465,7 +489,7 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	destination.dispatchEvent(new dom.window.Event('drop', { bubbles: true, cancelable: true }));
 	await Promise.resolve();
 	assert.deepEqual(rows(restored), ['one']);
-	assert.equal(restored.domNode.querySelector('[data-section="group:release"] [data-row-order-id="two"]'), source);
+	assert.equal(restored.domNode.querySelector('[data-parent-section="group:release"][data-row-order-id="two"]'), source);
 
 });
 
@@ -485,7 +509,11 @@ test('The sidebar filters durable automation metadata and preserves the active s
 		sessionId, title: sessionId, status: 'active', nextApprovalMode: 'manual',
 		chats: [{ threadId: 'root', status: 'active', origin: { type: 'root' } }],
 	});
-	const manual = makeSession('manual');
+	const manual: ISession = {
+		...makeSession('manual'),
+		workspace: { authorityId: 'local', root: '/workspace/repo/folder' },
+		management: { status: 'working', statusChangedAtUnixMs: 1 },
+	};
 	const automated: ISession = { ...makeSession(remoteId), source: 'automation' };
 	const catalog = [manual, makeSession('run'), automated];
 	const management = { sessions: catalog, untitledSessions: [], state: 'ready', onDidChange: Event.None } as unknown as ISessionsManagementService;
@@ -494,15 +522,49 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	const github = { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as import('../../contrib/github/browser/githubService.js').IGitHubService;
 	let menu: IContextMenuDelegate | undefined;
 	const context = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
+	const project: Project = {
+		id: 'release', name: 'Release', revision: 1, archived: false, sessionCount: 1,
+		description: '', materials: [], sessionIds: ['manual'],
+	};
+	const projects = { onDidChange: Event.None, list: async () => [project], read: async () => project } as unknown as IProjectService;
+	const repositoryReads: unknown[] = [];
+	const scopes = {
+		onDidChangeScopes: Event.None,
+		getScope: () => ({
+			backendIdentity: (id: string) => id,
+			assertCurrent() { },
+			services: {
+				host: {
+					localGit: {
+						readRepositoryContexts: async (directory: unknown) => {
+							repositoryReads.push(directory);
+							return [{
+								label: 'repo', rootPath: '/workspace/repo',
+								remotes: [{ name: 'origin', identity: { host: 'git.example', owner: 'team', repository: 'repo' } }],
+							}];
+						},
+					}
+				}
+			},
+		}),
+	} as unknown as ISessionProviderScopeService;
 	const makeList = (mode: 'chat' | 'code') => new SessionsList(dom.window.document.body, 'Sessions', mode, management, view,
-		github, emptyGroups, storage, emptyProjects, listCommands, context, listCustomViews, listMenus, listNotifications,
-		new SessionsListModelService(storage), new SessionSectionOrderService(storage));
+		github, emptyGroups, storage, projects, listCommands, context, listCustomViews, listMenus, listNotifications,
+		new SessionsListModelService(storage), new SessionSectionOrderService(storage), undefined, undefined, scopes);
 	const rows = (list: SessionsList) => Array.from(list.domNode.querySelectorAll<HTMLElement>('[data-row-order-id]'), row => row.dataset.rowOrderId);
-	const filter = (list: SessionsList) => {
-		list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-more')!.click();
-		const action = menu?.getActions().find(candidate => candidate.id === 'sessions.list.toggleAutomationSessions');
-		assert.equal(action?.label, '显示自动化会话');
-		return action!;
+	const submenuAction = (list: SessionsList, submenu: string, id: string): IAction => {
+		list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-more button')!.click();
+		const show = menu?.getActions().find(candidate => candidate.id === submenu);
+		assert.ok(show instanceof SubmenuAction);
+		menu?.onHide?.(true);
+		const action = show.actions.find(candidate => candidate.id === id);
+		assert.ok(action);
+		return action;
+	};
+	const filter = (list: SessionsList): IAction => {
+		const action = submenuAction(list, 'sessions.list.show', 'sessions.list.toggleAutomationSessions');
+		assert.equal(action.label, '显示自动化会话');
+		return action;
 	};
 
 	using code = makeList('code');
@@ -523,8 +585,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	assert.deepEqual(rows(code), ['manual', 'run']);
 	assert.deepEqual(rows(chat), ['manual', 'run']);
 
-	chat.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-more')!.click();
-	await menu!.getActions().find(action => action.id === 'sessions.list.showAutomationSessionsAfterReply')!.run();
+	await submenuAction(chat, 'sessions.list.show', 'sessions.list.showAutomationSessionsAfterReply').run();
 	assert.deepEqual(rows(chat), ['manual', 'run']);
 	const listModel = new SessionsListModelService(storage);
 	listModel.recordAutomationSessionReply(automated);
@@ -540,4 +601,25 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	assert.deepEqual(rows(chat), ['manual', 'run']);
 	listModel.setAutomationSessionOverride(automated, undefined);
 	assert.deepEqual(rows(chat), ['manual', 'run', remoteId]);
+
+	await submenuAction(code, 'sessions.list.sortBy', 'sessions.list.sortBy.name').run();
+	await submenuAction(code, 'sessions.list.sortBy', 'sessions.list.sortDirection.descending').run();
+	assert.deepEqual(rows(chat), [...catalog].sort((left, right) => right.title.localeCompare(left.title)).map(session => session.sessionId));
+
+	await submenuAction(code, 'sessions.list.groupBy', 'sessions.list.groupBy.status').run();
+	const working = chat.domNode.querySelector('[data-section="grouping:status:working"]')!;
+	assert.equal(working.querySelector('h3 button')?.textContent, '进行中');
+	assert.equal(chat.domNode.querySelector('[data-parent-section="grouping:status:working"][data-row-order-id]')?.getAttribute('data-row-order-id'), 'manual');
+	assert.equal(submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.status').checked, true);
+	assert.deepEqual(repositoryReads, []);
+	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.projects').run();
+	assert.equal(chat.domNode.querySelector('[data-parent-section="grouping:projects:release"][data-row-order-id]')?.getAttribute('data-row-order-id'), 'manual');
+	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.environment').run();
+	assert.equal(chat.domNode.querySelector('[data-section="grouping:environment:local"] h3 button')?.textContent, '本地');
+	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.repository').run();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(repositoryReads, Array.from({ length: 2 }, () => ({ sessionId: 'manual', path: '/workspace/repo/folder' })));
+	assert.ok([...chat.domNode.querySelectorAll('[data-section^="grouping:repository:"] > h3 button')].some(button => button.textContent === 'team/repo'));
+	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.none').run();
+	assert.equal(chat.domNode.querySelector('[data-section^="grouping:"]'), null);
 });

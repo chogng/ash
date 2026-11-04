@@ -790,6 +790,7 @@ impl ThreadController {
             thread_id: thread_id.clone(),
             origin: ThreadOrigin::Root,
             branch_name: request.branch_name,
+            worktree_start: request.worktree_start,
         })?;
         self.create_thread(CreateThreadRequest {
             agent_id,
@@ -823,6 +824,7 @@ impl ThreadController {
             thread_id: thread_id.clone(),
             origin: ThreadOrigin::Root,
             branch_name: None,
+            worktree_start: None,
         })?;
         let execution_target = self
             .read_session_catalog(&request.session_id)?
@@ -916,6 +918,7 @@ impl ThreadController {
             session_id: source.session_id.clone(),
             thread_id: thread_id.clone(),
             branch_name: None,
+            worktree_start: None,
             origin: origin.clone(),
         })?;
         self.create_thread_with_history(
@@ -1008,6 +1011,7 @@ impl ThreadController {
                             thread_id,
                             origin: binding.origin,
                             branch_name: Some(options.branch_name.clone()),
+                            worktree_start: None,
                         })?;
                     }
                     return Ok(snapshot);
@@ -1032,6 +1036,7 @@ impl ThreadController {
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
             branch_name: comparison.map(|options| options.branch_name.clone()),
+            worktree_start: None,
             origin: fork_origin(&source.thread_id, source.sequence, comparison.is_some()),
         })?;
         self.create_forked_thread_with_agent(
@@ -1066,6 +1071,7 @@ impl ThreadController {
             session_id: source.session_id.clone(),
             thread_id: thread_id.clone(),
             branch_name: None,
+            worktree_start: None,
             origin: ThreadOrigin::Rewind {
                 parent_thread_id: source.thread_id.clone(),
                 before_turn_id: request.before_turn_id.clone(),

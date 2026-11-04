@@ -1,0 +1,6 @@
+.ash-menu .ash-button.ash-session-delete-action,
+.ash-menu
+	.ash-action-view-item.focused
+	> .ash-button.ash-session-delete-action {
+	color: var(--ash-error-foreground);
+}

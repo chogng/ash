@@ -1,0 +1,69 @@
+.ash-sessions-keyboard-shortcuts {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+}
+
+.ash-sessions-shortcut-search {
+	flex: 0 0 auto;
+	margin: var(--ash-spacing-size240) var(--ash-spacing-size280)
+		var(--ash-spacing-size80);
+}
+
+.ash-sessions-shortcut-results {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+	align-content: start;
+	gap: var(--ash-spacing-size240) var(--ash-spacing-size320);
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	padding: var(--ash-spacing-size160) var(--ash-spacing-size280)
+		var(--ash-spacing-size240);
+}
+
+.ash-sessions-shortcut-results:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+.ash-sessions-shortcut-group:only-child,
+.ash-sessions-shortcut-empty {
+	grid-column: 1 / -1;
+}
+
+.ash-sessions-shortcut-empty {
+	color: var(--ash-editor-descriptionForeground);
+}
+
+.ash-sessions-shortcut-heading {
+	margin: 0 0 var(--ash-spacing-size80);
+	font-size: var(--ash-fontSize-label1);
+	font-weight: var(--ash-fontWeight-regular);
+}
+
+.ash-sessions-shortcut-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.ash-sessions-shortcut-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size80) var(--ash-spacing-size160);
+	padding-block: var(--ash-spacing-size80);
+	border-block-start: var(--ash-strokeThickness) solid
+		var(--ash-widget-border);
+	overflow-wrap: anywhere;
+}
+
+.ash-sessions-shortcut-keys {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size120);
+}

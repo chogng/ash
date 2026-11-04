@@ -216,6 +216,7 @@ fn marks_attached_context_as_untrusted_and_escapes_markup_boundaries() {
         turn_id.clone(),
         vec![
             ThreadItem::UserContext {
+                source_url: None,
                 client_id: None,
                 item_id: id("context"),
                 turn_id: turn_id.clone(),

@@ -21,7 +21,7 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 	) {
 		super(editor);
 		this.host = this._register(instantiation.createInstance(WebContentsViewHost, editor.browserContainer.ownerDocument.defaultView!));
-		this.welcome = this._register(new BrowserWelcomeFeature(editor.browserContainer));
+		this.welcome = this._register(new BrowserWelcomeFeature(editor.browserContainer, () => editor.focus()));
 	}
 	override onContainerCreated(container: HTMLElement): void { this.host.onContainerCreated(container); }
 	protected override onModelAttached(model: IBrowserViewModel, store: DisposableStore): void {

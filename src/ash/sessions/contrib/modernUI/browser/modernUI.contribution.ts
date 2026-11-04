@@ -2,13 +2,11 @@ import './media/modernUI.css';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { SessionsConfiguration, type SessionsLayoutStyle } from '../../../common/configuration.js';
-import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 
-/** Applies the Sessions appearance preference to this window and its layout. */
+/** Applies the Sessions appearance preference to this window. */
 export class SessionsModernUIContribution extends Disposable {
 	constructor(
 		private readonly container: HTMLElement,
-		private readonly layout: IAgentWorkbenchLayoutService,
 		private readonly configurationService: IConfigurationService,
 	) {
 		super();
@@ -24,7 +22,6 @@ export class SessionsModernUIContribution extends Disposable {
 
 	private update(): void {
 		const style = this.configurationService.getValue<SessionsLayoutStyle>(SessionsConfiguration.layoutStyle);
-		this.layout.setLayoutStyle(style);
 		this.container.dataset.layoutStyle = style;
 		this.container.classList.toggle('modern-ui', style === 'modern');
 	}

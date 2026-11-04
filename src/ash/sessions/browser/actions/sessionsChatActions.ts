@@ -46,7 +46,7 @@ for (const definition of approvalModeDefinitions) {
 			// The menu carries its own composer model, including when another pane is active.
 			await applyAgentHostCompletionAction(mode, confirmation => accessor.get(IDialogService).confirm(confirmation),
 				() => generation === model.composerGeneration && !model.inputState.aiDisabled,
-				selected => model.selectApprovalMode(selected));
+				selected => model.selectApprovalMode?.(selected));
 		}
 	});
 }

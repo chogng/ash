@@ -2,6 +2,7 @@
 	flex: 1 1 auto;
 	height: 0;
 	border: 0;
+	--ash-chat-transcript-overlap: var(--ash-spacing-size80);
 }
 
 .ash-chat-auxiliary-titlebar {

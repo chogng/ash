@@ -25,6 +25,10 @@ pub enum InputItem {
     Context {
         name: String,
         content: String,
+        /// Optional HTTPS link shown with the saved attachment.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        source_url: Option<String>,
     },
     /// Materialized from the initiating renderer before domain input is admitted or persisted.
     HostResource {

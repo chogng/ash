@@ -5,12 +5,13 @@ import { isRecord } from '../../../base/common/types.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { Part } from '../../../workbench/browser/part.js';
-import { WorkbenchPartView } from '../../../workbench/browser/workbenchPartView.js';
+import { NoWorkbenchPartFrameInsets, WorkbenchPartView, type WorkbenchPartFrameInsets } from '../../../workbench/browser/workbenchPartView.js';
 import type { EditorPart } from '../../../workbench/browser/parts/editor/editorPart.js';
 import { EDITOR_PART_MINIMUM_WIDTH } from './editorPartSizing.js';
 import './media/desktopEditorArea.css';
 
 const toolFrameInset = 6;
+const toolFrameInsets = { top: toolFrameInset, right: toolFrameInset, bottom: toolFrameInset, left: toolFrameInset };
 
 export type DesktopEditorTool = 'files' | 'changes' | 'browser' | 'terminal' | 'chat';
 export const desktopEditorTools: readonly DesktopEditorTool[] = ['files', 'changes', 'browser', 'terminal', 'chat'];
@@ -27,10 +28,15 @@ class ToolPartView extends WorkbenchPartView<DesktopEditorTool> implements ISeri
 	constructor(tool: DesktopEditorTool, private readonly editor: EditorPart, private readonly container: HTMLElement) {
 		super(tool, editor);
 		container.append(this.frame);
-		this.setFrameInsets({ top: toolFrameInset, right: toolFrameInset, bottom: toolFrameInset, left: toolFrameInset });
+		this.setFrameInsets(toolFrameInsets);
 	}
 	public override get element(): HTMLElement { return this.container; }
 	public focus(): void { this.editor.focus(); }
+	public override setFrameInsets(insets: WorkbenchPartFrameInsets): void {
+		super.setFrameInsets(insets);
+		// The chat composer offsets its padding by the actual symmetric frame inset.
+		this.container.style.setProperty('--ash-sessions-editor-tool-inset', `${insets.left}px`);
+	}
 	public override get minimumWidth(): number {
 		// The session composer needs its usable width inside the tool frame.
 		return this.partId === 'chat' ? Math.max(super.minimumWidth, EDITOR_PART_MINIMUM_WIDTH + 2 * toolFrameInset) : super.minimumWidth;
@@ -224,12 +230,17 @@ export class DesktopEditorArea extends Part {
 		this.applyVisibility();
 	}
 
-	public syncVisible(tools: readonly DesktopEditorTool[], active = this.active, place = true): void {
+	public syncVisible(tools: readonly DesktopEditorTool[], active: DesktopEditorTool | undefined, productPage: boolean): void {
+		const files = this.views.get('files')!;
+		const frameChanged = files.element.classList.contains('ash-product-page-host') !== productPage;
+		files.element.classList.toggle('ash-product-page-host', productPage);
+		files.setFrameInsets(productPage ? NoWorkbenchPartFrameInsets : toolFrameInsets);
+		const place = !productPage;
 		if (active && !tools.includes(active)) active = undefined;
 		const previous = this.desired;
 		const restoring = this.restoringPlacement;
 		this.restoringPlacement = undefined;
-		const changed = active !== this.active || tools.length !== previous.size || tools.some(tool => !previous.has(tool));
+		const changed = frameChanged || active !== this.active || tools.length !== previous.size || tools.some(tool => !previous.has(tool));
 		if (!restoring && place) {
 			const layout = this.withDesiredVisibility(this.saveLayout());
 			for (const tool of previous) {
@@ -458,39 +469,6 @@ export class DesktopEditorArea extends Part {
 		if (this.maximized) this.maximized = { tool: this.maximized.tool, layout: next };
 		else if (this.compact) this.compactLayout = next;
 		else this.replaceGrid(next);
-	}
-
-	public moveToolToEdge(tool: DesktopEditorTool, direction: Direction): void {
-		if (this.compact === 'single' || this.maximized || !this.desired.has(tool) || this.desired.size < 2) return;
-		const horizontal = direction === Direction.Left || direction === Direction.Right;
-		const orientation = horizontal ? Orientation.HORIZONTAL : Orientation.VERTICAL;
-		const after = direction === Direction.Right || direction === Direction.Down;
-		const layout = this.saveLayout();
-		const path: { branch: ToolBranch; atEdge: boolean; }[] = [];
-		let node = layout;
-		while (node.type === 'branch') {
-			const children = node.children.filter(child => toolLeaves(child).some(leaf => leaf.visible));
-			const index = children.findIndex(child => toolLeaves(child).some(leaf => leaf.data === tool));
-			if (index < 0) return;
-			// A branch with only one visible child has no edge of its own.
-			if (children.length > 1) path.push({ branch: node, atEdge: index === (after ? children.length - 1 : 0) });
-			node = children[index]!;
-		}
-		const parent = path.at(-1);
-		if (!parent) return;
-		let target: ToolBranch | undefined;
-		if (parent.branch.orientation === orientation) {
-			target = path.find(entry => entry.branch.orientation === orientation && !entry.atEdge)?.branch;
-		} else {
-			target = path.find(entry => entry.branch.orientation === orientation && !entry.atEdge)?.branch
-				?? path.filter(entry => entry.branch.orientation === orientation).at(-1)?.branch ?? parent.branch;
-		}
-		if (!target) return;
-		this.manuallyArranged = true;
-		this.reposition(layout, tool, target, orientation, after);
-		this.applyVisibility();
-		this.layout(this.dimension);
-		this.notifyConstraintsChanged();
 	}
 
 	public moveTool(tool: DesktopEditorTool, target: DesktopEditorTool, direction: Direction): void {

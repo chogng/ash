@@ -1,5 +1,6 @@
 import { Event } from '../../../../../base/common/event.js';
 import type { IAgentHostInputCompletionService } from '../../../../../platform/agentHost/common/agentService.js';
+import type { AgentHostInputCompletionRequest, AgentHostInputCompletionItem } from '../../../../../platform/agentHost/common/agent.js';
 import { raceCancellationError } from '../../../../../base/common/async.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { canceled } from '../../../../../base/common/errors.js';
@@ -43,14 +44,32 @@ export class SessionsSearchService implements IFileSearchService, IContentSearch
 	getTriggerCharacters(sessionId?: string): readonly string[] {
 		try { return this.scopes.getScope(sessionId).services.host.completions.getTriggerCharacters(); } catch { return []; }
 	}
+	forScope(scope: ISessionProviderScope): IAgentHostInputCompletionService {
+		const completions = scope.services.host.completions;
+		return {
+			onDidChangeConnection: Event.any(completions.onDidChangeConnection, this.scopes.onDidChangeScopes),
+			getTriggerCharacters: sessionId => {
+				try {
+					scope.assertCurrent();
+					return completions.getTriggerCharacters(sessionId === undefined ? undefined : scope.backendIdentity(sessionId));
+				} catch { return []; }
+			},
+			complete: (request, signal) => this.completeForScope(scope, request, signal),
+		};
+	}
 	complete(...[request, signal]: Parameters<IAgentHostInputCompletionService['complete']>): ReturnType<IAgentHostInputCompletionService['complete']> {
-		const scope = this.scopes.getScope(request.sessionId);
+		return this.completeForScope(this.scopes.getScope(request.sessionId), request, signal);
+	}
+	private completeForScope(scope: ISessionProviderScope, request: AgentHostInputCompletionRequest, signal: AbortSignal): Promise<readonly AgentHostInputCompletionItem[]> {
 		return this.run(scope, signal, async signal => {
-			const directories = await Promise.all(request.directories.map(async directory => {
+			const routedDirectories = request.directories.flatMap(directory => {
 				const routed = this.route(directory);
-				if (routed.scope !== scope) throw canceled();
-				return this.resolveDirectory(routed, signal);
-			}));
+				if (routed.scope === scope) return [routed];
+				// Drafts can use a different host than the window's workspace folders.
+				if (request.sessionId === undefined) return [];
+				throw canceled();
+			});
+			const directories = await Promise.all(routedDirectories.map(directory => this.resolveDirectory(directory, signal)));
 			return scope.services.host.completions.complete({
 				...request, directories,
 				...(request.sessionId === undefined ? {} : { sessionId: scope.backendIdentity(request.sessionId) }),

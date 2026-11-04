@@ -1,7 +1,11 @@
+import { isEditorPaneWithSelection } from '../../../workbench/common/editor.js';
+import { isEditorPaneWithViewState } from '../../../workbench/browser/parts/editor/editorWithViewState.js';
+import { TextEditorSelectionSource } from '../../../platform/editor/common/editor.js';
 import { SessionSideChatEditorInput } from '../../contrib/chat/browser/sessionSideChatEditorInput.js';
 import { Emitter } from '../../../base/common/event.js';
+import { isCancellationError } from '../../../base/common/errors.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
-import type { Direction, SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
+import type { SerializedGridDescriptor } from '../../../base/browser/ui/grid/grid.js';
 import type { IDimension } from '../../../base/browser/dom.js';
 import { isRecord } from '../../../base/common/types.js';
 import { EditorParts } from '../../../workbench/browser/parts/editor/editorParts.js';
@@ -183,7 +187,7 @@ export class DesktopEditorParts extends EditorParts {
 		const productPage = this.filesPart.isGroupVisible(this.pageGroupId);
 		this.area.syncVisible([...this.hosts]
 			.filter(([tool, part]) => (!productPage || tool === 'files') && part.groups.some(group => part.isGroupVisible(group.id)))
-			.map(([tool]) => tool), this.toolForGroup(this.activeGroup.id), !productPage);
+			.map(([tool]) => tool), this.toolForGroup(this.activeGroup.id), productPage);
 	}
 
 	private toolForGroup(groupId: number): DesktopEditorTool {
@@ -211,6 +215,40 @@ export class DesktopEditorParts extends EditorParts {
 		this.syncArea();
 		if (!options.inactive && !options.preserveFocus) { this.revealed.fire(); }
 		return pane;
+	}
+
+	public async moveModalEditorToMain(): Promise<void> {
+		const source = this.activePart;
+		const input = source.activeInput;
+		if (!source.isModalEditorVisible || !input
+			|| !(source instanceof DesktopMainEditorPart || source instanceof DesktopToolEditorPart)) return;
+		const host = this.hosts.get(editorTool(input));
+		if (!(host instanceof DesktopMainEditorPart || host instanceof DesktopToolEditorPart)) return;
+		const target = host.resolveDefaultGroup(input);
+		const moved = await source.moveModalEditorTo(target, () => {
+			this.setGroupVisible(target.id, true);
+			this.activateGroup(target.id);
+			this.revealed.fire();
+		});
+		if (!moved) return;
+		target.focus();
+	}
+
+	public async openActiveEditorInModal(): Promise<void> {
+		const source = this.activePart;
+		const input = source.activeInput;
+		const pane = source.activePane;
+		if (source.isModalEditorVisible || !input || !pane) return;
+		if (!isEditorPaneWithSelection(pane) && input.resource.scheme !== 'ash-session-changes') return;
+		const viewState = isEditorPaneWithViewState(pane) ? pane.saveViewState() : undefined;
+		const selection = isEditorPaneWithSelection(pane) ? pane.getSelection() : undefined;
+		const modal = await source.openEditor(input, { preferredEditorId: pane.id, ignoreError: true }, 'modalGroup');
+		if (viewState !== undefined && isEditorPaneWithViewState(pane) && isEditorPaneWithViewState(modal)
+			&& pane.viewStateTypeId === modal.viewStateTypeId) {
+			modal.restoreViewState(viewState);
+		} else if (selection && isEditorPaneWithSelection(modal)) {
+			modal.restoreSelection(selection, TextEditorSelectionSource.PROGRAMMATIC);
+		}
 	}
 
 	public async openFiles(): Promise<void> {
@@ -254,10 +292,6 @@ export class DesktopEditorParts extends EditorParts {
 			this.activateGroup(next.id);
 			this.focus();
 		}
-	}
-
-	public moveToolToEdge(direction: Direction, groupId = this.activeGroup.id): void {
-		if (groupId !== this.pageGroupId) this.area.moveToolToEdge(this.toolForGroup(groupId), direction);
 	}
 
 	public toggleMaximizeTool(groupId: number = this.activeGroup.id): void {
@@ -307,11 +341,17 @@ export class DesktopEditorParts extends EditorParts {
 		const unassigned = new Set(saved.groups.map(group => group.id));
 		for (const tool of desktopEditorTools) {
 			const state = tool === 'chat' && legacyWithoutChat ? { groups: [] } : metadata.parts[tool];
-			if (!isRecord(state) || !Array.isArray(state.groups)) { throw new TypeError('Invalid tool editor membership'); }
+			if (!isRecord(state) || !Array.isArray(state.groups)) { throw new TypeError(`Invalid tool editor membership for '${tool}'`); }
 			for (const id of state.groups) {
-				if (!Number.isSafeInteger(id) || !unassigned.delete(id)) { throw new TypeError('Invalid tool editor group identity'); }
+				if (!Number.isSafeInteger(id) || !unassigned.delete(id)) { throw new TypeError(`Invalid tool editor group identity for '${tool}'`); }
 			}
-			if (state.layout) { parseEditorWorkingSetLayout(state.layout, new Set(state.groups)); }
+			if (state.layout !== undefined) {
+				try {
+					parseEditorWorkingSetLayout(state.layout, new Set(state.groups));
+				} catch (error) {
+					throw new TypeError(`Invalid editor grid for tool '${tool}': ${String(error)}`, { cause: error });
+				}
+			}
 		}
 		if (unassigned.size) { throw new TypeError('Unassigned tool editor group'); }
 		return legacyWithoutChat ? { ...metadata, layout, parts: { ...metadata.parts, chat: { groups: [] } } } : metadata;
@@ -324,9 +364,11 @@ export class DesktopEditorParts extends EditorParts {
 		const activeGroup = saved === 'empty' ? undefined : saved.groups[saved.activeGroupIndex];
 		const activeEntry = activeGroup?.editors[activeGroup.activeEditorIndex];
 		const activeTool = activeEntry ? serializedTool(activeEntry) : 'files';
+		let restoringTool: DesktopEditorTool | undefined;
 		this.applying = true;
 		try {
 			for (const [tool, part] of this.hosts) {
+				restoringTool = tool;
 				let groups: readonly EditorGroupWorkingSet[] = [];
 				let layout: EditorWorkingSetLayout | undefined;
 				if (saved !== 'empty') {
@@ -360,12 +402,16 @@ export class DesktopEditorParts extends EditorParts {
 					for (const group of created) { if (!group.inputs.length) { part.setGroupVisible(group.id, false); } }
 				}
 			}
+			restoringTool = undefined;
 			const layout = metadata?.layout ?? (saved === 'empty' ? undefined : legacyToolLayout(saved));
 			if (layout) { this.area.restoreLayout(layout, metadata ? metadata.positioned : desktopEditorTools, metadata ? metadata.manuallyArranged : true, metadata?.closedSlots); }
 			if (saved !== 'empty') {
 				const activeId = restored.get(saved.groups[saved.activeGroupIndex]?.id ?? -1);
 				if (activeId !== undefined) { this.activateGroup(activeId); }
 			}
+		} catch (error) {
+			if (!restoringTool || isCancellationError(error)) { throw error; }
+			throw new Error(`Could not restore editor groups for tool '${restoringTool}': ${String(error)}`, { cause: error });
 		} finally {
 			this.applying = false;
 			this.syncArea();

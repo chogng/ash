@@ -7,7 +7,7 @@ import { prepareElectronAddons } from './addons.ts';
 import { spawn } from 'node:child_process';
 import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
-import { AshApplicationId } from '../../src/ash/code/common/application.ts';
+import { AshApplicationId, AshWindowsToastActivatorClsid } from '../../src/ash/code/common/application.ts';
 import { writeInstallationManifest } from './installationManifest.ts';
 import { APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH } from '../../.build/protocol/typescript/protocol.ts';
 
@@ -204,6 +204,7 @@ async function installer(options: Map<string, string>): Promise<void> {
 		`/DBundleDir=${bundle}`,
 		`/DAppVersion=${metadata.version}`,
 		`/DAppUserId=${AshApplicationId}`,
+		`/DToastActivatorClsid=${AshWindowsToastActivatorClsid.slice(1, -1)}`,
 		`/DIconPath=${icon}`,
 		`/O${output}`,
 		join(import.meta.dirname, 'win32', 'ash.iss'),

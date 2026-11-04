@@ -2,21 +2,17 @@ import { addDisposableListener } from '../../../../base/browser/dom.js';
 import './media/appToolsHost.css';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { CancellationTokenSource, throwIfCancelled } from '../../../../base/common/cancellation.js';
-import { ITaskService } from '../../../../workbench/contrib/tasks/common/taskService.js';
-import { type ITaskRun, type IWorkspaceTask, type ITaskDescription, type ITaskOutput } from '../../../../workbench/contrib/tasks/common/tasks.js';
-import { raceCancellationError } from '../../../../base/common/async.js';
-import { URI } from '../../../../base/common/uri.js';
-import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
+import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import type { IAppToolsHost, TaskRunSummary, TaskCatalog } from '../../../services/appTools/browser/appTools.js';
+import type { IAppToolsHost } from '../../../services/appTools/browser/appTools.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { ITerminalService } from '../../../../workbench/contrib/terminal/browser/terminal.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import { TERMINAL_VIEW_ID } from '../../../../workbench/contrib/terminal/common/terminal.js';
 import { ITerminalProfileResolverService } from '../../../../workbench/contrib/terminal/common/terminal.js';
-import { ITerminalProcessService, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, TerminalLocation, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import type { IUpdateService, UpdateCheckResult } from '../../../../platform/update/common/updateService.js';
@@ -27,6 +23,7 @@ import { SessionsListTools } from '../../sessions/browser/sessionsListTools.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { PICK_WORKSPACE_FOLDER_COMMAND_ID } from '../../../../workbench/browser/actions/workspaceCommands.js';
+import { AgentHostSessionTaskRunner } from '../../terminal/browser/agentHostSessionTaskRunner.js';
 import { getRemoteAuthority } from '../../../../platform/remote/common/remoteHosts.js';
 
 /** Window-owned execution; tool definitions and durable business operations belong to Rust. */
@@ -34,11 +31,10 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 	readonly sessionsList: IAppToolsHost['sessionsList'];
 	private readonly celebration = this._register(new MutableDisposable());
 	private terminalGeneration = 0;
-	private readonly agentTaskRuns = new Set<ITaskRun>();
+	readonly taskRunner: AgentHostSessionTaskRunner;
 	constructor(private readonly ownerDocument: Document, private readonly updates: Pick<IUpdateService, 'checkForUpdates'> | undefined,
 		@IEditorService private readonly editors: IEditorService,
 		@IOpenerService private readonly opener: IOpenerService,
-		@ITaskService private readonly tasks: ITaskService,
 		@ITerminalService private readonly terminals: ITerminalService,
 		@ITerminalProfileResolverService private readonly profiles: ITerminalProfileResolverService,
 		@ITerminalProcessService private readonly terminalProcesses: ITerminalProcessService,
@@ -51,65 +47,11 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 	) {
 		super();
 		this.sessionsList = instantiation.createInstance(SessionsListTools);
+		this.taskRunner = this._register(instantiation.createInstance(AgentHostSessionTaskRunner));
 		this._register(workspace.onDidChangeWorkspace(() => this.terminalGeneration++));
 		this._register(toDisposable(() => this.clearTransientState()));
 		this._register(terminalProcesses.onConnectionState(() => this.terminalGeneration++));
 		this._register(accessibility.onDidChangeReducedMotion(() => { if (accessibility.isMotionReduced()) this.celebration.clear(); }));
-	}
-	private taskFolder(directory: string): string {
-		const folder = this.workspace.getWorkspace().folders.find(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, URI.file(directory)));
-		if (!folder) throw new Error(localize('tasks.agentDirectoryUnavailable', 'The task directory is not a folder in this window.'));
-		return folder.id;
-	}
-	private findTask(directory: string, taskId: string): IWorkspaceTask {
-		const dirId = this.taskFolder(directory);
-		const task = this.tasks.tasks.find(task => task.id === taskId && task.dirId === dirId);
-		if (!task) throw new Error(localize('tasks.agentTaskNotFound', 'The selected task is no longer available. Discover workspace tasks again.'));
-		return task;
-	}
-	private findRun(directory: string, runId: string): ITaskRun {
-		const dirId = this.taskFolder(directory);
-		const run = this.tasks.getRun(runId);
-		if (!run || run.task.dirId !== dirId) throw new Error(localize('tasks.agentRunNotFound', 'The task run was not found in this folder. It may have expired or belonged to a previous workspace.'));
-		return run;
-	}
-	public async listTasks(directory: string, signal: AbortSignal): Promise<TaskCatalog> {
-		const dirId = this.taskFolder(directory);
-		await raceCancellationError(this.tasks.getWorkspaceTasks(), signal);
-		throwIfCancelled(signal);
-		this.taskFolder(directory);
-		const tasks = await Promise.all(this.tasks.tasks.filter(task => task.dirId === dirId).map(async task => {
-			let revision: string | null = null;
-			let unavailableReason: string | null = null;
-			try { revision = (await this.tasks.describe(task)).revision; }
-			catch (error) { unavailableReason = error instanceof Error ? error.message : String(error); }
-			return { taskId: task.id, label: task.label, source: task.source, group: task.group, revision, unavailableReason };
-		}));
-		throwIfCancelled(signal);
-		return { tasks, runs: this.tasks.runs.filter(run => run.task.dirId === dirId).map(taskSummary) };
-	}
-	public async describeTask(directory: string, taskId: string, revision: string, signal: AbortSignal): Promise<ITaskDescription> {
-		this.taskFolder(directory);
-		await raceCancellationError(this.tasks.refresh(), signal);
-		const description = await raceCancellationError(this.tasks.describe(this.findTask(directory, taskId)), signal);
-		if (description.revision !== revision) throw new Error(localize('tasks.agentRevisionChanged', 'The task configuration changed after review. Discover the task again before running it.'));
-		return description;
-	}
-	public async runTask(directory: string, taskId: string, revision: string, signal: AbortSignal): Promise<TaskRunSummary> {
-		await this.describeTask(directory, taskId, revision, signal);
-		throwIfCancelled(signal);
-		const priorRuns = new Set(this.tasks.runs.map(run => run.runId));
-		const run = this.tasks.start(this.findTask(directory, taskId), signal, revision);
-		if (!priorRuns.has(run.runId)) this.agentTaskRuns.add(run);
-		void run.completion?.finally(() => this.agentTaskRuns.delete(run)).catch(() => undefined);
-		return taskSummary(run);
-	}
-	public taskStatus(directory: string, runId: string): TaskRunSummary { return taskSummary(this.findRun(directory, runId)); }
-	public taskOutput(directory: string, runId: string, cursor: number, maxCharacters: number): ITaskOutput { return this.findRun(directory, runId).readOutput(cursor, maxCharacters); }
-	public async cancelTask(directory: string, runId: string): Promise<TaskRunSummary> {
-		const run = this.findRun(directory, runId);
-		await this.tasks.terminate(run);
-		return taskSummary(run);
 	}
 	public async openFile(resource: URI, line?: number): Promise<void> {
 		await this.editors.openEditor({ resource }, { pinned: true, ignoreError: true, ...(line ? { selection: new Range(line, 1, line, 1) } : {}) });
@@ -150,7 +92,7 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 		try {
 			assertCurrent();
 			this.terminals.setActiveInstance(terminal);
-			await this.views.openView(TERMINAL_VIEW_ID, true);
+			if (terminal.target !== TerminalLocation.Editor) await this.views.openView(TERMINAL_VIEW_ID, true);
 			assertCurrent();
 		} catch (error) {
 			// The request owns a late PTY even after cancellation or view failure.
@@ -167,8 +109,7 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 		return this.updates.checkForUpdates();
 	}
 	public clearTransientState(): void {
-		for (const run of this.agentTaskRuns) void this.tasks.terminate(run).catch(() => undefined);
-		this.agentTaskRuns.clear();
+		this.taskRunner.cancelOwnedRuns();
 		this.celebration.clear();
 	}
 	public fireConfetti(): boolean {
@@ -191,8 +132,4 @@ export class AppToolsHost extends Disposable implements IAppToolsHost {
 		this.celebration.value = toDisposable(() => { clearTimeout(timer); animations.forEach(animation => animation.cancel()); overlay.remove(); });
 		return true;
 	}
-}
-
-function taskSummary(run: ITaskRun): TaskRunSummary {
-	return { runId: run.runId, taskId: run.task.id, label: run.task.label, terminalId: run.terminalId, status: run.status, exitCode: run.exitCode ?? null, ready: run.isReady === true, hasErrors: run.hasErrors === true };
 }

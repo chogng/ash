@@ -159,7 +159,7 @@ block = true # 阻止这个默认规则
 - User 高于 Workbench/Builtin；同来源比较显式 priority，最后由后声明规则获胜。
 - Rust App/TUI 当前不支持命令 `args`；Ash Renderer 的 `keybindings.json` 保留自己的 JSON 契约和 `args` 扩展。
 
-Ash Code 桌面版可以在 profile 的 `keybindings.json` 中为打开 Agents 窗口的命令启用系统级快捷键：
+在 Ash 桌面版的「键盘快捷方式」中，搜索 `@command:workbench.action.openAgentsWindow`，编辑该命令并勾选「系统级」。也可以在 profile 的 `keybindings.json` 中设置：
 
 ```json
 [

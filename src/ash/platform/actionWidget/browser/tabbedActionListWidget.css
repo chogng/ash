@@ -50,3 +50,10 @@
 .ash-tabbed-action-list-back.ash-button {
 	margin: var(--ash-spacing-size80);
 }
+
+.ash-action-widget-side-preview {
+	box-sizing: border-box;
+	width: 180px;
+	max-width: calc(100vw - var(--ash-spacing-size160));
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+}

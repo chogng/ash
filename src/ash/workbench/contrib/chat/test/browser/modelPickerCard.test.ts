@@ -3,7 +3,6 @@ import { suiteTeardown, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
 import { ModelCard, type IModelCardOptions } from '../../browser/widget/input/modelPicker/modelPickerCard.js';
-import { ModelPickerDetailsMenu } from '../../browser/widget/input/modelPicker/modelPickerHover.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
@@ -45,30 +44,6 @@ test('Model card updates retained description text safely without losing keyboar
 	assert.equal(card.domNode.querySelector('img'), null);
 	assert.equal(environment.window.document.activeElement, card.domNode);
 });
-
-test('Model details hides missing descriptions and shows the next model without stale text', () => {
-	const document = environment.window.document;
-	const picker = document.createElement('div');
-	const row = document.createElement('div');
-	picker.append(row);
-	document.body.append(picker);
-	try {
-		using details = services.createInstance(ModelPickerDetailsMenu, picker);
-		details.show(entry, row);
-		assert.equal(details.domNode.hidden, false);
-		assert.equal(details.domNode.textContent?.trim(), entry.description);
-		for (const description of [undefined, null, '', '   ']) {
-			details.show({ ...entry, description }, row);
-			assert.equal(details.domNode.hidden, true);
-			assert.equal(details.domNode.textContent, '');
-		}
-		details.show({ ...entry, model: { provider: 'custom', model: 'other' }, displayName: 'Other model', description: 'Other description' }, row);
-		details.focus();
-		assert.equal(details.domNode.textContent?.trim(), 'Other description');
-		assert.equal(document.activeElement?.getAttribute('aria-label'), 'Other model');
-	} finally { picker.remove(); }
-});
-
 
 test('Configuration completion keeps a later keyboard target focused and reads checked state from its owner', async () => {
 	const document = environment.window.document;

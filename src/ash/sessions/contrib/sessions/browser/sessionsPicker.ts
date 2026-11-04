@@ -1,5 +1,6 @@
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import type { IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import type { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { sessionManagementLabel } from '../../../browser/sessionManagementLabels.js';
 import { getRecencyEntryKey, type SessionRecencyEntry } from '../../../services/sessions/browser/sessionsRecencyHistory.js';
 import type { ISession, SessionId, ThreadId } from '../../../services/sessions/common/session.js';
@@ -46,4 +47,18 @@ export function groupSessionsForPicker(sessions: readonly ISession[], history: r
 		groups[entry.needsInput ? 'needsInput' : entry.unread ? 'unread' : 'other'].push(entry.item);
 	}
 	return groups;
+}
+
+export async function pickSessionDestination(input: IQuickInputService, title: string, items: readonly (IQuickPickItem & { id: string; create?: boolean; })[], activeId?: string) {
+	using resources = new DisposableStore();
+	const picker = resources.add(input.createQuickPick<(typeof items)[number]>());
+	picker.ariaLabel = picker.placeholder = title;
+	picker.items = items;
+	const activeItem = items.find(item => item.id === activeId);
+	if (activeItem) picker.activeItems = [activeItem];
+	return await new Promise<(typeof items)[number] | undefined>(resolve => {
+		resources.add(picker.onDidAccept(() => { const item = picker.selectedItems[0]; if (item) { resolve(item); picker.hide(); } }));
+		resources.add(picker.onDidHide(() => resolve(undefined)));
+		picker.show();
+	});
 }

@@ -75,18 +75,29 @@ export class RemoteAgentHostContribution extends Disposable {
 		// This contribution is the scope owner. Its providers borrow only this connection's domains.
 		const services = createAgentHostSessionScope(this.instantiation, api, resources);
 		const folderAuthorization = services.getOptional(ISessionFolderAuthorizationService);
+		const tunnel = !isSSHAgentHost(connection) && connection.type === 'tunnel';
+		const isPublishedWorkspaceTrusted = async (target: SessionExecutionTarget): Promise<boolean> => {
+			const directory = info.directory!.target;
+			return directory.type === 'environment' && target.root === connection.workspace
+				&& hasDevelopmentPermissions(await api.workspaceTrust.readWorkspaceDirectory(directory.dirId));
+		};
 		const provider = resources.add(services.createInstance(RemoteAgentHostSessionsProvider, {
 			id: remoteAgentHostProviderId(info), label: connection.name,
 			root, directory: info.directory!,
 			workspace: () => isSSHAgentHost(connection) ? { type: 'ssh', host: connection.host, root: connection.workspace } : { type: 'remote', authority: root.authority, root: connection.workspace },
 			selectWorkspace: async () => undefined,
-			authorizeWorkspace: folderAuthorization && (async (target: SessionExecutionTarget, signal: AbortSignal) => {
-				const directory = info.directory!.target;
-				if (!isSSHAgentHost(connection) && connection.type === 'tunnel') {
-					// A tunnel borrows its published root grant and cannot widen permissions on the remote host.
-					return directory.type === 'environment' && target.root === connection.workspace
-						&& hasDevelopmentPermissions(await api.workspaceTrust.readWorkspaceDirectory(directory.dirId));
+			isWorkspaceTrusted: async (target: SessionExecutionTarget) => {
+				if (tunnel) {
+					const directory = info.directory!.target;
+					return directory.type === 'environment' && await isPublishedWorkspaceTrusted(target)
+						&& (await api.fs.getMetadata({ dirId: directory.dirId, path: '.' })).fileType === 'directory';
 				}
+				const directory = await api.workspaceTrust.readDirectory(target.root);
+				return hasDevelopmentPermissions(directory.permissions ?? directory.inheritedWorkspacePermissions);
+			},
+			authorizeWorkspace: folderAuthorization && (async (target: SessionExecutionTarget, signal: AbortSignal) => {
+				// A tunnel borrows its published root grant and cannot widen permissions on the remote host.
+				if (tunnel) return isPublishedWorkspaceTrusted(target);
 				return folderAuthorization.authorize(target.root, signal, { api, label: connection.name });
 			}),
 		}));

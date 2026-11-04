@@ -1,5 +1,6 @@
 import { ChatAttachmentModel } from '../../browser/attachments/chatAttachmentModel.js';
 import { SCMHistoryItemUri } from '../../../scm/common/history.js';
+import { LocalChatSessionUri } from '../../common/model/chatUri.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import assert from 'node:assert/strict';
 import { setup, teardown, test, suite, suiteSetup, suiteTeardown } from 'mocha';
@@ -58,7 +59,6 @@ const { IEditorService } = await import('../../../../services/editor/common/edit
 const { emptyEditorServiceState } = await import('../../../../test/common/testEditorService.js');
 const { IResourceIconRenderer } = await import('../../../../browser/labels.js');
 const { IChatSessionNavigationService } = await import('../../../../services/chat/common/chatSessionNavigationService.js');
-const { Schemas } = await import('../../../../../base/common/network.js');
 const { ChatReferenceAttachmentWidgetContribution } = await import('../../browser/attachments/chatReferenceAttachmentWidget.contribution.js');
 const { noFileIconTheme } = await import('../../../../../platform/theme/common/themeService.js');
 const { Emitter, Event: AshEvent } = await import('../../../../../base/common/event.js');
@@ -237,6 +237,31 @@ test('Chat reference cut captures before deletion and repeated paste has indepen
 	assert.equal(target.references.variables.length, 1);
 	target.editor.getModel().redo();
 	assert.equal(target.references.variables.length, 2);
+});
+
+test('Pasting a chat reference restores its widget and frozen snapshot', async () => {
+	using resources = new DisposableStore();
+	const target = createSnapshotComposer(resources);
+	const clipboard = new SnapshotClipboard();
+	const name = 'Earlier design';
+	const content = 'Frozen conversation';
+	const resource = LocalChatSessionUri.forSession('previous', 'thread');
+	clipboard.setData('text/plain', name);
+	clipboard.setData(CHAT_ATTACHMENT_MIME_TYPE, JSON.stringify({
+		version: 1,
+		draft: {
+			mode: 'agent',
+			text: name,
+			contexts: [{ id: 'previous', kind: 'chatReference', name, content, resource: resource.toString(), reference: { start: 0, end: name.length } }],
+		},
+	}));
+	dispatchSnapshotClipboard(target.editor, 'paste', clipboard);
+	await CopyPasteController.get(target.editor.codeEditor)!.finishedPaste();
+	const reference = target.references.variables[0]!;
+	assert.equal(reference.kind, 'chatReference');
+	assert.deepEqual(reference.resource, resource);
+	assert.equal((await reference.resolve()).content, content);
+	assert.equal(target.editor.element.querySelector<HTMLButtonElement>('.ash-chat-reference-attachment-source')?.disabled, false);
 });
 
 test('Chat ignores forged clipboard reference ranges and preserves the ordinary text paste', async () => {
@@ -445,7 +470,7 @@ test('Registered session references keep their snapshot through source activatio
 	editor.value = 'Explain  please';
 	editor.setSelection({ anchor: 8, active: 8 });
 	let reads = 0;
-	const reference = references.addReference({ id: 'session', kind: 'sessionReference', name: 'Earlier design', resource: URI.from({ scheme: Schemas.internal, authority: 'chat-session', query: 'sessionId=previous&threadId=thread' }), resolve: async () => { reads++; return { name: 'Earlier design', content: 'Original conversation snapshot' }; } });
+	const reference = references.addReference({ id: 'session', kind: 'chatReference', name: 'Earlier design', resource: LocalChatSessionUri.forSession('previous', 'thread'), resolve: async () => { reads++; return { name: 'Earlier design', content: 'Original conversation snapshot' }; } });
 	const decoration = editor.getModel().getAllDecorations().find(entry => entry.options.description === 'chat-context-reference')!;
 	assert.equal(decoration.options.before?.replaceLength, reference.name.length);
 	let submits = 0;
@@ -688,7 +713,7 @@ test('Deleting a focused session control leaves the reference at the text caret 
 	using attachmentModel = new ChatAttachmentModel();
 	using references = new ChatDynamicVariableModel(editor, attachmentModel);
 	const file = references.addReference({ id: 'first', kind: 'file', name: 'first.ts', resolve: async () => ({ name: 'first.ts', content: 'File snapshot' }) });
-	references.addReference({ id: 'second', kind: 'sessionReference', name: 'Earlier design', resource: URI.from({ scheme: Schemas.internal, authority: 'chat-session', query: 'sessionId=previous&threadId=thread' }), resolve: async () => ({ name: 'Earlier design', content: 'Conversation snapshot' }) });
+	references.addReference({ id: 'second', kind: 'chatReference', name: 'Earlier design', resource: LocalChatSessionUri.forSession('previous', 'thread'), resolve: async () => ({ name: 'Earlier design', content: 'Conversation snapshot' }) });
 	editor.setSelection({ anchor: file.reference!.start, active: file.reference!.start });
 	const source = editor.element.querySelector<HTMLButtonElement>('.ash-chat-reference-attachment-source')!;
 	source.focus();
@@ -1022,7 +1047,7 @@ test('Chat typography updates preserve the draft and selection, resize the input
 	await assert.rejects(configuration.updateValue(ChatInputConfiguration.fontSize, 7));
 	await assert.rejects(configuration.updateValue(ChatInputConfiguration.lineHeight, 7));
 	await configuration.updateValue(ChatInputConfiguration.lineHeight, 0);
-	assert.equal(font.lineHeight, `${codeEditor.getOption(EditorOption.fontInfo).lineHeight}px`);
+	assert.equal(font.lineHeight, '27px');
 	for (const key of Object.values(ChatInputConfiguration)) await configuration.updateValue(key, undefined);
 	await waitFor(() => editor.element.style.height === '120px');
 	assert.equal(font.fontFamily, family);
@@ -1523,7 +1548,7 @@ function createContextComposer(resources: DisposableStore) {
 	let pending: Promise<void> | undefined;
 	let reads = 0;
 	const context = resources.add(new BuiltinDynamicCompletions(target.editor, {
-		getAttachments: () => target.references.getInputState(),
+		getAttachments: () => target.references.variables,
 		getSessionId: () => undefined,
 		acquire: (prepare, signal) => target.attachmentModel.acquireContext(prepare, AbortSignal.any([signal, target.lifecycle.signal]), attachments => attachments.map(attachment => target.references.addReference(attachment, false))),
 	}, target.services.get(ILanguageFeaturesService), {

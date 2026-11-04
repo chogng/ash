@@ -114,6 +114,15 @@ export interface AgentTreeNode {
 	readonly children: readonly AgentTreeNode[];
 }
 
+export function findAgentNode(nodes: readonly AgentTreeNode[], threadId: ThreadId): AgentTreeNode | undefined {
+	for (const node of nodes) {
+		if (node.threadId === threadId) return node;
+		const child = findAgentNode(node.children, threadId);
+		if (child) return child;
+	}
+	return undefined;
+}
+
 /** Coarse durable activity; this does not identify an exact Turn state or waiting reason. */
 export interface IChat {
 	readonly threadId: ThreadId;

@@ -31,6 +31,22 @@ suite('Terminal editor resource boundary', () => {
 		assert.equal(restored.terminalInstance, undefined);
 	});
 
+	test('a split tab round-trips its pane identities and sizes after the first shell exits', () => {
+		const serializer = new TerminalInputSerializer();
+		const first = getTerminalUri('first', 1);
+		const second = getTerminalUri('second', 2);
+		const third = getTerminalUri('third', 3);
+		const input = new TerminalEditorInput(first);
+		input.addPane(second, input.panes.get());
+		input.activeResource = second;
+		input.addPane(third, input.panes.get());
+		input.removePane(first);
+		input.resizePanes(new Map([[second, 300], [third, 100]]));
+		const restored = serializer.deserialize(serializer.serialize(input));
+		assert.equal(restored.resource.path, first.path);
+		assert.deepEqual(restored.panes.get().map(({ resource, size }) => [resource.path, size]), [[second.path, .75], [third.path, .25]]);
+	});
+
 	test('incarnations with a reused instance number cannot bind an old resource', () => {
 		const instance = { resource: getTerminalUri('current-session', 1, 'New') };
 		assert.equal(getInstanceFromResource([instance], getTerminalUri('old-session', 1)), undefined);
@@ -109,8 +125,34 @@ function splitFixture() {
 		removeGroup: async (group: IEditorGroup) => { removed.push(group); allGroups.splice(allGroups.indexOf(group), 1); return true; },
 	} as unknown as IEditorGroupsService;
 	const service = lifetime.add(new TerminalEditorService(terminals, { onDidActiveEditorChange: Event.None } as IEditorService, groups));
-	return { lifetime, source, created, destination, instances, state, closed, removed, requests, service, setCreate: (value: typeof create) => create = value };
+	return { lifetime, input, source, created, destination, allGroups, instances, state, closed, removed, requests, service, setCreate: (value: typeof create) => create = value };
 }
+
+test('splitting within a tab adds an unplaced shell and detaching one pane keeps its sibling', async () => {
+	const f = splitFixture();
+	using lifetime = f.lifetime;
+	await f.service.splitPane(f.input, true);
+	assert.deepEqual(f.requests, [{ location: TerminalLocation.Editor, deferEditorOpen: true, skipContributedProfileCheck: true }]);
+	assert.deepEqual(f.input.panes.get().map(pane => pane.resource), [f.source.resource, f.created.resource]);
+	await f.service.detachInstance(f.source);
+	assert.deepEqual(f.input.panes.get().map(pane => pane.resource), [f.created.resource]);
+	assert.deepEqual(f.closed, []);
+	assert.deepEqual(f.removed, []);
+});
+
+test('a shell created after its split tab closes is released', async () => {
+	const f = splitFixture();
+	using lifetime = f.lifetime;
+	const pending = new DeferredPromise<ITerminalInstance>();
+	f.setCreate(() => pending.p);
+	const rejected = assert.rejects(f.service.splitPane(f.input, true), isCancellationError);
+	f.allGroups.length = 0;
+	f.instances.push(f.created);
+	await pending.complete(f.created);
+	await rejected;
+	assert.deepEqual(f.input.panes.get().map(pane => pane.resource), [f.source.resource]);
+	assert.deepEqual(f.closed, [f.created]);
+});
 
 test('editor terminal split captures the original group and reuses parent launch resolution', async () => {
 	const f = splitFixture();

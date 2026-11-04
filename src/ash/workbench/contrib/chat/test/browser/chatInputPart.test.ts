@@ -3,6 +3,7 @@ import { IVoiceInputModeService } from '../../browser/voiceInputMode/voiceInputM
 import { IChatSideChatService, ChatSideChatService } from '../../common/chatSideChatService.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { ChatContextService, IChatContextService } from '../../browser/contextContrib/chatContextService.js';
+import { LocalChatSessionUri } from '../../common/model/chatUri.js';
 import { ChatContextPickService, IChatContextPickService } from '../../browser/attachments/chatContextPickService.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import { registerTestExtensionService } from '../../../../test/common/testExtensionServices.js';
@@ -70,6 +71,7 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../../../../platform/accessibility/browser/accessibilityService.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
+import { IChatService } from '../../../../services/chat/common/chatService.js';
 import type { IChatWidgetModel } from '../../browser/widget/chatWidget.js';
 import type { IWillShutdownEvent } from '../../../../services/lifecycle/common/lifecycle.js';
 import type { IChatDraftStorage } from '../../browser/widget/input/chatInputPart.js';
@@ -164,6 +166,9 @@ function inputPart(notifications: TestNotificationService, dictation?: TestDicta
 	partServices.registerSingleton(IMenuService, () => partServices.createInstance(MenuService));
 	partServices.registerInstance(INotificationService, notifications);
 	partServices.registerInstance(IChatSessionNavigationService, { openConversation: async () => { } } as unknown as IChatSessionNavigationService);
+	if (!partServices.has(IChatService)) partServices.registerInstance(IChatService, {
+		readThread: async () => { throw new Error('Unexpected transcript read'); },
+	} as unknown as IChatService);
 	partServices.registerInstance(IKeybindingService, { lookupKeybinding: () => undefined } as unknown as IKeybindingService);
 	partServices.registerSingleton(IContextMenuService, () => partServices.createInstance(BrowserContextMenuService));
 	const contextView = inputResources.add(new BrowserContextViewService(document.body));
@@ -496,6 +501,25 @@ test('Chat draft handoff moves text and resolved attachments after acknowledgeme
 	captured.clear();
 	assert.equal(source.element.querySelector('textarea')?.value, '');
 	assert.doesNotMatch(source.element.querySelector('.ash-chat-input-attachments')?.textContent ?? '', /file\.ts/u);
+});
+
+test('Restoring a chat reference draft preserves its source URI and snapshot', async () => {
+	using part = inputPart(sharedNotifications);
+	const text = 'Earlier design';
+	const draft = {
+		mode: 'agent' as const,
+		text,
+		contexts: [{
+			id: 'previous',
+			kind: 'chatReference',
+			name: text,
+			content: 'Frozen conversation',
+			resource: LocalChatSessionUri.forSession('previous/session', 'earlier&thread').toString(),
+			reference: { start: 0, end: text.length },
+		}],
+	};
+	part.restoreDraft(draft);
+	assert.deepEqual((await part.captureDraft())?.draft, draft);
 });
 
 test('Chat draft handoff leaves text edited after capture in the source', async () => {
@@ -1746,6 +1770,87 @@ test('a hidden cleared composer does not overwrite the active renderer draft dur
 });
 suite('chatInput browser component', () => {
 	const browserTests = useBrowserTests();
+	test('Compact chat input uses the available line width with a proportional font', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?inlineCode&compact');
+		const composer = page.locator('.ash-chat-input-part.compact > .ash-chat-input-container');
+		const editor = page.locator('.ash-chat-input-editor');
+		const input = editor.getByRole('textbox');
+		await input.focus();
+		await page.keyboard.insertText('Review the draft');
+		await expect(composer).not.toHaveClass(/\bexpanded\b/u);
+		const nearEdge = await editor.evaluate(element => {
+			const style = getComputedStyle(element.querySelector('.stanza-editor-line-text')!);
+			const context = element.ownerDocument.createElement('canvas').getContext('2d')!;
+			context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+			let text = 'Review the draft. ';
+			const width = element.clientWidth - 3;
+			while (context.measureText(text + 'Draft ').width <= width) text += 'Draft ';
+			while (context.measureText(text + 'i').width <= width) text += 'i';
+			return text;
+		});
+		await input.press('ControlOrMeta+a');
+		await page.keyboard.insertText(nearEdge);
+		await expect(composer).not.toHaveClass(/\bexpanded\b/u);
+		await expect(editor.locator('.stanza-editor-line-text')).toHaveCount(1);
+		await input.press('End');
+		await expect.poll(() => editor.evaluate(element => {
+			const line = element.querySelector('.stanza-editor-line-text')!;
+			const range = element.ownerDocument.createRange();
+			range.selectNodeContents(line);
+			return element.getBoundingClientRect().right - range.getBoundingClientRect().right;
+		})).toBeLessThan(7);
+		await input.pressSequentially('12345');
+		await expect(composer).toHaveClass(/\bexpanded\b/u);
+		const expectCaretAtEnd = async (lastText: string): Promise<void> => {
+			const lastLine = editor.locator('.stanza-editor-line-text').last();
+			await expect(lastLine).toHaveText(lastText);
+			await expect.poll(() => lastLine.evaluate(line => {
+				const range = line.ownerDocument.createRange();
+				range.selectNodeContents(line);
+				const end = range.getBoundingClientRect();
+				const caret = line.closest('.stanza-editor')!.querySelector('.stanza-editor-caret')!.getBoundingClientRect();
+				return Math.max(Math.abs(end.right - caret.x), Math.abs((end.top + end.bottom - caret.top - caret.bottom) / 2));
+			})).toBeLessThan(2);
+		};
+		await expectCaretAtEnd(nearEdge + '12345');
+		const wrappedText = 'In this sample conversation, describe how the notification preferences behave for a new account. Include the default setting and what someone will see the first time they open the preferences panel, then summarize the result.';
+		const scrollbar = editor.locator('.ash-scrollbar-track-vertical');
+		await input.press('ControlOrMeta+a');
+		await page.keyboard.insertText(wrappedText);
+		await expect(composer).toHaveClass(/\bexpanded\b/u);
+		await expect(editor.locator('.stanza-editor-line-text').nth(1)).toBeVisible();
+		await expect(scrollbar).toHaveAttribute('aria-valuemax', '0');
+		await expect.poll(() => editor.evaluate(element => {
+			const [first, second] = element.querySelectorAll('.stanza-editor-line-text');
+			const nextWord = second.textContent!.trim().split(/\s+/u)[0];
+			const range = element.ownerDocument.createRange();
+			range.selectNodeContents(first);
+			const font = getComputedStyle(first);
+			const canvas = element.ownerDocument.createElement('canvas').getContext('2d')!;
+			canvas.font = `${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
+			const unused = element.getBoundingClientRect().right - range.getBoundingClientRect().right;
+			return unused - canvas.measureText(nextWord).width;
+		})).toBeLessThan(24);
+		await input.press('ControlOrMeta+a');
+		await page.keyboard.insertText('Scrollable draft\n'.repeat(24));
+		await expect(scrollbar).toHaveCSS('width', '8px');
+		await expect(scrollbar).toHaveAttribute('aria-valuemax', /^[1-9]\d*$/u);
+		await expect.poll(() => editor.evaluate(element => {
+			const track = element.querySelector('.ash-scrollbar-track-vertical')!;
+			return track.getBoundingClientRect().left - element.getBoundingClientRect().right;
+		})).toBeCloseTo(0, 0);
+		await input.press('ControlOrMeta+a');
+		await page.keyboard.insertText(wrappedText);
+		await expect(scrollbar).toHaveAttribute('aria-valuemax', '0');
+		await expect(composer).toHaveClass(/\bexpanded\b/u);
+		await expect(input).toBeFocused();
+		await input.press('ControlOrMeta+a');
+		await page.keyboard.insertText('Review the draft');
+		await expect(composer).not.toHaveClass(/\bexpanded\b/u);
+		await expect(input).toBeFocused();
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`Host input completions attach a captured file, undo and send in ${locale}`, async () => {
 			const { page } = browserTests;
@@ -2112,11 +2217,14 @@ suite('chatInput browser component', () => {
 		})).toEqual({ text, contexts });
 		expect(await page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: original }] });
 		await expect(input).toBeFocused();
-		await expect(page.locator('[data-action-id="ash.chat.input.send"]')).toHaveCount(text ? 1 : 0);
+		const send = page.locator('[data-action-id="ash.chat.input.send"] button');
 		if (text) {
+			await expect(send).toBeEnabled();
 			await input.press('Enter');
 			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.historyState())).toMatchObject({ submissions: [{ text: original }, { text }] });
 			await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dropState().text)).toBe('');
+		} else {
+			await expect(send).toBeDisabled();
 		}
 	});
 
@@ -2178,7 +2286,9 @@ suite('chatInput browser component', () => {
 		await expect(microphone).toBeEnabled();
 		await page.evaluate(() => window.ashChatInputIntegration.emitDictation('Still recognizing', false));
 		await expect(page.locator('.ash-chat-dictation-preview')).toHaveText('Still recognizing');
-		await expect(composer.locator('[data-action-id="ash.chat.input.send"]')).toHaveCount(outcome === 'failure' ? 1 : 0);
+		const send = composer.locator('[data-action-id="ash.chat.input.send"] button');
+		if (outcome === 'failure') await expect(send).toBeEnabled();
+		else await expect(send).toBeDisabled();
 		await input.press('Enter');
 		await expect.poll(() => page.evaluate(() => window.ashChatInputIntegration.dictationState().stops)).toBe(1);
 		await input.press('Enter');
@@ -3642,6 +3752,34 @@ suite('chatInput browser component', () => {
 		});
 	}
 
+	for (const theme of ['light', 'hcDark']) {
+		test(`model menu shows the localized effort inside its trigger in ${theme}`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?modelMenuConfiguration&locale=zh-CN&theme=${theme}`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const model = page.getByRole('button', { name: 'Test Model 低', exact: true });
+			const effort = model.locator('.ash-chat-input-model-effort');
+			await expect(effort).toBeVisible();
+			await expect(effort).toHaveText('低');
+			await expect(effort).toHaveCSS('color', theme === 'light' ? 'color(srgb 0.505726 0.505726 0.505726)' : 'rgb(255, 255, 255)');
+			const label = model.locator('.ash-chat-input-model-label');
+			await expect(label).toHaveCSS('align-items', 'baseline');
+			const nameBounds = (await label.locator('.ash-chat-input-picker-label').first().boundingBox())!;
+			const effortBounds = (await effort.boundingBox())!;
+			expect(effortBounds.x - (nameBounds.x + nameBounds.width)).toBeGreaterThan(0);
+			const modelBounds = (await model.boundingBox())!;
+			const labelBounds = (await label.boundingBox())!;
+			expect(labelBounds.y + labelBounds.height / 2).toBeCloseTo(modelBounds.y + modelBounds.height / 2);
+			await expect(page.locator('.ash-chat-input-configuration-action')).toBeHidden();
+			await model.press('ArrowDown');
+			const picker = page.locator('.ash-chat-model-picker');
+			await expect(picker).toBeVisible();
+			await picker.getByRole('menuitem', { name: '推理强度' }).press('ArrowRight');
+			await page.getByRole('menuitemradio', { name: '高', exact: true }).click();
+			await expect(page.getByRole('button', { name: 'Test Model 高', exact: true })).toBeVisible();
+		});
+	}
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`mode menu fits its contents and retains keyboard selection in ${locale}`, async function () {
 			const { page } = browserTests;
@@ -3822,7 +3960,7 @@ suite('chatInput browser component', () => {
 			await expect(trigger).toHaveAttribute('aria-description', lowCopy);
 			await expect(trigger).toHaveText(chinese ? '低' : 'Low');
 			await trigger.press('ArrowDown');
-			await expect(menu.locator('legend')).toHaveText(chinese ? ['推理强度', '上下文大小', '速度'] : ['Thinking Level', 'Context Size', 'Speed']);
+			await expect(menu.locator('legend')).toHaveText(chinese ? ['推理强度', '上下文大小', '速度'] : ['Effort', 'Context Size', 'Speed']);
 			const contextDefault = menu.getByRole('radio', { name: chinese ? '272K（默认）' : '272K (Default)', exact: true });
 			const expanded = menu.getByRole('radio', { name: '872K', exact: true });
 			const low = menu.getByRole('radio', { name: chinese ? '低' : 'Low', exact: true });
@@ -3873,7 +4011,7 @@ suite('chatInput browser component', () => {
 			await expect(trigger).toHaveAccessibleName(modelOptions === 'effort' ? 'Model options: Low' : 'Model options');
 			await trigger.press('ArrowDown');
 			const menu = page.locator('.ash-chat-model-card-configurable');
-			await expect(menu.locator('legend')).toHaveText(modelOptions === 'effort' ? 'Thinking Level' : 'Context Size');
+			await expect(menu.locator('legend')).toHaveText(modelOptions === 'effort' ? 'Effort' : 'Context Size');
 			await expect(menu.getByRole('radiogroup')).toHaveCount(1);
 			await expect(menu.getByRole('radio')).toHaveCount(2);
 			const last = menu.getByRole('radio').last();
@@ -4038,11 +4176,21 @@ suite('chatInput browser component', () => {
 			await expect(auto).toBeFocused();
 			await expect(search).toBeVisible();
 			await expect(picker.getByRole('menuitemradio')).toHaveCount(2);
-			await page.locator('.ash-chat-input-configuration-action').click();
+			const options = page.locator('.ash-chat-input-configuration-action');
+			await expect(options).toBeVisible();
+			const bounds = (await options.boundingBox())!;
+			// The open list consumes the outside click before the options trigger can receive it.
+			await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+			await expect(picker).toHaveCount(0);
+			await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+			await expect(options).toHaveAttribute('aria-expanded', 'false');
+			await options.click();
+			await expect(picker).toHaveCount(1);
 			await expect(picker.locator('.ash-chat-model-card-configurable')).toBeVisible();
 			await page.keyboard.press('Escape');
 			await expect(picker).toHaveCount(0);
-			await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+			await expect(options).toHaveAttribute('aria-expanded', 'false');
+			await expect(options).toBeFocused();
 			await trigger.click();
 			await expect(picker).toBeVisible();
 			await page.evaluate(() => window.ashChatInputIntegration.dispose());
@@ -4795,7 +4943,7 @@ suite('chatInput browser component', () => {
 		await expect(toolbar.locator('[data-action-id="ash.chat.input.voice"]')).toHaveCount(0);
 		const sendButton = toolbar.locator('[data-action-id="ash.chat.input.send"] button');
 		await expect(sendButton.locator('[data-ash-icon-id="arrow-up"]')).toHaveCount(1);
-		await expect(sendButton).toHaveCSS('border-radius', '50%');
+		await expect(sendButton).toHaveCSS('border-radius', '8px');
 		const messageLayout = await rightActionLayout('ash.chat.input.send');
 		expect(messageLayout.micLeft).toBeGreaterThan(messageLayout.toolbarMiddle);
 		expect(messageLayout.gap).toBeGreaterThanOrEqual(0);

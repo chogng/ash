@@ -1,3 +1,4 @@
+import { TerminalLocation } from '../../../../../../platform/terminal/common/terminal.js';
 import { SessionSectionOrderService } from '../../../../../services/sessions/browser/sessionSectionOrderService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../../../services/sessions/browser/sessionsListModelService.js';
 import { createTestPathService } from '../../../../../../workbench/test/common/workbenchHostTestServices.js';
@@ -7,7 +8,7 @@ import { ContextKeyService, IContextKeyService } from '../../../../../../platfor
 import { ILabelService } from '../../../../../../platform/label/common/label.js';
 import { LabelService } from '../../../../../../workbench/services/label/common/labelService.js';
 import { InstantiationType } from '../../../../../../platform/instantiation/common/extensions.js';
-import { ITerminalEditorService, ITerminalGroupService } from '../../../../../../workbench/contrib/terminal/browser/terminal.js';
+import { ITerminalEditorService, ITerminalGroupService, type ITerminalInstance, type TerminalEditorLocation } from '../../../../../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalEditorService } from '../../../../../../workbench/contrib/terminal/browser/terminalEditorService.js';
 import { TerminalGroupService } from '../../../../../../workbench/contrib/terminal/browser/terminalGroupService.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
@@ -23,6 +24,8 @@ import { IMarkerService } from '../../../../../../platform/markers/common/marker
 import { MarkerService } from '../../../../../../platform/markers/common/markerService.js';
 import { IModelService } from '../../../../../../editor/common/services/model.js';
 import { IFileSearchService } from '../../../../../../platform/search/common/fileSearch.js';
+import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
+import '../../../../../../workbench/browser/style.js';
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
 import { ITaskService } from '../../../../../../workbench/contrib/tasks/common/taskService.js';
@@ -140,8 +143,11 @@ const terminalCreations: ITerminalProcessCreateOptions[] = [];
 const profileSelections: TerminalProcessProfileSelection[] = [];
 const terminalViews: Array<{ id: string; focus: boolean | undefined; }> = [];
 const fixtureOptions = new URLSearchParams(location.search);
+if (fixtureOptions.has('leadingIcons')) document.body.classList.add('ash-workbench');
 const sessions = [1, 2, ...(fixtureOptions.has('treeFixture') ? [3] : [])].map(id => ({
-	sessionId: `session-${id}`, title: `Task ${id}`, status: 'active', source: id === 3 ? 'automation' : undefined,
+	sessionId: `session-${id}`, title: `Task ${id}`, status: 'active',
+	management: fixtureOptions.has('working') && id === 1 ? { status: 'working', statusChangedAtUnixMs: 0 } : undefined,
+	source: id === 3 ? 'automation' : undefined,
 	chats: [
 		{ threadId: `thread-${id}`, status: 'active', origin: { type: 'root' } },
 		...(id === 2 && fixtureOptions.has('nested') ? [{
@@ -155,8 +161,9 @@ const view = { activeSelection: undefined, visibleSelections: [], onDidChange: c
 const container = document.createElement('main');
 document.body.append(container);
 const listModel = new SessionsListModelService(storage);
-resources.add(new SessionsList(container, 'Tasks', 'code', management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, groups, storage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, listModel, new SessionSectionOrderService(storage)));
 const services = resources.add(new InstantiationService());
+services.registerInstance(IAccessibilityService, { onDidChangeReducedMotion: Event.None, isMotionReduced: () => window.matchMedia('(prefers-reduced-motion: reduce)').matches } as unknown as IAccessibilityService);
+resources.add(new SessionsList(container, 'Tasks', fixtureOptions.has('chatMode') ? 'chat' : 'code', management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, groups, storage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, listModel, new SessionSectionOrderService(storage), undefined, undefined, undefined, fixtureOptions.has('leadingIcons') ? services : undefined));
 services.registerInstance(IStorageService, storage);
 services.registerInstance(ISessionsListModelService, listModel);
 services.registerInstance(IDialogService, resources.add(new DialogService()));
@@ -225,20 +232,32 @@ services.registerSingleton(ITerminalProfileResolverService, () => services.creat
 services.registerInstance(IEditorService, { openEditor: async (...args: unknown[]) => { opened.push(args); } } as unknown as IEditorService);
 services.registerInstance(IOpenerService, { open: async (resource: { toString(): string; }) => { openedUrls.push(resource.toString()); return true; } } as unknown as IOpenerService);
 services.registerSingleton(ITerminalGroupService, () => services.createInstance(TerminalGroupService), { instantiation: InstantiationType.Delayed });
-services.registerSingleton(ITerminalEditorService, () => services.createInstance(TerminalEditorService), { instantiation: InstantiationType.Delayed });
+const useEditorTerminals = new URL(location.href).searchParams.has('editorTerminals');
+if (useEditorTerminals) {
+	services.registerInstance(ITerminalEditorService, {
+		openEditor: async (instance: ITerminalInstance, options?: TerminalEditorLocation) => {
+			terminalViews.push({ id: instance.id, focus: !options?.preserveFocus });
+		},
+	} as ITerminalEditorService);
+} else {
+	services.registerSingleton(ITerminalEditorService, () => services.createInstance(TerminalEditorService), { instantiation: InstantiationType.Delayed });
+}
 services.registerInstance(IWorkspaceTrustManagementService, resources.add(new TestWorkspaceTrustManagementService()));
 services.registerInstance(IWorkspaceTrustRequestService, {
 	onDidInitiateWorkspaceTrustRequest: Event.None, onDidInitiateWorkspaceTrustRequestOnStartup: Event.None,
 	requestWorkspaceTrust: async () => { throw new Error('App tool fixtures are already trusted'); },
 	requestWorkspaceTrustOnStartup() { }, completeWorkspaceTrustRequest: async () => { }, cancelWorkspaceTrustRequest() { },
 });
-const terminals = resources.add(services.createInstance(TerminalService));
+class EditorTerminalService extends TerminalService {
+	protected override getDefaultLocation(): TerminalLocation { return TerminalLocation.Editor; }
+}
+const terminals = resources.add(useEditorTerminals ? services.createInstance(EditorTerminalService) : services.createInstance(TerminalService));
 services.registerInstance(ITerminalService, terminals);
 services.registerInstance(IViewsService, { openView: async (id: string, focus: boolean | undefined) => { if (viewFailure) throw new Error('Terminal view unavailable'); terminalViews.push({ id, focus }); } } as unknown as IViewsService);
 services.registerInstance(IChatSessionNavigationService, { openConversation: async (sessionId: string, threadId: string) => { opened.push({ sessionId, threadId }); } } as unknown as IChatSessionNavigationService);
 services.registerInstance(ISessionGroupsService, groups);
-services.registerInstance(IAccessibilityService, { onDidChangeReducedMotion: Event.None, isMotionReduced: () => window.matchMedia('(prefers-reduced-motion: reduce)').matches } as unknown as IAccessibilityService);
-let taskSource = JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Check', command: 'compiler', presentation: { reveal: 'never' } }, { label: 'Interactive', command: '${input:value}' }] });
+
+let taskSource = JSON.stringify({ version: '2.0.0', tasks: [{ label: 'Check', command: 'compiler', presentation: { reveal: new URL(location.href).searchParams.has('revealTask') ? 'always' : 'never' } }, { label: 'Interactive', command: '${input:value}' }] });
 services.registerInstance(IFileService, {
 	onDidChangeFiles: Event.None,
 	stat: async (resource: URI) => { if (!resource.path.endsWith('/.vscode/tasks.json')) throw new FileNotFoundError(resource); return { kind: FileKind.File }; },
@@ -249,7 +268,9 @@ services.registerInstance(IOutputService, { createChannel: () => Object.assign(t
 services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 services.registerInstance(IModelService, { getModel: () => null } as unknown as import('../../../../../../editor/common/services/model.js').IModelService);
 services.registerInstance(IFileSearchService, { glob: async () => ({ matches: [] }) } as unknown as import('../../../../../../platform/search/common/fileSearch.js').IFileSearchService);
-services.registerInstance(IQuickInputService, { createQuickPick: () => { throw new Error('No interaction expected'); } } as unknown as import('../../../../../../platform/quickinput/common/quickInput.js').IQuickInputService);
+services.registerInstance(IQuickInputService, fixtureOptions.has('leadingIcons')
+	? resources.add(new TestQuickInputService({ container: document.body, instantiationService: services }))
+	: { createQuickPick: () => { throw new Error('No interaction expected'); } } as unknown as IQuickInputService);
 services.registerInstance(INotificationService, { warning() { }, error() { } } as unknown as import('../../../../../../platform/notification/common/notification.js').INotificationService);
 
 const taskService = resources.add(services.createInstance(TaskService));

@@ -6,6 +6,7 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import {
 	AshApplicationId,
+	AshWindowsToastActivatorClsid,
 	AshApplicationName,
 	AshRendererDirectory,
 	AshUserDataFolderName,
@@ -260,7 +261,11 @@ async function startup(application: AshApplication, developmentLauncher: boolean
 }
 
 function configureApplicationDataPaths(): void {
-	if (process.platform === 'win32') app.setAppUserModelId(AshApplicationId);
+	if (process.platform === 'win32') {
+		// Windows uses the installer shortcut's CLSID when activating a toast.
+		if (app.isPackaged) app.setToastActivatorCLSID(AshWindowsToastActivatorClsid);
+		app.setAppUserModelId(AshApplicationId);
+	}
 	if (!hasUserDataDirectoryOverride(process.argv)) {
 		app.setPath('userData', app.isPackaged ? getDefaultUserDataPath(AshUserDataFolderName) : developmentArtifactsPath(app.getAppPath(), 'dev', 'user-data'));
 	}

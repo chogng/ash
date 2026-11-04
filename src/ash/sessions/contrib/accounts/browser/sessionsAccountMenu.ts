@@ -3,9 +3,8 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { OpenKeyboardShortcutsCommandId } from '../../../../workbench/contrib/preferences/common/preferences.js';
 import type { SessionsPreferences } from '../../preferences/browser/sessionsPreferences.js';
-import { OPEN_ASH_WINDOW_COMMAND_ID } from '../../../common/sessionCommands.js';
+import { OPEN_ASH_WINDOW_COMMAND_ID, OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID } from '../../../common/sessionCommands.js';
 
 /** Sessions account actions shown beside the Activity Bar account button. */
 export class SessionsAccountMenu {
@@ -24,7 +23,7 @@ export class SessionsAccountMenu {
 			{ id: 'ash.sessions.settings', label: settingsLabel, tooltip: settingsLabel, icon: Lxicon.gear, enabled: true, run: () => this.preferences.open() },
 			{ id: 'workbench.action.manageAccounts', label: accountLabel, tooltip: accountLabel, icon: Lxicon.account, enabled: true, run: () => this.commands.executeCommand('workbench.action.manageAccounts') },
 			{ id: OPEN_ASH_WINDOW_COMMAND_ID, label: ideLabel, tooltip: ideLabel, icon: Lxicon.code, enabled: true, run: () => this.commands.executeCommand(OPEN_ASH_WINDOW_COMMAND_ID) },
-			{ id: OpenKeyboardShortcutsCommandId, label: shortcutsLabel, tooltip: shortcutsLabel, icon: Lxicon.command, enabled: true, run: () => this.commands.executeCommand(OpenKeyboardShortcutsCommandId) },
+			{ id: OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID, label: shortcutsLabel, tooltip: shortcutsLabel, icon: Lxicon.recordKeys, enabled: true, run: () => this.commands.executeCommand(OPEN_SESSIONS_KEYBOARD_SHORTCUTS_COMMAND_ID) },
 		];
 		anchor.setAttribute('aria-expanded', 'true');
 		this.contextMenus.showContextMenu({

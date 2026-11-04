@@ -691,6 +691,12 @@ export const SettingsNavigation = [
 						description: localize('settings.chatCodeBlocks.description', 'Choose how code blocks in replies are displayed.'),
 						settings: ['chat.editor.fontFamily', 'chat.editor.fontSize', 'chat.editor.lineHeight', 'chat.editor.wordWrap'],
 					},
+					{
+						id: 'chat-conversation-display',
+						label: localize('settings.chatConversationDisplay.label', 'Conversation'),
+						description: localize('settings.chatConversationDisplay.description', 'Choose how Chat displays and follows the conversation.'),
+						settings: ['chat.autoFollowReplies', 'chat.stickyScroll.enabled', 'sessions.chatTimeline.display', 'chat.tips.enabled'],
+					},
 				],
 			},
 			{

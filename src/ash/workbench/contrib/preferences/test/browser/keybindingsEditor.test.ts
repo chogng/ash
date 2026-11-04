@@ -565,7 +565,7 @@ test('recorder opens an empty modal, previews keys, ignores incomplete input and
 	assert.equal(dialog.getAttribute('aria-modal'), 'true');
 	assert.match(dialog.getAttribute('aria-label')!, /Alpha/);
 	assert.equal(document.activeElement, input);
-	assert.equal(root.querySelectorAll('.ash-keybindings-recorder input').length, 1);
+	assert.equal(dialog.querySelectorAll('input:not([hidden] *)').length, 1);
 	assert.equal(root.querySelectorAll('.ash-keybindings-recorder button').length, 0);
 	assert.equal(root.querySelector<HTMLElement>('.ash-keybindings-list')?.inert, true);
 	press(input, 'AltLeft', 'Alt', { altKey: true });
@@ -628,6 +628,45 @@ test('recorder reserves bare controls, records modified Enter and Escape, and sa
 	await keybindings.initialize();
 	assert.equal(keybindings.resolveUserBinding((await resources.read())[0]!.key)?.chords.length, 4);
 	assert.equal(root.querySelector<HTMLElement>('.ash-keybindings-recorder')?.hidden, true);
+});
+
+test('the Open Agents Window recorder saves and removes the system-wide option by keyboard', async () => {
+	using disposables = new DisposableStore();
+	const command = 'workbench.action.openAgentsWindow';
+	disposables.add(CommandsRegistry.register(command, () => undefined));
+	const { document, input, root, resources, editor, keybindings } = await createRecorderFixture(disposables);
+	editor.search(`@command:${command}`);
+	const row = () => root.querySelector<HTMLElement>('.ash-keybindings-row')!;
+	findButton(row(), 'Add').click();
+	const checkbox = root.querySelector<HTMLInputElement>('.ash-checkbox input')!;
+	press(input, 'Tab', 'Tab');
+	assert.equal(document.activeElement, checkbox);
+	checkbox.click();
+	press(checkbox, 'Tab', 'Tab', { shiftKey: true });
+	assert.equal(document.activeElement, input);
+	press(input, 'KeyA', 'a', { ctrlKey: true, shiftKey: true });
+	press(input, 'KeyB', 'b', { ctrlKey: true, shiftKey: true });
+	const rejected = waitForStatus(document, 'Record a single key combination supported by system-wide shortcuts.');
+	press(input, 'Enter', 'Enter');
+	await rejected;
+	assert.equal((await resources.read()).some(entry => entry.command === command), false);
+
+	press(input, 'Escape', 'Escape');
+	press(input, 'KeyA', 'a', { ctrlKey: true, shiftKey: true });
+	const saved = waitForStatus(document, 'Keybinding saved.');
+	press(input, 'Enter', 'Enter');
+	await saved;
+	await keybindings.initialize();
+	assert.deepEqual((await resources.read()).find(entry => entry.command === command), { key: 'ctrl+shift+[KeyA]', command, systemWide: true });
+	assert.match(row().textContent ?? '', /system-wide/);
+
+	findButton(row(), 'Edit').click();
+	assert.equal(checkbox.checked, true);
+	checkbox.click();
+	const cleared = waitForStatus(document, 'Keybinding saved.');
+	press(checkbox, 'Enter', 'Enter');
+	await cleared;
+	assert.deepEqual((await resources.read()).find(entry => entry.command === command), { key: 'ctrl+shift+[KeyA]', command });
 });
 
 test('recorder preserves a failed draft, retries through the shared model and locks it while saving', async () => {
@@ -746,7 +785,9 @@ test('recorder help and restart announcements use the Chinese catalog', async ()
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsMessages('zh-CN', chinese.bundles);
 	disposables.add(toDisposable(resetNlsResolver));
-	const { document, input, root, open } = await createRecorderFixture(disposables);
+	const command = 'workbench.action.openAgentsWindow';
+	disposables.add(CommandsRegistry.register(command, () => undefined));
+	const { document, input, root, open, editor } = await createRecorderFixture(disposables);
 	open();
 	assert.equal(root.getAttribute('aria-label'), '键盘快捷方式');
 	const alpha = shortcutRow(document, 'test.shortcuts.alpha')!;
@@ -759,6 +800,12 @@ test('recorder help and restart announcements use the Chinese catalog', async ()
 	assert.equal(root.querySelector('[role="status"]')?.textContent, '已录满 4 段，开始新序列：ctrl+[KeyY]。');
 	press(input, 'Escape', 'Escape');
 	assert.equal(root.querySelector('[role="status"]')?.textContent, '快捷键已清空。请录制新序列，或再次按 Escape 取消。');
+	press(input, 'Escape', 'Escape');
+	editor.search(`@command:${command}`);
+	shortcutRow(document, command)!.querySelector<HTMLButtonElement>('button')!.click();
+	const checkbox = root.querySelector<HTMLInputElement>('.ash-checkbox input')!;
+	assert.match(checkbox.labels?.[0]?.textContent ?? '', /系统级/);
+	assert.match(document.getElementById(checkbox.getAttribute('aria-describedby')!)?.textContent ?? '', /系统级触发会忽略生效条件/);
 });
 
 test('source menu filters system, user, extension and unassigned rows and edits a system condition intact', async () => {
