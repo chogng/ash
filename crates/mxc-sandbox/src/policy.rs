@@ -39,13 +39,14 @@ pub(super) fn request(
     } else {
         mxc_sdk::v1::CommandLineContext::PosixShell
     };
-    let script = mxc_sdk::v1::cmdline_from_argv_for_context(&argv, context)
-        .map_err(|error| unavailable(error.to_string()))?;
-    let script = if cfg!(unix) {
-        format!("exec {script}")
-    } else {
-        script
+    let render_argv = |argv: &[String]| {
+        mxc_sdk::v1::cmdline_from_argv_for_context(argv, context)
+            .map_err(|error| unavailable(error.to_string()))
     };
+    #[cfg(windows)]
+    let script = ash_sandboxing::windows_command_line(&argv, false, render_argv)?;
+    #[cfg(unix)]
+    let script = format!("exec {}", render_argv(&argv)?);
     let proxy_port = command
         .network_proxy()
         .map(|proxy| {

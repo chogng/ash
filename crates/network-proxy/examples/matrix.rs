@@ -255,7 +255,7 @@ fn main() {
         }
     }
     #[cfg(windows)]
-    if mode != "allowed" {
+    if matches!(mode.as_str(), "denied" | "managed") {
         for address in ["0.0.0.0:0", "[::]:0"] {
             assert!(
                 std::net::TcpListener::bind(address).is_err(),
@@ -263,7 +263,7 @@ fn main() {
             );
         }
     }
-    if mode == "managed" || mode == "denied" {
+    if matches!(mode.as_str(), "managed" | "denied" | "psec-denied") {
         let mut child_arguments = arguments.clone();
         child_arguments[0] = "descendant".into();
         assert!(

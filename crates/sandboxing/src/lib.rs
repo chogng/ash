@@ -21,6 +21,8 @@ pub use model::HostAclChanges;
 pub use model::SandboxLaunch;
 pub use process::ProcessHandle;
 pub use process::SandboxProcess;
+#[cfg(windows)]
+pub use process::windows_command_line;
 
 pub use dir::PROTECTED_DIR_METADATA_NAMES;
 pub use error::SandboxError;

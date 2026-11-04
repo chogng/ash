@@ -1,4 +1,4 @@
-name: PSEC Windows client x64 VM acceptance
+name: PSEC Windows 11 25H2 x64 acceptance
 
 on:
   push:
@@ -9,41 +9,42 @@ permissions: {}
 
 jobs:
   client-x64:
-    name: Windows 11 x64 PSEC positive
-    runs-on: [self-hosted, Windows, X64, ash-psec-x64-20261104]
+    name: Windows 11 25H2 x64 PSEC positive
+    runs-on: [self-hosted, Windows, X64, ash-psec-x64-25h2-20261104]
     timeout-minutes: 20
     steps:
-      - name: Verify and run the candidate from the mounted test image
+      - name: Run the acceptance kit
         shell: powershell
         run: |
+          $root = Join-Path $env:GITHUB_WORKSPACE ".build/acceptance/psec-client-x64/$($env:GITHUB_RUN_ID)-$($env:GITHUB_RUN_ATTEMPT)"
+          $env:ASH_PSEC_REPORT_DIR = Join-Path $root 'suite'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          Copy-Item -LiteralPath 'C:\psec-probe.json' -Destination $root
           $inventory = Get-Content -Raw -LiteralPath 'C:\psec-probe.json' | ConvertFrom-Json
           $inventory | ConvertTo-Json -Depth 6
-          if ($inventory.architecture -ne 'X64' -or $inventory.psec.status -ne 'advertised') {
-            throw 'Expected a Windows client x64 with advertised PSEC'
+          $runningBuild = Get-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
+          if ($runningBuild.DisplayVersion -ne $inventory.build.DisplayVersion -or $runningBuild.CurrentBuild -ne $inventory.build.CurrentBuild -or $runningBuild.UBR -ne $inventory.build.UBR) {
+            throw 'The current Windows build does not match the recorded probe'
+          }
+          if ($inventory.architecture -ne 'X64' -or $inventory.build.DisplayVersion -ne '25H2' -or $inventory.psec.status -ne 'advertised') {
+            throw 'Expected Windows 11 25H2 x64 with advertised PSEC'
           }
           $volume = Get-Volume -FileSystemLabel ASHPSECKIT
           $test = Join-Path ($volume.DriveLetter + ':\') 'run.ps1'
           & powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File $test
           $testExit = $LASTEXITCODE
-          $report = 'C:\psec-candidate-report'
-          $evidence = Join-Path $env:GITHUB_WORKSPACE '.build/acceptance/psec-client-x64'
-          New-Item -ItemType Directory -Force -Path $evidence | Out-Null
-          Copy-Item -LiteralPath 'C:\psec-probe.json' -Destination $evidence
-          Copy-Item -LiteralPath 'C:\psec-candidate\manifest.json' -Destination $evidence
-          if (Test-Path -LiteralPath $report) {
-            Copy-Item -LiteralPath $report -Destination (Join-Path $evidence 'suite') -Recurse
-          }
-          Get-Content -LiteralPath (Join-Path $report 'tests.log')
-          $summary = Get-Content -Raw -LiteralPath (Join-Path $report 'summary.json') | ConvertFrom-Json
+          Copy-Item -LiteralPath 'C:\psec-followup\manifest.json' -Destination $root
+          Get-Content -LiteralPath (Join-Path $env:ASH_PSEC_REPORT_DIR 'tests.log')
+          $summary = Get-Content -Raw -LiteralPath (Join-Path $env:ASH_PSEC_REPORT_DIR 'summary.json') | ConvertFrom-Json
           $summary | ConvertTo-Json -Depth 8
-          if ($testExit -ne 0 -or $summary.status -ne 'passed' -or $summary.tests.Count -ne 20 -or $summary.commit -ne 'e5e9389e976d30621da4281856b0bb22bfefc2c1') {
-            throw 'The Windows x64 candidate did not pass the complete positive suite'
+          if ($testExit -ne 0 -or $summary.status -ne 'passed' -or $summary.tests.Count -ne 22 -or $summary.commit -ne $env:GITHUB_SHA) {
+            throw 'The Windows client x64 acceptance kit did not complete successfully'
           }
-      - name: Upload Windows client x64 evidence
+      - name: Upload Windows 11 25H2 x64 evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: psec-client-x64-e5e9389e97-attempt-${{ github.run_attempt }}
-          path: .build/acceptance/psec-client-x64/
+          name: psec-client-x64-25h2-attempt-${{ github.run_attempt }}
+          path: .build/acceptance/psec-client-x64/${{ github.run_id }}-${{ github.run_attempt }}/
           if-no-files-found: error
           retention-days: 14
