@@ -407,10 +407,10 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	const github = { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as import('../../contrib/github/browser/githubService.js').IGitHubService;
 	let menu: IContextMenuDelegate | undefined;
 	const context = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
-	const makeList = (mode: 'chat' | 'code') => new SessionsList(dom.window.document.body, 'Sessions', mode, management, view,
-		github, groups, storage, emptyProjects, commands, context, listCustomViews, listMenus, listNotifications,
 	const appearanceCommands: unknown[][] = [];
 	const commands = { executeCommand: async (...args: unknown[]) => { appearanceCommands.push(args); } } as ICommandService;
+	const makeList = (mode: 'chat' | 'code') => new SessionsList(dom.window.document.body, 'Sessions', mode, management, view,
+		github, groups, storage, emptyProjects, commands, context, listCustomViews, listMenus, listNotifications,
 		new SessionsListModelService(storage), new SessionSectionOrderService(storage));
 	const sectionNames = (list: SessionsList) => Array.from(list.domNode.querySelectorAll('[data-section^="group:"] > h3'), heading => heading.textContent);
 	const rows = (list: SessionsList) => Array.from(list.domNode.querySelectorAll('[data-section="group:quality"] [data-row-order-id]'), row => row.getAttribute('data-row-order-id'));

@@ -9,7 +9,7 @@ import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.j
 import { createUuid } from '../../../../../base/common/uuid.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
-import type { AgentThreadExecutionStatus, AgentTreeNode, IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, SessionId, SessionWorkspaceSelection, ThreadId } from '../../../../services/sessions/common/session.js';
+import { findAgentNode, type AgentThreadExecutionStatus, type AgentTreeNode, type IActiveSessionThread, type ISession, type ModelRef, type SessionExecutionTarget, type SessionId, type SessionWorkspaceSelection, type ThreadId } from '../../../../services/sessions/common/session.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../../common/agentHostSessionsProvider.js';
 import type { AppServerConnectionState } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -306,9 +306,10 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		const target = await this.rendererHost.thread.fork({ sessionId, threadId, title, commandId: creationId, target: 'thread' });
 		this.assertCurrentConnection(generation, epoch);
 		if (target.sessionId !== sessionId) throw new Error(localize('sessions.nestedChat.unavailable', 'The new conversation is unavailable.'));
-		const session = await this.readCatalog(sessionId);
+		const result = await this.sessionApi.read({ sessionId });
 		this.assertCurrentConnection(generation, epoch);
-		if (!session?.chats.some(chat => chat.threadId === target.threadId)) {
+		const session = toSession(result.session, [], undefined, result.agentTree.roots);
+		if (session.sessionId !== sessionId || !session.chats.some(chat => chat.threadId === target.threadId)) {
 			throw new Error(localize('sessions.nestedChat.unavailable', 'The new conversation is unavailable.'));
 		}
 		return { session, threadId: target.threadId };
@@ -532,15 +533,6 @@ function executionStatus(status: TurnStatus | undefined): AgentThreadExecutionSt
 		case 'interrupted': return 'cancelled';
 		case undefined: return 'idle';
 	}
-}
-
-function findAgentNode(nodes: readonly AgentTreeNode[], threadId: ThreadId): AgentTreeNode | undefined {
-	for (const node of nodes) {
-		if (node.threadId === threadId) return node;
-		const child = findAgentNode(node.children, threadId);
-		if (child) return child;
-	}
-	return undefined;
 }
 
 function canInterrupt(node: AgentTreeNode): boolean {

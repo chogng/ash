@@ -277,8 +277,17 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	}
 
 	restoreUntitledSession(session: IUntitledChatSession): void {
+		// Older nested drafts can contain an Agent choice the fork never used.
+		if (session.forkSource && session.agent) {
+			session = { ...session, agent: undefined };
+		}
 		this._untitledSessions = [session, ...this._untitledSessions.filter(candidate => candidate.untitledSessionId !== session.untitledSessionId)];
 		this._onDidChange.fire();
+		if (session.forkSource) {
+			void this.hydrateSession(session.forkSource.sessionId).catch(() => {
+				// Keep the draft usable if its Agent metadata cannot be loaded. Sending validates the source.
+			});
+		}
 	}
 
 	discardUntitledSession(untitledSessionId: string): void {
@@ -313,6 +322,8 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	setUntitledSessionAgent(untitledSessionId: string, agent: ChatAgent | undefined): void {
 		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
 		if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
+		// The fork always inherits the source conversation's Agent.
+		if (current.forkSource) return;
 		if (current.agent?.name === agent?.name && current.agent?.sourceId === agent?.sourceId) return;
 		this._untitledSessions = this._untitledSessions.map(session => session.untitledSessionId === untitledSessionId ? { ...session, agent } : session);
 		this._onDidChange.fire();

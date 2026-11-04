@@ -59,30 +59,47 @@ export class SessionSideChatEditor extends EditorPane {
 				if (!session) throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
 				selection = { kind: 'session', active: { session, threadId: reference.threadId } };
 			}
-			const view = resources.add(this.instantiation.createInstance(NewChatView, this.element.ownerDocument,
-				`side-chat-${this.group?.id}-${input.resource.path.slice(1)}`, selection,
-				() => { void this.commands.executeCommand('ash.sessions.openSideChat').catch(error => this.notifications.error(error)); },
-				() => { }));
-			view.render(this.element);
-			this.view = view;
-			view.setVisible(this.isVisible());
+			const conversation = resources.add(new MutableDisposable<DisposableStore>());
 			// Keep only the reference needed to restore the tab. The model owns the conversation and its draft.
-			const updateReference = () => {
-				const active = view.model.selectedSession;
+			const updateReference = (): void => {
+				if (this.mount.value !== resources) return;
+				const active = this.view?.model.selectedSession;
+				if (!active) return;
 				if (active.kind === 'session') {
 					input.reference = { sessionId: active.active.session.sessionId, threadId: active.active.threadId };
 				} else {
 					const draft = this.sessions.untitledSessions.find(session => session.untitledSessionId === active.session.untitledSessionId);
-					if (draft) input.reference = { draft };
+					if (!draft) return;
+					input.reference = { draft };
+					if (draft.providerId !== active.session.providerId) {
+						const focused = this.element.contains(this.element.ownerDocument.activeElement);
+						// The environment picker saves the composer under this draft ID before switching hosts.
+						renderView({ kind: 'untitled', session: draft });
+						if (focused && this.isVisible()) this.view?.focus();
+					}
 				}
 			};
-			resources.add(view.model.onDidChange(updateReference));
+			const renderView = (selection: SessionsViewSelection): void => {
+				this.view = undefined;
+				const lifetime = conversation.value = new DisposableStore();
+				const view = lifetime.add(this.instantiation.createInstance(NewChatView, this.element.ownerDocument,
+					`side-chat-${this.group?.id}-${input.resource.path.slice(1)}`, selection,
+					() => { void this.commands.executeCommand('ash.sessions.openSideChat').catch(error => this.notifications.error(error)); },
+					() => { }));
+				view.render(this.element);
+				this.view = view;
+				view.setVisible(this.isVisible());
+				lifetime.add(view.model.onDidChange(updateReference));
+			};
+			renderView(selection);
 			resources.add(this.sessions.onDidChange(updateReference));
 			const closeHandler = input.closeHandler = {
 				showConfirm: () => true,
 				confirm: async () => {
-					await view.captureDraft();
-					updateReference();
+					if (this.mount.value === resources) {
+						await this.view?.captureDraft();
+						updateReference();
+					}
 					return ConfirmResult.DONT_SAVE;
 				},
 			};

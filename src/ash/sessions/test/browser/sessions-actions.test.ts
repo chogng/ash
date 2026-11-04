@@ -358,7 +358,11 @@ class TestQuickInputService implements IQuickInputService {
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		const picker = new TestQuickPick<TItem>(() => {
 			const label = this.labels.shift();
-			if (label) picker.chooseItem(label);
+			if (label) {
+				picker.chooseItem(label);
+			} else if (label === null) {
+				picker.hide();
+			}
 		});
 		this.picker = picker as unknown as TestQuickPick<IQuickPickItem>;
 		return picker;
@@ -393,7 +397,6 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	constructor(private readonly onShow: () => void) { super(); }
 	private readonly acceptEmitter = this._register(new Emitter<IQuickPickDidAcceptEvent>());
-			else if (label === null) picker.hide();
 	private readonly hideEmitter = this._register(new Emitter<IQuickInputHideEvent>());
 	readonly onDidAccept = this.acceptEmitter.event;
 	readonly onDidHide = this.hideEmitter.event;

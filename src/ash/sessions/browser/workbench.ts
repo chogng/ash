@@ -23,7 +23,7 @@ import { SessionsAgentThreadService } from './agentHost/sessionsAgentThreadServi
 import { SessionsSearchService } from '../contrib/providers/agentHost/browser/sessionsSearchService.js';
 import { SessionFileSystemContribution } from '../contrib/providers/agentHost/browser/sessionFileSystemContribution.js';
 import { ISessionFolderAuthorizationService, sessionWorkspaceUri } from '../common/sessionWorkspace.js';
-import { ISessionProviderScopeService, ISessionPrimaryProviderServices, SessionProviderScopeService, SessionProviderServices, captureInstructionImports } from './agentHost/sessionProviderScopeService.js';
+import { ISessionProviderScopeService, ISessionPrimaryProviderServices, SessionProviderScopeService, SessionProviderServices, captureInstructionImports, type ISessionProviderScope } from './agentHost/sessionProviderScopeService.js';
 import { SessionsChatService } from './agentHost/sessionsChatService.js';
 import { SessionsLanguageModelsService } from './agentHost/sessionsLanguageModelsService.js';
 import { SessionsPromptsService } from './agentHost/sessionsPromptsService.js';
@@ -647,12 +647,13 @@ export abstract class Workbench extends Disposable {
 		} else services.registerSingleton(ILanguageDiagnosticsService, createDiagnostics);
 		services.registerInstance(IAppServerHookApi, options.api.hooks);
 		services.registerInstance(ISessionPrimaryProviderServices, this._register(primaryHostServices.createInstance(SessionProviderServices)));
-		const providerScopes = this._register(services.createInstance(SessionProviderScopeService, provider.id));
+		const providerScopes = this._register(services.createInstance(SessionProviderScopeService, provider.id,
+			(scope: ISessionProviderScope) => search.forScope(scope)));
 		services.registerInstance(ISessionProviderScopeService, providerScopes);
+		const search = services.createInstance(SessionsSearchService, provider.id, options.workspace);
 		services.registerInstance(IInstructionService, { ...options.api.instructions, captureImports: sessionId => captureInstructionImports(providerScopes.getScope(sessionId), sessionId) });
 		this._register(services.createInstance(SessionFileSystemContribution, provider.id));
 		if (options.api.appServer.isAvailable) {
-			const search = services.createInstance(SessionsSearchService, provider.id, options.workspace);
 			services.registerInstance(IFileSearchService, search);
 			services.registerInstance(IAgentHostInputCompletionService, search);
 			services.registerInstance(IContentSearchService, search);

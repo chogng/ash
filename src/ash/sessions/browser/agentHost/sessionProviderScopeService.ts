@@ -1,7 +1,7 @@
 import { localize } from '../../../nls.js';
 import { IMcpServerManagementService } from '../../../platform/mcp/common/mcpServerManagementService.js';
 import { ILanguageModelToolsService } from '../../../workbench/contrib/chat/common/tools/languageModelToolsService.js';
-import { IAgentThreadService, IAgentVoiceService, IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
+import { IAgentHostInputCompletionService, IAgentThreadService, IAgentVoiceService, IAgentConnection } from '../../../platform/agentHost/common/agentService.js';
 import { IInstructionService, type IInstructionImports } from '../../../platform/instructions/common/instructionService.js';
 import { buildAgentHostSessionWorkspace } from '../../common/agentHostSessionWorkspace.js';
 import { sessionWorkspaceUri } from '../../common/sessionWorkspace.js';
@@ -64,6 +64,7 @@ export class SessionProviderScopeService extends Disposable implements ISessionP
 	readonly onDidChangeScopes = this.scopesChanged.event;
 	constructor(
 		private readonly defaultProviderId: string,
+		private readonly bindInputCompletions: (scope: ISessionProviderScope) => IAgentHostInputCompletionService,
 		@ISessionPrimaryProviderServices private readonly primary: SessionProviderServices,
 		@ISessionsProvidersService private readonly providers: ISessionsProvidersService,
 		@ISessionsManagementService private readonly management: ISessionsManagementService,
@@ -83,6 +84,7 @@ export class SessionProviderScopeService extends Disposable implements ISessionP
 		scope.assertCurrent();
 		const child = this.instantiation.createChild();
 		child.registerInstance(IAgentThreadService, scope.thread);
+		child.registerInstance(IAgentHostInputCompletionService, this.bindInputCompletions(scope));
 		// An absent optional host port must mask the ambient window's voice service.
 		child.registerInstance(IAgentVoiceService, createSessionVoiceService(scope));
 		const instructions = scope.services.host.instructions;
