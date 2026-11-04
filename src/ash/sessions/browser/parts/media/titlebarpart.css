@@ -31,7 +31,7 @@
 	width: 100%;
 	flex-direction: row;
 	align-items: center;
-	padding: 0 var(--ash-spacing-size160) 0 var(--ash-spacing-size80);
+	padding: 0 var(--ash-spacing-size40) 0 var(--ash-spacing-size80);
 }
 
 .ash-sessions-titlebar-left {
@@ -64,6 +64,11 @@
 	align-items: center;
 	margin-left: auto;
 	-webkit-app-region: no-drag;
+}
+
+.ash-sessions-titlebar-right > .ash-toolbar:empty {
+	/* An empty toolbar must not leave its sibling spacing at the window edge. */
+	display: none;
 }
 
 .ash-sessions-titlebar-page-content {
