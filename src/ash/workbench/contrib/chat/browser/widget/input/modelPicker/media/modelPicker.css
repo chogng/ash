@@ -25,6 +25,25 @@
 	flex: 1 1 auto;
 }
 
+.ash-chat-input-model-label {
+	display: flex;
+	align-items: baseline;
+	min-width: 0;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-chat-input-model-effort {
+	color: var(--ash-muted-foreground);
+}
+
+[data-color-scheme="light"] .ash-chat-input-model-effort {
+	color: color-mix(
+		in srgb,
+		var(--ash-muted-foreground) 92%,
+		var(--ash-editor-background)
+	);
+}
+
 .ash-chat-model-picker-control > .ash-chat-input-configuration-action {
 	max-width: 96px;
 	flex: 0 0 auto;

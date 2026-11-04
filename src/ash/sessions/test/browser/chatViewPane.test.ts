@@ -634,6 +634,7 @@ test('100 catalog sessions instantiate only opened conversations and reconnect t
 test('Chat title and history switching retain conversations and drafts', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	dom.window.HTMLElement.prototype.scrollTo = () => { };
+	Object.defineProperty(dom.window, 'ResizeObserver', { configurable: true, value: globalThis.ResizeObserver });
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	const subscriptionModel = {
 		model: { provider: 'openai', model: 'gpt-6.1-sol' },
@@ -960,7 +961,8 @@ test('Chat title and history switching retain conversations and drafts', async (
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
 		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, subscriptionModel.displayName);
-		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-label'), subscriptionModel.displayName);
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-effort')?.textContent, 'Medium');
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-label'), `${subscriptionModel.displayName} Medium`);
 		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.hidden, true);
 		assert.equal(inputToolbar?.querySelector('.ash-chat-input-model-access-badge'), null);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='workbench.action.chat.toggleSpeechToText'] button")?.disabled, true);
@@ -1008,8 +1010,10 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(effortMenu.querySelector('[aria-checked="true"]')?.getAttribute('aria-label'), 'Medium');
 	effortMenu.querySelector<HTMLButtonElement>('[aria-label="High"]')!.click();
 	await waitFor(() => effortMenu.querySelector('[aria-checked="true"]')?.getAttribute('aria-label') === 'High');
+	assert.equal(modelButton?.querySelector('.ash-chat-input-model-effort')?.textContent, 'High');
 	openEffort().querySelector<HTMLButtonElement>('[aria-label="Medium"]')!.click();
 	await waitFor(() => effortMenu.querySelector('[aria-checked="true"]')?.getAttribute('aria-label') === 'Medium');
+	assert.equal(modelButton?.querySelector('.ash-chat-input-model-effort')?.textContent, 'Medium');
 	openEffort();
 	assert.ok(effortMenu.contains(dom.window.document.activeElement), dom.window.document.activeElement?.outerHTML.slice(0, 500));
 	const tab = new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });

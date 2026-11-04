@@ -3752,6 +3752,34 @@ suite('chatInput browser component', () => {
 		});
 	}
 
+	for (const theme of ['light', 'hcDark']) {
+		test(`model menu shows the localized effort inside its trigger in ${theme}`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/chatInput.html?modelMenuConfiguration&locale=zh-CN&theme=${theme}`);
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const model = page.getByRole('button', { name: 'Test Model 低', exact: true });
+			const effort = model.locator('.ash-chat-input-model-effort');
+			await expect(effort).toBeVisible();
+			await expect(effort).toHaveText('低');
+			await expect(effort).toHaveCSS('color', theme === 'light' ? 'color(srgb 0.505726 0.505726 0.505726)' : 'rgb(255, 255, 255)');
+			const label = model.locator('.ash-chat-input-model-label');
+			await expect(label).toHaveCSS('align-items', 'baseline');
+			const nameBounds = (await label.locator('.ash-chat-input-picker-label').first().boundingBox())!;
+			const effortBounds = (await effort.boundingBox())!;
+			expect(effortBounds.x - (nameBounds.x + nameBounds.width)).toBeGreaterThan(0);
+			const modelBounds = (await model.boundingBox())!;
+			const labelBounds = (await label.boundingBox())!;
+			expect(labelBounds.y + labelBounds.height / 2).toBeCloseTo(modelBounds.y + modelBounds.height / 2);
+			await expect(page.locator('.ash-chat-input-configuration-action')).toBeHidden();
+			await model.press('ArrowDown');
+			const picker = page.locator('.ash-chat-model-picker');
+			await expect(picker).toBeVisible();
+			await picker.getByRole('menuitem', { name: '推理强度' }).press('ArrowRight');
+			await page.getByRole('menuitemradio', { name: '高', exact: true }).click();
+			await expect(page.getByRole('button', { name: 'Test Model 高', exact: true })).toBeVisible();
+		});
+	}
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`mode menu fits its contents and retains keyboard selection in ${locale}`, async function () {
 			const { page } = browserTests;
