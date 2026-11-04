@@ -43,6 +43,20 @@ suite('chatTranscript browser component', () => {
 			await expect(editor.getByText(description)).toBeHidden();
 			await expectEditText('Original request');
 			await expect(card).toBeHidden();
+			const send = editor.getByRole('button', { name: locale === 'en' ? 'Send edited request' : '发送编辑后的请求', exact: true });
+			if (!cowork) {
+				await expect(send).toBeEnabled();
+				await expect(send).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				await expect.poll(() => send.evaluate(button => {
+					const { width, height } = button.getBoundingClientRect();
+					const radius = parseFloat(getComputedStyle(button).borderTopLeftRadius);
+					return width === height && radius > 0 && radius < width / 2;
+				})).toBe(true);
+				await input.press('ControlOrMeta+a');
+				await input.press('Backspace');
+				await expect(send).toBeDisabled();
+				await expect(send).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			}
 			await replaceEditText('Cancelled change');
 			await page.keyboard.press('Escape');
 			await expect(input).toHaveCount(0);
@@ -90,7 +104,6 @@ suite('chatTranscript browser component', () => {
 			await expect(chat.locator('.ash-chat-request-editor')).toHaveJSProperty('scrollWidth', await chat.locator('.ash-chat-request-editor').evaluate(element => element.clientWidth));
 			await input.press('Control+Enter');
 			await expect(chat.locator('.ash-chat-request-editor')).toHaveAttribute('aria-busy', 'true');
-			const send = chat.getByRole('button', { name: locale === 'en' ? 'Send edited request' : '发送编辑后的请求', exact: true });
 			await expect(send).toBeDisabled();
 			await draftClickTarget.click();
 			await expect(editor).toHaveAttribute('aria-busy', 'true');

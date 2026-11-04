@@ -1337,11 +1337,16 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with
 		assert.equal(form.querySelector('[data-action-id="ash.chat.input.model"]'), null);
 		assert.ok(footer.querySelector('[data-action-id="ash.chat.input.model"]'));
 		assert.equal(footer.querySelector('[data-action-id="ash.chat.input.send"]'), null);
-		assert.equal(form.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		const sendButton = '[data-action-id="ash.chat.input.send"] button';
+		assert.equal(form.querySelector<HTMLButtonElement>(sendButton)?.disabled, true);
 		fixture.input.appendToDraft('Keep this text');
 		assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep this text');
 		assert.deepEqual(sent, []);
-		assert.ok(form.querySelector('[data-action-id="ash.chat.input.send"] button'));
+		assert.equal(form.querySelector<HTMLButtonElement>(sendButton)?.disabled, false);
+		const actions = form.querySelector('.ash-chat-input-toolbars.ash-chat-input-inline-toolbar');
+		assert.ok(actions);
+		assert.ok(actions.contains(form.querySelector(sendButton)));
+		assert.ok(actions.contains(form.querySelector('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')));
 		const ring = footer.querySelector<HTMLButtonElement>('.ash-chat-context-usage-button')!;
 		assert.equal(ring.hidden, false);
 		assert.equal(ring.disabled, true);

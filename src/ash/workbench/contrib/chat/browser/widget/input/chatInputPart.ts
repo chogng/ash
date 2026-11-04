@@ -1566,9 +1566,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			(isVoiceInputModeAvailable(this.voiceInputMode) === 'both' || this.voiceInputMode.voiceAvailable.get() && voice?.isConnected);
 		const trailingActions: IAction[] = [];
 		const executionActions = this.options.inlineEdit ? [] : this.executeMenu.getActions({ arg: this.executionContext() }).flatMap(([, actions]) => actions);
+		const keepSendVisible = this.inlineActionsToolbar && !this.toolbarState.canInterrupt && !voice?.isActive;
 		if (executionActions.length) {
 			trailingActions.push(...executionActions);
-		} else if (this.toolbarState.hasInput) {
+		} else if (this.toolbarState.hasInput || keepSendVisible) {
 			const label = this.options.inlineEdit ? localize('chat.edit.resend', 'Send edited request') : localize('chat.input.send', 'Send');
 			const tooltip = this.options.inlineEdit ? label : this.toolbarState.inputKind === 'command' ? localize('chat.input.runCommand', 'Run command') : localize('chat.input.sendMessage', 'Send message');
 			trailingActions.push(new ChatInputAction('ash.chat.input.send', label, tooltip, Lxicon.arrowUp, this.toolbarState.canSubmit, 'send', () => this.inputContainer.requestSubmit()));

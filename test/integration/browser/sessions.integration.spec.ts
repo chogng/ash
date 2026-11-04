@@ -1191,12 +1191,30 @@ test('the new Session composer keeps its pickers and dictation in keyboard navig
 	await page.keyboard.press('Tab');
 	const dictation = page.locator('.ash-sessions-chat-slot.active [data-action-id="workbench.action.chat.toggleSpeechToText"] button');
 	await expect(dictation).toBeFocused();
+	const actions = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-toolbars.ash-chat-input-inline-toolbar');
+	const send = actions.locator('.ash-chat-input-send-action');
+	await expect(send).toBeDisabled();
+	await expect(send).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	await page.keyboard.press('Tab');
 	await expect(picker).toBeFocused();
 	await page.keyboard.press('Tab');
 	await expect(workspace).toBeFocused();
 	await page.keyboard.press('Tab');
 	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-input-mode-action')).toBeFocused();
+	await input.focus();
+	await page.keyboard.insertText('Draft');
+	await expect(send).toBeEnabled();
+	await expect(send).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	await expect.poll(() => actions.evaluate(element => {
+		const mic = element.querySelector('.ash-chat-input-mic-action')!;
+		const send = element.querySelector('.ash-chat-input-send-action')!;
+		const micBounds = mic.getBoundingClientRect();
+		const sendBounds = send.getBoundingClientRect();
+		const radius = parseFloat(getComputedStyle(send).borderTopLeftRadius);
+		return micBounds.width === sendBounds.width && sendBounds.width === sendBounds.height
+			&& micBounds.top === sendBounds.top && micBounds.right <= sendBounds.left
+			&& radius > 0 && radius < sendBounds.width / 2;
+	})).toBe(true);
 });
 
 for (const locale of ['en', 'zh-CN']) {
