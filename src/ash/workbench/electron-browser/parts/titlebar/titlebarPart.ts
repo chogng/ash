@@ -15,7 +15,7 @@ import {
 	type ITitlebarPartFactoryOptions,
 } from '../../../browser/parts/titlebar/titlebarPart.js';
 import { NativeMenubarControl } from './menubarControl.js';
-import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { IThemeService, type IColorTheme } from '../../../../platform/theme/common/themeService.js';
 import { titleBarActionForeground, titleBarBackground } from '../../../common/theme.js';
 import { dialogBackdropBackground } from '../../../../platform/theme/common/colors/componentColors.js';
 import { INativeHostService } from '../../../common/services.js';
@@ -113,10 +113,14 @@ class AuxiliaryElectronTitlebarPart extends AuxiliaryBrowserTitlebarPart {
 }
 
 /** Applies titlebar colors to the operating-system window controls for one renderer. */
-export function bindWindowControlTheme(themeService: IThemeService, hostService: INativeHostApi): IDisposable {
+export function bindWindowControlTheme(
+	themeService: IThemeService,
+	hostService: INativeHostApi,
+	getBackgroundColor: (theme: IColorTheme) => string | undefined = theme => theme.getColorCss(titleBarBackground),
+): IDisposable {
 	const update = (): void => {
 		const theme = themeService.getColorTheme();
-		const backgroundColor = theme.getColorCss(titleBarBackground);
+		const backgroundColor = getBackgroundColor(theme);
 		const symbolColor = theme.getColorCss(titleBarActionForeground);
 		const backdropColor = theme.getColorCss(dialogBackdropBackground);
 		if (!backgroundColor || !symbolColor || !backdropColor) {

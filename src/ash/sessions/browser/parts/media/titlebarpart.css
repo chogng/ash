@@ -10,12 +10,6 @@
 	);
 }
 
-.ash-workbench[data-color-scheme="light"] .ash-sessions-titlebar {
-	--ash-sessions-titlebar-background: var(
-		--ash-sessions-conversation-background
-	);
-}
-
 .ash-sessions-titlebar::after {
 	/* Continue the sidebar's border paint at the same Grid edge. */
 	content: "";

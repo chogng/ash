@@ -1,11 +1,13 @@
 import { ServiceCollection } from '../../../platform/instantiation/common/serviceCollection.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
-import { IThemeService } from '../../../platform/theme/common/themeService.js';
+import { IThemeService, type IColorTheme } from '../../../platform/theme/common/themeService.js';
+import { ColorScheme, isDarkColorScheme } from '../../../platform/theme/common/theme.js';
 import './media/titlebarpart.css';
 import './titlebar/media/menubarControl.css';
-import '../../common/theme.js';
+import { sessionsConversationBackground } from '../../common/theme.js';
 import { h } from '../../../base/browser/dom.js';
 import { observeResize } from '../../../base/browser/observer.js';
+import { Color } from '../../../base/common/color.js';
 import type { ActionViewItemProvider } from '../../../base/browser/ui/actionbar/actionbar.js';
 import type { IAction } from '../../../base/common/actions.js';
 import { environment } from '../../../base/common/platform.js';
@@ -23,7 +25,20 @@ import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { observableFromEvent } from '../../../base/common/observable.js';
 import { Event } from '../../../base/common/event.js';
 import { SideBarVisibleContext } from '../../../workbench/common/contextkeys.js';
+import { titleBarBackground } from '../../../workbench/common/theme.js';
 import { toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+
+/** The titlebar surface to the right of the sidebar also backs the window controls. */
+export function getSessionsTitlebarBackground(theme: IColorTheme): string | undefined {
+	const shell = theme.getColor(titleBarBackground);
+	const background = theme.colorScheme === ColorScheme.Light ? theme.getColor(sessionsConversationBackground) ?? shell : shell;
+	if (!background) return undefined;
+	if (background.isOpaque()) return Color.Format.CSS.formatHex(background);
+
+	// Composite translucent custom colors over the Sessions shell before handing them to Electron.
+	const workbench = theme.getColor('workbench.background') ?? (isDarkColorScheme(theme.colorScheme) ? Color.black : Color.white);
+	return Color.Format.CSS.formatHex(background.flatten(shell ?? workbench, workbench));
+}
 
 /** The window owns the titlebar host; the visible page owns its content and mount lifetime. */
 export interface ISessionsTitlebarService {
@@ -61,6 +76,7 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 	) {
 		super(container, themeService, storageService, 0);
 		this.domNode.classList.add('ash-sessions-titlebar');
+		this.updateStyles();
 		const left = h(container.ownerDocument, 'div');
 		left.className = 'ash-sessions-titlebar-left';
 		this.contentDomNode.append(left);
@@ -137,6 +153,10 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 			presentation: 'inherit-foreground',
 			actionViewItemProvider: (action, options) => this.activityActionViewItemProvider?.(action, options),
 		}));
+	}
+
+	public override updateStyles(): void {
+		this.domNode.style.setProperty('--ash-sessions-titlebar-background', getSessionsTitlebarBackground(this.theme) ?? '');
 	}
 
 	public setPageContent(content: HTMLElement): IDisposable {
