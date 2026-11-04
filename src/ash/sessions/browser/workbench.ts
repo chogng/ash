@@ -1093,7 +1093,7 @@ export abstract class Workbench extends Disposable {
 					command: {
 						id: 'ash.sessions.toggleBrowser', title: localize2('sessions.cards.toggleBrowser', 'Toggle browser pane'),
 						icon: Lxicon.browserExplore, toggled: ContextKeyExpr.equals('sessions.browserVisible', true),
-					}, when: ContextKeyExpr.equals('sessions.toolsAvailable', true), group: 'navigation', order: 1.5
+					}, when: ContextKeyExpr.equals('sessions.toolsAvailable', true), group: 'navigation', order: 4.5
 				},
 			}))));
 		}
