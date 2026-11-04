@@ -19,7 +19,7 @@ import { Position } from '../../../../../../editor/common/core/position.js';
 import { Range } from '../../../../../../editor/common/core/range.js';
 import { TextModel } from '../../../../../../editor/common/model/textModel.js';
 import { LineInjectedText } from '../../../../../../editor/common/textModelEvents.js';
-import { type ChatInputEditorOptions, type IChatInputEditor } from './chatInputEditorRegistry.js';
+import { CHAT_INPUT_DEFAULT_MAX_HEIGHT, type ChatInputEditorOptions, type IChatInputEditor } from './chatInputEditorRegistry.js';
 import { CHAT_INPUT_LANGUAGE_ID, createChatCommandCompletionProvider, createChatSkillCompletionProvider } from './editor/chatInputCompletions.js';
 import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
 import { InputEditorCommandArgumentHint } from './editor/chatInputCommandArgumentHint.js';
@@ -34,7 +34,6 @@ const CHAT_INPUT_CARET_INSET = 2;
 const CHAT_INPUT_SCROLLBAR_WIDTH = 8;
 // The input container owns the inset; editor heights exclude it to avoid applying it twice.
 const CHAT_INPUT_MIN_HEIGHT = 40;
-const CHAT_INPUT_MAX_HEIGHT = 314;
 
 /** Stanza-backed embedded editor hosted by the Chat input part. */
 export class ChatInputEditor extends Disposable implements IChatInputEditor {
@@ -61,7 +60,7 @@ export class ChatInputEditor extends Disposable implements IChatInputEditor {
 	) {
 		super();
 		this.minimumHeight = options.height?.minimum ?? CHAT_INPUT_MIN_HEIGHT;
-		this.maximumHeight = options.height?.maximum ?? CHAT_INPUT_MAX_HEIGHT;
+		this.maximumHeight = options.height?.maximum ?? CHAT_INPUT_DEFAULT_MAX_HEIGHT;
 		this.tabFocusMode = options.tabFocusMode ?? false;
 		this.height = this.minimumHeight;
 		this.element = h(options.container.ownerDocument, 'div');

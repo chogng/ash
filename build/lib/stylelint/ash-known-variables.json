@@ -338,6 +338,7 @@
 		"--ash-chat-input-shadow",
 		"--ash-chat-input-toolbar-gap",
 		"--ash-chat-request-font-size",
+		"--ash-chat-transcript-composer-overlap",
 		"--ash-chat-transcript-overlap",
 		"--ash-chat-transcript-surface",
 		"--ash-checkbox-background",

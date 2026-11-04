@@ -15,7 +15,7 @@ import { ChatResourceGroupWidget } from './chatContentParts/chatResourceGroupWid
 import { DefaultChatAttachmentWidget } from '../attachments/chatAttachmentWidgets.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ChatAttachmentsContentPart } from './chatContentParts/chatAttachmentsContentPart.js';
-import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h } from '../../../../../base/browser/dom.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { ChatTurnErrorAction, IChatListItem } from '../../common/model/chatViewModel.js';
@@ -44,6 +44,7 @@ import { IQuickInputService } from '../../../../../platform/quickinput/common/qu
 export interface ChatRequestInputOptions {
 	readonly container: HTMLElement;
 	readonly descriptionId: string;
+	readonly initialHeight: number;
 	readonly submit: (text: string, contexts: readonly ResolvedChatContext[]) => Promise<void>;
 	readonly reportError: (error: unknown) => void;
 }
@@ -59,6 +60,8 @@ interface ChatListItemRendererOptions {
 	readonly contextExpansion: Map<string, boolean>;
 	readonly thinkingExpansion: Map<string, boolean>;
 	readonly onDidChangeHeight: () => void;
+	readonly beginRequestEdit: (close: () => boolean) => IDisposable | undefined;
+	readonly onWillChangeRequestEditor: (opening: boolean) => () => void;
 	readonly onDidChangeMarkdownHeight: (id: string) => void;
 	readonly onDidChangeContent: () => void;
 	readonly mcpAppDelegate?: IChatMcpAppDelegate;
@@ -307,7 +310,6 @@ export class ChatListItemRenderer extends Disposable {
 			if (this.edit.value || !this.item.requestSource || !this.options.isVisible()) return;
 			const source = this.item.requestSource;
 			const store = new DisposableStore();
-			this.edit.value = store;
 			const editor = h(this.element.ownerDocument, 'div');
 			editor.className = 'ash-chat-request-editor';
 			const editorHost = h(editor.ownerDocument, 'div');
@@ -319,6 +321,29 @@ export class ChatListItemRenderer extends Disposable {
 			const feedback = h(editor.ownerDocument, 'div');
 			feedback.setAttribute('role', 'status');
 			editor.append(explanation, feedback);
+			const close = (restoreFocus = true): void => {
+				const returnToEdit = restoreFocus && this.options.isVisible() && editor.contains(editor.ownerDocument.activeElement);
+				const restoreReadingPosition = this.options.isVisible() ? this.options.onWillChangeRequestEditor(false) : undefined;
+				this.edit.clear();
+				if (returnToEdit) editTarget.focus({ preventScroll: true });
+				restoreReadingPosition?.();
+				this.options.onDidChangeHeight();
+				this.options.onDidChangeContent();
+			};
+			let pending = false;
+			let requestInput: IChatInputPart | undefined;
+			const canClose = () => !pending && !requestInput?.isSubmitting;
+			const editLease = this.options.beginRequestEdit(() => {
+				if (!canClose()) return false;
+				close(false);
+				return true;
+			});
+			if (!editLease) { store.dispose(); return; }
+			store.add(editLease);
+			this.edit.value = store;
+			const originalBounds = requestText.getBoundingClientRect();
+			const restoreReadingPosition = this.options.onWillChangeRequestEditor(true);
+			if (this.options.createRequestInput) editor.style.inlineSize = `${originalBounds.width}px`;
 			requestText.before(editor);
 			requestText.hidden = true;
 			if (actions) actions.hidden = true;
@@ -327,14 +352,6 @@ export class ChatListItemRenderer extends Disposable {
 				requestText.hidden = false;
 				if (actions) actions.hidden = false;
 			}));
-			const close = (restoreFocus = true): void => {
-				const returnToEdit = restoreFocus && this.options.isVisible() && editor.contains(editor.ownerDocument.activeElement);
-				this.edit.clear();
-				if (returnToEdit) editTarget.focus();
-				this.options.onDidChangeHeight();
-				this.options.onDidChangeContent();
-			};
-			let pending = false;
 			let attempt: { signature: string; commandId: string; } | undefined;
 			const reportError = (error: unknown): void => {
 				if (this.edit.value === store) feedback.textContent = localize('chat.edit.failed', 'Could not send the edited request: {0}', String(error));
@@ -356,7 +373,10 @@ export class ChatListItemRenderer extends Disposable {
 			};
 			try {
 				if (this.options.createRequestInput) {
-					const input = store.add(this.options.createRequestInput({ container: editor, descriptionId: explanation.id, submit, reportError }));
+					const style = getWindow(requestText).getComputedStyle(requestText);
+					const initialHeight = Math.max(0, originalBounds.height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
+						- parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth));
+					const input = requestInput = store.add(this.options.createRequestInput({ container: editor, descriptionId: explanation.id, initialHeight, submit, reportError }));
 					input.appendToDraft(this.item.text);
 					input.focus();
 				} else {
@@ -400,20 +420,22 @@ export class ChatListItemRenderer extends Disposable {
 			} catch (error) {
 				this.edit.clear();
 				throw error;
+			} finally {
+				restoreReadingPosition();
 			}
 			// Wait until the outside click finishes so collapsing the editor does not move its target.
 			const quickInput = this.instantiationService.getOptional(IQuickInputService);
-			const dismiss = store.add(new RunOnceScheduler(() => { if (!pending) close(false); }, 0));
+			const dismiss = store.add(new RunOnceScheduler(() => { if (canClose()) close(false); }, 0));
 			let pressedInside = false;
 			store.add(addDisposableListener(editor.ownerDocument, 'pointerdown', event => {
 				pressedInside = event.composedPath().includes(editor) || !!quickInput?.currentQuickInput;
 			}, true));
 			store.add(addDisposableListener(editor.ownerDocument, 'click', event => {
-				if (!pending && event.detail > 0 && !pressedInside && !event.composedPath().includes(editor)) dismiss.schedule();
+				if (canClose() && event.detail > 0 && !pressedInside && !event.composedPath().includes(editor)) dismiss.schedule();
 			}, true));
 			store.add(addDisposableListener(editor, 'keydown', event => {
 				if (event.isComposing) return;
-				if (event.key === 'Escape' && !pending) { event.preventDefault(); event.stopPropagation(); close(); }
+				if (event.key === 'Escape' && canClose()) { event.preventDefault(); event.stopPropagation(); close(); }
 			}));
 			this.options.onDidChangeHeight(); this.options.onDidChangeContent();
 		};

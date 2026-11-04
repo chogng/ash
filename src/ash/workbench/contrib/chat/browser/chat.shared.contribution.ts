@@ -260,6 +260,22 @@ configurationRegistry.registerConfiguration(agentsWindowGraphicConfiguration);
 configurationRegistry.registerConfiguration(chatUpvoteAnimationConfiguration);
 
 configurationRegistry.registerConfiguration<boolean>({
+	key: ChatConfiguration.AutoFollowReplies,
+	defaultValue: true,
+	scope: ConfigurationScope.APPLICATION,
+	schema: { type: 'boolean' },
+	parse(value: unknown): boolean {
+		if (typeof value === 'boolean') { return value; }
+		throw new TypeError(localize('chat.autoFollowReplies.invalid', 'The Chat auto-follow setting must be a boolean.'));
+	},
+	setting: {
+		valueType: 'boolean',
+		get title() { return localize('chat.autoFollowReplies.title', 'Automatically follow new replies'); },
+		get description() { return localize('chat.autoFollowReplies.description', 'Follow new replies when the conversation is at the bottom. Scrolling up or editing a message pauses following.'); },
+	},
+});
+
+configurationRegistry.registerConfiguration<boolean>({
 	key: ChatConfiguration.TipsEnabled,
 	defaultValue: true,
 	scope: ConfigurationScope.APPLICATION,

@@ -15,6 +15,7 @@ export enum ChatConfiguration {
 	RequestQueueingDefaultAction = 'chat.requestQueuing.defaultAction',
 	AutoExpandToolFailures = 'chat.tools.autoExpandFailures',
 	TipsEnabled = 'chat.tips.enabled',
+	AutoFollowReplies = 'chat.autoFollowReplies',
 }
 
 export enum ChatNotificationMode {

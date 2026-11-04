@@ -8,6 +8,20 @@
 	flex: 1 1 auto;
 }
 
+.ash-chat-scroll-to-latest.ash-button {
+	position: absolute;
+	inset-block-end: var(--ash-spacing-size80);
+	inset-inline: 0;
+	margin-inline: auto;
+	z-index: 4;
+	inline-size: var(--ash-spacing-size280);
+	block-size: var(--ash-spacing-size280);
+	padding: 0;
+	border-radius: var(--ash-cornerRadius-large);
+	box-shadow: 0 var(--ash-spacing-size20) var(--ash-spacing-size80)
+		var(--ash-widget-shadow);
+}
+
 /* Continue the fixed chat header over the leading edge of the scrolling transcript. */
 .ash-chat-transcript-viewport::before {
 	content: "";
@@ -24,14 +38,37 @@
 }
 
 :where([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
-	.ash-chat-transcript-viewport::before {
+	.ash-chat-transcript-viewport::before,
+:where([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-chat-transcript-viewport::after {
 	display: none;
 }
 
 @media (forced-colors: active) {
-	.ash-chat-transcript-viewport::before {
+	.ash-chat-transcript-viewport::before,
+	.ash-chat-transcript-viewport::after {
 		display: none;
 	}
+}
+
+/* Soften the transcript edge above the fixed composer while more messages remain below. */
+.ash-chat-transcript-has-more-below:not(
+		:has(> .ash-scrollbar-viewport:focus-within)
+	)::after {
+	content: "";
+	position: absolute;
+	inset: auto 0 0;
+	block-size: calc(
+		var(--ash-spacing-size320) +
+			var(--ash-chat-transcript-composer-overlap, 0px)
+	);
+	z-index: 1;
+	pointer-events: none;
+	background: linear-gradient(
+		to bottom,
+		transparent,
+		var(--ash-chat-transcript-surface, var(--ash-editor-background))
+	);
 }
 
 .ash-chat-transcript-viewport > .ash-scrollbar-viewport {
@@ -46,6 +83,49 @@
 
 .ash-chat-transcript {
 	padding: 6px 12px 16px;
+}
+
+@media (forced-colors: none) {
+	.ash-chat-transcript-overlaps-composer:not(
+		:where([data-color-scheme="hcDark"] *, [data-color-scheme="hcLight"] *)
+	) {
+		margin-block-end: calc(
+			-1 * var(--ash-chat-transcript-composer-overlap)
+		);
+		isolation: isolate;
+	}
+
+	.ash-chat-transcript-overlaps-composer:not(
+			:where(
+				[data-color-scheme="hcDark"] *,
+				[data-color-scheme="hcLight"] *
+			)
+		)
+		> .ash-scrollbar-viewport {
+		scroll-padding-block-end: var(--ash-chat-transcript-composer-overlap);
+	}
+
+	/* Only a persistent changes row needs extra space at the bottom. The jump-only
+	   row disappears there, so reserving its height would move the scroll target. */
+	:where(
+			.ash-chat:has(
+				> .ash-chat-input-part
+					> .ash-chat-input-changes
+					> .ash-chat-changes-pill:not([hidden])
+			)
+		)
+		> .ash-chat-transcript-overlaps-composer:not(
+			:where(
+				[data-color-scheme="hcDark"] *,
+				[data-color-scheme="hcLight"] *
+			)
+		)
+		> .ash-scrollbar-viewport
+		> .ash-chat-transcript-content {
+		padding-block-end: calc(
+			16px + var(--ash-chat-transcript-composer-overlap)
+		);
+	}
 }
 .ash-chat-empty {
 	color: var(--ash-description-foreground);
@@ -203,6 +283,17 @@ article.ash-chat-user-message > pre {
 	--ash-chat-input-padding: var(--ash-spacing-size80)
 		var(--ash-spacing-size120);
 	--ash-chat-input-radius: var(--ash-cornerRadius-xLarge);
+}
+.ash-chat-request-editor:has(> .ash-chat-input-part) {
+	max-inline-size: 90%;
+	min-inline-size: min(
+		90%,
+		calc(
+			3 * var(--ash-toolbar-actionSize) + 2 * var(--ash-spacing-size120) +
+				2 * var(--ash-strokeThickness) + 2 * var(--ash-spacing-size80)
+		)
+	);
+	margin-inline-start: auto;
 }
 .ash-chat-request-editor .ash-chat-input-container:focus-within,
 .ash-chat-request-editor.ash-chat-input-container:focus-within {

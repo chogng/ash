@@ -221,7 +221,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			}));
 		}
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
-			createRequestInput: ({ container, descriptionId, submit, reportError }: ChatRequestInputOptions) => {
+			createRequestInput: ({ container, descriptionId, initialHeight, submit, reportError }: ChatRequestInputOptions) => {
 				const delegate: ChatInputDelegate = {
 					...inputDelegate,
 					voiceConversation: undefined,
@@ -236,7 +236,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				};
 				const part = scopedInstantiation.createInstance(ChatInputPart, container, delegate, contextMenuService, contextViewService, accessibleViewService, notifications, { create: (options: ChatInputEditorOptions) => this.input.createEditor(options) }, [], {
 					layout: 'compact', modePicker: 'hidden', modelPickerPosition: 'trailing',
-					renderSecondaryToolbar: false, draftStorage: 'host', inlineEdit: { descriptionId, reportError },
+					renderSecondaryToolbar: false, draftStorage: 'host', inlineEdit: { descriptionId, initialHeight, reportError },
 				});
 				const state = this.model.inputState;
 				part.render({
@@ -327,6 +327,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.input = this._register(createInputPart
 			? createInputPart(this.element, inputDelegate)
 			: instantiationService.createInstance(ChatInputPart, this.element, inputDelegate, contextMenuService, contextViewService, accessibleViewService, notifications, ChatInputEditors, [], { modePicker: 'visible', modelPickerPosition: 'leading', configureModelInMenu: viewOptions?.configureModelInMenu, get workspacePickerDelegate() { return viewOptions?.workspacePickerDelegate; } }));
+		this.listWidget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm);
 		this._register(widgets.register(this));
 		this._register(scopedInstantiation.createInstance(ChatRequestOriginPart, this.element, model));
 		const voiceContainer = h(ownerDocument, 'div');
@@ -349,6 +350,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			const state = previous.getViewState();
 			previous.element.replaceWith(widget.element);
 			this.listWidget = widget;
+			widget.setScrollToLatestHost(this.input.changesActionsHost, this.input.composerForm);
 			widget.restoreViewState(state, this.model.items);
 		}));
 		this._register(this.model.onDidChangeComposer(() => { this.input.invalidatePendingInput(); this.listWidget.resetFind(); }));

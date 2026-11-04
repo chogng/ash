@@ -522,6 +522,8 @@
     "settings.editor.selection.description": "选择标签样式和文档打开方式。",
     "settings.chatMessages.label": "消息正文",
     "settings.chatMessages.description": "选择消息文字的字体、基础字号和有用回复动画。",
+    "settings.chatConversationDisplay.label": "对话",
+    "settings.chatConversationDisplay.description": "设置聊天如何显示和跟随对话。",
     "settings.chatInput.label": "消息输入",
     "settings.chatInput.description": "设置消息输入框的字体、字号和行间距。",
     "settings.chatCodeBlocks.label": "代码块",

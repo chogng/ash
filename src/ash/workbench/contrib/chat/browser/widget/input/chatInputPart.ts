@@ -101,7 +101,7 @@ import { DesktopSlashCommands, parseSlashCommandInput, SlashCommandCatalog, type
 import { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import { isChatQuestionAnswerValid } from '../../../common/model/chatQuestionValidation.js';
 import type { ChatInputDelegate, ChatInputState } from './chatInput.js';
-import { ChatInputEditors, type ChatInputEditorOptions, type IChatInputEditor, type IChatInputEditorProvider } from './chatInputEditorRegistry.js';
+import { CHAT_INPUT_DEFAULT_MAX_HEIGHT, ChatInputEditors, type ChatInputEditorOptions, type IChatInputEditor, type IChatInputEditorProvider } from './chatInputEditorRegistry.js';
 import { ChatInputPickerResponsiveLayout } from './chatInputPickerResponsiveLayout.js';
 import {
 	chatInputStackClass, chatInputStackSlotClass, ChatInputStackSlot,
@@ -175,7 +175,7 @@ export interface ChatInputPartOptions {
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	/** Keep attachment and dictation or stop beside the editor; submit with Enter and keep configuration below. */
 	readonly layout?: 'compact';
-	readonly inlineEdit?: { readonly descriptionId: string; readonly reportError: (error: unknown) => void; };
+	readonly inlineEdit?: { readonly descriptionId: string; readonly initialHeight: number; readonly reportError: (error: unknown) => void; };
 	readonly renderSecondaryToolbar?: boolean;
 	/** Host-owned permission policy presented immediately after the mode picker. */
 	readonly primaryPermissionPicker?: {
@@ -199,6 +199,9 @@ export interface IChatDraftStorage {
 /** Input operations consumed by a Chat pane, independent of its product's composer layout. */
 export interface IChatInputPart extends IDisposable {
 	readonly inputEditor?: IChatInputEditor['codeEditor'];
+	readonly isSubmitting?: boolean;
+	readonly changesActionsHost?: HTMLElement;
+	readonly composerForm?: HTMLElement;
 	createEditor(options: ChatInputEditorOptions): IChatInputEditor;
 	readonly attachmentModel: ChatAttachmentModel;
 	readonly element: HTMLElement;
@@ -439,7 +442,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			ariaDescribedBy: options.inlineEdit?.descriptionId,
 			submitWithModifier: options.inlineEdit ? true : undefined,
 			tabFocusMode: options.inlineEdit ? true : undefined,
-			height: options.inlineEdit ? { minimum: 0 } : undefined,
+			// Different wrapping in the editor can shorten the message. Keep its
+			// original text height so the transcript cannot clamp its scroll position.
+			height: options.inlineEdit ? { minimum: options.inlineEdit.initialHeight, maximum: Math.max(CHAT_INPUT_DEFAULT_MAX_HEIGHT, options.inlineEdit.initialHeight) } : undefined,
 			slashCommands: this.slashCommands,
 			skills: this.skills,
 			hostCompletions: true,
@@ -506,7 +511,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			}));
 			this.inlineActionsToolbar.element.classList.add('ash-chat-input-toolbars');
 			this.inputFooter.append(this.inputToolbar.element);
-			this._register(installChatInputLayout(this.inputContainer, this.input, this.inlineActionsToolbar.element, this.attachmentToolbar.element));
+			this._register(installChatInputLayout(this.inputContainer, this.input, this.inlineActionsToolbar.element, this.attachmentToolbar.element, options.inlineEdit ? 'stacked' : 'adaptive'));
 		} else {
 			this.inputContainer.append(editorHost, this.inputToolbar.element);
 		}
@@ -856,6 +861,11 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	get inputEditor(): IChatInputEditor['codeEditor'] { return this.input.codeEditor; }
 
+	get isSubmitting(): boolean { return this.submitting; }
+
+	get changesActionsHost(): HTMLElement { return this.changesPill.domNode; }
+	get composerForm(): HTMLElement { return this.inputContainer; }
+
 	public createEditor(options: ChatInputEditorOptions): IChatInputEditor {
 		return this.editorProvider.create(options);
 	}
@@ -1021,6 +1031,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			// captured snapshots even when their visible labels stay unchanged.
 			this.input.setSelection({ anchor: previous.length, active: previous.length });
 			this.input.insertText(suffix);
+			// The transcript restores its reading position as soon as the edit opens.
+			// Measure the populated editor before the viewport can clamp to a shorter row.
+			if (this.options.inlineEdit) this.input.layout();
 		}
 		this.renderToolbar();
 	}

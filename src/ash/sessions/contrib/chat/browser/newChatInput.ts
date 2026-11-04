@@ -78,7 +78,7 @@ export class NewChatInputWidget extends ChatInputPart {
 				placeholder: localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question'),
 				tabFocusMode: true,
 				// Let the row center the actual text height beside its 28px controls.
-				height: { minimum: 0, maximum: 240 },
+				height: options.height ?? { minimum: 0, maximum: 240 },
 			}),
 		}, [], {
 			layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', configureModelInMenu: true, renderSecondaryToolbar: false, draftStorage: 'host',

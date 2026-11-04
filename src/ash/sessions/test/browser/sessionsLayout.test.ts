@@ -1176,6 +1176,14 @@ suite('sessions browser component', () => {
 		await accounts.click();
 		await settingsAction.click();
 		await settings.getByRole('button', { name: chinese ? '外观' : 'Appearance', exact: true }).click();
+		const follow = settings.getByRole('switch', { name: chinese ? '自动跟随新回复' : 'Automatically follow new replies', exact: true });
+		await expect(follow).toHaveAttribute('aria-checked', 'true');
+		await follow.press('Space');
+		await expect(follow).toHaveAttribute('aria-checked', 'false');
+		await expect(follow).toBeEnabled();
+		await follow.press('Space');
+		await expect(follow).toHaveAttribute('aria-checked', 'true');
+		await expect(follow).toBeEnabled();
 		await settings.getByRole('searchbox').fill('@id:chat.input.fontSize');
 		const fontSize = settings.locator('[data-settings-item-id="chat.input.fontSize"]').getByRole('spinbutton');
 		await expect(fontSize).toHaveValue('14');

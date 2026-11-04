@@ -8,6 +8,8 @@ import type { SlashCommandCatalog } from '../../../common/slashCommands.js';
 import type { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
 
+export const CHAT_INPUT_DEFAULT_MAX_HEIGHT = 314;
+
 /** Construction inputs shared by Chat input editor implementations. */
 export interface ChatInputEditorOptions {
 	readonly container: HTMLElement;
@@ -109,7 +111,7 @@ class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 	constructor(options: ChatInputEditorOptions) {
 		super();
 		this.minimumHeight = options.height?.minimum ?? 40;
-		this.maximumHeight = options.height?.maximum ?? 314;
+		this.maximumHeight = options.height?.maximum ?? CHAT_INPUT_DEFAULT_MAX_HEIGHT;
 		this.element = h(options.container.ownerDocument, 'textarea');
 		this.element.className = 'ash-chat-textarea-input';
 		this.element.rows = 2;

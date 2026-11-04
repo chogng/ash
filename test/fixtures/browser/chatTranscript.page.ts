@@ -103,6 +103,8 @@ import { ChatWidget, type IChatWidgetModel } from '../../../src/ash/workbench/co
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { IContextViewService, IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
+import { IContextKeyService } from '../../../src/ash/platform/contextkey/common/contextkey.js';
+import { IsSessionsWindowContext } from '../../../src/ash/workbench/common/contextkeys.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { ISpeechService, SpeechToTextStatus, type ISpeechToTextEvent } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
@@ -438,6 +440,7 @@ let appRequests = false;
 let allowAppCsp = false;
 let appCallMode: 'read' | 'delay' | 'error' = 'read';
 let appItems: readonly IChatListItem[] = [];
+let hasConversationChanges = false;
 let appChat: ChatWidget | CoworkWidget | undefined;
 let composerServices: InstantiationService | undefined;
 let dictationEvents: Emitter<ISpeechToTextEvent> | undefined;
@@ -665,7 +668,10 @@ declare global {
 			setUpvoteAnimation(value: string): Promise<void>;
 			showFind(query?: string): void;
 			runNavigationCommand(command: string): Promise<void>;
-			prepareRequestEditing(cowork: boolean): void;
+			prepareRequestEditing(cowork: boolean, text?: string, unanswered?: boolean): void;
+			setAutoFollowReplies(enabled: boolean): Promise<void>;
+			appendChatItem(item: IChatListItem): void;
+			setConversationChanges(visible: boolean): void;
 			requestEdits(): readonly { readonly text: string; readonly commandId: string; readonly itemId: string; readonly contexts?: readonly { readonly name: string; readonly content: string; }[]; }[];
 			finishRequestEdit(failure?: boolean): void;
 			readingState(): ReturnType<ChatListWidget['getViewState']>;
@@ -860,13 +866,21 @@ window.ashChatTranscriptIntegration = {
 	},
 	renderItems: items => { rendererItems = items; list.render(items); },
 	setUpvoteAnimation: value => services.get(IConfigurationService).updateValue('chat.upvoteAnimation', value),
-	prepareRequestEditing: cowork => {
+	prepareRequestEditing: (cowork, text, unanswered) => {
 		requestEditMode = true;
 		window.ashChatTranscriptIntegration.showChatApp(false, cowork);
 		requestEdits.length = 0;
-		appItems = [{ id: 'presentation-entry', type: 'userMessage', text: 'Original request', transient: false, requestSource: { sessionId: 'app-session', threadId: 'app-thread', turnId: 'original-turn', itemId: 'backend-request' } }];
+		const request: IChatListItem = { id: 'presentation-entry', type: 'userMessage', text: text ?? 'Original request', transient: false, requestSource: { sessionId: 'app-session', threadId: 'app-thread', turnId: 'original-turn', itemId: 'backend-request' } };
+		appItems = text === undefined ? [request] : [
+			{ id: 'preceding-answer', type: 'agentMessage', text: 'Earlier response\n\n'.repeat(15), transient: false },
+			request,
+			...(unanswered ? [] : [{ id: 'following-answer', type: 'agentMessage' as const, text: 'Following response', transient: false }]),
+		];
 		chatChanges.fire();
 	},
+	setAutoFollowReplies: enabled => services.get(IConfigurationService).updateValue('chat.autoFollowReplies', enabled),
+	appendChatItem: item => { appItems = [...appItems, item]; chatChanges.fire(); },
+	setConversationChanges: visible => { hasConversationChanges = visible; chatChanges.fire(); },
 	requestEdits: () => requestEdits,
 	finishRequestEdit: failure => completeRequestEdit?.(failure),
 	readingState: () => list.getViewState(),
@@ -1135,6 +1149,9 @@ window.ashChatTranscriptIntegration = {
 		window.ashChatTranscriptIntegration.showApp('read', false, withMedia);
 		root.hidden = true;
 		const chatServices = resources.add(services.createChild());
+		if (new URLSearchParams(location.search).has('sessions')) {
+			IsSessionsWindowContext.bindTo(chatServices.get(IContextKeyService)).set(true);
+		}
 		chatServices.registerInstance(IAccessibleViewService, accessibleView);
 		chatServices.registerInstance(ILanguageModelsService, { onDidChangeModels: Event.None, isModelVisible: () => true } as unknown as ILanguageModelsService);
 		chatServices.registerInstance(IChatSessionNavigationService, {
@@ -1196,7 +1213,7 @@ window.ashChatTranscriptIntegration = {
 			},
 			get inputState() {
 				const aiDisabled = services.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId);
-				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false };
+				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, changes: hasConversationChanges ? { files: 1, additions: 1, deletions: 1 } : undefined };
 			},
 			send: async (text, mode, _skills, contexts, submissionOptions) => { appChatMessages.push({ text, mode, contexts, ...(submissionOptions ? { commandId: submissionOptions.commandId, source: submissionOptions.source } : {}) }); },
 			executeServerCommand: async () => { }, interrupt: async () => { }, refreshChanges: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },
