@@ -5,7 +5,7 @@ import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { autorun, observableFromEvent } from '../../../../base/common/observable.js';
+import { autorun, observableFromEvent, observableValue } from '../../../../base/common/observable.js';
 import { environment } from '../../../../base/common/platform.js';
 import { basename } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
@@ -110,6 +110,7 @@ export class SessionsTitleBarWidget extends Disposable {
 				notifications.error(toErrorMessage(error));
 			}
 		};
+		const menuOpen = observableValue('sessionTitleMenuOpen', false);
 		const menuButton = this._register(new Button(element, {
 			...defaultButtonStyles,
 			presentation: 'quiet',
@@ -118,13 +119,17 @@ export class SessionsTitleBarWidget extends Disposable {
 			iconOnly: true,
 			label: localize('sessions.list.moreActions', 'More Sessions Actions'),
 			onClick: event => {
+				if (menuOpen.get()) {
+					contextMenus.hideContextMenu();
+					return;
+				}
 				const selection = sessions.activeSelection;
 				const target = renameTarget(selection);
 				if (!selection || target === undefined) return;
 				const targetKey = JSON.stringify(target);
 				const actions = createSessionItemActions(selection, commands, listModel, notifications,
 					() => commands.executeCommand('sessions.openInNewWindow', selection));
-				menuButton.domNode.setAttribute('aria-expanded', 'true');
+				menuOpen.set(true, undefined);
 				contextMenus.showContextMenu({
 					getAnchor: () => menuButton.domNode,
 					getActions: () => actions.map(action => action.id === 'agentSession.rename'
@@ -137,13 +142,15 @@ export class SessionsTitleBarWidget extends Disposable {
 						}
 						: action),
 					autoSelectFirstItem: true,
-					onHide: () => menuButton.domNode.setAttribute('aria-expanded', 'false'),
+					onHide: () => menuOpen.set(false, undefined),
 				});
 			},
 		}));
 		menuButton.domNode.classList.add('ash-titlebar-interactive-region', 'ash-sessions-titlebar-menu');
 		menuButton.domNode.setAttribute('aria-haspopup', 'menu');
-		menuButton.domNode.setAttribute('aria-expanded', 'false');
+		this._register(autorun(reader => {
+			menuButton.domNode.setAttribute('aria-expanded', String(menuOpen.read(reader)));
+		}));
 		const finishEdit = (restoreFocus: boolean) => {
 			const shouldRestoreFocus = restoreFocus && edit?.restoreFocus;
 			edit = undefined;
@@ -264,6 +271,6 @@ export class SessionsTitleBarWidget extends Disposable {
 					: workspaceDetails;
 			});
 		}));
-		this._register(titlebar.setSessionContent(element));
+		this._register(titlebar.setSessionContent(element, menuOpen));
 	}
 }

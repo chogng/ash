@@ -22,7 +22,7 @@ import { createServiceIdentifier, IInstantiationService } from '../../../platfor
 import { WindowModeControl } from './titlebar/windowModeControl.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
-import { observableFromEvent } from '../../../base/common/observable.js';
+import { autorun, observableFromEvent, type IObservable } from '../../../base/common/observable.js';
 import { Event } from '../../../base/common/event.js';
 import { SideBarVisibleContext } from '../../../workbench/common/contextkeys.js';
 import { titleBarBackground } from '../../../workbench/common/theme.js';
@@ -43,7 +43,7 @@ export function getSessionsTitlebarBackground(theme: IColorTheme): string | unde
 /** The window owns the titlebar host; the visible page owns its content and mount lifetime. */
 export interface ISessionsTitlebarService {
 	setPageContent(content: HTMLElement): IDisposable;
-	setSessionContent(content: HTMLElement): IDisposable;
+	setSessionContent(content: HTMLElement, menuOpen: IObservable<boolean>): IDisposable;
 }
 
 export const ISessionsTitlebarService = createServiceIdentifier<ISessionsTitlebarService>('sessionsTitlebarService');
@@ -166,10 +166,19 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		});
 	}
 
-	public setSessionContent(content: HTMLElement): IDisposable {
+	public setSessionContent(content: HTMLElement, menuOpen: IObservable<boolean>): IDisposable {
 		this.sessionContent.replaceChildren(content);
+		const menuState = autorun(reader => {
+			if (content.parentElement === this.sessionContent) {
+				this.sessionContent.classList.toggle('session-menu-open', menuOpen.read(reader));
+			}
+		});
 		return toDisposable(() => {
-			if (content.parentElement === this.sessionContent) { content.remove(); }
+			menuState.dispose();
+			if (content.parentElement === this.sessionContent) {
+				this.sessionContent.classList.remove('session-menu-open');
+				content.remove();
+			}
 		});
 	}
 

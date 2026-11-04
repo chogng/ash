@@ -88,8 +88,14 @@
 	display: flex;
 	flex: 1;
 	min-width: 0;
+	align-self: stretch;
 	align-items: center;
 	padding-inline-start: var(--ash-spacing-size40);
+}
+
+.ash-sessions-titlebar-session-content.session-menu-open {
+	/* Let the open menu receive outside clicks in the window's drag region. */
+	-webkit-app-region: no-drag;
 }
 
 .ash-sessions-titlebar-page-content:not(:empty)
