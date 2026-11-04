@@ -7,6 +7,7 @@ import { ChatAuxiliaryWindow } from '../../../src/ash/workbench/contrib/chat/bro
 import { BrowserAuxiliaryWindowService } from '../../../src/ash/workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { registerTestCodeEditorFeatures } from '../codeEditorFeatures.js';
 import { ChatMarkdownContentPart } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownContentPart.js';
+import { wrapTablesWithScrollable } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownTableScrolling.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { IImageEditorService } from '../../../src/ash/workbench/services/imageEditor/common/imageEditorService.js';
 import { ImageEditorService } from '../../../src/ash/workbench/services/imageEditor/browser/imageEditorService.js';
@@ -907,6 +908,7 @@ window.ashChatTranscriptIntegration = {
 		}
 		using renderer = services.createInstance(ChatContentMarkdownRenderer);
 		using expected = renderer.render({ value, supportThemeIcons: true, supportAlertSyntax: true }, { fillInIncompleteTokens: !complete, codeBlockRendererSync: codeNode });
+		wrapTablesWithScrollable(expected.element);
 		// Provider completion is asynchronous; compare formula identity and syntax here.
 		for (const element of [copy, expected.element]) for (const formula of element.querySelectorAll<HTMLElement>('.ash-katex-container')) formula.textContent = formula.dataset.latex!;
 		let layoutError = 0;
@@ -1141,14 +1143,15 @@ window.ashChatTranscriptIntegration = {
 			getActiveConversation: () => ({ sessionId: 'app-session', threadId: 'app-thread' }),
 			openConversation: async () => { if (!requestEditMode) throw new Error('Unexpected conversation navigation'); },
 		} as unknown as IChatSessionNavigationService);
+		chatServices.registerInstance(IChatService, {
+			rewriteRequest: async options => {
+				if (!requestEditMode) { throw new Error('Unexpected request edit'); }
+				requestEdits.push(options);
+				await new Promise<void>((resolve, reject) => { completeRequestEdit = failure => failure ? reject(new Error('Synthetic edit failure')) : resolve(); });
+				return { sessionId: options.sessionId, threadId: 'edited-thread' };
+			}
+		} as IChatService);
 		if (requestEditMode) {
-			chatServices.registerInstance(IChatService, {
-				rewriteRequest: async options => {
-					requestEdits.push(options);
-					await new Promise<void>((resolve, reject) => { completeRequestEdit = failure => failure ? reject(new Error('Synthetic edit failure')) : resolve(); });
-					return { sessionId: options.sessionId, threadId: 'edited-thread' };
-				}
-			} as IChatService);
 			chatServices.registerSingleton(ICommandService, () => chatServices.createInstance(StandaloneCommandService));
 		}
 		chatServices.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected link opening'); } } as unknown as IOpenerService);

@@ -338,6 +338,10 @@ suite('chatTranscript browser component', () => {
 			}
 			await page.evaluate(() => { document.querySelector<HTMLElement>('main')!.style.width = '180px'; });
 			expect(await tool.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+			const copyCommand = tool.getByRole('button', { name: locale === 'en' ? 'Copy command and arguments' : '复制命令与参数', exact: true });
+			const copyLabel = copyCommand.locator('.ash-button-label');
+			await expect(copyCommand).toBeVisible();
+			expect(await copyLabel.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
 			await summary.press('Space');
 			await expect(tool).not.toHaveAttribute('open');
 			await summary.press('Space');

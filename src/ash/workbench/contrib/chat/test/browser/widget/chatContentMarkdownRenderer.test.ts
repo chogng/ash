@@ -56,6 +56,7 @@ function services(overrides: Partial<IExtensionHostApi> = {}, opener: IOpenerSer
 function fragmentContents(element: HTMLElement): string {
 	const copy = element.cloneNode(true) as HTMLElement;
 	for (const fragment of copy.querySelectorAll('.ash-chat-markdown-fragment')) fragment.replaceWith(...fragment.childNodes);
+	for (const viewport of copy.querySelectorAll('.ash-chat-markdown-table-scroll')) viewport.replaceWith(...viewport.childNodes);
 	return copy.innerHTML;
 }
 
@@ -170,67 +171,76 @@ suite('Shared chat Markdown rendering', () => {
 	test('large tails coalesce terminal snapshots and cancel queued work on clear, hide and disposal', async () => {
 		using scope = services();
 		const actions: string[] = [];
-		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document, actionHandler: (_href: string, markdown: IMarkdownString) => actions.push(markdown.value) });
-		const render = mock.method(ChatContentMarkdownRenderer.prototype, 'render');
+		let updates = 0;
+		using part = scope.createInstance(ChatMarkdownContentPart, {
+			ownerDocument: document,
+			actionHandler: (_href: string, markdown: IMarkdownString) => actions.push(markdown.value),
+			asyncRenderCallback: () => updates++,
+		});
 		const frame = () => new Promise<void>(resolve => {
 			const scheduled = scheduleAtNextAnimationFrame(getWindow(part.domNode), () => { scheduled.dispose(); resolve(); });
 		});
 		const prefix = 'Large **stable** [Open](https://example.com) response. '.repeat(128);
-		try {
-			part.tryIncrementalUpdate({ value: prefix + 'intermediate' }, true);
-			part.tryIncrementalUpdate({ value: prefix + 'corrected' }, true);
-			part.tryIncrementalUpdate({ value: prefix + 'terminal' }, false);
-			await changedUntil(part.domNode, () => part.domNode.textContent!.trimEnd().endsWith('terminal'));
-			assert.equal(render.mock.callCount(), 1);
-			const stable = part.domNode.querySelector('strong');
-			part.tryIncrementalUpdate({ value: prefix + 'next' }, true);
-			await changedUntil(part.domNode, () => part.domNode.textContent!.trimEnd().endsWith('next'));
-			assert.equal(part.domNode.querySelector('strong'), stable);
-			part.domNode.querySelector('a')!.click();
-			assert.deepEqual(actions, [prefix + 'next']);
-			part.tryIncrementalUpdate({ value: prefix + 'stale' }, true);
-			part.tryIncrementalUpdate({ value: '' }, false);
-			await frame();
-			assert.equal(part.domNode.textContent, '');
-			part.setVisible(false);
-			const before = render.mock.callCount();
-			part.tryIncrementalUpdate({ value: prefix + 'hidden' }, true);
-			await frame();
-			assert.equal(render.mock.callCount(), before);
-			part.tryIncrementalUpdate({ value: prefix + 'visible terminal' }, false);
-			part.setVisible(true);
-			await changedUntil(part.domNode, () => part.domNode.textContent!.trimEnd().endsWith('visible terminal'));
-			const completed = render.mock.callCount();
-			part.tryIncrementalUpdate({ value: prefix + 'disposed' }, true);
-			part.dispose();
-			await frame();
-			assert.equal(render.mock.callCount(), completed);
-		} finally { render.mock.restore(); }
+		part.tryIncrementalUpdate({ value: prefix + 'intermediate' }, true);
+		part.tryIncrementalUpdate({ value: prefix + 'corrected' }, true);
+		part.tryIncrementalUpdate({ value: prefix + 'terminal' }, false);
+		await changedUntil(part.domNode, () => part.domNode.textContent!.trimEnd().endsWith('terminal'));
+		assert.equal(updates, 1);
+		const stable = part.domNode.querySelector('strong');
+		part.tryIncrementalUpdate({ value: prefix + 'next' }, true);
+		await changedUntil(part.domNode, () => part.domNode.textContent!.trimEnd().endsWith('next'));
+		assert.equal(part.domNode.querySelector('strong'), stable);
+		part.domNode.querySelector('a')!.click();
+		assert.deepEqual(actions, [prefix + 'next']);
+		part.tryIncrementalUpdate({ value: prefix + 'stale' }, true);
+		part.tryIncrementalUpdate({ value: '' }, false);
+		await frame();
+		assert.equal(part.domNode.textContent, '');
+		part.setVisible(false);
+		const before = updates;
+		part.tryIncrementalUpdate({ value: prefix + 'hidden' }, true);
+		await frame();
+		assert.equal(updates, before);
+		part.tryIncrementalUpdate({ value: prefix + 'visible terminal' }, false);
+		part.setVisible(true);
+		await changedUntil(part.domNode, () => part.domNode.textContent!.trimEnd().endsWith('visible terminal'));
+		const completed = updates;
+		part.tryIncrementalUpdate({ value: prefix + 'disposed' }, true);
+		part.dispose();
+		await frame();
+		assert.equal(updates, completed);
 	});
 
-	test('large-tail reuse preserves canonical sanitization, escaped text and current link handlers', () => {
+	test('large-tail reuse preserves canonical sanitization, escaped text and current link handlers', async () => {
 		using scope = services();
 		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
 		const prefix = '**kept** [Open](https://example.com) &lt;literal&gt; &amp; '.repeat(128);
 		const actions: string[] = [];
-		using first = renderer.render({ value: prefix + 'initial' });
-		const kept = first.element.querySelector('strong');
+		using part = scope.createInstance(ChatMarkdownContentPart, {
+			ownerDocument: document,
+			markdown: prefix + 'initial',
+			actionHandler: (href: string) => actions.push(href),
+		});
+		await changedUntil(part.domNode, () => part.domNode.textContent!.trimEnd().endsWith('initial'));
+		const kept = part.domNode.querySelector('strong');
 		const value = prefix + '&lt;script&gt;still text&lt;/script&gt; [blocked](javascript:alert(1)) **changed**';
-		using next = renderer.render({ value }, { actionHandler: href => actions.push(href) }, first.element);
-		// An inert extra extension selects the ordinary complete renderer for the reference.
-		using expected = renderer.render({ value }, { markedExtensions: [{}] });
-		assert.equal(next.element.innerHTML, expected.element.innerHTML);
-		assert.equal(next.element.querySelector('strong'), kept);
-		assert.equal(next.element.querySelector('script'), null);
-		assert.ok(next.element.textContent!.includes('<script>still text</script>'));
-		assert.equal(next.element.querySelector('a[href^="javascript:"]'), null);
-		next.element.querySelector('a')!.click();
+		part.tryIncrementalUpdate({ value });
+		await changedUntil(part.domNode, () => part.domNode.textContent!.trimEnd().endsWith('changed'));
+		using expected = renderer.render({ value });
+		assert.equal(fragmentContents(part.domNode), expected.element.innerHTML);
+		assert.equal(part.domNode.querySelector('strong'), kept);
+		assert.equal(part.domNode.querySelector('script'), null);
+		assert.ok(part.domNode.textContent!.includes('<script>still text</script>'));
+		assert.equal(part.domNode.querySelector('a[href^="javascript:"]'), null);
+		part.domNode.querySelector('a')!.click();
 		assert.deepEqual(actions, ['https://example.com']);
-		const custom = prefix + '[Custom](demo:resource)';
-		using allowed = renderer.render({ value: custom }, { sanitizerConfig: { allowedLinkSchemes: { augment: ['demo'] } } });
-		assert.ok(allowed.element.querySelector('a[href="demo:resource"]'));
-		using denied = renderer.render({ value: custom }, {}, allowed.element);
-		assert.equal(denied.element.querySelector('a[href="demo:resource"]'), null, 'Changing the sanitizer policy invalidates node reuse');
+		const command = prefix + '[Run](command:allowed.command)';
+		const commandLink = 'a[href="command:allowed.command"]';
+		part.tryIncrementalUpdate({ value: command, isTrusted: { enabledCommands: ['allowed.command'] } });
+		await changedUntil(part.domNode, () => !!part.domNode.querySelector(commandLink));
+		part.tryIncrementalUpdate({ value: command, isTrusted: false });
+		await changedUntil(part.domNode, () => !part.domNode.querySelector(commandLink));
+		assert.ok(part.domNode.textContent?.includes('Run'));
 	});
 
 	test('large scheduled formulas retain the entire ordered macro scope', async () => {
@@ -245,14 +255,23 @@ suite('Shared chat Markdown rendering', () => {
 		assert.deepEqual(batches, [{ formulas: formulas.map(source => ({ source, display: 'inline' })), macros: {} }]);
 	});
 
-	test('large-tail links retain the shared default opener and command trust policy', () => {
+	test('large-tail links retain the shared default opener and command trust policy', async () => {
 		const opened: unknown[] = [];
 		using scope = services({}, { open: async (href, options) => { opened.push([href, options]); return true; } } as IOpenerService);
-		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
 		const trusted = { enabledCommands: ['allowed.command'] };
-		using result = renderer.render({ value: 'Large **response**. '.repeat(256) + '[Command](command:allowed.command)', isTrusted: trusted });
-		result.element.querySelector('a')!.click();
+		using part = scope.createInstance(ChatMarkdownContentPart, {
+			ownerDocument: document,
+			markdown: { value: 'Large **response**. '.repeat(256) + '[Command](command:allowed.command)', isTrusted: trusted },
+		});
+		await changedUntil(part.domNode, () => !!part.domNode.querySelector('a'));
+		const link = part.domNode.querySelector('a')!;
+		link.click();
 		assert.deepEqual(opened, [['command:allowed.command', { fromUserGesture: true, allowContributedOpeners: true, allowCommands: ['allowed.command'], skipValidation: undefined }]]);
+		part.dispose();
+		const click = new document.defaultView!.MouseEvent('click', { bubbles: true, cancelable: true });
+		click.preventDefault();
+		link.dispatchEvent(click);
+		assert.equal(opened.length, 1);
 	});
 
 	test('corrections can merge an unchanged preceding block with a new continuation', () => {

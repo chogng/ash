@@ -8,6 +8,7 @@ import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ChatResultListSubPart } from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/toolInvocationParts/chatResultListSubPart.js';
 import { ChatContentMarkdownRenderer } from '../../../../workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
+import { wrapTablesWithScrollable } from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownTableScrolling.js';
 import type { IRenderedMarkdown } from '../../../../base/browser/markdownRenderer.js';
 import { coworkTaskStatus, type ChatCoworkTaskView } from './chatGPTService.js';
 
@@ -64,6 +65,7 @@ export class ChatCoworkTaskContent extends Disposable {
 					let rendered = this.markdown.get(item.itemId);
 					if (!rendered || this.renderedText.get(item.itemId) !== item.text) {
 						rendered = this.renderer.render({ value: item.text, isTrusted: false }, { ownerDocument: this.element.ownerDocument });
+						wrapTablesWithScrollable(rendered.element);
 						this.markdown.set(item.itemId, rendered);
 						this.renderedText.set(item.itemId, item.text);
 					}

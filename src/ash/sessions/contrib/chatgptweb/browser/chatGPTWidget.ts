@@ -10,6 +10,7 @@ import { autorun } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ChatContentMarkdownRenderer } from '../../../../workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
+import { wrapTablesWithScrollable } from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatMarkdownTableScrolling.js';
 import '../../../../workbench/contrib/chat/browser/widget/media/chatListWidget.css';
 import type { ChatGPTMessage, ChatGPTResource } from './chatGPTClient.js';
 import { ChatAttachmentsContentPart, type IChatAttachmentResource } from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatAttachmentsContentPart.js';
@@ -293,6 +294,7 @@ export class ChatGPTWidget extends Disposable {
 						if (this.followOutput) { this.scroll.scrollTop = this.scroll.scrollHeight; }
 					},
 				});
+				wrapTablesWithScrollable(row.markdown.element);
 				completeChatGPTRichContent(row.markdown.element, state.conversationId);
 				row.resources = [];
 				for (const placeholder of row.markdown.element.querySelectorAll<HTMLElement>('[data-chatgpt-resource]')) {
