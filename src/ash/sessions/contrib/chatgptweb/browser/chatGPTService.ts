@@ -191,6 +191,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private refreshOperation: AbortController | undefined;
 	private outbox: ChatGPTOutbox | undefined;
 	private syncingOutbox: Promise<void> | undefined;
+	private activeOutboxCreation: { readonly outbox: ChatGPTOutbox; readonly localId: string; readonly controller: AbortController; } | undefined;
 	private stream: AbortController | undefined;
 	private stopping: Promise<void> | undefined;
 	private generation = 0;
@@ -362,6 +363,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			} else if (creation.submittedAgainst) {
 				outbox.saveCreation({ ...creation, cancelled: true });
 			} else { outbox.removeCreation(creation.localId); }
+			const active = this.activeOutboxCreation;
+			if (active?.outbox === outbox && active.localId === creation.localId) {
+				active.controller.abort();
+			}
 		} else {
 			outbox.deleteConversation(id);
 			if (this.recentIds.delete(id)) { this.recentOffset = Math.max(0, this.recentOffset - 1); }
@@ -867,18 +872,22 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			await this.storage.flush();
 		}
 		for (const entry of outbox.creations()) {
-			if (account.aborted || !this.model.get().networkAvailable) { return; }
-			if (entry.submittedAgainst || entry.cancelled) { continue; }
+			if (account.aborted || this.outbox !== outbox || !this.model.get().networkAvailable) { return; }
+			// An earlier send can yield to deletion. Preparation already carries the prompt.
+			if (entry.submittedAgainst || entry.cancelled || outbox.creation(entry.localId) !== entry) { continue; }
 			const state = this.model.get();
 			const model = state.models.find(model => model.modelIds.includes(entry.model ?? ''));
 			const preset = model?.presets.find(preset => preset.model === entry.model && preset.thinkingEffort === entry.thinkingEffort)
 				?? state.models.find(model => model.id === state.model)?.presets.find(preset => preset.id === state.modelPreset);
 			if (!preset) { return; }
-			const signal = AbortSignal.any([account, AbortSignal.timeout(120_000)]);
+			const controller = new AbortController();
+			const active = this.activeOutboxCreation = { outbox, localId: entry.localId, controller };
+			const signal = AbortSignal.any([account, controller.signal, AbortSignal.timeout(120_000)]);
 			let submitted = false;
 			try {
 				for await (const event of this.client.send({ ...entry, model: preset.model, thinkingEffort: preset.thinkingEffort }, signal, async () => {
-					if (outbox.creation(entry.localId) !== entry || !this.model.get().networkAvailable) { throw new DOMException('Cancelled', 'AbortError'); }
+					signal.throwIfAborted();
+					if (this.outbox !== outbox || outbox.creation(entry.localId) !== entry || !this.model.get().networkAvailable) { throw new DOMException('Cancelled', 'AbortError'); }
 					outbox.saveCreation({ ...entry, submittedAgainst: state.conversations.filter(item => !item.local).map(item => item.id) });
 					submitted = true;
 					this.update({});
@@ -913,7 +922,9 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 					this.update({});
 					await this.storage.flush();
 				}
-				break;
+				if (!controller.signal.aborted) { break; }
+			} finally {
+				if (this.activeOutboxCreation === active) { this.activeOutboxCreation = undefined; }
 			}
 		}
 	}

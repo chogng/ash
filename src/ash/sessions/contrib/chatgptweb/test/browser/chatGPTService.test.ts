@@ -3,8 +3,9 @@ import type { Thread } from '../../../../../workbench/services/chat/common/chatS
 import '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
-import { suite, test } from 'mocha';
+import { suite, suiteTeardown, test } from 'mocha';
 import { chatGPTModelCatalog, simpleChatGPTModelCatalog } from '../../../../../../../test/fixtures/chatGPTModels.js';
+import { getWindowById } from '../../../../../base/browser/window.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -47,6 +48,9 @@ function response(path: string): Response {
 	return Response.json({ title: id, current_node: 'reply', mapping: { reply: { parent: null, message: { id: 'reply', author: { role: 'assistant' }, content: { parts: [id + ' reply'] } } } } });
 }
 suite('ChatGPT shared service', () => {
+	// The jsdom main window belongs to the suite, including when it registers lazily.
+	const mainWindowDisposables = getWindowById(1)?.disposables;
+	suiteTeardown(() => mainWindowDisposables?.dispose());
 	ensureNoDisposablesAreLeakedInTestSuite();
 	test('closing the window scope cancels pending initialization without resolving disposed services or dispatching late requests', async () => {
 		const ready = new DeferredPromise<string>();
@@ -612,6 +616,57 @@ suite('ChatGPT shared service', () => {
 		assert.equal(postRequests, 1);
 		assert.equal(deleteRequests, 2);
 	});
+
+	for (const duringPreparation of [false, true]) {
+		test(duringPreparation
+			? 'deleting a queued chat cancels its in-flight preparation'
+			: 'deleting the second queued chat while the first is submitting keeps its text off the transport', async () => {
+				const entered = new DeferredPromise<AbortSignal>();
+				const release = new DeferredPromise<void>();
+				const payloads: { phase: string; text: string; }[] = [];
+				using chat = fixture(async (path, signal, request) => {
+					if (path.includes('/.headers/')) { return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' }); }
+					const preparing = path.endsWith('/prepare');
+					if (preparing || path.endsWith('/f/conversation')) {
+						const text = JSON.parse(String(request.body)).messages[0].content.parts[0];
+						payloads.push({ phase: preparing ? 'prepare' : 'submit', text });
+						if (duringPreparation ? preparing && text === 'Second' : !preparing && text === 'First') {
+							await entered.complete(signal);
+							await release.p;
+						}
+						return preparing
+							? Response.json({ conduit_token: 'proof' })
+							: new Response('data: {"conversation_id":"sent-first"}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+					}
+					return response(path);
+				});
+				await chat.reload();
+				chat.setNetworkAvailable(false);
+				chat.setDraft('First');
+				await chat.send();
+				chat.newChat();
+				chat.setDraft('Second');
+				await chat.send();
+				const secondId = selectedChatConversationId(chat.state.get());
+				assert.ok(secondId && secondId.startsWith('pending:'));
+
+				chat.setNetworkAvailable(true);
+				const syncing = chat.refresh();
+				const signal = await entered.p;
+				const deleting = chat.deleteConversation(secondId);
+				const abortedOnDelete = signal.aborted;
+				await release.complete();
+				await Promise.all([syncing, deleting]);
+
+				const expected = [{ phase: 'prepare', text: 'First' }, { phase: 'submit', text: 'First' }];
+				if (duringPreparation) { expected.push({ phase: 'prepare', text: 'Second' }); }
+				assert.deepEqual(payloads, expected);
+				assert.equal(abortedOnDelete, duringPreparation);
+				assert.ok(chat.state.get().conversations.some(item => item.id === 'sent-first'));
+				assert.ok(!chat.state.get().conversations.some(item => item.id === secondId));
+				assert.equal(chat.state.get().pendingSync, false);
+			});
+	}
 
 	for (const cancelled of [false, true]) {
 		test(`an ambiguous creation reconciles by message ID after restart without posting again (${cancelled ? 'deleted offline' : 'retained'})`, async () => {
