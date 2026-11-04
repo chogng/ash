@@ -28,6 +28,10 @@ use ash_tool_executor::ExecutionLimits;
 use mxc_sandbox::MxcSandbox;
 use network_proxy::NetworkDecision;
 use network_proxy::NetworkPolicyHandle;
+use std::net::IpAddr;
+use std::net::Ipv4Addr;
+use std::net::Ipv6Addr;
+use std::net::TcpListener;
 use std::path::Path;
 use std::time::Duration;
 
@@ -139,6 +143,75 @@ fn psec_host_supports_scoped_policy() {
             &scope,
         )
         .unwrap_or_else(|error| panic!("PSEC policy preparation failed: {error}"));
+}
+
+#[test]
+#[ignore = "requires PSEC support for real TCP traffic"]
+fn psec_tcp_loopback_distinguishes_allowed_and_denied_network() {
+    let temp = tempfile::tempdir().unwrap();
+    let work = Dir::open_local(temp.path()).unwrap();
+    for address in [
+        IpAddr::V4(Ipv4Addr::LOCALHOST),
+        IpAddr::V6(Ipv6Addr::LOCALHOST),
+    ] {
+        let listener = TcpListener::bind((address, 0)).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let script = format!(
+            "$ErrorActionPreference='Stop'; \
+             $ip=[Net.IPAddress]::Parse('{address}'); \
+             $client=$null; \
+             try {{ \
+                 $client=[Net.Sockets.TcpClient]::new($ip.AddressFamily); \
+                 $pending=$client.BeginConnect($ip,{port},$null,$null); \
+                 if (!$pending.AsyncWaitHandle.WaitOne(5000)) {{ Write-Output 'blocked'; exit 0 }}; \
+                 $client.EndConnect($pending); Write-Output 'connected'; \
+             }} catch [Net.Sockets.SocketException] {{ Write-Output 'blocked' }} \
+             finally {{ if ($null -ne $client) {{ $client.Dispose() }} }}"
+        );
+        // The allowed run is a reachability control on the same listener and
+        // with the same restricted filesystem policy as the denied run.
+        for (network, expected) in [
+            (NetworkAccess::Allowed, "connected"),
+            (NetworkAccess::Denied, "blocked"),
+        ] {
+            let result = executor(&work, Duration::from_secs(30))
+                .execute_scoped_with_network(
+                    powershell(script.clone()),
+                    CommandExecutionAuthority::Sandboxed(sandbox_policy(
+                        FileSystemAccess::DirectoryWrite,
+                        network,
+                    )),
+                    &CancellationSource::new().token(),
+                    None,
+                    None,
+                )
+                .unwrap_or_else(|error| panic!("{address} {network:?}: {error:?}"));
+            let CommandExecutionOutcome::Completed(output) = result else {
+                panic!("{address} {network:?}: {result:?}");
+            };
+            assert_eq!(
+                output.exit_code,
+                Some(0),
+                "{address} {network:?}: {output:?}"
+            );
+            assert_eq!(
+                output.stdout.trim(),
+                expected,
+                "{address} {network:?}: {output:?}"
+            );
+            let connection = listener.accept();
+            if network == NetworkAccess::Allowed {
+                assert!(connection.is_ok(), "{address}: {connection:?}");
+            } else {
+                assert_eq!(
+                    connection.unwrap_err().kind(),
+                    std::io::ErrorKind::WouldBlock,
+                    "{address}: the denied client reached the host listener"
+                );
+            }
+        }
+    }
 }
 
 #[test]

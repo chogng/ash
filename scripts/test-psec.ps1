@@ -12,7 +12,7 @@ $report = [ordered]@{
     runnerImage = $env:ImageVersion
     expectedCapability = $Capability
     scope = 'PSEC preparation, scoped files, exit codes, process cleanup, cross-execution isolation; Managed refusal'
-    notCovered = @('PSEC ConPTY', 'Execution-service RPC', 'Allowed/Denied network traffic matrix', 'App Server product chain', 'WSL')
+    notCovered = @('PSEC ConPTY', 'Execution-service RPC', 'External network traffic matrix', 'App Server product chain', 'WSL')
     commands = @()
 }
 
@@ -89,6 +89,7 @@ try {
     foreach ($test in @(
         'psec_cmd_preserves_output_and_exit_code',
         'psec_powershell_preserves_output_and_exit_code',
+        'psec_tcp_loopback_distinguishes_allowed_and_denied_network',
         'scoped_execution_preserves_grants_metadata_and_exit_code_authenticity',
         'psec_filesystem_aliases_keep_read_only_and_denied_overrides',
         'timeout_and_cancellation_terminate_descendants',
@@ -127,6 +128,7 @@ try {
     if ($failures.Count -gt 0) { throw ($failures -join "`n") }
     $report.scope += '; ConPTY input, resize, large environment, read-only files and process-tree cleanup'
     $report.scope += '; product execution-service RPC, reconnect idempotency, pipe streams and drained exit output'
+    $report.scope += '; Allowed/Denied IPv4 and IPv6 TCP loopback'
     $report.notCovered = @($report.notCovered | Where-Object { $_ -ne 'PSEC ConPTY' -and $_ -ne 'Execution-service RPC' })
     $report.status = 'passed-listed-scope'
     $report.stage = 'complete'
