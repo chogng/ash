@@ -9,6 +9,7 @@ use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::io::AsRawHandle;
 use std::path::PathBuf;
 use windows_sys::Win32::Foundation::ERROR_IO_PENDING;
+use windows_sys::Win32::Foundation::ERROR_SERVICE_DOES_NOT_EXIST;
 use windows_sys::Win32::Foundation::GENERIC_READ;
 use windows_sys::Win32::Foundation::GetLastError;
 use windows_sys::Win32::Foundation::HANDLE;
@@ -107,11 +108,6 @@ impl Drop for ServiceHandle {
 }
 
 fn call(request: Request) -> Result<serde_json::Value, String> {
-    let image = directory()?.join("bin/ash-windows-sandbox-service.exe");
-    let _pins = win::pin_executable(&image)?;
-    for path in [directory()?, directory()?.join("bin"), image.clone()] {
-        win::verify_service_path(&path)?;
-    }
     let manager = ServiceHandle(unsafe {
         OpenSCManagerW(std::ptr::null(), std::ptr::null(), SC_MANAGER_CONNECT)
     });
@@ -126,7 +122,19 @@ fn call(request: Request) -> Result<serde_json::Value, String> {
         )
     });
     if service.0.is_null() {
+        if unsafe { GetLastError() } == ERROR_SERVICE_DOES_NOT_EXIST {
+            return Err("Windows sandbox service is not installed; use the product's approved ash-windows-sandbox-service installation plan".into());
+        }
         return Err(win::error("OpenServiceW"));
+    }
+    let root = directory()?;
+    let bin = root.join("bin");
+    let image = bin.join("ash-windows-sandbox-service.exe");
+    let _pins = win::pin_executable(&image).map_err(|error| {
+        format!("could not open the registered Windows sandbox service image: {error}")
+    })?;
+    for path in [&root, &bin, &image] {
+        win::verify_service_path(path)?;
     }
     let mut status: SERVICE_STATUS_PROCESS = unsafe { std::mem::zeroed() };
     let mut needed = 0;

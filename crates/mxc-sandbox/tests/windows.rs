@@ -74,6 +74,7 @@ fn powershell(script: String) -> CommandRequest {
             script,
         ],
         working_directory: ".".into(),
+        environment: Default::default(),
         input: CommandInput::Closed,
     }
 }
@@ -340,6 +341,7 @@ fn psec_cmd_preserves_output_and_exit_code() {
                     "echo psec-cmd-ok & exit /b 125".into(),
                 ],
                 working_directory: ".".into(),
+                environment: Default::default(),
                 input: CommandInput::Closed,
             },
             CommandExecutionAuthority::Sandboxed(sandbox_policy(

@@ -300,7 +300,7 @@ struct Resources {
     job: job::Job,
     filesystem: filesystem::Filesystem,
     _proxy: Option<proxy::Proxy>,
-    _station: desktop::PrivateStation,
+    desktops: desktop::ExecutionDesktops,
     _directory_pin: win::Handle,
     _directory: Directory,
     _lease: runtime::Lease,
@@ -337,7 +337,12 @@ fn spawn(request: &Execution) -> Result<Process, String> {
             .join("-")
     );
     let directory = Directory::new(&lease.root, &owner, &lease.account.sid, &capability)?;
-    let station = desktop::PrivateStation::start(&lease.runner, &lease.account.sid, &capability)?;
+    let desktops = desktop::ExecutionDesktops::prepare(
+        &lease.runner,
+        &owner,
+        &lease.account.sid,
+        &capability,
+    )?;
     let directory_pin = filesystem::pin(&directory.0)?;
     let filesystem = filesystem::Filesystem::prepare(
         request,
@@ -404,7 +409,7 @@ fn spawn(request: &Execution) -> Result<Process, String> {
             ash_sandboxing::ProcessIo::Pty(size) => Some([size.rows, size.cols]),
         },
         reply: directory.0.join("reply.json"),
-        desktop: station.command_desktop.clone(),
+        desktop: desktops.command().to_owned(),
     };
     let mut result = Process {
         process: None,
@@ -416,7 +421,7 @@ fn spawn(request: &Execution) -> Result<Process, String> {
             job,
             filesystem,
             _proxy: proxy,
-            _station: station,
+            desktops,
             _directory_pin: directory_pin,
             _directory: directory,
             _lease: lease,
@@ -430,7 +435,7 @@ fn spawn(request: &Execution) -> Result<Process, String> {
         &resources._lease.runner,
         &resources._directory.0,
         &worker,
-        &resources._station.worker_desktop,
+        resources.desktops.worker(),
         pipes,
         &resources.job,
     )?;

@@ -43,6 +43,19 @@ PSEC 报告包含系统版本、架构、工具链、MXC pin、测试及产品�
 
 账户 CI 为受限子进程测试启用 `ASH_WINDOWS_SANDBOX_DIAGNOSTICS`：超过原有 10 秒期限时，在终止 Job 前保存 CPU 时间、线程栈及模块转储，再继续原有失败和清理。诊断只针对受控测试子进程，不包含堆内存，随账户 artifact 保存；正常完成的子进程记录执行时间。
 
+## 2026-11-04 Windows 11 23H2 账户后备复验
+
+本机为 Windows 11 专业版 23H2 x64（`22631.6199`），MXC 为 `mxc-sdk 1.0.1`，兼容 fork 固定为 `f1e8694b75dea05ebb3dc8050039d04fe304236f`。管理员安装临时服务、账户与 WFP 规则。以下执行测试均由未提权的桌面进程发起。
+
+首轮安装后的状态为 `ready`，但执行在 `CreateWindowStationW` 返回访问拒绝后终止。交互式入口现使用 `WinSta0` 下每次执行独有的受限桌面，可信登录进程继承默认桌面。修复后使用同一次构建的 Desktop 后端及账户运行器复验。
+
+- 真实 App Server RPC 通过 1 项，验证账户 SID、工作区写入、敏感文件与工作区外写入拒绝、退出码及 ACL 恢复。Ash Desktop 的会话总变更冒烟通过 1 项。
+- 账户文件与网络通过 8 项，管道、ConPTY 与后代回收通过 3 项。MXC 与执行服务各通过 1 项缺少 PSEC 的拒绝用例，`Strict` 未启动命令。
+- 更新运行器与服务后，账户和 WFP 对象保持一致，重新执行 1 项 App Server RPC 与 3 项终端用例均通过。更新以 PE overlay 改变同一构建的摘要，覆盖替换与服务重启流程。
+- 卸载按安装计划完成，回读确认 WFP 对象均已移除，另行确认服务、安装目录及 3 个测试账户均已移除。
+
+实机日志、程序摘要及安装、更新与卸载计划位于 `.build/acceptance/windows-fallback-verify-e848c38281e948069ed007b9332e6532/`。PSEC 成功路径及其他 Windows 版本和架构仍需对应目标机复验。
+
 ## 2026-10-07 SDK 升级后的 Windows 复验
 
 本机为 Windows 11 专业版 23H2、build 22631、x64。`scripts/test-psec.ps1 -Capability absent` 实际通过：13 项适配器单元测试、2 项普通回归、1 项明确缺能力拒绝。状态为 `passed-unsupported-capability`，证明缺能力时在执行前拒绝，不证明 PSEC 成功执行。证据保存在 `.build/acceptance/mxc-upgrade-windows-20261007/psec/`。
