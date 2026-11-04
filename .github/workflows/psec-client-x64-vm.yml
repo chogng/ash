@@ -29,6 +29,7 @@ jobs:
           $evidence = Join-Path $env:GITHUB_WORKSPACE '.build/acceptance/psec-client-x64'
           New-Item -ItemType Directory -Force -Path $evidence | Out-Null
           Copy-Item -LiteralPath 'C:\psec-probe.json' -Destination $evidence
+          Copy-Item -LiteralPath 'C:\psec-candidate\manifest.json' -Destination $evidence
           if (Test-Path -LiteralPath $report) {
             Copy-Item -LiteralPath $report -Destination (Join-Path $evidence 'suite') -Recurse
           }
@@ -42,7 +43,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: psec-client-x64-e5e9389e97
+          name: psec-client-x64-e5e9389e97-attempt-${{ github.run_attempt }}
           path: .build/acceptance/psec-client-x64/
           if-no-files-found: error
           retention-days: 14
