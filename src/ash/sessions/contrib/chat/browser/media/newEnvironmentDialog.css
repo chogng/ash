@@ -44,9 +44,9 @@
 	font: inherit;
 }
 
-.ash-new-environment-dialog textarea {
+.ash-new-environment-dialog .ash-environment-field textarea {
 	resize: vertical;
-	font-family: var(--ash-editor-font-family, monospace);
+	font-family: var(--ash-font-family-monospace, monospace);
 }
 
 .ash-new-environment-dialog :is(input, select, textarea, button):focus-visible {
@@ -78,7 +78,7 @@
 }
 
 .ash-new-environment-dialog [role="alert"] {
-	color: var(--ash-errorForeground);
+	color: var(--ash-error-foreground);
 }
 
 .ash-new-environment-dialog .ash-environment-recent {

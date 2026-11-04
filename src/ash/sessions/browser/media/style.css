@@ -313,7 +313,7 @@
 .ash-sessions-directory-permission-detail {
 	display: grid;
 	gap: var(--ash-spacing-size80);
-	font-size: 13px;
+	font-size: var(--ash-fontSize-body1);
 }
 
 .ash-sessions-directory-permission-path {
