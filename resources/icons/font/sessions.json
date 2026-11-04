@@ -53,6 +53,7 @@
     "model-filled": [0],
     "new-file": [1],
     "new-folder": [1],
+    "open-in-window": [1],
     "open-preview": [2],
     "pdf": [4],
     "refresh": [0],
