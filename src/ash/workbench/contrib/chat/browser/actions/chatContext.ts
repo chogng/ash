@@ -31,6 +31,7 @@ import { IChatSessionNavigationService } from '../../../../services/chat/common/
 import { convertBufferToScreenshotVariable } from '../attachments/chatScreenshotContext.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { readLocalRepositories } from '../../../github/common/localRepository.js';
+import { createChatReferenceVariableEntry } from '../../common/attachments/chatVariableEntries.js';
 
 /** Registers stateless sources once; each invocation borrows its composer's state. */
 export class ChatContextContributions extends Disposable {
@@ -253,7 +254,7 @@ class SessionReferenceContextPickerPick implements IChatContextPickerItem {
 			return [];
 		}).join('\n\n');
 		const content = `Conversation: ${title}\nSession: ${sessionId}\nThread: ${threadId}\n\n${messages.length > 100_000 ? `[Earlier messages omitted]\n${messages.slice(-100_000)}` : messages}`;
-		return [{ id: `session:${sessionId}:${threadId}`, kind: 'sessionReference', name: title, resource: URI.from({ scheme: Schemas.internal, authority: 'chat-session', query: new URLSearchParams({ sessionId, threadId }).toString() }), resolve: async () => ({ name: title, content }) }];
+		return [createChatReferenceVariableEntry(sessionId, threadId, title, content)];
 	}
 }
 

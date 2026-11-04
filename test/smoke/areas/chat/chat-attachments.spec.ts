@@ -95,8 +95,8 @@ test('Restored session references use the window widget factory through removal,
 			version: 1,
 			draft: {
 				mode: 'agent', text, contexts: [{
-					id: 'previous', kind: 'sessionReference', name: 'Earlier design',
-					resource: 'private://chat-session?sessionId=previous-session&threadId=previous-thread',
+					id: 'previous', kind: 'chatReference', name: 'Earlier design',
+					resource: 'ash-chat-session:/previous-session/previous-thread',
 					content: 'Captured earlier conversation', reference: { start: 8, end: 22 },
 				}]
 			},

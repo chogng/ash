@@ -53,7 +53,7 @@ test('Paste admission uses the existing reference model and returns its exact sn
 	assert.equal(routes.getTarget(inputUri), target);
 	assert.equal(input.value, 'file.ts ');
 	assert.deepEqual(accepted[0]!.reference, { start: 0, end: 7 });
-	assert.equal(target.inlineReferences, references.variables);
+	assert.equal(references.variables[0], accepted[0]);
 	assert.equal(target.attachments[0]!.resolve, accepted[0]!.resolve);
 	assert.equal(target.attachments[0]!.reference, undefined);
 	assert.equal(attachmentModel.size, 1);
@@ -72,7 +72,7 @@ test('Aborted, replaced and disposed paste targets cannot edit their borrowed co
 	const controller = new AbortController();
 	controller.abort();
 	assert.throws(() => target.addAttachments([attachment], controller.signal), isCancellationError);
-	using replacement = routes.registerTarget(inputUri, { attachments: [], inlineReferences: [], addAttachments: () => [], removeAttachments() { }, addInlineReference() { } });
+	using replacement = routes.registerTarget(inputUri, { attachments: [], getCopiedInlinePrompt: () => undefined, addAttachments: () => [], removeAttachments() { }, addInlineReference() { } });
 	assert.throws(() => target.addAttachments([attachment]), isCancellationError);
 	assert.throws(() => target.removeAttachments(['file']), isCancellationError);
 	target.dispose();
@@ -112,7 +112,7 @@ suite('Attachment batch admission', () => {
 
 	test('source admission registers one canonical capture and updates its existing reference', async () => {
 		using resources = new DisposableStore();
-		const { input, target, attachmentModel } = setup(resources);
+		const { input, target, attachmentModel, references } = setup(resources);
 		const first = { ...attachment, lifetime: 'source' as const, kind: 'mcpApp' };
 		const accepted = target.addAttachments([first]);
 		assert.equal(attachmentModel.attachments[0], first);
@@ -121,13 +121,13 @@ suite('Attachment batch admission', () => {
 		target.addAttachments([latest]);
 		assert.equal(input.value, 'Current App ');
 		assert.equal(target.attachments[0], latest);
-		assert.equal(target.inlineReferences.length, 1);
-		assert.equal((await target.inlineReferences[0]!.resolve()).content, 'Latest capture');
+		assert.equal(references.variables.length, 1);
+		assert.equal((await references.variables[0]!.resolve()).content, 'Latest capture');
 	});
 
 	test('one model replacement cannot republish older captures while its text projection removes another item', async () => {
 		using resources = new DisposableStore();
-		const { input, target, attachmentModel } = setup(resources);
+		const { input, target, attachmentModel, references } = setup(resources);
 		const [retained, removed] = target.addAttachments([attachment, { ...attachment, id: 'removed', name: 'removed.ts' }]);
 		const updated = { ...attachment, id: retained!.id, name: 'updated.ts', resolve: async () => ({ name: 'updated.ts', content: 'New model capture' }) };
 		const added = { ...attachment, id: 'added', name: 'added.ts' };
@@ -137,10 +137,10 @@ suite('Attachment batch admission', () => {
 		assert.equal(changes, 1);
 		assert.equal(attachmentModel.attachments[0], updated);
 		assert.equal(attachmentModel.attachments[1], added);
-		assert.deepEqual(target.inlineReferences.map(reference => reference.id), [updated.id, added.id]);
-		for (const reference of target.inlineReferences) {
+		assert.deepEqual(references.variables.map(reference => reference.id), [updated.id, added.id]);
+		for (const reference of references.variables) {
 			assert.equal(input.value.slice(reference.reference!.start, reference.reference!.end), reference.name);
 		}
-		assert.equal((await target.inlineReferences[0]!.resolve()).content, 'New model capture');
+		assert.equal((await references.variables[0]!.resolve()).content, 'New model capture');
 	});
 });

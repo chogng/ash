@@ -371,7 +371,11 @@ services.registerInstance(IChatSessionNavigationService, {
 	createNewConversation: () => { throw new Error('Unexpected draft creation'); },
 	revision: 0,
 	getActiveConversation: () => ({ sessionId: 'active-session', threadId: 'active-thread' }),
-	getConversations: () => [{ sessionId: 'active-session', threadId: 'active-thread', title: 'Current session' }, { sessionId: 'previous-session', threadId: 'previous-thread', title: 'Earlier design' }],
+	getConversations: () => [
+		{ sessionId: composerWidget.sessionId!, threadId: composerWidget.threadId!, title: 'Current session' },
+		{ sessionId: 'active-session', threadId: 'active-thread', title: 'Active elsewhere' },
+		{ sessionId: 'previous-session', threadId: 'previous-thread', title: 'Earlier design' },
+	],
 	startVoiceConversation: async () => { throw new Error("Unexpected voice start"); },
 	appendToActiveDraft: () => { }, captureActiveDraft: async () => undefined, openConversation: async (sessionId, threadId) => { recordDestination({ sessionId, threadId }); },
 });

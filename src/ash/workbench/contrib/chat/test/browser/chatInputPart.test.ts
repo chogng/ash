@@ -3,6 +3,7 @@ import { IVoiceInputModeService } from '../../browser/voiceInputMode/voiceInputM
 import { IChatSideChatService, ChatSideChatService } from '../../common/chatSideChatService.js';
 import { getSingletonServiceDescriptors } from '../../../../../platform/instantiation/common/extensions.js';
 import { ChatContextService, IChatContextService } from '../../browser/contextContrib/chatContextService.js';
+import { LocalChatSessionUri } from '../../common/model/chatUri.js';
 import { ChatContextPickService, IChatContextPickService } from '../../browser/attachments/chatContextPickService.js';
 import { IExtensionService } from '../../../../services/extensions/common/extensionService.js';
 import { registerTestExtensionService } from '../../../../test/common/testExtensionServices.js';
@@ -496,6 +497,25 @@ test('Chat draft handoff moves text and resolved attachments after acknowledgeme
 	captured.clear();
 	assert.equal(source.element.querySelector('textarea')?.value, '');
 	assert.doesNotMatch(source.element.querySelector('.ash-chat-input-attachments')?.textContent ?? '', /file\.ts/u);
+});
+
+test('Restoring a chat reference draft preserves its source URI and snapshot', async () => {
+	using part = inputPart(sharedNotifications);
+	const text = 'Earlier design';
+	const draft = {
+		mode: 'agent' as const,
+		text,
+		contexts: [{
+			id: 'previous',
+			kind: 'chatReference',
+			name: text,
+			content: 'Frozen conversation',
+			resource: LocalChatSessionUri.forSession('previous/session', 'earlier&thread').toString(),
+			reference: { start: 0, end: text.length },
+		}],
+	};
+	part.restoreDraft(draft);
+	assert.deepEqual((await part.captureDraft())?.draft, draft);
 });
 
 test('Chat draft handoff leaves text edited after capture in the source', async () => {

@@ -10,6 +10,8 @@ import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { ChatContextAttachment } from '../../../services/chat/common/chatContextService.js';
+import type { IRange } from '../../../../editor/common/core/range.js';
+import type { IChatCopiedInlinePrompt } from './attachments/chatVariables.js';
 import type { Selection } from '../../../../editor/common/core/selection.js';
 import type { ChatWidget } from './widget/chatWidget.js';
 import type { IChatListItem } from '../common/model/chatViewModel.js';
@@ -149,8 +151,8 @@ export interface IQuickChatSession extends IDisposable {
 export interface IChatPasteTarget {
 	/** Canonical captures in this draft, without positional annotations. */
 	readonly attachments: readonly ChatContextAttachment[];
-	/** The same captures projected onto their current message ranges. */
-	readonly inlineReferences: readonly ChatContextAttachment[];
+	/** Capture the selection's references relative to the clipboard text before the input changes. */
+	getCopiedInlinePrompt(ranges: readonly IRange[], copiedText: string): IChatCopiedInlinePrompt | undefined;
 	/** Return the accepted identities and positions for the pending draft snapshot. */
 	addAttachments(entries: readonly ChatContextAttachment[], signal?: AbortSignal): readonly ChatContextAttachment[];
 	removeAttachments(ids: readonly string[]): void;

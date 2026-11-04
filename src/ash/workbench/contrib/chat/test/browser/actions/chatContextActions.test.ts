@@ -777,6 +777,7 @@ suite('chatContextActions browser component', () => {
 				}
 				if (name === 'Sessions…' || name === '会话…') {
 					await expect(page.getByRole('dialog').getByRole('option', { name: 'Current session', exact: true })).toHaveCount(0);
+					await expect(page.getByRole('dialog').getByRole('option', { name: 'Active elsewhere', exact: true })).toBeVisible();
 					await page.getByRole('dialog').getByRole('option', { name: 'Earlier design', exact: true }).click();
 				}
 				await expect(page.getByRole('dialog')).toHaveCount(0);

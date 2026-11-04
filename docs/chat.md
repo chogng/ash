@@ -44,12 +44,15 @@ host 查询的触发条件由 `editor/chatInputCompletionUtils.ts / isAtTriggerC
 
 当前 Ash 生产链的职责归位与上游全量功能覆盖分别记录。目录仍有以下上游差异，未创建无调用方入口：
 
-| 上游职责                                              | Ash 当前调用链                                                                                                                         |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `chatEditorInputContentProvider.ts` 的 URI 内容解析   | `ChatInputEditor` 创建并释放模型；粘贴的 `BulkEditService` 直接借用匹配的嵌入模型及其撤销栈，没有外部 URI resolver 消费者。            |
-| `chatInputInlineSuggestions.ts`                       | 上游绑定 Copilot Chat provider 专属设置；Ash 没有该 provider，通用编辑器补全由原 Editor 层提供。                                       |
-| `editorHoverWrapper.ts` 和样式                        | Agent 信息卡已由原托管 Hover／编辑器 Hover 容器承载；没有扩展 participant 的 hover action producer，不另建并行容器。                   |
-| 内联附件的 prompt rebasing／selection projection 端口 | Ash 的引用标签已在原文本中；`ChatDynamicVariableModel` 拥有偏移和撤销，复制粘贴沿原 snapshot 处理，不建立隐藏 anchor 或第二份 prompt。 |
+| 上游职责                                                        | Ash 当前调用链                                                                                                                             |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `chatEditorInputContentProvider.ts` 的 URI 内容解析             | `ChatInputEditor` 创建并释放模型；粘贴的 `BulkEditService` 直接借用匹配的嵌入模型及其撤销栈，没有外部 URI resolver 消费者。                |
+| `chatInputInlineSuggestions.ts`                                 | 上游绑定 Copilot Chat provider 专属设置；Ash 没有该 provider，通用编辑器补全由原 Editor 层提供。                                           |
+| `editorHoverWrapper.ts` 和样式                                  | Agent 信息卡已由原托管 Hover／编辑器 Hover 容器承载；没有扩展 participant 的 hover action producer，不另建并行容器。                       |
+| 内联附件的 prompt rebasing                                      | Ash 的引用标签直接保存在正文中。`ChatDynamicVariableModel.variables` 提供当前偏移。`chatVariables.ts` 负责复制选区和可移交草稿的坐标投影。 |
+| `attachments/chatVariables.ts`                                  | 发送直接读取当前输入的变量。按会话查找变量和工具选择的服务仍无消费者。                                                                     |
+| `attachments/chatImplicitContext.ts`                            | 已确认采用显式附加文件的行为。原当前编辑器推荐控件仅由单测实例化。                                                                         |
+| `attachments/transcriptContextAttachmentWidget.contribution.ts` | 会话选择器产生 `chatReference`，对应上游的会话引用控件。独立的 `transcriptContext` 类型仍无生产来源。                                      |
 
 `ChatInlineAttachments.refresh` 接收 Ash 现有引用快照及移除回调；`getPillReferences`、`openActivePill` 与 `layout` 分别服务输入字体／Tab 策略、Alt+Enter 和原输入布局。该公开输入形状适配 Ash 领域模型，不宣称与上游类型签名完全兼容。其余无消费者的补全匹配／排序 helper 也不单独导出。
 
@@ -75,7 +78,7 @@ Find 入口优先选择当前聚焦且具有 Find controller 的可见 Chat，�
 
 `actions/chatPluginActions.ts` 的 `workbench.action.chat.managePlugins` 使用既有 Extensions 打开契约和 `@plugins` 查询，在同一窗口聚焦已安装插件的搜索框。筛选、目录、详情、权限和启用状态继续归 Extensions 及原插件管理服务；重复打开会清除旧查询，Chat 草稿仍由原输入保存。该入口使用 Ash 已确认的插件生态，安装来源和 marketplace 配置尚未接入上游 Chat plugin 契约。
 
-`attachments/chatAttachmentWidgetRegistry.ts` 只拥有窗口内的控件工厂登记。`chatReferenceAttachmentWidget.contribution.ts` 为现有会话引用注册 `ChatReferenceAttachmentWidget`，Code 和 Sessions 在恢复输入前共用这一入口。内联承载层借用工厂创建的 DOM，负责原有模型坐标和文字替换投影，并随引用移除或输入释放销毁控件；工厂不持有草稿或快照。会话控件通过原 `ChatSessionNavigationService` 打开已捕获的 Session／Thread 标识，不重新读取附件内容。Tab 可到达打开和移除按钮，Alt+Enter 在引用处打开会话，按钮上的 Delete／Backspace 和中键触发原模型删除；撤销恢复同一快照。按钮激活不会提交草稿，释放后迟到的打开失败不会复活控件或报告旧错误。其他来源保留各自已有操作。
+`attachments/chatAttachmentWidgetRegistry.ts` 只拥有窗口内的控件工厂登记。`chatReferenceAttachmentWidget.contribution.ts` 为 `chatReference` 注册 `ChatReferenceAttachmentWidget`。Code 和 Sessions 在恢复输入前共用这一入口。会话选择器排除发起输入所在的 Thread，附加选定对话的快照及标准 Session／Thread URI。草稿恢复和粘贴使用同一个 `chatReference` 快照格式。内联承载层借用工厂创建的 DOM，负责原有模型坐标和文字替换投影，并随引用移除或输入释放销毁控件；工厂不持有草稿或快照。会话控件通过原 `ChatSessionNavigationService` 打开已捕获的 Session／Thread 标识，不重新读取附件内容。Tab 可到达打开和移除按钮，Alt+Enter 在引用处打开会话，按钮上的 Delete／Backspace 和中键触发原模型删除；撤销恢复同一快照。按钮激活不会提交草稿，释放后迟到的打开失败不会复活控件或报告旧错误。其他来源保留各自已有操作。
 
 现有文件、目录、带来源的图片、指令与符号控件支持从来源按钮拖拽，资源传输由 `workbench/browser/dnd.ts` 写入原 URI；符号与代码选区保留来源范围。目录不声明为本机文件下载，剪贴板图片不导出其捕获的图片字节。右键或按钮上的 Shift+F10／菜单键打开独立资源上下文，复用文件贡献中的在侧边打开、资源管理器定位与路径复制操作；目录不提供文件侧开。菜单参数始终是该附件的 URI，不能借用活动编辑器或 Explorer 选中项；文件操作剥离选区后定位，编辑器接收拖拽时将选区交回原组的打开选项。Escape 返回调用按钮，控件释放会取消自己的菜单。来源操作不改动捕获内容、草稿引用或撤销历史；终端、浏览器元素及 SCM 内部标识仍使用自己的来源操作。
 
@@ -85,9 +88,9 @@ Find 入口优先选择当前聚焦且具有 Find controller 的可见 Chat，�
 
 剩余现有上下文在同一控件文件内接入 `DefaultChatAttachmentWidget`、`PromptFileAttachmentWidget` 和 `ToolSetOrToolItemAttachmentWidget`。目录由 `FileAttachmentWidget` 返回 Explorer；指令只打开原授权 URI，提交仍由后端读取指令路径；工具与工具选择打开已有工具设置，不修改执行选择。通用控件保留符号位置、搜索视图和 GitHub 链接的原目标；没有可导航来源的调试和其他捕获内容，通过打开事件交回 `ChatInlineAttachments` 的同一只读快照 owner。移除、撤销、草稿恢复和复制粘贴保留原 resolver。所有现有控件均以完整原生按钮组替换正文标签，旧的前后独立按钮和来源分支已退出；按钮上的删除键只作用于其引用，异步导航和快照打开不能在控件退休后生效。`ElementChatAttachmentWidget`、`SCMHistoryItemAttachmentWidget` 和 `SCMHistoryItemChangeAttachmentWidget` 分别承接浏览器元素、提交和历史文件。主按钮及 Alt+Enter 交回同一只读快照入口；浏览器 HTML/CSS 作为捕获文本显示，不执行标记。独立来源按钮打开原 HTTP(S) 页面、SCM 提交更改或只读历史版本文件，不会同时打开快照。保存内容控件的鼠标悬停和编辑器键盘悬停共用同一份限定为 12 行、4,000 字符的捕获预览，HTML 和命令链接只作为代码文本显示；移除、替换或切换草稿后迟到结果不能更新新控件。内部来源标识不进入预览，完整内容仍由只读快照入口打开。SCM producer 通过领域 URI 固定仓库、提交、比较父版本和文件路径，草稿与复制粘贴沿既有 resource 契约保留它们；来源导航由原 SCM 命令及编辑器 owner 执行，不从显示名或复合 id 猜测身份，也不读取当前工作文件。来源失效时快照仍可查看；移除控件会取消其待完成的 SCM 导航，仓库移除或替换后迟到结果不能打开编辑器。
 
-`ChatPasteTargetService` 只按输入 URI 登记活着的接收端；`ChatWidgetPasteTarget.attachments` 读取规范附件集合，`inlineReferences` 读取带位置的正文投影；接收端拥有自身登记的释放，将粘贴、拖放及显式附件准备交回同一正文引用入口。准备仍由 `ChatAttachmentModel` 管理，接收端返回实际插入的身份和偏移供待发送快照使用；取消、接收端替换或释放后不能写入旧输入。引用快照标签显式声明文本类型，使独立的快照 URI 能进入真实工作台的只读文本编辑器。
+`ChatPasteTargetService` 只按输入 URI 登记活着的接收端；`ChatWidgetPasteTarget.attachments` 读取规范附件集合，`ChatDynamicVariableModel.variables` 提供当前正文引用。接收端拥有自身登记的释放，将粘贴、拖放及显式附件准备交回同一正文引用入口。准备仍由 `ChatAttachmentModel` 管理，接收端返回实际插入的身份和偏移供待发送快照使用；取消、接收端替换或释放后不能写入旧输入。引用快照标签显式声明文本类型，使独立的快照 URI 能进入真实工作台的只读文本编辑器。
 
-聊天正文的复制和剪切通过现有 `CopyPasteController`，由每个输入拥有的 `ChatPasteProvidersFeature` 捕获选区内的引用和内容快照。剪切前同步捕获身份与偏移，内容读取沿原编辑器的复制准备缓存完成；清空或关闭来源不影响已捕获内容。工具选择配置留在目标输入，复制只携带其可见标签。粘贴 provider 校验剪贴板正文与引用范围，选中的标准文字编辑生效后，才经 `ChatWidgetPasteTarget.addInlineReference` 绑定新身份；捕获内容进入同一 `ChatAttachmentModel`，偏移及撤销快照仍归原 `ChatDynamicVariableModel` 与文本模型历史。换行转换和多个粘贴选区分别映射引用位置；同名标签覆盖也保留一次可撤销替换。粘贴选项由 `PasteEditSession` 保持准备资源，允许在带快照和纯文本之间切换；输入隐藏、草稿换代或释放会取消等待中的粘贴。Workbench 对显式传入、没有文件 provider 的输入模型直接编辑原模型，不获取或保存文件。textarea 输入沿用原生纯文本复制粘贴。普通编辑器的代码复制由窗口级 `CopyTextProvider` 在打开聊天前捕获来源 URI、单个选区与可读名称，内容取实际剪贴板正文；普通粘贴保持原文，`PasteTextProvider` 提供“粘贴为代码附件”选项，复用同一快照绑定和撤销链路。选择该选项后，即使来源修改或关闭，引用仍保存复制时的内容。多个不连续来源选区保留普通粘贴。
+聊天正文的复制和剪切通过现有 `CopyPasteController`，由 `ChatWidgetPasteTarget.getCopiedInlinePrompt` 在输入变化前调用 `chatVariables.ts`，同步捕获选区内的引用及其剪贴板偏移。`ChatPasteProvidersFeature` 沿原编辑器的复制准备缓存读取快照内容并编码。清空或关闭来源不影响已捕获内容。工具选择配置留在目标输入，复制只携带其可见标签。粘贴 provider 校验剪贴板正文与引用范围，选中的标准文字编辑生效后，才经 `ChatWidgetPasteTarget.addInlineReference` 绑定新身份；捕获内容进入同一 `ChatAttachmentModel`，偏移及撤销快照仍归原 `ChatDynamicVariableModel` 与文本模型历史。换行转换和多个粘贴选区分别映射引用位置；同名标签覆盖也保留一次可撤销替换。粘贴选项由 `PasteEditSession` 保持准备资源，允许在带快照和纯文本之间切换；输入隐藏、草稿换代或释放会取消等待中的粘贴。Workbench 对显式传入、没有文件 provider 的输入模型直接编辑原模型，不获取或保存文件。textarea 输入沿用原生纯文本复制粘贴。普通编辑器的代码复制由窗口级 `CopyTextProvider` 在打开聊天前捕获来源 URI、单个选区与可读名称，内容取实际剪贴板正文；普通粘贴保持原文，`PasteTextProvider` 提供“粘贴为代码附件”选项，复用同一快照绑定和撤销链路。选择该选项后，即使来源修改或关闭，引用仍保存复制时的内容。多个不连续来源选区保留普通粘贴。
 
 当前引用内容借用 `ChatAttachmentModel`，偏移与历史快照归 `ChatDynamicVariableModel`；`ChatInlineAttachments` 拥有引用装饰和内联控件，沿 `editor/chatInputReferenceDecorations.ts` 注册可释放的共享样式，投影布局规则位于 `editor/media/chatInlineAttachments.css`。输出选区使用通道的可读名称：单根工作区省略重复的目录名，多根工作区保留目录名以区分同名语言服务器；原始 URI、行范围和选中时的内容仍完整保留。点击文件／代码引用或在引用处按 Alt+Enter，通过 `IEditorService` 在独立的只读标签中打开同一 resolver 保存的完整正文；快照资源身份按 resolver 区分，避免覆盖实时来源或另一份同名选区，重复打开复用原标签。移除引用、换草稿或释放输入会阻止迟到的打开请求。引用 hover 通过同一快照 resolver 预览附加的文件或选区正文，最多 12 行、4000 字符，缩短时明确提示；输出不展示内部通道 URI，文件保留来源路径。通用 Editor 的 `markdownHoverParticipant.ts` 读取装饰的 `hoverMessage`，通过原 Markdown renderer 显示正文并接收延迟快照更新。鼠标悬停或在引用处使用 Show or focus hover（Ctrl／Command+K，Ctrl／Command+I）均可查看，Escape 返回输入；移除引用或释放输入会清理对应展示，迟到结果不恢复旧引用。
 

@@ -31,13 +31,14 @@ import { TerminalCommandId } from '../../../../terminal/common/terminal.js';
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { SCMHistoryItemUri } from '../../../../scm/common/history.js';
 import type { CancellationToken } from '../../../../../../base/common/cancellation.js';
+import { LocalChatSessionUri } from '../../../common/model/chatUri.js';
 
 suite('Registered Chat reference attachments', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	const attachment: ChatContextAttachment = {
-		id: 'reference', kind: 'sessionReference', name: 'Earlier design',
-		resource: URI.from({ scheme: Schemas.internal, authority: 'chat-session', query: 'sessionId=source-session&threadId=source-thread' }),
+		id: 'reference', kind: 'chatReference', name: 'Earlier design',
+		resource: LocalChatSessionUri.forSession('source-session', 'source-thread'),
 		resolve: async () => { throw new Error('Rendering or opening a reference must not reread its snapshot'); },
 	};
 
@@ -453,8 +454,8 @@ suite('Registered Chat reference attachments', () => {
 		using registry = new ChatAttachmentWidgetRegistry();
 		let releases = 0;
 		const factory: ChatAttachmentWidgetFactory = () => ({ ...toDisposable(() => { releases++; }), element: container, onDidDelete: Event.None, onDidOpen: Event.None });
-		using old = registry.registerFactory('sessionReference', factory);
-		using current = registry.registerFactory('sessionReference', factory);
+		using old = registry.registerFactory('chatReference', factory);
+		using current = registry.registerFactory('chatReference', factory);
 		old.dispose();
 		const options = { supportsDeletion: false, shouldFocusClearButton: false };
 		const widget = registry.createWidget(attachment, options, container)!;

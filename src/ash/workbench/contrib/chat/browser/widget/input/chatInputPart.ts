@@ -18,6 +18,7 @@ import { Button } from '../../../../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../../../../base/browser/ui/dialog/dialog.js';
 import { defaultInputBoxStyles, defaultCheckboxStyles, defaultDialogStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { LocalChatSessionUri } from '../../../common/model/chatUri.js';
+import { restoreChatVariableEntry } from '../../../common/attachments/chatVariableEntries.js';
 import type { IWorkspacePickerDelegate } from '../../chat.js';
 import { WorkspacePickerActionItem } from './workspacePickerActionItem.js';
 import { captureChatDraft } from '../../../../../services/chat/common/chatContextService.js';
@@ -88,6 +89,7 @@ import { createToolSelectionAttachment } from '../../actions/chatToolPicker.js';
 import { status as announceStatus } from '../../../../../../base/browser/ui/aria/aria.js';
 import { ChatAttachmentModel } from '../../attachments/chatAttachmentModel.js';
 import { ChatDynamicVariableModel } from '../../attachments/chatDynamicVariables.js';
+import { projectChatDraftReferences } from '../../attachments/chatVariables.js';
 import { ChatWidgetPasteTarget } from '../../attachments/chatWidgetPasteTarget.js';
 import { createChatFileAttachments, IChatAttachmentResolveService } from '../../attachments/chatAttachmentResolveService.js';
 import { CopyPasteController } from '../../../../../../editor/contrib/dropOrPasteInto/browser/copyPasteController.js';
@@ -851,7 +853,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 
 	protected get contexts(): readonly ChatContextAttachment[] {
-		return this.pasteTarget.inlineReferences;
+		return this.inlineContext.variables;
 	}
 
 	private setInputValue(value: string): void {
@@ -961,20 +963,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	/** Persistence and handoff retain user references; live producer references stay with their owner. */
 	protected snapshotDraftReferences(): { text: string; contexts: readonly ChatContextAttachment[]; } {
-		let text = this.input.value;
-		let attachments = this.contexts.filter(attachment => attachment.lifetime !== 'source');
-		// App references belong to their live producer. Removing their labels from the
-		// transferred text also shifts the positions of any user references that follow.
-		for (const attachment of [...this.contexts].reverse()) {
-			if (attachment.lifetime !== 'source' || !attachment.reference) continue;
-			const { start, end } = attachment.reference;
-			text = text.slice(0, start) + text.slice(end);
-			attachments = attachments.map(context => context.reference && context.reference.start >= end ? {
-				...context,
-				reference: { start: context.reference.start - (end - start), end: context.reference.end - (end - start) },
-			} : context);
-		}
-		return { text, contexts: attachments };
+		return projectChatDraftReferences(this.input.value, this.contexts);
 	}
 
 	async captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined> {
@@ -1036,15 +1025,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const inline: ChatContextAttachment[] = [];
 		const legacyReferences: ChatContextAttachment[] = [];
 		for (const context of draft.contexts) {
-			const attachment: ChatContextAttachment = {
-				id: context.id,
-				kind: context.kind,
-				terminalSnapshot: context.terminalSnapshot,
-				name: context.name,
-				resource: context.resource ? URI.parse(context.resource) : undefined,
-				...(context.reference ? { reference: context.reference } : {}),
-				resolve: async () => ({ name: context.name, content: context.content, ...(context.kind === 'image' || context.kind === 'instruction' || context.kind === 'toolSelection' ? { kind: context.kind } : {}) }),
-			};
+			const attachment = restoreChatVariableEntry(context);
 			if (attachment.reference) inline.push(attachment);
 			else legacyReferences.push(attachment);
 		}
@@ -1070,7 +1051,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			const tools = this.contexts.filter(context => context.kind === 'toolSelection');
 			this.setInputValue(value);
 			this.pasteTarget.addAttachments(tools);
-			this.setReferenceState(this.inlineContext.getInputState());
+			this.setReferenceState(this.inlineContext.variables);
 		}
 		// Interim speech is not part of the draft until stopping flushes the transcript.
 		if (!this.dictationSession.isActive && !this.commandText().trim() && !this.attachmentModel.hasPendingContext && !this.contexts.some(attachment => attachment.kind !== 'toolSelection')) return;

@@ -13,8 +13,8 @@ import { IOutputService } from '../../../../../../services/output/common/output.
 import { createUuid } from '../../../../../../../base/common/uuid.js';
 import { Mimes } from '../../../../../../../base/common/mime.js';
 import { localize } from '../../../../../../../nls.js';
-import type { ChatContextAttachment } from '../../../../../../services/chat/common/chatContextService.js';
 import { IChatPasteTargetService, type IChatPasteTarget } from '../../../chat.js';
+import { restoreChatVariableEntry } from '../../../../common/attachments/chatVariableEntries.js';
 import type { IChatInputEditor } from '../chatInputEditorRegistry.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import { validateOpenAgentsWindow, type IOpenAgentsWindowOptions } from '../../../../../../../platform/native/common/nativeHost.js';
@@ -133,36 +133,11 @@ class CopyAttachmentsProvider implements DocumentPasteEditProvider {
 		const target = model === this.input.getModel?.() ? this.targets.getTarget(model.uri) : undefined;
 		const textValue = transfer.get(Mimes.text)?.value;
 		if (!target || token.isCancellationRequested || typeof textValue !== 'string') return undefined;
-		const text = textValue.replace(/\r\n|\r/g, '\n');
-		const selected: {
-			readonly attachment: ChatContextAttachment;
-			readonly reference: { readonly start: number; readonly end: number; };
-		}[] = [];
-		let copiedOffset = 0;
 		// Capture identities and source coordinates before an asynchronous read or the cut itself.
-		for (const range of ranges) {
-			const segment = model.getValueInRange(range, EndOfLinePreference.LF);
-			if (text.slice(copiedOffset, copiedOffset + segment.length) !== segment) return undefined;
-			const start = model.getOffsetAt(Range.getStartPosition(range));
-			const end = model.getOffsetAt(Range.getEndPosition(range));
-			for (const attachment of target.inlineReferences) {
-				// Tool selection is the composer's persistent configuration, not a
-				// captured source. Copying its label must not install another choice.
-				if (attachment.kind === 'toolSelection') continue;
-				const reference = attachment.reference;
-				if (!reference || reference.start < start || reference.end > end) continue;
-				const prefix = Range.fromPositions(Range.getStartPosition(range), model.getPositionAt(reference.start));
-				const relativeStart = model.getValueInRange(prefix, EndOfLinePreference.LF).length;
-				selected.push({
-					attachment,
-					reference: { start: copiedOffset + relativeStart, end: copiedOffset + relativeStart + attachment.name.length },
-				});
-			}
-			copiedOffset += segment.length + 1;
-		}
-		if (selected.length === 0 || selected.length > 1000) return undefined;
+		const copied = target.getCopiedInlinePrompt(ranges, textValue);
+		if (!copied || copied.references.length === 0 || copied.references.length > 1000) return undefined;
 		try {
-			const contexts = await Promise.all(selected.map(async ({ attachment, reference }) => ({
+			const contexts = await Promise.all(copied.references.map(async ({ attachment, reference }) => ({
 				id: attachment.id,
 				kind: attachment.kind,
 				name: attachment.name,
@@ -171,7 +146,7 @@ class CopyAttachmentsProvider implements DocumentPasteEditProvider {
 				...(attachment.terminalSnapshot ? { terminalSnapshot: { ...attachment.terminalSnapshot } } : {}),
 				content: (await attachment.resolve()).content,
 			})));
-			const raw = JSON.stringify({ version: 1, draft: { mode: 'agent', text, contexts } });
+			const raw = JSON.stringify({ version: 1, draft: { mode: 'agent', text: copied.text, contexts } });
 			if (token.isCancellationRequested || raw.length > maxClipboardLength) return undefined;
 			const result = new VSDataTransfer();
 			result.append(CHAT_ATTACHMENT_MIME_TYPE, createStringDataTransferItem(raw));
@@ -387,16 +362,11 @@ async function resolveReferencePasteEdit(
 			const insertionStart = operation.start + precedingDelta;
 			for (const reference of plan.references) {
 				const start = insertionStart + plan.text.slice(0, reference.reference.start).replace(/\n/g, model.getEOL()).length;
-				const kind = reference.kind === 'image' || reference.kind === 'instruction' || reference.kind === 'toolSelection' ? reference.kind : undefined;
-				target.addInlineReference({
+				target.addInlineReference(restoreChatVariableEntry({
+					...reference,
 					id: createUuid(),
-					kind: reference.kind,
-					name: reference.name,
-					...(reference.resource ? { resource: URI.parse(reference.resource) } : {}),
-					...(reference.terminalSnapshot ? { terminalSnapshot: reference.terminalSnapshot } : {}),
 					reference: { start, end: start + reference.name.length },
-					resolve: async () => ({ name: reference.name, content: reference.content, ...(kind ? { kind } : {}) }),
-				});
+				}));
 			}
 			precedingDelta += text.length - (operation.end - operation.start);
 		}

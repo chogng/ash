@@ -1,6 +1,9 @@
-import type { URI } from '../../../../../base/common/uri.js';
+import { URI } from '../../../../../base/common/uri.js';
 import type { ThemeIcon } from '../../../../../base/common/themables.js';
 import type { IMarkdownString } from '../../../../../base/common/htmlContent.js';
+import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
+import type { ChatContextAttachment } from '../../../../services/chat/common/chatContextService.js';
+import { LocalChatSessionUri } from '../model/chatUri.js';
 
 export type ChatContextIconPath = ThemeIcon | URI | { light: URI; dark: URI; };
 
@@ -23,4 +26,30 @@ export interface IChatRequestWorkspaceVariableEntry {
 	readonly kind: 'workspace';
 	readonly value: string;
 	readonly modelDescription?: string;
+}
+
+export function createChatReferenceVariableEntry(
+	sessionId: string,
+	threadId: string,
+	name: string,
+	content: string,
+): ChatContextAttachment {
+	return {
+		id: `session:${sessionId}:${threadId}`,
+		kind: 'chatReference',
+		name,
+		resource: LocalChatSessionUri.forSession(sessionId, threadId),
+		resolve: async () => ({ name, content }),
+	};
+}
+
+/** Rehydrates a frozen snapshot at the draft or clipboard boundary. */
+export function restoreChatVariableEntry(entry: NonNullable<IOpenAgentsWindowOptions['draft']>['contexts'][number]): ChatContextAttachment {
+	const { id, kind, name, content, reference, terminalSnapshot } = entry;
+	const resource = entry.resource ? URI.parse(entry.resource) : undefined;
+	const resolvedKind = kind === 'image' || kind === 'instruction' || kind === 'toolSelection' ? kind : undefined;
+	return {
+		id, kind, name, resource, reference, terminalSnapshot,
+		resolve: async () => ({ name, content, ...(resolvedKind ? { kind: resolvedKind } : {}) }),
+	};
 }
