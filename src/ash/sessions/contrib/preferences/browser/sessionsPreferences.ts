@@ -58,7 +58,7 @@ import { SessionsCustomizeContent } from './sessionsCustomizeContent.js';
 import { SessionsAgentsContent } from './sessionsAgentsContent.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import type { TeamRun } from '../../../services/teams/common/team.js';
-import { DesignConfiguration } from '../../creator/common/config/editorConfiguration.js';
+import { DesignConfiguration } from '../../artifacts/common/config/editorConfiguration.js';
 
 Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.SessionsSettings,

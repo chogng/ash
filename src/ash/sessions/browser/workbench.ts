@@ -166,7 +166,7 @@ import { Event } from '../../base/common/event.js';
 import { SessionsViewRegistry } from '../common/views.js';
 import { openExtensionsView, registerExtensionsViewContainer } from '../../workbench/contrib/extensions/browser/extensionsViewlet.js';
 import { ViewContainerLocation } from '../../workbench/common/views.js';
-import { DesignEditorService, IDesignEditorService } from '../contrib/creator/browser/designEditorService.js';
+import { DesignEditorService, IDesignEditorService } from '../contrib/artifacts/browser/designEditorService.js';
 import { Disposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import { ILanguageService } from '../../editor/common/languages/language.js';
 import { LanguageService } from '../../editor/common/services/languageService.js';

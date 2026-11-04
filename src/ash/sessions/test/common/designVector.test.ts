@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
-import { DesignModel } from '../../contrib/creator/common/model/designModel.js';
-import { documentFromShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/creator/common/model/document.js';
-import { cubicBezierPoint } from '../../contrib/creator/common/core/geometry.js';
-import { designPathContours, designShapeContours, moveDesignPathNode, splitDesignPathSegment, type DesignPath } from '../../contrib/creator/common/model/designVector.js';
-import { hitTestDesignShapes } from '../../contrib/creator/common/model/hitTest.js';
+import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';
+import { DesignModel } from '../../contrib/artifacts/common/model/designModel.js';
+import { documentFromShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/artifacts/common/model/document.js';
+import { cubicBezierPoint } from '../../contrib/artifacts/common/core/geometry.js';
+import { designPathContours, designShapeContours, moveDesignPathNode, splitDesignPathSegment, type DesignPath } from '../../contrib/artifacts/common/model/designVector.js';
+import { hitTestDesignShapes } from '../../contrib/artifacts/common/model/hitTest.js';
 
 const rectangle = (): DesignShape => ({ id: generateUuid(), kind: 'rectangle', x: 10, y: 20, width: 200, height: 100, rotation: 0, fill: '#ff0000' });
 const path = (): DesignPath => ({ ...rectangle(), kind: 'path', ...designShapeContours(rectangle())[0], strokeWidth: 0 });

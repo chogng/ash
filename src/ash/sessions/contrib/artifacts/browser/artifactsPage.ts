@@ -1,9 +1,14 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../../workbench/common/editor.js';
-import './creatorPage.css';
+import './artifactsPage.css';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
+import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
+import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
+import { Action } from '../../../../base/common/actions.js';
+import { IdGenerator } from '../../../../base/common/idGenerator.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -20,6 +25,7 @@ import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPa
 import { GENERAL_DOCUMENT_CONTENT_TYPE } from '../../../../workbench/contrib/documentEditor/browser/documentEditorInput.js';
 import { basename } from '../../../../base/common/resources.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { ToolbarSearchActionViewItem } from '../../../browser/ui/toolbarSearchActionViewItem.js';
 
 interface ArtifactCard {
 	readonly title: string;
@@ -28,18 +34,30 @@ interface ArtifactCard {
 	readonly open: () => void;
 }
 
-const pages = new WeakMap<Element, CreatorPage>();
+type ArtifactFilter = 'all' | 'yours' | 'shared';
 
-export class CreatorEditorPane extends EditorPane implements IEditorPane {
+const pages = new WeakMap<Element, ArtifactsPage>();
+const artifactResultsIds = new IdGenerator('ash-artifacts-results-');
+
+class ArtifactToggleActionViewItem extends ButtonActionViewItem {
+	override render(container: HTMLElement): void {
+		super.render(container);
+		if (this.action.onDidChange) {
+			this._register(this.action.onDidChange(() => { this.button.checked = this.action.checked; }));
+		}
+	}
+}
+
+export class ArtifactsEditorPane extends EditorPane implements IEditorPane {
 	public readonly id = 'sessions.editor.creator';
-	public page!: CreatorPage;
+	public page!: ArtifactsPage;
 	constructor(
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 	) { super('sessions.editor.creator', themeService, storageService); }
 	public override create(parent: HTMLElement): void {
-		this.page = this._register(this.instantiation.createInstance(CreatorPage, parent.ownerDocument));
+		this.page = this._register(this.instantiation.createInstance(ArtifactsPage, parent.ownerDocument));
 		parent.append(this.page.domNode);
 		super.create(this.page.domNode);
 		this.page.initialize();
@@ -54,7 +72,7 @@ export class CreatorEditorPane extends EditorPane implements IEditorPane {
 }
 
 /** Owns mode navigation and retained workspaces; each contribution owns its editing experience. */
-export class CreatorPage extends Disposable {
+export class ArtifactsPage extends Disposable {
 	public readonly domNode: HTMLElement;
 	private readonly homeDomNode: HTMLElement;
 	private readonly workspacesDomNode: HTMLElement;
@@ -64,10 +82,9 @@ export class CreatorPage extends Disposable {
 	private readonly docsButton: Button;
 	private readonly artifactsDomNode: HTMLElement;
 	private readonly artifactCards = this._register(new DisposableStore());
-	private readonly filterButtons: Button[] = [];
 	private readonly search: HTMLInputElement;
-	private filter = 0;
-	private ascending = true;
+	private readonly sortAction: Action;
+	private filter: ArtifactFilter = 'all';
 	private readonly modeButtons = new Map<CreatorMode, Button>();
 	private readonly workspaces = this._register(new DisposableMap<CreatorMode, ICreatorWorkspace>());
 	private mode: CreatorMode | undefined;
@@ -103,40 +120,78 @@ export class CreatorPage extends Disposable {
 		header.append(this.titleDomNode);
 		this.homeDomNode = h(ownerDocument, 'div', { className: 'ash-creator-home' });
 		const toolbar = h(ownerDocument, 'div', { className: 'ash-artifacts-toolbar' });
-		const filters = h(ownerDocument, 'div', { className: 'ash-artifacts-filters', attributes: { role: 'tablist', 'aria-label': localize('sessions.artifacts.filters', 'Artifact ownership') } });
-		const labels = [localize('sessions.artifacts.all', 'All'), localize('sessions.artifacts.yours', 'Yours'), localize('sessions.artifacts.shared', 'Shared with you')];
-		labels.forEach((label, index) => {
-			const button = this._register(new Button(filters, { ...defaultButtonStyles, label, onClick: () => this.selectFilter(index) }));
-			button.domNode.setAttribute('role', 'tab');
-			button.domNode.setAttribute('aria-controls', 'ash-artifacts-results');
-			this.filterButtons.push(button);
-			this._register(addDisposableListener(button.domNode, 'keydown', event => {
-				const target = event.key === 'Home' ? 0 : event.key === 'End' ? 2
-					: event.key === 'ArrowRight' ? (index + 1) % 3 : event.key === 'ArrowLeft' ? (index + 2) % 3 : undefined;
-				if (target === undefined) { return; }
-				event.preventDefault();
-				this.selectFilter(target);
-				this.filterButtons[target].focus();
-			}));
+		const panelId = artifactResultsIds.nextId();
+		const filterTabs = [
+			{ id: 'all', label: localize('sessions.artifacts.all', 'All') },
+			{ id: 'yours', label: localize('sessions.artifacts.yours', 'Yours') },
+			{ id: 'shared', label: localize('sessions.artifacts.shared', 'Shared with you') },
+		] as const;
+		const tabs = filterTabs.map(tab => ({ ...tab, value: tab.id, tabId: `${panelId}-${tab.id}`, panelId }));
+		const filters = this._register(new TabList<ArtifactFilter>(toolbar, {
+			ariaLabel: localize('sessions.artifacts.filters', 'Artifact ownership'),
+			presentation: 'navigation',
+			onActivate: filter => {
+				this.filter = filter;
+				filters.setTabs(tabs, filter);
+				this.artifactsDomNode.setAttribute('aria-labelledby', `${panelId}-${filter}`);
+				this.renderArtifacts();
+			},
+		}));
+		filters.element.classList.add('ash-artifacts-filters');
+		filters.setTabs(tabs, this.filter);
+		const searchLabel = localize('sessions.artifacts.search', 'Search artifacts');
+		this.search = h(ownerDocument, 'input', {
+			properties: { type: 'search', placeholder: searchLabel },
+			attributes: { 'aria-label': searchLabel },
 		});
-		const actions = h(ownerDocument, 'div', { className: 'ash-artifacts-actions' });
-		this.search = h(ownerDocument, 'input', { className: 'ash-artifacts-search', attributes: { type: 'search', 'aria-label': localize('sessions.artifacts.search', 'Search artifacts'), placeholder: localize('sessions.artifacts.search', 'Search artifacts') } });
-		this.search.hidden = true;
-		actions.append(this.search);
 		this._register(addDisposableListener(this.search, 'input', () => this.renderArtifacts()));
-		this._register(new Button(actions, {
-			...defaultButtonStyles, label: localize('sessions.artifacts.search', 'Search artifacts'), icon: Lxicon.search, iconOnly: true,
-			onClick: () => { this.search.hidden = !this.search.hidden; if (!this.search.hidden) { this.search.focus(); } else { this.search.value = ''; this.renderArtifacts(); } },
+		let searchItem: ToolbarSearchActionViewItem;
+		const searchAction = {
+			id: 'sessions.artifacts.search',
+			label: searchLabel,
+			tooltip: searchLabel,
+			icon: Lxicon.search,
+			enabled: true,
+			run: () => {
+				searchItem.setExpanded(true);
+				searchItem.focus();
+			},
+		};
+		const sortLabel = localize('sessions.artifacts.reverseSort', 'Reverse title order');
+		this.sortAction = this._register(new Action('sessions.artifacts.reverseSort', sortLabel, '', true, () => {
+			this.sortAction.checked = !this.sortAction.checked;
+			this.renderArtifacts();
 		}));
-		const sort = this._register(new Button(actions, {
-			...defaultButtonStyles, label: localize('sessions.artifacts.reverseSort', 'Reverse title order'), icon: Lxicon.sort, iconOnly: true, checked: false,
-			onClick: () => { this.ascending = !this.ascending; sort.checked = !this.ascending; this.renderArtifacts(); },
+		this.sortAction.icon = Lxicon.sort;
+		this.sortAction.tooltip = sortLabel;
+		this.sortAction.checked = false;
+		const layoutLabel = localize('sessions.artifacts.layoutGrid', 'Layout grid');
+		const layoutAction = this._register(new Action('sessions.artifacts.layoutGrid', layoutLabel, '', true, () => {
+			layoutAction.checked = !layoutAction.checked;
+			this.artifactsDomNode.classList.toggle('list-view', !layoutAction.checked);
 		}));
-		const list = this._register(new Button(actions, {
-			...defaultButtonStyles, label: localize('sessions.artifacts.listView', 'List view'), icon: Lxicon.listUnordered, iconOnly: true, checked: false,
-			onClick: () => { list.checked = !list.checked; this.artifactsDomNode.classList.toggle('list-view', list.checked); },
+		layoutAction.icon = Lxicon.layoutGrid;
+		layoutAction.tooltip = layoutLabel;
+		layoutAction.checked = true;
+		const actionBar = this._register(new ActionBar(toolbar, {
+			ariaLabel: localize('sessions.artifacts.actions', 'Artifact actions'),
+			actions: [searchAction, this.sortAction, layoutAction],
+			actionViewItemOptions: { buttonStyles: defaultButtonStyles, iconOnly: true },
+			actionViewItemProvider: (action, options) => {
+				if (action === searchAction) {
+					searchItem = new ToolbarSearchActionViewItem(action, options, this.search, () => {
+						this.search.value = '';
+						searchItem.setExpanded(false);
+						searchItem.focus();
+						this.renderArtifacts();
+					}, localize('sessions.artifacts.closeSearch', 'Close artifact search'));
+					return searchItem;
+				}
+				return new ArtifactToggleActionViewItem(action, options);
+			},
 		}));
-		toolbar.append(filters, actions);
+		actionBar.domNode.classList.add('ash-artifacts-actions');
+		actionBar.domNode.querySelector(`[data-action-id="${layoutAction.id}"] button`)!.setAttribute('aria-controls', panelId);
 		const introduction = h(ownerDocument, 'h2', { className: 'ash-creator-introduction' }, localize('sessions.creator.introduction', 'Make something new'));
 		const modes = h(ownerDocument, 'div', { className: 'ash-creator-modes' });
 		const docsEntry = h(ownerDocument, 'div', { className: 'ash-artifacts-docs-entry' });
@@ -153,7 +208,7 @@ export class CreatorPage extends Disposable {
 			button.domNode.dataset.creatorMode = mode;
 			this.modeButtons.set(mode, button);
 		}
-		this.artifactsDomNode = h(ownerDocument, 'section', { className: 'ash-artifacts-results', attributes: { id: 'ash-artifacts-results', role: 'tabpanel', 'aria-label': labels[0], 'aria-live': 'polite' } });
+		this.artifactsDomNode = h(ownerDocument, 'section', { className: 'ash-artifacts-results', attributes: { id: panelId, role: 'tabpanel', 'aria-labelledby': `${panelId}-${this.filter}`, 'aria-live': 'polite' } });
 		this.homeDomNode.append(toolbar, introduction, modes, this.artifactsDomNode);
 		this.workspacesDomNode = h(ownerDocument, 'div', { className: 'ash-creator-workspaces' });
 		this.workspacesDomNode.hidden = true;
@@ -166,7 +221,7 @@ export class CreatorPage extends Disposable {
 			this._register(document.onDidChangeLabel(() => this.renderArtifacts()));
 			void document.ready.then(() => { if (!this.isDisposed) { this.renderArtifacts(); } });
 		}
-		this.selectFilter(0);
+		this.renderArtifacts();
 	}
 
 	private createTile(container: HTMLElement, kind: ArtifactCard['kind'], title: string, open: () => void): Button {
@@ -192,17 +247,6 @@ export class CreatorPage extends Disposable {
 		svg.append(path);
 		preview.append(svg);
 		return preview;
-	}
-
-	private selectFilter(index: number): void {
-		this.filter = index;
-		this.filterButtons.forEach((button, buttonIndex) => {
-			button.domNode.setAttribute('aria-selected', String(index === buttonIndex));
-			button.domNode.classList.toggle('selected', index === buttonIndex);
-			button.domNode.tabIndex = index === buttonIndex ? 0 : -1;
-		});
-		this.artifactsDomNode.setAttribute('aria-label', this.filterButtons[index].label);
-		this.renderArtifacts();
 	}
 
 	private getArtifacts(): ArtifactCard[] {
@@ -239,10 +283,10 @@ export class CreatorPage extends Disposable {
 		this.artifactCards.clear();
 		this.artifactsDomNode.replaceChildren();
 		const query = this.search.value.trim().toLocaleLowerCase();
-		const cards = this.filter === 2 ? [] : this.getArtifacts().filter(card => card.title.toLocaleLowerCase().includes(query));
-		const restoring = this.filter !== 2 && [CreatorMode.Design, CreatorMode.Slides].some(mode => this.designs.getDocument(mode).isRestoring);
+		const cards = this.filter === 'shared' ? [] : this.getArtifacts().filter(card => card.title.toLocaleLowerCase().includes(query));
+		const restoring = this.filter !== 'shared' && [CreatorMode.Design, CreatorMode.Slides].some(mode => this.designs.getDocument(mode).isRestoring);
 		this.artifactsDomNode.setAttribute('aria-busy', String(restoring));
-		cards.sort((a, b) => a.title.localeCompare(b.title) * (this.ascending ? 1 : -1));
+		cards.sort((a, b) => a.title.localeCompare(b.title) * (this.sortAction.checked ? -1 : 1));
 		for (const card of cards) {
 			const button = this.artifactCards.add(new Button(this.artifactsDomNode, { ...defaultButtonStyles, label: card.title, title: card.title, onClick: card.open }));
 			button.domNode.classList.add('ash-artifacts-card', card.kind);
@@ -250,7 +294,7 @@ export class CreatorPage extends Disposable {
 			button.domNode.append(h(this.domNode.ownerDocument, 'span', { className: 'ash-artifacts-card-detail' }, card.detail));
 		}
 		if (cards.length === 0) {
-			const message = restoring ? localize('sessions.artifacts.loading', 'Loading artifacts…') : this.filter === 2 ? localize('sessions.artifacts.noShared', 'No artifacts have been shared with you.')
+			const message = restoring ? localize('sessions.artifacts.loading', 'Loading artifacts…') : this.filter === 'shared' ? localize('sessions.artifacts.noShared', 'No artifacts have been shared with you.')
 				: query ? localize('sessions.artifacts.noResults', 'No artifacts match your search.') : localize('sessions.artifacts.empty', 'Your work will appear here. Create a doc, slide deck or design to get started.');
 			this.artifactsDomNode.append(h(this.domNode.ownerDocument, 'p', { className: 'ash-artifacts-empty' }, message));
 		}
@@ -263,7 +307,7 @@ export class CreatorPage extends Disposable {
 			this.openMode(restored as CreatorMode);
 		}
 	}
-	public static getFocused(element: HTMLElement): CreatorPage | undefined {
+	public static getFocused(element: HTMLElement): ArtifactsPage | undefined {
 		const root = element.closest('.ash-creator');
 		return root ? pages.get(root) : undefined;
 	}

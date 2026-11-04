@@ -23,7 +23,7 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { IExtensionRecommendationsService } from '../../../../workbench/services/extensionRecommendations/common/extensionRecommendations.js';
 import { OPEN_EXTENSIONS_COMMAND_ID } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { Menus } from '../../../browser/menus.js';
-import { CreatorPage, CreatorEditorPane } from './creatorPage.js';
+import { ArtifactsPage, ArtifactsEditorPane } from './artifactsPage.js';
 import { GENERAL_DOCUMENT_CONTENT_TYPE } from '../../../../workbench/contrib/documentEditor/browser/documentEditorInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { EditorPanes, registerEditorPane } from '../../../../workbench/browser/editor.js';
@@ -31,9 +31,9 @@ import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/edit
 import { DocumentEditorPane } from '../../../../workbench/contrib/documentEditor/browser/documentEditorPane.js';
 import { ActiveEditorContext } from '../../../../workbench/common/contextkeys.js';
 
-registerEditorPane({ id: 'sessions.editor.creator', name: 'Artifacts', canOpen: input => input.resource.scheme === 'ash-creator' && input.resource.path === '/page' ? EditorPaneMatch.Default : EditorPaneMatch.None, create: options => options.instantiationService!.createInstance(CreatorEditorPane) });
+registerEditorPane({ id: 'sessions.editor.creator', name: 'Artifacts', canOpen: input => input.resource.scheme === 'ash-creator' && input.resource.path === '/page' ? EditorPaneMatch.Default : EditorPaneMatch.None, create: options => options.instantiationService!.createInstance(ArtifactsEditorPane) });
 
-function openCreator(accessor: ServicesAccessor, workspace?: CreatorMode | 'home', source?: 'restore'): Promise<void> {
+function openArtifacts(accessor: ServicesAccessor, workspace?: CreatorMode | 'home', source?: 'restore'): Promise<void> {
 	const editor = accessor.get(IEditorPart);
 	const entry: ISessionsEntry = {
 		id: 'creator.home', activityContext: 'sessions.activity.creatorSelected', content: 'editor',
@@ -44,7 +44,7 @@ function openCreator(accessor: ServicesAccessor, workspace?: CreatorMode | 'home
 		},
 	};
 	return accessor.get(ISessionsLayoutService).openEntry(entry, () => {
-		const page = (editor.activePane as CreatorEditorPane).page;
+		const page = (editor.activePane as ArtifactsEditorPane).page;
 		if (workspace === 'home') { page.showHome(); }
 		else if (workspace) { page.openMode(workspace); }
 		return page.usesCanvasPanels ? {
@@ -55,12 +55,12 @@ function openCreator(accessor: ServicesAccessor, workspace?: CreatorMode | 'home
 	}, source ? { source } : undefined);
 }
 
-CommandsRegistry.register('sessions.show.creator', accessor => openCreator(accessor, 'home'));
-CommandsRegistry.register('sessions.restore.creator', (accessor, source) => openCreator(accessor, undefined, source === 'restore' ? source : undefined));
-CommandsRegistry.register('sessions.restore.creatorDesign', (accessor, source) => openCreator(accessor, CreatorMode.Design, source === 'restore' ? source : undefined));
+CommandsRegistry.register('sessions.show.creator', accessor => openArtifacts(accessor, 'home'));
+CommandsRegistry.register('sessions.restore.creator', (accessor, source) => openArtifacts(accessor, undefined, source === 'restore' ? source : undefined));
+CommandsRegistry.register('sessions.restore.creatorDesign', (accessor, source) => openArtifacts(accessor, CreatorMode.Design, source === 'restore' ? source : undefined));
 CommandsRegistry.register('sessions.creator.openMode', (accessor, value) => {
 	if (!Object.values(CreatorMode).includes(value as CreatorMode)) { throw new TypeError(localize('sessions.creator.invalidMode', 'Invalid Artifacts document mode.')); }
-	return openCreator(accessor, value as CreatorMode);
+	return openArtifacts(accessor, value as CreatorMode);
 });
 
 function createDocumentOpener(accessor: ServicesAccessor): (resource: URI, source?: 'restore') => Promise<void> {
@@ -175,9 +175,9 @@ CommandsRegistry.register('sessions.creator.openDocument', (accessor, value) => 
 });
 CommandsRegistry.register('sessions.restore.creatorDocs', (accessor, source) => {
 	const saved = accessor.get(IStorageService).get('sessions.creator.activeDocument', StorageScope.WORKSPACE);
-	if (!saved) { return openCreator(accessor, 'home', source === 'restore' ? source : undefined); }
+	if (!saved) { return openArtifacts(accessor, 'home', source === 'restore' ? source : undefined); }
 	const resource = URI.parse(saved);
-	if (!['file', 'untitled'].includes(resource.scheme) || !/\.(?:ash-doc|md)$/u.test(resource.path)) { return openCreator(accessor, 'home', source === 'restore' ? source : undefined); }
+	if (!['file', 'untitled'].includes(resource.scheme) || !/\.(?:ash-doc|md)$/u.test(resource.path)) { return openArtifacts(accessor, 'home', source === 'restore' ? source : undefined); }
 	return createDocumentOpener(accessor)(resource, source === 'restore' ? source : undefined);
 });
 
@@ -206,9 +206,9 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 		when: ContextKeyExpr.has('sessionsCreatorFocused'),
 		getProvider: accessor => {
 			const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;
-			const page = CreatorPage.getFocused(focused);
+			const page = ArtifactsPage.getFocused(focused);
 			if (!page) { return undefined; }
-			return new AccessibleContentProvider(AccessibleViewProviderId.Creator, { type }, () => type === AccessibleViewType.Help ? `${localize('sessions.creator.help', 'Artifacts\nUse Tab and Shift+Tab to reach filters, search, view options, Docs, Slides, Design and your existing work. Press Enter to open an item. Use Left and Right to move between All, Yours and Shared with you. Search filters titles; sort changes title order; list view changes the presentation. The Artifacts navigation item returns home and retains each workspace. The dropdown beside Docs chooses Automatic, Rich document or Markdown. Switch Docs editor in the editor title opens a converted copy and keeps the original. Missing rich document extensions can be recommended; dismiss the notification or hide future suggestions. Design saves automatically; Slides uses Save document. Preview supports Left and Right to change slides and Escape to return.')}\n\n${page.getAccessibleContent()}` : page.getAccessibleContent(), () => focused.focus(), AccessibilityVerbositySettingId.Creator);
+			return new AccessibleContentProvider(AccessibleViewProviderId.Creator, { type }, () => type === AccessibleViewType.Help ? `${localize('sessions.creator.help', 'Artifacts\nUse Tab and Shift+Tab to reach filters, search, view options, Docs, Slides, Design and your existing work. Press Enter to open an item. Use Left and Right to move between All, Yours and Shared with you. Press Enter or Space to apply the focused filter. Search filters titles; sort changes title order. Layout grid switches your work between grid and list views. The Artifacts navigation item returns home and retains each workspace. The dropdown beside Docs chooses Automatic, Rich document or Markdown. Switch Docs editor in the editor title opens a converted copy and keeps the original. Missing rich document extensions can be recommended; dismiss the notification or hide future suggestions. Design saves automatically; Slides uses Save document. Preview supports Left and Right to change slides and Escape to return.')}\n\n${page.getAccessibleContent()}` : page.getAccessibleContent(), () => focused.focus(), AccessibilityVerbositySettingId.Creator);
 		},
 	});
 }

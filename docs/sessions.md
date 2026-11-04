@@ -22,14 +22,14 @@ Sessions 复用 Workbench 的 Part、编辑器和 ViewContainer 基座。Creator
 
 ## 中间区域与模式
 
-| 模式                | 左侧                       | 中间                             | 右侧                            |
-| ------------------- | -------------------------- | -------------------------------- | ------------------------------- |
-| Chat                | 会话 ViewContainer         | SessionsPart                     | 按该模式的显隐偏好              |
-| Code                | 会话 ViewContainer         | SessionsPart 与文档 EditorPart   | Files / Changes，按活动文档选择 |
-| Collaboration       | 团队 ViewContainer         | SessionsPart                     | 按该模式的显隐偏好              |
-| Library             | 分类 ViewContainer         | LibraryEditorPane                | 素材详情 ViewContainer          |
-| Creator 画布        | Layers ViewContainer       | CreatorEditorPane 保留的工作空间 | Shape properties ViewContainer  |
-| Creator 首页 / Make | Creator 导航 ViewContainer | CreatorEditorPane                | 默认收起属性                    |
+| 模式                | 左侧                       | 中间                               | 右侧                            |
+| ------------------- | -------------------------- | ---------------------------------- | ------------------------------- |
+| Chat                | 会话 ViewContainer         | SessionsPart                       | 按该模式的显隐偏好              |
+| Code                | 会话 ViewContainer         | SessionsPart 与文档 EditorPart     | Files / Changes，按活动文档选择 |
+| Collaboration       | 团队 ViewContainer         | SessionsPart                       | 按该模式的显隐偏好              |
+| Library             | 分类 ViewContainer         | LibraryEditorPane                  | 素材详情 ViewContainer          |
+| Creator 画布        | Layers ViewContainer       | ArtifactsEditorPane 保留的工作空间 | Shape properties ViewContainer  |
+| Creator 首页 / Make | Creator 导航 ViewContainer | ArtifactsEditorPane                | 默认收起属性                    |
 
 Sidebar 在每种桌面模式中都可用。用户显隐偏好按入口保存。Code 的 Panel 在其他模式不可用，回到 Code 恢复原显隐及工具视图。聚焦 Code 内的对话不改变模式；激活已打开的产品标签时恢复其对应的入口布局。
 
@@ -39,7 +39,7 @@ Sidebar 在每种桌面模式中都可用。用户显隐偏好按入口保存。
 
 会话工作集只保存和恢复文档编辑组，产品页面编辑组排除在外且保持存活。隐藏编辑内容、收起整个 Code 侧面区域和切换模式都保留普通标签与未保存文档。实际关闭、文件替换和窗口退出继续检查保存、放弃或取消。
 
-CreatorPage 拥有工作空间实例，文档内容和工作副本仍由各模式的原有服务拥有。LibraryService 拥有共享的可观察浏览状态；LibraryEditorPane、分类 View 和详情 View 分别创建并管理自己的界面。容器与 View 在 contribution 中注册，不依赖编辑器先创建。各区域隐藏时释放自己持有的预览资源，返回时保留搜索、视图模式和选择。
+ArtifactsPage 拥有工作空间实例，文档内容和工作副本仍由各模式的原有服务拥有。LibraryService 拥有共享的可观察浏览状态；LibraryEditorPane、分类 View 和详情 View 分别创建并管理自己的界面。容器与 View 在 contribution 中注册，不依赖编辑器先创建。各区域隐藏时释放自己持有的预览资源，返回时保留搜索、视图模式和选择。
 
 窗口布局按顺序完成 Grid、Parts 和内部内容，再通知容器布局完成。隐藏区域保留 Grid 缓存尺寸。窗口关闭等待布局切换、会话工作集和草稿保存结束，再释放 Parts 和存储。
 

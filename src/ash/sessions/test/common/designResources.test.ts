@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
-import { DesignModel } from '../../contrib/creator/common/model/designModel.js';
-import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/creator/common/model/document.js';
-import { getDesignResourceCatalog, resolveDesignVariable, type DesignLibrary } from '../../contrib/creator/common/model/designResources.js';
-import { hitTestDesignShapes } from '../../contrib/creator/common/model/hitTest.js';
+import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';
+import { DesignModel } from '../../contrib/artifacts/common/model/designModel.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/artifacts/common/model/document.js';
+import { getDesignResourceCatalog, resolveDesignVariable, type DesignLibrary } from '../../contrib/artifacts/common/model/designResources.js';
+import { hitTestDesignShapes } from '../../contrib/artifacts/common/model/hitTest.js';
 
 type Frame = Extract<DesignShape, { kind: 'frame'; }>;
 type Text = Extract<DesignShape, { kind: 'text'; }>;

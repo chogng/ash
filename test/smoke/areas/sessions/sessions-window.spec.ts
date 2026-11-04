@@ -16,7 +16,7 @@ import {
 	drawBezierPath,
 	rightClickCanvasShape,
 } from '../../../automation/design.js';
-import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/creator/common/model/document.js';
+import { parseDesignDocument } from '../../../../src/ash/sessions/contrib/artifacts/common/model/document.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { captureElectronMenu } from '../../../automation/menus.js';
 import type { IKeyboardLayoutDefinition } from '../../../../src/ash/platform/keyboardLayout/common/keyboardLayout.js';

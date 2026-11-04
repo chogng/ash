@@ -1,14 +1,14 @@
-import { designEndpointContours, designPathEndpoints, designStrokeLayers } from '../../contrib/creator/common/model/designVectorStroke.js';
+import { designEndpointContours, designPathEndpoints, designStrokeLayers } from '../../contrib/artifacts/common/model/designVectorStroke.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
-import { DesignModel } from '../../contrib/creator/common/model/designModel.js';
-import { documentFromShapes, parseDesignDocument, serializeDesignDocument } from '../../contrib/creator/common/model/document.js';
-import { designPathFillContours, designPathStrokeContours, designShapeContours, fitDesignPathBounds, type DesignPath } from '../../contrib/creator/common/model/designVector.js';
-import { connectDesignNetwork, toDesignVectorNetwork, withDesignVectorNetwork } from '../../contrib/creator/common/model/designVectorNetwork.js';
-import { designVariableStrokeContours, designWidthAt, designWidthPointAt, designWidthLocation, nearestDesignWidthLocation, supportsDesignVariableWidth } from '../../contrib/creator/common/model/designVariableWidth.js';
-import { hitTestDesignShapes } from '../../contrib/creator/common/model/hitTest.js';
+import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';
+import { DesignModel } from '../../contrib/artifacts/common/model/designModel.js';
+import { documentFromShapes, parseDesignDocument, serializeDesignDocument } from '../../contrib/artifacts/common/model/document.js';
+import { designPathFillContours, designPathStrokeContours, designShapeContours, fitDesignPathBounds, type DesignPath } from '../../contrib/artifacts/common/model/designVector.js';
+import { connectDesignNetwork, toDesignVectorNetwork, withDesignVectorNetwork } from '../../contrib/artifacts/common/model/designVectorNetwork.js';
+import { designVariableStrokeContours, designWidthAt, designWidthPointAt, designWidthLocation, nearestDesignWidthLocation, supportsDesignVariableWidth } from '../../contrib/artifacts/common/model/designVariableWidth.js';
+import { hitTestDesignShapes } from '../../contrib/artifacts/common/model/hitTest.js';
 
 const rectangle = () => ({ id: generateUuid(), kind: 'rectangle' as const, x: 0, y: 0, width: 200, height: 100, rotation: 0, fill: '#3366ff' });
 const box = (radius = 20): DesignPath => ({ ...rectangle(), kind: 'path', nodes: designShapeContours(rectangle())[0].nodes.map(node => ({ ...node, cornerRadius: radius })), closed: true, strokeWidth: 0 });

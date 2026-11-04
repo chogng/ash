@@ -264,7 +264,7 @@ IDE 与 Agent Window 共用图标注册、主题解析和 WOFF2 渲染机制。I
 - 颜色使用 `sessions.design.chromeBackground`、`sessions.design.chromeForeground`，普通主题背景为 `#181818`。
 - 菜单浮层位于共享容器，selector 使用页面标识，不依赖画布后代关系。
 
-实现入口：[designEditorWidget.ts](contrib/creator/browser/widget/designEditorWidget.ts)、[designToolsWidget.ts](contrib/creator/browser/widget/designToolsWidget.ts)、[designToolsWidget.css](contrib/creator/browser/widget/designToolsWidget.css)。
+实现入口：[designEditorWidget.ts](contrib/artifacts/browser/widget/designEditorWidget.ts)、[designToolsWidget.ts](contrib/artifacts/browser/widget/designToolsWidget.ts)、[designToolsWidget.css](contrib/artifacts/browser/widget/designToolsWidget.css)。
 
 ## 文案与可访问性
 

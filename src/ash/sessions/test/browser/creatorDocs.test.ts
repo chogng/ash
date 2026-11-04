@@ -16,13 +16,13 @@ import { EditorPanes } from '../../../workbench/browser/editor.js';
 import { EditorPaneMatch } from '../../../workbench/browser/parts/editor/editorPane.js';
 import { generalProfile } from '../../../../../extensions/academy/browser/generalProfile.js';
 import { GENERAL_DOCUMENT_CONTENT_TYPE } from '../../../workbench/contrib/documentEditor/browser/documentEditorInput.js';
-import { DOCS_EDITOR_SETTING } from '../../contrib/creator/common/creator.js';
+import { DOCS_EDITOR_SETTING } from '../../contrib/artifacts/common/creator.js';
 
 const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://docs.test' });
 for (const [key, value] of Object.entries({ window: browser.window, document: browser.window.document, HTMLElement: browser.window.HTMLElement, Node: browser.window.Node })) {
 	Object.defineProperty(globalThis, key, { configurable: true, value });
 }
-await import('../../contrib/creator/browser/creator.contribution.js');
+await import('../../contrib/artifacts/browser/artifacts.contribution.js');
 
 for (const [preference, provider, extension, recommends] of [
 	['automatic', false, '.md', true], ['automatic', true, '.ash-doc', false],

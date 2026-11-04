@@ -1,5 +1,5 @@
-import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
-import { flattenDesignShapes, type DesignShape } from '../../contrib/creator/common/model/document.js';
+import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';
+import { flattenDesignShapes, type DesignShape } from '../../contrib/artifacts/common/model/document.js';
 import { InMemoryFileSystemProvider } from '../../../platform/files/common/inMemoryFilesystemProvider.js';
 import { createTestFileService } from '../../../workbench/test/common/testEditorServices.js';
 import { IAssetService } from '../../../platform/assets/common/assetService.js';
@@ -16,14 +16,14 @@ import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { darkColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
-import { DesignConfiguration } from '../../contrib/creator/common/config/editorConfiguration.js';
+import { DesignConfiguration } from '../../contrib/artifacts/common/config/editorConfiguration.js';
 import { Emitter, Event as AshEvent, Event } from '../../../base/common/event.js';
 import { URI } from '../../../base/common/uri.js';
 import { constObservable } from '../../../base/common/observable.js';
 import type { IContextMenuDelegate } from '../../../base/browser/contextmenu.js';
 import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
 import { ContextView } from '../../../base/browser/ui/contextview/contextview.js';
-import type { DesignEditorContributionContext } from '../../contrib/creator/browser/designEditorBrowser.js';
+import type { DesignEditorContributionContext } from '../../contrib/artifacts/browser/designEditorBrowser.js';
 import { ConfirmResult, IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { FileKind, FileRevisionConflictError, FileNotFoundError, IFileService, type IFileWriteRequest, type IFileSystemProvider, type IFileWriteOptions, type IFileWriteResult, FileSystemProviderCapabilities } from '../../../platform/files/common/files.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
@@ -64,26 +64,26 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { documentFromShapes, parseDesignDocument, serializeDesignDocument } = await import('../../contrib/creator/common/model/document.js');
-const { DesignEditorWidget } = await import('../../contrib/creator/browser/widget/designEditorWidget.js');
-const { DesignDocumentController } = await import('../../contrib/creator/browser/designDocumentController.js');
-const { DesignEditorPage } = await import('../../contrib/creator/browser/designEditorPage.js');
-const { DesignEditorService, IDesignEditorService } = await import('../../contrib/creator/browser/designEditorService.js');
-const { DesignLayersView, DesignPropertiesView } = await import('../../contrib/creator/browser/designViews.js');
-const { CreatorMode } = await import('../../contrib/creator/common/creator.js');
-const { CreatorPage } = await import('../../contrib/creator/browser/creatorPage.js');
+const { documentFromShapes, parseDesignDocument, serializeDesignDocument } = await import('../../contrib/artifacts/common/model/document.js');
+const { DesignEditorWidget } = await import('../../contrib/artifacts/browser/widget/designEditorWidget.js');
+const { DesignDocumentController } = await import('../../contrib/artifacts/browser/designDocumentController.js');
+const { DesignEditorPage } = await import('../../contrib/artifacts/browser/designEditorPage.js');
+const { DesignEditorService, IDesignEditorService } = await import('../../contrib/artifacts/browser/designEditorService.js');
+const { DesignLayersView, DesignPropertiesView } = await import('../../contrib/artifacts/browser/designViews.js');
+const { CreatorMode } = await import('../../contrib/artifacts/common/creator.js');
+const { ArtifactsPage } = await import('../../contrib/artifacts/browser/artifactsPage.js');
 const { IEditorPart } = await import('../../../workbench/browser/parts/editor/editorPart.js');
-await import('../../contrib/creator/browser/creator.contribution.js');
-await import('../../contrib/creator/contrib/design/browser/design.contribution.js');
-await import('../../contrib/creator/contrib/whiteboard/browser/whiteboard.contribution.js');
-await import('../../contrib/creator/contrib/slides/browser/slides.contribution.js');
-await import('../../contrib/creator/contrib/brand/browser/brand.contribution.js');
-await import('../../contrib/creator/contrib/sites/browser/sites.contribution.js');
-await import('../../contrib/creator/contrib/make/browser/make.contribution.js');
-await import('../../contrib/creator/contrib/prototype/browser/prototype.contribution.js');
+await import('../../contrib/artifacts/browser/artifacts.contribution.js');
+await import('../../contrib/artifacts/contrib/design/browser/design.contribution.js');
+await import('../../contrib/artifacts/contrib/whiteboard/browser/whiteboard.contribution.js');
+await import('../../contrib/artifacts/contrib/slides/browser/slides.contribution.js');
+await import('../../contrib/artifacts/contrib/brand/browser/brand.contribution.js');
+await import('../../contrib/artifacts/contrib/sites/browser/sites.contribution.js');
+await import('../../contrib/artifacts/contrib/make/browser/make.contribution.js');
+await import('../../contrib/artifacts/contrib/prototype/browser/prototype.contribution.js');
 const DESIGN_EDITOR_RESOURCE = URI.parse('ash-creator:/design');
-await import('../../contrib/creator/browser/creatorEditor.contribution.js');
-const { createDesignEditorContributions } = await import('../../contrib/creator/design.main.js');
+await import('../../contrib/artifacts/browser/creatorEditor.contribution.js');
+const { createDesignEditorContributions } = await import('../../contrib/artifacts/design.main.js');
 const services = new InstantiationService();
 const notifications = new TestNotificationService();
 services.registerInstance(INotificationService, notifications);
@@ -1124,11 +1124,11 @@ test('Frame rotation keeps keyboard movement in canvas directions and unclipped 
 	if (updated.kind !== 'frame') { throw new Error('Expected frame'); }
 	assert.equal(updated.children[0].x, 20);
 	assert.equal(updated.children[0].y, 29);
-	const { exportDesignSvg } = await import('../../contrib/creator/browser/svgRenderer.js');
+	const { exportDesignSvg } = await import('../../contrib/artifacts/browser/svgRenderer.js');
 	const overflowing = { ...frame, rotation: 0, children: [{ ...child, x: -50, y: -20 }] };
 	assert.match(exportDesignSvg(documentFromShapes([overflowing])), /viewBox="50 180 150 120"/u);
 	assert.match(exportDesignSvg(documentFromShapes([{ ...overflowing, clip: true }])), /viewBox="100 200 100 100"/u);
-	const { generateDesignCode } = await import('../../contrib/creator/contrib/code/browser/designCodeGenerator.js');
+	const { generateDesignCode } = await import('../../contrib/artifacts/contrib/code/browser/designCodeGenerator.js');
 	const motion = { duration: 1000, loop: false, keyframes: [{ offset: 0, x: -50, y: -20, rotation: 0, opacity: 1 }, { offset: 1, x: 40, y: -20, rotation: 0, opacity: 1 }] };
 	const code = generateDesignCode(documentFromShapes([{ ...overflowing, children: [{ ...overflowing.children[0], motion }] }]));
 	assert.match(code, new RegExp(`@keyframes ash-design-object-${child.id}-motion`, 'u'));
@@ -1236,7 +1236,7 @@ test('Design reuses the exact Library version without importing again or duplica
 });
 
 class CreatorFixture extends Disposable {
-	readonly page: InstanceType<typeof CreatorPage>;
+	readonly page: InstanceType<typeof ArtifactsPage>;
 	readonly editors: InstanceType<typeof DesignEditorService>;
 	constructor() {
 		super();
@@ -1248,7 +1248,7 @@ class CreatorFixture extends Disposable {
 		const storage = this._register(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: generateUuid(), flushInterval: 0 }));
 		child.registerInstance(IStorageService, storage);
 		child.registerInstance(IEditorPart, { groups: [], onDidChangeEditors: AshEvent.None } as unknown as import('../../../workbench/browser/parts/editor/editorPart.js').IEditorPart);
-		this.page = this._register(child.createInstance(CreatorPage, browser.window.document));
+		this.page = this._register(child.createInstance(ArtifactsPage, browser.window.document));
 		browser.window.document.body.append(this.page.domNode);
 		this.page.initialize();
 		this.page.layout({ width: 1000, height: 720 });
@@ -1322,7 +1322,7 @@ test('Creator Slides order and Brand variants use their own complete undo histor
 
 test('Creator saves workspace identity and refuses to replace another mode with its file or backup', async () => {
 	using controller = services.createInstance(DesignDocumentController, CreatorMode.Slides);
-	new (await import('../../contrib/creator/common/commands/documentCommands.js')).DocumentCommands(controller.model).addFrame({ x: 0, y: 0 });
+	new (await import('../../contrib/artifacts/common/commands/documentCommands.js')).DocumentCommands(controller.model).addFrame({ x: 0, y: 0 });
 	assert.equal(await controller.saveDocument(), true);
 	assert.equal(parseDesignDocument(fileContent).mode, CreatorMode.Slides);
 	using other = services.createInstance(DesignDocumentController, CreatorMode.Design);
@@ -1341,7 +1341,7 @@ test('Creator shutdown checks dirty documents in hidden modes', async () => {
 	using editors = child.createInstance(DesignEditorService);
 	editors.getDocument(CreatorMode.Design);
 	const slides = editors.getDocument(CreatorMode.Slides);
-	const { DocumentCommands } = await import('../../contrib/creator/common/commands/documentCommands.js');
+	const { DocumentCommands } = await import('../../contrib/artifacts/common/commands/documentCommands.js');
 	new DocumentCommands(slides.model).addFrame({ x: 0, y: 0 });
 	try {
 		saveDecision = ConfirmResult.CANCEL;
@@ -1388,7 +1388,7 @@ test('Design layout properties edit nested geometry, rename layers and save the 
 	editor.selectShape(frame.id);
 	input('Width').value = '300'; input('Width').dispatchEvent(new browser.window.Event('change', { bubbles: true }));
 	assert.equal((model.value.shapes[0] as typeof frame).children[0].width, 276);
-	const { generateDesignCode } = await import('../../contrib/creator/contrib/code/browser/designCodeGenerator.js');
+	const { generateDesignCode } = await import('../../contrib/artifacts/contrib/code/browser/designCodeGenerator.js');
 	const html = generateDesignCode(model.value);
 	assert.match(html, /display: flex; flex-direction: column;[^{]*row-gap: 24px/u);
 	assert.match(html, /width: auto; align-self: stretch/u);
@@ -1499,7 +1499,7 @@ test('Design grid, wrapping and size limits edit one undoable document and rejec
 	assert.equal(frame().children[0].sizeLimits?.maxWidth, 80);
 	await view.designEditors.document.saveDocument();
 	assert.deepEqual(parseDesignDocument(fileContent), model.value);
-	const { generateDesignCode } = await import('../../contrib/creator/contrib/code/browser/designCodeGenerator.js');
+	const { generateDesignCode } = await import('../../contrib/artifacts/contrib/code/browser/designCodeGenerator.js');
 	assert.match(generateDesignCode(model.value), /display: grid; grid-template-columns:[^;]+50px/u);
 	assert.match(generateDesignCode(model.value), /grid-column: 1 \/ span 2; grid-row: 2 \/ span 1/u);
 	assert.match(generateDesignCode(model.value), /max-width: 80px/u);
@@ -1582,7 +1582,7 @@ test('Design resource controls bind modes, reject invalid values, create styles 
 test('Design library files publish media and review updates before changing consumers, preserving overrides and undo', async () => {
 	fileContent = ''; errors = [];
 	using publisher = services.createInstance(DesignDocumentController, CreatorMode.Design);
-	const { DocumentCommands } = await import('../../contrib/creator/common/commands/documentCommands.js');
+	const { DocumentCommands } = await import('../../contrib/artifacts/common/commands/documentCommands.js');
 	const author = new DocumentCommands(publisher.model);
 	const label: DesignShape = { id: generateUuid(), kind: 'text', text: 'Initial', fontSize: 16, x: 0, y: 0, width: 100, height: 24, fill: '#123456', rotation: 0 };
 	const bytes = new Uint8Array([137, 80, 78, 71]); const sha256 = createHash('sha256').update(bytes).digest('hex');
@@ -1629,8 +1629,8 @@ test('Design text, effect and layout guide styles render safely and artwork expo
 	const label: DesignShape = { id: generateUuid(), kind: 'text', x: 0, y: 0, width: 100, height: 80, rotation: 0, fill: '#abcdef', text: 'First\nSecond', fontSize: 20, fontFamily: 'serif', fontWeight: 700, lineHeight: 30, letterSpacing: 2, effects: { x: 0, y: 4, blur: 8, color: '#00000080' } };
 	controller.model.applyEdit([{ id: generateUuid(), kind: 'frame', x: 0, y: 0, width: 200, height: 100, rotation: 0, fill: '#ffffff', clip: false, children: [label], layoutGuide: { size: 8, color: '#ff000040' } }]);
 	const text = view.domNode.querySelector<HTMLElement>('[data-design-text]')!; assert.equal(text.style.fontFamily, 'serif'); assert.equal(text.style.fontWeight, '700'); assert.equal((text.children[1] as HTMLElement).style.lineHeight, '30px'); assert.ok(view.domNode.querySelector('[data-layout-guide]'));
-	const { exportDesignSvg } = await import('../../contrib/creator/browser/svgRenderer.js'); const svg = exportDesignSvg(controller.model.value); assert.ok(!svg.includes('data-layout-guide')); assert.match(svg, /drop-shadow/u); assert.match(svg, /letter-spacing: 2px/u);
-	const { generateDesignCode } = await import('../../contrib/creator/contrib/code/browser/designCodeGenerator.js'); const code = generateDesignCode(controller.model.value); assert.match(code, /filter: drop-shadow\(0px 4px 4px #00000080\)/u);
+	const { exportDesignSvg } = await import('../../contrib/artifacts/browser/svgRenderer.js'); const svg = exportDesignSvg(controller.model.value); assert.ok(!svg.includes('data-layout-guide')); assert.match(svg, /drop-shadow/u); assert.match(svg, /letter-spacing: 2px/u);
+	const { generateDesignCode } = await import('../../contrib/artifacts/contrib/code/browser/designCodeGenerator.js'); const code = generateDesignCode(controller.model.value); assert.match(code, /filter: drop-shadow\(0px 4px 4px #00000080\)/u);
 });
 
 test('Chinese Design resource controls and accessibility help use translated names', async () => {
@@ -1670,7 +1670,7 @@ test('Prototype properties author interactions and transitions, save them, and r
 });
 
 test('Prototype preview follows hotspot branches, overlay dismissal and Back, leaving the saved document unchanged', async () => {
-	const { defaultPrototypeTransition } = await import('../../contrib/creator/common/model/prototype.js');
+	const { defaultPrototypeTransition } = await import('../../contrib/artifacts/common/model/prototype.js');
 	using view = createView(); const editor = view.pane.editor; const model = view.designEditors.document.model; const { home, detail, dialog } = prototypeScreens();
 	const wire = (action: 'navigate' | 'overlay' | 'close', destination?: string) => ({ id: generateUuid(), trigger: 'click' as const, actions: [{ action, destination, transition: defaultPrototypeTransition }] });
 	model.replace(documentFromShapes([{ ...home, interactions: [wire('navigate', detail.id)] }, { ...detail, interactions: [wire('overlay', dialog.id)] }, { ...dialog, interactions: [wire('close')] }]));
@@ -1691,7 +1691,7 @@ test('Prototype preview follows hotspot branches, overlay dismissal and Back, le
 });
 
 test('Prototype hover and press restore temporary navigation while mouse enter is permanent', async () => {
-	const { defaultPrototypeTransition } = await import('../../contrib/creator/common/model/prototype.js');
+	const { defaultPrototypeTransition } = await import('../../contrib/artifacts/common/model/prototype.js');
 	for (const trigger of ['hover', 'press', 'enter'] as const) {
 		using view = createView(); const editor = view.pane.editor; const { home, detail } = prototypeScreens();
 		editor.documentController.model.replace(documentFromShapes([{ ...home, interactions: [{ id: generateUuid(), trigger, actions: [{ action: 'navigate', destination: detail.id, transition: defaultPrototypeTransition }] }] }, detail]));
@@ -1705,7 +1705,7 @@ test('Prototype hover and press restore temporary navigation while mouse enter i
 });
 
 test('Prototype cancels delayed transitions when hidden and renders animation frames without edits', async () => {
-	const { defaultPrototypeTransition } = await import('../../contrib/creator/common/model/prototype.js');
+	const { defaultPrototypeTransition } = await import('../../contrib/artifacts/common/model/prototype.js');
 	using view = createView(); const editor = view.pane.editor; const { home, detail } = prototypeScreens();
 	const callbacks = new Map<number, FrameRequestCallback>(); let next = 0;
 	const previousRequest = browser.window.requestAnimationFrame, previousCancel = browser.window.cancelAnimationFrame;
@@ -1750,7 +1750,7 @@ test('Chinese Prototype properties, triggers and accessible descriptions use tra
 });
 
 test('Prototype key, pointer and link triggers use the preview and repeated preview opens restore canvas input', async () => {
-	const { defaultPrototypeTransition } = await import('../../contrib/creator/common/model/prototype.js');
+	const { defaultPrototypeTransition } = await import('../../contrib/artifacts/common/model/prototype.js');
 	for (const trigger of ['key', 'drag', 'down', 'up', 'leave'] as const) {
 		using view = createView(); const editor = view.pane.editor; const { home, detail } = prototypeScreens();
 		editor.documentController.model.replace(documentFromShapes([{ ...home, interactions: [{ id: generateUuid(), trigger, key: 'k', actions: [{ action: 'navigate', destination: detail.id, transition: defaultPrototypeTransition }] }] }, detail]));
@@ -1772,7 +1772,7 @@ test('Prototype key, pointer and link triggers use the preview and repeated prev
 });
 
 test('Prototype Change to authoring and preview preserve editable component instances', async () => {
-	const { DocumentCommands } = await import('../../contrib/creator/common/commands/documentCommands.js');
+	const { DocumentCommands } = await import('../../contrib/artifacts/common/commands/documentCommands.js');
 	using view = createView(); const editor = view.pane.editor; const model = view.designEditors.document.model; const commands = new DocumentCommands(model); const { home } = prototypeScreens();
 	const main: Extract<DesignShape, { kind: 'frame'; }> = { ...home, name: 'Button', component: { kind: 'main' }, width: 120, height: 40 };
 	model.replace(documentFromShapes([main])); const variant = commands.components.addVariant(main.id)!;
@@ -1791,7 +1791,7 @@ test('Prototype Change to authoring and preview preserve editable component inst
 });
 
 test('Prototype action editor authors expressions, branches and custom springs, reorders with undo, and saves stable references', async () => {
-	const { DocumentCommands } = await import('../../contrib/creator/common/commands/documentCommands.js');
+	const { DocumentCommands } = await import('../../contrib/artifacts/common/commands/documentCommands.js');
 	using view = createView(); const editor = view.pane.editor, model = view.designEditors.document.model, { home, detail, dialog } = prototypeScreens();
 	model.replace(documentFromShapes([home, detail, dialog])); const commands = new DocumentCommands(model);
 	const collection = commands.resources.addCollection('State'), variable = commands.resources.addVariable(collection, 'count', 'number');
@@ -1816,7 +1816,7 @@ test('Prototype action editor authors expressions, branches and custom springs, 
 });
 
 test('Prototype animated chains defer later effects and cancel the entire continuation when closed or restarted', async () => {
-	const { defaultPrototypeTransition } = await import('../../contrib/creator/common/model/prototype.js');
+	const { defaultPrototypeTransition } = await import('../../contrib/artifacts/common/model/prototype.js');
 	using view = createView(); const editor = view.pane.editor, model = view.designEditors.document.model, { home, detail, dialog } = prototypeScreens();
 	model.replace(documentFromShapes([{
 		...home, interactions: [{
@@ -1890,7 +1890,7 @@ test('Prototype scroll controls save undoable settings and preview handles wheel
 });
 
 test('Prototype scroll animation recomputes fixed and sticky positions per frame, sequences actions and cancels on close', async () => {
-	const { defaultPrototypeTransition } = await import('../../contrib/creator/common/model/prototype.js');
+	const { defaultPrototypeTransition } = await import('../../contrib/artifacts/common/model/prototype.js');
 	using view = createView(); const editor = view.pane.editor, model = view.designEditors.document.model, { home } = prototypeScreens();
 	const target: DesignShape = { id: generateUuid(), kind: 'rectangle', x: 0, y: 800, width: 100, height: 60, rotation: 0, fill: '#ff0000' }, sticky: DesignShape = { ...target, id: generateUuid(), y: 100, scrollPosition: 'sticky' }, fixed: DesignShape = { ...target, id: generateUuid(), y: 10, scrollPosition: 'fixed' };
 	model.replace(documentFromShapes([{ ...home, height: 200, overflowDirection: 'vertical', children: [target, sticky, fixed], interactions: [{ id: generateUuid(), trigger: 'click', actions: [{ action: 'scrollTo', destination: target.id, transition: { ...defaultPrototypeTransition, type: 'scroll', duration: 1000, easing: 'linear' } }, { action: 'url', url: 'https://example.com/scrolled', transition: defaultPrototypeTransition }] }] }]));
@@ -1925,7 +1925,7 @@ test('Chinese Prototype overflow, fixed positioning, Scroll to and keyboard help
 });
 
 test('Scrolling preview keeps pending delay deadlines and respects reduced motion for Scroll to', async () => {
-	const { defaultPrototypeTransition } = await import('../../contrib/creator/common/model/prototype.js');
+	const { defaultPrototypeTransition } = await import('../../contrib/artifacts/common/model/prototype.js');
 	using view = createView(); const editor = view.pane.editor, { home } = prototypeScreens();
 	const target: DesignShape = { id: generateUuid(), kind: 'rectangle', x: 0, y: 800, width: 100, height: 60, rotation: 0, fill: '#ff0000' };
 	view.designEditors.document.model.replace(documentFromShapes([{ ...home, height: 200, overflowDirection: 'vertical', children: [target], interactions: [{ id: generateUuid(), trigger: 'delay', delay: 5000, actions: [{ action: 'scrollTo', destination: target.id, transition: { ...defaultPrototypeTransition, type: 'scroll' } }] }] }]));
@@ -1987,7 +1987,7 @@ test('Design character controls keep canvas selection, report mixed values and p
 	const pasted = view.designEditors.document.model.value.shapes[0] as Extract<DesignShape, { kind: 'text'; }>;
 	assert.equal(pasted.text, 'Safe text'); assert.equal(pasted.textRuns?.[0].style.fontWeight, 700); assert.equal(pasted.textRuns?.at(-1)?.style.fontStyle, 'italic'); assert.equal(editor().querySelector('script, img'), null);
 	assert.deepEqual(parseDesignDocument(serializeDesignDocument(view.designEditors.document.model.value)), view.designEditors.document.model.value);
-	const { readDesignTextHtml } = await import('../../contrib/creator/contrib/text/browser/textClipboard.js');
+	const { readDesignTextHtml } = await import('../../contrib/artifacts/contrib/text/browser/textClipboard.js');
 	assert.equal(readDesignTextHtml(browser.window.document, '<div><div>A</div>\n<div>B</div></div>').text, 'A\nB');
 });
 
@@ -2089,7 +2089,7 @@ test('IME emoji replacement preserves Unicode boundaries and the surrounding ric
 });
 
 test('Vector compound paths save, open and recover with editable handles and localized controls', async () => {
-	const { designShapeContours } = await import('../../contrib/creator/common/model/designVector.js');
+	const { designShapeContours } = await import('../../contrib/artifacts/common/model/designVector.js');
 	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
@@ -2151,7 +2151,7 @@ test('Gradient properties commit stacks and keyboard edits atomically and persis
 
 
 test('Plus darker containers retain clipped child prototype hotspots and keyboard navigation', async () => {
-	const { defaultPrototypeTransition } = await import('../../contrib/creator/common/model/prototype.js');
+	const { defaultPrototypeTransition } = await import('../../contrib/artifacts/common/model/prototype.js');
 	using view = createView(); const editor = view.pane.editor, model = view.designEditors.document.model, { home, detail } = prototypeScreens();
 	const button: DesignShape = { id: generateUuid(), kind: 'rectangle', name: 'Continue', x: 10, y: 20, width: 80, height: 30, rotation: 15, fill: '#c0c0c0', interactions: [{ id: generateUuid(), trigger: 'click', actions: [{ action: 'navigate', destination: detail.id, transition: defaultPrototypeTransition }] }] };
 	model.replace(documentFromShapes([{ ...home, blendMode: 'plus-darker', clip: true, children: [button] }, detail]));
@@ -2177,7 +2177,7 @@ test('Effect properties save complete stacks, reject invalid input and retain on
 	await clickAction({ domNode: view.propertiesDomNode }, 'Add effect'); select('Effect type', 'layer-blur');
 	assert.equal(view.propertiesDomNode.querySelector<HTMLButtonElement>('[aria-label="Duplicate effect"]')!.disabled, true);
 	await clickAction({ domNode: view.propertiesDomNode }, 'Add effect'); select('Effect type', 'background-blur');
-	const { designEffects } = await import('../../contrib/creator/common/model/designEffects.js');
+	const { designEffects } = await import('../../contrib/artifacts/common/model/designEffects.js');
 	const effects = designEffects(controller.model.value.shapes[0]);
 	assert.deepEqual(effects.map(effect => effect.type), ['background-blur', 'layer-blur', 'inner-shadow', 'drop-shadow']);
 	assert.equal(view.domNode.querySelectorAll(`.ash-sessions-design-shapes [data-shape-id="${id}"]`).length, 1);
@@ -2185,15 +2185,15 @@ test('Effect properties save complete stacks, reject invalid input and retain on
 	await clickCanvasMenu(view, 'Export SVG');
 	assert.match(fileContent, /feGaussianBlur/u); assert.match(fileContent, /shadow-cutout-/u); assert.match(fileContent, /background-mask-/u);
 	assert.ok(!fileContent.includes('data-shape-id'));
-	const { generateDesignCode } = await import('../../contrib/creator/contrib/code/browser/designCodeGenerator.js');
+	const { generateDesignCode } = await import('../../contrib/artifacts/contrib/code/browser/designCodeGenerator.js');
 	assert.match(generateDesignCode(controller.model.value), /layer-blur-/u);
 	controller.model.undo(); assert.equal(designEffects(controller.model.value.shapes[0])[0].type, 'drop-shadow');
 	controller.model.redo(); assert.deepEqual(designEffects(controller.model.value.shapes[0]), effects);
 });
 
 test('Shadow and blur containers preserve nested prototype keyboard hotspots without duplicating them in masks', async () => {
-	const { defaultPrototypeTransition } = await import('../../contrib/creator/common/model/prototype.js');
-	const { createDesignEffect } = await import('../../contrib/creator/common/model/designEffects.js');
+	const { defaultPrototypeTransition } = await import('../../contrib/artifacts/common/model/prototype.js');
+	const { createDesignEffect } = await import('../../contrib/artifacts/common/model/designEffects.js');
 	using view = createView(); const editor = view.pane.editor, model = view.designEditors.document.model, { home, detail } = prototypeScreens();
 	const button: DesignShape = { id: generateUuid(), kind: 'rectangle', name: 'Continue', x: 10, y: 20, width: 80, height: 30, rotation: 15, fill: '#ffffff80', effects: [{ id: generateUuid(), type: 'background-blur', blur: 24, progressive: { startBlur: 0, start: { x: 0, y: .5 }, end: { x: 1, y: .5 } } }, createDesignEffect('inner-shadow')], interactions: [{ id: generateUuid(), trigger: 'click', actions: [{ action: 'navigate', destination: detail.id, transition: defaultPrototypeTransition }] }] };
 	model.replace(documentFromShapes([{ ...home, clip: true, children: [button], effects: [createDesignEffect('drop-shadow'), { id: generateUuid(), type: 'layer-blur', blur: 8, progressive: { startBlur: 0, start: { x: .5, y: 0 }, end: { x: .5, y: 1 } } }] }, detail]));
@@ -2207,9 +2207,9 @@ test('Shadow and blur containers preserve nested prototype keyboard hotspots wit
 });
 
 test('Effect SVG export includes shadows cast by outside strokes and excludes duplicate layer IDs from backdrop images', async () => {
-	const { designShapeContours } = await import('../../contrib/creator/common/model/designVector.js');
-	const { exportDesignSvg } = await import('../../contrib/creator/browser/svgRenderer.js');
-	const { createDesignEffect } = await import('../../contrib/creator/common/model/designEffects.js');
+	const { designShapeContours } = await import('../../contrib/artifacts/common/model/designVector.js');
+	const { exportDesignSvg } = await import('../../contrib/artifacts/browser/svgRenderer.js');
+	const { createDesignEffect } = await import('../../contrib/artifacts/common/model/designEffects.js');
 	const base: DesignShape = { id: generateUuid(), kind: 'rectangle', x: 0, y: 0, width: 100, height: 100, rotation: 0, fill: '#ffffff' };
 	const path: DesignShape = { ...base, kind: 'path', ...designShapeContours(base)[0], strokeWidth: 20, strokeAlignment: 'outside', effects: [{ id: generateUuid(), type: 'drop-shadow', x: -100, y: 0, blur: 0, color: '#ff0000' }] };
 	const glass: DesignShape = { ...base, id: generateUuid(), fill: '#ffffff20', effects: [createDesignEffect('background-blur')] };
@@ -2221,7 +2221,7 @@ test('Effect SVG export includes shadows cast by outside strokes and excludes du
 });
 
 test('Progressive blur edits normalized positions with keyboard and cancels a drag inside a rotated scaled group', async () => {
-	const { designEffects } = await import('../../contrib/creator/common/model/designEffects.js');
+	const { designEffects } = await import('../../contrib/artifacts/common/model/designEffects.js');
 	using view = createView(); view.layout({ width: 800, height: 600 });
 	const model = view.designEditors.document.model;
 	const effect = { id: generateUuid(), type: 'layer-blur' as const, blur: 24, progressive: { startBlur: 0, start: { x: .5, y: 0 }, end: { x: .5, y: 1 } } };
@@ -2274,7 +2274,7 @@ test('Progressive blur edits normalized positions with keyboard and cancels a dr
 test('Chinese progressive blur fields, descriptions and keyboard help are localized', async () => {
 	const { productLanguagePackCatalogs } = await import('../../../workbench/services/localization/common/localizationCatalogs.js');
 	const { formatNlsMessage, setNlsResolver, resetNlsResolver } = await import('../../../nls.js');
-	const { describeDesignEffect } = await import('../../contrib/creator/browser/designEffectLabels.js');
+	const { describeDesignEffect } = await import('../../contrib/artifacts/browser/designEffectLabels.js');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {

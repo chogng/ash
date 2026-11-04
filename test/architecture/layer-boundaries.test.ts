@@ -271,7 +271,7 @@ function sourceName(file: string): string {
 
 
 test('Design editor stays within its Sessions contribution and keeps document code independent from the page', () => {
-	const designRoot = join(sourceRoot, 'sessions/contrib/creator');
+	const designRoot = join(sourceRoot, 'sessions/contrib/artifacts');
 	const canvasRoot = join(sourceRoot, 'sessions/contrib/canvas');
 	const commonRoot = join(designRoot, 'common');
 	const coreRoot = join(commonRoot, 'core');
@@ -325,12 +325,12 @@ test('Shared canvas does not depend on Creator modes or Sessions composition', (
 });
 
 
-test("Creator host consumes mode contracts and modes do not import each other's implementations", () => {
-	const root = join(sourceRoot, 'sessions/contrib/creator');
+test("Artifacts host consumes mode contracts and modes do not import each other's implementations", () => {
+	const root = join(sourceRoot, 'sessions/contrib/artifacts');
 	const modes = ['design', 'whiteboard', 'slides', 'brand', 'sites', 'make', 'prototype'];
 	const roots = modes.map(mode => join(root, 'contrib', mode));
 	const violations: string[] = [];
-	for (const file of [join(root, 'browser/creatorPage.ts'), join(root, 'browser/creatorWorkspace.ts')]) {
+	for (const file of [join(root, 'browser/artifactsPage.ts'), join(root, 'browser/creatorWorkspace.ts')]) {
 		for (const target of localImports(file)) {
 			if (roots.some(modeRoot => target.startsWith(modeRoot + sep))) violations.push(sourceName(file) + ' -> ' + sourceName(target));
 		}

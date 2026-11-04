@@ -1,6 +1,6 @@
 # Artifacts 工作空间
 
-Artifacts 是 Sessions 的创作主页，提供 Docs、Slides、Design 三个创建入口和已有作品卡片。主页保留窗口原有的对话侧栏，不注册单独的分类导航，也不显示编辑器标签栏。`CreatorPage` 保留画布工作空间；Docs 优先使用已安装的富文档扩展，未安装时创建 Markdown 文档；两者复用 Workbench 编辑器的保存、备份和关闭生命周期。主页从已有文档编辑器和画布文档派生作品列表，不持久化第二份作品目录。
+Artifacts 是 Sessions 的创作主页，提供 Docs、Slides、Design 三个创建入口和已有作品卡片。主页保留窗口原有的对话侧栏，不注册单独的分类导航，也不显示编辑器标签栏。`ArtifactsPage` 保留画布工作空间；Docs 优先使用已安装的富文档扩展，未安装时创建 Markdown 文档；两者复用 Workbench 编辑器的保存、备份和关闭生命周期。主页从已有文档编辑器和画布文档派生作品列表，不持久化第二份作品目录。
 
 Docs 旁的下拉按钮选择自动、富文档或 Markdown；偏好由 UI profile 的 `sessions.docs.editor` 设置持有。缺少可用富文档 Provider 时仍创建 Markdown，并通过共享扩展推荐通知发现可安装的编辑器。当前文档的“切换 Docs 编辑器”复用 Workbench 的 Markdown 导入／导出，创建未保存副本并保留原稿；转换失败由原编辑器报告，不覆盖源文档。
 
@@ -55,8 +55,8 @@ Design 隐藏编辑器标签栏和 Creator 标题行，不创建工作空间顶�
 | [browser/designDocumentController.ts](browser/designDocumentController.ts)                                                                                  | `DesignDocumentController`，文件身份、读取版本、保存基准、异步文件操作和共享 `IWorkingCopy` 契约                                 |
 | [browser/designEditorPage.ts](browser/designEditorPage.ts)                                                                                                  | `DesignEditorPage`，借用窗口文档，拥有编辑器装配、布局、焦点和浏览器关闭检查                                                     |
 | [browser/designEditorService.ts](browser/designEditorService.ts)、[designViews.ts](browser/designViews.ts)                                                  | 按模式持有的窗口文档、工作副本注册与当前编辑器的可观察引用，以及借用该实例文档、选区和属性组件的 Layers 与 Shape properties 视图 |
-| [browser/creatorPage.ts](browser/creatorPage.ts)、[creatorWorkspace.ts](browser/creatorWorkspace.ts)                                                        | CreatorEditorPane、模式导航、工作空间保留与模式注册契约                                                                          |
-| [browser/creator.contribution.ts](browser/creator.contribution.ts)、[creatorEditor.contribution.ts](browser/creatorEditor.contribution.ts)                  | 前者注册 Artifacts 导航及帮助，后者注册共享画布面板、快捷键和帮助                                                                |
+| [browser/artifactsPage.ts](browser/artifactsPage.ts)、[creatorWorkspace.ts](browser/creatorWorkspace.ts)                                                    | ArtifactsEditorPane、模式导航、工作空间保留与模式注册契约                                                                        |
+| [browser/artifacts.contribution.ts](browser/artifacts.contribution.ts)、[creatorEditor.contribution.ts](browser/creatorEditor.contribution.ts)              | 前者注册 Artifacts 导航及帮助，后者注册共享画布面板、快捷键和帮助                                                                |
 
 一个文件可以承接紧密相关的完整职责。几何和文档序列化目前各自保持在小模块中；新增能力时按实际职责拆分。
 
@@ -74,7 +74,7 @@ Typography 面板面向整层或当前字符选区，显示混合值，支持字
 
 `common/core` 只定义空间值与计算，文档类型和可变模型依赖它。`common/model` 拥有文档及历史，命令依赖模型。`common` 使用基础 JavaScript 与所属公共服务契约；DOM、文件操作和页面装配留在 `browser`。
 
-编辑器组件使用本目录的公共模型、命令和文件控制器，通过公共契约调用贡献。窗口编辑器服务按 Creator 模式创建并注册文档控制器；`CreatorPage` 的每个工作空间通过设计页面组件借用自己的文档，把能力装配函数传给 Widget，并转交编辑器布局与焦点。左右面板读取当前画布的同一份文档和选区；属性 View 只挂载 Widget 拥有的属性组件，视图切换不会创建第二份文档、选区或属性状态。Widget 创建 View、共享工具栏、输入控制器和一组贡献实例；各组件持有自己的 DOM、样式和订阅。宿主只定位直接挂载的组件根节点。
+编辑器组件使用本目录的公共模型、命令和文件控制器，通过公共契约调用贡献。窗口编辑器服务按 Creator 模式创建并注册文档控制器；`ArtifactsPage` 的每个工作空间通过设计页面组件借用自己的文档，把能力装配函数传给 Widget，并转交编辑器布局与焦点。左右面板读取当前画布的同一份文档和选区；属性 View 只挂载 Widget 拥有的属性组件，视图切换不会创建第二份文档、选区或属性状态。Widget 创建 View、共享工具栏、输入控制器和一组贡献实例；各组件持有自己的 DOM、样式和订阅。宿主只定位直接挂载的组件根节点。
 
 | 状态                                     | 持有者                              | 保存进文件                     |
 | ---------------------------------------- | ----------------------------------- | ------------------------------ |
@@ -92,7 +92,7 @@ Typography 面板面向整层或当前字符选区，显示混合值，支持字
 | 当前工具与模式                           | 每个 Widget                         | 否                             |
 | 文件 URI、读取版本、已保存内容和操作状态 | `DesignDocumentController`          | 否                             |
 
-多个 Widget 可以使用同一个文档控制器，共享已提交内容与历史，同时保留各自的选区和视口。Widget 借用控制器的模型；单独释放 Widget 会取消手势，释放 View、输入控制器、共享工具栏及该实例的全部贡献，并清理订阅和命令查找记录。View 释放画布的主题与配置订阅，Motion 释放播放时钟；文档仍由控制器持有。活动页切换隐藏对应编辑组或 EditorPane，`CreatorPage` 保留页面组件与 Widget；隐藏画布会取消手势并停止动画播放，回到设计页时恢复原选区和视口。Creator 页面使用 EditorPart 中保留的产品编辑组，不进入会话 Code 工作集，页面切换不会触发关闭确认。Design 文档由控制器自动保存：未命名草稿以现有设计文件包格式保存在当前 UI profile 的 `creator/<workspace-id>/<document-id>.ash-design`；工作空间机器状态只记录上次文档 URI，重新进入 Design 时加载该文件包。已打开的文件保留版本检查并自动写回。正常关闭等待全部修改保存，不询问保存；失败时保留画布内容并阻止关闭，可重试。保存副本、导出与发布仍需显式操作。其他 Creator 模式继续通过关闭生命周期确认保存、放弃或取消；窗口关闭后释放文档。
+多个 Widget 可以使用同一个文档控制器，共享已提交内容与历史，同时保留各自的选区和视口。Widget 借用控制器的模型；单独释放 Widget 会取消手势，释放 View、输入控制器、共享工具栏及该实例的全部贡献，并清理订阅和命令查找记录。View 释放画布的主题与配置订阅，Motion 释放播放时钟；文档仍由控制器持有。活动页切换隐藏对应编辑组或 EditorPane，`ArtifactsPage` 保留页面组件与 Widget；隐藏画布会取消手势并停止动画播放，回到设计页时恢复原选区和视口。Creator 页面使用 EditorPart 中保留的产品编辑组，不进入会话 Code 工作集，页面切换不会触发关闭确认。Design 文档由控制器自动保存：未命名草稿以现有设计文件包格式保存在当前 UI profile 的 `creator/<workspace-id>/<document-id>.ash-design`；工作空间机器状态只记录上次文档 URI，重新进入 Design 时加载该文件包。已打开的文件保留版本检查并自动写回。正常关闭等待全部修改保存，不询问保存；失败时保留画布内容并阻止关闭，可重试。保存副本、导出与发布仍需显式操作。其他 Creator 模式继续通过关闭生命周期确认保存、放弃或取消；窗口关闭后释放文档。
 
 文档文件保存所属模式；打开和恢复备份必须匹配当前工作空间。原有未记录模式的 Design 文件保持 Design 语义。每种模式的工作副本资源为 `ash-creator:/<mode>`，窗口导航迁移旧的 Design 命令顺序与页面选择。
 

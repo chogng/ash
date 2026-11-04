@@ -4,6 +4,7 @@ import { QuickAccess } from '../../../../../test/automation/quickaccess.js';
 import { StorageTarget } from '../../../platform/storage/common/storage.js';
 import { suite, test, setup, teardown } from 'mocha';
 import { useBrowserTests } from '../../../../../test/unit/browser/context.js';
+import { DOCS_EDITOR_SETTING } from '../../contrib/artifacts/common/creator.js';
 
 suite('sessions browser component', () => {
 	const browserTests = useBrowserTests();
@@ -71,6 +72,119 @@ suite('sessions browser component', () => {
 
 		await expect.poll(() => page.evaluate(() => ({ errors: window.ashSessionsIntegration.errors, details: window.ashSessionsIntegration.errorDetails }))).toEqual({ errors: [], details: [] });
 		expect(runtimeErrors.get(page)).toEqual([]);
+	});
+
+	test('Artifacts ownership uses navigation tabs and updates the localized results panel', async function () {
+		const { page, info } = browserTests;
+		await page.goto('/sessions.html?creator&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-light'));
+		await page.locator('.ash-sessions-navigation').getByRole('button', { name: 'Artifacts', exact: true }).click();
+		const creator = page.locator('.ash-creator');
+		const navigation = creator.locator('.ash-tab-list-navigation');
+		const tabs = navigation.getByRole('tablist', { name: '作品归属' });
+		const all = tabs.getByRole('tab', { name: '全部', exact: true });
+		const yours = tabs.getByRole('tab', { name: '我的', exact: true });
+		const shared = tabs.getByRole('tab', { name: '与你共享', exact: true });
+		const panel = creator.getByRole('tabpanel');
+		await expect(all).toHaveAttribute('aria-selected', 'true');
+		await expect(panel).toHaveAccessibleName('全部');
+		await expect(shared).toHaveAttribute('aria-controls', (await panel.getAttribute('id'))!);
+		await expect(navigation).toHaveCSS('height', '32px');
+		await creator.screenshot({ path: info.outputPath('artifacts-filters-zh-CN.png') });
+
+		await all.focus();
+		await page.keyboard.press('ArrowRight');
+		await expect(yours).toBeFocused();
+		await page.keyboard.press('ArrowRight');
+		await expect(shared).toBeFocused();
+		await expect(all).toHaveAttribute('aria-selected', 'true');
+		await page.keyboard.press('Enter');
+		await expect(shared).toHaveAttribute('aria-selected', 'true');
+		await expect(panel).toHaveAccessibleName('与你共享');
+		await expect(panel).toHaveText('暂无与你共享的作品。');
+		await yours.click();
+		await expect(yours).toHaveAttribute('aria-selected', 'true');
+		await expect(panel).toHaveAccessibleName('我的');
+	});
+
+	test('Artifacts ActionBar searches, sorts and switches the work results between grid and list', async function () {
+		const { page, info } = browserTests;
+		await page.goto('/sessions.html?creator&locale=zh-CN');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.evaluate(async setting => {
+			await window.ashSessionsIntegration.setTheme('ash-light');
+			await window.ashSessionsIntegration.updateConfiguration(setting, 'markdown');
+		}, DOCS_EDITOR_SETTING);
+		const home = page.locator('.ash-sessions-navigation').getByRole('button', { name: 'Artifacts', exact: true });
+		await home.click();
+		const creator = page.locator('.ash-creator');
+		const actions = creator.getByRole('toolbar', { name: '作品操作' });
+		const search = actions.getByRole('button', { name: '搜索作品' });
+		const sort = actions.getByRole('button', { name: '反转标题排序' });
+		const layout = actions.getByRole('button', { name: '网格布局' });
+		const searchInput = actions.getByRole('searchbox', { name: '搜索作品' });
+		const closeSearch = actions.getByRole('button', { name: '关闭作品搜索' });
+		const panel = creator.getByRole('tabpanel');
+		const createTiles = creator.locator('.ash-creator-modes');
+		await expect(layout).toHaveAttribute('aria-controls', (await panel.getAttribute('id'))!);
+		await expect(layout.locator('[data-ash-icon-id="layout-grid"]')).toBeVisible();
+		await layout.hover();
+		await expect(page.getByRole('tooltip')).toHaveText('网格布局');
+		const empty = panel.getByText(/你的作品将显示在这里/u);
+		await expect(empty).toBeVisible();
+		expect((await panel.boundingBox())!.height).toBeGreaterThan((await empty.boundingBox())!.height);
+
+		for (let count = 0; count < 2; count++) {
+			await createTiles.getByRole('button', { name: '文档', exact: true }).click();
+			await expect(creator).toBeHidden();
+			await home.click();
+		}
+		const cards = panel.getByRole('button', { name: '未命名文档' });
+		await expect(cards).toHaveCount(2);
+		await search.focus();
+		await page.keyboard.press('ArrowRight');
+		await expect(sort).toBeFocused();
+		await sort.press('Enter');
+		await expect(sort).toHaveAttribute('aria-pressed', 'true');
+		await page.keyboard.press('ArrowRight');
+		await expect(layout).toBeFocused();
+		await search.click();
+		await expect(searchInput).toBeFocused();
+		await expect(search).toBeHidden();
+		await expect(actions.locator('.ash-toolbar-search-field')).toBeVisible();
+		await expect(closeSearch.locator('[data-ash-icon-id="close"]')).toBeVisible();
+		await creator.screenshot({ path: info.outputPath('artifacts-search-zh-CN.png') });
+		await searchInput.fill('no match');
+		await expect(cards).toHaveCount(0);
+		await closeSearch.click();
+		await expect(search).toHaveAttribute('aria-expanded', 'false');
+		await expect(search).toBeFocused();
+		await expect(searchInput).toBeHidden();
+		await expect(cards).toHaveCount(2);
+		await search.press('Enter');
+		await expect(searchInput).toHaveValue('');
+		await searchInput.press('Escape');
+		await expect(search).toBeFocused();
+		await expect(layout).toHaveAttribute('aria-pressed', 'true');
+		const gridFirst = (await cards.nth(0).boundingBox())!;
+		const gridSecond = (await cards.nth(1).boundingBox())!;
+		expect(gridFirst.y).toBe(gridSecond.y);
+		expect(gridSecond.x).toBeGreaterThan(gridFirst.x);
+		const createBounds = await createTiles.boundingBox();
+		await creator.screenshot({ path: info.outputPath('artifacts-grid-zh-CN.png') });
+
+		await layout.press('Space');
+		await expect(layout).toHaveAttribute('aria-pressed', 'false');
+		const listFirst = (await cards.nth(0).boundingBox())!;
+		const listSecond = (await cards.nth(1).boundingBox())!;
+		expect(listFirst.x).toBe(listSecond.x);
+		expect(listSecond.y).toBeGreaterThan(listFirst.y);
+		expect(await createTiles.boundingBox()).toEqual(createBounds);
+		await creator.screenshot({ path: info.outputPath('artifacts-list-zh-CN.png') });
+		await layout.click();
+		await expect(layout).toHaveAttribute('aria-pressed', 'true');
+		await expect(cards.nth(1)).toHaveCSS('flex-direction', 'column');
 	});
 
 	test('update download becomes Restart to Update above Accounts and supports retry', async function () {

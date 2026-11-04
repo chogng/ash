@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { generateUuid } from '../../../base/common/uuid.js';
-import { DocumentCommands } from '../../contrib/creator/common/commands/documentCommands.js';
-import { DesignModel } from '../../contrib/creator/common/model/designModel.js';
-import { createDesignPaint, designGradientPosition, designPaints, parseDesignPaints, sampleDesignPaint, withDesignPaintColor, type DesignPaint } from '../../contrib/creator/common/model/designPaint.js';
-import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/creator/common/model/document.js';
+import { DocumentCommands } from '../../contrib/artifacts/common/commands/documentCommands.js';
+import { DesignModel } from '../../contrib/artifacts/common/model/designModel.js';
+import { createDesignPaint, designGradientPosition, designPaints, parseDesignPaints, sampleDesignPaint, withDesignPaintColor, type DesignPaint } from '../../contrib/artifacts/common/model/designPaint.js';
+import { documentFromShapes, flattenDesignShapes, parseDesignDocument, serializeDesignDocument, type DesignShape } from '../../contrib/artifacts/common/model/document.js';
 const rectangle = (): DesignShape => ({ id: generateUuid(), kind: 'rectangle', x: 0, y: 0, width: 200, height: 100, rotation: 0, fill: '#3366ff' });
 const gradient = (type: Exclude<DesignPaint['type'], 'solid'> = 'linear') => createDesignPaint(type, '#ff0000') as Exclude<DesignPaint, {
 	type: 'solid';

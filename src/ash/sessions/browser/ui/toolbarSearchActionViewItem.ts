@@ -74,7 +74,7 @@ export class ToolbarSearchActionViewItem extends ButtonActionViewItem {
 		// A closing field remains painted for its transition, but must stop accepting focus immediately.
 		this.field.inert = !expanded;
 		this.field.setAttribute('aria-hidden', String(!expanded));
-		this.button.domNode.hidden = expanded;
+		this.button.hidden = expanded;
 		this.button.domNode.setAttribute('aria-expanded', String(expanded));
 		this.field.parentElement!.classList.toggle('expanded', expanded);
 		this.setTabbable(this.tabbable);
