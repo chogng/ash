@@ -1,4 +1,7 @@
 import { ISessionsListModelService, SessionsListModelService } from '../../../../../services/sessions/browser/sessionsListModelService.js';
+import { IChatWidgetService } from '../../../../../../workbench/contrib/chat/browser/chat.js';
+import { ChatWidgetService } from '../../../../../../workbench/contrib/chat/browser/widget/chatWidgetService.js';
+import { ISessionProviderScopeService } from '../../../../../browser/agentHost/sessionProviderScopeService.js';
 import { registerTestWorkbenchHostServices } from '../../../../../../workbench/test/common/workbenchHostTestServices.js';
 import { remoteAgentHostRoot } from '../../../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { URI } from '../../../../../../base/common/uri.js';
@@ -82,6 +85,8 @@ await import('../../../../sessions/browser/sessions.contribution.js');
 const resources = new DisposableStore();
 
 const services = resources.add(new InstantiationService());
+services.registerInstance(IChatWidgetService, resources.add(new ChatWidgetService()));
+services.registerInstance(ISessionProviderScopeService, { onDidChangeScopes: Event.None, getScopes: () => [] } as unknown as ISessionProviderScopeService);
 
 const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);

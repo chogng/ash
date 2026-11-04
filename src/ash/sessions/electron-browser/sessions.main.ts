@@ -73,6 +73,7 @@ import { IConfigurationService } from '../../platform/configuration/common/confi
 import { getSingletonServiceDescriptors } from '../../platform/instantiation/common/extensions.js';
 import '../contrib/sessions/electron-browser/sessions.contribution.js';
 import { SessionsApplicationBadge } from '../contrib/sessions/electron-browser/sessionsApplicationBadge.js';
+import { SessionsWindowNotifier } from '../contrib/sessions/browser/sessionsWindowNotifier.js';
 
 /** Starts the Code-specific Electron Sessions page. */
 export async function main(profile: SessionsProfile): Promise<IDisposable> {
@@ -286,6 +287,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.sessionsMouseNavigation',
 					'sessions.automationSessionsListing',
 					SessionsApplicationBadge.ID,
+					SessionsWindowNotifier.ID,
 					'workbench.contrib.nativeWindow',
 					OpenAgentsWindowSystemWideKeybindingContribution.ID,
 					'workbench.contrib.chatScreenshot',

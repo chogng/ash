@@ -162,6 +162,7 @@ console.log(describeTheme(palette));
 	};
 	const serviceCollection = new ServiceCollection([IClipboardService, clipboard], [IHostService, {
 		hasFocus: true, onDidChangeFocus: Event.None, getWindows: async () => [],
+		showToast: async () => ({ supported: false, clicked: false }),
 		openWindow: async () => { }, restart: async () => { }, reload: async () => { }, getScreenshot: async () => undefined,
 	} satisfies IHostService]);
 	const fileDialogDescriptor = (services: () => IInstantiationService): SyncDescriptor<FileDialogService> => new SyncDescriptor(FileDialogService, [{

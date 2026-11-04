@@ -310,6 +310,40 @@ test('Session Details opens a localized read-only snapshot of active user sessio
 	} finally { resetNlsResolver(); }
 });
 
+test('Moving a conversation follows its destination only if navigation stayed on the original conversation', async () => {
+	using services = new InstantiationService();
+	using commands = new CommandService(services);
+	const source: ISession = { sessionId: 'source', title: 'Source', status: 'active', nextApprovalMode: 'manual', chats: [] };
+	const destination: ISession = { ...source, sessionId: 'destination', title: 'Destination' };
+	const calls: string[][] = [];
+	let navigationRevision = 0;
+	let navigateDuringMove = false;
+	services.registerInstance(IQuickInputService, new TestQuickInputService(['Destination', 'Destination']));
+	services.registerInstance(ISessionsService, {
+		activeSelection: { kind: 'session', active: { session: source, threadId: 'thread' } },
+		get navigationRevision() { return navigationRevision; },
+		openThread: async (...ids: string[]) => { calls.push(['open', ...ids]); },
+	} as unknown as ISessionsService);
+	services.registerInstance(ISessionsManagementService, {
+		getChatMoveDestinations: (sessionId: string, threadId: string) => sessionId === source.sessionId && threadId === 'thread' ? [destination] : [],
+		moveChat: async (...ids: string[]) => {
+			calls.push(['move', ...ids]);
+			if (navigateDuringMove) navigationRevision++;
+		},
+	} as unknown as ISessionsManagementService);
+
+	const context = { sessionId: source.sessionId, threadId: 'thread' };
+	await commands.executeCommand('sessions.list.moveChatToSession', context);
+	navigateDuringMove = true;
+	await commands.executeCommand('sessions.list.moveChatToSession', context);
+
+	assert.deepEqual(calls, [
+		['move', 'source', 'thread', 'destination'],
+		['open', 'destination', 'thread'],
+		['move', 'source', 'thread', 'destination'],
+	]);
+});
+
 test('The group appearance picker localizes choices and saves or resets the selected field', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));

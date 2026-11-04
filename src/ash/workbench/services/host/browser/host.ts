@@ -4,6 +4,8 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 import type { IOpenEmptyWindowOptions, IOpenWindowOptions, IWindowOpenable } from '../../../../platform/window/common/window.js';
 import type { VSBuffer } from '../../../../base/common/buffer.js';
 import type { IRectangle } from '../../../../platform/window/common/window.js';
+import type { CancellationToken } from '../../../../base/common/cancellation.js';
+import type { IToastOptions, IToastResult } from '../../../../platform/native/common/native.js';
 
 /** Opens an empty Workbench through the window host and its unload lifecycle. */
 export interface IHostService {
@@ -17,6 +19,7 @@ export interface IHostService {
 	reload(options?: { disableExtensions?: boolean; }): Promise<void>;
 	/** Raw PNG capture without workbench editing; browser hosts ask the user to choose a display surface. */
 	getScreenshot(rect?: IRectangle): Promise<VSBuffer | undefined>;
+	showToast(options: IToastOptions, token: CancellationToken): Promise<IToastResult>;
 }
 
 export const IHostService = createServiceIdentifier<IHostService>('hostService');

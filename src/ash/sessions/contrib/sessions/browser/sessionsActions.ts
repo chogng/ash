@@ -1,4 +1,5 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { isRecord } from '../../../../base/common/types.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { localize, localize2 } from '../../../../nls.js';
@@ -10,7 +11,8 @@ import { ISessionsManagementService } from '../../../services/sessions/common/se
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { IsSessionsWindowContext } from '../../../../workbench/common/contextkeys.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
-import { groupSessionsForPicker, type ISessionPickItem } from './sessionsPicker.js';
+import { groupSessionsForPicker, pickSessionDestination, type ISessionPickItem } from './sessionsPicker.js';
+import { runSessionsListMove } from './views/sessionsListChatMove.js';
 
 export const SHOW_SESSIONS_PICKER_COMMAND_ID = 'sessions.showSessionsPicker';
 
@@ -76,5 +78,26 @@ registerAction2(class ReopenLastClosedItemAction extends Action2 {
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		await accessor.get(ISessionsService).reopenLastClosedItem();
+	}
+});
+
+export const MOVE_CHAT_TO_SESSION_ACTION_ID = 'sessions.list.moveChatToSession';
+
+registerAction2(class MoveChatToSessionAction extends Action2 {
+	constructor() { super({ id: MOVE_CHAT_TO_SESSION_ACTION_ID, title: localize2({ bundle: 'ash.sessions', key: 'sessions.list.moveChat' }, 'Move Conversation to Session…') }); }
+
+	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+		if (!isRecord(argument) || typeof argument.sessionId !== 'string' || typeof argument.threadId !== 'string') return;
+		const { sessionId, threadId } = argument;
+		const sessions = accessor.get(ISessionsManagementService);
+		const view = accessor.get(ISessionsService);
+		const input = accessor.get(IQuickInputService);
+		const destinations = sessions.getChatMoveDestinations?.(sessionId, threadId);
+		const moveChat = sessions.moveChat?.bind(sessions);
+		if (!destinations?.length || !moveChat) return;
+		const selected = await pickSessionDestination(input, localize({ bundle: 'ash.sessions', key: 'sessions.list.moveChat' }, 'Move Conversation to Session…'),
+			destinations.map(session => ({ label: session.title, id: session.sessionId, description: session.workspace?.root })));
+		if (!selected) return;
+		await runSessionsListMove(view, sessionId, threadId, selected.id, moveChat);
 	}
 });

@@ -198,6 +198,7 @@ test('desktop commands are available from the command palette', async () => {
 	services.registerInstance(INativeHostService, {
 		onDidSuspendOS: () => ({ dispose() { } }),
 		onDidResumeOS: () => ({ dispose() { } }),
+		showToast: async () => ({ supported: false, clicked: false }),
 		getScreenshot: async () => { throw new Error('Unused screenshot capability'); },
 		moveTerminalToWindow: async () => { throw new Error('Unexpected terminal transfer'); },
 		takeTerminalTransfer: async () => undefined,

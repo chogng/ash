@@ -1,10 +1,29 @@
 import type { VSBuffer } from '../../../base/common/buffer.js';
 import type { IRectangle } from '../../window/common/window.js';
+import type { CancellationToken } from '../../../base/common/cancellation.js';
 
 /** Window-scoped platform operations shared by the desktop host adapters. */
 export interface ICommonNativeHostService {
 	/** Captures this host's window as PNG, independent of desktop focus. Rectangle coordinates use renderer CSS pixels. */
 	getScreenshot(rect?: IRectangle): Promise<VSBuffer | undefined>;
+	showToast(options: IToastOptions, token: CancellationToken): Promise<IToastResult>;
+}
+
+export const SHOW_TOAST_CHANNEL = 'ash:host:showToast';
+export const CANCEL_TOAST_CHANNEL = 'ash:host:cancelToast';
+
+export interface IToastOptions {
+	readonly id: string;
+	readonly title: string;
+	readonly body?: string;
+	readonly dedupeKey?: string;
+	readonly onlyWhenUnfocused?: boolean;
+}
+
+export interface IToastResult {
+	readonly supported: boolean;
+	readonly clicked: boolean;
+	readonly suppressed?: boolean;
 }
 
 /** Raw desktop frames, captured before the image-view host opens any selection windows. */

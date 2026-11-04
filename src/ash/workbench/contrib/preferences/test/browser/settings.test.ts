@@ -3363,6 +3363,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		onDidChangeFocus: Event.None,
 		openWindow: async () => { },
 		restart: async () => { },
+		showToast: async () => ({ supported: false, clicked: false }),
 		getScreenshot: async () => undefined,
 	});
 

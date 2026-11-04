@@ -14,6 +14,8 @@ import type { IRectangle } from '../../../../platform/window/common/window.js';
 import type { VSBuffer } from '../../../../base/common/buffer.js';
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 import { IsSessionsWindowContext } from '../../../common/contextkeys.js';
+import type { CancellationToken } from '../../../../base/common/cancellation.js';
+import type { IToastOptions, IToastResult } from '../../../../platform/native/common/native.js';
 
 export class NativeHostService extends BrowserHostService {
 	constructor(
@@ -33,6 +35,12 @@ export class NativeHostService extends BrowserHostService {
 	public override restart(): Promise<void> { return invoke<void>(HOST_RESTART_CHANNEL); }
 
 	public override getScreenshot(rect?: IRectangle): Promise<VSBuffer | undefined> { return this.host.getScreenshot(rect); }
+
+	public override async showToast(options: IToastOptions, token: CancellationToken): Promise<IToastResult> {
+		const result = await this.host.showToast(options, token);
+		if (result.clicked && !token.isCancellationRequested) await this.host.focusWindow();
+		return result;
+	}
 
 	public override openWindow(options?: IOpenEmptyWindowOptions): Promise<void>;
 	public override openWindow(toOpen: readonly IWindowOpenable[], options?: IOpenWindowOptions): Promise<void>;

@@ -119,7 +119,7 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 ## Sessions · TODO
 
-- [ ] **Sessions contribution 对齐余项** · 多对话会话的目录切换还需跨 Thread 原子提交执行目标并保留各自的工作区。远程和 Provider 会话还需对接其拥有方的目录选择和授权契约。通知、分组外观、自动化进度和目录呈现仍需核对生产调用链。
+- [ ] **Sessions contribution 对齐余项** · 多对话会话的目录切换还需跨 Thread 原子提交执行目标并保留各自的工作区。远程和 Provider 会话还需对接其拥有方的目录选择和授权契约。列表撤销通知需先由归档、分组和筛选各自提供可撤销操作。常驻列表提示和存储清理提示分别缺少对应的引导和清理建议生产方。
 
 - [ ] **New Environment · Cloud 与 WSL 验收** · Cloud 需要可路由的 Sessions provider 与目标发现和创建契约。仍需在 Windows 实机验证 WSL 首次连接及环境变量注入。
 

@@ -319,6 +319,7 @@ let releaseScreenshot: (() => void) | undefined;
 services.registerInstance(IHostService, {
 		getWindows: async () => [],
 	hasFocus: true, onDidChangeFocus: Event.None, restart: async () => { }, reload: async () => { }, openWindow: async () => { },
+	showToast: async () => ({ supported: false, clicked: false }),
 	async getScreenshot() {
 		screenshotCalls++;
 		screenshotVisibleOverlays.push([...document.querySelectorAll('dialog[open], [role="dialog"]')].filter(element => element.checkVisibility()).length);

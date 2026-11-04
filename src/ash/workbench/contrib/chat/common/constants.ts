@@ -7,12 +7,20 @@ import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTra
 export const MANAGE_CHAT_COMMAND_ID = 'workbench.action.chat.manage';
 
 export enum ChatConfiguration {
+	NotifyWindowOnConfirmation = 'chat.notifyWindowOnConfirmation',
+	NotifyWindowOnResponseReceived = 'chat.notifyWindowOnResponseReceived',
 	ChatViewSessionsOrientation = 'chat.viewSessions.orientation',
 	FontFamily = 'chat.fontFamily',
 	FontSize = 'chat.fontSize',
 	RequestQueueingDefaultAction = 'chat.requestQueuing.defaultAction',
 	AutoExpandToolFailures = 'chat.tools.autoExpandFailures',
 	TipsEnabled = 'chat.tips.enabled',
+}
+
+export enum ChatNotificationMode {
+	Off = 'off',
+	WindowNotFocused = 'windowNotFocused',
+	Always = 'always',
 }
 
 export const OPEN_AGENTS_WINDOW_COMMAND_ID = 'workbench.action.openAgentsWindow';

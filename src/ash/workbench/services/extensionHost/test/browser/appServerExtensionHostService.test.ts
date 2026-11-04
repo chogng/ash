@@ -1247,7 +1247,7 @@ function createServices(api: IExtensionHostApi, languages: ILanguageFeaturesServ
 		getWindows: async () => [],
 		reload: async () => { throw new Error('Unexpected reload in this fixture'); },
 		hasFocus: true, onDidChangeFocus: Event.None, openWindow: async () => assert.fail('Unexpected window'),
-		restart: async () => assert.fail('Unexpected restart'), getScreenshot: async () => undefined,
+		restart: async () => assert.fail('Unexpected restart'), showToast: async () => ({ supported: false, clicked: false }), getScreenshot: async () => undefined,
 	});
 	services.registerInstance(IRemoteConnectionApi, remote?.connections ?? UnavailableRemoteConnectionApi);
 	services.registerSingleton(IRemoteConnectionService, () => services.createInstance(RemoteConnectionService));

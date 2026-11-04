@@ -1,4 +1,8 @@
 import { readAutomationTemplates } from './automationTemplates.js';
+import { getAutomationCatalogueMessage } from './automationCataloguePresentation.js';
+import { automationRunWithLocalProgress } from './automationRunProgress.js';
+import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import { IChatWidgetService } from '../../../../../workbench/contrib/chat/browser/chat.js';
 import { ISessionsListModelService } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
@@ -19,7 +23,7 @@ import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
 import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { constObservable, autorun, observableSignalFromEvent, observableValue, transaction } from '../../../../../base/common/observable.js';
+import { constObservable, autorun, autorunWithStore, derived, observableSignalFromEvent, observableValue, transaction, type IObservable } from '../../../../../base/common/observable.js';
 import { getNLSLanguage, localize, localize2 } from '../../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -83,6 +87,7 @@ export class AutomationsCardsWidget extends Disposable {
 	private readonly details: HTMLElement;
 	private readonly attention: HTMLElement;
 	private readonly attentionItems = new Map<string, Button>();
+	private readonly displayRuns: IObservable<readonly IAutomationRun[]>;
 	private returnFocus: HTMLElement | undefined;
 
 	constructor(container: HTMLElement,
@@ -95,8 +100,29 @@ export class AutomationsCardsWidget extends Disposable {
 		@INotificationService private readonly notifications: INotificationService,
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
+		@IChatWidgetService chatWidgets: IChatWidgetService,
+		@ISessionProviderScopeService providerScopes: ISessionProviderScopeService,
 	) {
 		super();
+		const widgetsChanged = observableSignalFromEvent(this, chatWidgets.onDidChangeWidgets);
+		const scopesChanged = observableSignalFromEvent(this, providerScopes.onDidChangeScopes);
+		const localProgressChanged = observableValue(this, 0);
+		this._register(autorunWithStore((reader, subscriptions) => {
+			widgetsChanged.read(reader);
+			for (const widget of chatWidgets.getAllWidgets()) {
+				if (widget.model) subscriptions.add(widget.model.onDidChange(() => localProgressChanged.set(localProgressChanged.get() + 1, undefined)));
+			}
+		}));
+		this.displayRuns = derived(reader => {
+			widgetsChanged.read(reader);
+			scopesChanged.read(reader);
+			localProgressChanged.read(reader);
+			const runs = automations.runs.read(reader);
+			const widgets = chatWidgets.getAllWidgets();
+			if (!runs.length || !widgets.length) return runs;
+			const scopes = providerScopes.getScopes();
+			return runs.map(run => automationRunWithLocalProgress(run, widgets, scopes.find(scope => scope.providerId === run.providerId)));
+		});
 		const document = container.ownerDocument;
 		this.element = h(document, 'section', { className: 'ash-automations', attributes: { 'aria-label': localize('automations.title', 'Automations') }, properties: { tabIndex: -1 } });
 		this._register(contexts.createScoped(this.element)).createKey('sessionsAutomationsFocused', true);
@@ -198,7 +224,7 @@ export class AutomationsCardsWidget extends Disposable {
 		}));
 		this._register(autorun(reader => {
 			const plans = automations.automations.read(reader);
-			const runs = automations.runs.read(reader);
+			const runs = this.displayRuns.read(reader);
 			const state = automations.catalogueState.read(reader);
 			const historyState = automations.historyState?.read(reader);
 			this.query.read(reader);
@@ -210,10 +236,7 @@ export class AutomationsCardsWidget extends Disposable {
 				? localize('automations.historyRefreshFailed', 'Run history could not be refreshed. Showing the last available history. Use Refresh to try again.')
 				: (historyState ?? state) === 'loading' ? localize('sessions.loadingHistory', 'Loading history…') : '';
 			historyMessage.hidden = !historyMessage.textContent;
-			this.message.textContent = state === 'loading' ? localize('automations.loading', 'Loading automations…')
-				: state === 'error' ? localize('automations.loadFailed', 'Could not load automations.')
-					: state === 'unavailable' ? localize('automations.unavailable', 'The owning automation host is unavailable. Saved results may be out of date.')
-						: '';
+			this.message.textContent = getAutomationCatalogueMessage(state);
 			this.message.hidden = !this.message.textContent;
 			plansSection.setAttribute('aria-busy', String(state === 'loading'));
 			historySection.setAttribute('aria-busy', String((historyState ?? state) === 'loading'));
@@ -562,7 +585,7 @@ export class AutomationsCardsWidget extends Disposable {
 			lifetime.add(autorun(reader => {
 				const plan = this.automations.automations.read(reader).find(plan => plan.id === selected.id);
 				this.pendingChanged.read(reader);
-				const runs = this.automations.runs.read(reader).filter(run => run.automationId === selected.id);
+				const runs = this.displayRuns.read(reader).filter(run => run.automationId === selected.id);
 				const providers = this.automations.availableProviders.read(reader);
 				heading.textContent = plan?.name ?? localize('automations.deleted', 'Deleted automation');
 				state.textContent = plan?.enabled ? localize('automations.enabled', 'Enabled') : localize('automations.paused', 'Paused');
@@ -657,11 +680,12 @@ export class AutomationsCardsWidget extends Disposable {
 			}));
 			lifetime.add(autorun(reader => {
 				const run = this.automations.runs.read(reader).find(run => run.id === selected.id);
+				const displayRun = this.displayRuns.read(reader).find(run => run.id === selected.id);
 				this.automations.availableProviders.read(reader);
 				this.automations.automations.read(reader);
 				this.pendingChanged.read(reader);
 				heading.textContent = run?.definition.name ?? localize('automations.runUnavailable', 'Run unavailable');
-				state.textContent = run ? automationRunStatusLabel(run.status) : '';
+				state.textContent = displayRun ? automationRunStatusLabel(displayRun.status) : '';
 				prompt.textContent = run?.definition.prompt ?? '';
 				directory.textContent = run?.definition.target.directory ?? '';
 				schedule.textContent = run ? this.scheduleLabel(run.definition.schedule) : '';
@@ -670,7 +694,7 @@ export class AutomationsCardsWidget extends Disposable {
 				scheduled.textContent = time(run?.scheduledAt);
 				started.textContent = time(run?.startedAt);
 				finished.textContent = time(run?.finishedAt);
-				notice.textContent = run?.message ?? (run?.status === 'needsInput' ? localize('automations.inputNeeded', 'This run is waiting for your input. Open its conversation to review the request and respond.') : '');
+				notice.textContent = displayRun?.message ?? (displayRun?.status === 'needsInput' ? localize('automations.inputNeeded', 'This run is waiting for your input. Open its conversation to review the request and respond.') : '');
 				notice.hidden = !notice.textContent;
 				open.hidden = !run?.sessionId || !run.threadId;
 				stop.hidden = !run || !this.automations.canStopRun(run);
@@ -721,7 +745,7 @@ export class AutomationsCardsWidget extends Disposable {
 		this.pending.add(id);
 		this.pendingChanged.set(this.pendingChanged.get() + 1, undefined);
 		this.updatePlans(this.automations.automations.get());
-		this.updateRuns(this.automations.runs.get());
+		this.updateRuns(this.displayRuns.get());
 		try { await operation(); }
 		catch (error) { if (!this.isDisposed) this.notifications.error(String(error)); }
 		finally {
@@ -729,7 +753,7 @@ export class AutomationsCardsWidget extends Disposable {
 			this.pendingChanged.set(this.pendingChanged.get() + 1, undefined);
 			if (!this.isDisposed) {
 				this.updatePlans(this.automations.automations.get());
-				this.updateRuns(this.automations.runs.get());
+				this.updateRuns(this.displayRuns.get());
 				// Disabling an in-flight action can blur its button. Restore only if the user has not moved elsewhere.
 				if (restoreFocus && getActiveElement(document) === document.body) {
 					if (focused.isConnected) focused.focus({ preventScroll: true });

@@ -731,6 +731,7 @@ class NotificationsPresentation extends Disposable {
 			get hasFocus() { return presentation.hostFocused; }, onDidChangeFocus: this.hostFocusChanges.event,
 			openWindow: async () => { throw new Error('Unexpected window open'); },
 			restart: async () => { throw new Error('Unexpected restart'); }, reload: async () => { throw new Error('Unexpected reload'); },
+			showToast: async () => ({ supported: false, clicked: false }),
 			getScreenshot: async () => undefined,
 		});
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));

@@ -40,6 +40,12 @@ import { StorageScope, StorageTarget } from '../../../../../platform/storage/com
 import { AUTOMATIONS_CUSTOM_VIEW_ID } from '../../../sessions/browser/automationsConstants.js';
 import '../../../sessions/browser/sessions.contribution.js';
 import { AutomationsCardsWidget, AutomationsCustomViewContribution } from '../../../sessions/browser/views/automationsView.js';
+import { registerAutomationsAccessibility } from '../../../sessions/browser/views/automationsAccessibility.js';
+import { AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
+import { IChatWidgetService, type IChatWidget } from '../../../../../workbench/contrib/chat/browser/chat.js';
+import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IAutomationDialogService } from '../../../../../workbench/contrib/chat/common/automations/automationDialogService.js';
@@ -460,6 +466,23 @@ test('Catalogue and history ordering changes retain card identity and keyboard f
 		value.services.registerInstance(IStorageService, storage);
 		value.services.registerInstance(ISessionsListModelService, value.services.createInstance(SessionsListModelService));
 		value.services.registerInstance(ISessionsManagementService, { sessions: [], onDidChange: Event.None } as unknown as ISessionsManagementService);
+		const chatChanged = value.resources.add(new Emitter<void>());
+		const widgetsChanged = value.resources.add(new Emitter<void>());
+		const identity = (id: string) => `one/${id}`;
+		let turns = [{ turnId: 'other-turn', status: 'waitingForUserInput' }];
+		const chat = {
+			sessionId: identity('session'), threadId: identity('thread'),
+			model: {
+				onDidChange: chatChanged.event,
+				get thread() { return { sessionId: identity('session'), threadId: identity('thread'), turns }; },
+			},
+		} as unknown as IChatWidget;
+		value.services.registerInstance(IChatWidgetService, {
+			onDidChangeWidgets: widgetsChanged.event, getAllWidgets: () => [chat],
+		} as unknown as IChatWidgetService);
+		value.services.registerInstance(ISessionProviderScopeService, {
+			onDidChangeScopes: Event.None, getScopes: () => [{ providerId: 'one', identity }],
+		} as unknown as ISessionProviderScopeService);
 		const widget = value.resources.add(value.services.createInstance(AutomationsCardsWidget, browserEnvironment.window.document.body));
 		browserEnvironment.window.document.body.append(widget.element);
 		const oldTitle = widget.element.querySelector<HTMLButtonElement>('h3 button')!;
@@ -479,6 +502,29 @@ test('Catalogue and history ordering changes retain card identity and keyboard f
 		await host.store.refresh();
 		assert.deepEqual([...widget.element.querySelectorAll('[data-run-id]')].map(element => JSON.parse(element.getAttribute('data-run-id')!)[1]), ['newer-run', 'older-run']);
 		assert.equal(widget.element.querySelectorAll('[data-run-id]')[1], oldRow);
+		value.services.registerInstance(ILayoutService, { activeContainer: widget.element } as ILayoutService);
+		using accessible = registerAutomationsAccessibility();
+		const view = AccessibleViewRegistry.getImplementations().find(item => item.name === `sessionsAutomations${AccessibleViewType.View}`)!;
+		using content = value.services.invokeFunction(accessor => view.getProvider(accessor))!;
+		const activeRun: AutomationRun = {
+			...row('active-run', 3), status: 'running', finishedAt: null,
+			sessionId: 'session', threadId: 'thread', turnId: 'current-turn', message: null,
+		};
+		host.setHistory([activeRun]);
+		await host.store.refresh();
+		assert.ok(widget.element.querySelector('[data-run-id][data-status="running"]'));
+		turns = [{ turnId: 'current-turn', status: 'waitingForUserInput' }];
+		chatChanged.fire();
+		assert.ok(widget.element.querySelector('[data-run-id][data-status="needsInput"]'));
+		assert.match(content.provideContent(), /Needs input/);
+		assert.equal(host.store.runs.get()[0]?.status, 'running');
+		host.setHistory([{ ...activeRun, status: 'completed', finishedAt: 4 }]);
+		await host.store.refresh();
+		assert.ok(widget.element.querySelector('[data-run-id][data-status="completed"]'));
+		host.connection.set('disconnected', undefined);
+		const message = widget.element.querySelector('[role="status"]')?.textContent;
+		assert.match(message ?? '', /owning automation host is unavailable/);
+		assert.ok(content.provideContent().startsWith(message!));
 	} finally { value.resources.dispose(); }
 });
 

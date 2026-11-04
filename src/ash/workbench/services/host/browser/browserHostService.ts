@@ -20,6 +20,8 @@ import type { IOpenEmptyWindowOptions, IOpenWindowOptions, IWindowOpenable } fro
 import { ILifecycleService, ShutdownVetoError } from '../../lifecycle/common/lifecycle.js';
 import { IHostService } from './host.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
+import type { IToastOptions, IToastResult } from '../../../../platform/native/common/native.js';
+import type { CancellationToken } from '../../../../base/common/cancellation.js';
 
 export const EMPTY_WORKSPACE_ID_KEY = 'ash.workbench.emptyWorkspaceId';
 
@@ -35,6 +37,9 @@ export class BrowserHostService extends Disposable implements IHostService {
 	public readonly onDidChangeFocus = this.focusChanged.event;
 	public get hasFocus(): boolean { return hasAppFocus(); }
 	private readonly ownerWindow = window;
+	public async showToast(_options: IToastOptions, _token: CancellationToken): Promise<IToastResult> {
+		return { supported: false, clicked: false };
+	}
 	constructor(
 		private readonly options: BrowserHostServiceOptions,
 		@ILifecycleService private readonly lifecycle: ILifecycleService,

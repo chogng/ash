@@ -280,7 +280,7 @@ test('The localized keyboard menu targets the saved Session folder and the origi
 	const row = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => button.textContent === 'Move me')!;
 	row.focus();
 	row.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
-	const action = menu?.getActions().find(action => action.id === 'agentSession.moveChatToSession');
+	const action = menu?.getActions().find(action => action.id === 'sessions.list.moveChatToSession');
 	assert.equal(action?.label, '将对话移到会话…');
 	await action?.run();
 	const target = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => button.textContent === 'target')!;
@@ -290,7 +290,7 @@ test('The localized keyboard menu targets the saved Session folder and the origi
 	assert.equal(change?.label, '更改会话文件夹…');
 	await change?.run();
 	assert.deepEqual(invoked, [
-		['agentSession.moveChatToSession', { sessionId: 'source', threadId: 'original' }],
+		['sessions.list.moveChatToSession', { sessionId: 'source', threadId: 'original' }],
 		['agentSession.changeDirectory', 'target'],
 	]);
 });
@@ -308,6 +308,9 @@ test('Session hover localizes workspace and provider without translating their v
 			threadId: 'child', status: 'active', origin: { type: 'root' },
 			workspace: { authorityId: 'remote', root: '/child-workspace' },
 		}), ['工作区：/child-workspace', '提供方：Provider name']);
+		assert.deepEqual(getSessionSummaryHoverData(session, {
+			threadId: 'directoryless', status: 'active', origin: { type: 'root' }, workspace: null,
+		}), ['提供方：Provider name']);
 	} finally {
 		resetNlsResolver();
 	}
@@ -428,9 +431,6 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	{
 		using list = makeList('code');
 		assert.deepEqual(sectionNames(list), ['Quality', 'Release']);
-		await moveUp(list.domNode.querySelector<HTMLButtonElement>('[data-section="group:release"] > h3 button')!);
-		await moveUp(list.domNode.querySelector<HTMLButtonElement>('[data-item="session:two"] button')!);
-		assert.deepEqual(sectionNames(list), ['Release', 'Quality']);
 		const groupTitle = list.domNode.querySelector<HTMLButtonElement>('[data-section="group:quality"] > h3 button')!;
 		assert.ok(groupTitle.querySelector('[data-ash-icon-id="chat"]'));
 		groupTitle.focus();
@@ -439,6 +439,9 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 		assert.equal(appearance?.label, '更改分组颜色');
 		await appearance?.run();
 		assert.deepEqual(appearanceCommands, [['sessions.list.changeGroupAppearance', 'quality', 'color']]);
+		await moveUp(list.domNode.querySelector<HTMLButtonElement>('[data-section="group:release"] > h3 button')!);
+		await moveUp(list.domNode.querySelector<HTMLButtonElement>('[data-item="session:two"] button')!);
+		assert.deepEqual(sectionNames(list), ['Release', 'Quality']);
 		assert.deepEqual(rows(list), ['two', 'one']);
 		const firstRow = list.domNode.querySelector<HTMLElement>('[data-row-order-id="two"]')!;
 		const secondRow = list.domNode.querySelector<HTMLElement>('[data-row-order-id="one"]')!;

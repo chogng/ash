@@ -92,7 +92,7 @@ services.registerInstance(IHostService, {
 		getWindows: async () => [],
 	get hasFocus() { return focused; }, onDidChangeFocus: focusChanges.event,
 	openWindow: async () => { throw new Error('Unexpected window open'); },
-	restart: async () => { throw new Error('Unexpected restart'); }, reload: async () => { throw new Error('Unexpected reload'); }, getScreenshot: async () => undefined,
+	restart: async () => { throw new Error('Unexpected restart'); }, reload: async () => { throw new Error('Unexpected reload'); }, showToast: async () => ({ supported: false, clicked: false }), getScreenshot: async () => undefined,
 });
 const notifications = resources.add(services.createInstance(NotificationService));
 services.registerInstance(INotificationService, notifications);

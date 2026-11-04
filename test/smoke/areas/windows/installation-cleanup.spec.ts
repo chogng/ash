@@ -39,6 +39,7 @@ test('native installer upgrades and removes isolated installations without losin
 	const userData = join(directory, 'roaming', 'Ash');
 	const outside = join(directory, 'shared-component');
 	const identity = `com.ash.acceptance.${randomUUID()}`;
+	const toastActivatorClsid = randomUUID();
 	const name = `Ash acceptance ${randomUUID()}`;
 	const environment = {
 		...process.env,
@@ -57,6 +58,7 @@ test('native installer upgrades and removes isolated installations without losin
 			`/DBundleDir=${bundle}`,
 			`/DAppVersion=${version}`,
 			`/DAppUserId=${identity}`,
+			`/DToastActivatorClsid=${toastActivatorClsid}`,
 			`/DAppName=${name}`,
 			`/DIconPath=${resolve('resources/win32/ash.ico')}`,
 			`/O${directory}`,

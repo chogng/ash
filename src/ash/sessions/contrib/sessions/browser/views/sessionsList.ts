@@ -13,6 +13,7 @@ import { appendIcon, getRegisteredIcon } from '../../../../../base/browser/ui/lx
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
 import { AbstractDisposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { MOVE_CHAT_TO_SESSION_ACTION_ID } from '../sessionsActions.js';
 import { SessionActionFeedback } from '../sessionActionFeedback.js';
 import { getSessionsListEntries } from './sessionsListFilters.js';
 import { SessionsListSearch } from './sessionsListSearch.js';
@@ -367,7 +368,6 @@ export class SessionsList extends DomWidget {
 
 	private showSectionMenu(section: SessionListSection, group: SessionGroup, anchor: ContextMenuAnchor): void {
 		const actions = this.orderActions(section.domNode, 'section');
-		if (actions.length) {
 		if (group.kind !== 'comparison') {
 			const appearanceAction = (property: 'icon' | 'color', label: string): IAction => ({
 				id: `${CHANGE_SESSION_GROUP_APPEARANCE}.${property}`,
@@ -382,6 +382,7 @@ export class SessionsList extends DomWidget {
 				appearanceAction('color', localize('sessions.list.changeGroupColor', 'Change group color')),
 			);
 		}
+		if (actions.length) {
 			this.contextMenus.showContextMenu({ getAnchor: () => anchor, getActions: () => actions, autoSelectFirstItem: true });
 		}
 	}
@@ -426,11 +427,11 @@ export class SessionsList extends DomWidget {
 			}
 			if (this.sessionService.getChatMoveDestinations?.(session.sessionId, threadId).length) {
 				sessionActions.push({
-					id: 'agentSession.moveChatToSession',
+					id: MOVE_CHAT_TO_SESSION_ACTION_ID,
 					label: localize({ bundle: 'ash.sessions', key: 'sessions.list.moveChat' }, 'Move Conversation to Session…'),
 					tooltip: '',
 					enabled: true,
-					run: () => this.commands.executeCommand('agentSession.moveChatToSession', { sessionId: session.sessionId, threadId }),
+					run: () => this.commands.executeCommand(MOVE_CHAT_TO_SESSION_ACTION_ID, { sessionId: session.sessionId, threadId }),
 				});
 			}
 		}
@@ -646,8 +647,8 @@ class SessionListSection extends AbstractDisposable {
 	private readonly body: HTMLElement;
 	private readonly label: HTMLElement;
 	private readonly icon: HTMLElement;
-	private collapsed = false;
 	private readonly appearanceIcon: HTMLElement;
+	private collapsed = false;
 	private open: (() => void) | undefined;
 	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
 	private readonly listeners: { dispose(): void; }[];
@@ -667,8 +668,8 @@ class SessionListSection extends AbstractDisposable {
 		this.button = h(document, 'button', { className: 'ash-sessions-list-section-toggle' });
 		this.button.type = 'button';
 		this.icon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
-		this.label = h(document, 'span', { className: 'ash-sessions-list-section-label' });
 		this.appearanceIcon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
+		this.label = h(document, 'span', { className: 'ash-sessions-list-section-label' });
 		this.button.append(...(subgroup ? [this.icon, this.label] : [this.label, this.icon]));
 		heading.append(this.button);
 		this.body = h(document, 'div', { className: 'ash-sessions-list-section-body' });
@@ -709,12 +710,11 @@ class SessionListSection extends AbstractDisposable {
 		else this.button.removeAttribute('aria-label');
 		this.collapsed = collapsed;
 		this.button.setAttribute('aria-expanded', String(!collapsed));
-		const icon = this.subgroup ? collapsed ? Lxicon.folder : Lxicon.folderOpened : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
 		const customIcon = group?.icon && getRegisteredIcon(group.icon, this.icon.ownerDocument);
+		const icon = this.subgroup ? collapsed ? Lxicon.folder : Lxicon.folderOpened : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
 		if (this.icon.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
 			this.icon.replaceChildren(); appendIcon(icon, this.icon);
 		}
-		if (collapsed && this.body.contains(this.domNode.ownerDocument.activeElement)) this.button.focus({ preventScroll: true });
 		const color = group?.color ? `var(${colorCssVariable(group.color)})` : '';
 		this.icon.style.color = customIcon ? '' : color;
 		if (customIcon) {
@@ -727,6 +727,7 @@ class SessionListSection extends AbstractDisposable {
 		} else {
 			this.appearanceIcon.remove();
 		}
+		if (collapsed && this.body.contains(this.domNode.ownerDocument.activeElement)) this.button.focus({ preventScroll: true });
 		this.body.hidden = collapsed;
 		reconcileChildren(this.body, children);
 	}
