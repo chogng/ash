@@ -358,7 +358,9 @@
     "comment": "E163",
     "rail-session": "E164",
     "github-alt": "E165",
-    "brain": "E166"
+    "brain": "E166",
+    "share": "E167",
+    "sign-out": "E168"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -599,7 +601,7 @@
     "primitive-square": "5baa0fc62fe952bf4c8a76e4ba6abfc99ecf89937ba0493e4498c9a3af46faac",
     "progress": "41630335c7f00f1c3e0549bdae9e820703144cb8f1dacb4d262b66124fd55cf5",
     "projects-filled": "feb1176166ca551e515e793aae003fe7e8e7a01250235879aa75e9031e4ce28a",
-    "projects": "273b87d7ce6f4c528a834fbac5cb1157278175cfcb1260b502872c02d7ebf786",
+    "projects": "02f44bdd21a6c7cb4463a0224fc621a35c5f91482f94ee739a04398503e22a4e",
     "question": "35eefe38fb71cf59c185d7343fbab02b903327e458f034c72af16a973c13ab12",
     "quote": "202be3704d70924cea6c3c275897cebe339fef7c3f0bb23efca481123cf308bf",
     "quotes": "e439ccdb0ba8be43913dec33f9c1bc0b68767a093ede532d0a19e3d12d35ff23",
@@ -625,6 +627,8 @@
     "search-selection": "06af163ecaa006d4507c41437ea86cd9b7d36534923405f3e9f2439dbe25bd0d",
     "search": "d91300d910f010d5978d9f85d68a484f6094d5a83074c62ba1722e17d1cd4ae9",
     "settings": "cba1a8dae0245f772607d18a8a1f682a37117170cb1e1190c4ae4f6679b348b1",
+    "share": "a0b5b2548d722b0aba45c8d1da8ff60a12b3de098d63b370ad432f917a8c1e68",
+    "sign-out": "82b9d005632533d899020b934f8d375066a94839260570a441fe11f8a6b8dd49",
     "skill": "aa1f037252ae0a5cd8cea2679def68129e6d6d2e3b2d68d51edccdf98e7580bb",
     "snapshot": "bdf7dc30075e71f87723f537cf6f368c6511c0c69a0d705401c56de2f09aae24",
     "sort-precedence": "7255a74520b364f84dea4d923f84a256cf4021b44bcd106aaa95f2c2ee2da955",

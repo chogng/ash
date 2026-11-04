@@ -268,6 +268,8 @@ export const lxiconsLibrary = {
 	search: registerLxicon("search", 0xe0e5),
 	searchSelection: registerLxicon("search-selection", 0xe124),
 	settings: registerLxicon("settings", 0xe0e6),
+	share: registerLxicon("share", 0xe167),
+	signOut: registerLxicon("sign-out", 0xe168),
 	skill: registerLxicon("skill", 0xe0e7),
 	snapshot: registerLxicon("snapshot", 0xe0e8),
 	sort: registerLxicon("sort", 0xe131),

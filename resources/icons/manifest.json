@@ -1322,6 +1322,16 @@
       "rendering": "symbolic"
     },
     {
+      "id": "share",
+      "file": "share.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "sign-out",
+      "file": "sign-out.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "skill",
       "file": "skill.svg",
       "rendering": "symbolic"
