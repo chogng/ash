@@ -519,6 +519,7 @@ test('Quick Chat retains its independent composer through hide, materialization 
 	await waitFor(() => dom.window.document.querySelector('.ash-quick-chat textarea') !== null);
 	const original = dom.window.document.querySelector<HTMLElement>('.ash-quick-chat .ash-chat')!;
 	const input = original.querySelector<HTMLTextAreaElement>('textarea')!;
+	assert.equal(original.querySelector<HTMLElement>('.ash-chat-welcome')?.hidden, true);
 	const contextKeys = services.get(IContextKeyService);
 	assert.equal(contextKeys.getContext(input).getValue(ChatContextKeys.inChatSession.key), true);
 	assert.equal(contextKeys.getContext(input).getValue(ChatContextKeys.inChatInput.key), true);
@@ -1777,6 +1778,9 @@ test('an empty Session list opens an untitled session and persists it on its fir
 	const input = untitledPane.querySelector<HTMLTextAreaElement>('.ash-chat-textarea-input');
 	assert.ok(input);
 	assert.equal(untitledPane.classList.contains('empty'), true);
+	const welcome = untitledPane.querySelector<HTMLElement>('.ash-chat-welcome')!;
+	assert.equal(welcome.hidden, false);
+	assert.equal(welcome.querySelector('h2')?.textContent, 'Build with Agent');
 	let contextResolutions = 0;
 	pane.toggleSessionsSidebar();
 	assert.equal(pane.element.querySelector('.ash-chat-body')?.classList.contains('sessions-stacked'), false);
@@ -1799,6 +1803,7 @@ test('an empty Session list opens an untitled session and persists it on its fir
 	}));
 	assert.equal(untitledPane.classList.contains('empty'), false);
 	assert.equal(untitledPane.classList.contains('has-conversation'), true);
+	assert.equal(welcome.hidden, true);
 	assert.ok(untitledPane.querySelector(':scope > .ash-chat-list-widget'));
 	assert.ok(untitledPane.querySelector(':scope > .ash-chat-input-part'));
 	await waitFor(() => fake.turnStartRequests.length === 1);
@@ -1995,6 +2000,7 @@ test('failed first send keeps the untitled session and its input draft', async (
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.dataset.untitledSessionId, sessions.untitledSessions[0]?.untitledSessionId);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains('empty'), true);
 	assert.equal(pane.element.querySelector<HTMLElement>("[role='tabpanel']")?.classList.contains('has-conversation'), false);
+	assert.equal(pane.element.querySelector<HTMLElement>('.ash-chat-welcome')?.hidden, false);
 	assert.match(pane.element.querySelector<HTMLElement>('.ash-chat-input-notification-message')?.textContent ?? '', /Cannot create Session/);
 
 	dom.window.close();
@@ -5783,6 +5789,25 @@ for (const locale of ['en', 'zh-CN']) test(`Chat editor borrows one composer and
 		assert.deepEqual((await restored.pane.captureActiveDraft())!.draft, draft);
 		assert.equal(restored.fake.turnStartRequests.length, 0);
 	} finally { initializeTestLocalization('en'); }
+});
+
+test('Chat welcome follows draft navigation in Chinese', async () => {
+	initializeTestLocalization('zh-CN');
+	try {
+		const { resources, pane, sessions, chatPane } = await createNavigationInputPane();
+		using fixture = resources;
+		assert.equal(chatPane.querySelector<HTMLElement>('.ash-chat-welcome')?.hidden, true);
+		const draft = sessions.createUntitledSession();
+		const draftPane = pane.element.querySelector<HTMLElement>('.ash-chat-pane-host > .ash-chat:not([hidden])')!;
+		const welcome = draftPane.querySelector<HTMLElement>('.ash-chat-welcome')!;
+		assert.equal(draftPane.dataset.untitledSessionId, draft.untitledSessionId);
+		assert.equal(welcome.hidden, false);
+		assert.equal(welcome.querySelector('h2')?.textContent, '与智能体一起开发');
+		assert.equal(welcome.querySelector('p')?.textContent, '请核实 AI 生成的回复中的重要细节。');
+		sessions.selectThread('session-1', 'thread-1');
+		assert.equal(draftPane.hidden, true);
+		assert.equal(chatPane.hidden, false);
+	} finally { resetNlsResolver(); }
 });
 
 for (const locale of ['en', 'zh-CN']) {

@@ -1,0 +1,33 @@
+.ash-chat-welcome {
+	display: grid;
+	flex: 1 1 auto;
+	min-height: 0;
+	align-content: safe center;
+	justify-items: center;
+	gap: var(--ash-spacing-size80);
+	overflow: auto;
+	padding: var(--ash-spacing-size120);
+	color: var(--ash-foreground);
+	text-align: center;
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-welcome[hidden] {
+	display: none;
+}
+
+.ash-chat-welcome .ash-chat-welcome-icon {
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-chat-welcome > h2 {
+	margin: 0;
+	font-size: var(--ash-fontSize-heading2);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-chat-welcome > p {
+	margin: 0;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-body1);
+}

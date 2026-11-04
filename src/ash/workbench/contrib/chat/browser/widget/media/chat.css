@@ -65,6 +65,10 @@
 	flex: 0 0 0;
 }
 
+.ash-chat > .ash-chat-welcome:not([hidden]) + .ash-chat-list-widget {
+	display: none;
+}
+
 .ash-chat > .ash-chat-input-part {
 	box-sizing: border-box;
 	min-height: 0;

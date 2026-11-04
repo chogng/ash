@@ -51,6 +51,7 @@ export interface IWorkspacePickerDelegate {
 
 /** Host routing receives the accepted snapshot before model send; the live editor may already hold another draft. */
 export interface IChatWidgetViewOptions {
+	readonly showWelcome?: boolean;
 	readonly configureModelInMenu?: boolean;
 	readonly promptTimelineFiles?: (prompt: IChatListItem) => readonly PromptFileDiff[];
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;

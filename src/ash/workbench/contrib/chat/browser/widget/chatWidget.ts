@@ -59,6 +59,7 @@ import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts
 import { VoiceSessionController, pickVoiceConversation } from '../voiceClient/voiceSessionController.js';
 import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agent.js';
 import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions, type IChatWidgetViewOptions } from '../chat.js';
+import { ChatViewWelcomePart } from '../viewsWelcome/chatViewWelcomeController.js';
 
 /** The presentation consumes one conversation model owned by its product. */
 export interface IChatWidgetModel extends IDisposable {
@@ -115,6 +116,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	private readonly historyAction: Button;
 	private historyRecovery: { readonly status: IChatSessionHistoryStatus; readonly generation: number; } | undefined;
 	private submittedMessage = false;
+	private readonly welcome: ChatViewWelcomePart;
 	private displayedThreadId: ThreadId | undefined;
 
 	constructor(
@@ -340,7 +342,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			closeWindow: () => this.input.focus(),
 			showSessionsPicker: () => this.input.focus(),
 		}, { showClose: false, showOnboarding: false, inputBoxLayout: true }));
-		this.element.append(this.goalBanner.domNode, this.olderHistoryElement, this.listWidget.element, this.historyStatusElement, voiceContainer, this.input.element);
+		this.welcome = new ChatViewWelcomePart(ownerDocument);
+		this.element.append(this.goalBanner.domNode, this.olderHistoryElement, this.welcome.element, this.listWidget.element, this.historyStatusElement, voiceContainer, this.input.element);
 		this._register(listWidgets.onDidChange(widget => {
 			const previous = this.listWidget;
 			const state = previous.getViewState();
@@ -622,6 +625,18 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const hasConversation = this.submittedMessage || hasTranscript;
 		this.element.classList.toggle('empty', !hasConversation);
 		this.element.classList.toggle('has-conversation', hasConversation);
+		const input = this.model.inputState;
+		const showWelcome = this.viewOptions?.showWelcome !== false && !hasConversation
+			&& this.model.untitledSessionId !== undefined && !input.inputBlocked && !input.aiDisabled
+			&& !this.voiceSessionController.isActive;
+		this.welcome.render(showWelcome ? {
+			title: input.mode === 'ask'
+				? localize('chat.welcome.ask', 'Ask about your code')
+				: input.mode === 'agent'
+					? localize('chat.welcome.agent', 'Build with Agent')
+					: localize('chat.welcome.start', 'Start a conversation'),
+			message: localize('chat.welcome.verify', 'Check important details in AI-generated responses.'),
+		} : undefined);
 	}
 
 	private syncIdentity(): void {
