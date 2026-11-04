@@ -10,6 +10,7 @@ import { autorun } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ChatContentMarkdownRenderer } from '../../../../workbench/contrib/chat/browser/widget/chatContentMarkdownRenderer.js';
+import '../../../../workbench/contrib/chat/browser/widget/media/chatListWidget.css';
 import type { ChatGPTMessage, ChatGPTResource } from './chatGPTClient.js';
 import { ChatAttachmentsContentPart, type IChatAttachmentResource } from '../../../../workbench/contrib/chat/browser/widget/chatContentParts/chatAttachmentsContentPart.js';
 import { IChatGPTService, pendingCreationStatus, type ChatGPTState } from './chatGPTService.js';
@@ -57,7 +58,7 @@ export class ChatGPTWidget extends Disposable {
 		this.markdownRenderer = this._register(instantiation.createInstance(ChatContentMarkdownRenderer));
 		root.className = 'ash-chatgpt-widget';
 		root.tabIndex = -1;
-		const main = this.element('main', 'ash-chatgpt-main');
+		const main = this.element('main', 'ash-chatgpt-main ash-chat-transcript-viewport');
 		this.scroll.append(this.welcome, this.messages);
 		this.messages.setAttribute('role', 'log');
 		this.messages.setAttribute('aria-label', localize('sessions.chatgpt.conversation', 'Conversation'));
