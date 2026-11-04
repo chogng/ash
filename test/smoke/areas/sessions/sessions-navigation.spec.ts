@@ -77,6 +77,21 @@ test('Sessions New opens ChatGPT and shares its retained EditorPane', { tag: ['@
 	await expect(page.locator('.ash-projects')).toBeVisible();
 });
 
+test('ChatGPT sidebar keeps Code sessions in Code mode', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
+	const page = await workbench.openAgentsWindow(target.kind);
+	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New', exact: true }).click();
+	const sidebar = page.locator('[data-part="sidebar"] [data-view-container-id="sessions.chatgpt.navigation"]');
+	await expect(sidebar).toBeVisible();
+	await expect(sidebar.locator('.ash-sessions-list')).toHaveCount(0);
+	const modes = page.locator('.ash-window-mode-control');
+	await modes.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(page.locator('[data-part="sidebar"] .ash-sessions-list[data-mode="code"]')).toBeVisible();
+	await expect(sidebar).toBeHidden();
+	await modes.getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	await expect(sidebar).toBeVisible();
+	await expect(sidebar.locator('.ash-sessions-list')).toHaveCount(0);
+});
+
 test('Sessions restores the Projects entry and its pane visibility through entry startup', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	const draft = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));

@@ -1066,7 +1066,9 @@ suite('chatgptweb browser component', () => {
 			await expect(toggle(recent)).toHaveAttribute('aria-expanded', 'true');
 			const row = list.locator('.ash-chatgpt-navigation-row[data-parent-section="g-p-two"]');
 			await row.hover();
-			await row.getByRole('button', { name: zh ? '置顶聊天' : 'Pin chat', exact: true }).click();
+			const pin = row.getByRole('button', { name: zh ? '置顶聊天' : 'Pin chat', exact: true });
+			await expect(pin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pin');
+			await pin.click();
 			await expect(toggle(pinned)).toHaveAttribute('aria-expanded', 'false');
 			await expect(toggle(pinned)).toBeFocused();
 			await expect(list.getByRole('button', { name: 'Second project chat', exact: true })).toBeHidden();
@@ -1117,7 +1119,9 @@ suite('chatgptweb browser component', () => {
 
 			const row = list.locator('.ash-chatgpt-navigation-row[data-conversation="pinned-project"]');
 			await row.hover();
-			await row.getByRole('button', { name: zh ? '取消置顶聊天' : 'Unpin chat', exact: true }).click();
+			const unpin = row.getByRole('button', { name: zh ? '取消置顶聊天' : 'Unpin chat', exact: true });
+			await expect(unpin.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'pin-filled');
+			await unpin.click();
 			await expect(projectRows).toHaveText(['Project chat', 'Pinned project chat']);
 			await expect(list.getByRole('button', { name: 'Pinned project chat', exact: true })).toBeFocused();
 			await expect(pinnedRows).toHaveText(['Old pinned chat']);
@@ -1199,9 +1203,19 @@ suite('chatgptweb browser component', () => {
 			await expect(page.locator('.ash-chatgpt-conversation').first()).toHaveText('Synthetic conversation');
 			await expect(page.locator('.ash-chat-item')).toHaveCount(0);
 			await openMore();
+			const menu = page.getByRole('menu');
+			const rename = menu.getByRole('menuitem', { name: labels.rename, exact: true });
+			await expect(menu).toBeFocused();
+			await expect(menu).toHaveCSS('outline-style', 'none');
+			await page.keyboard.press('ArrowDown');
+			await expect(rename).toBeFocused();
 			for (const label of [labels.rename, labels.share, labels.archive, labels.delete, labels.move]) {
 				await expect(page.getByRole('menuitem', { name: label, exact: true })).toBeVisible();
 			}
+			await page.keyboard.press('Escape');
+			await expect(more).toBeFocused();
+			await page.keyboard.press('Enter');
+			await expect(rename).toBeFocused();
 			await page.keyboard.press('Escape');
 			await expect(more).toBeFocused();
 			await openMore();

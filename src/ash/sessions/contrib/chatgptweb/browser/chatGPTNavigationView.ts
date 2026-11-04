@@ -354,13 +354,13 @@ class ChatGPTNavigationGroup extends Disposable {
 		item.dataset.conversation = conversation.id;
 		item.append(h(document, 'span', { className: 'ash-sessions-list-label' }, conversation.title));
 		this.rows.add(addDisposableListener(item, 'click', () => this.openConversation(conversation.id)));
-		const more = this.action('more', localize('sessions.chatgpt.more', 'More actions'), () => this.showMore(row, conversation), Lxicon.ellipsis);
+		const more = this.action('more', localize('sessions.chatgpt.more', 'More actions'), () => this.showMore(row, conversation, trigger.matches(':focus-visible')), Lxicon.ellipsis);
 		// The glyph shows the current pin state; the label describes the action.
 		const pin = this.action('pin', conversation.pinned ? localize('sessions.chatgpt.unpin', 'Unpin chat') : localize('sessions.chatgpt.pin', 'Pin chat'),
 			async () => {
 				await this.chat.setPinned(conversation.id, !conversation.pinned);
 				this.focusConversation(conversation.id);
-			}, conversation.pinned ? Lxicon.pinned : Lxicon.unpin);
+			}, conversation.pinned ? Lxicon.pinFilled : Lxicon.pin);
 		const bar = this.rows.add(new ActionBar(row, {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			actions: conversation.id.startsWith('pending:') ? [more] : [{ ...pin, checked: conversation.pinned === true }, more],
@@ -374,7 +374,7 @@ class ChatGPTNavigationGroup extends Disposable {
 		const openMenu = (event: Event): void => {
 			if (trigger.disabled) { return; }
 			event.preventDefault();
-			void this.showMore(row, conversation);
+			void this.showMore(row, conversation, event.type === 'keydown');
 		};
 		this.rows.add(addDisposableListener(item, 'contextmenu', openMenu));
 		this.rows.add(addDisposableListener(item, 'keydown', event => {
@@ -405,7 +405,7 @@ class ChatGPTNavigationGroup extends Disposable {
 		return { id: `sessions.chatgpt.${id}`, label, tooltip: label, enabled: true, icon, run };
 	}
 
-	private async showMore(row: HTMLElement, conversation: ChatGPTConversation): Promise<void> {
+	private async showMore(row: HTMLElement, conversation: ChatGPTConversation, autoSelectFirstItem: boolean): Promise<void> {
 		const generation = ++this.menuGeneration;
 		const controller = new AbortController();
 		this.menuLoad.value = toDisposable(() => controller.abort());
@@ -440,6 +440,7 @@ class ChatGPTNavigationGroup extends Disposable {
 		this.menuRow = row;
 		this.contextMenus.showContextMenu({
 			getAnchor: () => trigger,
+			autoSelectFirstItem,
 			getActions: () => deleteOnly ? [
 				this.action('delete', localize('sessions.chatgpt.delete', 'Delete'), () => this.deleteConversation(conversation)),
 			] : [

@@ -34,6 +34,11 @@
 	min-width: 180px;
 	padding: var(--ash-menu-padding);
 }
+/* The menu can hold focus before navigation moves it to a highlighted item. */
+.ash-context-view-menu .ash-menu:focus {
+	outline: none;
+}
+
 .ash-menu .ash-action-view-item {
 	display: block;
 }

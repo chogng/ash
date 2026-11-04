@@ -300,7 +300,7 @@
     "sessions.newChatModel.useAsh": "选择模型新建 Ash 对话…",
     "sessions.newChatModel.useChatGPT": "选择模型新建 ChatGPT 对话…",
     "sessions.newChatModel.ashHelp": "模型选择器提供「选择模型新建 ChatGPT 对话」，用于打开一条独立对话。新建对话中未发送的草稿可复制文字。附件和历史保留在原对话。",
-    "sessions.newChatModel.chatGPTHelp": "在模型选择器中，选择“选择模型新建 Ash 对话”，再选一个模型以打开 Ash 对话。侧栏的 Ash 分组可以重新打开 Ash 对话。新建对话中未发送的草稿可复制文字。附件和历史保留在原对话。",
+    "sessions.newChatModel.chatGPTHelp": "在模型选择器中，选择“选择模型新建 Ash 对话”，再选一个模型以打开 Ash 对话。切换到代码模式后，可以从侧栏重新打开 Ash 对话。新建对话中未发送的草稿可复制文字。附件和历史保留在原对话。",
     "sessions.chatgpt.more": "更多操作",
     "sessions.chatgpt.pin": "置顶聊天",
     "sessions.chatgpt.unpin": "取消置顶聊天",

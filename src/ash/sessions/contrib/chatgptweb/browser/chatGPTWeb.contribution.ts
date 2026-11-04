@@ -30,8 +30,6 @@ import { IAccountService } from '../../../../platform/accounts/common/accountSer
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProgressService } from '../../../../platform/progress/common/progress.js';
 import { signInChatGPT } from './chatGPTLogin.js';
-import { SessionsNavigationView } from '../../sessions/browser/views/sessionsView.js';
-import { ASH_CHAT_SELECTED_CONTEXT, SHOW_ASH_CHAT_COMMAND } from '../../chat/common/constants.js';
 import '../../chat/browser/chat.contribution.js';
 import './newChatModelAction.js';
 
@@ -41,11 +39,6 @@ registerEditorPane({ id: 'sessions.editor.chatgpt', name: 'ChatGPT', canOpen: in
 SessionsViewRegistry.registerViewContainer({
 	id: chatGPTNavigationContainerId, ctorDescriptor: new SyncDescriptor(ChatGPTNavigationViewPaneContainer), mergeViewWithContainerWhenSingleView: false, title: 'ChatGPT', localizationKey: { bundle: 'ash', key: 'sessions.chatgpt.title' }, location: ViewContainerLocation.Sidebar, isDefault: true, order: 2,
 });
-SessionsViewRegistry.registerViews(chatGPTNavigationContainerId, [{
-	id: 'sessions.chat.ashHistory', title: 'Ash', order: -1, collapsed: true, canToggleVisibility: false,
-	ctorDescriptor: new SyncDescriptor(SessionsNavigationView, [{ openCommand: SHOW_ASH_CHAT_COMMAND, activeContext: ASH_CHAT_SELECTED_CONTEXT }]),
-}]);
-
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ChatGPT, defaultValue: true,
@@ -72,7 +65,7 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 				+ '\n\n' + localize('sessions.chatgpt.richContentHelp', 'Press Enter on a citation number to expand source details. Media provides playback controls; attachments can be previewed, opened or downloaded here. Use Tab to move between interactive preview controls. Charts support type, zoom and series controls; focus a chart and use Left and Right Arrow to read data points.')
 				+ '\n\n' + localize('sessions.chatgpt.executionHelp', 'Tool activity updates a single execution row. Press Enter or Space on its summary to expand the steps, then expand a step to read its original input or result. The execution row collapses when the answer starts and remains available above the answer. Failed steps remain indicated in the summary.')
 				+ '\n\n' + localize('sessions.chatgpt.promptTimelineHelp', 'The prompt timeline appears when the conversation has at least two prompts and the pane is wide enough. In the left gutter, focus Show prompts and press Enter or Space to open the list. Use Up and Down Arrow, Home or End to move between prompts. In Overview ruler mode, Tab to a marker and activate it to see its prompts. Activate a prompt to jump to its original message. Escape closes the list and returns focus to its control.')
-				+ '\n\n' + localize('sessions.newChatModel.chatGPTHelp', 'In the model picker, choose New Ash Chat with Model, then select a model to open an Ash chat. Reopen Ash chats from the Ash group in the sidebar. A new unsent draft can copy its text. Attachments and conversation history stay with their original chat.')
+				+ '\n\n' + localize('sessions.newChatModel.chatGPTHelp', 'In the model picker, choose New Ash Chat with Model, then select a model to open an Ash chat. Reopen Ash chats from the sidebar in Code mode. A new unsent draft can copy its text. Attachments and conversation history stay with their original chat.')
 				+ '\n\n' + localize('sessions.chatgpt.offlineHelp', 'While offline, Send in a new chat saves its first text message on this device. Delete removes a conversation from the sidebar. Ash syncs these changes when the connection returns. A saved chat is read-only until ChatGPT confirms it.')
 				+ '\n\n' + localize('sessions.chat.coworkHelp', 'Use the same input to ask questions or describe work to do. Clear text requests for actions or deliverables may run with Cowork. Progress and results appear in the conversation. Select Open Cowork task when the task needs input.')
 				: chat.getAccessibleContent(), () => focused?.focus(), AccessibilityVerbositySettingId.ChatGPT);

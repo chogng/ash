@@ -244,11 +244,15 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(editor).toBeVisible();
 			await composer.waitForEditorContents(text => text === 'Hello from native UI');
 			const sidebar = page.locator('.ash-chatgpt-navigation');
-			await sidebar.getByRole('button', { name: 'Ash', exact: true }).click();
-			await sidebar.locator('.ash-sessions-list .ash-sessions-list-item').getByText(locale === 'en' ? /\(draft\)/ : /（草稿）/).click();
+			await expect(sidebar.getByRole('button', { name: 'Ash', exact: true })).toHaveCount(0);
+			await expect(sidebar.locator('.ash-sessions-list')).toHaveCount(0);
+			const codeMode = mode.getByRole('button', { name: locale === 'en' ? 'Code' : '代码', exact: true });
+			await codeMode.click();
+			const codeList = page.locator('.ash-sessions-list[data-mode="code"]');
+			await codeList.locator('.ash-sessions-list-item').getByText(locale === 'en' ? /\(draft\)/ : /（草稿）/).click();
 			await expect(ash).toHaveAttribute('data-untitled-session-id', ashDraftId!);
 			await ashComposer.waitForEditorContents(text => text === 'Hello from native UI');
-			await expect(chatMode).toHaveAttribute('aria-pressed', 'true');
+			await expect(codeMode).toHaveAttribute('aria-pressed', 'true');
 			await ashComposer.waitForEditorFocus();
 			await page.keyboard.press('Enter');
 			await expect(ash).toContainText('Answer from Ash');
