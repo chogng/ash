@@ -1,5 +1,5 @@
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { addDisposableListener, getActiveElement, getWindow, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getActiveElement, getWindow, h, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { AnimationFrameScheduler, disposableWindowInterval } from '../../../../base/browser/scheduler.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
@@ -16,7 +16,9 @@ import { ViewPane, type IViewPaneOptions } from '../../../../workbench/browser/p
 import { PaneComposite, type PaneCompositeOptions } from '../../../../workbench/browser/panecomposite.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { getRegisteredIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { SubmenuAction, type IAction } from '../../../../base/common/actions.js';
+import type { Icon } from '../../../../base/common/icon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -29,9 +31,14 @@ import { SyncDescriptor } from '../../../../platform/instantiation/common/descri
 import type { ChatGPTConversation } from './chatGPTClient.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { IChatGPTService, chatGPTNavigationContainerId, selectedChatConversationId, type ChatGPTState } from './chatGPTService.js';
+import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
+import { SessionLeadingIcon } from '../../../browser/ui/sessionLeadingIcon.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import '../../../../base/browser/ui/button/button.css';
 import './media/chatGPTNavigationView.css';
+
+const conversationGroupGap = 8;
+const moreActionsSelector = '[data-action-id="sessions.chatgpt.more"] button';
 
 interface ConversationGroup {
 	readonly key: string;
@@ -220,16 +227,39 @@ export class ChatGPTNavigationViewPaneContainer extends PaneComposite {
 	public override focus(): void { this.element.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus(); }
 }
 
+interface ConversationRowTemplate {
+	readonly element: HTMLElement;
+	readonly titleButton: HTMLButtonElement;
+	readonly leadingIcon: SessionLeadingIcon;
+}
+
 /** One ordinary ViewPane per group, with content-sized rows and no custom header implementation. */
 export class ChatGPTNavigationView extends ViewPane {
 	private readonly bodySizeUpdate: AnimationFrameScheduler;
 	private readonly loadingProgress = this._register(new MutableDisposable());
 	private readonly rows = this._register(new DisposableStore());
 	private conversations: readonly ChatGPTConversation[] = [];
+	private sessionRows: readonly ConversationRowTemplate[] = [];
+	private readonly loadingStatus: ISessionStatusIcon = {
+		label: localize('sessions.loadingConversation', 'Loading conversation…'),
+		kind: 'inProgress',
+		icon: Lxicon.sync,
+	};
+	private readonly replyingStatus: ISessionStatusIcon = {
+		label: localize('sessions.chatgpt.replying', 'ChatGPT is replying…'),
+		kind: 'inProgress',
+		icon: Lxicon.sync,
+	};
+	private readonly workingStatus: ISessionStatusIcon = {
+		label: localize('sessions.chat.coworkRunning', 'Cowork is working…'),
+		kind: 'inProgress',
+		icon: Lxicon.sync,
+	};
 	private menuGeneration = 0;
 	private menuRow: HTMLElement | undefined;
 	private readonly menuLoad = this._register(new MutableDisposable());
 	constructor(key: string, private readonly navigation: HTMLElement, options: IViewPaneOptions,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IChatGPTService private readonly chat: IChatGPTService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
@@ -248,6 +278,7 @@ export class ChatGPTNavigationView extends ViewPane {
 		this._register(this.onDidChangeBodyVisibility(() => {
 			if (!this.isBodyVisible()) {
 				this.menuGeneration++; this.menuLoad.clear();
+				for (const row of this.sessionRows) { row.leadingIcon.closePicker(); }
 				if (this.menuRow) { this.contextMenus.hideContextMenu(); }
 			} else {
 				this.bodySizeUpdate.schedule();
@@ -255,7 +286,13 @@ export class ChatGPTNavigationView extends ViewPane {
 		}));
 	}
 
+	// Include the trailing group gap even when the body is collapsed.
+	public override get minimumSize(): number { return super.minimumSize + conversationGroupGap; }
 	public override get maximumSize(): number { return this.minimumSize; }
+
+	public override layout(size: number, offset: number, orthogonalSize: number): void {
+		super.layout(size - conversationGroupGap, offset, orthogonalSize);
+	}
 
 	public render(conversations: readonly ChatGPTConversation[], state: ChatGPTState): void {
 		if (state.loading?.kind === 'history' && !this.loadingProgress.value) {
@@ -265,15 +302,31 @@ export class ChatGPTNavigationView extends ViewPane {
 		if (conversations.length !== this.conversations.length || conversations.some((conversation, index) => conversation !== this.conversations[index])) {
 			this.rows.clear();
 			this.conversations = conversations;
-			this.contentElement.replaceChildren(...conversations.map(conversation => this.createRow(conversation)));
+			this.sessionRows = conversations.map(conversation => this.createRow(conversation));
+			this.contentElement.replaceChildren(...this.sessionRows.map(row => row.element));
 		}
-		for (const [index, row] of [...this.contentElement.querySelectorAll<HTMLElement>('.ash-chatgpt-navigation-row')].entries()) {
-			const conversation = conversations[index]!;
-			for (const button of row.querySelectorAll('button')) {
-				button.disabled = state.sending || state.managing || (state.busy && !button.classList.contains('ash-chatgpt-conversation'));
-				if (button.classList.contains('ash-chatgpt-conversation') && conversation.id === selectedChatConversationId(state)) { button.setAttribute('aria-current', 'page'); }
-				else { button.removeAttribute('aria-current'); }
+		const current = selectedChatConversationId(state);
+		const coworkRunning = state.coworkStarting || state.coworkTasks.some(task => {
+			const status = task.thread?.turns.at(-1)?.status;
+			return status === 'created' || status === 'running' || status === 'cancelling';
+		});
+		for (const [index, row] of this.sessionRows.entries()) {
+			const id = conversations[index]!.id;
+			const selected = id === current;
+			const iconStatus = state.loading?.kind === 'conversation' && state.loading.id === id ? this.loadingStatus
+				: selected && state.sending ? this.replyingStatus
+					: selected && coworkRunning ? this.workingStatus : undefined;
+			row.leadingIcon.setStatus(iconStatus);
+			const label = iconStatus ? localize('sessionRow.titleWithStatus', '{0}, {1}', conversations[index]!.title, iconStatus.label) : null;
+			if (row.titleButton.getAttribute('aria-label') !== label) {
+				if (label === null) { row.titleButton.removeAttribute('aria-label'); }
+				else { row.titleButton.setAttribute('aria-label', label); }
 			}
+			for (const button of row.element.querySelectorAll('button')) {
+				button.disabled = state.sending || state.managing || (state.busy && button !== row.titleButton);
+			}
+			if (selected) { row.titleButton.setAttribute('aria-current', 'page'); }
+			else { row.titleButton.removeAttribute('aria-current'); }
 		}
 		this.updateBodySize();
 	}
@@ -289,20 +342,21 @@ export class ChatGPTNavigationView extends ViewPane {
 		const gap = parseFloat(styles.rowGap) || 0;
 		const rowHeight = parseFloat(styles.getPropertyValue('--ash-list-rowHeight'));
 		const count = this.conversations.length;
-		this.minimumBodySize = count * rowHeight + Math.max(0, count - 1) * gap;
+		this.minimumBodySize = count * (rowHeight + gap);
 	}
 
-	private createRow(conversation: ChatGPTConversation): HTMLElement {
+	private createRow(conversation: ChatGPTConversation): ConversationRowTemplate {
 		const document = this.contentElement.ownerDocument;
-		const row = document.createElement('div');
-		row.className = 'ash-chatgpt-navigation-row';
-		row.dataset.conversation = conversation.id;
-		const item = document.createElement('button');
-		item.className = 'ash-button ash-button-standard ash-button-quiet ash-chatgpt-conversation';
-		item.type = 'button';
-		item.textContent = conversation.title;
-		item.title = conversation.title;
-		item.dataset.conversation = conversation.id;
+		const row = h(document, 'div', {
+			className: 'ash-session-row ash-chatgpt-navigation-row',
+			dataset: { conversation: conversation.id },
+		});
+		const leadingIcon = this.renderRowIcon(row, conversation);
+		const item = h(document, 'button', {
+			className: 'ash-button ash-button-standard ash-button-quiet ash-session-row-title ash-chatgpt-conversation',
+			attributes: { type: 'button', title: conversation.title },
+			dataset: { conversation: conversation.id },
+		}, conversation.title);
 		row.append(item);
 		const more = this.action('more', localize('sessions.chatgpt.more', 'More actions'), () => this.showMore(row, conversation), Lxicon.ellipsis);
 		// The glyph shows the current pin state; the label describes the action.
@@ -313,15 +367,45 @@ export class ChatGPTNavigationView extends ViewPane {
 			}, conversation.pinned ? Lxicon.pinned : Lxicon.unpin);
 		const bar = this.rows.add(new ActionBar(row, {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
-			actions: conversation.id.startsWith('pending:') ? [more] : [more, { ...pin, checked: conversation.pinned === true }],
+			actions: conversation.id.startsWith('pending:') ? [more] : [{ ...pin, checked: conversation.pinned === true }, more],
 			ariaLabel: localize('sessions.chatgpt.conversationActions', 'Actions for {0}', conversation.title),
 			actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
 		}));
-		bar.domNode.classList.add('ash-chatgpt-conversation-actions');
-		const trigger = bar.domNode.querySelector('button')!;
+		bar.domNode.classList.add('ash-session-row-actions', 'ash-chatgpt-conversation-actions');
+		const trigger = bar.domNode.querySelector<HTMLButtonElement>(moreActionsSelector)!;
 		trigger.setAttribute('aria-haspopup', 'menu');
 		trigger.setAttribute('aria-expanded', 'false');
-		return row;
+		const openMenu = (event: Event): void => {
+			if (trigger.disabled) { return; }
+			event.preventDefault();
+			void this.showMore(row, conversation);
+		};
+		this.rows.add(addDisposableListener(item, 'contextmenu', openMenu));
+		this.rows.add(addDisposableListener(item, 'keydown', event => {
+			if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+				openMenu(event);
+			}
+		}));
+		return { element: row, titleButton: item, leadingIcon };
+	}
+
+	private renderRowIcon(row: HTMLElement, conversation: ChatGPTConversation): SessionLeadingIcon {
+		const document = row.ownerDocument;
+		const iconId = this.chat.observeConversationIcon(conversation.id);
+		const leading = this.rows.add(this.instantiation.createInstance(SessionLeadingIcon, document, conversation.title,
+			iconId ? (icon: Icon | undefined) => this.chat.setConversationIcon(conversation.id, icon?.id) : undefined));
+		leading.element.classList.add('ash-session-row-leading');
+		row.append(leading.element);
+		const defaultIcon = conversation.id.startsWith('local:') ? Lxicon.cowork : Lxicon.chat;
+		if (iconId) {
+			this.rows.add(autorun(reader => {
+				const id = iconId.read(reader);
+				leading.setRestingIcon((id ? getRegisteredIcon(id, document) : undefined) ?? defaultIcon);
+			}));
+		} else {
+			leading.setRestingIcon(defaultIcon);
+		}
+		return leading;
 	}
 
 	private action(id: string, label: string, run: () => unknown, icon?: IAction['icon']): IAction {
@@ -333,7 +417,7 @@ export class ChatGPTNavigationView extends ViewPane {
 		const controller = new AbortController();
 		this.menuLoad.value = toDisposable(() => controller.abort());
 		row.classList.add('menu-open');
-		let trigger = row.querySelector<HTMLButtonElement>('.ash-chatgpt-conversation-actions button')!;
+		let trigger = row.querySelector<HTMLButtonElement>(moreActionsSelector)!;
 		trigger.setAttribute('aria-expanded', 'true');
 		const state = this.chat.state.get();
 		const deleteOnly = conversation.id.startsWith('pending:') || !conversation.local && (!state.connected || !state.networkAvailable);
@@ -357,7 +441,7 @@ export class ChatGPTNavigationView extends ViewPane {
 			const replacement = [...this.contentElement.querySelectorAll<HTMLElement>('.ash-chatgpt-navigation-row')].find(item => item.dataset.conversation === conversation.id);
 			if (!replacement) { return; }
 			row = replacement;
-			trigger = row.querySelector<HTMLButtonElement>('.ash-chatgpt-conversation-actions button')!;
+			trigger = row.querySelector<HTMLButtonElement>(moreActionsSelector)!;
 			row.classList.add('menu-open'); trigger.setAttribute('aria-expanded', 'true');
 		}
 		this.menuRow = row;

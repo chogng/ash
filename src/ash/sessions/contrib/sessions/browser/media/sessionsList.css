@@ -296,6 +296,23 @@
 	--sessions-row-background: var(--ash-sideBar-background);
 }
 
+.ash-sessions-list-row > .ash-session-leading-icon {
+	position: absolute;
+	z-index: 1;
+	inset-block-start: 50%;
+	inset-inline-start: calc(
+		var(--ash-spacing-size120) +
+			(var(--ash-lxiconFontSize-large) - var(--ash-spacing-size280)) / 2
+	);
+	transform: translateY(-50%);
+}
+
+.ash-sessions-list-row.has-leading-icon > .ash-sessions-list-item {
+	padding-inline-start: calc(
+		2 * var(--ash-spacing-size120) + var(--ash-lxiconFontSize-large)
+	);
+}
+
 .ash-sessions-list-row:hover,
 .ash-sessions-list-row:focus-within,
 .ash-sessions-list-row.menu-visible {

@@ -67,8 +67,12 @@
 
 .ash-workbench:is([data-color-scheme="light"], [data-color-scheme="dark"])
 	.ash-sessions-navigation
-	.ash-sessions-activity-item:is(.selected, :hover):not(:disabled) {
+	.ash-sessions-activity-item:hover:not(:disabled) {
 	background: var(--ash-menu-hoverBackground);
+}
+
+.ash-sessions-navigation .ash-sessions-activity-item.selected:not(:disabled) {
+	background: var(--ash-sessions-sidebar-selection-background);
 }
 
 .ash-sessions-activity-item .ash-icon {
@@ -95,7 +99,7 @@
 
 .ash-sessions-activity-content.labeled {
 	align-items: stretch;
-	padding: var(--ash-spacing-size80);
+	padding-inline: var(--ash-sessions-sidebar-row-inset);
 }
 
 .ash-sessions-activity-content.labeled .ash-sessions-activity-top,

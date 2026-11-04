@@ -361,12 +361,12 @@ suite('chatgptweb browser component', () => {
 				await page.keyboard.press('Tab');
 				await title.focus();
 				await title.hover();
-				await expect(row.getByRole('toolbar')).toHaveCSS('opacity', '1');
+				await expect(row.locator('.ash-session-row-actions')).toHaveCSS('opacity', '1');
 				await testInfo.attach(`conversation-focused-${theme}-${direction}`, { body: await row.screenshot(), contentType: 'image/png' });
 				await expectVisibleFocusOutline(title);
-				await row.getByRole('toolbar').getByRole('button').first().click({ trial: true });
+				await row.locator('.ash-session-row-actions').getByRole('button').first().click({ trial: true });
 				await page.keyboard.press('Tab');
-				await expect(row.getByRole('toolbar').getByRole('button').first()).toBeFocused();
+				await expect(row.locator('.ash-session-row-actions').getByRole('button').first()).toBeFocused();
 			}
 		}
 	});
@@ -1073,7 +1073,7 @@ suite('chatgptweb browser component', () => {
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${zh ? 'hcDark' : 'light'}`);
 			const row = page.locator('.ash-chatgpt-navigation-row[data-conversation="fixture-chat"]');
 			const title = row.locator('.ash-chatgpt-conversation');
-			const toolbar = row.getByRole('toolbar');
+			const toolbar = row.locator('.ash-session-row-actions');
 			const more = row.getByRole('button', { name: labels.more, exact: true });
 			const openMore = async () => { await row.hover(); await more.click(); };
 			await expect(title).toBeVisible();

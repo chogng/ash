@@ -1,3 +1,4 @@
+import { ChatTimelineStorage } from '../../../src/ash/sessions/browser/chatTimelineStorage.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
@@ -25,8 +26,10 @@ import { createDisconnectedExtensionHostApi } from '../../../src/ash/platform/ex
 import { normalizeExtensionHostSnapshot } from '../../../src/ash/platform/extensions/browser/extensionHostProtocol.js';
 import { IAgentThreadService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { bindTestColorTheme } from './themeFixture.js';
+import '../../../src/ash/workbench/browser/style.js';
 import '../../../src/ash/sessions/browser/media/workbench.css';
 import '../../../src/ash/sessions/browser/media/style.css';
+import '../../../src/ash/sessions/browser/parts/activitybar/media/activityBarPart.css';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
@@ -79,6 +82,12 @@ const themes = { light: lightColorTheme, dark: darkColorTheme, hcDark: highContr
 const theme = resources.add(new TestThemeService(themes[(parameters.get('theme') ?? 'dark') as keyof typeof themes]));
 const requests = new Map<string, { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array>; }>();
 const storage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: parameters.get('workspace') ?? 'chatgpt-navigation-fixture', profileId: 'chatgpt-navigation-fixture' }));
+if (parameters.has('workRow')) {
+	const timeline = new ChatTimelineStorage(storage, 'chatgpt-web');
+	if (!timeline.read('local:fixture-work')) {
+		timeline.write('local:fixture-work', { localId: 'fixture-work', title: 'Synthetic Work', tasks: [] });
+	}
+}
 if (parameters.has('legacyCollapsed')) {
 	for (const key of ['recent', 'projects', 'g-p-unloaded']) { storage.store(`sessions.chatgpt.navigation.collapsed.${key}`, true, StorageScope.PROFILE, StorageTarget.MACHINE); }
 }

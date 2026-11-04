@@ -4,6 +4,29 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 
 suite('appTools browser component', () => {
 	const browserTests = useBrowserTests();
+	test('Code and Agent lists share the leading icon picker and saved row icons', async function () {
+		const { page } = browserTests;
+		await page.goto('/appTools.html?leadingIcons&locale=zh-CN');
+		const row = page.locator('[data-item="session:session-1"]');
+		const trigger = row.getByRole('button', { name: '更换「Task 1」的图标' });
+		const picker = page.getByRole('dialog', { name: '更换图标', exact: true });
+		await expect(trigger.locator('[data-ash-icon-id="chat"]')).toBeVisible();
+		await trigger.press('Enter');
+		await picker.getByRole('combobox', { name: '搜索图标' }).fill('folder');
+		await picker.getByRole('option', { name: 'folder', exact: true }).click();
+		await expect(trigger).toBeFocused();
+		await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
+		await page.goto('/appTools.html?leadingIcons&chatMode&locale=zh-CN');
+		await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
+		await page.goto('/appTools.html?leadingIcons&working&locale=zh-CN');
+		await expect(trigger.locator('.ash-pixel-spinner')).toBeVisible();
+		await page.goto('/appTools.html?leadingIcons&locale=zh-CN');
+		await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
+		await trigger.click();
+		await picker.getByRole('button', { name: '恢复默认图标' }).click();
+		await expect(trigger.locator('[data-ash-icon-id="chat"]')).toBeVisible();
+	});
+
 	test('application tools adapt file, review and browser resources into window services', async function () {
 		const { page } = browserTests;
 

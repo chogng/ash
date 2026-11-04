@@ -1,0 +1,16 @@
+.ash-session-status-icon {
+	display: grid;
+	place-items: center;
+}
+
+.ash-session-status-icon-layer {
+	display: grid;
+	grid-area: 1 / 1;
+	width: 100%;
+	height: 100%;
+	place-items: center;
+}
+
+.ash-session-status-icon-progress {
+	color: var(--ash-textLink-foreground);
+}

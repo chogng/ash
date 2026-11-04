@@ -7,7 +7,8 @@ import { ChatReplyError } from '../../../common/chatReplyBackend.js';
 import { ChatGPTReplyBackend } from './chatGPTReplyBackend.js';
 import { ChatGPTOutbox, type PendingChatGPTCreation } from './chatGPTOutbox.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
-import { observableValue, type IObservable } from '../../../../base/common/observable.js';
+import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
+import { observableFromEvent, observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { equals } from '../../../../base/common/objects.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { getNLSLanguage, localize } from '../../../../nls.js';
@@ -127,6 +128,8 @@ export interface IChatGPTService {
 	loadMore(): Promise<void>;
 	rename(id: string, title: string): Promise<void>;
 	setPinned(id: string, pinned: boolean): Promise<void>;
+	observeConversationIcon(id: string): IObservable<string | undefined> | undefined;
+	setConversationIcon(id: string, iconId: string | undefined): void;
 	archive(id: string): Promise<void>;
 	deleteConversation(id: string): Promise<void>;
 	moveToProject(id: string, projectId: string): Promise<void>;
@@ -300,6 +303,32 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		});
 	}
 
+	public observeConversationIcon(id: string): IObservable<string | undefined> | undefined {
+		const key = this.conversationIconKey(id);
+		if (!key) { return undefined; }
+		return observableFromEvent(this, listener => this.storage.onDidChangeValue(event => {
+			if (event.scope === StorageScope.PROFILE && event.key === key) { listener(event); }
+		}),
+			() => this.storage.get(key, StorageScope.PROFILE));
+	}
+
+	public setConversationIcon(id: string, iconId: string | undefined): void {
+		const key = this.conversationIconKey(id);
+		if (!key || !this.model.get().conversations.some(item => item.id === id) || (iconId !== undefined && !getLxiconDefinition(iconId))) { return; }
+		this.storage.store(key, iconId, StorageScope.PROFILE, StorageTarget.MACHINE);
+	}
+
+	private conversationIconKey(id: string): string | undefined {
+		if (id.startsWith('local:')) { return `sessions.chatgpt.icon:${id}`; }
+		if (!this.cacheScope || id.startsWith('pending:')) { return undefined; }
+		return `sessions.chatgpt.icon:${this.cacheScope}:${id}`;
+	}
+
+	private forgetConversationIcon(id: string): void {
+		const key = this.conversationIconKey(id);
+		if (key) { this.storage.remove(key, StorageScope.PROFILE); }
+	}
+
 	public archive(id: string): Promise<void> { return this.removeConversation(id, false); }
 	public async deleteConversation(id: string): Promise<void> {
 		const outbox = this.outbox;
@@ -336,8 +365,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			const state = this.model.get();
 			if (state.coworkStarting || state.sending || state.managing) return;
 			const wasSelected = selectedChatConversationId(state) === id;
-			if (deleted) this.timeline.remove(id);
-			else this.updateLocalConversation(id, { archived: true });
+			if (deleted) {
+				this.timeline.remove(id);
+				this.forgetConversationIcon(id);
+			} else this.updateLocalConversation(id, { archived: true });
 			this.update({ conversations: this.model.get().conversations.filter(item => item.id !== id) });
 			if (wasSelected) this.newChat();
 			return;
@@ -368,6 +399,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			this.drafts.delete(localId);
 		}
 		this.localIdsByRemoteId.delete(id);
+		this.forgetConversationIcon(id);
 		this.remoteTimeline?.remove(id);
 		this.timeline.remove(id);
 	}
@@ -956,6 +988,15 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const tasks = [...local.tasks, ...(remote?.tasks ?? []).filter(task => !local.tasks.some(other => other.sessionId === task.sessionId && other.threadId === task.threadId))];
 		const { title, parentId, messages } = this.model.get();
 		timeline.write(remoteId, { ...remote, localId, tasks, history: remote?.history ?? { title, parentId, messages } });
+		const localIconKey = this.conversationIconKey(localKey)!;
+		const remoteIconKey = this.conversationIconKey(remoteId);
+		const localIcon = this.storage.get(localIconKey, StorageScope.PROFILE);
+		if (remoteIconKey && localIcon) {
+			if (!this.storage.get(remoteIconKey, StorageScope.PROFILE)) {
+				this.storage.store(remoteIconKey, localIcon, StorageScope.PROFILE, StorageTarget.MACHINE);
+			}
+			this.storage.remove(localIconKey, StorageScope.PROFILE);
+		}
 		this.timeline.remove(localKey);
 		this.update({ conversations: this.model.get().conversations.filter(item => item.id !== localKey) });
 		this.rememberHistory({ id: remoteId, title: local.title ?? this.model.get().title });

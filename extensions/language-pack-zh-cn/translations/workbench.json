@@ -1,5 +1,7 @@
 {
   "ash": {
+    "iconPicker.changeIcon": "更换图标",
+    "iconPicker.resetIcon": "恢复默认图标",
     "agentSessionsWelcome.title": "Agent 会话欢迎页",
     "agentSessionsWelcome.heading": "你想处理什么工作？",
     "agentSessionsWelcome.open": "打开 Agent 会话欢迎页",

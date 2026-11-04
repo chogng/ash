@@ -58,7 +58,10 @@ class SessionsNavigationView extends ViewPane {
 		super.setVisible(visible);
 		// Retain the view model while only the current mode contributes sidebar rows and tab stops.
 		if (visible) this.contentElement.append(this.list.element);
-		else this.list.element.remove();
+		else {
+			this.list.closeIconPickers();
+			this.list.element.remove();
+		}
 		if (visible && this.hiddenListState) {
 			this.list.restoreViewState({ ...this.hiddenListState, focus: undefined });
 			this.hiddenListState = undefined;

@@ -11,6 +11,14 @@
 	--ash-fontSize-label1: 14px;
 	--ash-fontSize-label2: 11px;
 	--ash-fontSize-label3: 10px;
+	--ash-sessions-sidebar-hover-background: var(
+		--ash-list-hoverBackground,
+		ButtonFace
+	);
+	--ash-sessions-sidebar-row-inset: var(--ash-spacing-size80);
+	--ash-sessions-sidebar-selection-background: var(
+		--ash-sessions-selectionBackground
+	);
 	--ash-toolbar-actionSize: var(--ash-spacing-size280);
 	--ash-menu-divider-gap: var(--ash-spacing-size40);
 	--ash-sessions-soft-shadow: 0 2px 8px
@@ -28,6 +36,18 @@
 	--ash-action-widget-filter-divider-content: "";
 	--ash-icon-font-family: "Ash UI Variable";
 	--ash-icon-font-weight: 550;
+}
+
+.ash-workbench:is([data-color-scheme="light"], [data-color-scheme="dark"])
+	.ash-sessions-window {
+	--ash-sessions-sidebar-selection-background: var(
+		--ash-menu-hoverBackground
+	);
+	--ash-sessions-sidebar-hover-background: color-mix(
+		in srgb,
+		var(--ash-sessions-sidebar-selection-background) 50%,
+		transparent
+	);
 }
 
 .ash-sessions-window .ash-button .ash-icon-label-icon > .ash-icon,

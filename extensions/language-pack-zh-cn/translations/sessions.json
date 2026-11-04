@@ -1,5 +1,7 @@
 {
   "ash": {
+    "sessionRow.changeIcon": "更换「{0}」的图标",
+    "sessionRow.titleWithStatus": "{0}，{1}",
     "sessions.remoteSandbox.required": "必须先在 {0} 上以管理员身份初始化 Windows 账户沙箱，才能运行 Agent 命令。",
     "sessions.remoteSandbox.instructions": "查看初始化步骤",
     "sessions.remoteSandbox.steps": "在 Windows 执行端，使用此连接对应的 Windows 账户，以管理员身份打开 PowerShell。进入 Ash Remote 安装包的 bin 目录，核对服务安装清单并安装服务，再核对并应用账户初始化清单。完成后返回此处，选择“刷新状态”。",
@@ -113,7 +115,7 @@
     "sessions.list.openWindow": "在新窗口中打开",
     "sessions.list.actions": "聊天操作",
     "sessions.list.more": "更多操作",
-    "sessions.list.menuHelp": "悬停或聚焦聊天可显示更多操作，也可按 Shift+F10。菜单包含置顶、重命名、归档、添加到项目、移动到分组、删除和在新窗口中打开。所有聊天条目在发送首条消息前就支持这些操作。整理聊天会保留草稿，不会发送消息。独立 Agent 会话窗口保留原有对话与草稿，关闭窗口或选择返回主窗口可将聊天带回；窗口置顶可让桌面窗口始终位于其他窗口之上。",
+    "sessions.list.menuHelp": "使用 Tab 可访问已保存会话的更换图标按钮。悬停或聚焦聊天可显示更多操作，也可按 Shift+F10。菜单包含置顶、重命名、归档、添加到项目、移动到分组、删除和在新窗口中打开。所有聊天条目在发送首条消息前就支持这些操作。整理聊天会保留草稿，不会发送消息。独立 Agent 会话窗口保留原有对话与草稿，关闭窗口或选择返回主窗口可将聊天带回；窗口置顶可让桌面窗口始终位于其他窗口之上。",
     "sessions.list.projectHost": "项目只能包含此主机上的聊天。",
     "sessions.list.noProjects": "请先创建项目，再添加此聊天。",
     "sessions.list.newGroup": "新建分组…",
@@ -1314,7 +1316,7 @@
     "sessions.chatgpt.navigationHint": "按 Alt+F1 获取 ChatGPT 无障碍帮助。",
     "sessions.chatgpt.navigationVerbosity": "ChatGPT 无障碍帮助",
     "sessions.chatgpt.navigationVerbosityDescription": "ChatGPT 获得焦点时，播报如何打开无障碍帮助。",
-    "sessions.chatgpt.navigationHelp": "ChatGPT 会话位于窗口侧栏。项目、Artifacts 和自定义页面保留同一份列表，打开会话会返回 ChatGPT。使用侧栏顶部的“新建”开始聊天。使用侧栏顶部的“搜索”，再选择“会话”，可按标题或项目名称查找已加载的 ChatGPT 会话。使用 Tab 访问会话列表。在列表中使用方向键、Home 和 End 移动，按 Enter 打开会话。滚动到接近列表底部时会自动加载更多会话。加载失败后，可再次滚动以重试。无障碍命令可打开帮助和当前聊天的可选择文本视图，关闭视图后焦点返回原控件。Enter 发送消息，Shift+Enter 换行。点击“停止”可以中断回复。使用“新建”按钮的右键菜单可登录 Ash、选择 Codex 登录、退出 Ash 登录或刷新 ChatGPT。Ash 独立登录会自动续期，Codex 登录由 Codex 管理。切换会话时会保留草稿。使用窗口分隔条调整侧栏宽度，使用标题栏按钮显示或隐藏侧栏。",
+    "sessions.chatgpt.navigationHelp": "ChatGPT 会话位于窗口侧栏。项目、Artifacts 和自定义页面保留同一份列表，打开会话会返回 ChatGPT。使用侧栏顶部的“新建”开始聊天。使用侧栏顶部的“搜索”，再选择“会话”，可按标题或项目名称查找已加载的 ChatGPT 会话。使用 Tab 访问会话列表。在列表中使用方向键、Home 和 End 移动，按 Enter 打开会话。按 Shift+F10 打开会话操作菜单，也可用 Tab 访问更换图标、置顶和更多操作。滚动到接近列表底部时会自动加载更多会话。加载失败后，可再次滚动以重试。无障碍命令可打开帮助和当前聊天的可选择文本视图，关闭视图后焦点返回原控件。Enter 发送消息，Shift+Enter 换行。点击“停止”可以中断回复。使用“新建”按钮的右键菜单可登录 Ash、选择 Codex 登录、退出 Ash 登录或刷新 ChatGPT。Ash 独立登录会自动续期，Codex 登录由 Codex 管理。切换会话时会保留草稿。使用窗口分隔条调整侧栏宽度，使用标题栏按钮显示或隐藏侧栏。",
     "sessions.chatgpt.image": "图片",
     "sessions.chatgpt.file": "文件",
     "sessions.chatgpt.interactive": "交互内容",

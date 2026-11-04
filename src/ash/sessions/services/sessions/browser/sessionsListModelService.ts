@@ -1,3 +1,4 @@
+import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
 import type { Event } from '../../../../base/common/event.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
@@ -41,6 +42,8 @@ export interface ISessionsListModelService {
 	isSessionPinned(session: ISession): boolean;
 	pinSession(session: ISession): void;
 	unpinSession(session: ISession): void;
+	getRowIcon(rowId: string): string | undefined;
+	setRowIcon(rowId: string, iconId: string | undefined): void;
 	registerTree(mode: SessionsListMode, read: () => readonly ISessionsListTreeNode[]): IDisposable;
 	readTree(mode: SessionsListMode): readonly ISessionsListTreeNode[] | undefined;
 }
@@ -56,6 +59,7 @@ const groupingKey = 'sessions.list.grouping';
 const comparisonGroupsKey = 'sessions.list.showComparisonGroups';
 const manualOrderPrefix = 'sessions.list.manualOrder.';
 const pinnedSessionPrefix = 'sessions.list.pinned.';
+const rowIconPrefix = 'sessions.list.rowIcon.';
 
 /** Owns profile-local list filters, pins, and manual row order. */
 export class SessionsListModelService implements ISessionsListModelService {
@@ -78,7 +82,7 @@ export class SessionsListModelService implements ISessionsListModelService {
 			if (event.scope === StorageScope.PROFILE && (event.key === automationVisibilityKey || event.key === sortModeKey
 				|| event.key === sortDirectionKey || event.key === groupingKey || event.key === comparisonGroupsKey
 				|| event.key.startsWith(automationOverridePrefix) || event.key.startsWith(automationReplyPrefix)
-				|| event.key.startsWith(pinnedSessionPrefix) || event.key.startsWith(manualOrderPrefix))) {
+				|| event.key.startsWith(pinnedSessionPrefix) || event.key.startsWith(manualOrderPrefix) || event.key.startsWith(rowIconPrefix))) {
 				listener.call(thisArgs);
 			}
 		}, undefined, disposables);
@@ -185,6 +189,15 @@ export class SessionsListModelService implements ISessionsListModelService {
 
 	pinSession(session: ISession): void {
 		this.storage.store(pinnedSessionPrefix + session.sessionId, true, StorageScope.PROFILE, StorageTarget.USER);
+	}
+
+	getRowIcon(rowId: string): string | undefined {
+		return this.storage.get(rowIconPrefix + rowId, StorageScope.PROFILE);
+	}
+
+	setRowIcon(rowId: string, iconId: string | undefined): void {
+		if (iconId !== undefined && !getLxiconDefinition(iconId)) { return; }
+		this.storage.store(rowIconPrefix + rowId, iconId, StorageScope.PROFILE, StorageTarget.MACHINE);
 	}
 
 	unpinSession(session: ISession): void {

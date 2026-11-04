@@ -17,27 +17,15 @@
 	box-sizing: border-box;
 }
 
-.ash-chatgpt-navigation :is(.ash-chatgpt-conversation, .ash-action-label) {
-	min-height: var(--ash-spacing-size320);
-	padding: var(--ash-spacing-size60) var(--ash-spacing-size120);
-	text-align: left;
-}
-
-.ash-chatgpt-navigation
-	:is(.ash-chatgpt-conversation, .ash-action-label)[aria-current] {
-	font-weight: var(--ash-fontWeight-semiBold, 600);
-	border-color: var(--ash-contrastBorder, transparent);
-	background: var(--ash-sessions-selectionBackground);
-}
-
 .ash-chatgpt-navigation-list {
 	/* Keep content inset while the scroll track reaches the sidebar edge. */
-	padding: var(--ash-spacing-size120);
+	padding-block: var(--ash-spacing-size120);
+	padding-inline: var(--ash-sessions-sidebar-row-inset);
 }
 
 /* History groups share the sidebar's navigation treatment, within the retained ViewPanes. */
 .ash-chatgpt-navigation .ash-pane-view-header {
-	padding: 0 var(--ash-spacing-size120);
+	padding: 0;
 	border-radius: var(--ash-cornerRadius-large);
 	color: var(--ash-sessions-activityBar-foreground);
 	font-size: var(--ash-fontSize-body1);
@@ -45,11 +33,12 @@
 }
 
 .ash-chatgpt-navigation .ash-pane-view-header:hover {
-	background: var(--ash-list-hoverBackground);
+	background: var(--ash-sessions-sidebar-hover-background);
 }
 
 .ash-chatgpt-navigation .ash-pane-view-header-button {
 	gap: var(--ash-spacing-size80);
+	padding-inline: var(--ash-spacing-size120);
 	border-radius: inherit;
 }
 
@@ -67,30 +56,52 @@
 
 /* These content-sized groups scroll together; they do not need pane separators. */
 .ash-chatgpt-navigation
-	.ash-split-view
-	> .ash-split-view-pane:not(:first-child)::before {
+	.ash-split-view-separator-border
+	> .ash-split-view-pane:not([hidden])
+	~ .ash-split-view-pane::before {
 	content: none;
-}
-
-.ash-chatgpt-navigation-row {
-	position: relative;
-	border-radius: var(--ash-cornerRadius-large, 8px);
 }
 
 .ash-chatgpt-navigation-rows {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: var(--ash-spacing-size20);
+	padding-block-start: var(--ash-spacing-size20);
 }
 
-.ash-chatgpt-navigation-row:is(:hover, :focus-within, .menu-open) {
-	background: var(--ash-list-hoverBackground, ButtonFace);
+.ash-session-row {
+	--session-row-background: transparent;
+	--session-row-action-width: var(--ash-toolbar-actionSize, 22px);
+	--session-row-icon-slot-size: var(--ash-spacing-size280);
+	--session-row-action-inset: var(--ash-spacing-size20);
+
+	position: relative;
+	background: var(--session-row-background);
+	border-radius: var(--ash-cornerRadius-large, 8px);
 }
 
-.ash-chatgpt-navigation-row:has(
-		> .ash-chatgpt-conversation:focus-visible
-	)::after {
-	/* The action background and fade cover the title, but must not cover its focus ring. */
+.ash-session-row:is(:hover, :focus-within, .menu-open) {
+	--session-row-background: var(
+		--ash-sessions-sidebar-hover-background,
+		var(--ash-list-hoverBackground)
+	);
+}
+
+.ash-session-row:has(> .ash-session-row-title[aria-current]) {
+	--session-row-background: var(
+		--ash-sessions-sidebar-selection-background,
+		Highlight
+	);
+}
+
+.ash-session-row:has(
+	> .ash-session-row-actions > .ash-action-view-item + .ash-action-view-item
+) {
+	--session-row-action-width: calc(2 * var(--ash-toolbar-actionSize, 22px));
+}
+
+.ash-session-row:has(> .ash-session-row-title:focus-visible)::after {
+	/* Keep the row focus ring above the action buttons. */
 	content: "";
 	position: absolute;
 	inset: 0;
@@ -102,105 +113,105 @@
 	pointer-events: none;
 }
 
-.ash-chatgpt-navigation .ash-chatgpt-conversation {
+.ash-session-row .ash-session-row-title {
+	box-sizing: border-box;
 	display: block;
 	width: 100%;
 	flex-shrink: 0;
-	min-height: var(--ash-list-rowHeight, 22px);
-	/* Match the pane's row geometry when the Sessions host supplies 14px text. */
-	line-height: calc(
-		var(--ash-list-rowHeight) - 2 * var(--ash-strokeThickness)
-	);
+	min-height: var(--ash-list-rowHeight, 32px);
+	line-height: 20px;
 	padding-block: 0;
+	padding-inline: calc(
+			var(--ash-spacing-size20) + var(--session-row-icon-slot-size) +
+				var(--ash-spacing-size80) - var(--ash-strokeThickness)
+		)
+		var(--ash-spacing-size120);
+	border-radius: inherit;
+	text-align: start;
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
 }
 
-.ash-chatgpt-conversation-actions {
-	/* Overlay the title when revealed instead of reserving room in every row. */
+.ash-session-row > .ash-session-row-leading {
+	position: absolute;
+	z-index: 1;
+	inset-block-start: 50%;
+	inset-inline-start: var(--ash-spacing-size20);
+	transform: translateY(-50%);
+}
+
+/* The row paints its state across both the title and the action area. */
+.ash-session-row .ash-session-row-title.ash-button-quiet {
+	background: transparent;
+}
+
+.ash-session-row .ash-session-row-title[aria-current] {
+	font-weight: var(--ash-fontWeight-semiBold, 600);
+	border-color: var(--ash-contrastBorder, transparent);
+}
+
+.ash-session-row:has(> .ash-session-row-actions):is(
+		:hover,
+		:focus-within,
+		.menu-open
+	)
+	> .ash-session-row-title {
+	padding-inline-end: calc(
+		var(--session-row-action-width) + var(--session-row-action-inset) +
+			var(--ash-spacing-size40)
+	);
+}
+
+.ash-action-bar.ash-session-row-actions {
+	/* Hidden actions leave the full row available for the title. */
 	position: absolute;
 	z-index: 1;
 	inset-block: 0;
-	inset-inline-end: 0;
+	inset-inline-end: var(--session-row-action-inset);
 	align-items: center;
 	gap: 0;
-	border-radius: inherit;
-	border-start-start-radius: 0;
-	border-end-start-radius: 0;
-	background-color: var(--ash-sideBar-background, ButtonFace);
-	background-image: linear-gradient(
-		var(--ash-list-hoverBackground, ButtonFace),
-		var(--ash-list-hoverBackground, ButtonFace)
-	);
 	opacity: 0;
 	pointer-events: none;
 	transition: opacity var(--ash-animation-durationFast) ease-out;
 }
 
-.ash-chatgpt-conversation-actions::before {
-	content: "";
-	position: absolute;
-	inset-block: 0;
-	inset-inline-end: 100%;
-	width: var(--ash-spacing-size320, 32px);
-	background: inherit;
-	mask-image: linear-gradient(
-		to right,
-		transparent,
-		rgb(0 0 0 / 16%) 25%,
-		rgb(0 0 0 / 50%) 50%,
-		rgb(0 0 0 / 84%) 75%,
-		black
-	);
-	pointer-events: none;
-}
-
-.ash-chatgpt-conversation-actions:dir(rtl)::before {
-	transform: scaleX(-1);
-}
-
-.ash-chatgpt-navigation-row:is(:hover, :focus-within, .menu-open)
-	> .ash-chatgpt-conversation-actions {
+.ash-session-row:is(:hover, :focus-within, .menu-open)
+	> .ash-session-row-actions {
 	opacity: 1;
 	pointer-events: auto;
 }
 
-.ash-chatgpt-navigation-row:is(:focus-within, .menu-open)
-	> .ash-chatgpt-conversation-actions {
+.ash-session-row:is(:focus-within, .menu-open) > .ash-session-row-actions {
 	transition: none;
 }
 
-.hc-black .ash-chatgpt-conversation-actions::before,
-.hc-light .ash-chatgpt-conversation-actions::before {
-	display: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
-	.ash-chatgpt-conversation-actions {
+	.ash-session-row-actions {
 		transition: none;
 	}
 }
 
-.ash-chatgpt-conversation-actions .ash-action-label {
+.ash-session-row .ash-session-row-actions .ash-action-label {
 	width: var(--ash-toolbar-actionSize, 22px);
 	height: var(--ash-toolbar-actionSize, 22px);
+	min-width: 0;
 	min-height: 0;
 	padding: 0;
 	gap: 0;
 }
 
-.ash-chatgpt-conversation-actions .ash-action-label-text {
-	display: none;
-}
-
-.ash-chatgpt-navigation [hidden] {
+.ash-session-row-actions .ash-action-label-text {
 	display: none;
 }
 
 @media (forced-colors: active) {
-	.ash-chatgpt-navigation-list button[aria-current] {
+	.ash-session-row-title[aria-current] {
 		outline: 2px solid Highlight;
 		outline-offset: -2px;
 	}
+}
+
+.ash-chatgpt-navigation [hidden] {
+	display: none;
 }

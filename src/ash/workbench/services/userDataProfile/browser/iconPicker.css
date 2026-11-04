@@ -1,0 +1,22 @@
+.ash-icon-picker {
+	box-sizing: border-box;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-large);
+	background: var(--ash-quickInput-background);
+	color: var(--ash-foreground);
+	box-shadow: 0 8px 32px var(--ash-widget-shadow);
+}
+
+.ash-icon-picker-title {
+	margin: 0;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120) 0;
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-icon-picker-footer {
+	display: flex;
+	justify-content: flex-end;
+	padding: 0 var(--ash-spacing-size80) var(--ash-spacing-size80);
+}
