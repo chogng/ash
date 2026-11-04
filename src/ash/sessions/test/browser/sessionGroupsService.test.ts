@@ -21,11 +21,25 @@ test('session groups persist moves, validate complete ordering and retain tasks 
 		await assert.rejects(groups.reorder(first.sectionId, ['session-1']));
 		await groups.reorder(first.sectionId, ['session-2', 'session-1']);
 		await groups.move('session-1', second.sectionId);
+		await groups.setGroupAppearance(second.sectionId, 'icon', 'chat');
+		await groups.setGroupAppearance(second.sectionId, 'color', 'charts.blue');
 		assert.deepEqual(groups.groups.map(group => group.sessionIds), [['session-2'], ['session-1']]);
 		using restored = new SessionGroupsService(storage, { sessions: [], onDidChange: Event.None } as unknown as ISessionsManagementService);
 		assert.deepEqual(restored.groups, groups.groups);
+		assert.equal(restored.groups[1].icon, 'chat');
+		assert.equal(restored.groups[1].color, 'charts.blue');
 		await restored.rename(second.sectionId, 'Ship');
 		assert.equal(groups.groups[1].name, 'Ship');
+		await restored.setGroupAppearance(second.sectionId, 'color', undefined);
+		assert.equal(groups.groups[1].color, undefined);
+		assert.equal(groups.groups[1].icon, 'chat');
+		let appearanceChanges = 0;
+		{
+			using listener = groups.onDidChange(() => appearanceChanges++);
+			await restored.setGroupAppearance(second.sectionId, 'color', undefined);
+			await restored.setGroupAppearance('missing', 'icon', 'chat');
+		}
+		assert.equal(appearanceChanges, 0);
 		await restored.delete(first.sectionId);
 		assert.equal(groups.groups.length, 1);
 		await restored.move('session-1', null);

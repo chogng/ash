@@ -33,6 +33,8 @@ import { IContextKeyService } from '../../../platform/contextkey/browser/context
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { ISessionsLayoutService } from '../../services/layout/common/sessionsLayoutService.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
+import { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
+import '../../contrib/sessions/browser/views/sessionGroupAppearancePicker.js';
 
 registerNewChatActions();
 registerChatActions();
@@ -308,6 +310,34 @@ test('Session Details opens a localized read-only snapshot of active user sessio
 	} finally { resetNlsResolver(); }
 });
 
+test('The group appearance picker localizes choices and saves or resets the selected field', async () => {
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		using services = new InstantiationService();
+		using commands = new CommandService(services);
+		const input = new TestQuickInputService(['聊天', '红色', '默认', null]);
+		services.registerInstance(IQuickInputService, input);
+		const updates: unknown[][] = [];
+		services.registerInstance(ISessionGroupsService, {
+			groups: [{ sectionId: 'review', name: 'Review', sessionIds: [], color: 'charts.orange' }],
+			setGroupAppearance: async (...args: unknown[]) => { updates.push(args); },
+		} as unknown as ISessionGroupsService);
+		await commands.executeCommand('sessions.list.changeGroupAppearance', 'review', 'icon');
+		assert.equal(input.picker?.ariaLabel, '更改分组图标');
+		assert.ok(input.picker?.items.some(item => item.id === 'circle-filled' && item.iconClass));
+		await commands.executeCommand('sessions.list.changeGroupAppearance', 'review', 'color');
+		assert.equal(input.picker?.activeItems[0]?.id, 'charts.orange');
+		assert.deepEqual(input.picker?.items.filter(item => item.iconColor).map(item => item.iconColor?.id), [
+			'terminal.ansiBlack', 'terminal.ansiRed', 'terminal.ansiGreen', 'terminal.ansiYellow',
+			'terminal.ansiBlue', 'terminal.ansiMagenta', 'terminal.ansiCyan', 'terminal.ansiWhite', 'charts.orange',
+		]);
+		await commands.executeCommand('sessions.list.changeGroupAppearance', 'review', 'icon');
+		await commands.executeCommand('sessions.list.changeGroupAppearance', 'review', 'color');
+		assert.deepEqual(updates, [['review', 'icon', 'chat'], ['review', 'color', 'terminal.ansiRed'], ['review', 'icon', undefined]]);
+	} finally { resetNlsResolver(); }
+});
+
 class TestQuickInputService implements IQuickInputService {
 	readonly quickAccess = quickInputServiceTestControls.quickAccess;
 	readonly onShow = quickInputServiceTestControls.onShow;
@@ -323,7 +353,7 @@ class TestQuickInputService implements IQuickInputService {
 	createQuickWidget = quickInputServiceTestControls.createQuickWidget;
 
 	picker: TestQuickPick<IQuickPickItem> | undefined;
-	constructor(private readonly labels: string[] = []) { }
+	constructor(private readonly labels: (string | null)[] = []) { }
 
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		const picker = new TestQuickPick<TItem>(() => {
@@ -363,6 +393,7 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 	readonly onDidChangeSelection = QuickPickTestEvent.None;
 	constructor(private readonly onShow: () => void) { super(); }
 	private readonly acceptEmitter = this._register(new Emitter<IQuickPickDidAcceptEvent>());
+			else if (label === null) picker.hide();
 	private readonly hideEmitter = this._register(new Emitter<IQuickInputHideEvent>());
 	readonly onDidAccept = this.acceptEmitter.event;
 	readonly onDidHide = this.hideEmitter.event;

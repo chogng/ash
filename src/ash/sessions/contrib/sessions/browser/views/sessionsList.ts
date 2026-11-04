@@ -5,10 +5,11 @@ import { Separator, type IAction } from '../../../../../base/common/actions.js';
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
-import { ISessionGroupsService } from '../../../../services/sessions/browser/sessionGroupsService.js';
+import { ISessionGroupsService, type SessionGroup } from '../../../../services/sessions/browser/sessionGroupsService.js';
+import { CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
 import '../media/sessionsList.css';
 import { addDisposableListener, getWindow, h } from '../../../../../base/browser/dom.js';
-import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
+import { appendIcon, getRegisteredIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
 import { AbstractDisposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -364,9 +365,23 @@ export class SessionsList extends DomWidget {
 		];
 	}
 
-	private showSectionMenu(section: SessionListSection, anchor: ContextMenuAnchor): void {
+	private showSectionMenu(section: SessionListSection, group: SessionGroup, anchor: ContextMenuAnchor): void {
 		const actions = this.orderActions(section.domNode, 'section');
 		if (actions.length) {
+		if (group.kind !== 'comparison') {
+			const appearanceAction = (property: 'icon' | 'color', label: string): IAction => ({
+				id: `${CHANGE_SESSION_GROUP_APPEARANCE}.${property}`,
+				label,
+				tooltip: '',
+				enabled: true,
+				run: () => this.commands.executeCommand(CHANGE_SESSION_GROUP_APPEARANCE, group.sectionId, property)
+					.catch(error => this.notifications.error(String(error))),
+			});
+			actions.push(
+				appearanceAction('icon', localize('sessions.list.changeGroupIcon', 'Change group icon')),
+				appearanceAction('color', localize('sessions.list.changeGroupColor', 'Change group color')),
+			);
+		}
 			this.contextMenus.showContextMenu({ getAnchor: () => anchor, getActions: () => actions, autoSelectFirstItem: true });
 		}
 	}
@@ -467,18 +482,18 @@ export class SessionsList extends DomWidget {
 			item.domNode.dataset.item = key;
 			return item;
 		};
-		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], subgroup = false, open?: () => void): HTMLElement => {
+		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], subgroup = false, open?: () => void, group?: SessionGroup): HTMLElement => {
 			activeSections.add(key);
 			const storageKey = `sessions.list.${this.mode}.collapsed.${key}`;
 			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, subgroup, collapsed => {
 				if (!this.search.hasQuery) this.storage.store(storageKey, collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
 			}));
 			section.update(title, reorderChildren(children, ids => this.listModel.getSessionOrder(`${this.mode}:${key}`, ids), 'rowOrderId'),
-				!this.search.hasQuery && this.storage.getBoolean(storageKey, StorageScope.PROFILE, false), open);
-			if (key.startsWith('group:')) {
+				!this.search.hasQuery && this.storage.getBoolean(storageKey, StorageScope.PROFILE, false), open, group);
+			if (group) {
 				section.domNode.dataset.sectionOrderId = key;
 				section.button.draggable = true;
-				section.setContextMenu(anchor => this.showSectionMenu(section, anchor));
+				section.setContextMenu(anchor => this.showSectionMenu(section, group, anchor));
 			}
 			return section.domNode;
 		};
@@ -559,7 +574,7 @@ export class SessionsList extends DomWidget {
 			}
 			if (this.search.hasQuery && !members.length && !this.search.matches(group.name)) continue;
 			(this.mode === 'code' ? recent : chatGroups).push(sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code',
-				group.kind === 'comparison' ? () => { void this.openComparison(group.sessionIds); } : undefined));
+				group.kind === 'comparison' ? () => { void this.openComparison(group.sessionIds); } : undefined, group));
 		}
 		const orderedRecent = reorderChildren(recent, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId');
 		orderedRecent.push(...remaining.values());
@@ -632,6 +647,7 @@ class SessionListSection extends AbstractDisposable {
 	private readonly label: HTMLElement;
 	private readonly icon: HTMLElement;
 	private collapsed = false;
+	private readonly appearanceIcon: HTMLElement;
 	private open: (() => void) | undefined;
 	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
 	private readonly listeners: { dispose(): void; }[];
@@ -652,6 +668,7 @@ class SessionListSection extends AbstractDisposable {
 		this.button.type = 'button';
 		this.icon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
 		this.label = h(document, 'span', { className: 'ash-sessions-list-section-label' });
+		this.appearanceIcon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
 		this.button.append(...(subgroup ? [this.icon, this.label] : [this.label, this.icon]));
 		heading.append(this.button);
 		this.body = h(document, 'div', { className: 'ash-sessions-list-section-body' });
@@ -684,7 +701,7 @@ class SessionListSection extends AbstractDisposable {
 		this.button.setAttribute('aria-haspopup', 'menu');
 	}
 
-	update(title: string, children: readonly HTMLElement[], collapsed: boolean, open?: () => void): void {
+	update(title: string, children: readonly HTMLElement[], collapsed: boolean, open?: () => void, group?: SessionGroup): void {
 		this.open = open;
 		this.label.textContent = title;
 		this.button.title = open ? localize('sessions.list.openComparison', 'Open comparison {0}', title) : title;
@@ -693,10 +710,23 @@ class SessionListSection extends AbstractDisposable {
 		this.collapsed = collapsed;
 		this.button.setAttribute('aria-expanded', String(!collapsed));
 		const icon = this.subgroup ? collapsed ? Lxicon.folder : Lxicon.folderOpened : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
+		const customIcon = group?.icon && getRegisteredIcon(group.icon, this.icon.ownerDocument);
 		if (this.icon.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
 			this.icon.replaceChildren(); appendIcon(icon, this.icon);
 		}
 		if (collapsed && this.body.contains(this.domNode.ownerDocument.activeElement)) this.button.focus({ preventScroll: true });
+		const color = group?.color ? `var(${colorCssVariable(group.color)})` : '';
+		this.icon.style.color = customIcon ? '' : color;
+		if (customIcon) {
+			if (this.appearanceIcon.firstElementChild?.getAttribute('data-ash-icon-id') !== customIcon.id) {
+				this.appearanceIcon.replaceChildren();
+				appendIcon(customIcon, this.appearanceIcon);
+			}
+			this.appearanceIcon.style.color = color;
+			if (!this.appearanceIcon.parentElement) this.label.before(this.appearanceIcon);
+		} else {
+			this.appearanceIcon.remove();
+		}
 		this.body.hidden = collapsed;
 		reconcileChildren(this.body, children);
 	}

@@ -2,7 +2,31 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { browserEnvironment } from '../../../../editor/test/browser/testEditorDom.js';
 import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { themeColorFromId, ThemeIcon } from '../../../../base/common/themables.js';
+import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
+import { QuickInputList } from '../../browser/quickInputList.js';
 import { TestQuickInputService } from './testQuickInputService.js';
+
+test('Quick Pick applies theme color to the decorative icon only', () => {
+	using resources = new DisposableStore();
+	const document = browserEnvironment.window.document;
+	const root = document.createElement('main');
+	document.body.append(root);
+	resources.add(toDisposable(() => root.remove()));
+	const services = resources.add(new InstantiationService());
+	resources.add(new TestQuickInputService({ container: root, instantiationService: services }));
+	const list = resources.add(services.createInstance(QuickInputList, root, 'menu'));
+	list.items = [
+		{ label: 'Red', iconClass: ThemeIcon.asClassName(Lxicon.circleFilled), iconColor: themeColorFromId('terminal.ansiRed') },
+		{ label: 'Default', iconClass: ThemeIcon.asClassName(Lxicon.circleFilled) },
+	];
+	const icons = root.querySelectorAll<HTMLElement>('.ash-icon-circle-filled');
+	assert.equal(icons.length, 2);
+	assert.equal(icons[0].style.color, 'var(--ash-terminal-ansiRed)');
+	assert.equal(icons[0].getAttribute('aria-hidden'), 'true');
+	assert.equal(icons[1].style.color, '');
+});
 
 test('Window Quick Input commands target a modal prompt and release its controller on close', async () => {
 	using resources = new DisposableStore();

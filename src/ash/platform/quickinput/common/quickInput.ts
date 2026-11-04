@@ -4,6 +4,7 @@ import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { ResolvedKeybinding } from '../../../base/common/keybindings.js';
 import type { URI } from '../../../base/common/uri.js';
 import type Severity from '../../../base/common/severity.js';
+import type { ThemeColor } from '../../../base/common/themables.js';
 import type { IQuickAccessController } from './quickAccess.js';
 import {
 	createServiceIdentifier,
@@ -23,6 +24,7 @@ export interface IQuickPickItem {
 	readonly className?: string;
 	readonly buttons?: readonly IQuickPickItemButton[];
 	readonly iconClass?: string;
+	readonly iconColor?: ThemeColor;
 	/** Resource icon classes resolved by the active file icon theme. */
 	readonly iconClasses?: readonly string[];
 	readonly alwaysShow?: boolean;

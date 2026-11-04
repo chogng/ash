@@ -390,7 +390,7 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	const view = { onDidChange: Event.None } as unknown as ISessionsService;
 	using groupsChanged = new Emitter<void>();
 	let groupEntries = [
-		{ sectionId: 'quality', name: 'Quality', sessionIds: ['one', 'two'] },
+		{ sectionId: 'quality', name: 'Quality', sessionIds: ['one', 'two'], icon: 'chat', color: 'charts.blue' },
 		{ sectionId: 'release', name: 'Release', sessionIds: ['three'] },
 	];
 	const groups = {
@@ -408,7 +408,9 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	let menu: IContextMenuDelegate | undefined;
 	const context = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
 	const makeList = (mode: 'chat' | 'code') => new SessionsList(dom.window.document.body, 'Sessions', mode, management, view,
-		github, groups, storage, emptyProjects, listCommands, context, listCustomViews, listMenus, listNotifications,
+		github, groups, storage, emptyProjects, commands, context, listCustomViews, listMenus, listNotifications,
+	const appearanceCommands: unknown[][] = [];
+	const commands = { executeCommand: async (...args: unknown[]) => { appearanceCommands.push(args); } } as ICommandService;
 		new SessionsListModelService(storage), new SessionSectionOrderService(storage));
 	const sectionNames = (list: SessionsList) => Array.from(list.domNode.querySelectorAll('[data-section^="group:"] > h3'), heading => heading.textContent);
 	const rows = (list: SessionsList) => Array.from(list.domNode.querySelectorAll('[data-section="group:quality"] [data-row-order-id]'), row => row.getAttribute('data-row-order-id'));
@@ -429,6 +431,14 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 		await moveUp(list.domNode.querySelector<HTMLButtonElement>('[data-section="group:release"] > h3 button')!);
 		await moveUp(list.domNode.querySelector<HTMLButtonElement>('[data-item="session:two"] button')!);
 		assert.deepEqual(sectionNames(list), ['Release', 'Quality']);
+		const groupTitle = list.domNode.querySelector<HTMLButtonElement>('[data-section="group:quality"] > h3 button')!;
+		assert.ok(groupTitle.querySelector('[data-ash-icon-id="chat"]'));
+		groupTitle.focus();
+		groupTitle.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
+		const appearance = menu?.getActions().find(action => action.id === 'sessions.list.changeGroupAppearance.color');
+		assert.equal(appearance?.label, '更改分组颜色');
+		await appearance?.run();
+		assert.deepEqual(appearanceCommands, [['sessions.list.changeGroupAppearance', 'quality', 'color']]);
 		assert.deepEqual(rows(list), ['two', 'one']);
 		const firstRow = list.domNode.querySelector<HTMLElement>('[data-row-order-id="two"]')!;
 		const secondRow = list.domNode.querySelector<HTMLElement>('[data-row-order-id="one"]')!;

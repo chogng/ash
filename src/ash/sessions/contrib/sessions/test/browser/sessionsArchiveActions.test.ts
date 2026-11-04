@@ -406,6 +406,7 @@ test('sidebar destination commands act on the captured chat and reread the proje
 	current.services.registerInstance(ISessionGroupsService, {
 		groups: [{ sectionId: 'group', name: 'Test group', sessionIds: [] }], onDidChange: Event.None,
 		move: async (id, group) => { moved.push([id, group]); },
+		setGroupAppearance: async () => { throw new Error('Unexpected group appearance update'); },
 		create: async () => { throw new Error('Unexpected group creation'); }, rename: async () => { }, delete: async () => { }, reorder: async () => { },
 	});
 	const projectAction = current.commands.executeCommand('agentSession.addToProject', 'second');
@@ -449,6 +450,7 @@ for (const action of ['sessions.list.togglePin', 'agentSession.rename', 'agentSe
 		services.registerInstance(ISessionGroupsService, {
 			groups: [{ sectionId: 'group', name: 'Group', sessionIds: [] }], onDidChange: Event.None,
 			move: async id => { moved.push(id); }, create: async () => { throw new Error('Unexpected group creation'); },
+			setGroupAppearance: async () => { throw new Error('Unexpected group appearance update'); },
 			rename: async () => { }, delete: async () => { }, reorder: async () => { },
 		});
 		const target = { untitledSessionId: draft.untitledSessionId };
