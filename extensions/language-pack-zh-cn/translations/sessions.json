@@ -483,7 +483,7 @@
     "sessions.layout.openChanges": "打开更改标签",
     "sessions.changes.editorHelp": "更改编辑器\n文件列表与比较内容共用此编辑器。方向键浏览更改文件，Enter 比较文件。Tab 到达审查、提交和比较操作。拖动内部的分隔条可调整文件列表和比较区域。文件、浏览器和终端共用编辑器组。拖动标签或组标题可排列它们；聚焦标题栏操作后按 Alt+Shift+方向键可移动组。组布局操作可分屏或最大化组。Alt+F2 阅读文件列表和前后内容。",
     "sessions.changes.editorComparison": "{0}\n更改前：\n{1}\n更改后：\n{2}",
-    "sessions.layout.restoreFailed": "无法恢复此会话的编辑器：{0}",
+    "sessions.layout.restoreFailed": "无法恢复此会话的编辑器。详情请查看窗口日志。",
     "sessions.design.canvas": "设计画布",
     "sessions.design.tools": "设计工具",
     "sessions.design.layers": "图层",

@@ -10,6 +10,7 @@ import { URI } from '../../../../base/common/uri.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { localize } from '../../../../nls.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -59,6 +60,7 @@ export abstract class BaseLayoutController extends Disposable {
 		@ILayoutService protected readonly layout: IAgentWorkbenchLayoutService,
 		@IStorageService protected readonly storage: IStorageService,
 		@INotificationService protected readonly notifications: INotificationService,
+		@ILogService private readonly logService: ILogService,
 		@ILifecycleService private readonly lifecycle: ILifecycleService,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
@@ -218,7 +220,7 @@ export abstract class BaseLayoutController extends Disposable {
 				}
 			}).catch(error => {
 				if (!this.isDisposed && !isCancellationError(error)) {
-					this.notifications.error(localize('sessions.layout.restoreFailed', 'Could not restore the editors for this session: {0}', String(error)));
+					this.reportRestoreError(error);
 				}
 			}).finally(() => {
 				if (revision === this.revision && !this.isDisposed) {
@@ -275,10 +277,15 @@ export abstract class BaseLayoutController extends Disposable {
 			}
 		}).catch(error => {
 			if (!this.isDisposed) {
-				this.notifications.error(localize('sessions.layout.restoreFailed', 'Could not restore the editors for this session: {0}', String(error)));
+				this.reportRestoreError(error);
 			}
 		});
 		return this.pendingRestore;
+	}
+
+	private reportRestoreError(error: unknown): void {
+		this.logService.error('sessions.layout', 'Could not restore the editors for this session', error instanceof Error ? error : String(error));
+		this.notifications.error(localize('sessions.layout.restoreFailed', 'Could not restore the editors for this session. See the Window log for details.'));
 	}
 
 	private async restoreEditors(selection: SessionsViewSelection): Promise<void> {

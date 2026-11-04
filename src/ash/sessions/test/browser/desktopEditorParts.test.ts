@@ -229,6 +229,23 @@ suite('Desktop tool EditorParts', () => {
 		assert.equal(hosts.editor.activePane, pane);
 	});
 
+	test('restores a working set with a hidden Files group whose legacy size is zero', async () => {
+		using source = fixture();
+		const files = source.files.fileGroups[0]!;
+		source.editor.setGroupVisible(files.id, false);
+		const browserResource = URI.parse('ash-browser:/fixture');
+		await source.editor.openEditor({ resource: browserResource }, { pinned: true });
+		const saved = source.editor.saveWorkingSet('hidden-files');
+		const snapshot = { ...saved, groups: saved.groups.map(group => group.id === files.id ? { ...group, size: 0 } : group) };
+
+		using target = fixture();
+		await target.editor.applyWorkingSet(snapshot);
+
+		assert.deepEqual(target.files.fileGroups.map(group => ({ visible: target.files.isGroupVisible(group.id), tabs: group.inputs.length })), [{ visible: false, tabs: 0 }]);
+		assert.equal(target.editor.activePart, target.tools.get('browser'));
+		assert.equal(target.editor.activeGroup.activeInput?.resource.toString(), browserResource.toString());
+	});
+
 	test('migrates legacy group identities and vertical tool geometry together', async () => {
 		using hosts = fixture();
 		await hosts.editor.applyWorkingSet({

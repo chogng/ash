@@ -4,6 +4,7 @@ import { localize } from '../../../../nls.js';
 import { BaseLayoutController } from './baseSessionLayoutController.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import { ILogService } from '../../../../platform/log/common/log.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
@@ -61,10 +62,11 @@ export class DesktopLayoutController extends BaseLayoutController {
 		@ILayoutService layout: IAgentWorkbenchLayoutService,
 		@IStorageService storage: IStorageService,
 		@INotificationService notifications: INotificationService,
+		@ILogService logService: ILogService,
 		@ILifecycleService lifecycle: ILifecycleService,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
-		super(sessions, management, editor, editors, workspace, layout, storage, notifications, lifecycle, instantiation);
+		super(sessions, management, editor, editors, workspace, layout, storage, notifications, logService, lifecycle, instantiation);
 		this._register((editor as DesktopEditorParts).setGroupScope(id => this.documentGroups.some(group => group.id === id)));
 		this.tabs = this._register(instantiation.createInstance(DesktopDockedTabsCoordinator, pageGroupId));
 		this.detailPanel = instantiation.createInstance(DesktopDetailPanelCoordinator);

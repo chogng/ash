@@ -22,7 +22,7 @@ import { ContextKeyService, IContextKeyService } from '../../../../../platform/c
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
@@ -562,6 +562,7 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, materializedSessions: observableValue('materialized', new Map()), state: 'loading' } as unknown as ISessionsManagementService);
 		this.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 		this.services.registerInstance(INotificationService, { error: (message: string) => { this.errors.push(message); } } as unknown as INotificationService);
+		this.services.registerInstance(ILogService, new NullLoggerService());
 		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
 		this.services.registerInstance(ISessionsConversationService, {
 			openInNewWindow: async () => { throw new Error('Unexpected popup'); },
