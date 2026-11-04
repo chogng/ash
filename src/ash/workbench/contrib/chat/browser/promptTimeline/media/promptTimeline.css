@@ -34,11 +34,12 @@
 .ash-prompt-timeline-ruler {
 	position: absolute;
 	z-index: 2;
-	inset-block-start: var(--ash-spacing-size280);
 }
 
 .ash-prompt-timeline-gutter {
-	inset-inline-start: 0;
+	inset-block-start: 50%;
+	inset-inline-start: var(--ash-spacing-size40);
+	transform: translateY(-50%);
 }
 
 .ash-prompt-timeline-ruler {
@@ -46,8 +47,17 @@
 	inset-inline-end: var(--ash-spacing-size120);
 }
 
-.ash-prompt-timeline-gutter > summary,
 .ash-prompt-timeline-mark,
+.ash-prompt-timeline-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+}
+
+.ash-prompt-timeline-row > details {
+	grid-column: 1 / -1;
+}
+
 .ash-prompt-timeline-row button {
 	border: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, transparent);
@@ -58,9 +68,55 @@
 	cursor: pointer;
 }
 
+.ash-prompt-timeline-row .ash-prompt-timeline-review {
+	display: flex;
+	inline-size: auto;
+	flex-wrap: nowrap;
+	font-size: var(--ash-fontSize-label1);
+	font-variant-numeric: tabular-nums;
+}
+
+.ash-prompt-timeline-review:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
 .ash-prompt-timeline-gutter > summary {
-	display: block;
+	display: grid;
+	place-items: center;
+	box-sizing: border-box;
+	inline-size: var(--ash-spacing-size240);
+	min-block-size: var(--ash-spacing-size240);
+	padding-block: var(--ash-spacing-size60);
+	border-radius: var(--ash-cornerRadius-small);
 	list-style: none;
+	cursor: pointer;
+}
+
+.ash-prompt-timeline-gutter > summary:hover,
+.ash-prompt-timeline-gutter[open] > summary {
+	background: var(--ash-toolbar-hoverBackground);
+}
+
+.ash-prompt-timeline-gutter-marks {
+	display: grid;
+	justify-items: center;
+	gap: var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+}
+
+.ash-prompt-timeline-gutter-marks > span {
+	inline-size: var(--ash-spacing-size60);
+	border-block-start: var(--ash-spacing-size20) solid currentColor;
+}
+
+.ash-prompt-timeline-gutter-marks > .active {
+	color: var(--ash-foreground);
+}
+
+:where([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-prompt-timeline-gutter-marks
+	> .active {
+	inline-size: var(--ash-spacing-size120);
 }
 
 .ash-prompt-timeline-mark {
@@ -84,6 +140,11 @@
 	color: var(--ash-foreground);
 }
 
+.ash-prompt-timeline-gutter .ash-prompt-timeline-panel {
+	inset-block-start: 50%;
+	transform: translateY(-50%);
+}
+
 .ash-prompt-timeline-ruler .ash-prompt-timeline-panel {
 	inset-inline: auto 100%;
 }
@@ -102,6 +163,13 @@
 .ash-prompt-timeline-row button[aria-current] {
 	background: var(--ash-list-activeSelectionBackground);
 	color: var(--ash-list-activeSelectionForeground);
+}
+
+.ash-prompt-timeline-gutter
+	.ash-prompt-timeline-row.preview
+	> .ash-prompt-timeline-jump,
+.ash-prompt-timeline-gutter .ash-prompt-timeline-row > button:hover {
+	background: var(--ash-list-hoverBackground);
 }
 
 .ash-prompt-timeline-gutter :focus-visible,

@@ -80,7 +80,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 					}
 				},
 			}, model), {
-			promptTimelineFiles: prompt => turnChanges.getChangesForRequest(prompt),
+			promptTimelineChanges: prompt => turnChanges.getChangesForRequest(prompt),
 		}, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
 		const parent = this.input.element;
 		const inputContainer = this.input.inputContainerElement;

@@ -1,9 +1,15 @@
 import type { IChatListItem } from '../../common/model/chatViewModel.js';
+import type { IChangesStats } from '../../../../browser/changesStatsWidget.js';
 
-export interface PromptFileDiff {
+interface PromptFileDiff {
 	readonly id: string;
 	readonly path: string;
 	readonly review: () => void;
+}
+
+export interface PromptTurnChanges extends IChangesStats {
+	readonly fileDiffs: readonly PromptFileDiff[];
+	review(): void | Promise<void>;
 }
 
 export interface PromptTick {

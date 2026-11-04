@@ -348,10 +348,14 @@ const openedAppLinks: { uri: string; options: unknown; }[] = [];
 const appServices = resources.add(services.createChild());
 appServices.registerInstance(IOpenerService, { open: async (uri: URI, options: unknown) => { openedAppLinks.push({ uri: uri.toString(), options }); return true; } } as unknown as IOpenerService);
 const listOptions = {
-	promptTimelineFiles: new URLSearchParams(location.search).has('promptTimeline')
-		? (prompt: IChatListItem) => prompt.id === 'second' ? [{
-			id: 'change', path: 'src/example.ts', review: () => { root.dataset.reviewedPrompt = prompt.id; },
-		}] : [] : undefined,
+	promptTimelineChanges: new URLSearchParams(location.search).has('promptTimeline')
+		? (prompt: IChatListItem) => prompt.id === 'second' ? {
+			files: 1, insertions: 2, deletions: 1,
+			review: () => { root.dataset.reviewedTurn = prompt.id; },
+			fileDiffs: [{
+				id: 'change', path: 'src/example.ts', review: () => { root.dataset.reviewedPrompt = prompt.id; },
+			}],
+		} : undefined : undefined,
 	imageResourceLoader: async () => { imageReads++; return new Blob([new Uint8Array(imageBytes)], { type: 'image/png' }); } };
 let rendererItems: readonly IChatListItem[] = [];
 let list = resources.add(appServices.createInstance(ChatListWidget, root, listOptions));

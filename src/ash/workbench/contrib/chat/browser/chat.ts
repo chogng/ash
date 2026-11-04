@@ -1,4 +1,4 @@
-import type { PromptFileDiff } from './promptTimeline/promptTimelineModel.js';
+import type { PromptTurnChanges } from './promptTimeline/promptTimelineModel.js';
 import type { ChatMode } from '../../../services/chat/common/chatService.js';
 import type { IChatInputPart } from './widget/input/chatInputPart.js';
 import type { ChatRequestQueueKind } from '../../../services/chat/common/chatService.js';
@@ -53,7 +53,7 @@ export interface IWorkspacePickerDelegate {
 export interface IChatWidgetViewOptions {
 	readonly showWelcome?: boolean;
 	readonly configureModelInMenu?: boolean;
-	readonly promptTimelineFiles?: (prompt: IChatListItem) => readonly PromptFileDiff[];
+	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;
 }

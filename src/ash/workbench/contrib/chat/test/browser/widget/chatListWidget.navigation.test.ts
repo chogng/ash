@@ -56,23 +56,62 @@ suite('Chat transcript navigation', () => {
 		await expect(pinned).toBeHidden();
 	});
 
-	test('navigates loaded prompts in the gutter and ruler and dispatches a file review', async () => {
+	test('navigates loaded prompts and opens a turn review directly from its counts', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html?locale=zh-CN&promptTimeline');
 		await page.evaluate(messages => window.ashChatTranscriptIntegration.renderItems(messages), messages);
-		await page.getByLabel('显示提问', { exact: true }).press('Enter');
 		const gutter = page.locator('.ash-prompt-timeline-gutter');
-		await gutter.getByText('已更改的文件（1）').press('Enter');
-		await gutter.getByRole('button', { name: 'src/example.ts' }).press('Enter');
-		await expect(page.locator('main[data-reviewed-prompt]')).toHaveAttribute('data-reviewed-prompt', 'second');
-		await gutter.getByRole('button', { name: 'Second request' }).press('Enter');
+		const handle = gutter.getByLabel('显示提问', { exact: true });
+		const marks = gutter.locator('.ash-prompt-timeline-gutter-marks > span');
+		await expect(marks).toHaveCount(2);
+		await expect(marks.first()).toHaveClass('active');
+		const position = await gutter.evaluate(element => {
+			const rail = element.getBoundingClientRect();
+			const transcript = element.parentElement!.getBoundingClientRect();
+			return { inset: rail.left - transcript.left, centerOffset: rail.top + rail.height / 2 - (transcript.top + transcript.height / 2) };
+		});
+		expect(position.inset).toBeGreaterThanOrEqual(0);
+		expect(position.inset).toBeLessThan(12);
+		expect(Math.abs(position.centerOffset)).toBeLessThan(1);
+		const panel = gutter.locator('.ash-prompt-timeline-panel');
+		const firstPrompt = panel.getByRole('button', { name: 'First request', exact: true });
+		const secondPrompt = panel.getByRole('button', { name: 'Second request', exact: true });
+		await marks.last().hover();
+		await expect(secondPrompt).toBeVisible();
+		await expect(secondPrompt.locator('..')).toHaveClass(/\bpreview\b/);
+		await page.locator('[data-item-id="second"]').hover();
+		await expect(panel).toBeHidden();
+		await marks.last().hover();
+		await secondPrompt.click();
 		await expect(page.locator('[data-item-id="second"]')).toBeFocused();
+		await expect(panel).toBeHidden();
+
+		await handle.press('Enter');
+		await expect(firstPrompt).toBeFocused();
+		await firstPrompt.press('ArrowDown');
+		await expect(secondPrompt).toBeFocused();
+		await secondPrompt.press('ArrowRight');
+		const review = panel.getByRole('button', { name: /查看提问「Second request」的改动.*新增 2 行，删除 1 行/u });
+		await expect(review).toBeFocused();
+		await expect(review).toHaveText('+2 −1');
+		await review.press('Escape');
+		await expect(handle).toBeFocused();
+		await expect(gutter).not.toHaveAttribute('open');
+		await handle.press('Enter');
+		await expect(panel.locator('.ash-prompt-timeline-review')).toHaveCount(1);
+		await review.click();
+		await expect(page.locator('main')).toHaveAttribute('data-reviewed-turn', 'second');
+		await expect(panel).toBeHidden();
 		await page.evaluate(() => window.ashChatTranscriptIntegration.setPromptTimeline('ruler'));
 		const ruler = page.locator('.ash-prompt-timeline-ruler');
 		await ruler.getByRole('button', { name: 'First request' }).press('Enter');
 		await expect(ruler.getByRole('button', { name: 'First request' }).last()).toBeFocused();
 		await ruler.getByRole('button', { name: 'First request' }).last().press('Escape');
 		await expect(ruler.getByRole('button', { name: 'First request' })).toHaveAttribute('aria-expanded', 'false');
+		await ruler.getByRole('button', { name: 'Second request', exact: true }).press('Enter');
+		await ruler.getByText('已更改的文件（1）').press('Enter');
+		await ruler.getByRole('button', { name: 'src/example.ts' }).press('Enter');
+		await expect(page.locator('main')).toHaveAttribute('data-reviewed-prompt', 'second');
 		await page.evaluate(() => window.ashChatTranscriptIntegration.setPromptTimeline('off'));
 		await expect(ruler).toHaveCount(0);
 	});
@@ -99,11 +138,12 @@ suite('Chat transcript navigation', () => {
 
 	test('Simplified Chinese transcript help documents navigation and confirmation focus', async () => {
 		const { page } = browserTests;
-		await page.goto('/chatTranscript.html?locale=zh-CN');
+		await page.goto('/chatTranscript.html?locale=zh-CN&promptTimeline');
 		await page.evaluate(messages => window.ashChatTranscriptIntegration.renderItems(messages), messages);
 		await page.evaluate(() => window.ashChatTranscriptIntegration.runNavigationCommand('chat.action.focus'));
 		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.openAccessibleView(true))).toBe(true);
 		const help = page.getByRole('dialog').getByRole('textbox');
+		await expect(help).toHaveValue(/悬停在左侧时间线/u);
 		await expect(help).toHaveValue(/固定在对话顶部[\s\S]*用户提问之间移动[\s\S]*聚焦待确认控件/u);
 		await expect(help).not.toHaveValue(/Use |<keybinding:/u);
 		await help.press('Escape');

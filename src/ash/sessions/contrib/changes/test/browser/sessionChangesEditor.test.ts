@@ -12,7 +12,7 @@ import { ContextKeyService, IContextKeyService } from '../../../../../platform/c
 import { IAccessibleViewService, AccessibleViewType } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
-import { IChatService, type ThreadUpdateEnvelope, type ThreadChangesSummary } from '../../../../../workbench/services/chat/common/chatService.js';
+import { IChatService, type ThreadUpdateEnvelope, type ThreadChangesSummary, type TurnChangeSetSummary } from '../../../../../workbench/services/chat/common/chatService.js';
 
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SessionChangesEditor } from '../../browser/sessionChangesEditor.js';
@@ -34,6 +34,9 @@ import { EditorPane, EditorPaneMatch } from '../../../../../workbench/browser/pa
 import type { MultiDiffEditorInput } from '../../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { constObservable } from '../../../../../base/common/observable.js';
+import { createSessionFileChange } from '../../../../services/sessions/common/session.js';
+import { SessionChangesEditorInput } from '../../browser/sessionChangesEditorInput.js';
 
 const emptySummary: ThreadChangesSummary = { sequence: 1, revision: 'empty', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] };
 
@@ -216,4 +219,61 @@ test('the default Changes editor reviews the backend checkpoint, resolves exact 
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(counts.at(-1), 0);
 	assert.equal(pane.getAccessibleContent(), 'No changes in this conversation.');
+});
+
+test('a Turn Changes editor includes every repository capture for that turn and excludes other turns', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	using domOwner = toDisposable(() => dom.window.close());
+	using services = registerTestComponentServices(new InstantiationService());
+	using contexts = new ContextKeyService();
+	using configuration = new InMemoryConfigurationService();
+	const capture = (changeSetId: string, turnId: string, repositoryId: string): TurnChangeSetSummary => ({
+		sessionId: 'session', threadId: 'thread', changeSetId, turnId, repositoryId, revision: 1,
+		captureState: 'sealed', messageState: 'unconfigured', commitState: 'idle', committedPaths: [],
+		statistics: { files: 1, additions: 1, deletions: 0 }, dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [],
+	});
+	const captures = [capture('first', 'older', 'a'), capture('second', 'selected', 'a'), capture('third', 'selected', 'b')];
+	const file = { path: 'main.ts', kind: 'modified' as const, binary: false, additions: 1, deletions: 0 };
+	const fileReads: string[] = [];
+	let comparison: MultiDiffEditorInput | undefined;
+	class TurnPane extends EditorPane {
+		readonly id = 'test.turn';
+		constructor() { super('test.turn', services.get(IThemeService), services.get(IStorageService)); }
+		async setInput(input: MultiDiffEditorInput): Promise<void> { comparison = input; }
+		clearInput(): void { }
+		layout(): void { }
+		focus(): void { }
+	}
+	using registration = EditorPanes.registerEditorPane({
+		id: 'test.turn', name: 'Turn',
+		canOpen: input => input.resource.scheme === 'ash-multi-diff' ? EditorPaneMatch.Default : EditorPaneMatch.None,
+		create: () => new TurnPane(),
+	});
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(IContextKeyService, contexts);
+	services.registerInstance(ISessionsManagementService, { sessions: [{ sessionId: 'session' }] } as unknown as ISessionsManagementService);
+	services.registerInstance(ISessionChangesService, {
+		setChangesCount: () => { },
+		resolveChangeset: async (_resource: URI, id: string) => ({
+			isEnabled: constObservable(true),
+			changes: constObservable([createSessionFileChange(captures.find(summary => summary.changeSetId === id)!, file)]),
+		}),
+	} as unknown as ISessionChangesService);
+	services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
+	services.registerInstance(IChatService, {
+		onDidUpdateThread: Event.None, onDidUpdateTurnChanges: Event.None, onDidBecomeReady: Event.None,
+		listTurnChanges: async () => captures,
+		readTurnChange: async (_session: string, _thread: string, id: string) => ({ summary: captures.find(summary => summary.changeSetId === id)!, files: [file] }),
+		readTurnChangeFile: async (_session: string, _thread: string, id: string) => {
+			fileReads.push(id);
+			return { before: 'baseline', after: id, binary: false, truncated: false };
+		},
+	} as unknown as IChatService);
+	using pane = services.createInstance(SessionChangesEditor, {});
+	pane.create(dom.window.document.body);
+	pane.setVisible(true);
+	await pane.setInput(new SessionChangesEditorInput(URI.parse('ash-session-changes:/session?thread=thread'), { kind: 'turn', turnId: 'selected' }), new AbortController().signal);
+	assert.deepEqual(fileReads, ['second', 'third']);
+	assert.deepEqual(comparison!.items.map(item => item.modified.initialText), ['second', 'third']);
+	assert.equal(new Set(comparison!.items.map(item => item.modified.resource.toString())).size, 2);
 });

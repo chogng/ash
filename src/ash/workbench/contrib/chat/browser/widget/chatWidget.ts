@@ -245,7 +245,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				});
 				return part;
 			},
-			promptTimelineFiles: this.viewOptions?.promptTimelineFiles,
+			promptTimelineChanges: this.viewOptions?.promptTimelineChanges,
 			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),
 			getHistoryState: () => this.model.olderHistory,
 			loadOlderHistory: async () => { await this.model.loadOlderHistory?.(); },

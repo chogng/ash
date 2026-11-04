@@ -27,10 +27,7 @@ export class PromptTimelineRulerRail extends Disposable implements IPromptTimeli
 		this.panel = document.createElement('div');
 		this.panel.className = 'ash-prompt-timeline-panel';
 		this.panel.hidden = true;
-		this.card = new PromptTimelineCard(this.panel, {
-			...actions,
-			reveal: prompt => { this.close(); actions.reveal(prompt); },
-		});
+		this.card = new PromptTimelineCard(this.panel, actions, () => this.close(), true);
 		this.rail.append(this.marks, this.panel);
 		this.rail.onkeydown = event => {
 			if (event.key === 'Escape' && this.openMark) {
