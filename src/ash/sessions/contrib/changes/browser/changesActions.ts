@@ -4,7 +4,9 @@ import { localize2 } from '../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { registerDiffEditorViewMenu } from '../../../../workbench/browser/parts/editor/diffEditorCommands.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
+import { ActiveEditorContext } from '../../../../workbench/common/contextkeys.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
@@ -13,6 +15,8 @@ import { getChangesEditorLabels } from './changesEditorLabels.js';
 import { ILabelService } from '../../../../platform/label/common/label.js';
 import { ISessionChangesService } from '../common/sessionChangesService.js';
 import { SessionChangesetOperationStatus } from '../../../services/sessions/common/session.js';
+
+registerDiffEditorViewMenu(ActiveEditorContext.isEqualTo(SessionChangesEditor.ID));
 
 class OpenChangedFileAction extends Action2 {
 	constructor() {

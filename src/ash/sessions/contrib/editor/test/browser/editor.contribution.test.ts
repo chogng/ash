@@ -1,6 +1,8 @@
+import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
+import { setARIAContainer } from '../../../../../base/browser/ui/aria/aria.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { observableValue } from '../../../../../base/common/observable.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -12,19 +14,61 @@ import { ContextKeyService, IContextKeyService } from '../../../../../platform/c
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { IEditorPart } from '../../../../../workbench/browser/parts/editor/editorPart.js';
+import { IsSessionsWindowContext, ResourceSchemeContext } from '../../../../../workbench/common/contextkeys.js';
+import { IChatAttachmentResolveService } from '../../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
 import { ITerminalEditorService } from '../../../../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalEditorInput } from '../../../../../workbench/contrib/terminal/browser/terminalEditorInput.js';
 import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
+import type { ChatContextAttachment } from '../../../../../workbench/services/chat/common/chatContextService.js';
 import { IEditorGroupsService } from '../../../../../workbench/services/editor/common/editorGroupsService.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { Menus } from '../../../../browser/menus.js';
+import type { SessionsPart } from '../../../../browser/parts/sessionsPart.js';
 import { NEW_FILE_TAB_COMMAND_ID } from '../../../../common/sessionCommands.js';
 import type { IAgentWorkbenchLayoutService } from '../../../../browser/workbench.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../../layout/browser/desktopLayoutController.js';
-import { EditorTitleMenuBridgeContribution } from '../../browser/editor.contribution.js';
+import { EditorTitleMenuBridgeContribution, registerAddFileAsContextAction } from '../../browser/editor.contribution.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
+
+test('the Command Palette adds the active file to the Sessions draft', async () => {
+	using aria = setARIAContainer(browserEnvironment.window.document.body);
+	using services = new InstantiationService();
+	using contextKeys = new ContextKeyService();
+	using commands = new CommandService(services);
+	const menus = new MenuService(commands, contextKeys);
+	const file = { resource: URI.file('/fixture/main.ts') };
+	const group = { id: 1, activeInput: file, inputs: [file], selectedInputs: [file], editors: [] };
+	services.registerInstance(IEditorGroupsService, { activeGroup: group, groups: [group], getGroup: () => group } as unknown as IEditorGroupsService);
+	const attachment: ChatContextAttachment = {
+		id: 'main', kind: 'file', resource: file.resource, name: 'main.ts',
+		resolve: async () => ({ name: 'main.ts', content: 'export {};\n' }),
+	};
+	services.registerInstance(IChatAttachmentResolveService, {
+		resolveEditorAttachContext: async input => {
+			assert.equal(input, file);
+			return attachment;
+		},
+	} as IChatAttachmentResolveService);
+	const draft: ChatContextAttachment[] = [];
+	using action = registerAddFileAsContextAction({
+		async acquireContext(prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>) {
+			const prepared = await prepare(new AbortController().signal);
+			draft.push(...prepared);
+			return prepared;
+		},
+	} as SessionsPart);
+	const entry = () => menus.getMenuActions(MenuId.CommandPalette).flatMap(([, actions]) => actions)
+		.find(action => action.id === 'workbench.action.agentSessions.addFileAsContext');
+	ResourceSchemeContext.bindTo(contextKeys).set('file');
+	assert.equal(entry(), undefined);
+	IsSessionsWindowContext.bindTo(contextKeys).set(true);
+	await entry()!.run();
+	assert.deepEqual(draft, [attachment]);
+	ResourceSchemeContext.bindTo(contextKeys).set('ash-session-changes');
+	assert.equal(entry(), undefined);
+});
 
 test('editor contributions follow layout state, serialize open commands without Add tab UI and release window registrations', async () => {
 	using services = new InstantiationService();
@@ -190,7 +234,7 @@ test('editor contributions follow layout state, serialize open commands without 
 		assert.deepEqual(titleState().map(([label]) => label), ['切换详情', '显示编辑器']);
 		assert.deepEqual(headerActions().map(action => action.label), ['切换详情', '切换工具区域大小', '隐藏工具区域']);
 		assert.deepEqual(addTab.getActions(), []);
-		assert.equal(palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === NEW_FILE_TAB_COMMAND_ID)?.label, '打开文件标签');
+		assert.equal(palette.getActions().flatMap(([, actions]) => actions).find(action => action.id === NEW_FILE_TAB_COMMAND_ID)?.label, '打开文件');
 		assert.equal(changesAction().label, '更改');
 		contextKeys.setContext('sessions.editorTool', 'terminal');
 		assert.equal(desktopTitle.getActions().flatMap(([, actions]) => actions).find(action => action.id === 'ash.sessions.splitTerminalDown')?.label, '向下拆分');

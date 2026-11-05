@@ -216,7 +216,9 @@ Session geometry does not determine Editor, Details, or other side-pane visibili
 
 All non-phone Agents windows use the desktop detail layout. Phone viewports use the dedicated mobile presentation.
 
-DesktopWorkbenchLayout composes the window's outer Parts. Within its editor region, DesktopEditorArea owns the tool Grid. Each tool card hosts an independent EditorPart for Files, Changes, Browser (Preview), Terminal or Side Chat. DesktopEditorParts coordinates these hosts through the shared editor coordinator. Each EditorPart owns its internal split layout and one or more EditorGroups. Each group owns its tabs and uses EditorPanes to display the active tab's EditorPane. A Side Chat tab renders a SessionSideChatEditor in its group. In layout discussions, a _tool pane_ means the whole tool card that the tool Grid moves.
+`DesktopWorkbenchLayout` composes the window's outer Parts. Within its editor region, `DesktopEditorArea` owns the tool Grid for Files, Changes, Browser (Preview), Terminal and Side Chat. Each tool card has exactly one independent `EditorPart`. `DesktopEditorParts` coordinates the Parts. Each Part owns one or more `EditorGroup`s and their internal split layout. Each group owns its title toolbar and tabs and displays its active editor in an `EditorPane`. A Side Chat tab renders a `SessionSideChatEditor` in its group. In layout discussions, a _tool pane_ means the whole tool card that the tool Grid moves.
+
+Changes starts with one group and hides the tab strip while keeping the group's title toolbar. Splitting a Changes group adds another group inside the same card, with its own title toolbar. Diff View commands use that group as their context and update the Agents window's shared diff preference. Maximize Tool acts on the whole card in the outer tool Grid.
 
 Ordinary title dragging moves groups within a tool; Alt-drag moves a whole tool card. Alt+Shift+Arrow first moves a group beside its local neighbor, then moves the tool at a group-grid boundary. Tool and group separators retain their own geometry.
 

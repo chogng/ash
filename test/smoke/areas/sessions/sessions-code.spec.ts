@@ -82,8 +82,8 @@ for (const locale of ['en', 'zh-CN']) {
 			({ workbench } = await restartWorkbench());
 		}
 		const copy = locale === 'zh-CN'
-			? { code: '代码', browser: '浏览器', tabs: '浏览器标签页', newTab: '打开新的浏览器标签页' }
-			: { code: 'Code', browser: 'Browser', tabs: 'Browser tabs', newTab: 'Open new browser tab' };
+			? { code: '代码', browser: '浏览器', tabs: '浏览器标签页', newTab: '打开新的浏览器标签页', openAddress: '打开地址…', history: '历史记录' }
+			: { code: 'Code', browser: 'Browser', tabs: 'Browser tabs', newTab: 'Open new browser tab', openAddress: 'Open Address…', history: 'History' };
 		const page = await workbench.openAgentsWindow(target.kind);
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 		await installMainChannelTestClient(page);
@@ -92,6 +92,16 @@ for (const locale of ['en', 'zh-CN']) {
 		const readPages = () => page.evaluate(() => globalThis.ashTestMainProcess.call<readonly IBrowserViewInfo[]>('browserView', 'getBrowserViews', []));
 		await commands.runCommand('workbench.action.browser.open');
 		await expect(tabs).toHaveCount(1);
+		const blankPage = page.locator('[data-editor-tool="browser"] .ash-browser-welcome');
+		const historyButton = blankPage.getByRole('button', { name: copy.history, exact: true });
+		await blankPage.getByRole('button', { name: copy.openAddress, exact: true }).focus();
+		await page.keyboard.press('Tab');
+		await expect(historyButton).toBeFocused();
+		await page.keyboard.press('Enter');
+		const history = page.getByRole('dialog', { name: copy.history, exact: true });
+		await expect(history).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(historyButton).toBeFocused();
 		await commands.runCommand('workbench.action.browser.quickOpen');
 		const picker = page.getByRole('dialog', { name: copy.tabs, exact: true });
 		const search = picker.getByRole('combobox');
@@ -464,19 +474,26 @@ test('Files and Changes use independent editor Parts and tool maximization resto
 	await testInfo.attach('shared-editor-groups', { body: await page.screenshot(), contentType: 'image/png' });
 });
 
-test('Changes editor exposes its group layout and review help in Chinese', async ({ target, workbench, restartWorkbench }) => {
+test('Changes editor exposes diff view modes and review help in Chinese', async ({ target, application, workbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 	await language.fill('简体中文');
 	await language.press('Enter');
-	({ workbench } = await restartWorkbench());
+	({ application, workbench } = await restartWorkbench());
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
 	await page.locator('[data-part="titlebar"]').getByRole('button', { name: '更改', exact: true }).click();
-	const editor = page.locator('[data-part="editor"]');
-	await editor.getByRole('tree', { name: '更改', exact: true }).focus();
+	const editor = page.locator('[data-editor-tool="changes"]');
+	const changesPane = editor.locator('.ash-sessions-changes-editor');
+	await changesPane.focus();
+	const moreActions = editor.locator('.ash-editor-title-actions').getByRole('button', { name: '更多操作', exact: true });
+	const menus = new Menus(page);
+	await menus.select(application, () => moreActions.click(), ['差异视图', '行内']);
+	await expect.poll(async () => (await menus.inspect(application, () => moreActions.click(), ['差异视图']))
+		.filter(item => item.checked).map(item => item.label)).toEqual(['行内']);
+	await changesPane.focus();
 	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/更改编辑器[\s\S]*编辑器组[\s\S]*预览选中的更改/u);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/更改编辑器[\s\S]*“更改”是一张独立工具卡，每个编辑器组都有自己的标题工具栏[\s\S]*预览选中的更改[\s\S]*打开“差异视图”/u);
 	await page.keyboard.press('Escape');
-	await expect(editor.getByRole('tree', { name: '更改', exact: true })).toBeFocused();
+	await expect(changesPane).toBeFocused();
 });

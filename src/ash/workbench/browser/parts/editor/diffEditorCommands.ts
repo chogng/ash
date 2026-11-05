@@ -2,7 +2,7 @@ import { localize2 } from '../../../../nls.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyExpr, type ContextKeyExpression } from '../../../../platform/contextkey/common/contextkey.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { DIFF_EDITOR_ID } from '../../../common/editor/diffEditorInput.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -23,15 +23,19 @@ export const DIFF_OPEN_SIDE = 'workbench.action.compareEditor.openSide';
 export const TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE = 'toggle.diff.ignoreTrimWhitespace';
 export const DIFF_SWAP_SIDES = 'workbench.action.compareEditor.swapSides';
 
-export function registerDiffEditorCommands(): void {
-	const diffEditorActive = ActiveEditorContext.isEqualTo(DIFF_EDITOR_ID);
+export function registerDiffEditorViewMenu(when: ContextKeyExpression): void {
 	MenusRegistry.appendMenuItem(MenuId.EditorTitle, {
 		submenu: MenuId.DiffEditorViewSubmenu,
 		title: localize2({ bundle: 'ash.workbench', key: 'diffView' }, 'Diff View'),
-		when: diffEditorActive,
+		when,
 		group: '1_diff',
 		order: 10,
 	});
+}
+
+export function registerDiffEditorCommands(): void {
+	const diffEditorActive = ActiveEditorContext.isEqualTo(DIFF_EDITOR_ID);
+	registerDiffEditorViewMenu(diffEditorActive);
 	registerAction2(class ToggleDiffLayoutAction extends Action2 {
 		constructor() { super({ id: TOGGLE_DIFF_SIDE_BY_SIDE, title: localize2({ bundle: 'ash.workbench', key: 'command.ToggleDiffLayoutAction' }, 'Toggle Inline Diff View'), f1: true }); }
 		override run(accessor: ServicesAccessor): Promise<void> {
@@ -67,10 +71,11 @@ export function registerDiffEditorCommands(): void {
 				super({
 					id,
 					title,
-					f1: true,
-					precondition: diffEditorActive,
 					toggled,
-					menu: { id: MenuId.DiffEditorViewSubmenu, group: '1_view', order },
+					menu: [
+						{ id: MenuId.DiffEditorViewSubmenu, group: '1_view', order },
+						{ id: MenuId.CommandPalette, when: diffEditorActive },
+					],
 				});
 			}
 			override run(accessor: ServicesAccessor, context?: unknown): Promise<void> {

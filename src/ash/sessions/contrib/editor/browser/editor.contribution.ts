@@ -22,6 +22,7 @@ import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorPar
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Menus } from '../../../browser/menus.js';
+import { SessionsCategories } from '../../../common/categories.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopLayoutController, IDesktopLayoutContext } from '../../layout/browser/desktopLayoutController.js';
 import { registerAddTabActions } from './addTabActions.js';
@@ -371,7 +372,9 @@ export function registerAddFileAsContextAction(sessions: SessionsPart) {
 			super({
 				id: 'workbench.action.agentSessions.addFileAsContext',
 				title: localize2({ bundle: 'ash.workbench', key: 'sessions.editor.addFileAsContext' }, 'Add File as Context'),
+				category: SessionsCategories.Sessions,
 				icon: Lxicon.paperclip,
+				f1: true,
 				precondition: when,
 				menu: [
 					{ id: Menus.SessionsEditorTitle, when, group: 'navigation', order: 100 },
