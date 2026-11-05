@@ -1558,7 +1558,7 @@
     "sessions.project.folderSelected": "项目文件夹：{0}",
     "sessions.project.unavailable": "此项目不可用。请选择其他项目。",
     "sessions.code.workspaceRequired": "请先选择项目，再发送消息。",
-    "sessions.code.workspaceRequiredHelp": "在代码模式中，请先选择项目，再发送消息。选择项目时仍可编辑草稿。首次发送会将对话保存在侧栏对应的项目下。要查找没有文件夹的旧对话，请切换到聊天模式并查看 Ash 对话列表。",
+    "sessions.code.workspaceRequiredHelp": "在代码模式中，新对话需要先选择项目才能发送消息。选择项目时仍可编辑草稿。首次发送会将对话保存在侧栏对应的项目下。已保存的 Ash 对话可以在代码模式或 IDE 中继续，包括没有文件夹的对话。",
     "sessions.list.searchEmpty": "没有匹配的会话。",
     "sessions.picker.other": "其他会话",
     "sessions.notification.title": "会话：{0}",

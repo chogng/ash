@@ -31,6 +31,88 @@ function observeDetails(): void {
 	};
 }
 
+test.describe('Saved conversations shared with the IDE', () => {
+	test.use({ electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN' } });
+
+	test('IDE and Code continue the same conversation without an execution folder', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, testWorkspace }) => {
+		const title = 'Shared folderless conversation';
+		const model = { provider: 'custom-shared-conversation-fixture', model: 'shared-conversation-model' };
+		let replies = 0;
+		await using server = createServer((request, response) => {
+			if (request.method === 'GET') {
+				response.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ data: [{ id: model.model }] }));
+				return;
+			}
+			const reply = { id: `shared-reply-${++replies}`, choices: [{ delta: { content: `Shared reply ${replies}` }, finish_reason: 'stop' }] };
+			response.writeHead(200, { 'Content-Type': 'text/event-stream' }).end(`data: ${JSON.stringify(reply)}\n\ndata: [DONE]\n\n`);
+		});
+		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		const address = server.address();
+		if (!address || typeof address === 'string') throw new Error('Shared conversation fixture has no port');
+		const { client, close } = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+		let session: Session;
+		try {
+			const config = await client.request(APP_SERVER_METHODS['config/read'], {});
+			await client.request(APP_SERVER_METHODS['provider/configure'], {
+				commandId: 'shared-conversation-provider', expectedRevision: config.revision,
+				config: {
+					connection: model.provider, provider: model.provider, baseUrl: `http://127.0.0.1:${address.port}/v1`,
+					custom: { name: 'Shared conversation fixture', protocol: 'chatCompletions', order: 0, contextWindow: 272_000 },
+					modelContext: { [model.model]: { contextWindow: 272_000 } },
+				},
+			});
+			await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: model.provider, apiKey: 'isolated-fixture-key' });
+			({ session } = await client.request(APP_SERVER_METHODS['session/create'], {
+				commandId: 'shared-folderless-conversation', title, agent: { type: 'default' }, executionTarget: null,
+			}));
+		} finally {
+			await close();
+		}
+		await enableFixtureModel(workbench, model, 'zh-CN');
+		const send = async (page: Page, chat: ReturnType<Page['locator']>, prompt: string, reply: string): Promise<void> => {
+			await chat.locator('.ash-chat-input-model-action').press('ArrowDown');
+			const picker = page.getByRole('dialog', { name: '选择聊天模型', exact: true });
+			const auto = picker.getByRole('switch', { name: '自动', exact: true });
+			if (await auto.isChecked()) await auto.press('Space');
+			const search = picker.getByRole('combobox');
+			await search.fill(model.model);
+			await expect(picker.getByRole('menuitemradio')).toHaveCount(1);
+			await search.press('Enter');
+			const editor = new Editor(chat);
+			await editor.input.focus();
+			await editor.waitForTypeInEditor(prompt);
+			await page.keyboard.press('Enter');
+			await expect(chat.locator('.ash-chat-item-agentMessage').last()).toContainText(reply);
+		};
+		const threadId = session.threads[0].threadId;
+		const row = `[data-item="session:${session.sessionId}"]`;
+		await workbench.quickaccess.runCommand('workbench.action.chat.focusAgentSessionsViewer');
+		await workbench.page.locator(`.ash-chat-sessions-sidebar ${row}`).click();
+		const ideChat = workbench.page.locator('.ash-chat-view-pane .ash-chat:visible');
+		await expect(ideChat).toHaveAttribute('data-session-id', session.sessionId);
+		await expect(ideChat).toHaveAttribute('data-thread-id', threadId);
+		await send(workbench.page, ideChat, 'Sent from IDE', 'Shared reply 1');
+
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+		await page.locator(`.ash-sessions-list ${row} .ash-sessions-list-item`).press('Enter');
+		const codeChat = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		await expect(codeChat).toHaveAttribute('data-session-id', session.sessionId);
+		await expect(codeChat).toHaveAttribute('data-thread-id', threadId);
+		await expect(codeChat).toContainText('Sent from IDE');
+		await expect(codeChat).toContainText('Shared reply 1');
+		await send(page, codeChat, 'Sent from Code', 'Shared reply 2');
+		await expect(ideChat).toContainText('Sent from Code');
+		await expect(ideChat).toContainText('Shared reply 2');
+
+		await new Editor(codeChat).input.press('Alt+F1');
+		await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/已保存的 Ash 对话可以在代码模式或 IDE 中继续，包括没有文件夹的对话。/u);
+		await page.keyboard.press('Escape');
+		await new QuickAccess(page).runCommand('sessions.showSessionsPicker');
+		await expect(page.getByRole('option').filter({ hasText: title })).toBeVisible();
+	});
+});
+
 for (const locale of ['en', 'zh-CN']) {
 	test(`Code sidebar scrolls sessions under a fixed header in ${locale}`, { tag: ['@electron-app-server'] }, async ({ application, target, workbench, restartWorkbench, testWorkspace }) => {
 		if (locale === 'zh-CN') {

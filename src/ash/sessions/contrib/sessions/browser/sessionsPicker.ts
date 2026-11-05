@@ -3,19 +3,19 @@ import { localize } from '../../../../nls.js';
 import type { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { sessionManagementLabel } from '../../../browser/sessionManagementLabels.js';
 import { getRecencyEntryKey, type SessionRecencyEntry } from '../../../services/sessions/browser/sessionsRecencyHistory.js';
-import { chatExecutionWorkspace, type ISession, type SessionId, type ThreadId } from '../../../services/sessions/common/session.js';
+import type { ISession, SessionId, ThreadId } from '../../../services/sessions/common/session.js';
 
 export interface ISessionPickItem extends IQuickPickItem {
 	readonly sessionId: SessionId;
 	readonly threadId: ThreadId;
 }
 
-export function groupSessionsForPicker(sessions: readonly ISession[], history: readonly SessionRecencyEntry[], getLastViewedAt: (entry: SessionRecencyEntry) => number | undefined, active?: SessionRecencyEntry, workspaceRequired = false) {
+export function groupSessionsForPicker(sessions: readonly ISession[], history: readonly SessionRecencyEntry[], getLastViewedAt: (entry: SessionRecencyEntry) => number | undefined, active?: SessionRecencyEntry) {
 	const visits = new Map(history.map((entry, index) => [getRecencyEntryKey(entry), index]));
 	const activeKey = active && getRecencyEntryKey(active);
 	const items = sessions.flatMap(session => {
 		if (session.status !== 'active') return [];
-		const threads = session.chats.filter(thread => thread.status === 'active' && (!workspaceRequired || chatExecutionWorkspace(session, thread)));
+		const threads = session.chats.filter(thread => thread.status === 'active');
 		return threads.map((thread, index) => {
 			const management = thread.management ?? (thread.origin.type === 'root' ? session.management : undefined);
 			const item: ISessionPickItem = {

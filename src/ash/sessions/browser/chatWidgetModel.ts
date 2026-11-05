@@ -225,19 +225,15 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private get workspaceRequiredMessage(): string | undefined {
-		if (this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) !== 'code') return undefined;
-		const selection = this.selection;
-		if (selection.kind === 'untitled' && !selection.session.forkSource) {
-			const workspace = selection.session.workspace;
-			const requiresProject = !selection.session.providerId || selection.session.providerId === LOCAL_AGENT_HOST_PROVIDER_ID;
-			if ((!requiresProject || selection.session.projectId)
-				&& workspace.type !== 'current' && (workspace.type !== 'multiple' || workspace.folders.length)) return undefined;
+		if (this.selection.kind === 'session' || this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) !== 'code') return undefined;
+		const { forkSource, workspace, providerId, projectId } = this.selection.session;
+		if (forkSource) {
+			const session = this.sessionService.sessions.find(candidate => candidate.sessionId === forkSource.sessionId);
+			if (session && chatExecutionWorkspace(session, session.chats.find(chat => chat.threadId === forkSource.threadId))) return undefined;
 		} else {
-			const active = selection.kind === 'session' ? selection.active : undefined;
-			const source = selection.kind === 'untitled' ? selection.session.forkSource : undefined;
-			const session = active?.session ?? this.sessionService.sessions.find(candidate => candidate.sessionId === source?.sessionId);
-			const threadId = active?.threadId ?? source?.threadId;
-			if (session && chatExecutionWorkspace(session, session.chats.find(chat => chat.threadId === threadId))) return undefined;
+			const requiresProject = !providerId || providerId === LOCAL_AGENT_HOST_PROVIDER_ID;
+			if ((!requiresProject || projectId)
+				&& workspace.type !== 'current' && (workspace.type !== 'multiple' || workspace.folders.length)) return undefined;
 		}
 		return localize({ bundle: 'ash.sessions', key: 'sessions.code.workspaceRequired' }, 'Choose a project before sending.');
 	}

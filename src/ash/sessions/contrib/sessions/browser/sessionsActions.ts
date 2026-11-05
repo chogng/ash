@@ -7,8 +7,6 @@ import { Action2, registerAction2 } from '../../../../platform/actions/common/ac
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
-import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { IsSessionsWindowContext } from '../../../../workbench/common/contextkeys.js';
@@ -27,9 +25,8 @@ function showSessionsPicker(accessor: ServicesAccessor): void {
 	picker.ariaLabel = picker.placeholder;
 	picker.sortByLabel = false;
 	const selected = sessions.activeSelection;
-	const workspaceRequired = accessor.getOptional(IContextKeyService)?.getValue(SessionsWorkspaceModeContext.key) === 'code';
 	const groups = groupSessionsForPicker(catalog.sessions, sessions.recentSessions, entry => sessions.getLastViewedAt(entry), selected?.kind === 'session'
-		? { sessionId: selected.active.session.sessionId, threadId: selected.active.threadId } : undefined, workspaceRequired);
+		? { sessionId: selected.active.session.sessionId, threadId: selected.active.threadId } : undefined);
 	picker.items = [
 		...groups.needsInput,
 		...(groups.unread.length ? [

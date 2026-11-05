@@ -1,10 +1,10 @@
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { autorun, observableValue, transaction, type IReader } from '../../../../base/common/observable.js';
+import { autorun, transaction, type IReader } from '../../../../base/common/observable.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { chatExecutionWorkspace, type IUntitledChatSession, type SessionWorkspaceSelection, type SessionId, type ThreadId } from '../common/session.js';
+import type { IUntitledChatSession, SessionWorkspaceSelection, SessionId, ThreadId } from '../common/session.js';
 import { ISessionsManagementService } from '../common/sessionsManagement.js';
 import { WELCOME_COMPLETE_KEY } from '../../../common/welcome.js';
 import { ICustomViewService } from '../../customView/browser/customViewService.js';
@@ -51,12 +51,12 @@ export class SessionsService extends Disposable implements ISessionsService {
 	private readonly sessionService: ISessionsManagementService;
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	private readonly slots = new VisibleSessions(reference => this.resolve(reference));
-	private readonly workspaceMode = observableValue<'chat' | 'code'>(this, 'chat');
+	private workspaceMode: 'chat' | 'code' = 'chat';
 	private readonly recency: SessionsRecencyHistory;
 	private readonly closedItems = new ClosedItemHistory();
 	private readonly navigation = new SessionsNavigation<NavigationEntry>(
 		navigationKey,
-		entry => entry.kind === 'customView' || this.canShow(this.resolve(entry)),
+		entry => entry.kind === 'customView' || this.resolve(entry) !== undefined,
 		entry => this.openHistoryEntry(entry),
 		() => this._onDidChange.fire(),
 	);
@@ -110,26 +110,15 @@ export class SessionsService extends Disposable implements ISessionsService {
 	get canNavigateForward(): boolean { return this.navigation.canGoForward; }
 
 	getSelection(reader?: IReader): SessionsSelection {
-		const selection = this.slots.read(reader);
-		if (this.workspaceMode.read(reader) !== 'code') return selection;
-		const visibleSelections = selection.visibleSelections.filter(isCodeSelection);
-		const activeSelection = selection.activeSelection && isCodeSelection(selection.activeSelection)
-			? selection.activeSelection : visibleSelections[0];
-		return { visibleSelections, activeSelection };
+		return this.slots.read(reader);
 	}
 
 	setWorkspaceMode(mode: 'chat' | 'code'): void {
-		if (this.workspaceMode.get() === mode) return;
-		const previous = this.activeSelection;
+		if (this.workspaceMode === mode) return;
+		// Switching shells supersedes pending opens without changing the visible conversations.
+		this.workspaceMode = mode;
 		this._navigationRevision++;
-		this.workspaceMode.set(mode, undefined);
-		const active = this.activeSelection;
-		if (active && selectionKey(active) !== selectionKey(previous)) this.updateManagementSelection(referenceForSelection(active));
 		this._onDidChange.fire();
-	}
-
-	private canShow(selection: SessionsViewSelection | undefined): selection is SessionsViewSelection {
-		return !!selection && (this.workspaceMode.get() !== 'code' || isCodeSelection(selection));
 	}
 
 	async initialize(): Promise<void> {
@@ -191,7 +180,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 			await this.sessionService.prepareThread(sessionId, threadId);
 			preparedAt = performance.now();
 			if (this.isDisposed) throw canceled();
-			if (revision !== this._navigationRevision || !this.canShow(this.resolve({ kind: 'session', sessionId, threadId }))) return;
+			if (revision !== this._navigationRevision || !this.resolve({ kind: 'session', sessionId, threadId })) return;
 			const sideThread = sideBySide && this.slots.find(reference =>
 				reference.kind === 'session' && reference.sessionId === sessionId && reference.threadId !== threadId);
 			this.activate({ kind: 'session', sessionId, threadId, ...(sideThread ? { sideThread: true } : {}) }, sideBySide ? 'add' : 'open');
@@ -212,7 +201,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 	}
 	activateSelection(selection: SessionsViewSelection, options?: { readonly source: 'restore'; }): void { this.activate(referenceForSelection(selection), 'focus', options?.source === 'restore' ? 'automatic' : 'explicit'); }
 	closeVisibleSelection(selection: SessionsViewSelection): void {
-		const removed = this.slots.remove(selection, this.activeSelection, candidate => this.canShow(candidate));
+		const removed = this.slots.remove(selection, this.activeSelection);
 		if (!removed) {
 			return;
 		}
@@ -229,8 +218,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		if (wasActive && replacement) this.activate(replacement, 'focus', 'automatic');
 		else if (wasActive) {
 			const session = this.sessionService.createUntitledSession();
-			// A Code draft can become active while a Chat-only slot is still retained.
-			this.select({ kind: 'untitled', session }, this.workspaceMode.get() === 'code' ? 'add' : 'open', 'automatic');
+			this.select({ kind: 'untitled', session }, 'open', 'automatic');
 		}
 		this.slots.publish(this.catalogUnavailable);
 		this.saveState();
@@ -248,10 +236,10 @@ export class SessionsService extends Disposable implements ISessionsService {
 			}
 			return;
 		}
-		if (!this.canShow(this.resolve(reference))) return;
+		if (!this.resolve(reference)) return;
 		const revision = ++this._navigationRevision;
 		await this.sessionService.prepareThread(reference.sessionId, reference.threadId);
-		if (this.isDisposed || this._navigationRevision !== revision || !this.canShow(this.resolve(reference))) {
+		if (this.isDisposed || this._navigationRevision !== revision || !this.resolve(reference)) {
 			return;
 		}
 		this.activate(reference, replacedBy ? { index, replacedBy: this.materializedReference(replacedBy) } : index);
@@ -339,11 +327,10 @@ export class SessionsService extends Disposable implements ISessionsService {
 	private activate(reference: SessionsViewReference, mode: SessionPlacement = 'open', intent: 'explicit' | 'automatic' | 'history' = 'explicit'): void {
 		// Ordinary navigation to an already visible side Thread keeps that slot.
 		const visible = this.slots.find(candidate => referenceKey(candidate) === referenceKey(reference)) ?? reference;
-		const selection = this.resolve(visible);
-		if (!this.canShow(selection)) return;
+		if (!this.resolve(visible)) return;
 		this.updateManagementSelection(visible);
 		const current = this.resolve(visible);
-		if (this.canShow(current)) this.select(current, mode, intent);
+		if (current) this.select(current, mode, intent);
 	}
 
 	private updateManagementSelection(reference: SessionsViewReference): void {
@@ -361,12 +348,6 @@ export class SessionsService extends Disposable implements ISessionsService {
 		const thread = session?.chats.find(candidate => candidate.threadId === reference.threadId && candidate.status === 'active');
 		return session && thread ? { kind: 'session', active: { session, threadId: thread.threadId }, ...(reference.sideThread ? { sideThread: true } : {}) } : undefined;
 	}
-}
-
-function isCodeSelection(selection: SessionsViewSelection): boolean {
-	if (selection.kind === 'untitled') return true;
-	const { session, threadId } = selection.active;
-	return !!chatExecutionWorkspace(session, session.chats.find(chat => chat.threadId === threadId));
 }
 
 function activeSelection(sessionService: ISessionsManagementService): SessionsViewSelection | undefined {

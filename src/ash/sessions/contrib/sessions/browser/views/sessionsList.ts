@@ -24,7 +24,7 @@ import { IGitHubService } from '../../../github/browser/githubService.js';
 import { getPullRequestLabel } from '../../../github/common/types.js';
 import { getHighestPriorityPullRequestIcon } from '../../../../../workbench/common/chatPullRequest.js';
 import { sessionManagementLabel } from '../../../../browser/sessionManagementLabels.js';
-import { chatExecutionWorkspace, type ISession, type SessionManagementInfo } from '../../../../services/sessions/common/session.js';
+import type { ISession, SessionManagementInfo } from '../../../../services/sessions/common/session.js';
 import type { ThemeIcon } from '../../../../../base/common/themables.js';
 import { colorCssVariable } from '../../../../../platform/theme/common/colorUtils.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
@@ -743,8 +743,7 @@ export class SessionsList extends DomWidget {
 		const projectNames = new Map(this.projects.flatMap(project => project.sessionIds.map(id => [id, project.name] as const)));
 		for (const session of catalog) {
 			const current = activeSelection?.kind === 'session' && activeSelection.active.session.sessionId === session.sessionId ? activeSelection.active : undefined;
-			const activeChats = session.chats.filter(chat => chat.status === 'active'
-				&& (this.mode !== 'code' || chatExecutionWorkspace(session, chat)));
+			const activeChats = session.chats.filter(chat => chat.status === 'active');
 			const thread = activeChats.find(chat => chat.threadId === session.sessionId)
 				?? activeChats.find(chat => chat.origin.type === 'root') ?? activeChats[0];
 			if (!thread) continue;

@@ -261,7 +261,7 @@ test('Sessions view service replaces visible sessions on open and Back/Forward n
 	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-2:thread-2']);
 });
 
-test('Code omits directoryless conversations from open panes and history while Chat can still reopen them', async () => {
+test('Code retains and reopens directoryless conversations through session navigation', async () => {
 	const legacy = session('legacy', 'legacy-root');
 	const bound = { ...session('bound', 'bound-root'), workspace: { authorityId: 'local', root: '/workspace' } };
 	using sessions = new FakeSessionService([legacy, bound]);
@@ -273,19 +273,18 @@ test('Code omits directoryless conversations from open panes and history while C
 	assert.equal(selectionId(view.activeSelection), 'session:legacy:legacy-root');
 
 	view.setWorkspaceMode('code');
-	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:bound:bound-root']);
+	assert.ok(view.visibleSelections.some(selection => selectionId(selection) === 'session:legacy:legacy-root'));
+	assert.equal(selectionId(view.activeSelection), 'session:legacy:legacy-root');
+	view.openSession('bound', 'bound-root');
 	assert.equal(selectionId(view.activeSelection), 'session:bound:bound-root');
 	await view.openThread('legacy', 'legacy-root');
-	view.openSession('legacy', 'legacy-root');
+	assert.equal(selectionId(view.activeSelection), 'session:legacy:legacy-root');
 	await view.openPreviousSession();
 	assert.equal(selectionId(view.activeSelection), 'session:bound:bound-root');
-	assert.equal(view.canNavigateForward, false);
-	view.closeVisibleSelection(view.activeSelection!);
-	assert.equal(view.activeSelection?.kind, 'untitled');
+	await view.openNextSession();
+	assert.equal(selectionId(view.activeSelection), 'session:legacy:legacy-root');
 
 	view.setWorkspaceMode('chat');
-	assert.ok(view.visibleSelections.some(selection => selectionId(selection) === 'session:legacy:legacy-root'));
-	view.openSession('legacy', 'legacy-root');
 	assert.equal(selectionId(view.activeSelection), 'session:legacy:legacy-root');
 });
 

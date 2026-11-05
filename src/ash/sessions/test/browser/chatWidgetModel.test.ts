@@ -739,7 +739,7 @@ test('Code keeps a directoryless draft editable and blocks sending and voice unt
 	}
 });
 
-test('Code can reopen directoryless history and send after the session folder is set', async () => {
+test('Code reopens and sends to the original directoryless conversation', async () => {
 	const f = fixture('Code');
 	using resources = f.resources;
 	const model = f.model;
@@ -747,14 +747,11 @@ test('Code can reopen directoryless history and send after the session folder is
 	await model.initialize();
 	await model.selectThread({ session: { ...f.session, workspace: null }, threadId: 'A' });
 	assert.ok(model.thread);
-	assert.equal(model.inputState.inputBlocked, true);
-	await assert.rejects(model.send('Continue'), /Choose a project/);
-	assert.equal(f.starts.length, 0);
-
-	await model.selectThread({ session: f.session, threadId: 'A' });
 	assert.notEqual(model.inputState.inputBlocked, true);
+	assert.deepEqual(await model.prepareConversation(), { sessionId: f.session.sessionId, threadId: 'A' });
 	await model.send('Continue');
 	assert.equal(f.starts.length, 1);
+	assert.equal(f.starts[0].threadId, 'A');
 });
 
 test('Ash Chat can continue a directoryless conversation using the shared composer model', async () => {
@@ -768,8 +765,7 @@ test('Ash Chat can continue a directoryless conversation using the shared compos
 	await model.initialize();
 
 	mode.set('code');
-	assert.equal(model.inputState.inputBlocked, true);
-	await assert.rejects(model.send('Continue'), /Choose a project/);
+	assert.notEqual(model.inputState.inputBlocked, true);
 	mode.set('chat');
 	assert.notEqual(model.inputState.inputBlocked, true);
 	await model.send('Continue');

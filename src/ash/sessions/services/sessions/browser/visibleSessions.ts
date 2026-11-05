@@ -82,7 +82,7 @@ export class VisibleSessions {
 		return replaced;
 	}
 
-	remove(selection: SessionsViewSelection, active: SessionsViewSelection | undefined, canShow: (selection: SessionsViewSelection | undefined) => boolean): { readonly index: number; readonly wasActive: boolean; readonly replacement: SessionsViewReference | undefined; } | undefined {
+	remove(selection: SessionsViewSelection, active: SessionsViewSelection | undefined): { readonly index: number; readonly wasActive: boolean; readonly replacement: SessionsViewReference | undefined; } | undefined {
 		const key = sessionViewSelectionKey(selection);
 		const index = this.references.findIndex(reference => visibilityKey(reference) === key);
 		if (index < 0) {
@@ -93,7 +93,7 @@ export class VisibleSessions {
 		if (wasActive) {
 			this.preferred = undefined;
 		}
-		const isVisible = (reference: SessionsViewReference) => canShow(this.resolve(reference));
+		const isVisible = (reference: SessionsViewReference) => this.resolve(reference) !== undefined;
 		const replacement = this.references.slice(index).find(isVisible)
 			?? this.references.slice(0, index).reverse().find(isVisible);
 		return { index, wasActive, replacement };
