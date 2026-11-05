@@ -38,6 +38,8 @@ export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
 	readonly scrolling?: ListScrolling;
 	readonly smoothScrolling?: boolean;
 	readonly indent?: number;
+	/** Leading space before the depth-based indent. Defaults to 8px. */
+	readonly defaultIndent?: number;
 	readonly indentGuides?: TreeIndentGuides;
 	readonly twistieAdditionalCssClass?: (element: TNode) => string | undefined;
 	/** Whether the second click of a double-click gesture toggles expansion. Defaults to true. */
@@ -53,6 +55,7 @@ export interface AbstractTreeOptions<T, TNode extends AbstractTreeNode<T>> {
 	readonly enableStickyScroll?: boolean;
 	readonly stickyScrollMaxItemCount?: number;
 	readonly renderElement: (element: TNode, index: number) => HTMLElement;
+	readonly rowClassName?: (element: TNode) => string | undefined;
 	readonly updateElement?: (element: TNode, index: number, content: HTMLElement) => void;
 	readonly renderTwistie?: (element: TNode, state: TreeTwistieState, container: HTMLSpanElement) => void;
 	readonly reuseRows?: boolean;
@@ -83,6 +86,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	private readonly findController: TreeFindController<T, TNode> | undefined;
 	private readonly stickyContainer: HTMLDivElement | undefined;
 	private readonly renderedElements = new WeakMap<HTMLDivElement, T>();
+	private readonly rowClassNames = new WeakMap<HTMLDivElement, string>();
 	private sourceItems: readonly TNode[] = [];
 	private findCandidatesProvider: (() => readonly TNode[]) | undefined;
 	private findCandidates: readonly TNode[] | undefined;
@@ -107,6 +111,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		this.options = options;
 		this.twistieAdditionalCssClass = options.twistieAdditionalCssClass;
 		validateIndent(options.indent);
+		validateDefaultIndent(options.defaultIndent);
 		this.findController = options.keyboardNavigationLabelProvider ? new TreeFindController({ labelProvider: options.keyboardNavigationLabelProvider, mode: options.findMode ?? 'highlight', matchType: options.findMatchType ?? 'fuzzy' }) : undefined;
 		this.list = this._register(new List<TNode>(container, {
 			styles: options.styles,
@@ -154,6 +159,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 			`ash-tree-selection-${options.selectionPresentation ?? 'active'}`,
 		);
 		if (options.indent !== undefined) this.element.style.setProperty('--ash-tree-indent', `${options.indent}px`);
+		if (options.defaultIndent !== undefined) this.element.style.setProperty('--ash-list-row-padding-start', `${options.defaultIndent}px`);
 		if (options.enableStickyScroll) {
 			this.stickyContainer = h(this.element.ownerDocument, 'div');
 			this.stickyContainer.className = 'ash-tree-sticky-container';
@@ -184,10 +190,12 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	}
 
 	get items(): readonly TNode[] { return this.list.items; }
-	public updateOptions(options: Pick<AbstractTreeOptions<T, TNode>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'>): void {
+	public updateOptions(options: Pick<AbstractTreeOptions<T, TNode>, 'indent' | 'defaultIndent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'>): void {
 		validateIndent(options.indent);
+		validateDefaultIndent(options.defaultIndent);
 		this.list.updateOptions(options);
 		if (options.indent !== undefined) this.element.style.setProperty('--ash-tree-indent', `${options.indent}px`);
+		if (options.defaultIndent !== undefined) this.element.style.setProperty('--ash-list-row-padding-start', `${options.defaultIndent}px`);
 		if (options.indentGuides !== undefined) {
 			this.element.classList.remove('ash-tree-indent-guides-none', 'ash-tree-indent-guides-onHover', 'ash-tree-indent-guides-always');
 			this.element.classList.add(`ash-tree-indent-guides-${options.indentGuides}`);
@@ -393,6 +401,9 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 	private renderRow(node: TNode, row: HTMLDivElement, index: number): HTMLElement {
 		const document = row.ownerDocument;
 		row.classList.add('ash-tree-row');
+		// List resets the class list when it allocates a row from its cache.
+		this.rowClassNames.delete(row);
+		this.updateRowClassName(node, row);
 		row.dataset.treeId = node.id;
 		row.classList.toggle('collapsible', node.collapsible);
 		row.classList.toggle('expanded', node.collapsible && this.isExpanded(node));
@@ -402,7 +413,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		row.dataset.treeDepth = String(node.depth);
 		row.dataset.treeExpanded = String(node.collapsible && !node.collapsed);
 		row.dataset.treeCollapsible = String(node.collapsible);
-		const inner = h(document, 'span');
+		const inner = h(document, 'div');
 		inner.className = 'ash-tree-row-inner';
 		const indent = h(document, 'span');
 		indent.className = 'ash-tree-indent';
@@ -414,7 +425,7 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		const twistieState = { collapsible: node.collapsible, expanded: node.collapsible && !node.collapsed };
 		if (this.options.renderTwistie) this.options.renderTwistie(node, twistieState, twistie);
 		else if (twistieState.collapsible) appendIcon(twistieState.expanded ? Lxicon.chevronDown : Lxicon.chevronRight, twistie);
-		const contents = h(document, 'span');
+		const contents = h(document, 'div');
 		contents.className = 'ash-tree-contents';
 		contents.append(this.options.renderElement(node, index));
 		this.renderedElements.set(row, node.element);
@@ -426,13 +437,14 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		const elementChanged = this.renderedElements.get(row) !== node.element;
 		if (elementChanged) {
 			this.options.onDidRemoveRow?.(row);
-			const contents = row.querySelector<HTMLSpanElement>(':scope > .ash-tree-row-inner > .ash-tree-contents');
+			const contents = row.querySelector<HTMLDivElement>(':scope > .ash-tree-row-inner > .ash-tree-contents');
 			contents?.replaceChildren(this.options.renderElement(node, index));
 			this.renderedElements.set(row, node.element);
 		} else if (this.options.updateElement) {
 			const content = row.querySelector<HTMLElement>(':scope > .ash-tree-row-inner > .ash-tree-contents')?.firstElementChild;
 			if (content) this.options.updateElement(node, index, content as HTMLElement);
 		}
+		this.updateRowClassName(node, row);
 		row.classList.toggle('collapsible', node.collapsible);
 		row.classList.toggle('expanded', node.collapsible && !node.collapsed);
 		row.classList.toggle('collapsed', node.collapsible && node.collapsed);
@@ -456,6 +468,19 @@ export class AbstractTree<T, TNode extends AbstractTreeNode<T>> extends Disposab
 		if (indent) this.renderIndentGuides(node, indent);
 		const depth = String(node.depth);
 		if (row.dataset.treeDepth !== depth) row.dataset.treeDepth = depth;
+	}
+
+	private updateRowClassName(node: TNode, row: HTMLDivElement): void {
+		const rowClassName = this.options.rowClassName;
+		if (!rowClassName) return;
+		const previous = this.rowClassNames.get(row);
+		const next = rowClassName(node);
+		if (previous === next) return;
+		if (previous) row.classList.remove(previous);
+		if (next) {
+			row.classList.add(next);
+			this.rowClassNames.set(row, next);
+		} else this.rowClassNames.delete(row);
 	}
 
 	private onListPointer(node: TNode, browserEvent: MouseEvent): void {
@@ -663,8 +688,13 @@ function validateIndent(indent: number | undefined): void {
 	if (indent !== undefined && indent !== 0 && (!Number.isFinite(indent) || indent < 4 || indent > 40)) throw new RangeError('Tree indent must be zero or between 4 and 40 pixels');
 }
 
+function validateDefaultIndent(indent: number | undefined): void {
+	if (indent !== undefined && (!Number.isFinite(indent) || indent < 0)) throw new RangeError('Tree default indent must be a non-negative finite number');
+}
+
 function treeRowPadding(level: number): string {
-	return level === 1 ? '8px' : `calc(8px + ${Array.from({ length: level - 1 }, () => 'var(--ash-tree-indent, 8px)').join(' + ')})`;
+	const defaultIndent = 'var(--ash-list-row-padding-start, 8px)';
+	return level === 1 ? defaultIndent : `calc(${defaultIndent} + ${Array.from({ length: level - 1 }, () => 'var(--ash-tree-indent, 8px)').join(' + ')})`;
 }
 
 interface TreeFindControllerOptions<T, TNode extends AbstractTreeNode<T>> {

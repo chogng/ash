@@ -1,13 +1,13 @@
 import type { Event } from '../../../common/event.js';
 import { Disposable } from '../../../common/lifecycle.js';
 import { ObjectTreeModel, type ObjectTreeDefaultCollapseState, type ObjectTreeElement, type ObjectTreeIdentityProvider, type ObjectTreeModelChangeEvent, type ObjectTreeModelCollapseStateChangeEvent, type ObjectTreeNode } from './objectTreeModel.js';
-import type { TreeFilter, TreeSorter } from './tree.js';
+import type { TreeElement, TreeFilter, TreeSorter } from './tree.js';
 
 export interface CompressibleTreeElement<T> {
 	readonly element: T;
 	readonly children?: readonly CompressibleTreeElement<T>[];
 	readonly collapsible?: boolean;
-	readonly collapsed?: boolean;
+	readonly collapsed?: TreeElement<T>['collapsed'];
 	readonly incompressible?: boolean;
 }
 

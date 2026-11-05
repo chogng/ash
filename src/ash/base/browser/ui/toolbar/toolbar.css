@@ -48,6 +48,22 @@
 	padding: 0;
 }
 
+.ash-toolbar.ash-toolbar-inset-icon-actions
+	> .ash-action-view-item.icon
+	> .ash-button-quiet {
+	/* Inset the button paint without reducing its hit area. */
+	box-sizing: border-box;
+	border: var(--ash-spacing-size20) solid transparent;
+	border-radius: calc(
+		var(--ash-button-border-radius, var(--ash-cornerRadius-small)) +
+			var(--ash-spacing-size20)
+	);
+	background-clip: padding-box;
+	outline-offset: calc(
+		-1 * (var(--ash-strokeThickness) + var(--ash-spacing-size20))
+	);
+}
+
 .ash-toolbar
 	.ash-action-view-item.icon
 	:where(.ash-button:not(.ash-button-primary))

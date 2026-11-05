@@ -560,7 +560,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(locale === 'en' ? /Use New at the top of the sidebar to start a chat/u : /使用侧栏顶部的“新建”开始聊天/u);
 			await page.keyboard.press('Escape');
 			await testInfo.attach(`chatgpt-entry-${locale}`, { body: await page.screenshot(), contentType: 'image/png' });
-			const pinned = history.locator('[data-group="pinned"] .ash-sessions-list-section-toggle');
+			const pinned = history.locator('[data-section="pinned"] .ash-sessions-list-section-toggle');
 			await pinned.click();
 			await expect(pinned).toHaveAttribute('aria-expanded', 'false');
 			const retainedHistory = await history.elementHandle();
@@ -611,7 +611,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await expect(restored.locator(entry.content)).toBeVisible();
 				const restoredHistory = restored.locator('.ash-chat-navigation');
 				await expect(restoredHistory).toBeVisible();
-				await expect(restoredHistory.locator('[data-group="pinned"] .ash-sessions-list-section-toggle')).toHaveAttribute('aria-expanded', 'false');
+				await expect(restoredHistory.locator('[data-section="pinned"] .ash-sessions-list-section-toggle')).toHaveAttribute('aria-expanded', 'false');
 				await expect(restoredHistory.getByRole('button', { name: 'First native history', exact: true })).toHaveAttribute('aria-current', 'page');
 				await restoredHistory.getByRole('button', { name: 'First native history', exact: true }).click();
 				await expect(restored.locator('.ash-chatgpt-widget')).toContainText('History one answer');

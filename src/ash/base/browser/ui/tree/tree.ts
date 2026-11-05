@@ -38,11 +38,18 @@ export interface TreeSorter<T> {
 	compare(left: T, right: T): number;
 }
 
+/** Apply an explicit collapse state when a tree replaces an existing node. */
+export enum ObjectTreeElementCollapseState {
+	Expanded = 'expanded',
+	Collapsed = 'collapsed',
+}
+
 export interface TreeElement<T> {
 	readonly element: T;
 	readonly children?: readonly TreeElement<T>[];
 	readonly collapsible?: boolean;
-	readonly collapsed?: boolean;
+	/** Booleans are defaults for new nodes. Explicit states also apply to retained nodes. */
+	readonly collapsed?: boolean | ObjectTreeElementCollapseState;
 }
 
 export interface TreeDataSource<TInput, T> {

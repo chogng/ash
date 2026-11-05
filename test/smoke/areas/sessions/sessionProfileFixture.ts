@@ -86,7 +86,20 @@ export async function connectProfile(application: PlaywrightApplication, web: We
 	} : await (application as Extract<PlaywrightApplication, { evaluate: unknown; }>).evaluate(({ app }) => ({
 		appPath: app.getAppPath(), resourcesPath: process.resourcesPath, electronExecutable: process.execPath,
 		isPackaged: app.isPackaged,
-		profileRoot: process.env.ASH_HOME!, sourceEnvironment: { PATH: process.env.PATH, HOME: process.env.HOME, SystemRoot: process.env.SystemRoot, ASH_RG_PATH: process.env.ASH_RG_PATH, ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH, ASH_USE_INMEMORY_SECRETSTORAGE: process.env.ASH_USE_INMEMORY_SECRETSTORAGE },
+		profileRoot: process.env.ASH_HOME!,
+		sourceEnvironment: {
+			PATH: process.env.PATH,
+			HOME: process.env.HOME,
+			SystemRoot: process.env.SystemRoot,
+			ASH_RG_PATH: process.env.ASH_RG_PATH,
+			ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH,
+			ASH_USE_INMEMORY_SECRETSTORAGE: process.env.ASH_USE_INMEMORY_SECRETSTORAGE,
+			// Select the running Desktop's backend, including its development generation.
+			ASH_RENDERER_URL: process.env.ASH_RENDERER_URL,
+			ASH_DEV_APP_SERVER_RELOAD: process.env.ASH_DEV_APP_SERVER_RELOAD,
+			ASH_DEV_APP_SERVER_GENERATION: process.env.ASH_DEV_APP_SERVER_GENERATION,
+			ASH_DEV_SUBSECOND: process.env.ASH_DEV_SUBSECOND,
+		},
 	}));
 	const { launcher } = createAppServerDaemonLauncher({ ...host, profileRoot: options.profileRoot ?? host.profileRoot, packageLocation: { appPath: host.appPath, resourcesPath: host.resourcesPath, isPackaged: host.isPackaged, platform: process.platform }, workspaceRoot, role: options.directoryGrantsHost ? 'workbench' : 'agents' });
 	let frames: ChildProcessJsonlTransport | undefined;

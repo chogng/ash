@@ -40,7 +40,7 @@ export interface MoreActionsPlacement {
 }
 
 /** Component-owned visual adaptation selected by a toolbar host. */
-export type ToolBarPresentation = 'default' | 'inherit-foreground';
+export type ToolBarPresentation = 'default' | 'inherit-foreground' | 'inset-icon-actions';
 
 /**
  * Presents primary actions inline, secondary actions in a menu, and pinned
@@ -91,6 +91,7 @@ export class ToolBar extends Disposable {
 		this.onDidChangeDropdownVisibility = this.actionBar.onDidChangeDropdownVisibility;
 		this._register(this.onDidChangeDropdownVisibility(visible => {
 			this.dropdownVisible = visible;
+			this.element.classList.toggle('ash-toolbar-menu-visible', visible);
 			if (!visible) this.layoutScheduler?.schedule();
 		}));
 		const ownerWindow = this.element.ownerDocument.defaultView;

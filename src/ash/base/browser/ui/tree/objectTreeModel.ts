@@ -1,18 +1,13 @@
 import { Emitter, type Event } from '../../../common/event.js';
 import { Disposable } from '../../../common/lifecycle.js';
 import { IndexTreeModel, type IndexTreeNode } from './indexTreeModel.js';
-import type { TreeFilter, TreeSorter, TreeVisibleSplice } from './tree.js';
+import type { TreeElement, TreeFilter, TreeSorter, TreeVisibleSplice } from './tree.js';
 
 export type ObjectTreeDefaultCollapseState = 'collapsed' | 'expanded';
 export type ObjectTreeModelChangeKind = 'structure' | 'collapse' | 'filter' | 'sort' | 'rerender';
 
 /** One structural entry supplied to `ObjectTreeModel`. */
-export interface ObjectTreeElement<T> {
-	readonly element: T;
-	readonly children?: readonly ObjectTreeElement<T>[];
-	readonly collapsible?: boolean;
-	readonly collapsed?: boolean;
-}
+export type ObjectTreeElement<T> = TreeElement<T>;
 
 export interface ObjectTreeIdentityProvider<T> {
 	getId(element: T): string;
@@ -88,7 +83,10 @@ export class ObjectTreeModel<TNode> extends Disposable {
 		return node === this.index.rootNode ? undefined : node as ObjectTreeNode<TNode> | undefined;
 	}
 	getElement(id: string): TNode | undefined { return this.getNode(id)?.element; }
-	getParent(id: string): ObjectTreeNode<TNode> | undefined { return this.getNode(id)?.parent; }
+	getParent(id: string): ObjectTreeNode<TNode> | undefined {
+		const parent = this.getNode(id)?.parent;
+		return parent === this.index.rootNode ? undefined : parent;
+	}
 
 	setChildren(children: readonly ObjectTreeElement<TNode>[]): void {
 		this.withChangeKind('structure', () => this.index.setChildren(this.prepareElements(children)));

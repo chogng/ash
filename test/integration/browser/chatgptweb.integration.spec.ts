@@ -181,8 +181,8 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	await page.setViewportSize({ width: 960, height: 300 });
 	await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=light');
 	const sidebar = page.locator('.ash-chat-navigation');
-	const headers = sidebar.locator('.ash-sessions-list-section-toggle');
-	await expect(headers).toHaveText(['置顶', '最近']);
+	const projectsHeader = sidebar.locator('[data-section="projects"]');
+	await expect(projectsHeader).toBeVisible();
 	await expect(sidebar.locator('[data-item="chatgpt:fixture-other"]')).toHaveCount(0);
 	const row = sidebar.locator('[data-item="chatgpt:fixture-chat"].ash-chat-navigation-row');
 	const sessionIcon = '[data-ash-icon-id="chat-session"]';
@@ -190,7 +190,7 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	await expect(row.locator(sessionIcon)).toBeVisible();
 	const item = row.locator('.ash-chat-navigation-item');
 	const actions = row.locator('.ash-chat-navigation-actions');
-	const recent = sidebar.locator('[data-group="recent"]');
+	const recent = sidebar.locator('[data-section="recent"]');
 	const pinnedHeader = sidebar.getByRole('button', { name: '置顶', exact: true });
 	const recentHeader = sidebar.getByRole('button', { name: '最近', exact: true });
 	await expect.poll(() => recent.evaluate(group => {
@@ -199,29 +199,36 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 		const [first, second] = treeRow.parentElement!.querySelectorAll('[data-parent-section="recent"]');
 		const a = first!.getBoundingClientRect();
 		const b = second!.getBoundingClientRect();
-		const previous = treeRow.previousElementSibling!
-			.querySelector('.ash-chat-navigation-row')!.getBoundingClientRect();
+		const previous = treeRow.previousElementSibling!.getBoundingClientRect();
 		return [header.height, a.height, a.top - header.bottom, b.top - a.bottom, header.top - previous.bottom, a.width - header.width];
 	})).toEqual([32, 32, 2, 2, 8, 0]);
 	await pinnedHeader.click();
 	await expect(pinnedHeader).toHaveAttribute('aria-expanded', 'false');
-	await expect.poll(async () => (await recentHeader.boundingBox())!.y - (await pinnedHeader.boundingBox())!.y).toBe(40);
+	await expect.poll(async () => {
+		const pinned = (await pinnedHeader.boundingBox())!;
+		const projects = (await projectsHeader.boundingBox())!;
+		const recent = (await recentHeader.boundingBox())!;
+		return [projects.y - pinned.y, recent.y - projects.y];
+	}).toEqual([40, 40]);
 	await pinnedHeader.click();
 	await expect(pinnedHeader).toHaveAttribute('aria-expanded', 'true');
 
+	const transparent = 'rgba(0, 0, 0, 0)';
+	const rowBackground = () => row.evaluate(element => getComputedStyle(element, '::before').backgroundColor);
+	const resting = await rowBackground();
 	await item.hover();
-	await expect(item).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-	const hovered = await item.evaluate(element => getComputedStyle(element).backgroundColor);
+	const hovered = await rowBackground();
+	expect(hovered).not.toBe(resting);
 	await expect(actions).toHaveCSS('opacity', '1');
-	await expect(item).toHaveCSS('background-color', hovered);
-	await expect(actions).toHaveCSS('background-color', hovered);
+	await expect(item).toHaveCSS('background-color', transparent);
+	await expect(actions).toHaveCSS('background-color', transparent);
 	await expect(actions).toHaveCSS('background-image', 'none');
 	await testInfo.attach('sidebar-unselected-hover', { body: await sidebar.screenshot(), contentType: 'image/png' });
 	await item.click();
 	await expect(item).toHaveAttribute('aria-current', 'page');
 	await page.mouse.move(350, 1);
 	await expect(actions).toHaveCSS('opacity', '0');
-	const selected = await item.evaluate(element => getComputedStyle(element).backgroundColor);
+	const selected = await rowBackground();
 	expect(selected).not.toBe(hovered);
 	const navigationStyle = await item.evaluate(element => {
 		const document = element.ownerDocument;
@@ -244,7 +251,7 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	expect(hovered).toBe(navigationStyle.hoverBackground);
 	await expect(item).toHaveCSS('height', navigationStyle.height);
 	await expect(item).toHaveCSS('border-radius', navigationStyle.borderRadius);
-	await expect(item).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	await expect(item).toHaveCSS('background-color', transparent);
 	await expect.poll(() => row.evaluate(element => {
 		const row = element.getBoundingClientRect();
 		const host = element.closest('.ash-chat-navigation')!.getBoundingClientRect();
@@ -253,10 +260,10 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	await testInfo.attach('sidebar-rest', { body: await sidebar.screenshot(), contentType: 'image/png' });
 	await item.hover();
 	await expect(actions).toHaveCSS('opacity', '1');
-	await expect(item).toHaveCSS('background-color', selected);
-	await expect(actions).toHaveCSS('background-color', selected);
+	await expect.poll(rowBackground).toBe(selected);
+	await expect(item).toHaveCSS('background-color', transparent);
+	await expect(actions).toHaveCSS('background-color', transparent);
 	await expect(actions).toHaveCSS('background-image', 'none');
-	await expect(item).toHaveCSS('background-color', selected);
 	await expect(actions.locator('[data-action-id]')).toHaveCount(2);
 	await expect(actions.getByRole('button').last()).toHaveAccessibleName('更多操作');
 	await expect.poll(() => row.evaluate(element => {
@@ -272,7 +279,7 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 		const bounds = (await row.boundingBox())!;
 		const more = (await actions.locator('button').last().boundingBox())!;
 		return bounds.x + bounds.width - more.x - more.width;
-	}).toBe(5);
+	}).toBe(2);
 	await actions.locator('button').first().hover();
 	await testInfo.attach('sidebar-hover', { body: await sidebar.screenshot(), contentType: 'image/png' });
 

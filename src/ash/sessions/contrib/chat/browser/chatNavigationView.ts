@@ -5,6 +5,7 @@ import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { appendIcon, getRegisteredIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
+import { ObjectTreeElementCollapseState } from '../../../../base/browser/ui/tree/tree.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import type { Icon } from '../../../../base/common/icon.js';
@@ -83,9 +84,9 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 		scrollable.element.classList.add('ash-chat-navigation-scrollable');
 		const list = h(document, 'div', { className: 'ash-chat-navigation-list' });
 		scrollable.contentElement.append(list);
-		const listToolbar = this._register(new SessionsListToolbar(list, menus, contextMenus, notifications, listModel, this.scopedContextKeyService));
+		const createToolbar = (container: HTMLElement) => new SessionsListToolbar(container, menus, contextMenus, notifications, listModel, this.scopedContextKeyService);
 		const conversationsLabel = localize('sessions.chatList.conversations', 'Conversations');
-		const tree = this._register(new SessionsListTree(list, conversationsLabel, configuration, 'external', {
+		const tree = this._register(new SessionsListTree(list, conversationsLabel, configuration, 'chat', 'external', {
 			organization: element => this.rows.get(element.dataset.item ?? '')?.organization,
 			didMove: source => {
 				const id = source.dataset.item;
@@ -98,7 +99,7 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			const row = this.rows.get(key)?.element ?? projectRows.get(key)?.element
 				?? tree.getVisibleElements().find(element => element.dataset.item === key || conversationId !== undefined && element.dataset.conversationId === conversationId);
 			if (row) {
-				if (!row.isConnected && row.dataset.parentProject) {
+				if (!tree.model.has(SessionsListTree.id(row)) && row.dataset.parentProject) {
 					const parent = projectRows.get(row.dataset.parentProject)?.element;
 					if (parent?.isConnected) { tree.focusRow(parent, preventScroll); return; }
 				}
@@ -116,11 +117,12 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 		const pendingProgress = this._register(new MutableDisposable());
 		this._register(addDisposableListener(list, 'keydown', event => {
 			const active = getActiveElement(document);
-			const parent = active?.closest<HTMLElement>('[data-parent-project]')?.dataset.parentProject;
-			if (event.key === 'ArrowLeft' && parent) {
+			const child = event.key === 'ArrowLeft' ? active?.closest<HTMLElement>('[data-parent-project]') : undefined;
+			const parent = child && tree.model.getParent(SessionsListTree.id(child));
+			if (parent) {
 				event.preventDefault();
 				event.stopPropagation();
-				focusConversation(parent);
+				tree.focusRow(parent.element);
 				return;
 			}
 			if (!active || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { return; }
@@ -173,7 +175,6 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			}
 			storage.remove(previousKey, StorageScope.PROFILE);
 		}
-		let syncingCollapse = false;
 		this._register(tree.onDidChangeCollapseState(({ element, node, collapsed }) => {
 			const key = element.dataset.section ?? element.dataset.item;
 			if (key === undefined) return;
@@ -185,7 +186,7 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 					descendants.push(...child.children);
 				}
 			}
-			if (!syncingCollapse) storage.store(collapseKey(key), collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
+			storage.store(collapseKey(key), collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
 			scrollable.layout();
 			scheduleLoad();
 		}));
@@ -206,7 +207,8 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			const hadFocus = root.contains(focused);
 			const focusedRow = focused?.closest<HTMLElement>('[data-item]');
 			const focusedId = focusedRow?.dataset.item;
-			const focusedGroup = focused?.closest<HTMLElement>('[data-group]')?.dataset.group;
+			const focusedGroup = focused?.closest<HTMLElement>('[data-section]')?.dataset.section;
+			const previousVisible = tree.getVisibleElements();
 			const top = scrollable.state.top;
 			const projectState = projects.state.get();
 			const activeProjects = projectState.projects.filter(project => !project.archived);
@@ -310,15 +312,15 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 						if (collapsed === undefined) tree.toggleCollapsed(itemId);
 						else if (collapsed) tree.collapse(itemId);
 						else if (!tree.expand(itemId)) {
-							const child = tree.getVisibleElements().find(element => element.dataset.parentProject === itemId
+							const child = tree.model.getNode(itemId)?.children.find(({ element }) => element.isConnected
 								&& element.querySelector('button:not([hidden]):not(:disabled)'));
-							if (child) tree.focusRow(child);
+							if (child) tree.focusRow(child.element);
 						}
 					}));
 				}
 				row.element.dataset.parentSection = group;
 				row.element.dataset.projectId = project.key;
-				row.update(project.title, collapsed);
+				row.update(project.title);
 				const nodes = sortRows(project.rows).map(entry => chatNode(entry, group, project.key));
 				const current = membership.get(project.key);
 				const history = project.project?.history;
@@ -335,7 +337,10 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 								? localize('sessions.chatList.loadingProjectChats', 'Loading project chats…')
 								: !nodes.length ? localize('sessions.chatList.emptyProject', 'No chats in this project') : undefined;
 				if (label) nodes.push({ element: row.updateHistory(label, action) });
-				return { element: row.element, children: nodes, collapsible: true, collapsed };
+				return {
+					element: row.element, children: nodes, collapsible: true,
+					collapsed: collapsed ? ObjectTreeElementCollapseState.Collapsed : ObjectTreeElementCollapseState.Expanded,
+				};
 			};
 			const children = groups.map(group => {
 				const { key } = group;
@@ -348,17 +353,15 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 				let section = this.sections.get(key);
 				if (!section) {
 					section = this.sections.set(key, new SessionListSection(document, key, false,
-						collapsed => tree.setSectionCollapsed(key, collapsed)));
-					section.domNode.classList.add('ash-chat-navigation-group');
-					section.domNode.dataset.group = key;
-					if (key === 'projects') section.domNode.append(listToolbar.element);
+						collapsed => tree.setSectionCollapsed(key, collapsed), key === 'projects' ? createToolbar : undefined));
 				}
 				section.domNode.dataset.groupDropTarget = String(key.startsWith('group:'));
-				section.update(group.title, rows.map(row => row.element));
+				section.update(group.title);
 				const collapsible = key !== 'projects' || rows.length > 0;
 				return {
 					element: section.domNode, children: rows, collapsible,
-					collapsed: collapsible && storage.getBoolean(collapseKey(key), StorageScope.PROFILE, false),
+					collapsed: storage.getBoolean(collapseKey(key), StorageScope.PROFILE, false)
+						? ObjectTreeElementCollapseState.Collapsed : ObjectTreeElementCollapseState.Expanded,
 				};
 			}).filter(node => node !== undefined);
 			for (const [key] of projectRows) {
@@ -372,19 +375,10 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			for (const [key] of this.sections) {
 				if (!usedSections.has(key)) this.sections.deleteAndDispose(key);
 			}
-			syncingCollapse = true;
-			try {
-				tree.setChildren(children);
-				for (const section of children) {
-					tree.setSectionCollapsed(section.element.dataset.section!, section.collapsed);
-					for (const branch of section.children) {
-						if (branch.collapsible && tree.isCollapsed(SessionsListTree.id(branch.element)) !== branch.collapsed) {
-							tree.toggleCollapsed(SessionsListTree.id(branch.element));
-						}
-					}
-				}
-			} finally {
-				syncingCollapse = false;
+			tree.setChildren(children);
+			// A restored collapse state is applied during the splice, outside the user collapse event.
+			for (const element of previousVisible) {
+				if (!list.contains(element) && element.dataset.item !== undefined) this.rows.get(element.dataset.item)?.closeTransientUI();
 			}
 			for (const { row, load } of idleProjects) {
 				// Loading can synchronously update the source. Let the tree commit first.
@@ -403,9 +397,10 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			scrollable.layout();
 			if (focusedId && hadFocus && !root.contains(getActiveElement(document))) { focusConversation(focusedId, true, focusedRow?.dataset.conversationId); }
 			if (focusedGroup && !root.contains(getActiveElement(document))) {
+				const section = this.sections.get(focusedGroup);
 				if (focused && root.contains(focused)) focused.focus({ preventScroll: true });
-				else if (focusedGroup === 'projects' && !this.sections.get(focusedGroup)?.button.isConnected) listToolbar.focus();
-				else this.sections.get(focusedGroup)?.button.focus({ preventScroll: true });
+				else if (section?.button.isConnected) section.button.focus({ preventScroll: true });
+				else section?.toolbar?.focus();
 			}
 			scrollable.scrollTo(0, top);
 			scheduleLoad();
@@ -463,6 +458,7 @@ class ChatProjectNavigationRow extends SessionListRowRenderer {
 			attributes: { 'aria-hidden': 'true' },
 		});
 		leading.append(this.chevron);
+		this.setCollapseRenderer(collapsed => this.renderCollapse(collapsed));
 		this._register(addDisposableListener(this.button, 'click', () => toggle()));
 		this._register(addDisposableListener(this.element, 'keydown', event => {
 			if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
@@ -485,8 +481,11 @@ class ChatProjectNavigationRow extends SessionListRowRenderer {
 		}));
 	}
 
-	update(title: string, collapsed: boolean): void {
+	update(title: string): void {
 		this.button.title = this.label.textContent = title;
+	}
+
+	private renderCollapse(collapsed: boolean): void {
 		this.button.setAttribute('aria-expanded', String(!collapsed));
 		const icon = collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
 		if (this.chevron.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
