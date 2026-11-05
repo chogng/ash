@@ -1,4 +1,5 @@
 import { ActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { h } from '../../../../base/browser/dom.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../nls.js';
@@ -76,10 +77,11 @@ class ComposerPickerActionViewItem extends ActionViewItem {
 
 	override render(container: HTMLElement): void {
 		if (this.kind === 'workspace') {
-			this.picker = this._register(this.instantiation.createInstance(SessionWorkspacePicker, container, this.owner.model));
+			const picker = this.picker = this._register(this.instantiation.createInstance(SessionWorkspacePicker, container, this.owner.model));
+			this._register(picker.renderRecentProjects(this.owner.setupCard));
 		} else {
 			const picker = this.picker = this._register(this.instantiation.createInstance(SessionEnvironmentPicker, this.owner.model, this.owner.persistDraft));
-			this._register(picker.render(container));
+			this._register(picker.render(container, this.owner.setupCard));
 		}
 		this.trigger = container.querySelector('button') ?? undefined;
 		this.setVisible(this.owner.visible);
@@ -96,12 +98,14 @@ class ComposerPickerActionViewItem extends ActionViewItem {
 
 /** Connects the footer toolbar to one composer's model and draft checkpoint. */
 export class ComposerSessionControls extends Disposable {
+	readonly setupCard: HTMLElement;
 	private readonly items = new Map<string, ComposerPickerActionViewItem>();
 	private isVisible = true;
 	get visible(): boolean { return this.isVisible; }
 
 	constructor(
 		footer: HTMLElement,
+		environmentSetup: HTMLElement,
 		readonly model: IChatWidgetModel,
 		readonly persistDraft: () => Promise<void>,
 		@IMenuService menus: IMenuService,
@@ -110,6 +114,9 @@ export class ComposerSessionControls extends Disposable {
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
+		this.setupCard = h(environmentSetup.ownerDocument, 'div', { className: 'ash-sessions-environment-card' });
+		environmentSetup.append(this.setupCard);
+		this._register(toDisposable(() => this.setupCard.remove()));
 		const menu = Menus.NewSessionChatInputToolbar;
 		const toolbar = this._register(new MenuWorkbenchToolBar(footer, menus, contextMenus, menu, {
 			ariaLabel: localize('sessions.newChatComposer.sessionControls', 'Session controls'),

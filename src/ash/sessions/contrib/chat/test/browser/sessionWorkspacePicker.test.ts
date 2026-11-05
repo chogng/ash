@@ -108,9 +108,11 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 		getWorkspace: () => ({ id: 'project', folders: windowFolder ? [windowFolder] : [] }), onDidChangeWorkspaceFolders: Event.None,
 	} as unknown as IWorkspaceContextService);
 	let history: readonly IRecent[] = [{ folderUri: URI.file('/recent'), label: 'Recent project' }, ...additionalRecents];
+	const recentChanged = lifetime.add(new Emitter<void>());
 	services.registerInstance(IWorkspacesService, {
+		onDidChangeRecentlyOpened: recentChanged.event,
 		getRecentlyOpened: async () => { await gates?.history; return { workspaces: history }; },
-		addRecentlyOpened: async (entries: readonly IRecent[]) => { history = [...entries, ...history]; },
+		addRecentlyOpened: async (entries: readonly IRecent[]) => { history = [...entries, ...history]; recentChanged.fire(); },
 	} as unknown as IWorkspacesService);
 	services.registerInstance(IFileDialogService, { showOpenDialog: () => dialog.p } as unknown as IFileDialogService);
 	services.registerInstance(IQuickInputService, {
@@ -140,6 +142,32 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 		[Symbol.dispose]() { lifetime.dispose(); },
 	};
 }
+
+test('Code setup shows recent projects in open order and selects a project for the draft', async () => {
+	const saved = URI.file('/saved-project');
+	const grants: string[] = [];
+	using f = fixture(undefined, [], [saved, URI.file('/older'), URI.file('/oldest')].map(folderUri => ({ folderUri })),
+		undefined, undefined, undefined, async root => { grants.push(root); return true; }, undefined, {
+		id: 'saved', name: 'Saved Project', description: '', archived: false, revision: 1, sessionIds: [], sessionCount: 0,
+		materials: [{ kind: 'folder', name: 'source', resource: saved }],
+	});
+	const document = f.button.ownerDocument;
+	const setup = document.body.appendChild(document.createElement('div'));
+	using presentation = f.control.renderRecentProjects(setup);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	const buttons = () => Array.from(setup.querySelectorAll('button'));
+	assert.deepEqual(buttons().map(button => button.textContent), ['Recent project', 'saved-project', 'older']);
+	const updated = new Promise<void>(resolve => Event.once(f.changed.event)(resolve));
+	buttons()[1]!.focus();
+	buttons()[1]!.click();
+	await updated;
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.deepEqual(grants, [saved.fsPath]);
+	assert.equal(f.drafts[0]!.projectId, 'saved');
+	assert.equal(f.drafts[1]!.projectId, undefined);
+	assert.deepEqual(buttons().map(button => button.getAttribute('aria-pressed')), ['true', 'false', 'false']);
+	assert.equal(document.activeElement, buttons()[0]);
+});
 
 test('Choose project authorizes its folder and binds only the current Code draft', async () => {
 	const resource = URI.file('/saved-project');

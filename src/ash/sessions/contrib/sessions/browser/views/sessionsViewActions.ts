@@ -115,7 +115,10 @@ registerAction2(class CreateSessionGroupAction extends Action2 {
 			id: 'sessionsViewPane.createGroup',
 			title: localize2('sessions.list.addFolder', 'Add folder…'),
 			icon: Lxicon.newFolder,
-			menu: [Menus.SidebarSessionsHeader, Menus.ChatSidebarHeader].map(id => ({ id, group: 'navigation', order: 20 })),
+			menu: [
+				{ id: Menus.SidebarSessionsHeader, group: 'navigation', order: 20, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code') },
+				{ id: Menus.ChatSidebarHeader, group: 'navigation', order: 20 },
+			],
 		});
 	}
 

@@ -424,7 +424,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._untitledSessions = this._untitledSessions.map(session => session === current
 			? {
 				...session, providerId, workspace: selection,
-				projectId: changedHost ? undefined : options?.projectId ?? (selection === current.workspace ? current.projectId : undefined),
+				projectId: options?.projectId ?? (!changedHost && selection === current.workspace ? current.projectId : undefined),
 				environment: options?.environment ?? (changedHost || options?.clearEnvironment ? undefined : current.environment),
 				devContainer: options?.devContainer === true, branchName: options?.branchName,
 				...(changedHost ? { model: undefined, modelSelectionKind: undefined, modelDefaults: undefined, agent: undefined } : {}),

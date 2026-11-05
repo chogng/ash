@@ -1,7 +1,7 @@
 import { SessionBackgroundActivitiesControl } from './sessionBackgroundActivitiesControl.js';
 import { h } from '../../../../base/browser/dom.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
-import { autorun, observableFromEvent, observableValue, type IReader } from '../../../../base/common/observable.js';
+import { autorun, observableFromEvent, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -15,6 +15,7 @@ import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/c
 import { ChatConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
 import { ChatWidget } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ChatInputTipPresenter } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.js';
 import { IVoiceModeOnboardingService } from '../../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
@@ -29,6 +30,7 @@ import { SessionsChatResponseFileChangesService } from './sessionTurnChanges.js'
 import { refreshChatInputStack } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
 import './media/chatInput.css';
 import './media/chatInputCard.css';
+import './media/newChatEnvironment.css';
 import '../../../common/theme.js';
 
 interface INewChatWidgetOptions {
@@ -43,6 +45,8 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 	private readonly composer: SharedChatInputComposer;
 	private readonly tips: ChatInputTipPresenter;
 	private readonly sessionControls: ComposerSessionControls | undefined;
+	private readonly environmentSetup: HTMLElement | undefined;
+	private readonly codePresentation: IObservable<boolean>;
 	private submittedInput = false;
 	private composerThreadId: string | undefined;
 
@@ -66,6 +70,8 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		const turnChanges = instantiationService.createInstance(SessionsChatResponseFileChangesService, model);
 		const chatPresentation = observableFromEvent('native Chat presentation', contextKeys.onDidChangeContext,
 			() => contextKeys.getValue(ASH_CHAT_SELECTED_CONTEXT) === true);
+		const codePresentation = observableFromEvent('Code presentation', contextKeys.onDidChangeContext,
+			() => contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code');
 		const welcomeTitle = observableValue<string | null | undefined>('native chat welcome', undefined);
 		super(container, panelId, model, createNewSession, contextMenus, contextViews, commands, accessibleViews, notifications,
 			undefined, undefined, undefined,
@@ -99,13 +105,17 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 			welcomeTitle,
 		}, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
 		this.composer = this._register(composer);
+		this.codePresentation = codePresentation;
 		const shown = observableFromEvent(this, this.onDidChangeVisibility, () => this.visible);
 		const draftId = observableFromEvent(this, model.onDidChange, () => model.untitledSessionId);
 		const welcome = this._register(instantiationService.createInstance(ChatWelcomeTitle, (reader: IReader) => {
 			const id = chatPresentation.read(reader) && draftId.read(reader);
 			return id ? { id, revision: 0 } : undefined;
 		}, shown, false));
-		this._register(autorun(reader => welcomeTitle.set(chatPresentation.read(reader) ? welcome.title.read(reader) : undefined, undefined)));
+		this._register(autorun(reader => {
+			const showEnvironment = codePresentation.read(reader) && !model.isNestedDraft;
+			welcomeTitle.set(chatPresentation.read(reader) ? welcome.title.read(reader) : showEnvironment ? null : undefined, undefined);
+		}));
 		const parent = this.input.element;
 		const inputContainer = this.input.composerForm;
 		const footer = this.input.composerFooter!;
@@ -135,7 +145,10 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		}));
 		footer.classList.add('ash-sessions-chat-input-footer');
 		if (!model.isNestedDraft) {
-			this.sessionControls = this._register(instantiationService.createInstance(ComposerSessionControls, footer, model, () => this.saveState()));
+			this.environmentSetup = h(parent.ownerDocument, 'div', { className: 'ash-sessions-environment-setup' });
+			parent.before(this.environmentSetup);
+			this._register(toDisposable(() => this.environmentSetup?.remove()));
+			this.sessionControls = this._register(instantiationService.createInstance(ComposerSessionControls, footer, this.environmentSetup, model, () => this.saveState()));
 		}
 		this.renderDraftNotice(parent);
 		parent.append(footer);
@@ -147,7 +160,8 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		this._register(this.onDidChangeVisibility(updatePickerAvailability));
 		this._register(autorun(reader => {
 			chatPresentation.read(reader);
-			this.tips.update();
+			codePresentation.read(reader);
+			this.updateComposer();
 		}));
 		this._register(model.onDidChange(() => {
 			updatePickerAvailability();
@@ -176,8 +190,10 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 	}
 
 	private updateComposer(): void {
+		const hasConversation = this.submittedInput || this.model.items.length > 0;
+		if (this.environmentSetup) this.environmentSetup.hidden = !this.codePresentation.get() || hasConversation || !this.model.untitledSessionId || this.model.inputState.aiDisabled === true;
 		this.input.element.setAttribute('aria-busy', String(this.model.inputState.phase === 'loading'));
-		this.input.element.classList.toggle('has-conversation', this.submittedInput || this.model.items.length > 0);
+		this.input.element.classList.toggle('has-conversation', hasConversation);
 		this.tips.update();
 	}
 

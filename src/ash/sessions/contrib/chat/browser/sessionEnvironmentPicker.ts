@@ -4,11 +4,14 @@ import { ActionWidgetDropdown } from '../../../../platform/actionWidget/browser/
 import { parseSessionEnvironment } from '../../../services/sessions/common/sessionEnvironment.js';
 import { isSessionEnvironmentSelection } from '../../../services/sessions/browser/sessionGridState.js';
 import { NewEnvironmentDialog } from './newEnvironmentDialog.js';
+import { projectForFolder, readCodeProjects } from './sessionWorkspaceProjects.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IWorkspacesService } from '../../../../platform/workspaces/common/workspaces.js';
 import { IAgentConnection } from '../../../../platform/agentHost/common/agentService.js';
 import { createUuid } from '../../../../base/common/uuid.js';
+import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
+import { URI } from '../../../../base/common/uri.js';
 import { StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { buildAgentHostSessionWorkspace, selectionFromResource } from '../../../common/agentHostSessionWorkspace.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
@@ -18,18 +21,22 @@ import { listSavedTunnelEndpoints, tunnelEnvironmentLabel } from '../../../commo
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
 import { ActionListItemKind, type IActionListItem } from '../../../../platform/actionWidget/browser/actionList.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IRemoteAgentHostService, isSSHAgentHost, remoteAgentHostRoot, type RemoteAgentHostConnection } from '../../../../platform/agentHost/common/remoteAgentHostService.js';
 import { IRemoteConnectionService, type RemoteConnectionDefinition } from '../../../../platform/remote/common/remoteConnectionService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IProjectService } from '../../../../platform/projects/common/projectService.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import type { ISessionsProvider } from '../../../services/sessions/common/sessionsProvider.js';
 import type { IUntitledChatSession } from '../../../services/sessions/common/session.js';
-import { h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
@@ -40,6 +47,7 @@ export class SessionEnvironmentPicker extends Disposable {
 	private readonly connecting = this._register(new MutableDisposable());
 	private readonly folderAuthorization = this._register(new MutableDisposable());
 	private host: HTMLElement | undefined;
+	private updateSetup: ((enabled: boolean) => void) | undefined;
 	private rendered = false;
 	private visible = true;
 
@@ -58,11 +66,13 @@ export class SessionEnvironmentPicker extends Disposable {
 		@IFileDialogService private readonly fileDialogs: IFileDialogService,
 		@IWorkspacesService private readonly workspaces: IWorkspacesService,
 		@IAgentConnection private readonly localHost: IAgentConnection,
+		@IProjectService private readonly projects: IProjectService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
 	) {
 		super();
 	}
 
-	render(container: HTMLElement): IDisposable & { readonly element: HTMLElement; } {
+	render(container: HTMLElement, setupContainer?: HTMLElement): IDisposable & { readonly element: HTMLElement; } {
 		if (this.rendered || this.isDisposed) throw new Error('The environment picker can only be mounted once.');
 		this.rendered = true;
 		const lifetime = this._register(new DisposableStore());
@@ -71,6 +81,7 @@ export class SessionEnvironmentPicker extends Disposable {
 		lifetime.add(toDisposable(() => {
 			this.dropdown = undefined;
 			this.host = undefined;
+			this.updateSetup = undefined;
 			this.connecting.clear();
 			this.folderAuthorization.clear();
 			this.newEnvironment.clear();
@@ -92,6 +103,7 @@ export class SessionEnvironmentPicker extends Disposable {
 			},
 		}, this.menus));
 		dropdown.element.classList.add('ash-sessions-environment-picker');
+		if (setupContainer) this.renderSetup(setupContainer, lifetime);
 		lifetime.add(trackChatInputPickerFocus(element));
 		lifetime.add(this.sessions.onDidChange(() => this.update()));
 		lifetime.add(this.providers.onDidChangeProviders(() => { dropdown.hide(); this.update(); }));
@@ -99,6 +111,28 @@ export class SessionEnvironmentPicker extends Disposable {
 		lifetime.add(toDisposable(() => element.remove()));
 		this.update();
 		return Object.assign(toDisposable(() => lifetime.dispose()), { element });
+	}
+
+	private renderSetup(container: HTMLElement, lifetime: DisposableStore): void {
+		const document = container.ownerDocument;
+		const trigger = h(document, 'button', {
+			className: 'ash-sessions-environment-card-trigger',
+			attributes: { type: 'button', 'aria-haspopup': 'dialog' },
+		}, localize('sessions.environment.choose', 'Choose environment'));
+		appendIcon(Lxicon.dropDownButton, trigger);
+		container.append(trigger);
+		lifetime.add(toDisposable(() => trigger.remove()));
+		lifetime.add(addDisposableListener(trigger, 'click', () => {
+			const draft = this.draft;
+			if (!draft || !this.isCurrent(draft) || this.newEnvironment.value) return;
+			trigger.focus();
+			void this.showNewEnvironment(draft, this.loadCatalog()).catch(error => {
+				if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
+			});
+		}));
+		this.updateSetup = enabled => {
+			trigger.disabled = !enabled;
+		};
 	}
 
 	private get draft() {
@@ -117,6 +151,7 @@ export class SessionEnvironmentPicker extends Disposable {
 			this.dropdown?.hide();
 			this.connecting.clear();
 			this.folderAuthorization.clear();
+			this.newEnvironment.clear();
 			this.dropdown?.element.removeAttribute('aria-busy');
 		}
 		this.update();
@@ -132,7 +167,9 @@ export class SessionEnvironmentPicker extends Disposable {
 		dropdown.setIcon(icon);
 		dropdown.setLabel(label);
 		dropdown.element.setAttribute('aria-label', localize('sessions.environment.label', 'Run on: {0}', label));
-		dropdown.setEnabled(this.visible && !!draft && !this.model.inputState.aiDisabled && this.model.inputState.phase !== 'submitting');
+		const enabled = this.visible && !!draft && !this.model.inputState.aiDisabled && this.model.inputState.phase !== 'submitting';
+		dropdown.setEnabled(enabled);
+		this.updateSetup?.(enabled);
 	}
 
 	public showPicker(): void {
@@ -320,22 +357,49 @@ export class SessionEnvironmentPicker extends Disposable {
 		return items;
 	}
 
-	private async applyEnvironment(draft: IUntitledChatSession, providerId: string, environment: SessionEnvironmentSelection): Promise<void> {
-		if (!this.isCurrent(draft)) return;
+	private async applyEnvironment(
+		draft: IUntitledChatSession,
+		providerId: string,
+		environment: SessionEnvironmentSelection,
+		projectFolder = environment.folders[0],
+		signal?: AbortSignal,
+	): Promise<void> {
+		const isCurrent = () => !signal?.aborted && this.isCurrent(draft);
+		if (!isCurrent()) return;
 		const provider = this.providers.getProvider(providerId) as IAgentHostSessionsProvider | undefined;
-		if (!provider || !await this.authorizeFolders(provider, environment.folders) || !this.isCurrent(draft)) return;
+		if (!provider || !await this.authorizeFolders(provider, environment.folders, signal) || !isCurrent()) return;
+		let projectId: string | undefined;
+		let projectResource: URI | undefined;
+		if (providerId === LOCAL_AGENT_HOST_PROVIDER_ID && projectFolder?.type === 'local'
+			&& this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code') {
+			const resource = URI.file(projectFolder.root);
+			projectResource = resource;
+			if (draft.projectId && draft.workspace.type === 'local' && extUriBiasedIgnorePathCase.isEqual(URI.file(draft.workspace.root), resource)) {
+				projectId = draft.projectId;
+			} else {
+				const projects = await readCodeProjects(this.projects);
+				if (!isCurrent()) return;
+				projectId = (await projectForFolder(this.projects, projects, resource)).id;
+			}
+		}
 		await this.persistDraft();
-		if (!this.isCurrent(draft) || this.providers.getProvider(providerId) !== provider) return;
-		this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, environment.folders[0], { providerId, environment });
+		if (!isCurrent() || this.providers.getProvider(providerId) !== provider) return;
+		this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, environment.folders[0], { providerId, environment, projectId });
+		if (projectResource) {
+			void this.workspaces.addRecentlyOpened([{ folderUri: projectResource }]).catch(error => {
+				if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
+			});
+		}
 	}
 
-	private async authorizeFolders(provider: IAgentHostSessionsProvider, folders: readonly SessionExecutionTarget[]): Promise<boolean> {
+	private async authorizeFolders(provider: IAgentHostSessionsProvider, folders: readonly SessionExecutionTarget[], parentSignal?: AbortSignal): Promise<boolean> {
 		if (!provider.authorizeWorkspace) return true;
 		const controller = new AbortController();
+		const signal = parentSignal ? AbortSignal.any([controller.signal, parentSignal]) : controller.signal;
 		const operation = this.folderAuthorization.value = toDisposable(() => controller.abort());
 		try {
 			for (const target of folders) {
-				if (!await provider.authorizeWorkspace(target, controller.signal) || controller.signal.aborted) return false;
+				if (!await provider.authorizeWorkspace(target, signal) || signal.aborted) return false;
 			}
 			return true;
 		} finally {
@@ -364,11 +428,12 @@ export class SessionEnvironmentPicker extends Disposable {
 		const controller = new AbortController();
 		const selected = Math.max(0, hosts.findIndex(host => host.id === draft.providerId));
 		const workspace = draft.workspace;
-		const initial = hosts[selected]?.id === draft.providerId && workspace.type !== 'current' && workspace.type !== 'multiple' ? workspace : undefined;
+		const initialFolders = hosts[selected]?.id !== draft.providerId || workspace.type === 'current' ? []
+			: workspace.type === 'multiple' ? workspace.folders.map(folder => folder.target) : [workspace];
 		const accepts = (candidate: SessionExecutionTarget, source?: SessionExecutionTarget) =>
 			buildAgentHostSessionWorkspace(candidate)?.authorityId === (buildAgentHostSessionWorkspace(source)?.authorityId ?? 'local');
 		const dialog = new NewEnvironmentDialog(this.layout.activeContainer, {
-			hosts, selected, initial,
+			hosts, selected, initialFolders,
 			browse: async source => {
 				const defaultUri = source && sessionWorkspaceUri(buildAgentHostSessionWorkspace(source)!);
 				const resources = await this.fileDialogs.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, canSelectMany: true, defaultUri });
@@ -385,7 +450,10 @@ export class SessionEnvironmentPicker extends Disposable {
 			create: async (name, providerId, folders, variables) => {
 				const key = 'sessions.environment.profile.' + createUuid();
 				const parsed = parseSessionEnvironment(variables);
-				const environment = { id: key, name, folders, hasVariables: 'variables' in parsed && Object.keys(parsed.variables).length > 0 };
+				const environment = {
+					id: key, name, folders: folders.map(folder => folder.worktree ?? folder.target),
+					hasVariables: 'variables' in parsed && Object.keys(parsed.variables).length > 0,
+				};
 				if (environment.hasVariables && 'variables' in parsed) {
 					const session = this.localHost.session;
 					if (!session.saveEnvironmentProfile) {
@@ -394,7 +462,7 @@ export class SessionEnvironmentPicker extends Disposable {
 					await session.saveEnvironmentProfile(key, parsed.variables);
 				}
 				this.storage.store(key, JSON.stringify({ providerId, environment }), StorageScope.PROFILE, StorageTarget.MACHINE);
-				if (!controller.signal.aborted) await this.applyEnvironment(draft, providerId, environment);
+				await this.applyEnvironment(draft, providerId, environment, folders[0]?.target, controller.signal);
 			},
 		});
 		this.newEnvironment.value = dialog;
@@ -443,15 +511,15 @@ export class SessionEnvironmentPicker extends Disposable {
 		try { await dialog.show(); }
 		finally {
 			controller.abort();
-			this.newEnvironment.clear();
-			if (!this.isDisposed && this.draft?.untitledSessionId === draft.untitledSessionId) this.dropdown?.focus();
+			if (this.newEnvironment.value === dialog) this.newEnvironment.clear();
 		}
 	}
 
 	private isCurrent(draft: IUntitledChatSession): boolean {
 		const current = this.draft;
 		return !this.isDisposed && this.dropdown?.element.disabled === false && current?.untitledSessionId === draft.untitledSessionId
-			&& current.providerId === draft.providerId && current.environment === draft.environment;
+			&& current.providerId === draft.providerId && current.environment === draft.environment
+			&& current.workspace === draft.workspace && current.projectId === draft.projectId;
 	}
 
 	private findSSHProvider(target: RemoteConnectionDefinition, providers = this.providers.getProviders()): ISessionsProvider | undefined {

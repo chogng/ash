@@ -2,6 +2,7 @@ import { IAgentHostConnectionsService } from '../../../src/ash/platform/agentHos
 import { ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
+import { IWorkspacesService } from '../../../src/ash/platform/workspaces/common/workspaces.js';
 import { createServiceIdentifier } from '../../../src/ash/platform/instantiation/common/instantiation.js';
 import { registerWorkbenchServiceContribution } from '../../../src/ash/workbench/browser/workbenchServiceContributions.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
@@ -82,6 +83,29 @@ globalThis.ashWebWorkbenchHost = {
 		github: { ...disconnectedApi.github, listAccounts: async () => [] },
 	}
 };
+if (new URL(location.href).searchParams.has('environmentSetup')) {
+	registerWorkbenchServiceContribution({
+		service: createServiceIdentifier<object>('test.environmentSetup'),
+		dependencies: [IWorkspacesService],
+		install: context => {
+			context.blockRestorationUntil(context.container.get(IWorkspacesService).addRecentlyOpened([
+				{ folderUri: URI.file('/workspace/host-a'), label: 'host-a' },
+			]));
+			return {};
+		},
+	});
+	globalThis.ashWebWorkbenchHost = { api: {
+		...globalThis.ashWebWorkbenchHost.api,
+		appServer: { ...disconnectedApi.appServer, getConnectionState: async () => 'ready' },
+		session: {
+			...disconnectedApi.session,
+			list: async () => ({ sessions: [] }),
+			subscribeCatalog: async () => ({ sessions: [] }),
+			unsubscribeCatalog: async () => { },
+			listAgents: async () => ({ agents: [] }),
+		},
+	} };
+}
 if (new URL(location.href).searchParams.has('remoteManagement')) {
 	const { SSHAgentHostContribution } = await import('../../../src/ash/sessions/contrib/providers/remoteAgentHost/browser/sshAgentHost.contribution.js');
 	const { WSLAgentHostContribution } = await import('../../../src/ash/sessions/contrib/providers/remoteAgentHost/browser/wslAgentHost.contribution.js');
@@ -147,6 +171,8 @@ if (new URL(location.href).searchParams.has('search') || new URL(location.href).
 		sessionIds: new URL(location.href).searchParams.has('sidebarGroups') ? [sessionIdentity('Host A', 'same', 'local-agent-host')] : [],
 		updatedAtMs: updatedAt === null ? undefined : Number(updatedAt), createdAtMs: createdAt === null ? undefined : Number(createdAt),
 	};
+	const codeProject = new URL(location.href).searchParams.has('projectPicker')
+		? { ...project, id: 'code-project', name: 'Code project fixture' } : project;
 	const unexpectedAutomation = async (): Promise<never> => { throw new Error('Search must not mutate or run the fixture schedule'); };
 	globalThis.ashWebWorkbenchHost = {
 		api: {
@@ -180,8 +206,6 @@ window.addEventListener('pagehide', () => completeCustomizeDetails(), { once: tr
 // Synthetic catalogs exercise the real Sessions composition without using a personal profile.
 if (new URL(location.href).searchParams.has('customize')) {
 	const catalog = { generation: 1, skills: ['research-notes', 'code-review', 'writing-guide'].map(name => ({
-	const codeProject = new URL(location.href).searchParams.has('projectPicker')
-		? { ...project, id: 'code-project', name: 'Code project fixture' } : project;
 		id: { source: 'fixture', name }, description: name === 'writing-guide' ? 'Reusable writing instructions.' : name === 'research-notes' ? 'Reusable research instructions.'
 			: `Reusable ${name.toLowerCase()} instructions with a deliberately long description to verify card wrapping without pushing actions outside the page.`,
 		metadata: { author: 'Ash fixtures' }, contentDigest: 'a'.repeat(64), enabled: true, compatible: true,

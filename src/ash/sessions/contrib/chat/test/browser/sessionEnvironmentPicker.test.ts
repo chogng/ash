@@ -13,9 +13,11 @@ import { ICommandService } from '../../../../../platform/commands/common/command
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { IProjectService } from '../../../../../platform/projects/common/projectService.js';
 import { IRemoteConnectionService } from '../../../../../platform/remote/common/remoteConnectionService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import type { IChatWidgetModel } from '../../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
@@ -54,6 +56,8 @@ test('Environment discovery yields to an existing or newer workspace menu and ca
 	} as unknown as ICommandService);
 	services.registerInstance(INotificationService, { error: (error: unknown) => assert.fail(String(error)) } as unknown as INotificationService);
 	services.registerInstance(IStorageService, { keys: () => [] } as unknown as IStorageService);
+	services.registerInstance(IProjectService, {} as IProjectService);
+	services.registerInstance(IContextKeyService, {} as IContextKeyService);
 	services.registerInstance(IAgentConnection, {} as IAgentConnection);
 	services.registerInstance(ILayoutService, {} as ILayoutService);
 	services.registerInstance(IFileDialogService, {} as IFileDialogService);
