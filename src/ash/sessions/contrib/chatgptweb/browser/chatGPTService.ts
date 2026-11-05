@@ -2,6 +2,7 @@ import { ChatTimelineStorage, type ChatTimeline, type ChatTimelineTask } from '.
 import { ChatCoworkTasks } from '../../cowork/browser/chatCoworkTasks.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { Thread } from '../../../../workbench/services/chat/common/chatService.js';
+import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { ChatReplyError } from '../../../common/chatReplyBackend.js';
 import { ChatGPTReplyBackend } from './chatGPTReplyBackend.js';
 import { ChatGPTOutbox, type PendingChatGPTCreation } from './chatGPTOutbox.js';
@@ -10,16 +11,19 @@ import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
 import { observableFromEvent, observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { equals } from '../../../../base/common/objects.js';
 import { isRecord } from '../../../../base/common/types.js';
+import { isUuid } from '../../../../base/common/uuid.js';
 import { getNLSLanguage, localize } from '../../../../nls.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { ChatGPTAuthenticationError, IChatGPTTransport } from '../common/chatGPTTransport.js';
-import { ChatGPTClient, ChatGPTRequestError, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTModel, type ChatGPTFile, type ChatGPTProject, type ChatGPTProjectCursor, type ChatGPTHistory } from './chatGPTClient.js';
+import { ChatGPTClient, ChatGPTRequestError, type ChatGPTConversation, type ChatGPTMessage, type ChatGPTModel, type ChatGPTProject, type ChatGPTProjectCursor, type ChatGPTHistory } from './chatGPTClient.js';
+import { ChatGPTDraftAttachmentStorage, type ChatGPTAttachment } from './chatGPTDraftAttachmentStorage.js';
 import { createChatGPTFetch } from './chatGPTFetch.js';
 import { getChatGPTRichContentText } from './chatGPTRichContent.js';
 import type { ChatGPTVoiceSession } from './chatGPTVoiceSession.js';
 
 const selectedConversationKey = 'sessions.chatgpt.conversation';
+const newDraftIdKey = 'sessions.chatgpt.newDraftId';
 const catalogKey = 'sessions.chatgpt.catalog.v1';
 const historyFreshnessMs = 60_000;
 type HistoryValidation = Pick<ChatGPTHistory, 'parentId' | 'model' | 'thinkingEffort'> & { readonly validatedAt: number; };
@@ -32,14 +36,6 @@ function isMissingConversation(error: unknown): boolean {
 	return error instanceof ChatGPTRequestError && (error.status === 404 || error.status === 410);
 }
 
-export interface ChatGPTAttachment {
-	readonly id: string;
-	readonly name: string;
-	readonly size: number;
-	readonly status: 'uploading' | 'ready' | 'failed';
-	readonly file?: ChatGPTFile;
-	readonly error?: string;
-}
 interface ChatGPTDraft {
 	readonly text: string;
 	readonly attachments: readonly ChatGPTAttachment[];
@@ -137,7 +133,7 @@ export interface IChatGPTService {
 	refresh(): Promise<void>;
 	setNetworkAvailable(available: boolean): void;
 	reload(): Promise<void>;
-	newChat(): void;
+	newChat(options?: { readonly clearDraft: boolean; }): void;
 	select(id: string): Promise<void>;
 	loadMore(): Promise<void>;
 	loadProjectConversations(projectId: string, nextPage?: boolean): Promise<void>;
@@ -166,7 +162,7 @@ export interface IChatGPTService {
 export const IChatGPTService = createServiceIdentifier<IChatGPTService>('chatGPTService');
 
 export class ChatGPTService extends Disposable implements IChatGPTService {
-	private newConversationId = crypto.randomUUID();
+	private newConversationId: string = crypto.randomUUID();
 	private readonly localIdsByRemoteId = new Map<string, string>();
 	private readonly model = observableValue<ChatGPTState>('chatgpt', {
 		coworkTasks: [], localConversationId: this.newConversationId, draft: '', attachments: [], voice: 'idle', voiceTranscript: [], connected: false, busy: false, loading: undefined, sending: false, conversations: [], projects: [], hasMore: false,
@@ -178,6 +174,9 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private cacheScope: string | undefined;
 	private readonly taskWatchers = this._register(new DisposableStore());
 	private readonly drafts = new Map<string, ChatGPTDraft>();
+	private readonly draftAttachments: ChatGPTDraftAttachmentStorage;
+	private readonly pendingAttachmentWrites = new Set<Promise<void>>();
+	private readonly savingAttachments = new Set<string>();
 	private readonly attachmentFiles = new Map<string, File>();
 	private readonly uploads = new Map<string, AbortController>();
 	private voiceController: AbortController | undefined;
@@ -207,10 +206,27 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	public get newDraftRevision(): number { return this.draftRevision; }
 	private readonly client: ChatGPTClient;
 	private readonly replyBackend: ChatGPTReplyBackend;
-	constructor(@IChatGPTTransport private readonly transport: IChatGPTTransport, @IStorageService private readonly storage: IStorageService, @IInstantiationService private readonly instantiation?: IInstantiationService) {
+	constructor(
+		@IChatGPTTransport private readonly transport: IChatGPTTransport,
+		@IStorageService private readonly storage: IStorageService,
+		@ILifecycleService private readonly lifecycle: ILifecycleService,
+		@IInstantiationService private readonly instantiation?: IInstantiationService,
+	) {
 		super();
 		this.timeline = new ChatTimelineStorage(storage, 'chatgpt-web');
-		this.update({ conversations: this.localConversations() });
+		this.draftAttachments = this._register(new ChatGPTDraftAttachmentStorage(storage));
+		this._register(lifecycle.onWillShutdown(event => {
+			if (this.pendingAttachmentWrites.size) {
+				event.join(async () => {
+					while (this.pendingAttachmentWrites.size) { await Promise.allSettled(this.pendingAttachmentWrites); }
+					// Saving the bytes may have published new manifest entries after the window's first flush.
+					await this.storage.flush();
+				}, 'ChatGPT draft attachments');
+			}
+		}));
+		const newDraftId = storage.get(newDraftIdKey, StorageScope.WORKSPACE);
+		if (isUuid(newDraftId)) { this.newConversationId = newDraftId; }
+		this.update({ conversations: this.localConversations(), localConversationId: this.newConversationId, draft: this.readDraft(this.newConversationId)?.text ?? '' });
 		this.client = new ChatGPTClient(createChatGPTFetch(transport));
 		this.replyBackend = new ChatGPTReplyBackend(this.client);
 		this._register(toDisposable(() => {
@@ -236,8 +252,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.localIdsByRemoteId.clear();
 		this.historyValidations.clear();
 		this.taskWatchers.clear();
-		this.newConversationId = crypto.randomUUID();
+		this.forgetDraft(this.newConversationId);
+		this.rotateNewDraft();
 		this.drafts.set(this.newConversationId, { text: draft, attachments: [] });
+		this.persistDraftText(this.newConversationId, draft);
 		this.recentIds.clear(); this.recentOffset = 0;
 		this.cacheScope = undefined;
 		this.remoteTimeline = undefined;
@@ -431,6 +449,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			if (state.sending || state.managing) return;
 			const wasSelected = selectedChatConversationId(state) === id;
 			if (deleted) {
+				const localId = this.timeline.read(id)?.localId;
+				if (localId) { this.forgetDraft(localId); }
 				this.timeline.remove(id);
 				this.forgetConversationIcon(id);
 			} else this.updateLocalConversation(id, { archived: true });
@@ -454,15 +474,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	}
 
 	private forgetRemoteConversation(id: string): void {
-		const localId = this.localIdsByRemoteId.get(id);
-		if (localId) {
-			for (const attachment of this.drafts.get(localId)?.attachments ?? []) {
-				this.uploads.get(attachment.id)?.abort();
-				this.uploads.delete(attachment.id);
-				this.attachmentFiles.delete(attachment.id);
-			}
-			this.drafts.delete(localId);
-		}
+		const localId = this.localIdsByRemoteId.get(id) ?? this.timelineFor(id).read(id)?.localId;
+		if (localId) { this.forgetDraft(localId); }
 		this.localIdsByRemoteId.delete(id);
 		this.historyValidations.delete(id);
 		this.forgetConversationIcon(id);
@@ -506,7 +519,9 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	}
 	public setDraft(draft: string): void {
 		const key = this.draftKey();
-		this.drafts.set(key, { ...this.drafts.get(key), text: draft, attachments: this.model.get().attachments });
+		const stored = this.drafts.get(key);
+		if (stored) { this.drafts.set(key, { ...stored, text: draft }); }
+		this.persistDraftText(key, draft);
 		this.update({ draft });
 	}
 	public setModel(model: string, preset?: string): void {
@@ -611,29 +626,63 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 
 	public async attachFiles(files: readonly File[]): Promise<void> {
 		const state = this.model.get();
-		if (this.isDisposed || !state.connected || state.busy || state.sending || state.managing || state.voice !== 'idle') { return; }
+		if (!files.length || this.isDisposed || this.lifecycle.willShutdown || !state.connected || state.busy || state.sending || state.managing || state.voice !== 'idle') { return; }
 		if (state.attachments.length + files.length > 10 || files.some(file => !file.name.trim() || file.name.length > 1024 || file.size > 20 * 1024 * 1024)
 			|| [...state.attachments, ...files].reduce((size, file) => size + file.size, 0) > 50 * 1024 * 1024) {
 			this.update({ error: localize('sessions.chatgpt.attachmentLimit', 'Attach up to 10 files, with at most 20 MB per file and 50 MB in total.') });
 			return;
 		}
 		const key = this.draftKey();
-		const attachments = files.map(file => {
-			const id = crypto.randomUUID();
+		const sources = files.map(file => ({ id: crypto.randomUUID(), file }));
+		const attachments = sources.map(({ id, file }) => ({ id, name: file.name, size: file.size, status: 'uploading' as const }));
+		const scope = this.cacheScope;
+		for (const { id, file } of sources) {
 			this.attachmentFiles.set(id, file);
-			return { id, name: file.name, size: file.size, status: 'uploading' as const };
-		});
+			if (scope) { this.savingAttachments.add(id); }
+		}
 		this.drafts.set(key, { ...this.drafts.get(key), text: state.draft, attachments: [...state.attachments, ...attachments] });
 		this.update({ attachments: this.drafts.get(key)!.attachments, error: '' });
+		if (scope) { await this.trackAttachmentWrite(this.saveAttachmentFiles(key, scope, sources)); }
+		if (this.isDisposed || this.lifecycle.willShutdown) { return; }
 		await Promise.all(attachments.map(attachment => this.uploadAttachment(key, attachment.id)));
 	}
 
+	private async saveAttachmentFiles(key: string, scope: string, sources: readonly { id: string; file: File; }[]): Promise<void> {
+		const account = this.management.signal;
+		try {
+			await this.draftAttachments.saveFiles(scope, sources);
+		} catch (error) {
+			if (!account.aborted && !this.isDisposed) {
+				const ids = new Set(sources.map(source => source.id));
+				for (const id of ids) { this.attachmentFiles.delete(id); }
+				const draft = this.drafts.get(key);
+				if (draft) {
+					const attachments = draft.attachments.filter(attachment => !ids.has(attachment.id));
+					this.drafts.set(key, { ...draft, attachments });
+					if (key === this.draftKey()) {
+						this.update({ attachments, error: localize('sessions.chatgpt.saveDraftAttachmentsFailed', 'Could not save draft attachments: {0}', this.errorText(error)) });
+					}
+				}
+			}
+			return;
+		} finally {
+			for (const { id } of sources) { this.savingAttachments.delete(id); }
+		}
+		if (this.isDisposed) { return; }
+		const draft = !account.aborted ? this.drafts.get(key) : undefined;
+		if (draft) { this.persistDraftAttachments(key, draft); }
+		await this.deleteAttachmentFiles(scope, sources.filter(source => !draft?.attachments.some(attachment => attachment.id === source.id)).map(source => source.id));
+	}
+
 	public removeAttachment(id: string): void {
-		if (this.model.get().sending) { return; }
-		this.uploads.get(id)?.abort(); this.uploads.delete(id); this.attachmentFiles.delete(id);
 		const state = this.model.get();
+		if (state.sending || !state.attachments.some(attachment => attachment.id === id)) { return; }
+		this.releaseAttachment(id);
 		const attachments = state.attachments.filter(attachment => attachment.id !== id);
-		this.drafts.set(state.localConversationId, { ...this.drafts.get(state.localConversationId), text: state.draft, attachments });
+		const draft = { ...this.drafts.get(state.localConversationId), text: state.draft, attachments };
+		this.drafts.set(state.localConversationId, draft);
+		this.persistDraftAttachments(state.localConversationId, draft);
+		if (this.cacheScope && !this.savingAttachments.has(id)) { this.trackAttachmentWrite(this.deleteAttachmentFiles(this.cacheScope, [id])); }
 		this.update({ attachments });
 	}
 
@@ -643,19 +692,27 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	}
 
 	private async uploadAttachment(key: string, id: string): Promise<void> {
-		const source = this.attachmentFiles.get(id);
-		if (!source || this.uploads.has(id)) { return; }
+		const draft = this.readDraft(key);
+		const attachment = draft?.attachments.find(item => item.id === id);
+		const scope = this.cacheScope;
+		if (!draft || !attachment || attachment.status === 'ready' || this.uploads.has(id) || this.lifecycle.willShutdown) { return; }
+		this.drafts.set(key, draft);
 		const controller = new AbortController();
 		this.uploads.set(id, controller);
 		const update = (value: Partial<ChatGPTAttachment>): void => {
 			const draft = this.drafts.get(key);
-			if (this.isDisposed || controller.signal.aborted || !draft || !draft.attachments.some(attachment => attachment.id === id)) { return; }
+			if (this.isDisposed || this.lifecycle.willShutdown || controller.signal.aborted || !draft || !draft.attachments.some(attachment => attachment.id === id)) { return; }
 			const attachments = draft.attachments.map(attachment => attachment.id === id ? { ...attachment, ...value } : attachment);
-			this.drafts.set(key, { ...draft, attachments });
+			const updated = { ...draft, attachments };
+			this.drafts.set(key, updated);
+			this.persistDraftAttachments(key, updated);
 			if (key === this.draftKey()) { this.update({ attachments }); }
 		};
 		update({ status: 'uploading', error: undefined });
 		try {
+			const source = this.attachmentFiles.get(id) ?? (scope ? await this.draftAttachments.readFile(scope, attachment) : undefined);
+			controller.signal.throwIfAborted();
+			if (!source) { throw new Error(localize('sessions.chatgpt.draftAttachmentUnavailable', 'The original file is unavailable. Remove the attachment and add the file again.')); }
 			const file = await this.client.upload(source, AbortSignal.any([controller.signal, AbortSignal.timeout(60_000)]));
 			update({ status: 'ready', file });
 			this.attachmentFiles.delete(id);
@@ -684,7 +741,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		if (!saved?.history) return;
 		const { title, parentId, messages } = saved.history;
 		this.bindConversation(remoteId, saved.localId);
-		const draft = this.drafts.get(saved.localId);
+		const draft = this.readDraft(saved.localId);
 		this.update({
 			conversationId: remoteId, localConversationId: saved.localId,
 			title: this.model.get().conversations.find(item => item.id === remoteId)?.title ?? title,
@@ -772,7 +829,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	private restoreLocalConversation(id: string): void {
 		const timeline = this.timeline.read(id);
 		if (!timeline || timeline.archived) return;
-		const draft = this.drafts.get(timeline.localId);
+		const draft = this.readDraft(timeline.localId);
 		this.update({
 			conversationId: undefined, localConversationId: timeline.localId, title: timeline.title ?? timeline.tasks[0]?.prompt ?? 'ChatGPT',
 			parentId: crypto.randomUUID(), messages: [], coworkTasks: timeline.tasks, draft: draft?.text ?? '', attachments: draft?.attachments ?? [],
@@ -788,16 +845,18 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 
 	private retainedConversation(): string | undefined {
 		const legacy = this.storage.get(selectedConversationKey, StorageScope.PROFILE);
+		// A fresh New entry can be opened before the account's cache scope is known.
+		if (legacy === '') { return undefined; }
 		if (legacy?.startsWith('local:') || !this.cacheScope) { return legacy; }
-		return this.storage.get(`${selectedConversationKey}:${this.cacheScope}`, StorageScope.PROFILE) ?? legacy;
+		return (this.storage.get(`${selectedConversationKey}:${this.cacheScope}`, StorageScope.PROFILE) ?? legacy) || undefined;
 	}
 
 	private rememberConversation(id: string | undefined): void {
 		if (this.cacheScope && !id?.startsWith('local:')) {
-			this.storage.store(`${selectedConversationKey}:${this.cacheScope}`, id, StorageScope.PROFILE, StorageTarget.MACHINE);
+			this.storage.store(`${selectedConversationKey}:${this.cacheScope}`, id ?? '', StorageScope.PROFILE, StorageTarget.MACHINE);
 			this.storage.remove(selectedConversationKey, StorageScope.PROFILE);
 		} else {
-			this.storage.store(selectedConversationKey, id, StorageScope.PROFILE, StorageTarget.MACHINE);
+			this.storage.store(selectedConversationKey, id ?? '', StorageScope.PROFILE, StorageTarget.MACHINE);
 		}
 	}
 
@@ -815,8 +874,8 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		const outbox = this.outbox;
 		if (!outbox) { return; }
 		outbox.saveCreation(entry);
-		if (entry.localId === this.newConversationId) { this.newConversationId = crypto.randomUUID(); }
-		this.drafts.delete(entry.localId);
+		this.forgetDraft(entry.localId);
+		if (entry.localId === this.newConversationId) { this.rotateNewDraft(); }
 		this.updateCatalog({ conversations: this.model.get().conversations });
 		this.restorePendingCreation(entry);
 		try { await this.storage.flush(); }
@@ -972,7 +1031,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.cacheScope = scope;
 		this.remoteTimeline = new ChatTimelineStorage(this.storage, `chatgpt-web:${scope}`);
 		this.outbox = new ChatGPTOutbox(this.storage, scope);
-		this.update({ conversations: this.withLocalConversations([]) });
+		this.update({ conversations: this.withLocalConversations([]), attachments: this.readDraft(this.draftKey())?.attachments ?? [] });
 		const raw = this.storage.get(`${catalogKey}:${scope}`, StorageScope.PROFILE);
 		if (!raw) { return; }
 		let value: unknown;
@@ -1019,10 +1078,74 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	}
 	private draftKey(): string { return this.model.get().localConversationId; }
 
+	private readDraft(localId: string): ChatGPTDraft | undefined {
+		const draft = this.drafts.get(localId);
+		if (draft) { return draft; }
+		const text = this.storage.get(`sessions.chatgpt.draft:${localId}`, StorageScope.WORKSPACE);
+		const saved = this.cacheScope ? this.draftAttachments.read(localId) : undefined;
+		const attachments = saved?.scope === this.cacheScope ? saved?.attachments : undefined;
+		return text === undefined && !attachments?.length ? undefined : { text: text ?? '', attachments: attachments ?? [] };
+	}
+
+	private persistDraftText(localId: string, text: string): void {
+		this.storage.store(`sessions.chatgpt.draft:${localId}`, text || undefined, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		this.rememberNewDraft(localId, text);
+	}
+
+	private rememberNewDraft(localId: string, text: string): void {
+		if (localId !== this.newConversationId) { return; }
+		this.storage.store(newDraftIdKey, text || this.draftAttachments.has(localId) ? localId : undefined, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	}
+
+	private persistDraftAttachments(localId: string, draft: ChatGPTDraft): void {
+		const scope = this.cacheScope;
+		if (!scope) { return; }
+		const previous = this.draftAttachments.read(localId);
+		if (previous && previous.scope !== scope) {
+			this.trackAttachmentWrite(this.deleteAttachmentFiles(previous.scope, previous.attachments.map(attachment => attachment.id)));
+		}
+		// An upload is only restorable once its original bytes have committed.
+		this.draftAttachments.write(localId, scope, draft.attachments.filter(attachment => !this.savingAttachments.has(attachment.id)));
+		this.rememberNewDraft(localId, draft.text);
+	}
+
+	private trackAttachmentWrite(operation: Promise<void>): Promise<void> {
+		const tracked = operation.finally(() => this.pendingAttachmentWrites.delete(tracked));
+		this.pendingAttachmentWrites.add(tracked);
+		return tracked;
+	}
+
+	private async deleteAttachmentFiles(scope: string, ids: readonly string[]): Promise<void> {
+		try { await this.draftAttachments.deleteFiles(scope, ids); }
+		catch (error) { this.update({ error: localize('sessions.chatgpt.removeDraftAttachmentsFailed', 'Could not remove draft attachment files: {0}', this.errorText(error)) }); }
+	}
+
+	private releaseAttachment(id: string): void {
+		this.uploads.get(id)?.abort();
+		this.uploads.delete(id);
+		this.attachmentFiles.delete(id);
+	}
+
+	private forgetDraft(localId: string): void {
+		const saved = this.draftAttachments.read(localId);
+		for (const attachment of this.drafts.get(localId)?.attachments ?? []) { this.releaseAttachment(attachment.id); }
+		this.draftAttachments.remove(localId);
+		if (saved) {
+			this.trackAttachmentWrite(this.deleteAttachmentFiles(saved.scope, saved.attachments.map(attachment => attachment.id)));
+		}
+		this.drafts.delete(localId);
+		this.persistDraftText(localId, '');
+	}
+
+	private rotateNewDraft(): void {
+		this.newConversationId = crypto.randomUUID();
+		this.storage.remove(newDraftIdKey, StorageScope.WORKSPACE);
+	}
+
 	/** The first accepted reply binds a remote conversation to the existing local draft. */
 	private bindConversation(remoteId: string, localId: string): void {
 		this.localIdsByRemoteId.set(remoteId, localId);
-		if (localId === this.newConversationId) { this.newConversationId = crypto.randomUUID(); }
+		if (localId === this.newConversationId) { this.rotateNewDraft(); }
 	}
 	private bindLocalTimeline(localId: string, remoteId: string): void {
 		const localKey = `local:${localId}`;
@@ -1214,9 +1337,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		for (const item of page.items) { this.recentIds.add(item.id); }
 	}
 
-	public newChat(): void {
+	public newChat(options?: { readonly clearDraft: boolean; }): void {
 		if (this.isDisposed || this.model.get().sending || this.model.get().managing || this.voiceStopping) { return; }
-		if (this.voiceController) { void this.endVoice(true).then(() => this.newChat()); return; }
+		if (this.voiceController) { void this.endVoice(true).then(() => this.newChat(options)); return; }
+		if (options?.clearDraft) { this.forgetDraft(this.newConversationId); }
 		this.openNewChat();
 	}
 
@@ -1227,7 +1351,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.generation++;
 		this.draftRevision++;
 		this.taskWatchers.clear();
-		const draft = this.drafts.get(this.newConversationId);
+		const draft = this.readDraft(this.newConversationId);
 		const selected = models.find(model => model.id === draft?.selection?.model);
 		const selection = selected ? { model: selected.id, modelPreset: this.resolveModelPreset(selected, draft?.selection?.modelPreset) } : draft?.selection;
 		this.update({ coworkTasks: [], localConversationId: this.newConversationId, draft: draft?.text ?? '', attachments: draft?.attachments ?? [], conversationId: undefined, title: 'ChatGPT', messages: [], parentId: crypto.randomUUID(), error: '', busy: false, loading: undefined, uncertain: false, stopped: false, models, ...selection });
@@ -1327,8 +1451,9 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.persistHistory(history, saved?.tasks);
 		this.markHistoryValidated(history);
 		if (legacy) { this.timeline.remove(history.id); }
+		const draft = this.readDraft(localId);
 		this.update({
-			coworkTasks: sameConversation ? state.coworkTasks : saved?.tasks ?? [], localConversationId: localId, draft: this.drafts.get(localId)?.text ?? '', attachments: this.drafts.get(localId)?.attachments ?? [], conversationId: history.id, title: history.title, messages: history.messages, parentId: history.parentId,
+			coworkTasks: sameConversation ? state.coworkTasks : saved?.tasks ?? [], localConversationId: localId, draft: draft?.text ?? '', attachments: draft?.attachments ?? [], conversationId: history.id, title: history.title, messages: history.messages, parentId: history.parentId,
 			...(!preserveModel ? this.historyModel(history) : {}),
 			...(!preserveLoading ? { busy: false, loading: undefined } : {}),
 			uncertain: false, stopped: false,
@@ -1419,7 +1544,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				if (this.isDisposed || this.stream !== controller) { return; }
 				if (!acknowledged) {
 					acknowledged = true;
-					this.drafts.delete(draftKey);
+					this.forgetDraft(draftKey);
 					this.update({ draft: '', attachments: [] });
 				}
 				if (event.conversationId) {
@@ -1436,7 +1561,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				this.update({ messages, conversationId: event.conversationId ?? current.conversationId, parentId: event.message?.id ?? current.parentId });
 				if (event.conversationId) { this.rememberConversation(event.conversationId); }
 			}
-			this.drafts.delete(draftKey);
+			this.forgetDraft(draftKey);
 			this.update({ draft: '', attachments: [] });
 			const current = this.model.get();
 			const currentId = current.conversationId;

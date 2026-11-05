@@ -17,7 +17,7 @@ import { CommandsRegistry, ICommandService } from '../../../../platform/commands
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
-import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
+import { ILifecycleService, StartupKind } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
@@ -75,7 +75,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@ICommandService private readonly commands: ICommandService,
 		@INotificationService private readonly notifications: INotificationService,
-		@ILifecycleService lifecycle: ILifecycleService,
+		@ILifecycleService private readonly lifecycle: ILifecycleService,
 		@IInstantiationService instantiation: IInstantiationService,
 		@ISessionsConversationService private readonly conversation: ISessionsConversationService,
 		@ICustomViewService private readonly customViews: ICustomViewService,
@@ -286,6 +286,21 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	public async restore(onWillRestoreEntry?: (command: string) => void): Promise<void> {
 		await this.controller.whenSettled();
 		if (this.isDisposed) { return; }
+		const desktopNew = CommandsRegistry.hasCommand('sessions.open.new');
+		if (desktopNew && this.lifecycle.startupKind === StartupKind.NewWindow) {
+			this.customViews.hideCustomView();
+			onWillRestoreEntry?.('sessions.open.new');
+			await this.commands.executeCommand('sessions.open.new', 'startup');
+		} else {
+			await this.restoreSavedEntry(desktopNew ? 'sessions.open.new' : 'sessions.open.chat', onWillRestoreEntry);
+		}
+		if (this.isDisposed) { return; }
+		for (const key of ['sessions.layout.activeMode', 'sessions.layout.primaryPage', 'sessions.activityBar.activePage', 'sessions.layout.primaryEditor']) {
+			this.storage.remove(key, StorageScope.WORKSPACE);
+		}
+	}
+
+	private async restoreSavedEntry(defaultEntry: string, onWillRestoreEntry?: (command: string) => void): Promise<void> {
 		const saved = this.customViews.activeCustomView.get()?.entryCommand ?? this.storage.get(activeEntryKey, StorageScope.WORKSPACE);
 		// These names describe the discarded storage format, not runtime product selection.
 		const oldEditor = this.storage.get('sessions.layout.primaryEditor', StorageScope.WORKSPACE);
@@ -300,7 +315,6 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		if (!saved && oldEntry !== undefined && !Object.hasOwn(oldCommands, oldEntry)) {
 			throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'));
 		}
-		const defaultEntry = CommandsRegistry.hasCommand('sessions.open.new') ? 'sessions.open.new' : 'sessions.open.chat';
 		const requested = saved ?? (oldEntry ? oldCommands[oldEntry]! : defaultEntry);
 		const available = CommandsRegistry.hasCommand(requested);
 		// Entry commands can disappear during development or when a contribution is
@@ -309,9 +323,5 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		const command = available ? requested : defaultEntry;
 		if (!this.customViews.activeCustomView.get()) onWillRestoreEntry?.(command);
 		await this.commands.executeCommand(command, 'restore');
-		if (this.isDisposed) { return; }
-		for (const key of ['sessions.layout.activeMode', 'sessions.layout.primaryPage', 'sessions.activityBar.activePage', 'sessions.layout.primaryEditor']) {
-			this.storage.remove(key, StorageScope.WORKSPACE);
-		}
 	}
 }

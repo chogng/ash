@@ -93,7 +93,7 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 		this._register(CommandsRegistry.register('sessions.chatgpt.newChat', newChat));
 		this._register(CommandsRegistry.register('sessions.show.chatgpt', (_accessor, source) => showChat(source)));
 		this._register(CommandsRegistry.register('sessions.open.new', async (_accessor, source) => {
-			if (source !== 'restore') { chat.newChat(); }
+			if (source !== 'restore') { chat.newChat(source === 'startup' ? { clearDraft: true } : undefined); }
 			await showChat(source);
 		}));
 		// Saved window entries and existing keybindings from the experiment retain the same chat owner.

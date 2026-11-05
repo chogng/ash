@@ -38,6 +38,7 @@ import { createDisconnectedAgentHostInputCompletionService } from '../../../src/
 import { IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { IMessageHistoryService } from '../../../src/ash/platform/messageHistory/common/messageHistory.js';
 import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
+import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { IChatGPTTransport } from '../../../src/ash/sessions/contrib/chatgptweb/common/chatGPTTransport.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
@@ -217,6 +218,7 @@ services.registerInstance(IClipboardService, { writeText: async (value: string) 
 registerCodeEditorServices(services);
 
 resources.add(bindTestColorTheme(services.get(IThemeService), document.body));
+services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as ILifecycleService);
 const chat = resources.add(services.createInstance(ChatGPTService));
 services.registerInstance(IChatGPTService, chat);
 window.ashChatGPTIntegration = {

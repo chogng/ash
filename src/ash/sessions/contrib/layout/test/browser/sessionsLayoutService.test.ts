@@ -31,7 +31,7 @@ import { IEditorPart } from '../../../../../workbench/browser/parts/editor/edito
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import type { EditorPartChangeEvent } from '../../../../../workbench/services/editor/common/editorState.js';
 import type { IResourceEditorInput } from '../../../../../workbench/common/editor.js';
-import { ILifecycleService } from '../../../../../workbench/services/lifecycle/common/lifecycle.js';
+import { ILifecycleService, StartupKind } from '../../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { AbstractLifecycleService } from '../../../../../workbench/services/lifecycle/common/lifecycleService.js';
 import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { IPaneCompositePartService } from '../../../../../workbench/services/panecomposite/browser/panecomposite.js';
@@ -60,12 +60,25 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.service.newSessionCommand, undefined);
 	});
 
-	for (const saved of [undefined, 'sessions.show.removedFeature']) {
-		test(`restores the Desktop New entry when the saved entry is ${saved ?? 'absent'}`, async () => {
+	for (const saved of [undefined, 'sessions.open.code']) {
+		test(`opens a fresh Desktop New when the saved entry is ${saved ?? 'absent'}`, async () => {
 			using fixture = new EntryFixture();
 			if (saved) { fixture.storage.store('sessions.layout.activeEntry', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE); }
 			const calls: (readonly unknown[])[] = [];
 			using entry = CommandsRegistry.register('sessions.open.new', (_accessor, ...args) => { calls.push(args); });
+			using code = CommandsRegistry.register('sessions.open.code', () => assert.fail('Ordinary launch restored Code'));
+			await fixture.service.restore(command => { calls.push([command]); });
+			assert.deepEqual(calls, [['sessions.open.new'], ['startup']]);
+		});
+	}
+
+	for (const kind of [StartupKind.ReloadedWindow, StartupKind.ReopenedWindow]) {
+		test(`restores the saved Desktop entry on ${StartupKind[kind]}`, async () => {
+			using fixture = new EntryFixture(undefined, kind);
+			fixture.storage.store('sessions.layout.activeEntry', 'sessions.show.chatgpt', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			const calls: (readonly unknown[])[] = [];
+			using entry = CommandsRegistry.register('sessions.show.chatgpt', (_accessor, ...args) => { calls.push(args); });
+			using fresh = CommandsRegistry.register('sessions.open.new', () => assert.fail('Restoration started a fresh chat'));
 			await fixture.service.restore();
 			assert.deepEqual(calls, [['restore']]);
 		});
@@ -465,7 +478,7 @@ class EntryFixture extends Disposable {
 	public readonly container = this.dom.window.document.body;
 	private readonly services = this._register(new InstantiationService());
 	public readonly storage = this._register(new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'sessions', backend: this.dom.window.localStorage, flushInterval: 0 }));
-	public readonly lifecycle = this._register(new TestLifecycle(undefined, new NullLoggerService(), this.storage));
+	public readonly lifecycle: TestLifecycle;
 	public readonly contextKeys = this._register(new ContextKeyService());
 	public readonly customViews = this._register(new CustomViewService(new NullLoggerService(), this.storage));
 	private readonly workspace = this._register(new TestWorkspaceService({ id: 'sessions', folders: [] }));
@@ -498,8 +511,9 @@ class EntryFixture extends Disposable {
 		this.editorChanged.fire({ kind: 'groupChanged', groupId: this.services.get(IEditorPart).activeGroup.id, event: { kind: 'activeEditorChanged', editor: undefined } });
 	}
 
-	constructor(savedVisibility?: unknown) {
+	constructor(savedVisibility?: unknown, startupKind?: StartupKind) {
 		super();
+		this.lifecycle = this._register(new TestLifecycle(startupKind, new NullLoggerService(), this.storage));
 		this._register(toDisposable(() => this.dom.window.close()));
 		if (savedVisibility) { this.storage.store('sessions.layout.entryVisibility', JSON.stringify(savedVisibility), StorageScope.PROFILE, StorageTarget.MACHINE); }
 		const fixture = this;

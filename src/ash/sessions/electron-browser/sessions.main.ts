@@ -45,10 +45,11 @@ import { NativeMenubarControl } from '../../workbench/electron-browser/parts/tit
 import { Menus } from '../browser/menus.js';
 import { getSessionsTitlebarBackground, TitlebarPart } from '../browser/parts/titlebarPart.js';
 import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
-import { RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
+import { AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL } from '../../platform/window/common/window.js';
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { ElectronLifecycleService } from '../../workbench/services/lifecycle/electron-browser/lifecycleService.js';
+import { StartupKind } from '../../workbench/services/lifecycle/common/lifecycle.js';
 import { NativeHostColorSchemeService } from '../../workbench/services/themes/electron-browser/nativeHostColorSchemeService.js';
 import { showStartupError } from '../../workbench/browser/startupError.js';
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
@@ -126,9 +127,13 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	let logger: NativeLogService;
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
 	let documentClient: AppServerProtocolClient | undefined;
+	let restoreEntry: boolean;
 	try {
 		const windowId = await invoke<unknown>('ash:ipc:window-id');
 		if (!Number.isSafeInteger(windowId) || (windowId as number) <= 0) { throw new TypeError('Invalid Main IPC window ID'); }
+		const startupIntent = await invoke<unknown>(AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL);
+		if (typeof startupIntent !== 'boolean') { throw new TypeError('Invalid Agents startup intent'); }
+		restoreEntry = startupIntent;
 		// Release automation dependencies before their Main IPC connection during window shutdown.
 		profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 		const mainProcessService = profileServices.get(IMainProcessService);
@@ -352,6 +357,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					lifecycleService = services.createInstance(ElectronLifecycleService, {
 						ownerWindow: window,
 						onError: onUnexpectedError,
+						startupKind: restoreEntry ? StartupKind.ReopenedWindow : undefined,
 					});
 					sessions.add(
 						lifecycleService.onWillShutdown(event =>

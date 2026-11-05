@@ -99,7 +99,7 @@ import { UpdateChannel } from '../../platform/update/common/updateIpc.js';
 import { NATIVE_HOST_ACCESSIBILITY_SUPPORT_CHANGED_CHANNEL, NATIVE_HOST_TERMINAL_REQUEST_CHANNEL, validateOpenAgentsWindow, type INativeSystemWideKeybinding, type IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { DialogMainService, IDialogMainService } from '../../platform/dialogs/electron-main/dialogMainService.js';
 import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
-import { RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
+import { AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL, validateAgentsWindowHandoffComplete, validateAgentsWindowHandoffTake, type IAgentsWindowHandoffResult } from '../../platform/window/common/window.js';
 import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
 import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../workbench/contrib/chat/common/constants.js';
@@ -290,6 +290,7 @@ export class AshApplication extends Disposable {
 	}));
 	private readonly sessionsWindow = this._register(new MutableDisposable<SessionsWindowRecord>());
 	private sessionsWindowOpenQueue: Promise<void> = Promise.resolve();
+	private hasOpenedSessionsWindow = false;
 	private readonly windowServices = this._register(new InstantiationService(new ServiceCollection([
 		IAuxiliaryWindowsMainService,
 		new SyncDescriptor(AuxiliaryWindowsMainService, [(contents: Electron.WebContents) => BrowserWindow.fromWebContents(contents)]),
@@ -2038,6 +2039,9 @@ export class AshApplication extends Disposable {
 		});
 		const titleBarStyle = this.titleBarStyle;
 		const wasOpen = this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY) !== undefined;
+		// The singleton can be reopened within a run. Ordinary app launches can
+		// reuse window placement while starting a fresh conversation.
+		const restoreEntry = this.lifecycleMainService.wasRestarted || this.hasOpenedSessionsWindow;
 		await this.windowsMainService.openManagedWindow(
 			AGENTS_WINDOW_KEY,
 			options => new BrowserWindow(options),
@@ -2181,6 +2185,11 @@ export class AshApplication extends Disposable {
 						}),
 						...workspaceContextIpcRoutes(session.workspaceContext),
 						{
+							channel: AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL,
+							validate: (value: unknown) => { if (value !== undefined) throw new TypeError('Agents startup intent takes no arguments'); return undefined; },
+							invoke: () => restoreEntry,
+						},
+						{
 							channel: AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL,
 							validate: validateAgentsWindowHandoffTake,
 							invoke: () => this.windowsMainService.takeManagedWindowHandoff(AGENTS_WINDOW_KEY),
@@ -2232,7 +2241,10 @@ export class AshApplication extends Disposable {
 			},
 		);
 		await this.selectSessionsWorkspace(session, workspace, resolvedWorkspace);
-		if (!wasOpen) this.windowSessionStateHandler.windowOpened();
+		if (!wasOpen) {
+			this.hasOpenedSessionsWindow = true;
+			this.windowSessionStateHandler.windowOpened();
+		}
 		if (handoff) {
 			const completed = this.windowsMainService.enqueueManagedWindowHandoff(AGENTS_WINDOW_KEY, handoff);
 			const window = this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);

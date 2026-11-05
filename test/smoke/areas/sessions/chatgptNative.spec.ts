@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import type { ElectronApplication } from '@playwright/test';
+import type { ElectronApplication, Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { Editor } from '../../../automation/editor.js';
@@ -11,7 +11,7 @@ import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index
 import { connectProfile } from './sessionProfileFixture.js';
 
 declare global {
-	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; };
+	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; };
 }
 
 /** Keep production IPC, Rust authentication, transport, verification and UI; replace only service I/O. */
@@ -25,6 +25,9 @@ async function installService(application: ElectronApplication, holdInitializati
 		let sends = 0; let step = 0; let reply: ReadableStreamDefaultController<Uint8Array> | undefined;
 		let cancelledInitializations = 0;
 		let offline = false;
+		let uploadsHeld = false;
+		let heldUploads = 0;
+		const uploadedFiles: Record<string, string> = {};
 		const initializing = new Set<() => void>();
 		const message = (id: string, role: string, text: string) => ({ id, author: { role }, content: { content_type: 'text', parts: [text] } });
 		const live: Record<string, { parent: string | null; message: ReturnType<typeof message>; }> = {};
@@ -40,6 +43,9 @@ async function installService(application: ElectronApplication, holdInitializati
 			get pendingInitializations() { return initializing.size; },
 			get cancelledInitializations() { return cancelledInitializations; },
 			setOffline(value) { offline = value; },
+			holdUploads(value) { uploadsHeld = value; },
+			get heldUploads() { return heldUploads; },
+			get uploadedFiles() { return uploadedFiles; },
 			releaseInitialization() {
 				holdInitialization = false;
 				for (const release of [...initializing]) { release(); }
@@ -67,8 +73,24 @@ async function installService(application: ElectronApplication, holdInitializati
 			});
 			storage.fetch = async (input, init) => {
 				const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+				if (url.origin === 'https://fixture.oaiusercontent.com' && init?.method === 'PUT') {
+					uploadedFiles[decodeURIComponent(url.pathname.slice(1))] = Buffer.from(init.body as Uint8Array).toString('utf8');
+					return new Response(null, { status: 204 });
+				}
 				if (url.hostname !== 'chatgpt.com') { throw new Error('Unexpected fixture origin'); }
 				if (offline) { return new Response(null, { status: 503 }); }
+				if (url.pathname.endsWith('/files') && init?.method === 'POST') {
+					const { file_name: name } = JSON.parse(String(init.body));
+					if (uploadsHeld) {
+						heldUploads++;
+						await new Promise<never>((_, reject) => {
+							init.signal!.throwIfAborted();
+							init.signal!.addEventListener('abort', () => reject(init.signal!.reason), { once: true });
+						});
+					}
+					return Response.json({ file_id: 'file-' + name.replace(/[^a-z0-9]/gu, '-'), upload_url: 'https://fixture.oaiusercontent.com/' + encodeURIComponent(name) + '?fixture=1' });
+				}
+				if (url.pathname.endsWith('/uploaded')) { return Response.json({ status: 'success' }); }
 				if (url.pathname.endsWith('/models')) {
 					if (holdInitialization) {
 						await new Promise<void>((resolve, reject) => {
@@ -274,12 +296,24 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await testInfo.attach('chatgpt-after-initialization-close', { body: await page.screenshot(), contentType: 'image/png' });
 		});
 
-		test('reopens the ChatGPT sidebar and selected conversation from disk when the service is offline', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench }) => {
+		test('restores an offline ChatGPT conversation and draft on window reopen, then opens blank New on ordinary startup', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, reloadWorkbench }) => {
 			const application = browser as ElectronApplication;
 			await installService(application);
 			const page = await workbench.openAgentsWindow(target.kind);
 			await page.getByRole('button', { name: 'First native history', exact: true }).click();
 			await expect(page.locator('.ash-chatgpt-widget')).toContainText('History one answer');
+			const composer = new Editor(page.locator('.ash-chatgpt-widget'));
+			await composer.waitForEditorFocus();
+			await composer.waitForTypeInEditor('Unsent native follow-up');
+			const ready = 'draft-ready.txt';
+			const pending = 'draft-pending.txt';
+			const staged = (page: Page, name: string) => page.locator('.ash-chat-staged-file').filter({ hasText: name });
+			const picker = page.locator('.ash-chatgpt-widget input[type=file]');
+			await picker.setInputFiles({ name: ready, mimeType: 'text/plain', buffer: Buffer.from('Ready draft bytes') });
+			await expect(staged(page, ready)).toContainText(locale === 'en' ? 'Ready' : '就绪');
+			await application.evaluate(() => globalThis.ashNativeFixture.holdUploads(true));
+			await picker.setInputFiles({ name: pending, mimeType: 'text/plain', buffer: Buffer.from('Pending draft bytes') });
+			await expect.poll(() => application.evaluate(() => globalThis.ashNativeFixture.heldUploads)).toBe(1);
 			await application.evaluate(() => globalThis.ashNativeFixture.setOffline(true));
 
 			const reopened = await workbench.reopenAgentsWindow(application, page);
@@ -290,6 +324,32 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(history.getByRole('button', { name: 'Second native history', exact: true })).toBeVisible();
 			await expect(history.getByRole('button', { name: 'Pinned native history', exact: true })).toBeVisible();
 			await expect(editor).toContainText('History one answer');
+			await new Editor(editor).waitForEditorContents(text => text === 'Unsent native follow-up');
+			await expect(staged(reopened, ready)).toContainText(locale === 'en' ? 'Ready' : '就绪');
+			const retry = staged(reopened, pending).getByRole('button', { name: locale === 'en' ? 'Retry ' + pending : '重试 ' + pending, exact: true });
+			await expect(retry).toBeVisible();
+			await application.evaluate(() => {
+				globalThis.ashNativeFixture.setOffline(false);
+				globalThis.ashNativeFixture.holdUploads(false);
+			});
+			await retry.click();
+			await expect(staged(reopened, pending)).toContainText(locale === 'en' ? 'Ready' : '就绪');
+			expect(await application.evaluate(() => globalThis.ashNativeFixture.uploadedFiles)).toEqual({ [ready]: 'Ready draft bytes', [pending]: 'Pending draft bytes' });
+
+			const restarted = await reloadWorkbench('quit');
+			await installService(restarted.application as ElectronApplication);
+			const fresh = await restarted.workbench.openAgentsWindow(target.kind);
+			const freshEditor = fresh.locator('.ash-chatgpt-widget');
+			const freshComposer = new Editor(freshEditor);
+			await expect(freshComposer.input).toBeFocused();
+			await freshComposer.waitForEditorContents(text => text === '');
+			await expect(freshEditor.locator('.ash-chat-item')).toHaveCount(0);
+			await expect(freshEditor.locator('.ash-chat-staged-file')).toHaveCount(0);
+			await fresh.getByRole('button', { name: 'First native history', exact: true }).click();
+			await expect(freshEditor).toContainText('History one answer');
+			await freshComposer.waitForEditorContents(text => text === 'Unsent native follow-up');
+			await expect(staged(fresh, ready)).toContainText(locale === 'en' ? 'Ready' : '就绪');
+			await expect(staged(fresh, pending)).toContainText(locale === 'en' ? 'Ready' : '就绪');
 		});
 	});
 
