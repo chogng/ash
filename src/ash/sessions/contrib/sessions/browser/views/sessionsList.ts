@@ -765,7 +765,7 @@ export class SessionsList extends DomWidget {
 				recent.push(item.domNode);
 			}
 		}
-		const catalog = getSessionsListEntries(this.sessionService.sessions, this.listModel,
+		const catalog = getSessionsListEntries(this.sessionService.sessions.filter(session => session.surface !== 'chat'), this.listModel,
 			activeSelection?.kind === 'session' ? activeSelection.active.session.sessionId : undefined);
 		const groupNames = new Map(this.groups.groups.flatMap(group => group.sessionIds.map(id => [id, group.name] as const)));
 		const projectNames = new Map(this.projects.flatMap(project => project.sessionIds.map(id => [id, project.name] as const)));

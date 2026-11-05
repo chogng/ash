@@ -282,6 +282,7 @@ fn memories_are_recollected_after_preflight_compaction_and_revocation() {
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
             core_api::StartThreadRequest {
+                surface: None,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,

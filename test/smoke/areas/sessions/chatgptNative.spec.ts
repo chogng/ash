@@ -177,11 +177,16 @@ async function configureAshModel(catalog: ReturnType<typeof createAshModelServer
 test.describe('Unified Chat sidebar', () => {
 	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN' } });
 
-	test('a retained Chat picker follows Ash model settings', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
+	test('a retained Chat picker follows Ash model settings', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }, testInfo) => {
 		const application = browser as ElectronApplication;
 		await installService(application);
 		await using catalog = createAshModelServer([]);
 		await configureAshModel(catalog, application, workbench, testWorkspace.directory);
+		const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+		try {
+			await connection.client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: 'openai', apiKey: 'isolated-effort-fixture-key' });
+			await connection.client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: 'anthropic', apiKey: 'isolated-speed-fixture-key' });
+		} finally { await connection.close(); }
 		const page = await workbench.openAgentsWindow(target.kind);
 		const modelButton = page.locator('.ash-chatgpt-widget .ash-chat-input-model-action');
 		const picker = page.getByRole('dialog', { name: '选择聊天模型', exact: true });
@@ -212,8 +217,27 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(ashChoice).toBeVisible();
 		await expect(webChoice).toHaveAttribute('aria-checked', 'true');
 		await ashChoice.click();
-		const ashDraft = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat[data-untitled-session-id]');
-		await expect(ashDraft.locator('.ash-chat-input-model-action')).toHaveText(ashFixtureModel.model);
+		const ashDraft = page.locator('.ash-native-chat-widget .ash-chat[data-untitled-session-id]');
+		const nativeModelButton = ashDraft.locator('.ash-chat-input-model-action');
+		await expect(nativeModelButton).toHaveText(ashFixtureModel.model);
+		await nativeModelButton.press('ArrowDown');
+		await picker.getByRole('menuitemradio', { name: 'GPT-6.1 Sol', exact: true }).click();
+		await expect(picker.getByRole('slider')).toHaveAttribute('aria-valuetext', '中');
+		const fast = picker.getByRole('button', { name: '快速模式', exact: true });
+		await expect(fast).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(nativeModelButton).toHaveAccessibleName('GPT-6.1 Sol · 中');
+		await expect(nativeModelButton).toBeFocused();
+		await expect(ashDraft.locator('.ash-chat-input-configuration-action')).toBeHidden();
+		await ashDraft.locator('.ash-chat-input-part').screenshot({ path: testInfo.outputPath('ash-chat-combined-model-picker.png') });
+		await nativeModelButton.press('ArrowDown');
+		await picker.getByRole('button', { name: 'GPT-6.1 Sol', exact: true }).click();
+		await picker.getByRole('menuitemradio', { name: 'Claude Opus 5.5', exact: true }).click();
+		await expect(fast).toBeVisible();
+		await picker.getByRole('button', { name: 'Claude Opus 5.5', exact: true }).click();
+		await picker.getByRole('menuitemradio', { name: 'Claude Sonnet 5.5', exact: true }).click();
+		await expect(picker.getByRole('button', { name: 'Claude Sonnet 5.5', exact: true })).toBeVisible();
+		await expect(fast).toHaveCount(0);
 	});
 
 	test('opens and continues ChatGPT and Ash conversations from the same list', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
@@ -234,6 +258,16 @@ test.describe('Unified Chat sidebar', () => {
 		await new QuickAccess(page).runCommand('workbench.action.files.newUntitledFile');
 		const codeEditor = page.getByRole('textbox', { name: 'Untitled-1', exact: true });
 		await expect(codeEditor).toBeVisible();
+		const code = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		const codeComposer = new Editor(code);
+		await codeComposer.waitForEditorFocus();
+		await codeComposer.waitForTypeInEditor('Keep this Code draft');
+		await code.locator('.ash-chat-input-model-action').press('ArrowDown');
+		const codeAuto = page.getByRole('switch', { name: '自动', exact: true });
+		await expect(codeAuto).toBeVisible();
+		if (!await codeAuto.isChecked()) await codeAuto.press('Space');
+		await expect(codeAuto).toBeChecked();
+		await page.keyboard.press('Escape');
 		await chatMode.click();
 		await expect(chatMode).toHaveAttribute('aria-pressed', 'true');
 		const modelButton = editor.locator('.ash-chat-input-model-action');
@@ -249,7 +283,7 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(picker.getByText('选择模型新建 Ash 对话…', { exact: true })).toHaveCount(0);
 		await picker.getByRole('menuitemradio', { name: ashFixtureModel.model, exact: true }).click();
 
-		const ash = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		const ash = page.locator('.ash-native-chat-widget .ash-chat');
 		const ashComposer = new Editor(ash);
 		await ashComposer.waitForEditorFocus();
 		await ashComposer.waitForEditorContents(text => text === 'First Ash message');
@@ -265,10 +299,12 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(picker.getByRole('combobox')).toHaveCount(0);
 		await expect(picker.getByRole('toolbar')).toHaveCount(0);
 		await expect(picker.getByRole('menuitemradio', { name: ashFixtureModel.model, exact: true })).toHaveAttribute('aria-checked', 'true');
+		await expect(picker.getByRole('menuitemradio', { name: '自动', exact: true })).toHaveCount(0);
 		await page.keyboard.press('Escape');
 		await codeMode.click();
-		await expect(ash.locator('.ash-chat-input-mode-selector')).toBeVisible();
-		await ashComposer.waitForEditorContents(text => text === 'First Ash message');
+		await expect(ash).toBeHidden();
+		await expect(code.locator('.ash-chat-input-model-action')).toHaveText('自动');
+		await codeComposer.waitForEditorContents(text => text === 'Keep this Code draft');
 		await chatMode.click();
 		await expect(codeTools).toHaveCount(0);
 		await ashComposer.waitForEditorContents(text => text === 'First Ash message');
@@ -342,6 +378,24 @@ test.describe('Unified Chat sidebar', () => {
 		});
 		expect(await application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(2);
 		expect(ashRequests).toEqual([ashFixtureModel.model, ashFixtureModel.model]);
+
+		await ashTitle.click();
+		await codeMode.click();
+		await expect(page.locator('[data-item]').getByText('First Ash message', { exact: true })).toHaveCount(0);
+		await codeComposer.waitForEditorContents(text => text === 'Keep this Code draft');
+		await chatMode.click();
+		await expect(ash).toContainText('Follow up with Ash');
+		await test.step('Reopen Agents and restore the native Chat conversation', async () => {
+			const restored = await workbench.reopenAgentsWindow(application, page);
+			const restoredChat = restored.locator('.ash-native-chat-widget .ash-chat');
+			await expect(restoredChat).toHaveAttribute('data-session-id', ashSessionId!);
+			await expect(restoredChat).toContainText('Follow up with Ash');
+			await expect(restoredChat.locator('.ash-chat-input-model-action')).toHaveText(ashFixtureModel.model);
+			const window = await application.browserWindow(restored);
+			const closed = restored.waitForEvent('close');
+			await window.evaluate(window => window.close());
+			await closed;
+		});
 	});
 });
 
@@ -492,7 +546,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await modelMenu.getByRole('menuitemradio', { name: model.model, exact: true }).click();
 			const mode = page.locator('.ash-window-mode-control');
 			const chatMode = mode.getByRole('button', { name: locale === 'en' ? 'Chat / Agents' : '聊天 / Agents', exact: true });
-			const ash = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+			const ash = page.locator('.ash-native-chat-widget .ash-chat');
 			const ashComposer = new Editor(ash);
 			await ashComposer.waitForEditorContents(text => text === 'Hello from native UI');
 			const ashCard = ash.locator('.ash-chat-input-container.ash-chat-input-adaptive');

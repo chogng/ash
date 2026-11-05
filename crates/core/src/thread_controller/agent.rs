@@ -114,6 +114,7 @@ impl ThreadController {
         }
         let mut events = vec![
             ThreadEvent::ThreadCreated {
+                surface: None,
                 agent_id: Some(agent_id),
                 origin: ThreadOrigin::AgentSpawn {
                     parent_thread_id: request.context_seed.parent_thread_id.clone(),

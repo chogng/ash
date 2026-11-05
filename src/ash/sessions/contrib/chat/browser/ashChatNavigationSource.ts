@@ -1,35 +1,38 @@
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { derived, observableFromEvent, observableSignalFromEvent } from '../../../../base/common/observable.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsListModelService } from '../../../services/sessions/browser/sessionsListModelService.js';
-import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { getSessionsListEntries } from '../../sessions/browser/views/sessionsListFilters.js';
 import type { ChatListEntry, ChatListSnapshot, ChatListSource } from './chatListModel.js';
 import { ASH_CHAT_SELECTED_CONTEXT, SHOW_ASH_CHAT_COMMAND } from '../common/constants.js';
+import { IAshChatSelectionService } from './ashChatSelectionService.js';
+import { ISessionsSearchService } from '../../search/browser/searchService.js';
+import type { SearchResult } from '../../search/browser/searchModel.js';
 
 /** Projects the local Ash catalog and routes actions to its Session owner. */
-export class AshChatNavigationSource implements ChatListSource {
+export class AshChatNavigationSource extends Disposable implements ChatListSource {
 	readonly snapshot;
 
 	constructor(
 		@ISessionsManagementService management: ISessionsManagementService,
-		@ISessionsService sessions: ISessionsService,
+		@IAshChatSelectionService selection: IAshChatSelectionService,
 		@ISessionsListModelService list: ISessionsListModelService,
 		@ISessionGroupsService groups: ISessionGroupsService,
-		@IContextKeyService contextKeys: IContextKeyService,
 		@ICommandService commands: ICommandService,
-		@ILayoutService layout: ILayoutService,
+		@IContextKeyService contextKeys: IContextKeyService,
+		@ISessionsSearchService search: ISessionsSearchService,
 	) {
+		super();
 		const context = new Set([ASH_CHAT_SELECTED_CONTEXT]);
-		const active = observableFromEvent(this, listener => contextKeys.onDidChangeContext(event => {
+		const visible = observableFromEvent(this, listener => contextKeys.onDidChangeContext(event => {
 			if (event.affectsSome(context)) listener(event);
 		}), () => contextKeys.getValue(ASH_CHAT_SELECTED_CONTEXT) === true);
 		const catalog = observableFromEvent(this, management.onDidChange, () => management.sessions);
@@ -41,13 +44,13 @@ export class AshChatNavigationSource implements ChatListSource {
 		this.snapshot = derived<ChatListSnapshot>(reader => {
 			listChanged.read(reader);
 			groupsChanged.read(reader);
-			const selection = sessions.getSelection(reader).activeSelection;
-			const selectedId = active.read(reader) && selection?.kind === 'session' ? selection.active.session.sessionId : undefined;
+			const active = selection.selection.read(reader);
+			const selectedId = visible.read(reader) && active.kind === 'thread' ? active.sessionId : undefined;
 			const rows: ChatListEntry[] = [];
 			const entries = getSessionsListEntries(catalog.read(reader), list, selectedId);
 			for (const session of entries) {
 				// The ambient local provider keeps its raw catalog IDs and omits providerId.
-				if (session.providerId && session.providerId !== LOCAL_AGENT_HOST_PROVIDER_ID) continue;
+				if (session.surface !== 'chat' || session.providerId && session.providerId !== LOCAL_AGENT_HOST_PROVIDER_ID) continue;
 				const chats = session.chats.filter(chat => chat.status === 'active');
 				const thread = chats.find(chat => chat.threadId === session.sessionId)
 					?? chats.find(chat => chat.origin.type === 'root') ?? chats[0];
@@ -75,8 +78,10 @@ export class AshChatNavigationSource implements ChatListSource {
 					open: async signal => {
 						await commands.executeCommand(SHOW_ASH_CHAT_COMMAND);
 						if (signal.aborted) return;
-						sessions.openSession(id, thread.threadId);
-						layout.focus();
+						const current = selection.selection.get();
+						if (current.kind !== 'thread' || current.sessionId !== id || current.threadId !== thread.threadId) {
+							selection.select({ kind: 'thread', sessionId: id, threadId: thread.threadId });
+						}
 					},
 					getActions: () => [
 						action('agentSession.rename', localize('sessions.list.rename', 'Rename'), Lxicon.edit),
@@ -89,5 +94,9 @@ export class AshChatNavigationSource implements ChatListSource {
 			}
 			return { entries: rows, groups: groups.groups.filter(group => group.kind !== 'comparison') };
 		});
+		this._register(search.registerSource(this.snapshot.map(snapshot => snapshot.entries.map(entry => ({
+			id: entry.id, category: 'sessions', title: entry.title, icon: entry.defaultIcon,
+			target: { kind: 'contributed', open: () => entry.open(new AbortController().signal) },
+		} satisfies SearchResult)))));
 	}
 }

@@ -5,9 +5,10 @@ import type { IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, 
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 import type { IAutomationStore } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
-import type { SessionWorktreeStart } from '../../../../platform/agentHost/common/agent.js';
+import type { SessionSurface, SessionWorktreeStart } from '../../../../platform/agentHost/common/agent.js';
 
 export interface ISessionCreateOptions {
+	readonly surface?: SessionSurface;
 	readonly automaticTitle?: true;
 	readonly devContainer?: boolean;
 	readonly branchName?: string;

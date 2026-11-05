@@ -26,7 +26,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IProgressService } from '../../../../platform/progress/common/progress.js';
 import { signInChatGPT } from '../browser/chatGPTLogin.js';
 import { ChatGPTList } from './chatGPTList.js';
-import { canUseCodeModels } from './chatGPTWidgetModel.js';
+import { canUseAshModels } from './chatGPTWidgetModel.js';
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
 import { openAshChatWithModel } from '../../chat/electron-browser/actions/newChatModelAction.js';
 
@@ -84,7 +84,7 @@ CommandsRegistry.register(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, async (accessor, mod
 	const revision = chat.newDraftRevision;
 	await openAshChatWithModel(accessor, { provider: model.provider, model: model.model }, () => {
 		const state = chat.state.get();
-		if (!canOpen() || state.localConversationId !== source || chat.newDraftRevision !== revision || !canUseCodeModels(state)
+		if (!canOpen() || state.localConversationId !== source || chat.newDraftRevision !== revision || !canUseAshModels(state)
 			|| state.sending || state.managing || state.voice !== 'idle') return undefined;
 		return state.draft;
 	});

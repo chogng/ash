@@ -261,6 +261,7 @@ impl Serialize for StoredThreadEvent<'_> {
             thread_id,
             title,
             execution_target,
+            ..
         } = &self.0.event
         else {
             return self.0.event.serialize(serializer);

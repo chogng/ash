@@ -3927,6 +3927,7 @@ fn temporary_dir(label: &str) -> std::path::PathBuf {
 
 fn manager_state_session(id: &str) -> Session {
     Session {
+        surface: None,
         source: None,
         model: None,
         session_id: SessionId::new(id).unwrap(),

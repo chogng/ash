@@ -8,6 +8,7 @@ pub(super) fn session(
     activity: Option<SessionManagerActivity>,
 ) -> Session {
     Session {
+        surface: None,
         source: None,
         model: None,
         session_id: SessionId::new(id).unwrap(),

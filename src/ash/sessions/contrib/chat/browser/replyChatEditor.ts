@@ -33,6 +33,9 @@ import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
 import { ChatWelcomeTitle } from './chatWelcomeTitle.js';
 import './media/chatInput.css';
 import './media/chatInputCard.css';
+import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
+import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
+import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
 import './media/chatView.css';
 
 export interface IReplyChatEditorModel extends IChatWidgetModel {
@@ -48,13 +51,16 @@ export interface ReplyChatEditorOptions {
 	readonly title: () => string;
 	readonly inputLabel: () => string;
 	readonly model: SyncDescriptor<IReplyChatEditorModel>;
+	readonly persistentDraftScope?: string;
+	readonly useWorkbenchModelManagement?: true;
+	readonly advanceWelcomePhrase?: false;
 	readonly createDraftPicker?: (instantiation: IInstantiationService, footer: HTMLElement, visible: IObservable<boolean>) => IDisposable;
 	readonly accessibility: {
 		readonly focusContext: string;
 		readonly verbositySetting: AccessibilityVerbositySettingId;
 		readonly hint: () => string;
 	};
-	readonly scrollOptimizationSetting: string;
+	readonly scrollOptimizationSetting?: string;
 }
 
 export function registerReplyChatEditor(options: ReplyChatEditorOptions): void {
@@ -84,7 +90,8 @@ export class ReplyChatEditor extends EditorPane {
 		@IOpenerService private readonly opener: IOpenerService,
 		@IEditorService private readonly editors: IEditorService,
 		@IThemeService theme: IThemeService,
-		@IStorageService profileStorage: IStorageService,
+		@IStorageService private readonly profileStorage: IStorageService,
+		@ILifecycleService private readonly lifecycle: ILifecycleService,
 		@IChatListCatalog private readonly chatCatalog: IChatListCatalog,
 	) {
 		super(options.id, theme, profileStorage);
@@ -127,10 +134,10 @@ export class ReplyChatEditor extends EditorPane {
 			projectTitlebar.setVisible(!!project);
 		}));
 		const createDraftPicker = this.options.createDraftPicker;
-		const welcome = this._register(instantiation.createInstance(ChatWelcomeTitle, (reader: IReader) => model.readWelcomeDraft(reader), this.shown, true));
+		const welcome = this._register(instantiation.createInstance(ChatWelcomeTitle, (reader: IReader) => model.readWelcomeDraft(reader), this.shown, this.options.advanceWelcomePhrase !== false));
 		try {
 			this.widget = this._register(instantiation.createInstance(ChatWidget<IReplyChatEditorModel>,
-				root, 'sessions-chat-reply', model, () => model.newChat(),
+				root, this.options.id, model, () => model.newChat(),
 				this.menus, this.contextViews, this.commands, this.accessibleViews, this.notifications,
 				this.opener, this.editors, undefined,
 				(container: HTMLElement, delegate: ChatInputDelegate) => {
@@ -144,12 +151,20 @@ export class ReplyChatEditor extends EditorPane {
 						}),
 					}, [], {
 						layout: 'compact', modePicker: 'hidden', modelPickerPosition: 'trailing',
-						useWorkbenchModelManagement: false,
-						chatModelSlider: true,
+						useWorkbenchModelManagement: this.options.useWorkbenchModelManagement === true,
+						chatModelSlider: true, configureModelInMenu: true,
 						renderSecondaryToolbar: false, draftStorage: 'host',
 						renderLeadingFooter: createDraftPicker && ((footer: HTMLElement) => createDraftPicker(instantiation, footer, this.shown)),
 						inputLabel: this.options.inputLabel(),
 					});
+					const draftScope = this.options.persistentDraftScope;
+					if (draftScope) {
+						input.bindDraftStorage(model, {
+							read: identity => readNewChatDraftState(this.profileStorage, `${draftScope}:${identity}`, chatInputStatePersistence),
+							write: (identity, draft) => writeNewChatDraftState(this.profileStorage, draft, `${draftScope}:${identity}`, chatInputStatePersistence),
+							flush: () => this.profileStorage.flush(),
+						}, this.lifecycle.onWillShutdown);
+					}
 					input.element.classList.add('ash-sessions-chat-input', 'chat-composer');
 					input.composerForm.classList.add('ash-sessions-chat-input-card', 'floating-card');
 					return input;
@@ -158,10 +173,12 @@ export class ReplyChatEditor extends EditorPane {
 			model.dispose();
 			throw error;
 		}
-		const scrollOptimization = observableConfigValue(this.options.scrollOptimizationSetting, false, this.configuration);
-		this._register(autorun(reader => {
-			root.classList.toggle('ash-chat-defer-completed', scrollOptimization.read(reader));
-		}));
+		if (this.options.scrollOptimizationSetting) {
+			const scrollOptimization = observableConfigValue(this.options.scrollOptimizationSetting, false, this.configuration);
+			this._register(autorun(reader => {
+				root.classList.toggle('ash-chat-defer-completed', scrollOptimization.read(reader));
+			}));
+		}
 		this._register(addDisposableListener(root, 'focusin', event => {
 			const { hint, verbositySetting } = this.options.accessibility;
 			if (!root.contains(event.relatedTarget as Node) && this.configuration.getValue<boolean>(verbositySetting)) {

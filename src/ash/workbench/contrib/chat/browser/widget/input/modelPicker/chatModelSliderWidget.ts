@@ -13,7 +13,7 @@ import { appendIcon } from '../../../../../../../base/browser/ui/lxicons/lxicon.
 import { Lxicon } from '../../../../../../../base/common/lxicons.js';
 import { ILanguageModelsService } from '../../../../common/languageModels.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
-import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
+import { modelRefIdentity, type ModelCatalogEntry, type ModelReasoningEffort } from '../../../../../../services/chat/common/modelCatalog.js';
 import { modelPickerEffortOptions } from './modelPickerModelConfig.js';
 import type { ModelPreferencesUpdate } from '../../../../../../../platform/models/common/agentModels.js';
 
@@ -156,6 +156,7 @@ export class ChatModelSliderWidget extends Disposable {
 		container.append(root);
 
 		const models = this.delegate.getModels();
+		let displayedModels = models;
 		const selectedModelRef = this.delegate.getSelectedModel();
 		const currentModel = models.find(m => m.model.provider === selectedModelRef?.provider && m.model.model === selectedModelRef.model) ?? models[0];
 		const hasMultiplePresets = !this.delegate.isAutomaticModel() && this.effortChoices(currentModel).length > 1;
@@ -170,6 +171,7 @@ export class ChatModelSliderWidget extends Disposable {
 			root.replaceChildren();
 
 			const currentModels = this.delegate.getModels();
+			displayedModels = currentModels;
 			const activeSelectedRef = this.delegate.getSelectedModel();
 			const automatic = this.delegate.isAutomaticModel();
 			const activeModel = automatic ? undefined : currentModels.find(m => m.model.provider === activeSelectedRef?.provider && m.model.model === activeSelectedRef.model) ?? currentModels[0];
@@ -413,11 +415,24 @@ export class ChatModelSliderWidget extends Disposable {
 				this.focusModelPicker(root);
 			} else if (focus) {
 				const targets = { model: modelButton, effort: track };
-				targets[focus]?.focus({ preventScroll: true });
+				(targets[focus] ?? modelButton).focus({ preventScroll: true });
 			}
 		};
 
 		render();
+		lifetime.add(this.delegate.onDidChangePresentation(() => {
+			const current = this.delegate.getModels();
+			if (current.length === displayedModels.length && current.every((entry, index) => {
+				const displayed = displayedModels[index]!;
+				return modelRefIdentity(entry.model) === modelRefIdentity(displayed.model) && entry.displayName === displayed.displayName;
+			})) return;
+			const focused = document.activeElement;
+			if (!root.contains(focused)) {
+				render();
+				return;
+			}
+			render(focused?.closest('[role="slider"]') ? 'effort' : 'models');
+		}));
 		return lifetime;
 	}
 }

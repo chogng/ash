@@ -541,7 +541,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 	async startNewSession(title = 'New Chat', background?: Parameters<ISessionsManagementService['startNewSession']>[1]): Promise<IActiveSessionThread> {
 		const revision = background ? undefined : ++this.selectionRevision;
-		const active = await this.createSession(title, background?.workspace ?? this.creationProvider().currentWorkspace(), undefined, createUuid(), background?.providerId, background?.creation);
+		const active = await this.createSession(title, background?.workspace ?? this.creationProvider().currentWorkspace(), undefined, background?.creationId ?? createUuid(), background?.providerId, background?.creation);
 		this._sessions = [active.session, ...this._sessions.filter(session => session.sessionId !== active.session.sessionId)];
 		if (revision === this.selectionRevision) {
 			this._active = active;
@@ -576,7 +576,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	getChatMoveDestinations(sessionId: SessionId, threadId: ThreadId): readonly ISession[] {
 		const source = this._sessions.find(session => session.sessionId === sessionId);
 		const thread = source?.chats.find(chat => chat.threadId === threadId);
-		if (!source || source.source || source.status !== 'active' || !thread || threadId === sessionId
+		if (!source || source.source || source.surface === 'chat' || source.status !== 'active' || !thread || threadId === sessionId
 			|| !source.chats.some(chat => chat.threadId === sessionId && chat.status === 'active')
 			|| thread.status !== 'active' || thread.origin.type !== 'root'
 			|| thread.executionStatus === 'queued' || thread.executionStatus === 'running' || thread.executionStatus === 'waiting'
@@ -588,7 +588,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		const workspace = source.workspace;
 		if (workspace === undefined) return [];
 		return this._sessions.filter(session => session.sessionId !== sessionId && !session.source
-			&& session.status === 'active' && session.providerId === source.providerId
+			&& session.status === 'active' && session.surface !== 'chat' && session.providerId === source.providerId
 			&& session.chats.some(chat => chat.threadId === session.sessionId && chat.status === 'active')
 			&& (workspace === null ? session.workspace === null : session.workspace?.root === workspace.root
 				&& session.workspace.authorityId === workspace.authorityId
@@ -853,7 +853,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 function firstActiveThread(sessions: readonly ISession[]): IActiveSessionThread | undefined {
 	for (const session of sessions) {
-		if (session.status !== 'active') continue;
+		if (session.status !== 'active' || session.surface === 'chat') continue;
 		const thread = session.chats.find(candidate => candidate.status === 'active' && candidate.origin.type === 'root') ?? session.chats.find(candidate => candidate.status === 'active');
 		if (thread) return { session, threadId: thread.threadId };
 	}
@@ -875,7 +875,7 @@ function sameManagement(left: SessionManagementInfo | undefined, right: SessionM
 
 function sameSession(left: ISession | undefined, right: ISession | undefined): boolean {
 	if (!left || !right) return left === right;
-	if (left.title !== right.title || left.status !== right.status || left.agentTree !== right.agentTree || left.chats.length !== right.chats.length) return false;
+	if (left.title !== right.title || left.surface !== right.surface || left.status !== right.status || left.agentTree !== right.agentTree || left.chats.length !== right.chats.length) return false;
 	if (left.nextApprovalMode !== right.nextApprovalMode || !sameManagement(left.management, right.management) || !sameModel(left.model, right.model) || left.workspace?.authorityId !== right.workspace?.authorityId || left.workspace?.root !== right.workspace?.root) return false;
 	return left.chats.every((chat, index) => {
 		const next = right.chats[index];

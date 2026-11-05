@@ -24,9 +24,10 @@ The desktop host presents those records in Ash's [Sessions view](contrib/session
 search and `ReplyChatEditor`. The desktop Chat list model combines catalog
 records and supplies ordered sections and row operations. The view owns
 rendering, keyboard focus and scrolling. The adapter maps ChatGPT identities, messages and actions to the
-host's contracts. In an eligible new Chat draft, selecting a Code model asks
-the adapter for the current unsent text after model validation. The host uses
-that text to open an Ash draft in Chat without sending a message.
+host's contracts. In an eligible new Chat draft, selecting an Ash model asks the
+adapter for the current unsent text after model validation. The host opens an
+independent Ash Chat draft without sending a message. Its first send creates a
+Chat-owned Thread through the shared App Server.
 The `ash-chatgpt` editor resource and conversation storage keys stay stable
 across entry restoration. Previous native-experiment restore commands resolve
 to this same entry without creating or sending a new conversation.

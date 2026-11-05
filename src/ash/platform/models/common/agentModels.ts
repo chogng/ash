@@ -16,6 +16,12 @@ export enum ModelPurpose {
 
 export type ModelReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max';
 
+export const modelReasoningEfforts = ['none', 'minimal', 'low', 'medium', 'high', 'extraHigh', 'max'] as const satisfies readonly ModelReasoningEffort[];
+
+export function isModelReasoningEffort(value: unknown): value is ModelReasoningEffort {
+	return modelReasoningEfforts.some(effort => effort === value);
+}
+
 export interface ModelReasoningEffortOption {
 	readonly effort: ModelReasoningEffort;
 	readonly description?: string | null;

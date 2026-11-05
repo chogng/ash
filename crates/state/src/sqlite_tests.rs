@@ -183,6 +183,7 @@ fn open_change_set(thread_id: ThreadId) -> TurnChangeSet {
 
 fn catalog(session_id: &SessionId, thread_id: &ThreadId, sequence: u64) -> ThreadCatalogRecord {
     ThreadCatalogRecord {
+        surface: None,
         model: None,
         resumable_model_providers: Some(Default::default()),
         execution_target: None,
@@ -254,6 +255,7 @@ fn append_created_thread(
                 recorded_at: Timestamp(u128::from(ordinal)),
                 command: None,
                 event: ThreadEvent::ThreadCreated {
+                    surface: None,
                     execution_target: None,
                     agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                     origin: Default::default(),
@@ -291,6 +293,7 @@ fn append_recent_activity_with_padding(
     let turn = TurnId::new(format!("turn-{label}")).unwrap();
     let target = ash_protocol::SessionExecutionTarget::Local { root: root.into() };
     let mut events = vec![ThreadEvent::ThreadCreated {
+        surface: None,
         execution_target: Some(target.clone()),
         agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
         origin: Default::default(),
@@ -643,6 +646,7 @@ fn sqlite_thread_store_recovers_typed_events() {
         recorded_at: Timestamp(2),
         command: None,
         event: ThreadEvent::ThreadCreated {
+            surface: None,
             execution_target: None,
             agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
             origin: Default::default(),
@@ -1779,6 +1783,7 @@ fn sqlite_thread_catalog_rejects_index_metadata_mismatch() {
                 recorded_at: Timestamp(2),
                 command: None,
                 event: ThreadEvent::ThreadCreated {
+                    surface: None,
                     execution_target: None,
                     agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                     origin: Default::default(),
@@ -1906,6 +1911,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
         recorded_at: Timestamp(1),
         command: None,
         event: ThreadEvent::ThreadCreated {
+            surface: None,
             execution_target: None,
             agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
             origin: Default::default(),
@@ -1963,6 +1969,7 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
         recorded_at: Timestamp(1),
         command: None,
         event: ThreadEvent::ThreadCreated {
+            surface: None,
             execution_target: None,
             agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
             origin: Default::default(),

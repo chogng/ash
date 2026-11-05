@@ -25,13 +25,13 @@ import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js
 import { canQueueChatGPTCreation, coworkTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 import { shareChatGPTConversation } from './chatGPTShare.js';
 
-export function canUseCodeModels(state: ChatGPTState): boolean {
+export function canUseAshModels(state: ChatGPTState): boolean {
 	// Existing conversations and drafts with provider-owned attachments keep their reply route.
 	return !selectedChatConversationId(state) && !state.pendingCreation && !state.uncertain
 		&& state.loading?.kind !== 'conversation' && !state.messages.length && !state.coworkTasks.length && !state.attachments.length;
 }
 
-/** Projects ChatGPT's data into the Ash composer and offers the host's Code draft handoff. */
+/** Projects ChatGPT's data into the Ash composer and offers the host's Ash Chat draft handoff. */
 export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorModel {
 	private readonly changed = this._register(new Emitter<void>());
 	private readonly composerChanged = this._register(new Emitter<void>());
@@ -46,10 +46,10 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	private draftRevision = 0;
 	private localId: string | undefined;
 	private readonly webEntries: IObservable<readonly ModelCatalogEntry[]>;
-	private readonly codeCatalog = observableValue<readonly ModelCatalogEntry[]>(this, []);
-	private readonly codeEntries: IObservable<readonly ModelCatalogEntry[]>;
+	private readonly ashCatalog = observableValue<readonly ModelCatalogEntry[]>(this, []);
+	private readonly ashEntries: IObservable<readonly ModelCatalogEntry[]>;
 	private readonly pickerEntries: IObservable<readonly ModelCatalogEntry[]>;
-	private codeCatalogRequest = 0;
+	private ashCatalogRequest = 0;
 	private currentItems: readonly IChatListItem[] = [];
 	private transcriptState: ChatGPTState | undefined;
 	private readonly decoded = new WeakMap<ChatReplyMessage, { readonly conversationId: string | undefined; readonly reply: ReturnType<typeof decodeChatGPTReply>; }>();
@@ -65,22 +65,22 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		@ICommandService private readonly commands: ICommandService,
 	) {
 		super();
-		const codeModelsChanged = observableSignalFromEvent(this, primary.models.onDidChangeModels);
+		const ashModelsChanged = observableSignalFromEvent(this, primary.models.onDidChangeModels);
 		this.webEntries = backend.state.map(state => state.models).map(families => families.map(family => ({
 			model: { provider: 'chatgpt', model: family.id },
 			displayName: family.title,
 			longContext: null,
 			presets: family.presets,
 		})));
-		this.codeEntries = derived(reader => {
+		this.ashEntries = derived(reader => {
 			// Visibility is a local preference and can change while App Server reads are pending.
-			codeModelsChanged.read(reader);
-			return this.codeCatalog.read(reader).filter(entry => primary.models.isModelVisible(entry.model));
+			ashModelsChanged.read(reader);
+			return this.ashCatalog.read(reader).filter(entry => primary.models.isModelVisible(entry.model));
 		});
-		const codeEligible = backend.state.map(canUseCodeModels);
+		const ashEligible = backend.state.map(canUseAshModels);
 		this.pickerEntries = derived(reader => {
 			const web = this.webEntries.read(reader);
-			return codeEligible.read(reader) ? [...web, ...this.codeEntries.read(reader)] : web;
+			return ashEligible.read(reader) ? [...web, ...this.ashEntries.read(reader)] : web;
 		});
 		this._register(autorun(reader => {
 			this.pickerEntries.read(reader);
@@ -103,8 +103,8 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 			this.changed.fire();
 		}));
 		this._register(autorun(reader => {
-			codeModelsChanged.read(reader);
-			void this.loadCodeModels();
+			ashModelsChanged.read(reader);
+			void this.loadAshModels();
 		}));
 	}
 
@@ -119,12 +119,12 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		return { id: state.localConversationId, revision: this.backend.newDraftRevision };
 	}
 
-	private async loadCodeModels(): Promise<void> {
-		const request = ++this.codeCatalogRequest;
-		// The handoff needs the catalog, not the backend defaults for Code's composer.
+	private async loadAshModels(): Promise<void> {
+		const request = ++this.ashCatalogRequest;
+		// The handoff needs the catalog, not the backend's default model.
 		const entries = await this.primary.models.listModelCatalog().catch(() => []);
-		if (this.isDisposed || request !== this.codeCatalogRequest) return;
-		this.codeCatalog.set(entries);
+		if (this.isDisposed || request !== this.ashCatalogRequest) return;
+		this.ashCatalog.set(entries);
 	}
 
 	readonly draft: NonNullable<IReplyChatEditorModel['draft']> = {
@@ -208,7 +208,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 				}
 			}
 		}
-		if (canUseCodeModels(state) && this.codeEntries.get().some(entry => modelRefIdentity(entry.model) === modelRefIdentity(model))) {
+		if (canUseAshModels(state) && this.ashEntries.get().some(entry => modelRefIdentity(entry.model) === modelRefIdentity(model))) {
 			await this.commands.executeCommand(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, model);
 			return;
 		}

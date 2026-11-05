@@ -236,6 +236,7 @@ fn history_prefix(id: &str) -> ash_history::HistoryPrefix {
             recorded_at: ash_history::Timestamp(0),
             command: None,
             event: ash_protocol::ThreadEvent::ThreadCreated {
+                surface: None,
                 agent_id: Some(ash_protocol::AgentId::new(format!("agent-{id}")).unwrap()),
                 origin: Default::default(),
                 agent: None,

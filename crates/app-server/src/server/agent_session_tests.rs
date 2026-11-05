@@ -1984,3 +1984,61 @@ fn unnamed_thread_projects_preview_then_persists_the_generated_title() {
         "修复解析器"
     );
 }
+
+#[test]
+fn chat_session_surface_survives_replay_and_rejects_a_conflicting_creation() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("chat-surface.sqlite3");
+    let params = serde_json::json!({
+        "commandId": "ash-chat-root",
+        "title": "Ash Chat",
+        "executionTarget": null,
+        "surface": "chat",
+    });
+    let session_id;
+    {
+        let threads = Arc::new(ThreadController::with_store(Arc::new(
+            ash_state::SqliteThreadStore::open(&path).unwrap(),
+        )));
+        let (sender, _) = mpsc::channel();
+        let server = AppServer::new(
+            threads,
+            Arc::new(CaptureModel(sender)),
+            ash_app_server_diff::compute,
+        );
+        let mut connection = server.connection();
+        call(
+            &server,
+            &mut connection,
+            "initialize",
+            serde_json::json!({"clientInfo":{"name":"chat-surface","version":"1"}}),
+        );
+        let created = call(&server, &mut connection, "session/create", params.clone());
+        assert_eq!(created["result"]["session"]["surface"], "chat", "{created}");
+        session_id = ash_protocol::SessionId::new(
+            created["result"]["session"]["sessionId"].as_str().unwrap(),
+        )
+        .unwrap();
+        let replayed = call(&server, &mut connection, "session/create", params.clone());
+        assert_eq!(replayed["result"]["session"], created["result"]["session"]);
+        let mut conflicting = params;
+        conflicting["surface"] = serde_json::json!("code");
+        let rejected = call(&server, &mut connection, "session/create", conflicting);
+        assert!(rejected.get("error").is_some(), "{rejected}");
+    }
+    let reopened =
+        ThreadController::with_store(Arc::new(ash_state::SqliteThreadStore::open(&path).unwrap()));
+    let root = ThreadId::new(session_id.as_str()).unwrap();
+    assert_eq!(
+        reopened.read_thread(&root).unwrap().surface,
+        Some(ash_protocol::SessionSurface::Chat)
+    );
+    assert_eq!(
+        reopened
+            .read_session_catalog(&session_id)
+            .unwrap()
+            .unwrap()
+            .surface,
+        Some(ash_protocol::SessionSurface::Chat)
+    );
+}

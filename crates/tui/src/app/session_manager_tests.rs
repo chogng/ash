@@ -853,6 +853,7 @@ fn active_session_app() -> App {
 
 fn session() -> Session {
     Session {
+        surface: None,
         source: None,
         model: None,
         session_id: SessionId::new("current").unwrap(),

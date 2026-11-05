@@ -33,6 +33,10 @@ pub use thread_origin::ThreadOrigin;
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     pub session_id: SessionId,
+    /// Product surface that owns this conversation. Legacy Sessions have no recorded surface.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub surface: Option<SessionSurface>,
     pub title: String,
     pub status: SessionStatus,
     /// How this Session was created, when it has a non-interactive source.
@@ -49,6 +53,14 @@ pub struct Session {
     #[serde(default)]
     pub manager: SessionManagerInfo,
     pub threads: Vec<SessionThread>,
+}
+
+/// Product surface that owns the conversation rooted at this Session.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum SessionSurface {
+    Chat,
+    Code,
 }
 
 /// Durable provenance for Sessions created outside the interactive workflow.

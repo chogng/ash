@@ -65,6 +65,7 @@ fn manager_rejects_a_snapshot_older_than_its_observed_sequence() {
 
 fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
     ThreadSnapshot {
+        surface: None,
         voice_transcripts: Vec::new(),
         execution_target: None,
         advisor: Default::default(),

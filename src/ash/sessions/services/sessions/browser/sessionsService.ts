@@ -344,7 +344,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 			const session = this.sessionService.untitledSessions.find(candidate => candidate.untitledSessionId === reference.untitledSessionId);
 			return session ? { kind: 'untitled', session } : undefined;
 		}
-		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === reference.sessionId && candidate.status === 'active');
+		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === reference.sessionId && candidate.status === 'active' && candidate.surface !== 'chat');
 		const thread = session?.chats.find(candidate => candidate.threadId === reference.threadId && candidate.status === 'active');
 		return session && thread ? { kind: 'session', active: { session, threadId: thread.threadId }, ...(reference.sideThread ? { sideThread: true } : {}) } : undefined;
 	}

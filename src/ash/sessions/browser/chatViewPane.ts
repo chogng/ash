@@ -514,6 +514,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 	}
 
 	private selectionForSession(session: ISession): IActiveSessionThread | undefined {
+		if (session.surface === 'chat') return undefined;
 		const active = this.sessionService.activeUntitledSession ? undefined : this.sessionService.active;
 		if (
 			active?.session.sessionId === session.sessionId &&

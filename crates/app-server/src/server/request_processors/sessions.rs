@@ -526,13 +526,18 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
             });
             let legacy_creation = params.agent_id.is_none()
                 && existing.agent_id.as_str() == format!("legacy-agent:{}", existing.thread_id);
-            let existing_execution_target = self
+            let existing_session = self
                 .context
                 .agent_runtime()
                 .read_session_catalog(&existing.session_id)
-                .map_err(core_error)?
-                .and_then(|session| session.execution_target);
+                .map_err(core_error)?;
+            let existing_surface = existing_session
+                .as_ref()
+                .and_then(|session| session.surface);
+            let existing_execution_target =
+                existing_session.and_then(|session| session.execution_target);
             if !matches
+                || params.surface != existing_surface
                 || params.title != existing.creation_title
                 || existing_execution_target != execution_target
                 || (expected_agent_id != existing.agent_id && !legacy_creation)
@@ -569,6 +574,7 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                 .context
                 .agent_runtime()
                 .start_thread(StartThreadRequest {
+                    surface: params.surface,
                     agent_id: params.agent_id,
                     command_id: params.command_id,
                     title: params.title,

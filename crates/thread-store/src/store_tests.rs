@@ -24,6 +24,7 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
             recorded_at: Timestamp(1),
             command: None,
             event: ThreadEvent::ThreadCreated {
+                surface: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -35,6 +36,7 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
             },
         }],
         catalog: ThreadCatalogRecord {
+            surface: None,
             model: None,
             resumable_model_providers: Some(Default::default()),
             binding: agent_graph_store::ThreadBinding {

@@ -318,6 +318,7 @@ impl Fixture {
     fn start_root(&self, command_id: &str) -> ash_core::ThreadSnapshot {
         self.server
             .start_thread(StartThreadRequest {
+                surface: None,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,

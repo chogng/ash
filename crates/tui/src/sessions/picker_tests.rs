@@ -17,6 +17,7 @@ use crossterm::event::KeyModifiers;
 #[test]
 fn resume_picker_selects_the_current_session_and_maps_enter_to_its_id() {
     let sessions = vec![Session {
+        surface: None,
         source: None,
         model: None,
         session_id: SessionId::new("session-1").unwrap(),
@@ -48,6 +49,7 @@ fn resume_picker_selects_the_current_session_and_maps_enter_to_its_id() {
 #[test]
 fn resume_action_ids_do_not_change_when_sessions_are_reordered() {
     let session = |id: &str| Session {
+        surface: None,
         source: None,
         model: None,
         session_id: SessionId::new(id).unwrap(),
@@ -71,6 +73,7 @@ fn resume_action_ids_do_not_change_when_sessions_are_reordered() {
 fn resume_picker_excludes_archived_sessions_and_keeps_current_selection() {
     let sessions = vec![
         Session {
+            surface: None,
             source: None,
             model: None,
             session_id: SessionId::new("session-2").unwrap(),
@@ -81,6 +84,7 @@ fn resume_picker_excludes_archived_sessions_and_keeps_current_selection() {
             threads: Vec::new(),
         },
         Session {
+            surface: None,
             source: None,
             model: None,
             session_id: SessionId::new("session-1").unwrap(),
@@ -91,6 +95,7 @@ fn resume_picker_excludes_archived_sessions_and_keeps_current_selection() {
             threads: Vec::new(),
         },
         Session {
+            surface: None,
             source: None,
             model: None,
             session_id: SessionId::new("session-3").unwrap(),
@@ -128,6 +133,7 @@ fn resume_picker_excludes_archived_sessions_and_keeps_current_selection() {
 #[test]
 fn resume_items_show_time_and_tokens_without_branches_or_ids() {
     let mut session = Session {
+        surface: None,
         source: None,
         model: None,
         session_id: SessionId::new("session-sized").unwrap(),
@@ -167,6 +173,7 @@ fn resume_items_show_time_and_tokens_without_branches_or_ids() {
 #[test]
 fn resume_picker_is_empty_when_every_session_is_archived() {
     let session = Session {
+        surface: None,
         source: None,
         model: None,
         session_id: SessionId::new("archived").unwrap(),
@@ -199,6 +206,7 @@ fn resume_picker_renders_only_session_title_time_and_tokens() {
         .into_iter()
         .enumerate()
         .map(|(index, elapsed)| Session {
+            surface: None,
             source: None,
             model: None,
             session_id: SessionId::new(format!("thread:{index}")).unwrap(),
@@ -245,6 +253,7 @@ fn resume_picker_renders_only_session_title_time_and_tokens() {
 #[test]
 fn resume_time_floors_elapsed_time_and_omits_zero_trailing_units() {
     let mut session = Session {
+        surface: None,
         source: None,
         model: None,
         session_id: SessionId::new("session-time").unwrap(),
@@ -293,6 +302,7 @@ fn resume_time_shows_local_date_starting_at_seven_days() {
         .unwrap()
         .timestamp_millis() as u64;
     let session = Session {
+        surface: None,
         source: None,
         model: None,
         session_id: SessionId::new("session-date").unwrap(),

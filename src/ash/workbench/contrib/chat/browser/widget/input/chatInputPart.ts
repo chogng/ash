@@ -1402,8 +1402,10 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	bindDraftStorage(model: IChatWidgetModel, storage: IChatDraftStorage, onWillShutdown: ILifecycleService['onWillShutdown']): () => Promise<void> {
 		if (this.persistentDrafts) throw new Error('Chat composer already has a draft store');
 		this.persistentDrafts = true;
-		let threadId = model.threadId;
-		let identity = threadId ?? `untitled:${model.untitledSessionId!}`;
+		const draftIdentity = () => model.threadId ?? `untitled:${model.untitledSessionId!}`;
+		let identity = draftIdentity();
+		let generation = model.composerGeneration;
+		let wasUntitled = model.threadId === undefined;
 		let restoring = false;
 		let restoreFailed = false;
 		const revisions = new Map<string, number>();
@@ -1463,21 +1465,27 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			for (const [id, revision] of revisions) revisions.set(id, revision + 1);
 		}));
 		this._register(model.onDidChange(() => {
-			if (threadId === model.threadId) return;
-			if (threadId !== undefined) {
+			const nextIdentity = draftIdentity();
+			const nextGeneration = model.composerGeneration;
+			if (identity === nextIdentity) {
+				generation = nextGeneration;
+				return;
+			}
+			const promoted = wasUntitled && model.threadId !== undefined && generation === nextGeneration;
+			if (promoted) {
+				// Promotion consumes the untitled identity without creating another composer.
+				revisions.set(identity, (revisions.get(identity) ?? 0) + 1);
+				storage.write(identity, undefined);
+			} else {
 				save();
 				restoring = true;
 				this.setInputValue('');
 				this.attachmentModel.clear();
-			} else {
-				// Promotion consumes the untitled identity without creating another composer.
-				revisions.set(identity, (revisions.get(identity) ?? 0) + 1);
-				storage.write(identity, undefined);
 			}
-			const changingThread = threadId !== undefined;
-			threadId = model.threadId;
-			identity = threadId ?? `untitled:${model.untitledSessionId!}`;
-			if (changingThread) restore();
+			generation = nextGeneration;
+			wasUntitled = model.threadId === undefined;
+			identity = nextIdentity;
+			if (!promoted) restore();
 			restoring = false;
 			save();
 		}));

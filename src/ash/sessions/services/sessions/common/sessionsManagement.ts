@@ -46,7 +46,7 @@ export interface ISessionsManagementService {
 	cancelUntitledSessionPreparation(untitledSessionId: string): void;
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void;
 	ensureActiveThread(): Promise<IActiveSessionThread>;
-	startNewSession(title?: string, background?: { readonly workspace: SessionWorkspaceSelection; readonly providerId: string; readonly creation: ISessionCreateOptions; }): Promise<IActiveSessionThread>;
+	startNewSession(title?: string, background?: { readonly workspace: SessionWorkspaceSelection; readonly providerId: string; readonly creation: ISessionCreateOptions; readonly creationId?: string; }): Promise<IActiveSessionThread>;
 	stopSession(sessionId: SessionId): Promise<void>;
 	archiveSession(sessionId: SessionId): Promise<void>;
 	/** Restores the canonical catalog entry without changing foreground selection or drafts. */

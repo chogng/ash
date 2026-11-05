@@ -3021,6 +3021,8 @@ use ash_protocol::SessionSource;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionStatus;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::SessionSurface;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionThread;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SkillActivationReason;
@@ -7095,6 +7097,7 @@ typescript_bindings! {
     DirectoryGrantsForgetParams,
     SessionStatus,
     SessionSource,
+    SessionSurface,
     SessionManagerStatus,
     SessionManagerActivity,
     SessionManagerInfo,

@@ -1,6 +1,6 @@
 import { isRecord } from '../../base/common/types.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
-import type { ModelReasoningEffort, ModelRef } from '../../platform/models/common/agentModels.js';
+import { isModelReasoningEffort, modelReasoningEfforts, type ModelReasoningEffort, type ModelRef } from '../../platform/models/common/agentModels.js';
 import { Registry } from '../../platform/registry/common/platform.js';
 import { agentHostSessionWorkspaceKey, buildAgentHostSessionWorkspace } from './agentHostSessionWorkspace.js';
 import type { SessionWorkspaceSelection } from '../services/sessions/common/session.js';
@@ -20,14 +20,8 @@ export function codeConversationWorkspaceKey(selection: SessionWorkspaceSelectio
 	return selection.type === 'current' || selection.type === 'multiple' ? undefined : agentHostSessionWorkspaceKey(buildAgentHostSessionWorkspace(selection));
 }
 
-const efforts = ['none', 'minimal', 'low', 'medium', 'high', 'extraHigh', 'max'] as const satisfies readonly ModelReasoningEffort[];
-
-export function isCodeConversationEffort(value: unknown): value is ModelReasoningEffort {
-	return typeof value === 'string' && (efforts as readonly string[]).includes(value);
-}
-
 export function parseCodeConversationModel(value: unknown): CodeConversationModel {
-	if (!isRecord(value) || (value.effort !== undefined && !isCodeConversationEffort(value.effort))) {
+	if (!isRecord(value) || (value.effort !== undefined && !isModelReasoningEffort(value.effort))) {
 		throw new TypeError('Invalid Code conversation model selection');
 	}
 	const model = value.model;
@@ -47,7 +41,7 @@ const selectionSchema = {
 				model: { type: 'string', minLength: 1 },
 			}
 		},
-		effort: { type: 'string', enum: [...efforts] },
+		effort: { type: 'string', enum: [...modelReasoningEfforts] },
 	},
 } as const;
 

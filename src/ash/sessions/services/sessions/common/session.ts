@@ -1,3 +1,4 @@
+import type { SessionSurface } from '../../../../platform/agentHost/common/agent.js';
 import type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agent.js';
 export type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agent.js';
 import type { ApprovalMode, ChatAgent, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
@@ -178,6 +179,7 @@ export interface ISession {
 	readonly application?: ISessionApplication;
 	readonly sessionId: SessionId;
 	readonly source?: 'automation';
+	readonly surface?: SessionSurface;
 	readonly title: string;
 	readonly status: SessionStatus;
 	readonly model?: ModelRef | null;

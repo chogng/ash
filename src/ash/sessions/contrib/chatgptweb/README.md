@@ -4,12 +4,12 @@
 
 | 路径          | 数据与操作的归属                                                                                                                                                          |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ash 原生 Chat | Ash 的 [`ChatWidgetModel`](../../browser/chatWidgetModel.ts) 使用原生会话服务，由 Ash 管理 Session、Thread、Turn 和原生模型选择。                                         |
+| Ash 原生 Chat | Ash 的 [`AshChatWidgetModel`](../chat/browser/ashChatWidgetModel.ts) 使用原生会话服务，由 Ash 管理 Session、Thread、Turn 和原生模型选择。                                 |
 | ChatGPT Web   | [`ChatGPTService`](browser/chatGPTService.ts) 提供 ChatGPT 会话、模型和操作。[适配器的界面模型](electron-browser/chatGPTWidgetModel.ts) 将这些数据投影到 Ash 的聊天界面。 |
 
 ## 通过模型选择会话路径
 
-Chat 模式的「新建」打开一个可选 ChatGPT 或 Code 模型的草稿。在无附件的新草稿里直接选 Code 模型，会在 Chat 模式打开一个 Ash 草稿并带上未发送的文字。已有会话的模型选择归各自的后端。Code 模式只使用原生模型目录。相关路由见 [`newChatModelAction.ts`](../chat/electron-browser/actions/newChatModelAction.ts)。
+Chat 模式的「新建」打开一个可选 ChatGPT 或 Ash 模型的草稿。在无附件的新草稿里直接选 Ash 模型，会在 Chat 模式打开一个 Ash 草稿并带上未发送的文字。已有会话按创建时的归属打开。Ash 原生 Chat 和 Code 共用模型目录，各自保存选模偏好。相关路由见 [`newChatModelAction.ts`](../chat/electron-browser/actions/newChatModelAction.ts)。
 
 ## 适配器与共享界面的边界
 
