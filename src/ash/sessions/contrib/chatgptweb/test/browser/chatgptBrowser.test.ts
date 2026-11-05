@@ -111,11 +111,16 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		let previousWidth = 0;
 		for (const width of [660, 799, 800, 869, 870, 1280, 1365]) {
 			await page.setViewportSize({ width, height: 720 });
-			const [row, card, sticky] = await Promise.all([
+			const [row, card, sticky, pane] = await Promise.all([
 				response.boundingBox(),
 				composer.boundingBox(),
 				stickyPrompt.boundingBox(),
+				viewport.boundingBox(),
 			]);
+			// At intermediate widths, the model popup must not reserve space in the chat column.
+			if (pane!.width <= 950) {
+				expect(card!.width, `space used at ${width}px`).toBeGreaterThanOrEqual(pane!.width - 80);
+			}
 			expect(card!.width, `composer width at ${width}px`).toBeGreaterThanOrEqual(previousWidth - 1);
 			for (const column of [row!, sticky!]) {
 				expect(Math.abs(column.x - card!.x), `left edge at ${width}px`).toBeLessThan(1);
@@ -450,13 +455,15 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			const dialog = page.getByRole('dialog', { name: locale === 'en' ? 'Choose a chat model' : '选择聊天模型' });
 			const modelButton = dialog.locator('.ash-chat-slider-model-button');
 			const slider = dialog.getByRole('slider');
-			const expectCentered = async () => {
+			const expectAnchored = async () => {
 				await expect(dialog).toHaveCSS('width', '250px');
 				await expect(dialog).toBeInViewport({ ratio: 1 });
 				await expect.poll(async () => {
 					const button = (await picker.boundingBox())!;
 					const panel = (await dialog.boundingBox())!;
-					return Math.abs(panel.x + panel.width / 2 - (button.x + button.width / 2));
+					const centeredLeft = button.x + (button.width - panel.width) / 2;
+					const rightmostLeft = page.viewportSize()!.width - panel.width;
+					return Math.abs(panel.x - Math.min(Math.max(centeredLeft, 0), rightmostLeft));
 				}).toBeLessThan(1);
 				const button = (await picker.boundingBox())!;
 				const panel = (await dialog.boundingBox())!;
@@ -480,7 +487,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 				alternativeModel.boundingBox(), modelButton.boundingBox(),
 			]);
 			expect(alternativeBounds!.y + alternativeBounds!.height).toBeLessThan(expandedButtonBounds!.y);
-			await expectCentered();
+			await expectAnchored();
 			await modelButton.press('Enter');
 			await expect(modelButton).toBeFocused();
 			await page.keyboard.press('Tab');
@@ -498,7 +505,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			for (const width of [1280, 870, 869, 660]) {
 				await page.setViewportSize({ width, height: 720 });
 				await picker.press('Enter');
-				await expectCentered();
+				await expectAnchored();
 				await page.keyboard.press('Escape');
 			}
 			await page.setViewportSize({ width: 1280, height: 720 });

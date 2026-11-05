@@ -1,13 +1,8 @@
 .ash-sessions-chat-content {
 	--ash-chat-content-host-inset: var(--ash-sessions-editor-tool-inset, 0px);
 	--ash-chat-content-padding: var(--ash-spacing-size240);
-	/* Share the gutters across messages and the composer. Reserve half the 250px
-	 * model picker as space allows, while leaving 320px for the column. */
-	--ash-chat-content-min-padding: clamp(
-		var(--ash-spacing-size400),
-		calc((100% - 320px) / 2),
-		125px
-	);
+	/* Leave room for the prompt rail without moving the column when it appears. */
+	--ash-chat-content-min-padding: var(--ash-spacing-size400);
 	--ash-sessions-chat-content-bottom: calc(
 		var(--ash-spacing-size120) - var(--ash-chat-content-host-inset)
 	);
@@ -43,24 +38,6 @@
 
 .ash-reply-chat-editor {
 	flex-direction: column;
-	container: ash-reply-chat / inline-size;
-}
-
-@container ash-reply-chat (width < calc(320px + 250px)) {
-	/* Center the trigger on its own row until the column has room for both gutters. */
-	.ash-reply-chat-editor .ash-sessions-chat-input > .ash-chat-input-footer {
-		flex-wrap: wrap;
-	}
-
-	.ash-reply-chat-editor .ash-chat-input-footer > .ash-chat-input-toolbars {
-		flex-basis: 100%;
-	}
-
-	.ash-reply-chat-editor
-		.ash-chat-input-toolbars.model-picker-trailing
-		.ash-chat-input-model-selector {
-		margin-inline: auto;
-	}
 }
 
 .ash-reply-chat-project {

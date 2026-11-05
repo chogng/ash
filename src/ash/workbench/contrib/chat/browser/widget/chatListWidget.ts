@@ -776,7 +776,8 @@ export class ChatListWidget extends DomWidget {
 
 	private updateScrollToLatestVisibility(): void {
 		const { top, maximumTop } = this.scrollable.state;
-		const hidden = !this.visible || maximumTop - top <= 1;
+		// Transcript padding can create a scroll range even in an empty draft.
+		const hidden = !this.visible || this.items.length === 0 || maximumTop - top <= 1;
 		if (hidden === this.scrollToLatestButton.hidden) return;
 		this.element.classList.toggle('ash-chat-transcript-has-more-below', !hidden);
 		if (hidden && this.visible && this.element.ownerDocument.activeElement === this.scrollToLatestButton.domNode) {

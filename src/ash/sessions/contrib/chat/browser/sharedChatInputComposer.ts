@@ -101,8 +101,8 @@ export class SharedChatInputComposer extends Disposable {
 			get showContextUsage() { return !chatPresentation.get(); },
 			accessibilityHelp: getSessionsChatAccessibilityHelp,
 			statusText: (state, contexts, status) => {
-				// Keep the draft welcome in place while the catalog loads. The host exposes aria-busy.
-				if (!state.aiDisabled && model.untitledSessionId !== undefined && state.phase === 'loading' && !state.error) {
+				// The host exposes catalog loading through aria-busy. Keep actionable draft status visible.
+				if (!state.aiDisabled && model.untitledSessionId !== undefined && state.phase === 'loading' && !state.error && state.status === undefined) {
 					return '';
 				}
 				if (!status && state.phase === 'ready' && !state.inputBlocked && model.threadId
