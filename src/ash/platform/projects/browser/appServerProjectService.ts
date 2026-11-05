@@ -73,6 +73,7 @@ function fromDto(project: ProjectDto): Project {
 		id: project.projectId, revision: project.revision, name: project.name, archived: project.status === 'archived',
 		createdAtMs: project.createdAtMs ?? undefined, updatedAtMs: project.updatedAtMs ?? undefined,
 		description: project.description, sessionIds: project.sessionIds, sessionCount: project.sessionIds.length,
+		roots: project.roots.map(root => URI.parse(root.path)),
 		materials: project.materials.map(material => ({ name: material.name, kind: material.kind, resource: URI.parse(material.path) })),
 	};
 }

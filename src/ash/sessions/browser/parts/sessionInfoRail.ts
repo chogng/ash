@@ -270,7 +270,7 @@ export class SessionInfoRail extends Disposable {
 		const branch = provider?.historyProvider?.historyItemRef.get()?.name;
 		const rows = [
 			[Lxicon.remote, folder?.authority || localize('sessions.info.local', 'This computer')],
-			[Lxicon.folder, folder ? basename(folder) : localize('sessions.info.noWorkspace', 'No workspace selected')],
+			[Lxicon.folder, folder ? basename(folder) : localize('sessions.info.noWorkspace', 'No project folder selected')],
 			...(branch ? ([[Lxicon.gitBranch, branch]] as const) : []),
 		] as const;
 		this.environment.replaceChildren(

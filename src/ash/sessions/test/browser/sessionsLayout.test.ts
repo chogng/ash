@@ -450,7 +450,7 @@ suite('sessions browser component', () => {
 		expect(second!.y).toBeGreaterThan(first!.y);
 		await page.setViewportSize(viewport);
 		await expect(shortcuts.getByRole('heading', { name: chinese ? '新建 Code 会话' : 'New Code Conversation' })).toBeVisible();
-		const picker = shortcuts.getByRole('listitem').filter({ hasText: chinese ? '聚焦工作区选择器' : 'Focus Workspace Picker' });
+		const picker = shortcuts.getByRole('listitem').filter({ hasText: chinese ? '聚焦项目选择器' : 'Focus Project Picker' });
 		await expect(picker.locator('kbd')).toHaveCount(4);
 		for (const [heading, command, keyCount] of chinese ? [
 			['会话', '在侧栏中搜索会话', 2],

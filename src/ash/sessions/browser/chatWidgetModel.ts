@@ -17,7 +17,7 @@ import { localize } from '../../nls.js';
 import type { SkillReference } from '../../platform/agentHost/common/appServerApi.js';
 import type { ResolvedChatContext } from '../../workbench/services/chat/common/chatContextService.js';
 import type { SessionHistoryBindingDiagnostic } from '../services/sessions/browser/sessionOpenTelemetryService.js';
-import { findAgentNode, type IActiveSessionThread, type ISession, type IUntitledChatSession, type ModelRef, type SessionId, type ThreadId } from '../services/sessions/common/session.js';
+import { chatExecutionWorkspace, findAgentNode, type IActiveSessionThread, type ISession, type IUntitledChatSession, type ModelRef, type SessionId, type ThreadId } from '../services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { chatQueuedMessageListItems, chatTranscriptListItems, type IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ChatHistoryRedoModel } from '../../workbench/contrib/chat/common/model/chatHistoryRedoModel.js';
@@ -33,6 +33,8 @@ import type { ThreadHistoryBoundary, ThreadRead } from '../../workbench/services
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 import { codeConversationDefaultsSetting, codeConversationWorkspaceKey, parseCodeConversationModel, type CodeConversationDefaults, type CodeConversationModel } from '../common/codeConversationDefaults.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../common/agentHostSessionsProvider.js';
+import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
+import { SessionsWorkspaceModeContext } from '../common/contextkeys.js';
 
 const historyPageTurns = 20;
 
@@ -124,12 +126,18 @@ export class ChatWidgetModel extends Disposable {
 		return composer?.generation === this.composerGeneration && composer.threadId === this.threadId ? composer.untitledSessionId : undefined;
 	}
 
-	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService, @IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService) {
+	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService, @IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService, @IContextKeyService private readonly contextKeys?: IContextKeyService) {
 		super();
 		this.chatService = chatService;
 		this.historyRedo = this._register(new ChatHistoryRedoModel(chatService, () => this._onDidChange.fire()));
 		this.sessionService = sessionService;
 		this.selection = selection;
+		if (contextKeys) {
+			const keys = new Set([SessionsWorkspaceModeContext.key]);
+			this._register(contextKeys.onDidChangeContext(event => {
+				if (event.affectsSome(keys)) this._onDidChange.fire();
+			}));
+		}
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(ChatAIDisabledSettingId)) this._onDidChange.fire();
 		}));
@@ -182,13 +190,15 @@ export class ChatWidgetModel extends Disposable {
 		const agentSession = forkSource ? this.sessionService.sessions.find(session => session.sessionId === forkSource.sessionId) : active?.session;
 		const agentThreadId = forkSource?.threadId ?? active?.threadId;
 		const agentTree = agentSession?.agentTree;
+		const workspaceRequired = this.workspaceRequiredMessage;
 		return {
 			draftIdentity: { id: this.composerIdentity, generation: this.composerGeneration },
 			mode: this.mode,
 			activeMode: activeTurn(this._thread)?.mode,
 			queuedMessages: this.queue.filter(message => message.status !== 'rejected').length,
 			phase: this._state,
-			inputBlocked: this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
+			inputBlocked: workspaceRequired !== undefined || this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
+			status: workspaceRequired,
 			aiDisabled: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
 			error: this.historyStatus ? undefined : this._error,
 			canInterrupt: this.canInterrupt,
@@ -212,6 +222,24 @@ export class ChatWidgetModel extends Disposable {
 			interaction: this.interaction,
 			pendingUserInputRequestId: pendingInteraction?.kind === 'userInput' ? pendingInteraction.requestId : undefined,
 		};
+	}
+
+	private get workspaceRequiredMessage(): string | undefined {
+		if (this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) !== 'code') return undefined;
+		const selection = this.selection;
+		if (selection.kind === 'untitled' && !selection.session.forkSource) {
+			const workspace = selection.session.workspace;
+			const requiresProject = !selection.session.providerId || selection.session.providerId === LOCAL_AGENT_HOST_PROVIDER_ID;
+			if ((!requiresProject || selection.session.projectId)
+				&& workspace.type !== 'current' && (workspace.type !== 'multiple' || workspace.folders.length)) return undefined;
+		} else {
+			const active = selection.kind === 'session' ? selection.active : undefined;
+			const source = selection.kind === 'untitled' ? selection.session.forkSource : undefined;
+			const session = active?.session ?? this.sessionService.sessions.find(candidate => candidate.sessionId === source?.sessionId);
+			const threadId = active?.threadId ?? source?.threadId;
+			if (session && chatExecutionWorkspace(session, session.chats.find(chat => chat.threadId === threadId))) return undefined;
+		}
+		return localize({ bundle: 'ash.sessions', key: 'sessions.code.workspaceRequired' }, 'Choose a project before sending.');
 	}
 
 	get error(): string | undefined {
@@ -465,6 +493,7 @@ export class ChatWidgetModel extends Disposable {
 		const sameProvider = this.selection.session.providerId === session.providerId;
 		this.selection = { kind: 'untitled', session };
 		if (sameProvider) this.applyDefaultNewChatModel();
+		this._onDidChange.fire();
 		void this.loadModels();
 	}
 
@@ -526,6 +555,7 @@ export class ChatWidgetModel extends Disposable {
 	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions): Promise<void> {
 		if (!text.trim() && !contexts?.length) return;
 		this.assertAIEnabled();
+		this.assertWorkspaceSelected();
 		const operation = this.captureOperation(options);
 		const stateRequest = ++this.stateRequest;
 		try {
@@ -1421,6 +1451,7 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private async ensureActiveSession(signal?: AbortSignal): Promise<IActiveSessionThread> {
+		this.assertWorkspaceSelected();
 		if (this.selection.kind === 'session') return this.selection.active;
 		const untitledSession = this.selection.session;
 		const generation = this.composerGeneration;
@@ -1441,6 +1472,11 @@ export class ChatWidgetModel extends Disposable {
 			promote: created => this.sessionService.promoteUntitledSession(untitledSession.untitledSessionId, created),
 			subscribe: created => this.subscribe(created),
 		});
+	}
+
+	private assertWorkspaceSelected(): void {
+		const message = this.workspaceRequiredMessage;
+		if (message) throw new Error(message);
 	}
 
 	/** Keep this composer's choices when organization gives its draft a durable identity. */

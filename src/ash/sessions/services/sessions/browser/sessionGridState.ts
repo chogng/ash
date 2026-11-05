@@ -115,6 +115,7 @@ export function isUntitledSession(value: unknown): value is IUntitledChatSession
 		&& (value.model === undefined || isRecord(value.model) && nonEmptyString(value.model.provider) && nonEmptyString(value.model.model))
 		&& (value.forkSource === undefined || isRecord(value.forkSource) && nonEmptyString(value.forkSource.sessionId) && nonEmptyString(value.forkSource.threadId))
 		&& (value.providerId === undefined || nonEmptyString(value.providerId))
+		&& (value.projectId === undefined || nonEmptyString(value.projectId))
 		&& (value.modelSelectionKind === undefined || value.modelSelectionKind === 'manual')
 		&& (value.reasoningEffortSelection === undefined || value.reasoningEffortSelection === null || isCodeConversationEffort(value.reasoningEffortSelection))
 		&& (value.automaticTitle === undefined || value.automaticTitle === true)

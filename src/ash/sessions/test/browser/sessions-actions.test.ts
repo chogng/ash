@@ -183,7 +183,10 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 	} as unknown as ISessionsService);
 	services.registerInstance(ISessionsManagementService, {
 		resolveNewSessionTarget: async () => ({ providerId: 'test', workspace: { type: 'current' } }),
-		sessions: [{ sessionId: 'session', title: 'Session', status: 'active', chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }] }],
+		sessions: [
+			{ sessionId: 'session', title: 'Session', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }] },
+			{ sessionId: 'legacy', title: 'Legacy session', status: 'active', chats: [{ threadId: 'legacy', status: 'active', origin: { type: 'root' } }] },
+		],
 	} as unknown as ISessionsManagementService);
 	services.registerInstance(IConfigurationService, { getValue: () => false } as unknown as IConfigurationService);
 	services.registerInstance(IContextKeyService, { getValue: () => 'code', onDidChangeContext: Event.None } as unknown as IContextKeyService);

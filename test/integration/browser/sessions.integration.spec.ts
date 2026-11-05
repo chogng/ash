@@ -929,6 +929,46 @@ test('Artifacts canvas responds to wheel, drag and keyboard input', async ({ pag
 	await expect(canvas).toBeHidden();
 });
 
+test('Code binds the selected project folder and lists associated conversations under Projects', async ({ page }) => {
+	await page.goto('/sessions.html?multiHost&sidebarGroups&projectPicker&locale=zh-CN');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+	const sidebar = page.locator('.ash-sessions-list');
+	await expect(sidebar.locator('[data-row-order-id][data-parent-section="projects"]')).toContainText('Task from Host A');
+	await expect(sidebar.locator('[data-row-order-id][data-parent-section="recent"]')).toContainText('Task from Host B');
+	await page.locator('[data-action-id="sessions.newSession"] button').click();
+	const chooser = page.locator('.ash-sessions-chat-slot.active .ash-sessions-workspace-picker');
+	await expect(chooser).toContainText('选择项目');
+	await chooser.press('ArrowDown');
+	await page.getByRole('menuitemradio', { name: 'Search project fixture', exact: true }).click();
+	await expect(chooser).toContainText('Search project fixture');
+	const input = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor').getByRole('textbox');
+	await input.focus();
+	await page.keyboard.insertText('Draft for the selected project');
+	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-input-send-action')).toBeEnabled();
+	await expect(sidebar.locator('[data-item^="untitled:"][data-parent-section="projects"]')).toHaveCount(1);
+});
+
+test('switching to Code hides saved conversations without a workspace and Chat can reopen them', async ({ page }) => {
+	await page.goto('/sessions.html?multiHost&directorylessSession');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const sidebar = page.locator('.ash-sessions-list');
+	const mode = page.locator('.ash-window-mode-control');
+	const legacy = sidebar.getByRole('button', { name: 'Task from Host B', exact: true });
+	const legacyPane = page.locator('.ash-sessions-chat-slot').getByRole('region', { name: 'Task from Host B', exact: true });
+	await legacy.click();
+	await expect(legacyPane).toBeVisible();
+
+	await mode.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(sidebar.getByRole('button', { name: 'Task from Host A', exact: true })).toBeVisible();
+	await expect(legacy).toHaveCount(0);
+	await expect(legacyPane).toHaveCount(0);
+
+	await mode.getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	await legacy.click();
+	await expect(legacyPane).toBeVisible();
+});
+
 test('multiple Agent hosts keep equal backend IDs, model scopes and retained Code/Cowork drafts isolated', async ({
 	page,
 }) => {
@@ -1193,6 +1233,8 @@ test('the new Session composer keeps its pickers and dictation in keyboard navig
 	const input = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor').getByRole('textbox');
 	await input.focus();
 	await page.keyboard.press('Tab');
+	await expect(page.locator('.ash-sessions-chat-slot.active').getByRole('button', { name: 'Add context' })).toBeFocused();
+	await page.keyboard.press('Tab');
 	const dictation = page.locator('.ash-sessions-chat-slot.active [data-action-id="workbench.action.chat.toggleSpeechToText"] button');
 	await expect(dictation).toBeFocused();
 	const actions = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-toolbars.ash-chat-input-inline-toolbar');
@@ -1207,8 +1249,11 @@ test('the new Session composer keeps its pickers and dictation in keyboard navig
 	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-input-mode-action')).toBeFocused();
 	await input.focus();
 	await page.keyboard.insertText('Draft');
-	await expect(send).toBeEnabled();
-	await expect(send).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	await expect(send).toBeDisabled();
+	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-status'))
+		.toHaveText('Choose a project before sending.');
+	await input.press('Enter');
+	await expect(page.locator('.ash-sessions-chat-slot.active .stanza-editor-line-text')).toContainText('Draft');
 	await expect.poll(() => actions.evaluate(element => {
 		const mic = element.querySelector('.ash-chat-input-mic-action')!;
 		const send = element.querySelector('.ash-chat-input-send-action')!;

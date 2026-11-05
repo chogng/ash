@@ -89,16 +89,22 @@ The Sessions adapter owns no picker DOM, focus, popup lifetime, or additional ca
 `contrib/chat/browser/chatView.ts` owns the retained Code `NewChatView`, its
 provider scope, model binding and information rail. It creates `NewChatWidget`,
 which specializes the shared `ChatWidget` and owns its `NewChatInputWidget`,
-session toolbar, Tip above the input and footer workspace picker. The view and
+session toolbar, Tip above the input and footer project picker in Code. The view and
 input survive draft materialization; the existing model remains the only owner
 of the Session identity and first-send operation. `NewChatInputWidget` retains
 editor and draft policy without constructing its parent. File selection, paste,
 drop, attachment preparation and cancellation belong to the shared Workbench input.
 Its permission slot binds the current model to Workbench `PermissionPickerActionItem`, which owns
 the shared permission menu, keyboard interaction and popup lifetime.
-Its workspace slot binds the draft and execution policy through `SessionWorkspacePicker`
-to the Sessions-owned `WorkspacePicker` in `sessionWorkspacePicker.ts`. That picker
-owns its trigger, folder history, choice list, cancellation and focus restoration.
+In Code, **Choose project** selects a Project and a folder for the new
+conversation. A Project without a folder prompts for one. Opening a local
+folder directly reuses its Project or creates one.
+The draft holds the selected Project ID and the workspace for execution.
+Sessions management links the durable conversation through `IProjectService`
+before the first request can run. Worktrees and Dev Containers change where the
+Agent runs while retaining the selected Project. The picker owns folder history,
+cancellation and focus restoration.
+For an independent remote Agent host, folder selection stays on that host.
 The Workbench Welcome workspace picker has a separate delegate and presentation;
 it does not own the Sessions execution environment.
 

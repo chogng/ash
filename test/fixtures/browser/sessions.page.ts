@@ -12,6 +12,7 @@ import { sessionIdentity } from '../../../src/ash/sessions/services/sessions/com
 import { installMultiHostSessionsFixture } from './multiHostSessionsFixture.js';
 import { errorHandler } from '../../../src/ash/base/common/errors.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
+import { URI } from '../../../src/ash/base/common/uri.js';
 import { IUpdateService, type UpdateCheckResult, type UpdateReadyResult, type UpdateState } from '../../../src/ash/platform/update/common/updateService.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
@@ -140,7 +141,9 @@ if (new URL(location.href).searchParams.has('search') || new URL(location.href).
 	const createdAt = new URL(location.href).searchParams.get('projectCreatedAt');
 	const project = {
 		id: 'search-project', revision: 1, name: 'Search project fixture', archived: false, sessionCount: 0,
-		description: 'Synthetic project for Search navigation', materials: [],
+		description: 'Synthetic project for Search navigation',
+		materials: new URL(location.href).searchParams.has('projectPicker')
+			? [{ kind: 'folder' as const, name: 'source', resource: URI.file('/workspace/host-a') }] : [],
 		sessionIds: new URL(location.href).searchParams.has('sidebarGroups') ? [sessionIdentity('Host A', 'same', 'local-agent-host')] : [],
 		updatedAtMs: updatedAt === null ? undefined : Number(updatedAt), createdAtMs: createdAt === null ? undefined : Number(createdAt),
 	};

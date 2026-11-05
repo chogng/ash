@@ -22,6 +22,7 @@ export interface ProjectSummary {
 
 export interface Project extends ProjectSummary {
 	readonly description: string;
+	readonly roots?: readonly URI[];
 	readonly materials: readonly ProjectMaterial[];
 	readonly sessionIds: readonly string[];
 }

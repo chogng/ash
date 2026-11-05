@@ -2,6 +2,8 @@ import { ChatAIDisabledSettingId } from '../../../platform/chat/common/chatSetti
 import { ChatRequestQueueKind } from '../../../workbench/services/chat/common/chatService.js';
 import { observableValue } from '../../../base/common/observable.js';
 import { TestConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
+import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
+import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import type { IStorageService } from '../../../platform/storage/common/storage.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -12,6 +14,7 @@ import { canceled, isCancellationError } from '../../../base/common/errors.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { ChatWidgetModel } from '../../browser/chatWidgetModel.js';
 import { CoworkWidgetModel } from '../../contrib/cowork/browser/coworkWidgetModel.js';
+import { codeConversationWorkspaceKey } from '../../common/codeConversationDefaults.js';
 import { SessionsChatService } from '../../browser/agentHost/sessionsChatService.js';
 import type { ISessionProviderScope, ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
@@ -78,12 +81,14 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	const prompts = skillService ?? { onDidChangeSkills: Event.None, findAgentSkills: async () => [] } as unknown as IPromptsService;
 	const models = { onDidChangeModels: Event.None, listModels: async () => [], readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }) } as unknown as ILanguageModelsService;
 	const preferences = { onDidChangeModels: Event.None } as ILanguageModelsConfigurationService;
-	const session: ISession = { sessionId: 'session', title: 'Session', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'A', origin: { type: 'root' }, status: 'active' }, { threadId: 'B', origin: { type: 'fork', parentThreadId: 'A', parentSequence: 1 }, status: 'active' }] };
+	const session: ISession = { sessionId: 'session', title: 'Session', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, nextApprovalMode: 'manual', chats: [{ threadId: 'A', origin: { type: 'root' }, status: 'active' }, { threadId: 'B', origin: { type: 'fork', parentThreadId: 'A', parentSequence: 1 }, status: 'active' }] };
 	const sessions = {} as ISessionsManagementService;
 	const selection = { kind: 'session' as const, active: { session, threadId: 'A' } };
 	const storage = { get: () => undefined, store: () => { } } as unknown as IStorageService;
-	const model = resources.add(kind === 'Code' ? new ChatWidgetModel(routedChat, selection, sessions, prompts, models, execution, configuration, storage) : new CoworkWidgetModel(routedChat, selection, sessions, prompts, models, preferences, execution, configuration));
-	return { resources, model, configuration, storage, chat, routedChat, models, prompts, executionSettings: execution, threadApi, turnApi, modelApi, execution, starts, queues, steers, consults, compacts, updates, transcripts, offers, session, reconnect: () => { generation++; connection.fire('ready'); } };
+	const contextKeys = resources.add(new ContextKeyService());
+	SessionsWorkspaceModeContext.bindTo(contextKeys).set(kind === 'Code' ? 'code' : 'chat');
+	const model = resources.add(kind === 'Code' ? new ChatWidgetModel(routedChat, selection, sessions, prompts, models, execution, configuration, storage, contextKeys) : new CoworkWidgetModel(routedChat, selection, sessions, prompts, models, preferences, execution, configuration));
+	return { resources, model, configuration, storage, contextKeys, chat, routedChat, models, prompts, executionSettings: execution, threadApi, turnApi, modelApi, execution, starts, queues, steers, consults, compacts, updates, transcripts, offers, session, reconnect: () => { generation++; connection.fire('ready'); } };
 }
 
 async function turnTask(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
@@ -699,11 +704,84 @@ for (const kind of ['Code', 'Cowork'] as const) {
 	});
 }
 
+test('Code keeps a directoryless draft editable and blocks sending and voice until a workspace is selected', async () => {
+	const f = fixture('Code');
+	using resources = f.resources;
+	const draft = { untitledSessionId: 'directoryless', title: 'New Chat', model: undefined, agent: undefined, workspace: { type: 'current' as const } };
+	let creations = 0;
+	const sessions = {
+		untitledSessions: [draft],
+		materializeUntitledSession: async () => { creations++; return { session: f.session, threadId: 'A' }; },
+		promoteUntitledSession: () => { },
+	} as unknown as ISessionsManagementService;
+	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, f.contextKeys);
+	await model.initialize();
+	const messages = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/sessions.json', 'utf8'));
+	setNlsMessages('zh-CN', messages);
+	try {
+		const message = '请先选择项目，再发送消息。';
+		assert.equal(model.inputState.status, message);
+		assert.equal(model.inputState.inputBlocked, true);
+		await assert.rejects(model.send('Draft text'), { message });
+		await assert.rejects(model.prepareConversation(), { message });
+		assert.equal(creations, 0);
+		assert.equal(f.starts.length, 0);
+
+		model.selectUntitledSession({ ...draft, workspace: { type: 'local', root: '/workspace' } });
+		assert.equal(model.inputState.inputBlocked, true);
+		model.selectUntitledSession({ ...draft, projectId: 'project', workspace: { type: 'local', root: '/workspace' } });
+		assert.notEqual(model.inputState.inputBlocked, true);
+		await model.send('Draft text');
+		assert.equal(creations, 1);
+		assert.equal(f.starts.length, 1);
+	} finally {
+		resetNlsResolver();
+	}
+});
+
+test('Code can reopen directoryless history and send after the session folder is set', async () => {
+	const f = fixture('Code');
+	using resources = f.resources;
+	const model = f.model;
+	assert.ok(model instanceof ChatWidgetModel);
+	await model.initialize();
+	await model.selectThread({ session: { ...f.session, workspace: null }, threadId: 'A' });
+	assert.ok(model.thread);
+	assert.equal(model.inputState.inputBlocked, true);
+	await assert.rejects(model.send('Continue'), /Choose a project/);
+	assert.equal(f.starts.length, 0);
+
+	await model.selectThread({ session: f.session, threadId: 'A' });
+	assert.notEqual(model.inputState.inputBlocked, true);
+	await model.send('Continue');
+	assert.equal(f.starts.length, 1);
+});
+
+test('Ash Chat can continue a directoryless conversation using the shared composer model', async () => {
+	const f = fixture('Code');
+	using resources = f.resources;
+	using contextKeys = new ContextKeyService();
+	const mode = SessionsWorkspaceModeContext.bindTo(contextKeys);
+	const session = { ...f.session, workspace: null };
+	const active = { session, threadId: 'A' };
+	using model = new ChatWidgetModel(f.chat, { kind: 'session', active }, {} as ISessionsManagementService, f.prompts, f.models, f.execution, f.configuration, f.storage, contextKeys);
+	await model.initialize();
+
+	mode.set('code');
+	assert.equal(model.inputState.inputBlocked, true);
+	await assert.rejects(model.send('Continue'), /Choose a project/);
+	mode.set('chat');
+	assert.notEqual(model.inputState.inputBlocked, true);
+	await model.send('Continue');
+	assert.equal(f.starts.length, 1);
+});
+
 test('voice source preparation materializes the model selected immediately beforehand', async () => {
 	const f = fixture('Code'); using resources = f.resources; await f.model.initialize();
 	const selected = { provider: 'provider', model: 'chosen' };
 	f.models.listModels = async () => [{ model: selected, displayName: 'Chosen model', longContext: false }];
-	let draft = { untitledSessionId: 'voice-draft', title: 'New Chat', model: undefined as typeof selected | undefined, modelSelectionKind: 'manual' as const, modelDefaults: { workspace: null }, agent: undefined, workspace: { type: 'current' as const } };
+	const workspace = { type: 'local' as const, root: '/workspace' };
+	let draft = { untitledSessionId: 'voice-draft', title: 'New Chat', model: undefined as typeof selected | undefined, modelSelectionKind: 'manual' as const, modelDefaults: { workspace: codeConversationWorkspaceKey(workspace) ?? null }, agent: undefined, workspace, projectId: 'project' };
 	const materializedModels: (typeof selected | undefined)[] = [];
 	const sessionService = {
 		get untitledSessions() { return [draft]; }, get activeUntitledSession() { return draft; },
@@ -711,7 +789,7 @@ test('voice source preparation materializes the model selected immediately befor
 		materializeUntitledSession: async () => { materializedModels.push(draft.model); return { session: { ...f.session, model: draft.model }, threadId: 'A' }; },
 		promoteUntitledSession: () => { },
 	} as unknown as ISessionsManagementService;
-	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessionService, f.prompts, f.models, f.executionSettings, resources.add(new TestConfigurationService()), f.storage);
+	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessionService, f.prompts, f.models, f.executionSettings, resources.add(new TestConfigurationService()), f.storage, f.contextKeys);
 	await model.initialize();
 	const selecting = model.selectModel(selected);
 	const preparing = model.prepareConversation();
@@ -876,7 +954,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		const sessions = { untitledSessions: [draft], materializedSessions: materialized } as unknown as ISessionsManagementService;
 		using configuration = new TestConfigurationService();
 		using model = kind === 'Code'
-			? new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, configuration, f.storage)
+			? new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, configuration, f.storage, f.contextKeys)
 			: new CoworkWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, { onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined } as unknown as ILanguageModelsConfigurationService, f.execution, configuration);
 		await model.initialize();
 		model.selectMode('plan');

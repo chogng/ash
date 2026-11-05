@@ -196,7 +196,7 @@ import { TextResourcePropertiesService } from '../../workbench/services/textreso
 import { CoworkPaneFactory } from '../contrib/cowork/browser/cowork.contribution.js';
 import { ISessionsConversationService } from '../services/sessions/common/sessionsConversation.js';
 import { ChatTipService, IChatTipService } from '../../workbench/contrib/chat/browser/chatTipService.js';
-import { NewSessionDraftVisibleContext } from '../common/contextkeys.js';
+import { NewSessionDraftVisibleContext, SessionsWorkspaceModeContext } from '../common/contextkeys.js';
 import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
@@ -752,6 +752,12 @@ export abstract class Workbench extends Disposable {
 		workspaceFolderCount.set(workspace.getWorkspace().folders.length);
 		this._register(workspace.onDidChangeWorkspace(() => workspaceFolderCount.set(workspace.getWorkspace().folders.length)));
 		services.registerInstance(IContextKeyService, contextKeys);
+		const workspaceModeKeys = new Set([SessionsWorkspaceModeContext.key]);
+		this._register(contextKeys.onDidChangeContext(event => {
+			if (event.affectsSome(workspaceModeKeys)) {
+				view.setWorkspaceMode(contextKeys.getValue<'chat' | 'code'>(SessionsWorkspaceModeContext.key) ?? 'chat');
+			}
+		}));
 		// Locale changes resolve the host, which uses this window's context keys.
 		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
 		services.registerInstance(IAccessibilityService, this._register(options.nativeHostApi

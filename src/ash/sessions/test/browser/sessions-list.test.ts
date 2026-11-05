@@ -137,7 +137,7 @@ for (const mode of ['chat', 'code'] as const) {
 				const attachment = { untitledSessionId: 'attachment', title: 'Attachment' };
 				const corrupt = { untitledSessionId: 'corrupt', title: 'Unreadable' };
 				let drafts = [blank, attachment, corrupt];
-				const saved = { sessionId: 'saved', title: 'Saved conversation', status: 'active', chats: [{ threadId: 'root', origin: { type: 'root' }, status: 'active' }] };
+				const saved = { sessionId: 'saved', title: 'Saved conversation', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, chats: [{ threadId: 'root', origin: { type: 'root' }, status: 'active' }] };
 				const management = { get untitledSessions() { return drafts; }, sessions: [saved], state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
 				const opened: string[] = [];
 				const view = {
@@ -273,6 +273,7 @@ test('The localized keyboard menu targets the saved Session folder and the origi
 	const chat = (threadId: string, title: string) => ({ threadId, title, status: 'active' as const, origin: { type: 'root' as const } });
 	const session = (sessionId: string, chats: ISession['chats']): ISession => ({
 		sessionId, title: sessionId, status: 'active', chats, nextApprovalMode: 'manual',
+		workspace: { authorityId: 'local', root: '/workspace' },
 	});
 	const source = session('source', [chat('source', 'Source root'), chat('original', 'Move me')]);
 	const destination = session('target', [chat('target', 'Target root')]);
@@ -314,11 +315,11 @@ test('Session hover localizes workspace and provider without translating their v
 			sessionId: 'session', title: 'Session', status: 'active', nextApprovalMode: 'manual', chats: [],
 			providerLabel: 'Provider name', workspace: { authorityId: 'local', root: '/workspace' },
 		};
-		assert.deepEqual(getSessionSummaryHoverData(session), ['工作区：/workspace', '提供方：Provider name']);
+		assert.deepEqual(getSessionSummaryHoverData(session), ['项目文件夹：/workspace', '提供方：Provider name']);
 		assert.deepEqual(getSessionSummaryHoverData(session, {
 			threadId: 'child', status: 'active', origin: { type: 'root' },
 			workspace: { authorityId: 'remote', root: '/child-workspace' },
-		}), ['工作区：/child-workspace', '提供方：Provider name']);
+		}), ['项目文件夹：/child-workspace', '提供方：Provider name']);
 		assert.deepEqual(getSessionSummaryHoverData(session, {
 			threadId: 'directoryless', status: 'active', origin: { type: 'root' }, workspace: null,
 		}), ['提供方：Provider name']);
@@ -397,6 +398,7 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'list', flushInterval: 0 });
 	const catalog = ['one', 'two', 'three'].map(sessionId => ({
 		sessionId, title: sessionId, status: 'active' as const, nextApprovalMode: 'manual' as const,
+		workspace: { authorityId: 'local', root: '/workspace' },
 		chats: [{ threadId: 'root', status: 'active' as const, origin: { type: 'root' as const } }],
 	}));
 	let sessions = catalog;
@@ -507,7 +509,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	const remoteId = sessionIdentity(remote, 'run', local);
 	const makeSession = (sessionId: string): ISession => ({
 		sessionId, title: sessionId, status: 'active', nextApprovalMode: 'manual',
-		chats: [{ threadId: 'root', status: 'active', origin: { type: 'root' } }],
+		chats: [{ threadId: 'root', status: 'active', origin: { type: 'root' }, workspace: { authorityId: 'local', root: '/workspace' } }],
 	});
 	const manual: ISession = {
 		...makeSession('manual'),
@@ -569,6 +571,8 @@ test('The sidebar filters durable automation metadata and preserves the active s
 
 	using code = makeList('code');
 	assert.deepEqual(rows(code), ['manual', 'run']);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(code.domNode.querySelector('[data-row-order-id="manual"]')?.getAttribute('data-parent-section'), 'projects');
 	assert.equal(filter(code).checked, false);
 	await filter(code).run();
 	assert.deepEqual(rows(code), ['manual', 'run', remoteId]);
@@ -618,7 +622,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	assert.equal(chat.domNode.querySelector('[data-section="grouping:environment:local"] h3 button')?.textContent, '本地');
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.repository').run();
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual(repositoryReads, Array.from({ length: 2 }, () => ({ sessionId: 'manual', path: '/workspace/repo/folder' })));
+	assert.deepEqual(repositoryReads, [{ sessionId: 'manual', path: '/workspace/repo/folder' }]);
 	assert.ok([...chat.domNode.querySelectorAll('[data-section^="grouping:repository:"] > h3 button')].some(button => button.textContent === 'team/repo'));
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.none').run();
 	assert.equal(chat.domNode.querySelector('[data-section^="grouping:"]'), null);

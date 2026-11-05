@@ -24,7 +24,7 @@ import { IGitHubService } from '../../../github/browser/githubService.js';
 import { getPullRequestLabel } from '../../../github/common/types.js';
 import { getHighestPriorityPullRequestIcon } from '../../../../../workbench/common/chatPullRequest.js';
 import { sessionManagementLabel } from '../../../../browser/sessionManagementLabels.js';
-import type { ISession, SessionManagementInfo } from '../../../../services/sessions/common/session.js';
+import { chatExecutionWorkspace, type ISession, type SessionManagementInfo } from '../../../../services/sessions/common/session.js';
 import type { ThemeIcon } from '../../../../../base/common/themables.js';
 import { colorCssVariable } from '../../../../../platform/theme/common/colorUtils.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
@@ -709,6 +709,7 @@ export class SessionsList extends DomWidget {
 		// Content belongs to the composer store; an open blank welcome page is not a recent conversation.
 		// Include parked drafts too, so switching conversations does not hide their only sidebar entry.
 		const nestedDrafts = new Map<string, HTMLElement[]>();
+		const projectDrafts = new Map<string, HTMLElement[]>();
 		for (const session of this.sessionService.untitledSessions) {
 			let draft: ReturnType<typeof readNewChatDraftState>;
 			try { draft = readNewChatDraftState(this.storage, `untitled:${session.untitledSessionId}`, chatInputStatePersistence); }
@@ -724,6 +725,10 @@ export class SessionsList extends DomWidget {
 				const rows = nestedDrafts.get(id) ?? [];
 				rows.push(item.domNode);
 				nestedDrafts.set(id, rows);
+			} else if (this.mode === 'code' && session.projectId && this.projects.some(project => project.id === session.projectId)) {
+				const rows = projectDrafts.get(session.projectId) ?? [];
+				rows.push(item.domNode);
+				projectDrafts.set(session.projectId, rows);
 			} else {
 				recent.push(item.domNode);
 			}
@@ -731,14 +736,16 @@ export class SessionsList extends DomWidget {
 		const catalog = getSessionsListEntries(this.sessionService.sessions, this.listModel,
 			activeSelection?.kind === 'session' ? activeSelection.active.session.sessionId : undefined);
 		const groupNames = new Map(this.groups.groups.flatMap(group => group.sessionIds.map(id => [id, group.name] as const)));
+		const projectNames = new Map(this.projects.flatMap(project => project.sessionIds.map(id => [id, project.name] as const)));
 		for (const session of catalog) {
 			const current = activeSelection?.kind === 'session' && activeSelection.active.session.sessionId === session.sessionId ? activeSelection.active : undefined;
-			const activeChats = session.chats.filter(chat => chat.status === 'active');
+			const activeChats = session.chats.filter(chat => chat.status === 'active'
+				&& (this.mode !== 'code' || chatExecutionWorkspace(session, chat)));
 			const thread = activeChats.find(chat => chat.threadId === session.sessionId)
 				?? activeChats.find(chat => chat.origin.type === 'root') ?? activeChats[0];
 			if (!thread) continue;
 			const requests = this.github.getSessionPullRequests(session.sessionId);
-			const fields = [session.title, session.providerLabel, session.workspace?.root, groupNames.get(session.sessionId),
+			const fields = [session.title, session.providerLabel, session.workspace?.root, groupNames.get(session.sessionId), projectNames.get(session.sessionId),
 			...requests.map(getPullRequestLabel)];
 			const matchesSession = this.search.matches(thread.title, ...fields);
 			const nested = activeChats.filter(chat => chat !== thread && chat.origin.type !== 'agentSpawn'
@@ -771,9 +778,17 @@ export class SessionsList extends DomWidget {
 		const projects: HTMLElement[] = [];
 		const chatGroups: HTMLElement[] = [];
 		for (const project of this.projects) {
-			if (!this.search.matches(project.name)) continue;
+			const members = this.mode === 'code' ? project.sessionIds.flatMap(id => {
+				const item = remaining.get(id);
+				if (!item) return [];
+				remaining.delete(id);
+				return [item];
+			}) : [];
+			const drafts = projectDrafts.get(project.id) ?? [];
+			if (!members.length && !drafts.length && !this.search.matches(project.name)) continue;
 			const item = itemFor(`project:${project.id}`, Lxicon.projects);
 			item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
+			item.children = [...members, ...drafts];
 			projects.push(item.domNode);
 		}
 		if (this.projectsFailed && !this.search.hasQuery) projects.push(this.projectError);

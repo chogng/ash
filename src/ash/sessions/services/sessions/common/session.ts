@@ -139,6 +139,11 @@ export interface IChat {
 	readonly management?: SessionManagementInfo;
 }
 
+/** Unhydrated chats inherit the session directory. An explicit null means the chat has no directory. */
+export function chatExecutionWorkspace(session: ISession, chat: IChat | undefined): ISessionWorkspace | null | undefined {
+	return chat?.workspace === undefined ? session.workspace : chat.workspace;
+}
+
 export type SessionStatus = 'active' | 'archived';
 export type SessionWorkspaceSelection =
 	| { readonly type: 'current'; }
@@ -215,6 +220,8 @@ export interface IUntitledChatSession {
 	readonly reasoningEffortSelection?: ModelReasoningEffort | null;
 	readonly agent: ChatAgent | undefined;
 	readonly workspace: SessionWorkspaceSelection;
+	/** Selected Project to link when this draft acquires a durable Session. */
+	readonly projectId?: string;
 	/** Prepare the source workspace's container before creating the first durable Session. */
 	readonly devContainer?: boolean;
 	/** Created with the conversation on first send, never while selecting its workspace. */

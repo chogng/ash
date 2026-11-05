@@ -145,6 +145,9 @@ export function installMultiHostSessionsFixture(): {
 					usage: { inputTokens: 0, outputTokens: 0 }, joins: [], children: [],
 				};
 				if (nestedDraft) session = { ...session, agentTree: [sourceAgent] };
+				if (!params.has('directorylessSession') || name === 'Host A') {
+					session = { ...session, workspace: { authorityId: 'local', root: name === 'Host A' ? '/workspace/host-a' : '/workspace/host-b' } };
+				}
 				if (params.has('inheritWorkspace') && name === 'Host A') {
 					session = { ...session, workspace: { authorityId: 'local', root: '/workspace/inherited-project' } };
 				}

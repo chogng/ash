@@ -20,6 +20,9 @@ import type { IAction } from '../../../../../base/common/actions.js';
 import { IQuickInputService, type IInputOptions } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspacesService, type IRecent } from '../../../../../platform/workspaces/common/workspaces.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IProjectService, type Project } from '../../../../../platform/projects/common/projectService.js';
+import { SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
 import type { IChatWidgetModel } from '../../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { ISessionFolderAuthorizationService } from '../../../../common/sessionWorkspace.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
@@ -29,12 +32,24 @@ import type { ISession, IUntitledChatSession, SessionExecutionTarget, SessionWor
 import { getSessionsChatAccessibilityHelp } from '../../browser/sessionsChatAccessibilityHelp.js';
 import { SessionWorkspacePicker } from '../../browser/sessionWorkspacePicker.js';
 
-function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.file('/project').fsPath }, catalog: readonly ISession[] = [], additionalRecents: readonly IRecent[] = [], worktrees?: readonly { readonly label: string; readonly target: SessionExecutionTarget; readonly repository: SessionExecutionTarget; }[], windowFolder?: { readonly name: string; readonly uri: URI; }, gates?: { readonly worktrees: Promise<void>; readonly container: Promise<boolean>; readonly history: Promise<void>; }, authorize: ISessionFolderAuthorizationService['authorize'] = async () => true, isTrusted: ISessionFolderAuthorizationService['isTrusted'] = async () => true) {
+function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.file('/project').fsPath }, catalog: readonly ISession[] = [], additionalRecents: readonly IRecent[] = [], worktrees?: readonly { readonly label: string; readonly target: SessionExecutionTarget; readonly repository: SessionExecutionTarget; }[], windowFolder?: { readonly name: string; readonly uri: URI; }, gates?: { readonly worktrees: Promise<void>; readonly container: Promise<boolean>; readonly history: Promise<void>; }, authorize: ISessionFolderAuthorizationService['authorize'] = async () => true, isTrusted: ISessionFolderAuthorizationService['isTrusted'] = async () => true, project?: Project) {
 	const lifetime = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	lifetime.add(toDisposable(() => dom.window.close()));
 	lifetime.add(setARIAContainer(dom.window.document.body));
 	const services = lifetime.add(new InstantiationService());
+	const contextKeys = lifetime.add(new ContextKeyService());
+	SessionsWorkspaceModeContext.bindTo(contextKeys).set(project ? 'code' : 'chat');
+	services.registerInstance(IContextKeyService, contextKeys);
+	const projects = project ? [project] : [];
+	services.registerInstance(IProjectService, {
+		onDidChange: Event.None, list: async () => projects, read: async (id: string) => projects.find(project => project.id === id)!,
+		async create(id: string, name: string, description: string, materials: Project['materials']) {
+			const project: Project = { id, name, description, materials, revision: 1, archived: false, sessionIds: [], sessionCount: 0 };
+			projects.push(project);
+			return project;
+		},
+	} as unknown as IProjectService);
 	services.registerInstance(ISessionFolderAuthorizationService, { isTrusted, authorize });
 	services.registerInstance(IStorageService, lifetime.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test' })));
 	const changed = lifetime.add(new Emitter<void>());
@@ -104,7 +119,7 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 	const control = lifetime.add(services.createInstance(SessionWorkspacePicker, dom.window.document.body, model as unknown as IChatWidgetModel));
 	const button = dom.window.document.querySelector('button')!;
 	return {
-		button, control, model, changed, updated, loaded: loaded.event, dialog, branch, errors, checkout, cloneStarted, cancelled,
+		button, control, model, changed, updated, loaded: loaded.event, dialog, branch, errors, checkout, cloneStarted, cancelled, projects,
 		get history() { return history; },
 		get worktreeRequests() { return worktreeRequests; },
 		get items() { return items; },
@@ -125,6 +140,36 @@ function fixture(target: SessionExecutionTarget = { type: 'local', root: URI.fil
 		[Symbol.dispose]() { lifetime.dispose(); },
 	};
 }
+
+test('Choose project authorizes its folder and binds only the current Code draft', async () => {
+	const resource = URI.file('/saved-project');
+	const grants: string[] = [];
+	using f = fixture(undefined, [], [], undefined, undefined, undefined, async root => {
+		grants.push(root);
+		return true;
+	}, undefined, {
+		id: 'saved', name: 'Saved Project', description: '', archived: false, revision: 1, sessionIds: [], sessionCount: 0,
+		materials: [{ kind: 'folder', name: 'source', resource }],
+	});
+	assert.match(f.button.textContent ?? '', /Choose project/);
+	await f.open();
+	await f.choose('Saved Project');
+	assert.deepEqual(grants, [resource.fsPath]);
+	assert.equal(f.drafts[0]!.projectId, 'saved');
+	assert.deepEqual(f.drafts[0]!.workspace, { type: 'local', root: resource.fsPath });
+	assert.equal(f.drafts[1]!.projectId, undefined);
+
+	await f.open();
+	const folder = f.choose('Open Folder…');
+	await f.dialog.complete([URI.file('/recent')]);
+	await folder;
+	const folderProject = f.projects.find(project => project.id === f.drafts[0]!.projectId);
+	assert.equal(folderProject?.materials[0]?.resource.fsPath, URI.file('/recent').fsPath);
+	await f.open();
+	await f.choose('Open Folder…');
+	assert.equal(f.drafts[0]!.projectId, folderProject?.id);
+	assert.equal(f.projects.length, 2);
+});
 
 test('Workspace picker hides when the composer moves from a draft to a session', () => {
 	using f = fixture();
@@ -380,7 +425,7 @@ test('Workspace cancellation keeps the draft and the Chinese picker exposes tran
 	const translations = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/sessions.json', 'utf8'));
 	setNlsMessages('zh-CN', translations);
 	try {
-		assert.match(getSessionsChatAccessibilityHelp(), /选择尚未完全信任的本地文件夹时会打开信任对话框/);
+		assert.match(getSessionsChatAccessibilityHelp(), /打开不受信任的本地文件夹时会出现信任对话框/);
 		using f = fixture();
 		await f.open();
 		assert.ok(f.labels.includes('克隆仓库…'));

@@ -4,7 +4,7 @@ import { SessionsRecentWorkspacesService } from '../../../services/sessions/brow
 import { SessionWorkspaceFallback } from './sessionWorkspaceFallback.js';
 import { URI } from '../../../../base/common/uri.js';
 import { createUuid } from '../../../../base/common/uuid.js';
-import { basename } from '../../../../base/common/resources.js';
+import { basename, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { observableValue } from '../../../../base/common/observable.js';
 import { IWorkspacesService, type IRecentlyOpened } from '../../../../platform/workspaces/common/workspaces.js';
 import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
@@ -24,6 +24,8 @@ import { cloneRepository } from '../../../services/sessions/browser/cloneReposit
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IProjectService, type Project } from '../../../../platform/projects/common/projectService.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
 import { ActionListItemKind, type IActionListItem, type IActionListItemInlineToggle } from '../../../../platform/actionWidget/browser/actionList.js';
@@ -37,6 +39,7 @@ import { ISessionFolderAuthorizationService, sessionWorkspaceUri } from '../../.
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { IUntitledChatSession, SessionExecutionTarget } from '../../../services/sessions/common/session.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 
 const MAX_NEW_PICKER_RECENT_WORKSPACES = 10;
 
@@ -82,6 +85,8 @@ export class SessionWorkspacePicker extends Disposable {
 	private visible = true;
 	private readonly worktreeRequest = this._register(new MutableDisposable());
 	private worktreeQuery: IWorkspaceWorktreeQuery | undefined;
+	private selectedProject: { readonly id: string; readonly name: string; } | undefined;
+	private projectRead = 0;
 
 	constructor(
 		container: HTMLElement,
@@ -97,6 +102,8 @@ export class SessionWorkspacePicker extends Disposable {
 		@IWorkspacesService private readonly workspaces: IWorkspacesService,
 		@ILocalGitService private readonly git: ILocalGitService,
 		@ISessionFolderAuthorizationService private readonly folderAuthorization: ISessionFolderAuthorizationService,
+		@IProjectService private readonly projects: IProjectService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
 	) {
 		super();
 		const host = this.host = h(container.ownerDocument, 'div', { className: 'ash-sessions-chat-input-workspace' });
@@ -116,7 +123,7 @@ export class SessionWorkspacePicker extends Disposable {
 					run: () => this.openPicker(),
 				},
 				onDidChange: this.presentationChanged.event,
-				placeholder: localize('sessions.workspace.searchFolders', 'Search folders'),
+				placeholder: localize({ bundle: 'ash.sessions', key: 'sessions.project.search' }, 'Search projects and folders'),
 			},
 		}));
 		this.picker.render(host);
@@ -124,11 +131,36 @@ export class SessionWorkspacePicker extends Disposable {
 		this._register(model.onDidChange(() => this.render()));
 		this._register(workspace.onDidChangeWorkspaceFolders(() => this.render()));
 		this._register(providers.onDidChangeProviders(() => this.render()));
+		this._register(projects.onDidChange(() => this.readSelectedProject()));
+		this._register(contextKeys.onDidChangeContext(event => {
+			if (event.affectsSome(new Set([SessionsWorkspaceModeContext.key]))) {
+				this.picker.hide();
+				this.pending.clear();
+				this.render();
+			}
+		}));
 		this.render();
 	}
 
 	private get draft(): IUntitledChatSession | undefined {
 		return this.sessions.untitledSessions.find(draft => draft.untitledSessionId === this.model.untitledSessionId);
+	}
+
+	private get isCode(): boolean { return this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code'; }
+
+	private usesLocalProjects(draft: IUntitledChatSession): boolean {
+		return this.isCode && (!draft.providerId || draft.providerId === LOCAL_AGENT_HOST_PROVIDER_ID);
+	}
+
+	private readSelectedProject(): void {
+		const id = this.draft?.projectId;
+		const generation = ++this.projectRead;
+		if (!id) return;
+		void this.projects.read(id).then(project => {
+			if (this.isDisposed || this.projectRead !== generation || this.draft?.projectId !== id) return;
+			this.selectedProject = { id, name: project.name };
+			this.render();
+		}, () => { /* The picker can still show the selected folder during a reconnect. */ });
 	}
 
 	public setVisible(visible: boolean): void {
@@ -144,17 +176,27 @@ export class SessionWorkspacePicker extends Disposable {
 
 	private render(): void {
 		const draft = this.draft;
+		if (this.selectedProject?.id !== draft?.projectId) {
+			this.selectedProject = draft?.projectId ? { id: draft.projectId, name: '' } : undefined;
+			this.readSelectedProject();
+		}
 		this.host.hidden = !draft;
 		const session = this.sessions.sessions.find(session => session.sessionId === this.model.sessionId);
 		const selection = draft?.workspace;
 		const root = selection && 'root' in selection ? selection.root : session?.workspace?.root;
-		const name = root?.replace(/[/\\]+$/, '').split(/[/\\]/).pop()
-			|| this.workspace.getWorkspace().folders.map(folder => folder.name).join(', ')
-			|| localize('sessions.workspace.select', 'Select workspace');
+		const folderName = root?.replace(/[/\\]+$/, '').split(/[/\\]/).pop()
+			|| this.workspace.getWorkspace().folders.map(folder => folder.name).join(', ');
+		const chooseProject = localize({ bundle: 'ash.sessions', key: 'sessions.project.choose' }, 'Choose project');
+		const name = draft && this.usesLocalProjects(draft)
+			? (draft.projectId && (this.selectedProject?.name || folderName)) || chooseProject
+			: folderName || (this.isCode ? chooseProject : localize('sessions.workspace.select', 'Choose folder'));
 		const label = draft?.devContainer || session?.workspace?.runtime?.providerId === 'ash.dev-containers'
 			? localize('sessions.workspace.containerLabel', 'Dev Container · {0}', name) : name;
 		this.label = label;
-		this.tooltip = localize('sessions.workspace.label', 'Workspace: {0}', root ? `${label}\n${root}` : label);
+		const detail = root ? `${label}\n${root}` : label;
+		this.tooltip = this.isCode
+			? root ? localize({ bundle: 'ash.sessions', key: 'sessions.project.label' }, 'Project: {0}', detail) : label
+			: localize('sessions.workspace.label', 'Folder: {0}', detail);
 		this.enabled = !!draft && !this.model.inputState.aiDisabled && this.model.inputState.phase !== 'submitting';
 		if (!this.enabled || this.pendingDraftId && this.pendingDraftId !== draft?.untitledSessionId) { this.pending.clear(); }
 		if (this.pickerDraft && (this.pickerDraft.untitledSessionId !== draft?.untitledSessionId || this.pickerDraft.workspace !== draft?.workspace)) {
@@ -214,10 +256,14 @@ export class SessionWorkspacePicker extends Disposable {
 		this.pending.clear();
 		this.pickerDraft = draft;
 		const source = this.workspaceSource(draft);
+		const projectCatalog = this.usesLocalProjects(draft)
+			&& (!source || source.type === 'local') ? this.readProjects() : undefined;
+		let projectActions: IWorkspacePickerAction[] = [];
 		const worktreeQuery = this.prepareWorktrees(draft, true);
 		const isCurrent = (): boolean => !this.isDisposed && this.visible && this.enabled
 			&& this.draft?.untitledSessionId === draft.untitledSessionId
-			&& this.draft.workspace === draft.workspace && this.draft.providerId === draft.providerId;
+			&& this.draft.workspace === draft.workspace && this.draft.providerId === draft.providerId
+			&& this.draft.projectId === draft.projectId;
 		const toAction = (item: IWorkspaceModeItem): IWorkspacePickerAction => ({
 			recent: item.recent,
 			id: `sessions.workspace.${item.mode}.${item.target?.root ?? ''}`,
@@ -229,7 +275,7 @@ export class SessionWorkspacePicker extends Disposable {
 			run: async () => {
 				if (!isCurrent()) return;
 				if (item.mode === 'browse' || item.mode === 'clone' || item.mode === 'folder' || item.mode === 'worktree') {
-					await this.selectWorkspace(draft, item.mode, item.target ?? source);
+					await this.selectWorkspace(draft, item.mode, item.target ?? source, undefined, projectCatalog);
 				} else {
 					this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, item.target ?? source ?? draft.workspace, {
 						devContainer: item.mode === 'container',
@@ -266,7 +312,7 @@ export class SessionWorkspacePicker extends Disposable {
 		const buildActions = () => {
 			const environmentItems: IWorkspaceModeItem[] = [];
 			if (hasContainer) {
-				environmentItems.push({ label: localize('sessions.workspace.useHost', 'Use workspace host'), mode: 'workspace', picked: !draft.devContainer });
+				environmentItems.push({ label: localize('sessions.workspace.useHost', 'Use this host'), mode: 'workspace', picked: !draft.devContainer });
 				environmentItems.push({ label: localize('sessions.workspace.useContainer', 'Use Dev Container'), mode: 'container', picked: draft.devContainer });
 			}
 			const worktreesOnHost = allWorktrees ?? [];
@@ -347,6 +393,7 @@ export class SessionWorkspacePicker extends Disposable {
 				}).map(folder => folderAction(folder, true)),
 			];
 			return Separator.join(
+				projectActions,
 				[...folderActions, ...environmentItems.map(toAction)],
 				[...actions, openFolder],
 				worktreeActions,
@@ -358,6 +405,29 @@ export class SessionWorkspacePicker extends Disposable {
 			};
 			const provider = this.providers.getProvider(draft.providerId ?? '') as IAgentHostSessionsProvider | undefined;
 			await Promise.all([
+				projectCatalog?.then(projects => {
+					projectActions = projects.filter(project => !project.archived).map(project => {
+						const folders = projectFolders(project);
+						const chooseFolder = (folder: URI): IWorkspacePickerAction => ({
+							id: `sessions.project.${project.id}.${folder.toString()}`,
+							label: basename(folder) || folder.fsPath, tooltip: folder.fsPath, rowTooltip: folder.fsPath,
+							enabled: true, icon: Lxicon.folder,
+							run: () => { if (isCurrent()) return this.selectWorkspace(draft, 'folder', selectionFromResource(folder), project.id); },
+						});
+						return {
+							id: `sessions.project.${project.id}`, label: project.name, icon: Lxicon.projects,
+							tooltip: folders.length === 1 ? folders[0]!.fsPath : project.name, enabled: true,
+							checked: draft.projectId === project.id,
+							submenu: folders.length > 1 ? folders.map(chooseFolder) : undefined,
+							run: () => {
+								if (!isCurrent()) return;
+								if (folders.length === 1) return chooseFolder(folders[0]!).run();
+								if (!folders.length) return this.selectWorkspace(draft, 'browse', source, project.id);
+							},
+						};
+					});
+					update();
+				}, () => { /* Folder and worktree choices can load independently of the project catalog. */ }),
 				worktreeQuery?.result.then(result => {
 					if (!token.isCancellationRequested && isCurrent() && worktreeQuery.error !== undefined) this.notifications.error(getErrorMessage(worktreeQuery.error));
 					if (structuralEquals(allWorktrees, result)) return;
@@ -383,7 +453,7 @@ export class SessionWorkspacePicker extends Disposable {
 		});
 	}
 
-	private async selectWorkspace(draft: IUntitledChatSession, mode: 'browse' | 'clone' | 'folder' | 'worktree', source: SessionExecutionTarget | undefined): Promise<void> {
+	private async selectWorkspace(draft: IUntitledChatSession, mode: 'browse' | 'clone' | 'folder' | 'worktree', source: SessionExecutionTarget | undefined, projectId?: string, projectCatalog?: Promise<readonly Project[]>): Promise<void> {
 		const lifetime = new DisposableStore();
 		this.pending.value = lifetime;
 		this.pendingDraftId = draft.untitledSessionId;
@@ -417,7 +487,7 @@ export class SessionWorkspacePicker extends Disposable {
 			} else if (mode === 'browse') {
 				if (source && source.type !== 'local') {
 					const root = await this.quickInput.input({
-						title: localize('sessions.workspace.browseTitle', 'Choose a conversation folder'),
+						title: localize('sessions.workspace.browseTitle', 'Choose a folder'),
 						value: source.root,
 						placeHolder: localize('sessions.workspace.remotePath', 'Absolute folder path on this conversation’s host'),
 						validateInput: async value => value.startsWith('/') && !value.includes('\0') ? undefined
@@ -428,7 +498,7 @@ export class SessionWorkspacePicker extends Disposable {
 				} else {
 					const defaultUri = source && sessionWorkspaceUri(buildAgentHostSessionWorkspace(source)!);
 					const folders = await this.fileDialogs.showOpenDialog({
-						title: localize('sessions.workspace.browseTitle', 'Choose a conversation folder'),
+						title: localize('sessions.workspace.browseTitle', 'Choose a folder'),
 						canSelectFiles: false, canSelectFolders: true, canSelectMany: false, defaultUri,
 					});
 					if (!folders?.[0]) { return; }
@@ -437,22 +507,63 @@ export class SessionWorkspacePicker extends Disposable {
 			}
 			// Native dialogs may outlive their composer; a late result must not change another draft.
 			const isCurrent = () => !authorization.signal.aborted && this.draft?.untitledSessionId === draft.untitledSessionId
-				&& this.draft.workspace === draft.workspace && this.draft.providerId === draft.providerId && this.model.inputState.phase !== 'submitting';
+				&& this.draft.workspace === draft.workspace && this.draft.providerId === draft.providerId
+				&& this.draft.projectId === draft.projectId && this.model.inputState.phase !== 'submitting';
 			if (!target || !isCurrent()) { return; }
 			const provider = draft.providerId && this.providers.getProvider(draft.providerId) as IAgentHostSessionsProvider | undefined;
 			const accepted = provider && provider.authorizeWorkspace
 				? await provider.authorizeWorkspace(target, authorization.signal)
 				: target.type !== 'local' || await this.folderAuthorization.authorize(target.root, authorization.signal);
 			if (!accepted || !isCurrent()) { return; }
+			let project: Project | undefined;
+			if (projectId) {
+				project = await this.projects.read(projectId);
+				if (!isCurrent()) return;
+				const resource = URI.file(target.root);
+				const belongs = projectFolders(project).some(folder => extUriBiasedIgnorePathCase.isEqual(folder, resource));
+				if (project.archived || (!belongs && mode !== 'browse')) {
+					throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.project.unavailable' }, 'This project is unavailable. Choose another project.'));
+				}
+				if (!belongs) {
+					project = await this.projects.update(project, project.name, project.description, [
+						...project.materials, { kind: 'folder', name: basename(resource) || target.root, resource },
+					]);
+				}
+			} else if (!projectId && projectCatalog && target.type === 'local' && (mode !== 'worktree' || !draft.projectId)) {
+				const checkoutSource = mode === 'worktree' ? this.workspaceSource(draft) : undefined;
+				const resource = URI.file(checkoutSource?.type === 'local' ? checkoutSource.root : target.root);
+				const projects = await projectCatalog;
+				if (!isCurrent()) return;
+				project = await this.projectForFolder(projects, resource);
+			}
+			if (!isCurrent()) return;
 			this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, target, mode === 'worktree'
-				? { devContainer: this.draft?.devContainer, branchName: this.draft?.branchName } : { branchName: undefined });
-			status(localize('sessions.workspace.selected', 'Conversation folder: {0}', target.root));
+				? { devContainer: this.draft?.devContainer, branchName: this.draft?.branchName, projectId: draft.projectId ?? project?.id }
+				: { projectId: projectId ?? project?.id });
+			status(this.isCode ? localize({ bundle: 'ash.sessions', key: 'sessions.project.folderSelected' }, 'Project folder: {0}', target.root)
+				: localize('sessions.workspace.selected', 'Conversation folder: {0}', target.root));
 			if (mode !== 'worktree') await this.recordRecentFolder(draft.providerId, target);
 		} catch (error) {
 			if (!cancellation.token.isCancellationRequested && !isCancellationError(error)) { this.notifications.error(getErrorMessage(error)); }
 		} finally {
 			if (this.pending.value === lifetime) { this.pending.clear(); }
 		}
+	}
+
+	private async readProjects(): Promise<readonly Project[]> {
+		const summaries = await this.projects.list();
+		return Promise.all(summaries.map(project => this.projects.read(project.id)));
+	}
+
+	private async projectForFolder(projects: readonly Project[], resource: URI): Promise<Project> {
+		const matching = projects.find(project => !project.archived
+			&& projectFolders(project).some(folder => extUriBiasedIgnorePathCase.isEqual(folder, resource)));
+		if (matching) return matching;
+		// A folder opened in two windows at once uses the same Project creation command.
+		const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(extUriBiasedIgnorePathCase.getComparisonKey(resource)));
+		const id = `folder-${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+		const name = basename(resource) || resource.fsPath;
+		return this.projects.create(projects.some(project => project.id === id) ? createUuid() : id, name, '', [{ kind: 'folder', resource, name }]);
 	}
 
 	private async recordRecentFolder(providerId: string | undefined, target: SessionExecutionTarget): Promise<void> {
@@ -465,6 +576,12 @@ export class SessionWorkspacePicker extends Disposable {
 }
 
 // Restrict the derived name to one portable path segment before giving it to the host.
+function projectFolders(project: Project): URI[] {
+	const folders = [...project.roots ?? [], ...project.materials.filter(material => material.kind === 'folder').map(material => material.resource)];
+	return [...new Map(folders.filter(folder => folder.scheme === 'file' && !folder.authority)
+		.map(folder => [extUriBiasedIgnorePathCase.getComparisonKey(folder), folder])).values()];
+}
+
 function cloneFolderName(input: string): string | undefined {
 	const value = input.trim();
 	let path: string;

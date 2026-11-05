@@ -1,15 +1,14 @@
 import { h } from '../../../../base/browser/dom.js';
 import { getNLSLanguage, localize } from '../../../../nls.js';
-import type { IChat, ISession } from '../../../services/sessions/common/session.js';
+import { chatExecutionWorkspace, type IChat, type ISession } from '../../../services/sessions/common/session.js';
 
 export function getSessionSummaryHoverData(session: ISession, chat?: IChat): readonly string[] {
-	// An explicitly directoryless chat must not display the session's execution target.
-	const workspace = chat?.workspace === undefined ? session.workspace : chat.workspace;
+	const workspace = chatExecutionWorkspace(session, chat);
 	const provider = session.providerLabel ?? session.application?.label;
 	const updatedAt = chat?.updatedAt;
 	const details: string[] = [];
 	if (workspace) {
-		details.push(localize('sessions.hover.workspace', 'Workspace: {0}', workspace.root));
+		details.push(localize('sessions.hover.workspace', 'Project folder: {0}', workspace.root));
 	}
 	if (provider) {
 		details.push(localize('sessions.hover.provider', 'Provider: {0}', provider));

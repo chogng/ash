@@ -95,7 +95,7 @@ registerAction2(class FocusNewSessionWorkspacePickerAction extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.focusNewSessionWorkspacePicker',
-			title: localize2('sessions.focusNewSessionWorkspacePicker', 'Focus Workspace Picker'),
+			title: localize2('sessions.focusNewSessionWorkspacePicker', 'Focus Project Picker'),
 			f1: true,
 			precondition: FOCUS_NEW_SESSION_WORKSPACE_PICKER_WHEN,
 			keybinding: { weight: KeybindingWeight.SessionsContrib, primary: FOCUS_NEW_SESSION_WORKSPACE_PICKER_KEYBINDING },
