@@ -78,6 +78,13 @@ const managementIcons: Record<SessionManagementInfo['status'], Icon | undefined>
 	stopped: Lxicon.stopCircle,
 };
 
+const quietSessionIcon = Lxicon.circle;
+const codeManagementIcons: typeof managementIcons = {
+	...managementIcons,
+	completed: quietSessionIcon,
+	stopped: quietSessionIcon,
+};
+
 export type SessionsListPresentation = 'chat' | 'code' | { readonly openCommand: string; readonly activeContext: string; };
 
 interface SessionsListDragOptions {
@@ -693,7 +700,9 @@ export class SessionsList extends DomWidget {
 		const childrenByRow = new Map<HTMLElement, readonly HTMLElement[]>();
 		const activeSelection = this.customViews.activeCustomView.get() || this.entry && !this.contextKeys?.getValue(this.entry.activeContext)
 			? undefined : this.viewService.activeSelection;
-		const itemFor = (key: string, icon = this.mode === 'code' ? Lxicon.chatSession : undefined, conversation = false): SessionListItem => {
+		const restingIcon = this.mode === 'code' ? quietSessionIcon : undefined;
+		const statusIcons = this.mode === 'code' ? codeManagementIcons : managementIcons;
+		const itemFor = (key: string, icon = restingIcon, conversation = false): SessionListItem => {
 			present.add(key);
 			let item = this.items.get(key);
 			if (!item) {
@@ -701,7 +710,7 @@ export class SessionsList extends DomWidget {
 					? this.instantiation.createInstance(SessionLeadingIcon, ownerDocument, '',
 						(picked: Icon | undefined) => this.listModel.setRowIcon(key, picked?.id))
 					: undefined;
-				item = this.items.set(key, new SessionListItem(ownerDocument, this.contextMenus, icon, leading));
+				item = this.items.set(key, new SessionListItem(ownerDocument, this.contextMenus, statusIcons, icon, leading));
 			}
 			item.domNode.dataset.item = key;
 			if (item.leadingIcon) {
@@ -710,9 +719,9 @@ export class SessionsList extends DomWidget {
 			}
 			return item;
 		};
-		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], subgroup = false, open?: () => void, group?: SessionGroup): HTMLElement => {
+		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], kind: SessionListSectionKind = 'section', open?: () => void, group?: SessionGroup): HTMLElement => {
 			activeSections.add(key);
-			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, subgroup,
+			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, kind,
 				collapsed => this.tree.setSectionCollapsed(key, collapsed), key === 'projects' ? this.createListToolbar : undefined));
 			childrenByRow.set(section.domNode, reorderChildren(children, ids => this.listModel.getSessionOrder(`${this.mode}:${key}`, ids), 'rowOrderId'));
 			section.update(title, {
@@ -772,14 +781,14 @@ export class SessionsList extends DomWidget {
 			const nested = activeChats.filter(chat => chat !== thread && chat.origin.type !== 'agentSpawn'
 				&& (matchesSession || this.search.matches(chat.title, chat.workspace?.root, ...fields)));
 			if (!matchesSession && !nested.length && !nestedDrafts.has(session.sessionId)) continue;
-			const item = itemFor(`session:${session.sessionId}`, this.mode === 'code' ? Lxicon.chatSession : Lxicon.cowork, true);
+			const item = itemFor(`session:${session.sessionId}`, restingIcon ?? Lxicon.cowork, true);
 			item.target = { sessionId: session.sessionId, threadId: thread.threadId };
 			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, () => this.openRow(() => this.viewService.openSession(session.sessionId, thread.threadId)), session.management);
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor));
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
 			item.updateSummary(this.hoverService, getSessionSummaryHoverData(session, thread));
 			const children = nested.map(chat => {
-				const child = itemFor(`chat:${JSON.stringify([session.sessionId, chat.threadId])}`, Lxicon.chatSession, true);
+				const child = itemFor(`chat:${JSON.stringify([session.sessionId, chat.threadId])}`, restingIcon ?? Lxicon.chatSession, true);
 				child.target = { sessionId: session.sessionId, threadId: chat.threadId };
 				child.update(chat.title || localize('sessions.list.untitledChat', 'Untitled Chat'), current?.threadId === chat.threadId,
 					() => this.openRow(() => this.viewService.openSession(session.sessionId, chat.threadId)), chat.management);
@@ -807,7 +816,7 @@ export class SessionsList extends DomWidget {
 			if (!members.length && !drafts.length && !this.search.matches(project.name)) continue;
 			const key = `project:${project.id}`;
 			if (this.mode === 'code') {
-				const section = sectionFor(key, project.name, [...members, ...drafts], true);
+				const section = sectionFor(key, project.name, [...members, ...drafts], 'project');
 				section.dataset.projectId = project.id;
 				projects.push(section);
 			} else {
@@ -828,7 +837,7 @@ export class SessionsList extends DomWidget {
 				if (item) { members.push(item); remaining.delete(id); }
 			}
 			if (this.search.hasQuery && !members.length && !this.search.matches(group.name)) continue;
-			(this.mode === 'code' ? recent : chatGroups).push(sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code',
+			(this.mode === 'code' ? recent : chatGroups).push(sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code' ? 'subgroup' : 'section',
 				group.kind === 'comparison' ? () => { void this.openComparison(group.sessionIds); } : undefined, group));
 		}
 		const orderedRecent = reorderChildren(recent, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId');
@@ -861,7 +870,7 @@ export class SessionsList extends DomWidget {
 				bucket.rows.push(remaining.get(session.sessionId)!);
 			}
 			for (const [id, bucket] of [...buckets].sort((left, right) => left[1].label.localeCompare(right[1].label))) {
-				orderedRecent.push(sectionFor(`grouping:${grouping}:${id}`, bucket.label, bucket.rows, true));
+				orderedRecent.push(sectionFor(`grouping:${grouping}:${id}`, bucket.label, bucket.rows, 'subgroup'));
 			}
 		}
 		const showEmpty = orderedRecent.length === 0 && pinned.length === 0 && chatGroups.length === 0;
@@ -1025,7 +1034,7 @@ class SessionListItem extends AbstractDisposable {
 		};
 	}
 
-	constructor(ownerDocument: Document, contextMenus: IContextMenuService, icon?: ThemeIcon, readonly leadingIcon?: SessionLeadingIcon) {
+	constructor(ownerDocument: Document, contextMenus: IContextMenuService, private readonly statusIcons: typeof managementIcons, icon?: ThemeIcon, readonly leadingIcon?: SessionLeadingIcon) {
 		super();
 		this.row = new SessionListRowRenderer(ownerDocument, leadingIcon?.element);
 		this.domNode = this.row.element;
@@ -1083,7 +1092,7 @@ class SessionListItem extends AbstractDisposable {
 		if (this.label.textContent !== title) this.label.textContent = title;
 		this.leadingIcon?.setTitle(title);
 		const state = sessionManagementLabel(management);
-		const icon = management && managementIcons[management.status];
+		const icon = management && this.statusIcons[management.status];
 		this.leadingIcon?.setStatus(state && icon ? {
 			label: state, kind: management?.status === 'working' ? 'inProgress' : 'static', icon,
 		} : undefined);
@@ -1138,6 +1147,8 @@ class SessionListItem extends AbstractDisposable {
 	}
 }
 
+type SessionListSectionKind = 'section' | 'subgroup' | 'project';
+
 export class SessionListSection extends Disposable {
 	readonly domNode: HTMLElement;
 	readonly button: HTMLButtonElement;
@@ -1149,22 +1160,24 @@ export class SessionListSection extends Disposable {
 	private open: (() => void) | undefined;
 	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
 
+	private get subgroup(): boolean { return this.kind !== 'section'; }
 	get title(): string { return this.label.textContent ?? ''; }
 	get rowClassName(): string { return this.subgroup ? 'ash-sessions-list-subgroup-row' : 'ash-sessions-list-section-row'; }
 
-	constructor(document: Document, key: string, private readonly subgroup: boolean, toggle: (collapsed?: boolean) => void,
+	constructor(document: Document, key: string, private readonly kind: SessionListSectionKind, toggle: (collapsed?: boolean) => void,
 		createToolbar?: (container: HTMLElement, disposables: DisposableStore) => MenuWorkbenchToolBar) {
 		super();
-		this.domNode = h(document, 'section', { className: subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section' });
+		this.domNode = h(document, 'section', { className: this.subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section' });
 		this.domNode.dataset.section = key;
 		collapseRenderers.set(this.domNode, this);
 		this.heading = h(document, 'h3');
 		this.button = h(document, 'button', { className: 'ash-sessions-list-section-toggle' });
 		this.button.type = 'button';
 		this.icon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
+		if (kind === 'project') this.icon.classList.add('ash-sessions-list-project-icon');
 		this.appearanceIcon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
 		this.label = h(document, 'span', { className: 'ash-sessions-list-section-label' });
-		this.button.append(...(subgroup ? [this.icon, this.label] : [this.label, this.icon]));
+		this.button.append(...(this.subgroup ? [this.icon, this.label] : [this.label, this.icon]));
 		this.heading.append(this.button);
 		this.domNode.append(this.heading);
 		if (createToolbar) {
@@ -1233,10 +1246,14 @@ export class SessionListSection extends Disposable {
 			}
 			this.button.setAttribute('aria-expanded', String(!collapsed));
 		}
-		const icon = this.subgroup ? collapsed ? Lxicon.folder : Lxicon.folderOpened : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
+		const chevron = collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
+		const icon = this.subgroup ? (collapsed ? Lxicon.folder : Lxicon.folderOpened) : chevron;
 		if (this.icon.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
 			this.icon.replaceChildren();
 			appendIcon(icon, this.icon);
+			if (this.kind === 'project') {
+				appendIcon(chevron, this.icon).classList.add('ash-sessions-list-project-chevron');
+			}
 		}
 	}
 

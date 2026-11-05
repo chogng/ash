@@ -269,6 +269,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const search = picker.getByRole('combobox');
 			await search.fill(model.model); await expect(picker.getByRole('menuitemradio')).toHaveCount(1); await search.press('Enter');
 			// Keep row order stable while status changes update the last activity time.
+			await page.locator('.ash-tree-row[data-tree-id="section:projects"]').hover();
 			await page.locator('.ash-sessions-list-more').getByRole('button', { name: locale === 'zh-CN' ? '更多会话操作' : 'More Sessions Actions', exact: true }).click();
 			await page.getByRole('menuitem', { name: locale === 'zh-CN' ? '排序方式' : 'Sort By', exact: true }).press('ArrowRight');
 			await page.getByRole('menuitemradio', { name: locale === 'zh-CN' ? '创建日期' : 'Date Created', exact: true }).click();
@@ -287,7 +288,7 @@ for (const locale of ['en', 'zh-CN']) {
 					await expect(layer.locator(`[data-ash-icon-id="${glyph}"]`)).toBeVisible();
 				}
 			});
-			await assertStatus(copy.idle, 'chat-session');
+			await assertStatus(copy.idle, 'circle');
 			const rowHeight = (await row().boundingBox())!.height;
 			await row().focus();
 			const rowIdentity = await row().elementHandle();
@@ -327,7 +328,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const stopped = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId: root.threadId });
 			await client.request(APP_SERVER_METHODS['session/request'], interrupt);
 			expect((await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId: root.threadId })).thread).toEqual(stopped.thread);
-			await assertStatus(copy.stopped, 'stop-circle'); await preserve();
+			await assertStatus(copy.stopped, 'circle'); await preserve();
 			await start(root.threadId, 'fixture-failure');
 			await expect.poll(() => branchState(root.threadId), { timeout: 30_000 }).toBe('failed');
 			await assertStatus(copy.failed, 'error'); await preserve();
@@ -365,7 +366,7 @@ for (const locale of ['en', 'zh-CN']) {
 			}
 			await workbench.page.locator('[data-action-id="ash.chat.input.interrupt"] button:visible').click();
 			await expect.poll(() => branchState(root.threadId)).toBe('stopped');
-			await assertStatus(copy.stopped, 'stop-circle');
+			await assertStatus(copy.stopped, 'circle');
 			const finalRequests = await page.evaluate(() => (window as Window & { sessionStateRequests?: { method: string; sessionId?: string; }[]; }).sessionStateRequests!);
 			expect(finalRequests.filter(request => request.sessionId === sessionId && ['session/read', 'session/subscribe', 'session/thread/read'].includes(request.method))).toEqual([]);
 			await writeFile(testInfo.outputPath('management-transitions.json'), JSON.stringify({ locale, session: await read(), productRequests: finalRequests, stoppedReplay: stopped.thread }, null, 2));
@@ -384,7 +385,7 @@ for (const locale of ['en', 'zh-CN']) {
 			} else {
 				page = await agentsWorkbench.reopenAgentsWindow(application, page);
 			}
-			await assertStatus(copy.stopped, 'stop-circle');
+			await assertStatus(copy.stopped, 'circle');
 			await expect(active()).toHaveAttribute('data-untitled-session-id', draftId!);
 			await new Editor(active()).waitForEditorContents(text => text === 'Keep the unsent management draft');
 			await row().click();

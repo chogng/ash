@@ -35,6 +35,7 @@ If need, read the local refers: `../mxc`, `../tgrep`, `../vscode`, `../codex`, `
 - Use the client's NLS for changed product-owned user-visible text, including accessibility text; update translations and verify at least one non-default language. Parameterize dynamic text; do not translate command IDs, protocol fields, paths or user content.
 - If the requested UI style conflicts with an applicable skill, ask the user before implementing it.
 - Use `✅` and `❌` only for binary judgments.
+- 严格禁止使用codicons安装icon，使用icon
 
 ## Development workflow
 

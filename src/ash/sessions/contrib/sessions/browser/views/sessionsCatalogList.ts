@@ -283,7 +283,7 @@ export class SessionsCatalogList extends Disposable {
 				usedSections.add(key);
 				let control = this.sections.get(key);
 				if (!control) {
-					control = this.sections.set(key, new SessionListSection(document, key, false,
+					control = this.sections.set(key, new SessionListSection(document, key, 'section',
 						collapsed => tree.setSectionCollapsed(key, collapsed), section.showActions ? createToolbar : undefined));
 				}
 				control.domNode.dataset.groupDropTarget = String(section.groupDropTarget);

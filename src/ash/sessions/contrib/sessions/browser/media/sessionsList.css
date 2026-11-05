@@ -196,6 +196,18 @@
 		opacity: 1;
 		pointer-events: auto;
 	}
+
+	.ash-sessions-list-tree
+		.ash-tree-row:not(:hover)
+		.ash-sessions-list-section {
+		&:not(:focus-within) .ash-sessions-list-section-toggle,
+		.ash-sessions-list-section-toggle:focus:not(:focus-visible) {
+			> .ash-sessions-list-section-label
+				+ .ash-sessions-list-section-icon {
+				visibility: hidden;
+			}
+		}
+	}
 }
 
 .ash-sessions-list-section-toggle,
@@ -252,6 +264,31 @@
 
 .ash-sessions-list-section-icon > .ash-icon {
 	font-size: inherit;
+}
+
+.ash-sessions-list-section-icon.ash-sessions-list-project-icon {
+	display: inline-grid;
+	place-items: center;
+}
+
+.ash-sessions-list-project-icon > .ash-icon {
+	grid-area: 1 / 1;
+}
+
+.ash-sessions-list-project-icon > .ash-sessions-list-project-chevron {
+	visibility: hidden;
+}
+
+.ash-sessions-list-section-toggle:is(:hover, :focus-visible)
+	.ash-sessions-list-project-icon
+	> .ash-icon {
+	visibility: hidden;
+}
+
+.ash-sessions-list-section-toggle:is(:hover, :focus-visible)
+	.ash-sessions-list-project-icon
+	> .ash-sessions-list-project-chevron {
+	visibility: visible;
 }
 
 .ash-sessions-list-section-label {
@@ -379,6 +416,13 @@
 	/* The tree row reserves the trailing inset, even when the toolbar is hidden. */
 	padding-block: var(--ash-sessions-sidebar-item-inset);
 	padding-inline: var(--ash-sessions-sidebar-item-inset) 0;
+}
+
+.ash-sessions-list[data-mode="code"]
+	:is(.ash-sessions-list-item, .ash-session-status-icon-layer)
+	> .ash-icon-circle {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-lxiconFontSize);
 }
 
 .ash-sessions-list[data-mode="code"]
