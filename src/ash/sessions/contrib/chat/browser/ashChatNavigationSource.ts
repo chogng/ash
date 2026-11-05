@@ -11,11 +11,11 @@ import { ISessionsListModelService } from '../../../services/sessions/browser/se
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { getSessionsListEntries } from '../../sessions/browser/views/sessionsListFilters.js';
-import type { ChatNavigationEntry, ChatNavigationSnapshot, ChatNavigationSource } from '../../sessions/browser/views/chatNavigationView.js';
+import type { ChatListEntry, ChatListSnapshot, ChatListSource } from '../../sessions/browser/views/chatListModel.js';
 import { ASH_CHAT_SELECTED_CONTEXT, SHOW_ASH_CHAT_COMMAND } from '../common/constants.js';
 
 /** Projects the local Ash catalog and routes actions to its Session owner. */
-export class AshChatNavigationSource implements ChatNavigationSource {
+export class AshChatNavigationSource implements ChatListSource {
 	readonly snapshot;
 
 	constructor(
@@ -35,12 +35,11 @@ export class AshChatNavigationSource implements ChatNavigationSource {
 		const working: ISessionStatusIcon = {
 			label: localize('sessions.management.working', 'Working'), kind: 'inProgress', icon: Lxicon.sync,
 		};
-		this.snapshot = derived<ChatNavigationSnapshot>(reader => {
+		this.snapshot = derived<ChatListSnapshot>(reader => {
 			listChanged.read(reader);
 			const selection = sessions.getSelection(reader).activeSelection;
 			const selectedId = active.read(reader) && selection?.kind === 'session' ? selection.active.session.sessionId : undefined;
-			const pinned: ChatNavigationEntry[] = [];
-			const recent: ChatNavigationEntry[] = [];
+			const rows: ChatListEntry[] = [];
 			const entries = getSessionsListEntries(catalog.read(reader), list, selectedId);
 			for (const session of entries) {
 				// The ambient local provider keeps its raw catalog IDs and omits providerId.
@@ -55,9 +54,8 @@ export class AshChatNavigationSource implements ChatNavigationSource {
 					id, label, tooltip: label, enabled: true,
 					run: () => commands.executeCommand(id, session.sessionId),
 				});
-				(isPinned ? pinned : recent).push({
-					source: 'ash',
-					id,
+				rows.push({
+					id: `ash:${id}`,
 					title: session.title || localize('sessions.list.untitled', 'Untitled Session'),
 					selected: selectedId === id,
 					status: session.management?.status === 'working' ? working : undefined,
@@ -79,12 +77,7 @@ export class AshChatNavigationSource implements ChatNavigationSource {
 					],
 				});
 			}
-			return {
-				groups: [
-					{ key: 'pinned', title: localize('sessions.chatgpt.pinnedGroup', 'Pinned'), rows: pinned },
-					{ key: 'recent', title: localize('sessions.chatgpt.recentGroup', 'Recent'), rows: recent },
-				]
-			};
+			return { entries: rows };
 		});
 	}
 }

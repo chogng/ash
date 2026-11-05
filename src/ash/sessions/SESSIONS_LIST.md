@@ -21,7 +21,7 @@ This specification defines stable placement and state-ownership rules. Row styli
 
 Chat and Code consume the same session selection and pins. Chat presents flat conversation rows in top-level custom groups and a remaining conversation section beside pinned conversations and project entries. Code lists project entries separately from Recents, which includes unpinned conversations across workspaces and projects. Explicit custom groups remain inside Recents. Each mode owns separate section expansion state. Project records and membership remain owned by `IProjectService`; the sidebar holds only a disposable projection.
 
-The Desktop Chat sidebar projects ChatGPT history and active local Ash sessions into one tree using the shared Sessions list renderers. Pins and Recents contain entries from both sources, and ChatGPT project groups retain their original membership. Each source owns its history and actions, including its pin state. Opening a row delegates to its source. The sidebar retains its existing profile collapse state.
+The Desktop Chat sidebar consumes one catalog contract for every source. Sources supply conversation records with opaque identities, project membership, paging state, and operations. The Ash list model groups those records, giving pins precedence over projects and recents. The renderer uses the resulting groups and delegates operations through the records. Sources own their history and pin state. The sidebar owns profile collapse state.
 
 List-owned state is local presentation state. It is not synchronized back to a provider and must not mutate provider timestamps or metadata.
 

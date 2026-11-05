@@ -13,13 +13,13 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 import { ASH_CHAT_SELECTED_CONTEXT } from '../../chat/common/constants.js';
-import type { ChatNavigationEntry, ChatNavigationSnapshot, ChatNavigationSource } from '../../sessions/browser/views/chatNavigationView.js';
+import type { ChatListEntry, ChatListProject, ChatListSnapshot, ChatListSource } from '../../sessions/browser/views/chatListModel.js';
 import { shareChatGPTConversation } from './chatGPTShare.js';
 import type { ChatGPTConversation } from './chatGPTClient.js';
-import { IChatGPTService, selectedChatConversationId } from './chatGPTService.js';
+import { IChatGPTService, selectedChatConversationId, type ChatGPTState } from './chatGPTService.js';
 
-/** Projects ChatGPT history while the service retains account, history, and operation ownership. */
-export class ChatGPTNavigationSource implements ChatNavigationSource {
+/** Adapts the ChatGPT catalog and its operations to the Ash chat list. */
+export class ChatGPTList implements ChatListSource {
 	readonly snapshot;
 	private readonly loadingStatus: ISessionStatusIcon = {
 		label: localize('sessions.loadingConversation', 'Loading conversation…'),
@@ -52,7 +52,7 @@ export class ChatGPTNavigationSource implements ChatNavigationSource {
 				if (event.affectsSome(context)) listener(event);
 			}),
 			() => contextKeys.getValue(ASH_CHAT_SELECTED_CONTEXT) === true);
-		this.snapshot = derived<ChatNavigationSnapshot>(reader => {
+		this.snapshot = derived<ChatListSnapshot>(reader => {
 			const state = chat.state.read(reader);
 			const current = selectedChatConversationId(state);
 			const showSelection = !ashSelected.read(reader);
@@ -60,23 +60,16 @@ export class ChatGPTNavigationSource implements ChatNavigationSource {
 				const status = task.thread?.turns.at(-1)?.status;
 				return status === 'created' || status === 'running' || status === 'cancelling';
 			});
-			const groups = [
-				{ key: 'pinned', title: localize('sessions.chatgpt.pinnedGroup', 'Pinned'), rows: [] as ChatNavigationEntry[] },
-				...state.projects.map(project => ({ key: project.id, title: project.title, rows: [] as ChatNavigationEntry[] })),
-				{ key: 'other', title: localize('sessions.chatgpt.otherProjects', 'Other projects'), rows: [] as ChatNavigationEntry[] },
-				{ key: 'recent', title: localize('sessions.chatgpt.recentGroup', 'Recent'), rows: [] as ChatNavigationEntry[] },
-			];
-			const buckets = new Map(groups.map(group => [group.key, group.rows]));
 			const projects = new Set(state.projects.map(project => project.id));
-			for (const conversation of state.conversations) {
+			const entries = state.conversations.map((conversation): ChatListEntry => {
 				const { id, title, pinned, projectId } = conversation;
-				const key = pinned ? 'pinned' : projectId && (projectId.startsWith('g-p-') || projects.has(projectId))
-					? (projects.has(projectId) ? projectId : 'other') : 'recent';
 				const selected = id === current;
 				const icon = chat.observeConversationIcon(id);
-				buckets.get(key)!.push({
-					source: 'chatgpt',
-					id, title, pinned,
+				return {
+					id: `chatgpt:${id}`,
+					title, pinned,
+					// Custom GPT conversations also have gizmo IDs, but are not project members.
+					projectId: projectId && (projectId.startsWith('g-p-') || projects.has(projectId)) ? projectId : undefined,
 					selected: selected && showSelection,
 					status: state.loading?.kind === 'conversation' && state.loading.id === id ? this.loadingStatus
 						: selected && state.sending ? this.replyingStatus
@@ -90,10 +83,26 @@ export class ChatGPTNavigationSource implements ChatNavigationSource {
 					open: signal => this.open(id, signal),
 					setPinned: id.startsWith('pending:') ? undefined : pinned => chat.setPinned(id, pinned),
 					getActions: (signal, restoreFocus) => this.getActions(conversation, signal, restoreFocus),
-				});
-			}
-			return { groups, loading: state.loading?.kind === 'history' };
+				};
+			});
+			return {
+				entries,
+				projects: state.projects.map(project => ({ ...project, history: this.projectHistory(project.id, state) })),
+				loading: state.loading?.kind === 'history',
+			};
 		});
+	}
+
+	private projectHistory(projectId: string, state: ChatGPTState): ChatListProject['history'] {
+		const page = state.projectHistory.get(projectId);
+		if (page?.status === 'ready' && !page.cursor) return { state: 'complete' };
+		if (!state.connected || !state.networkAvailable) return { state: 'unavailable' };
+		if (!page) return { state: 'idle', load: () => this.chat.loadProjectConversations(projectId) };
+		if (page.status === 'loading') return { state: 'loading' };
+		return {
+			state: page.status === 'error' ? 'error' : 'more',
+			load: () => this.chat.loadProjectConversations(projectId, true),
+		};
 	}
 
 	attach(window: Window & typeof globalThis, isVisible: () => boolean): DisposableStore {

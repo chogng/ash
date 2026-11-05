@@ -180,12 +180,12 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	}));
 	await page.setViewportSize({ width: 960, height: 300 });
 	await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=light');
-	const sidebar = page.locator('.ash-chatgpt-navigation');
+	const sidebar = page.locator('.ash-chat-navigation');
 	const headers = sidebar.locator('.ash-sessions-list-section-toggle');
 	await expect(headers).toHaveText(['置顶', '其他项目', '最近']);
-	const row = sidebar.locator('[data-conversation="fixture-chat"].ash-chatgpt-navigation-row');
-	const item = row.locator('.ash-chatgpt-conversation');
-	const actions = row.locator('.ash-chatgpt-conversation-actions');
+	const row = sidebar.locator('[data-item="chatgpt:fixture-chat"].ash-chat-navigation-row');
+	const item = row.locator('.ash-chat-navigation-item');
+	const actions = row.locator('.ash-chat-navigation-actions');
 	const recent = sidebar.locator('[data-group="recent"]');
 	const other = sidebar.locator('[data-group="other"]');
 	await expect.poll(() => recent.evaluate(group => {
@@ -195,7 +195,7 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 		const a = first!.getBoundingClientRect();
 		const b = second!.getBoundingClientRect();
 		const previous = treeRow.previousElementSibling!
-			.querySelector('.ash-chatgpt-navigation-row')!.getBoundingClientRect();
+			.querySelector('.ash-chat-navigation-row')!.getBoundingClientRect();
 		return [header.height, a.height, a.top - header.bottom, b.top - a.bottom, header.top - previous.bottom, a.width - header.width];
 	})).toEqual([32, 32, 2, 2, 8, 0]);
 	await other.locator('.ash-sessions-list-section-toggle').click();
@@ -240,7 +240,7 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	await expect(item).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	await expect.poll(() => row.evaluate(element => {
 		const row = element.getBoundingClientRect();
-		const host = element.closest('.ash-chatgpt-navigation')!.getBoundingClientRect();
+		const host = element.closest('.ash-chat-navigation')!.getBoundingClientRect();
 		return [row.left - host.left, host.right - row.right];
 	})).toEqual([8, 8]);
 	await testInfo.attach('sidebar-rest', { body: await sidebar.screenshot(), contentType: 'image/png' });
@@ -251,14 +251,14 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	await expect(actions).toHaveCSS('background-image', 'none');
 	await expect(item).toHaveCSS('background-color', selected);
 	await expect(actions.locator('[data-action-id]')).toHaveCount(2);
-	await expect(actions.locator('[data-action-id]').last()).toHaveAttribute('data-action-id', 'sessions.chatgpt.more');
+	await expect(actions.getByRole('button').last()).toHaveAccessibleName('更多操作');
 	await expect.poll(() => row.evaluate(element => {
 		const centerY = (node: Element): number => {
 			const bounds = node.getBoundingClientRect();
 			return bounds.top + bounds.height / 2;
 		};
 		const rowCenter = centerY(element);
-		return [...element.querySelectorAll('.ash-chatgpt-conversation-actions button')]
+		return [...element.querySelectorAll('.ash-chat-navigation-actions button')]
 			.map(button => centerY(button) - rowCenter);
 	})).toEqual([0, 0]);
 	await expect.poll(async () => {
@@ -271,7 +271,7 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 
 	await page.mouse.move(350, 1);
 	await item.press('Shift+F10');
-	const more = actions.locator('[data-action-id="sessions.chatgpt.more"] button');
+	const more = actions.getByRole('button', { name: '更多操作', exact: true });
 	await expect(more).toHaveAttribute('aria-expanded', 'true');
 	await expect(page.getByRole('menuitem', { name: '重命名' })).toBeVisible();
 	await page.keyboard.press('Escape');
@@ -289,7 +289,7 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 	await mockChatGPTRequests(page);
 	await page.setViewportSize({ width: 900, height: 520 });
 	await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=light');
-	const row = page.locator('.ash-chatgpt-navigation-row[data-conversation="fixture-chat"]');
+	const row = page.locator('.ash-chat-navigation-row[data-item="chatgpt:fixture-chat"]');
 	const title = row.getByRole('button', { name: 'Synthetic conversation', exact: true });
 	const trigger = row.getByRole('button', { name: '更换「Synthetic conversation」的图标' });
 	const picker = page.getByRole('dialog', { name: '更换图标', exact: true });

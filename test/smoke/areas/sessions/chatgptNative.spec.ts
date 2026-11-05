@@ -160,7 +160,7 @@ test.describe('Unified Chat sidebar', () => {
 		await using catalog = createAshModelServer(ashRequests);
 		await configureAshModel(catalog, application, workbench, testWorkspace.directory);
 		const page = await workbench.openAgentsWindow(target.kind);
-		const sidebar = page.locator('.ash-chatgpt-navigation');
+		const sidebar = page.locator('.ash-chat-navigation');
 		const editor = page.locator('.ash-chatgpt-widget');
 		const chatGPTComposer = new Editor(editor);
 		const chatMode = page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true });
@@ -181,7 +181,7 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(ash).toContainText('Answer from Ash');
 		const ashSessionId = await ash.getAttribute('data-session-id');
 		expect(ashSessionId).toBeTruthy();
-		const ashRow = sidebar.locator(`[data-source="ash"][data-conversation="${ashSessionId}"]`);
+		const ashRow = sidebar.locator(`[data-item="ash:${ashSessionId}"]`);
 		const ashTitle = ashRow.locator('.ash-sessions-list-item');
 		await expect(ashTitle).toHaveAttribute('aria-current', 'page');
 		await expect(ashRow).toHaveAttribute('data-parent-section', 'recent');
@@ -203,7 +203,7 @@ test.describe('Unified Chat sidebar', () => {
 
 		await page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: '新建', exact: true }).click();
 		await sendChatGPT('First ChatGPT message');
-		const chatGPTRow = sidebar.locator('[data-source="chatgpt"][data-conversation="fixture-live"] .ash-sessions-list-item');
+		const chatGPTRow = sidebar.locator('[data-item="chatgpt:fixture-live"] .ash-sessions-list-item');
 		await expect(chatGPTRow).toHaveAttribute('aria-current', 'page');
 		await expect(ashTitle).not.toHaveAttribute('aria-current', 'page');
 
@@ -258,14 +258,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			let page = await workbench.openAgentsWindow(target.kind);
 			for (let reopen = 0; reopen < 3; reopen++) {
 				await expect.poll(() => application.evaluate(() => globalThis.ashNativeFixture.pendingInitializations)).toBe(1);
-				await expect(page.locator('.ash-chatgpt-navigation-list')).toHaveAttribute('aria-busy', 'true');
+				await expect(page.locator('.ash-chat-navigation-list')).toHaveAttribute('aria-busy', 'true');
 				page = await workbench.reopenAgentsWindow(application, page);
 				await expect.poll(() => application.evaluate(() => globalThis.ashNativeFixture.cancelledInitializations)).toBe(reopen + 1);
 				expect(driver.diagnostics.errors).toEqual([]);
 			}
 			await expect.poll(() => application.evaluate(() => globalThis.ashNativeFixture.pendingInitializations)).toBe(1);
 			await application.evaluate(() => globalThis.ashNativeFixture.releaseInitialization());
-			await expect(page.locator('.ash-chatgpt-navigation-list')).toHaveAttribute('aria-busy', 'false');
+			await expect(page.locator('.ash-chat-navigation-list')).toHaveAttribute('aria-busy', 'false');
 			await expect(page.getByRole('button', { name: 'First native history', exact: true })).toBeVisible();
 			await page.getByRole('button', { name: 'First native history', exact: true }).click();
 			await expect(page.locator('.ash-chatgpt-widget')).toContainText('History one answer');
@@ -283,7 +283,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await application.evaluate(() => globalThis.ashNativeFixture.setOffline(true));
 
 			const reopened = await workbench.reopenAgentsWindow(application, page);
-			const history = reopened.locator('.ash-chatgpt-navigation');
+			const history = reopened.locator('.ash-chat-navigation');
 			const editor = reopened.locator('.ash-chatgpt-widget');
 			await expect(editor.locator('.ash-chat-input-notification-message')).toContainText('503');
 			await expect(history.getByRole('button', { name: 'First native history', exact: true })).toHaveAttribute('aria-current', 'page');
@@ -348,7 +348,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: locale === 'en' ? 'New' : '新建', exact: true }).click();
 			await expect(editor).toBeVisible();
 			await composer.waitForEditorContents(text => text === 'Hello from native UI');
-			const sidebar = page.locator('.ash-chatgpt-navigation');
+			const sidebar = page.locator('.ash-chat-navigation');
 			await expect(sidebar.getByRole('button', { name: 'Ash', exact: true })).toHaveCount(0);
 			await expect(sidebar.locator('.ash-sessions-list')).toHaveCount(0);
 			const codeMode = mode.getByRole('button', { name: locale === 'en' ? 'Code' : '代码', exact: true });
@@ -413,7 +413,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await expect(editor.locator('.ash-chat-input-notification-message')).toBeHidden();
 				await composer.waitForEditorContents(text => text.trim() === '');
 			}
-			const history = page.locator('.ash-chatgpt-navigation');
+			const history = page.locator('.ash-chat-navigation');
 			await expect(history.getByRole('button', { name: locale === 'en' ? 'New chat' : '新聊天', exact: true })).toHaveCount(0);
 			await history.getByRole('button', { name: 'First native history', exact: true }).click();
 			await expect(editor).toContainText('History one answer');
@@ -488,7 +488,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await restored.locator(`[data-action-id="${entry.action}"] button`).click();
 				restored = await workbench.reopenAgentsWindow(application, restored);
 				await expect(restored.locator(entry.content)).toBeVisible();
-				const restoredHistory = restored.locator('.ash-chatgpt-navigation');
+				const restoredHistory = restored.locator('.ash-chat-navigation');
 				await expect(restoredHistory).toBeVisible();
 				await expect(restoredHistory.locator('[data-group="pinned"] .ash-sessions-list-section-toggle')).toHaveAttribute('aria-expanded', 'false');
 				await expect(restoredHistory.getByRole('button', { name: 'First native history', exact: true })).toHaveAttribute('aria-current', 'page');

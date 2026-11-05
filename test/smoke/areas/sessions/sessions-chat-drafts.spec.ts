@@ -50,7 +50,7 @@ test('Sessions sidebar hides blank drafts and restores parked content drafts', {
 	const modes = page.locator('.ash-window-mode-control');
 	await modes.getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	if (target.kind === 'electron') {
-		await expect(page.locator('.ash-chatgpt-navigation-list')).toBeVisible();
+		await expect(page.locator('.ash-chat-navigation-list')).toBeVisible();
 		await modes.getByRole('button', { name: 'Code', exact: true }).click();
 	}
 	await expect(drafts()).toHaveCount(1);

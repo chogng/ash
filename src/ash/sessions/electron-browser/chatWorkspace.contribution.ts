@@ -8,7 +8,7 @@ import { ViewContainerLocation } from '../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../common/views.js';
 import { AshChatNavigationSource } from '../contrib/chat/browser/ashChatNavigationSource.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../contrib/chat/common/constants.js';
-import { ChatGPTNavigationSource } from '../contrib/chatgptweb/browser/chatGPTNavigationView.js';
+import { ChatGPTList } from '../contrib/chatgptweb/browser/chatGPTList.js';
 import { chatGPTReplyEditor } from '../contrib/chatgptweb/browser/chatGPTWeb.js';
 import { ChatNavigationViewPaneContainer } from '../contrib/sessions/browser/views/chatNavigationView.js';
 import { ISessionsLayoutService } from '../services/layout/common/sessionsLayoutService.js';
@@ -19,7 +19,7 @@ import './actions/newChatModelAction.js';
 SessionsViewRegistry.registerViewContainer({
 	id: CHAT_WORKSPACE_NAVIGATION_ID,
 	ctorDescriptor: new SyncDescriptor(ChatNavigationViewPaneContainer, [[
-		new SyncDescriptor(ChatGPTNavigationSource),
+		new SyncDescriptor(ChatGPTList),
 		new SyncDescriptor(AshChatNavigationSource),
 	], chatGPTReplyEditor.accessibility]),
 	mergeViewWithContainerWhenSingleView: false, title: 'Chat', localizationKey: { bundle: 'ash', key: 'sessions.activity.chat' }, location: ViewContainerLocation.Sidebar, isDefault: true, order: 2,

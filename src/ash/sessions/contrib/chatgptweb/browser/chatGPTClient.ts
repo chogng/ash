@@ -5,8 +5,17 @@ import { isRecord } from '../../../../base/common/types.js';
 import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 import { SSEParser } from '../../../../base/common/sseParser.js';
-export interface ChatGPTConversation { readonly id: string; readonly title: string; readonly pinned?: boolean; readonly projectId?: string; readonly local?: boolean; }
+export interface ChatGPTConversation {
+	readonly id: string;
+	readonly title: string;
+	readonly pinned?: boolean;
+	readonly projectId?: string;
+	readonly local?: boolean;
+	/** This row was discovered outside the window's recent-history pagination. */
+	readonly projectOnly?: boolean;
+}
 export interface ChatGPTProject { readonly id: string; readonly title: string; }
+export type ChatGPTProjectCursor = { readonly kind: 'project'; readonly value: string; } | { readonly kind: 'recent'; readonly offset: number; };
 
 /** A product model family and its selectable presets from the web model picker. */
 export interface ChatGPTModel {
@@ -120,15 +129,55 @@ export class ChatGPTClient {
 			const value = await this.json('/gizmos/snorlax/sidebar?' + query, signal);
 			if (!isRecord(value) || !Array.isArray(value.items) || (value.cursor != null && typeof value.cursor !== 'string')) { throw this.invalidResponse(); }
 			for (const item of value.items) {
-				if (!isRecord(item) || !isRecord(item.gizmo) || !isRecord(item.gizmo.display) || typeof item.gizmo.id !== 'string'
-					|| typeof item.gizmo.display.name !== 'string' || item.gizmo.gizmo_snorlax_type === 'locked_chats') { continue; }
-				projects.set(item.gizmo.id, { id: item.gizmo.id, title: item.gizmo.display.name });
+				if (!isRecord(item) || !isRecord(item.gizmo)) { continue; }
+				// ChatGPT can wrap the project metadata with its tools and files.
+				const gizmo = isRecord(item.gizmo.gizmo) ? item.gizmo.gizmo : item.gizmo;
+				if (!isRecord(gizmo.display) || typeof gizmo.id !== 'string'
+					|| typeof gizmo.display.name !== 'string' || gizmo.gizmo_snorlax_type === 'locked_chats') { continue; }
+				projects.set(gizmo.id, { id: gizmo.id, title: gizmo.display.name });
 			}
 			cursor = value.cursor || undefined;
 			if (cursor && cursors.has(cursor)) { throw this.invalidResponse(); }
 			if (cursor) { cursors.add(cursor); }
 		} while (cursor);
 		return [...projects.values()];
+	}
+
+	async projectConversations(projectId: string, cursor: ChatGPTProjectCursor | undefined, signal: AbortSignal): Promise<{ items: readonly ChatGPTConversation[]; cursor?: ChatGPTProjectCursor; }> {
+		if (cursor?.kind !== 'recent') {
+			try {
+				const page = await this.readProjectConversations(projectId, cursor?.value, signal);
+				return { items: page.items, cursor: page.cursor ? { kind: 'project', value: page.cursor } : undefined };
+			} catch (error) {
+				// This route can reject a sign-in that still has access to recent
+				// history. Use only matching rows from that history.
+				if (!(error instanceof ChatGPTRequestError) || (error.status !== 401 && error.status !== 403)) throw error;
+			}
+		}
+		let offset = cursor?.kind === 'recent' ? cursor.offset : 0;
+		for (let pages = 0; ; pages++) {
+			const page = await this.conversations(offset, signal);
+			const items = page.items.filter(item => item.projectId === projectId);
+			// Check a few older history pages for quiet projects without turning one
+			// expansion into an unbounded crawl of the account.
+			if (items.length || !page.hasMore || pages === 2) {
+				return { items, cursor: page.hasMore ? { kind: 'recent', offset: page.nextOffset } : undefined };
+			}
+			offset = page.nextOffset;
+		}
+	}
+
+	private async readProjectConversations(projectId: string, cursor: string | undefined, signal: AbortSignal): Promise<{ items: readonly ChatGPTConversation[]; cursor?: string; }> {
+		const query = new URLSearchParams({ limit: '20', owned_only: 'false', ...(cursor ? { cursor } : {}) });
+		const value = await this.json(`/gizmos/${encodeURIComponent(projectId)}/conversations?${query}`, signal);
+		if (!isRecord(value) || !Array.isArray(value.items) || (value.cursor != null && typeof value.cursor !== 'string') || (cursor && value.cursor === cursor)) {
+			throw this.invalidResponse();
+		}
+		const items = value.items.flatMap(item =>
+			isRecord(item) && typeof item.id === 'string' && typeof item.title === 'string' && item.is_archived !== true
+				&& (item.gizmo_id == null || item.gizmo_id === projectId)
+				? [{ id: item.id, title: item.title, pinned: item.is_starred === true, projectId }] : []);
+		return { items, cursor: value.cursor || undefined };
 	}
 
 	async rename(id: string, title: string, signal: AbortSignal): Promise<void> {

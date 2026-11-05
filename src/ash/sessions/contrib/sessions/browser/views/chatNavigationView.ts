@@ -9,8 +9,8 @@ import { ProgressBar } from '../../../../../base/browser/ui/progressbar/progress
 import type { IAction } from '../../../../../base/common/actions.js';
 import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
 import type { Icon } from '../../../../../base/common/icon.js';
-import { Disposable, DisposableMap, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
-import { autorun, type IObservable } from '../../../../../base/common/observable.js';
+import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { autorun } from '../../../../../base/common/observable.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
 import type { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
@@ -25,39 +25,32 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../../pla
 import { defaultButtonStyles, defaultProgressBarStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import { PaneComposite, type PaneCompositeOptions } from '../../../../../workbench/browser/panecomposite.js';
-import type { ISessionStatusIcon } from '../../../../browser/sessionStatusIcon.js';
 import { SessionLeadingIcon } from '../../../../browser/ui/sessionLeadingIcon.js';
+import { groupChatList, type ChatListEntry, type ChatListProject, type ChatListSnapshot, type ChatListSource } from './chatListModel.js';
 import { SessionListRowRenderer, SessionListSection, SessionsListTree } from './sessionsList.js';
 import '../../../../../base/browser/ui/button/button.css';
 import '../media/chatNavigationView.css';
 
-export interface ChatNavigationEntry {
-	readonly source: string;
-	readonly id: string;
-	readonly title: string;
-	readonly selected: boolean;
-	readonly status?: ISessionStatusIcon;
-	readonly disabled?: boolean;
-	readonly actionsDisabled?: boolean;
-	readonly pinned?: boolean;
-	readonly defaultIcon: Icon;
-	readonly iconId?: string;
-	readonly setIcon?: (icon: Icon | undefined) => void;
-	readonly open: (signal: AbortSignal) => Promise<void>;
-	readonly setPinned?: (pinned: boolean) => void | Promise<void>;
-	readonly getActions: (signal: AbortSignal, restoreFocus: () => void) => readonly IAction[] | Promise<readonly IAction[]>;
+interface ChatNavigationHistoryFooter {
+	readonly label: string;
+	readonly run?: () => void;
+	readonly busy?: boolean;
 }
 
-export interface ChatNavigationSnapshot {
-	readonly groups: readonly { readonly key: string; readonly title: string; readonly rows: readonly ChatNavigationEntry[]; }[];
-	readonly loading?: boolean;
-}
-
-/** A disposable sidebar projects provider-owned history and delegates operations back to its source. */
-export interface ChatNavigationSource {
-	readonly snapshot: IObservable<ChatNavigationSnapshot>;
-	attach?(window: Window & typeof globalThis, isVisible: () => boolean): IDisposable;
-	loadMore?(retry: boolean): void;
+function projectFooter(history: ChatListProject['history'], hasRows: boolean): ChatNavigationHistoryFooter | undefined {
+	switch (history.state) {
+		case 'idle':
+		case 'loading':
+			return { label: localize('sessions.chatList.loadingProjectChats', 'Loading project chats…'), busy: true };
+		case 'more':
+			return { label: localize('sessions.chatList.loadMoreProjectChats', 'Load more project chats'), run: history.load };
+		case 'error':
+			return { label: localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry'), run: history.load };
+		case 'complete':
+			return hasRows ? undefined : { label: localize('sessions.chatList.noProjectChats', 'No unpinned chats') };
+		case 'unavailable':
+			return { label: localize('sessions.chatList.projectChatsOffline', 'Connect to load project chats.') };
+	}
 }
 
 export const chatNavigationFocusContext = 'chatNavigationFocused';
@@ -73,7 +66,7 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 	private readonly opening = this._register(new MutableDisposable());
 	private scheduleLoad: () => void = () => { };
 
-	constructor(adapters: readonly SyncDescriptor<ChatNavigationSource>[], accessibility: ChatNavigationAccessibilityHint | undefined, parent: HTMLElement, options: PaneCompositeOptions,
+	constructor(adapters: readonly SyncDescriptor<ChatListSource>[], accessibility: ChatNavigationAccessibilityHint | undefined, parent: HTMLElement, options: PaneCompositeOptions,
 		@IConfigurationService configuration: IConfigurationService,
 		@IStorageService storage: IStorageService,
 		@IThemeService theme: IThemeService,
@@ -88,7 +81,7 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 		const sources = adapters.map(adapter => instantiationService.createInstance(adapter));
 		const root = this.element;
 		const document = root.ownerDocument;
-		root.classList.add('ash-chatgpt-navigation');
+		root.classList.add('ash-chat-navigation');
 		this.scopedContextKeyService.createKey(chatNavigationFocusContext, true);
 		if (accessibility) {
 			this._register(addDisposableListener(root, 'focusin', event => {
@@ -98,10 +91,10 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			}));
 		}
 		const scrollable = this.scrollable!;
-		scrollable.element.classList.add('ash-chatgpt-navigation-scrollable');
-		const list = h(document, 'div', { className: 'ash-chatgpt-navigation-list' });
+		scrollable.element.classList.add('ash-chat-navigation-scrollable');
+		const list = h(document, 'div', { className: 'ash-chat-navigation-list' });
 		scrollable.contentElement.append(list);
-		const conversationsLabel = localize('sessions.chatgpt.conversations', 'Conversations');
+		const conversationsLabel = localize('sessions.chatList.conversations', 'Conversations');
 		const tree = this._register(new SessionsListTree(list, conversationsLabel, configuration));
 		const focusConversation = (key: string, preventScroll = false): void => {
 			if (!root.isConnected || root.closest('[hidden]')) return;
@@ -123,7 +116,7 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			const active = getActiveElement(document);
 			if (!active || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { return; }
 			const header = active.classList.contains('ash-sessions-list-section-toggle');
-			const selector = header ? '.ash-sessions-list-section-toggle' : '.ash-chatgpt-conversation';
+			const selector = header ? '.ash-sessions-list-section-toggle' : '.ash-chat-navigation-item';
 			const items = [...list.querySelectorAll<HTMLButtonElement>(selector)].filter(item => !item.closest('[hidden]') && !item.disabled);
 			const index = items.findIndex(item => item === active);
 			if (index < 0) { return; }
@@ -133,11 +126,16 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 				: header ? Math.max(0, Math.min(items.length - 1, step)) : (step + items.length) % items.length;
 			items[next]?.focus();
 		}, true));
+		let groups: ReturnType<typeof groupChatList> = [];
 		const loadMoreIfNeeded = (retry: boolean): void => {
 			const viewport = scrollable.state;
 			if (!this.isVisible() || !viewport.height) { return; }
+			for (const group of groups) {
+				const history = group.project?.history;
+				if (history?.state === 'idle' && tree.isCollapsed(`section:${group.key}`) === false) history.load();
+			}
 			const last = tree.getVisibleElements().at(-1);
-			if (last && tree.isCollapsed(SessionsListTree.id(last))) { return; }
+			if (last && !groups.find(group => group.key === last.dataset.section)?.project && tree.isCollapsed(SessionsListTree.id(last))) { return; }
 			if (viewport.maximumTop - viewport.top <= 96) {
 				for (const source of sources) { source.loadMore?.(retry); }
 			}
@@ -183,7 +181,7 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			scrollable.layout();
 			scheduleLoad();
 		}));
-		const openConversation = (entry: ChatNavigationEntry): void => {
+		const openConversation = (entry: ChatListEntry): void => {
 			const controller = new AbortController();
 			this.opening.value = toDisposable(() => controller.abort());
 			void entry.open(controller.signal).catch(error => {
@@ -195,34 +193,58 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			if (menuRow !== row) menuRow?.closeTransientUI();
 			menuRow = row;
 		};
-		const render = (snapshots: readonly ChatNavigationSnapshot[]): void => {
+		const footers = new Map<string, { element: HTMLElement; message: HTMLElement; button: HTMLButtonElement; }>();
+		const renderFooter = (key: string, footer: ChatNavigationHistoryFooter): HTMLElement => {
+			let row = footers.get(key);
+			if (!row) {
+				const element = h(document, 'div', { className: 'ash-chat-navigation-history' });
+				element.dataset.item = `history:${key}`;
+				element.dataset.historyGroup = key;
+				const message = h(document, 'span');
+				message.setAttribute('role', 'status');
+				const button = h(document, 'button', { className: 'ash-sessions-list-item' });
+				button.type = 'button';
+				button.onkeydown = event => {
+					if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+				};
+				element.append(message, button);
+				row = { element, message, button };
+				footers.set(key, row);
+			}
+			const showButton = !!footer.run || !!footer.busy && !row.button.hidden && !!row.button.textContent;
+			row.message.hidden = showButton;
+			row.button.hidden = !showButton;
+			row.message.textContent = showButton ? '' : footer.label;
+			row.button.textContent = showButton ? footer.label : '';
+			row.button.setAttribute('aria-disabled', String(!footer.run));
+			row.button.onclick = footer.run ?? null;
+			return row.element;
+		};
+		const render = (snapshots: readonly ChatListSnapshot[]): void => {
 			const focused = getActiveElement(document) as HTMLElement | null;
 			const hadFocus = root.contains(focused);
-			const focusedId = focused?.closest<HTMLElement>('[data-item]')?.dataset.item;
+			const focusedFooter = focused?.closest<HTMLElement>('[data-history-group]')?.dataset.historyGroup;
+			const focusedId = focusedFooter ? undefined : focused?.closest<HTMLElement>('[data-item]')?.dataset.item;
 			const focusedGroup = focused?.classList.contains('ash-sessions-list-section-toggle')
-				? focused.closest<HTMLElement>('[data-group]')?.dataset.group : undefined;
+				? focused.closest<HTMLElement>('[data-group]')?.dataset.group : focusedFooter;
 			const top = scrollable.state.top;
-			const groups = new Map<string, { title: string; rows: ChatNavigationEntry[]; }>();
-			for (const snapshot of snapshots) {
-				for (const group of snapshot.groups) {
-					const merged = groups.get(group.key);
-					if (merged) merged.rows.push(...group.rows);
-					else groups.set(group.key, { title: group.title, rows: [...group.rows] });
-				}
-			}
+			groups = groupChatList(snapshots);
 			const usedRows = new Set<string>();
+			const usedSections = new Set<string>();
+			const usedFooters = new Set<string>();
 			const children = [];
-			for (const [key, group] of groups) {
-				if (!group.rows.length) continue;
+			for (const group of groups) {
+				const { key, project } = group;
+				usedSections.add(key);
 				let section = this.sections.get(key);
 				if (!section) {
 					section = this.sections.set(key, new SessionListSection(document, key, false,
 						collapsed => tree.setSectionCollapsed(key, collapsed)));
-					section.domNode.classList.add('ash-chatgpt-navigation-group');
+					section.domNode.classList.add('ash-chat-navigation-group');
 					section.domNode.dataset.group = key;
 				}
 				const rows = group.rows.map(entry => {
-					const rowKey = `${entry.source}:${entry.id}`;
+					const rowKey = entry.id;
 					usedRows.add(rowKey);
 					let row = this.rows.get(rowKey);
 					if (!row) {
@@ -232,12 +254,15 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 					row.update(entry, key);
 					return row.element;
 				});
+				const footer = project && projectFooter(project.history, rows.length > 0);
+				if (footer) usedFooters.add(key);
+				const elements = footer ? [...rows, renderFooter(key, footer)] : rows;
 				section.update(group.title, rows);
 				children.push({
 					element: section.domNode,
-					children: rows.map(element => ({ element })),
+					children: elements.map(element => ({ element })),
 					collapsible: true,
-					collapsed: storage.getBoolean(collapseKey(key), StorageScope.PROFILE, false),
+					collapsed: storage.getBoolean(collapseKey(key), StorageScope.PROFILE, !!project),
 				});
 			}
 			for (const [key, row] of this.rows) {
@@ -246,11 +271,14 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 				this.rows.deleteAndDispose(key);
 			}
 			for (const [key] of this.sections) {
-				if (!groups.get(key)?.rows.length) this.sections.deleteAndDispose(key);
+				if (!usedSections.has(key)) this.sections.deleteAndDispose(key);
+			}
+			for (const key of footers.keys()) {
+				if (!usedFooters.has(key)) footers.delete(key);
 			}
 			tree.setChildren(children);
-			for (const [key] of this.sections) {
-				tree.setSectionCollapsed(key, storage.getBoolean(collapseKey(key), StorageScope.PROFILE, false));
+			for (const { key, project } of groups) {
+				tree.setSectionCollapsed(key, storage.getBoolean(collapseKey(key), StorageScope.PROFILE, !!project));
 			}
 			const readingHistory = snapshots.some(snapshot => snapshot.loading);
 			list.setAttribute('aria-busy', String(readingHistory));
@@ -300,9 +328,9 @@ class ChatNavigationRow extends Disposable {
 	private readonly more: IAction;
 	private readonly menuRequest = this._register(new MutableDisposable());
 	private menuVisible = false;
-	private entry: ChatNavigationEntry;
+	private entry: ChatListEntry;
 
-	constructor(document: Document, entry: ChatNavigationEntry, open: (entry: ChatNavigationEntry) => void, private readonly focus: () => void,
+	constructor(document: Document, entry: ChatListEntry, open: (entry: ChatListEntry) => void, private readonly focus: () => void,
 		private readonly beforeOpenMenu: (row: ChatNavigationRow) => void,
 		@IInstantiationService instantiation: IInstantiationService,
 		@IContextMenuService private readonly menus: IContextMenuService,
@@ -314,27 +342,24 @@ class ChatNavigationRow extends Disposable {
 			entry.setIcon && ((icon: Icon | undefined) => this.entry.setIcon?.(icon))));
 		const row = this._register(new SessionListRowRenderer(document, this.leadingIcon.element));
 		this.element = row.element;
-		this.element.classList.add('ash-chatgpt-navigation-row');
-		this.element.dataset.item = `${entry.source}:${entry.id}`;
-		this.element.dataset.conversation = entry.id;
-		this.element.dataset.source = entry.source;
+		this.element.classList.add('ash-chat-navigation-row');
+		this.element.dataset.item = entry.id;
 		this.button = row.button;
-		this.button.classList.add('ash-chatgpt-conversation');
-		this.button.dataset.conversation = entry.id;
+		this.button.classList.add('ash-chat-navigation-item');
 		this.label = h(document, 'span', { className: 'ash-sessions-list-label' });
 		this.button.append(this.label);
 		this._register(addDisposableListener(this.button, 'click', () => open(this.entry)));
-		this.more = this.action('more', localize('sessions.chatgpt.more', 'More actions'), Lxicon.ellipsis,
+		this.more = this.action('more', localize('sessions.chatList.more', 'More actions'), Lxicon.ellipsis,
 			() => this.showMore(this.moreButton.matches(':focus-visible')));
 		this.bar = this._register(new ActionBar(this.element, {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
-			ariaLabel: localize('sessions.chatgpt.conversationActions', 'Actions for {0}', entry.title),
+			ariaLabel: localize('sessions.chatList.conversationActions', 'Actions for {0}', entry.title),
 			actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
 		}));
-		this.bar.domNode.classList.add('ash-sessions-list-actions', 'ash-chatgpt-conversation-actions');
+		this.bar.domNode.classList.add('ash-sessions-list-actions', 'ash-chat-navigation-actions');
 		const updateActions = () => {
 			const current = this.entry;
-			const label = current.pinned ? localize('sessions.chatgpt.unpin', 'Unpin chat') : localize('sessions.chatgpt.pin', 'Pin chat');
+			const label = current.pinned ? localize('sessions.chatList.unpin', 'Unpin chat') : localize('sessions.chatList.pin', 'Pin chat');
 			const pin = this.action('pin', label, current.pinned ? Lxicon.pinFilled : Lxicon.pin, async () => {
 				await current.setPinned?.(!current.pinned);
 				focus();
@@ -362,14 +387,14 @@ class ChatNavigationRow extends Disposable {
 		return this.bar.domNode.querySelector<HTMLButtonElement>(`[data-action-id="${this.more.id}"] button`)!;
 	}
 
-	update(entry: ChatNavigationEntry, group: string): void {
+	update(entry: ChatListEntry, group: string): void {
 		const previous = this.entry;
 		this.entry = entry;
 		this.element.dataset.parentSection = group;
 		if (this.label.textContent !== entry.title) {
 			this.button.title = this.label.textContent = entry.title;
 			this.leadingIcon.setTitle(entry.title);
-			this.bar.setAriaLabel(localize('sessions.chatgpt.conversationActions', 'Actions for {0}', entry.title));
+			this.bar.setAriaLabel(localize('sessions.chatList.conversationActions', 'Actions for {0}', entry.title));
 		}
 		if (previous.pinned !== entry.pinned || !!previous.setPinned !== !!entry.setPinned) this.updateActions();
 		const customIcon = entry.iconId && getRegisteredIcon(entry.iconId, this.element.ownerDocument);
@@ -399,7 +424,7 @@ class ChatNavigationRow extends Disposable {
 	}
 
 	private action(id: string, label: string, icon: Icon, run: () => unknown): IAction {
-		return { id: `sessions.${this.entry.source}.${id}`, label, tooltip: label, enabled: true, icon, run };
+		return { id: `sessions.chatList.${id}`, label, tooltip: label, enabled: true, icon, run };
 	}
 
 	private setMenuExpanded(expanded: boolean): void {

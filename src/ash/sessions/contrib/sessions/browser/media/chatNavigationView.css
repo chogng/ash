@@ -1,4 +1,4 @@
-.ash-chatgpt-navigation {
+.ash-chat-navigation {
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
@@ -11,15 +11,25 @@
 	line-height: 1.5;
 }
 
-.ash-chatgpt-navigation * {
+.ash-chat-navigation * {
 	box-sizing: border-box;
 }
 
-.ash-chatgpt-navigation-list {
+.ash-chat-navigation-list {
 	display: flex;
 	flex-direction: column;
 	gap: var(--ash-spacing-size80);
 	/* Keep content inset while the scroll track reaches the sidebar edge. */
 	padding-block: var(--ash-spacing-size120);
 	padding-inline: var(--ash-sessions-sidebar-row-inset);
+}
+
+.ash-chat-navigation-history > span {
+	display: block;
+	padding-inline: var(--ash-spacing-size120);
+	color: var(--ash-descriptionForeground);
+}
+
+.ash-chat-navigation-history > span[hidden] {
+	display: none;
 }
