@@ -185,7 +185,7 @@ export class ChatListWidget extends DomWidget {
 			getRowElement: id => this.renderedItems.get(id)?.element,
 			getViewportAnchorItemId: () => this.readingAnchor()?.id,
 			reveal: (id, target) => this.revealItem(id, target),
-			focus: () => this.transcript.focus(),
+			focus: () => this.focusReadingPosition(),
 			isVisible: () => this.visible,
 			setFindVisible: visible => this.setFindVisible(visible),
 			getHistoryState: this.options.getHistoryState,
@@ -237,6 +237,14 @@ export class ChatListWidget extends DomWidget {
 		else { this.transcript.focus(); }
 	}
 
+	/** Return focus to the message at the current reading position without scrolling. */
+	public focusReadingPosition(): void {
+		if (!this.visible) return;
+		const anchor = this.readingAnchor();
+		const row = anchor && this.renderedItems.get(anchor.id);
+		(row?.element ?? this.transcript).focus({ preventScroll: true });
+	}
+
 	/** Source changes retire the query, its pending history work and borrowed render ranges together. */
 	public resetFind(): void { this.findWidget.clear(); }
 
@@ -265,6 +273,8 @@ export class ChatListWidget extends DomWidget {
 		}));
 		this.domNode = this.scrollable.element;
 		this.element.classList.add('ash-chat-transcript-viewport', `${this.classPrefix}-list-widget`, `${this.classPrefix}-transcript-scrollable`);
+		// Keep the native scroll container out of the Tab order when it has no tabbable children.
+		this.scrollable.scrollableElement.tabIndex = -1;
 		this.transcript = this.scrollable.contentElement;
 		this.transcript.classList.add('ash-chat-transcript-content', `${this.classPrefix}-transcript`);
 		this.transcript.setAttribute('role', 'log');
@@ -530,7 +540,9 @@ export class ChatListWidget extends DomWidget {
 			imageFocus.focus({ preventScroll: true });
 		}
 		if (focusedActionRowId && !active?.isConnected && this.element.ownerDocument.activeElement === this.element.ownerDocument.body) {
-			(this.renderedItems.get(focusedActionRowId)?.element ?? this.transcript).focus({ preventScroll: true });
+			const row = this.renderedItems.get(focusedActionRowId);
+			if (row) this.focus(row.item);
+			else this.focusReadingPosition();
 		}
 		if (this.lastFocusedItemId && !ids.has(this.lastFocusedItemId)) { this.lastFocusedItemId = undefined; }
 		for (const id of this.contextExpansion.keys()) if (!ids.has(id)) this.contextExpansion.delete(id);
@@ -768,7 +780,9 @@ export class ChatListWidget extends DomWidget {
 		if (hidden === this.scrollToLatestButton.hidden) return;
 		this.element.classList.toggle('ash-chat-transcript-has-more-below', !hidden);
 		if (hidden && this.visible && this.element.ownerDocument.activeElement === this.scrollToLatestButton.domNode) {
-			this.transcript.focus({ preventScroll: true });
+			const latest = this.items.at(-1);
+			if (latest) this.focus(latest);
+			else this.focusReadingPosition();
 		}
 		this.scrollToLatestButton.hidden = hidden;
 	}
@@ -851,7 +865,7 @@ export class ChatListWidget extends DomWidget {
 		} else if (pinned) {
 			this.pinnedPrompt = undefined;
 			if (this.stickyPrompt.domNode === this.element.ownerDocument.activeElement && this.visible) {
-				this.transcript.focus({ preventScroll: true });
+				this.focusReadingPosition();
 			}
 			this.stickyPrompt.setVisible(false);
 		}

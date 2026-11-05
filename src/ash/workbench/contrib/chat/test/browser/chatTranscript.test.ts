@@ -391,7 +391,9 @@ suite('chatTranscript browser component', () => {
 		await jump.press('Enter');
 		await expect.poll(async () => (await position()).gap).toBeLessThan(1);
 		await expect(jump).toBeHidden();
-		await expect(chat.getByRole('log')).toBeFocused();
+		const latestReply = chat.locator('[data-item-id="live-2"]');
+		await expect(latestReply).toBeFocused();
+		await expect(latestReply).toHaveCSS('outline-style', 'solid');
 		await page.evaluate(() => window.ashChatTranscriptIntegration.setConversationChanges(false));
 		await expect(changes).toBeHidden();
 		await chat.locator('.ash-chat-user-message > pre').click();
@@ -559,7 +561,10 @@ suite('chatTranscript browser component', () => {
 			await expect(pagination).toBeHidden();
 			await expect(chat.locator('.ash-chat-item')).toHaveCount(50);
 			await expect.poll(async () => Math.abs(await position() - before)).toBeLessThan(2);
-			await expect(chat.getByRole('log')).toBeFocused();
+			const focusedMessage = chat.locator('.ash-chat-item:focus-visible');
+			await expect(focusedMessage).toBeFocused();
+			await expect(focusedMessage).toBeInViewport();
+			await expect(focusedMessage).toHaveCSS('outline-style', 'solid');
 			await expect(draft).toHaveValue('Keep this draft');
 			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.historyPageLoads())).toBe(2);
 			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([]);

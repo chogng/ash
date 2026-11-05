@@ -75,6 +75,13 @@
 	scroll-padding-block-start: var(--ash-chat-transcript-overlap, 0px);
 }
 
+/* Messages and controls show focus instead of the transcript's scroll layers. */
+.ash-chat-transcript-viewport.ash-scrollbar:focus-visible,
+.ash-chat-transcript-viewport > .ash-scrollbar-viewport:focus-visible,
+.ash-chat-transcript-content:focus-visible {
+	outline: none;
+}
+
 .ash-chat-transcript-viewport
 	> .ash-scrollbar-viewport
 	> .ash-chat-transcript-content {

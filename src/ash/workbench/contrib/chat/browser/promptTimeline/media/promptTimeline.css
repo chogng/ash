@@ -70,14 +70,7 @@
 
 .ash-prompt-timeline-gutter {
 	inset-block-start: 50%;
-	/* Keep the full 24px hit target and an 8px gap outside the message column. */
-	inset-inline-start: max(
-		0px,
-		calc(
-			var(--ash-chat-content-inset, var(--ash-spacing-size400)) -
-				var(--ash-spacing-size240) - var(--ash-spacing-size80)
-		)
-	);
+	inset-inline-start: var(--ash-spacing-size40);
 	transform: translateY(-50%);
 }
 

@@ -686,7 +686,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				const active = this.element.ownerDocument.activeElement;
 				if (active === this.olderHistoryButton.domNode || active === this.element.ownerDocument.body) {
 					if (this.model.olderHistory) this.olderHistoryButton.focus();
-					else this.listWidget.element.querySelector<HTMLElement>('.ash-chat-transcript')?.focus({ preventScroll: true });
+					else this.listWidget.focusReadingPosition();
 				}
 			}
 		}
