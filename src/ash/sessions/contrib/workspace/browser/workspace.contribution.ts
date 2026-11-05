@@ -34,6 +34,11 @@ import {
 import { MANAGE_TRUST_COMMAND_ID } from '../../../../workbench/contrib/workspace/common/workspace.js';
 import { Menus } from '../../../browser/menus.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
+import { WorkspaceFolderManagementContribution } from './workspaceFolderManagement.js';
+
+registerWorkbenchContribution(WorkspaceFolderManagementContribution.ID, WorkbenchPhase.BlockRestore, accessor =>
+	accessor.get(IInstantiationService).createInstance(WorkspaceFolderManagementContribution),
+);
 
 export function createSessionFolderTrustRequestService(
 	container: HTMLElement,

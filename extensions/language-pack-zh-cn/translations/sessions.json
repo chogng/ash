@@ -233,6 +233,7 @@
     "sessions.environment.variablesConfigured": "环境变量 · 已配置",
     "sessions.environment.variablesMissing": "已保存的环境变量不可用。",
     "sessions.environment.foldersUnavailable": "所选主机无法访问此环境中的所有文件夹。",
+    "sessions.newChatComposer.sessionControls": "会话控件",
     "sessions.environment.menu": "运行位置",
     "sessions.environment.tooltip": "环境",
     "sessions.environment.search": "搜索环境",

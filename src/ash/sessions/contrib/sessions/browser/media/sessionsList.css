@@ -9,7 +9,8 @@
 }
 
 .ash-sessions-list-more {
-	--ash-actionBar-gap: var(--ash-spacing-sizeNone);
+	--ash-actionBar-gap: var(--ash-spacing-size40);
+	--ash-toolbar-actionSize: var(--ash-spacing-size240);
 	flex: 0 0 auto;
 }
 
@@ -166,10 +167,10 @@
 .ash-sessions-list-section-with-actions {
 	display: flex;
 	align-items: center;
-	gap: var(--ash-sessions-sidebar-item-inset);
+	gap: var(--ash-spacing-size40);
 	/* Keep the last action outside the scroll track in either scroll host. */
 	padding-inline-end: max(
-		var(--ash-sessions-sidebar-item-inset),
+		var(--ash-spacing-size40),
 		calc(
 			var(--ash-scrollbar-vertical-size, 0px) -
 				var(--ash-list-row-inset-end)

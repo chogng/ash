@@ -17,12 +17,12 @@ import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
 import { ChatInputTipPresenter } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.js';
 import { IVoiceModeOnboardingService } from '../../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
-import { NewChatInputWidget } from './newChatInput.js';
+import type { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
+import { ComposerSessionControls } from './sharedChatInputComposer.contribution.js';
+import { SharedChatInputComposer } from './sharedChatInputComposer.js';
 import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
 import { NewSessionPickersAvailableContext } from './newChatPickerKeybinding.js';
 import { SessionsChatResponseFileChangesService } from './sessionTurnChanges.js';
-import { SessionEnvironmentPicker } from './sessionEnvironmentPicker.js';
-import { SessionWorkspacePicker } from './sessionWorkspacePicker.js';
 import { refreshChatInputStack } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
 import './media/chatInput.css';
 import './media/chatInputCard.css';
@@ -36,10 +36,10 @@ interface INewChatWidgetOptions {
 
 /** Owns the Code chat surface and its input while retaining the shared transcript and send pipeline. */
 export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
-	declare readonly input: NewChatInputWidget;
+	declare readonly input: ChatInputPart;
+	private readonly composer: SharedChatInputComposer;
 	private readonly tips: ChatInputTipPresenter;
-	private readonly environmentPicker: SessionEnvironmentPicker | undefined;
-	private readonly workspacePicker: SessionWorkspacePicker | undefined;
+	private readonly sessionControls: ComposerSessionControls | undefined;
 	private submittedInput = false;
 	private composerThreadId: string | undefined;
 
@@ -59,37 +59,42 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		@IVoiceModeOnboardingService voiceOnboarding: IVoiceModeOnboardingService,
 		@IConfigurationService configuration: IConfigurationService,
 	) {
+		let composer!: SharedChatInputComposer;
 		const turnChanges = instantiationService.createInstance(SessionsChatResponseFileChangesService, model);
 		super(container, panelId, model, createNewSession, contextMenus, contextViews, commands, accessibleViews, notifications,
 			undefined, undefined, undefined,
-			(inputContainer, delegate) => instantiationService.createInstance(NewChatInputWidget, inputContainer, {
-				...delegate,
-				send: async (...args: Parameters<ChatInputDelegate['send']>) => {
-					const submissionSignal = args[4];
-					if (this.isDisposed || submissionSignal?.aborted) {
-						return;
-					}
-					this.submittedInput = true;
-					this.updateComposer();
-					try {
-						await delegate.send(...args);
-					} catch (error) {
-						// A retired send must not change the welcome state of the newly selected conversation.
-						if (!this.isDisposed && !submissionSignal?.aborted) {
-							if (model.items.length === 0) {
-								this.submittedInput = false;
-							}
-							this.updateComposer();
+			(inputContainer, delegate) => {
+				composer = instantiationService.createInstance(SharedChatInputComposer, inputContainer, {
+					...delegate,
+					send: async (...args: Parameters<ChatInputDelegate['send']>) => {
+						const submissionSignal = args[4];
+						if (this.isDisposed || submissionSignal?.aborted) {
+							return;
 						}
-						throw error;
-					}
-				},
-			}, model), {
+						this.submittedInput = true;
+						this.updateComposer();
+						try {
+							await delegate.send(...args);
+						} catch (error) {
+							// A retired send must not change the welcome state of the newly selected conversation.
+							if (!this.isDisposed && !submissionSignal?.aborted) {
+								if (model.items.length === 0) {
+									this.submittedInput = false;
+								}
+								this.updateComposer();
+							}
+							throw error;
+						}
+					},
+				}, model);
+				return composer.input;
+			}, {
 			promptTimelineChanges: prompt => turnChanges.getChangesForRequest(prompt),
 		}, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
+		this.composer = this._register(composer);
 		const parent = this.input.element;
-		const inputContainer = this.input.inputContainerElement;
-		const footer = this.input.inputFooterElement;
+		const inputContainer = this.input.composerForm;
+		const footer = this.input.composerFooter!;
 		parent.classList.add('ash-sessions-chat-input', 'chat-composer');
 		inputContainer.classList.add('ash-sessions-chat-input-card', 'floating-card');
 		const toolbar = this._register(instantiationService.createInstance(SessionChatInputToolbar, parent, () => this.input.focus()));
@@ -116,9 +121,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		}));
 		footer.classList.add('ash-sessions-chat-input-footer');
 		if (!model.isNestedDraft) {
-			this.workspacePicker = this._register(instantiationService.createInstance(SessionWorkspacePicker, footer, model));
-			this.environmentPicker = this._register(instantiationService.createInstance(SessionEnvironmentPicker, model, () => this.saveState()));
-			this._register(this.environmentPicker.render(footer));
+			this.sessionControls = this._register(instantiationService.createInstance(ComposerSessionControls, footer, model, () => this.saveState()));
 		}
 		this.renderDraftNotice(parent);
 		parent.append(footer);
@@ -143,15 +146,15 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 	protected renderDraftNotice(_container: HTMLElement): void { }
 
 	saveState(): Promise<void> {
-		return this.input.saveState();
+		return this.composer.saveState();
 	}
 
 	focusWorkspacePicker(): void {
-		if (this.visible) { this.workspacePicker?.showPicker(); }
+		this.sessionControls?.open('workspace');
 	}
 
 	focusEnvironmentPicker(): void {
-		if (this.visible) { this.environmentPicker?.showPicker(); }
+		this.sessionControls?.open('environment');
 	}
 
 	private updateComposer(): void {
@@ -162,7 +165,6 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
-		this.workspacePicker?.setVisible(visible);
-		this.environmentPicker?.setVisible(visible);
+		this.sessionControls?.setVisible(visible);
 	}
 }

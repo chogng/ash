@@ -1211,8 +1211,8 @@ suite('sessions browser component', () => {
 			await expect(projectRow).toHaveCount(0);
 			const titleBounds = (await toggle.boundingBox())!;
 			const actionBounds = (await more.boundingBox())!;
-			expect(actionBounds.width).toBe(28);
-			expect(actionBounds.height).toBe(28);
+			expect(actionBounds.width).toBe(24);
+			expect(actionBounds.height).toBe(24);
 			const addBounds = (await add.boundingBox())!;
 			const rowBounds = (await treeRow.boundingBox())!;
 			const navBounds = (await newSession.boundingBox())!;
@@ -1221,9 +1221,9 @@ suite('sessions browser component', () => {
 			expect(rowBounds.height).toBe(32);
 			await expect(treeRow).toHaveCSS('padding-left', '0px');
 			expect((await projects.boundingBox())!.width).toBeCloseTo(rowBounds.width);
-			await expect(projects).toHaveCSS('padding-inline-end', '2px');
-			expect(rowBounds.x + rowBounds.width - (addBounds.x + addBounds.width)).toBeCloseTo(2);
-			expect(addBounds.x).toBeGreaterThanOrEqual(actionBounds.x + actionBounds.width);
+			await expect(projects).toHaveCSS('padding-inline-end', '4px');
+			expect(rowBounds.x + rowBounds.width - (addBounds.x + addBounds.width)).toBeCloseTo(4);
+			expect(addBounds.x - (actionBounds.x + actionBounds.width)).toBeCloseTo(4);
 			expect(addBounds.width).toBe(actionBounds.width);
 			expect(addBounds.height).toBe(actionBounds.height);
 			await expect(toggle).toHaveCSS('font-weight', '400');
@@ -1240,8 +1240,7 @@ suite('sessions browser component', () => {
 				await action.hover();
 				await expect(treeRow).toHaveCSS('background-color', hoverBackground);
 				await expect(action).not.toHaveCSS('background-color', transparent);
-				await expect(action).toHaveCSS('background-clip', 'padding-box');
-				await expect(action).toHaveCSS('border-width', '2px');
+				await expect(action).toHaveCSS('border-width', '0px');
 			}
 			await page.mouse.move(0, 0);
 			await expect(treeRow).toHaveCSS('background-color', transparent);

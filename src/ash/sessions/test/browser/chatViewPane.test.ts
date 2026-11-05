@@ -329,9 +329,11 @@ const storageResources = new DisposableStore();
 const testStorages: InstanceType<typeof BrowserStorageService>[] = [];
 const { ChatWidget, openChatMarkdownLink } = await import('../../../workbench/contrib/chat/browser/widget/chatWidget.js');
 const { CoworkWidget } = await import('../../contrib/cowork/browser/widget/coworkWidget.js');
-const { NewChatInputWidget } = await import('../../contrib/chat/browser/newChatInput.js');
+const { SharedChatInputComposer } = await import('../../contrib/chat/browser/sharedChatInputComposer.js');
 const { NewChatWidget } = await import('../../contrib/chat/browser/newChatWidget.js');
+const { SharedChatInputComposerContribution } = await import('../../contrib/chat/browser/sharedChatInputComposer.contribution.js');
 const { NewChatView } = await import('../../contrib/chat/browser/chatView.js');
+const { ISessionsChatViewStateService, SessionsChatViewStateService } = await import('../../contrib/chat/browser/chatViewStateService.js');
 const { NewCoworkInputWidget } = await import('../../contrib/cowork/browser/newCoworkInput.js');
 const { readNewChatDraftState, writeNewChatDraftState } = await import('../../contrib/chat/common/newChatDraftState.js');
 const { createCodeEditorServices } = await import('../../../editor/test/browser/testCodeEditor.js');
@@ -1206,18 +1208,6 @@ test('Turn error cards invoke their typed action without interpreting message te
 	dom.window.close();
 });
 
-class SessionsInputForTest extends NewChatInputWidget {
-	removeContextForTest(id: string): void {
-		const reference = this.contexts.find(context => context.id === id)!.reference!;
-		this.input.setSelection({ anchor: reference.start, active: reference.end });
-		this.input.insertText('');
-	}
-
-	retireWhenInputChanges() {
-		return this.onDidChangeInput(() => this.invalidatePendingInput());
-	}
-}
-
 /** Exercise the same priority and context selection as the accessible view service. */
 function focusedChatHelp(services: ServicesAccessor) {
 	const contextKeys = services.get(IContextKeyService);
@@ -1269,31 +1259,34 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 			listAgents: async () => [], selectAgent: () => { }, selectMode: mode => model.selectMode(mode),
 			openModelSettings: async () => { }, resolveInteraction: async () => { },
 		};
-		const input = resources.add(services.createInstance(SessionsInputForTest, document.body, delegate, model));
+		const composerResources = resources.add(new DisposableStore());
+		const composer = composerResources.add(services.createInstance(SharedChatInputComposer, document.body, delegate, model));
+		const input = composerResources.add(composer.input);
 		input.render(model.inputState);
-		return { input, model, storage, notices, identity, services, delegate, [Symbol.dispose]() { resources.dispose(); } };
+		return { input, model, storage, notices, identity, services, delegate, disposeInput: () => composerResources.dispose(), [Symbol.dispose]() { resources.dispose(); } };
 	} catch (error) { resources.dispose(); throw error; }
 }
 
 async function sessionsWidgetFixture(send: (text: string, signal?: AbortSignal) => Promise<void> = async () => { }, interrupt: () => Promise<void> = async () => { }) {
 	const fixture = await sessionsInputFixture();
 	try {
-		fixture.input.dispose();
+		fixture.disposeInput();
 		fixture.services.registerInstance(ISessionProviderScopeService, {} as ISessionProviderScopeService);
 		fixture.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 		fixture.services.registerInstance(ISessionContext, fixture.model);
 		fixture.services.registerInstance(ILayoutService, { activeContainer: document.body } as ILayoutService);
 		fixture.model.send = async (text, _mode, _skills, _contexts, options) => send(text, options?.signal);
 		fixture.model.interrupt = interrupt;
+		const contribution = fixture.services.createInstance(SharedChatInputComposerContribution);
 		const widget = fixture.services.createInstance(NewChatWidget, document.body, { panelId: 'sessions-composer', model: fixture.model, createNewSession: () => { } });
 		widget.setVisible(true);
-		return { ...fixture, input: widget.input, widget, [Symbol.dispose]() { widget.dispose(); fixture[Symbol.dispose](); } };
+		return { ...fixture, input: widget.input, widget, [Symbol.dispose]() { widget.dispose(); contribution.dispose(); fixture[Symbol.dispose](); } };
 	} catch (error) { fixture[Symbol.dispose](); throw error; }
 }
 
 for (const surface of ['chat', 'cowork'] as const) test(`Sessions ${surface} receives source drops through shared snapshot and undo owners`, async () => {
 	using fixture = await sessionsInputFixture();
-	fixture.input.dispose();
+	fixture.disposeInput();
 	let sourceText = 'Original dropped source';
 	fixture.services.registerInstance(IFileService, {
 		hasProvider: () => true,
@@ -1302,9 +1295,10 @@ for (const surface of ['chat', 'cowork'] as const) test(`Sessions ${surface} rec
 	} as unknown as IFileService);
 	fixture.services.registerSingleton(IChatAttachmentResolveService, () => fixture.services.createInstance(ChatAttachmentResolveService));
 	fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
-	using input = surface === 'chat'
-		? fixture.services.createInstance(SessionsInputForTest, document.body, fixture.delegate, fixture.model)
-		: fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model, 'conversation');
+	using composer = surface === 'chat'
+		? fixture.services.createInstance(SharedChatInputComposer, document.body, fixture.delegate, fixture.model)
+		: undefined;
+	using input = composer?.input ?? fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model, 'conversation');
 	input.render(fixture.model.inputState);
 	input.appendToDraft('Review ');
 	const values = ['file:///workspace/first.ts', 'file:///workspace/second.ts'];
@@ -1332,7 +1326,7 @@ test('Cowork composer submits the exact Skill reference through the shared input
 	using restoreCanvas = toDisposable(() => { canvas.getContext = originalGetContext; });
 	const submissions: { text: string; skills: Parameters<ChatInputDelegate['send']>[2]; }[] = [];
 	using fixture = await sessionsInputFixture(async (text, _mode, skills) => { submissions.push({ text, skills }); });
-	fixture.input.dispose();
+	fixture.disposeInput();
 	fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
 	using input = fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model, 'conversation');
 	const skill = { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest' as const, digest: 'sha256:commit' } };
@@ -1457,7 +1451,7 @@ test('Sessions composer does not submit when clearing the old input synchronousl
 	let sends = 0;
 	using fixture = await sessionsInputFixture(async () => { sends++; });
 	fixture.input.appendToDraft('The old conversation');
-	using transition = fixture.input.retireWhenInputChanges();
+	using transition = fixture.input.inputEditor!.onDidChangeModelContent(() => fixture.input.invalidatePendingInput());
 	await fixture.input.acceptInput();
 	assert.equal(sends, 0);
 	assert.equal(fixture.input.element.classList.contains('has-conversation'), false);
@@ -1554,7 +1548,15 @@ test('a removed Sessions attachment cannot report a stale draft persistence erro
 	const source = new DeferredPromise<{ name: string; content: string; }>();
 	fixture.input.addContext({ id: 'delayed', kind: 'file', name: 'delayed.txt', resolve: () => source.p });
 	const capture = fixture.input.captureDraft();
-	fixture.input.removeContextForTest('delayed');
+	const editorModel = fixture.input.inputEditor!.getModel()!;
+	const start = editorModel.getPositionAt('Keep this task '.length);
+	const end = editorModel.getPositionAt('Keep this task delayed.txt'.length);
+	editorModel.applyEdits([{
+		range: {
+			startLineNumber: start.lineNumber, startColumn: start.column,
+			endLineNumber: end.lineNumber, endColumn: end.column,
+		}, text: ''
+	}]);
 	const rejected = assert.rejects(capture, /Source unavailable/u);
 	await source.error(new Error('Source unavailable'));
 	await rejected;
@@ -1586,7 +1588,7 @@ test('Sessions composer waits for file paste before sending and clears only the 
 		assert.equal(text, 'source.txt ');
 		for (const context of contexts ?? []) sent.push((await context.resolve()).content);
 	});
-	const container = fixture.input.inputContainerElement;
+	const container = fixture.input.composerForm;
 	const textPaste = new browserEnvironment.window.Event('paste', { bubbles: true, cancelable: true });
 	Object.defineProperty(textPaste, 'clipboardData', { value: { files: [] } });
 	container.dispatchEvent(textPaste);
@@ -1667,14 +1669,17 @@ test('sending from one session preserves a later draft during first-session crea
 	editorServices.registerInstance(IChatTipService, editorResources.add(editorServices.createInstance(ChatTipService)));
 	Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
 	editorServices.registerInstance(ILifecycleService, editorResources.add(editorServices.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));
+	let boundThread = thread();
 	const fake = fakeApi({
 		sessions: [],
+		thread: () => boundThread,
 		createSession: session('session-1', undefined, 'New Chat'),
 		createThread: { session: session('session-1', 'thread-1', 'New Chat'), threadId: 'thread-1' },
 	});
 	using sessions = new SessionsManagementService(fake.api);
 	await sessions.initialize();
 	editorServices.registerInstance(ISessionsManagementService, sessions);
+	editorServices.registerInstance(ISessionsChatViewStateService, new SessionsChatViewStateService());
 	using customViews = editorServices.createInstance(CustomViewService);
 	editorServices.registerInstance(ICustomViewService, customViews);
 	using view = editorServices.createInstance(SessionsService);
@@ -1701,6 +1706,7 @@ test('sending from one session preserves a later draft during first-session crea
 		getScopes: () => [], getScope: () => { throw new Error('Unexpected host routing'); }, getProviderScope: () => { throw new Error('Unexpected host routing'); },
 		createScope: () => editorServices.createChild(),
 	});
+	using composerContribution = editorServices.createInstance(SharedChatInputComposerContribution);
 	using codeView = editorServices.createInstance(NewChatView, dom.window.document.body, {
 		panelId: 'centered-chat', selection: draft, createNewSession: () => { view.openNewSession(); }, onDidChangeInfo: () => { },
 	});
@@ -1754,6 +1760,44 @@ test('sending from one session preserves a later draft during first-session crea
 	assert.equal(view.activeSelection?.kind, 'session');
 	assert.equal(await widget.captureDraft(), undefined);
 	assert.equal(readNewChatDraftState(composerStorage, 'thread-1', chatInputStatePersistence), undefined);
+
+	const selection = view.getSelection().activeSelection;
+	assert.ok(selection?.kind === 'session');
+	const completed = thread('Finished the work');
+	const turn = completed.turns[0]!;
+	boundThread = {
+		...completed, turns: [{
+			...turn, items: [
+				{ type: 'reasoning', itemId: 'reasoning-1', turnId: turn.turnId, text: 'Checking the workspace', state: [] },
+				...turn.items,
+			]
+		}]
+	};
+	const openCodeView = (panelId: string) => editorServices.createInstance(NewChatView, dom.window.document.body, {
+		panelId, selection, createNewSession: () => { }, onDidChangeInfo: () => { },
+	});
+	using first = openCodeView('first-transcript');
+	first.setVisible(true);
+	await first.model.initialize();
+	const reasoning = first.element.querySelector<HTMLDetailsElement>('.ash-chat-thinking');
+	assert.ok(reasoning);
+	assert.equal(reasoning.open, false);
+	reasoning.open = true;
+
+	const originalThread = boundThread;
+	boundThread = { ...thread('Another conversation'), threadId: 'thread-2' };
+	await first.model.selectThread({ ...selection.active, threadId: 'thread-2' });
+	assert.equal(first.element.querySelector('.ash-chat-thinking'), null);
+	boundThread = originalThread;
+	await first.model.selectThread(selection.active);
+	assert.equal(first.element.querySelector<HTMLDetailsElement>('.ash-chat-thinking')?.open, true);
+	first.dispose();
+
+	using reopened = openCodeView('reopened-transcript');
+	await reopened.model.initialize();
+	reopened.setVisible(true);
+	assert.equal(reopened.element.querySelector<HTMLDetailsElement>('.ash-chat-thinking')?.open, true);
+	assert.equal(await reopened.captureDraft(), undefined);
 });
 
 test('an empty Session list opens an untitled session and persists it on its first send', async () => {

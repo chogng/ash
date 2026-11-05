@@ -40,7 +40,7 @@ export interface MoreActionsPlacement {
 }
 
 /** Component-owned visual adaptation selected by a toolbar host. */
-export type ToolBarPresentation = 'default' | 'inherit-foreground' | 'inset-icon-actions';
+export type ToolBarPresentation = 'default' | 'inherit-foreground';
 
 /**
  * Presents primary actions inline, secondary actions in a menu, and pinned

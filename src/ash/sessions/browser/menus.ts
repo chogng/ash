@@ -9,6 +9,7 @@ export const Menus = {
 	SidebarSessionContext: new MenuId('SidebarSessionContext'),
 	SidebarSessionsHeader: new MenuId('SidebarSessionsHeader'),
 	SessionsViewFilter: new MenuId('SessionsViewPaneFilterSubMenu'),
+	NewSessionChatInputToolbar: new MenuId('NewSessionChatInputToolbar'),
 	ChatSidebarHeader: new MenuId('ChatSidebarHeader'),
 	SessionsViewSort: new MenuId('SessionsViewSort'),
 	MenubarMainMenu: new MenuId('SessionsMenubarMainMenu'),

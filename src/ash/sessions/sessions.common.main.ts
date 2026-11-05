@@ -3,6 +3,7 @@ import '../workbench/contrib/remote/browser/remote.contribution.js';
 import '../workbench/contrib/workspace/browser/workspace.contribution.js';
 import './contrib/workspace/browser/workspace.contribution.js';
 import './contrib/chat/browser/chat.contribution.js';
+import './contrib/chat/browser/sharedChatInputComposer.contribution.js';
 import './contrib/github/browser/createSessionFromPullRequestAction.js';
 import '../workbench/contrib/accessibility/browser/accessibility.contribution.js';
 import '../workbench/contrib/debug/browser/debug.service.contribution.js';

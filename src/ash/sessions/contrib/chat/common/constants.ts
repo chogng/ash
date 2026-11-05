@@ -9,4 +9,5 @@ export const ASH_CHAT_SELECTED_CONTEXT = 'sessions.activity.ashChatSelected';
 export const SESSIONS_COMPACT_INPUT_HEIGHT = Object.freeze({ minimum: 0, maximum: 240 });
 // Keep the persisted container ID for existing desktop sidebar layouts.
 export const CHAT_WORKSPACE_NAVIGATION_ID = 'sessions.chatgpt.navigation';
+export const CHAT_NAVIGATION_FOCUS_CONTEXT = 'chatNavigationFocused';
 export const CHAT_WORKSPACE_LAST_BACKEND_KEY = 'sessions.chat.lastBackend';

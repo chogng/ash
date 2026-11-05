@@ -2,6 +2,9 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { logSessionHistoryBinding } from '../../../services/sessions/browser/sessionOpenTelemetryService.js';
 import './media/chatView.css';
 import { h } from '../../../../base/browser/dom.js';
+import type { URI } from '../../../../base/common/uri.js';
+import { LocalChatSessionUri } from '../../../../workbench/contrib/chat/common/model/chatUri.js';
+import { ISessionsChatViewStateService } from './chatViewStateService.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IChatService } from '../../../../workbench/services/chat/common/chatService.js';
 import { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
@@ -26,6 +29,8 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 	readonly element: HTMLElement;
 	private readonly widget: NewChatWidget;
 	private readonly info: SessionInfoRail;
+	private visible = false;
+	private viewStateResource: URI | undefined;
 
 	constructor(
 		container: HTMLElement,
@@ -33,6 +38,7 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 		@ISessionProviderScopeService providerScopes: ISessionProviderScopeService,
 		@IChatService chatService: IChatService,
 		@ISessionsManagementService sessions: ISessionsManagementService,
+		@ISessionsChatViewStateService private readonly viewStateService: ISessionsChatViewStateService,
 	) {
 		super();
 		this.element = h(container.ownerDocument, 'div', { className: 'ash-sessions-chat-content' });
@@ -60,8 +66,14 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 			this._register(this.info.onDidChange(onDidChangeInfo));
 			const updateLoading = () => {
 				this.widget.element.querySelector(':scope > .ash-chat-list-widget')?.setAttribute('aria-busy', String(model.state === 'loading'));
+				this.restoreConversationViewState();
 			};
 			this._register(model.onDidChange(updateLoading));
+			this._register(model.onDidChangeComposer(() => {
+				// The outgoing transcript is still mounted before the model switches Threads.
+				this.saveConversationViewState();
+				this.viewStateResource = undefined;
+			}));
 			updateLoading();
 		} catch (error) {
 			this.dispose();
@@ -86,7 +98,32 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 	public captureDraft(): ReturnType<ISessionsConversationPane['captureDraft']> { return this.widget.captureDraft(); }
 	public restoreDraft(...args: Parameters<ISessionsConversationPane['restoreDraft']>): void { this.widget.restoreDraft(...args); }
 	public setVisible(visible: boolean): void {
+		if (!visible) this.saveConversationViewState();
+		this.visible = visible;
 		this.widget.setVisible(visible);
 		this.info.setVisible(visible);
+		this.restoreConversationViewState();
+	}
+
+	protected override disposeCore(): void {
+		this.saveConversationViewState();
+		super.disposeCore();
+	}
+
+	private saveConversationViewState(): void {
+		if (this.visible && this.viewStateResource) {
+			this.viewStateService.set(this.viewStateResource, this.widget.getViewState());
+		}
+	}
+
+	private restoreConversationViewState(): void {
+		if (!this.visible || this.viewStateResource) return;
+		const { sessionId, threadId, thread } = this.model;
+		if (!sessionId || !threadId || thread?.threadId !== threadId) return;
+
+		// Only a bound transcript can restore a reading anchor or disclosure state.
+		const resource = this.viewStateResource = LocalChatSessionUri.forSession(sessionId, threadId);
+		const state = this.viewStateService.get(resource);
+		if (state) this.widget.restoreViewState(state);
 	}
 }

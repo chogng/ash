@@ -99,7 +99,7 @@ Activity Bar 用于产品页面导航，顺序与入口位置稳定，页面内�
 - 内容增长时条目增高，保留状态、操作与文字可读性。
 - 头像用于识别人、Agent 或工作来源，没有识别用途时省略。
 - 顶部全局导航的“＋ New”新建会话并打开输入区，下方列表按 Pinned、Projects、Recent（Code 为 Recents）分组。大组的 chevron 紧跟标题文字之后，点击展开收起。带列表操作栏的 Projects 标题在没有项目时也显示，操作栏位于同一行右侧，空组省略 chevron。其他没有内容的大组不显示。Chat 只保留大组，Code 的小组使用标题前的 folder / folder-opened 表达展开状态，会话标题前显示图标。
-- 展开的导航、Accounts 以及 Chat 和 Code 的分组标题通过 `--ash-sessions-sidebar-row-inset` 共用 8px 的左右外缩进。图标槽和行尾工具栏按钮使用 `--ash-toolbar-actionSize`，默认 28px。侧栏行高由该尺寸加两倍 `--ash-sessions-sidebar-item-inset` 得出，默认 32px。Projects 标题行的工具栏按钮在 28px 点击区内绘制 24px 底板，底板之间及工具栏与标题区、行尾之间默认留 4px。
+- 展开的导航、Accounts 以及 Chat 和 Code 的分组标题通过 `--ash-sessions-sidebar-row-inset` 共用 8px 的左右外缩进。图标槽和行尾工具栏按钮使用 `--ash-toolbar-actionSize`，默认 28px。侧栏行高由该尺寸加两倍 `--ash-sessions-sidebar-item-inset` 得出，默认 32px。Projects 标题行的工具栏按钮为 24 × 24px，按钮之间及工具栏与标题区、行尾之间默认留 4px。
 - 分组标题整行可展开或折叠，使用共享侧栏行高。标题按钮直接布局文字与 chevron，内边距为上下 4px、左右 8px，文字与 chevron 间隔 8px。Chat 标题到首项与条目之间均为 2px，组间留白 8px。
 - Chat 会话与项目行的图标槽距行首 2px，距文字 6px，18px 图标在槽内居中。Chat、Work 和 Code 的行首状态和换图标操作复用同一控件，各列表拥有自己的行布局。可更换的图标使用行首 ActionBar 按钮，打开共享图标选择器。运行时状态可暂时占用图标槽，结束后恢复条目图标。
 - 分组标题与条目默认透明，底板圆角 8px。浅色和深色主题的悬停底色使用选中底色的 50% 透明混合，高对比度主题使用 `list.hoverBackground`。当前条目与 Activity Bar 导航按钮共用选中底色，悬停或打开菜单时保留选中底色。键盘焦点用独立焦点环，错误与待回应有文字或形状辅助。

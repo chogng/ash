@@ -13,9 +13,15 @@ import type { ChatContextAttachment } from '../../../services/chat/common/chatCo
 import type { IRange } from '../../../../editor/common/core/range.js';
 import type { IChatCopiedInlinePrompt } from './attachments/chatVariables.js';
 import type { Selection } from '../../../../editor/common/core/selection.js';
+import type { ChatListWidget } from './widget/chatListWidget.js';
 import type { ChatWidget } from './widget/chatWidget.js';
 import type { IChatListItem } from '../common/model/chatViewModel.js';
 import type { ChatEditorInput } from './widgetHosts/editor/chatEditorInput.js';
+
+export const CHAT_WIDGET_VIEW_STATE_CACHE_LIMIT = 100;
+
+/** Retained transcript presentation independent of the host's visibility and DOM focus. */
+export type IChatWidgetViewState = Omit<ReturnType<ChatListWidget['getViewState']>, 'visible' | 'focus'>;
 
 export interface IChatAcceptInputOptions {
 	readonly queue?: ChatRequestQueueKind;

@@ -11,6 +11,8 @@ suite('Sessions Chat accessibility help', () => {
 			await page.goto(`/sessions.html?locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: locale === 'en' ? 'Code' : '代码', exact: true }).click();
+			const controls = page.locator('.ash-sessions-chat-slot.active').getByRole('toolbar', { name: locale === 'en' ? 'Session controls' : '会话控件', exact: true });
+			await expect(controls.getByRole('button')).toHaveCount(2);
 			const input = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor .stanza-editor').getByRole('textbox');
 			await expect(input).toBeVisible();
 			await input.focus();
@@ -49,6 +51,11 @@ suite('Sessions Chat accessibility help', () => {
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		const composer = page.locator('.ash-sessions-chat-slot.active');
 		const input = composer.locator('.ash-chat-input-editor .stanza-editor').getByRole('textbox');
+		const environment = composer.locator('.ash-sessions-environment-picker');
+		const workspace = composer.locator('.ash-sessions-workspace-picker');
+		await environment.focus();
+		await environment.press('ArrowRight');
+		await expect(workspace).toBeFocused();
 		await input.focus();
 		await page.keyboard.insertText('Keep this draft');
 

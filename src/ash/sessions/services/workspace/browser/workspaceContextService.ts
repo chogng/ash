@@ -1,52 +1,10 @@
-import { extUriBiasedIgnorePathCase, basename } from '../../../../base/common/resources.js';
-import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
-import { buildAgentHostSessionWorkspace } from '../../../common/agentHostSessionWorkspace.js';
-import type { IWorkspace, IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
-import { ISessionsService } from '../../sessions/browser/sessionsService.js';
-import type { ISession } from '../../sessions/common/session.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import type { IWorkspace } from '../../../../platform/workspace/common/workspace.js';
 
-/** Explorer follows the selection; filesystem routing is owned by the shared file provider. */
-export class SessionsWorkspaceContextService extends Disposable {
-	constructor(
-		private readonly hostWorkspace: () => IWorkspace,
-		private readonly updateWorkspace: (workspace: IWorkspace) => void,
-		@ISessionsService private readonly sessions: ISessionsService,
-	) {
-		super();
-		this._register(sessions.onDidChange(() => this.updateSelection()));
-		this.updateSelection();
-	}
+export const ISessionsWorkspaceContextService = createServiceIdentifier<ISessionsWorkspaceContextService>('sessionsWorkspaceContextService');
 
-	private updateSelection(): void {
-		const selected = this.sessions.activeSelection;
-		if (selected?.kind === 'session') {
-			const folder = sessionFolder(selected.active.session, selected.active.threadId);
-			this.updateWorkspace({ id: selected.active.session.sessionId, folders: folder ? [folder] : [] });
-			return;
-		}
-		const host = this.hostWorkspace();
-		const target = selected?.kind === 'untitled' ? selected.session.workspace : undefined;
-		if (target?.type === 'local' || target?.type === 'ssh' || target?.type === 'provider') {
-			const uri = sessionWorkspaceUri(buildAgentHostSessionWorkspace(target)!);
-			if (target.type === 'provider') {
-				// Drafts have no SessionDirectory authority yet; expose no writable Explorer root.
-				this.updateWorkspace({ id: host.id, folders: [] }); return;
-			}
-			const known = host.folders.filter(folder => extUriBiasedIgnorePathCase.isEqual(folder.uri, uri));
-			this.updateWorkspace({ id: host.id, folders: known.length || target.type !== 'ssh' ? known : [{ id: `agent-host:${selected?.kind === 'untitled' ? selected.session.providerId ?? '' : ''}`, uri, name: basename(uri), index: 0 }] });
-			return;
-		}
-		this.updateWorkspace(host);
-	}
-}
-
-function sessionFolder(session: ISession, threadId?: string): IWorkspaceFolder | undefined {
-	// Undefined Thread detail is not permission to use the source directory;
-	// null is an authoritative Thread without a filesystem directory.
-	const workspace = threadId ? session.chats.find(chat => chat.threadId === threadId)?.workspace : session.workspace;
-	if (!workspace) { return undefined; }
-	const uri = sessionWorkspaceUri(workspace);
-	// Bind the root into the folder identity: moving a Session must not redirect an already open file.
-	return { id: `session:${encodeURIComponent(session.sessionId)}:${encodeURIComponent(workspace.root)}`, uri, name: basename(uri), index: 0 };
+/** Host workspace and publication of the Explorer's window-local workspace projection. */
+export interface ISessionsWorkspaceContextService {
+	getHostWorkspace(): IWorkspace;
+	updateWorkspace(workspace: IWorkspace): void;
 }

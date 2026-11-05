@@ -1,4 +1,4 @@
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
@@ -8,15 +8,16 @@ import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workb
 import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import { AshChatNavigationSource } from '../browser/ashChatNavigationSource.js';
-import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../common/constants.js';
-import { ChatListCatalog, IChatListCatalog, type ChatListSource } from '../browser/chatListModel.js';
-import { ChatNavigationViewPaneContainer, type ChatNavigationAccessibilityHint } from '../browser/chatNavigationView.js';
+import { ASH_CHAT_SELECTED_CONTEXT, CHAT_NAVIGATION_FOCUS_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../common/constants.js';
+import { ChatListCatalog, ChatWorkspaceListModel, IChatListCatalog, type ChatListSource } from '../browser/chatListModel.js';
+import { SessionsView } from '../../sessions/browser/views/sessionsView.js';
+import type { SessionsCatalogAccessibility } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
 import '../browser/chat.contribution.js';
 
 export function registerChatWorkspace(webChat: {
 	readonly catalog: SyncDescriptor<ChatListSource>;
-	readonly accessibility: ChatNavigationAccessibilityHint;
+	readonly accessibility: Omit<SessionsCatalogAccessibility, 'focusContext'>;
 	readonly openCommand: string;
 }): void {
 	registerSingleton(IChatListCatalog, new SyncDescriptor(ChatListCatalog, [[
@@ -24,14 +25,28 @@ export function registerChatWorkspace(webChat: {
 		new SyncDescriptor(AshChatNavigationSource),
 	]], true));
 
-	SessionsViewRegistry.registerViewContainer({
-		id: CHAT_WORKSPACE_NAVIGATION_ID,
-		ctorDescriptor: new SyncDescriptor(ChatNavigationViewPaneContainer, [webChat.accessibility]),
-		mergeViewWithContainerWhenSingleView: false, title: 'Chat', localizationKey: { bundle: 'ash', key: 'sessions.activity.chat' }, location: ViewContainerLocation.Sidebar, isDefault: true, order: 2,
-	});
+	registerChatWorkspaceNavigation(webChat.accessibility);
 
 	registerWorkbenchContribution(ChatWorkspaceContribution.ID, WorkbenchPhase.BlockRestore,
 		accessor => accessor.get(IInstantiationService).createInstance(ChatWorkspaceContribution, webChat.openCommand));
+}
+
+export function registerChatWorkspaceNavigation(accessibility: Omit<SessionsCatalogAccessibility, 'focusContext'>): IDisposable {
+	const registrations = new DisposableStore();
+	const title = 'Chat';
+	const localizationKey = { bundle: 'ash', key: 'sessions.activity.chat' };
+	registrations.add(SessionsViewRegistry.registerViewContainer({
+		id: CHAT_WORKSPACE_NAVIGATION_ID, title, localizationKey, location: ViewContainerLocation.Sidebar, isDefault: true, order: 2,
+	}));
+	registrations.add(SessionsViewRegistry.registerViews(CHAT_WORKSPACE_NAVIGATION_ID, [{
+		id: CHAT_WORKSPACE_NAVIGATION_ID + '.view',
+		title, localizationKey, canToggleVisibility: false,
+		ctorDescriptor: new SyncDescriptor(SessionsView, [{
+			input: new SyncDescriptor(ChatWorkspaceListModel),
+			accessibility: { ...accessibility, focusContext: CHAT_NAVIGATION_FOCUS_CONTEXT },
+		}]),
+	}]));
+	return registrations;
 }
 
 export class ChatWorkspaceContribution extends Disposable {

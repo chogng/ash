@@ -1,6 +1,6 @@
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsMenuActiveConversationContext } from '../../../../common/contextkeys.js';
-import { ISessionsListModelService, type ISessionsListTreeNode, type SessionGrouping, type SessionSortDirection, type SessionSortMode } from '../../../../services/sessions/browser/sessionsListModelService.js';
+import { ISessionsListModelService, type ISessionsListTreeNode, type SessionGrouping } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
@@ -13,10 +13,11 @@ import { appendIcon, getRegisteredIcon } from '../../../../../base/browser/ui/lx
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
 import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
-import { AbstractDisposable, Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { AbstractDisposable, Disposable, DisposableMap, type DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { MOVE_CHAT_TO_SESSION_ACTION_ID } from '../sessionsActions.js';
 import { SessionActionFeedback } from '../sessionActionFeedback.js';
 import { getSessionsListEntries } from './sessionsListFilters.js';
+import { sessionListProjectActions, sessionProjectOrganization, sessionSortActions, type SessionListOrganization } from './sessionsListActions.js';
 import { SessionsListSearch } from './sessionsListSearch.js';
 import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
@@ -28,8 +29,8 @@ import { sessionManagementLabel } from '../../../../browser/sessionManagementLab
 import type { ISession, SessionManagementInfo } from '../../../../services/sessions/common/session.js';
 import type { ThemeIcon } from '../../../../../base/common/themables.js';
 import { colorCssVariable } from '../../../../../platform/theme/common/colorUtils.js';
-import { autorun } from '../../../../../base/common/observable.js';
-import { IMenuService, SubmenuItemAction } from '../../../../../platform/actions/common/actions.js';
+import { autorun, observableFromEvent, type IObservable } from '../../../../../base/common/observable.js';
+import { IMenuService, SubmenuItemAction, type MenuId } from '../../../../../platform/actions/common/actions.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
@@ -78,50 +79,6 @@ const managementIcons: Record<SessionManagementInfo['status'], Icon | undefined>
 };
 
 export type SessionsListPresentation = 'chat' | 'code' | { readonly openCommand: string; readonly activeContext: string; };
-
-export interface SessionListProjectOrganization {
-	readonly current?: string;
-	readonly destinations: readonly { readonly id: string; readonly title: string; }[];
-	readonly loadDestinations?: (signal: AbortSignal) => Promise<SessionListProjectOrganization['destinations']>;
-	move(projectId: string | undefined): Promise<void>;
-}
-
-export interface SessionListOrganization {
-	readonly pinned?: boolean;
-	readonly setPinned?: (pinned: boolean) => void | Promise<void>;
-	readonly moveToGroup?: (id: string | null) => Promise<void>;
-	readonly project?: SessionListProjectOrganization;
-}
-
-export function sessionProjectOrganization(
-	projects: IProjectService,
-	sessionId: string,
-	current: string | undefined,
-	destinations: readonly { readonly id: string; readonly name: string; }[],
-): SessionListProjectOrganization {
-	return {
-		current,
-		destinations: destinations.map(({ id, name }) => ({ id, title: name })),
-		move: destination => projects.moveSession(sessionId, current, destination),
-	};
-}
-
-export function sessionListProjectActions(
-	project: SessionListProjectOrganization,
-	destinations: SessionListProjectOrganization['destinations'],
-	run: (operation: () => Promise<void>) => Promise<void>,
-): readonly IAction[] {
-	const targets = destinations.map(({ id, title }): IAction => ({
-		id: `sessions.list.moveToProject.${id}`, label: title, tooltip: title,
-		checked: id === project.current, enabled: id !== project.current, run: () => run(() => project.move(id)),
-	}));
-	const move = new SubmenuAction('sessions.list.moveToProject', localize('sessions.chatgpt.moveToProject', 'Move to project'),
-		targets.length ? targets : [{ id: 'sessions.list.noProjectDestination', label: localize('sessions.chatgpt.noProjects', 'No projects'), tooltip: '', enabled: false, run: () => { } }], Lxicon.folder);
-	return project.current ? [move, {
-		id: 'sessions.list.removeFromProject', label: localize('sessions.list.removeFromProject', 'Remove from project'),
-		tooltip: '', enabled: true, run: () => run(() => project.move(undefined)),
-	}] : [move];
-}
 
 interface SessionsListDragOptions {
 	organization(element: HTMLElement): SessionListOrganization | undefined;
@@ -231,8 +188,9 @@ export class SessionsList extends DomWidget {
 	private readonly feedback = this._register(new SessionActionFeedback());
 	private readonly rowMenuContext = this._register(new MutableDisposable<IScopedContextKeyService>());
 	readonly domNode: HTMLElement;
+	readonly loading: IObservable<boolean>;
 	private readonly list: HTMLDivElement;
-	private readonly createListToolbar: (container: HTMLElement) => SessionsListToolbar;
+	private readonly createListToolbar: (container: HTMLElement, disposables: DisposableStore) => MenuWorkbenchToolBar;
 	private readonly items = this._register(new DisposableMap<string, SessionListItem>());
 	private readonly sections = this._register(new DisposableMap<string, SessionListSection>());
 	private projects: readonly Project[] = [];
@@ -269,6 +227,7 @@ export class SessionsList extends DomWidget {
 		super();
 		const mode = this.mode = typeof presentation === 'string' ? presentation : 'chat';
 		this.entry = typeof presentation === 'string' ? undefined : presentation;
+		this.loading = observableFromEvent(this, sessionService.onDidChange, () => sessionService.state === 'loading' && sessionService.sessions.length > 0);
 		const ownerDocument = container.ownerDocument;
 		this.domNode = h(ownerDocument, 'section');
 		this.domNode.className = 'ash-sessions-list';
@@ -363,9 +322,9 @@ export class SessionsList extends DomWidget {
 		this._register(github.onDidChange(() => this.render()));
 		this._register(groups.onDidChange(() => this.render()));
 		const menuContext = contextKeys && this._register(contextKeys.createScoped(this.domNode));
-		this.createListToolbar = container => new SessionsListToolbar(
-			container, menus, contextMenus, notifications, listModel, menuContext,
-			actions => this.getFilterActions(actions),
+		this.createListToolbar = (container, disposables) => createSessionsListToolbar(
+			container, disposables, menus, contextMenus, notifications, menuContext,
+			Menus.SidebarSessionsHeader, Menus.SessionsViewFilter, actions => this.getFilterActions(actions),
 		);
 		this._register(autorun(reader => {
 			customViews.activeCustomView.read(reader);
@@ -998,62 +957,46 @@ function reorderChildren(children: readonly HTMLElement[], order: (ids: readonly
 	return children.map(child => child.dataset[attribute] ? ordered[next++]! : child);
 }
 
-function sessionSortActions(model: ISessionsListModelService): IAction[] {
-	const sort = (value: SessionSortMode, label: string): IAction => ({
-		id: `sessions.list.sortBy.${value}`, label, tooltip: '', enabled: true,
-		checked: model.sortMode === value, run: () => model.setSortMode(value),
-	});
-	const direction = (value: SessionSortDirection, label: string): IAction => ({
-		id: `sessions.list.sortDirection.${value}`, label, tooltip: '', enabled: true,
-		checked: model.sortDirection === value, run: () => model.setSortDirection(value),
-	});
-	return [
-		sort('name', localize('sessions.list.sortName', 'Name')),
-		sort('updated', localize('sessions.list.sortUpdated', 'Last Updated')),
-		sort('created', localize('sessions.list.sortCreated', 'Date Created')),
-		new Separator(),
-		direction('ascending', localize('sessions.list.sortAscending', 'Ascending')),
-		direction('descending', localize('sessions.list.sortDescending', 'Descending')),
-	];
-}
-
 /** Shared Projects header controls for the conversation catalogs. */
-export class SessionsListToolbar extends MenuWorkbenchToolBar {
-	constructor(container: HTMLElement, menus: IMenuService, contextMenus: IContextMenuService, notifications: INotificationService,
-		model: ISessionsListModelService, contextKeys: IContextKeyService | undefined,
-		getFilterActions?: (contributed: readonly IAction[]) => readonly IAction[]) {
-		const submenu = getFilterActions ? Menus.SessionsViewFilter : Menus.SessionsViewSort;
-		super(container, menus, contextMenus, getFilterActions ? Menus.SidebarSessionsHeader : Menus.ChatSidebarHeader, {
-			ariaLabel: localize('sessions.list.headerActions', 'Sessions List Actions'),
-			presentation: 'inset-icon-actions',
-			contextKeyService: contextKeys,
-			// The popup reads list state even when the submenu has no registered commands.
-			menuOptions: { preserveEmptySubmenus: true },
-			actionViewItemProvider: (action, options) => {
-				if (!(action instanceof SubmenuItemAction) || action.item.submenu !== submenu) return undefined;
-				return new DropdownMenuActionViewItem(
-					action,
-					() => getFilterActions ? getFilterActions(action.actions) : sessionSortActions(model),
-					{
-						showContextMenu: delegate => contextMenus.showContextMenu({
-							...delegate, getMenuClassName: () => 'ash-sessions-list-menu',
-							getCheckedActionsRepresentation: item => item.id.startsWith('sessions.list.groupBy.') || item.id.startsWith('sessions.list.sort') ? 'radio' : 'checkbox',
-						}),
-					},
-					{ ...options, iconOnly: true },
-				);
-			},
-		});
-		this._register(this.actionRunner.onDidRun(({ action, error }) => {
-			if (action.id === 'sessionsViewPane.createGroup' && error !== undefined) notifications.error(toErrorMessage(error));
-		}));
-		this.element.classList.add('ash-sessions-list-more');
-		// Toolbar inputs stay within the header without activating tree rows.
-		this._register(addDisposableListener(this.element, 'click', event => event.stopPropagation()));
-		this._register(addDisposableListener(this.element, 'keydown', event => {
-			if (['Enter', ' ', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown'].includes(event.key)) event.stopPropagation();
-		}));
-	}
+export function createSessionsListToolbar(container: HTMLElement, disposables: DisposableStore, menus: IMenuService,
+	contextMenus: IContextMenuService, notifications: INotificationService, contextKeys: IContextKeyService | undefined,
+	menuId: MenuId, submenu: MenuId, getActions: (contributed: readonly IAction[]) => readonly IAction[]): MenuWorkbenchToolBar {
+	const toolbar = disposables.add(new MenuWorkbenchToolBar(container, menus, contextMenus, menuId, {
+		ariaLabel: localize('sessions.list.headerActions', 'Sessions List Actions'),
+		contextKeyService: contextKeys,
+		// The popup reads list state even when the submenu has no registered commands.
+		menuOptions: { preserveEmptySubmenus: true },
+		actionViewItemProvider: (action, options) => {
+			if (!(action instanceof SubmenuItemAction) || action.item.submenu !== submenu) {
+				return undefined;
+			}
+			return new DropdownMenuActionViewItem(
+				action,
+				() => getActions(action.actions),
+				{
+					showContextMenu: delegate => contextMenus.showContextMenu({
+						...delegate, getMenuClassName: () => 'ash-sessions-list-menu',
+						getCheckedActionsRepresentation: item => item.id.startsWith('sessions.list.groupBy.') || item.id.startsWith('sessions.list.sort') ? 'radio' : 'checkbox',
+					}),
+				},
+				{ ...options, iconOnly: true },
+			);
+		},
+	}));
+	disposables.add(toolbar.actionRunner.onDidRun(({ action, error }) => {
+		if (action.id === 'sessionsViewPane.createGroup' && error !== undefined) {
+			notifications.error(toErrorMessage(error));
+		}
+	}));
+	toolbar.element.classList.add('ash-sessions-list-more');
+	// Toolbar inputs stay within the header without activating tree rows.
+	disposables.add(addDisposableListener(toolbar.element, 'click', event => event.stopPropagation()));
+	disposables.add(addDisposableListener(toolbar.element, 'keydown', event => {
+		if (['Enter', ' ', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown'].includes(event.key)) {
+			event.stopPropagation();
+		}
+	}));
+	return toolbar;
 }
 
 class SessionListItem extends AbstractDisposable {
@@ -1196,23 +1139,22 @@ class SessionListItem extends AbstractDisposable {
 	}
 }
 
-export class SessionListSection extends AbstractDisposable {
+export class SessionListSection extends Disposable {
 	readonly domNode: HTMLElement;
 	readonly button: HTMLButtonElement;
-	readonly toolbar: SessionsListToolbar | undefined;
+	readonly toolbar: MenuWorkbenchToolBar | undefined;
 	private readonly heading: HTMLElement;
 	private readonly label: HTMLElement;
 	private readonly icon: HTMLElement;
 	private readonly appearanceIcon: HTMLElement;
 	private open: (() => void) | undefined;
 	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
-	private readonly listeners: { dispose(): void; }[];
 
 	get title(): string { return this.label.textContent ?? ''; }
 	get rowClassName(): string { return this.subgroup ? 'ash-sessions-list-subgroup-row' : 'ash-sessions-list-section-row'; }
 
 	constructor(document: Document, key: string, private readonly subgroup: boolean, toggle: (collapsed?: boolean) => void,
-		createToolbar?: (container: HTMLElement) => SessionsListToolbar) {
+		createToolbar?: (container: HTMLElement, disposables: DisposableStore) => MenuWorkbenchToolBar) {
 		super();
 		this.domNode = h(document, 'section', { className: subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section' });
 		this.domNode.dataset.section = key;
@@ -1228,29 +1170,27 @@ export class SessionListSection extends AbstractDisposable {
 		this.domNode.append(this.heading);
 		if (createToolbar) {
 			this.domNode.classList.add('ash-sessions-list-section-with-actions');
-			this.toolbar = createToolbar(this.domNode);
+			this.toolbar = createToolbar(this.domNode, this._store);
 		}
-		this.listeners = [
-			addDisposableListener(this.button, 'click', event => { event.stopPropagation(); if (this.open) this.open(); else toggle(); }),
-			addDisposableListener(this.button, 'contextmenu', event => {
-				if (!this.contextMenu) return;
-				event.preventDefault();
-				this.contextMenu({ x: event.clientX, y: event.clientY, targetWindow: getWindow(this.button) });
-			}),
-			addDisposableListener(this.button, 'keydown', event => {
-				if (this.contextMenu && (event.key === 'ContextMenu' || event.key === 'F10' && event.shiftKey)) {
-					event.preventDefault();
-					event.stopPropagation();
-					this.contextMenu(this.button);
-					return;
-				}
-				if (event.key === 'Enter' || event.key === ' ') { event.stopPropagation(); return; }
-				if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+		this._register(addDisposableListener(this.button, 'click', event => { event.stopPropagation(); if (this.open) this.open(); else toggle(); }));
+		this._register(addDisposableListener(this.button, 'contextmenu', event => {
+			if (!this.contextMenu) return;
+			event.preventDefault();
+			this.contextMenu({ x: event.clientX, y: event.clientY, targetWindow: getWindow(this.button) });
+		}));
+		this._register(addDisposableListener(this.button, 'keydown', event => {
+			if (this.contextMenu && (event.key === 'ContextMenu' || event.key === 'F10' && event.shiftKey)) {
 				event.preventDefault();
 				event.stopPropagation();
-				toggle(event.key === 'ArrowLeft');
-			}),
-		];
+				this.contextMenu(this.button);
+				return;
+			}
+			if (event.key === 'Enter' || event.key === ' ') { event.stopPropagation(); return; }
+			if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+			event.preventDefault();
+			event.stopPropagation();
+			toggle(event.key === 'ArrowLeft');
+		}));
 	}
 
 	setContextMenu(menu: (anchor: ContextMenuAnchor) => void): void {
@@ -1302,8 +1242,7 @@ export class SessionListSection extends AbstractDisposable {
 	}
 
 	protected override disposeCore(): void {
-		for (const listener of this.listeners) listener.dispose();
-		this.toolbar?.dispose();
+		super.disposeCore();
 		this.domNode.remove();
 	}
 }

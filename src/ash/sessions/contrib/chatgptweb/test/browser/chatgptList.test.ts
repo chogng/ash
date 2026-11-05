@@ -7,6 +7,22 @@ import { mockChatGPTRequests } from './chatGPTBrowserTestUtils.js';
 suite('ChatGPT catalog in the Ash chat list', () => {
 	const browserTests = useBrowserTests();
 
+	test('the registered Chat sidebar opens Ash and ChatGPT rows through their own sources', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page);
+		await page.goto('/chatgptNavigation.html?locale=en&mixedCatalog');
+		const sidebar = page.locator('[data-view-container-id="sessions.chatgpt.navigation"]').getByRole('tree');
+		const ash = sidebar.getByRole('button', { name: 'Local Ash conversation', exact: true });
+		const chatGPT = sidebar.getByRole('button', { name: 'Synthetic conversation', exact: true });
+		await expect(ash).toBeVisible();
+		await expect(chatGPT).toBeVisible();
+
+		await ash.press('Enter');
+		await expect(page.locator('body')).toHaveAttribute('data-opened-ash', 'fixture-chat/fixture-thread');
+		await chatGPT.press('Enter');
+		await expect(page.locator('.ash-chatgpt-widget')).toContainText('Synthetic answer');
+	});
+
 	test('ChatGPT refreshes the visible history when the window comes back online', async () => {
 		const { page } = browserTests;
 		let changed = false;

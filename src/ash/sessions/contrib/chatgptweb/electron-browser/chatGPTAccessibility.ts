@@ -5,14 +5,14 @@ import { AccessibleViewRegistry } from '../../../../platform/accessibility/brows
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { ServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
-import { chatNavigationFocusContext } from '../../chat/browser/chatNavigationView.js';
+import { CHAT_NAVIGATION_FOCUS_CONTEXT } from '../../chat/common/constants.js';
 
 export function registerChatGPTAccessibility(focusContext: string, contentService: ServiceIdentifier<{ getAccessibleContent(): string; }>): void {
 	for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 		AccessibleViewRegistry.register({
 			type, priority: 100, name: `sessionsChatGPT${type}`,
 			when: type === AccessibleViewType.Help
-				? ContextKeyExpr.or(ContextKeyExpr.has(focusContext), ContextKeyExpr.has(chatNavigationFocusContext))
+				? ContextKeyExpr.or(ContextKeyExpr.has(focusContext), ContextKeyExpr.has(CHAT_NAVIGATION_FOCUS_CONTEXT))
 				: ContextKeyExpr.has(focusContext),
 			getProvider: accessor => {
 				const focused = getActiveElement(accessor.get(ILayoutService).activeContainer.ownerDocument) as HTMLElement;

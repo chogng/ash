@@ -18,7 +18,8 @@ This specification defines stable placement and state-ownership rules. Row styli
 | Custom groups and membership                  | `ISessionGroupsService`                          |
 | Top-level group/workspace order               | `ISessionSectionOrderService`                    |
 | Tree interaction and drop targets             | `SessionsListTree`                               |
-| Tree composition and presentation             | Each sidebar's data and placement projection     |
+| Desktop Chat placement, ordering and paging   | Desktop Chat list model                          |
+| Row rendering, keyboard focus and scrolling   | Sidebar view and list controls                   |
 
 Chat and Code consume the same session selection and pins. Chat presents flat conversation rows in top-level custom groups and a remaining conversation section beside pinned conversations and project entries. Code shows unpinned project conversations below their Project in the sidebar. Recents contains unpinned conversations without a project, including their explicit custom groups. Each mode owns separate section expansion state. `IProjectService` owns project records and membership. The workspace is the Agent's execution directory, which can be a worktree or container for the same Project.
 

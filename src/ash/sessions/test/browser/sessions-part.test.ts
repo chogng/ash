@@ -1,3 +1,5 @@
+import { SharedChatInputComposerContribution } from '../../contrib/chat/browser/sharedChatInputComposer.contribution.js';
+import { ISessionsChatViewStateService, SessionsChatViewStateService } from '../../contrib/chat/browser/chatViewStateService.js';
 import { createDisconnectedAgentHostInputCompletionService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 
 import { IEditorGroupsService } from '../../../workbench/services/editor/common/editorGroupsService.js';
@@ -392,6 +394,8 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	});
 	paneServices.registerInstance(IImageEditorService, resources.add(paneServices.createInstance(BrowserImageEditorService)));
 	const cowork = resources.add(paneServices.createInstance(CoworkPaneFactory));
+	paneServices.registerInstance(ISessionsChatViewStateService, new SessionsChatViewStateService());
+	using composerContribution = paneServices.createInstance(SharedChatInputComposerContribution);
 	using part = paneServices.createInstance(SessionsPart, dom.window.document.body, {
 		newDraftVisible: observableValue('draft visibility', false),
 		createCoworkPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { viewService.openNewSession(); }),

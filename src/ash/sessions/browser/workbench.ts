@@ -220,7 +220,7 @@ import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../platform/na
 import { IStorageService, WillSaveStateReason, StorageScope } from '../../platform/storage/common/storage.js';
 import { IThemeService } from '../../platform/theme/common/themeService.js';
 import { WorkbenchState, IWorkspaceContextService, type IWorkspace } from '../../platform/workspace/common/workspace.js';
-import { SessionsWorkspaceContextService } from '../services/workspace/browser/workspaceContextService.js';
+import { ISessionsWorkspaceContextService } from '../services/workspace/browser/workspaceContextService.js';
 import { IMarkerService } from '../../platform/markers/common/markers.js';
 import { MarkerService } from '../../platform/markers/common/markerService.js';
 import { GitHubService as SessionsGitHubService, IGitHubService as ISessionsGitHubService } from '../contrib/github/browser/githubService.js';
@@ -577,7 +577,10 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 		services.registerSingleton(IAgentSessionsService, () => services.createInstance(ChatHistoryModel));
 		const workspace = configurationService;
-		this._register(services.createInstance(SessionsWorkspaceContextService, options.workspace, (next: IWorkspace) => workspace.updateWorkspace(next)));
+		services.registerInstance(ISessionsWorkspaceContextService, {
+			getHostWorkspace: options.workspace,
+			updateWorkspace: next => workspace.updateWorkspace(next),
+		});
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IMarkerService, this._register(new MarkerService()));
 		const files = this._register(services.createInstance(SessionFileService, options.api, () => [...options.workspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment' as const, dirId: folder.id } })), ...sessions.sessions.filter(session => (session.providerId ?? provider.id) === provider.id).flatMap(session => [session.workspace, ...session.chats.map(chat => chat.workspace)].flatMap(workspace => workspace ? [{ uri: sessionWorkspaceUri(workspace), target: { type: 'session' as const, sessionId: session.backendSessionId ?? session.sessionId, path: workspace.root } }] : []))]));

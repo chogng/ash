@@ -14,7 +14,7 @@ export class NewChatInSessionWidget extends NewChatWidget {
 			focusInput: () => this.input.focus(),
 		}));
 		notice.domNode.textContent = message;
-		container.insertBefore(notice.domNode, this.input.inputContainerElement);
+		container.insertBefore(notice.domNode, this.input.composerForm);
 		notice.setVisible(false);
 		const claim = this._register(this.input.noticeHost.occupy(ChatInputNoticeLane.Onboarding, {
 			focusTarget: notice,

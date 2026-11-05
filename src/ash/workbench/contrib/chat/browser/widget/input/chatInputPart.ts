@@ -181,6 +181,11 @@ export interface ChatInputPartOptions {
 	readonly inputLabel?: string;
 	readonly inlineEdit?: { readonly descriptionId: string; readonly initialHeight: number; readonly reportError: (error: unknown) => void; };
 	readonly renderSecondaryToolbar?: boolean;
+	/** Places the shared context meter in the host's composer footer. */
+	readonly contextUsageInFooter?: boolean;
+	readonly accessibilityHelp?: () => string;
+	/** Lets the host adapt status text using its conversation and attachment policy. */
+	readonly statusText?: (state: ChatInputState, contexts: readonly ChatContextAttachment[], defaultText: string) => string;
 	/** Opens a fresh conversation through a model route supplied by the host. */
 	/** Host-owned permission policy presented immediately after the mode picker. */
 	readonly primaryPermissionPicker?: {
@@ -683,13 +688,20 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this._register(this.executeMenu.onDidChange(() => this.renderToolbarActions()));
 		this._register(presentations.onDidChange(menu => { if (menu === MenuId.ChatExecute) this.renderToolbarActions(); }));
 		this.renderToolbarActions();
+		if (options.contextUsageInFooter && this.inputFooter) {
+			this.createContextUsageToolbar(this.inputFooter, contextMenuService);
+		}
+		if (options.statusText) {
+			this._register(this.onDidChangeInput(() => this.renderStatus()));
+			this.renderStatus();
+		}
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(toDisposable(() => this.inputLifecycle.abort()));
 		this._register(toDisposable(() => this.conversationDrafts.clear()));
 		this._register(toDisposable(() => { this.logDictationSample(false); void this.stopDictation().catch(() => undefined); }));
 	}
 
-	protected setHistoryScope(scope: string | undefined): void {
+	public setHistoryScope(scope: string | undefined): void {
 		if (!this.history.setScope(scope)) return;
 		this.historyInputRevision++;
 		this.historySearch.clear();
@@ -894,6 +906,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	get changesActionsHost(): HTMLElement { return this.changesPill.domNode; }
 	get composerForm(): HTMLElement { return this.inputContainer; }
+	get composerFooter(): HTMLElement | undefined { return this.inputFooter; }
 
 	public createEditor(options: ChatInputEditorOptions): IChatInputEditor {
 		return this.editorProvider.create(options);
@@ -1254,6 +1267,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.state.interaction?.request.type === 'toolResultReview' ? localize('chat.resultReview.help', 'This tool has already executed. Tab to Results awaiting review to read its captured output. Share results sends it to the model; Skip results withholds it without undoing changes. Restoring supported file changes is a separate checkpoint operation.') : '',
 			this.options.workspacePickerDelegate ? localize('chat.workspace.help', 'The workspace picker chooses the Welcome submission target. In an empty window, use Tab to reach Workspace and Enter, Space or an arrow key to open it, or run Chat: Open Workspace Picker from the Command Palette. Use arrow keys to choose a trusted recent folder or workspace, Enter to select and Escape to return. With a target selected, submitting opens that workspace with the draft and attachments prefilled; it never sends automatically. A failed open keeps your draft.') : '',
 			this.contexts.map(attachment => attachment.name).join('\n'),
+			this.options.accessibilityHelp?.(),
 		].filter(Boolean).join('\n');
 	}
 
@@ -1836,7 +1850,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	protected renderStatus(): void {
-		const text = this.statusText(this.state);
+		const defaultText = this.statusText(this.state);
+		const text = this.options.statusText?.(this.state, this.contexts, defaultText) ?? defaultText;
 		const showNotifications = !this.state.aiDisabled && (!this.state.inputBlocked || !!this.delegate.draft);
 		const error = showNotifications && (this.state.error || (this.state.phase === 'error' ? text : ''));
 		this.notificationVisible.set(this.visible && showNotifications, undefined);

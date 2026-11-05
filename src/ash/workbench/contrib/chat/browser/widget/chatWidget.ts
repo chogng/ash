@@ -59,7 +59,7 @@ import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/co
 import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppModel.js';
 import { VoiceSessionController, pickVoiceConversation } from '../voiceClient/voiceSessionController.js';
 import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agent.js';
-import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions, type IChatWidgetViewOptions } from '../chat.js';
+import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions, type IChatWidgetViewOptions, type IChatWidgetViewState } from '../chat.js';
 import { ChatViewWelcomePart } from '../viewsWelcome/chatViewWelcomeController.js';
 
 /** The presentation consumes one conversation model owned by its product. */
@@ -469,6 +469,15 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		this.syncRecapPresence(visible);
 		this.input.setVisible(visible);
 		this.listWidget.setVisible(visible);
+	}
+
+	public getViewState(): IChatWidgetViewState {
+		const { visible, focus, ...state } = this.listWidget.getViewState();
+		return state;
+	}
+
+	public restoreViewState(state: IChatWidgetViewState): void {
+		this.listWidget.restoreViewState({ ...state, visible: this.visible, focus: undefined }, this.model.items);
 	}
 
 	public focus(item?: IChatListItem): void {

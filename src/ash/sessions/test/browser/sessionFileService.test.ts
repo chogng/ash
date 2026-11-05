@@ -24,7 +24,8 @@ import { ISessionsManagementService } from '../../services/sessions/common/sessi
 import { TestSessionsManagementService as SessionsManagementService } from '../../services/sessions/test/browser/testSessionsManagementService.js';
 import type { ISessionsProvider } from '../../services/sessions/common/sessionsProvider.js';
 import type { ISession, SessionId } from '../../services/sessions/common/session.js';
-import { SessionsWorkspaceContextService } from '../../services/workspace/browser/workspaceContextService.js';
+import { ISessionsWorkspaceContextService } from '../../services/workspace/browser/workspaceContextService.js';
+import { WorkspaceFolderManagementContribution } from '../../contrib/workspace/browser/workspaceFolderManagement.js';
 import { SessionFileService } from '../../contrib/providers/agentHost/browser/sessionFileService.js';
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { NullLoggerService } from '../../../platform/log/common/log.js';
@@ -44,7 +45,11 @@ test('Session files preserve their original directory through selection, directo
 		services.registerInstance(ISessionsService, sessions);
 		await sessions.initialize();
 		using workspace = new TestWorkspaceService({ id: 'host', folders: [] });
-		using workspaceSelection = services.createInstance(SessionsWorkspaceContextService, () => ({ id: 'host', folders: [] }), (next: import('../../../platform/workspace/common/workspace.js').IWorkspace) => workspace.updateWorkspace(next));
+		services.registerInstance(ISessionsWorkspaceContextService, {
+			getHostWorkspace: () => ({ id: 'host', folders: [] }),
+			updateWorkspace: next => workspace.updateWorkspace(next),
+		});
+		using workspaceFolders = services.createInstance(WorkspaceFolderManagementContribution);
 		services.registerInstance(IWorkspaceContextService, workspace);
 		const calls: unknown[] = [];
 		const host = createDisconnectedRendererApi();
@@ -203,7 +208,11 @@ test('restored file identity waits for backend routing independently of Session 
 		using sessions = services.createInstance(SessionsService);
 		services.registerInstance(ISessionsService, sessions);
 		using workspace = new TestWorkspaceService({ id: 'host', folders: [] });
-		using workspaceSelection = services.createInstance(SessionsWorkspaceContextService, () => ({ id: 'source', folders: [{ id: 'source', index: 0, name: 'source', uri: URI.file('/source') }] }), (next: import('../../../platform/workspace/common/workspace.js').IWorkspace) => workspace.updateWorkspace(next));
+		services.registerInstance(ISessionsWorkspaceContextService, {
+			getHostWorkspace: () => ({ id: 'source', folders: [{ id: 'source', index: 0, name: 'source', uri: URI.file('/source') }] }),
+			updateWorkspace: next => workspace.updateWorkspace(next),
+		});
+		using workspaceFolders = services.createInstance(WorkspaceFolderManagementContribution);
 		services.registerInstance(IWorkspaceContextService, workspace);
 		const calls: unknown[] = [];
 		const host = createDisconnectedRendererApi();

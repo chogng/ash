@@ -122,8 +122,18 @@
 }
 
 .ash-sessions-environment,
-.ash-sessions-chat-input-footer > .ash-sessions-chat-input-workspace {
+.ash-sessions-chat-input-workspace,
+.ash-sessions-composer-controls {
 	flex: 0 1 auto;
+}
+
+.ash-sessions-composer-controls,
+.ash-sessions-composer-controls > .ash-action-view-item {
+	min-width: 0;
+}
+
+.ash-sessions-composer-controls[hidden] {
+	display: none;
 }
 
 .ash-sessions-chat-input-workspace {

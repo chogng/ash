@@ -1,14 +1,15 @@
 import '../media/sessionsViewPane.css';
 import { getWindow, h } from '../../../../../base/browser/dom.js';
+import { autorun } from '../../../../../base/common/observable.js';
 import { observeResize } from '../../../../../base/browser/observer.js';
 import { AnimationFrameScheduler } from '../../../../../base/browser/scheduler.js';
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
 import { ViewPane, type IViewPaneOptions } from '../../../../../workbench/browser/parts/views/viewPane.js';
 import { SessionsViewRegistry } from '../../../../common/views.js';
 import { localize } from '../../../../../nls.js';
-import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
 import { SessionsList, type SessionsListPresentation } from './sessionsList.js';
+import { SessionsCatalogList, type SessionsCatalogAccessibility, type SessionsCatalogListInput } from './sessionsCatalogList.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 
@@ -27,40 +28,64 @@ export function registerSessionsNavigation(): IDisposable {
 	return registrations;
 }
 
+export interface SessionsCatalogListModel extends SessionsCatalogListInput, IDisposable {
+	attach(window: Window & typeof globalThis, isVisible: () => boolean): void;
+}
+
+interface SessionsCatalogPresentation {
+	readonly input: SyncDescriptor<SessionsCatalogListModel>;
+	readonly accessibility: SessionsCatalogAccessibility;
+}
+
 export class SessionsView extends ViewPane {
-	private list: SessionsList;
+	private list?: SessionsList;
+	private readonly catalogList?: SessionsCatalogList;
 	private hiddenListState: ReturnType<SessionsList['getViewState']> | undefined;
 	private readonly embedded: boolean;
-	private readonly restoreListState: AnimationFrameScheduler;
-	constructor(presentation: SessionsListPresentation, parent: HTMLElement, options: IViewPaneOptions, @ISessionsManagementService management: ISessionsManagementService, @IInstantiationService instantiation: IInstantiationService) {
-		const embedded = typeof presentation !== 'string';
+	private readonly restoreListState?: AnimationFrameScheduler;
+	constructor(presentation: SessionsListPresentation | SessionsCatalogPresentation, parent: HTMLElement, options: IViewPaneOptions, @IInstantiationService instantiation: IInstantiationService) {
+		const embedded = typeof presentation !== 'string' && 'openCommand' in presentation;
 		super(parent, embedded ? { ...options, headerSize: 32, minimumBodySize: 0 } : options);
 		this.embedded = embedded;
 		this.contentElement.classList.add('ash-sessions-navigation-view');
 		this.contentElement.classList.toggle('embedded', embedded);
-		const loading = this._register(new MutableDisposable());
-		const updateLoading = (): void => {
-			if (management.state === 'loading' && management.sessions.length > 0 && !loading.value) {
-				const progress = this.getProgressIndicator().show(true, 150);
-				loading.value = toDisposable(() => progress.done());
-			} else if (management.state !== 'loading') loading.clear();
-		};
-		this._register(management.onDidChange(updateLoading));
-		updateLoading();
+		if (typeof presentation !== 'string' && 'input' in presentation) {
+			const input = this._register(instantiation.createInstance(presentation.input));
+			const list = this.catalogList = this._register(instantiation.createInstance(SessionsCatalogList, this.contentElement, input, presentation.accessibility));
+			this._register(this.onDidChangeBodyVisibility(visible => list.setVisible(visible)));
+			input.attach(getWindow(this.element), () => this.isBodyVisible());
+			return;
+		}
 		const title = localize({ bundle: 'ash.sessions', key: 'sessions.list.header' }, 'Sessions');
 		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), title, presentation);
 		this.list = lists.get();
 		this.contentElement.append(this.list.element);
+		const loading = this._register(new MutableDisposable());
+		const loadingListener = this._register(new MutableDisposable());
+		const watchLoading = (list: SessionsList): void => {
+			loadingListener.value = autorun(reader => {
+				if (list.loading.read(reader)) {
+					if (!loading.value) {
+						const progress = this.getProgressIndicator().show(true, 150);
+						loading.value = toDisposable(() => progress.done());
+					}
+				} else {
+					loading.clear();
+				}
+			});
+		};
+		watchLoading(this.list);
+		this._register(lists.onDidChange(watchLoading));
 		this.restoreListState = this._register(new AnimationFrameScheduler(getWindow(this.element), () => {
 			const state = this.hiddenListState;
 			if (!state || !this.isVisible()) return;
 			this.hiddenListState = undefined;
-			this.list.restoreViewState(state);
+			this.list?.restoreViewState(state);
 		}));
 		const sizeObserver = this._register(new MutableDisposable());
 		if (embedded) {
 			const measure = this._register(new AnimationFrameScheduler(getWindow(this.element), () => {
-				if (this.list.element.isConnected) this.minimumBodySize = this.list.element.offsetHeight;
+				if (this.list?.element.isConnected) this.minimumBodySize = this.list.element.offsetHeight;
 			}));
 			const observeList = (list: SessionsList): void => {
 				sizeObserver.value = observeResize(list.element, () => measure.schedule());
@@ -71,18 +96,22 @@ export class SessionsView extends ViewPane {
 			this._register(this.onDidChangeBodyVisibility(visible => { if (visible) measure.schedule(); }));
 		}
 		this._register(lists.onDidChange(list => {
-			const previous = this.list;
+			const previous = this.list!;
 			const state = this.hiddenListState ?? previous.getViewState();
 			previous.element.replaceWith(list.element);
 			this.list = list;
 			this.hiddenListState = state;
-			if (this.isVisible()) { this.restoreListState.schedule(); }
+			if (this.isVisible()) { this.restoreListState?.schedule(); }
 		}));
 	}
 	public override get maximumSize(): number { return this.embedded ? this.minimumSize : super.maximumSize; }
 	public override setVisible(visible: boolean): void {
+		if (!this.list) {
+			super.setVisible(visible);
+			return;
+		}
 		if (!visible && this.isVisible()) {
-			this.restoreListState.cancel();
+			this.restoreListState?.cancel();
 			this.hiddenListState ??= this.list.getViewState();
 		}
 		super.setVisible(visible);
@@ -95,8 +124,8 @@ export class SessionsView extends ViewPane {
 		if (visible && this.hiddenListState) {
 			this.hiddenListState = { ...this.hiddenListState, focus: undefined };
 			// The sidebar host completes its mode switch and layout after mounting the pane.
-			this.restoreListState.schedule();
+			this.restoreListState?.schedule();
 		}
 	}
-	public focus(): void { this.list.focus(); }
+	public focus(): void { (this.list ?? this.catalogList)?.focus(); }
 }

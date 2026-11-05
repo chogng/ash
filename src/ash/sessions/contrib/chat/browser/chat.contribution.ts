@@ -6,15 +6,11 @@ import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/edit
 import { SessionSideChatEditor } from './sessionSideChatEditor.js';
 import { SessionSideChatEditorInput } from './sessionSideChatEditorInput.js';
 import './agentHostDelegation.js';
+import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
+import { ISessionsChatViewStateService, SessionsChatViewStateService } from './chatViewStateService.js';
 import { AGENT_SESSIONS_SCOPED_INPUT_HISTORY_SETTING } from './sessionsChatHistory.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
-import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
-import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
-import {
-	FOCUS_NEW_SESSION_WORKSPACE_PICKER_KEYBINDING, FOCUS_NEW_SESSION_WORKSPACE_PICKER_WHEN,
-	FOCUS_NEW_SESSION_ENVIRONMENT_PICKER_KEYBINDING, FOCUS_NEW_SESSION_ENVIRONMENT_PICKER_WHEN,
-} from './newChatPickerKeybinding.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -25,6 +21,8 @@ import { parseSessionIdentity } from '../../../services/sessions/common/sessionI
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
+
+registerSingleton(ISessionsChatViewStateService, SessionsChatViewStateService, InstantiationType.Delayed);
 
 registerAction2(NewChatInSessionsWindowAction);
 registerAction2(NewSessionFromNavigationAction);
@@ -99,36 +97,4 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).updateConfiguratio
 			},
 		},
 	}],
-});
-
-registerAction2(class FocusNewSessionWorkspacePickerAction extends Action2 {
-	constructor() {
-		super({
-			id: 'sessions.focusNewSessionWorkspacePicker',
-			title: localize2('sessions.focusNewSessionWorkspacePicker', 'Focus Project Picker'),
-			f1: true,
-			precondition: FOCUS_NEW_SESSION_WORKSPACE_PICKER_WHEN,
-			keybinding: { weight: KeybindingWeight.SessionsContrib, primary: FOCUS_NEW_SESSION_WORKSPACE_PICKER_KEYBINDING },
-		});
-	}
-
-	run(accessor: ServicesAccessor): void {
-		accessor.get(ISessionsConversationService).focusDraftPicker('workspace');
-	}
-});
-
-registerAction2(class FocusNewSessionEnvironmentPickerAction extends Action2 {
-	constructor() {
-		super({
-			id: 'sessions.focusNewSessionEnvironmentPicker',
-			title: localize2('sessions.focusNewSessionEnvironmentPicker', 'Focus Environment Picker'),
-			f1: true,
-			precondition: FOCUS_NEW_SESSION_ENVIRONMENT_PICKER_WHEN,
-			keybinding: { weight: KeybindingWeight.SessionsContrib, primary: FOCUS_NEW_SESSION_ENVIRONMENT_PICKER_KEYBINDING },
-		});
-	}
-
-	run(accessor: ServicesAccessor): void {
-		accessor.get(ISessionsConversationService).focusDraftPicker('environment');
-	}
 });
