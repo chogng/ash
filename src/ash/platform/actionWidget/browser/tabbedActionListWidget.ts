@@ -1,6 +1,6 @@
 import { addDisposableListener, h, isHTMLElement, isNode, stopEvent } from '../../../base/browser/dom.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
-import { ContextView, ContextViewFocusRestore, type ContextViewAnchor } from '../../../base/browser/ui/contextview/contextview.js';
+import { ContextView, ContextViewFocusRestore, type ContextViewAnchor, type ContextViewOptions } from '../../../base/browser/ui/contextview/contextview.js';
 import { TabList, type TabListItem } from '../../../base/browser/ui/tablist/tabList.js';
 import { RunOnceScheduler } from '../../../base/common/async.js';
 import { AnchorAxisAlignment, AnchorPosition } from '../../../base/common/layout.js';
@@ -49,6 +49,14 @@ export interface ITabbedActionListDetailsOptions {
 	readonly backLabel: string;
 	render(container: HTMLElement): IDisposable;
 	focus?(container: HTMLElement): void;
+}
+
+interface IActionPanelContentOptions extends Pick<ContextViewOptions, 'anchorAlignment' | 'anchorPosition'> {
+	readonly anchor: HTMLElement;
+	readonly width: number;
+	readonly ariaLabel: string;
+	render(container: HTMLElement, layout: () => void): IDisposable;
+	focus(container: HTMLElement): void;
 }
 
 /** Owns one anchored popup; changing pages retains the list's filter, scroll and pending action. */
@@ -193,12 +201,7 @@ export class TabbedActionListWidget extends Disposable {
 			tabId: `${options.user}.action-tab.${index}`, panelId: panel.id,
 		}));
 		let descriptors = describeTabs();
-		const layout = (): void => {
-			finishActionWidgetOpeningAnimation(root);
-			const maximum = Math.max(100, document.defaultView!.innerWidth - 16);
-			root.style.width = `${Math.min(maximum, options.width ?? list.layout(0))}px`;
-			this.contextViewService.layout();
-		};
+		const layout = () => this.layoutPopup(root, () => options.width ?? list.layout(0));
 		let renderedFooterTab: string | undefined;
 		const refresh = (): void => {
 			descriptors = describeTabs();
@@ -304,26 +307,71 @@ export class TabbedActionListWidget extends Disposable {
 		const extra = options.renderWidget?.(root);
 		if (extra) { lifetime.add(extra); }
 		refresh();
-		const anchor = options.anchor;
+		this.showPopup({
+			anchor: options.anchor,
+			content: root,
+			isTargetWithin: target => sidePanel?.contains(target) ?? false,
+			onHide: () => options.delegate.onHide(),
+		}, lifetime, () => {
+			if (options.isBodyCollapsed?.()) { options.focusFooter?.(); }
+			else if (initial.listOptions?.focusFilterOnOpen && initial.listOptions.filterVisible !== false) { list.focusFilter(); }
+			else { list.focus(); }
+		});
+	}
+
+	/** Hosts a custom body in the same anchored panel as the action list. */
+	public showContent(options: IActionPanelContentOptions): void {
+		this.hide();
+		const lifetime = new DisposableStore();
+		this.popup.value = lifetime;
+		const document = options.anchor.ownerDocument;
+		const root = h(document, 'div', {
+			className: 'ash-action-widget ash-tabbed-action-list',
+			attributes: { role: 'dialog', 'aria-label': options.ariaLabel },
+		});
+		const layout = () => this.layoutPopup(root, () => options.width);
+		lifetime.add(options.render(root, layout));
+		lifetime.add(addDisposableListener(document.defaultView!, 'resize', layout));
+		layout();
+		this.showPopup({
+			anchor: options.anchor,
+			content: root,
+			anchorAlignment: options.anchorAlignment,
+			anchorPosition: options.anchorPosition,
+		}, lifetime, () => options.focus(root));
+	}
+
+	private layoutPopup(root: HTMLElement, width: () => number): void {
+		finishActionWidgetOpeningAnimation(root);
+		const maximum = Math.max(100, root.ownerDocument.defaultView!.innerWidth - 16);
+		root.style.width = `${Math.min(maximum, width())}px`;
+		this.contextViewService.layout();
+	}
+
+	private showPopup(
+		options: Pick<ContextViewOptions, 'anchor' | 'content' | 'anchorAlignment' | 'anchorPosition' | 'isTargetWithin' | 'onHide'>,
+		lifetime: DisposableStore,
+		focus: () => void,
+	): void {
+		const { anchor, content } = options;
 		if (isHTMLElement(anchor) && anchor.hasAttribute('aria-expanded')) {
 			anchor.setAttribute('aria-expanded', 'true');
 			lifetime.add(toDisposable(() => anchor.setAttribute('aria-expanded', 'false')));
 		}
 		const shown = this.contextViewService.show({
-			anchor: options.anchor, content: root, presentation: 'plain', gap: 4,
+			...options,
+			presentation: 'plain',
+			gap: 4,
 			focusRestore: ContextViewFocusRestore.Previous,
 			blockOutsidePointer: true,
-			isTargetWithin: target => sidePanel?.contains(target) ?? false,
-			onHide: () => {
+			onHide: reason => {
 				if (this.popup.value === lifetime) { this.popup.clear(); }
-				options.delegate.onHide();
+				options.onHide?.(reason);
 			},
 		});
 		if (shown) {
-			root.classList.add(ACTION_WIDGET_ANIMATED_CLASS);
-			if (options.isBodyCollapsed?.()) { options.focusFooter?.(); }
-			else if (initial.listOptions?.focusFilterOnOpen && initial.listOptions.filterVisible !== false) { list.focusFilter(); }
-			else { list.focus(); }
+			content.classList.add(ACTION_WIDGET_ANIMATED_CLASS);
+			focus();
 		} else { this.popup.clear(); }
 	}
 

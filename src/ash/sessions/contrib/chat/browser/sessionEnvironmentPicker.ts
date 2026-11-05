@@ -114,6 +114,7 @@ export class SessionEnvironmentPicker extends Disposable {
 	setVisible(visible: boolean): void {
 		this.visible = visible;
 		if (!visible) {
+			this.dropdown?.hide();
 			this.connecting.clear();
 			this.folderAuthorization.clear();
 			this.dropdown?.element.removeAttribute('aria-busy');
@@ -126,7 +127,7 @@ export class SessionEnvironmentPicker extends Disposable {
 		if (!dropdown || !host) return;
 		const draft = this.draft;
 		const label = draft?.environment?.name ?? this.label(draft?.providerId, draft?.providerId ? this.providers.getProvider(draft.providerId)?.label : undefined);
-		host.hidden = !draft;
+		host.hidden = !this.visible || !draft;
 		const icon = draft?.providerId === LOCAL_AGENT_HOST_PROVIDER_ID ? Lxicon.local : Lxicon.remote;
 		dropdown.setIcon(icon);
 		dropdown.setLabel(label);

@@ -105,6 +105,25 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
 		const viewport = page.locator('.ash-chat-transcript-scrollable > .ash-scrollbar-viewport');
 		await expect(handle).toBeVisible();
+		const response = viewport.locator('.ash-chat-item-agentMessage').first();
+		const composer = page.locator('.ash-chat-input-container');
+		const stickyPrompt = page.locator('.ash-chat-transcript-scrollable > .ash-chat-sticky-prompt');
+		let previousWidth = 0;
+		for (const width of [660, 799, 800, 869, 870, 1280, 1365]) {
+			await page.setViewportSize({ width, height: 720 });
+			const [row, card, sticky] = await Promise.all([
+				response.boundingBox(),
+				composer.boundingBox(),
+				stickyPrompt.boundingBox(),
+			]);
+			expect(card!.width, `composer width at ${width}px`).toBeGreaterThanOrEqual(previousWidth - 1);
+			for (const column of [row!, sticky!]) {
+				expect(Math.abs(column.x - card!.x), `left edge at ${width}px`).toBeLessThan(1);
+				expect(Math.abs(column.x + column.width - (card!.x + card!.width)), `right edge at ${width}px`).toBeLessThan(1);
+			}
+			previousWidth = card!.width;
+		}
+		await page.setViewportSize({ width: 1280, height: 720 });
 		await viewport.evaluate(element => { element.scrollTop = 0; });
 		const rail = page.locator('.ash-prompt-timeline-gutter');
 		const marks = rail.locator('.ash-prompt-timeline-gutter-marks > span');
@@ -393,6 +412,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
 
+			await page.setViewportSize({ width: 1600, height: 900 });
 			await mockChatGPTRequests(page);
 			const catalog = chatGPTModelCatalog(locale);
 			const labels = locale === 'en' ? ['Instant', 'Medium', 'High', 'Extra High', 'Pro'] : ['即时', '中', '高', '极高', 'Pro'];
@@ -409,16 +429,79 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=light`);
 			const picker = page.locator('.ash-chat-input-model-action');
 			const choose = async (name: string): Promise<void> => {
+				const [modelTitle, presetLabel] = name.split(' · ') as [string, string];
 				await picker.click();
-				await page.getByRole('menuitemradio', { name, exact: true }).click();
+				const dialog = page.getByRole('dialog', { name: locale === 'en' ? 'Choose a chat model' : '选择聊天模型' });
+				const modelButton = dialog.locator('.ash-chat-slider-model-button');
+				const currentTitle = (await modelButton.textContent())?.split(' · ', 1)[0];
+				if (currentTitle !== modelTitle) {
+					await modelButton.click();
+					await page.getByRole('menuitemradio', { name: modelTitle.trim(), exact: true }).click();
+				}
+				if (presetLabel) {
+					await dialog.getByRole('button', { name: presetLabel.trim(), exact: true }).click();
+				}
+				await expect(modelButton).toHaveAccessibleName(name);
+				await page.keyboard.press('Escape');
 				await expect(picker).toHaveText(name);
 			};
 			await expect(picker).toHaveText(`GPT-6 · ${labels[0]}`);
-			await picker.click();
-			await expect(page.getByRole('menuitemradio')).toHaveCount(10);
+			await picker.press('Enter');
+			const dialog = page.getByRole('dialog', { name: locale === 'en' ? 'Choose a chat model' : '选择聊天模型' });
+			const modelButton = dialog.locator('.ash-chat-slider-model-button');
+			const slider = dialog.getByRole('slider');
+			const expectCentered = async () => {
+				await expect(dialog).toHaveCSS('width', '250px');
+				await expect(dialog).toBeInViewport({ ratio: 1 });
+				await expect.poll(async () => {
+					const button = (await picker.boundingBox())!;
+					const panel = (await dialog.boundingBox())!;
+					return Math.abs(panel.x + panel.width / 2 - (button.x + button.width / 2));
+				}).toBeLessThan(1);
+				const button = (await picker.boundingBox())!;
+				const panel = (await dialog.boundingBox())!;
+				expect(panel.y + panel.height).toBeLessThan(button.y);
+			};
+			await expect(dialog).toHaveClass(/\bash-tabbed-action-list\b/u);
+			const cornerRadius = await dialog.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-cornerRadius-large').trim());
+			await expect(dialog).toHaveCSS('border-top-left-radius', cornerRadius);
+			await expect(modelButton).toHaveAccessibleName(`GPT-6 · ${labels[0]}`);
+			await expect(modelButton).toBeFocused();
+			const [panelBounds, modelBounds, sliderBounds] = await Promise.all([
+				dialog.boundingBox(), modelButton.boundingBox(), slider.boundingBox(),
+			]);
+			expect(Math.abs(modelBounds!.x + modelBounds!.width / 2 - (panelBounds!.x + panelBounds!.width / 2))).toBeLessThan(1);
+			expect(modelBounds!.y + modelBounds!.height).toBeLessThan(sliderBounds!.y);
+			await page.keyboard.press('Enter');
+			await expect(dialog.getByRole('combobox')).toBeFocused();
+			const alternativeModel = dialog.getByRole('menuitemradio', { name: 'GPT-5.6 Sol', exact: true });
+			await expect(alternativeModel).toBeInViewport();
+			const [alternativeBounds, expandedButtonBounds] = await Promise.all([
+				alternativeModel.boundingBox(), modelButton.boundingBox(),
+			]);
+			expect(alternativeBounds!.y + alternativeBounds!.height).toBeLessThan(expandedButtonBounds!.y);
+			await expectCentered();
+			await modelButton.press('Enter');
+			await expect(modelButton).toBeFocused();
+			await page.keyboard.press('Tab');
+			await expect(slider).toBeFocused();
+			await page.keyboard.press('ArrowRight');
+			await expect(slider).toHaveAttribute('aria-valuetext', labels[1]!);
+			await expect(modelButton).toHaveAccessibleName(`GPT-6 · ${labels[1]}`);
+			await expect(slider).toBeFocused();
+			await expect(page.locator('.ash-chat-slider-tick')).toHaveCount(5);
 			await expect(page.getByRole('switch')).toHaveCount(0);
-			await testInfo.attach('chatgpt-model-families', { body: await page.getByRole('dialog').screenshot(), contentType: 'image/png' });
+			await testInfo.attach('chatgpt-model-families', { body: await dialog.screenshot(), contentType: 'image/png' });
 			await page.keyboard.press('Escape');
+			await expect(dialog).toBeHidden();
+			await expect(picker).toBeFocused();
+			for (const width of [1280, 870, 869, 660]) {
+				await page.setViewportSize({ width, height: 720 });
+				await picker.press('Enter');
+				await expectCentered();
+				await page.keyboard.press('Escape');
+			}
+			await page.setViewportSize({ width: 1280, height: 720 });
 			const expected = [
 				['gpt-6-instant', undefined], ['gpt-6-thinking', 'standard'], ['gpt-6-thinking', 'extended'],
 				['gpt-6-thinking', 'max'], ['gpt-6-pro', undefined],

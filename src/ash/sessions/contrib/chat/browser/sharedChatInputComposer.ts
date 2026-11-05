@@ -6,6 +6,7 @@ import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/b
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { autorun, type IObservable } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
@@ -37,6 +38,7 @@ export class SharedChatInputComposer extends Disposable {
 		container: HTMLElement,
 		delegate: ChatInputDelegate,
 		model: ChatWidgetModel,
+		chatPresentation: IObservable<boolean>,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IContextViewService contextViews: IContextViewService,
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
@@ -51,6 +53,38 @@ export class SharedChatInputComposer extends Disposable {
 		@IApprovalEnvironmentService approvalEnvironment: IApprovalEnvironmentService | undefined,
 	) {
 		super();
+		const permissionPicker: ChatInputPartOptions['primaryPermissionPicker'] = {
+			action: {
+				id: 'sessions.chat.permissions',
+				get label() {
+					const definition = approvalModeDefinition(model.inputState.approvalMode);
+					return localize(definition.label.key, definition.label.text);
+				},
+				get tooltip() { return localize('sessions.chat.permission.label', 'Permissions: {0}', this.label); },
+				get enabled() { return !model.inputState.aiDisabled && model.inputState.phase !== 'submitting'; },
+				run: () => this.input.openPermissionPicker(),
+			},
+			onDidChange: model.onDidChange,
+			actionProvider: {
+				getActions: () => [
+					...approvalModeDefinitions.map(definition => ({
+						id: definition.id,
+						label: localize(definition.label.key, definition.label.text),
+						tooltip: localize(definition.description.key, definition.description.text),
+						enabled: true,
+						checked: definition.id === model.inputState.approvalMode,
+						run: () => commands.executeCommand(`sessions.chat.permission.${definition.id}`, model),
+					})),
+					...(approvalEnvironment ? [{
+						id: OPEN_GUARDIAN_SETUP_COMMAND_ID,
+						label: localize('approvalEnvironment.title', 'Prepare review environment…'),
+						tooltip: '',
+						enabled: true,
+						run: () => commands.executeCommand(OPEN_GUARDIAN_SETUP_COMMAND_ID, model),
+					}] : []),
+				],
+			},
+		};
 		const input = this.input = instantiationService.createInstance(ChatInputPart, container, delegate, contextMenus, contextViews, accessibleViews, notifications, {
 			create: options => instantiationService.createInstance(ChatInputEditor, {
 				...options,
@@ -60,8 +94,11 @@ export class SharedChatInputComposer extends Disposable {
 				height: options.height ?? SESSIONS_COMPACT_INPUT_HEIGHT,
 			}),
 		} satisfies Pick<IChatInputEditorProvider, 'create'>, [], {
-			layout: 'compact', modePicker: 'visible', modelPickerPosition: 'trailing', configureModelInMenu: true, renderSecondaryToolbar: false, draftStorage: 'host',
+			layout: 'compact', modelPickerPosition: 'trailing', configureModelInMenu: true, renderSecondaryToolbar: false, draftStorage: 'host',
 			contextUsageInFooter: true,
+			get modePicker() { return chatPresentation.get() ? 'hidden' : 'visible'; },
+			get chatModelSlider() { return chatPresentation.get(); },
+			get showContextUsage() { return !chatPresentation.get(); },
 			accessibilityHelp: getSessionsChatAccessibilityHelp,
 			statusText: (state, contexts, status) => {
 				// Keep the draft welcome in place while the catalog loads. The host exposes aria-busy.
@@ -75,39 +112,12 @@ export class SharedChatInputComposer extends Disposable {
 				return status;
 			},
 			attachGitHubReference: (kind, signal) => attachSessionGitHubReference(kind, model, github, quickInput, signal),
-			primaryPermissionPicker: {
-				action: {
-					id: 'sessions.chat.permissions',
-					get label() {
-						const definition = approvalModeDefinition(model.inputState.approvalMode);
-						return localize(definition.label.key, definition.label.text);
-					},
-					get tooltip() { return localize('sessions.chat.permission.label', 'Permissions: {0}', this.label); },
-					get enabled() { return !model.inputState.aiDisabled && model.inputState.phase !== 'submitting'; },
-					run: () => this.input.openPermissionPicker(),
-				},
-				onDidChange: model.onDidChange,
-				actionProvider: {
-					getActions: () => [
-						...approvalModeDefinitions.map(definition => ({
-							id: definition.id,
-							label: localize(definition.label.key, definition.label.text),
-							tooltip: localize(definition.description.key, definition.description.text),
-							enabled: true,
-							checked: definition.id === model.inputState.approvalMode,
-							run: () => commands.executeCommand(`sessions.chat.permission.${definition.id}`, model),
-						})),
-						...(approvalEnvironment ? [{
-							id: OPEN_GUARDIAN_SETUP_COMMAND_ID,
-							label: localize('approvalEnvironment.title', 'Prepare review environment…'),
-							tooltip: '',
-							enabled: true,
-							run: () => commands.executeCommand(OPEN_GUARDIAN_SETUP_COMMAND_ID, model),
-						}] : []),
-					],
-				},
-			},
+			get primaryPermissionPicker() { return chatPresentation.get() ? undefined : permissionPicker; },
 		} satisfies ChatInputPartOptions);
+		this._register(autorun(reader => {
+			chatPresentation.read(reader);
+			input.refreshPresentation();
+		}));
 		const form = input.composerForm;
 		this._register(addDisposableListener(form, 'focusin', event => {
 			if (form.contains(event.relatedTarget as Node | null)) return;

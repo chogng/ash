@@ -131,9 +131,10 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		};
 		this._register((editor as DesktopEditorParts).onDidRevealActiveEditor(() => revealActiveEditor(true)));
 		this._register(editor.onDidChangeEditors(event => {
-			// A modal borrows the current entry. Opening or closing it does not navigate its underlying document groups.
-			if (event.kind === 'activeGroupChanged') { revealActiveEditor(); }
-			else if (event.kind === 'groupChanged' && event.groupId === editor.activeGroup.id && event.event.kind === 'activeEditorChanged') { revealActiveEditor(true); }
+			const activeGroup = editor.activeGroup.id;
+			const activeTabChanged = event.kind === 'groupChanged' && event.groupId === activeGroup && event.event.kind === 'activeEditorChanged';
+			// Retained Code groups can change while hidden in Chat. Only an explicit reveal may navigate to a hidden group.
+			if ((event.kind === 'activeGroupChanged' || activeTabChanged) && editor.isGroupVisible(activeGroup)) { revealActiveEditor(activeTabChanged); }
 		}));
 		this._register(toDisposable(() => {
 			for (const key of this.activityKeys.values()) { key.reset(); }

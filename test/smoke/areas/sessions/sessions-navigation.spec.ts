@@ -191,7 +191,9 @@ test('Artifacts keeps creation and ownership controls legible across themes', { 
 test('Sessions pages keep Code tabs separate and retain dirty files and Design state', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
-	const code = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
+	const modes = page.locator('.ash-window-mode-control');
+	const code = modes.getByRole('button', { name: 'Code', exact: true });
+	const chat = modes.getByRole('button', { name: 'Chat / Agents', exact: true });
 	const creator = navigation.getByRole('button', { name: 'Artifacts', exact: true });
 	const projects = navigation.getByRole('button', { name: 'Projects', exact: true });
 	await code.click();
@@ -202,7 +204,7 @@ test('Sessions pages keep Code tabs separate and retain dirty files and Design s
 	await file.waitForEditorFocus();
 	await page.keyboard.insertText('Keep this unsaved Code file');
 	const tabs = await codeTabs.allTextContents();
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	await chat.click();
 	await creator.click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	await expect(creator).toHaveAttribute('aria-current', 'page');
@@ -229,8 +231,8 @@ test('Sessions pages keep Code tabs separate and retain dirty files and Design s
 	await expect(codeEditor).toBeVisible();
 	await file.waitForEditorContents(text => text === 'Keep this unsaved Code file');
 	await expect(codeTabs).toHaveText(tabs);
-	await creator.focus();
-	await page.keyboard.press('Enter');
+	await chat.click();
+	await creator.press('Enter');
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	await expect(canvas).toBeVisible();
 	await expect.poll(() => world.evaluate(element => (element as HTMLElement).style.transform)).toBe(transform);

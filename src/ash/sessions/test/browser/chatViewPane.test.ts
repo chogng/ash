@@ -86,6 +86,7 @@ import { IGitHubService as ISessionsGitHubService } from '../../contrib/github/b
 import { IApprovalEnvironmentService } from '../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import { IFileTextModelService } from '../../../workbench/services/textmodelResolver/common/textModelResourceService.js';
 import assert from 'node:assert/strict';
+import { constObservable } from '../../../base/common/observable.js';
 import { test, teardown, suiteTeardown } from 'mocha';
 import { JSDOM } from 'jsdom';
 import type { ModelRef, QueueEnqueueParams, ServerNotification, Session as SessionDto, SessionCreateParams, Thread, ThreadTranscriptSnapshot } from '../../../../../.build/protocol/typescript/index.js';
@@ -1260,7 +1261,7 @@ async function sessionsInputFixture(send: ChatInputDelegate['send'] = async () =
 			openModelSettings: async () => { }, resolveInteraction: async () => { },
 		};
 		const composerResources = resources.add(new DisposableStore());
-		const composer = composerResources.add(services.createInstance(SharedChatInputComposer, document.body, delegate, model));
+		const composer = composerResources.add(services.createInstance(SharedChatInputComposer, document.body, delegate, model, constObservable(false)));
 		const input = composerResources.add(composer.input);
 		input.render(model.inputState);
 		return { input, model, storage, notices, identity, services, delegate, disposeInput: () => composerResources.dispose(), [Symbol.dispose]() { resources.dispose(); } };
@@ -1296,7 +1297,7 @@ for (const surface of ['chat', 'cowork'] as const) test(`Sessions ${surface} rec
 	fixture.services.registerSingleton(IChatAttachmentResolveService, () => fixture.services.createInstance(ChatAttachmentResolveService));
 	fixture.services.registerSingleton(ICoworkChatTipService, () => fixture.services.createInstance(CoworkChatTipService));
 	using composer = surface === 'chat'
-		? fixture.services.createInstance(SharedChatInputComposer, document.body, fixture.delegate, fixture.model)
+		? fixture.services.createInstance(SharedChatInputComposer, document.body, fixture.delegate, fixture.model, constObservable(false))
 		: undefined;
 	using input = composer?.input ?? fixture.services.createInstance(NewCoworkInputWidget, document.body, fixture.delegate, fixture.model, 'conversation');
 	input.render(fixture.model.inputState);

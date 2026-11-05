@@ -6,6 +6,7 @@ import { IActionViewItemService } from '../../../../platform/actions/browser/act
 import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { Action2, IMenuService, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
@@ -18,6 +19,7 @@ import {
 } from './newChatPickerKeybinding.js';
 import { SessionEnvironmentPicker } from './sessionEnvironmentPicker.js';
 import { SessionWorkspacePicker } from './sessionWorkspacePicker.js';
+import { ASH_CHAT_SELECTED_CONTEXT } from '../common/constants.js';
 
 const pickers = [
 	{
@@ -53,7 +55,10 @@ for (const [order, { kind, id, title, keybinding, when }] of pickers.entries()) 
 	});
 
 	// The keyboard command requires editor focus. The toolbar's native triggers own their enablement.
-	MenusRegistry.appendMenuItem(Menus.NewSessionChatInputToolbar, { command: { id, title }, group: 'navigation', order });
+	MenusRegistry.appendMenuItem(Menus.NewSessionChatInputToolbar, {
+		command: { id, title }, group: 'navigation', order,
+		when: kind === 'environment' ? ContextKeyExpr.not(ASH_CHAT_SELECTED_CONTEXT) : undefined,
+	});
 }
 
 class ComposerPickerActionViewItem extends ActionViewItem {
@@ -128,12 +133,15 @@ export class ComposerSessionControls extends Disposable {
 
 	setVisible(visible: boolean): void {
 		this.isVisible = visible;
-		for (const item of this.items.values()) item.setVisible(visible);
+		for (const item of this.items.values()) {
+			if (!item.isDisposed) item.setVisible(visible);
+		}
 	}
 
 	open(kind: ComposerPicker): void {
 		const picker = pickers.find(picker => picker.kind === kind);
-		if (picker && this.visible) this.items.get(picker.id)?.open();
+		const item = picker && this.items.get(picker.id);
+		if (this.visible && item && !item.isDisposed) item.open();
 	}
 }
 

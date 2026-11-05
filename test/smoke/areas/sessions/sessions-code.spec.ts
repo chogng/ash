@@ -130,18 +130,19 @@ test('Code Sessions runs Quick Diff commands through its editor services', async
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const commands = new QuickAccess(page);
 	await commands.runCommand('workbench.action.files.newUntitledFile');
-	const editor = page.locator('[data-part="editor"]');
-	const input = editor.locator('.stanza-editor-input');
-	await expect(input).toBeVisible();
-	await input.focus();
+	const content = page.locator('[data-part="editor"] .ash-editor-group:visible > .ash-editor-group-content');
+	const editor = new Editor(content);
+	const status = editor.element.locator('.stanza-editor-accessibility-status');
+	const peek = content.locator('.ash-quick-diff-peek');
+	await editor.waitForEditorFocus();
 	await commands.runCommand('scm.quickDiff.next');
-	await expect(editor.locator('.stanza-editor-accessibility-status')).toHaveText('No Quick Diff changes');
-	await expect(editor.locator('.ash-quick-diff-peek')).toHaveCount(0);
-	await input.focus();
+	await expect(status).toHaveText('No Quick Diff changes');
+	await expect(peek).toHaveCount(0);
+	await editor.waitForEditorFocus();
 	await commands.runCommand('scm.quickDiff.previous');
-	await expect(editor.locator('.stanza-editor-accessibility-status')).toHaveText('No Quick Diff changes');
+	await expect(status).toHaveText('No Quick Diff changes');
 	await commands.runCommand('scm.quickDiff.close');
-	await expect(editor.locator('.ash-quick-diff-peek')).toHaveCount(0);
+	await expect(peek).toHaveCount(0);
 });
 
 test('Code Sessions starts with dialog dependencies and confirms closing a dirty editor', async ({ target, workbench }) => {

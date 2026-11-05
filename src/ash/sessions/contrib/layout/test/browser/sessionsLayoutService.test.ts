@@ -190,7 +190,8 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 	test('opening an ordinary document from Cowork reveals its body after switching to Code', async () => {
 		using fixture = new EntryFixture();
 		await fixture.service.openEntry(chatEntry);
-		fixture.openDocument({ resource: URI.parse('ash-chat-transcript:/saved.md'), readOnly: true, initialText: 'Saved transcript' });
+		fixture.changeActiveDocument({ resource: URI.parse('ash-chat-transcript:/saved.md'), readOnly: true, initialText: 'Saved transcript' });
+		fixture.revealActiveEditor.fire();
 		await fixture.service.runOperation(async () => { });
 		await fixture.service.runOperation(async () => { });
 		assert.equal(fixture.service.isDocumentContent, true);
@@ -207,6 +208,22 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.service.isDocumentContent, true);
 		assert.equal(fixture.visible.get('editor'), true);
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), documentEntry.restoreCommand);
+	});
+
+	test('passive changes in a retained Code group preserve the Chat entry', async () => {
+		using fixture = new EntryFixture();
+		const nativeChat = { ...chatEntry, id: 'ashChat', conversationKind: 'code' } as const;
+		await fixture.service.openEntry(documentEntry);
+		fixture.changeActiveDocument({ resource: URI.parse('untitled:/retained-code-file') });
+		await fixture.service.openEntry(nativeChat);
+		assert.equal(fixture.groupVisibility.get('documents'), false);
+
+		const groupId = fixture.activeGroupId;
+		fixture.editorChanged.fire({ kind: 'activeGroupChanged', groupId });
+		fixture.changeActiveDocument({ resource: URI.parse('untitled:/another-retained-code-file') });
+		await fixture.service.runOperation(async () => { });
+		assert.equal(fixture.service.isDocumentContent, false);
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), nativeChat.restoreCommand);
 	});
 
 	test('disposal during conversation preparation stops queued entries and Part mutations', async () => {
@@ -253,7 +270,7 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		await fixture.service.runOperation(async () => { });
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), chatEntry.restoreCommand);
 		assert.equal(fixture.partChanges.length, before);
-		fixture.editorChanged.fire({ kind: 'activeGroupChanged', groupId: 1 });
+		fixture.revealActiveEditor.fire();
 		await fixture.service.runOperation(async () => { });
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), documentEntry.restoreCommand);
 	});
@@ -545,9 +562,10 @@ class EntryFixture extends Disposable {
 	public readonly service: SessionsLayoutService;
 	public readonly outputReveal = this._register(new Emitter<void>());
 	public readonly viewVisibility = this._register(new Emitter<{ id: string; location: ViewContainerLocation; visible: boolean; }>());
-	public openDocument(input: IResourceEditorInput): void {
+	public get activeGroupId() { return this.services.get(IEditorPart).activeGroup.id; }
+	public changeActiveDocument(input: IResourceEditorInput): void {
 		this.activeInput = input;
-		this.editorChanged.fire({ kind: 'groupChanged', groupId: this.services.get(IEditorPart).activeGroup.id, event: { kind: 'activeEditorChanged', editor: undefined } });
+		this.editorChanged.fire({ kind: 'groupChanged', groupId: this.activeGroupId, event: { kind: 'activeEditorChanged', editor: undefined } });
 	}
 
 	constructor(savedVisibility?: unknown, startupKind?: StartupKind) {

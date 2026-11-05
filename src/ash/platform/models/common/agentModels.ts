@@ -81,6 +81,7 @@ export interface ModelCatalogEntry {
 	readonly supportedReasoningEfforts?: readonly ModelReasoningEffortOption[];
 	readonly defaultReasoningEffort?: ModelReasoningEffort;
 	readonly effectiveReasoningEffort?: ModelReasoningEffort;
+	readonly presets?: readonly { readonly id: string; readonly label: string; readonly isPro?: boolean; readonly thinkingEffort?: string; }[];
 }
 
 export interface AdvisorConfig {

@@ -1,4 +1,6 @@
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
@@ -223,8 +225,20 @@ test.describe('Unified Chat sidebar', () => {
 		const sidebar = page.locator('.ash-chat-navigation');
 		const editor = page.locator('.ash-chatgpt-widget');
 		const chatGPTComposer = new Editor(editor);
-		const chatMode = page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true });
+		const modeControl = page.locator('.ash-window-mode-control');
+		const chatMode = modeControl.getByRole('button', { name: '聊天 / Agents', exact: true });
+		const codeMode = modeControl.getByRole('button', { name: '代码', exact: true });
+		await codeMode.click();
+		await expect(codeMode).toHaveAttribute('aria-pressed', 'true');
+		await new QuickAccess(page).runCommand('workbench.action.files.newUntitledFile');
+		const codeEditor = page.getByRole('textbox', { name: 'Untitled-1', exact: true });
+		await expect(codeEditor).toBeVisible();
+		await chatMode.click();
+		await expect(chatMode).toHaveAttribute('aria-pressed', 'true');
 		const modelButton = editor.locator('.ash-chat-input-model-action');
+		const webWelcome = editor.getByRole('heading', { level: 2 });
+		await expect(webWelcome).toBeVisible();
+		const welcome = await webWelcome.innerText();
 		await expect(modelButton).toHaveText('Fixture model');
 		await expect(modelButton).toBeEnabled();
 		await chatGPTComposer.waitForTypeInEditor('First Ash message');
@@ -238,6 +252,24 @@ test.describe('Unified Chat sidebar', () => {
 		const ashComposer = new Editor(ash);
 		await ashComposer.waitForEditorFocus();
 		await ashComposer.waitForEditorContents(text => text === 'First Ash message');
+		await expect(chatMode).toHaveAttribute('aria-pressed', 'true');
+		await expect(sidebar).toBeVisible();
+		await expect(ash.locator('.ash-chat-input-model-action')).toHaveText(ashFixtureModel.model);
+		await expect(codeEditor).toBeHidden();
+		await expect(ash.getByRole('heading', { level: 2 })).toHaveText(welcome);
+		const codeTools = ash.locator(':is(.ash-sessions-environment, .ash-chat-input-mode-selector, .ash-chat-input-permission-picker, .ash-chat-input-context-toolbar):visible');
+		await expect(codeTools).toHaveCount(0);
+		await ash.locator('.ash-chat-input-model-action').press('ArrowDown');
+		await expect(picker.locator('.ash-chat-model-slider-widget')).toBeVisible();
+		await expect(picker.getByRole('menuitemradio', { name: ashFixtureModel.model, exact: true })).toHaveAttribute('aria-checked', 'true');
+		await page.keyboard.press('Escape');
+		await codeMode.click();
+		await expect(ash.locator('.ash-chat-input-mode-selector')).toBeVisible();
+		await ashComposer.waitForEditorContents(text => text === 'First Ash message');
+		await chatMode.click();
+		await expect(codeTools).toHaveCount(0);
+		await ashComposer.waitForEditorContents(text => text === 'First Ash message');
+		await ashComposer.waitForEditorFocus();
 		await page.keyboard.press('Enter');
 		await expect(ash).toContainText('Answer from Ash');
 		const ashSessionId = await ash.getAttribute('data-session-id');
@@ -421,6 +453,14 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const ashRequests: string[] = [];
 			await using catalog = createAshModelServer(ashRequests);
 			await configureAshModel(catalog, application, workbench, testWorkspace.directory);
+			const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+			const projectName = 'Chat routing fixture';
+			try {
+				await connection.client.request(APP_SERVER_METHODS['project/create'], {
+					commandId: randomUUID(), projectId: randomUUID(), name: projectName, description: '',
+					materials: [{ kind: 'folder', name: 'Workspace', path: pathToFileURL(testWorkspace.directory).href }],
+				});
+			} finally { await connection.close(); }
 			const page = await workbench.openAgentsWindow(target.kind); const commands = new QuickAccess(page);
 			const newLabel = locale === 'en' ? 'New' : '新建';
 			const newChat = page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: newLabel, exact: true });
@@ -480,6 +520,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(modelMenu.getByRole('menuitemradio', { name: 'Fixture model', exact: true })).toHaveCount(0);
 			await expect(modelMenu.getByText(locale === 'en' ? 'New ChatGPT Chat with Model…' : '选择模型新建 ChatGPT 对话…', { exact: true })).toHaveCount(0);
 			await page.keyboard.press('Escape');
+			const projectPicker = ash.locator('.ash-sessions-workspace-picker');
+			await projectPicker.click();
+			await page.getByRole('menu').getByText(projectName, { exact: true }).click();
+			await expect(projectPicker).toHaveText(projectName);
 			await ashComposer.waitForEditorFocus();
 			await page.keyboard.press('Enter');
 			await expect(ash).toContainText('Answer from Ash');

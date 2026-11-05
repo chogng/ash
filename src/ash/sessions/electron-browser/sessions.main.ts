@@ -196,7 +196,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		let workspaceSelection = selectionFromWorkspace(workspace);
 		let workspaceGeneration = 0;
 		const initialWorkspaceReady = api.workspaceDirectoriesReady.then(async () => {
-			if (sessions.isDisposed || workspaceGeneration !== 0 || !api.appServer.isAvailable) return;
+			const state = await api.appServer.getConnectionState();
+			if (sessions.isDisposed || workspaceGeneration !== 0 || state !== 'ready') return;
 			const boundFolders = await Promise.all(initialWorkspace.folders.map(async folder =>
 				hasDevelopmentPermissions(await api.workspaceTrust.readWorkspaceDirectory(folder.id))));
 			if (!sessions.isDisposed && workspaceGeneration === 0 && boundFolders.every(Boolean)) {
@@ -213,7 +214,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			workspaceChange = workspaceChange.then(async () => {
 				if (sessions.isDisposed || generation !== workspaceGeneration) return;
 				await api.reloadWorkspaceDirectories();
-				if (sessions.isDisposed || generation !== workspaceGeneration || !api.appServer.isAvailable) return;
+				const state = await api.appServer.getConnectionState();
+				if (sessions.isDisposed || generation !== workspaceGeneration || state !== 'ready') return;
 				workspace = next;
 				workspaceSelection = selectionFromWorkspace(workspace);
 			}).catch(error => { if (!isCancellationError(error)) onUnexpectedError(error); });

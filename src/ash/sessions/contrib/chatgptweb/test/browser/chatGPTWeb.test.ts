@@ -148,7 +148,7 @@ suite('ChatGPT entry', () => {
 		assert.equal(entries[1]!.source, undefined);
 	});
 
-	test('Ash uses the Code conversation renderer inside the Chat workspace and restores it from the mode toggle', async () => {
+	test('Ash opens native conversations inside the Chat workspace and restores them from the mode toggle', async () => {
 		const values = new Map<string, string>();
 		using contexts = new ContextKeyService();
 		const entries: ISessionsEntry[] = [];
@@ -177,7 +177,7 @@ suite('ChatGPT entry', () => {
 
 	test('a retained Chat draft applies Ash model visibility while default model reads are pending', async () => {
 		const native = { model: { provider: 'openai', model: 'gpt-6-luna' }, displayName: 'GPT-6 Luna', longContext: null };
-		const web = { provider: 'chatgpt', model: JSON.stringify(['web', 'instant']) };
+		const web = { provider: 'chatgpt', model: 'web' };
 		const state = observableValue<ChatGPTState>('draft', {
 			...newChatState, localConversationId: 'draft', draft: '', attachments: [], voice: 'idle', voiceTranscript: [],
 			connected: true, networkAvailable: true, canQueue: false, pendingSync: false, busy: false, sending: false,

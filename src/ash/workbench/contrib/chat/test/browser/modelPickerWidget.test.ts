@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
+import type { TabbedActionListWidget } from '../../../../../platform/actionWidget/browser/tabbedActionListWidget.js';
 import type { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { IModelPickerDelegate } from '../../browser/widget/input/modelPicker/modelPickerActionItem.js';
-import type { ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
+import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../services/chat/common/modelCatalog.js';
+import { ChatModelSliderWidget } from '../../browser/widget/input/modelPicker/chatModelSliderWidget.js';
 import { ModelPickerWidget } from '../../browser/widget/input/modelPicker/modelPickerWidget.js';
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
@@ -38,5 +40,43 @@ test('An unavailable selection keeps its exact ID and disabled controls remain d
 		automatic = true; changes.fire();
 		assert.equal(button.textContent, 'Auto');
 		assert.equal(button.getAttribute('aria-disabled'), 'true');
+	} finally { dom.window.close(); }
+});
+
+test('The Chat slider displays effective native reasoning effort and adjusts it with the keyboard', async () => {
+	const dom = new JSDOM('<body><button></button><div></div></body>');
+	const { document } = dom.window;
+	setIconResolver(document, icon => getIconDefinition(icon));
+	try {
+		using resources = new DisposableStore();
+		const model: ModelCatalogEntry = {
+			model: { provider: 'openai', model: 'gpt-6-luna' }, displayName: 'GPT-6 Luna', longContext: null,
+			supportedReasoningEfforts: [{ effort: 'low' }, { effort: 'medium' }, { effort: 'high' }],
+			defaultReasoningEffort: 'low', effectiveReasoningEffort: 'medium',
+		};
+		let selected: ModelReasoningEffort | undefined;
+		const delegate: IModelPickerDelegate = {
+			onDidChangePresentation: Event.None,
+			getModels: () => [model], getSelectedModel: () => model.model, isAutomaticModel: () => false,
+			getSelectedReasoningEffort: () => selected, getModelsError: () => undefined,
+			selectModel: async () => { }, openSettings: async () => { },
+			selectReasoningEffort: async effort => { selected = effort; },
+		};
+		const panel = document.querySelector('div')!;
+		const picker = resources.add(new ChatModelSliderWidget(delegate, {
+			createInstance: () => ({
+				showContent: (options: Parameters<TabbedActionListWidget['showContent']>[0]) => resources.add(options.render(panel, () => { })),
+				dispose() { },
+				[Symbol.dispose]() { },
+			}),
+		} as unknown as IInstantiationService));
+		picker.show(document.querySelector('button')!);
+		const slider = () => panel.querySelector<HTMLElement>('[role="slider"]')!;
+		assert.equal(slider().getAttribute('aria-valuetext'), 'Medium');
+		slider().dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+		await Promise.resolve();
+		assert.equal(selected, 'high');
+		assert.equal(slider().getAttribute('aria-valuetext'), 'High');
+		assert.equal(document.activeElement, slider());
 	} finally { dom.window.close(); }
 });

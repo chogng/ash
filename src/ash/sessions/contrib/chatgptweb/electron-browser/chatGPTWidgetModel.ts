@@ -66,11 +66,12 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	) {
 		super();
 		const codeModelsChanged = observableSignalFromEvent(this, primary.models.onDidChangeModels);
-		this.webEntries = backend.state.map(state => state.models).map(families => families.flatMap(family => family.presets.map(preset => ({
-			model: { provider: 'chatgpt', model: JSON.stringify([family.id, preset.id]) },
-			displayName: family.presets.length === 1 ? family.title : `${family.title} · ${preset.label}`,
+		this.webEntries = backend.state.map(state => state.models).map(families => families.map(family => ({
+			model: { provider: 'chatgpt', model: family.id },
+			displayName: family.title,
 			longContext: null,
-		}))));
+			presets: family.presets,
+		})));
 		this.codeEntries = derived(reader => {
 			// Visibility is a local preference and can change while App Server reads are pending.
 			codeModelsChanged.read(reader);
@@ -169,17 +170,20 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 			canInterrupt: state.sending,
 			interruptKind: 'reply',
 			error: state.error || undefined,
+			// The destination row shows loading; an empty status suppresses the composer's fallback text.
 			status: state.voice === 'connecting' ? localize('sessions.chatgpt.voiceConnecting', 'Connecting voice…')
 				: state.voice === 'connected' ? localize('sessions.chatgpt.voiceConnected', 'Voice conversation is active')
 					: state.voice === 'stopping' ? localize('sessions.chatgpt.voiceStopping', 'Finishing voice conversation…')
-						: loading ? localize('sessions.loadingConversation', 'Loading conversation…')
+						: loading ? ''
 							: state.sending ? localize('sessions.chatgpt.replying', 'ChatGPT is replying…')
 								: state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : pendingCreationStatus(state),
 			queuedMessages: 0,
 			approvalMode: 'manual',
 			models: this.pickerEntries.get(),
 			canSelectModel: !state.busy && !state.sending && !state.managing && !voice,
-			selectedModel: this.webEntries.get().find(entry => entry.model.model === JSON.stringify([state.model, state.modelPreset]))?.model,
+			selectedModel: this.webEntries.get().find(entry => entry.model.model === state.model)?.model
+				?? this.webEntries.get().find(entry => entry.model.model === JSON.stringify([state.model, state.modelPreset]))?.model,
+			selectedPreset: state.modelPreset,
 			isAutomaticModel: false,
 			slashCommands: [],
 			skillSelectors: [],
@@ -191,10 +195,15 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		const state = this.backend.state.get();
 		if (state.busy || state.sending || state.managing || state.voice !== 'idle') return;
 		if (model.provider === 'chatgpt') {
-			for (const family of state.models) {
-				const preset = family.presets.find(candidate => JSON.stringify([family.id, candidate.id]) === model.model);
+			const family = state.models.find(candidate => candidate.id === model.model);
+			if (family) {
+				this.backend.setModel(family.id);
+				return;
+			}
+			for (const f of state.models) {
+				const preset = f.presets.find(candidate => JSON.stringify([f.id, candidate.id]) === model.model);
 				if (preset) {
-					this.backend.setModel(family.id, preset.id);
+					this.backend.setModel(f.id, preset.id);
 					return;
 				}
 			}
@@ -204,6 +213,12 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 			return;
 		}
 		throw new Error(localize('sessions.newChatModel.unavailable', 'The selected model is no longer available.'));
+	}
+
+	async selectPreset(presetId: string): Promise<void> {
+		const state = this.backend.state.get();
+		if (state.busy || state.sending || state.managing || state.voice !== 'idle') return;
+		this.backend.setModel(state.model, presetId);
 	}
 
 	async send(text: string, _mode?: unknown, _skills?: unknown, _contexts?: unknown, options?: ChatSubmissionOptions): Promise<void> {

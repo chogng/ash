@@ -68,6 +68,7 @@ export interface ChatInputState {
 	readonly skillSelectorsLoading?: boolean;
 	readonly selectedModel?: ModelRef;
 	readonly selectedReasoningEffort?: ModelReasoningEffort;
+	readonly selectedPreset?: string;
 	readonly isAutomaticModel: boolean;
 	readonly selectedAgent?: ChatAgent;
 	readonly agentName?: string;
@@ -97,6 +98,7 @@ export interface ChatInputDelegate {
 	openChanges?(revision?: string): Promise<void>;
 	readWorkspaceChanges?(): Promise<ChatChangesStatistics | undefined>;
 	selectModel(model: ModelRef): Promise<void>;
+	selectPreset?(presetId: string): Promise<void>;
 	selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
 	selectAutomaticModel?(): Promise<void>;
 	listAgents(): Promise<readonly ChatAgent[]>;

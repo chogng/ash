@@ -146,6 +146,7 @@ interface ChatInputToolbarState {
 	readonly canSelectModel?: boolean;
 	readonly selectedModel?: ModelRef;
 	readonly selectedReasoningEffort?: ModelReasoningEffort;
+	readonly selectedPreset?: string;
 	readonly isAutomaticModel: boolean;
 	readonly selectedAgent?: ChatAgent;
 	readonly agentName?: string;
@@ -173,6 +174,8 @@ export interface ChatInputPartOptions {
 	readonly configureModelInMenu?: boolean;
 	/** The host supplies its own catalog and model settings when false. */
 	readonly useWorkbenchModelManagement?: boolean;
+	readonly chatModelSlider?: boolean;
+	readonly showContextUsage?: boolean;
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	/** Mounts host-owned controls before the compact footer's model toolbar. */
 	readonly renderLeadingFooter?: (footer: HTMLElement) => IDisposable;
@@ -1583,6 +1586,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			canSelectModel: this.state.canSelectModel,
 			selectedModel: this.state.selectedModel,
 			selectedReasoningEffort: this.state.selectedReasoningEffort,
+			selectedPreset: this.state.selectedPreset,
 			isAutomaticModel: this.state.isAutomaticModel,
 			selectedAgent: this.state.selectedAgent,
 			agentName: this.state.agentName,
@@ -1601,6 +1605,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			state.canSelectModel === this.toolbarState.canSelectModel &&
 			sameModel(state.selectedModel, this.toolbarState.selectedModel) &&
 			state.selectedReasoningEffort === this.toolbarState.selectedReasoningEffort &&
+			state.selectedPreset === this.toolbarState.selectedPreset &&
 			state.isAutomaticModel === this.toolbarState.isAutomaticModel &&
 			state.selectedAgent?.name === this.toolbarState.selectedAgent?.name &&
 			state.selectedAgent?.sourceId === this.toolbarState.selectedAgent?.sourceId &&
@@ -1618,6 +1623,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.queueContextKeys.progress.set(this.state.inputBlocked === true);
 		});
 		this.renderToolbarActions();
+	}
+
+	/** Reapply host-owned controls when the presentation changes without a model update. */
+	public refreshPresentation(): void {
+		this.renderToolbarActions();
+		this.renderFooter();
 	}
 
 	private renderToolbarActions(): void {
@@ -1933,12 +1944,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.renderWorkspacePicker();
 		if (!this.footerContextToolbar || !this.footerContextAction) return;
 		const showWhenEmpty = this.options.layout === 'compact';
-		const showMeter = showWhenEmpty || this.state.contextUsage !== undefined;
+		const showMeter = this.options.showContextUsage !== false && (showWhenEmpty || this.state.contextUsage !== undefined);
 		this.footerContextToolbar.setActions(showMeter ? [this.footerContextAction] : []);
 		if (showMeter) {
 			this.contextUsageWidget?.update(this.state.contextUsage, showWhenEmpty);
 			if (!this.visible) this.contextUsageWidget?.hide();
 		} else {
+			this.contextUsageWidget?.hide();
 			this.contextUsageWidget = undefined;
 		}
 		this.footerContextToolbar.element.hidden = !showMeter;
@@ -1986,17 +1998,21 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (action instanceof MenuItemAction && action.id === this.dictationSession.action.id) { return this.instantiationService.createInstance(DictationActionViewItem, action, undefined, this.dictationSession.activeState); }
 		if (!(action instanceof ChatInputAction)) return undefined;
 		if (action.presentation === 'model') {
+			const options = this.options;
 			return this.modelPickerActionItem = this.instantiationService.createInstance(ModelPickerActionItem, action, {
 				configureInMenu: this.options.configureModelInMenu,
 				useWorkbenchModelManagement: this.options.useWorkbenchModelManagement,
+				get chatModelSlider() { return options.chatModelSlider; },
 				onDidChangePresentation: this.modelPickerPresentationChanged.event,
 				getModels: () => this.state.models,
 				canSelectModel: () => this.state.canSelectModel !== false,
 				getSelectedModel: () => this.state.selectedModel,
 				getSelectedReasoningEffort: () => this.state.selectedReasoningEffort,
+				getSelectedPreset: () => this.state.selectedPreset,
 				isAutomaticModel: () => this.state.isAutomaticModel,
 				getModelsError: () => this.state.modelsError,
 				selectModel: (model: ModelRef) => this.delegate.selectModel(model),
+				selectPreset: (presetId: string) => this.delegate.selectPreset?.(presetId) ?? Promise.resolve(),
 				selectAutomaticModel: this.delegate.selectAutomaticModel,
 				selectReasoningEffort: (effort: ModelReasoningEffort | undefined) => this.delegate.selectReasoningEffort(effort),
 				openSettings: () => this.delegate.openModelSettings(),

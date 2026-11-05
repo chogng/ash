@@ -1,6 +1,7 @@
 import { SessionBackgroundActivitiesControl } from './sessionBackgroundActivitiesControl.js';
 import { h } from '../../../../base/browser/dom.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
+import { autorun, observableFromEvent, observableValue, type IReader } from '../../../../base/common/observable.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -20,6 +21,8 @@ import type { ChatInputDelegate } from '../../../../workbench/contrib/chat/brows
 import type { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { ComposerSessionControls } from './sharedChatInputComposer.contribution.js';
 import { SharedChatInputComposer } from './sharedChatInputComposer.js';
+import { ChatWelcomeTitle } from './chatWelcomeTitle.js';
+import { ASH_CHAT_SELECTED_CONTEXT } from '../common/constants.js';
 import { SessionChatInputToolbar } from './sessionChatInputToolbar.js';
 import { NewSessionPickersAvailableContext } from './newChatPickerKeybinding.js';
 import { SessionsChatResponseFileChangesService } from './sessionTurnChanges.js';
@@ -34,7 +37,7 @@ interface INewChatWidgetOptions {
 	readonly createNewSession: () => void;
 }
 
-/** Owns the Code chat surface and its input while retaining the shared transcript and send pipeline. */
+/** Owns the native conversation and projects its composer for the active workspace. */
 export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 	declare readonly input: ChatInputPart;
 	private readonly composer: SharedChatInputComposer;
@@ -61,6 +64,9 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 	) {
 		let composer!: SharedChatInputComposer;
 		const turnChanges = instantiationService.createInstance(SessionsChatResponseFileChangesService, model);
+		const chatPresentation = observableFromEvent('native Chat presentation', contextKeys.onDidChangeContext,
+			() => contextKeys.getValue(ASH_CHAT_SELECTED_CONTEXT) === true);
+		const welcomeTitle = observableValue<string | null | undefined>('native chat welcome', undefined);
 		super(container, panelId, model, createNewSession, contextMenus, contextViews, commands, accessibleViews, notifications,
 			undefined, undefined, undefined,
 			(inputContainer, delegate) => {
@@ -86,12 +92,20 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 							throw error;
 						}
 					},
-				}, model);
+				}, model, chatPresentation);
 				return composer.input;
 			}, {
 			promptTimelineChanges: prompt => turnChanges.getChangesForRequest(prompt),
+			welcomeTitle,
 		}, instantiationService, dialogs, quickInput, widgets, contextKeys, voiceOnboarding);
 		this.composer = this._register(composer);
+		const shown = observableFromEvent(this, this.onDidChangeVisibility, () => this.visible);
+		const draftId = observableFromEvent(this, model.onDidChange, () => model.untitledSessionId);
+		const welcome = this._register(instantiationService.createInstance(ChatWelcomeTitle, (reader: IReader) => {
+			const id = chatPresentation.read(reader) && draftId.read(reader);
+			return id ? { id, revision: 0 } : undefined;
+		}, shown, false));
+		this._register(autorun(reader => welcomeTitle.set(chatPresentation.read(reader) ? welcome.title.read(reader) : undefined, undefined)));
 		const parent = this.input.element;
 		const inputContainer = this.input.composerForm;
 		const footer = this.input.composerFooter!;
@@ -107,7 +121,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		this.tips = this._register(instantiationService.createInstance(ChatInputTipPresenter, {
 			container: tipContainer,
 			isEligible: () => this.visible && configuration.getValue<boolean>(ChatConfiguration.TipsEnabled) !== false
-				&& !this.model.isNestedDraft && !this.model.inputState.aiDisabled && !this.submittedInput && this.model.items.length === 0
+				&& !chatPresentation.get() && !this.model.isNestedDraft && !this.model.inputState.aiDisabled && !this.submittedInput && this.model.items.length === 0
 				&& (this.model.inputState.phase === 'ready' || (this.model.untitledSessionId !== undefined && this.model.inputState.phase === 'loading'))
 				&& !this.model.inputState.interaction
 				&& !widgets.getAllWidgets().some(widget => widget !== this && widget.visible && widget.domNode.ownerDocument === parent.ownerDocument),
@@ -131,6 +145,10 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		const updatePickerAvailability = () => pickersAvailable.set(this.visible && !!model.untitledSessionId && !model.isNestedDraft
 			&& !model.inputState.aiDisabled && model.inputState.phase !== 'submitting');
 		this._register(this.onDidChangeVisibility(updatePickerAvailability));
+		this._register(autorun(reader => {
+			chatPresentation.read(reader);
+			this.tips.update();
+		}));
 		this._register(model.onDidChange(() => {
 			updatePickerAvailability();
 			if (this.composerThreadId !== model.threadId && this.composerThreadId !== undefined) {

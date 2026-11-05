@@ -175,7 +175,30 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await mockChatGPTRequests(page);
 			let releaseHistory!: () => void;
 			const history = new Promise<void>(resolve => { releaseHistory = resolve; });
-			await page.route('**/service/backend-api/conversations?*', async route => { await history; await route.fallback(); });
+			await page.route('**/service/backend-api/conversations?*', async route => {
+				await history;
+				await route.fulfill({
+					json: {
+						items: [
+							{ id: 'previous-chat', title: 'Previous conversation' },
+							{ id: 'fixture-chat', title: 'Synthetic conversation' },
+						],
+						total: 2,
+					},
+				});
+			});
+			await page.route('**/service/backend-api/conversation/previous-chat', route => route.fulfill({
+				json: {
+					title: 'Previous conversation',
+					current_node: 'answer',
+					mapping: {
+						answer: {
+							parent: null,
+							message: { id: 'answer', author: { role: 'assistant' }, content: { content_type: 'text', parts: ['Previous answer'] } },
+						},
+					},
+				},
+			}));
 			await page.goto(`/chatgptNavigation.html?locale=${locale}`);
 			const navigation = page.locator('.ash-chat-navigation');
 			const editor = page.locator('.ash-chatgpt-widget');
@@ -187,6 +210,8 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const conversation = navigation.getByRole('button', { name: 'Synthetic conversation', exact: true });
 			await expect(conversation).toBeVisible();
 			await expect(navigation.locator('.ash-chat-navigation-list')).toHaveAttribute('aria-busy', 'false');
+			await navigation.getByRole('button', { name: 'Previous conversation', exact: true }).click();
+			await expect(editor.locator('.ash-chat-transcript')).toContainText('Previous answer');
 			let releaseConversation!: () => void;
 			const pending = new Promise<void>(resolve => { releaseConversation = resolve; });
 			await page.route('**/service/backend-api/conversation/fixture-chat', async route => { await pending; await route.fallback(); });
@@ -194,13 +219,19 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				await conversation.click();
 				await expect(editor.locator('.ash-chat-transcript')).toHaveAttribute('aria-busy', 'true');
 				await expect(navigation.locator('.ash-chat-navigation-list')).toHaveAttribute('aria-busy', 'false');
-				// The row's accessible name includes its status during the read.
-				await expect(navigation.locator('[data-item="chatgpt:fixture-chat"] .ash-chat-navigation-item')).toBeEnabled();
+				const destinationRow = navigation.locator('[data-item="chatgpt:fixture-chat"]');
+				const destination = destinationRow.locator('.ash-chat-navigation-item');
+				await expect(destination).toBeEnabled();
+				await expect(destination).toHaveAccessibleName(locale === 'zh-CN' ? /正在加载对话…/u : /Loading conversation…/u);
+				await expect(destinationRow.locator('.ash-session-status-icon-progress')).toBeVisible();
+				await expect(editor.locator('.ash-chat-status')).toBeHidden();
+				await expect(editor.locator('.ash-chat-transcript')).toContainText('Previous answer');
 				await expect(editor.locator('.ash-chat-welcome h2')).toBeHidden();
 				await page.screenshot({ path: browserTests.info.outputPath(`chat-independent-loading-${locale}.png`) });
 			} finally { releaseConversation(); }
 			await expect(editor.locator('.ash-chat-transcript')).toContainText('Synthetic answer');
 			await expect(editor.locator('.ash-chat-transcript')).toHaveAttribute('aria-busy', 'false');
+			await expect(conversation).toHaveAttribute('aria-current', 'page');
 		});
 
 		test(`ChatGPT conversations load more on scroll and keyboard navigation (${locale})`, async function () {

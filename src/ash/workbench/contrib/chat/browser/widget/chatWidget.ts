@@ -97,6 +97,7 @@ export interface IChatWidgetModel extends IDisposable {
 	interrupt(): Promise<void>;
 	refreshChanges?(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
+	selectPreset?(presetId: string): Promise<void>;
 	selectReasoningEffort?(effort: ModelReasoningEffort | undefined): Promise<void>;
 	selectAutomaticModel?(): Promise<void>;
 	listAgents?(): Promise<readonly ChatAgent[]>;
@@ -356,6 +357,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			}),
 			readWorkspaceChanges: model.refreshChanges && (() => readWorkspaceChanges(commandService)),
 			selectModel: (model) => this.model.selectModel(model),
+			selectPreset: presetId => model.selectPreset?.(presetId) ?? Promise.resolve(),
 			selectReasoningEffort: effort => model.selectReasoningEffort?.(effort) ?? Promise.resolve(),
 			selectAutomaticModel: model.selectAutomaticModel?.bind(model),
 			listAgents: () => model.listAgents?.() ?? Promise.resolve([]),
@@ -731,7 +733,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const input = this.model.inputState;
 		const welcomeTitle = this.viewOptions?.welcomeTitle?.get();
 		const showWelcome = this.viewOptions?.showWelcome !== false && !hasConversation && !input.aiDisabled
-			&& (this.viewOptions?.welcomeTitle ? !!welcomeTitle : this.model.untitledSessionId !== undefined && !input.inputBlocked)
+			&& (welcomeTitle === undefined ? this.model.untitledSessionId !== undefined && !input.inputBlocked : !!welcomeTitle)
 			&& !this.voiceSessionController?.isActive;
 		this.welcome.render(showWelcome ? {
 			title: welcomeTitle ?? (input.mode === 'ask'

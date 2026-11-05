@@ -58,7 +58,8 @@ export interface IWorkspacePickerDelegate {
 /** Host routing receives the accepted snapshot before model send; the live editor may already hold another draft. */
 export interface IChatWidgetViewOptions {
 	readonly showWelcome?: boolean;
-	readonly welcomeTitle?: import('../../../../base/common/observable.js').IObservable<string | undefined>;
+	/** Use the default title for undefined, or hide the welcome for null. */
+	readonly welcomeTitle?: import('../../../../base/common/observable.js').IObservable<string | null | undefined>;
 	readonly configureModelInMenu?: boolean;
 	readonly showPromptTimeline?: boolean;
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
