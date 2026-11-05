@@ -179,7 +179,7 @@ export function registerAgentSessionActions(): void {
 	const restoreId = 'agentSession.restore';
 	const archiveAllId = 'workbench.action.chat.archiveAllAgentSessions';
 	registerAction2(class PinAgentSessionAction extends Action2 {
-		constructor() { super({ id: 'sessions.list.togglePin', title: localize2('sessions.list.pin', 'Pin chat') }); }
+		constructor() { super({ id: 'sessions.list.togglePin', title: localize2('sessions.list.pin', 'Pin') }); }
 		override run(accessor: ServicesAccessor, argument?: unknown): Promise<string> {
 			return accessor.get(IAgentSessionActionsService).togglePin(argument);
 		}

@@ -1303,7 +1303,7 @@ for (const locale of ['en', 'zh-CN'])
 		const taskB = list.getByRole('button', { name: 'Task from Host B', exact: true });
 		await taskB.focus();
 		await taskB.press('Shift+F10');
-		await page.getByRole('menuitem', { name: chinese ? '置顶聊天' : 'Pin chat', exact: true }).click();
+		await page.getByRole('menuitem', { name: chinese ? '置顶' : 'Pin', exact: true }).click();
 		await expect(pinned.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
 		await expect(list.getByRole('button', { name: 'Task from Host B', exact: true })).toHaveCount(1);
 		await expect(groups).toHaveText(chinese ? ['置顶', '项目', '聊天'] : ['Pinned', 'Projects', 'Chats']);
@@ -1360,12 +1360,12 @@ for (const locale of ['en', 'zh-CN'])
 			)
 			.toBe(true);
 		await taskA.press('Shift+F10');
-		await page.getByRole('menuitem', { name: chinese ? '置顶聊天' : 'Pin chat', exact: true }).click();
+		await page.getByRole('menuitem', { name: chinese ? '置顶' : 'Pin', exact: true }).click();
 		const pinnedA = pinned.getByRole('button', { name: 'Task from Host A', exact: true });
 		await expect(pinnedA).toBeVisible();
 		await expect(taskA).toHaveCount(0);
 		await pinnedA.press('Shift+F10');
-		await page.getByRole('menuitem', { name: chinese ? '取消置顶聊天' : 'Unpin chat', exact: true }).click();
+		await page.getByRole('menuitem', { name: chinese ? '取消置顶' : 'Unpin', exact: true }).click();
 		await expect(taskA).toBeVisible();
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
@@ -1393,7 +1393,7 @@ for (const locale of ['en', 'zh-CN'])
 		await expect(recent).toHaveAttribute('aria-expanded', 'false');
 		await expect(pinned.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
 		await pinned.getByRole('button', { name: 'Task from Host B', exact: true }).click({ button: 'right' });
-		await page.getByRole('menuitem', { name: chinese ? '取消置顶聊天' : 'Unpin chat', exact: true }).click();
+		await page.getByRole('menuitem', { name: chinese ? '取消置顶' : 'Unpin', exact: true }).click();
 		await expect(pinned).toHaveCount(0);
 		await expect(recent).toBeFocused();
 		await recent.press('ArrowRight');
