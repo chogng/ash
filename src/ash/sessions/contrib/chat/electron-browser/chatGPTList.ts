@@ -113,7 +113,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 					// Returning from Ash to the streaming conversation keeps the same ChatGPT selection.
 					disabled: state.managing || state.sending && (showSelection || !selected),
 					actionsDisabled: state.busy || state.sending,
-					defaultIcon: id.startsWith('local:') ? Lxicon.cowork : Lxicon.chat,
+					defaultIcon: id.startsWith('local:') ? Lxicon.cowork : Lxicon.chatSession,
 					iconId: iconKey ? storage.get(iconKey, StorageScope.PROFILE) : undefined,
 					setIcon: iconKey ? value => {
 						const current = chat.state.get();

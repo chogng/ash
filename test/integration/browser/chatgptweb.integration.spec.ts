@@ -185,6 +185,9 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	await expect(headers).toHaveText(['置顶', '最近']);
 	await expect(sidebar.locator('[data-item="chatgpt:fixture-other"]')).toHaveCount(0);
 	const row = sidebar.locator('[data-item="chatgpt:fixture-chat"].ash-chat-navigation-row');
+	const sessionIcon = '[data-ash-icon-id="chat-session"]';
+	await expect(sidebar.locator('[data-item="chatgpt:fixture-pinned"]').locator(sessionIcon)).toBeVisible();
+	await expect(row.locator(sessionIcon)).toBeVisible();
 	const item = row.locator('.ash-chat-navigation-item');
 	const actions = row.locator('.ash-chat-navigation-actions');
 	const recent = sidebar.locator('[data-group="recent"]');
@@ -298,7 +301,7 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 	const trigger = row.getByRole('button', { name: '更换「Synthetic conversation」的图标' });
 	const picker = page.getByRole('dialog', { name: '更换图标', exact: true });
 	const search = picker.getByRole('combobox', { name: '搜索图标' });
-	const defaultIcon = trigger.locator('[data-ash-icon-id="chat"]');
+	const defaultIcon = trigger.locator('[data-ash-icon-id="chat-session"]');
 	await expect(defaultIcon).toBeVisible();
 	await expect(defaultIcon).toHaveCSS('width', '18px');
 	await expect.poll(async () => {
@@ -362,9 +365,9 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
 	await trigger.click();
 	await picker.getByRole('button', { name: '恢复默认图标' }).click();
-	await expect(trigger.locator('[data-ash-icon-id="chat"]')).toBeVisible();
+	await expect(trigger.locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
 	await page.reload();
-	await expect(trigger.locator('[data-ash-icon-id="chat"]')).toBeVisible();
+	await expect(trigger.locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
 });
 
 test('Work rows use the same leading action and persist an independent icon', async ({ page }) => {
@@ -378,7 +381,7 @@ test('Work rows use the same leading action and persist an independent icon', as
 	await picker.getByRole('option', { name: 'folder', exact: true }).click();
 	await page.reload();
 	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
-	await expect(page.getByRole('button', { name: '更换「Synthetic conversation」的图标' }).locator('[data-ash-icon-id="chat"]')).toBeVisible();
+	await expect(page.getByRole('button', { name: '更换「Synthetic conversation」的图标' }).locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
 });
 
 test('ChatGPT dictation inserts text at the cursor and cancels on navigation without sending', async ({ page }) => {
