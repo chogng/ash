@@ -646,7 +646,7 @@ test('Sessions merges legacy selections and restores one order, active selection
 	using storage = createTestStorage();
 	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	const chatDraft = { kind: 'untitled', session: { untitledSessionId: 'saved-chat', title: 'Chat draft', workspace: { type: 'current' } } };
-	const firstCode = { kind: 'untitled', session: { untitledSessionId: 'saved-code-first', title: 'New code session', workspace: { type: 'current' }, modelDefaults: { workspace: null, effort: 'high' } } };
+	const firstCode = { kind: 'untitled', session: { untitledSessionId: 'saved-code-first', title: 'New code session', workspace: { type: 'current' }, automaticTitle: true, modelDefaults: { workspace: null, effort: 'high' } } };
 	const secondCode = { kind: 'untitled', session: { untitledSessionId: 'saved-code-second', title: 'Second Code draft', workspace: { type: 'current' } } };
 	storage.store('sessions.viewState', JSON.stringify({
 		version: 1, pages: {
@@ -720,10 +720,11 @@ test('a choice during catalog loading supersedes the saved foreground selection'
 test('invalid persisted Sessions arrangements are rejected at service creation', () => {
 	using storage = createTestStorage();
 	using sessions = new FakeSessionService([]);
-	const draft = { untitledSessionId: 'draft', title: 'Draft', workspace: { type: 'current' }, modelDefaults: { workspace: null, effort: 'high' } };
+	const draft = { untitledSessionId: 'draft', title: 'Draft', workspace: { type: 'current' }, automaticTitle: true, modelDefaults: { workspace: null, effort: 'high' } };
 	for (const reference of [
 		{ kind: 'session', sessionId: '', threadId: 'thread' },
 		{ kind: 'untitled', session: { ...draft, workspace: { type: 'ssh', root: '/workspace' } } },
+		{ kind: 'untitled', session: { ...draft, automaticTitle: false } },
 		{ kind: 'untitled', session: { ...draft, modelDefaults: { ...draft.modelDefaults, effort: 'invalid' } } },
 	]) {
 		storage.store('sessions.viewState', JSON.stringify({

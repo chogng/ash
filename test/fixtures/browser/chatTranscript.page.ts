@@ -129,7 +129,6 @@ import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/edi
 import { IUntitledTextEditorService } from '../../../src/ash/workbench/services/untitled/common/untitledTextEditorService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
-import { IContextKeyService } from '../../../src/ash/platform/contextkey/common/contextkey.js';
 import { ChatContextKeys } from '../../../src/ash/workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { ForkConversationActionId, type IForkConversationOptions } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatForkActions.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
