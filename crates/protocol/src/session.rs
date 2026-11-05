@@ -108,6 +108,10 @@ pub enum SessionExecutionTarget {
 pub struct SessionThread {
     pub thread_id: ThreadId,
     pub title: String,
+    /// Latest saved conversation recap on this branch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub recap: Option<String>,
     #[ts(type = "number")]
     pub created_at_unix_ms: u64,
     /// Latest Turn activity or Thread creation. Renaming, configuration and archive do not advance it.

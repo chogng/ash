@@ -221,7 +221,9 @@
       "enum": [
         "advisor",
         "review",
-        "commit"
+        "commit",
+        "threadTitle",
+        "threadRecap"
       ]
     },
     "ModelReasoningEffortOption": {

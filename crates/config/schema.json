@@ -127,6 +127,33 @@
             }
           ]
         },
+        "threadRecapEnabled": {
+          "default": false,
+          "description": "Opts in to automatic conversation recaps.",
+          "type": "boolean"
+        },
+        "threadRecapModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional dedicated model for recaps. None uses a catalog recommendation."
+        },
+        "threadTitleModel": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional dedicated model for automatic thread titles. None uses a catalog recommendation."
+        },
         "timeContext": {
           "$ref": "#/$defs/TimeContextConfig",
           "default": {
@@ -243,6 +270,22 @@
           "type": "object"
         }
       ]
+    },
+    "ClaudePreToolUseHook": {
+      "additionalProperties": false,
+      "description": "Compatibility contract for a Claude PreToolUse command.",
+      "properties": {
+        "timeoutSeconds": {
+          "format": "uint32",
+          "maximum": 600,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "timeoutSeconds"
+      ],
+      "type": "object"
     },
     "CodebaseAutomaticContext": {
       "description": "Whether code retrieval is automatically added to the first model invocation of a Turn.",
@@ -915,6 +958,16 @@
       "properties": {
         "action": {
           "$ref": "#/$defs/HookAction"
+        },
+        "claudePreToolUse": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ClaudePreToolUseHook"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "enablement": {
           "$ref": "#/$defs/HookEnablement",
@@ -1890,6 +1943,7 @@
           "commandFileAccess": "directoryWrite",
           "commandNetworkAccess": "denied"
         },
+        "threadRecapEnabled": false,
         "timeContext": {
           "mode": "date"
         },

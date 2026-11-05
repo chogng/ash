@@ -866,6 +866,7 @@ fn session() -> Session {
             summary: None,
         },
         threads: vec![SessionThread {
+            recap: None,
             manager: None,
             thread_id: ThreadId::new("current").unwrap(),
             title: "main".into(),

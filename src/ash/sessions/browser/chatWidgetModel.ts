@@ -97,6 +97,7 @@ export class ChatWidgetModel extends Disposable {
 	private readonly selectedApprovalModes = observableValue<ReadonlyMap<string, ApprovalMode>>(this, new Map());
 	// A New Chat's key is replaced with its Thread ID when the first message materializes it.
 	private readonly selectedReasoningEfforts = new Map<string, { model: string; effort: ModelReasoningEffort | undefined; }>();
+	private readonly recapViews = new Map<string, { sessionId: SessionId; threadId: ThreadId; focused: boolean; }>();
 	private _slashCommands: readonly SlashCommandDefinition[] = [];
 	private _skillSelectors: readonly SkillSelectorDefinition[] = [];
 	private skillCatalogGeneration = 0;
@@ -140,7 +141,12 @@ export class ChatWidgetModel extends Disposable {
 		this._register(chatService.onDidChangeInteractionOffer(change => {
 			if (change.sessionId === this.sessionId && change.threadId === this.threadId) this._onDidChange.fire();
 		}));
-		this._register(chatService.onDidBecomeReady(() => void this.reconnect()));
+		this._register(chatService.onDidBecomeReady(() => {
+			for (const [surface, view] of this.recapViews) {
+				void this.reportRecapPresence(view.sessionId, view.threadId, surface, view.focused).catch(() => { });
+			}
+			void this.reconnect();
+		}));
 		this._register(execution.onDidChange(() => void this.loadDefaultApprovalMode()));
 		this._register(this.languageModels.onDidChangeModels(() => void this.loadModels()));
 		this._register(chatService.onDidChangeQueue(() => void this.loadQueue()));
@@ -635,8 +641,22 @@ export class ChatWidgetModel extends Disposable {
 		return this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
 	}
 
-	async executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void> {
+	reportRecapPresence(sessionId: SessionId, threadId: ThreadId, surface: string, focused: boolean | null): Promise<void> {
+		if (focused === null) this.recapViews.delete(surface);
+		else this.recapViews.set(surface, { sessionId, threadId, focused });
+		return this.chatService.setRecapPresence?.(sessionId, threadId, surface, focused) ?? Promise.resolve();
+	}
+
+	async executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void | string> {
 		this.assertAIEnabled();
+		if (name === 'recap') {
+			const operation = this.captureOperation({ signal: submissionSignal });
+			const active = this.activeSession;
+			if (!active || !this.chatService.generateRecap) throw new Error(localize('chat.recap.needsConversation', 'Finish a conversation turn before using /recap.'));
+			const recap = await this.chatService.generateRecap(active.session.sessionId, active.threadId);
+			this.requireCurrentOperation(operation);
+			return recap;
+		}
 		if (name !== 'compact' && name !== 'advisor') {
 			await this.send(`/${name}${argumentsText ? ` ${argumentsText}` : ''}`, this.mode, undefined, undefined, { signal: submissionSignal });
 			return;

@@ -748,6 +748,15 @@ pub struct ConfigReadResult {
     pub approval_review_model: ApprovalReviewModelSelectionDto,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
+    pub thread_title_model: Option<ModelRefDto>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub thread_recap_model: Option<ModelRefDto>,
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    pub thread_recap_enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
     pub code_review_model: Option<ModelRefDto>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
@@ -919,6 +928,18 @@ pub struct ConfigUpdateParams {
     #[schemars(with = "Option<ApprovalReviewModelSelectionDto>")]
     #[ts(as = "Option<ApprovalReviewModelSelectionDto>", optional = nullable)]
     pub approval_review_model: Patch<ApprovalReviewModelSelectionDto>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<ModelRefDto>")]
+    #[ts(as = "Option<ModelRefDto>", optional = nullable)]
+    pub thread_title_model: Patch<ModelRefDto>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<ModelRefDto>")]
+    #[ts(as = "Option<ModelRefDto>", optional = nullable)]
+    pub thread_recap_model: Patch<ModelRefDto>,
+    #[serde(default, skip_serializing_if = "Patch::is_missing")]
+    #[schemars(with = "Option<bool>")]
+    #[ts(as = "Option<bool>", optional = nullable)]
+    pub thread_recap_enabled: Patch<bool>,
     #[serde(default, skip_serializing_if = "Patch::is_missing")]
     #[schemars(with = "Option<ModelRefDto>")]
     #[ts(as = "Option<ModelRefDto>", optional = nullable)]

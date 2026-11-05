@@ -44,7 +44,9 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
                 origin: Default::default(),
             },
             session_id: ash_protocol::SessionId::new("session_1").expect("test ID is non-empty"),
+            preview: None,
             thread: SessionThread {
+                recap: None,
                 manager: None,
                 thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
                 title: "test".into(),

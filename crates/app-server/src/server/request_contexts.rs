@@ -763,6 +763,29 @@ impl super::team_operations::TeamRequestProcessorContext for AppServer {
 }
 
 impl super::operations::AgentRequestProcessorContext for AppServer {
+    fn set_recap_presence(
+        &self,
+        connection: u64,
+        thread: ash_protocol::ThreadId,
+        surface: String,
+        focused: Option<bool>,
+    ) {
+        if let Some(worker) = &self.thread_recaps {
+            self.updates
+                .set_recap_presence(worker, connection, thread, surface, focused);
+        }
+    }
+    fn generate_recap(
+        &self,
+        thread: &ash_protocol::ThreadId,
+    ) -> Result<String, core_api::CoreError> {
+        self.thread_recaps
+            .as_ref()
+            .ok_or_else(|| {
+                core_api::CoreError::Execution("Conversation recaps are unavailable.".into())
+            })?
+            .manual(thread)
+    }
     fn change_session_directory_request(
         &self,
         mutation: super::operations::SessionMutation,
@@ -805,6 +828,7 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
                     expected_ide,
                 )
             },
+            |request, updates| self.schedule_thread_title(request, updates),
         )
     }
     fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_ {

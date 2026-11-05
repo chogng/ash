@@ -354,6 +354,14 @@ async function readToolResource(connection: AppServerProtocolClient, source: Par
 
 export function createAppServerAgentThreadService(connection: AppServerProtocolClient, remoteHost?: string | { readonly authority: string; }, snapshots?: IAgentHostResourceService): IAgentThreadService {
 	return {
+		setRecapPresence: async params => {
+			await appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'setRecapPresence', threadId: params.threadId, surface: params.surface, focused: params.focused }));
+		},
+		generateRecap: async params => {
+			const result = await appServerRequest(connection, 'session/request', sessionRequest(params, { type: 'generateRecap', threadId: params.threadId }));
+			if (result.type !== 'recap') throw new TypeError('Expected a conversation recap');
+			return result.value;
+		},
 		canCreateSideChat: () => connection.capabilities?.contracts.sideChats?.version === 1,
 		canMoveThreadToSession: () => connection.capabilities?.contracts.moveThreadToSession?.version === 1,
 		moveThreadToSession: async params => {
@@ -1052,6 +1060,7 @@ function toAgentSession(session: SessionDto, remoteHost?: string | { readonly au
 			title: thread.title,
 			createdAtUnixMs: thread.createdAtUnixMs,
 			lastActivityAtUnixMs: thread.lastActivityAtUnixMs ?? undefined,
+			...(thread.recap != null ? { recap: thread.recap } : {}),
 			status: thread.status,
 			parentThreadId: thread.parentThreadId,
 			forkedFromId: thread.forkedFromId,

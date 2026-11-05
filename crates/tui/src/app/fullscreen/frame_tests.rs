@@ -1302,6 +1302,7 @@ fn agent_thread_switcher_starts_at_the_empty_input_cursor_column() {
         manager: Default::default(),
         threads: vec![
             SessionThread {
+                recap: None,
                 manager: None,
                 thread_id: root_id.clone(),
                 title: "Main".into(),
@@ -1315,6 +1316,7 @@ fn agent_thread_switcher_starts_at_the_empty_input_cursor_column() {
                 status: ThreadStatus::Active,
             },
             SessionThread {
+                recap: None,
                 manager: None,
                 thread_id: ThreadId::new("child").unwrap(),
                 title: "Child".into(),
@@ -2166,6 +2168,7 @@ fn manager_session(
             summary: None,
         },
         threads: vec![SessionThread {
+            recap: None,
             manager: None,
             thread_id: ThreadId::new(id).unwrap(),
             title: "main".into(),

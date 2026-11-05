@@ -20,6 +20,8 @@ pub struct ThreadCatalogRecord {
     pub session_id: SessionId,
     pub thread: SessionThread,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preview: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[serde(alias = "workspace")]
     pub execution_target: Option<ash_protocol::SessionExecutionTarget>,
     /// Retained in the catalog so listing Sessions never replays histories to find a model.
@@ -48,7 +50,7 @@ pub fn session_from_catalog(
         .iter()
         .find(|record| record.thread.thread_id.as_str() == session_id.as_str())
         .unwrap_or(first);
-    let title = root.thread.title.clone();
+    let title = catalog_display_title(root).to_owned();
     let created_at_unix_ms = root.thread.created_at_unix_ms;
     let status = if records
         .iter()
@@ -73,11 +75,22 @@ pub fn session_from_catalog(
             .into_iter()
             .map(|mut record| {
                 // The outer catalog owns this fact. Old nested metadata must never overwrite it.
+                if record.thread.title.is_empty() {
+                    record.thread.title = record.preview.take().unwrap_or_default();
+                }
                 record.thread.manager = Some(record.manager);
                 record.thread
             })
             .collect(),
     })
+}
+
+fn catalog_display_title(record: &ThreadCatalogRecord) -> &str {
+    if record.thread.title.is_empty() {
+        record.preview.as_deref().unwrap_or_default()
+    } else {
+        &record.thread.title
+    }
 }
 
 fn catalog_session_manager(

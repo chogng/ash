@@ -14,6 +14,7 @@ import { productLanguagePackCatalogs } from '../../../../services/localization/c
 for (const [kind, purpose, otherPurpose] of [
 	['codeReviewModel', ModelPurpose.Review, ModelPurpose.Commit],
 	['commitMessageModel', ModelPurpose.Commit, ModelPurpose.Review],
+	['threadTitleModel', ModelPurpose.ThreadTitle, ModelPurpose.Commit],
 ] as const) {
 	test(`${kind} follows catalog recommendations while retaining a saved unmarked model`, async () => {
 		using resources = new DisposableStore();
@@ -38,7 +39,7 @@ for (const [kind, purpose, otherPurpose] of [
 			const listener = resources.add(model.onDidChange(() => { if (selector().enabled) { listener.dispose(); resolve(); } }));
 		});
 		let loaded = ready(); model.setVisible(true); await loaded;
-		assert.deepEqual(selector().options.map(option => option.label), [kind === 'codeReviewModel' ? 'Follow Current Model' : 'Inherit conversation model', 'Recommended', 'Saved']);
+		assert.deepEqual(selector().options.map(option => option.label), [kind === 'threadTitleModel' ? 'Automatic' : kind === 'codeReviewModel' ? 'Follow Current Model' : 'Inherit conversation model', 'Recommended', 'Saved']);
 		assert.equal(selector().value, modelRefIdentity(saved));
 		uses = [];
 		loaded = ready(); changes.fire(); await loaded;
@@ -47,7 +48,7 @@ for (const [kind, purpose, otherPurpose] of [
 	});
 }
 
-for (const kind of ['codeReviewModel', 'commitMessageModel'] as const) {
+for (const kind of ['codeReviewModel', 'commitMessageModel', 'threadTitleModel', 'threadRecapModel'] as const) {
 	test(`${kind} saves immediately, restores on reopen and clears without changing other defaults`, async () => {
 		using resources = new DisposableStore();
 		const services = resources.add(new InstantiationService());
@@ -68,7 +69,7 @@ for (const kind of ['codeReviewModel', 'commitMessageModel'] as const) {
 		} as IAgentModelsService);
 		services.registerInstance(ILanguageModelsService, {
 			onDidChangeModels: changes.event, isModelVisible: () => true,
-			listModelCatalog: async () => [{ model: review, displayName: 'Review fixture', recommendedFor: [ModelPurpose.Review, ModelPurpose.Commit] }],
+			listModelCatalog: async () => [{ model: review, displayName: 'Review fixture', recommendedFor: [ModelPurpose.Review, ModelPurpose.Commit, ModelPurpose.ThreadTitle] }],
 		} as unknown as ILanguageModelsService);
 		const model = resources.add(services.createInstance(AgentTaskModelSettingsModel, kind));
 		const selector = () => model.fields.find(field => field.kind === 'select') as Extract<SettingsSectionField, { kind: 'select'; }>;
@@ -103,6 +104,13 @@ for (const kind of ['codeReviewModel', 'commitMessageModel'] as const) {
 		assert.deepEqual(snapshot.model, chat);
 		assert.equal(snapshot[kind === 'codeReviewModel' ? 'commitMessageModel' : 'codeReviewModel'], null);
 		assert.deepEqual(writes, [{ [kind]: review }, { [kind]: null }]);
+		if (kind === 'threadRecapModel') {
+			const toggle = () => model.fields.find(field => field.kind === 'boolean') as Extract<SettingsSectionField, { kind: 'boolean'; }>;
+			assert.equal(toggle().value, false);
+			pending = settled(); toggle().setValue(true); await pending;
+			assert.equal(toggle().value, true);
+			assert.deepEqual(writes.at(-1), { threadRecapEnabled: true });
+		}
 		if (kind === 'commitMessageModel') {
 			const toggle = () => model.fields.find(field => field.kind === 'boolean') as Extract<SettingsSectionField, { kind: 'boolean'; }>;
 			pending = settled(); selector().setValue(modelRefIdentity(review)); await pending;
@@ -131,5 +139,16 @@ test('Task model labels and help use Chinese localization', () => {
 		const commitSelector = commit.fields.find(field => field.kind === 'select') as Extract<SettingsSectionField, { kind: 'select'; }>;
 		assert.equal(commitSelector.options[0].label, '继承对话模型');
 		assert.equal(commit.fields[0].kind, 'boolean');
+		using titles = new AgentTaskModelSettingsModel('threadTitleModel', {} as IAgentModelsService, { onDidChangeModels: Event.None } as ILanguageModelsService);
+		assert.equal(titles.title, '对话标题');
+		assert.ok(titles.help.startsWith('对话标题设置'));
+		const titleSelector = titles.fields[0] as Extract<SettingsSectionField, { kind: 'select'; }>;
+		assert.equal(titleSelector.options[0].label, '自动');
+		using recap = new AgentTaskModelSettingsModel('threadRecapModel', {} as IAgentModelsService, { onDidChangeModels: Event.None } as ILanguageModelsService);
+		assert.equal(recap.title, '对话回顾');
+		assert.ok(recap.help.startsWith('对话回顾设置'));
+		assert.ok(recap.fields.some(field => field.kind === 'boolean' && field.label === '自动生成回顾'));
+		const recapSelector = recap.fields.find(field => field.kind === 'select') as Extract<SettingsSectionField, { kind: 'select'; }>;
+		assert.equal(recapSelector.options[0].label, '自动');
 	} finally { resetNlsResolver(); }
 });

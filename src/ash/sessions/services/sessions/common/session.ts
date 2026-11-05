@@ -133,6 +133,7 @@ export interface IChat {
 	readonly origin: ThreadOrigin;
 	readonly status: ChatStatus;
 	readonly title?: string;
+	readonly recap?: string;
 	readonly executionStatus?: AgentThreadExecutionStatus;
 	readonly management?: SessionManagementInfo;
 }
@@ -199,6 +200,8 @@ export interface SessionEnvironmentSelection {
 export interface IUntitledChatSession {
 	readonly providerId?: string;
 	readonly untitledSessionId: string;
+	/** The draft label is provisional until the backend receives the first message. */
+	readonly automaticTitle?: true;
 	readonly forkSource?: { readonly sessionId: SessionId; readonly threadId: ThreadId; };
 	readonly environment?: SessionEnvironmentSelection;
 	readonly title: string;

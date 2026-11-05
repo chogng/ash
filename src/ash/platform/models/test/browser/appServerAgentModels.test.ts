@@ -102,7 +102,7 @@ test('Review model saves only independent review settings with the current confi
 });
 
 
-for (const kind of ['codeReviewModel', 'commitMessageModel'] as const) {
+for (const kind of ['codeReviewModel', 'commitMessageModel', 'threadTitleModel', 'threadRecapModel'] as const) {
 	test(`${kind} is saved and cleared independently of the chat model`, async () => {
 		const model = { provider: 'anthropic', model: 'task-model' };
 		const writes: ConfigUpdateParams[] = [];

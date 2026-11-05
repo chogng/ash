@@ -307,7 +307,7 @@ fn table_session_line<'a>(
     table_line(
         &prefix,
         Span::styled(
-            &session.title,
+            crate::sessions::session_title(session),
             Style::default()
                 .fg(session_color(&session.session_id, context))
                 .patch(interaction_style(context, state)),
@@ -346,7 +346,7 @@ fn draw_summary(
                 .find(|session| &session.session_id == id)
             {
                 lines.push(Line::styled(
-                    session.title.clone(),
+                    crate::sessions::session_title(session).to_owned(),
                     heading.fg(session_color(id, context)),
                 ));
                 lines.push(Line::styled(
@@ -452,7 +452,10 @@ fn session_line<'a>(
     let body_width = after_icon.saturating_sub(elapsed_width + time_gap);
     let middle = activity_text(session);
     let (name_width, middle_gap, middle_width) = column_widths(body_width, !middle.is_empty());
-    let name = pad_to_width(&truncate_to_width(&session.title, name_width), name_width);
+    let name = pad_to_width(
+        &truncate_to_width(crate::sessions::session_title(session), name_width),
+        name_width,
+    );
     let middle = pad_to_width(&truncate_to_width(middle, middle_width), middle_width);
     let row_style = if state.selected || state.hovered || state.pressed {
         interaction_style(context, state)

@@ -1,6 +1,7 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
-import type { IChatService, ThreadRead, Thread, ThreadGoal } from '../../../workbench/services/chat/common/chatService.js';
+import { localize } from '../../../nls.js';
+import type { IChatService, SessionId, ThreadId, ThreadRead, Thread, ThreadGoal } from '../../../workbench/services/chat/common/chatService.js';
 import type { AgentInteractionOffer } from '../../../platform/agentHost/common/agent.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from './sessionProviderScopeService.js';
 
@@ -280,6 +281,18 @@ export class SessionsChatService extends Disposable implements IChatService {
 			return result;
 		});
 	}
+	setRecapPresence(sessionId: SessionId, threadId: ThreadId, surface: string, focused: boolean | null): Promise<void> {
+		return this.run(sessionId, async scope => { await scope.services.chat.setRecapPresence?.(scope.backendIdentity(sessionId), scope.backendIdentity(threadId), surface, focused); });
+	}
+
+	generateRecap(sessionId: SessionId, threadId: ThreadId): Promise<string> {
+		return this.run(sessionId, async scope => {
+			const recap = await scope.services.chat.generateRecap?.(scope.backendIdentity(sessionId), scope.backendIdentity(threadId));
+			if (!recap) throw new Error(localize('chat.recap.unavailable', 'A recap is unavailable. Finish a conversation turn and check the recap model in Agents settings.'));
+			return recap;
+		});
+	}
+
 	compactContext(options: Parameters<IChatService['compactContext']>[0]): ReturnType<IChatService['compactContext']> {
 		return this.run(options.sessionId, async scope => {
 			const result = await scope.services.chat.compactContext(backendOptions(options, scope));

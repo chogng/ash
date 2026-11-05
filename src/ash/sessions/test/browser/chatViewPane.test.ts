@@ -186,6 +186,7 @@ function createInputServices(
 	const editorServices = createCodeEditorServices(inputResources);
 	if (!editorServices.has(IExtensionService)) registerTestExtensionService(inputResources, editorServices);
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), editorServices));
+	services.registerInstance(IChatService, chat);
 	services.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
 	services.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 	services.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
@@ -1119,7 +1120,7 @@ test('Chat transcript retains message rows while reordering and revising Markdow
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using list = createChatListWidget(dom.window.document.body);
 	list.render([]);
-	assert.equal(list.element.textContent, '');
+	assert.equal(list.element.querySelector('.ash-chat-item'), null);
 	const first = { id: 'first', type: 'agentMessage' as const, text: 'Original **answer**', transient: false };
 	const second = { id: 'second', type: 'userMessage' as const, text: 'Question', transient: false };
 	list.render([first, second]);
@@ -5992,8 +5993,8 @@ for (const locale of ['en', 'zh-CN']) {
 			assert.equal(f.sessions.activeUntitledSession?.untitledSessionId, draft.untitledSessionId);
 			const actions = menu.getActions().filter(action => !(action instanceof Separator));
 			assert.deepEqual(actions.map(action => action.label), locale === 'en'
-				? ['Rename', 'Fork', 'Pin chat', 'Open in new window', 'Move Chat to Editor Area', 'Close', 'Close Others', 'Close to the Right', 'Close All', 'Chat Settings']
-				: ['重命名', '分叉', '置顶聊天', '在新窗口中打开', '将聊天移至编辑器区域', '关闭', '关闭其他', '关闭右侧', '全部关闭', '聊天设置']);
+				? ['Rename', 'Fork', 'Pin', 'Open in new window', 'Move Chat to Editor Area', 'Close', 'Close Others', 'Close to the Right', 'Close All', 'Chat Settings']
+				: ['重命名', '分叉', '置顶', '在新窗口中打开', '将聊天移至编辑器区域', '关闭', '关闭其他', '关闭右侧', '全部关闭', '聊天设置']);
 			assert.equal(actions.find(action => action.id === ForkConversationActionId)?.enabled, true);
 			const calls: { id: string; args: readonly unknown[]; }[] = [];
 			f.commands.executeCommand = async <T>(id: string, ...args: readonly unknown[]): Promise<T> => {
@@ -7080,7 +7081,7 @@ test('Chat accepted-request notifications follow backend success and exclude rej
 });
 
 
-test('initial naming is scoped to the accepted Thread and cannot turn a naming failure into a resend', async () => {
+test('first send leaves automatic naming to the backend and manual rename errors propagate', async () => {
 	const fake = fakeApi();
 	const names: Parameters<import('../../../platform/agentHost/common/agentService.js').IAgentThreadService['rename']>[0][] = [];
 	fake.api.thread.rename = params => { names.push(params); throw new Error('Synthetic naming failure'); };
@@ -7088,9 +7089,9 @@ test('initial naming is scoped to the accepted Thread and cannot turn a naming f
 	await service.startTurn({ sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, mode: 'agent', text: '  修复  parser\nnow ', isNewSession: true });
 	await Promise.resolve();
 	assert.equal(fake.turnStartRequests.length, 1);
-	assert.deepEqual(names.map(({ sessionId, threadId, title, source }) => ({ sessionId, threadId, title, source })), [{ sessionId: 'session-1', threadId: 'thread-1', title: '修复 parser now', source: 'automatic' }]);
+	assert.deepEqual(names, []);
 	await assert.rejects(service.renameThread('session-1', 'thread-2', 'Manual branch name'), /Synthetic naming failure/);
-	assert.deepEqual(names.slice(1).map(({ threadId, title, source }) => ({ threadId, title, source })), [{ threadId: 'thread-2', title: 'Manual branch name', source: 'manual' }]);
+	assert.deepEqual(names.map(({ threadId, title, source }) => ({ threadId, title, source })), [{ threadId: 'thread-2', title: 'Manual branch name', source: 'manual' }]);
 });
 
 

@@ -775,7 +775,13 @@ impl ThreadController {
         binder: &dyn ThreadWorktreeBinder,
         request: StartThreadRequest,
     ) -> Result<ThreadSnapshot, CoreError> {
-        validate_thread_title(&request.command_id, &request.title)?;
+        // An empty title opts a root Thread into automatic naming. Explicit names
+        // still use the same validation as a rename.
+        if request.title.is_empty() {
+            validate_command_id(&request.command_id)?;
+        } else {
+            validate_thread_title(&request.command_id, &request.title)?;
+        }
         if let Some(agent) = &request.agent {
             agent
                 .validate()
@@ -1383,7 +1389,15 @@ impl ThreadController {
                     disposition: StartTurnDisposition::Replayed,
                 });
             }
-            validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
+            // A recap written after the client read the last Turn changes only catalog text.
+            let only_recap_changed = matches!(
+                (request.expected_sequence, &snapshot.recap),
+                (SequenceExpectation::Exact(expected), Some(recap))
+                    if recap.sequence == snapshot.sequence && expected.checked_add(1) == Some(snapshot.sequence)
+            );
+            if !only_recap_changed {
+                validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
+            }
             let turn_id =
                 TurnId::new(self.next_identifier("turn")).expect("generated Turn ID is non-empty");
             let input_items =
@@ -1618,6 +1632,17 @@ impl ThreadController {
         title: String,
         source: ash_protocol::ThreadTitleSource,
     ) -> Result<u64, CoreError> {
+        self.rename_thread_with_initial_turn(thread_id, command_id, title, source, None)
+    }
+
+    pub(crate) fn rename_thread_with_initial_turn(
+        &self,
+        thread_id: &ThreadId,
+        command_id: CommandId,
+        title: String,
+        source: ash_protocol::ThreadTitleSource,
+        initial_turn: Option<&TurnId>,
+    ) -> Result<u64, CoreError> {
         validate_thread_title(&command_id, &title)?;
         if title.chars().count() > 256 {
             return Err(CoreError::InvalidInput(
@@ -1639,6 +1664,13 @@ impl ThreadController {
                 } else {
                     Err(CoreError::CommandConflict)
                 };
+            }
+            if let Some(turn) = initial_turn
+                && (!snapshot.title.is_empty()
+                    || snapshot.status != ash_protocol::ThreadStatus::Active
+                    || crate::thread_title::first_message(snapshot).map(|(id, _)| id) != Some(turn))
+            {
+                return Err(CoreError::CommandConflict);
             }
             // A late automatic result must not overwrite an explicit name, even when
             // that name happens to equal an earlier automatic title.
@@ -3980,7 +4012,7 @@ fn matching_created_thread(
         && snapshot.agent_id == request.agent_id
         && snapshot.origin == request.origin
         && snapshot.thread_id == request.thread_id
-        && snapshot.title == request.title
+        && snapshot.creation_title == request.title
         && snapshot.execution_target == request.execution_target
         && snapshot.agent.as_ref() == request.agent.as_ref()
     {
@@ -3999,7 +4031,9 @@ fn thread_catalog_record(snapshot: &ThreadSnapshot) -> ThreadCatalogRecord {
             origin: snapshot.origin.clone(),
         },
         session_id: snapshot.session_id.clone(),
+        preview: crate::thread_title::preview(snapshot),
         thread: SessionThread {
+            recap: snapshot.recap.as_ref().map(|recap| recap.text.clone()),
             manager: None,
             thread_id: snapshot.thread_id.clone(),
             title: snapshot.title.clone(),

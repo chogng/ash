@@ -8,6 +8,7 @@ import type { CancellationToken } from '../../../../base/common/cancellation.js'
 import type { SessionWorktreeStart } from '../../../../platform/agentHost/common/agent.js';
 
 export interface ISessionCreateOptions {
+	readonly automaticTitle?: true;
 	readonly devContainer?: boolean;
 	readonly branchName?: string;
 	readonly worktreeStart?: SessionWorktreeStart;

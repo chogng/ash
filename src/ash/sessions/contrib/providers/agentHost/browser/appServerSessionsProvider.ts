@@ -355,7 +355,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		if (additional.length && (!this.sessionApi.addWorkspaceFolder || additional.some(folder => !this.ownsSourceAuthority(buildAgentHostSessionWorkspace(folder)!.authorityId)))) {
 			throw new Error(localize('sessions.environment.foldersUnavailable', 'The selected host cannot access every environment folder.'));
 		}
-		const created = await this.sessionApi.create({ commandId: `desktop-session-${creationId}`, title, executionTarget, branchName: options?.branchName, worktreeStart: options?.worktreeStart, environmentVariables: options?.environmentVariables, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
+		const created = await this.sessionApi.create({ commandId: `desktop-session-${creationId}`, title: options?.automaticTitle ? '' : title, executionTarget, branchName: options?.branchName, worktreeStart: options?.worktreeStart, environmentVariables: options?.environmentVariables, agent: agent ? { type: 'exact', source: { type: 'directory', id: agent.sourceId }, name: agent.name } : { type: 'default' } });
 		// Creation also subscribes this connection to the new Session on the server.
 		if (this.isDisposed && generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch) {
 			await this.sessionApi.unsubscribe({ sessionId: created.session.sessionId });
@@ -479,7 +479,7 @@ function toSession(session: AgentSession, threads: readonly ThreadSubscription[]
 		application: getSessionApplication('ash'),
 		sessionId: session.sessionId,
 		...(session.source ? { source: session.source } : {}),
-		title: session.title,
+		title: session.title || localize('chat.title.new', 'New Chat'),
 		status: session.status,
 		workspace,
 		model: session.model,
@@ -498,7 +498,8 @@ function toSession(session: AgentSession, threads: readonly ThreadSubscription[]
 					? { type: 'fork' as const, parentThreadId: thread.parentThreadId ?? thread.forkedFromId!, parentSequence: detail?.sequence ?? 0 }
 					: { type: 'root' as const },
 				status: thread.status,
-				title: detail?.title ?? thread.title,
+				recap: thread.recap ?? undefined,
+				title: detail?.title || thread.title || localize('chat.title.new', 'New Chat'),
 				management: thread.manager ? { ...thread.manager } : undefined,
 				executionStatus: detail ? executionStatus(detail.turns.at(-1)?.status) : prior?.executionStatus ?? 'idle',
 			};

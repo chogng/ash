@@ -152,6 +152,7 @@ export interface AgentSession {
 		readonly title: string;
 		readonly createdAtUnixMs?: number;
 		readonly lastActivityAtUnixMs?: number;
+		readonly recap?: string | null;
 		readonly parentThreadId?: string | null;
 		readonly forkedFromId?: string | null;
 		readonly status: 'active' | 'archived';
@@ -796,6 +797,7 @@ export type ThreadCommittedEvent =
 		readonly type:
 		| 'threadCreated'
 		| 'threadTitleChanged'
+		| 'threadRecapUpdated'
 		| 'advisorConfigured'
 		| 'modelProvidersMigrated'
 		| 'threadArchived'

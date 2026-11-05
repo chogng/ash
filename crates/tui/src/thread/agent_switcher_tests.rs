@@ -244,6 +244,7 @@ fn session() -> Session {
 
 fn root() -> SessionThread {
     SessionThread {
+        recap: None,
         manager: None,
         thread_id: thread_id("root"),
         title: "Main Task".into(),
@@ -260,6 +261,7 @@ fn root() -> SessionThread {
 
 fn child(value: &str) -> SessionThread {
     SessionThread {
+        recap: None,
         manager: None,
         thread_id: thread_id(value),
         title: value.into(),

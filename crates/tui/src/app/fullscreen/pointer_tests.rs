@@ -957,6 +957,7 @@ fn session_manager_items_hover_and_activate_without_changing_the_draft() {
         execution_target: None,
         manager: SessionManagerInfo::default(),
         threads: vec![SessionThread {
+            recap: None,
             manager: None,
             thread_id: thread_id.clone(),
             title: "Pointer thread".into(),

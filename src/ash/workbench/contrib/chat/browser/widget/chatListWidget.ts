@@ -15,6 +15,7 @@ import { findLast } from '../../../../../base/common/arraysFind.js';
 import { PromptTimelineStickyHeader } from '../promptTimeline/promptTimelineStickyHeader.js';
 import './media/chatListWidget.css';
 import { addDisposableListener, h, isHTMLElement } from '../../../../../base/browser/dom.js';
+import { observeResize } from '../../../../../base/browser/observer.js';
 import { ScrollableElement } from '../../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
@@ -164,13 +165,11 @@ export class ChatListWidget extends DomWidget {
 		if (host && composerForm) {
 			// Updating the list margin changes an observed box. Apply it outside observer delivery.
 			const layout = new RunOnceScheduler(updateOverlap, 0);
-			const resize = new host.ownerDocument.defaultView!.ResizeObserver(() => layout.schedule());
-			resize.observe(this.element);
-			resize.observe(host);
-			resize.observe(composerForm);
-			if (host.parentElement) resize.observe(host.parentElement);
+			const targets = [this.element, host, composerForm];
+			if (host.parentElement) targets.push(host.parentElement);
+			const resize = observeResize(targets, () => layout.schedule());
 			this.scrollToLatestHostObserver.value = toDisposable(() => {
-				resize.disconnect();
+				resize.dispose();
 				layout.dispose();
 				this.element.style.removeProperty(overlapProperty);
 				this.element.classList.remove('ash-chat-transcript-overlaps-composer');

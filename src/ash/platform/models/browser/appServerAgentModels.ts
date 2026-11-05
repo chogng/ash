@@ -44,6 +44,9 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 				commitMessageModel: config.commitMessageModel ? { ...config.commitMessageModel } : null,
 				commitMessageEnabled: config.commitMessageEnabled,
 				codeReviewModel: config.codeReviewModel ? { ...config.codeReviewModel } : null,
+				...(config.threadTitleModel ? { threadTitleModel: { ...config.threadTitleModel } } : {}),
+				...(config.threadRecapEnabled !== undefined ? { threadRecapEnabled: config.threadRecapEnabled } : {}),
+				...(config.threadRecapModel ? { threadRecapModel: { ...config.threadRecapModel } } : {}),
 				revision: config.revision,
 				model: config.model ? { ...config.model } : null,
 				reasoningEffort: config.modelReasoningEffort ?? null,
@@ -55,6 +58,9 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 				...(update.commitMessageEnabled !== undefined ? { commitMessageEnabled: update.commitMessageEnabled } : {}),
 				...(update.commitMessageModel !== undefined ? { commitMessageModel: update.commitMessageModel } : {}),
 				...(update.codeReviewModel !== undefined ? { codeReviewModel: update.codeReviewModel } : {}),
+				...(update.threadTitleModel !== undefined ? { threadTitleModel: update.threadTitleModel } : {}),
+				...(update.threadRecapEnabled !== undefined ? { threadRecapEnabled: update.threadRecapEnabled } : {}),
+				...(update.threadRecapModel !== undefined ? { threadRecapModel: update.threadRecapModel } : {}),
 				...(update.model !== undefined ? { model: update.model } : {}),
 				...(update.reasoningEffort !== undefined ? { modelReasoningEffort: update.reasoningEffort } : {}),
 			});
@@ -263,7 +269,7 @@ function modelDiscoveryMessage(code: ProviderModelsListFailureCodeDto): string {
 }
 
 function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatalogEntry {
-	const purposes = { advisor: ModelPurpose.Advisor, review: ModelPurpose.Review, commit: ModelPurpose.Commit };
+	const purposes = { advisor: ModelPurpose.Advisor, review: ModelPurpose.Review, commit: ModelPurpose.Commit, threadTitle: ModelPurpose.ThreadTitle, threadRecap: ModelPurpose.ThreadRecap };
 	return Object.freeze({
 		model: Object.freeze({ ...entry.model }),
 		displayName: entry.display_name,

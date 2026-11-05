@@ -23,6 +23,7 @@ fn reentering_a_session_falls_back_to_main_after_the_viewed_subagent_completes()
     let mut catalog_session = session("one");
     catalog_session.threads = vec![
         SessionThread {
+            recap: None,
             manager: None,
             thread_id: thread_id("one"),
             title: "main".into(),
@@ -36,6 +37,7 @@ fn reentering_a_session_falls_back_to_main_after_the_viewed_subagent_completes()
             status: ThreadStatus::Active,
         },
         SessionThread {
+            recap: None,
             manager: None,
             thread_id: thread_id("child"),
             title: "child".into(),

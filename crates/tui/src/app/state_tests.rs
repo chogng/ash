@@ -4896,3 +4896,16 @@ fn terminal_dictation_controls_are_idempotent_preserve_the_draft_and_ignore_shor
         assert!(app.input().contains("Natural language, with punctuation!"));
     }
 }
+
+#[test]
+fn recap_slash_dispatches_as_a_product_command() {
+    let mut app = App::new();
+    app.insert_text("/recap");
+    let Some(AppCommand::Thread(crate::thread::Command::ExecuteProductCommand(invocation))) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("recap must run through the typed product dispatcher");
+    };
+    assert_eq!(invocation.command.name, "recap");
+    assert!(invocation.arguments.is_empty());
+}

@@ -74,6 +74,8 @@ pub enum ModelPurpose {
     Advisor,
     Review,
     Commit,
+    ThreadTitle,
+    ThreadRecap,
 }
 
 /// A confirmed retirement announcement for the catalog's exact model and connection scope.

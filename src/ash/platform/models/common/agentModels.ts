@@ -10,6 +10,8 @@ export enum ModelPurpose {
 	Advisor = 'advisor',
 	Review = 'review',
 	Commit = 'commit',
+	ThreadTitle = 'threadTitle',
+	ThreadRecap = 'threadRecap',
 }
 
 export type ModelReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max';
@@ -164,6 +166,10 @@ export interface AgentModelDefaults {
 	readonly commitMessageEnabled: boolean;
 	/** Null follows the reviewing Thread's current model. */
 	readonly codeReviewModel: ModelRef | null;
+	/** Null selects a recommended model on the conversation provider. */
+	readonly threadTitleModel?: ModelRef | null;
+	readonly threadRecapModel?: ModelRef | null;
+	readonly threadRecapEnabled?: boolean;
 	readonly revision: number;
 	readonly model: ModelRef | null;
 	readonly reasoningEffort: ModelReasoningEffort | null;
@@ -173,6 +179,9 @@ export interface AgentModelDefaultsUpdate {
 	readonly commitMessageModel?: ModelRef | null;
 	readonly commitMessageEnabled?: boolean;
 	readonly codeReviewModel?: ModelRef | null;
+	readonly threadTitleModel?: ModelRef | null;
+	readonly threadRecapModel?: ModelRef | null;
+	readonly threadRecapEnabled?: boolean;
 	readonly model?: ModelRef | null;
 	readonly reasoningEffort?: ModelReasoningEffort | null;
 }

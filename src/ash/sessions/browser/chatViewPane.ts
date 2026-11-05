@@ -306,7 +306,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 
 	public override createEmbeddedChat(parent: HTMLElement, titleId: string, options: IChatWidgetViewOptions = {}): IQuickChatSession {
 		let disposed = false;
-		const draft = this.sessionService.createUntitledSession(localize('chat.title.new', 'New Chat'), undefined, undefined, false);
+		const draft = this.sessionService.createUntitledSession(undefined, undefined, undefined, false);
 		this.embeddedOptions.set(draft.untitledSessionId, {
 			showWelcome: false,
 			get workspacePickerDelegate() { return disposed ? undefined : options.workspacePickerDelegate; },

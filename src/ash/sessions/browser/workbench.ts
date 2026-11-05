@@ -1216,7 +1216,7 @@ export abstract class Workbench extends Disposable {
 		else if (options.draft) {
 			const selected = this.sessionsView.activeSelection;
 			if (selected?.kind !== 'untitled' || !sameWorkspace(selected.session.workspace, this.workspaceSelection())) {
-				this.sessionsView.openNewSession('New code session');
+				this.sessionsView.openNewSession();
 			}
 		}
 		await this.showChat();

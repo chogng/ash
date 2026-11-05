@@ -4,6 +4,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { Workbench } from '../../../automation/workbench.js';
 import { Editor } from '../../../automation/editor.js';
+import { QuickAccess } from '../../../automation/quickaccess.js';
 import { APP_SERVER_METHODS, type ModelRef } from '../../../../.build/protocol/typescript/index.js';
 import { connectProfile } from './sessionProfileFixture.js';
 
@@ -142,3 +143,97 @@ for (const locale of ['en', 'zh-CN']) {
 		}
 	});
 }
+
+test('Agents title bar replaces the first-message preview and /recap saves a conversation recap', { tag: ['@electron-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }) => {
+	const provider = 'custom-thread-title-fixture';
+	const model = { provider, model: 'conversation-fixture' };
+	const titleModel = { provider, model: 'title-fixture' };
+	const recapModel = { provider, model: 'recap-fixture' };
+	const firstMessage = 'Handle empty inputs in the parser and verify the fix.';
+	const shortTitle = 'Handle empty parser inputs';
+	const recap = 'The parser now handles empty inputs.';
+	let releaseRecap!: () => void;
+	const recapGate = new Promise<void>(resolve => { releaseRecap = resolve; });
+	let releaseTitle!: () => void;
+	const titleGate = new Promise<void>(resolve => { releaseTitle = resolve; });
+	const invocations: string[] = [];
+	const server = createServer(async (request, response) => {
+		if (request.method === 'GET') {
+			response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: model.model }, { id: titleModel.model }, { id: recapModel.model }] }));
+			return;
+		}
+		const chunks: Buffer[] = [];
+		for await (const chunk of request) chunks.push(Buffer.from(chunk));
+		const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string; stream?: boolean; };
+		invocations.push(body.model);
+		const generatingTitle = body.model === titleModel.model;
+		if (generatingTitle) await titleGate;
+		const generatingRecap = body.model === recapModel.model;
+		if (generatingRecap) await recapGate;
+		const content = generatingTitle ? shortTitle : generatingRecap ? recap : 'Parser fixture complete';
+		if (body.stream) {
+			const chunk = (delta: object, finish_reason: string | null) => `data: ${JSON.stringify({ id: 'title-fixture', object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
+			response.writeHead(200, { 'content-type': 'text/event-stream' }).end(chunk({ content }, null) + chunk({}, 'stop') + 'data: [DONE]\n\n');
+		} else {
+			response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ id: 'title-fixture', object: 'chat.completion', choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }] }));
+		}
+	});
+	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+	let connection: Awaited<ReturnType<typeof connectProfile>> | undefined;
+	try {
+		connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
+		const { client } = connection;
+		const address = server.address();
+		if (!address || typeof address === 'string') throw new Error('Title model fixture has no port');
+		const config = await client.request(APP_SERVER_METHODS['config/read'], {});
+		await client.request(APP_SERVER_METHODS['provider/configure'], {
+			commandId: 'title-provider', expectedRevision: config.revision, config: {
+				connection: provider, provider, baseUrl: `http://127.0.0.1:${address.port}/v1`,
+				custom: { name: 'Title fixture', protocol: 'chatCompletions', order: 0, contextWindow: 272_000 },
+				modelContext: Object.fromEntries([model, titleModel, recapModel].map(({ model }) => [model, { contextWindow: 272_000 }])),
+			},
+		});
+		await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: provider, apiKey: 'synthetic-title-key' });
+		const configured = await client.request(APP_SERVER_METHODS['config/read'], {});
+		expect(configured.threadRecapEnabled).toBe(false);
+		await client.request(APP_SERVER_METHODS['config/update'], {
+			commandId: 'title-models', expectedRevision: configured.revision, model, threadTitleModel: titleModel, threadRecapModel: recapModel,
+		});
+
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await page.locator('[data-action-id="sessions.newSession"] button').click();
+		const active = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		const editor = new Editor(active);
+		await editor.waitForEditorFocus();
+		await editor.waitForTypeInEditor(firstMessage);
+		await page.keyboard.press('Enter');
+		await expect(active).toHaveAttribute('data-thread-id', /.+/u);
+		const title = page.locator('.ash-sessions-titlebar-title');
+		await expect(title).toHaveText(firstMessage);
+		await expect.poll(() => invocations.filter(id => id === titleModel.model)).toHaveLength(1);
+		releaseTitle();
+		await expect(title).toHaveText(shortTitle);
+		const readSession = async () => (await client.request(APP_SERVER_METHODS['session/list'], {})).sessions.find(session => session.title === shortTitle);
+		const threadId = await active.getAttribute('data-thread-id');
+		await expect(active.getByText('Parser fixture complete', { exact: true })).toBeVisible();
+		expect(invocations).not.toContain(recapModel.model);
+		await editor.waitForEditorFocus();
+		await editor.waitForTypeInEditor('/recap');
+		await page.keyboard.press('Enter');
+		await expect.poll(() => invocations.filter(id => id === recapModel.model)).toHaveLength(1);
+		expect((await readSession())?.threads.find(thread => thread.threadId === threadId)?.recap).toBeUndefined();
+		releaseRecap();
+		await expect.poll(async () => (await readSession())?.threads.find(thread => thread.threadId === threadId)?.recap).toBe(recap);
+		await new QuickAccess(page).runCommand('sessions.showConversationRecap');
+		await expect(page.locator('.stanza-editor:visible .stanza-editor-line-text').filter({ hasText: recap })).toBeVisible();
+	} finally {
+		releaseTitle();
+		releaseRecap();
+		try { await connection?.close(); }
+		finally {
+			server.closeAllConnections();
+			await new Promise<void>(resolve => server.close(() => resolve()));
+		}
+	}
+});

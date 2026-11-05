@@ -4,7 +4,7 @@
     {
       "provider_id": "deepseek",
       "model_id": "deepseek-flash",
-      "recommended_for": ["review", "commit"],
+      "recommended_for": ["review", "commit", "threadTitle", "threadRecap"],
       "display_name": "DeepSeek V4.1 Flash",
       "context_window": 1000000,
       "capabilities": {

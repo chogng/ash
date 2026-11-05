@@ -337,6 +337,8 @@ export interface IChatService {
 	removePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
 	/** Promote the durable message before interrupting the captured active task. */
 	sendPendingRequestImmediately(target: QueueMessageTarget, text?: string): Promise<void>;
+	setRecapPresence?(sessionId: SessionId, threadId: ThreadId, surface: string, focused: boolean | null): Promise<void>;
+	generateRecap?(sessionId: SessionId, threadId: ThreadId): Promise<string>;
 	compactContext(options: CompactContextOptions): Promise<void>;
 	configureAdvisor(options: ConfigureAdvisorOptions): Promise<void>;
 	consultAdvisor(options: ConsultAdvisorOptions): Promise<void>;

@@ -42,6 +42,7 @@ pub(crate) enum TuiSlashCommandAction {
     Help,
     Shortcuts,
     Export,
+    Recap,
     Model,
     Mode,
     Effort,
@@ -73,7 +74,7 @@ impl TuiSlashCommandAction {
     ) -> crate::thread::transcript::LocalCommandCompletion {
         use crate::thread::transcript::LocalCommandCompletion;
         match self {
-            Self::New | Self::Branch | Self::Fork | Self::Archive => {
+            Self::New | Self::Branch | Self::Fork | Self::Archive | Self::Recap => {
                 LocalCommandCompletion::Deferred
             }
             Self::Theme | Self::AddDir | Self::Cd | Self::Resume | Self::Rewind
@@ -124,6 +125,7 @@ impl TuiSlashCommandAction {
             Self::Help => "show shortcuts and commands",
             Self::Shortcuts => "browse and customize terminal shortcuts",
             Self::Export => "export this conversation as Markdown",
+            Self::Recap => "Generate a recap of this conversation",
             Self::Model => "show or set the preferred provider/model",
             Self::Mode => "choose how the next task is handled",
             Self::Effort => "set thinking effort or Ash multitask",

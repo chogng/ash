@@ -37,6 +37,7 @@ use ash_protocol::TurnId;
 use std::time::Instant;
 
 pub(super) enum Completion {
+    RecapPresenceReported,
     Memory(crate::memory::Completion),
     IssueCreated {
         generation: u64,
@@ -152,6 +153,7 @@ pub(super) fn apply_request_completion(
         return;
     }
     match completion {
+        Completion::RecapPresenceReported => {}
         Completion::IssueCreated { generation, result } => match result {
             Ok(ConversationCompletion {
                 conversation: next,

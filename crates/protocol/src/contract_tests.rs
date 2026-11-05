@@ -682,6 +682,7 @@ fn canonical_session_contains_root_model_and_thread_lineage_without_history() {
         manager: Default::default(),
         threads: vec![
             SessionThread {
+                recap: None,
                 manager: None,
                 thread_id: ThreadId::new("thread_root").expect("test ID is non-empty"),
                 title: "task".into(),
@@ -695,6 +696,7 @@ fn canonical_session_contains_root_model_and_thread_lineage_without_history() {
                 status: ThreadStatus::Active,
             },
             SessionThread {
+                recap: None,
                 manager: None,
                 thread_id: ThreadId::new("thread_child").expect("test ID is non-empty"),
                 title: "review".into(),

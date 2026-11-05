@@ -65,7 +65,7 @@
     {
       "provider_id": "glm",
       "model_id": "glm-5.3-flash",
-      "recommended_for": ["review", "commit"],
+      "recommended_for": ["review", "commit", "threadTitle", "threadRecap"],
       "display_name": "GLM-5.3 Flash",
       "context_window": 1000000,
       "capabilities": {

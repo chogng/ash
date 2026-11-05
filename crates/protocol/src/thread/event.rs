@@ -76,6 +76,12 @@ pub enum ToolExecutionAuthority {
     rename_all_fields = "camelCase"
 )]
 pub enum ThreadEvent {
+    /// A short catch-up summary through a successfully completed Turn.
+    ThreadRecapUpdated {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        text: String,
+    },
     ThreadTitleChanged {
         thread_id: ThreadId,
         title: String,
@@ -448,6 +454,7 @@ impl ThreadEvent {
             Self::HookRunUpdated { .. } => "hook.run_updated",
             Self::ThreadCreated { .. } => "thread.created",
             Self::ThreadTitleChanged { .. } => "thread.title_changed",
+            Self::ThreadRecapUpdated { .. } => "thread.recap_updated",
             Self::AdvisorConfigured { .. } => "advisor.configured",
             Self::ModelProvidersMigrated { .. } => "model.providers_migrated",
             Self::ThreadArchived { .. } => "thread.archived",
@@ -512,6 +519,7 @@ impl ThreadEvent {
             | Self::ModelProvidersMigrated { thread_id, .. }
             | Self::AdvisorConfigured { thread_id, .. }
             | Self::ThreadTitleChanged { thread_id, .. }
+            | Self::ThreadRecapUpdated { thread_id, .. }
             | Self::ThreadArchived { thread_id, .. }
             | Self::ThreadRestored { thread_id }
             | Self::ThreadMovedToSession { thread_id, .. }

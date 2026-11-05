@@ -227,7 +227,9 @@ pub enum ExecInteractionKind {
 impl From<AgentInteractionKind> for ExecInteractionKind {
     fn from(kind: AgentInteractionKind) -> Self {
         match kind {
-            AgentInteractionKind::Approval => Self::Approval,
+            AgentInteractionKind::Approval | AgentInteractionKind::ToolResultReview => {
+                Self::Approval
+            }
             AgentInteractionKind::Permissions => Self::Permissions,
             AgentInteractionKind::UserInput => Self::UserInput,
             AgentInteractionKind::DynamicTool => Self::DynamicTool,

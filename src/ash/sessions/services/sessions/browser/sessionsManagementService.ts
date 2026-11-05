@@ -252,13 +252,23 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		await this.owner(sessionId).interrupt(backendSession(session, this.defaultProviderId), parseSessionIdentity(threadId, this.defaultProviderId).backendSessionId);
 	}
 
-	createUntitledSession(title = localize('chat.title.new', 'New Chat'), workspace?: SessionWorkspaceSelection, providerId?: string, activate = true, forkSource?: IUntitledChatSession['forkSource'], options?: { readonly devContainer?: boolean; }): IUntitledChatSession {
+	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection, providerId?: string, activate = true, forkSource?: IUntitledChatSession['forkSource'], options?: { readonly devContainer?: boolean; }): IUntitledChatSession {
 		const provider = this.creationProvider(workspace, providerId);
 		if (!workspace) {
 			const current = provider.currentWorkspace();
 			workspace = (activate && !forkSource ? this.recentWorkspaces?.getSelected(provider.id, current) : undefined) ?? current;
 		}
-		const session = { untitledSessionId: createUuid(), providerId: provider.id, title, model: undefined, agent: undefined, workspace, ...(forkSource ? { forkSource } : {}), ...(options?.devContainer ? { devContainer: true } : {}) };
+		const session: IUntitledChatSession = {
+			untitledSessionId: createUuid(),
+			providerId: provider.id,
+			title: title ?? localize('chat.title.new', 'New Chat'),
+			model: undefined,
+			agent: undefined,
+			workspace,
+			...(title === undefined ? { automaticTitle: true } : {}),
+			...(forkSource ? { forkSource } : {}),
+			...(options?.devContainer ? { devContainer: true } : {}),
+		};
 		this._untitledSessions = [session, ...this._untitledSessions];
 		if (activate) {
 			this.selectionRevision++;
@@ -431,7 +441,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 					!('root' in workspace) || workspace.type !== folder.type || workspace.root !== folder.root);
 				return this.createSession(session.title, workspace, session.agent, untitledSessionId, session.providerId, {
 					token: cancellation.token, devContainer: session.devContainer, branchName: session.branchName,
-					additionalFolders, environmentVariables,
+					additionalFolders, environmentVariables, automaticTitle: session.automaticTitle,
 				}, session.forkSource);
 			});
 			entry = { promise: creating, cancellation, waiters: 0, settled: false };
@@ -823,6 +833,6 @@ function sameSession(left: ISession | undefined, right: ISession | undefined): b
 	if (left.nextApprovalMode !== right.nextApprovalMode || !sameManagement(left.management, right.management) || !sameModel(left.model, right.model) || left.workspace?.authorityId !== right.workspace?.authorityId || left.workspace?.root !== right.workspace?.root) return false;
 	return left.chats.every((chat, index) => {
 		const next = right.chats[index];
-		return next?.threadId === chat.threadId && next.status === chat.status && next.title === chat.title && next.executionStatus === chat.executionStatus && sameManagement(next.management, chat.management);
+		return next?.threadId === chat.threadId && next.status === chat.status && next.title === chat.title && next.recap === chat.recap && next.executionStatus === chat.executionStatus && sameManagement(next.management, chat.management);
 	});
 }

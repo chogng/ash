@@ -88,6 +88,7 @@ impl ServerRefresh {
 pub(super) struct AppDriver {
     app: App,
     client: AppServerRequestHandle,
+    recap_view: Option<(ash_protocol::SessionId, ash_protocol::ThreadId, bool)>,
     conversation: Option<Conversation>,
     requests: RequestTasks,
     queued_commands: VecDeque<ScheduledCommand>,
@@ -131,6 +132,7 @@ impl AppDriver {
         let mut driver = Self {
             app,
             client,
+            recap_view: None,
             conversation,
             requests: RequestTasks::default(),
             queued_commands: VecDeque::from([initial]),
@@ -730,6 +732,63 @@ impl AppDriver {
                 origin,
             );
         }
+    }
+
+    pub(super) fn report_recap_presence(&mut self, focused: bool) {
+        let key = Some(RequestKey::RecapPresence);
+        if !self.requests.is_idle(key) {
+            return;
+        }
+        let view = self
+            .conversation
+            .as_ref()
+            .filter(|_| !self.app.fullscreen_home_visible())
+            .map(|current| {
+                (
+                    current.conversation.session_id().clone(),
+                    current.conversation.thread_id().clone(),
+                    focused,
+                )
+            });
+        if view == self.recap_view {
+            return;
+        }
+        let previous = std::mem::replace(&mut self.recap_view, view.clone());
+        let mut client = self.client.clone();
+        let origin = RequestOrigin::current(&self.app);
+        self.requests.spawn(
+            key,
+            "ash-tui-recap-presence",
+            move || {
+                use ash_app_server_protocol::protocol::session::{
+                    SessionRequest, SessionRequestParams,
+                };
+                let mut report = |session_id, thread_id, focused| {
+                    let _ = client.request_session(SessionRequestParams {
+                        command_id: crate::client::new_command_id("recap-presence"),
+                        session_id,
+                        request: SessionRequest::SetRecapPresence {
+                            thread_id,
+                            surface: "tui".into(),
+                            focused,
+                        },
+                    });
+                };
+                if let Some((session_id, thread_id, _)) = previous
+                    && view.as_ref().is_none_or(|(next_session, next_thread, _)| {
+                        next_session != &session_id || next_thread != &thread_id
+                    })
+                {
+                    report(session_id, thread_id, None);
+                }
+                if let Some((session_id, thread_id, focused)) = view {
+                    report(session_id, thread_id, Some(focused));
+                }
+                Completion::RecapPresenceReported
+            },
+            &mut self.app,
+            origin,
+        );
     }
 
     fn thread_request_scope(&self) -> Option<ThreadRequestScope> {

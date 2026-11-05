@@ -861,6 +861,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         parent_thread_id: None,
         forked_from_id: None,
         title: "test".into(),
+        creation_title: "test".into(),
         status: ash_protocol::ThreadStatus::Active,
         archived_at_unix_ms: None,
         archive_reason: None,
@@ -927,6 +928,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         sent_agent_messages: BTreeMap::new(),
         received_agent_messages: BTreeMap::new(),
         fork_import: None,
+        recap: None,
     }
 }
 

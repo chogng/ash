@@ -193,7 +193,9 @@ fn catalog(session_id: &SessionId, thread_id: &ThreadId, sequence: u64) -> Threa
             origin: Default::default(),
         },
         session_id: session_id.clone(),
+        preview: None,
         thread: SessionThread {
+            recap: None,
             manager: None,
             thread_id: thread_id.clone(),
             title: "Primary".into(),

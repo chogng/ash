@@ -533,7 +533,7 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                 .map_err(core_error)?
                 .and_then(|session| session.execution_target);
             if !matches
-                || params.title != existing.title
+                || params.title != existing.creation_title
                 || existing_execution_target != execution_target
                 || (expected_agent_id != existing.agent_id && !legacy_creation)
                 || params.worktree_start.as_ref().is_some_and(|start| {

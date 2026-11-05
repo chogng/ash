@@ -653,7 +653,15 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(!typescript.contains(r#""turn/start": { method: "turn/start" }"#));
     assert!(!typescript.contains(r#""turn/shell/start": { method: "turn/shell/start" }"#));
     assert!(typescript.contains(
-        r#"export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string, } | { "type": "hostResource", name: string, resource: HostResourceRef, } | { "type": "toolSelection", disabled: Array<ToolName>,"#
+        r#"export type InputItem = { "type": "issue", number: number, } | { "type": "text", text: string, } | { "type": "context", name: string, content: string,"#
+    ));
+    assert!(typescript.contains(
+        r#"sourceUrl?: string | null, } | { "type": "hostResource", name: string, resource: HostResourceRef, } | { "type": "toolSelection", disabled: Array<ToolName>,"#
+    ));
+    assert!(typescript.contains("threadRecapModel?: ModelRef | null"));
+    assert!(typescript.contains("recap?: string | null"));
+    assert!(typescript.contains(
+        r#"{ "type": "threadRecapUpdated", threadId: ThreadId, turnId: TurnId, text: string, }"#
     ));
     assert!(typescript.contains("scope?: ToolScope | null,"));
     assert!(!typescript.contains("InputItemKind"));

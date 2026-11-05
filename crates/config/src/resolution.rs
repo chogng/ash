@@ -21,6 +21,8 @@ pub struct ConfigProvenance {
     pub model: Option<ConfigValueSource>,
     pub model_reasoning_effort: Option<ConfigValueSource>,
     pub approval_review_model: ConfigValueSource,
+    pub thread_title_model: Option<ConfigValueSource>,
+    pub thread_recap_model: Option<ConfigValueSource>,
     pub code_review_model: Option<ConfigValueSource>,
     pub commit_message_model: Option<ConfigValueSource>,
     pub advisor: Option<ConfigValueSource>,
@@ -54,6 +56,16 @@ impl ConfigProvenance {
                 .as_ref()
                 .map(|_| ConfigValueSource::User),
             approval_review_model: ConfigValueSource::User,
+            thread_title_model: document
+                .agent
+                .thread_title_model
+                .as_ref()
+                .map(|_| ConfigValueSource::User),
+            thread_recap_model: document
+                .agent
+                .thread_recap_model
+                .as_ref()
+                .map(|_| ConfigValueSource::User),
             code_review_model: document
                 .agent
                 .code_review_model

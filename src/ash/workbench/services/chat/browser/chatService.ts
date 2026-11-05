@@ -166,7 +166,11 @@ export class ChatService extends Disposable implements IChatService {
 
 	async listSlashCommands(): Promise<readonly SlashCommandDefinition[]> {
 		const commands = await this.appServerApi.getSlashCommands();
-		return commands.map((command) => ({ ...command }));
+		const definitions = commands.map(command => ({ ...command }));
+		if (this.threadApi.generateRecap && !definitions.some(command => command.name === 'recap')) {
+			definitions.push({ name: 'recap', argumentMode: 'none', description: localize('chat.recap.commandDescription', 'Generate a recap of this conversation') });
+		}
+		return definitions;
 	}
 
 	async readCheckpoints(sessionId: SessionId, threadId: ThreadId): Promise<readonly ChatCheckpoint[]> {
@@ -308,18 +312,7 @@ export class ChatService extends Disposable implements IChatService {
 		this.requireSubmissionOwner(options);
 		const epoch = this.connectionEpoch;
 		const input = turnInput(options);
-		const started = await this.turnApi.start({ commandId: options.commandId ?? commandId('turn'), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, commandInterpretation: options.commandInterpretation, approvalMode: options.approvalMode, model: options.model, reasoningEffort: options.reasoningEffort, input }, options.signal);
-		if (options.isNewSession && !this.isDisposed && epoch === this.connectionEpoch) {
-			const title = Array.from(options.text.trim().replace(/\s+/gu, ' ')).slice(0, 80).join('');
-			if (title) {
-				// Initial naming is best effort after admission. Core arbitrates a racing
-				// manual name, and a failed title write must never resend the Turn.
-				void Promise.resolve().then(() => {
-					if (this.isDisposed || epoch !== this.connectionEpoch) return;
-					return this.threadApi.rename({ sessionId: options.sessionId, threadId: options.threadId, title, source: 'automatic', commandId: `initial-title-${started.turnId}` });
-				}).catch(() => { });
-			}
-		}
+		await this.turnApi.start({ commandId: options.commandId ?? commandId('turn'), sessionId: options.sessionId, threadId: options.threadId, expectedSequence: options.expectedSequence, mode: options.mode, commandInterpretation: options.commandInterpretation, approvalMode: options.approvalMode, model: options.model, reasoningEffort: options.reasoningEffort, input }, options.signal);
 		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: options.isNewSession === true, requestSequence: options.expectedSequence });
 	}
 
@@ -418,6 +411,16 @@ export class ChatService extends Disposable implements IChatService {
 
 	saveAdvisorDefault(advisor: AdvisorConfig | null): Promise<void> {
 		return this.modelApi.setAdvisorDefault({ commandId: commandId('advisor-default'), advisor });
+	}
+
+	async setRecapPresence(sessionId: SessionId, threadId: ThreadId, surface: string, focused: boolean | null): Promise<void> {
+		await this.threadApi.setRecapPresence?.({ sessionId, threadId, surface, focused, commandId: commandId('recap-presence') });
+	}
+
+	async generateRecap(sessionId: SessionId, threadId: ThreadId): Promise<string> {
+		const recap = await this.threadApi.generateRecap?.({ sessionId, threadId, commandId: commandId('recap') });
+		if (!recap) throw new Error(localize('chat.recap.unavailable', 'A recap is unavailable. Finish a conversation turn and check the recap model in Agents settings.'));
+		return recap;
 	}
 
 	async compactContext(options: CompactContextOptions): Promise<void> {

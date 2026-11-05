@@ -91,7 +91,8 @@ export interface IChatWidgetModel extends IDisposable {
 	loadOlderHistory?(): Promise<void>;
 	prepareConversation?(): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void>;
-	executeServerCommand?(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void>;
+	executeServerCommand?(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void | string>;
+	reportRecapPresence?(sessionId: SessionId, threadId: ThreadId, surface: string, focused: boolean | null): Promise<void>;
 	/** Rejects on failure so Stop and Send can preserve the unsent draft. */
 	interrupt(): Promise<void>;
 	refreshChanges?(): Promise<void>;
@@ -130,6 +131,11 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	private historyRecovery: { readonly status: IChatSessionHistoryStatus; readonly generation: number; } | undefined;
 	private submittedMessage = false;
 	private readonly welcome: ChatViewWelcomePart;
+	private readonly recapSurface = generateUuid();
+	private readonly recapFocusListeners = this._register(new DisposableStore());
+	private recapDocument: Document | undefined;
+	private recapView: { sessionId: SessionId; threadId: ThreadId; focused: boolean; } | undefined;
+	private recapPresencePending = Promise.resolve();
 	private displayedConversationId: string | undefined;
 
 	constructor(
@@ -183,6 +189,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		// Detached Markdown fragments still inherit this conversation's command scope.
 		const scopedInstantiation = this._register(instantiationService.createChild(new ServiceCollection([IContextKeyService, context])));
 		const inQuickChat = ChatContextKeys.inQuickChat.bindTo(context);
+		if (model.reportRecapPresence) this._register(toDisposable(() => this.syncRecapPresence(false)));
 		this._register(addDisposableListener(this.element, 'focusin', () => {
 			// Quick Chat borrows this widget by reparenting it; its original scope stays alive.
 			inQuickChat.set(contextKeys.getContext(this.element.parentElement).getValue<boolean>(ChatContextKeys.inQuickChat.key) === true);
@@ -332,9 +339,16 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
 				: invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
-			executeServerCommand: model.executeServerCommand && ((invocation, submissionSignal) => invocation.name === 'advisor' && !invocation.argumentsText.trim()
-				? commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID)
-				: model.executeServerCommand!(invocation.name, invocation.argumentsText, submissionSignal)),
+			executeServerCommand: model.executeServerCommand && (async (invocation, submissionSignal) => {
+				if (invocation.name === 'advisor' && !invocation.argumentsText.trim()) {
+					await commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
+					return;
+				}
+				const recap = await model.executeServerCommand!(invocation.name, invocation.argumentsText, submissionSignal);
+				if (typeof recap === 'string') {
+					this.notifications.info(recap);
+				}
+			}),
 			interrupt: () => this.model.interrupt(),
 			openChanges: model.refreshChanges && (async revision => {
 				try { await commandService.executeCommand(OPEN_CHAT_CHANGES_COMMAND_ID, this.model.sessionId, this.model.threadId, revision); }
@@ -452,6 +466,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		if (!visible && this.model.voice?.isActive) void this.runVoice(() => this.model.voice!.stop());
 		const voiceClient = this.voiceSessionController;
 		if (!visible && voiceClient?.isActive) void this.runVoice(() => voiceClient.disconnect());
+		this.syncRecapPresence(visible);
 		this.input.setVisible(visible);
 		this.listWidget.setVisible(visible);
 	}
@@ -569,7 +584,35 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		}
 	}
 
+	private syncRecapPresence(visible = this.visible): void {
+		if (!this.model.reportRecapPresence) return;
+		const { sessionId, threadId } = this.model;
+		const document = this.element.ownerDocument;
+		if (visible && this.recapDocument !== document) {
+			this.recapDocument = document;
+			this.recapFocusListeners.clear();
+			const report = () => this.syncRecapPresence();
+			if (document.defaultView) {
+				this.recapFocusListeners.add(addDisposableListener(document.defaultView, 'focus', report));
+				this.recapFocusListeners.add(addDisposableListener(document.defaultView, 'blur', report));
+			}
+			this.recapFocusListeners.add(addDisposableListener(document, 'visibilitychange', report));
+		}
+		const focused = document.visibilityState !== 'hidden' && document.hasFocus();
+		const view = visible && sessionId && threadId ? { sessionId, threadId, focused } : undefined;
+		const previous = this.recapView;
+		if (previous?.sessionId === view?.sessionId && previous?.threadId === view?.threadId && previous?.focused === view?.focused) return;
+		this.recapView = view;
+		this.recapPresencePending = this.recapPresencePending.then(async () => {
+			if (previous && (previous.sessionId !== view?.sessionId || previous.threadId !== view.threadId)) {
+				await this.model.reportRecapPresence!(previous.sessionId, previous.threadId, this.recapSurface, null).catch(() => { });
+			}
+			if (view) await this.model.reportRecapPresence!(view.sessionId, view.threadId, this.recapSurface, view.focused).catch(() => { });
+		});
+	}
+
 	private render(): void {
+		this.syncRecapPresence();
 		const conversationId = this.model.threadId ?? this.model.inputState.draftIdentity?.id;
 		if (this.displayedConversationId !== conversationId) {
 			this.displayedConversationId = conversationId;

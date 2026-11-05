@@ -79,6 +79,8 @@ pub struct ThreadSnapshot {
     pub parent_thread_id: Option<ThreadId>,
     pub forked_from_id: Option<ThreadId>,
     pub title: String,
+    pub(crate) creation_title: String,
+    pub(crate) recap: Option<crate::thread_recap::SavedThreadRecap>,
     pub execution_target: Option<ash_protocol::SessionExecutionTarget>,
     pub status: ThreadStatus,
     pub archived_at_unix_ms: Option<u64>,
@@ -487,6 +489,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     parent_thread_id: None,
                     forked_from_id: None,
                     title: title.clone(),
+                    creation_title: title.clone(),
                     execution_target: execution_target.clone(),
                     status: ThreadStatus::Active,
                     archived_at_unix_ms: None,
@@ -524,6 +527,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     sent_agent_messages: BTreeMap::new(),
                     received_agent_messages: BTreeMap::new(),
                     fork_import: None,
+                    recap: None,
                     commands: {
                         require_no_command(envelope)?;
                         Vec::new()
@@ -607,6 +611,10 @@ pub(crate) fn reduce_thread_event_with_prefix(
             // Only the conversation used by the next request follows the history cursor.
             snapshot.turns = source.turns.clone();
             snapshot.items = source.items.clone();
+            snapshot.recap = source
+                .recap
+                .clone()
+                .filter(|_| source.thread_id == snapshot.thread_id);
             snapshot.voice_transcripts = source.voice_transcripts.clone();
             snapshot.hook_runs = source.hook_runs.clone();
             snapshot.user_time_contexts = source.user_time_contexts.clone();
@@ -853,6 +861,20 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 ));
             }
             migrate_model_providers(&mut snapshot, providers);
+        }
+        ThreadEvent::ThreadRecapUpdated { turn_id, text, .. } => {
+            require_no_command(envelope)?;
+            if envelope.schema_version < 31
+                || !crate::thread_recap::can_recap(&snapshot, turn_id)
+                || !crate::thread_recap::valid_recap(text)
+            {
+                return Err(CoreError::Journal("invalid Thread recap".into()));
+            }
+            snapshot.recap = Some(crate::thread_recap::SavedThreadRecap {
+                turn_id: turn_id.clone(),
+                sequence: envelope.sequence,
+                text: text.clone(),
+            });
         }
         ThreadEvent::ThreadTitleChanged { title, source, .. } => {
             let receipt = envelope.command.clone().ok_or_else(|| {

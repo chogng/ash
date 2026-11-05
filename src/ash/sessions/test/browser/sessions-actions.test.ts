@@ -337,6 +337,29 @@ test('Session Details opens a localized read-only snapshot of active user sessio
 	} finally { resetNlsResolver(); }
 });
 
+test('Show Conversation Recap opens the latest saved text for the selected branch', async () => {
+	using services = new InstantiationService();
+	using commands = new CommandService(services);
+	const opened: Parameters<IEditorService['openEditor']>[] = [];
+	const session: ISession = {
+		sessionId: 'session', title: 'Task', status: 'active', nextApprovalMode: 'manual',
+		chats: [
+			{ threadId: 'root', origin: { type: 'root' }, status: 'active', recap: 'Root recap' },
+			{ threadId: 'branch', origin: { type: 'root' }, status: 'active', recap: 'Branch recap' },
+		],
+	};
+	services.registerInstance(ISessionsService, {
+		activeSelection: { kind: 'session', active: { session: { ...session, chats: [] }, threadId: 'branch' } },
+	} as unknown as ISessionsService);
+	services.registerInstance(ISessionsManagementService, { sessions: [session] } as unknown as ISessionsManagementService);
+	services.registerInstance(IEditorService, {
+		openEditor: async (...args: Parameters<IEditorService['openEditor']>) => { opened.push(args); },
+	} as unknown as IEditorService);
+	await commands.executeCommand('sessions.showConversationRecap');
+	assert.equal(opened[0]?.[0].initialText, 'Branch recap');
+	assert.equal(opened[0]?.[0].readOnly, true);
+});
+
 test('Moving a conversation follows its destination only if navigation stayed on the original conversation', async () => {
 	using services = new InstantiationService();
 	using commands = new CommandService(services);

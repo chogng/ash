@@ -277,6 +277,8 @@ mod testing_operations_tests;
 mod thread_dir_binding;
 mod thread_dirs;
 mod thread_history_files;
+mod thread_recap;
+mod thread_title;
 mod turn_backend_router;
 pub(crate) mod update_broker;
 pub(crate) mod update_plan_tool;
@@ -322,6 +324,7 @@ pub struct AppServer {
     pub(super) multi_agent: Arc<MultiAgentCoordinator>,
     model: Arc<dyn ModelService>,
     model_catalog: Arc<dyn ModelCatalog>,
+    thread_recaps: Option<Arc<thread_recap::ThreadRecaps>>,
     model_instructions: Arc<ash_models_manager::ModelInstructionCatalog>,
     request_scheduler: RequestScheduler,
     request_cancellations: RequestCancellationRegistry,
@@ -1322,6 +1325,7 @@ impl AppServer {
             multi_agent,
             model,
             model_catalog: unavailable_model_catalog(),
+            thread_recaps: None,
             model_instructions: ash_models_manager::ModelInstructionCatalog::built_in(),
             request_scheduler,
             request_cancellations,
@@ -1984,6 +1988,7 @@ impl AppServer {
             .expect("config watcher exists")
             .bind_language(Arc::clone(&config), &self.language);
         self.config = Some(config);
+        self.bind_thread_recaps();
         if let Some(login) = &self.login {
             login
                 .install_events(Arc::new(account_operations::AppServerLoginEvents::new(
@@ -2598,6 +2603,7 @@ impl AppServer {
 
     pub(crate) fn with_model_catalog(mut self, model_catalog: Arc<dyn ModelCatalog>) -> Self {
         self.model_catalog = model_catalog;
+        self.bind_thread_recaps();
         self
     }
 

@@ -59,6 +59,7 @@ pub struct SessionCreateParams {
     #[serde(default)]
     pub agent: ash_protocol::AgentRoleSelection,
     pub command_id: CommandId,
+    /// An empty title lets the first user message supply a preview and an automatic title.
     pub title: String,
     /// Null creates a Session without a selected execution directory.
     #[serde(deserialize_with = "deserialize_execution_target")]
@@ -238,6 +239,16 @@ pub struct SessionDeleted {
     rename_all_fields = "camelCase"
 )]
 pub enum SessionRequest {
+    /// Reports one product surface displaying the Thread. Null releases the surface.
+    SetRecapPresence {
+        thread_id: ThreadId,
+        #[schemars(length(min = 1, max = 80))]
+        surface: String,
+        focused: Option<bool>,
+    },
+    GenerateRecap {
+        thread_id: ThreadId,
+    },
     RenameSession {
         title: String,
     },
@@ -593,6 +604,8 @@ pub struct AdvisorConfigureResult {
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(tag = "type", content = "value", rename_all = "camelCase")]
 pub enum SessionRequestResult {
+    RecapPresenceUpdated,
+    Recap(String),
     Session(SessionResult),
     Deleted(SessionId),
     Thread(SessionThreadResult),
