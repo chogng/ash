@@ -320,13 +320,15 @@ export class NewEnvironmentDialog extends Disposable {
 			}
 			variables = textarea.value;
 			switchPage(false);
-			variableButton.label = variables.trim()
-				? localize('sessions.environment.variablesConfigured', 'Environment variables · Configured')
-				: variableTitle;
+			const label = variables.trim() ? localize('sessions.environment.variablesConfigured', 'Configured') : noVariables;
+			variableStatus.textContent = label;
+			variableButton.setAttribute('aria-description', label);
 		}, true);
+		variableButton.setAttribute('aria-description', noVariables);
 		this.dialog = this._register(new Dialog(container, this.title, [], {
 			buttonStyles: defaultButtonStyles, checkboxStyles: defaultCheckboxStyles, inputBoxStyles: defaultInputBoxStyles,
 			dialogStyles: defaultDialogStyles, disableDefaultAction: true, extraClasses: ['ash-new-environment-dialog'],
+			closeOnBackdropClick: true,
 			renderBody: body => body.append(main, editor, error),
 			renderFooter: element => element.append(footer),
 		}));
