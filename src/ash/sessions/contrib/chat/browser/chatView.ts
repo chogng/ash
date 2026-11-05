@@ -14,53 +14,59 @@ import { ISessionContext } from '../../../services/sessions/browser/sessionConte
 import { NewChatInSessionWidget } from './newChatInSessionWidget.js';
 import { NewChatWidget } from './newChatWidget.js';
 
+interface INewChatViewOptions {
+	readonly panelId: string;
+	readonly selection: SessionsViewSelection;
+	readonly createNewSession: () => void;
+	readonly onDidChangeInfo: () => void;
+}
+
 /** Retains one Code surface and its provider scope when a draft acquires a durable Session identity. */
 export class NewChatView extends Disposable implements ISessionsConversationPane {
 	readonly element: HTMLElement;
-	private widget!: NewChatWidget;
-	private info!: SessionInfoRail;
+	private readonly widget: NewChatWidget;
+	private readonly info: SessionInfoRail;
 
 	constructor(
-		ownerDocument: Document,
-		private readonly panelId: string,
-		private readonly selection: SessionsViewSelection,
-		private readonly createNewSession: () => void,
-		private readonly onDidChangeInfo: () => void,
-		@ISessionProviderScopeService private readonly providerScopes: ISessionProviderScopeService,
-		@IChatService private readonly chatService: IChatService,
-		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
+		container: HTMLElement,
+		options: INewChatViewOptions,
+		@ISessionProviderScopeService providerScopes: ISessionProviderScopeService,
+		@IChatService chatService: IChatService,
+		@ISessionsManagementService sessions: ISessionsManagementService,
 	) {
 		super();
-		this.element = h(ownerDocument, 'div', { className: 'ash-sessions-chat-content' });
+		this.element = h(container.ownerDocument, 'div', { className: 'ash-sessions-chat-content' });
+		container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
-	}
 
-	public render(parent: HTMLElement): void {
-		parent.append(this.element);
-		const selection = this.selection;
-		const scope = this._register(this.providerScopes.createScope(
-			selection.kind === 'session' ? selection.active.session.sessionId : undefined,
-			selection.kind === 'untitled' ? selection.session.providerId : undefined,
-		));
-		const model = scope.createInstance(ChatWidgetModel, this.chatService,
-			selection.kind === 'session' ? { kind: 'session', active: selection.active } : { kind: 'untitled', session: selection.session },
-			this.sessions);
-		scope.registerInstance(ISessionContext, model);
-		const log = scope.getOptional(ILogService);
-		if (log) this._register(logSessionHistoryBinding(log, model.onDidFinishHistoryBinding));
+		const { selection, panelId, createNewSession, onDidChangeInfo } = options;
 		try {
-			this.widget = this._register(scope.createInstance(model.isNestedDraft ? NewChatInSessionWidget : NewChatWidget, this.element, this.panelId, model, this.createNewSession));
+			const scope = this._register(providerScopes.createScope(
+				selection.kind === 'session' ? selection.active.session.sessionId : undefined,
+				selection.kind === 'untitled' ? selection.session.providerId : undefined,
+			));
+			const model = scope.createInstance(ChatWidgetModel, chatService, selection, sessions);
+			try {
+				scope.registerInstance(ISessionContext, model);
+				const log = scope.getOptional(ILogService);
+				if (log) this._register(logSessionHistoryBinding(log, model.onDidFinishHistoryBinding));
+				this.widget = this._register(scope.createInstance(model.isNestedDraft ? NewChatInSessionWidget : NewChatWidget,
+					this.element, { panelId, model, createNewSession }));
+			} catch (error) {
+				model.dispose();
+				throw error;
+			}
+			this.info = this._register(scope.createInstance(SessionInfoRail, this.element, model, () => this.widget.focus()));
+			this._register(this.info.onDidChange(onDidChangeInfo));
+			const updateLoading = () => {
+				this.widget.element.querySelector(':scope > .ash-chat-list-widget')?.setAttribute('aria-busy', String(model.state === 'loading'));
+			};
+			this._register(model.onDidChange(updateLoading));
+			updateLoading();
 		} catch (error) {
-			model.dispose();
+			this.dispose();
 			throw error;
 		}
-		this.info = this._register(scope.createInstance(SessionInfoRail, this.element, model, () => this.widget.focus()));
-		this._register(this.info.onDidChange(this.onDidChangeInfo));
-		const updateLoading = (): void => {
-			this.widget.element.querySelector(':scope > .ash-chat-list-widget')?.setAttribute('aria-busy', String(model.state === 'loading'));
-		};
-		this._register(model.onDidChange(updateLoading));
-		updateLoading();
 	}
 
 	public get model(): ChatWidgetModel { return this.widget.model; }
@@ -68,6 +74,7 @@ export class NewChatView extends Disposable implements ISessionsConversationPane
 	public get infoVisible(): boolean { return this.info.visible; }
 	public toggleInfo(): void { this.info.toggle(); }
 	public focus(): void { this.widget.focus(); }
+	public saveState(): Promise<void> { return this.widget.saveState(); }
 	public focusDraftPicker(picker: 'workspace' | 'environment'): void {
 		if (picker === 'workspace') this.widget.focusWorkspacePicker();
 		else this.widget.focusEnvironmentPicker();

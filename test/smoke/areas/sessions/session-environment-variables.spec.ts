@@ -1,4 +1,6 @@
 import { createServer } from 'node:http';
+import { randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { APP_SERVER_METHODS, APPROVAL_MODE_DEFINITIONS } from '../../../../.build/protocol/typescript/index.js';
@@ -59,6 +61,11 @@ test('A saved environment reaches the Agent process and stays scoped to its Sess
 			commandId: 'environment-fixture-policy', expectedRevision: config.revision,
 			rule: { id: 'environment-fixture-shell', selector: { type: 'source', source: 'built_in_tool', sourceId: 'shell-command' }, effect: { type: 'allowUnsandboxed' }, justification: 'Reads synthetic environment values in this isolated smoke profile.' },
 		});
+		const { project } = await client.request(APP_SERVER_METHODS['project/create'], {
+			commandId: randomUUID(), projectId: randomUUID(),
+			name: 'Environment fixture project', description: '',
+			materials: [{ kind: 'folder', name: 'Workspace', path: pathToFileURL(testWorkspace.directory).href }],
+		});
 		let page = await workbench.openAgentsWindow(target.kind);
 		const code = async () => page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await code();
@@ -78,6 +85,12 @@ test('A saved environment reaches the Agent process and stays scoped to its Sess
 		await expect(picker()).toHaveText('Fixture environment');
 
 		const send = async (marker: string) => {
+			const projectPicker = active().locator('.ash-sessions-workspace-picker');
+			if (await projectPicker.textContent() !== project.name) {
+				await projectPicker.click();
+				await page.locator('[role="menu"]').getByText(project.name, { exact: true }).click();
+				await expect(projectPicker).toHaveText(project.name);
+			}
 			await active().locator('.ash-chat-input-mode-action').click();
 			await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Agent', exact: true }).click();
 			await active().getByRole('button', { name: /^Permissions:/ }).click();

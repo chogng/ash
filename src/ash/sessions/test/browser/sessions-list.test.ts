@@ -461,6 +461,7 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 		const firstRow = list.domNode.querySelector<HTMLElement>('[data-row-order-id="two"]')!;
 		const secondRow = list.domNode.querySelector<HTMLElement>('[data-row-order-id="one"]')!;
 		firstRow.dispatchEvent(new dom.window.Event('dragstart', { bubbles: true }));
+		secondRow.dispatchEvent(new dom.window.Event('dragover', { bubbles: true, cancelable: true }));
 		secondRow.dispatchEvent(new dom.window.Event('drop', { bubbles: true, cancelable: true }));
 		assert.deepEqual(rows(list), ['one', 'two']);
 		await moveUp(list.domNode.querySelector<HTMLButtonElement>('[data-item="session:two"] button')!);
@@ -490,6 +491,7 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	const source = restored.domNode.querySelector<HTMLElement>('[data-row-order-id="two"]')!;
 	const destination = restored.domNode.querySelector<HTMLElement>('[data-section="group:release"] > h3 button')!;
 	source.dispatchEvent(new dom.window.Event('dragstart', { bubbles: true }));
+	destination.dispatchEvent(new dom.window.Event('dragover', { bubbles: true, cancelable: true }));
 	destination.dispatchEvent(new dom.window.Event('drop', { bubbles: true, cancelable: true }));
 	await Promise.resolve();
 	assert.deepEqual(rows(restored), ['one']);

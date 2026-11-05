@@ -13,7 +13,8 @@ import { SHOW_SESSIONS_PICKER_COMMAND_ID } from '../../contrib/sessions/browser/
 import '../../browser/actions/sessionsChatActions.js';
 import '../../contrib/sessions/browser/sessionDetailsAction.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
-import { NewChatInSessionsWindowAction } from '../../contrib/chat/browser/newSessionAction.js';
+import { NEW_SESSION_ACTION_ID } from '../../contrib/chat/common/constants.js';
+import '../../contrib/chat/browser/chat.contribution.js';
 import { registerNewChatActions } from '../../../workbench/contrib/chat/browser/actions/chatNewActions.js';
 import { registerChatActions } from '../../../workbench/contrib/chat/browser/actions/chatActions.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -103,10 +104,10 @@ test('Sessions owns its New Session command and routes explicit provider choices
 	services.registerInstance(ISessionsProvidersService, providers);
 	using commands = new CommandService(services);
 
-	await commands.executeCommand(NewChatInSessionsWindowAction.ID);
+	await commands.executeCommand(NEW_SESSION_ACTION_ID);
 
-	await commands.executeCommand(NewChatInSessionsWindowAction.ID, 'ssh-host');
-	await assert.rejects(commands.executeCommand(NewChatInSessionsWindowAction.ID, {}), TypeError);
+	await commands.executeCommand(NEW_SESSION_ACTION_ID, 'ssh-host');
+	await assert.rejects(commands.executeCommand(NEW_SESSION_ACTION_ID, {}), TypeError);
 	assert.deepEqual(created, [undefined, 'ssh-host']);
 	onDidChange.dispose();
 });
@@ -204,7 +205,7 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 	assert.deepEqual(created, ['test']);
 	assert.deepEqual(focus, ['code', 'composer']);
 	await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
-	assert.deepEqual(input.picker?.items.map(item => item.label), ['Session']);
+	assert.deepEqual(input.picker?.items.map(item => item.label), ['Session', 'Legacy session']);
 	input.picker!.acceptFirst();
 	assert.deepEqual(opened, ['session/thread']);
 });

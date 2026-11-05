@@ -42,6 +42,8 @@ import { AccessibilityVerbositySettingId } from '../../../../platform/accessibil
 
 /** Applies Sessions editor, attachment and draft policy to the shared input. */
 export class NewChatInputWidget extends ChatInputPart {
+	readonly saveState: () => Promise<void>;
+
 	constructor(
 		container: HTMLElement,
 		delegate: ChatInputDelegate,
@@ -54,7 +56,7 @@ export class NewChatInputWidget extends ChatInputPart {
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
 		@INotificationService notifications: INotificationService,
 		@IInstantiationService instantiationService: IInstantiationService,
-		@IStorageService private readonly storage: IStorageService,
+		@IStorageService storage: IStorageService,
 		@ILifecycleService lifecycle: ILifecycleService,
 		@IQuickInputService quickInput: IQuickInputService,
 		@IMenuService menuService: IMenuService,
@@ -130,20 +132,13 @@ export class NewChatInputWidget extends ChatInputPart {
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(AGENT_SESSIONS_SCOPED_INPUT_HISTORY_SETTING)) updateHistoryScope();
 		}));
-		this.bindDraftStorage(model, {
+		this.saveState = this.bindDraftStorage(model, {
 			read: identity => readNewChatDraftState(storage, identity, chatInputStatePersistence),
 			write: (identity, draft) => writeNewChatDraftState(storage, draft, identity, chatInputStatePersistence),
 			flush: () => storage.flush(),
 		}, lifecycle.onWillShutdown);
 		this._register(this.onDidChangeInput(() => this.renderStatus()));
 		this.renderStatus();
-	}
-
-	public async persistDraftForHostChange(): Promise<void> {
-		const id = this.model.untitledSessionId;
-		const snapshot = await this.captureDraft();
-		if (this.isDisposed || !id || this.model.untitledSessionId !== id) return;
-		if (snapshot) writeNewChatDraftState(this.storage, snapshot.draft, `untitled:${id}`, chatInputStatePersistence);
 	}
 
 	protected override getAccessibilityHelpContent(): string {

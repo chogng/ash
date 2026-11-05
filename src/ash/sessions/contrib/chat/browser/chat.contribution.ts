@@ -1,11 +1,14 @@
 import { registerEditorPane } from '../../../../workbench/browser/editor.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
+import { NewChatInSessionsWindowAction, NewSessionFromNavigationAction } from './newSessionAction.js';
+import { OpenSessionLinkOpenerContribution } from './openSessionLinkOpener.contribution.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { SessionSideChatEditor } from './sessionSideChatEditor.js';
 import { SessionSideChatEditorInput } from './sessionSideChatEditorInput.js';
 import './agentHostDelegation.js';
 import { AGENT_SESSIONS_SCOPED_INPUT_HISTORY_SETTING } from './sessionsChatHistory.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 import {
@@ -22,6 +25,13 @@ import { parseSessionIdentity } from '../../../services/sessions/common/sessionI
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
+
+registerAction2(NewChatInSessionsWindowAction);
+registerAction2(NewSessionFromNavigationAction);
+
+// The window's host-aware opener must take precedence over the ambient Workbench opener.
+registerWorkbenchContribution(OpenSessionLinkOpenerContribution.ID, WorkbenchPhase.BlockRestore,
+	accessor => accessor.get(IInstantiationService).createInstance(OpenSessionLinkOpenerContribution));
 
 registerEditorPane({
 	id: SessionSideChatEditor.ID,

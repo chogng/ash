@@ -35,6 +35,8 @@ export interface IProjectService {
 	create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project>;
 	/** Adds a saved Session using the current project revision. */
 	addSession(project: Project, sessionId: string): Promise<Project>;
+	/** Changes one project membership. Other memberships of the Session are independent. */
+	moveSession(sessionId: string, fromProjectId: string | undefined, toProjectId: string | undefined): Promise<void>;
 	update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project>;
 	archive(project: ProjectSummary): Promise<Project>;
 	restore(project: ProjectSummary): Promise<Project>;

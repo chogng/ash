@@ -25,8 +25,9 @@ suite('New Chat in Current Session', () => {
 		await expect(agentMenu.getByRole('menuitemradio', { name: 'Agent A', exact: true })).toBeDisabled();
 		await expect(agentMenu.getByText('Agent B', { exact: true })).toHaveCount(0);
 		await page.keyboard.press('Escape');
-		const nested = page.getByRole('group', { name: 'Task from Host A 中的对话' });
-		await expect(nested.getByRole('button', { name: /新对话/ })).toBeVisible();
+		const draftRow = page.getByRole('treeitem', { name: '新对话（草稿）', exact: true });
+		await expect(draftRow).toBeVisible();
+		await expect(draftRow).toHaveAttribute('aria-level', '3');
 		const relevantCalls = () => page.evaluate(() => window.ashSessionsIntegration.multiHost!.calls.filter(call => call.method === 'fork' || call.method === 'send'));
 		expect(await relevantCalls()).toEqual([]);
 		await active.locator('.ash-chat-input-editor .stanza-editor').getByRole('textbox').focus();
@@ -38,7 +39,9 @@ suite('New Chat in Current Session', () => {
 			{ host: 'Host A', method: 'send', sessionId: 'same', threadId: 'side' },
 		]);
 		await expect(page.locator('.ash-sessions-chat-slot:visible')).toHaveCount(2);
-		await expect(nested.getByRole('button', { name: '新对话', exact: true })).toHaveAttribute('aria-current', 'page');
+		const chatRow = page.getByRole('treeitem', { name: '新对话', exact: true });
+		await expect(chatRow).toHaveAttribute('aria-level', '3');
+		await expect(chatRow.getByRole('button', { name: '新对话', exact: true })).toHaveAttribute('aria-current', 'page');
 		await expect(agent).toHaveText('Agent A');
 	});
 

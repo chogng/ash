@@ -11,6 +11,7 @@ import { IAgentConnection } from '../../../platform/agentHost/common/agentServic
 import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import type { IChatWidgetViewOptions } from '../../../workbench/contrib/chat/browser/chat.js';
 import { IWorkspacesService } from '../../../platform/workspaces/common/workspaces.js';
+import { IProjectService } from '../../../platform/projects/common/projectService.js';
 import { IVoiceModeOnboardingService } from '../../../workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IImageEditorService } from '../../../workbench/services/imageEditor/common/imageEditorService.js';
@@ -191,6 +192,7 @@ function createInputServices(
 	services.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
 	services.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 	services.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
+	services.registerInstance(IProjectService, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService);
 	services.registerInstance(IFileDialogService, {
 		showOpenDialog: async () => { throw new Error('Folder browsing is outside this composer fixture'); },
 	} as unknown as IFileDialogService);
@@ -1282,7 +1284,7 @@ async function sessionsWidgetFixture(send: (text: string, signal?: AbortSignal) 
 		fixture.services.registerInstance(ILayoutService, { activeContainer: document.body } as ILayoutService);
 		fixture.model.send = async (text, _mode, _skills, _contexts, options) => send(text, options?.signal);
 		fixture.model.interrupt = interrupt;
-		const widget = fixture.services.createInstance(NewChatWidget, document.body, 'sessions-composer', fixture.model, () => { });
+		const widget = fixture.services.createInstance(NewChatWidget, document.body, { panelId: 'sessions-composer', model: fixture.model, createNewSession: () => { } });
 		widget.setVisible(true);
 		return { ...fixture, input: widget.input, widget, [Symbol.dispose]() { widget.dispose(); fixture[Symbol.dispose](); } };
 	} catch (error) { fixture[Symbol.dispose](); throw error; }
@@ -1507,7 +1509,7 @@ test('Chinese Sessions draft recovery and accessibility help use the product lan
 		const content = help.provideContent();
 		assert.match(content, /已完成的附件仍保留在草稿中/u);
 		assert.match(content, /暂不支持远程项目/u);
-		assert.match(content, /首次发送消息时才会准备容器/u);
+		assert.match(content, /首次发送时会创建所选的工作树或启动所选开发容器/u);
 		assert.match(content, /停止任务/u);
 		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		assert.match(chinese.bundles.ash['chat.sessions.help'], /新聊天和已有对话的输入区都保持可见/u);
@@ -1557,6 +1559,23 @@ test('a removed Sessions attachment cannot report a stale draft persistence erro
 	await rejected;
 	assert.deepEqual(fixture.notices.model.getNotifications(), []);
 	assert.deepEqual(readNewChatDraftState(fixture.storage, fixture.identity, chatInputStatePersistence), { mode: 'agent', text: 'Keep this task  ', contexts: [] });
+});
+
+test('a Code draft checkpoint saves edits made while its attachment is resolving', async () => {
+	using fixture = await sessionsWidgetFixture();
+	const source = new DeferredPromise<{ name: string; content: string; }>();
+	fixture.input.appendToDraft('Start here');
+	fixture.input.addContext({ id: 'delayed', kind: 'file', name: 'source.txt', resolve: () => source.p });
+
+	const saving = fixture.widget.saveState();
+	fixture.input.appendToDraft('Keep this later edit');
+	await source.complete({ name: 'source.txt', content: 'Source snapshot' });
+	await saving;
+	fixture.widget.dispose();
+
+	const draft = readNewChatDraftState(fixture.storage, fixture.identity, chatInputStatePersistence);
+	assert.match(draft?.text ?? '', /Keep this later edit/u);
+	assert.equal(draft?.contexts[0]?.content, 'Source snapshot');
 });
 
 test('Sessions composer waits for file paste before sending and clears only the completed request', async () => {
@@ -1615,6 +1634,7 @@ test('sending from one session preserves a later draft during first-session crea
 	editorServices.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 	editorServices.registerInstance(ILayoutService, { activeContainer: dom.window.document.body } as ILayoutService);
 	editorServices.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
+	editorServices.registerInstance(IProjectService, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService);
 	editorServices.registerInstance(ISearchService, {
 		registerSearchResultProvider: () => { throw new Error('Search registration is outside this composer fixture'); },
 		fileSearch: async () => ({ results: [], messages: [] }),
@@ -1680,8 +1700,9 @@ test('sending from one session preserves a later draft during first-session crea
 		getScopes: () => [], getScope: () => { throw new Error('Unexpected host routing'); }, getProviderScope: () => { throw new Error('Unexpected host routing'); },
 		createScope: () => editorServices.createChild(),
 	});
-	using codeView = editorServices.createInstance(NewChatView, dom.window.document, 'centered-chat', draft, () => { view.openNewSession(); }, () => { });
-	codeView.render(dom.window.document.body);
+	using codeView = editorServices.createInstance(NewChatView, dom.window.document.body, {
+		panelId: 'centered-chat', selection: draft, createNewSession: () => { view.openNewSession(); }, onDidChangeInfo: () => { },
+	});
 	codeView.setVisible(true);
 	const widgetModel = codeView.model;
 	const widget = editorServices.get(IChatWidgetService).getAllWidgets().find(widget => widget.domNode.id === 'centered-chat');
@@ -1704,8 +1725,9 @@ test('sending from one session preserves a later draft during first-session crea
 	view.openNewSession();
 	const chatSelection = view.activeSelection;
 	if (chatSelection?.kind !== 'untitled') throw new Error('Expected Chat draft');
-	using chatWidget = editorServices.createInstance(NewChatView, dom.window.document, 'separate-chat', chatSelection, () => { view.openNewSession(); }, () => { });
-	chatWidget.render(dom.window.document.body);
+	using chatWidget = editorServices.createInstance(NewChatView, dom.window.document.body, {
+		panelId: 'separate-chat', selection: chatSelection, createNewSession: () => { view.openNewSession(); }, onDidChangeInfo: () => { },
+	});
 	chatWidget.setVisible(true);
 	const chatDraft = { mode: 'agent' as const, text: 'Keep my Chat draft', contexts: [{ id: 'chat-file', kind: 'file', name: 'chat.txt', content: 'Chat context', resource: 'file:///workspace/chat.txt' }] };
 	chatWidget.restoreDraft(chatDraft);
@@ -2858,6 +2880,7 @@ function modelsFor(chat: IChatService): ILanguageModelsService {
 }
 function createWidgetModel(chat: IChatService, selection: import('../../browser/chatWidgetModel.js').ChatWidgetSelection, sessions: ISessionsManagementService, execution?: IAgentExecutionSettingsService, configuration?: WorkbenchConfigurationService): ChatWidgetModel {
 	const services = inputResources.add(new InstantiationService());
+	services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IAppServerHookApi, { onDidChangeHooks: Event.None, list: async () => { throw new Error('Unexpected Hook read in Skill fixture'); } });
 	services.registerInstance(ILanguageModelsService, modelsFor(chat));
@@ -3219,6 +3242,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
 		services.registerInstance(ICoworkModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: { session: session('session-1'), threadId: 'thread-1' } };
+		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
 		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
 		await widget.initialize();
 		assert.deepEqual(scopes, ['session-1']);
@@ -3577,6 +3601,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
 		services.registerInstance(ICoworkModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: sessions.active! };
+		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
 		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
 		await widget.initialize();
 		assert.deepEqual({ catalog: sessions.active?.session.model, picker: widget.inputState.selectedModel }, { catalog: rootModel, picker: rootModel });
@@ -3612,6 +3637,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
 		services.registerInstance(ICoworkModelPreferences, preferences);
 		const selection = { kind: 'session' as const, active: sessions.active! };
+		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
 		using widget = kind === 'Code' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
 		await widget.initialize();
 		await widget.selectModel(manualModel);
@@ -7064,6 +7090,7 @@ for (const kind of ['Chat', 'Cowork']) {
 		using preferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
 		services.registerInstance(ICoworkModelPreferences, preferences);
 		const selection = { kind: 'untitled' as const, session: sessions.createUntitledSession() };
+		services.registerInstance(IContextKeyService, inputResources.add(new ContextKeyService()));
 		using model = kind === 'Chat' ? services.createInstance(ChatWidgetModel, chat, selection, sessions) : services.createInstance(CoworkWidgetModel, chat, selection, sessions);
 		await model.initialize();
 		await configuration.updateValue(ChatAIDisabledSettingId, true);

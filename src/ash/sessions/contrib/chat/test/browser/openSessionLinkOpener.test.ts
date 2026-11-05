@@ -40,13 +40,15 @@ suite('Sessions conversation link opener', () => {
 		await expect(slots).toHaveCount(2);
 		await expect(slots.first().locator('.ash-chat-input-editor .view-lines')).toHaveText('Keep the source draft');
 		await expect(slots.last().locator('.ash-chat-input-editor .stanza-editor').getByRole('textbox')).toBeFocused();
-		const nested = page.getByRole('group', { name: 'Conversations in Task from Host A' });
-		const followUp = nested.getByRole('button', { name: 'Follow-up chat' });
+		const sidebar = page.locator('.ash-sessions-list[data-mode="code"]');
+		const followUps = sidebar.locator('[data-item^="chat:"] > .ash-sessions-list-item').filter({ hasText: 'Follow-up chat' });
+		const item = await followUps.and(page.locator('[aria-current="page"]')).locator('..').getAttribute('data-item');
+		const followUp = sidebar.locator(`[data-item=${JSON.stringify(item)}] > .ash-sessions-list-item`);
 		await expect(followUp).toBeVisible();
 		await followUp.hover();
 		await expect(page.locator('.ash-hover').getByText('Follow-up chat', { exact: true })).toBeVisible();
 		await page.keyboard.press('Escape');
-		await page.getByRole('button', { name: 'Task from Host A', exact: true }).press('Enter');
+		await sidebar.locator('[data-row-order-id] > .ash-sessions-list-item').filter({ hasText: 'Task from Host A' }).press('Enter');
 		await expect(followUp).toHaveAttribute('aria-current', 'false');
 		await followUp.press('Enter');
 		await expect(followUp).toHaveAttribute('aria-current', 'page');

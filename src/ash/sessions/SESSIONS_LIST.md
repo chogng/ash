@@ -17,7 +17,8 @@ This specification defines stable placement and state-ownership rules. Row styli
 | Sidebar collapse state                        | `WorkbenchObjectTree`, persisted by each sidebar |
 | Custom groups and membership                  | `ISessionGroupsService`                          |
 | Top-level group/workspace order               | `ISessionSectionOrderService`                    |
-| Tree composition and presentation             | `SessionsView` and `SessionsList`                |
+| Tree interaction and drop targets             | `SessionsListTree`                               |
+| Tree composition and presentation             | Each sidebar's data and placement projection     |
 
 Chat and Code consume the same session selection and pins. Chat presents flat conversation rows in top-level custom groups and a remaining conversation section beside pinned conversations and project entries. Code shows unpinned project conversations below their Project in the sidebar. Recents contains unpinned conversations without a project, including their explicit custom groups. Each mode owns separate section expansion state. `IProjectService` owns project records and membership. The workspace is the Agent's execution directory, which can be a worktree or container for the same Project.
 
@@ -106,7 +107,7 @@ Filters compose across session type, status, archive/read state, and provider. T
 
 ## Drag and drop
 
-The target determines which service handles the drop.
+Chat and Code supply row capabilities to the same list tree. The tree interprets the destination, and the row's source owns the mutation. A drop from the Pinned shortcut into Recents unpins the conversation and retains its memberships. A drop from a project row into Recents removes that project membership.
 
 - sessions may reorder within valid sections;
 - sessions may move into user-created groups;

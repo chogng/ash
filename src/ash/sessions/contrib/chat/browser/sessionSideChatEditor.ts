@@ -82,11 +82,12 @@ export class SessionSideChatEditor extends EditorPane {
 			const renderView = (selection: SessionsViewSelection): void => {
 				this.view = undefined;
 				const lifetime = conversation.value = new DisposableStore();
-				const view = lifetime.add(this.instantiation.createInstance(NewChatView, this.element.ownerDocument,
-					`side-chat-${this.group?.id}-${input.resource.path.slice(1)}`, selection,
-					() => { void this.commands.executeCommand('ash.sessions.openSideChat').catch(error => this.notifications.error(error)); },
-					() => { }));
-				view.render(this.element);
+				const view = lifetime.add(this.instantiation.createInstance(NewChatView, this.element, {
+					panelId: `side-chat-${this.group?.id}-${input.resource.path.slice(1)}`,
+					selection,
+					createNewSession: () => { void this.commands.executeCommand('ash.sessions.openSideChat').catch(error => this.notifications.error(error)); },
+					onDidChangeInfo: () => { },
+				}));
 				this.view = view;
 				view.setVisible(this.isVisible());
 				lifetime.add(view.model.onDidChange(updateReference));
@@ -97,7 +98,7 @@ export class SessionSideChatEditor extends EditorPane {
 				showConfirm: () => true,
 				confirm: async () => {
 					if (this.mount.value === resources) {
-						await this.view?.captureDraft();
+						await this.view?.saveState();
 						updateReference();
 					}
 					return ConfirmResult.DONT_SAVE;

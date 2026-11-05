@@ -3,9 +3,8 @@ import { observableValue, constObservable } from '../../../../base/common/observ
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { OPEN_SESSION_LINK_SCHEME, parseOpenSessionLinkUri } from '../../../../platform/agentHost/common/openSessionLink.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
+import type { IWorkbenchContribution } from '../../../../workbench/common/contributions.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { ILinkPresentationService, type ILinkPresentation } from '../../../../platform/dataChannel/common/dataChannel.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
@@ -14,7 +13,9 @@ import { parseSessionProviderAuthority, sessionIdentity } from '../../../service
 import { getSessionSummaryHoverData } from '../../sessions/browser/sessionHoverContent.js';
 import { sessionManagementLabel } from '../../../browser/sessionManagementLabels.js';
 
-class OpenSessionLinkOpenerContribution extends Disposable {
+export class OpenSessionLinkOpenerContribution extends Disposable implements IWorkbenchContribution {
+	static readonly ID = 'sessions.openSessionLinkOpener';
+
 	constructor(
 		@IOpenerService opener: IOpenerService,
 		@IChatSessionNavigationService navigation: IChatSessionNavigationService,
@@ -78,6 +79,3 @@ class OpenSessionLinkOpenerContribution extends Disposable {
 		}));
 	}
 }
-
-registerWorkbenchContribution('sessions.openSessionLinkOpener', WorkbenchPhase.BlockRestore,
-	accessor => accessor.get(IInstantiationService).createInstance(OpenSessionLinkOpenerContribution));

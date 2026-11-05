@@ -12,6 +12,7 @@ import { addDisposableListener, getWindow, h } from '../../../../../base/browser
 import { appendIcon, getRegisteredIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
+import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
 import { AbstractDisposable, Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { MOVE_CHAT_TO_SESSION_ACTION_ID } from '../sessionsActions.js';
 import { SessionActionFeedback } from '../sessionActionFeedback.js';
@@ -58,6 +59,9 @@ import { createSessionSummaryHover, getSessionSummaryHoverData } from '../sessio
 import { IHoverService, type IManagedHover } from '../../../../../platform/hover/browser/hoverService.js';
 import { LocalChatSessionUri } from '../../../../../workbench/contrib/chat/common/model/chatUri.js';
 import { fillChatReferenceDragData } from '../../../../browser/dnd.js';
+import { DragAndDropDataKind } from '../../../../../base/browser/ui/dnd/dnd.js';
+import type { TreeDragAndDrop, TreeDragData } from '../../../../../base/browser/ui/tree/tree.js';
+import type { URI } from '../../../../../base/common/uri.js';
 
 interface SessionBucket {
 	readonly id: string;
@@ -75,6 +79,149 @@ const managementIcons: Record<SessionManagementInfo['status'], Icon | undefined>
 };
 
 export type SessionsListPresentation = 'chat' | 'code' | { readonly openCommand: string; readonly activeContext: string; };
+
+export interface SessionListProjectOrganization {
+	readonly current?: string;
+	readonly destinations: readonly { readonly id: string; readonly title: string; }[];
+	readonly loadDestinations?: (signal: AbortSignal) => Promise<SessionListProjectOrganization['destinations']>;
+	move(projectId: string | undefined): Promise<void>;
+}
+
+export interface SessionListOrganization {
+	readonly pinned?: boolean;
+	readonly setPinned?: (pinned: boolean) => void | Promise<void>;
+	readonly moveToGroup?: (id: string | null) => Promise<void>;
+	readonly project?: SessionListProjectOrganization;
+}
+
+export function sessionProjectOrganization(
+	projects: IProjectService,
+	sessionId: string,
+	current: string | undefined,
+	destinations: readonly { readonly id: string; readonly name: string; }[],
+): SessionListProjectOrganization {
+	return {
+		current,
+		destinations: destinations.map(({ id, name }) => ({ id, title: name })),
+		move: destination => projects.moveSession(sessionId, current, destination),
+	};
+}
+
+export function sessionListProjectActions(
+	project: SessionListProjectOrganization,
+	destinations: SessionListProjectOrganization['destinations'],
+	run: (operation: () => Promise<void>) => Promise<void>,
+): readonly IAction[] {
+	const targets = destinations.map(({ id, title }): IAction => ({
+		id: `sessions.list.moveToProject.${id}`, label: title, tooltip: title,
+		checked: id === project.current, enabled: id !== project.current, run: () => run(() => project.move(id)),
+	}));
+	const move = new SubmenuAction('sessions.list.moveToProject', localize('sessions.chatgpt.moveToProject', 'Move to project'),
+		targets.length ? targets : [{ id: 'sessions.list.noProjectDestination', label: localize('sessions.chatgpt.noProjects', 'No projects'), tooltip: '', enabled: false, run: () => { } }], Lxicon.folder);
+	return project.current ? [move, {
+		id: 'sessions.list.removeFromProject', label: localize('sessions.list.removeFromProject', 'Remove from project'),
+		tooltip: '', enabled: true, run: () => run(() => project.move(undefined)),
+	}] : [move];
+}
+
+interface SessionsListDragOptions {
+	organization(element: HTMLElement): SessionListOrganization | undefined;
+	reference?(element: HTMLElement): URI | undefined;
+	canReorder?(element: HTMLElement): boolean;
+	reorder?(source: HTMLElement, target: HTMLElement): (() => void) | undefined;
+	didMove?(source: HTMLElement, target: HTMLElement, from: string | undefined): void;
+	onError(error: unknown): void;
+}
+
+class SessionsListDragAndDrop extends Disposable implements TreeDragAndDrop<HTMLElement> {
+	private readonly referenceDrag = this._register(new MutableDisposable());
+
+	constructor(document: Document, private readonly options: SessionsListDragOptions) {
+		super();
+		// A composer can consume the drag and cause the source row to be removed.
+		this._register(addDisposableListener(document, 'dragend', () => this.referenceDrag.clear(), true));
+	}
+
+	getDragURI(element: HTMLElement): string | undefined {
+		const reference = this.options.reference?.(element);
+		if (reference) return reference.toString();
+		const organization = this.options.organization(element);
+		if (organization?.setPinned || organization?.project || organization?.moveToGroup || this.options.canReorder?.(element)) {
+			return `ash-session-list:${encodeURIComponent(SessionsListTree.id(element))}`;
+		}
+	}
+
+	onDragStart(data: TreeDragData<HTMLElement>, event: DragEvent): void {
+		this.referenceDrag.clear();
+		if (data.kind !== DragAndDropDataKind.Internal || !event.dataTransfer) return;
+		const element = data.elements[0];
+		if (!element) return;
+		const reference = this.options.reference?.(element);
+		if (reference) {
+			this.referenceDrag.value = fillChatReferenceDragData(event.dataTransfer, reference);
+			event.dataTransfer.effectAllowed = this.options.organization(element) ? 'copyMove' : 'copy';
+		} else {
+			event.dataTransfer.clearData('text/uri-list');
+			event.dataTransfer.setData('application/x-ash-session-order', '');
+			event.dataTransfer.effectAllowed = 'move';
+		}
+	}
+
+	onDragOver(data: TreeDragData<HTMLElement>, target: HTMLElement | undefined): boolean {
+		return !!this.operation(data, target);
+	}
+
+	drop(data: TreeDragData<HTMLElement>, target: HTMLElement | undefined): void {
+		const run = this.operation(data, target);
+		if (!run || !target || data.kind !== DragAndDropDataKind.Internal) return;
+		const source = data.elements[0]!;
+		const from = source.dataset.parentSection;
+		try {
+			void Promise.resolve(run()).then(() => this.options.didMove?.(source, target, from), this.options.onError);
+		} catch (error) {
+			this.options.onError(error);
+		}
+	}
+
+	private operation(data: TreeDragData<HTMLElement>, target: HTMLElement | undefined): (() => void | Promise<void>) | undefined {
+		if (data.kind !== DragAndDropDataKind.Internal || !target) return;
+		const source = data.elements[0];
+		if (!source?.isConnected || source === target) return;
+		const reorder = this.options.reorder?.(source, target);
+		if (reorder) return reorder;
+		const item = this.options.organization(source);
+		if (!item) return;
+		const project = item.project;
+		const destination = target.dataset.projectId ?? target.dataset.parentProjectId;
+		const from = source.dataset.parentSection;
+		const leavingPinned = from === 'pinned' && !source.dataset.parentProjectId && item.pinned;
+		if (destination) {
+			if (!project?.destinations.some(({ id }) => id === destination)) return;
+			if (project.current === destination) {
+				if (leavingPinned && item.setPinned) return () => item.setPinned!(false);
+				return;
+			}
+			return async () => {
+				await project.move(destination);
+				if (leavingPinned) await item.setPinned?.(false);
+			};
+		}
+		const section = target.dataset.section ?? target.dataset.parentSection;
+		if (section === from) return;
+		if (section === 'pinned' && item.setPinned) return () => item.setPinned!(true);
+		if (section === 'recent') {
+			if (leavingPinned && item.setPinned) return () => item.setPinned!(false);
+			if (project?.current && source.dataset.parentProjectId) return () => project.move(undefined);
+			if (item.moveToGroup) return () => item.moveToGroup!(null);
+		}
+		if (section?.startsWith('group:') && target.dataset.groupDropTarget === 'true' && item.moveToGroup) {
+			return async () => {
+				await item.moveToGroup!(section.slice('group:'.length));
+				if (item.pinned) await item.setPinned?.(false);
+			};
+		}
+	}
+}
 
 /** Session picker owned by the dedicated Sessions Workbench sidebar. */
 export class SessionsList extends DomWidget {
@@ -140,7 +287,28 @@ export class SessionsList extends DomWidget {
 		header.append(heading);
 		const config = configuration ?? this._register(new InMemoryConfigurationService());
 		// Embedded Sessions shares Chat's viewport with the conversation history.
-		this.tree = this._register(new SessionsListTree(this.domNode, title, config, this.entry ? 'external' : 'managed'));
+		this.tree = this._register(new SessionsListTree(this.domNode, title, config, this.entry ? 'external' : 'managed', {
+			organization: element => this.getOrganization(element),
+			reference: element => {
+				const target = this.items.get(element.dataset.item ?? '')?.target;
+				return target && LocalChatSessionUri.forSession(target.sessionId, target.threadId);
+			},
+			canReorder: element => !!element.dataset.sectionOrderId,
+			reorder: (source, target) => {
+				const attribute = source.dataset.rowOrderId ? 'rowOrderId' : 'sectionOrderId';
+				const id = target.dataset[attribute];
+				if (source.dataset[attribute] && id && this.parents.get(source) === this.parents.get(target)) {
+					return () => this.moveOrderedItem(source, attribute, id);
+				}
+			},
+			didMove: (source, target, from) => {
+				const id = target.dataset.rowOrderId;
+				if (id && source.dataset.rowOrderId && source.dataset.parentSection !== from && this.parents.get(source) === this.parents.get(target)) {
+					this.moveOrderedItem(source, 'rowOrderId', id);
+				}
+			},
+			onError: error => this.notifications.error(toErrorMessage(error)),
+		}));
 		this.list = this.tree.domNode;
 		this.list.classList.add('ash-sessions-list-items');
 		this._register(this.tree.onDidChangeCollapseState(({ element, collapsed }) => {
@@ -176,7 +344,6 @@ export class SessionsList extends DomWidget {
 			const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : Math.max(0, Math.min(buttons.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
 			buttons[next]?.focus();
 		}, true));
-		this.registerOrderingDragAndDrop();
 		this._register(sessionService.onDidChange(() => this.render()));
 		this._register(storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && event.key.startsWith(`sessions.list.${mode}.collapsed.`)
@@ -360,75 +527,19 @@ export class SessionsList extends DomWidget {
 		this.render();
 	}
 
-	private registerOrderingDragAndDrop(): void {
-		const selector = '[data-row-order-id], [data-section-order-id]';
-		const referenceDrag = this._register(new MutableDisposable());
-		let source: HTMLElement | undefined;
-		const destination = (event: DragEvent) => {
-			const target = (event.target as Element | null)?.closest<HTMLElement>(`${selector}, [data-section]`);
-			if (!source || !target || source === target || !this.list.contains(source)) return;
-			const attribute = source.dataset.rowOrderId ? 'rowOrderId' : 'sectionOrderId';
-			if (this.parents.get(source) === this.parents.get(target) && target.dataset[attribute]) return { target, attribute } as const;
-			if (attribute !== 'rowOrderId') return;
-			const section = target.dataset.section ?? this.parents.get(target)?.element.dataset.section;
-			const from = this.parents.get(source)?.element.dataset.section;
-			if (section !== from && (section === 'pinned' || section === 'recent'
-				|| this.groups.groups.some(group => group.kind !== 'comparison' && section === `group:${group.sectionId}`))) {
-				return { target, attribute, section } as const;
-			}
-		};
-		this._register(addDisposableListener(this.list, 'dragstart', event => {
-			const handle = (event.target as Element | null)?.closest<HTMLElement>('[draggable="true"]');
-			referenceDrag.clear();
-			const item = handle?.dataset.item ? this.items.get(handle.dataset.item) : undefined;
-			source = item
-				? (item.domNode.matches(selector) ? item.domNode : undefined)
-				: handle?.closest<HTMLElement>(selector) ?? undefined;
-			const conversation = item?.target;
-			if (conversation && event.dataTransfer) {
-				referenceDrag.value = fillChatReferenceDragData(event.dataTransfer, LocalChatSessionUri.forSession(conversation.sessionId, conversation.threadId));
-				event.dataTransfer.effectAllowed = source ? 'copyMove' : 'copy';
-			}
-			if (source && event.dataTransfer) {
-				if (!conversation) event.dataTransfer.effectAllowed = 'move';
-				event.dataTransfer.setData('application/x-ash-session-order', '');
-			}
-		}));
-		this._register(addDisposableListener(this.list, 'dragover', event => {
-			if (!destination(event)) return;
-			event.preventDefault();
-			if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-		}));
-		this._register(addDisposableListener(this.list, 'drop', event => {
-			const drop = destination(event);
-			if (!drop || !source) return;
-			event.preventDefault();
-			if ('section' in drop && drop.section) {
-				void this.moveToSection(source.dataset.rowOrderId!, drop.section, drop.target.dataset.rowOrderId).catch(error => this.notifications.error(String(error)));
-			} else {
-				this.moveOrderedItem(source, drop.attribute, drop.target.dataset[drop.attribute]!);
-			}
-			source = undefined;
-		}));
-		this._register(addDisposableListener(this.list.ownerDocument, 'dragend', () => {
-			source = undefined;
-			referenceDrag.clear();
-		}, true));
-	}
-
-	private async moveToSection(id: string, section: string, targetId?: string): Promise<void> {
+	private getOrganization(element: HTMLElement): SessionListOrganization | undefined {
+		const id = element.dataset.rowOrderId;
+		if (!id) return;
 		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === id && candidate.status === 'active');
 		if (!session) return;
-		if (section === 'pinned') {
-			this.listModel.pinSession(session);
-		} else {
-			const group = section === 'recent' ? null : section.slice('group:'.length);
-			await this.groups.move(id, group);
-			if (this.isDisposed) return;
-			this.listModel.unpinSession(session);
-		}
-		const item = this.items.get(`session:${id}`)?.domNode;
-		if (item && targetId) this.moveOrderedItem(item, 'rowOrderId', targetId);
+		const memberships = this.projects.filter(project => project.sessionIds.includes(id));
+		const current = element.dataset.parentProjectId ?? (memberships.length === 1 ? memberships[0]!.id : undefined);
+		return {
+			pinned: this.listModel.isSessionPinned(session),
+			setPinned: pinned => pinned ? this.listModel.pinSession(session) : this.listModel.unpinSession(session),
+			moveToGroup: group => this.groups.move(id, group),
+			project: session.backendSessionId ? undefined : sessionProjectOrganization(this.projectService, id, current, this.projects),
+		};
 	}
 
 	private moveOrderedItem(element: HTMLElement, attribute: 'rowOrderId' | 'sectionOrderId', targetId: string): void {
@@ -541,6 +652,15 @@ export class SessionsList extends DomWidget {
 					run: () => this.commands.executeCommand(MOVE_CHAT_TO_SESSION_ACTION_ID, { sessionId: session.sessionId, threadId }),
 				});
 			}
+		}
+		const project = this.getOrganization(item.domNode)?.project;
+		if (project && (project.current || project.destinations.length)) {
+			sessionActions.push(...sessionListProjectActions(project, project.destinations, async run => {
+				try {
+					await run();
+					if (!this.isDisposed) this.tree.focusRow(item.domNode);
+				} catch (error) { this.notifications.error(toErrorMessage(error)); }
+			}));
 		}
 		this.rowMenuContext.clear();
 		const context = this.rowMenuContext.value = this.contextKeys?.createScoped(item.domNode);
@@ -705,7 +825,7 @@ export class SessionsList extends DomWidget {
 			});
 			if (group) {
 				section.domNode.dataset.sectionOrderId = key;
-				section.button.draggable = true;
+				section.domNode.dataset.groupDropTarget = String(group.kind !== 'comparison');
 				section.setContextMenu(anchor => this.showSectionMenu(section, group, anchor));
 			}
 			return section.domNode;
@@ -763,7 +883,6 @@ export class SessionsList extends DomWidget {
 			const children = nested.map(chat => {
 				const child = itemFor(`chat:${JSON.stringify([session.sessionId, chat.threadId])}`, Lxicon.chatSession, true);
 				child.target = { sessionId: session.sessionId, threadId: chat.threadId };
-				child.domNode.draggable = true;
 				child.update(chat.title || localize('sessions.list.untitledChat', 'Untitled Chat'), current?.threadId === chat.threadId,
 					() => this.openRow(() => this.viewService.openSession(session.sessionId, chat.threadId)), chat.management);
 				child.updateSummary(this.hoverService, getSessionSummaryHoverData(session, chat));
@@ -772,11 +891,11 @@ export class SessionsList extends DomWidget {
 			});
 			item.children = [...children, ...(nestedDrafts.get(session.sessionId) ?? [])];
 			item.domNode.dataset.rowOrderId = session.sessionId;
-			item.domNode.draggable = true;
 			if (this.listModel.isSessionPinned(session)) pinned.push(item.domNode);
 			else remaining.set(session.sessionId, item.domNode);
 		}
 		const projects: HTMLElement[] = [];
+		let hasProjectConversations = false;
 		const chatGroups: HTMLElement[] = [];
 		for (const project of this.projects) {
 			const members = this.mode === 'code' ? project.sessionIds.flatMap(id => {
@@ -785,9 +904,11 @@ export class SessionsList extends DomWidget {
 				remaining.delete(id);
 				return [item];
 			}) : [];
+			hasProjectConversations ||= members.length > 0;
 			const drafts = projectDrafts.get(project.id) ?? [];
 			if (!members.length && !drafts.length && !this.search.matches(project.name)) continue;
 			const item = itemFor(`project:${project.id}`, Lxicon.projects);
+			item.domNode.dataset.projectId = project.id;
 			item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
 			item.children = [...members, ...drafts];
 			projects.push(item.domNode);
@@ -849,7 +970,9 @@ export class SessionsList extends DomWidget {
 		if (pinned.length) ordered.push(sectionFor('pinned', localize('sessions.list.pinned', 'Pinned'), pinned));
 		if (projects.length) ordered.push(sectionFor('projects', localize('projects.title', 'Projects'), projects));
 		ordered.push(...reorderChildren(chatGroups, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId'));
-		if (orderedRecent.length) ordered.push(sectionFor('recent', this.mode === 'chat' ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents'), orderedRecent));
+		if (orderedRecent.length || !this.search.hasQuery && (pinned.length || hasProjectConversations)) {
+			ordered.push(sectionFor('recent', this.mode === 'chat' ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents'), orderedRecent));
+		}
 		if (showEmpty && emptyStatus) ordered.push(this.empty);
 		// Keep filtered rows available so closing search can restore the original focus target.
 		if (!this.search.hasQuery) {
@@ -864,6 +987,14 @@ export class SessionsList extends DomWidget {
 			const children: ObjectTreeElement<HTMLElement>[] = [];
 			const branch = { element, children, collapsible: !!section, collapsed: !!section && !this.search.hasQuery && this.storage.getBoolean(this.collapseKey(key!), StorageScope.PROFILE, false) };
 			this.parents.set(element, parent);
+			const projectId = parent?.element.dataset.projectId ?? parent?.element.dataset.parentProjectId;
+			if (projectId) element.dataset.parentProjectId = projectId;
+			else delete element.dataset.parentProjectId;
+			const groupDropTarget = parent?.element.dataset.groupDropTarget;
+			if (key === undefined) {
+				if (groupDropTarget) element.dataset.groupDropTarget = groupDropTarget;
+				else delete element.dataset.groupDropTarget;
+			}
 			if (parent) element.dataset.parentSection = parent.element.dataset.section ?? parent.element.dataset.parentSection ?? '';
 			else delete element.dataset.parentSection;
 			for (const child of section?.children ?? item?.children ?? []) children.push(project(child, branch));
@@ -1172,7 +1303,8 @@ export class SessionListRowRenderer extends Disposable {
 
 /** Shared tree renderer for the retained controls supplied by each session sidebar. */
 export class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
-	constructor(container: HTMLElement, title: string, configurationService: IConfigurationService, scrolling: 'external' | 'managed' = 'external') {
+	constructor(container: HTMLElement, title: string, configurationService: IConfigurationService, scrolling: 'external' | 'managed' = 'external', dragOptions?: SessionsListDragOptions) {
+		const dnd = dragOptions && new SessionsListDragAndDrop(container.ownerDocument, dragOptions);
 		super(container, {
 			configurationService,
 			ariaLabel: title,
@@ -1183,6 +1315,7 @@ export class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
 				},
 			},
 			scrolling,
+			dnd,
 			expandOnDoubleClick: false,
 			indent: 0,
 			indentGuides: 'none',
@@ -1193,6 +1326,7 @@ export class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
 				if (element.dataset.section !== undefined) sectionRenderers.get(element)?.renderCollapse(!state.expanded);
 			},
 		});
+		if (dnd) this._register(dnd);
 		this.element.classList.add('ash-sessions-list-tree');
 		this.element.tabIndex = -1;
 	}

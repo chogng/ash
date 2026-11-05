@@ -7,6 +7,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
+import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsListModelService } from '../../../services/sessions/browser/sessionsListModelService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
@@ -22,6 +23,7 @@ export class AshChatNavigationSource implements ChatListSource {
 		@ISessionsManagementService management: ISessionsManagementService,
 		@ISessionsService sessions: ISessionsService,
 		@ISessionsListModelService list: ISessionsListModelService,
+		@ISessionGroupsService groups: ISessionGroupsService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@ICommandService commands: ICommandService,
 		@ILayoutService layout: ILayoutService,
@@ -32,11 +34,13 @@ export class AshChatNavigationSource implements ChatListSource {
 		}), () => contextKeys.getValue(ASH_CHAT_SELECTED_CONTEXT) === true);
 		const catalog = observableFromEvent(this, management.onDidChange, () => management.sessions);
 		const listChanged = observableSignalFromEvent(this, list.onDidChange);
+		const groupsChanged = observableSignalFromEvent(this, groups.onDidChange);
 		const working: ISessionStatusIcon = {
 			label: localize('sessions.management.working', 'Working'), kind: 'inProgress', icon: Lxicon.sync,
 		};
 		this.snapshot = derived<ChatListSnapshot>(reader => {
 			listChanged.read(reader);
+			groupsChanged.read(reader);
 			const selection = sessions.getSelection(reader).activeSelection;
 			const selectedId = active.read(reader) && selection?.kind === 'session' ? selection.active.session.sessionId : undefined;
 			const rows: ChatListEntry[] = [];
@@ -66,6 +70,7 @@ export class AshChatNavigationSource implements ChatListSource {
 					setIcon: icon => list.setRowIcon(`session:${id}`, icon?.id),
 					pinned: isPinned,
 					setPinned: pinned => pinned ? list.pinSession(session) : list.unpinSession(session),
+					moveToGroup: group => groups.move(id, group),
 					open: async signal => {
 						await commands.executeCommand(SHOW_ASH_CHAT_COMMAND);
 						if (signal.aborted) return;
@@ -74,13 +79,14 @@ export class AshChatNavigationSource implements ChatListSource {
 					},
 					getActions: () => [
 						action('agentSession.rename', localize('sessions.list.rename', 'Rename'), Lxicon.edit),
+						action('agentSession.moveToGroup', localize('sessions.list.moveToGroup', 'Move to group'), Lxicon.folders),
 						new Separator(),
 						action('agentSession.archive', localize('chatSession.archive', 'Archive'), Lxicon.archive),
 						{ ...action('agentSession.delete', localize('sessions.list.delete', 'Delete'), Lxicon.trash), class: 'ash-chat-navigation-delete-action' },
 					],
 				});
 			}
-			return { entries: rows };
+			return { entries: rows, groups: groups.groups.filter(group => group.kind !== 'comparison') };
 		});
 	}
 }

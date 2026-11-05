@@ -18,8 +18,8 @@ export const CODE_NAVIGATION_CONTAINER_ID = 'sessions.navigation.code';
 export function registerSessionsNavigation(): IDisposable {
 	const registrations = new DisposableStore();
 	for (const [id, title, key, ctorDescriptor] of [
-		[SESSIONS_NAVIGATION_CONTAINER_ID, localize('sessions.activity.chat', 'Chat'), 'sessions.activity.chat', new SyncDescriptor(SessionsNavigationView, ['chat'])],
-		[CODE_NAVIGATION_CONTAINER_ID, localize({ bundle: 'ash', key: 'sessions.mode.code' }, 'Code'), 'sessions.mode.code', new SyncDescriptor(SessionsNavigationView, ['code'])],
+		[SESSIONS_NAVIGATION_CONTAINER_ID, localize('sessions.activity.chat', 'Chat'), 'sessions.activity.chat', new SyncDescriptor(SessionsView, ['chat'])],
+		[CODE_NAVIGATION_CONTAINER_ID, localize({ bundle: 'ash', key: 'sessions.mode.code' }, 'Code'), 'sessions.mode.code', new SyncDescriptor(SessionsView, ['code'])],
 	] as const) {
 		registrations.add(SessionsViewRegistry.registerViewContainer({ id, title, localizationKey: { bundle: 'ash', key }, location: ViewContainerLocation.Sidebar, order: 0 }));
 		registrations.add(SessionsViewRegistry.registerViews(id, [{ id: id + '.view', title, localizationKey: { bundle: 'ash', key }, ctorDescriptor, canToggleVisibility: false }]));
@@ -27,7 +27,7 @@ export function registerSessionsNavigation(): IDisposable {
 	return registrations;
 }
 
-export class SessionsNavigationView extends ViewPane {
+export class SessionsView extends ViewPane {
 	private list: SessionsList;
 	private hiddenListState: ReturnType<SessionsList['getViewState']> | undefined;
 	private readonly embedded: boolean;

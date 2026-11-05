@@ -7,7 +7,10 @@ import { createServiceIdentifier, IInstantiationService } from '../../../../plat
 import { localize } from '../../../../nls.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 
-export interface ChatListEntry {
+import type { SessionGroup } from '../../../services/sessions/browser/sessionGroupsService.js';
+import type { SessionListOrganization } from '../../sessions/browser/views/sessionsList.js';
+
+export interface ChatListEntry extends SessionListOrganization {
 	/** Opaque identity, unique across the entire list. */
 	readonly id: string;
 	readonly title: string;
@@ -19,12 +22,10 @@ export interface ChatListEntry {
 	readonly status?: ISessionStatusIcon;
 	readonly disabled?: boolean;
 	readonly actionsDisabled?: boolean;
-	readonly pinned?: boolean;
 	readonly defaultIcon: Icon;
 	readonly iconId?: string;
 	readonly setIcon?: (icon: Icon | undefined) => void;
 	readonly open: (signal: AbortSignal) => Promise<void>;
-	readonly setPinned?: (pinned: boolean) => void | Promise<void>;
 	readonly getActions: (signal: AbortSignal, restoreFocus: () => void) => readonly IAction[] | Promise<readonly IAction[]>;
 }
 
@@ -57,6 +58,7 @@ export interface ChatListProject {
 export interface ChatListSnapshot {
 	readonly entries: readonly ChatListEntry[];
 	readonly projects?: readonly ChatListProject[];
+	readonly groups?: readonly SessionGroup[];
 	readonly loading?: boolean;
 }
 

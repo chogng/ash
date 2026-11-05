@@ -552,6 +552,13 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await page.getByRole('menuitemcheckbox', { name: 'Project Two', exact: true }).click();
 			await expect.poll(() => writes.some(write => write.body?.gizmo_id === 'g-p-two')).toBe(true);
 			await openMore();
+			await page.getByRole('menuitem', { name: zh ? '从项目中移除' : 'Remove from project', exact: true }).click();
+			await expect.poll(() => writes.some(write => write.body?.gizmo_id === null)).toBe(true);
+			const recent = page.locator('.ash-chat-navigation-list [data-section="recent"] > h3 button');
+			await row.dragTo(recent);
+			await expect.poll(() => writes.some(write => write.body?.is_starred === false)).toBe(true);
+			await expect(row).toHaveAttribute('data-parent-section', 'recent');
+			await openMore();
 			await page.getByRole('menuitem', { name: labels.rename, exact: true }).click();
 			const name = page.getByRole('textbox', { name: labels.rename, exact: true });
 			await name.fill('Renamed conversation');
@@ -579,6 +586,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(third).toHaveCount(0);
 			await expect(page.locator('.ash-chat-navigation-row .ash-chat-navigation-item')).toHaveText(['Other chat']);
 			expect(writes.map(write => [write.method, write.path])).toEqual([
+				['PATCH', '/service/backend-api/conversation/fixture-chat'], ['PATCH', '/service/backend-api/conversation/fixture-chat'],
 				['PATCH', '/service/backend-api/conversation/fixture-chat'], ['PATCH', '/service/backend-api/conversation/fixture-chat'],
 				['POST', '/service/backend-api/conversation/id/fixture-chat/rename'], ['POST', '/service/backend-api/share/v2/create'],
 				['PATCH', '/service/backend-api/conversation/fixture-chat'], ['DELETE', '/service/backend-api/conversation/id/third'],

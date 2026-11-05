@@ -502,15 +502,9 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	): ISessionsConversationPane {
 		const options = this.options;
 		if (kind === 'cowork') return options.createCoworkPane(container, panelId, selection);
-		const view = this.services.createInstance(NewChatView, container.ownerDocument, panelId, selection,
-			options.createNewSession, () => this.updateInfoContext());
-		try {
-			view.render(container);
-			return view;
-		} catch (error) {
-			view.dispose();
-			throw error;
-		}
+		return this.services.createInstance(NewChatView, container, {
+			panelId, selection, createNewSession: options.createNewSession, onDidChangeInfo: () => this.updateInfoContext(),
+		});
 	}
 }
 

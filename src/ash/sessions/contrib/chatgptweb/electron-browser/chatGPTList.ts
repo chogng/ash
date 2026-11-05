@@ -1,6 +1,6 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { disposableWindowInterval } from '../../../../base/browser/scheduler.js';
-import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
+import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
@@ -97,15 +97,21 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 				return status === 'created' || status === 'running' || status === 'cancelling';
 			});
 			const projects = new Set(state.projects.map(project => project.id));
+			const visibleProjects = (available: typeof state.projects) => available.filter(project => {
+				const key = projectArchiveKey(project.id, state.catalogScope);
+				return !key || !this.storage.getBoolean(key, StorageScope.PROFILE, false);
+			});
+			const destinations = visibleProjects(state.projects);
 			const entries = state.conversations.map((conversation): ChatListEntry => {
 				const { id, title, pinned, projectId } = conversation;
 				const selected = id === current;
 				const iconKey = conversationIconKey(id, state.catalogScope);
+				// Custom GPT conversations also have gizmo IDs, but are not project members.
+				const currentProject = projectId && (projectId.startsWith('g-p-') || projects.has(projectId)) ? projectId : undefined;
 				return {
 					id: `chatgpt:${id}`,
 					title, pinned,
-					// Custom GPT conversations also have gizmo IDs, but are not project members.
-					projectId: projectId && (projectId.startsWith('g-p-') || projects.has(projectId)) ? projectId : undefined,
+					projectId: currentProject,
 					selected: selected && showSelection,
 					status: state.loading?.kind === 'conversation' && state.loading.id === id ? this.loadingStatus
 						: selected && state.sending ? this.replyingStatus
@@ -123,7 +129,18 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 					} : undefined,
 					open: signal => this.open(id, signal),
 					setPinned: id.startsWith('pending:') ? undefined : pinned => chat.setPinned(id, pinned),
-					getActions: (signal, restoreFocus) => this.getActions(conversation, signal, restoreFocus),
+					project: !conversation.local && !id.startsWith('pending:') && (!projectId || currentProject) && state.connected && state.networkAvailable ? {
+						current: currentProject,
+						destinations,
+						loadDestinations: async signal => visibleProjects(await this.chat.listProjects(signal)),
+						move: async destination => {
+							if (state.catalogScope !== this.chat.state.get().catalogScope) {
+								throw new Error(localize('sessions.chatgpt.projectMoveFailed', 'Could not move this conversation. Try again.'));
+							}
+							await this.chat.moveToProject(id, destination ?? null);
+						},
+					} : undefined,
+					getActions: (_signal, restoreFocus) => this.getActions(conversation, restoreFocus),
 				};
 			});
 			return {
@@ -205,7 +222,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		return { id: `sessions.chatgpt.${id}`, label, tooltip: label, icon, enabled: true, run };
 	}
 
-	private async getActions(conversation: ChatGPTConversation, signal: AbortSignal, restoreFocus: () => void): Promise<readonly IAction[]> {
+	private getActions(conversation: ChatGPTConversation, restoreFocus: () => void): readonly IAction[] {
 		const state = this.chat.state.get();
 		const remove = { ...this.action('delete', localize('sessions.chatgpt.delete', 'Delete'), Lxicon.trash, () => this.deleteConversation(conversation)), class: 'ash-chat-navigation-delete-action' };
 		if (conversation.id.startsWith('pending:') || !conversation.local && (!state.connected || !state.networkAvailable)) {
@@ -217,24 +234,6 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		})];
 		if (!conversation.local) {
 			actions.push(new Separator(), this.action('share', localize('sessions.chatgpt.share', 'Share'), Lxicon.share, () => shareChatGPTConversation(this.chat, this.dialogs, this.clipboard, conversation.id, conversation.title)));
-			let projects: readonly IAction[];
-			try {
-				const available = await this.chat.listProjects(signal);
-				const scope = this.chat.state.get().catalogScope;
-				projects = available.filter(project => {
-					const key = projectArchiveKey(project.id, scope);
-					return !key || !this.storage.getBoolean(key, StorageScope.PROFILE, false);
-				}).map(project => ({
-					...this.action(`move.${project.id}`, project.title, undefined, () => this.chat.moveToProject(conversation.id, project.id)),
-					checked: project.id === conversation.projectId,
-				}));
-				if (!projects.length) {
-					projects = [{ ...this.action('noProjects', localize('sessions.chatgpt.noProjects', 'No projects'), undefined, () => { }), enabled: false }];
-				}
-			} catch {
-				projects = [{ ...this.action('projectsUnavailable', localize('sessions.chatgpt.projectsUnavailable', 'Could not load projects. Reopen the menu to retry.'), undefined, () => { }), enabled: false }];
-			}
-			actions.push(new SubmenuAction('sessions.chatgpt.moveToProject', localize('sessions.chatgpt.moveToProject', 'Move to project'), projects, Lxicon.folder));
 		}
 		actions.push(new Separator(), this.action('archive', localize('sessions.chatgpt.archive', 'Archive'), Lxicon.archive, () => this.chat.archive(conversation.id)), remove);
 		return actions;

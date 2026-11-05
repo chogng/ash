@@ -30,7 +30,6 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
 import { ActionListItemKind, type IActionListItem, type IActionListItemInlineToggle } from '../../../../platform/actionWidget/browser/actionList.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
-import type { IManagedHover } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../common/agentHostSessionsProvider.js';
@@ -106,9 +105,6 @@ export class SessionWorkspacePicker extends Disposable {
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 	) {
 		super();
-		const host = this.host = h(container.ownerDocument, 'div', { className: 'ash-sessions-chat-input-workspace' });
-		container.prepend(host);
-		this._register(toDisposable(() => host.remove()));
 		const owner = this;
 		this.workspaceFallback = instantiation.createInstance(SessionWorkspaceFallback);
 		this.recentWorkspaces = instantiation.createInstance(SessionsRecentWorkspacesService);
@@ -126,7 +122,7 @@ export class SessionWorkspacePicker extends Disposable {
 				placeholder: localize({ bundle: 'ash.sessions', key: 'sessions.project.search' }, 'Search projects and folders'),
 			},
 		}));
-		this.picker.render(host);
+		this.host = this.picker.render(container);
 		this._register(sessions.onDidChange(() => this.render()));
 		this._register(model.onDidChange(() => this.render()));
 		this._register(workspace.onDidChangeWorkspaceFolders(() => this.render()));
@@ -612,7 +608,7 @@ export class WorkspacePicker extends Disposable {
 		folderUri: undefined, origin: WorkspaceSelectionOrigin.None, state: 'none', historyState: 'loading',
 	});
 
-	private hover!: IManagedHover;
+	private readonly renderDisposables = this._register(new DisposableStore());
 	private dropdown: ActionWidgetDropdown | undefined;
 
 	constructor(
@@ -622,9 +618,12 @@ export class WorkspacePicker extends Disposable {
 		@INotificationService private readonly notifications: INotificationService,
 	) { super(); }
 
-	public render(container: HTMLElement): void {
+	public render(container: HTMLElement): HTMLElement {
+		this.renderDisposables.clear();
 		const trigger = this.options.trigger!;
-		const dropdown = this.dropdown = this._register(new ActionWidgetDropdown(container, {
+		const slot = h(container.ownerDocument, 'div', { className: 'ash-sessions-chat-input-workspace' });
+		container.prepend(slot);
+		const dropdown = this.dropdown = this.renderDisposables.add(new ActionWidgetDropdown(slot, {
 			label: trigger.action.label, ariaLabel: trigger.action.tooltip,
 			buttonOptions: { icon: trigger.action.icon, presentation: 'quiet', size: 'small' },
 			onOpen: () => { trigger.action.run(); },
@@ -640,17 +639,22 @@ export class WorkspacePicker extends Disposable {
 			},
 		}, trigger.actionWidget));
 		dropdown.element.classList.add('ash-sessions-workspace-picker');
-		this._register(trackChatInputPickerFocus(container));
-		this.hover = this._register(getHoverDelegate().setupHover({ target: dropdown.element, content: trigger.action.tooltip }));
+		this.renderDisposables.add(trackChatInputPickerFocus(slot));
+		const hover = this.renderDisposables.add(getHoverDelegate().setupHover({ target: dropdown.element, content: trigger.action.tooltip }));
 		const update = (): void => {
 			dropdown.setLabel(trigger.action.label);
 			dropdown.setEnabled(trigger.action.enabled);
 			dropdown.element.tabIndex = trigger.action.enabled ? 0 : -1;
 			dropdown.element.setAttribute('aria-label', trigger.action.tooltip);
-			this.hover.update(trigger.action.tooltip);
+			hover.update(trigger.action.tooltip);
 		};
-		this._register(trigger.onDidChange(update));
+		this.renderDisposables.add(trigger.onDidChange(update));
+		this.renderDisposables.add(toDisposable(() => {
+			this.dropdown = undefined;
+			slot.remove();
+		}));
 		update();
+		return slot;
 	}
 	public focus(): void {
 		this.dropdown?.focus();

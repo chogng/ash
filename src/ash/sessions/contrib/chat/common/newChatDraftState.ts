@@ -1,3 +1,4 @@
+import { structuralEquals } from '../../../../base/common/equals.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { generateUuid, isUuid } from '../../../../base/common/uuid.js';
 import { validateOpenAgentsWindow, type IOpenAgentsWindowOptions } from '../../../../platform/native/common/nativeHost.js';
@@ -106,7 +107,7 @@ export function migrateNewChatDraftState(storage: IStorageService, persistence: 
 				const draft = validateChatDraft(persistence.deserializeUntitledInputState(storage.get(key, StorageScope.WORKSPACE)!));
 				const identity = key.slice(prefix.length + 1);
 				const existing = identity ? readStoredDraft(storage, identity, persistence)?.draft : undefined;
-				if (!identity || existing && JSON.stringify(existing) !== JSON.stringify(draft)) {
+				if (!identity || existing && !structuralEquals(existing, draft)) {
 					recovered.push({ draft, key });
 					continue;
 				}

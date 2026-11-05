@@ -38,6 +38,17 @@ test('malformed legacy drafts preserve their raw entries while valid drafts stil
 	assert.deepEqual(readNewChatDraftState(storage, 'valid', chatInputStatePersistence), draft);
 });
 
+test('migration deduplicates matching drafts with differently ordered fields', () => {
+	using fixture = createStorage();
+	const { storage } = fixture;
+	writeNewChatDraftState(storage, draft, 'same', chatInputStatePersistence);
+	storage.store('sessions.draftState:same', JSON.stringify({ contexts: draft.contexts, text: draft.text, mode: draft.mode }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+
+	assert.deepEqual(migrateNewChatDraftState(storage, chatInputStatePersistence), []);
+	assert.equal(storage.get('sessions.draftState:same', StorageScope.WORKSPACE), undefined);
+	assert.deepEqual(readNewChatDraftState(storage, 'same', chatInputStatePersistence), draft);
+});
+
 test('a corrupt destination preserves both copies and does not block another draft', () => {
 	using fixture = createStorage();
 	const storage = fixture.storage;

@@ -26,7 +26,7 @@ import type { ISessionsProvider } from '../../../services/sessions/common/sessio
 import type { IUntitledChatSession } from '../../../services/sessions/common/session.js';
 import { h } from '../../../../base/browser/dom.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
-import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
@@ -36,19 +36,19 @@ import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browse
 
 export class SessionEnvironmentPicker extends Disposable {
 	private readonly newEnvironment = this._register(new MutableDisposable<NewEnvironmentDialog>());
-	private readonly dropdown: ActionWidgetDropdown;
+	private dropdown: ActionWidgetDropdown | undefined;
 	private readonly connecting = this._register(new MutableDisposable());
 	private readonly folderAuthorization = this._register(new MutableDisposable());
-	private readonly host: HTMLElement;
+	private host: HTMLElement | undefined;
+	private rendered = false;
 	private visible = true;
 
 	constructor(
-		container: HTMLElement,
 		private readonly model: IChatWidgetModel,
 		private readonly persistDraft: () => Promise<void>,
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 		@ISessionsProvidersService private readonly providers: ISessionsProvidersService,
-		@IActionWidgetService menus: IActionWidgetService,
+		@IActionWidgetService private readonly menus: IActionWidgetService,
 		@ICommandService private readonly commands: ICommandService,
 		@IRemoteAgentHostService private readonly remoteHosts: IRemoteAgentHostService,
 		@IRemoteConnectionService private readonly connections: IRemoteConnectionService,
@@ -60,16 +60,28 @@ export class SessionEnvironmentPicker extends Disposable {
 		@IAgentConnection private readonly localHost: IAgentConnection,
 	) {
 		super();
-		this.host = h(container.ownerDocument, 'div', { className: 'ash-sessions-environment' });
-		container.prepend(this.host);
-		this._register(toDisposable(() => this.host.remove()));
-		this.dropdown = this._register(new ActionWidgetDropdown(this.host, {
+	}
+
+	render(container: HTMLElement): IDisposable & { readonly element: HTMLElement; } {
+		if (this.rendered || this.isDisposed) throw new Error('The environment picker can only be mounted once.');
+		this.rendered = true;
+		const lifetime = this._register(new DisposableStore());
+		const element = this.host = h(container.ownerDocument, 'div', { className: 'ash-sessions-environment' });
+		container.prepend(element);
+		lifetime.add(toDisposable(() => {
+			this.dropdown = undefined;
+			this.host = undefined;
+			this.connecting.clear();
+			this.folderAuthorization.clear();
+			this.newEnvironment.clear();
+		}));
+		const dropdown = this.dropdown = lifetime.add(new ActionWidgetDropdown(element, {
 			label: '', ariaLabel: '',
 			buttonOptions: { presentation: 'quiet', size: 'small', icon: undefined, title: localize('sessions.environment.tooltip', 'Environment') },
 			onOpen: () => this.openPicker(),
 			tabLeavesPopup: true,
 			onError: error => {
-				if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
+				if (this.dropdown === dropdown && !isCancellationError(error)) this.notifications.error(error instanceof Error ? error : String(error));
 			},
 			listOptions: {
 				className: 'ash-sessions-environment-menu ash-action-widget-accent-checks',
@@ -78,13 +90,15 @@ export class SessionEnvironmentPicker extends Disposable {
 				filterPlaceholder: localize('sessions.environment.search', 'Search environments'),
 				ariaLabel: localize('sessions.environment.menu', 'Run on'),
 			},
-		}, menus));
-		this.dropdown.element.classList.add('ash-sessions-environment-picker');
-		this._register(trackChatInputPickerFocus(this.host));
-		this._register(sessions.onDidChange(() => this.update()));
-		this._register(providers.onDidChangeProviders(() => { this.dropdown.hide(); this.update(); }));
-		this._register(model.onDidChange(() => this.update()));
+		}, this.menus));
+		dropdown.element.classList.add('ash-sessions-environment-picker');
+		lifetime.add(trackChatInputPickerFocus(element));
+		lifetime.add(this.sessions.onDidChange(() => this.update()));
+		lifetime.add(this.providers.onDidChangeProviders(() => { dropdown.hide(); this.update(); }));
+		lifetime.add(this.model.onDidChange(() => this.update()));
+		lifetime.add(toDisposable(() => element.remove()));
 		this.update();
+		return Object.assign(toDisposable(() => lifetime.dispose()), { element });
 	}
 
 	private get draft() {
@@ -102,34 +116,37 @@ export class SessionEnvironmentPicker extends Disposable {
 		if (!visible) {
 			this.connecting.clear();
 			this.folderAuthorization.clear();
-			this.dropdown.element.removeAttribute('aria-busy');
+			this.dropdown?.element.removeAttribute('aria-busy');
 		}
 		this.update();
 	}
 
 	private update(): void {
+		const { dropdown, host } = this;
+		if (!dropdown || !host) return;
 		const draft = this.draft;
 		const label = draft?.environment?.name ?? this.label(draft?.providerId, draft?.providerId ? this.providers.getProvider(draft.providerId)?.label : undefined);
-		this.host.hidden = !draft;
+		host.hidden = !draft;
 		const icon = draft?.providerId === LOCAL_AGENT_HOST_PROVIDER_ID ? Lxicon.local : Lxicon.remote;
-		this.dropdown.setIcon(icon);
-		this.dropdown.setLabel(label);
-		this.dropdown.element.setAttribute('aria-label', localize('sessions.environment.label', 'Run on: {0}', label));
-		this.dropdown.setEnabled(this.visible && !!draft && !this.model.inputState.aiDisabled && this.model.inputState.phase !== 'submitting');
+		dropdown.setIcon(icon);
+		dropdown.setLabel(label);
+		dropdown.element.setAttribute('aria-label', localize('sessions.environment.label', 'Run on: {0}', label));
+		dropdown.setEnabled(this.visible && !!draft && !this.model.inputState.aiDisabled && this.model.inputState.phase !== 'submitting');
 	}
 
 	public showPicker(): void {
-		this.dropdown.focus();
+		this.dropdown?.focus();
 		this.openPicker();
 	}
 
 	private openPicker(): void {
 		const draft = this.draft;
-		if (!draft || this.dropdown.element.disabled) { return; }
+		const dropdown = this.dropdown;
+		if (!draft || !dropdown || dropdown.element.disabled) { return; }
 		let catalog: ReturnType<SessionEnvironmentPicker['loadCatalog']> | undefined;
 		const loadCatalog = () => catalog ??= this.loadCatalog();
 		const openNewEnvironment = () => this.showNewEnvironment(draft, loadCatalog());
-		this.dropdown.showItems({
+		dropdown.showItems({
 			requireIdle: true,
 			restoreFocusOnSelect: true,
 			load: () => this.buildItems(draft, [], [], openNewEnvironment),
@@ -426,13 +443,13 @@ export class SessionEnvironmentPicker extends Disposable {
 		finally {
 			controller.abort();
 			this.newEnvironment.clear();
-			if (!this.isDisposed && this.draft?.untitledSessionId === draft.untitledSessionId) this.dropdown.focus();
+			if (!this.isDisposed && this.draft?.untitledSessionId === draft.untitledSessionId) this.dropdown?.focus();
 		}
 	}
 
 	private isCurrent(draft: IUntitledChatSession): boolean {
 		const current = this.draft;
-		return !this.isDisposed && !this.dropdown.element.disabled && current?.untitledSessionId === draft.untitledSessionId
+		return !this.isDisposed && this.dropdown?.element.disabled === false && current?.untitledSessionId === draft.untitledSessionId
 			&& current.providerId === draft.providerId && current.environment === draft.environment;
 	}
 
@@ -455,11 +472,12 @@ export class SessionEnvironmentPicker extends Disposable {
 	}
 
 	private async connect(draft: IUntitledChatSession, target: RemoteConnectionDefinition): Promise<void> {
-		if (!this.isCurrent(draft)) return;
+		const dropdown = this.dropdown;
+		if (!dropdown || !this.isCurrent(draft)) return;
 		const controller = new AbortController();
 		const pending = toDisposable(() => controller.abort());
 		this.connecting.value = pending;
-		this.dropdown.element.setAttribute('aria-busy', 'true');
+		dropdown.element.setAttribute('aria-busy', 'true');
 		try {
 			await this.remoteHosts.connect(target, controller.signal);
 			if (controller.signal.aborted || !this.isCurrent(draft)) return;
@@ -471,7 +489,7 @@ export class SessionEnvironmentPicker extends Disposable {
 		} finally {
 			if (this.connecting.value === pending) {
 				this.connecting.clear();
-				this.dropdown.element.removeAttribute('aria-busy');
+				this.dropdown?.element.removeAttribute('aria-busy');
 			}
 		}
 	}

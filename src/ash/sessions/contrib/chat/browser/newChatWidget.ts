@@ -28,6 +28,12 @@ import './media/chatInput.css';
 import './media/chatInputCard.css';
 import '../../../common/theme.js';
 
+interface INewChatWidgetOptions {
+	readonly panelId: string;
+	readonly model: ChatWidgetModel;
+	readonly createNewSession: () => void;
+}
+
 /** Owns the Code chat surface and its input while retaining the shared transcript and send pipeline. */
 export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 	declare readonly input: NewChatInputWidget;
@@ -39,9 +45,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 
 	constructor(
 		container: HTMLElement,
-		panelId: string,
-		model: ChatWidgetModel,
-		createNewSession: () => void,
+		{ panelId, model, createNewSession }: INewChatWidgetOptions,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@IContextViewService contextViews: IContextViewService,
@@ -113,7 +117,8 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		footer.classList.add('ash-sessions-chat-input-footer');
 		if (!model.isNestedDraft) {
 			this.workspacePicker = this._register(instantiationService.createInstance(SessionWorkspacePicker, footer, model));
-			this.environmentPicker = this._register(instantiationService.createInstance(SessionEnvironmentPicker, footer, model, () => this.input.persistDraftForHostChange()));
+			this.environmentPicker = this._register(instantiationService.createInstance(SessionEnvironmentPicker, model, () => this.saveState()));
+			this._register(this.environmentPicker.render(footer));
 		}
 		this.renderDraftNotice(parent);
 		parent.append(footer);
@@ -136,6 +141,10 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 	}
 
 	protected renderDraftNotice(_container: HTMLElement): void { }
+
+	saveState(): Promise<void> {
+		return this.input.saveState();
+	}
 
 	focusWorkspacePicker(): void {
 		if (this.visible) { this.workspacePicker?.showPicker(); }

@@ -48,6 +48,24 @@ export class AppServerProjectService implements IProjectService {
 		} catch (error) { throw projectError(error); }
 	}
 
+	public async moveSession(sessionId: string, fromProjectId: string | undefined, toProjectId: string | undefined): Promise<void> {
+		if (fromProjectId === toProjectId) return;
+		// Link first so a failed transfer preserves the existing membership.
+		// Retrying can skip a link that already succeeded.
+		if (toProjectId) {
+			const destination = await this.read(toProjectId);
+			if (!destination.sessionIds.includes(sessionId)) await this.addSession(destination, sessionId);
+		}
+		if (!fromProjectId) return;
+		const source = await this.read(fromProjectId);
+		if (!source.sessionIds.includes(sessionId)) return;
+		try {
+			await appServerRequest(this.connection, 'project/session/unlink', {
+				commandId: generateUuid(), projectId: source.id, expectedRevision: source.revision, sessionId,
+			});
+		} catch (error) { throw projectError(error); }
+	}
+
 	public async update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project> {
 		try {
 			return fromDto((await appServerRequest(this.connection, 'project/details/update', { commandId: generateUuid(), projectId: project.id, expectedRevision: project.revision, name, description, materials: toMaterials(materials) })).project);

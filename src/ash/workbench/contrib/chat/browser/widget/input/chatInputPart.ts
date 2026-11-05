@@ -1376,8 +1376,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 
-	/** Layout hosts borrow this composer; changing hosts never copies or consumes its draft. */
-	bindDraftStorage(model: IChatWidgetModel, storage: IChatDraftStorage, onWillShutdown: ILifecycleService['onWillShutdown']): void {
+	/** Returns a checkpoint for hosts that must save the current draft before releasing this composer. */
+	bindDraftStorage(model: IChatWidgetModel, storage: IChatDraftStorage, onWillShutdown: ILifecycleService['onWillShutdown']): () => Promise<void> {
 		if (this.persistentDrafts) throw new Error('Chat composer already has a draft store');
 		this.persistentDrafts = true;
 		let threadId = model.threadId;
@@ -1401,26 +1401,21 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			const { text, contexts: attachments } = this.snapshotDraftReferences();
 			const mode = this.mode;
 			if (attachments.length === 0) { storage.write(draftId, { mode, text, contexts: [] }); return; }
-			const contexts = await Promise.all(attachments.map(async attachment => ({
-				id: attachment.id, kind: attachment.kind, name: attachment.name,
-				content: (await attachment.resolve()).content,
-				...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
-				...(attachment.reference ? { reference: attachment.reference } : {}),
-				...(attachment.terminalSnapshot ? { terminalSnapshot: attachment.terminalSnapshot } : {}),
-			}))).catch(error => {
+			const draft = await captureChatDraft(text, mode, attachments).catch(error => {
 				if (revision !== revisions.get(draftId)) return undefined;
 				throw error;
 			});
-			if (contexts && revision === revisions.get(draftId)) storage.write(draftId, { mode, text, contexts });
+			if (draft && revision === revisions.get(draftId)) storage.write(draftId, draft);
 		};
-		const save = (): void => {
+		const save = (reportError = true): Promise<void> | undefined => {
 			if (restoreFailed || restoring) return;
 			const operation = write();
 			pending.add(operation);
 			void operation.then(() => pending.delete(operation), error => {
 				pending.delete(operation);
-				if (!this.isDisposed) this.notifications.error(localize('sessions.chat.draftFailed', 'Could not save the Chat draft: {0}', String(error)));
+				if (reportError && !this.isDisposed) this.notifications.error(localize('sessions.chat.draftFailed', 'Could not save the Chat draft: {0}', String(error)));
 			});
+			return operation;
 		};
 		restoring = true;
 		restore();
@@ -1464,6 +1459,22 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			restoring = false;
 			save();
 		}));
+		return async () => {
+			const lifecycle = this.inputLifecycle.signal;
+			const draftId = identity;
+			// Edits can supersede a write while an attachment is being serialized.
+			// Wait for the current snapshot before the host replaces this input.
+			while (!this.isDisposed && !lifecycle.aborted && identity === draftId) {
+				if (this.attachmentModel.hasPendingContext) {
+					await this.attachmentModel.resolvePendingContext();
+					continue;
+				}
+				const revision = this.draftRevision;
+				const mode = this.mode;
+				await save(false);
+				if (this.draftRevision === revision && this.mode === mode && !this.attachmentModel.hasPendingContext) return;
+			}
+		};
 	}
 
 	private selectDraft(identity: ChatInputState['draftIdentity']): ChatInputMode | undefined {

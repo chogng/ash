@@ -7,7 +7,7 @@ import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actio
 import { appendIcon, getRegisteredIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
-import type { IAction } from '../../../../base/common/actions.js';
+import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import type { Icon } from '../../../../base/common/icon.js';
 import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -29,7 +29,7 @@ import { IThemeService } from '../../../../platform/theme/common/themeService.js
 import { PaneComposite, type PaneCompositeOptions } from '../../../../workbench/browser/panecomposite.js';
 import { SessionLeadingIcon } from '../../../browser/ui/sessionLeadingIcon.js';
 import { getProjectSessionRows, groupChatList, IChatListCatalog, type ChatListEntry, type ChatListGroup, type ChatListSnapshot } from './chatListModel.js';
-import { SessionListRowRenderer, SessionListSection, SessionsListTree } from '../../sessions/browser/views/sessionsList.js';
+import { sessionListProjectActions, sessionProjectOrganization, SessionListRowRenderer, SessionListSection, SessionsListTree, type SessionListOrganization } from '../../sessions/browser/views/sessionsList.js';
 import '../../../../base/browser/ui/button/button.css';
 import './media/chatNavigationView.css';
 
@@ -82,11 +82,18 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 		const list = h(document, 'div', { className: 'ash-chat-navigation-list' });
 		scrollable.contentElement.append(list);
 		const conversationsLabel = localize('sessions.chatList.conversations', 'Conversations');
-		const tree = this._register(new SessionsListTree(list, conversationsLabel, configuration));
-		const focusConversation = (key: string, preventScroll = false): void => {
+		const tree = this._register(new SessionsListTree(list, conversationsLabel, configuration, 'external', {
+			organization: element => this.rows.get(element.dataset.item ?? '')?.organization,
+			didMove: source => {
+				const id = source.dataset.item;
+				if (id && source.contains(getActiveElement(document))) focusConversation(id, false, source.dataset.conversationId);
+			},
+			onError: error => notifications.error(toErrorMessage(error)),
+		}));
+		const focusConversation = (key: string, preventScroll = false, conversationId?: string): void => {
 			if (!root.isConnected || root.closest('[hidden]')) return;
 			const row = this.rows.get(key)?.element ?? projectRows.get(key)?.element
-				?? tree.getVisibleElements().find(element => element.dataset.item === key);
+				?? tree.getVisibleElements().find(element => element.dataset.item === key || conversationId !== undefined && element.dataset.conversationId === conversationId);
 			if (row) {
 				if (!row.isConnected && row.dataset.parentProject) {
 					const parent = projectRows.get(row.dataset.parentProject)?.element;
@@ -194,7 +201,8 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 		const render = (snapshots: readonly ChatListSnapshot[]): void => {
 			const focused = getActiveElement(document) as HTMLElement | null;
 			const hadFocus = root.contains(focused);
-			const focusedId = focused?.closest<HTMLElement>('[data-item]')?.dataset.item;
+			const focusedRow = focused?.closest<HTMLElement>('[data-item]');
+			const focusedId = focusedRow?.dataset.item;
 			const focusedGroup = focused?.closest<HTMLElement>('[data-group]')?.dataset.group;
 			const top = scrollable.state.top;
 			const projectState = projects.state.get();
@@ -232,6 +240,18 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			const pinnedProjects = [...projectGroups.values()].filter(project => projects.isPinned(project.key));
 			const otherProjects = [...projectGroups.values()].filter(project => !projects.isPinned(project.key));
 			const groups = [...groupChatList(snapshots, 'chat', pinnedProjects.length > 0)];
+			if (!groups.some(group => group.key === 'recent') && entries.some(entry => entry.pinned || entry.projectId || projectEntryIds.has(entry.id))) {
+				groups.push({ key: 'recent', title: localize('sessions.chatList.recentGroup', 'Recent'), rows: [] });
+			}
+			const recent = groups.find(group => group.key === 'recent');
+			const grouped = new Set<string>();
+			for (const group of snapshots.flatMap(snapshot => snapshot.groups ?? [])) {
+				const members = new Set(group.sessionIds);
+				const rows = (recent?.rows ?? []).filter(entry => entry.sessionId && members.has(entry.sessionId)
+					&& !projectEntryIds.has(entry.id) && !grouped.has(entry.id));
+				for (const row of rows) grouped.add(row.id);
+				groups.splice(recent ? groups.indexOf(recent) : groups.length, 0, { key: `group:${group.sectionId}`, title: group.name, rows });
+			}
 			if (otherProjects.length) groups.splice(groups[0]?.key === 'pinned' ? 1 : 0, 0,
 				{ key: 'projects', title: localize('projects.title', 'Projects'), rows: [] });
 			const usedProjectRows = new Set<string>();
@@ -240,16 +260,26 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			const idleProjects: { row: HTMLElement; load: () => void; }[] = [];
 			const chatNode = (entry: ChatListEntry, group: string, parentProject?: string): ObjectTreeElement<HTMLElement> => {
 				// A conversation can be pinned independently and can belong to more than one local project.
-				const rowKey = parentProject ? JSON.stringify([parentProject, entry.id]) : entry.id;
+				const rowKey = parentProject ? JSON.stringify([`project:${parentProject}`, entry.id]) : entry.id;
 				usedRows.add(rowKey);
 				let row = this.rows.get(rowKey);
 				if (!row) {
 					row = this.rows.set(rowKey, instantiationService.createInstance(ChatNavigationRow, document, entry,
-						openConversation, () => focusConversation(rowKey), beforeOpenMenu));
+						openConversation, () => focusConversation(rowKey, false, entry.id), beforeOpenMenu));
 					row.element.dataset.item = rowKey;
-					if (parentProject) row.element.dataset.parentProject = parentProject;
+					row.element.dataset.conversationId = entry.id;
+					if (parentProject) {
+						row.element.dataset.parentProject = `project:${parentProject}`;
+						row.element.dataset.parentProjectId = parentProject;
+					}
 				}
-				row.update(entry, group);
+				row.element.dataset.groupDropTarget = String(group.startsWith('group:'));
+				const project = entry.sessionId ? () => {
+					const memberships = activeProjects.filter(project => membership.get(project.id)?.sessionIds?.includes(entry.sessionId!));
+					const current = parentProject ?? (memberships.length === 1 ? memberships[0]!.id : undefined);
+					return sessionProjectOrganization(projectService, entry.sessionId!, current, activeProjects);
+				} : undefined;
+				row.update(entry, group, project);
 				return { element: row.element };
 			};
 			const projectNode = (project: ChatListGroup, group: string): ObjectTreeElement<HTMLElement> => {
@@ -269,8 +299,9 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 					}));
 				}
 				row.element.dataset.parentSection = group;
+				row.element.dataset.projectId = project.key;
 				row.update(project.title, collapsed);
-				const nodes = project.rows.map(entry => chatNode(entry, group, itemId));
+				const nodes = project.rows.map(entry => chatNode(entry, group, project.key));
 				const current = membership.get(project.key);
 				const history = project.project?.history;
 				if (history?.state === 'idle' && !collapsed) idleProjects.push({ row: row.element, load: history.load });
@@ -290,11 +321,11 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			};
 			const children = groups.map(group => {
 				const { key } = group;
-				const rows = group.rows.filter(entry => key !== 'recent' || !projectEntryIds.has(entry.id))
+				const rows = group.rows.filter(entry => key !== 'recent' || !projectEntryIds.has(entry.id) && !grouped.has(entry.id))
 					.map(entry => chatNode(entry, key));
 				if (key === 'pinned') rows.push(...pinnedProjects.map(project => projectNode(project, key)));
 				if (key === 'projects') rows.push(...otherProjects.map(project => projectNode(project, key)));
-				if (!rows.length) return undefined;
+				if (!rows.length && key !== 'recent' && !key.startsWith('group:')) return undefined;
 				usedSections.add(key);
 				let section = this.sections.get(key);
 				if (!section) {
@@ -303,6 +334,7 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 					section.domNode.classList.add('ash-chat-navigation-group');
 					section.domNode.dataset.group = key;
 				}
+				section.domNode.dataset.groupDropTarget = String(key.startsWith('group:'));
 				section.update(group.title, rows.map(row => row.element));
 				return {
 					element: section.domNode, children: rows, collapsible: true,
@@ -349,7 +381,7 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 				progress.element.hidden = true;
 			}
 			scrollable.layout();
-			if (focusedId && hadFocus && !root.contains(getActiveElement(document))) { focusConversation(focusedId, true); }
+			if (focusedId && hadFocus && !root.contains(getActiveElement(document))) { focusConversation(focusedId, true, focusedRow?.dataset.conversationId); }
 			if (focusedGroup && !root.contains(getActiveElement(document))) {
 				this.sections.get(focusedGroup)?.button.focus({ preventScroll: true });
 			}
@@ -458,6 +490,12 @@ class ChatNavigationRow extends Disposable {
 	private readonly menuRequest = this._register(new MutableDisposable());
 	private menuVisible = false;
 	private entry: ChatListEntry;
+	private project?: () => SessionListOrganization['project'];
+
+	get organization(): SessionListOrganization | undefined {
+		if (this.entry.disabled || this.entry.actionsDisabled) return;
+		return { ...this.entry, project: this.project?.() ?? this.entry.project };
+	}
 
 	constructor(document: Document, entry: ChatListEntry, open: (entry: ChatListEntry) => void, private readonly focus: () => void,
 		private readonly beforeOpenMenu: (row: ChatNavigationRow) => void,
@@ -516,7 +554,8 @@ class ChatNavigationRow extends Disposable {
 		return this.bar.domNode.querySelector<HTMLButtonElement>(`[data-action-id="${this.more.id}"] button`)!;
 	}
 
-	update(entry: ChatListEntry, group: string): void {
+	update(entry: ChatListEntry, group: string, project?: () => SessionListOrganization['project']): void {
+		this.project = project;
 		const previous = this.entry;
 		this.entry = entry;
 		this.element.dataset.parentSection = group;
@@ -568,7 +607,23 @@ class ChatNavigationRow extends Disposable {
 		this.menuRequest.value = toDisposable(() => controller.abort());
 		this.setMenuExpanded(true);
 		try {
-			const actions = await this.entry.getActions(controller.signal, this.focus);
+			const actions = [...await this.entry.getActions(controller.signal, this.focus)];
+			const project = this.organization?.project;
+			if (project && (project.current || project.destinations.length || project.loadDestinations)) {
+				try {
+					const destinations = project.loadDestinations ? await project.loadDestinations(controller.signal) : project.destinations;
+					const organization = sessionListProjectActions(project, destinations, async run => {
+						try {
+							await run();
+							this.focus();
+						} catch (error) { this.notifications.error(toErrorMessage(error)); }
+					});
+					const separator = actions.map(action => action instanceof Separator).lastIndexOf(true);
+					actions.splice(separator < 0 ? actions.length : separator, 0, ...organization);
+				} catch (error) {
+					if (!controller.signal.aborted) this.notifications.error(toErrorMessage(error));
+				}
+			}
 			if (controller.signal.aborted) return;
 			if (!this.element.isConnected || this.moreButton.disabled || this.element.closest('[hidden]')) {
 				this.setMenuExpanded(false);

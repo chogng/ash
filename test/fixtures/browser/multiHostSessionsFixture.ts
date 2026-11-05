@@ -159,7 +159,9 @@ export function installMultiHostSessionsFixture(): {
 					automations,
 					id: name, label: name, order: 1, instantiationService: child, onDidChangeCatalog: Event.None, onDidChangeSession: Event.None,
 					list: async () => [catalogSession()], listAgents: async () => nestedDraft ? [replacementAgent] : [],
-					currentWorkspace: (): SessionWorkspaceSelection => ({ type: 'current' }),
+					currentWorkspace: (): SessionWorkspaceSelection => sideChatHostSwitch
+						? { type: 'local', root: name === 'Host A' ? '/workspace/host-a' : '/workspace/host-b' }
+						: { type: 'current' },
 					readCatalog: async () => catalogSession(), subscribe: async () => session, unsubscribe: async () => { },
 					renameSession: async (target: ISession, title: string) => {
 						record('rename', target.sessionId, 'same');

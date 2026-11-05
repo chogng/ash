@@ -818,6 +818,8 @@ suite('ChatGPT shared service', () => {
 		assert.equal(chat.state.get().conversations[0]!.pinned, true);
 		await chat.moveToProject('one', 'g-p-project');
 		assert.equal(chat.state.get().conversations[0]!.projectId, 'g-p-project');
+		await chat.moveToProject('one', null);
+		assert.equal(chat.state.get().conversations[0]!.projectId, undefined);
 		reject = true;
 		await chat.archive('one');
 		assert.equal(chat.state.get().conversations.length, 2);
@@ -833,7 +835,7 @@ suite('ChatGPT shared service', () => {
 		await chat.deleteConversation('two');
 		assert.equal(chat.state.get().conversations.length, 0);
 		assert.deepEqual(writes.map(item => [item.method, item.body]), [
-			['POST', { title: 'Renamed' }], ['PATCH', { is_starred: true }], ['PATCH', { gizmo_id: 'g-p-project' }],
+			['POST', { title: 'Renamed' }], ['PATCH', { is_starred: true }], ['PATCH', { gizmo_id: 'g-p-project' }], ['PATCH', { gizmo_id: null }],
 			['PATCH', { is_archived: true }], ['PATCH', { is_archived: true }], ['DELETE', undefined],
 		]);
 		assert.ok(writes[0]!.path.endsWith('/conversation/id/one/rename'));

@@ -67,7 +67,8 @@ test('Environment discovery yields to an existing or newer workspace menu and ca
 		onDidChangeProviders: Event.None, getProviders: () => providers, getProvider: () => undefined,
 	} as unknown as ISessionsProvidersService);
 	const model = { untitledSessionId: draft.untitledSessionId, inputState: { phase: 'ready' }, onDidChange: Event.None };
-	lifetime.add(services.createInstance(SessionEnvironmentPicker, footer, model as unknown as IChatWidgetModel, async () => { }));
+	const picker = lifetime.add(services.createInstance(SessionEnvironmentPicker, model as unknown as IChatWidgetModel, async () => { }));
+	const rendered = picker.render(footer);
 	const trigger = footer.querySelector<HTMLButtonElement>('button')!;
 	const openWorkspace = () => {
 		workspace.focus();
@@ -140,4 +141,8 @@ test('Environment discovery yields to an existing or newer workspace menu and ca
 	menus.hide();
 	assert.equal(trigger.getAttribute('aria-expanded'), 'false');
 	assert.equal(document.activeElement, trigger);
+	rendered.dispose();
+	assert.equal(rendered.element.isConnected, false);
+	picker.showPicker();
+	assert.equal(menus.isVisible, false);
 });

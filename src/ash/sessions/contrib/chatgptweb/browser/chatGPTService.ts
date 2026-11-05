@@ -148,7 +148,7 @@ export interface IChatGPTService {
 	setPinned(id: string, pinned: boolean): Promise<void>;
 	archive(id: string): Promise<void>;
 	deleteConversation(id: string): Promise<void>;
-	moveToProject(id: string, projectId: string): Promise<void>;
+	moveToProject(id: string, projectId: string | null): Promise<void>;
 	share(id: string, messageId?: string): Promise<string | undefined>;
 	readResponseAudio(id: string, messageId: string, signal: AbortSignal): Promise<Blob>;
 	listProjects(signal: AbortSignal): Promise<readonly ChatGPTProject[]>;
@@ -518,12 +518,26 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.timeline.remove(id);
 	}
 
-	public async moveToProject(id: string, projectId: string): Promise<void> {
-		await this.manage(id, async signal => {
+	public async moveToProject(id: string, projectId: string | null): Promise<void> {
+		const moved = await this.manage(id, async signal => {
 			await this.client.updateConversation(id, { gizmo_id: projectId }, signal);
 			signal.throwIfAborted();
-			this.updateCatalog({ conversations: this.model.get().conversations.map(item => item.id === id ? { ...item, projectId } : item) });
+			const state = this.model.get();
+			const projectHistory = new Map(state.projectHistory);
+			const previous = state.conversations.find(item => item.id === id)?.projectId;
+			if (previous) projectHistory.delete(previous);
+			if (projectId) projectHistory.delete(projectId);
+			this.updateCatalog({
+				projectHistory,
+				conversations: state.conversations.map(item => item.id !== id ? item : {
+					...item,
+					projectId: projectId ?? undefined,
+					projectOnly: projectId ? item.projectOnly : undefined,
+				}),
+			});
+			return true;
 		});
+		if (!moved) throw new Error(this.model.get().error || localize('sessions.chatgpt.projectMoveFailed', 'Could not move this conversation. Try again.'));
 	}
 
 	public share(id: string, messageId?: string): Promise<string | undefined> { return this.manage(id, signal => this.client.share(id, signal, messageId)); }

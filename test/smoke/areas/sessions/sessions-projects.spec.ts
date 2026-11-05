@@ -8,6 +8,53 @@ import { connectProfile, enableFixtureModel } from './sessionProfileFixture.js';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 
+test('Chat and Code organize the same Ash conversation from their sidebars', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+	const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+	try {
+		const { client } = connection;
+		const createProject = async (name: string) => (await client.request(APP_SERVER_METHODS['project/create'], {
+			commandId: randomUUID(), projectId: randomUUID(), name, description: '', materials: [],
+		})).project;
+		const first = await createProject('First project');
+		const second = await createProject('Second project');
+		const title = 'Organize this conversation';
+		const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
+			commandId: randomUUID(), title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory },
+		});
+		const members = async (projectId: string) => (await client.request(APP_SERVER_METHODS['project/read'], { projectId })).project.sessionIds;
+		const page = await workbench.openAgentsWindow(target.kind);
+		const chat = page.locator('.ash-chat-navigation-list');
+		const row = chat.getByRole('button', { name: title, exact: true });
+		const firstProject = chat.getByRole('button', { name: first.name, exact: true });
+		const secondProject = chat.getByRole('button', { name: second.name, exact: true });
+		await row.dragTo(firstProject);
+		await expect.poll(() => members(first.projectId)).toEqual([session.sessionId]);
+		await firstProject.click();
+		await expect(row).toBeVisible();
+		await row.dragTo(secondProject);
+		await expect.poll(() => members(second.projectId)).toEqual([session.sessionId]);
+		await expect.poll(() => members(first.projectId)).toEqual([]);
+
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		const code = page.locator('.ash-sessions-list[data-mode="code"]');
+		const codeRow = code.locator(`[data-row-order-id="${session.sessionId}"]`);
+		const conversation = codeRow.locator(':scope > button.ash-sessions-list-item');
+		await expect(codeRow).toHaveAttribute('data-parent-project-id', second.projectId);
+		await expect(conversation).toHaveText(title);
+		await conversation.press('Shift+F10');
+		await page.getByRole('menuitem', { name: 'Remove from project', exact: true }).click();
+		await expect.poll(() => members(second.projectId)).toEqual([]);
+		await expect(codeRow).not.toHaveAttribute('data-parent-project-id');
+		await conversation.press('Shift+F10');
+		await page.getByRole('menuitem', { name: 'Pin', exact: true }).click();
+		await expect(codeRow).toHaveAttribute('data-parent-section', 'pinned');
+		await codeRow.dragTo(code.getByRole('button', { name: 'Recents', exact: true }));
+		await expect(codeRow).not.toHaveAttribute('data-parent-section', 'pinned');
+	} finally {
+		await connection.close();
+	}
+});
+
 test('Sessions Projects opens its chats and continues the same conversation after Desktop relaunch', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench, reloadWorkbench }, testInfo) => {
 	test.setTimeout(120_000);
 	const model = { provider: 'custom-project-chat-fixture', model: 'project-chat-fixture' };

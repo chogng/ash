@@ -1,5 +1,6 @@
+import { NEW_SESSION_ACTION_ID } from '../common/constants.js';
 import { localize2 } from '../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { Action2 } from '../../../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
@@ -12,10 +13,8 @@ import type { IUntitledChatSession } from '../../../services/sessions/common/ses
 
 // Shared Chat actions reach this window's creation policy through its navigation service.
 export class NewChatInSessionsWindowAction extends Action2 {
-	static readonly ID = 'workbench.action.sessions.newChat';
-
 	constructor() {
-		super({ id: NewChatInSessionsWindowAction.ID, title: localize2({ bundle: 'ash', key: 'chat.sessions.new' }, 'New Session') });
+		super({ id: NEW_SESSION_ACTION_ID, title: localize2({ bundle: 'ash', key: 'chat.sessions.new' }, 'New Session') });
 	}
 
 	override async run(accessor: ServicesAccessor, providerId?: string): Promise<IUntitledChatSession> {
@@ -25,9 +24,8 @@ export class NewChatInSessionsWindowAction extends Action2 {
 		return accessor.get(ISessionsService).openNewSession(undefined, { providerId });
 	}
 }
-registerAction2(NewChatInSessionsWindowAction);
 
-registerAction2(class NewSessionFromNavigationAction extends Action2 {
+export class NewSessionFromNavigationAction extends Action2 {
 	constructor() {
 		super({ id: 'sessions.newSession', title: localize2('sessions.activity.new', 'New') });
 	}
@@ -60,11 +58,11 @@ registerAction2(class NewSessionFromNavigationAction extends Action2 {
 			if (pageChanged || revision !== sessions.navigationRevision || contextKeys.getValue(SessionsWorkspaceModeContext.key) !== mode) return;
 			created = sessions.openNewSession(undefined, target);
 		} else {
-			created = await commands.executeCommand<IUntitledChatSession | undefined>(NewChatInSessionsWindowAction.ID);
+			created = await commands.executeCommand<IUntitledChatSession | undefined>(NEW_SESSION_ACTION_ID);
 		}
 		if (created) {
 			await commands.executeCommand(mode === 'code' ? 'sessions.open.code' : 'sessions.open.chat');
 			layout.focus();
 		}
 	}
-});
+}

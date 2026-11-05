@@ -1,7 +1,6 @@
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { PullRequestFollowUpWidget } from '../../changes/browser/pullRequestFollowUpWidget.js';
-import { ArtifactDetailsPanel } from './artifactDetailsPanel.js';
-import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
+import { ArtifactDetailsContextView } from './artifactDetailsContextView.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { createUuid } from '../../../../base/common/uuid.js';
@@ -46,8 +45,6 @@ export class SessionChatInputToolbar extends Disposable {
 		@IGitHubService private readonly github: IGitHubService,
 		@IOpenerService private readonly opener: IOpenerService,
 		@INotificationService private readonly notifications: INotificationService,
-		@IEditorService private readonly editors: IEditorService,
-		@IContextViewService private readonly contextViews: IContextViewService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
@@ -127,16 +124,20 @@ export class SessionChatInputToolbar extends Disposable {
 			present.add(key);
 			let entry = this.entries.get(key);
 			if (!entry) {
-				entry = this.entries.set(key, new PullRequestEntry(this.element, request, this.opener, this.notifications, this.editors, async reference => {
+				const detach = async (reference: NonNullable<IResolvedSessionPullRequest['recordedReference']>) => {
 					if (!sessionId) { return; }
 					await this.github.detachPullRequest(sessionId, reference);
 					if (!this.isDisposed) {
 						this.focusFallback();
 						status(localize('sessions.github.detached', 'Pull request attachment removed.'));
 					}
-				}, this.contextViews, (container, binding) => this.instantiation.createInstance(PullRequestFollowUpWidget, container, { sessionId: sessionId!, id: binding.artifact.id }), async (request, select) => {
+				};
+				const renderFollowUp = (container: HTMLElement, binding: IArtifactIntegrationBinding) =>
+					this.instantiation.createInstance(PullRequestFollowUpWidget, container, { sessionId: sessionId!, id: binding.artifact.id });
+				const invoke = async (request: IResolvedSessionPullRequest, select: (binding: IArtifactIntegrationBinding) => Promise<ArtifactAction | undefined>) => {
 					if (sessionId) { await this.github.invokePullRequestArtifact(sessionId, request, select); }
-				}));
+				};
+				entry = this.entries.set(key, this.instantiation.createInstance(PullRequestEntry, this.element, request, detach, renderFollowUp, invoke));
 				this.element.insertBefore(entry.containerDomNode, this.issuesDomNode);
 			}
 			entry.update(request);
@@ -238,19 +239,19 @@ class PullRequestEntry extends Disposable {
 	private readonly labelDomNode: HTMLSpanElement;
 	private readonly removeDomNode: HTMLButtonElement;
 	private readonly actionsDomNode: HTMLButtonElement;
-	private readonly artifactDetails: ArtifactDetailsPanel;
+	private readonly artifactDetails: ArtifactDetailsContextView;
 	private request: IResolvedSessionPullRequest;
 
 	constructor(
 		container: HTMLElement,
 		request: IResolvedSessionPullRequest,
-		opener: IOpenerService,
-		notifications: INotificationService,
-		editors: IEditorService,
 		detach: (reference: NonNullable<IResolvedSessionPullRequest['recordedReference']>) => Promise<void>,
-		contextViews: IContextViewService,
 		private readonly renderFollowUp: (container: HTMLElement, binding: IArtifactIntegrationBinding) => Disposable,
 		invoke: (request: IResolvedSessionPullRequest, select: (binding: IArtifactIntegrationBinding) => Promise<ArtifactAction | undefined>) => Promise<void>,
+		@IOpenerService opener: IOpenerService,
+		@INotificationService notifications: INotificationService,
+		@IEditorService editors: IEditorService,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
 		this.request = request;
@@ -280,7 +281,7 @@ class PullRequestEntry extends Disposable {
 			...defaultButtonStyles, label: localize('sessions.github.artifactActions', 'PR Actions'), presentation: 'secondary', size: 'small',
 		})).domNode;
 		this.actionsDomNode.classList.add('ash-session-chat-input-pr-action');
-		this.artifactDetails = this._register(new ArtifactDetailsPanel(this.actionsDomNode, contextViews));
+		this.artifactDetails = this._register(instantiation.createInstance(ArtifactDetailsContextView, this.actionsDomNode));
 		this._register(addDisposableListener(this.actionsDomNode, 'click', () => {
 			if (this.actionsDomNode.disabled) { return; }
 			this.actionsDomNode.disabled = true;

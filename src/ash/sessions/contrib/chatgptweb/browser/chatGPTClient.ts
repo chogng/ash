@@ -212,7 +212,7 @@ export class ChatGPTClient {
 		await this.consume(`/conversation/id/${encodeURIComponent(id)}/rename`, signal, 'POST', { title });
 	}
 
-	async updateConversation(id: string, change: { is_starred: boolean; } | { is_archived: true; } | { gizmo_id: string; }, signal: AbortSignal): Promise<void> {
+	async updateConversation(id: string, change: { is_starred: boolean; } | { is_archived: true; } | { gizmo_id: string | null; }, signal: AbortSignal): Promise<void> {
 		await this.consume(`/conversation/${encodeURIComponent(id)}`, signal, 'PATCH', change);
 	}
 
