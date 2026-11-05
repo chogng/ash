@@ -1,14 +1,14 @@
 .ash-session-leading-icon {
 	display: grid;
-	width: var(--ash-spacing-size280);
-	height: var(--ash-spacing-size280);
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
 	place-items: center;
 }
 
 .ash-session-leading-icon .ash-action-label {
 	box-sizing: border-box;
-	width: var(--ash-spacing-size280);
-	height: var(--ash-spacing-size280);
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
 	min-height: 0;
 	padding: 0;
 }

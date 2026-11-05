@@ -16,6 +16,11 @@
 		ButtonFace
 	);
 	--ash-sessions-sidebar-row-inset: var(--ash-spacing-size80);
+	--ash-sessions-sidebar-item-inset: var(--ash-spacing-size20);
+	--ash-sessions-sidebar-row-height: calc(
+		var(--ash-toolbar-actionSize) + 2 *
+			var(--ash-sessions-sidebar-item-inset)
+	);
 	--ash-sessions-sidebar-selection-background: var(
 		--ash-sessions-selectionBackground
 	);

@@ -78,6 +78,19 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expectInsets(16);
 			await list.evaluate(node => node.style.removeProperty('--ash-sessions-sidebar-row-inset'));
 			await expectInsets(8);
+			await expect(header).toHaveCSS('height', '32px');
+			await expect(header).toHaveCSS('padding', '4px 8px');
+			const window = page.locator('.ash-sessions-window');
+			await window.evaluate(node => {
+				node.style.setProperty('--ash-toolbar-actionSize', '32px');
+				node.style.setProperty('--ash-sessions-sidebar-item-inset', '4px');
+			});
+			await expect(header).toHaveCSS('height', '40px');
+			await expect(header).toHaveCSS('padding', '4px 8px');
+			await window.evaluate(node => {
+				node.style.removeProperty('--ash-toolbar-actionSize');
+				node.style.removeProperty('--ash-sessions-sidebar-item-inset');
+			});
 			await header.hover();
 			await expect(header).toHaveCSS('border-radius', '8px');
 		});
@@ -489,6 +502,12 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const more = row.getByRole('button', { name: labels.more, exact: true });
 			const openMore = async () => { await row.hover(); await more.click(); };
 			await expect(title).toBeVisible();
+			const window = page.locator('.ash-sessions-window');
+			await window.evaluate(element => (element as HTMLElement).style.setProperty('--ash-toolbar-actionSize', '32px'));
+			await expect(icon).toHaveCSS('width', '32px');
+			await expect(more).toHaveCSS('width', '32px');
+			await expect(row).toHaveCSS('height', '36px');
+			await window.evaluate(element => (element as HTMLElement).style.removeProperty('--ash-toolbar-actionSize'));
 			for (const forcedColors of ['none', 'active'] as const) {
 				await page.emulateMedia({ forcedColors });
 				expect((await row.boundingBox())!.height).toBe(32);

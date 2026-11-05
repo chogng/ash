@@ -2,8 +2,6 @@ import { addDisposableListener, getActiveElement, getWindow, h, scheduleAtNextAn
 import { observeResize } from '../../../../base/browser/observer.js';
 import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
-import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
-import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { appendIcon, getRegisteredIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
@@ -16,6 +14,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IProjectsService } from '../../projects/browser/projectsService.js';
 import { localize } from '../../../../nls.js';
 import type { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -24,7 +23,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProjectService } from '../../../../platform/projects/common/projectService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { defaultButtonStyles, defaultProgressBarStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { defaultProgressBarStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { PaneComposite, type PaneCompositeOptions } from '../../../../workbench/browser/panecomposite.js';
 import { SessionLeadingIcon } from '../../../browser/ui/sessionLeadingIcon.js';
@@ -485,7 +484,7 @@ class ChatNavigationRow extends Disposable {
 	private readonly button: HTMLButtonElement;
 	private readonly label: HTMLElement;
 	private readonly leadingIcon: SessionLeadingIcon;
-	private readonly bar: ActionBar;
+	private readonly toolbar: WorkbenchToolBar;
 	private readonly more: IAction;
 	private readonly menuRequest = this._register(new MutableDisposable());
 	private menuVisible = false;
@@ -518,12 +517,10 @@ class ChatNavigationRow extends Disposable {
 		this._register(addDisposableListener(this.button, 'click', () => open(this.entry)));
 		this.more = this.action('more', localize('sessions.chatList.more', 'More actions'), Lxicon.ellipsis,
 			() => this.showMore(this.moreButton.matches(':focus-visible')));
-		this.bar = this._register(new ActionBar(this.element, {
-			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
+		this.toolbar = this._register(new WorkbenchToolBar(this.element, this.menus, {
 			ariaLabel: localize('sessions.chatList.conversationActions', 'Actions for {0}', entry.title),
-			actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
 		}));
-		this.bar.domNode.classList.add('ash-sessions-list-actions', 'ash-chat-navigation-actions');
+		this.toolbar.element.classList.add('ash-sessions-list-actions', 'ash-chat-navigation-actions');
 		const updateActions = () => {
 			const current = this.entry;
 			const label = current.pinned ? localize('sessions.chatList.unpin', 'Unpin chat') : localize('sessions.chatList.pin', 'Pin chat');
@@ -531,7 +528,7 @@ class ChatNavigationRow extends Disposable {
 				await current.setPinned?.(!current.pinned);
 				focus();
 			});
-			this.bar.setActions(current.setPinned ? [{ ...pin, checked: current.pinned === true }, this.more] : [this.more]);
+			this.toolbar.setActions(current.setPinned ? [{ ...pin, checked: current.pinned === true }, this.more] : [this.more]);
 			this.moreButton.setAttribute('aria-haspopup', 'menu');
 			this.moreButton.setAttribute('aria-expanded', String(this.menuVisible));
 		};
@@ -551,7 +548,7 @@ class ChatNavigationRow extends Disposable {
 	private readonly updateActions: () => void;
 
 	private get moreButton(): HTMLButtonElement {
-		return this.bar.domNode.querySelector<HTMLButtonElement>(`[data-action-id="${this.more.id}"] button`)!;
+		return this.toolbar.element.querySelector<HTMLButtonElement>(`[data-action-id="${this.more.id}"] button`)!;
 	}
 
 	update(entry: ChatListEntry, group: string, project?: () => SessionListOrganization['project']): void {
@@ -562,7 +559,7 @@ class ChatNavigationRow extends Disposable {
 		if (this.label.textContent !== entry.title) {
 			this.button.title = this.label.textContent = entry.title;
 			this.leadingIcon.setTitle(entry.title);
-			this.bar.setAriaLabel(localize('sessions.chatList.conversationActions', 'Actions for {0}', entry.title));
+			this.toolbar.setAriaLabel(localize('sessions.chatList.conversationActions', 'Actions for {0}', entry.title));
 		}
 		if (previous.pinned !== entry.pinned || !!previous.setPinned !== !!entry.setPinned) this.updateActions();
 		const customIcon = entry.iconId && getRegisteredIcon(entry.iconId, this.element.ownerDocument);

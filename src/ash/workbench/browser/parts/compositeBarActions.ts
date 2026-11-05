@@ -10,7 +10,6 @@ import type { IDelayedHoverOptions } from '../../../base/browser/ui/hover/hover.
 import { HoverPosition } from '../../../base/browser/ui/hover/hoverWidget.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
-import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
@@ -119,17 +118,15 @@ export class CompositeActionViewItem extends ActionViewItem {
 			this.button = this._register(new Button(container, {
 				...defaultButtonStyles,
 				label: this.action.label,
+				icon: this.action.icon,
 				iconOnly: this.options.navigationLabel !== 'visible',
 				onClick: () => { void Promise.resolve(this.action.run()).catch(onUnexpectedError); },
 			}));
-			// The row is the single trigger. Its icon view shares the action but adds no focus stop.
-			const iconItem = this._register(new NavigationIconActionViewItem(this.action));
-			iconItem.render(this.button.domNode);
 			if (this.options.navigationClassName) { this.button.domNode.classList.add(this.options.navigationClassName); }
 			const update = (): void => {
 				const button = this.button!;
 				button.label = this.action.label;
-				iconItem.update();
+				button.icon = this.action.icon;
 				button.enabled = this.action.enabled;
 				container.classList.toggle('checked', this.action.checked === true);
 				button.toggleClassName('selected', this.action.checked === true);
@@ -207,37 +204,6 @@ export class CompositeActionViewItem extends ActionViewItem {
 	private get container(): HTMLElement {
 		assertDefined(this.renderedContainer, `CompositeBar action is not rendered: ${this.action.id}`);
 		return this.renderedContainer;
-	}
-}
-
-/** Decorative child of a navigation row; the containing button owns activation and focus. */
-export class NavigationIconActionViewItem extends ActionViewItem {
-	private element: HTMLElement | undefined;
-	private icon: Icon | undefined;
-
-	constructor(action: IAction) {
-		super(action);
-	}
-
-	override render(container: HTMLElement): void {
-		this.element = h(container.ownerDocument, 'span', {
-			className: 'ash-action-view-item ash-composite-bar-navigation-icon-item',
-			attributes: { 'aria-hidden': 'true' },
-		});
-		container.prepend(this.element);
-		this._register(toDisposable(() => this.element?.remove()));
-		this.update();
-	}
-
-	update(): void {
-		if (!this.element || this.icon === this.action.icon) return;
-		this.icon = this.action.icon;
-		this.element.replaceChildren();
-		if (this.icon) appendIcon(this.icon, this.element);
-	}
-
-	override setTabbable(_tabbable: boolean): void {
-		// The containing row is the only keyboard target.
 	}
 }
 

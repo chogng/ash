@@ -65,7 +65,7 @@ suite('sessions browser component', () => {
 		await expect(navigation).toHaveCSS('display', 'flex');
 		await expect(navigation).toHaveCSS('justify-content', 'space-between');
 		await expect.poll(() => navigation.evaluate(element => getComputedStyle(element).flexDirection === (element.classList.contains('horizontal') ? 'row' : 'column'))).toBe(true);
-		const icons = navigation.locator('button > .ash-composite-bar-navigation-icon-item > .ash-icon, button > .ash-button-content > .ash-icon-label-icon > .ash-icon');
+		const icons = navigation.locator('button > .ash-button-content > .ash-icon-label-icon > .ash-icon');
 		const itemWidth = horizontal ? 24 : 36;
 		const itemHeight = horizontal ? 24 : 32;
 		for (const item of await navigation.locator('.ash-composite-bar-navigation-item > button').all()) {
@@ -674,16 +674,24 @@ suite('sessions browser component', () => {
 		const activityNavigation = page.locator('.ash-sessions-activity-content');
 		const chatButton = activityNavigation.locator('button').first();
 		const buttonBounds = await chatButton.boundingBox();
-		const iconBounds = await chatButton.locator('.ash-composite-bar-navigation-icon-item').boundingBox();
+		const iconSlot = chatButton.locator('.ash-icon-label-icon');
+		const iconBounds = await iconSlot.boundingBox();
 		expect(buttonBounds).not.toBeNull();
 		expect(iconBounds).not.toBeNull();
 		expect(buttonBounds!.width).toBeGreaterThan(36);
 		expect(buttonBounds!.height).toBe(32);
 		expect(iconBounds!.width).toBe(28);
 		expect(iconBounds!.height).toBe(28);
-		const projectsIcon = activityNavigation.locator('button .ash-composite-bar-navigation-icon-item > [data-ash-icon-id="projects"]');
+		const projectsIcon = activityNavigation.locator('button .ash-icon-label-icon > [data-ash-icon-id="projects"]');
 		await expect(projectsIcon).toHaveCSS('width', '18px');
 		expect(Math.abs(iconBounds!.y + iconBounds!.height / 2 - (buttonBounds!.y + buttonBounds!.height / 2))).toBeLessThanOrEqual(1);
+		const window = page.locator('.ash-sessions-window');
+		const accountSlot = page.getByRole('button', { name: 'Accounts', exact: true }).locator('.ash-icon-label-icon');
+		await window.evaluate(element => (element as HTMLElement).style.setProperty('--ash-toolbar-actionSize', '32px'));
+		await expect(iconSlot).toHaveCSS('width', '32px');
+		await expect(accountSlot).toHaveCSS('width', '32px');
+		await expect(chatButton).toHaveCSS('height', '36px');
+		await window.evaluate(element => (element as HTMLElement).style.removeProperty('--ash-toolbar-actionSize'));
 		await chatButton.click({ button: 'right' });
 		await expect(page.getByRole('menuitem', { name: 'Activity Bar Size' })).toHaveCount(0);
 		await page.keyboard.press('Escape');

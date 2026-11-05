@@ -74,10 +74,6 @@
 	font-size: var(--ash-lxiconFontSize-large);
 }
 
-.ash-sessions-activity-item.icon-only > .ash-button-content {
-	display: none;
-}
-
 .ash-sessions-activity-more > .ash-dropdown-menu-indicator {
 	display: none;
 }
@@ -113,34 +109,29 @@
 }
 
 .ash-sessions-activity-bottom.labeled {
-	padding: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size80) var(--ash-sessions-sidebar-row-inset);
 }
 
 .ash-sessions-activity-content.labeled .ash-sessions-activity-item,
 .ash-sessions-activity-bottom.labeled .ash-sessions-activity-item {
 	display: flex;
 	width: 100%;
+	height: var(--ash-sessions-sidebar-row-height);
 	justify-content: flex-start;
+	padding: var(--ash-sessions-sidebar-item-inset);
 	font-size: var(--ash-fontSize-body1);
 }
 
 .ash-sessions-activity-content.labeled
-	.ash-sessions-navigation
-	.ash-sessions-activity-item,
-.ash-sessions-activity-bottom.labeled .ash-sessions-activity-item {
-	padding: var(--ash-spacing-size20);
-}
-
-.ash-sessions-activity-content.labeled
-	.ash-sessions-navigation
-	.ash-composite-bar-navigation-icon-item,
-.ash-sessions-activity-bottom.labeled .ash-composite-bar-navigation-icon-item {
-	display: inline-flex;
-	flex: 0 0 auto;
-	align-items: center;
-	justify-content: center;
-	width: var(--ash-spacing-size280);
-	height: var(--ash-spacing-size280);
+	.ash-sessions-activity-item
+	> .ash-button-content
+	> .ash-icon-label-icon,
+.ash-sessions-activity-bottom.labeled
+	.ash-sessions-activity-item
+	> .ash-button-content
+	> .ash-icon-label-icon {
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
 }
 
 .ash-menu .ash-sessions-navigation-menu-row {

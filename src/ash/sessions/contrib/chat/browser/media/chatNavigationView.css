@@ -48,19 +48,19 @@
 .ash-chat-navigation-list .ash-sessions-list-row > .ash-sessions-list-item {
 	position: relative;
 	grid-area: 1 / 1;
-	padding-inline: var(--ash-spacing-size20);
+	padding: var(--ash-sessions-sidebar-item-inset);
 	background: transparent;
 }
 
 .ash-chat-navigation-list .ash-sessions-list-row > .ash-session-leading-icon {
-	inset-inline-start: var(--ash-spacing-size20);
+	inset-inline-start: var(--ash-sessions-sidebar-item-inset);
 }
 
 .ash-chat-navigation-list
 	.ash-sessions-list-row.has-leading-icon
 	> .ash-sessions-list-item {
 	padding-inline-start: calc(
-		var(--ash-spacing-size20) + var(--ash-spacing-size280) +
+		var(--ash-sessions-sidebar-item-inset) + var(--ash-toolbar-actionSize) +
 			var(--ash-spacing-size60)
 	);
 }
@@ -71,7 +71,7 @@
 	align-self: center;
 	inset: auto;
 	transform: none;
-	margin-inline-end: var(--ash-spacing-size20);
+	margin-inline-end: var(--ash-sessions-sidebar-item-inset);
 	padding-inline-end: 0;
 	background: transparent;
 }

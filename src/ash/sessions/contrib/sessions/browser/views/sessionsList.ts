@@ -5,6 +5,7 @@ import { Separator, SubmenuAction, type IAction } from '../../../../../base/comm
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
+import { WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
 import '../media/sessionsList.css';
@@ -804,7 +805,7 @@ export class SessionsList extends DomWidget {
 					? this.instantiation.createInstance(SessionLeadingIcon, ownerDocument, '',
 						(picked: Icon | undefined) => this.listModel.setRowIcon(key, picked?.id))
 					: undefined;
-				item = this.items.set(key, new SessionListItem(ownerDocument, icon, leading));
+				item = this.items.set(key, new SessionListItem(ownerDocument, this.contextMenus, icon, leading));
 			}
 			item.domNode.dataset.item = key;
 			if (item.leadingIcon) {
@@ -1050,7 +1051,7 @@ class SessionListItem extends AbstractDisposable {
 	readonly domNode: HTMLElement;
 	target: { readonly sessionId: string; readonly threadId: string; } | undefined;
 	private readonly button: HTMLButtonElement;
-	private readonly actions: ActionBar;
+	private readonly actions: WorkbenchToolBar;
 	private readonly row: SessionListRowRenderer;
 	private readonly label: HTMLSpanElement;
 	private readonly pullRequest: HTMLSpanElement;
@@ -1074,22 +1075,22 @@ class SessionListItem extends AbstractDisposable {
 		};
 	}
 
-	constructor(ownerDocument: Document, icon?: ThemeIcon, readonly leadingIcon?: SessionLeadingIcon) {
+	constructor(ownerDocument: Document, contextMenus: IContextMenuService, icon?: ThemeIcon, readonly leadingIcon?: SessionLeadingIcon) {
 		super();
 		this.row = new SessionListRowRenderer(ownerDocument, leadingIcon?.element);
 		this.domNode = this.row.element;
 		this.button = this.row.button;
-		this.actions = new ActionBar(this.domNode, {
+		this.actions = new WorkbenchToolBar(this.domNode, contextMenus, {
 			ariaLabel: localize('sessions.list.actions', 'Chat actions'),
-			actions: [{
-				id: 'sessions.list.more', label: localize('sessions.list.more', 'More actions'),
-				tooltip: localize('sessions.list.more', 'More actions'), icon: Lxicon.ellipsis, enabled: true,
-				run: () => this.contextMenu?.(this.actions.domNode),
-			}],
 		});
-		this.actions.domNode.classList.add('ash-sessions-list-actions');
-		this.actions.domNode.hidden = true;
-		this.actions.domNode.querySelector('button')?.setAttribute('aria-haspopup', 'menu');
+		this.actions.setActions([{
+			id: 'sessions.list.more', label: localize('sessions.list.more', 'More actions'),
+			tooltip: localize('sessions.list.more', 'More actions'), icon: Lxicon.ellipsis, enabled: true,
+			run: () => this.contextMenu?.(this.actions.element),
+		}]);
+		this.actions.element.classList.add('ash-sessions-list-actions');
+		this.actions.element.hidden = true;
+		this.actions.element.querySelector('button')?.setAttribute('aria-haspopup', 'menu');
 		this.label = h(ownerDocument, 'span');
 		this.label.className = 'ash-sessions-list-label';
 		this.statusAnnouncement = h(ownerDocument, 'span', {
@@ -1120,12 +1121,12 @@ class SessionListItem extends AbstractDisposable {
 
 	setContextMenu(menu: (anchor: ContextMenuAnchor) => void): void {
 		this.contextMenu = menu;
-		this.actions.domNode.hidden = false;
+		this.actions.element.hidden = false;
 	}
 
 	setMenuVisible(visible: boolean): void {
 		this.domNode.classList.toggle('menu-visible', visible);
-		this.actions.domNode.querySelector('button')?.setAttribute('aria-expanded', String(visible));
+		this.actions.element.querySelector('button')?.setAttribute('aria-expanded', String(visible));
 	}
 
 	update(title: string, selected: boolean, open: () => void, management?: SessionManagementInfo): void {

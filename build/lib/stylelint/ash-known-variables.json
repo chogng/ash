@@ -468,6 +468,8 @@
 		"--ash-sessions-editor-tool-inset",
 		"--ash-sessions-inverse-zoom-factor",
 		"--ash-sessions-sidebar-hover-background",
+		"--ash-sessions-sidebar-item-inset",
+		"--ash-sessions-sidebar-row-height",
 		"--ash-sessions-sidebar-row-inset",
 		"--ash-sessions-sidebar-selection-background",
 		"--ash-sessions-soft-shadow",

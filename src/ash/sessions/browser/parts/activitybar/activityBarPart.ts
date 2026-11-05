@@ -14,7 +14,7 @@ import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
-import { CompositeActionViewItem, NavigationIconActionViewItem, getActivityHoverPosition } from '../../../../workbench/browser/parts/compositeBarActions.js';
+import { CompositeActionViewItem, getActivityHoverPosition } from '../../../../workbench/browser/parts/compositeBarActions.js';
 import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
 import { SessionsConfiguration } from '../../../common/configuration.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
@@ -466,13 +466,10 @@ class AccountActionViewItem extends ActionViewItem {
 		this.button = this._register(new Button(container, {
 			...defaultButtonStyles,
 			label: this.action.label,
-			icon: this.presentation === 'titlebar' ? this.action.icon : undefined,
+			icon: this.action.icon,
 			iconOnly: this.presentation !== 'sidebar',
 			onClick: event => this.showMenu(this.button.domNode, event.detail === 0),
 		}));
-		if (this.presentation === 'sidebar') {
-			this._register(new NavigationIconActionViewItem(this.action)).render(this.button.domNode);
-		}
 		if (this.presentation !== 'titlebar') { this.button.domNode.classList.add('ash-sessions-activity-item'); }
 		this.button.domNode.setAttribute('aria-haspopup', 'menu');
 		this.button.domNode.setAttribute('aria-expanded', 'false');
