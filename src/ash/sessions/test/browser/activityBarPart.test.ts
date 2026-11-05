@@ -158,6 +158,12 @@ test('Chat navigation includes Search and selects New, Projects, Creator and Cus
 		), [['New', 'Search', 'Projects', 'Artifacts', 'Customize'], ['Accounts']]);
 		assert.ok(buttons.every(button => !button.classList.contains('icon-only')));
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item > button.ash-sessions-activity-item').length, 5);
+		const iconItem = buttons[0]!.querySelector('.ash-composite-bar-navigation-icon-item');
+		assert.equal(iconItem?.parentElement, buttons[0]);
+		assert.ok(iconItem?.classList.contains('ash-action-view-item'));
+		assert.equal(iconItem?.getAttribute('aria-hidden'), 'true');
+		assert.equal(iconItem?.querySelectorAll('button, [tabindex]').length, 0);
+		assert.equal(buttons[0]!.querySelector('.ash-button-content .ash-icon'), null);
 		assert.equal(bar.domNode.querySelectorAll('.ash-composite-bar-navigation-item.checked').length, 1);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
 		assert.ok(buttons[0]?.classList.contains('selected'));
