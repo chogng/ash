@@ -133,7 +133,7 @@ export class ChatGPTClient {
 				// ChatGPT can wrap the project metadata with its tools and files.
 				const gizmo = isRecord(item.gizmo.gizmo) ? item.gizmo.gizmo : item.gizmo;
 				if (!isRecord(gizmo.display) || typeof gizmo.id !== 'string'
-					|| typeof gizmo.display.name !== 'string' || gizmo.gizmo_snorlax_type === 'locked_chats') { continue; }
+					|| typeof gizmo.display.name !== 'string' || (gizmo.gizmo_snorlax_type === 'locked_chats' || gizmo.is_archived === true)) { continue; }
 				projects.set(gizmo.id, { id: gizmo.id, title: gizmo.display.name });
 			}
 			cursor = value.cursor || undefined;
@@ -141,6 +141,34 @@ export class ChatGPTClient {
 			if (cursor) { cursors.add(cursor); }
 		} while (cursor);
 		return [...projects.values()];
+	}
+
+	async deleteProject(id: string, signal: AbortSignal): Promise<void> {
+		await this.consume(`/gizmos/${encodeURIComponent(id)}`, signal, 'DELETE');
+	}
+
+	async projectDetails(id: string, signal: AbortSignal): Promise<{ name: string; description: string; emoji: string | null; theme: string | null; }> {
+		const value = await this.json(`/gizmos/${encodeURIComponent(id)}`, signal);
+		const gizmo = isRecord(value) && isRecord(value.gizmo) ? value.gizmo : undefined;
+		const display = gizmo && isRecord(gizmo.display) ? gizmo.display : undefined;
+		if (!gizmo || gizmo.id !== id || typeof display?.name !== 'string'
+			|| (gizmo.instructions != null && typeof gizmo.instructions !== 'string')
+			|| (display.emoji != null && typeof display.emoji !== 'string')
+			|| (display.theme != null && typeof display.theme !== 'string')) throw this.invalidResponse();
+		return { name: display.name, description: gizmo.instructions ?? '', emoji: display.emoji ?? null, theme: display.theme ?? null };
+	}
+
+	async updateProjectDetails(id: string, details: { name: string; description: string; emoji: string | null; theme: string | null; }, signal: AbortSignal): Promise<void> {
+		const response = await this.request(`/projects/${encodeURIComponent(id)}`, signal, {
+			method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ name: details.name, instructions: details.description, emoji: details.emoji, theme: details.theme }),
+		});
+		const text = await response.text();
+		signal.throwIfAborted();
+		if (text) {
+			const value: unknown = JSON.parse(text);
+			if (!isRecord(value) || value.error != null || value.success === false) throw this.invalidResponse();
+		}
 	}
 
 	async projectConversations(projectId: string, cursor: ChatGPTProjectCursor | undefined, signal: AbortSignal): Promise<{ items: readonly ChatGPTConversation[]; cursor?: ChatGPTProjectCursor; }> {

@@ -1,3 +1,8 @@
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { toErrorMessage } from '../../../../base/common/errorMessage.js';
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { IChatListCatalog } from '../../sessions/browser/views/chatListModel.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { autorun, observableFromEvent, observableValue, type IReader } from '../../../../base/common/observable.js';
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
@@ -81,6 +86,7 @@ export class ReplyChatEditor extends EditorPane {
 		@IThemeService theme: IThemeService,
 		@IStorageService private readonly profileStorage: IStorageService,
 		@IAccessibilityService private readonly accessibility: IAccessibilityService,
+		@IChatListCatalog private readonly chatCatalog: IChatListCatalog,
 	) {
 		super(options.id, theme, profileStorage);
 		this.id = options.id;
@@ -98,6 +104,27 @@ export class ReplyChatEditor extends EditorPane {
 		// Nested input editors must inherit this page's accessibility context.
 		const instantiation = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, contextKeys])));
 		const model = instantiation.createInstance(this.options.model);
+		const projectLink = h(parent.ownerDocument, 'div', { className: 'ash-reply-chat-project' });
+		projectLink.hidden = true;
+		root.append(projectLink);
+		let projectId: string | undefined;
+		const projectButton = this._register(new Button(projectLink, {
+			...defaultButtonStyles, label: '', icon: Lxicon.projects, presentation: 'quiet',
+			onClick: () => {
+				if (!projectId) return;
+				void this.commands.executeCommand('sessions.open.projects', projectId)
+					.catch(error => this.notifications.error(toErrorMessage(error)));
+			},
+		}));
+		this._register(autorun(reader => {
+			const snapshots = this.chatCatalog.sources.map(source => source.snapshot.read(reader));
+			const entry = snapshots.flatMap(snapshot => snapshot.entries).find(entry => entry.selected);
+			const project = entry?.projectId && snapshots.flatMap(snapshot => snapshot.projects ?? [])
+				.find(project => project.id === entry.projectId && !project.archived);
+			projectId = project ? project.id : undefined;
+			projectButton.label = project ? project.title : '';
+			projectLink.hidden = !project;
+		}));
 		try {
 			this.widget = this._register(instantiation.createInstance(ChatWidget<IReplyChatEditorModel>,
 				root, 'sessions-chat-reply', model, () => model.newChat(),

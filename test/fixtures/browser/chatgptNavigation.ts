@@ -1,3 +1,9 @@
+import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
+import { ProjectsEditorPane } from '../../../src/ash/sessions/contrib/projects/browser/projectsEditor.js';
+import { IProjectsService, ProjectsService } from '../../../src/ash/sessions/contrib/projects/browser/projectsService.js';
+import { ISessionsTitlebarService } from '../../../src/ash/sessions/browser/parts/titlebarPart.js';
+import { IProjectService } from '../../../src/ash/platform/projects/common/projectService.js';
+import { IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { IChatResponseResourceFileSystemProvider } from '../../../src/ash/workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
 import { IChatSlashCommandService } from '../../../src/ash/workbench/contrib/chat/common/participants/chatSlashCommands.js';
 import { IActionViewItemService } from '../../../src/ash/platform/actions/browser/actionViewItemService.js';
@@ -21,10 +27,12 @@ import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.j
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { ChatGPTService, IChatGPTService } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.js';
-import { ChatGPTList } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTList.js';
+import { ChatGPTList } from '../../../src/ash/sessions/electron-browser/chatGPTList.js';
+import { ASH_CHAT_SELECTED_CONTEXT } from '../../../src/ash/sessions/contrib/chat/common/constants.js';
 import { ChatNavigationViewPaneContainer } from '../../../src/ash/sessions/contrib/sessions/browser/views/chatNavigationView.js';
+import { IChatListCatalog } from '../../../src/ash/sessions/contrib/sessions/browser/views/chatListModel.js';
 import { ReplyChatEditor } from '../../../src/ash/sessions/contrib/chat/browser/replyChatEditor.js';
-import { chatGPTReplyEditor } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTWeb.js';
+import { chatGPTReplyEditor } from '../../../src/ash/sessions/electron-browser/chatGPTWeb.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
@@ -38,7 +46,6 @@ import { createDisconnectedAgentHostInputCompletionService } from '../../../src/
 import { IAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/common/agentService.js';
 import { IMessageHistoryService } from '../../../src/ash/platform/messageHistory/common/messageHistory.js';
 import '../../../src/ash/workbench/contrib/chat/browser/chat.shared.contribution.js';
-import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
 import { IChatGPTTransport } from '../../../src/ash/sessions/contrib/chatgptweb/common/chatGPTTransport.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { registerTestComponentServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
@@ -87,7 +94,7 @@ import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/pl
 import '../../../src/ash/sessions/contrib/chat/browser/chat.contribution.js';
 
 declare global {
-	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; }; }
+	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setAshChatSelected(selected: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; }; }
 }
 
 const parameters = new URLSearchParams(location.search);
@@ -221,6 +228,7 @@ resources.add(bindTestColorTheme(services.get(IThemeService), document.body));
 services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as ILifecycleService);
 const chat = resources.add(services.createInstance(ChatGPTService));
 services.registerInstance(IChatGPTService, chat);
+const ashChatSelected = services.get(IContextKeyService).createKey<boolean>(ASH_CHAT_SELECTED_CONTEXT, false);
 window.ashChatGPTIntegration = {
 	setConfiguration: (key, value) => configuration.updateValue(key, value),
 	setMathEnabled: enabled => services.get(IConfigurationService).updateValue('markdown.math.enabled', enabled),
@@ -231,13 +239,17 @@ window.ashChatGPTIntegration = {
 	dictate: (text, final) => transcript?.(text, final),
 	dictationStops: () => dictationStops,
 	setVisible: visible => widget.setVisible(visible),
+	setAshChatSelected: selected => ashChatSelected.set(selected),
 };
+services.registerInstance(IChatListCatalog, { sources: [resources.add(services.createInstance(ChatGPTList))] });
+services.registerInstance(IProjectService, { list: async () => [], onDidChange: Event.None } as unknown as IProjectService);
+services.registerInstance(IProjectsService, resources.add(services.createInstance(ProjectsService)));
 widget = resources.add(services.createInstance(ReplyChatEditor, chatGPTReplyEditor));
 widget.create(document.getElementById('editor')!);
 if (parameters.has('screenReader')) { services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled); }
 widget.setVisible(true);
 const host = document.getElementById('navigation')!;
-const descriptor = { id: 'sessions.chatgpt.navigation', title: 'ChatGPT', location: ViewContainerLocation.Sidebar, ctorDescriptor: new SyncDescriptor(ChatNavigationViewPaneContainer, [[new SyncDescriptor(ChatGPTList)], undefined]) };
+const descriptor = { id: 'sessions.chatgpt.navigation', title: 'ChatGPT', location: ViewContainerLocation.Sidebar, ctorDescriptor: new SyncDescriptor(ChatNavigationViewPaneContainer, [undefined]) };
 resources.add(SessionsViewRegistry.registerViewContainer(descriptor));
 const descriptors = resources.add(services.createInstance(ViewDescriptorService, { registry: SessionsViewRegistry }));
 const view = resources.add(services.createInstance(descriptor.ctorDescriptor, host, {
@@ -245,6 +257,18 @@ const view = resources.add(services.createInstance(descriptor.ctorDescriptor, ho
 	contextKeyService: services.get(IContextKeyService), instantiationService: services,
 }));
 view.setVisible(true);
+if (parameters.has('projects')) {
+	if (!services.has(IFileDialogService)) services.registerInstance(IFileDialogService, {} as IFileDialogService);
+	services.registerInstance(ISessionsTitlebarService, {
+		setPageContent: content => {
+			document.body.prepend(content);
+			return toDisposable(() => content.remove());
+		},
+	} as ISessionsTitlebarService);
+	const projects = resources.add(services.createInstance(ProjectsEditorPane));
+	projects.create(document.getElementById('editor')!);
+	projects.setVisible(true);
+}
 const resize = new ResizeObserver(() => view.layout({ height: host.clientHeight, width: host.clientWidth }));
 resize.observe(host);
 resources.add(toDisposable(() => resize.disconnect()));

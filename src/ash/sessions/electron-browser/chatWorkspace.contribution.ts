@@ -1,5 +1,6 @@
 import { Disposable } from '../../base/common/lifecycle.js';
 import { CommandsRegistry, ICommandService } from '../../platform/commands/common/commands.js';
+import { registerSingleton } from '../../platform/instantiation/common/extensions.js';
 import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
 import { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
@@ -8,20 +9,23 @@ import { ViewContainerLocation } from '../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../common/views.js';
 import { AshChatNavigationSource } from '../contrib/chat/browser/ashChatNavigationSource.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../contrib/chat/common/constants.js';
-import { ChatGPTList } from '../contrib/chatgptweb/browser/chatGPTList.js';
-import { chatGPTReplyEditor } from '../contrib/chatgptweb/browser/chatGPTWeb.js';
+import { ChatGPTList } from './chatGPTList.js';
+import { chatGPTReplyEditor } from './chatGPTWeb.js';
+import { ChatListCatalog, IChatListCatalog } from '../contrib/sessions/browser/views/chatListModel.js';
 import { ChatNavigationViewPaneContainer } from '../contrib/sessions/browser/views/chatNavigationView.js';
 import { ISessionsLayoutService } from '../services/layout/common/sessionsLayoutService.js';
 import '../contrib/chat/browser/chat.contribution.js';
-import '../contrib/chatgptweb/browser/chatGPTWeb.contribution.js';
+import './chatGPTWeb.contribution.js';
 import './actions/newChatModelAction.js';
+
+registerSingleton(IChatListCatalog, new SyncDescriptor(ChatListCatalog, [[
+	new SyncDescriptor(ChatGPTList),
+	new SyncDescriptor(AshChatNavigationSource),
+]], true));
 
 SessionsViewRegistry.registerViewContainer({
 	id: CHAT_WORKSPACE_NAVIGATION_ID,
-	ctorDescriptor: new SyncDescriptor(ChatNavigationViewPaneContainer, [[
-		new SyncDescriptor(ChatGPTList),
-		new SyncDescriptor(AshChatNavigationSource),
-	], chatGPTReplyEditor.accessibility]),
+	ctorDescriptor: new SyncDescriptor(ChatNavigationViewPaneContainer, [chatGPTReplyEditor.accessibility]),
 	mergeViewWithContainerWhenSingleView: false, title: 'Chat', localizationKey: { bundle: 'ash', key: 'sessions.activity.chat' }, location: ViewContainerLocation.Sidebar, isDefault: true, order: 2,
 });
 

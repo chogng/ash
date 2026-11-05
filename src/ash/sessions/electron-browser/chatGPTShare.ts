@@ -1,8 +1,8 @@
-import { status } from '../../../../base/browser/ui/aria/aria.js';
-import { localize } from '../../../../nls.js';
-import type { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import type { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import type { IChatGPTService } from './chatGPTService.js';
+import { status } from '../../base/browser/ui/aria/aria.js';
+import { localize } from '../../nls.js';
+import type { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
+import type { IDialogService } from '../../platform/dialogs/common/dialogs.js';
+import type { IChatGPTService } from '../contrib/chatgptweb/browser/chatGPTService.js';
 
 export async function shareChatGPTConversation(chat: IChatGPTService, dialogs: IDialogService, clipboard: IClipboardService, id: string, title: string, messageId?: string): Promise<void> {
 	const result = await dialogs.confirm({

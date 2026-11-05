@@ -10,7 +10,7 @@ suite('Ash chat list model', () => {
 			open: async () => { }, getActions: () => [],
 		});
 		const history = { state: 'idle', load: () => { } } as const;
-		const groups = groupChatList([
+		const snapshots = [
 			{
 				entries: [row('opaque-a', 'research'), row('opaque-b', 'research', true), row('opaque-c', 'unknown')],
 			},
@@ -21,15 +21,19 @@ suite('Ash chat list model', () => {
 				],
 				entries: [row('opaque-d', 'research'), row('opaque-e', undefined, true), row('opaque-f')],
 			},
-		]);
+		];
+		const groups = groupChatList(snapshots);
 		assert.deepEqual(groups.map(group => [group.key, group.rows.map(row => row.id)]), [
 			['pinned', ['opaque-b', 'opaque-e']],
-			['research', ['opaque-a', 'opaque-d']],
-			['empty', []],
-			['other', ['opaque-c']],
 			['recent', ['opaque-f']],
 		]);
-		assert.equal(groups[1]?.title, 'Field notes');
-		assert.equal(groups[2]?.project?.history, history);
+		const projects = groupChatList(snapshots, 'projects');
+		assert.equal(projects[0]?.title, 'Field notes');
+		assert.equal(projects[1]?.project?.history, history);
+		assert.deepEqual(projects.map(group => [group.key, group.rows.map(row => row.id)]), [
+			['research', ['opaque-a', 'opaque-b', 'opaque-d']],
+			['empty', []],
+			['other', ['opaque-c']],
+		]);
 	});
 });

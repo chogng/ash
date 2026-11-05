@@ -345,6 +345,11 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
 	await expect(trigger.locator('.ash-pixel-spinner')).toHaveCount(0);
 	await expect(trigger.locator('.ash-session-status-icon-layer')).toHaveCount(1);
+	await expect(title).toHaveAttribute('aria-current', 'page');
+	await page.evaluate(() => window.ashChatGPTIntegration.setAshChatSelected(true));
+	await expect(title).not.toHaveAttribute('aria-current');
+	await page.evaluate(() => window.ashChatGPTIntegration.setAshChatSelected(false));
+	await expect(title).toHaveAttribute('aria-current', 'page');
 	await page.reload();
 	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
 	await trigger.click();

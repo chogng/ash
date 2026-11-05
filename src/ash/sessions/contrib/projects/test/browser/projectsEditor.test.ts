@@ -370,7 +370,7 @@ suite('Projects toolbar', () => {
 			const sort = toolbar.getByRole('button', { name: chinese ? '项目排序' : 'Sort projects', exact: true });
 			const create = toolbar.getByRole('button', { name: chinese ? '新建项目' : 'New project', exact: true });
 			await expect(toolbar).toHaveClass(/ash-toolbar/);
-			await expect(toolbar.getByRole('button')).toHaveCount(3);
+			await expect(toolbar.getByRole('button')).toHaveCount(4);
 			await expect(create).toHaveClass(/ash-button-primary/);
 			await expect(create).toBeFocused();
 			await expect(toolbar.locator('button[tabindex="0"]')).toHaveCount(1);
@@ -390,6 +390,8 @@ suite('Projects toolbar', () => {
 			await expect(sort).toBeFocused();
 			await expect(sort).toHaveAttribute('aria-expanded', 'false');
 			expect(await sortNode!.evaluate(element => element.isConnected)).toBe(true);
+			await page.keyboard.press('ArrowRight');
+			await expect(toolbar.getByRole('button', { name: chinese ? '已归档' : 'Archived', exact: true })).toBeFocused();
 			await page.keyboard.press('ArrowRight');
 			await expect(create).toBeFocused();
 			await page.keyboard.press('Enter');
@@ -453,8 +455,8 @@ suite('Projects toolbar', () => {
 			await page.keyboard.press('Alt+F1');
 			await expect(page.locator('.ash-accessible-view-content')).toHaveValue(
 				chinese
-					? /使用左右方向键在搜索、排序和新建项目之间移动/
-					: /Left and Right Arrow to move between Search, Sort and New project/,
+					? /使用左右方向键在搜索、排序、已归档和新建项目之间移动/
+					: /Left and Right Arrow to move between Search, Sort, Archived and New project/,
 			);
 			await page.keyboard.press('Escape');
 			await expect(sort).toBeFocused();

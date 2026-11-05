@@ -12,6 +12,7 @@ const sortOrderStorageKey = 'sessions.projects.sortOrder';
 export interface ProjectsState {
 	readonly projects: readonly ProjectSummary[];
 	readonly selectedId: string | undefined;
+	readonly conversationProjectId?: string;
 	readonly selected: Project | undefined;
 	readonly query: string;
 	readonly sortOrder: ProjectSortOrder;
@@ -26,12 +27,14 @@ export interface IProjectsService {
 	setQuery(query: string): void;
 	setSortOrder(sortOrder: ProjectSortOrder): void;
 	openProject(id: string): Promise<void>;
+	openConversationProject(id: string): void;
 	showProjects(): void;
 	reload(): Promise<void>;
 	create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean>;
 	update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean>;
 	readProject(id: string): Promise<Project | undefined>;
 	archive(project: ProjectSummary): Promise<boolean>;
+	restore(project: ProjectSummary): Promise<boolean>;
 	remove(project: ProjectSummary): Promise<boolean>;
 	isPinned(id: string): boolean;
 	togglePinned(id: string): void;
@@ -76,13 +79,18 @@ export class ProjectsService extends Disposable implements IProjectsService {
 	}
 	public showProjects(): void {
 		this.loadSequence++;
-		this.patch({ selectedId: undefined, selected: undefined, loading: false, message: undefined });
+		this.patch({ selectedId: undefined, conversationProjectId: undefined, selected: undefined, loading: false, message: undefined });
 		void this.reload();
 	}
 
 	public async openProject(id: string): Promise<void> {
-		this.patch({ selectedId: id, selected: undefined, message: undefined });
+		this.patch({ selectedId: id, conversationProjectId: undefined, selected: undefined, message: undefined });
 		await this.reload();
+	}
+
+	public openConversationProject(id: string): void {
+		this.loadSequence++;
+		this.patch({ conversationProjectId: id, selectedId: undefined, selected: undefined, loading: false, message: undefined });
 	}
 
 	public async reload(): Promise<void> {
@@ -116,6 +124,7 @@ export class ProjectsService extends Disposable implements IProjectsService {
 		}
 	}
 	public archive(project: ProjectSummary): Promise<boolean> { return this.mutate(() => this.projects.archive(project)); }
+	public restore(project: ProjectSummary): Promise<boolean> { return this.mutate(() => this.projects.restore(project)); }
 	public async remove(project: ProjectSummary): Promise<boolean> {
 		const removed = await this.mutate(() => this.projects.remove(project), false, project.id);
 		if (removed) { this.storage.remove(`sessions.projects.pinned.${project.id}`, StorageScope.PROFILE); }

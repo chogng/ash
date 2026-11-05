@@ -1,31 +1,37 @@
-import { Emitter } from '../../../../base/common/event.js';
-import { addDisposableListener } from '../../../../base/browser/dom.js';
-import { raceCancellationError } from '../../../../base/common/async.js';
-import { canceled } from '../../../../base/common/errors.js';
-import { isPortableLinkTarget } from '../../../../base/common/htmlContent.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { autorun, type IReader } from '../../../../base/common/observable.js';
-import type { URI } from '../../../../base/common/uri.js';
-import { localize } from '../../../../nls.js';
-import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
-import type { IReplyChatEditorModel } from '../../chat/browser/replyChatEditor.js';
-import type { ChatResponseActions } from '../../../../workbench/contrib/chat/browser/widget/chatListRenderer.js';
-import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
-import { chatListItem, type IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
-import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
-import type { ChatSubmissionOptions } from '../../../../workbench/services/chat/common/chatService.js';
-import { decodeChatGPTReply } from './chatGPTRichContent.js';
-import type { ChatReplyMessage } from '../../../common/chatReplyBackend.js';
-import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
-import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
-import { canQueueChatGPTCreation, canUseCodeModels, coworkTaskStatus, IChatGPTService, pendingCreationStatus, type ChatGPTState } from './chatGPTService.js';
+import { Emitter } from '../../base/common/event.js';
+import { addDisposableListener } from '../../base/browser/dom.js';
+import { raceCancellationError } from '../../base/common/async.js';
+import { canceled } from '../../base/common/errors.js';
+import { isPortableLinkTarget } from '../../base/common/htmlContent.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../base/common/lifecycle.js';
+import { autorun, type IReader } from '../../base/common/observable.js';
+import type { URI } from '../../base/common/uri.js';
+import { localize } from '../../nls.js';
+import { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
+import { ICommandService } from '../../platform/commands/common/commands.js';
+import { IDialogService } from '../../platform/dialogs/common/dialogs.js';
+import { IOpenerService } from '../../platform/opener/common/opener.js';
+import type { ModelRef } from '../../platform/models/common/agentModels.js';
+import type { IReplyChatEditorModel } from '../contrib/chat/browser/replyChatEditor.js';
+import type { ChatResponseActions } from '../../workbench/contrib/chat/browser/widget/chatListRenderer.js';
+import type { ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
+import { chatListItem, type IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
+import { modelRefIdentity, type ModelCatalogEntry } from '../../workbench/services/chat/common/modelCatalog.js';
+import type { ChatSubmissionOptions } from '../../workbench/services/chat/common/chatService.js';
+import { decodeChatGPTReply } from '../contrib/chatgptweb/browser/chatGPTRichContent.js';
+import type { ChatReplyMessage } from '../common/chatReplyBackend.js';
+import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../browser/agentHost/sessionProviderScopeService.js';
+import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../contrib/chat/common/constants.js';
+import { canQueueChatGPTCreation, coworkTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../contrib/chatgptweb/browser/chatGPTService.js';
 import { shareChatGPTConversation } from './chatGPTShare.js';
 
-/** Projects the provider's one conversation record into the existing Chat widget. */
+export function canUseCodeModels(state: ChatGPTState): boolean {
+	// Existing conversations and drafts with provider-owned attachments keep their reply route.
+	return !selectedChatConversationId(state) && !state.pendingCreation && !state.uncertain
+		&& state.loading?.kind !== 'conversation' && !state.messages.length && !state.coworkTasks.length && !state.attachments.length;
+}
+
+/** Projects ChatGPT's data into the Ash composer and offers the host's Code draft handoff. */
 export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorModel {
 	private readonly changed = this._register(new Emitter<void>());
 	private readonly composerChanged = this._register(new Emitter<void>());

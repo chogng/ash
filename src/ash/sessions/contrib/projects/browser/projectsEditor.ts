@@ -15,13 +15,13 @@ import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Dialog, DialogContentsAlignment } from '../../../../base/browser/ui/dialog/dialog.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { AnchorAlignment, AnchorPosition } from '../../../../base/browser/ui/contextview/contextview.js';
-import { DisposableMap, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IntervalTimer } from '../../../../base/common/async.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { autorun } from '../../../../base/common/observable.js';
+import { autorun, derived, observableValue } from '../../../../base/common/observable.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { basename } from '../../../../base/common/resources.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
@@ -32,6 +32,9 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { toErrorMessage } from '../../../../base/common/errorMessage.js';
+import { groupChatList, IChatListCatalog, type ChatListEntry, type ChatListGroup, type ConversationProjectEditor } from '../../sessions/browser/views/chatListModel.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { IProjectsService, type ProjectSortOrder, type ProjectsState } from './projectsService.js';
@@ -88,6 +91,11 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 	private sortMenuOpen = false;
 	private readonly projectInputs = this._register(new DisposableMap<string, ProjectChatInput>());
 	private activeProjectInput: ProjectChatInput | undefined;
+	private readonly conversationProjects = derived(reader =>
+		this.chatCatalog.sources.map(source => source.snapshot.read(reader)));
+	private readonly showArchived = observableValue(this, false);
+	private readonly readConversationProject = this._register(new MutableDisposable());
+	private readonly openConversationRequest = this._register(new MutableDisposable());
 
 	constructor(
 		@IProjectsService private readonly projects: IProjectsService,
@@ -102,6 +110,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		@IThemeService themeService: IThemeService,
 		@IStorageService storageService: IStorageService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IChatListCatalog private readonly chatCatalog: IChatListCatalog,
+		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super('sessions.editor.projects', themeService, storageService);
 	}
@@ -127,8 +137,12 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				...defaultButtonStyles,
 				label: localize('projects.title', 'Projects'),
 				onClick: () => {
+					const projectId = this.projects.state.get().conversationProjectId;
 					this.projects.showProjects();
-					this.createActionViewItem.focus();
+					const card = Array.from(this.body.querySelectorAll<HTMLButtonElement>('.ash-projects-card'))
+						.find(card => card.dataset.projectControl === projectId);
+					if (card) card.focus();
+					else this.createActionViewItem.focus();
 				},
 			}),
 		);
@@ -250,6 +264,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const searchLabel = localize('projects.search', 'Search projects');
 		const sortLabel = localize('projects.sort', 'Sort projects');
 		const createLabel = localize('projects.new', 'New project');
+		const archivedLabel = localize('projects.archived', 'Archived');
 		this.toolbarActions = [
 			{
 				id: 'projects.search',
@@ -269,6 +284,16 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				icon: Lxicon.sort,
 				enabled: true,
 				run: () => this.sortDropdown.show(),
+			},
+			{
+				id: 'projects.archived',
+				label: archivedLabel,
+				tooltip: archivedLabel,
+				enabled: true,
+				run: () => {
+					this.showArchived.set(!this.showArchived.get(), undefined);
+					this.title.focus();
+				},
 			},
 			{
 				id: 'projects.create',
@@ -310,7 +335,19 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				}),
 			);
 		}
-		this._register(autorun(reader => this.render(this.projects.state.read(reader))));
+		this._register(autorun(reader => {
+			const state = this.projects.state.read(reader);
+			const id = state.conversationProjectId;
+			const snapshots = this.conversationProjects.read(reader);
+			const groups = groupChatList(snapshots, 'projects');
+			const archived = this.showArchived.read(reader) && !id && !state.selectedId;
+			const selected = groups.find(group => group.key === id);
+			this.render(state, groups, selected, archived ? groupChatList(snapshots, 'archived') : undefined);
+			const history = (selected ?? groups.find(group => group.key === state.selectedId))?.project?.history;
+			if (this.isVisible() && history?.state === 'idle') {
+				history.load();
+			}
+		}));
 	}
 
 	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
@@ -322,12 +359,15 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.updateTitlebar();
 		if (visible) {
 			void this.projects.reload();
+			const history = groupChatList(this.conversationProjects.get(), 'projects').find(group => group.key === (this.projects.state.get().conversationProjectId ?? this.projects.state.get().selectedId))?.project?.history;
+			if (history?.state === 'idle') history.load();
 		} else {
 			this.relativeTimeUpdate.cancel();
 			if (this.sortMenuOpen) {
 				this.contextMenus.hideContextMenu();
 			}
 			this.finishRename(false);
+			this.readConversationProject.clear();
 			this.dialog.clear();
 		}
 	}
@@ -335,7 +375,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.domNode.classList.toggle('narrow', dimension.width < 760);
 	}
 	public override focus(): void {
-		if (this.projects.state.get().selectedId) {
+		if (this.projects.state.get().selectedId || this.projects.state.get().conversationProjectId !== undefined) {
 			if (this.activeProjectInput) this.activeProjectInput.focus();
 			else this.title.focus();
 		} else {
@@ -345,14 +385,14 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 
 	private updateTitlebar(): void {
 		// The list has its own heading; only an opened project needs breadcrumb navigation.
-		if (this.isVisible() && this.projects.state.get().selectedId) {
+		if (this.isVisible() && (this.projects.state.get().selectedId || this.projects.state.get().conversationProjectId !== undefined)) {
 			this.titlebarContent.value ??= this.titlebar.setPageContent(this.breadcrumb);
 		} else {
 			this.titlebarContent.clear();
 		}
 	}
 
-	private render(state: ProjectsState): void {
+	private render(state: ProjectsState, groups: readonly ChatListGroup[], selected: ChatListGroup | undefined, archived: readonly ChatListGroup[] | undefined): void {
 		// Metadata can refresh while the editor has a selection or an IME composition.
 		// Keep the same detail DOM and composer in that case, replacing only its supporting content.
 		const retainedInput = this.activeProjectInput;
@@ -368,12 +408,13 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.relativeTimeUpdate.cancel();
 		this.content.clear();
 		if (!retainDetail) this.body.replaceChildren();
-		this.breadcrumbSeparator.hidden = !state.selected && !loadingProject;
+		else this.body.querySelector(':scope > .ash-projects-conversations')?.remove();
+		this.breadcrumbSeparator.hidden = !selected && !state.selected && !loadingProject;
 		if (this.rename && this.rename.project.id !== state.selected?.id) {
 			this.finishRename(false);
 		}
-		this.breadcrumbName.hidden = (!state.selected && !loadingProject) || !!this.rename;
-		this.breadcrumbName.label = state.selected?.name ?? '';
+		this.breadcrumbName.hidden = (!selected && !state.selected && !loadingProject) || !!this.rename;
+		this.breadcrumbName.label = selected?.title ?? state.selected?.name ?? '';
 		this.breadcrumbName.enabled = !!state.selected && !state.busy;
 		this.breadcrumbName.domNode.classList.toggle('ash-projects-placeholder', loadingProject);
 		this.breadcrumbName.domNode.setAttribute('aria-hidden', String(loadingProject));
@@ -381,16 +422,18 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			'aria-label',
 			loadingProject
 				? localize('projects.loading', 'Loading projects…')
-				: localize('projects.rename', 'Rename project {0}', state.selected?.name ?? ''),
+				: selected?.title ?? localize('projects.rename', 'Rename project {0}', state.selected?.name ?? ''),
 		);
-		if (state.selectedId) {
+		if (state.selectedId || selected) {
 			this.breadcrumbProjects.domNode.removeAttribute('aria-current');
 		} else {
 			this.breadcrumbProjects.domNode.setAttribute('aria-current', 'page');
 		}
 		this.updateTitlebar();
-		this.tools.hidden = !!state.selectedId;
-		this.title.textContent = loadingProject ? '' : (state.selected?.name ?? localize('projects.title', 'Projects'));
+		this.tools.hidden = !!state.selectedId || !!selected;
+		this.title.textContent = loadingProject ? '' : (selected?.title ?? state.selected?.name ??
+			(archived ? localize('projects.archived', 'Archived') : localize('projects.title', 'Projects')));
+		this.tools.querySelector('[data-action-id="projects.archived"] button')?.setAttribute('aria-pressed', String(!!archived));
 		this.title.title = this.title.textContent;
 		this.title.classList.toggle('ash-projects-placeholder', loadingProject);
 		this.title.classList.toggle('ash-projects-loading-title', loadingProject);
@@ -399,7 +442,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		} else {
 			this.title.removeAttribute('aria-label');
 		}
-		this.setSearchVisible(!state.selectedId && (this.searchActionViewItem.expanded || !!state.query));
+		this.setSearchVisible(!selected && !state.selectedId && (this.searchActionViewItem.expanded || !!state.query));
 		this.search.value = state.query;
 		const createAction = this.toolbarActions.find(action => action.id === 'projects.create')!;
 		if (createAction.enabled === state.busy) {
@@ -417,12 +460,21 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.retry.domNode.hidden = !state.message;
 		this.retry.enabled = !state.loading && !state.busy;
 		this.body.setAttribute('aria-busy', String(state.loading));
-		if (state.selected) {
+		const localIds = new Set(state.projects.map(project => project.id));
+		const query = state.query.trim().toLocaleLowerCase();
+		const conversationCards = groups.filter(group => !localIds.has(group.key) && group.title.toLocaleLowerCase().includes(query));
+		if (selected) {
+			this.renderProjectConversations(selected);
+		} else if (state.selected) {
 			this.renderProject(state.selected);
+			const conversations = groups.find(group => group.key === state.selectedId);
+			if (conversations) this.renderProjectConversations(conversations);
 		} else if (loadingProject) {
 			this.renderLoading(true);
-		} else if (!state.selectedId && this.projects.getProjects().length) {
-			this.renderCards();
+		} else if (archived) {
+			this.renderArchivedProjects(state, archived, query);
+		} else if (!state.selectedId && (this.projects.getProjects().length || conversationCards.length)) {
+			this.renderCards(conversationCards);
 		} else if (state.loading) {
 			this.renderLoading(false);
 		} else if (!state.loading && !state.message) {
@@ -580,7 +632,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.body.append(empty);
 	}
 
-	private renderCards(): void {
+	private renderCards(conversationCards: readonly ChatListGroup[]): void {
 		const document = this.domNode.ownerDocument;
 		const list = h(document, 'ul', {
 			className: 'ash-projects-grid',
@@ -619,53 +671,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				this.content.add(this.hover.setupDelayedHover(caption, { content: updatedAt }));
 			}
 			card.append(mark, content);
-			const actionsHost = h(document, 'div', { className: 'ash-projects-card-actions' });
-			const pinned = this.projects.isPinned(project.id);
-			const pinLabel = pinned ? localize('projects.unpin', 'Unpin') : localize('projects.pin', 'Pin');
-			const pin: IAction = {
-				id: 'projects.pin',
-				label: pinLabel,
-				tooltip: pinLabel,
-				icon: pinned ? Lxicon.pinFilled : Lxicon.pinned,
-				enabled: !this.projects.state.get().busy,
-				checked: pinned,
-				run: () => this.projects.togglePinned(project.id),
-			};
-			const toolbar = this.content.add(
-				new WorkbenchToolBar(
-					actionsHost,
-					{
-						showContextMenu: delegate => {
-							row.classList.add('menu-visible');
-							this.contextMenus.showContextMenu({
-								...delegate,
-								getMenuClassName: () => 'ash-projects-menu',
-								onHide: didCancel => {
-									row.classList.remove('menu-visible');
-									delegate.onHide?.(didCancel);
-								},
-							});
-							// The menu mounts synchronously in this window; Projects owns its destructive styling.
-							const destructiveAction = this.domNode.ownerDocument.querySelector(
-								'.ash-projects-menu [data-action-id="projects.delete"]',
-							);
-							destructiveAction?.classList.add('ash-projects-destructive-action');
-						},
-					},
-					{
-						ariaLabel: localize('projects.actions', 'Actions for {0}', project.name),
-						presentation: 'inherit-foreground',
-						highlightToggledItems: false,
-						actionViewItemProvider: (action, options) =>
-							action.id === 'projects.pin' ? new ProjectsPinActionViewItem(action, options) : undefined,
-					},
-				),
-			);
-			toolbar.setActions([], this.projectActions(project), [pin]);
-			const pinButton = actionsHost.querySelector<HTMLElement>('[data-action-id="projects.pin"] button')!;
-			pinButton.dataset.projectControl = `pin:${project.id}`;
-			const moreButton = actionsHost.querySelector<HTMLElement>('.ash-toolbar-more-actions button')!;
-			moreButton.dataset.projectControl = `more:${project.id}`;
+			const actionsHost = this.renderCardActions(row, project.id, project.name, this.projectActions(project));
 			this.content.add(this.hover.setupDelayedHover(card, { content: project.name }));
 			this.content.add(
 				addDisposableListener(card, 'click', () => {
@@ -675,11 +681,192 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			row.append(card, actionsHost);
 			list.append(row);
 		}
+		for (const project of conversationCards) {
+			const row = h(document, 'li', { className: 'ash-projects-row' });
+			const card = h(document, 'button', {
+				className: 'ash-button ash-button-quiet ash-projects-card',
+				properties: { type: 'button' },
+			});
+			card.dataset.projectControl = project.key;
+			card.dataset.conversationProject = '';
+			const mark = h(document, 'span', { className: 'ash-projects-card-mark', attributes: { 'aria-hidden': 'true' } });
+			appendIcon(Lxicon.projects, mark);
+			card.append(mark, h(document, 'span', { className: 'ash-projects-card-name' }, project.title));
+			this.content.add(addDisposableListener(card, 'click', () => {
+				this.projects.openConversationProject(project.key);
+				this.title.focus();
+			}));
+			const editor = project.project?.editDetails;
+			const editLabel = localize('projects.edit', 'Edit details');
+			const editActions: IAction[] = editor ? [{
+				id: 'projects.edit',
+				label: editLabel,
+				tooltip: editLabel,
+				icon: Lxicon.edit,
+				enabled: true,
+				run: () => this.editConversationProject(editor),
+			}] : [];
+			const archive = project.project?.archive;
+			const remove = project.project?.remove;
+			row.append(card, this.renderCardActions(row, project.key, project.title, [
+				...editActions,
+				...this.projectRemovalActions(project.title, archive, remove),
+			]));
+			list.append(row);
+		}
 		this.body.append(list);
 		this.updateCardTimes();
 		if (this.isVisible() && list.querySelector('time')) {
 			this.relativeTimeUpdate.cancelAndSet(() => this.updateCardTimes(), 60_000, document.defaultView!);
 		}
+	}
+
+	private renderArchivedProjects(state: ProjectsState, groups: readonly ChatListGroup[], query: string): void {
+		const document = this.body.ownerDocument;
+		const projects = [
+			...state.projects.filter(project => project.archived).map(project => ({
+				id: project.id, title: project.name, restore: () => this.projects.restore(project),
+			})),
+			...groups.flatMap(group => group.project?.restore ? [{
+				id: group.key, title: group.title, restore: group.project.restore,
+			}] : []),
+		].filter(project => project.title.toLocaleLowerCase().includes(query))
+			.sort((left, right) => left.title.localeCompare(right.title));
+		if (!projects.length) {
+			this.body.append(h(document, 'p', { attributes: { role: 'status' } }, query
+				? localize('projects.noMatchingArchived', 'No matching archived projects.')
+				: localize('projects.noArchived', 'No archived projects.')));
+			return;
+		}
+		const list = h(document, 'ul', {
+			className: 'ash-projects-grid',
+			attributes: { 'aria-label': localize('projects.archived', 'Archived') }
+		});
+		for (const project of projects) {
+			const row = h(document, 'li', { className: 'ash-projects-row' });
+			const button = this.content.add(new Button(row, {
+				...defaultButtonStyles,
+				label: localize('projects.restoreNamed', 'Unarchive {0}', project.title),
+				icon: Lxicon.archive,
+				onClick: () => {
+					void Promise.resolve().then(project.restore).catch(error => this.notifications.error(toErrorMessage(error)));
+				},
+			}));
+			button.enabled = !state.busy;
+			button.domNode.dataset.projectControl = `restore:${project.id}`;
+			list.append(row);
+		}
+		this.body.append(list);
+	}
+
+	private renderCardActions(row: HTMLElement, id: string, title: string, actions: readonly IAction[]): HTMLElement {
+		const actionsHost = h(row.ownerDocument, 'div', { className: 'ash-projects-card-actions' });
+		const pinned = this.projects.isPinned(id);
+		const pinLabel = pinned ? localize('projects.unpin', 'Unpin') : localize('projects.pin', 'Pin');
+		const pin: IAction = {
+			id: 'projects.pin',
+			label: pinLabel,
+			tooltip: pinLabel,
+			icon: pinned ? Lxicon.pinFilled : Lxicon.pinned,
+			enabled: !this.projects.state.get().busy,
+			checked: pinned,
+			run: () => this.projects.togglePinned(id),
+		};
+		const toolbar = this.content.add(
+			new WorkbenchToolBar(
+				actionsHost,
+				{
+					showContextMenu: delegate => {
+						row.classList.add('menu-visible');
+						this.contextMenus.showContextMenu({
+							...delegate,
+							getMenuClassName: () => 'ash-projects-menu',
+							onHide: didCancel => {
+								row.classList.remove('menu-visible');
+								delegate.onHide?.(didCancel);
+							},
+						});
+						// The menu mounts synchronously in this window; Projects owns its destructive styling.
+						const destructiveAction = this.domNode.ownerDocument.querySelector(
+							'.ash-projects-menu [data-action-id="projects.delete"]',
+						);
+						destructiveAction?.classList.add('ash-projects-destructive-action');
+					},
+				},
+				{
+					ariaLabel: localize('projects.actions', 'Actions for {0}', title),
+					presentation: 'inherit-foreground',
+					highlightToggledItems: false,
+					actionViewItemProvider: (action, options) =>
+						action.id === 'projects.pin' ? new ProjectsPinActionViewItem(action, options) : undefined,
+				},
+			),
+		);
+		toolbar.setActions([], actions, [pin]);
+		const pinButton = actionsHost.querySelector<HTMLElement>('[data-action-id="projects.pin"] button')!;
+		pinButton.dataset.projectControl = `pin:${id}`;
+		const moreButton = actionsHost.querySelector<HTMLElement>('.ash-toolbar-more-actions button')!;
+		if (moreButton) moreButton.dataset.projectControl = `more:${id}`;
+		return actionsHost;
+	}
+
+	private async editConversationProject(read: (signal: AbortSignal) => Promise<ConversationProjectEditor>): Promise<void> {
+		const controller = new AbortController();
+		this.readConversationProject.value = toDisposable(() => controller.abort());
+		try {
+			const editor = await read(controller.signal);
+			if (!controller.signal.aborted && this.isVisible()) this.showProjectDialog(undefined, editor);
+		} catch (error) {
+			if (!controller.signal.aborted) this.notifications.error(toErrorMessage(error));
+		}
+	}
+
+	private renderProjectConversations(group: ChatListGroup): void {
+		const document = this.domNode.ownerDocument;
+		const section = h(document, 'section', { className: 'ash-projects-conversations' });
+		this.body.append(section);
+		const list = h(document, 'ul', {
+			className: 'ash-projects-grid',
+			attributes: { 'aria-label': localize('projects.conversations', 'Project conversations') },
+		});
+		const history = group.project?.history;
+		for (const entry of group.rows) {
+			const row = h(document, 'li', { className: 'ash-projects-row' });
+			const button = this.content.add(new Button(row, {
+				...defaultButtonStyles, label: entry.title, icon: entry.defaultIcon, presentation: 'quiet',
+				onClick: () => this.openProjectConversation(entry),
+			}));
+			button.enabled = !entry.disabled;
+			button.domNode.dataset.projectControl = entry.id;
+			list.append(row);
+		}
+		section.append(list);
+		if (history?.state === 'more' || history?.state === 'error') {
+			const button = this.content.add(new Button(section, {
+				...defaultButtonStyles,
+				label: history.state === 'more' ? localize('sessions.chatList.loadMoreProjectChats', 'Load more project chats')
+					: localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry'),
+				onClick: history.load,
+			}));
+			button.domNode.dataset.projectControl = 'project-history';
+		} else if (history?.state === 'loading' || history?.state === 'idle') {
+			section.append(h(document, 'p', { attributes: { role: 'status' } },
+				localize('sessions.chatList.loadingProjectChats', 'Loading project chats…')));
+		} else if (history?.state === 'unavailable') {
+			section.append(h(document, 'p', { attributes: { role: 'status' } },
+				localize('sessions.chatList.projectChatsOffline', 'Connect to load project chats.')));
+		} else if (!group.rows.length) {
+			section.append(h(document, 'p', { attributes: { role: 'status' } },
+				localize('sessions.chatList.emptyProject', 'No chats in this project')));
+		}
+	}
+
+	private openProjectConversation(entry: ChatListEntry): void {
+		const controller = new AbortController();
+		this.openConversationRequest.value = toDisposable(() => controller.abort());
+		void entry.open(controller.signal).catch(error => {
+			if (!controller.signal.aborted) this.notifications.error(toErrorMessage(error));
+		});
 	}
 
 	private updateCardTimes(): void {
@@ -717,29 +904,51 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 					this.showProjectDialog(current);
 				}
 			}),
-			action('projects.archive', localize('projects.archive', 'Archive'), Lxicon.archive, async () => {
-				await this.projects.archive(project);
-				if (!this.isDisposed && this.isVisible()) {
-					this.focusProjectList();
-				}
-			}),
-			action('projects.delete', localize('projects.delete', 'Delete'), Lxicon.trash, async () => {
-				const result = await this.dialogs.confirm({
-					message: localize('projects.deleteConfirm', 'Delete project "{0}"?', project.name),
-					detail: localize(
-						'projects.deleteDetail',
-						'The project and its material references will be removed. Conversations and source files will be kept.',
-					),
-					primaryButton: localize('projects.delete', 'Delete'),
-				});
-				if (result.confirmed) {
-					await this.projects.remove(project);
-					if (!this.isDisposed && this.isVisible()) {
-						this.focusProjectList();
-					}
-				}
+			...this.projectRemovalActions(project.name, async () => { await this.projects.archive(project); }, {
+				removesContents: false,
+				run: async () => { await this.projects.remove(project); },
 			}),
 		];
+	}
+
+	private projectRemovalActions(
+		title: string,
+		archive: (() => void | Promise<void>) | undefined,
+		remove: { readonly removesContents: boolean; run(): Promise<void>; } | undefined,
+	): IAction[] {
+		const run = async (operation: () => void | Promise<void>): Promise<void> => {
+			try {
+				await operation();
+				if (!this.isDisposed && this.isVisible()) this.focusProjectList();
+			} catch (error) {
+				this.notifications.error(toErrorMessage(error));
+			}
+		};
+		const actions: IAction[] = [];
+		if (archive) {
+			const label = localize('projects.archive', 'Archive');
+			actions.push({
+				id: 'projects.archive', label, tooltip: label, icon: Lxicon.archive,
+				enabled: !this.projects.state.get().busy, run: () => run(archive)
+			});
+		}
+		if (remove) {
+			const label = localize('projects.delete', 'Delete');
+			actions.push({
+				id: 'projects.delete', label, tooltip: label, icon: Lxicon.trash,
+				enabled: !this.projects.state.get().busy, run: async () => {
+					const result = await this.dialogs.confirm({
+						message: localize('projects.deleteConfirm', 'Delete project "{0}"?', title),
+						detail: remove.removesContents
+							? localize('projects.deleteContentsDetail', 'This permanently deletes the project, its conversations and instructions, and files stored only in the project.')
+							: localize('projects.deleteDetail', 'The project and its material references will be removed. Conversations and source files will be kept.'),
+						primaryButton: label,
+					});
+					if (result.confirmed) await run(remove.run);
+				}
+			});
+		}
+		return actions;
 	}
 
 	private renderProject(project: Project): void {
@@ -1005,7 +1214,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.retry.domNode.hidden = true;
 	}
 
-	private showProjectDialog(project?: Project): void {
+	private showProjectDialog(project?: Project, conversation?: ConversationProjectEditor): void {
 		if (this.dialog.value) {
 			return;
 		}
@@ -1018,7 +1227,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const name = h(document, 'input', {
 			properties: {
 				type: 'text',
-				value: project?.name ?? '',
+				value: project?.name ?? conversation?.details.name ?? '',
 				required: true,
 				maxLength: 200,
 				placeholder: localize('projects.namePlaceholder', 'Name your project'),
@@ -1033,7 +1242,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		);
 		const description = h(document, 'textarea', {
 			properties: {
-				value: project?.description ?? '',
+				value: project?.description ?? conversation?.details.description ?? '',
 				maxLength: 20000,
 				placeholder: localize('projects.descriptionPlaceholder', 'Describe your project, goals, subject, etc…'),
 			},
@@ -1087,12 +1296,14 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		);
 		const actions = h(document, 'footer', { className: 'ash-projects-form-actions' });
 		const conflicts = h(document, 'div', { className: 'ash-projects-conflicts', properties: { hidden: true } });
-		form.append(nameLabel, descriptionLabel, folderRow, feedback, conflicts, actions);
+		form.append(nameLabel, descriptionLabel);
+		if (!conversation) form.append(folderRow);
+		form.append(feedback, conflicts, actions);
 		let didSave = false;
 		const dialog = store.add(
 			new Dialog(
 				this.domNode,
-				project
+				project || conversation
 					? localize('projects.edit', 'Edit details')
 					: localize('projects.createTitle', 'Create a project'),
 				[],
@@ -1131,7 +1342,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const submit = store.add(
 			new Button(actions, {
 				...defaultButtonStyles,
-				label: project
+				label: project || conversation
 					? localize('projects.save', 'Save changes')
 					: localize('projects.create', 'Create project'),
 				presentation: 'primary',
@@ -1307,9 +1518,14 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 				name.disabled = true;
 				description.disabled = true;
 				folder.enabled = false;
-				const result = base
-					? this.projects.update(base, name.value.trim(), description.value.trim(), materials)
-					: this.projects.create(id, name.value.trim(), description.value.trim(), materials);
+				const details = { name: name.value.trim(), description: description.value.trim() };
+				const result = conversation
+					? conversation.save(details).then(() => true, error => {
+						if (!store.isDisposed) feedback.textContent = toErrorMessage(error);
+						return false;
+					})
+					: base ? this.projects.update(base, details.name, details.description, materials)
+						: this.projects.create(id, details.name, details.description, materials);
 				void result.then(saved => {
 					if (store.isDisposed) {
 						return;
@@ -1318,7 +1534,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 						didSave = true;
 						dialog.dispose();
 					} else {
-						feedback.textContent = this.projects.state.get().message ?? '';
+						if (!conversation) feedback.textContent = this.projects.state.get().message ?? '';
 						name.disabled = false;
 						description.disabled = false;
 						folder.enabled = true;

@@ -11,8 +11,9 @@ import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../common/agentHostSessionsProv
 import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND, SHOW_ASH_CHAT_COMMAND } from '../../contrib/chat/common/constants.js';
 import { writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
-import { canUseCodeModels, IChatGPTService } from '../../contrib/chatgptweb/browser/chatGPTService.js';
-import { chatGPTSelectedContext } from '../../contrib/chatgptweb/browser/chatGPTWeb.js';
+import { IChatGPTService } from '../../contrib/chatgptweb/browser/chatGPTService.js';
+import { chatGPTSelectedContext } from '../chatGPTWeb.js';
+import { canUseCodeModels } from '../chatGPTWidgetModel.js';
 import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 

@@ -24,12 +24,8 @@
 	padding-inline: var(--ash-sessions-sidebar-row-inset);
 }
 
-.ash-chat-navigation-history > span {
-	display: block;
-	padding-inline: var(--ash-spacing-size120);
-	color: var(--ash-descriptionForeground);
-}
-
-.ash-chat-navigation-history > span[hidden] {
-	display: none;
+.ash-menu
+	.ash-action-view-item
+	> .ash-button.ash-chat-navigation-delete-action {
+	color: var(--ash-error-foreground);
 }

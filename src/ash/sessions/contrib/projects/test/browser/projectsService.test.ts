@@ -49,6 +49,12 @@ class ProjectsFixture extends Disposable {
 				this.projects = this.projects.map(value => value.id === project.id ? saved : value);
 				this.changed.fire(); return saved;
 			},
+			restore: async project => {
+				if (this.failure) { throw this.failure; }
+				const saved = { ...this.projects.find(value => value.id === project.id)!, archived: false, revision: project.revision + 1 };
+				this.projects = this.projects.map(value => value.id === project.id ? saved : value);
+				this.changed.fire(); return saved;
+			},
 			remove: async project => {
 				if (this.failure) { throw this.failure; }
 				this.projects = this.projects.filter(value => value.id !== project.id);
@@ -102,12 +108,14 @@ suite('Projects browsing', () => {
 		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.id), ['a', 'z']);
 	});
 
-	test('archive and delete update the owning catalog and clear unavailable selection and pin state', async () => {
+	test('archive, restore and delete update the owning catalog and clear unavailable selection and pin state', async () => {
 		using fixture = new ProjectsFixture();
 		await fixture.projectsView.create('archive', 'Archive', '', []);
 		assert.equal(await fixture.projectsView.archive(fixture.projects[0]), true);
 		assert.equal(fixture.projectsView.state.get().selectedId, undefined);
 		assert.deepEqual(fixture.projectsView.getProjects(), []);
+		assert.equal(await fixture.projectsView.restore(fixture.projects[0]), true);
+		assert.deepEqual(fixture.projectsView.getProjects().map(project => project.id), ['archive']);
 		await fixture.projectsView.create('delete', 'Delete', '', []);
 		fixture.projectsView.togglePinned('delete');
 		assert.equal(await fixture.projectsView.remove(fixture.projects.find(project => project.id === 'delete')!), true);

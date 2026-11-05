@@ -1,4 +1,4 @@
-import type { IAction } from '../../../../base/common/actions.js';
+import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { derived, observableFromEvent, observableSignalFromEvent } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
@@ -50,8 +50,8 @@ export class AshChatNavigationSource implements ChatListSource {
 				if (!thread) continue;
 				const id = session.sessionId;
 				const isPinned = list.isSessionPinned(session);
-				const action = (id: string, label: string): IAction => ({
-					id, label, tooltip: label, enabled: true,
+				const action = (id: string, label: string, icon: IAction['icon']): IAction => ({
+					id, label, tooltip: label, icon, enabled: true,
 					run: () => commands.executeCommand(id, session.sessionId),
 				});
 				rows.push({
@@ -71,9 +71,10 @@ export class AshChatNavigationSource implements ChatListSource {
 						layout.focus();
 					},
 					getActions: () => [
-						action('agentSession.rename', localize('sessions.list.rename', 'Rename')),
-						action('agentSession.archive', localize('chatSession.archive', 'Archive')),
-						action('agentSession.delete', localize('sessions.list.delete', 'Delete')),
+						action('agentSession.rename', localize('sessions.list.rename', 'Rename'), Lxicon.edit),
+						new Separator(),
+						action('agentSession.archive', localize('chatSession.archive', 'Archive'), Lxicon.archive),
+						{ ...action('agentSession.delete', localize('sessions.list.delete', 'Delete'), Lxicon.trash), class: 'ash-chat-navigation-delete-action' },
 					],
 				});
 			}

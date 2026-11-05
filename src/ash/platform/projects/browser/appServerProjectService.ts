@@ -60,6 +60,12 @@ export class AppServerProjectService implements IProjectService {
 		} catch (error) { throw projectError(error); }
 	}
 
+	public async restore(project: ProjectSummary): Promise<Project> {
+		try {
+			return fromDto((await appServerRequest(this.connection, 'project/restore', { commandId: generateUuid(), projectId: project.id, expectedRevision: project.revision })).project);
+		} catch (error) { throw projectError(error); }
+	}
+
 	public async remove(project: ProjectSummary): Promise<void> {
 		try {
 			await appServerRequest(this.connection, 'project/delete', { commandId: generateUuid(), projectId: project.id, expectedRevision: project.revision });
