@@ -190,42 +190,10 @@ pub(super) fn prepare(
 
 fn command_line(argv: &[String]) -> Result<String, SandboxError> {
     let context = mxc_sdk::mxc_common::cmdline::CommandLineContext::WindowsCreateProcess;
-    let render = |arguments: &[String]| {
+    ash_sandboxing::windows_command_line(argv, true, |arguments| {
         mxc_sdk::mxc_common::cmdline::cmdline_from_argv_for_context(arguments, context)
             .map_err(unavailable)
-    };
-    let program = PathBuf::from(&argv[0]);
-    let is_cmd = program
-        .file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| {
-            name.eq_ignore_ascii_case("cmd.exe") || name.eq_ignore_ascii_case("cmd")
-        });
-    let script_switch = is_cmd
-        .then(|| {
-            argv.iter().position(|argument| {
-                argument.eq_ignore_ascii_case("/c") || argument.eq_ignore_ascii_case("/k")
-            })
-        })
-        .flatten();
-    match script_switch {
-        None => render(argv),
-        Some(index) => {
-            if argv.len() != index + 2 {
-                return Err(SandboxError::UnsupportedPolicy(
-                    "cmd.exe requires one command string after /C or /K".into(),
-                ));
-            }
-            // cmd consumes the tail as shell syntax, not CRT argv. Its outer
-            // quotes delimit the complete script; escaping inner quotes with
-            // backslashes corrupts quoted executable paths and script strings.
-            Ok(format!(
-                "{} \"{}\"",
-                render(&argv[..=index])?,
-                argv[index + 1]
-            ))
-        }
-    }
+    })
 }
 
 fn unicode_paths(paths: &[PathBuf]) -> Result<Vec<String>, SandboxError> {
@@ -300,7 +268,7 @@ struct Resources {
     job: job::Job,
     filesystem: filesystem::Filesystem,
     _proxy: Option<proxy::Proxy>,
-    _station: desktop::PrivateStation,
+    desktops: desktop::ExecutionDesktops,
     _directory_pin: win::Handle,
     _directory: Directory,
     _lease: runtime::Lease,
@@ -337,7 +305,12 @@ fn spawn(request: &Execution) -> Result<Process, String> {
             .join("-")
     );
     let directory = Directory::new(&lease.root, &owner, &lease.account.sid, &capability)?;
-    let station = desktop::PrivateStation::start(&lease.runner, &lease.account.sid, &capability)?;
+    let desktops = desktop::ExecutionDesktops::prepare(
+        &lease.runner,
+        &owner,
+        &lease.account.sid,
+        &capability,
+    )?;
     let directory_pin = filesystem::pin(&directory.0)?;
     let filesystem = filesystem::Filesystem::prepare(
         request,
@@ -404,7 +377,7 @@ fn spawn(request: &Execution) -> Result<Process, String> {
             ash_sandboxing::ProcessIo::Pty(size) => Some([size.rows, size.cols]),
         },
         reply: directory.0.join("reply.json"),
-        desktop: station.command_desktop.clone(),
+        desktop: desktops.command().to_owned(),
     };
     let mut result = Process {
         process: None,
@@ -416,7 +389,7 @@ fn spawn(request: &Execution) -> Result<Process, String> {
             job,
             filesystem,
             _proxy: proxy,
-            _station: station,
+            desktops,
             _directory_pin: directory_pin,
             _directory: directory,
             _lease: lease,
@@ -430,7 +403,7 @@ fn spawn(request: &Execution) -> Result<Process, String> {
         &resources._lease.runner,
         &resources._directory.0,
         &worker,
-        &resources._station.worker_desktop,
+        resources.desktops.worker(),
         pipes,
         &resources.job,
     )?;

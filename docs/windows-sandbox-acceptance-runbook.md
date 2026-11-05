@@ -6,7 +6,7 @@
 
 ## 当前入口
 
-2026-10-10 起源码固定 MXC `c6f301d53a1430c4c921a05c57af838f7392348f`，采用官方合并后的 `mxc-sdk 1.0.0`，直接使用平台运行器及发布的 1.0 请求类型。本次升级的本地验证见 [适配器记录](../crates/mxc-sandbox/README.md#验证)。10 月 7 日记录使用 `c45e7d5a485036d88f469aa363efaa3c651564bc`，10 月 2 日记录使用 `46ce71d0da7b97bb531a33e175bf4166ffa730c0`，9 月 10–11 日记录使用 `6cd3d58f05d3447e67109cfb75e042803b843ca4`，均不作为新 pin 的运行通过证据。
+当前依赖为 `mxc-sdk 1.0.1`，兼容 fork 固定为 `f1e8694b75dea05ebb3dc8050039d04fe304236f`。当前 pin 的运行证据见 [发布候选 CI](#2026-11-04-windows-发布候选-ci) 和 [23H2 账户后备复验](#2026-11-04-windows-11-23h2-账户后备复验)。
 
 当前 MXC Windows 后端只接受完整 PSEC 能力。此前的账户原型已退出源码和产品包，不能再通过 `mxc-user` 或 `tests/local.ps1` 安装它。独立实现使用 `ash-windows-sandbox`，安装与验收需要明确授权；通过依据是下述当前源码的实机记录，不能沿用旧原型的结论。
 
@@ -39,9 +39,68 @@ PSEC 检查不安装账户、不改变系统权限。`test-psec.ps1 -Capability 
 
 账户任务在独立的临时托管机器上运行 `test-windows-sandbox.ps1`，按已有安装计划创建账户，执行测试，并在 finally 中移除安装；同时运行后端选择与禁止重跑测试。手动 `self-hosted` 只运行 PSEC 成功路径，要求 `self-hosted`、`Windows`、`psec` 标签，以及 PowerShell 7、Python 3.11+、Rustup 和 MSVC 工具链。
 
-PSEC 报告包含系统版本、架构、工具链、MXC pin、测试及产品程序的 SHA-256、各项退出码和输出。ARM64 另通过 `probe-psec-network.py` 保存系统报告的 PSEC 版本与 `NetworkIngress` 标志；这项只读查询不创建环境、不启动命令，也不宣布 Managed 支持。账户结果见独立任务日志及安装计划。能力不支持用例通过只证明拒绝行为，不是 PSEC 成功证明。ConPTY 及[独立执行服务 RPC](../crates/exec-server/README.md#pty-边界) 用例已接入此入口，只有逐项实际通过后才在报告中标记覆盖；实际结果见 [终端与 RPC 验收](#2026-10-07-psec-终端与执行服务-rpc-验收)。完整网络矩阵、App Server 产品链路及 WSL 尚未纳入此任务。
+PSEC 报告包含系统版本、架构、工具链、MXC pin、测试及产品程序的 SHA-256、各项退出码和输出。ARM64 另通过 `probe-psec-network.py` 保存系统报告的 PSEC 版本与 `NetworkIngress` 标志；这项只读查询不创建环境、不启动命令，也不宣布 Managed 支持。账户结果见独立任务日志及安装计划。能力不支持用例通过只证明拒绝行为，不是 PSEC 成功证明。ConPTY、[独立执行服务 RPC](../crates/exec-server/README.md#pty-边界) 和 Allowed/Denied TCP 回环用例只有实际通过后才在报告中标记覆盖。外部网络矩阵、App Server PSEC 产品链路及 WSL 尚未纳入此任务。
 
 账户 CI 为受限子进程测试启用 `ASH_WINDOWS_SANDBOX_DIAGNOSTICS`：超过原有 10 秒期限时，在终止 Job 前保存 CPU 时间、线程栈及模块转储，再继续原有失败和清理。诊断只针对受控测试子进程，不包含堆内存，随账户 artifact 保存；正常完成的子进程记录执行时间。
+
+## 2026-11-04 Windows 发布候选 CI
+
+提交 `e5e9389e976d30621da4281856b0bb22bfefc2c1` 的 [GitHub Actions 验收](https://github.com/chogng/ash/actions/runs/41837412425) 使用当前 MXC pin，六个作业全部通过。已核对三个 PSEC 报告的提交、SDK 来源、二进制摘要和逐项日志。
+
+| 托管系统                                          | PSEC 结果                                                                                                     |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Windows 11 Enterprise 25H2 ARM64，`26200.9711`    | 139 项通过，含能力探测、实际文件隔离、退出码与后代回收、ConPTY、执行服务 RPC 及 IPv4／IPv6 TCP 回环允许和拒绝 |
+| Windows Server 2022 Datacenter x64，`20348.5761`  | 125 项通过，含适配器和执行服务两项缺能力时的启动前拒绝                                                        |
+| Windows Server 2025 Datacenter x64，`26100.33674` | 125 项通过，范围同 Server 2022                                                                                |
+
+三个系统的账户作业均通过 9 项服务、43 项账户库测试，以及运行器更新前后各 11 项执行和 3 项终端用例。服务更新后重新执行文件隔离用例并完成卸载。更新计划与日志记录了账户及 WFP 对象保留，以及账户、WFP 与服务清理。
+
+ARM64 镜像 `20261026.197.1` 报告 PSEC 1.1 和 `NetworkIngress=true`。网络用例使用同一宿主监听器验证可达性及拒绝，外部流量和 Managed 代理成功路径仍未验收。
+
+首轮 [CI](https://github.com/chogng/ash/actions/runs/41836321955) 的三个 PSEC 作业已通过并归档，随后结束该提交上重复的账户作业，账户验收使用最终候选。原始报告、日志和校验过摘要的 ZIP 位于 `.build/acceptance/windows-fallback-verify-e848c38281e948069ed007b9332e6532/github-41837412425/`。
+
+### Windows 11 26H2 客户端 x64
+
+在本机 WSL2 的独立 QEMU/KVM 虚拟机安装微软 Windows 11 Enterprise Evaluation 26H2 x64（`26300.9457`）。来宾系统报告 PSEC 1.0、能力标志 `0x3`、`NetworkIngress=false`。通过一次性自托管 Runner 派发 [GitHub Actions 作业](https://github.com/chogng/ash/actions/runs/41857302480)，用只读介质提供从候选 `e5e9389e97` 构建的六个 x64 程序，来宾逐个校验摘要后执行。工作流提交为 `b9ad582de7`。
+
+20 组命令共 139 项通过，包括文件隔离、IPv4／IPv6 TCP 回环允许与拒绝、ConPTY、执行服务 RPC 和后代回收。早期作业分别遇到 RPC 夹具目录权限和 PowerShell 退出码采集问题。最终作业与上传均成功，Runner 已注销，虚拟机已关闭。
+
+下载的原始 ZIP 含上一轮残留的 `suite/summary.json`，本轮有效报告是 `suite/psec-candidate-report/summary.json`。证据与核验索引位于 `.build/acceptance/psec-client-x64-20261104/`。
+
+### PSEC 外部网络与 App Server
+
+外部网络验收使用运行在 Windows 来宾之外的独立 IPv4、IPv6 HTTP 和 DNS 端点。先用普通进程验证可达，再验证 PSEC `Denied` 及其子进程无法建立 TCP 连接或发送 DNS 请求，最后验证 PSEC `Allowed` 可达。DNS 分别走 UDP 和 TCP，发送 A 和 AAAA 查询。26H2 x64 的端点日志与来宾结果吻合，每类请求只收到普通进程和 `Allowed` 各一次。PSEC 1.0 仍能绑定监听端口，本轮验证出站流量。入站和 Managed 单独验收。
+
+App Server 用例通过实际 RPC 创建会话、线程和 shell turn，设置 `RequireSandbox`，并在账户沙箱服务未安装的 Windows 来宾以非提权进程运行。它检查工作目录、执行次数、退出码、受保护的 `.env` 和 `.git/config`、工作区外写入以及 ACL 恢复。首次走到真实命令执行时复现了 PSEC 对 `cmd.exe /c` 内层引号的错误转义。两种 Windows 后端现在共用单一脚本参数的处理，MXC 原先接受分开的参数时保留原有编码。带嵌套引号和实际退出码的 Windows 回归已通过。
+
+修复候选 `38d36eac14` 在 26H2 x64（`26300.9457`）上通过 22 组、141 项。全量首跑有三项超时，分别是后代取消、跨执行文件所有权和 App Server shell turn。三项均用同一组二进制和原有超时单独重跑通过。首跑、重跑和逐类收包证据保存在 `.build/acceptance/psec-client-x64-20261104/followup/` 的 `26h2-full-attempt1` 和 `26h2-full-retry`。
+
+另用同一候选把 IPv4 DNS 端点换成公网 `1.1.1.1:53`，普通进程与 PSEC `Allowed` 都收到 UDP、TCP 的 A／AAAA 响应，`Denied` 和后代均失败。受控 IPv4／IPv6 HTTP 和 IPv6 DNS 继续用独立来宾外端点。报告位于同目录的 `26h2-public-dns`。
+
+### Windows 11 25H2 客户端 x64
+
+复用同一 WSL2/QEMU 环境，在独立虚拟盘安装 Windows 11 Pro 25H2 x64。基础构建 `26200.6584` 缺少 `processmodel.dll`。应用 KB5127648 后，`26200.9711` 报告 PSEC 1.1、标志 `0xf` 和 `NetworkIngress=true`。 [Microsoft KB5127648](https://support.microsoft.com/en-us/servicing/os/windows-11/2026/10/kb5127648-windows-11-24h2-25h2-26h2-security-update)
+
+通过一次性自托管 Runner 执行候选 `38d36eac14` 的 [GitHub Actions 作业](https://github.com/chogng/ash/actions/runs/41877853927/job/126742161421)，首次执行 22 组共 141 项全部通过，包括独立端点的 IPv4／IPv6 出站矩阵和 App Server shell RPC。核对了产物 `13347712451` 的 SHA-256、Windows 构建、候选清单与端点收包。原始产物和验证索引保存在 `followup/github-25h2-41877853927/`。Runner 完成一次作业后注销。
+
+### 2026-11-05 公网 IPv6 出站补测
+
+验收 WSL2 实际为 NAT 模式。访问 `2606:4700:4700::1111` 时，Windows 宿主通过 Mihomo 路由完成 HTTPS 往返，WSL2 没有公网 IPv6 路由。补测只在验收 WSL2 为该目标加临时 `/128`，将 HTTP 和 TCP／UDP DNS 请求通过 Windows 原生 IPv6 套接字转发到该地址。Windows 与 WSL2 的普通进程先取得 HTTP 响应和 A／AAAA 查询结果。
+
+25H2 和 26H2 x64 来宾都使用候选 `38d36eac14` 的同一网络用例。每台来宾都通过普通进程、PSEC `Allowed`、`Denied` 和后代继承检查。转发日志中，HTTP 和四种 DNS 查询各有两次有效响应，分别对应普通进程和 `Allowed`。本次公网对照走 Mihomo 出口。日志位于 `followup/public-ipv6/`，测试完成后撤销临时出口并关停两台来宾。
+
+## 2026-11-04 Windows 11 23H2 账户后备复验
+
+本机为 Windows 11 专业版 23H2 x64（`22631.6199`），MXC 为 `mxc-sdk 1.0.1`，兼容 fork 固定为 `f1e8694b75dea05ebb3dc8050039d04fe304236f`。管理员安装临时服务、账户与 WFP 规则。以下执行测试均由未提权的桌面进程发起。
+
+首轮安装后的状态为 `ready`，但执行在 `CreateWindowStationW` 返回访问拒绝后终止。交互式入口现使用 `WinSta0` 下每次执行独有的受限桌面，可信登录进程继承默认桌面。修复后使用同一次构建的 Desktop 后端及账户运行器复验。
+
+- 真实 App Server RPC 通过 1 项，验证账户 SID、工作区写入、敏感文件与工作区外写入拒绝、退出码及 ACL 恢复。Ash Desktop 的会话总变更冒烟通过 1 项。
+- 账户文件与网络通过 8 项，管道、ConPTY 与后代回收通过 3 项。MXC 与执行服务各通过 1 项缺少 PSEC 的拒绝用例，`Strict` 未启动命令。
+- 更新运行器与服务后，账户和 WFP 对象保持一致，重新执行 1 项 App Server RPC 与 3 项终端用例均通过。更新以 PE overlay 改变同一构建的摘要，覆盖替换与服务重启流程。
+- 卸载按安装计划完成，回读确认 WFP 对象均已移除，另行确认服务、安装目录及 3 个测试账户均已移除。
+
+实机日志、程序摘要及安装、更新与卸载计划位于 `.build/acceptance/windows-fallback-verify-e848c38281e948069ed007b9332e6532/`。PSEC 成功路径及其他 Windows 版本和架构仍需对应目标机复验。
 
 ## 2026-10-07 SDK 升级后的 Windows 复验
 

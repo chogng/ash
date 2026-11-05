@@ -79,9 +79,14 @@ fn windows_command_path_preserves_cmd_syntax_and_argument_slashes() {
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
     let system = std::path::PathBuf::from(std::env::var_os("SystemRoot").unwrap());
+    let cmd = system.join("System32").join("cmd.exe");
+    let script = format!(
+        "\"{}\" /d /s /c \"echo https://example.test/a/b & exit /b 125\"",
+        cmd.display()
+    );
     let command = ash_sandboxing::SandboxCommand::new(
         system.join("System32/cmd.exe"),
-        ["/d", "/c", "echo https://example.test/a/b & exit /b 125"],
+        ["/d", "/s", "/c", &script],
         dir.canonical_path(),
     );
     let request = super::request(
@@ -95,7 +100,7 @@ fn windows_command_path_preserves_cmd_syntax_and_argument_slashes() {
     .unwrap();
     // Exercise the serialized command with cmd's parser even on hosts that
     // cannot create a PSEC environment. Keep its /c payload unchanged.
-    let output = std::process::Command::new(system.join("System32").join("cmd.exe"))
+    let output = std::process::Command::new(cmd)
         .args(["/d", "/s", "/c"])
         .raw_arg(format!("\"{}\"", request.command_line))
         .current_dir(&request.cwd)

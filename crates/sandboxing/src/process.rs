@@ -2,6 +2,45 @@ use crate::SandboxProcessExitStatus;
 use std::io::Read;
 use std::io::Write;
 
+/// Renders a Windows launch, preserving the raw command string consumed by cmd.exe.
+/// Backends that accept separate arguments after /C or /K retain their argv encoding.
+#[cfg(windows)]
+pub fn windows_command_line(
+    argv: &[String],
+    require_single_cmd_script: bool,
+    render_argv: impl FnOnce(&[String]) -> Result<String, crate::SandboxError>,
+) -> Result<String, crate::SandboxError> {
+    let is_cmd = argv
+        .first()
+        .and_then(|program| std::path::Path::new(program).file_name())
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| {
+            name.eq_ignore_ascii_case("cmd.exe") || name.eq_ignore_ascii_case("cmd")
+        });
+    let script_switch = is_cmd
+        .then(|| {
+            argv.iter().position(|argument| {
+                argument.eq_ignore_ascii_case("/c") || argument.eq_ignore_ascii_case("/k")
+            })
+        })
+        .flatten();
+    match script_switch {
+        Some(index) if argv.len() == index + 2 => {
+            // cmd consumes the tail as shell syntax. CRT backslash escaping
+            // would corrupt quoted executable paths and script strings.
+            Ok(format!(
+                "{} \"{}\"",
+                render_argv(&argv[..=index])?,
+                argv[index + 1]
+            ))
+        }
+        Some(_) if require_single_cmd_script => Err(crate::SandboxError::UnsupportedPolicy(
+            "cmd.exe requires one command string after /C or /K".into(),
+        )),
+        _ => render_argv(argv),
+    }
+}
+
 /// Backend-owned running process. Implementations close the complete process tree and its
 /// isolation resources; callers drain taken streams and invoke close before releasing a proxy.
 pub trait SandboxProcess: Send {

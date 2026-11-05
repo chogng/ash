@@ -1548,6 +1548,24 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
 #[test]
 #[ignore = "requires explicitly provisioned Windows sandbox and ASH_WINDOWS_SANDBOX_BIN"]
 fn windows_shell_turn_enforces_account_isolation_through_rpc() {
+    windows_shell_turn_enforces_isolation_through_rpc(WindowsShellSandbox::Account);
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "requires a PSEC-capable Windows host without the account sandbox service"]
+fn windows_shell_turn_enforces_psec_isolation_through_rpc() {
+    windows_shell_turn_enforces_isolation_through_rpc(WindowsShellSandbox::Psec);
+}
+
+#[cfg(windows)]
+enum WindowsShellSandbox {
+    Account,
+    Psec,
+}
+
+#[cfg(windows)]
+fn windows_shell_turn_enforces_isolation_through_rpc(backend: WindowsShellSandbox) {
     use std::time::Instant;
 
     let powershell = Path::new(&std::env::var_os("SystemRoot").unwrap())
@@ -1574,14 +1592,28 @@ fn windows_shell_turn_enforces_account_isolation_through_rpc() {
         "the product acceptance must run without elevation"
     );
     let owner = host_script("[Security.Principal.WindowsIdentity]::GetCurrent().User.Value");
-    let helper = std::env::var_os("ASH_WINDOWS_SANDBOX_BIN").unwrap();
-    let plan = Command::new(helper)
-        .args(["plan", "remove"])
-        .output()
-        .unwrap();
-    assert!(plan.status.success(), "{plan:?}");
-    let plan: serde_json::Value = serde_json::from_slice(&plan.stdout).unwrap();
-    let accounts = plan["changes"]["accounts"].as_array().unwrap();
+    let account_plan: Option<serde_json::Value> = match backend {
+        WindowsShellSandbox::Account => {
+            let helper = std::env::var_os("ASH_WINDOWS_SANDBOX_BIN").unwrap();
+            let plan = Command::new(helper)
+                .args(["plan", "remove"])
+                .output()
+                .unwrap();
+            assert!(plan.status.success(), "{plan:?}");
+            Some(serde_json::from_slice(&plan.stdout).unwrap())
+        }
+        WindowsShellSandbox::Psec => {
+            // With RequireSandbox and no account service, successful execution
+            // with real filesystem restrictions can only use PSEC.
+            assert_eq!(
+                host_script(
+                    "if (Get-Service -Name AshWindowsSandbox -ErrorAction SilentlyContinue) { 'installed' } else { 'absent' }"
+                ),
+                "absent"
+            );
+            None
+        }
+    };
 
     let profile = tempfile::tempdir().unwrap();
     let fixture = tempfile::tempdir().unwrap();
@@ -1716,7 +1748,7 @@ fn windows_shell_turn_enforces_account_isolation_through_rpc() {
     );
     let identity = std::fs::read_to_string(work.join("identity")).unwrap();
     let identity = identity.trim();
-    assert_ne!(identity, owner);
+    assert!(!identity.is_empty());
     assert_eq!(
         dunce::canonicalize(
             std::fs::read_to_string(work.join("execution-root"))
@@ -1727,10 +1759,14 @@ fn windows_shell_turn_enforces_account_isolation_through_rpc() {
         work,
         "execution did not use the requested directory"
     );
-    assert!(
-        accounts.iter().any(|account| account["sid"] == identity),
-        "unexpected identity: {identity}"
-    );
+    if let Some(plan) = account_plan {
+        let accounts = plan["changes"]["accounts"].as_array().unwrap();
+        assert_ne!(identity, owner);
+        assert!(
+            accounts.iter().any(|account| account["sid"] == identity),
+            "unexpected identity: {identity}"
+        );
+    }
     assert_eq!(
         std::fs::read_to_string(work.join("attempts"))
             .unwrap()

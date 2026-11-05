@@ -139,6 +139,13 @@ impl SandboxBackend for SandboxBackends {
                 Err(SandboxError::UnsupportedPolicy(reason)) => {
                     unsupported.push(format!("{name}: {reason}"))
                 }
+                Err(SandboxError::BackendUnavailable { backend, message }) => {
+                    unsupported.push(format!("{name}: {message}"));
+                    return Err(SandboxError::BackendUnavailable {
+                        backend,
+                        message: unsupported.join("; "),
+                    });
+                }
                 Err(error) => return Err(error),
             }
         }

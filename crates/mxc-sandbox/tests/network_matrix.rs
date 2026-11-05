@@ -1,5 +1,5 @@
 //! End-to-end network matrix through the platform SDK and the command executor.
-#![cfg(any(target_os = "linux", target_os = "macos"))]
+#![cfg(any(target_os = "linux", target_os = "macos", windows))]
 #[path = "../../network-proxy/tests/support/matrix.rs"]
 mod matrix;
 
@@ -27,13 +27,25 @@ impl ApprovalPolicy for Approved {
 }
 
 #[test]
-#[ignore = "requires ASH_NETWORK_MATRIX_PROBE and a reachable ASH_DNS_SERVER; Linux also requires Bubblewrap"]
+#[ignore = "requires ASH_NETWORK_MATRIX_PROBE, ASH_DNS_SERVER and the platform sandbox"]
 fn dns_ipv6_and_host_routes_preserve_the_network_boundary() {
+    #[cfg(windows)]
+    for variable in ["ASH_WINDOWS_DNS_ENDPOINT", "ASH_WINDOWS_NETWORK_ENDPOINT"] {
+        std::env::var(variable).unwrap_or_else(|_| panic!("provide {variable} outside the guest"));
+    }
     let fixtures = matrix::Matrix::start();
-    let probe = std::env::var("ASH_NETWORK_MATRIX_PROBE").unwrap();
-    fixtures.positive_control(std::path::Path::new(&probe));
+    let source = std::env::var("ASH_NETWORK_MATRIX_PROBE").unwrap();
+    fixtures.positive_control(std::path::Path::new(&source));
     let temp = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(temp.path()).unwrap();
+    #[cfg(windows)]
+    let probe = {
+        let path = dir.canonical_path().join("matrix.exe");
+        std::fs::copy(&source, &path).unwrap();
+        path.to_str().unwrap().to_owned()
+    };
+    #[cfg(not(windows))]
+    let probe = source;
     let executor = CommandExecutor::new(
         dir,
         MxcSandbox::new(ash_install_context::InstallContext::current()),
@@ -43,11 +55,24 @@ fn dns_ipv6_and_host_routes_preserve_the_network_boundary() {
             max_output_bytes: 16384,
         },
     );
-    for (mode, network) in [
-        ("denied", NetworkAccess::Denied),
-        ("managed", NetworkAccess::Managed),
-    ] {
+    // PSEC validates outbound traffic here. Older PSEC versions can bind
+    // listeners even when outbound connections are denied.
+    let cases = if cfg!(windows) {
+        [
+            ("psec-denied", NetworkAccess::Denied),
+            ("allowed", NetworkAccess::Allowed),
+        ]
+    } else {
+        [
+            ("denied", NetworkAccess::Denied),
+            ("managed", NetworkAccess::Managed),
+        ]
+    };
+    for (mode, network) in cases {
         let policy = (network == NetworkAccess::Managed).then(|| fixtures.policy());
+        let sandbox = SandboxPolicy::new(FileSystemAccess::ReadOnly, network);
+        #[cfg(windows)]
+        let sandbox = sandbox.with_host_acl_changes(ash_sandboxing::HostAclChanges::Scoped);
         let result = executor
             .execute_scoped_with_network(
                 CommandRequest {
@@ -55,11 +80,9 @@ fn dns_ipv6_and_host_routes_preserve_the_network_boundary() {
                     arguments: fixtures.arguments(mode),
                     working_directory: ".".into(),
                     input: CommandInput::Closed,
+                    environment: Default::default(),
                 },
-                CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
-                    FileSystemAccess::ReadOnly,
-                    network,
-                )),
+                CommandExecutionAuthority::Sandboxed(sandbox),
                 &CancellationSource::new().token(),
                 None,
                 policy.as_ref(),
@@ -74,8 +97,12 @@ fn dns_ipv6_and_host_routes_preserve_the_network_boundary() {
             output.stdout.contains(&format!("matrix-{mode}-ok")),
             "{output:?}"
         );
-        assert!(output.stdout.contains("matrix-descendant-ok"), "{output:?}");
-        fixtures.assert_no_dns_escape();
+        if network != NetworkAccess::Allowed {
+            assert!(output.stdout.contains("matrix-descendant-ok"), "{output:?}");
+            fixtures.assert_no_dns_escape();
+        }
     }
-    fixtures.assert_policy_observed();
+    if !cfg!(windows) {
+        fixtures.assert_policy_observed();
+    }
 }

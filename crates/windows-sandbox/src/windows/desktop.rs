@@ -40,6 +40,43 @@ pub(super) struct Desktop {
 
 unsafe impl Send for Desktop {}
 
+pub(super) enum ExecutionDesktops {
+    Interactive(Desktop),
+    NonInteractive(PrivateStation),
+}
+
+impl ExecutionDesktops {
+    pub(super) fn prepare(
+        runner: &Path,
+        owner: &str,
+        account: &str,
+        capability: &str,
+    ) -> Result<Self> {
+        if window_station_name()?.eq_ignore_ascii_case("WinSta0") {
+            // Naming a new window station requires an administrator token.
+            // The interactive logon worker can inherit WinSta0; only the
+            // restricted command uses this execution's ACL-protected desktop.
+            Desktop::new(owner, account, capability).map(Self::Interactive)
+        } else {
+            PrivateStation::start(runner, account, capability).map(Self::NonInteractive)
+        }
+    }
+
+    pub(super) fn worker(&self) -> Option<&str> {
+        match self {
+            Self::Interactive(_) => None,
+            Self::NonInteractive(station) => Some(&station.worker_desktop),
+        }
+    }
+
+    pub(super) fn command(&self) -> &str {
+        match self {
+            Self::Interactive(desktop) => &desktop.name,
+            Self::NonInteractive(station) => &station.command_desktop,
+        }
+    }
+}
+
 pub(super) fn window_station_name() -> Result<String> {
     let station = unsafe { GetProcessWindowStation() };
     if station.is_null() {
