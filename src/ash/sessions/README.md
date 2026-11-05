@@ -7,10 +7,11 @@ is canonical for the renderer implementation and extension points.
 
 UI design and style boundaries are defined in [Sessions style](STYLE.md).
 
-[`sessions.desktop.main.ts`](sessions.desktop.main.ts) loads the
-[desktop Chat contribution](contrib/chat/electron-browser/chatWorkspace.contribution.ts),
-which composes the Ash and ChatGPT entries. The workspace assembly, cross-source
-model routing and ChatGPT UI integration live in `contrib/chat/electron-browser`.
+[`sessions.desktop.main.ts`](sessions.desktop.main.ts) wires the
+[`chatgptweb` adapter](contrib/chatgptweb/README.md) into the
+[desktop Chat contribution](contrib/chat/electron-browser/chatWorkspace.contribution.ts).
+The shared Chat workspace consumes catalog and editor contracts. Only the
+desktop entry point imports the adapter from outside its contribution in Sessions.
 The window bootstrap lives in `sessions/electron-browser` in the
 [Sessions core](LAYERS.md#sessions--sessions-core).
 
@@ -19,14 +20,13 @@ integration. It owns conversation and project identities, history, messages,
 drafts, model presets and streamed replies. It reports when a conversation
 identity is retired or replaced so the host can maintain its own preferences.
 
-The desktop host projects those records into Ash's Chat sidebar, Projects,
+The desktop host presents those records in Ash's Chat sidebar, Projects,
 search and `ReplyChatEditor`. Ash owns row grouping and rendering, default
 and custom icons, local project visibility and which conversation is
-highlighted. Keep these policies and the active workspace state out of the
-source adapter. The host also owns the model picker across sources. In an
-eligible new Chat draft, selecting a Code model opens an Ash draft in Chat and
-copies the unsent text without sending a message. The ChatGPT adapter handles
-only its own model selection and reply route.
+highlighted. The adapter maps ChatGPT identities, messages and actions to the
+host's contracts. In an eligible new Chat draft, selecting a Code model asks
+the adapter for the current unsent text after model validation. The host uses
+that text to open an Ash draft in Chat without sending a message.
 The `ash-chatgpt` editor resource and conversation storage keys stay stable
 across entry restoration. Previous native-experiment restore commands resolve
 to this same entry without creating or sending a new conversation.

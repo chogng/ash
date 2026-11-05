@@ -34,7 +34,7 @@ import '../media/chatNavigationView.css';
 
 export const chatNavigationFocusContext = 'chatNavigationFocused';
 
-interface ChatNavigationAccessibilityHint {
+export interface ChatNavigationAccessibilityHint {
 	readonly verbositySetting: AccessibilityVerbositySettingId;
 	hint(): string;
 }

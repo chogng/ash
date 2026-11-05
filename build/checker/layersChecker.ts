@@ -8,6 +8,7 @@ const environments = new Set(['common', 'browser', 'worker', 'node', 'electron-b
 const webEnvironments = new Set(['common', 'browser', 'worker', 'electron-browser']);
 const nodeModules = new Set(builtinModules.map(name => name.replace(/^node:/u, '')));
 const hostGlobals = new Set(['process', 'Buffer', 'require', 'module', 'exports', '__filename', '__dirname', 'setImmediate', 'clearImmediate', 'global', 'NodeJS', 'Electron']);
+const chatGPTAdapterRoot = 'sessions/contrib/chatgptweb/';
 // These are separately compiled sandbox scripts; ordinary renderer code uses their bridges.
 const preloads = new Set([
 	'base/parts/sandbox/electron-browser/preload.cts',
@@ -142,6 +143,10 @@ export function checkLayers(tsconfigPath: string, sourceRoot: string): readonly 
 				const target = targets.get(specifier);
 				if (target) {
 					const targetPath = relative(sourceRoot, target).replaceAll('\\', '/');
+					if (targetPath.startsWith(chatGPTAdapterRoot) && path.startsWith('sessions/')
+						&& !path.startsWith(chatGPTAdapterRoot) && path !== 'sessions/sessions.desktop.main.ts') {
+						report(specifier, 'Compose the ChatGPT Web adapter in sessions.desktop.main.ts and use shared Chat contracts in Sessions.');
+					}
 					if (!isAbsolute(targetPath) && !targetPath.startsWith('../') && ['node', 'electron-main', 'electron-utility'].includes(environmentFor(targetPath))) {
 						report(specifier, `Host module '${name}' is unavailable in the ${environment} layer.`);
 					}

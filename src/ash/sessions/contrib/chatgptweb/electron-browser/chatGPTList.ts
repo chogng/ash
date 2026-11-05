@@ -14,11 +14,11 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
-import { ASH_CHAT_SELECTED_CONTEXT } from '../common/constants.js';
+import { ASH_CHAT_SELECTED_CONTEXT } from '../../chat/common/constants.js';
 import type { ChatListEntry, ChatListProject, ChatListSnapshot, ChatListSource } from '../../sessions/browser/views/chatListModel.js';
 import { shareChatGPTConversation } from './chatGPTShare.js';
-import type { ChatGPTConversation } from '../../chatgptweb/browser/chatGPTClient.js';
-import { IChatGPTService, selectedChatConversationId, type ChatGPTState } from '../../chatgptweb/browser/chatGPTService.js';
+import type { ChatGPTConversation } from '../browser/chatGPTClient.js';
+import { IChatGPTService, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 
 const conversationIconPrefix = 'sessions.chatgpt.icon:';
 const projectArchivePrefix = 'sessions.chatgpt.projectArchived:';

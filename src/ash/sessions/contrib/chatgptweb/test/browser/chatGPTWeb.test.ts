@@ -19,11 +19,12 @@ import { ISessionsService } from '../../../../services/sessions/browser/sessions
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, OPEN_ASH_CHAT_WITH_MODEL_COMMAND, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
 import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
-import { ChatGPTWebContribution, chatGPTScrollOptimization } from '../../../chat/electron-browser/chatGPTWeb.js';
+import { ChatGPTWebContribution, chatGPTScrollOptimization } from '../../electron-browser/chatGPTWeb.js';
 import { IChatGPTService, coworkTaskStatus, type ChatGPTState } from '../../browser/chatGPTService.js';
 import { ISessionsSearchService } from '../../../search/browser/searchService.js';
 import type { SearchResult } from '../../../search/browser/searchModel.js';
-import { ChatWorkspaceContribution } from '../../../chat/electron-browser/chatWorkspace.contribution.js';
+import { ChatWorkspaceContribution, registerChatWorkspace } from '../../../chat/electron-browser/chatWorkspace.contribution.js';
+import { chatGPTWorkspaceSource } from '../../electron-browser/chatGPTWeb.contribution.js';
 import { localize, setNlsMessages } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { DefaultSettings } from '../../../../../workbench/services/preferences/common/settingsModels.js';
@@ -34,6 +35,8 @@ import { SessionsViewRegistry } from '../../../../common/views.js';
 const newChatState = { conversations: [], messages: [], coworkTasks: [] } satisfies Partial<ChatGPTState>;
 
 const testStorage = { get: () => undefined, store() { } } as unknown as IStorageService;
+
+registerChatWorkspace(chatGPTWorkspaceSource);
 
 suite('ChatGPT entry', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -147,7 +150,7 @@ suite('ChatGPT entry', () => {
 			[IEditorService, {} as IEditorService],
 			[ISessionsLayoutService, { openEntry: async entry => { entries.push(entry); } } as ISessionsLayoutService],
 		));
-		using contribution = services.createInstance(ChatWorkspaceContribution);
+		using contribution = services.createInstance(ChatWorkspaceContribution, chatGPTWorkspaceSource.openCommand);
 		await services.invokeFunction(CommandsRegistry.getCommand(SHOW_ASH_CHAT_COMMAND)!, 'restore');
 		await services.invokeFunction(CommandsRegistry.getCommand(SHOW_CHAT_WORKSPACE_COMMAND)!);
 		assert.equal(entries.length, 2);
@@ -199,8 +202,9 @@ suite('ChatGPT entry', () => {
 		assert.deepEqual(calls, []);
 
 		const draft = state.get();
+		const handoff = services.invokeFunction(command, model);
 		state.set({ ...draft, conversationId: 'existing' }, undefined);
-		await services.invokeFunction(command, model);
+		await handoff;
 		assert.deepEqual(calls, []);
 		state.set(draft, undefined);
 

@@ -1,27 +1,40 @@
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { isNonEmptyString, isRecord } from '../../../../base/common/types.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { Menus } from '../../../browser/menus.js';
-import { ActivityBarItemContext } from '../../../common/contextkeys.js';
+import { ActivityBarItemContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { registerChatGPTAccessibility } from './chatGPTAccessibility.js';
-import { registerReplyChatEditor } from '../browser/replyChatEditor.js';
-import { IChatGPTTransport } from '../../chatgptweb/common/chatGPTTransport.js';
-import { ElectronChatGPTTransport } from '../../chatgptweb/electron-browser/electronChatGPTTransport.js';
-import { ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization, chatGPTSelectedContext } from './chatGPTWeb.js';
-import { ChatGPTService, IChatGPTService } from '../../chatgptweb/browser/chatGPTService.js';
+import { registerReplyChatEditor } from '../../chat/browser/replyChatEditor.js';
+import { IChatGPTTransport } from '../common/chatGPTTransport.js';
+import { ElectronChatGPTTransport } from './electronChatGPTTransport.js';
+import { ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization, chatGPTSelectedContext, SHOW_CHATGPT_COMMAND } from './chatGPTWeb.js';
+import { ChatGPTService, IChatGPTService } from '../browser/chatGPTService.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IAccountService } from '../../../../platform/accounts/common/accountService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProgressService } from '../../../../platform/progress/common/progress.js';
-import { signInChatGPT } from '../../chatgptweb/browser/chatGPTLogin.js';
+import { signInChatGPT } from '../browser/chatGPTLogin.js';
+import { ChatGPTList } from './chatGPTList.js';
+import { canUseCodeModels } from './chatGPTWidgetModel.js';
+import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
+import { openAshChatWithModel } from '../../chat/electron-browser/actions/newChatModelAction.js';
+
+export const chatGPTWorkspaceSource = {
+	catalog: new SyncDescriptor(ChatGPTList),
+	accessibility: chatGPTReplyEditor.accessibility,
+	openCommand: SHOW_CHATGPT_COMMAND,
+};
 
 registerSingleton(IChatGPTService, ChatGPTService, InstantiationType.Delayed);
 registerSingleton(IChatGPTTransport, ElectronChatGPTTransport, InstantiationType.Delayed);
@@ -56,6 +69,27 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 registerWorkbenchContribution(ChatGPTWebContribution.ID, WorkbenchPhase.BlockRestore,
 	services => services.get(IInstantiationService).createInstance(ChatGPTWebContribution));
 
+CommandsRegistry.register(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, async (accessor, model: unknown) => {
+	if (!isRecord(model) || !isNonEmptyString(model.provider) || !isNonEmptyString(model.model)) {
+		throw new TypeError('Expected an Ash model reference');
+	}
+	const contextKeys = accessor.get(IContextKeyService);
+	const configuration = accessor.get(IConfigurationService);
+	const canOpen = () => contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'chat'
+		&& contextKeys.getValue(chatGPTSelectedContext) === true
+		&& !configuration.getValue<boolean>('chat.disableAIFeatures');
+	if (!canOpen()) return;
+	const chat = accessor.get(IChatGPTService);
+	const source = chat.state.get().localConversationId;
+	const revision = chat.newDraftRevision;
+	await openAshChatWithModel(accessor, { provider: model.provider, model: model.model }, () => {
+		const state = chat.state.get();
+		if (!canOpen() || state.localConversationId !== source || chat.newDraftRevision !== revision || !canUseCodeModels(state)
+			|| state.sending || state.managing || state.voice !== 'idle') return undefined;
+		return state.draft;
+	});
+});
+
 registerAction2(class OpenChatGPT extends Action2 {
 	constructor() {
 		super({
@@ -64,7 +98,7 @@ registerAction2(class OpenChatGPT extends Action2 {
 			f1: true,
 		});
 	}
-	public override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(ICommandService).executeCommand('sessions.show.chatgpt'); }
+	public override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(ICommandService).executeCommand(SHOW_CHATGPT_COMMAND); }
 });
 
 registerAction2(class ToggleChatGPTScrolling extends Action2 {

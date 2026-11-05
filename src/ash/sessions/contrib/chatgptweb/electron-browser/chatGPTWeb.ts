@@ -13,14 +13,15 @@ import type { IWorkbenchContribution } from '../../../../workbench/common/contri
 import { EditorInputCapabilities } from '../../../../workbench/common/editor.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
-import { CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID } from '../common/constants.js';
-import type { ReplyChatEditorOptions } from '../browser/replyChatEditor.js';
+import { CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID } from '../../chat/common/constants.js';
+import type { ReplyChatEditorOptions } from '../../chat/browser/replyChatEditor.js';
 import { ChatGPTWidgetModel } from './chatGPTWidgetModel.js';
-import { IChatGPTService, selectedChatConversationId } from '../../chatgptweb/browser/chatGPTService.js';
+import { IChatGPTService, selectedChatConversationId } from '../browser/chatGPTService.js';
 import { ISessionsSearchService } from '../../search/browser/searchService.js';
 import type { SearchResult } from '../../search/browser/searchModel.js';
 
 export const chatGPTScrollOptimization = 'sessions.chatgpt.optimizeScrolling';
+export const SHOW_CHATGPT_COMMAND = 'sessions.show.chatgpt';
 
 export const chatGPTReplyEditor = {
 	id: 'sessions.editor.chatgpt',
@@ -66,7 +67,7 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 					resource: URI.from({ scheme: chatGPTReplyEditor.scheme, path: '/page' }), label: chatGPTReplyEditor.title(),
 					showBreadcrumbs: false, readOnly: true, capabilities: EditorInputCapabilities.CannotClose,
 				},
-				restoreCommand: 'sessions.show.chatgpt', newSessionCommand: 'sessions.chatgpt.newChat', focus: 'editor',
+				restoreCommand: SHOW_CHATGPT_COMMAND, newSessionCommand: 'sessions.chatgpt.newChat', focus: 'editor',
 			}, undefined, source === 'restore' ? { source } : undefined);
 			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'chatgpt', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		};
@@ -91,7 +92,7 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 			editors.focusActiveEditor();
 		};
 		this._register(CommandsRegistry.register('sessions.chatgpt.newChat', newChat));
-		this._register(CommandsRegistry.register('sessions.show.chatgpt', (_accessor, source) => showChat(source)));
+		this._register(CommandsRegistry.register(SHOW_CHATGPT_COMMAND, (_accessor, source) => showChat(source)));
 		this._register(CommandsRegistry.register('sessions.open.new', async (_accessor, source) => {
 			if (source !== 'restore') { chat.newChat(source === 'startup' ? { clearDraft: true } : undefined); }
 			await showChat(source);

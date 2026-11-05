@@ -12,7 +12,8 @@ import './contrib/editor/electron-browser/browserEmptyState.contribution.js';
 import './contrib/canvases/electron-browser/sessionCanvases.contribution.js';
 import '../workbench/services/browserView/electron-browser/playwrightWorkbenchService.js';
 import './contrib/browserView/browser/sessionBrowserView.contribution.js';
-import './contrib/chat/electron-browser/chatWorkspace.contribution.js';
+import { registerChatWorkspace } from './contrib/chat/electron-browser/chatWorkspace.contribution.js';
+import { chatGPTWorkspaceSource } from './contrib/chatgptweb/electron-browser/chatGPTWeb.contribution.js';
 import './sessions.common.main.js';
 import '../platform/update/common/update.config.contribution.js';
 import '../workbench/services/update/electron-browser/updateService.js';
@@ -46,6 +47,7 @@ registerSingleton(IHostService, NativeHostService, InstantiationType.Delayed);
 registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationType.Delayed);
 registerSingleton(IRemoteAuthorityResolverService, RemoteAuthorityResolverService, InstantiationType.Delayed);
 
+registerChatWorkspace(chatGPTWorkspaceSource);
 registerOpenAgentsWindowCommand();
 registerAction2(OpenAshWindowAction);
 registerAction2(ReloadWindowAction);

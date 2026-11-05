@@ -27,12 +27,12 @@ import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.j
 import { IEditorService } from '../../../src/ash/workbench/services/editor/common/editorService.js';
 import { CommandsRegistry } from '../../../src/ash/platform/commands/common/commands.js';
 import { ChatGPTService, IChatGPTService } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.js';
-import { ChatGPTList } from '../../../src/ash/sessions/contrib/chat/electron-browser/chatGPTList.js';
+import { ChatGPTList } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTList.js';
 import { ASH_CHAT_SELECTED_CONTEXT } from '../../../src/ash/sessions/contrib/chat/common/constants.js';
 import { ChatNavigationViewPaneContainer } from '../../../src/ash/sessions/contrib/sessions/browser/views/chatNavigationView.js';
 import { IChatListCatalog } from '../../../src/ash/sessions/contrib/sessions/browser/views/chatListModel.js';
 import { ReplyChatEditor } from '../../../src/ash/sessions/contrib/chat/browser/replyChatEditor.js';
-import { chatGPTReplyEditor } from '../../../src/ash/sessions/contrib/chat/electron-browser/chatGPTWeb.js';
+import { chatGPTReplyEditor } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTWeb.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';

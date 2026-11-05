@@ -9,30 +9,36 @@ import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import { AshChatNavigationSource } from '../browser/ashChatNavigationSource.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../common/constants.js';
-import { ChatGPTList } from './chatGPTList.js';
-import { chatGPTReplyEditor } from './chatGPTWeb.js';
-import { ChatListCatalog, IChatListCatalog } from '../../sessions/browser/views/chatListModel.js';
-import { ChatNavigationViewPaneContainer } from '../../sessions/browser/views/chatNavigationView.js';
+import { ChatListCatalog, IChatListCatalog, type ChatListSource } from '../../sessions/browser/views/chatListModel.js';
+import { ChatNavigationViewPaneContainer, type ChatNavigationAccessibilityHint } from '../../sessions/browser/views/chatNavigationView.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
 import '../browser/chat.contribution.js';
-import './chatGPTWeb.contribution.js';
-import './actions/newChatModelAction.js';
 
-registerSingleton(IChatListCatalog, new SyncDescriptor(ChatListCatalog, [[
-	new SyncDescriptor(ChatGPTList),
-	new SyncDescriptor(AshChatNavigationSource),
-]], true));
+export function registerChatWorkspace(webChat: {
+	readonly catalog: SyncDescriptor<ChatListSource>;
+	readonly accessibility: ChatNavigationAccessibilityHint;
+	readonly openCommand: string;
+}): void {
+	registerSingleton(IChatListCatalog, new SyncDescriptor(ChatListCatalog, [[
+		webChat.catalog,
+		new SyncDescriptor(AshChatNavigationSource),
+	]], true));
 
-SessionsViewRegistry.registerViewContainer({
-	id: CHAT_WORKSPACE_NAVIGATION_ID,
-	ctorDescriptor: new SyncDescriptor(ChatNavigationViewPaneContainer, [chatGPTReplyEditor.accessibility]),
-	mergeViewWithContainerWhenSingleView: false, title: 'Chat', localizationKey: { bundle: 'ash', key: 'sessions.activity.chat' }, location: ViewContainerLocation.Sidebar, isDefault: true, order: 2,
-});
+	SessionsViewRegistry.registerViewContainer({
+		id: CHAT_WORKSPACE_NAVIGATION_ID,
+		ctorDescriptor: new SyncDescriptor(ChatNavigationViewPaneContainer, [webChat.accessibility]),
+		mergeViewWithContainerWhenSingleView: false, title: 'Chat', localizationKey: { bundle: 'ash', key: 'sessions.activity.chat' }, location: ViewContainerLocation.Sidebar, isDefault: true, order: 2,
+	});
+
+	registerWorkbenchContribution(ChatWorkspaceContribution.ID, WorkbenchPhase.BlockRestore,
+		accessor => accessor.get(IInstantiationService).createInstance(ChatWorkspaceContribution, webChat.openCommand));
+}
 
 export class ChatWorkspaceContribution extends Disposable {
 	static readonly ID = 'sessions.chatWorkspace';
 
 	constructor(
+		openWebChatCommand: string,
 		@ISessionsLayoutService layout: ISessionsLayoutService,
 		@IStorageService storage: IStorageService,
 	) {
@@ -46,11 +52,8 @@ export class ChatWorkspaceContribution extends Disposable {
 			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'ash', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		}));
 		this._register(CommandsRegistry.register(SHOW_CHAT_WORKSPACE_COMMAND, accessor => {
-			const command = storage.get(CHAT_WORKSPACE_LAST_BACKEND_KEY, StorageScope.WORKSPACE) === 'ash' ? SHOW_ASH_CHAT_COMMAND : 'sessions.show.chatgpt';
+			const command = storage.get(CHAT_WORKSPACE_LAST_BACKEND_KEY, StorageScope.WORKSPACE) === 'ash' ? SHOW_ASH_CHAT_COMMAND : openWebChatCommand;
 			return accessor.get(ICommandService).executeCommand(command);
 		}));
 	}
 }
-
-registerWorkbenchContribution(ChatWorkspaceContribution.ID, WorkbenchPhase.BlockRestore,
-	accessor => accessor.get(IInstantiationService).createInstance(ChatWorkspaceContribution));

@@ -12,17 +12,17 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
-import type { IReplyChatEditorModel } from '../browser/replyChatEditor.js';
+import type { IReplyChatEditorModel } from '../../chat/browser/replyChatEditor.js';
 import type { ChatResponseActions } from '../../../../workbench/contrib/chat/browser/widget/chatListRenderer.js';
 import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { chatListItem, type IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ChatSubmissionOptions } from '../../../../workbench/services/chat/common/chatService.js';
-import { decodeChatGPTReply } from '../../chatgptweb/browser/chatGPTRichContent.js';
+import { decodeChatGPTReply } from '../browser/chatGPTRichContent.js';
 import type { ChatReplyMessage } from '../../../common/chatReplyBackend.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
-import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../common/constants.js';
-import { canQueueChatGPTCreation, coworkTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../../chatgptweb/browser/chatGPTService.js';
+import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
+import { canQueueChatGPTCreation, coworkTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 import { shareChatGPTConversation } from './chatGPTShare.js';
 
 export function canUseCodeModels(state: ChatGPTState): boolean {
