@@ -17,10 +17,6 @@
 	);
 	--ash-sessions-sidebar-row-inset: var(--ash-spacing-size80);
 	--ash-sessions-sidebar-item-inset: var(--ash-spacing-size20);
-	--ash-sessions-sidebar-row-height: calc(
-		var(--ash-toolbar-actionSize) + 2 *
-			var(--ash-sessions-sidebar-item-inset)
-	);
 	--ash-sessions-sidebar-selection-background: var(
 		--ash-sessions-selectionBackground
 	);
@@ -41,6 +37,19 @@
 	--ash-action-widget-filter-divider-content: "";
 	--ash-icon-font-family: "Ash UI Variable";
 	--ash-icon-font-weight: 550;
+}
+
+.ash-sessions-window .ash-workbench-sidebar {
+	--ash-toolbar-actionSize: var(--ash-spacing-size240);
+	--ash-sessions-sidebar-item-inset: var(--ash-spacing-size40);
+}
+
+.ash-sessions-window,
+.ash-sessions-window .ash-workbench-sidebar {
+	--ash-sessions-sidebar-row-height: calc(
+		var(--ash-toolbar-actionSize) + 2 *
+			var(--ash-sessions-sidebar-item-inset)
+	);
 }
 
 .ash-workbench:is([data-color-scheme="light"], [data-color-scheme="dark"])

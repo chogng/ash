@@ -285,7 +285,6 @@ export class SessionsList extends DomWidget {
 		this.projectError.type = 'button';
 		this.projectError.textContent = localize('sessions.list.projectsRetry', 'Could not load projects. Retry');
 		this._register(addDisposableListener(this.projectError, 'click', () => { void this.loadProjects(); }));
-		this.domNode.append(this.list);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener(this.list, 'keydown', event => {

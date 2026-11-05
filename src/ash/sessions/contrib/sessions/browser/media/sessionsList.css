@@ -222,6 +222,13 @@
 	cursor: pointer;
 }
 
+.ash-sessions-list-section-with-actions > .ash-sessions-list-section-static,
+.ash-sessions-list-section-with-actions
+	> h3
+	> .ash-sessions-list-section-toggle {
+	padding-inline-end: 0;
+}
+
 .ash-sessions-list-subgroup > h3 > .ash-sessions-list-section-toggle,
 .ash-sessions-list-subgroup > .ash-sessions-list-section-static {
 	color: var(--ash-foreground);
@@ -349,8 +356,10 @@
 		.ash-sessions-list-section-row,
 		.ash-sessions-list-subgroup-row
 	) {
-	--ash-list-row-inset-end: 0px;
-	padding-inline-end: var(--ash-list-scrollbar-inset);
+	padding-inline-end: max(
+		var(--ash-sessions-sidebar-item-inset),
+		calc(var(--ash-list-scrollbar-inset) - var(--ash-list-row-inset-end))
+	);
 }
 
 .ash-sessions-list[data-mode="code"]
@@ -362,29 +371,45 @@
 .ash-sessions-list[data-mode="code"] .ash-sessions-list-row {
 	display: flex;
 	align-items: center;
+	column-gap: var(--ash-sessions-sidebar-item-inset);
 }
 
 .ash-sessions-list[data-mode="code"] .ash-sessions-list-item {
 	flex: 1 1 0;
-	gap: var(--ash-spacing-size80);
-	padding-inline-start: var(--ash-spacing-size80);
+	/* The tree row reserves the trailing inset, even when the toolbar is hidden. */
+	padding-block: var(--ash-sessions-sidebar-item-inset);
+	padding-inline: var(--ash-sessions-sidebar-item-inset) 0;
+}
+
+.ash-sessions-list[data-mode="code"]
+	:is(
+		.ash-sessions-list-subgroup > h3 > .ash-sessions-list-section-toggle,
+		.ash-sessions-list-subgroup > .ash-sessions-list-section-static
+	) {
+	gap: var(--ash-spacing-size60);
+	padding: var(--ash-sessions-sidebar-item-inset);
+}
+
+.ash-sessions-list[data-mode="code"]
+	.ash-sessions-list-subgroup
+	.ash-sessions-list-section-icon {
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	justify-content: center;
 }
 
 .ash-sessions-list[data-mode="code"]
 	.ash-sessions-list-row
 	> .ash-session-leading-icon {
-	inset-inline-start: calc(
-		var(--ash-spacing-size80) +
-			(var(--ash-lxiconFontSize-large) - var(--ash-toolbar-actionSize)) /
-			2
-	);
+	inset-inline-start: var(--ash-sessions-sidebar-item-inset);
 }
 
 .ash-sessions-list[data-mode="code"]
 	.ash-sessions-list-row.has-leading-icon
 	> .ash-sessions-list-item {
 	padding-inline-start: calc(
-		2 * var(--ash-spacing-size80) + var(--ash-lxiconFontSize-large)
+		var(--ash-sessions-sidebar-item-inset) + var(--ash-toolbar-actionSize) +
+			var(--ash-spacing-size60)
 	);
 }
 
@@ -393,6 +418,7 @@
 	position: static;
 	flex: 0 0 auto;
 	transform: none;
+	padding-inline-end: 0;
 }
 
 .ash-sessions-list[data-mode="code"] .ash-sessions-list-actions::before {

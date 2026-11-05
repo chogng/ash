@@ -153,7 +153,7 @@ test('Chat navigation includes Search and selects New, Projects, Creator and Cus
 			{ icon: 'briefcase', disabled: false },
 			{ icon: 'account', disabled: false },
 		]);
-		assert.deepEqual([...bar.domNode.querySelectorAll('.ash-sessions-activity-top, .ash-sessions-activity-bottom')].map(group =>
+		assert.deepEqual([...bar.domNode.querySelectorAll(':scope > [role="toolbar"]')].map(group =>
 			[...group.querySelectorAll('button')].map(button => button.textContent),
 		), [['New', 'Search', 'Projects', 'Artifacts', 'Customize'], ['Accounts']]);
 		assert.ok(buttons.every(button => !button.classList.contains('icon-only')));
