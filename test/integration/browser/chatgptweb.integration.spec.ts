@@ -182,12 +182,14 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=light');
 	const sidebar = page.locator('.ash-chat-navigation');
 	const headers = sidebar.locator('.ash-sessions-list-section-toggle');
-	await expect(headers).toHaveText(['置顶', '其他项目', '最近']);
+	await expect(headers).toHaveText(['置顶', '最近']);
+	await expect(sidebar.locator('[data-item="chatgpt:fixture-other"]')).toHaveCount(0);
 	const row = sidebar.locator('[data-item="chatgpt:fixture-chat"].ash-chat-navigation-row');
 	const item = row.locator('.ash-chat-navigation-item');
 	const actions = row.locator('.ash-chat-navigation-actions');
 	const recent = sidebar.locator('[data-group="recent"]');
-	const other = sidebar.locator('[data-group="other"]');
+	const pinnedHeader = sidebar.getByRole('button', { name: '置顶', exact: true });
+	const recentHeader = sidebar.getByRole('button', { name: '最近', exact: true });
 	await expect.poll(() => recent.evaluate(group => {
 		const header = group.querySelector('.ash-sessions-list-section-toggle')!.getBoundingClientRect();
 		const treeRow = group.closest('.ash-tree-row')!;
@@ -198,9 +200,11 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 			.querySelector('.ash-chat-navigation-row')!.getBoundingClientRect();
 		return [header.height, a.height, a.top - header.bottom, b.top - a.bottom, header.top - previous.bottom, a.width - header.width];
 	})).toEqual([32, 32, 2, 2, 8, 0]);
-	await other.locator('.ash-sessions-list-section-toggle').click();
-	await expect.poll(async () => (await headers.nth(2).boundingBox())!.y - (await headers.nth(1).boundingBox())!.y).toBe(40);
-	await other.locator('.ash-sessions-list-section-toggle').click();
+	await pinnedHeader.click();
+	await expect(pinnedHeader).toHaveAttribute('aria-expanded', 'false');
+	await expect.poll(async () => (await recentHeader.boundingBox())!.y - (await pinnedHeader.boundingBox())!.y).toBe(40);
+	await pinnedHeader.click();
+	await expect(pinnedHeader).toHaveAttribute('aria-expanded', 'true');
 
 	await item.hover();
 	await expect(item).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');

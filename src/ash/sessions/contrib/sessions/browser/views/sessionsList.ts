@@ -672,7 +672,7 @@ export class SessionsList extends DomWidget {
 		const remaining = new Map<string, HTMLElement>();
 		const activeSelection = this.customViews.activeCustomView.get() || this.entry && !this.contextKeys?.getValue(this.entry.activeContext)
 			? undefined : this.viewService.activeSelection;
-		const itemFor = (key: string, icon = this.mode === 'code' ? Lxicon.chat : undefined, conversation = false): SessionListItem => {
+		const itemFor = (key: string, icon = this.mode === 'code' ? Lxicon.chatSession : undefined, conversation = false): SessionListItem => {
 			present.add(key);
 			let item = this.items.get(key);
 			if (!item) {
@@ -751,7 +751,7 @@ export class SessionsList extends DomWidget {
 			const nested = activeChats.filter(chat => chat !== thread && chat.origin.type !== 'agentSpawn'
 				&& (matchesSession || this.search.matches(chat.title, chat.workspace?.root, ...fields)));
 			if (!matchesSession && !nested.length && !nestedDrafts.has(session.sessionId)) continue;
-			const item = itemFor(`session:${session.sessionId}`, this.mode === 'code' ? Lxicon.chat : Lxicon.cowork, true);
+			const item = itemFor(`session:${session.sessionId}`, this.mode === 'code' ? Lxicon.chatSession : Lxicon.cowork, true);
 			item.leadingIcon?.setStatus(session.management?.status === 'working' ? this.workingIcon : undefined);
 			item.target = { sessionId: session.sessionId, threadId: thread.threadId };
 			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, () => this.openRow(() => this.viewService.openSession(session.sessionId, thread.threadId)), session.management);
@@ -759,7 +759,7 @@ export class SessionsList extends DomWidget {
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
 			item.updateSummary(this.hoverService, getSessionSummaryHoverData(session, thread));
 			const children = nested.map(chat => {
-				const child = itemFor(`chat:${JSON.stringify([session.sessionId, chat.threadId])}`, Lxicon.chat, true);
+				const child = itemFor(`chat:${JSON.stringify([session.sessionId, chat.threadId])}`, Lxicon.chatSession, true);
 				child.leadingIcon?.setStatus(chat.management?.status === 'working' ? this.workingIcon : undefined);
 				child.target = { sessionId: session.sessionId, threadId: chat.threadId };
 				child.domNode.draggable = true;

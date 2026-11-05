@@ -59,7 +59,7 @@ export class AshChatNavigationSource implements ChatListSource {
 					title: session.title || localize('sessions.list.untitled', 'Untitled Session'),
 					selected: selectedId === id,
 					status: session.management?.status === 'working' ? working : undefined,
-					defaultIcon: Lxicon.chat,
+					defaultIcon: Lxicon.chatSession,
 					iconId: list.getRowIcon(`session:${id}`),
 					setIcon: icon => list.setRowIcon(`session:${id}`, icon?.id),
 					pinned: isPinned,

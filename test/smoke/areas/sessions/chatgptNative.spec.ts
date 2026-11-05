@@ -189,6 +189,7 @@ test.describe('Unified Chat sidebar', () => {
 		const modelButton = editor.locator('.ash-chat-input-model-action');
 		await expect(modelButton).toHaveText('Fixture model');
 		await expect(modelButton).toBeEnabled();
+		await chatGPTComposer.waitForTypeInEditor('First Ash message');
 		await modelButton.press('ArrowDown');
 		const picker = page.getByRole('dialog', { name: '选择聊天模型', exact: true });
 		await expect(picker.getByRole('menuitemradio', { name: 'Fixture model', exact: true })).toBeVisible();
@@ -198,7 +199,7 @@ test.describe('Unified Chat sidebar', () => {
 		const ash = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 		const ashComposer = new Editor(ash);
 		await ashComposer.waitForEditorFocus();
-		await ashComposer.waitForTypeInEditor('First Ash message');
+		await ashComposer.waitForEditorContents(text => text === 'First Ash message');
 		await page.keyboard.press('Enter');
 		await expect(ash).toContainText('Answer from Ash');
 		const ashSessionId = await ash.getAttribute('data-session-id');
@@ -369,13 +370,17 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await using catalog = createAshModelServer(ashRequests);
 			await configureAshModel(catalog, application, workbench, testWorkspace.directory);
 			const page = await workbench.openAgentsWindow(target.kind); const commands = new QuickAccess(page);
+			const newLabel = locale === 'en' ? 'New' : '新建';
+			const newChat = page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: newLabel, exact: true });
 			await expect(page.locator('[data-action-id="sessions.open.chatgpt"]')).toHaveCount(0);
-			await expect(page.locator('[data-action-id="sessions.newSession"] button:not([aria-current])')).toBeVisible();
+			await expect(newChat).toBeVisible();
+			await expect(newChat).toHaveAttribute('aria-current', 'page');
 			const editor = page.locator('.ash-chatgpt-widget'); await expect(editor).toBeVisible();
 			await expect(page.locator('.ash-chat2-editor, .ash-web-bridge')).toHaveCount(0);
 			const input = editor.getByRole('textbox', { name: locale === 'en' ? 'Ask ChatGPT' : '询问 ChatGPT', exact: true });
 			const composer = new Editor(editor);
 			await expect(input).toBeEditable();
+			await composer.waitForEditorContents(text => text.trim() === '');
 			await composer.waitForEditorFocus();
 			await composer.waitForTypeInEditor('Hello from native UI');
 			const cardStyle = (element: HTMLElement) => {
@@ -477,6 +482,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(history.getByRole('button', { name: locale === 'en' ? 'New chat' : '新聊天', exact: true })).toHaveCount(0);
 			await history.getByRole('button', { name: 'First native history', exact: true }).click();
 			await expect(editor).toContainText('History one answer');
+			await expect(newChat).not.toHaveAttribute('aria-current', 'page');
 			await composer.waitForEditorFocus(); await composer.waitForTypeInEditor('Draft in first history');
 			await history.getByRole('button', { name: 'Second native history', exact: true }).click();
 			await expect(editor).toContainText('History two answer');
@@ -484,7 +490,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await history.getByRole('button', { name: 'First native history', exact: true }).click();
 			await expect(editor).toContainText('History one answer');
 			await composer.waitForEditorContents(text => text === 'Draft in first history');
-			await page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: locale === 'en' ? 'New' : '新建', exact: true }).click();
+			await newChat.click();
+			await expect(newChat).toHaveAttribute('aria-current', 'page');
 			await expect(editor.locator('.ash-chat-item')).toHaveCount(0);
 			await composer.waitForEditorContents(text => text.trim() === '');
 			await composer.waitForEditorFocus();
@@ -543,7 +550,9 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			let restored = await workbench.reopenAgentsWindow(application, page);
 			await expect(restored.locator('.ash-chatgpt-widget')).toContainText('History one answer');
 			await expect(restored.locator('[data-action-id="sessions.open.chatgpt"]')).toHaveCount(0);
-			await expect(restored.locator('[data-action-id="sessions.newSession"] button:not([aria-current])')).toBeVisible();
+			const restoredNewChat = restored.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: newLabel, exact: true });
+			await expect(restoredNewChat).toBeVisible();
+			await expect(restoredNewChat).not.toHaveAttribute('aria-current', 'page');
 			for (const entry of pages) {
 				await restored.locator(`[data-action-id="${entry.action}"] button`).click();
 				restored = await workbench.reopenAgentsWindow(application, restored);
