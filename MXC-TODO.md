@@ -2,9 +2,7 @@
 
 当前 SDK 为 `mxc-sdk = "=1.0.1"`，兼容 fork 固定为 `f1e8694b75dea05ebb3dc8050039d04fe304236f`。运行命令与验收方法见 [适配器验证](crates/mxc-sandbox/README.md#验证)，依赖差异见 [SDK 依赖说明](third_party/mxc/README.md)。
 
-## Windows／WSL2
-
-- [ ] 在该宿主的 WSL2 中重跑 Linux 适配器、PTY、执行服务及网络矩阵，补 Windows 挂载目录和互操作边界，记录发行版、内核和 Bubblewrap 版本；命令见 [WSL 验证入口](crates/mxc-sandbox/README.md#验证)。
+Windows PSEC 的发布候选矩阵及 25H2／26H2 x64 客户端已有通过记录。见 [Windows 验收手册](docs/windows-sandbox-acceptance-runbook.md#2026-11-04-windows-发布候选-ci)。
 
 ## Linux
 

@@ -4,10 +4,6 @@
 
 任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**布局前置**表示须先补齐布局 owner 的位置或移动契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
 
-## Agents Window · Windows 环境选择器验收
-
-- [ ] **验收 · Windows 冷启动环境枚举** · macOS Desktop 已用受控 IPC 验证菜单即时打开、SSH 与 WSL 独立更新，以及新建环境表单保留选择和焦点。待在装有 WSL 2 的 Windows 实机冷启动 Ash，测量菜单展开、SSH 和 WSL 条目出现的时间，并核对 WSL 发行版列表。
-
 ## Agents Window · 真实 SSH 主机验收
 
 - [ ] **验收 · SSH 工作区信任** · 已通过本地桌面场景和远程路径的定向自动化测试。真实远程主机验收缺少可连接的 SSH 地址及允许创建临时目录的路径。取得这两项后，在隔离目录验证 SSH 工作区启动恢复、已有受限授权时重新提示并在确认后挂载，以及取消后目录未挂载。用远端目录绑定状态核对结果。
@@ -28,25 +24,6 @@
 
   - composition 开发模式复用 WebView2 工作台顶栏，并由 AppWindow 保留系统窗口按钮。125% 实测鼠标可打开搜索和应用菜单、隐藏和恢复主侧栏、拖动空白区并最大化，悬停最大化按钮可见贴靠布局。跨屏 DPI、键盘和系统无障碍仍待验收。记录在 `.build/ash-native-gpu-probe/workbench-system-titlebar/`。
 
-## Rust 后端生命周期 · Windows 验收
-
-- [ ] **验收 · Windows 用户实机** · 同步当前 Rust 改动和新增的 guard／watchdog／managed fixture 源文件，在已配置的 Windows 开发环境执行下列命令，保留完整输出、Windows 版本、架构及实际执行／跳过的测试数。macOS 原生测试及 Linux／Windows 交叉编译不能替代此项；Windows 的 Unix 专属 session/SIGSTOP 用例按 cfg 不执行。
-
-```powershell
-just verify ash-process-hardening --profile ci-test
-just verify ash-utils-pty --profile ci-test
-just verify ash-sandboxing --profile ci-test
-just verify ash-external-ext --profile ci-test
-just verify ash-arg0 --profile ci-test
-just verify ash-app-server-daemon --profile ci-test
-just verify ash-app-server-runtime --profile ci-test --lib --filter managed::tests
-just verify ash-app-server --profile ci-test --process-tests --test managed_lifecycle --test managed_initialize
-```
-
-Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Job Object 对 owned 子孙进程的回收、扩展探测超时后的旧代清理与恢复、停用后不被迟到探测重启，以及 daemon 显式停止后的连接／监听释放和同 profile 重启。另在隔离 profile 启动真实 App Server 与扩展宿主，强制结束 App Server，检查其 Job 内宿主及后代已退出、原监听端口可重新绑定；不要结束日常使用的 profile。只关闭客户端时，仍有有效 lease 的共享 daemon／后台任务应保持运行。命令和实机验收均通过后移除此节。
-
-2026-11-01 本机 Linux arm64 容器已通过上述 8 个包的 214 项定向测试及对应 check／rust-warnings；组合故障场景已验证后代退出、端口重绑及同 profile 重启。测试结束后无残留工作进程或 TCP 监听；Linux 线程枚举导致守护进程提前自杀的问题已修复，macOS PTY 和 daemon 回归通过。原始日志与范围见[验证记录](.build/lifecycle-linux-20261101/validation.json)。
-
 ## 窗口缩放布局 · Windows 验收
 
 - [ ] **验收** · 在 Windows 显示缩放 100%、125%、150%、200% 下，分别检查 IDE 与 Agents：连续拖动四边和四角、往返缩放、最大化后恢复；标题栏左右图标应保持相对窗口边缘的位置，按钮不得抖动、重叠或被裁切。再切换应用界面缩放，检查底部状态栏和右边缘是否出现 1px 裁切。
@@ -58,6 +35,10 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 主窗修复复测（GPU 开启）。旧原生尺寸对根容器的限制已收窄为一个物理像素。125% 完整自托管场景通过，1,782 帧未发现按钮偏移，松手后及应用缩放 0、+1、−1 均与 Win32 客户区对齐。150% 仍有右侧标题栏按钮距边缘的偏移，稳定状态通过。100% 和 200% 的界面隔离场景通过。继续验证 150% 标题栏边距、辅助窗物理边界及 Agents 会话弹窗。见 [125% 日志](.build/ash-playwright-mcp/windows-resize/ide-125-gpu-final.log) 和 [150% 日志](.build/ash-playwright-mcp/windows-resize/ide-150-gpu-final.log)。
 
+2026-11-05 在同一 Windows 11 23H2 x64 主机复测 125%。将测试窗口移出 Windows Shell 浮层覆盖区后，IDE 主窗与辅助编辑器共采样 2,876 帧原生拖拽，布局断言、最大化恢复和辅助编辑器的紧凑模式键盘切换均通过。场景退出清理报 `taskkill` 拒绝访问，复查时该 PID 已退出。复验范围和退出错误见 `.build/todo-local-acceptance-20261105/resize-ide-125-clear-shell.log`。
+
+同一主机在 150%、GPU 合成开启时再次复现 IDE 主窗标题栏右侧短时偏移。原生拖拽 1,187 帧中有 67 帧违反边距断言，样本中偏移约 1.5 个物理像素。松手后的客户区、最大化恢复和应用缩放断言通过。日志位于 `.build/todo-local-acceptance-20261105/resize-ide-150-gpu.log`。
+
 ## Connectors 面板 · 点击后窗口无响应
 
 - [ ] **历史现场复核** · 2026-10-21 用户随后确认点击已正常；实际开发窗口的只读检查也显示主线程响应、无活动动画、Connectors 读取已结束。隔离 Desktop 中全折叠后展开／键盘切换通过，尚未建立原先整窗无响应的故障链。潜在的状态通知请求放大已单独复现并修复：25 次通知在读取进行中不再追加 25 组读取，只在结束后补读一次；保留最新状态、隐藏时撤销待补读，显式导航及可物理取消的市场查询仍可抢占。原始故障仅在再次出现时采集实际 Renderer／Main 栈继续归因，不把这一防护称为历史根因修复；证据与运行限制见 `.build/ash-playwright-mcp/connectors-validation.json`。
@@ -67,20 +48,10 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 - [ ] **测量** · 最终独立窗口中最慢暖点击 375.6 ms：extensionHost/invoke/read（connection 1，request 2907）客户端往返 274.3 ms，同 ID 服务端处理 0.088 ms、出站 0.040 ms，Git 请求在之后才开始且仅 3.4 ms。尚未拆清 Renderer→Main→daemon 送达与返程 decode/dispatch，不能归因扩展执行或渲染。下一步补这些边界的 method/request ID 标记，保留极值复现；本轮全部原始数据和已完成实现见[报告](.build/scm-tail-v2/report.md)。
 - [ ] **checkIgnore 排队残余** · 统计读取与普通文件读取的两层共享读已完成；新 16 窗对照中 Git RPC p99 79.8→16.6 ms、资源排队 p99 77→0 ms，暖端到端 p95/p99 均通过预设稳定规则。仍有 1/960 暖点击等待 47 ms，前方三个独占 `git/checkIgnore` 请求依次完成；后续评估该路径须保留取消、写者顺序及仓库权限约束，不直接移除序列化。原始关联与完整结果见[报告](.build/scm-statistics-concurrency/report.md)。
 
-## PR #57 · 合并后剩余项
+## 2026-10-08 main 集成交接余项
 
-[PR #57](https://github.com/chogng/ash/pull/57) 已于 2026-10-20 正常 squash merge（`ee3dea640`）。后续仅在当前 main 本地整批修复与验证；不推送、不主动触发远端 CI、不恢复已暂停的 `pr-57-ci` heartbeat。保留其它任务修改，完整批次提交前准确 stage 并执行 `just commit-check origin/main`。
-
-- [ ] **完整 CI 覆盖**：获准发布后，以新 main SHA 核对原失败矩阵及 Windows sandbox acceptance。[此前失败的 CI](https://github.com/chogng/ash/actions/runs/39490567225) 在旧安全门禁后跳过了前端、Bazel 和 Rust 作业；本地证书修复后 `just dependency-security` 的 advisories／licenses／sources 已全部通过，但尚未发布，不能称远端全绿。已有 Linux x64 47 项通过证据不等于旧 hosted 启动失败根因已证实；尚无完整跨平台全绿证据；Desktop runtime acceptance 的 macOS hosted MCP 进程回归仍需远端通过证据，本机进程补验见 [AgentHost 记录](agenthost-todo.md#2026-10-29-macos-进程补验)。本地证书验证日志 `/tmp/ash-pr57-certificate-{security,dependencies-final,http-final,bazel-final,app-server-build}.log`。本轮 rebase 后 `0d95ccc29` 基线的 macOS 定向复核及首败／修正复验见[验证记录](.build/pr57-rebased/validation.json)；该记录不覆盖随后并行任务的 Activity Bar、Chat 和 Rust 改动。
-
-## MXC · 跨平台验收
-
-- [ ] **验收** · 在支持 PSEC 的 Windows、WSL2 和独立 Linux／x64 运行当前 SDK pin `f1e8694b`，并补外部局域网／公网 IPv6。命令与验收边界见 [MXC 清单](MXC-TODO.md) 与 [适配器验证](crates/mxc-sandbox/README.md#验证)。
-
-## Windows 开发实验资源清理
-
-- 保存 Rust 到 App 可用的 15 秒目标尚未达到。2026-10-19 在 `3df4938da` 暂停开发与同步后完成迁移修复的 20 次匹配尝试：空库成功中位数 20.06 → 19.80 秒（5/5 → 5/5），100 条历史会话 22.27 → 21.15 秒（3/5 → 5/5），历史成功样本快 1.12 秒（5.0%）；仍差 4.80／6.15 秒。空库差异很小，不能用成功样本的条件中位数替代总体延迟或失败率结论。原始样本与阶段成本见 `docs/build.md` 完整循环复测及 `.build/perf-win-edit-20261019-migration/q2-summary.json`。
-- 本轮复测完成，修复内容与正常构建已恢复；此前第五轮的 diff 适配器边界优化仍保留，旧源码上的约 25 秒结果不作为本轮基线。15 秒是体验目标，并非测量推导的性能下限；若继续优化，需根据发布前约 13.7 秒及历史发布后约 7.4 秒的成本选择方向。上述结果仅覆盖 diff 适配器编辑；本机卷均为 NTFS，没有 Dev Drive。
+- [ ] **并行开发** · `/team develop` 已有持久化和冻结工作树绑定，仍缺专用运行时、调度、review/check 执行、RPC/UI 和 SCM 落地。实现前该入口返回不可用。范围见 [Workflows](crates/ext/workflows/README.md)。
+- [ ] **复核 · 浏览器集成中的 scrollbar 点击偶发失败** · 2026-10-08 完整集成 840 项通过、1 项失败，未修改的基线重复 10 次出现 5 次相同失败。调查时保留现有断言。见 [main 集成交接记录](docs/archive/ash-main-handoff-2026-10-08.md#本次实际验证)。
 
 ## Rust 函数级增量编译
 
@@ -121,7 +92,7 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 - [ ] **Sessions contribution 对齐余项** · 多对话会话的目录切换还需跨 Thread 原子提交执行目标并保留各自的工作区。远程和 Provider 会话还需对接其拥有方的目录选择和授权契约。列表撤销通知需先由归档、分组和筛选各自提供可撤销操作。常驻列表提示和存储清理提示分别缺少对应的引导和清理建议生产方。
 
-- [ ] **New Environment · Cloud 与 WSL 验收** · Cloud 需要可路由的 Sessions provider 与目标发现和创建契约。仍需在 Windows 实机验证 WSL 首次连接及环境变量注入。
+- [ ] **New Environment · Cloud 与 WSL 环境变量** · Cloud 需要可路由的 Sessions provider 与目标发现和创建契约。Windows 实机的 WSL 首次连接已通过，仍需验证保存的环境变量到达 WSL 会话启动的命令。
 
 ### Artifact Integrations
 
@@ -224,7 +195,3 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 ## Chat accessibility · 缺失宿主入口
 
 - [ ] **前置** · `src/ash/workbench/contrib/chat/browser/accessibility/` 已接入消息标签、响应纯文本视图和 Chat 信号 owner；37 项定向测试与 1 项 Desktop 自托管场景通过。上游对应的 `chatTerminalOutputAccessibleView.ts`、`chatBackgroundShellOutputAccessibleView.ts`、`chatPetJumpGameAccessibleView.ts` 尚无 Ash 生产入口：缺少终端工具输出的焦点／内容契约、后台 Shell 输出视图和宠物游戏 owner。先闭合各自真实宿主及焦点恢复契约，再在对应路径接入 Accessible View 并验证键盘、内容更新和释放；不提前创建无调用方文件。
-
-## Chat Status · 订阅额度最终 Desktop 复验
-
-- [ ] **验证阻塞** · `chatStatusEntry.ts` 已通过 `IAccountService.readRateLimits` 接入现有 `account/rateLimits/read`，42 项定向测试（含中英文真实 Chromium 渲染、账号切换、取消、精确余额与未知额度）通过，独立本地化生成缺失 0 项。最后执行 `pnpm run test:smoke:ui test/smoke/areas/chat/chat-status.spec.ts` 时，准备与 Renderer 类型检查通过，但 Vite 的 `ash-browser-extensions` 内嵌本地化生成报 `Unknown translation: zh-CN/ash.chat/chat.context.invalidProviderData`；相同源码由 `bun build/resources/localization.ts` 独立生成成功。先排查 Vite 配置内嵌提取与独立提取的差异，再重跑原 Desktop 场景，不删断言或忽略未知翻译。证据：`/tmp/ash-chat-quota-verified.log`、`/tmp/ash-chat-quota-localization-fix.log`、`/tmp/ash-chat-quota-desktop-verified.log`；中英文截图在 `.build/desktop/playwright/unit-browser-hAxd3m/`。成功复验后移除此项。

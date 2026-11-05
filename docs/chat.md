@@ -180,6 +180,8 @@ Hook 事件类型归 `common/promptSyntax/hookTypes.ts`，读取与变更通知�
 
 `browser/chatStatus/chatStatusEntry.ts` 通过窗口级状态栏显示订阅账号状态，并使用 Quick Input 提供账号管理、模型连接和 Usage 入口。状态来自 `IAccountService`，账号事件淘汰迟到读取；禁用 AI 或释放窗口时撤回入口与选择器。上下文及累计 token 用量仍由原输入框和 Usage 页面拥有，不迁入状态栏，也不表示订阅剩余额度。订阅额度复用后端 `account/rateLimits/read`：窗口剩余百分比与重置时间、ChatGPT credits、xAI 账期和精确 USD 余额分别展示；未知字段不推断为不限量。按账号独立处理加载与失败，选择器内刷新可重试；账号事件、关闭、禁用 AI 和释放取消旧结果写回。未接入上游 Copilot 推广、套餐升级或扩展 Chat 状态项。
 
+订阅额度的 42 项定向测试覆盖中英文 Chromium、账号切换、取消、精确余额和未知额度。2026-11-05 在 Windows 11 23H2 x64 上以 `a5d5bc18d3` 重跑 `pnpm run test:smoke:ui test/smoke/areas/chat/chat-status.spec.ts`，完整 Desktop 构建及中文本地化生成通过，Electron 场景 1/1 通过，覆盖键盘打开、取消、焦点恢复及进入模型连接设置。日志位于 `.build/todo-local-acceptance-20261105/chat-status-desktop.log`。
+
 共享后端同时服务 Agent、手动终端和扩展。`aiAgentEnv.ts`／宿主环境构建器过滤继承的 `AI_AGENT`（含大小写变体），不更改父环境；Rust `ProcessExecutor` 只为 Core 工具、Hook 和认证 Agent ProcessStart 的最终子环境设置 `AI_AGENT=ash`。手动终端默认不继承标记，显式 env 可以覆盖。该值仅作进程归因，不代表授权、身份认证、账号或模型，不另加配置或协议字段。
 
 邀请沿成功的 `ChatService.onDidSubmitRequest` → sender 绑定可信 IPC → Main `AgentsWindowInvitationState` → focused conversation 的现有通知列表。只有后端接受的本窗口请求登记使用；Main 的 Application／Machine storage 仅保存首次使用计数与冷却，不读领域 RPC 或建立会话目录。单窗口等待 30 秒，并行活动等待 15 秒，全局只有一个 claim，真正可见后才记曝光。

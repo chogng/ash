@@ -59,3 +59,9 @@ just verify ash-app-server --process-tests --test managed_initialize --test mana
 ```
 
 Windows 身份与终止测试位于 `src/process/windows_tests.rs`，须在 Windows 执行实测。
+
+2026-11-05 在 Windows 11 23H2 x64（22631.6199）用 `ci-test` profile 验收。`ash-process-hardening`、`ash-utils-pty`、`ash-sandboxing`、`ash-external-ext`、`ash-arg0`、`ash-app-server-daemon`、`ash-app-server-runtime` 的 `managed::tests` 和 `ash-app-server` 的 `managed_initialize`／`managed_lifecycle` 进程套件共 202 项通过。各组 check 和 rust-warnings 通过。ConPTY 用例在隔离的非交互 PowerShell 中确认 Ctrl+C 中断前台子进程后，原 Shell 仍能执行命令。Unix 专属 session／SIGSTOP 用例按平台条件排除。
+
+在隔离 profile 强制结束真实 managed App Server 测试宿主后，Windows Job Object 回收扩展宿主和它的子进程，两个 TCP 监听端口均能重新绑定。同一 profile 成功启动新进程并正常停止。Windows 验收日志位于 `.build/todo-local-acceptance-20261105/lifecycle/`，实机故障场景见 `windows-job-reclaim.log`。
+
+2026-11-01 的 Linux arm64 容器验收通过相应 8 组的 214 项定向测试和 check／rust-warnings，组合故障场景覆盖后代退出、端口重绑和同 profile 重启。macOS PTY 和 daemon 回归也通过。原始记录位于 `.build/lifecycle-linux-20261101/validation.json`。

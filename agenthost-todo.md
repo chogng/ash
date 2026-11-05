@@ -436,7 +436,6 @@ Ash 的 [前后端边界](docs/frontend-app-server-boundary.md)已明确 `platfo
 - [x] 在 `src/ash/sessions/contrib/providers/agentHost/browser/appServerSessionsProvider.ts` 原地修复 model 映射与 list/readCatalog 优先级。持久化目录忠实读取 DTO.model，包括缺失值；全局默认仅在已知 create/draft 流程中选择，不能替换既有目录事实。保留 pane 的未发送手动选择和 Auto，不能用 catalog 更新覆盖它们。
 - [x] 在 `src/ash/sessions/services/sessions/browser/sessionsManagementService.ts` 的现有 `sameSession` 补齐 model 与 workspace 事实比较，保持其他刷新、selection 和 subscription 算法不变；默认模型写入不再根据历史模型相等而跳过或改写所有 Session。
 - [x] 在 `src/ash/sessions/services/sessions/test/browser/sessionsManagementService.test.ts` 覆盖两会话不同模型、config 默认不同、child 模型不同、重连、迟到旧目录与 model/workspace-only 变化。
-- [ ] 使用现有 `src/ash/sessions/test/browser/chatViewPane.test.ts`、`chatViewPane.startup.test.ts` 和 Cowork 测试，验证真实创建入口到 picker/startTurn 的效果。已通过 Code/Cowork WidgetModel/DI/inputState/startTurn 与 startup 单测；真实 DOM 与 profile/pane 重开验收待 Mac。没有修改 pane 生产 owner。
 
 主要 production 写入限于三个现有 owner：SQLite predicate、Session provider 和 Management equality。若现有 `setModel` 的全目录替换与上述事实分离冲突，先核对真实生产调用方，再决定局部变更，不能机械保留或删除旧 API。
 
