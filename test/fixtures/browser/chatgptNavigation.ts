@@ -195,7 +195,7 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 		return [];
 	} } as unknown as ILanguageModelsService],
 	[ISessionProviderScopeService, { getProviderScope: () => { throw new Error('This fixture has no Ash model provider'); } } as unknown as ISessionProviderScopeService],
-	[ISessionPrimaryProviderServices, { models: { onDidChangeModels: Event.None, listModels: async () => [] } } as unknown as SessionProviderServices],
+	[ISessionPrimaryProviderServices, { models: { onDidChangeModels: Event.None, listModelCatalog: async () => [] } } as unknown as SessionProviderServices],
 	[IThemeService, theme],
 	[IContextViewService, resources.add(new BrowserContextViewService(document.body))],
 	[IVoiceCodeTranscriptionBackendService, dictation ? createTestDictationBackend(resources, dictation) : undefined],

@@ -175,6 +175,44 @@ async function configureAshModel(catalog: ReturnType<typeof createAshModelServer
 test.describe('Unified Chat sidebar', () => {
 	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN' } });
 
+	test('a retained Chat picker follows Ash model settings', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
+		const application = browser as ElectronApplication;
+		await installService(application);
+		await using catalog = createAshModelServer([]);
+		await configureAshModel(catalog, application, workbench, testWorkspace.directory);
+		const page = await workbench.openAgentsWindow(target.kind);
+		const modelButton = page.locator('.ash-chatgpt-widget .ash-chat-input-model-action');
+		const picker = page.getByRole('dialog', { name: '选择聊天模型', exact: true });
+		const ashChoice = picker.getByRole('menuitemradio', { name: ashFixtureModel.model, exact: true });
+		const webChoice = picker.getByRole('menuitemradio', { name: 'Fixture model', exact: true });
+		await expect(modelButton).toHaveText('Fixture model');
+		await modelButton.press('ArrowDown');
+		await expect(ashChoice).toBeVisible();
+		const settings = await readUserSettings(workbench.page);
+		await writeUserSettings(workbench.page, JSON.stringify({ ...JSON.parse(settings.content), 'models.hidden': [] }), settings.revision);
+		await expect(ashChoice).toHaveCount(0);
+		await expect(webChoice).toHaveAttribute('aria-checked', 'true');
+		await expect(picker.getByRole('combobox')).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(modelButton).toBeFocused();
+
+		await new QuickAccess(page).runCommand('workbench.action.chat.manage');
+		const modelList = page.locator('.ash-chat-models-catalog');
+		await modelList.getByRole('combobox').fill(ashFixtureModel.model);
+		const toggle = modelList.getByRole('switch', { name: new RegExp(ashFixtureModel.model, 'u') });
+		await expect(toggle).not.toBeChecked();
+		await toggle.press('Space');
+		await expect(toggle).toBeChecked();
+		await expect(toggle).toBeEnabled();
+		await page.keyboard.press('Escape');
+		await modelButton.press('ArrowDown');
+		await expect(ashChoice).toBeVisible();
+		await expect(webChoice).toHaveAttribute('aria-checked', 'true');
+		await ashChoice.click();
+		const ashDraft = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat[data-untitled-session-id]');
+		await expect(ashDraft.locator('.ash-chat-input-model-action')).toHaveText(ashFixtureModel.model);
+	});
+
 	test('opens and continues ChatGPT and Ash conversations from the same list', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
 		const application = browser as ElectronApplication;
 		await installService(application);

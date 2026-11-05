@@ -1,25 +1,36 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { observableValue, type IObservable } from '../../../../../base/common/observable.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
+import type { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
+import type { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { ChatGPTNewDraftContext } from '../../../../common/contextkeys.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
+import type { AgentModelDefaults, IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../../../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
+import { LanguageModelsService } from '../../../../../workbench/contrib/chat/common/languageModels.js';
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
-import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import { ISessionPrimaryProviderServices, ISessionProviderScopeService, type SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, OPEN_ASH_CHAT_WITH_MODEL_COMMAND, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
 import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
-import { ChatGPTWebContribution, chatGPTScrollOptimization } from '../../electron-browser/chatGPTWeb.js';
+import { ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization } from '../../electron-browser/chatGPTWeb.js';
 import { IChatGPTService, coworkTaskStatus, type ChatGPTState } from '../../browser/chatGPTService.js';
 import { ISessionsSearchService } from '../../../search/browser/searchService.js';
 import type { SearchResult } from '../../../search/browser/searchModel.js';
@@ -164,6 +175,67 @@ suite('ChatGPT entry', () => {
 		}
 	});
 
+	test('a retained Chat draft applies Ash model visibility while default model reads are pending', async () => {
+		const native = { model: { provider: 'openai', model: 'gpt-6-luna' }, displayName: 'GPT-6 Luna', longContext: null };
+		const web = { provider: 'chatgpt', model: JSON.stringify(['web', 'instant']) };
+		const state = observableValue<ChatGPTState>('draft', {
+			...newChatState, localConversationId: 'draft', draft: '', attachments: [], voice: 'idle', voiceTranscript: [],
+			connected: true, networkAvailable: true, canQueue: false, pendingSync: false, busy: false, sending: false,
+			projects: [], projectHistory: new Map(), hasMore: false, title: 'ChatGPT', parentId: 'root', error: '', uncertain: false, stopped: false, managing: false,
+			model: 'web', modelPreset: 'instant',
+			models: [{ id: 'web', title: 'Web model', modelIds: ['web-instant'], defaultPreset: 'instant', presets: [{ id: 'instant', label: 'Instant', model: 'web-instant', isPro: false }] }],
+		});
+		using configuration = new InMemoryConfigurationService();
+		using preferences = new LanguageModelsConfigurationService(ChatModelPreferences, configuration, { onDidChangeValue: Event.None } as IStorageService);
+		using notifications = new Emitter<Parameters<Parameters<IServerEventApi['subscribe']>[0]>[0]>();
+		const defaults = { revision: 1, model: null, reasoningEffort: null, commitMessageModel: null, commitMessageEnabled: false, codeReviewModel: null };
+		let defaultRead: Promise<AgentModelDefaults> = Promise.resolve(defaults);
+		using models = new LanguageModelsService({
+			listModels: async () => ({ models: [native] }),
+			listProviders: async () => ({ providers: [] }),
+			readDefaults: () => defaultRead,
+		} as unknown as IAgentModelsService,
+			{ connectionGeneration: 1, onConnectionState: Event.None } as unknown as IAppServerApi,
+			{ subscribe: notifications.event }, preferences,
+			{ onDidChangeAccounts: Event.None, read: async () => ({ revision: 1n, accounts: [] }) } as unknown as IAccountService);
+		const calls: unknown[][] = [];
+		using services = new InstantiationService(new ServiceCollection(
+			[IChatGPTService, { state, newDraftRevision: 1 } as unknown as IChatGPTService],
+			[IClipboardService, {} as IClipboardService],
+			[IDialogService, {} as IDialogService],
+			[IOpenerService, {} as IOpenerService],
+			[ISessionPrimaryProviderServices, { models } as unknown as SessionProviderServices],
+			[ICommandService, { executeCommand: async (...args: unknown[]) => { calls.push(args); } } as ICommandService],
+		));
+		using draft = services.createInstance(chatGPTReplyEditor.model);
+		const presented = new DeferredPromise<void>();
+		let choices = draft.inputState.models.map(entry => entry.model);
+		using listener = draft.onDidChange(() => {
+			choices = draft.inputState.models.map(entry => entry.model);
+			if (choices.length === 2) { void presented.complete(); }
+		});
+		await presented.p;
+		assert.deepEqual(choices, [web, native.model]);
+
+		const pendingDefaults = new DeferredPromise<AgentModelDefaults>();
+		defaultRead = pendingDefaults.p;
+		try {
+			notifications.fire({ method: 'config/changed', params: { revision: 2, generation: 2 } });
+			await models.setModelVisible(native.model, false);
+			assert.deepEqual(choices, [web]);
+			assert.deepEqual(draft.inputState.selectedModel, web);
+			await assert.rejects(draft.selectModel(native.model), /no longer available/);
+			assert.deepEqual(calls, []);
+
+			await models.setModelVisible(native.model, true);
+			assert.deepEqual(choices, [web, native.model]);
+			await draft.selectModel(native.model);
+			assert.deepEqual(calls, [[OPEN_ASH_CHAT_WITH_MODEL_COMMAND, native.model]]);
+		} finally {
+			await pendingDefaults.complete({ ...defaults, revision: 2 });
+		}
+	});
+
 	test('choosing an Ash model from ChatGPT creates a separate Ash draft with the chosen model and plain text', async () => {
 		const values = new Map<string, string>();
 		const storage = { get: (key: string) => values.get(key), store: (key: string, value: string) => { values.set(key, value); } } as unknown as IStorageService;
@@ -173,6 +245,7 @@ suite('ChatGPT entry', () => {
 			conversations: [], messages: [], coworkTasks: [], attachments: [],
 		} as unknown as ChatGPTState);
 		const model = { provider: 'fixture-provider', model: 'fixture-model' };
+		let modelVisible = true;
 		const calls: unknown[][] = [];
 		using services = new InstantiationService(new ServiceCollection(
 			[IConfigurationService, { getValue: () => false } as unknown as IConfigurationService],
@@ -180,7 +253,7 @@ suite('ChatGPT entry', () => {
 			[ISessionProviderScopeService, {
 				getProviderScope: (provider: string) => {
 					assert.equal(provider, LOCAL_AGENT_HOST_PROVIDER_ID);
-					return { assertCurrent() { }, services: { models: { listModels: async () => [{ model, displayName: 'Fixture model', longContext: null }] } } };
+					return { assertCurrent() { }, services: { models: { listModelCatalog: async () => [{ model, displayName: 'Fixture model', longContext: null }], isModelVisible: () => modelVisible } } };
 				}
 			} as unknown as ISessionProviderScopeService],
 			[IChatGPTService, { state, newDraftRevision: 1 } as unknown as IChatGPTService],
@@ -207,6 +280,12 @@ suite('ChatGPT entry', () => {
 		await handoff;
 		assert.deepEqual(calls, []);
 		state.set(draft, undefined);
+
+		const hiddenHandoff = services.invokeFunction(command, model);
+		modelVisible = false;
+		await assert.rejects(Promise.resolve(hiddenHandoff), /no longer available/);
+		assert.deepEqual(calls, []);
+		modelVisible = true;
 
 		await services.invokeFunction(command, model);
 		assert.deepEqual(calls, [['create', LOCAL_AGENT_HOST_PROVIDER_ID, false], ['model', 'new', model], [SHOW_ASH_CHAT_COMMAND], ['open', 'new'], ['focus']]);

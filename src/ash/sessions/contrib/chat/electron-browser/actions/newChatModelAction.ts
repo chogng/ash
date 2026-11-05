@@ -22,11 +22,12 @@ export async function openAshChatWithModel(accessor: ServicesAccessor, selection
 	const layout = accessor.get(ILayoutService);
 	const scope = scopes.getProviderScope(LOCAL_AGENT_HOST_PROVIDER_ID);
 	scope.assertCurrent();
-	const models = await scope.services.models.listModels();
+	const languageModels = scope.services.models;
+	const models = await languageModels.listModelCatalog();
 	scope.assertCurrent();
 	const text = readDraftText();
 	if (text === undefined) return;
-	if (!models.some(entry => entry.model.provider === selection.provider && entry.model.model === selection.model)) {
+	if (!languageModels.isModelVisible(selection) || !models.some(entry => entry.model.provider === selection.provider && entry.model.model === selection.model)) {
 		throw new Error(localize('sessions.newChatModel.unavailable', 'The selected model is no longer available.'));
 	}
 
