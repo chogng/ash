@@ -80,7 +80,7 @@ Service layer sits alongside core. Provides shared service interfaces and implem
 
 ### `sessions/contrib/*/~` — Contributions (non-provider)
 
-**Path:** `src/ash/sessions/contrib/*/{browser,common}/**` (excluding `contrib/providers/`)
+**Path:** `src/ash/sessions/contrib/*/{browser,common,electron-browser}/**` (excluding `contrib/providers/`)
 
 Feature contributions like `chat`, `sessions`, `changes`, `terminal`, etc.
 

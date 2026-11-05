@@ -19,11 +19,11 @@ import { ISessionsService } from '../../../../services/sessions/browser/sessions
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, OPEN_ASH_CHAT_WITH_MODEL_COMMAND, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
 import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
-import { ChatGPTWebContribution, chatGPTScrollOptimization } from '../../../../electron-browser/chatGPTWeb.js';
+import { ChatGPTWebContribution, chatGPTScrollOptimization } from '../../../chat/electron-browser/chatGPTWeb.js';
 import { IChatGPTService, coworkTaskStatus, type ChatGPTState } from '../../browser/chatGPTService.js';
 import { ISessionsSearchService } from '../../../search/browser/searchService.js';
 import type { SearchResult } from '../../../search/browser/searchModel.js';
-import { ChatWorkspaceContribution } from '../../../../electron-browser/chatWorkspace.contribution.js';
+import { ChatWorkspaceContribution } from '../../../chat/electron-browser/chatWorkspace.contribution.js';
 import { localize, setNlsMessages } from '../../../../../nls.js';
 import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { DefaultSettings } from '../../../../../workbench/services/preferences/common/settingsModels.js';

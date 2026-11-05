@@ -7,11 +7,17 @@ is canonical for the renderer implementation and extension points.
 
 UI design and style boundaries are defined in [Sessions style](STYLE.md).
 
-The desktop Chat workspace composes the Ash and ChatGPT entries. The
-`contrib/chatgptweb` adapter owns the ChatGPT source model and operations,
-including conversation and project identities, history, messages, drafts,
-model presets and streamed replies. It reports when a conversation identity
-is retired or replaced so the host can maintain its own preferences.
+[`sessions.desktop.main.ts`](sessions.desktop.main.ts) loads the
+[desktop Chat contribution](contrib/chat/electron-browser/chatWorkspace.contribution.ts),
+which composes the Ash and ChatGPT entries. The workspace assembly, cross-source
+model routing and ChatGPT UI integration live in `contrib/chat/electron-browser`.
+The window bootstrap lives in `sessions/electron-browser` in the
+[Sessions core](LAYERS.md#sessions--sessions-core).
+
+The `contrib/chatgptweb` adapter handles ChatGPT authentication and transport
+integration. It owns conversation and project identities, history, messages,
+drafts, model presets and streamed replies. It reports when a conversation
+identity is retired or replaced so the host can maintain its own preferences.
 
 The desktop host projects those records into Ash's Chat sidebar, Projects,
 search and `ReplyChatEditor`. Ash owns row grouping and rendering, default

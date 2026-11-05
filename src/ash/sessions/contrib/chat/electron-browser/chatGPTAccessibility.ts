@@ -1,11 +1,11 @@
-import { getActiveElement } from '../../base/browser/dom.js';
-import { localize } from '../../nls.js';
-import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../platform/accessibility/browser/accessibleView.js';
-import { AccessibleViewRegistry } from '../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { ContextKeyExpr } from '../../platform/contextkey/common/contextkey.js';
-import type { ServiceIdentifier } from '../../platform/instantiation/common/instantiation.js';
-import { ILayoutService } from '../../platform/layout/browser/layoutService.js';
-import { chatNavigationFocusContext } from '../contrib/sessions/browser/views/chatNavigationView.js';
+import { getActiveElement } from '../../../../base/browser/dom.js';
+import { localize } from '../../../../nls.js';
+import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import type { ServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import { chatNavigationFocusContext } from '../../sessions/browser/views/chatNavigationView.js';
 
 export function registerChatGPTAccessibility(focusContext: string, contentService: ServiceIdentifier<{ getAccessibleContent(): string; }>): void {
 	for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {

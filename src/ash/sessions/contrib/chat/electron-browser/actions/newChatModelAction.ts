@@ -1,21 +1,21 @@
-import { isNonEmptyString, isRecord } from '../../../base/common/types.js';
-import { localize } from '../../../nls.js';
-import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
-import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
-import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
-import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
-import { IStorageService } from '../../../platform/storage/common/storage.js';
-import * as chatInputStatePersistence from '../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
-import { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../common/agentHostSessionsProvider.js';
-import { SessionsWorkspaceModeContext } from '../../common/contextkeys.js';
-import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND, SHOW_ASH_CHAT_COMMAND } from '../../contrib/chat/common/constants.js';
-import { writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
-import { IChatGPTService } from '../../contrib/chatgptweb/browser/chatGPTService.js';
+import { isNonEmptyString, isRecord } from '../../../../../base/common/types.js';
+import { localize } from '../../../../../nls.js';
+import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
+import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
+import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessionsProvider.js';
+import { SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
+import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND, SHOW_ASH_CHAT_COMMAND } from '../../common/constants.js';
+import { writeNewChatDraftState } from '../../common/newChatDraftState.js';
+import { IChatGPTService } from '../../../chatgptweb/browser/chatGPTService.js';
 import { chatGPTSelectedContext } from '../chatGPTWeb.js';
 import { canUseCodeModels } from '../chatGPTWidgetModel.js';
-import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
-import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
+import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
+import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 
 CommandsRegistry.register(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, async (accessor, model: unknown): Promise<void> => {
 	if (!isRecord(model) || !isNonEmptyString(model.provider) || !isNonEmptyString(model.model)) {
