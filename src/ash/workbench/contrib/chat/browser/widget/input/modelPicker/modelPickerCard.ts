@@ -93,7 +93,7 @@ export class ModelCard extends DomWidget {
 		this.title!.setLabel(entry.displayName);
 		this.identity!.textContent = `${entry.model.provider}/${entry.model.model}`;
 		// Preference updates retain the radio DOM, including the option being used by the keyboard.
-		const key = JSON.stringify([entry.model, entry.supportedReasoningEfforts, entry.defaultReasoningEffort,
+		const key = JSON.stringify([entry.model, entry.supportedReasoningEfforts,
 		entry.accelerationOptions, entry.longContext === null, entry.defaultContextWindow, entry.maximumContextWindow, entry.longContext === null ? entry.contextWindow : undefined]);
 		if (key !== this.capabilityKey) {
 			this.capabilityKey = key;
@@ -115,7 +115,7 @@ export class ModelCard extends DomWidget {
 			for (const option of modelPickerEffortOptions(entry, this.options!.getSelectedReasoningEffort())) {
 				this.addChoice(group, 'effort', option.label, option.description,
 					() => modelPickerEffortOptions(this.entry!, this.options!.getSelectedReasoningEffort()).some(current => current.effort === option.effort && current.checked),
-					() => this.options!.onReasoningEffortChange(option.value));
+					() => this.options!.onReasoningEffortChange(option.effort));
 			}
 		}
 		const setLongContext = this.options!.onLongContextChange;

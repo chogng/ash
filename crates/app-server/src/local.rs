@@ -2857,15 +2857,8 @@ impl ModelService for ConfigBackedModelService {
         if config.model.is_none() {
             return Ok(None);
         }
-        let default_effort = self
-            .context_catalog(&config)?
-            .info(&config)?
-            .default_reasoning_effort;
-        let effort = config.model_reasoning_effort.or(default_effort);
-        Ok(effort.map(|effort| ash_protocol::ReasoningConfig {
-            effort,
-            summary: false,
-        }))
+        let info = self.context_catalog(&config)?.info(&config)?;
+        Ok(model_reasoning_config(&info, config.model_reasoning_effort))
     }
 
     fn input_token_measurement_capability(
@@ -3744,16 +3737,10 @@ impl FrozenModelSource {
                 Arc::new(UnavailableModel::new(error.to_string())) as Arc<dyn ModelInvoker>
             }
         };
-        let reasoning = config
-            .model_reasoning_effort
-            .or_else(|| match &info {
-                Ok(info) => info.default_reasoning_effort,
-                Err(_) => None,
-            })
-            .map(|effort| ash_protocol::ReasoningConfig {
-                effort,
-                summary: false,
-            });
+        let reasoning = info
+            .as_ref()
+            .ok()
+            .and_then(|info| model_reasoning_config(info, config.model_reasoning_effort));
         Ok(Arc::new(FrozenModelService {
             source: self.clone(),
             provider: ProviderModelService::new(provider),
@@ -3762,6 +3749,24 @@ impl FrozenModelSource {
             reasoning,
         }))
     }
+}
+
+fn model_reasoning_config(
+    info: &ash_protocol::ModelInfo,
+    preferred: Option<ash_protocol::ReasoningEffort>,
+) -> Option<ash_protocol::ReasoningConfig> {
+    // The profile preference survives model switches. Apply it only when this model offers it.
+    preferred
+        .filter(|effort| {
+            info.supported_reasoning_efforts
+                .iter()
+                .any(|option| option.effort == *effort)
+        })
+        .or(info.default_reasoning_effort)
+        .map(|effort| ash_protocol::ReasoningConfig {
+            effort,
+            summary: false,
+        })
 }
 
 /// One model/provider snapshot shared by auxiliary context preparation and execution.

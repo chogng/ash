@@ -11,11 +11,12 @@ export function renderModelConfigurationButton(
 	accessibilityHint?: string,
 ): void {
 	const summary = model ? getModelConfigSummary(model, selectedEffort) : '';
-	button.hidden = hidden || summary.length === 0;
+	const configurable = model && (model.supportedReasoningEfforts?.length || model.longContext !== null || model.accelerationOptions?.length);
+	const optionsLabel = localize('chat.modelPicker.configuration', 'Model options');
+	button.hidden = hidden || !configurable;
 	button.classList.toggle('hidden', button.hidden);
-	button.querySelector('.ash-chat-input-picker-label')!.textContent = summary;
-	const label = (model?.supportedReasoningEfforts?.length || model?.selectedAcceleration)
-		? localize('chat.modelPicker.configurationAriaLabel', 'Model options: {0}', summary) : summary;
+	button.querySelector('.ash-chat-input-picker-label')!.textContent = summary || optionsLabel;
+	const label = summary ? localize('chat.modelPicker.configurationAriaLabel', 'Model options: {0}', summary) : optionsLabel;
 	button.setAttribute('aria-label', label);
 	const effort = model ? modelPickerEffortOptions(model, selectedEffort).find(option => option.checked) : undefined;
 	const acceleration = model ? modelPickerAccelerationOptions(model).find(option => option.checked) : undefined;

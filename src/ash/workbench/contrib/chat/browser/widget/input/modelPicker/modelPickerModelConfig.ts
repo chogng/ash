@@ -4,15 +4,13 @@ import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../
 /** The toolbar shows effort and an explicitly selected acceleration mode. */
 export function getModelConfigSummary(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): string {
 	const values: string[] = [];
-	if (entry.supportedReasoningEfforts?.length) {
-		values.push(modelPickerEffortLabel(selectedEffort ?? entry.defaultReasoningEffort));
-	}
+	const effort = modelPickerEffortOptions(entry, selectedEffort).find(option => option.checked);
+	if (effort) { values.push(effort.label); }
 	if (entry.selectedAcceleration) {
 		const acceleration = modelPickerAccelerationOptions(entry).find(option => option.value === entry.selectedAcceleration);
 		if (acceleration) { values.push(acceleration.label); }
 	}
-	if (values.length) { return values.join(' · '); }
-	return entry.longContext !== null || entry.accelerationOptions?.length ? localize('chat.modelPicker.configuration', 'Model options') : '';
+	return values.join(' · ');
 }
 
 /** The catalog already reflects connection availability; preserve each provider's exact option ID. */
@@ -60,18 +58,12 @@ export function getModelConfigValueLabel(tokens: number): string {
 	return String(tokens);
 }
 
-/** Both configuration surfaces write undefined when the configured default is chosen. */
-export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): readonly { effort: ModelReasoningEffort | undefined; value: ModelReasoningEffort | undefined; label: string; description?: string; checked: boolean; }[] {
-	const defaultEffort = entry.defaultReasoningEffort;
-	const efforts = defaultEffort === undefined || !entry.supportedReasoningEfforts?.some(option => option.effort === defaultEffort)
-		? [{ effort: undefined, description: undefined }, ...(entry.supportedReasoningEfforts ?? [])]
-		: entry.supportedReasoningEfforts ?? [];
-	return efforts.map(({ effort, description }) => ({
+export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): readonly { effort: ModelReasoningEffort; label: string; description?: string; checked: boolean; }[] {
+	return (entry.supportedReasoningEfforts ?? []).map(({ effort, description }) => ({
 		effort,
-		value: effort === defaultEffort ? undefined : effort,
 		label: modelPickerEffortLabel(effort),
 		description: modelPickerEffortDescription(description),
-		checked: effort === (selectedEffort ?? (efforts.some(option => option.effort === defaultEffort) ? defaultEffort : undefined)),
+		checked: effort === selectedEffort,
 	}));
 }
 
@@ -89,9 +81,8 @@ export function modelPickerEffortDescription(description: string | null | undefi
 	}
 }
 
-export function modelPickerEffortLabel(effort: ModelReasoningEffort | undefined): string {
+export function modelPickerEffortLabel(effort: ModelReasoningEffort): string {
 	switch (effort) {
-		case undefined: return localize('chat.modelPicker.defaultEffort', 'Default');
 		case 'none': return localize('chat.modelPicker.effortNone', 'None');
 		case 'minimal': return localize('chat.modelPicker.effortMinimal', 'Minimal');
 		case 'low': return localize('chat.modelPicker.effortLow', 'Low');

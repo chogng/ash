@@ -23,7 +23,7 @@ export interface ILanguageModelsService {
 	getDefaultNewChatModel(models: readonly ModelCatalogEntry[]): ModelRef | undefined;
 	readModelDefaults(): Promise<AgentModelDefaults>;
 	rememberSelectedModel(model: ModelRef | undefined): Promise<void>;
-	saveReasoningEffort(model: ModelRef, effort: ModelReasoningEffort | undefined): Promise<void>;
+	saveReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
 	listModelCatalog(): Promise<readonly ModelCatalogEntry[]>;
 	listCustomModelProviders(): Promise<readonly CustomModelProvider[]>;
 	saveCustomModelProvider(provider: CustomModelProvider): Promise<void>;
@@ -147,22 +147,21 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 			}
 			const defaults = await this.modelApi.readDefaults();
 			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
-			const same = defaults.model && modelRefIdentity(model) === modelRefIdentity(defaults.model);
-			await this.modelApi.configureDefaults({ model, ...(!same ? { reasoningEffort: null } : {}) }, defaults.revision);
+			await this.modelApi.configureDefaults({ model }, defaults.revision);
 			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			await this.readModelDefaults();
 			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			this.preferences.rememberSelectedModel(null);
 		});
 	}
-	public saveReasoningEffort(model: ModelRef, effort: ModelReasoningEffort | undefined): Promise<void> {
+	public saveReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void> {
 		const epoch = this.connectionEpoch;
 		const generation = this.appServer.connectionGeneration;
 		return this.selectionUpdates.schedule(async () => {
 			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			const defaults = await this.modelApi.readDefaults();
 			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
-			await this.modelApi.configureDefaults({ model, reasoningEffort: effort ?? null }, defaults.revision);
+			await this.modelApi.configureDefaults({ reasoningEffort: effort ?? null }, defaults.revision);
 			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			await this.readModelDefaults();
 			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();

@@ -3570,7 +3570,7 @@ fn config_backed_model_service_resolves_model_reasoning_effort() {
             summary: false,
         })
     );
-    service
+    let cleared = service
         .config
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("clear-selected-effort").unwrap(),
@@ -3589,6 +3589,39 @@ fn config_backed_model_service_resolves_model_reasoning_effort() {
             effort: ReasoningEffort::Medium,
             summary: false,
         })
+    );
+
+    let luna = ModelRef::new(provider.clone(), ModelId::new("gpt-6-luna").unwrap());
+    let sol = ModelRef::new(provider, ModelId::new("gpt-6.1-sol").unwrap());
+    service
+        .config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("select-luna-with-no-reasoning").unwrap(),
+            expected_revision: cleared.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                model: Patch::Value(luna),
+                model_reasoning_effort: Patch::Value(ReasoningEffort::None),
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+    let frozen = service
+        .snapshot(ModelSelection::Session(&sol))
+        .unwrap()
+        .unwrap();
+    for effective in [
+        service.reasoning_config(ModelSelection::Session(&sol)),
+        frozen.reasoning_config(ModelSelection::ConfiguredDefault),
+    ] {
+        assert_eq!(effective.unwrap().unwrap().effort, ReasoningEffort::Medium);
+    }
+    assert_eq!(
+        service
+            .reasoning_config(ModelSelection::ConfiguredDefault)
+            .unwrap()
+            .unwrap()
+            .effort,
+        ReasoningEffort::None
     );
 }
 

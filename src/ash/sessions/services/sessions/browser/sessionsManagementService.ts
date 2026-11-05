@@ -368,10 +368,20 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined): void {
+	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined, defaults: NonNullable<IUntitledChatSession['modelDefaults']>): void {
 		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
-		if (!current || current.modelSelectionKind === 'manual' || sameModel(current.model, model)) return;
-		this._untitledSessions = this._untitledSessions.map(session => session.untitledSessionId === untitledSessionId ? { ...session, model } : session);
+		if (!current || current.modelDefaults?.workspace === defaults.workspace) return;
+		this._untitledSessions = this._untitledSessions.map(session => session === current
+			? { ...session, model: session.modelSelectionKind === 'manual' ? session.model : model, modelDefaults: defaults }
+			: session);
+		this._onDidChange.fire();
+	}
+
+	setUntitledSessionReasoningEffort(untitledSessionId: string, effort: NonNullable<IUntitledChatSession['reasoningEffortSelection']> | null): void {
+		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
+		if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
+		if (current.reasoningEffortSelection === effort) return;
+		this._untitledSessions = this._untitledSessions.map(session => session === current ? { ...session, reasoningEffortSelection: effort } : session);
 		this._onDidChange.fire();
 	}
 
@@ -398,7 +408,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				...session, providerId, workspace: selection,
 				environment: options?.environment ?? (changedHost || options?.clearEnvironment ? undefined : current.environment),
 				devContainer: options?.devContainer === true, branchName: options?.branchName,
-				...(changedHost ? { model: undefined, agent: undefined } : {}),
+				...(changedHost ? { model: undefined, modelSelectionKind: undefined, modelDefaults: undefined, agent: undefined } : {}),
 			} : session);
 		this._onDidChange.fire();
 	}

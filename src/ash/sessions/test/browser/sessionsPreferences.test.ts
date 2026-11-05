@@ -60,6 +60,7 @@ import { TestWorkspaceService } from '../../../workbench/services/configuration/
 import { IAppServerRemoteAgentService } from '../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
+import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { IFileService } from '../../../platform/files/common/files.js';
 import { ILanguagePackService } from '../../../platform/languagePacks/common/languagePacks.js';
@@ -262,6 +263,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IAgentSessionService, { listAgents: async () => ({ agents: [], diagnostics: [] }), readRoleCatalog: async () => ({ agents: [], diagnostics: [] }) } as unknown as IAgentSessionService);
 	services.registerInstance(ITeamsManagementService, { teams: constObservable([]), refresh: async () => { } } as unknown as ITeamsManagementService);
 	services.registerInstance(ISessionsService, { onDidChange: Event.None, openThread: async () => { throw new Error('Unexpected team conversation navigation'); } } as unknown as ISessionsService);
+	services.registerInstance(ISessionsManagementService, { onDidChange: Event.None } as unknown as ISessionsManagementService);
 	const editorOpens: { resource: string; target: unknown; }[] = [];
 	services.registerInstance(IEditorService, {
 		openEditor: async (input, _options, target) => {

@@ -268,11 +268,23 @@ function modelDiscoveryMessage(code: ProviderModelsListFailureCodeDto): string {
 	}
 }
 
+function modelDisplayName(entry: ModelListResult['models'][number]): string {
+	const provider = entry.source?.provider_id ?? entry.model.provider;
+	if (provider !== 'openai' && provider !== 'chatgpt-subscription' && provider !== 'chatgpt-plan') {
+		return entry.display_name;
+	}
+	// A catalog refresh can swap seed and discovered metadata for the same GPT model.
+	const match = /^gpt-(\d+(?:\.\d+)*)(?:-([a-z]+))?$/i.exec(entry.model.model);
+	if (!match) { return entry.display_name; }
+	const [, version, variant] = match;
+	return variant ? `GPT-${version} ${variant.charAt(0).toUpperCase()}${variant.slice(1).toLowerCase()}` : `GPT-${version}`;
+}
+
 function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatalogEntry {
 	const purposes = { advisor: ModelPurpose.Advisor, review: ModelPurpose.Review, commit: ModelPurpose.Commit, threadTitle: ModelPurpose.ThreadTitle, threadRecap: ModelPurpose.ThreadRecap };
 	return Object.freeze({
 		model: Object.freeze({ ...entry.model }),
-		displayName: entry.display_name,
+		displayName: modelDisplayName(entry),
 		recommendedFor: Object.freeze((entry.recommended_for ?? []).map(purpose => purposes[purpose])),
 		capabilities: Object.freeze({ toolCalling: entry.capabilities.tools, agentMode: entry.capabilities.agent_mode ?? 'unknown' }),
 		source: entry.source ? Object.freeze({ providerId: entry.source.provider_id, connectionId: entry.source.connection_id, metadata: entry.source.metadata }) : undefined,

@@ -77,7 +77,7 @@ export class CoworkWidgetModel extends Disposable {
 	private approvalGeneration = 0;
 	private readonly selectedApprovalModes = observableValue<ReadonlyMap<string, ApprovalMode>>(this, new Map());
 	// A New Chat's key is replaced with its Thread ID when the first message materializes it.
-	private readonly selectedReasoningEfforts = new Map<string, { model: string; effort: ModelReasoningEffort | undefined; }>();
+	private readonly selectedReasoningEfforts = new Map<string, { effort: ModelReasoningEffort | undefined; }>();
 	private _skillSelectors: readonly SkillSelectorDefinition[] = [];
 	private skillCatalogGeneration = 0;
 	private readonly skillSelectorsLoading = observableValue(this, false);
@@ -236,11 +236,8 @@ export class CoworkWidgetModel extends Disposable {
 		if (this.isAutomaticModel || !model) return undefined;
 		const identity = modelRefIdentity(model);
 		const selection = this.selectedReasoningEfforts.get(key);
-		const lastTurn = this._thread?.turns.at(-1);
 		// A local "Default" choice must override the last durable Turn's explicit effort.
-		const effort = selection
-			? selection.model === identity ? selection.effort : undefined
-			: lastTurn?.model && modelRefIdentity(lastTurn.model) === identity ? lastTurn.reasoningEffort ?? undefined : undefined;
+		const effort = selection ? selection.effort : this._thread?.turns.at(-1)?.reasoningEffort;
 		const entry = this._models.find(candidate => modelRefIdentity(candidate.model) === identity);
 		return effort && entry?.supportedReasoningEfforts?.some(option => option.effort === effort) ? effort : undefined;
 	}
@@ -378,7 +375,7 @@ export class CoworkWidgetModel extends Disposable {
 			throw new Error('The selected model does not support this thinking effort');
 		}
 		const key = this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
-		this.selectedReasoningEfforts.set(key, { model: modelRefIdentity(model), effort });
+		this.selectedReasoningEfforts.set(key, { effort });
 		this._onDidChange.fire();
 	}
 

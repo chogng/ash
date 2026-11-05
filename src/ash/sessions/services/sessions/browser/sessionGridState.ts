@@ -3,6 +3,7 @@ import { Orientation } from '../../../../base/browser/ui/sash/sash.js';
 import { LayoutPriority } from '../../../../base/browser/ui/splitview/splitview.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../platform/storage/common/storage.js';
+import { isCodeConversationEffort } from '../../../common/codeConversationDefaults.js';
 import type { IUntitledChatSession, SessionEnvironmentSelection, SessionWorkspaceSelection } from '../common/session.js';
 import { visibilityKey, type SessionsViewReference } from './visibleSessions.js';
 
@@ -115,7 +116,11 @@ export function isUntitledSession(value: unknown): value is IUntitledChatSession
 		&& (value.forkSource === undefined || isRecord(value.forkSource) && nonEmptyString(value.forkSource.sessionId) && nonEmptyString(value.forkSource.threadId))
 		&& (value.providerId === undefined || nonEmptyString(value.providerId))
 		&& (value.modelSelectionKind === undefined || value.modelSelectionKind === 'manual')
+		&& (value.reasoningEffortSelection === undefined || value.reasoningEffortSelection === null || isCodeConversationEffort(value.reasoningEffortSelection))
 		&& (value.automaticTitle === undefined || value.automaticTitle === true)
+		&& (value.modelDefaults === undefined || isRecord(value.modelDefaults)
+			&& (value.modelDefaults.workspace === null || nonEmptyString(value.modelDefaults.workspace))
+			&& (value.modelDefaults.effort === undefined || isCodeConversationEffort(value.modelDefaults.effort)))
 		&& (value.devContainer === undefined || typeof value.devContainer === 'boolean')
 		&& (value.branchName === undefined || typeof value.branchName === 'string' && value.branchName.trim().length > 0 && value.branchName.length <= 1024)
 		&& (value.agent === undefined || isRecord(value.agent) && nonEmptyString(value.agent.name) && typeof value.agent.description === 'string' && nonEmptyString(value.agent.sourceId))

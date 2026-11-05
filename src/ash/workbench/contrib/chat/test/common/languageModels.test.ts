@@ -87,6 +87,25 @@ function modelEntry(model = 'example', provider = 'openai'): ModelListResult['mo
 	};
 }
 
+test('model picker and management get the same GPT name after a catalog refresh', async () => {
+	using resources = new DisposableStore();
+	const { source, models } = catalogFixture(resources);
+	const gpt = modelEntry('gpt-6.1-sol', 'chatgpt-subscription');
+	gpt.display_name = 'GPT-6.1-Sol';
+	const custom = modelEntry('gpt-6.1-sol', 'custom-gateway');
+	custom.display_name = 'Team coding model';
+	source.catalog = [gpt, custom];
+
+	const names = (catalog: Awaited<ReturnType<LanguageModelsService['listModels']>>) => catalog.map(entry => entry.displayName);
+	const expected = ['GPT-6.1 Sol', 'Team coding model'];
+	assert.deepEqual(names(await models.listModels()), expected);
+	gpt.display_name = 'GPT-6.1 Sol Fast';
+	gpt.selected_acceleration = 'priority';
+	assert.deepEqual(names(await models.refreshModels()), expected);
+	assert.deepEqual(names(await models.listModelCatalog()), expected);
+	assert.equal((await models.listModels())[0].selectedAcceleration, 'priority');
+});
+
 test('Usable capacity changes reach consumers independently of compaction budgets and old snapshots', async () => {
 	using resources = new DisposableStore();
 	const { source, models } = catalogFixture(resources);
@@ -776,18 +795,21 @@ test('Model and effort saves serialize against fresh backend revisions while Aut
 		{ onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined, rememberSelectedModel: (value: import('../../../../../platform/models/common/agentModels.js').ModelRef | undefined | null) => assert.ok(value === null || value === undefined, 'Backend model references must not duplicate UI profile state') } as unknown as ILanguageModelsConfigurationService,
 		{ onDidChangeAccounts: Event.None } as IAccountService));
 	const model = { provider: 'example', model: 'reasoning' };
+	const nextModel = { provider: 'example', model: 'another' };
 	const select = models.rememberSelectedModel(model);
-	const effort = models.saveReasoningEffort(model, 'high');
+	const effort = models.saveReasoningEffort('high');
+	const switchModel = models.rememberSelectedModel(nextModel);
 	const auto = models.rememberSelectedModel(undefined);
 	await Promise.resolve(); await Promise.resolve();
 	assert.equal(writes.length, 1);
 	await first.complete();
-	await Promise.all([select, effort, auto]);
+	await Promise.all([select, effort, switchModel, auto]);
 	assert.deepEqual(writes, [
-		{ revision: 1, update: { model, reasoningEffort: null } },
-		{ revision: 2, update: { model, reasoningEffort: 'high' } },
+		{ revision: 1, update: { model } },
+		{ revision: 2, update: { reasoningEffort: 'high' } },
+		{ revision: 3, update: { model: nextModel } },
 	]);
-	assert.deepEqual(await models.readModelDefaults(), { codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 3, model, reasoningEffort: 'high' });
+	assert.deepEqual(await models.readModelDefaults(), { codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 4, model: nextModel, reasoningEffort: 'high' });
 });
 
 test('A failed default save leaves the backend snapshot intact and permits a later save', async () => {

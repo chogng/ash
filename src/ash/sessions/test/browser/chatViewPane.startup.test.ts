@@ -194,6 +194,7 @@ class PendingSessionService implements ISessionsManagementService {
 	discardUntitledSession(_untitledSessionId: string): void { }
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void { }
 	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void { }
+	setUntitledSessionReasoningEffort() { }
 	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void { }
 	setUntitledSessionWorkspace(): void { throw new Error('Unexpected workspace edit'); }
 	cancelUntitledSessionPreparation(): void { throw new Error('Unexpected preparation cancellation'); }

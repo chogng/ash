@@ -2,6 +2,7 @@ import { ChatAIDisabledSettingId } from '../../../platform/chat/common/chatSetti
 import { ChatRequestQueueKind } from '../../../workbench/services/chat/common/chatService.js';
 import { observableValue } from '../../../base/common/observable.js';
 import { TestConfigurationService } from '../../../workbench/services/configuration/test/common/testServices.js';
+import type { IStorageService } from '../../../platform/storage/common/storage.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'mocha';
@@ -80,13 +81,33 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	const session: ISession = { sessionId: 'session', title: 'Session', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'A', origin: { type: 'root' }, status: 'active' }, { threadId: 'B', origin: { type: 'fork', parentThreadId: 'A', parentSequence: 1 }, status: 'active' }] };
 	const sessions = {} as ISessionsManagementService;
 	const selection = { kind: 'session' as const, active: { session, threadId: 'A' } };
-	const model = resources.add(kind === 'Code' ? new ChatWidgetModel(routedChat, selection, sessions, prompts, models, execution, configuration) : new CoworkWidgetModel(routedChat, selection, sessions, prompts, models, preferences, execution, configuration));
-	return { resources, model, configuration, chat, routedChat, models, prompts, executionSettings: execution, threadApi, turnApi, modelApi, execution, starts, queues, steers, consults, compacts, updates, transcripts, offers, session, reconnect: () => { generation++; connection.fire('ready'); } };
+	const storage = { get: () => undefined, store: () => { } } as unknown as IStorageService;
+	const model = resources.add(kind === 'Code' ? new ChatWidgetModel(routedChat, selection, sessions, prompts, models, execution, configuration, storage) : new CoworkWidgetModel(routedChat, selection, sessions, prompts, models, preferences, execution, configuration));
+	return { resources, model, configuration, storage, chat, routedChat, models, prompts, executionSettings: execution, threadApi, turnApi, modelApi, execution, starts, queues, steers, consults, compacts, updates, transcripts, offers, session, reconnect: () => { generation++; connection.fire('ready'); } };
 }
 
 async function turnTask(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
 async function waitFor(condition: () => boolean): Promise<void> { for (let i = 0; i < 200 && !condition(); i++) await turnTask(); assert.ok(condition(), 'expected deferred operation reached'); }
 function approval(requestId: string): AgentInteractionOffer { return { connectionGeneration: 1, sessionId: 'session', threadId: 'A', turnId: 'turn-A', interaction: { requestId, request: { type: 'approval', request: { reason: requestId, capabilities: [{ kind: 'fileWrite', scope: '/owned/file' }] } } } }; }
+
+test('Code reconnect restores recap presence for open surfaces', async () => {
+	const f = fixture('Code');
+	using resources = f.resources;
+	const model = f.model;
+	assert.ok(model instanceof ChatWidgetModel);
+	const reports: { sessionId: string; threadId: string; surface: string; focused: boolean | null; }[] = [];
+	f.threadApi.setRecapPresence = async ({ sessionId, threadId, surface, focused }) => {
+		reports.push({ sessionId, threadId, surface, focused });
+	};
+	await model.initialize();
+	await model.reportRecapPresence('session', 'A', 'main', true);
+	await model.reportRecapPresence('session', 'A', 'auxiliary', false);
+	await model.reportRecapPresence('session', 'A', 'auxiliary', null);
+	reports.length = 0;
+	f.reconnect();
+	await waitFor(() => reports.length > 0);
+	assert.deepEqual(reports, [{ sessionId: 'session', threadId: 'A', surface: 'main', focused: true }]);
+});
 
 for (const kind of ['Code', 'Cowork'] as const) {
 	test(`${kind} renders backend queue revisions and a redo checkpoint independently of committed rows`, async () => {
@@ -678,13 +699,11 @@ for (const kind of ['Code', 'Cowork'] as const) {
 	});
 }
 
-test('voice source preparation waits for a pending model choice before materializing its untitled composer', async () => {
+test('voice source preparation materializes the model selected immediately beforehand', async () => {
 	const f = fixture('Code'); using resources = f.resources; await f.model.initialize();
 	const selected = { provider: 'provider', model: 'chosen' };
-	const saved = new DeferredPromise<void>();
 	f.models.listModels = async () => [{ model: selected, displayName: 'Chosen model', longContext: false }];
-	f.models.rememberSelectedModel = () => saved.p;
-	let draft = { untitledSessionId: 'voice-draft', title: 'New Chat', model: undefined as typeof selected | undefined, modelSelectionKind: 'manual' as const, agent: undefined, workspace: { type: 'current' as const } };
+	let draft = { untitledSessionId: 'voice-draft', title: 'New Chat', model: undefined as typeof selected | undefined, modelSelectionKind: 'manual' as const, modelDefaults: { workspace: null }, agent: undefined, workspace: { type: 'current' as const } };
 	const materializedModels: (typeof selected | undefined)[] = [];
 	const sessionService = {
 		get untitledSessions() { return [draft]; }, get activeUntitledSession() { return draft; },
@@ -692,13 +711,12 @@ test('voice source preparation waits for a pending model choice before materiali
 		materializeUntitledSession: async () => { materializedModels.push(draft.model); return { session: { ...f.session, model: draft.model }, threadId: 'A' }; },
 		promoteUntitledSession: () => { },
 	} as unknown as ISessionsManagementService;
-	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessionService, f.prompts, f.models, f.executionSettings, resources.add(new TestConfigurationService()));
+	using model = new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessionService, f.prompts, f.models, f.executionSettings, resources.add(new TestConfigurationService()), f.storage);
 	await model.initialize();
 	const selecting = model.selectModel(selected);
 	const preparing = model.prepareConversation();
-	await turnTask(); assert.deepEqual(materializedModels, []);
-	await saved.complete(); await selecting;
-	assert.deepEqual(await preparing, { sessionId: 'session', threadId: 'A' });
+	const [, prepared] = await Promise.all([selecting, preparing]);
+	assert.deepEqual(prepared, { sessionId: 'session', threadId: 'A' });
 	assert.deepEqual(materializedModels, [selected]); assert.deepEqual(model.selectedModel, selected);
 });
 
@@ -858,7 +876,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		const sessions = { untitledSessions: [draft], materializedSessions: materialized } as unknown as ISessionsManagementService;
 		using configuration = new TestConfigurationService();
 		using model = kind === 'Code'
-			? new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, configuration)
+			? new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, configuration, f.storage)
 			: new CoworkWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, { onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined } as unknown as ILanguageModelsConfigurationService, f.execution, configuration);
 		await model.initialize();
 		model.selectMode('plan');

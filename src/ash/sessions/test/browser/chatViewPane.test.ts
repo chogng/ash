@@ -2,6 +2,7 @@ import { ISessionContext } from '../../services/sessions/browser/sessionContext.
 import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
 import { ISessionFolderAuthorizationService } from '../../common/sessionWorkspace.js';
+import { codeConversationDefaultsSetting, codeConversationWorkspaceKey } from '../../common/codeConversationDefaults.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ILocalGitService } from '../../../platform/git/common/localGitService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
@@ -639,7 +640,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 	using contextViewService = new BrowserContextViewService(dom.window.document.body);
 	const subscriptionModel = {
 		model: { provider: 'openai', model: 'gpt-6.1-sol' },
-		displayName: 'GPT-6.1 Sol',
+		displayName: 'GPT-6.1-Sol',
 		contextWindow: 128000,
 		supportedReasoningEfforts: [{ effort: 'low' }, { effort: 'medium' }, { effort: 'high' }] as const,
 		defaultReasoningEffort: 'medium' as const,
@@ -961,9 +962,9 @@ test('Chat title and history switching retain conversations and drafts', async (
 			],
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
-		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, subscriptionModel.displayName);
-		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-effort')?.textContent, 'Medium');
-		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-label'), `${subscriptionModel.displayName} Medium`);
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, 'GPT-6.1 Sol');
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-effort')?.hidden, true);
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-label'), 'GPT-6.1 Sol');
 		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.hidden, true);
 		assert.equal(inputToolbar?.querySelector('.ash-chat-input-model-access-badge'), null);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='workbench.action.chat.toggleSpeechToText'] button")?.disabled, true);
@@ -993,29 +994,42 @@ test('Chat title and history switching retain conversations and drafts', async (
 	assert.equal(dom.window.document.activeElement, modelPicker?.querySelector('[role=menuitemradio]'));
 	modelSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.equal(firstChatPane.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-expanded'), 'false');
-	modelButton!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-	const reopenedPicker = dom.window.document.querySelector<HTMLElement>('.ash-chat-model-picker')!;
+	const reopenPicker = (): HTMLElement => {
+		modelButton!.focus();
+		modelButton!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+		return dom.window.document.querySelector<HTMLElement>('.ash-chat-model-picker')!;
+	};
+	let reopenedPicker = reopenPicker();
 	assert.deepEqual(
 		[...reopenedPicker.querySelectorAll('.ash-chat-model-picker-section button')].map(button => button.getAttribute('aria-label')),
 		['Effort', 'More Models'],
 	);
-	const effort = reopenedPicker.querySelector<HTMLButtonElement>('[aria-label="Effort"]')!;
-	assert.ok(effort.querySelector('.ash-icon-brain'));
+	const effortButton = () => reopenedPicker.querySelector<HTMLButtonElement>('[aria-label="Effort"]')!;
+	assert.ok(effortButton().querySelector('.ash-icon-brain'));
 	const openEffort = (): HTMLElement => {
+		const effort = effortButton();
 		effort.focus();
 		effort.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
 		return dom.window.document.querySelector<HTMLElement>('[role="menu"][aria-label="Effort"]')!;
 	};
-	const effortMenu = openEffort();
+	let effortMenu = openEffort();
 	assert.deepEqual([...effortMenu.querySelectorAll('[role="menuitemradio"]')].map(item => item.getAttribute('aria-label')), ['Low', 'Medium', 'High']);
-	assert.equal(effortMenu.querySelector('[aria-checked="true"]')?.getAttribute('aria-label'), 'Medium');
+	assert.equal(effortMenu.querySelector('[aria-checked="true"]'), null);
 	effortMenu.querySelector<HTMLButtonElement>('[aria-label="High"]')!.click();
-	await waitFor(() => effortMenu.querySelector('[aria-checked="true"]')?.getAttribute('aria-label') === 'High');
+	await waitFor(() => !reopenedPicker.isConnected);
+	assert.equal(effortMenu.isConnected, false);
 	assert.equal(modelButton?.querySelector('.ash-chat-input-model-effort')?.textContent, 'High');
-	openEffort().querySelector<HTMLButtonElement>('[aria-label="Medium"]')!.click();
-	await waitFor(() => effortMenu.querySelector('[aria-checked="true"]')?.getAttribute('aria-label') === 'Medium');
+	reopenedPicker = reopenPicker();
+	effortMenu = openEffort();
+	assert.equal(effortMenu.querySelector('[aria-checked="true"]')?.getAttribute('aria-label'), 'High');
+	effortMenu.querySelector<HTMLButtonElement>('[aria-label="Medium"]')!.click();
+	await waitFor(() => !reopenedPicker.isConnected);
 	assert.equal(modelButton?.querySelector('.ash-chat-input-model-effort')?.textContent, 'Medium');
-	openEffort();
+	assert.equal((await api.model.readDefaults()).reasoningEffort, null);
+	reopenedPicker = reopenPicker();
+	await nextTask();
+	const effort = effortButton();
+	effortMenu = openEffort();
 	assert.ok(effortMenu.contains(dom.window.document.activeElement), dom.window.document.activeElement?.outerHTML.slice(0, 500));
 	const tab = new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
 	dom.window.document.activeElement!.dispatchEvent(tab);
@@ -2837,6 +2851,7 @@ function createTestStorage(): InstanceType<typeof BrowserStorageService> {
 
 const modelServices = new WeakMap<IChatService, ILanguageModelsService>();
 const configurationServices = new WeakMap<IChatService, WorkbenchConfigurationService>();
+const chatStorages = new WeakMap<IChatService, IStorageService>();
 const skillServices = new WeakMap<IChatService, IAppServerSkillApi>();
 function modelsFor(chat: IChatService): ILanguageModelsService {
 	return modelServices.get(chat)!;
@@ -2849,6 +2864,7 @@ function createWidgetModel(chat: IChatService, selection: import('../../browser/
 	services.registerInstance(IAgentExecutionSettingsService, execution ?? { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IAppServerSkillApi, skillServices.get(chat)!);
 	services.registerInstance(IConfigurationService, configuration ?? configurationServices.get(chat) ?? inputResources.add(new WorkbenchConfigurationService()));
+	services.registerInstance(IStorageService, chatStorages.get(chat)!);
 	return services.createInstance(ChatWidgetModel, chat, selection, sessions);
 }
 function createChatService(api: IWorkbenchHost, configurationService?: WorkbenchConfigurationService, storageService?: InstanceType<typeof BrowserStorageService>): ChatService {
@@ -2865,6 +2881,7 @@ function createChatService(api: IWorkbenchHost, configurationService?: Workbench
 	services.registerInstance(ILanguageModelsConfigurationService, inputResources.add(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 	const chat = services.createInstance(ChatService);
 	configurationServices.set(chat, configuration);
+	chatStorages.set(chat, storage);
 	modelServices.set(chat, inputResources.add(services.createInstance(LanguageModelsService)));
 	skillServices.set(chat, api.skills);
 	return chat;
@@ -3237,13 +3254,13 @@ test('instruction references reach Turn start, queue and steering without becomi
 
 test('Language models service applies product visibility defaults and persists manual changes', async () => {
 	const enabled = [
-		{ provider: 'openai', model: 'gpt-6.1-sol' },
-		{ provider: 'openai', model: 'gpt-6-astra' },
-		{ provider: 'openai', model: 'gpt-6-luna' },
-		{ provider: 'anthropic', model: 'claude-opus-5-5' },
-		{ provider: 'anthropic', model: 'claude-sonnet-5-5' },
-		{ provider: 'xai', model: 'grok-4.7' },
-	].map(model => ({ model, displayName: model.model }));
+		{ provider: 'openai', model: 'gpt-6.1-sol', displayName: 'GPT-6.1 Sol' },
+		{ provider: 'openai', model: 'gpt-6-astra', displayName: 'GPT-6 Astra' },
+		{ provider: 'openai', model: 'gpt-6-luna', displayName: 'GPT-6 Luna' },
+		{ provider: 'anthropic', model: 'claude-opus-5-5', displayName: 'claude-opus-5-5' },
+		{ provider: 'anthropic', model: 'claude-sonnet-5-5', displayName: 'claude-sonnet-5-5' },
+		{ provider: 'xai', model: 'grok-4.7', displayName: 'grok-4.7' },
+	].map(({ provider, model, displayName }) => ({ model: { provider, model }, displayName }));
 	const older = { model: { provider: 'openai', model: 'gpt-5.6' }, displayName: 'GPT-5.6' };
 	const custom = { model: { provider: 'custom-gateway', model: 'private-model' }, displayName: 'Private model' };
 	const catalog = [...enabled, older, custom];
@@ -3280,8 +3297,9 @@ test('Language models service applies product visibility defaults and persists m
 });
 
 test('Cowork and Code keep independent defaults and model choices for the same draft', async () => {
-	const codeModel = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'Code model' };
-	const coworkModel = { model: { provider: 'anthropic', model: 'claude-opus-5-5' }, displayName: 'Cowork model' };
+	const efforts = [{ effort: 'high' }] as const;
+	const codeModel = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'Code model', supportedReasoningEfforts: efforts };
+	const coworkModel = { model: { provider: 'anthropic', model: 'claude-opus-5-5' }, displayName: 'Cowork model', supportedReasoningEfforts: efforts };
 	const fake = fakeApi({ models: [codeModel, coworkModel], createSession: session('created', 'created-thread'), thread: () => ({ ...thread(), threadId: 'created-thread' }) });
 	using configuration = new WorkbenchConfigurationService();
 	using storage = createTestStorage();
@@ -3308,10 +3326,12 @@ test('Cowork and Code keep independent defaults and model choices for the same d
 	await cowork.selectAutomaticModel();
 	assert.deepEqual([code.selectedModel, cowork.selectedModel], [codeModel.model, undefined]);
 	await cowork.selectModel(codeModel.model);
+	await cowork.selectReasoningEffort('high');
 	await code.selectModel(coworkModel.model);
 	assert.deepEqual([code.selectedModel, cowork.selectedModel], [coworkModel.model, codeModel.model]);
 	await code.selectModel(codeModel.model);
 	await cowork.selectModel(coworkModel.model);
+	assert.deepEqual([code.selectedReasoningEffort, cowork.selectedReasoningEffort], [undefined, 'high']);
 	await configuration.updateValue(CoworkModelPreferences.defaultModelSetting, '');
 	assert.deepEqual([code.selectedModel, cowork.selectedModel], [codeModel.model, coworkModel.model]);
 	using restoredCoworkPreferences = services.createInstance(CoworkModelPreferencesService, CoworkModelPreferences);
@@ -3401,6 +3421,51 @@ test('Existing chats keep their choice while new chats follow the last picker se
 	using fourthChat = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await fourthChat.initialize();
 	assert.equal(fourthChat.isAutomaticModel, true);
+});
+
+test('New Code conversations resolve workspace and profile pairs before the last choice', async () => {
+	const efforts = [{ effort: 'low' }, { effort: 'medium' }, { effort: 'high' }] as const;
+	const sol = { provider: 'openai', model: 'gpt-6.1-sol' };
+	const luna = { provider: 'openai', model: 'gpt-6-luna' };
+	const target = { type: 'local', root: '/workspace/first' } as const;
+	const secondTarget = { type: 'local', root: '/workspace/second' } as const;
+	const workspace = codeConversationWorkspaceKey(target)!;
+	const defaults = { profile: { model: sol, effort: 'medium' }, workspaces: { [workspace]: { model: luna, effort: 'high' } } };
+	const fake = fakeApi({ models: [sol, luna].map(model => ({ model, displayName: model.model, supportedReasoningEfforts: efforts })) });
+	using configuration = new WorkbenchConfigurationService();
+	using chat = createChatService(fake.api, configuration);
+	using sessions = new SessionsManagementService(fake.api);
+	await configuration.updateValue(codeConversationDefaultsSetting, defaults);
+	const start = (folder: typeof target | typeof secondTarget) => createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession(undefined, folder) }, sessions);
+	const pair = (model: ChatWidgetModel) => [model.selectedModel, model.selectedReasoningEffort];
+
+	using existing = start(target);
+	await existing.initialize();
+	assert.deepEqual(pair(existing), [luna, 'high']);
+	const draftId = sessions.activeUntitledSession!.untitledSessionId;
+	await existing.selectModel(sol);
+	await existing.selectReasoningEffort('low');
+	assert.deepEqual(configuration.getValue(codeConversationDefaultsSetting), defaults);
+	assert.equal((await fake.api.model.readDefaults()).revision, 1);
+
+	using sameWorkspace = start(target);
+	using otherWorkspace = start(secondTarget);
+	await Promise.all([sameWorkspace.initialize(), otherWorkspace.initialize()]);
+	assert.deepEqual(pair(sameWorkspace), [luna, 'high']);
+	assert.deepEqual(pair(otherWorkspace), [sol, 'medium']);
+	await configuration.updateValue(codeConversationDefaultsSetting, { workspaces: {} });
+	await modelsFor(chat).refreshModels();
+	assert.deepEqual(pair(sameWorkspace), [luna, 'high']);
+	assert.deepEqual(pair(existing), [sol, 'low']);
+
+	const savedDraft = sessions.untitledSessions.find(draft => draft.untitledSessionId === draftId)!;
+	using restored = createWidgetModel(chat, { kind: 'untitled', session: savedDraft }, sessions);
+	await restored.initialize();
+	assert.deepEqual(pair(restored), [sol, 'low']);
+
+	using inherited = start(target);
+	await inherited.initialize();
+	assert.deepEqual(pair(inherited), [sol, 'low']);
 });
 
 test('Model discovery refreshes the picker after an older catalog request completes', async () => {
@@ -3567,7 +3632,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 	});
 }
 
-test('ChatWidgetModel keeps per-chat choices while saving the default for new chats', async () => {
+test('ChatWidgetModel keeps per-chat choices and records the last selection without writing backend defaults', async () => {
 	const firstModel: ModelRef = { provider: 'openai', model: 'gpt-first' };
 	const secondModel: ModelRef = { provider: 'openai', model: 'gpt-second' };
 	const activeSession = {
@@ -3597,19 +3662,24 @@ test('ChatWidgetModel keeps per-chat choices while saving the default for new ch
 
 	assert.deepEqual(fake.turnStartRequests.map(request => request.model), [firstModel, secondModel]);
 	assert.deepEqual(model.selectedModel, firstModel);
-	assert.deepEqual((await fake.api.model.readDefaults()).model, secondModel);
+	assert.equal((await fake.api.model.readDefaults()).model, null);
+	using draft = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await draft.initialize();
+	assert.deepEqual(draft.selectedModel, secondModel);
 });
 
-test('ChatWidgetModel sends the selected model thinking effort with its Turn', async () => {
+test('ChatWidgetModel carries the selected thinking effort across compatible models and sends it with the Turn', async () => {
 	const first = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First', supportedReasoningEfforts: [{ effort: 'low' }, { effort: 'high' }] as const };
-	const second = { model: { provider: 'openai', model: 'gpt-6-astra' }, displayName: 'Second', supportedReasoningEfforts: [{ effort: 'medium' }] as const };
+	const second = { model: { provider: 'openai', model: 'gpt-6-astra' }, displayName: 'Second', supportedReasoningEfforts: [{ effort: 'medium' }, { effort: 'high' }] as const };
+	const limited = { model: { provider: 'example', model: 'limited' }, displayName: 'Limited', supportedReasoningEfforts: [{ effort: 'medium' }] as const };
 	const activeSession = session('session-1', 'thread-1');
 	const previous = thread('previous answer');
 	const fake = fakeApi({
-		sessions: [activeSession], models: [first, second],
+		sessions: [activeSession], models: [first, second, limited],
 		thread: () => ({ ...previous, turns: previous.turns.map(turn => ({ ...turn, model: first.model, reasoningEffort: 'high' as const })) }),
 	});
 	using chat = createChatService(fake.api);
+	await modelsFor(chat).setModelVisible(limited.model, true);
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
@@ -3619,13 +3689,21 @@ test('ChatWidgetModel sends the selected model thinking effort with its Turn', a
 	assert.equal(model.inputState.selectedReasoningEffort, undefined);
 	await model.selectModel(first.model);
 	await model.selectReasoningEffort('high');
+	await model.selectModel(second.model);
 	assert.equal(model.inputState.selectedReasoningEffort, 'high');
 	await model.send('Use high effort');
+	assert.deepEqual(fake.turnStartRequests[0]?.model, second.model);
 	assert.equal(fake.turnStartRequests[0]?.reasoningEffort, 'high');
 
-	await model.selectModel(second.model);
+	await model.selectModel(limited.model);
 	assert.equal(model.inputState.selectedReasoningEffort, undefined);
 	await assert.rejects(model.selectReasoningEffort('high'), /does not support/);
+	assert.equal((await fake.api.model.readDefaults()).reasoningEffort, null);
+	await model.selectModel(first.model);
+	assert.equal(model.inputState.selectedReasoningEffort, 'high');
+	using draft = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await draft.initialize();
+	assert.equal(draft.selectedReasoningEffort, 'high');
 	await model.selectAutomaticModel();
 	assert.equal(model.inputState.selectedReasoningEffort, undefined);
 	await assert.rejects(model.selectReasoningEffort('medium'), /Select a model/);
@@ -3687,6 +3765,7 @@ test('ChatWidgetModel Auto retains the configured profile model and leaves Turn 
 	const manualModel: ModelRef = { provider: 'openai', model: 'gpt-manual' };
 	const activeSession = { ...session('session-1', 'thread-1'), model: sessionModel };
 	const fake = fakeApi({ sessions: [activeSession], models: [sessionModel, manualModel].map(model => ({ model, displayName: model.model })) });
+	await fake.api.model.configureDefaults({ model: sessionModel }, 1);
 	using chat = createChatService(fake.api);
 	await modelsFor(chat).setModelVisible(manualModel, true);
 	using sessions = new SessionsManagementService(fake.api);
@@ -3701,7 +3780,7 @@ test('ChatWidgetModel Auto retains the configured profile model and leaves Turn 
 	await model.send('Use the session model');
 
 	assert.equal(fake.turnStartRequests[0]?.model, undefined);
-	assert.deepEqual((await fake.api.model.readDefaults()).model, manualModel);
+	assert.deepEqual((await fake.api.model.readDefaults()).model, sessionModel);
 });
 
 test('ChatWidgetModel sends image-only input using the selected approval mode', async () => {
@@ -5170,13 +5249,11 @@ test('ChatWidgetModel connects agentHost tool transcript updates to a retained c
 });
 
 
-test('Chat model saves cannot overwrite or send the previous input into the newly selected Thread', async () => {
+test('Chat model selection and pending input stay scoped to the originating Thread', async () => {
 	const entry = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First' };
 	const activeSession = session('session-1');
 	let currentThread = thread();
 	const fake = fakeApi({ sessions: [activeSession], models: [entry], thread: () => currentThread });
-	const saved = new DeferredPromise<void>();
-	fake.api.model.configureDefaults = async () => saved.p;
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
@@ -5184,35 +5261,29 @@ test('Chat model saves cannot overwrite or send the previous input into the newl
 	const selecting = model.selectModel(entry.model);
 	const sending = model.send('Keep this message in its original Thread');
 	const canceledSend = assert.rejects(sending, error => isCancellationError(error));
-	assert.equal(model.selectedModel, undefined);
+	assert.deepEqual(model.selectedModel, entry.model);
 	currentThread = { ...currentThread, threadId: 'thread-2' };
 	await model.selectThread({ session: { ...activeSession, chats: [{ ...activeSession.chats[0]!, threadId: 'thread-2' }] }, threadId: 'thread-2' });
-	await saved.complete(); await selecting; await canceledSend;
+	await Promise.all([selecting, canceledSend]);
 	assert.equal(fake.turnStartRequests.length, 0);
 	assert.equal(model.threadId, 'thread-2');
 	assert.equal(model.selectedModel, undefined);
 });
 
-test('Chat selection failure retains Auto and sending awaits successful effort persistence', async () => {
+test('Chat sends a newly selected effort independently of backend defaults', async () => {
 	const entry = { model: { provider: 'openai', model: 'gpt-6.1-sol' }, displayName: 'First', supportedReasoningEfforts: [{ effort: 'high' as const }] };
 	const fake = fakeApi({ models: [entry], createSession: session('created', 'created-thread'), thread: () => ({ ...thread(), threadId: 'created-thread' }) });
 	using chat = createChatService(fake.api);
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
 	await model.initialize();
-	const write = fake.api.model.configureDefaults;
-	fake.api.model.configureDefaults = async () => { throw new Error('save rejected'); };
-	await assert.rejects(model.selectModel(entry.model), /save rejected/);
-	assert.equal(model.isAutomaticModel, true);
-	fake.api.model.configureDefaults = write;
+	const defaults = await fake.api.model.readDefaults();
 	await model.selectModel(entry.model);
-	const saved = new DeferredPromise<void>();
-	fake.api.model.configureDefaults = async (...args) => { await saved.p; await write(...args); };
 	const selecting = model.selectReasoningEffort('high');
-	const sending = model.send('Use saved effort');
-	await nextTask(); assert.equal(fake.turnStartRequests.length, 0);
-	await saved.complete(); await Promise.all([selecting, sending]);
+	const sending = model.send('Use selected effort');
+	await Promise.all([selecting, sending]);
 	assert.equal(fake.turnStartRequests.at(-1)?.reasoningEffort, 'high');
+	assert.deepEqual(await fake.api.model.readDefaults(), defaults);
 });
 
 test('Queued chat Turns inherit the backend permission default and reject a late connection read', async () => {
@@ -6675,34 +6746,25 @@ for (const aba of [false, true]) {
 	});
 }
 
-test('composer navigation A-B-A during a pending model save cannot dispatch the old request', async () => {
+test('composer navigation A-B-A after model selection cancels the old request and retains the selection', async () => {
 	const activeSession = { ...session('session-1', 'thread-1'), chats: [{ threadId: 'thread-1', origin: { type: 'root' as const }, status: 'active' as const }, { threadId: 'thread-2', origin: { type: 'fork' as const, parentThreadId: 'thread-1', parentSequence: 1 }, status: 'active' as const }] };
 	const selected = { provider: 'openai', model: 'gpt-6.1-sol' };
 	const fake = fakeApi({ sessions: [activeSession], models: [{ model: selected, displayName: 'Navigation model' }] });
-	const gate = new DeferredPromise<void>();
-	const saving = new DeferredPromise<void>();
 	using chat = createChatService({
-		...fake.api, model: {
-			...fake.api.model, configureDefaults: async (update, expectedRevision) => {
-				await saving.complete();
-				await gate.p;
-				return fake.api.model.configureDefaults(update, expectedRevision);
-			}
-		}, thread: { ...fake.api.thread, read: async ({ threadId }) => navigationThreadSnapshot(threadId), subscribe: async ({ threadId }) => ({ ...navigationThreadSnapshot(threadId), updates: [] }) }
+		...fake.api, thread: { ...fake.api.thread, read: async ({ threadId }) => navigationThreadSnapshot(threadId), subscribe: async ({ threadId }) => ({ ...navigationThreadSnapshot(threadId), updates: [] }) }
 	});
 	using sessions = new SessionsManagementService(fake.api);
 	using model = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
 	await model.initialize();
 	assert.ok(model.inputState.models.some(entry => entry.model.provider === selected.provider && entry.model.model === selected.model));
-	const selection = model.selectModel(selected);
-	await saving.p;
-	const previous = model.send('Old A request').then(() => undefined, error => { assert.ok(isCancellationError(error)); });
+	await model.selectModel(selected);
+	const previous = assert.rejects(model.send('Old A request'), isCancellationError);
 	await model.selectThread({ session: activeSession, threadId: 'thread-2' });
+	assert.equal(model.selectedModel, undefined);
 	await model.selectThread({ session: activeSession, threadId: 'thread-1' });
-	await gate.complete();
-	await selection;
 	await previous;
 	assert.equal(fake.turnStartRequests.length, 0);
+	assert.deepEqual(model.selectedModel, selected);
 });
 
 

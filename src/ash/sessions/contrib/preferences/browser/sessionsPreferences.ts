@@ -3,6 +3,7 @@ import { ExecutionSettingsModel } from './executionSettingsModel.js';
 import { GitHubSettingsModel } from '../../../../workbench/contrib/github/browser/githubSettingsModel.js';
 import { TraceSettingsModel } from '../../../../workbench/contrib/trace/browser/traceSettingsModel.js';
 import { SettingsSectionRenderer } from '../../../../workbench/contrib/preferences/browser/settingsSectionRenderer.js';
+import { CodeConversationDefaultsSettings } from './codeConversationDefaultsSettings.js';
 import { ChatConfiguration, ChatInputConfiguration } from '../../../../workbench/contrib/chat/common/constants.js';
 import './media/sessionsPreferences.css';
 import '../../../../workbench/services/extensions/browser/resourceEditorAccessibility.js';
@@ -297,6 +298,8 @@ export class SessionsPreferences extends Disposable {
 		};
 		const renderer = resources.add(contentServices.createInstance(SettingsRenderer, list, settingOptions));
 		const modelContent = resources.add(contentServices.createInstance(ModelSettingsRenderer, list));
+		const codeDefaults = resources.add(contentServices.createInstance(CodeConversationDefaultsSettings));
+		const codeDefaultsContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, codeDefaults, AccessibleViewProviderId.ChatModelConfiguration, AccessibilityVerbositySettingId.ChatModelConfiguration));
 		const dictationContent = resources.add(this.instantiationService.createInstance(DictationSettingsRenderer, list));
 		const customizeContent = resources.add(contentServices.createInstance(SessionsCustomizeContent, list, async () => { dialog.dispose(); }, this.showEditor, () => openSettingsEditor(), () => openUserSettings()));
 		const githubSettings = resources.add(contentServices.createInstance(GitHubSettingsModel, async () => { dialog.dispose(); }));
@@ -361,6 +364,7 @@ export class SessionsPreferences extends Disposable {
 		const categories = sections.flatMap(section => section.categories);
 		const categoryContents = (category: SettingsCategory): readonly SettingsPageRenderer[] => [
 			...category.id === 'environment' ? [executionContent] : [],
+			...category.id === 'models' ? [codeDefaultsContent] : [],
 			...category.content ? [category.content] : [],
 			...contributed.filter(section => section.categoryId === category.id && category.id !== 'agents').map(section => section.content),
 		];

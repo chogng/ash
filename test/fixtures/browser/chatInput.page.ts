@@ -184,7 +184,7 @@ declare global {
 		setRunning(running: boolean): void;
 		setQueueDefault(value: 'queue' | 'steer'): Promise<void>;
 		queueState(): unknown;
-		finishPaste(): Promise<void>; dropState(): { text: string; pending: boolean; reads: readonly string[]; }; setDropSourceText(text: string): void; releaseDropRead(): void; replaceDropDraft(): void; inputSelection(): { anchor: number; active: number; }; changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; addDeferredContext(content: string): void; addDeferredImageContext(content: string): void; releaseReferencePreview(): void; setHistorySkill(digest: string): void; inputLinkAtCursor(): string | undefined; openInputLink(): Promise<unknown>; setSlashCommands(commands: ChatInputState['slashCommands']): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; restoreProviderModels(): void; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseContextSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
+		finishPaste(): Promise<void>; dropState(): { text: string; pending: boolean; reads: readonly string[]; }; setDropSourceText(text: string): void; releaseDropRead(): void; replaceDropDraft(): void; inputSelection(): { anchor: number; active: number; }; changeTools(): void; setActiveFile(path?: string): void; setActiveDiff(original: string, modified: string, text?: string): void; setChanges(changes: ChatInputState['changes']): void; setChangesScope(scope: 'workspace' | 'conversation'): void; releaseWorkspaceChanges(changes: ChatInputState['changes']): void; workspaceChangesReads(): number; setChangesError(error: string): void; setVisible(visible: boolean): void; inputAccessibility(): string | undefined; contextAccessibility(): { help: string | undefined; content: string | undefined; }; setFooterPhase(phase: ChatInputState['phase'], error?: string): void; setContextUsage(available: boolean, capacity?: number, estimatedTokens?: number): void; setFooterStatus(visible: boolean): void; removeFooterStatus(): void; historyState(): unknown; holdNextHistoryRead(): void; releaseHistorySearch(query: string): void; addHistoryContext(): void; addDeferredContext(content: string): void; addDeferredImageContext(content: string): void; releaseReferencePreview(): void; setHistorySkill(digest: string): void; inputLinkAtCursor(): string | undefined; openInputLink(): Promise<unknown>; setSlashCommands(commands: ChatInputState['slashCommands']): void; refresh(): void; showQuestions(): void; showModels(): void; openModels(): void; setDescription(description: string | null): void; setModelsAvailable(available: boolean): void; modelState(): unknown; finishModelPreference(success: boolean): void; restoreProviderModels(): void; setImageCapability(capability: 'text' | 'image' | 'unknown'): void; appendToDraft(text: string): void; restoreCapturedDraft(): Promise<string | undefined>; setRetirement(retirement: ModelCatalogEntry['retirement']): void; dispose(): void; releaseFileSearch(index: number): void; releaseGitHubSearch(query: string): void; releaseContextSearch(query: string): void; releaseSymbolSearch(query: string): void; releaseInstructions(): void; changeContextSources(): void; disposeContextTerminal(): void; }; }
 }
 
 const locale = new URLSearchParams(location.search).get('locale');
@@ -438,6 +438,8 @@ const preferenceWrites: unknown[] = [];
 let selectedReasoningEffort: ModelReasoningEffort | undefined;
 const modelOptions = new URLSearchParams(location.search).get('modelOptions');
 const multipleAcceleration = new URLSearchParams(location.search).get('acceleration') === 'multiple';
+let holdModelPreference = new URLSearchParams(location.search).has('holdModelPreference');
+let finishModelPreference: ((success: boolean) => void) | undefined;
 let models: readonly ModelCatalogEntry[] = [{
 	model: { provider: 'openai', model: 'test-model' }, displayName: 'Test Model',
 	inputModalities: new URLSearchParams(location.search).get('imageCapability') === 'text' ? ['text'] : new URLSearchParams(location.search).get('imageCapability') === 'image' ? ['text', 'image'] : null,
@@ -482,6 +484,12 @@ services.registerInstance(ILanguageModelsService, {
 	setApprovalReviewModel: async () => { },
 	onDidChangeModels: modelChanged.event,
 	setModelPreferences: async (model, update) => {
+		if (holdModelPreference) {
+			holdModelPreference = false;
+			const success = await new Promise<boolean>(resolve => { finishModelPreference = resolve; });
+			finishModelPreference = undefined;
+			if (!success) { throw new Error('Preference write failed'); }
+		}
 		if (new URLSearchParams(location.search).has('modelPreferenceFailure')) { throw new Error('Preference write failed'); }
 		preferenceWrites.push({ model, update });
 		models = models.map(entry => entry.model.provider === model.provider && entry.model.model === model.model ? {
@@ -1192,6 +1200,7 @@ window.ashChatInputIntegration = {
 	setSlashCommands: slashCommands => { state = { ...state, slashCommands }; part.render(state); },
 	setHistorySkill: digest => part.render({ ...state, skillSelectors: [{ name: 'commit', description: 'Commit the synthetic change', source: 'user', skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest } } }] }),
 	modelState: () => ({ selectedModel, selectedReasoningEffort, automatic, preferences: models.map(({ model, selectedAcceleration, accelerationOptions, longContext }) => ({ model, selectedAcceleration, accelerationOptions, longContext })), preferenceWrites }),
+	finishModelPreference: success => finishModelPreference?.(success),
 	restoreProviderModels: () => { models = [...models, ...unavailableProviderModels]; renderModels(); modelChanged.fire(); },
 	setModelsAvailable: available => { if (available) { models = hiddenModels ?? models; hiddenModels = undefined; } else { hiddenModels = models; models = []; } renderModels(); modelChanged.fire(); },
 	setDescription: description => { models = models.map(entry => ({ ...entry, description })); renderModels(); modelChanged.fire(); },

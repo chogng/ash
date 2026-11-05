@@ -37,7 +37,8 @@ export interface ISessionsManagementService {
 	selectUntitledSession(untitledSessionId: string): void;
 	discardUntitledSession(untitledSessionId: string): void;
 	setUntitledSessionModel(untitledSessionId: string, model: ModelRef | undefined): void;
-	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined): void;
+	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined, defaults: NonNullable<IUntitledChatSession['modelDefaults']>): void;
+	setUntitledSessionReasoningEffort(untitledSessionId: string, effort: NonNullable<IUntitledChatSession['reasoningEffortSelection']> | null): void;
 	setUntitledSessionAgent(untitledSessionId: string, agent: ChatAgent | undefined): void;
 	setUntitledSessionWorkspace(untitledSessionId: string, workspace: SessionWorkspaceSelection | undefined, options?: { readonly devContainer?: boolean; readonly branchName?: string; readonly providerId?: string; readonly environment?: SessionEnvironmentSelection; readonly clearEnvironment?: boolean; }): void;
 	/** Organization and first send share one creation; creating a durable identity does not submit a request. */

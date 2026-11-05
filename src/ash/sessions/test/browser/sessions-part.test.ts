@@ -166,6 +166,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		},
 		setUntitledSessionModel() { },
 		setUntitledSessionDefaultModel() { },
+		setUntitledSessionReasoningEffort() { },
 		setUntitledSessionAgent() { },
 		setUntitledSessionWorkspace() { throw new Error('Unexpected workspace edit'); },
 		cancelUntitledSessionPreparation() { throw new Error('Unexpected preparation cancellation'); },

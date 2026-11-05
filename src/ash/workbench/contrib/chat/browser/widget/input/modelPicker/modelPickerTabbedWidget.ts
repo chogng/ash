@@ -5,6 +5,7 @@ import { appendIcon } from '../../../../../../../base/browser/ui/lxicons/lxicon.
 import { Menu } from '../../../../../../../base/browser/ui/menu/menu.js';
 import { Switch } from '../../../../../../../base/browser/ui/toggle/toggle.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { autorun, observableValue } from '../../../../../../../base/common/observable.js';
 import { localize } from '../../../../../../../nls.js';
 import {
 	AccessibleContentProvider,
@@ -37,7 +38,7 @@ export class TabbedModelPicker extends Disposable {
 	private providers: readonly ModelProviderCredentialStatus[] = [];
 	private activeCard: ModelCard | undefined;
 	private detailsModel: ModelRef | undefined;
-	private selecting = false;
+	private readonly selecting = observableValue(this, false);
 
 	constructor(
 		private readonly delegate: IModelPickerDelegate,
@@ -102,8 +103,8 @@ export class TabbedModelPicker extends Disposable {
 			}));
 			automaticSwitch = automatic;
 			resources.add(automatic.onDidChange(async value => {
-				if (this.selecting) { automatic.checked = this.delegate.isAutomaticModel(); return; }
-				this.selecting = true;
+				if (this.selecting.get()) { automatic.checked = this.delegate.isAutomaticModel(); return; }
+				this.selecting.set(true, undefined);
 				error.hidden = true;
 				const hadFocus = document.activeElement === automatic.input;
 				automatic.busy = true;
@@ -119,7 +120,7 @@ export class TabbedModelPicker extends Disposable {
 						error.hidden = false;
 					}
 				} finally {
-					this.selecting = false;
+					this.selecting.set(false, undefined);
 					if (!resources.isDisposed) {
 						automatic.busy = false;
 						automatic.checked = this.delegate.isAutomaticModel();
@@ -179,8 +180,8 @@ export class TabbedModelPicker extends Disposable {
 			},
 			delegate: {
 				onSelect: async entry => {
-					if (this.selecting) { return; }
-					this.selecting = true;
+					if (this.selecting.get()) { return; }
+					this.selecting.set(true, undefined);
 					error.hidden = true;
 					try {
 						await this.delegate.selectModel(entry.model);
@@ -190,7 +191,7 @@ export class TabbedModelPicker extends Disposable {
 							error.textContent = localize('chat.modelPicker.selectionFailed', 'Could not select model');
 							error.hidden = false;
 						}
-					} finally { this.selecting = false; }
+					} finally { this.selecting.set(false, undefined); }
 				},
 				onHide: () => {
 					this.activeCard = undefined;
@@ -230,14 +231,14 @@ export class TabbedModelPicker extends Disposable {
 				let configurationKey: string | undefined;
 				let effortActions: Action[] = [];
 				let fast: Switch | undefined;
-				const refreshConfiguration = (): void => {
+				const refreshConfiguration = (selecting: boolean): void => {
 					if (!configureInMenu) { return; }
 					const selected = this.delegate.getSelectedModel();
 					const entry = this.delegate.isAutomaticModel() ? undefined : selected && this.findModel(selected);
 					const efforts = entry?.supportedReasoningEfforts?.length
 						? modelPickerEffortOptions(entry, this.delegate.getSelectedReasoningEffort()) : [];
 					const acceleration = useWorkbenchModelManagement ? entry?.accelerationOptions?.find(option => option.name === 'Fast') : undefined;
-					const key = JSON.stringify([entry?.model, efforts.map(option => option.value), acceleration?.id]);
+					const key = JSON.stringify([entry?.model, efforts.map(option => option.effort), acceleration?.id]);
 					if (key !== configurationKey) {
 						const active = document.activeElement;
 						const hadFocus = active && (effortSection.contains(active) || fastSection.contains(active) || sidePanel?.contains(active));
@@ -248,7 +249,10 @@ export class TabbedModelPicker extends Disposable {
 						fast = undefined;
 						effortActions = efforts.map((option, index) => configurationResources.add(new Action(
 							`chat.modelPicker.effort.${index}`, option.label, undefined, true,
-							() => updateConfiguration(() => this.delegate.selectReasoningEffort(option.value)),
+							() => updateConfiguration(async () => {
+								await this.delegate.selectReasoningEffort(option.effort);
+								if (!session.isDisposed) { this.hide(); }
+							}),
 						)));
 						if (effortActions.length) {
 							configurationResources.add(new Menu(effortSection, [new SubmenuAction(
@@ -281,18 +285,17 @@ export class TabbedModelPicker extends Disposable {
 					}
 					for (const [index, action] of effortActions.entries()) {
 						action.checked = efforts[index]!.checked;
-						action.enabled = !this.selecting;
+						action.enabled = !selecting;
 					}
 					if (fast) {
 						fast.checked = !!acceleration && entry?.selectedAcceleration === acceleration.id;
-						fast.busy = this.selecting;
+						fast.busy = selecting;
 					}
 				};
 				const updateConfiguration = async (update: () => Promise<unknown>): Promise<void> => {
-					if (this.selecting) { refreshConfiguration(); return; }
-					this.selecting = true;
+					if (this.selecting.get()) { return; }
+					this.selecting.set(true, undefined);
 					error.hidden = true;
-					refreshConfiguration();
 					try {
 						await update();
 					} catch {
@@ -301,23 +304,22 @@ export class TabbedModelPicker extends Disposable {
 							error.hidden = false;
 						}
 					} finally {
-						this.selecting = false;
-						if (!resources.isDisposed) { refreshConfiguration(); }
+						this.selecting.set(false, undefined);
 					}
 				};
 				const actions = manageModels && manageModelsLabel ? [{ ...manageModels, label: manageModelsLabel, run: () => { this.hide(); return manageModels.run(); } }] : [];
 				resources.add(new Menu(moreSection, actions, {
 					buttonStyles: defaultButtonStyles, keybindingLabelStyles: defaultKeybindingLabelStyles
 				}, defaultMenuStyles));
-				const refreshFooter = (): void => {
+				const refreshFooter = (selecting: boolean): void => {
 					const hasModels = this.delegate.getModels().length > 0;
 					container.classList.toggle('ash-chat-model-picker-footer', hasModels);
 					container.classList.toggle('has-divider', hasModels && !configureInMenu);
 					moreSection.hidden = !manageModels || !hasModels || (!configureInMenu && this.delegate.isAutomaticModel());
-					refreshConfiguration();
+					refreshConfiguration(selecting);
 				};
-				refreshFooter();
-				resources.add(this.delegate.onDidChangePresentation(refreshFooter));
+				resources.add(autorun(reader => refreshFooter(this.selecting.read(reader))));
+				resources.add(this.delegate.onDidChangePresentation(() => refreshFooter(this.selecting.get())));
 				return resources;
 			},
 			openItemDetails: item => { this.showDetails(item.item!); return true; },

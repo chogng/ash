@@ -5,6 +5,7 @@ import type { TurnChangeFile, TurnChangeSetSummary } from '../../../../workbench
 import type { IObservable } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
+import type { ModelReasoningEffort } from '../../../../platform/models/common/agentModels.js';
 
 export const enum SessionChangesetOperationScope {
 	Changeset = 'changeset',
@@ -208,6 +209,10 @@ export interface IUntitledChatSession {
 	readonly model: ModelRef | undefined;
 	/** Distinguishes an explicit Auto choice from a draft awaiting its default. */
 	readonly modelSelectionKind?: 'manual';
+	/** Defaults captured when the draft began in this workspace. */
+	readonly modelDefaults?: { readonly workspace: string | null; readonly effort?: ModelReasoningEffort; };
+	/** A manual choice for this draft; null clears the captured effort. */
+	readonly reasoningEffortSelection?: ModelReasoningEffort | null;
 	readonly agent: ChatAgent | undefined;
 	readonly workspace: SessionWorkspaceSelection;
 	/** Prepare the source workspace's container before creating the first durable Session. */

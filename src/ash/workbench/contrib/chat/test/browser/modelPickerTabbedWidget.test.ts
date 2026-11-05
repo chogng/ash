@@ -5,6 +5,35 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 suite('model picker browser component', () => {
 	const browserTests = useBrowserTests();
 
+	for (const success of [true, false]) {
+		test(`reopening the picker unlocks its controls after a ${success ? 'successful' : 'failed'} save`, async () => {
+			const { page } = browserTests;
+			await page.goto('/chatInput.html?modelMenuConfiguration&holdModelPreference&locale=zh-CN');
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const trigger = page.locator('.ash-chat-input-model-action');
+			const picker = page.locator('.ash-chat-model-picker');
+			const fast = picker.getByRole('switch', { name: '快速模式' });
+			await trigger.press('ArrowDown');
+			await fast.press('Space');
+			await expect(fast).toHaveAttribute('aria-busy', 'true');
+			await picker.getByRole('combobox').press('Escape');
+			await expect(picker).toHaveCount(0);
+			await trigger.press('ArrowDown');
+			await expect(fast).toBeDisabled();
+
+			await page.evaluate(value => window.ashChatInputIntegration.finishModelPreference(value), success);
+			await expect(fast).toBeEnabled();
+			await expect(fast).toHaveJSProperty('checked', success);
+			await picker.getByRole('menuitem', { name: '推理强度' }).press('ArrowRight');
+			const high = page.getByRole('menuitemradio', { name: '高', exact: true });
+			await expect(high).toBeEnabled();
+			await high.press('Enter');
+			await expect(picker).toHaveCount(0);
+			await expect(trigger).toHaveAccessibleName('Test Model 高');
+			await expect(trigger).toBeFocused();
+		});
+	}
+
 	test('effort submenu and model preview replace each other on the same surface', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatInput.html?modelMenuConfiguration');
@@ -236,7 +265,7 @@ suite('model picker browser component', () => {
 			await fast.focus();
 			await fast.press('Space');
 			await expect(fast).toBeChecked();
-			await expect(options).toHaveText(chinese ? '低 · 快速' : 'Low · Fast');
+			await expect(options).toHaveText(chinese ? '快速' : 'Fast');
 			await ultra.focus();
 			await ultra.press('Space');
 			await expect(ultra).toBeChecked();
@@ -246,11 +275,11 @@ suite('model picker browser component', () => {
 			const context = picker.getByRole('radiogroup', { name: chinese ? '上下文大小' : 'Context Size', exact: true });
 			await expect(context.getByRole('radio').first()).toBeChecked();
 			const thinking = picker.getByRole('radiogroup', { name: chinese ? '推理强度' : 'Effort', exact: true });
-			await expect(thinking.getByRole('radio').first()).toBeChecked();
+			await expect(thinking.getByRole('radio', { checked: true })).toHaveCount(0);
 			await standard.focus();
 			await standard.press('Space');
 			await expect(standard).toBeChecked();
-			await expect(options).toHaveText(chinese ? '低' : 'Low');
+			await expect(options).toHaveText(chinese ? '模型选项' : 'Model options');
 			const after = await page.evaluate(() => window.ashChatInputIntegration.modelState());
 			expect(after).toEqual({
 				...before as Record<string, unknown>,

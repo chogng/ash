@@ -127,6 +127,7 @@ class ProjectChatFixture extends Disposable {
 			untitledSessions: [this.draft],
 			materializedSessions: observableValue('materialized projects', new Map()),
 			setUntitledSessionDefaultModel() { },
+			setUntitledSessionReasoningEffort() { },
 			materializeUntitledSession: async () => {
 				this.calls.push('create');
 				return active;
