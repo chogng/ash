@@ -380,13 +380,15 @@ for (const locale of ['en', 'zh-CN'])
 		});
 		const code = modes.getByRole('button', { name: locale === 'zh-CN' ? '代码' : 'Code', exact: true });
 		const pane = page.locator('.ash-sessions-chat-view:visible .ash-sessions-chat-slot > [role="region"]');
+		const draftWidget = page.locator('.ash-sessions-chat-view:visible .ash-sessions-chat-slot.active [data-untitled-session-id]');
 		const root = await page.locator('.ash-sessions-window').elementHandle();
 		const url = page.url();
 		const pageCount = page.context().pages().length;
 		const draft = 'A retained draft across workspace pages';
 		await pane.locator('.ash-chat-input-editor').getByRole('textbox').focus();
 		await page.keyboard.insertText(draft);
-		const session = await pane.getAttribute('data-untitled-session-id');
+		await expect(draftWidget).toHaveAttribute('data-untitled-session-id', /.+/);
+		const session = await draftWidget.getAttribute('data-untitled-session-id');
 		await expect(chat.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'chat');
 		for (const mode of [code, chat]) {
 			await mode.click();
@@ -398,7 +400,7 @@ for (const locale of ['en', 'zh-CN'])
 			const bounds = await modes.boundingBox();
 			expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(sidebar!.x + sidebar!.width);
 			await expect(pane.locator('.ash-chat-input-editor')).toContainText(draft);
-			await expect(pane).toHaveAttribute('data-untitled-session-id', session!);
+			await expect(draftWidget).toHaveAttribute('data-untitled-session-id', session!);
 			expect(page.url()).toBe(url);
 			expect(page.context().pages()).toHaveLength(pageCount);
 			expect(await root!.evaluate(element => element === document.querySelector('.ash-sessions-window'))).toBe(
@@ -640,14 +642,15 @@ test('New navigation creates distinct sessions in Code and preserves the previou
 test('Sessions can directly dispose and recreate a restored window without capturing released editor grids', async ({
 	page,
 }) => {
-	const navigation = page.locator('.ash-sessions-activity-content');
+	const code = page.getByRole('toolbar', { name: 'Workspace mode', exact: true }).getByRole('button', { name: 'Code', exact: true });
+	const changes = page.getByRole('region', { name: 'Editor', exact: true }).getByText('Changes appear after the agent edits files.', { exact: true });
 	for (let attempt = 0; attempt < 2; attempt++) {
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		await expect(
-			page
-				.locator('[data-part="editor"] .ash-editor-title-control')
-				.getByRole('tab', { name: 'Changes', exact: true }),
-		).toBeVisible();
+		await code.click();
+		await expect(code).toHaveAttribute('aria-pressed', 'true');
+		if (!await changes.isVisible()) {
+			await page.getByRole('toolbar', { name: 'Code layout', exact: true }).getByRole('button', { name: 'Changes', exact: true }).click();
+		}
+		await expect(changes).toBeVisible();
 		await page.evaluate(() => window.ashSessionsIntegration.remountAfterDirectDispose());
 		await expect(page.locator('.ash-sessions-window')).toHaveCount(1);
 		await expect(page.locator('[data-action-id="sessions.newSession"] button')).toBeVisible();
@@ -946,8 +949,9 @@ test('multiple Agent hosts keep equal backend IDs, model scopes and retained Cod
 		)
 		.toEqual(expect.arrayContaining(['Host A', 'Host B']));
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(sidebar.getByRole('heading', { name: 'Host A', exact: true })).toBeVisible();
-	await expect(sidebar.getByRole('heading', { name: 'Host B', exact: true })).toBeVisible();
+	await expect(sidebar.getByRole('heading', { name: 'Recents', exact: true })).toBeVisible();
+	await expect(sidebar.getByRole('button', { name: 'Task from Host A', exact: true })).toBeVisible();
+	await expect(sidebar.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
 	await page.evaluate(() => window.ashSessionsIntegration.multiHost!.open('Host A', true));
 	const active = page.locator('.ash-sessions-chat-slot.active');
 	await active.locator('.stanza-editor-input').focus();
@@ -957,7 +961,7 @@ test('multiple Agent hosts keep equal backend IDs, model scopes and retained Cod
 	await page.keyboard.insertText('Private Host B draft');
 	await expect(active).toContainText('Host B model');
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
-	await sidebar.getByRole('button', { name: 'Host A draft', exact: true }).click();
+	await sidebar.getByRole('button', { name: 'Host A draft (draft)', exact: true }).click();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(active.locator('.stanza-editor-line-text')).toContainText('Private Host A draft');
 	await expect(active).toContainText('Host A model');
@@ -974,7 +978,7 @@ test('multiple Agent hosts keep equal backend IDs, model scopes and retained Cod
 	await expect(modelPicker.getByRole('menuitemradio')).toHaveCount(1);
 	await modelPicker.getByRole('menuitemradio', { name: 'Host A model', exact: true }).click();
 	await expect(active).toContainText('Host A model');
-	await sidebar.getByRole('button', { name: 'Host B draft', exact: true }).click();
+	await sidebar.getByRole('button', { name: 'Host B draft (draft)', exact: true }).click();
 	await expect(active.locator('.stanza-editor-line-text')).toContainText('Private Host B draft');
 	await active.locator('.ash-chat-input-model-action').click();
 	await expect(automaticModel).toHaveAttribute('aria-checked', 'true');
