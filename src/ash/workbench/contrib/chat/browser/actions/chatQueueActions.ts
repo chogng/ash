@@ -152,7 +152,7 @@ export class ChatEditPendingRequestAction extends Action2 {
 	constructor() { super({ id: ChatEditPendingRequestAction.ID, title: localize2('chat.queue.edit', 'Chat: Edit Queued Message'), f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true) }); }
 	public override async run(accessor: ServicesAccessor, value?: unknown): Promise<void> {
 		const selected = await selectMessage(accessor, value);
-		if (selected) await selected.widget.startEditing(selected.message.commandId);
+		if (selected) await selected.widget.startEditing(selected.message);
 	}
 }
 

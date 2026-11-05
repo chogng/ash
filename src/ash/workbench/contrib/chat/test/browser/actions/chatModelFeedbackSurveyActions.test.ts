@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { suite, test } from 'mocha';
 import '../../../browser/chat.shared.contribution.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
+import { Event } from '../../../../../../base/common/event.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
 import { CommandsRegistry } from '../../../../../../platform/commands/common/commands.js';
@@ -30,12 +31,18 @@ class Fixture extends Disposable {
 		visible: true, threadId: 'thread-1', getFocus: () => undefined,
 		model: { inputState: { selectedModel: { provider: 'connection-1', model: 'model-1' } } },
 	} as unknown as IChatWidget;
+	additionalWidgets: readonly IChatWidget[] = [];
 	readonly form: IssueFormService;
 	constructor() {
 		super();
 		this.services.registerInstance(IConfigurationService, { getValue: () => this.disabled } as unknown as IConfigurationService);
 		const fixture = this;
-		this.services.registerInstance(IChatWidgetService, { get lastFocusedWidget() { return fixture.widget; } } as IChatWidgetService);
+		this.services.registerInstance(IChatWidgetService, {
+			get lastFocusedWidget() { return fixture.widget; },
+			getAllWidgets: () => [...(fixture.widget ? [fixture.widget] : []), ...fixture.additionalWidgets],
+			onDidChangeWidgets: Event.None,
+			register: () => { throw new Error('Unexpected widget registration'); },
+		});
 		this.services.registerInstance(INotificationService, { info: (text: string) => this.notices.push(text) } as unknown as INotificationService);
 		this.services.registerInstance(IEditorService, { openEditor: async (input: { resource: { toString(): string; }; }) => { if (this.failOpen) throw new Error('Editor unavailable'); this.opened.push(input.resource.toString()); } } as unknown as IEditorService);
 		this.services.registerInstance(IIssueReporterService, {
@@ -48,7 +55,7 @@ class Fixture extends Disposable {
 		this.services.registerInstance(IIssueFormService, this.form);
 		this.services.registerInstance(IWorkbenchIssueService, this.services.createInstance(WorkbenchIssueService));
 	}
-	async run() { await this.services.invokeFunction(CommandsRegistry.getCommand(ChatModelFeedbackSurveyActionId)!); }
+	async run(target?: unknown) { await this.services.invokeFunction(CommandsRegistry.getCommand(ChatModelFeedbackSurveyActionId)!, target); }
 }
 
 suite('Ash model feedback from the standard action', () => {
@@ -68,6 +75,29 @@ suite('Ash model feedback from the standard action', () => {
 			}
 		} as unknown as IChatWidget;
 		await f.run(); assert.equal(f.form.state.issueTitle, 'Model feedback: original-model'); assert.match(f.form.state.issueBody, /original-connection/u);
+	});
+
+	test('an explicit reply action opens a report for that completed reply in another visible chat', async () => {
+		using f = new Fixture();
+		const target = { sessionId: 'reply-session', threadId: 'reply-thread', turnId: 'reply-turn', itemId: 'reply-item' };
+		f.additionalWidgets = [{
+			visible: true, sessionId: target.sessionId, threadId: target.threadId,
+			model: {
+				thread: {
+					turns: [{
+						turnId: target.turnId, status: 'completed', model: { provider: 'reply-connection', model: 'reply-model' }, items: [
+							{ type: 'agentMessage', itemId: target.itemId, text: 'Private reply' },
+						]
+					}]
+				}
+			},
+		} as unknown as IChatWidget];
+		await assert.rejects(f.run({ ...target, itemId: 'obsolete' }), /known model/u);
+		await f.run(target);
+		assert.equal(f.form.state.issueTitle, 'Model feedback: reply-model');
+		assert.match(f.form.state.issueBody, /Connection: reply-connection/u);
+		assert.doesNotMatch(f.form.state.issueBody, /Private reply/u);
+		assert.equal(f.submissions, 0);
 	});
 	test('an existing issue draft is opened without replacing text or submitting it', async () => {
 		using f = new Fixture(); f.form.update({ issueTitle: 'My existing report', issueBody: 'Keep my reproduction steps.' });

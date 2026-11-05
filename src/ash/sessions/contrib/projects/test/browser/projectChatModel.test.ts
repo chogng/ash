@@ -108,7 +108,7 @@ class ProjectChatFixture extends Disposable {
 			unsubscribeThread: async () => { },
 			readThread: async () => snapshot,
 			readContextUsage: async () => ({ estimatedTokens: 0, categories: [] }),
-			queuedMessageCount: async () => 0,
+			readQueue: async () => [],
 			listTurnChanges: async () => [],
 			readThreadChanges: async () => ({
 				sequence: 1,

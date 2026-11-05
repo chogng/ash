@@ -44,6 +44,7 @@ import { IStorageService, StorageScope, StorageTarget } from '../../platform/sto
 import type { IAction } from '../../base/common/actions.js';
 import { ForkConversationActionId } from '../../workbench/contrib/chat/browser/actions/chatForkActions.js';
 import { IEditorGroupsService } from '../../workbench/services/editor/common/editorGroupsService.js';
+import { createTurnMultiDiffEditorInput } from './turnMultiDiffSource.js';
 
 let chatPaneInstanceId = 0;
 
@@ -372,6 +373,11 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			model = services.createInstance(ChatWidgetModel, this.chatService, selection, this.sessionService);
 			const log = services.getOptional(ILogService);
 			if (log) resources.add(logSessionHistoryBinding(log, model.onDidFinishHistoryBinding));
+			const editor = this.editorService;
+			const openTurnChanges: IChatWidgetViewOptions['openTurnChanges'] = editor && (async ({ sessionId, threadId, turnId }, signal) => {
+				const input = await createTurnMultiDiffEditorInput(this.chatService, { session: { sessionId }, threadId }, { turnId }, undefined, signal);
+				if (!signal.aborted) await editor.openEditor(input, { pinned: true });
+			});
 			const pane = services.createInstance<ChatWidget<ChatWidgetModel>>(ChatWidget,
 				this.paneHost,
 				`ash-chat-pane-${++chatPaneInstanceId}`,
@@ -385,7 +391,7 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				this.openerService,
 				this.editorService,
 				(resource: URI) => readMarkdownImageResource(this.fileService, resource),
-				undefined, { ...options, configureModelInMenu: true },
+				undefined, { ...options, configureModelInMenu: true, openTurnChanges },
 			);
 			this.paneScopes.set(pane, resources);
 			return pane;

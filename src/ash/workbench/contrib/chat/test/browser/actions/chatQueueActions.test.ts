@@ -91,8 +91,8 @@ function queueFixture() {
 	let editor: ChatQueueEditor | undefined;
 	const widget = {
 		sessionId: 'session', threadId: 'thread', visible: true, domNode: container, onDidHide: hidden.event, onDidChangeViewModel: changed.event, focusInput: () => { focus++; },
-		startEditing: async (requestId: string) => {
-			editor = lifetime.add(services.createInstance(ChatQueueEditor, widget, requestId));
+		startEditing: async (request: QueuedMessage) => {
+			editor = lifetime.add(services.createInstance(ChatQueueEditor, widget, request));
 			try { await editor.show(); } finally { editor.dispose(); editor = undefined; }
 		},
 		acceptInput: async (value?: string, options?: IChatAcceptInputOptions) => editor?.acceptInput(value, options)
@@ -189,7 +189,7 @@ test('A queue picker closes when its captured conversation changes without modif
 for (const command of [ChatEditPendingRequestAction.ID, ChatRemovePendingRequestAction.ID, ChatSendPendingImmediatelyAction.ID]) test(`Queue command ${command} retires a delayed A-B-A read`, async () => {
 	using f = queueFixture();
 	const model = { composerGeneration: 0 };
-	Object.assign(f.widget, { model, startEditing: async (commandId: string) => { f.calls.push(['edit', commandId]); } });
+	Object.assign(f.widget, { model, startEditing: async (request: QueuedMessage) => { f.calls.push(['edit', request.commandId]); } });
 	const pending = new DeferredPromise<readonly QueuedMessage[]>();
 	f.chat.getPendingRequests = () => pending.p;
 	const operation = f.services.invokeFunction(CommandsRegistry.getCommand(command)!, f.target) as Promise<void>;

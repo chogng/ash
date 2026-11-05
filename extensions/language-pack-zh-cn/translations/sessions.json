@@ -421,6 +421,8 @@
     "sessions.create.noActiveChat": "新会话中没有活动聊天。",
     "chat.modelPicker.unavailable": "所选模型不可用",
     "sessions.changes.captureChanged": "此回合的更改在加载期间已更新。请重新打开更改以审阅最新修订。",
+    "chat.turnChanges.title": "本轮文件变更",
+    "chat.turnChanges.unavailable": "此轮的文件变更已不可用。",
     "sessions.history.now": "刚刚",
     "sessions.history.minutesAgo": "{0} 分钟前",
     "sessions.history.recent": "最近",

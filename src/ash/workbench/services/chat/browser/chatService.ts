@@ -345,14 +345,13 @@ export class ChatService extends Disposable implements IChatService {
 		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: false, requestSequence: options.expectedSequence });
 	}
 
-	async queuedMessageCount(sessionId: SessionId, threadId: ThreadId): Promise<number> {
+	async readQueue(sessionId: SessionId, threadId: ThreadId): Promise<readonly QueuedMessage[]> {
 		const result = await this.turnApi.listQueued({ sessionId, threadId });
-		return result.messages.filter(message => message.status === 'pending' || message.status === 'paused' || message.status === 'delivering').length;
+		return result.messages.filter(message => message.status !== 'started' && message.status !== 'cancelled');
 	}
 
 	async getPendingRequests(sessionId: SessionId, threadId: ThreadId): Promise<readonly QueuedMessage[]> {
-		const result = await this.turnApi.listQueued({ sessionId, threadId });
-		return result.messages.filter(message => message.status === 'pending' || message.status === 'paused' || message.status === 'rejected');
+		return (await this.readQueue(sessionId, threadId)).filter(message => message.status !== 'delivering');
 	}
 
 	async pausePendingRequest(target: QueueMessageTarget) {

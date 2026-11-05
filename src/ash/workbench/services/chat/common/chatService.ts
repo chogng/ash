@@ -328,7 +328,8 @@ export interface IChatService {
 	startTurn(options: StartTurnOptions): Promise<void>;
 	startReview(options: StartReviewOptions): Promise<void>;
 	queueTurn(options: StartTurnOptions): Promise<void>;
-	queuedMessageCount(sessionId: SessionId, threadId: ThreadId): Promise<number>;
+	/** Pending, paused, delivering and rejected messages in the backend's queue order. */
+	readQueue(sessionId: SessionId, threadId: ThreadId): Promise<readonly QueuedMessage[]>;
 	getPendingRequests(sessionId: SessionId, threadId: ThreadId): Promise<readonly QueuedMessage[]>;
 	pausePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;
 	resumePendingRequest(target: QueueMessageTarget): Promise<QueuedMessage>;

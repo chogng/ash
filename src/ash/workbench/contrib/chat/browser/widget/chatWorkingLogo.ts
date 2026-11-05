@@ -2,11 +2,13 @@ import { addDisposableListener, h } from '../../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { observeIntersection, observeResize } from '../../../../../base/browser/observer.js';
 import { PixelRatio, type IPixelRatioMonitor } from '../../../../../base/browser/pixelRatio.js';
-import { raceCancellationError, RunOnceScheduler } from '../../../../../base/common/async.js';
+import { disposableWindowTimeout } from '../../../../../base/browser/scheduler.js';
+import { raceCancellationError } from '../../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
+import { scheduleChatAnimationFrame } from './chatProgressAnimation.js';
 import { acquireChatWorkingLogoAtlas, getChatWorkingLogoAtlasKeyframes } from './chatWorkingLogoAtlas.js';
 import { ashTitlebarMark } from '../../../../browser/parts/titlebar/titlebarMark.js';
 import { captureChatWorkingLogoDraw, chatWorkingLogoDrawDuration, startChatWorkingLogoDraw } from './chatWorkingLogoDraw.js';
@@ -19,7 +21,7 @@ export class ChatWorkingLogo extends Disposable {
 	private readonly mark: HTMLElement;
 	private animations: Animation[] = [];
 	private readonly atlasRequest = this._register(new MutableDisposable<DisposableStore>());
-	private readonly atlasScheduler = this._register(new RunOnceScheduler(() => { void this.prepareAtlas(); }, 150));
+	private readonly atlasPreparation = this._register(new MutableDisposable());
 	private readonly pixelRatio: IPixelRatioMonitor | undefined;
 	private atlasSheet: HTMLElement | undefined;
 	private atlasFailed = false;
@@ -88,7 +90,19 @@ export class ChatWorkingLogo extends Disposable {
 			this.animations = startChatWorkingLogoDraw(this.mark);
 		}
 		for (const animation of this.animations) if (animation.playState === 'paused') animation.play();
-		if (!this.atlasRequest.value && !this.atlasFailed && !this.atlasScheduler.isScheduled()) this.atlasScheduler.schedule();
+		this.scheduleAtlas();
+	}
+
+	private scheduleAtlas(): void {
+		const targetWindow = this.domNode.ownerDocument.defaultView;
+		if (!targetWindow || this.atlasRequest.value || this.atlasFailed || this.atlasPreparation.value) return;
+		// Give font playback a head start, then batch geometry reads with other progress indicators.
+		this.atlasPreparation.value = disposableWindowTimeout(targetWindow, () => {
+			this.atlasPreparation.value = scheduleChatAnimationFrame(targetWindow, () => {
+				this.atlasPreparation.clear();
+				void this.prepareAtlas();
+			});
+		}, 150);
 	}
 
 	private invalidateAtlas(): void {
@@ -98,7 +112,7 @@ export class ChatWorkingLogo extends Disposable {
 	}
 
 	private clearAtlas(): void {
-		this.atlasScheduler.cancel();
+		this.atlasPreparation.clear();
 		this.atlasRequest.clear();
 		if (!this.atlasSheet) return;
 		for (const animation of this.animations) animation.cancel();

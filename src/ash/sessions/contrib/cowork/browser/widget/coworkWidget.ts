@@ -23,7 +23,7 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDis
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions } from '../../../../../workbench/contrib/chat/browser/chat.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
-import type { AgentInteractionDecision, ApprovalMode, ChatAgent, ChatMode, ModelRef, SessionId, ThreadGoal, ThreadId } from '../../../../../workbench/services/chat/common/chatService.js';
+import type { AgentInteractionDecision, ApprovalMode, ChatAgent, ChatMode, ModelRef, QueuedMessage, SessionId, ThreadGoal, ThreadId } from '../../../../../workbench/services/chat/common/chatService.js';
 import type { ChatInputDelegate } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { IChatInputPart } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
@@ -306,9 +306,9 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		return this.queueEditor.value ? this.queueEditor.value.acceptInput(value, options) : this.input.acceptInput(value, options);
 	}
 
-	public async startEditing(requestId: string): Promise<void> {
+	public async startEditing(request: QueuedMessage): Promise<void> {
 		if (this.queueEditor.value || !this.visible) return;
-		const editor = this.instantiationService.createInstance(ChatQueueEditor, this, requestId);
+		const editor = this.instantiationService.createInstance(ChatQueueEditor, this, request);
 		this.queueEditor.value = editor;
 		try { await editor.show(); }
 		finally { if (this.queueEditor.value === editor) this.queueEditor.clear(); }

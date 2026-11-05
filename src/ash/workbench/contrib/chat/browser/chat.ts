@@ -1,7 +1,7 @@
 import type { PromptTurnChanges } from './promptTimeline/promptTimelineModel.js';
 import type { ChatMode } from '../../../services/chat/common/chatService.js';
 import type { IChatInputPart } from './widget/input/chatInputPart.js';
-import type { ChatRequestQueueKind } from '../../../services/chat/common/chatService.js';
+import type { ChatRequestQueueKind, QueuedMessage } from '../../../services/chat/common/chatService.js';
 import type { IView } from '../../../common/views.js';
 import type { AgentSessionsViewerOrientation } from './agentSessions/agentSessions.js';
 import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
@@ -56,9 +56,12 @@ export interface IChatWidgetViewOptions {
 	readonly configureModelInMenu?: boolean;
 	readonly showPromptTimeline?: boolean;
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
+	readonly openTurnChanges?: ChatTurnChangesOpener;
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;
 }
+
+export type ChatTurnChangesOpener = (source: NonNullable<IChatListItem['feedbackSource']>, signal: AbortSignal) => Promise<void>;
 
 /** The live presentation owns the input; the registry never owns a conversation model. */
 export interface IChatWidget {
@@ -77,7 +80,7 @@ export interface IChatWidget {
 	readonly onDidChangeViewModel: Event<void>;
 	acceptInput(query?: string, options?: IChatAcceptInputOptions): Promise<void>;
 	/** Edits a queued request without replacing the unsent composer draft. */
-	startEditing(requestId: string): void | Promise<void>;
+	startEditing(request: QueuedMessage): void | Promise<void>;
 	cancelTranscriptProgress?(): boolean;
 	retryFailedTurn(turnId?: string): Promise<void>;
 	getFindController(): IChatFindController | undefined;

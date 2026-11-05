@@ -289,7 +289,7 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		startReview: async () => { throw new Error('Unexpected review in this fixture'); },
 		startTurn: () => pending as Promise<void>,
 		queueTurn: () => pending as Promise<void>,
-		queuedMessageCount: () => pending as Promise<number>,
+		readQueue: () => pending,
 		getPendingRequests: async () => { throw new Error('Unexpected queue operation'); },
 		pausePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
 		resumePendingRequest: async () => { throw new Error('Unexpected queue operation'); },

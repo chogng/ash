@@ -81,7 +81,7 @@ export function installMultiHostSessionsFixture(): {
 					readThread: async (sessionId: string, threadId: string) => { record('read', sessionId, threadId); return read(sessionId, threadId); },
 					subscribeThread: async (sessionId: string, threadId: string) => { record('subscribe', sessionId, threadId); return { ...read(sessionId, threadId), updates: [] }; },
 					unsubscribeThread: async (sessionId: string, threadId: string) => { record('unsubscribe', sessionId, threadId); },
-					readContextUsage: async () => ({ estimatedTokens: 0, categories: [] }), queuedMessageCount: async () => 0,
+					readContextUsage: async () => ({ estimatedTokens: 0, categories: [] }), readQueue: async () => [],
 					listTurnChanges: async () => [], readThreadChanges: async () => ({ sequence: 1, revision: '1', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] }),
 					readHistoryState: async () => ({ sequence: 1, canUndo: false, canRedo: false }), readCheckpoints: async () => [],
 					startTurn: async (options: StartTurnOptions) => {

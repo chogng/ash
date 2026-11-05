@@ -2336,7 +2336,7 @@ export class ChatQueueEditor extends Disposable {
 
 	constructor(
 		private readonly widget: IChatWidget,
-		private readonly requestId: string,
+		private readonly original: QueuedMessage,
 		@IChatService private readonly chat: IChatService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IMenuService private readonly menus: IMenuService,
@@ -2352,13 +2352,12 @@ export class ChatQueueEditor extends Disposable {
 	}
 
 	async show(): Promise<void> {
-		const { sessionId, threadId } = this.widget;
-		if (!sessionId || !threadId || !this.widget.visible) return;
-		let current = () => !this.isDisposed && this.widget.visible && this.widget.sessionId === sessionId && this.widget.threadId === threadId;
-		const messages = await this.chat.getPendingRequests(sessionId, threadId);
+		const original = this.original;
+		const { sessionId, threadId } = original;
+		const generation = this.widget.model?.composerGeneration;
+		let current = () => !this.isDisposed && this.widget.visible && this.widget.sessionId === sessionId && this.widget.threadId === threadId
+			&& this.widget.model?.composerGeneration === generation;
 		if (!current()) return;
-		const original = messages.find(message => message.commandId === this.requestId);
-		if (!original) throw new Error(localize('chat.queue.conflict', 'This queued message changed or has already started. Choose it again from the queue.'));
 		const target = (message: QueuedMessage) => ({ sessionId, threadId, commandId: message.commandId, expectedRevision: message.revision });
 		const paused = await this.chat.pausePendingRequest(target(original));
 		const resume = () => original.status === 'pending' ? this.chat.resumePendingRequest(target(paused)).then(() => undefined) : Promise.resolve();

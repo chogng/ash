@@ -4,6 +4,136 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 
 suite('chatTranscript browser component', () => {
 	const browserTests = useBrowserTests();
+	for (const locale of ['en', 'zh-CN']) {
+		test(`reply turn changes appear in place and keep the source and keyboard focus in ${locale}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatTranscript.html?locale=${locale}&turnChanges`);
+			const feedbackSource = { sessionId: 'session', threadId: 'thread', turnId: 'earlier-turn', itemId: 'turn-reply' };
+			const reply = { id: 'turn-reply', type: 'agentMessage', text: 'Earlier reply', transient: false, feedbackSource } as const;
+			const render = (turnChanges?: { files: number; additions: number; deletions: number; }) => page.evaluate(({ reply, turnChanges }) =>
+				window.ashChatTranscriptIntegration.renderItems([{ ...reply, turnChanges }]), { reply, turnChanges });
+			await render();
+			const row = page.locator('[data-item-id="turn-reply"]');
+			const name = locale === 'en' ? 'Open Turn Changes: 2 files, added 3, removed 1' : '打开本轮变更：2 个文件，新增 3 行，删除 1 行';
+			const changes = row.getByRole('button', { name, exact: true });
+			await expect(changes).toHaveCount(0);
+			const body = await row.locator('.ash-chat-markdown-part').elementHandle();
+			await render({ files: 2, additions: 3, deletions: 1 });
+			await expect(changes).toContainText('+3');
+			await expect(changes).toContainText('−1');
+			await changes.press('Space');
+			await expect(page.locator('main[data-opened-turn]')).toHaveAttribute('data-opened-turn', JSON.stringify(feedbackSource));
+			expect(await row.locator('.ash-chat-markdown-part').evaluate((node, previous) => node === previous, body)).toBe(true);
+			await body?.dispose();
+			await render();
+			await expect(changes).toHaveCount(0);
+			await expect(row).toBeFocused();
+		});
+
+		test(`queue, redo and feedback buttons forward the latest row identity in ${locale}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatTranscript.html?locale=${locale}`);
+			const source = { sessionId: 'session', threadId: 'thread' };
+			const feedbackSource = { ...source, turnId: 'turn', itemId: 'feedback-reply' };
+			const queueTarget = { ...source, commandId: 'queued', expectedRevision: 3 };
+			const historyRedoTarget = { ...source, expectedSequence: 12 };
+			const rows = [
+				{ id: 'feedback-reply', type: 'agentMessage', text: 'Same reply', transient: false, feedbackSource },
+				{ id: 'redo', type: 'historyRedo', text: '', transient: false, historyRedoTarget },
+				{ id: 'queued', type: 'queuedMessage', text: 'Queued input', transient: false, queueTarget: { ...queueTarget, expectedRevision: 2 } },
+			] as const;
+			await page.evaluate(rows => {
+				window.ashChatTranscriptIntegration.captureMessageRowCommands();
+				window.ashChatTranscriptIntegration.renderItems(rows);
+			}, rows);
+			const action = (en: string, zh: string) => page.getByRole('button', { name: locale === 'en' ? en : zh, exact: true });
+			const feedback = action('Give model feedback', '提供模型反馈');
+			await expect(feedback).toHaveCount(0);
+			const reply = page.locator('[data-item-id="feedback-reply"]');
+			const retained = await reply.elementHandle();
+			await page.evaluate(({ rows, queueTarget }) => window.ashChatTranscriptIntegration.renderItems([
+				{ ...rows[0], canGiveModelFeedback: true }, rows[1], { ...rows[2], queueTarget },
+			]), { rows, queueTarget });
+			await feedback.press('Enter');
+			expect(await reply.evaluate((node, previous) => node === previous, retained)).toBe(true);
+			await retained?.dispose();
+			await action('Edit queued message', '编辑排队消息').press('Space');
+			await action('Send queued message immediately', '立即发送排队消息').click();
+			await action('Remove queued message', '移除排队消息').click();
+			await action('Redo last request', '重做上一条请求').click();
+			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.messageRowCommands())).toEqual([
+				{ id: 'workbench.action.chat.openModelFeedbackSurvey', args: [feedbackSource] },
+				{ id: 'workbench.action.chat.editPendingRequest', args: [queueTarget] },
+				{ id: 'workbench.action.chat.sendPendingImmediately', args: [queueTarget] },
+				{ id: 'workbench.action.chat.removePendingRequest', args: [queueTarget] },
+				{ id: 'workbench.action.chat.redoEdit', args: [historyRedoTarget] },
+			]);
+		});
+
+		test(`message checkpoint restore targets its request and returns focus on cancel in ${locale}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatTranscript.html?locale=${locale}`);
+			await page.evaluate(() => window.ashChatTranscriptIntegration.prepareMessageCheckpoint());
+			const action = { name: locale === 'en' ? 'Restore checkpoint' : '恢复检查点', exact: true };
+			await expect(page.locator('[data-item-id="request-1"]').getByRole('button', action)).toHaveCount(0);
+			const restore = page.locator('[data-item-id="request-2"]').getByRole('button', action);
+			await restore.press('Enter');
+			const picker = page.getByRole('combobox', { name: locale === 'en' ? 'Choose a checkpoint to restore into a new chat' : '选择要恢复到新对话的检查点' });
+			await expect(picker).toBeFocused();
+			await expect(page.getByRole('option')).toHaveCount(2);
+			await picker.press('Escape');
+			await expect(restore).toBeFocused();
+			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.messageCheckpointState())).toEqual({ requests: [], opened: [] });
+			await restore.press('Space');
+			await picker.fill(locale === 'en' ? 'After this message' : '此消息之后');
+			await picker.press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.messageCheckpointState().opened)).toEqual(['restored']);
+			const { requests } = await page.evaluate(() => window.ashChatTranscriptIntegration.messageCheckpointState());
+			expect(requests).toMatchObject([{ sessionId: 'source', threadId: 'original', itemId: 'item-2', boundary: 'after' }]);
+		});
+
+		test(`message Fork keeps its focus and click target through progress and failure in ${locale}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatTranscript.html?locale=${locale}`);
+			await page.evaluate(locale => {
+				window.ashChatTranscriptIntegration.setTheme(locale === 'en' ? 'light' : 'hc');
+				window.ashChatTranscriptIntegration.prepareMessageFork();
+			}, locale);
+			const label = locale === 'en' ? 'Fork conversation from this point' : '从此处创建分支对话';
+			const fork = page.getByRole('button', { name: label, exact: true });
+			await page.evaluate(() => window.ashChatTranscriptIntegration.setMessageForkEnabled(false));
+			await expect(fork).toHaveCount(0);
+			await page.evaluate(() => window.ashChatTranscriptIntegration.setMessageForkEnabled(true));
+			await fork.focus();
+			const bounds = await fork.boundingBox();
+			await page.keyboard.press('Enter');
+			await expect(fork).toHaveAttribute('aria-busy', 'true');
+			await expect(fork).toBeFocused();
+			expect(await fork.boundingBox()).toEqual(bounds);
+			const spinner = await fork.locator('.ash-pixel-spinner').boundingBox();
+			expect(Math.abs((spinner!.x + spinner!.width / 2) - (bounds!.x + bounds!.width / 2))).toBeLessThan(1);
+			await page.keyboard.press('Enter');
+			const source = { sessionId: 'source', threadId: 'original', beforeItemId: 'item-2' };
+			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.messageForks())).toEqual([{ ...source, toSide: false }]);
+			await page.evaluate(() => window.ashChatTranscriptIntegration.finishMessageFork(true));
+			await expect(fork).toBeEnabled();
+			await expect(fork).toBeFocused();
+			await fork.click({ modifiers: ['Alt'] });
+			await expect(fork).toHaveAttribute('aria-busy', 'true');
+			await page.evaluate(() => window.ashChatTranscriptIntegration.finishMessageFork());
+			await expect(fork).toBeEnabled();
+			await fork.press('Alt+Enter');
+			await expect(fork).toHaveAttribute('aria-busy', 'true');
+			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.messageForks())).toEqual([
+				{ ...source, toSide: false }, { ...source, toSide: true }, { ...source, toSide: true },
+			]);
+			await page.evaluate(async () => {
+				window.ashChatTranscriptIntegration.renderItems([]);
+				await window.ashChatTranscriptIntegration.finishMessageFork();
+			});
+			await expect(fork).toHaveCount(0);
+		});
+	}
 	for (const locale of ['en', 'zh-CN']) for (const cowork of [false, true]) for (const theme of ['dark', 'light', 'hc', 'hcLight'] as const) {
 		test(`Chat request editing preserves drafts and keyboard focus in ${cowork ? 'Cowork' : 'Code'} ${locale} ${theme}`, async function () {
 			const { page } = browserTests;

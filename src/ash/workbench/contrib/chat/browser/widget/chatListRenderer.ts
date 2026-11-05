@@ -38,6 +38,14 @@ import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 import { captureAnimationTarget, triggerClickAnimation, ClickAnimation } from '../../../../../base/browser/ui/animations/animations.js';
 import { ChatResponseFeedbackStoragePrefix, ChatUpvoteAnimationSettingId, isResponseHelpful, type ChatUpvoteAnimation } from '../../common/chatResponseFeedback.js';
 import { MarkHelpfulActionId } from '../actions/chatTitleActions.js';
+import { ChatEditPendingRequestAction, ChatRemovePendingRequestAction, ChatSendPendingImmediatelyAction } from '../actions/chatQueueActions.js';
+import { ChatModelFeedbackSurveyActionId } from '../actions/chatModelFeedbackSurveyActions.js';
+import type { Icon } from '../../../../../base/common/icon.js';
+import { ChatForkActionViewItem } from './chatForkActionViewItem.js';
+import { ChatTurnChangesPill } from './chatTurnPills.js';
+import type { ChatTurnChangesOpener } from '../chat.js';
+import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
+import { RedoChatHistoryActionId, RestoreCheckpointActionId } from '../chatEditing/chatEditingActions.js';
 
 import type { IChatInputPart } from './input/chatInputPart.js';
 import type { ResolvedChatContext } from '../../../../services/chat/common/chatContextService.js';
@@ -79,6 +87,7 @@ interface ChatListItemRendererOptions {
 	readonly mcpAppDelegate?: IChatMcpAppDelegate;
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
 	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void;
+	readonly openTurnChanges?: ChatTurnChangesOpener;
 	readonly onDidRequestLink?: (target: string) => void;
 	readonly readResponseResource?: (item: IChatListItem, resource: URI, signal: AbortSignal) => Promise<Blob>;
 	readonly getResponseLinkOpener?: (item: IChatListItem) => ((target: string) => Promise<void>) | undefined;
@@ -87,6 +96,7 @@ interface ChatListItemRendererOptions {
 }
 
 const speechContextKeys = new Set([HasSpeechProvider.key, TextToSpeechInProgress.key]);
+const chatEnabledContextKeys = new Set([ChatContextKeys.enabled.key]);
 
 /** Owns one message's DOM, incremental content, actions and disposable resources. */
 export class ChatListItemRenderer extends Disposable {
@@ -99,6 +109,8 @@ export class ChatListItemRenderer extends Disposable {
 	private updateResponseActions: (() => void) | undefined;
 	private updateReadAloud: (() => void) | undefined;
 	private updateHelpful: (() => void) | undefined;
+	private updateModelFeedback: (() => void) | undefined;
+	private updateTurnChanges: (() => void) | undefined;
 	private readonly reading = this._register(new MutableDisposable<IDisposable & { readonly source: CancellationTokenSource; readonly item: IChatListItem; }>());
 	private readonly memoryReferences = this._register(new DisposableMap<string, IDisposable & { readonly element: HTMLButtonElement; }>());
 	private readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
@@ -129,6 +141,7 @@ export class ChatListItemRenderer extends Disposable {
 		@ICommandService private readonly commands: ICommandService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IStorageService private readonly storageService: IStorageService,
+		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
 		this.element = h(ownerDocument, 'article');
@@ -195,6 +208,8 @@ export class ChatListItemRenderer extends Disposable {
 		this.updateReadAloud?.();
 		this.updateResponseActions?.();
 		this.updateHelpful?.();
+		this.updateModelFeedback?.();
+		this.updateTurnChanges?.();
 		this.renderAttachments();
 		this.renderMemoryReferences();
 	}
@@ -252,9 +267,15 @@ export class ChatListItemRenderer extends Disposable {
 		} else { this.resourceChanges.clear(); this.resources.clear(); }
 	}
 
-	private renderCopyAction(lifetime: DisposableStore): HTMLElement {
+	private createMessageActions(): HTMLElement {
 		const actions = h(this.element.ownerDocument, 'div');
 		actions.className = 'ash-chat-message-actions';
+		this.element.append(actions);
+		return actions;
+	}
+
+	private renderCopyAction(lifetime: DisposableStore): HTMLElement {
+		const actions = this.createMessageActions();
 		const button = lifetime.add(new Button(actions, {
 			...defaultButtonStyles,
 			label: localize('chat.message.copy', 'Copy message'),
@@ -267,7 +288,6 @@ export class ChatListItemRenderer extends Disposable {
 		this.copyButton = button;
 		const copy = this.createCopyHandler(actions, lifetime, button.domNode);
 		lifetime.add(button.onDidClick(() => void copy()));
-		this.element.append(actions);
 		if (this.item.type === 'agentMessage') {
 			this.renderReadAloudAction(actions, lifetime);
 			if (!this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key)) this.renderHelpfulAction(actions, lifetime);
@@ -305,9 +325,8 @@ export class ChatListItemRenderer extends Disposable {
 		};
 	}
 
-	private renderResponseActionBar(lifetime: DisposableStore): void {
-		const actions = h(this.element.ownerDocument, 'div', { className: 'ash-chat-message-actions' });
-		this.element.append(actions);
+	private renderResponseActionBar(lifetime: DisposableStore): HTMLElement {
+		const actions = this.createMessageActions();
 		const bar = lifetime.add(new ActionBar(actions, {
 			ariaLabel: localize('chat.message.actions', 'Response actions'),
 			actionViewItemOptions: { iconOnly: true, buttonStyles: defaultButtonStyles, buttonPresentation: 'quiet' },
@@ -369,6 +388,96 @@ export class ChatListItemRenderer extends Disposable {
 			event.preventDefault();
 			event.stopPropagation();
 		}));
+		return actions;
+	}
+
+	private renderResponseExtras(actions: HTMLElement, lifetime: DisposableStore): void {
+		this.updateModelFeedback = this.renderMessageCommandActions(actions, lifetime, [{
+			id: ChatModelFeedbackSurveyActionId, label: localize('chat.modelFeedback.messageAction', 'Give model feedback'), icon: Lxicon.comment,
+		}], () => this.item.canGiveModelFeedback && !this.item.transient && !this.item.isError ? this.item.feedbackSource : undefined);
+		const open = this.options.openTurnChanges;
+		if (open) {
+			let pill: ChatTurnChangesPill | undefined;
+			this.updateTurnChanges = () => {
+				if (!pill && this.item.turnChanges) {
+					pill = lifetime.add(this.instantiationService.createInstance(ChatTurnChangesPill, actions, this.element, async (signal: AbortSignal) => {
+						if (this.options.isVisible() && this.item.turnChanges && this.item.feedbackSource) await open(this.item.feedbackSource, signal);
+					}));
+				}
+				pill?.render(this.item.turnChanges);
+			};
+		}
+	}
+
+	private renderRestoreCheckpointAction(actions: HTMLElement, source: NonNullable<IChatListItem['requestSource']>, lifetime: DisposableStore): void {
+		const label = localize('chat.restoreCheckpoint.messageAction', 'Restore checkpoint');
+		const button = lifetime.add(new Button(actions, {
+			...defaultButtonStyles, label, title: label, icon: Lxicon.history, iconOnly: true, presentation: 'quiet', size: 'small',
+		}));
+		const updateVisibility = () => { button.hidden = this.contextKeys.getValue(ChatContextKeys.enabled.key) !== true; };
+		updateVisibility();
+		lifetime.add(this.contextKeys.onDidChangeContext(event => {
+			if (event.affectsSome(chatEnabledContextKeys)) updateVisibility();
+		}));
+		const { sessionId, threadId, itemId } = source;
+		let pending = false;
+		lifetime.add(button.onDidClick(async event => {
+			event.stopPropagation();
+			if (pending || button.hidden || !this.options.isVisible()) return;
+			pending = true;
+			button.domNode.setAttribute('aria-disabled', 'true');
+			try {
+				await this.commands.executeCommand(RestoreCheckpointActionId, { sessionId, threadId, itemId });
+			} catch (error) {
+				if (!this.isDisposed && !isCancellationError(error)) {
+					this.notifications.error(localize('chat.restoreCheckpoint.failed', 'Could not restore the checkpoint: {0}', String(error)));
+				}
+			} finally {
+				pending = false;
+				if (!this.isDisposed) button.domNode.removeAttribute('aria-disabled');
+			}
+		}));
+	}
+
+	private renderMessageCommandActions(
+		actions: HTMLElement,
+		lifetime: DisposableStore,
+		commands: readonly { readonly id: string; readonly label: string; readonly icon: Icon; }[],
+		getTarget: () => object | undefined,
+	): () => void {
+		let pending = false;
+		const buttons = commands.map(command => {
+			const button = lifetime.add(new Button(actions, {
+				...defaultButtonStyles, label: command.label, title: command.label, icon: command.icon, iconOnly: true, presentation: 'quiet', size: 'small',
+			}));
+			lifetime.add(button.onDidClick(async event => {
+				event.stopPropagation();
+				const target = getTarget();
+				if (pending || button.hidden || !target || !this.options.isVisible()) return;
+				pending = true;
+				for (const action of buttons) action.domNode.setAttribute('aria-disabled', 'true');
+				try {
+					await this.commands.executeCommand(command.id, target);
+				} catch (error) {
+					if (!this.isDisposed && !isCancellationError(error)) {
+						this.notifications.error(localize('chat.messageAction.failed', 'Could not run {0}: {1}', command.label, String(error)));
+					}
+				} finally {
+					pending = false;
+					if (!this.isDisposed) for (const action of buttons) action.domNode.removeAttribute('aria-disabled');
+				}
+			}));
+			return button;
+		});
+		const update = () => {
+			const hidden = this.contextKeys.getValue(ChatContextKeys.enabled.key) !== true || !getTarget();
+			for (const button of buttons) button.hidden = hidden;
+		};
+		lifetime.add(this.contextKeys.onDidChangeContext(event => {
+			if (event.affectsSome(chatEnabledContextKeys)) update();
+		}));
+		update();
+		return update;
 	}
 
 	private renderHelpfulAction(actions: HTMLElement, lifetime: DisposableStore): void {
@@ -411,7 +520,7 @@ export class ChatListItemRenderer extends Disposable {
 	}
 
 	private renderEditAction(requestText: HTMLElement, lifetime: DisposableStore, actions?: HTMLElement): void {
-		const edit = actions ? lifetime.add(new Button(actions, {
+		const edit = actions && !this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key) ? lifetime.add(new Button(actions, {
 			...defaultButtonStyles, label: localize('chat.edit.label', 'Edit message'), presentation: 'quiet', size: 'small',
 		})) : undefined;
 		const editTarget = edit?.domNode ?? requestText;
@@ -694,8 +803,8 @@ export class ChatListItemRenderer extends Disposable {
 			return;
 		}
 		const body = item.type === 'advisor' ? h(this.element.ownerDocument, 'details') : article;
+		if (item.type === 'userMessage' || item.type === 'queuedMessage') article.classList.add('ash-chat-user-message');
 		if (item.type === 'userMessage' || item.type === 'agentMessage') {
-			if (item.type === 'userMessage') article.classList.add('ash-chat-user-message');
 			article.setAttribute('aria-label', this.accessibilityProvider.getAriaLabel(item));
 		} else if (item.type !== 'reasoning') {
 			const label = h(article.ownerDocument, item.type === 'advisor' ? 'summary' : 'div');
@@ -786,11 +895,29 @@ export class ChatListItemRenderer extends Disposable {
 		this.markdownPart = markdownPart;
 		this.attachments = attachments;
 		if (item.type === 'agentMessage') {
-			if (this.options.getResponseActions) this.renderResponseActionBar(disposables);
-			else this.renderCopyAction(disposables);
+			const actions = this.options.getResponseActions ? this.renderResponseActionBar(disposables) : this.renderCopyAction(disposables);
+			this.renderResponseExtras(actions, disposables);
+		} else if (item.historyRedoTarget) {
+			this.renderMessageCommandActions(this.createMessageActions(), disposables, [{
+				id: RedoChatHistoryActionId, label: localize('chat.history.redoMessage', 'Redo last request'), icon: Lxicon.redo,
+			}], () => this.item.historyRedoTarget);
+		} else if (item.queueTarget) {
+			this.renderMessageCommandActions(this.createMessageActions(), disposables, [
+				{ id: ChatEditPendingRequestAction.ID, label: localize('chat.queue.rowEdit', 'Edit queued message'), icon: Lxicon.edit },
+				{ id: ChatSendPendingImmediatelyAction.ID, label: localize('chat.queue.rowSendNow', 'Send queued message immediately'), icon: Lxicon.enter },
+				{ id: ChatRemovePendingRequestAction.ID, label: localize('chat.queue.rowRemove', 'Remove queued message'), icon: Lxicon.close },
+			], () => this.item.queueTarget);
 		} else if (requestText) {
-			const actions = this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key) ? undefined : this.renderCopyAction(disposables);
+			const checkpoint = item.canForkBeforeRequest && item.requestSource;
+			const actions = this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key)
+				? (checkpoint ? this.createMessageActions() : undefined)
+				: this.renderCopyAction(disposables);
 			if (item.requestSource) this.renderEditAction(requestText, disposables, actions);
+			if (checkpoint && actions) {
+				this.renderRestoreCheckpointAction(actions, checkpoint, disposables);
+				const { sessionId, threadId, itemId } = checkpoint;
+				disposables.add(this.instantiationService.createInstance(ChatForkActionViewItem, actions, { sessionId, threadId, beforeItemId: itemId }, this.options.isVisible));
+			}
 		}
 	}
 
@@ -830,8 +957,14 @@ export class ChatListItemRenderer extends Disposable {
 
 function sameItem(left: IChatListItem, right: IChatListItem): boolean {
 	return left.id === right.id && left.type === right.type && left.text === right.text && left.contextText === right.contextText && left.contextSourceUrl === right.contextSourceUrl
+		&& left.canGiveModelFeedback === right.canGiveModelFeedback && left.feedbackSource?.sessionId === right.feedbackSource?.sessionId
+		&& left.feedbackSource?.threadId === right.feedbackSource?.threadId && left.feedbackSource?.turnId === right.feedbackSource?.turnId
+		&& left.feedbackSource?.itemId === right.feedbackSource?.itemId
+		&& left.turnChanges?.files === right.turnChanges?.files && left.turnChanges?.additions === right.turnChanges?.additions
+		&& left.turnChanges?.deletions === right.turnChanges?.deletions
 		&& left.requestSource?.sessionId === right.requestSource?.sessionId && left.requestSource?.threadId === right.requestSource?.threadId
 		&& left.requestSource?.turnId === right.requestSource?.turnId && left.requestSource?.itemId === right.requestSource?.itemId
+		&& left.canForkBeforeRequest === right.canForkBeforeRequest
 		&& left.hookPart?.run === right.hookPart?.run
 		&& left.resources === right.resources && left.markdown?.supportHtml === right.markdown?.supportHtml
 		&& left.contextEntries === right.contextEntries

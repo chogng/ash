@@ -16,7 +16,7 @@ import type { ISessionProviderScope, ISessionProviderScopeService } from '../../
 import { ChatService } from '../../../workbench/services/chat/browser/chatService.js';
 import { createDisconnectedAgentSessionService, createDisconnectedAgentThreadService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 import type { IAgentTurnService } from '../../../platform/agentHost/common/agentService.js';
-import type { AgentInteractionOffer, ThreadRead, ThreadSubscription, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, SessionOperationInput } from '../../../platform/agentHost/common/agent.js';
+import type { AgentInteractionOffer, QueuedMessage, ThreadRead, ThreadSubscription, ThreadUpdateEnvelope, ThreadTranscriptUpdateEnvelope, SessionOperationInput } from '../../../platform/agentHost/common/agent.js';
 import type { AdvisorConfig, IAgentModelsService } from '../../../platform/models/common/agentModels.js';
 import type { IAgentExecutionSettingsService } from '../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import type { IAppServerApi, IServerEventApi, AppServerConnectionState } from '../../../platform/agentHost/common/appServerApi.js';
@@ -89,6 +89,29 @@ async function waitFor(condition: () => boolean): Promise<void> { for (let i = 0
 function approval(requestId: string): AgentInteractionOffer { return { connectionGeneration: 1, sessionId: 'session', threadId: 'A', turnId: 'turn-A', interaction: { requestId, request: { type: 'approval', request: { reason: requestId, capabilities: [{ kind: 'fileWrite', scope: '/owned/file' }] } } } }; }
 
 for (const kind of ['Code', 'Cowork'] as const) {
+	test(`${kind} renders backend queue revisions and a redo checkpoint independently of committed rows`, async () => {
+		const f = fixture(kind); using resources = f.resources;
+		const base = { sessionId: 'session', threadId: 'A', revision: 5, mode: 'agent', text: 'Queued input', contextCount: 2 } as const;
+		const messages: QueuedMessage[] = [
+			{ ...base, commandId: 'first', status: 'pending' },
+			{ ...base, commandId: 'delivering', status: 'delivering' },
+			{ ...base, commandId: 'rejected', status: 'rejected', error: 'Rejected input' },
+			{ ...base, commandId: 'started', status: 'started' },
+		];
+		f.turnApi.listQueued = async () => ({ messages });
+		f.threadApi.readHistoryState = async () => ({ sequence: 1, canUndo: false, canRedo: true });
+		await f.model.initialize();
+		await waitFor(() => f.model.items.length === 3);
+		assert.deepEqual(f.model.items.map(item => item.type), ['historyRedo', 'queuedMessage', 'queuedMessage']);
+		assert.deepEqual(f.model.items[0]?.historyRedoTarget, { sessionId: 'session', threadId: 'A', expectedSequence: 1 });
+		assert.deepEqual(f.model.items.slice(1).map(item => item.queueTarget), ['first', 'rejected'].map(commandId => ({
+			sessionId: 'session', threadId: 'A', commandId, expectedRevision: 5,
+		})));
+		assert.equal(f.model.inputState.queuedMessages, 2);
+		f.updates.fire({ sessionId: 'session', threadId: 'A', durableSequence: 2, update: { type: 'committed', event: { type: 'turnAccepted' } } });
+		assert.equal(f.model.items.some(item => item.type === 'historyRedo'), false);
+	});
+
 	for (const route of ['start', 'queue', 'steer'] as const) {
 		test(`${kind} ${route} interleaves text and typed snapshots in composer order`, async () => {
 			const f = fixture(kind, undefined, route !== 'start');

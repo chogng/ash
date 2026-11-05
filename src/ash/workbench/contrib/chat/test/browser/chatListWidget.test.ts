@@ -593,6 +593,12 @@ test('message editing uses the accepted backend request identity and excludes st
 		{ id: 'presentation-steering', source: undefined },
 		{ id: 'presentation-transient', source: undefined },
 	]);
+	const source = { sessionId: 'session', threadId: 'thread' };
+	assert.deepEqual(items.map(item => item.canForkBeforeRequest), [false, undefined, undefined]);
+	assert.deepEqual(chatTranscriptListItems(entries, 'turn', [turn], source, { archived: false, hasOlderTurns: true })
+		.map(item => item.canForkBeforeRequest), [true, undefined, undefined]);
+	assert.deepEqual(chatTranscriptListItems(entries, 'turn', [turn], source, { archived: true, hasOlderTurns: true })
+		.map(item => item.canForkBeforeRequest), [false, undefined, undefined]);
 });
 
 suite('chatRenderer browser component', () => {

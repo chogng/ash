@@ -7,7 +7,7 @@ import type { ILifecycleService } from '../../../../services/lifecycle/common/li
 import { readWorkspaceChanges } from './input/chatInput.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import type { ChatSubmissionOptions, ChatRequestQueueKind } from '../../../../services/chat/common/chatService.js';
+import type { ChatSubmissionOptions, ChatRequestQueueKind, QueuedMessage } from '../../../../services/chat/common/chatService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { applyAgentHostCompletionAction } from '../agentHostCompletionAction.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
@@ -234,6 +234,15 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				},
 			}));
 		}
+		const openChangesForTurn = this.viewOptions?.openTurnChanges;
+		const openTurnChanges: IChatWidgetViewOptions['openTurnChanges'] = openChangesForTurn && (async (source, signal) => {
+			if (!this.visible || model.sessionId !== source.sessionId || model.threadId !== source.threadId) return;
+			using listeners = new DisposableStore();
+			const controller = new AbortController();
+			listeners.add(this.onDidHide(() => controller.abort()));
+			listeners.add(model.onDidChangeComposer(() => controller.abort()));
+			await openChangesForTurn(source, AbortSignal.any([signal, controller.signal]));
+		});
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
 			createRequestInput: ({ container, descriptionId, initialHeight, submit, reportError }: ChatRequestInputOptions) => {
 				const delegate: ChatInputDelegate = {
@@ -264,6 +273,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			readResponseResource: model.readResponseResource?.bind(model),
 			getResponseLinkOpener: model.getResponseLinkOpener?.bind(model),
 			getResponseActions: model.getResponseActions?.bind(model),
+			openTurnChanges,
 			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),
 			getHistoryState: () => this.model.olderHistory,
 			loadOlderHistory: async () => { await this.model.loadOlderHistory?.(); },
@@ -491,9 +501,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		return this.queueEditor.value ? this.queueEditor.value.acceptInput(value, options) : this.input.acceptInput(value, options);
 	}
 
-	public async startEditing(requestId: string): Promise<void> {
+	public async startEditing(request: QueuedMessage): Promise<void> {
 		if (this.queueEditor.value || !this.visible) return;
-		const editor = this.instantiationService.createInstance(ChatQueueEditor, this, requestId);
+		const editor = this.instantiationService.createInstance(ChatQueueEditor, this, request);
 		this.queueEditor.value = editor;
 		try { await editor.show(); }
 		finally { if (this.queueEditor.value === editor) this.queueEditor.clear(); }

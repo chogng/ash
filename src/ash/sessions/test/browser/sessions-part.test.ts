@@ -246,7 +246,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		async startReview() { throw new Error('Unexpected review in this fixture'); },
 		async startTurn() { },
 		async queueTurn() { },
-		async queuedMessageCount() { return 0; },
+		async readQueue() { return []; },
 		getPendingRequests: async () => { throw new Error('Unexpected queue operation'); },
 		pausePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
 		resumePendingRequest: async () => { throw new Error('Unexpected queue operation'); },

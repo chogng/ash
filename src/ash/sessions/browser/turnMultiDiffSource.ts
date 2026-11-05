@@ -10,20 +10,28 @@ import { createSessionFileChange } from '../services/sessions/common/session.js'
 export type TurnMultiDiffScope = 'currentTurn' | 'throughCurrentTurn' | 'previousTurn';
 
 /** Resolves immutable Turn change sets into one composed review input. */
-export async function createTurnMultiDiffEditorInput(chatService: IChatService, active: IActiveSessionThread, scope: TurnMultiDiffScope, changeSetIds?: readonly string[], signal?: AbortSignal): Promise<MultiDiffEditorInput> {
+export async function createTurnMultiDiffEditorInput(
+	chatService: IChatService,
+	active: { readonly session: Pick<IActiveSessionThread['session'], 'sessionId'>; readonly threadId: string; },
+	scope: TurnMultiDiffScope | { readonly turnId: string; },
+	changeSetIds?: readonly string[],
+	signal?: AbortSignal,
+): Promise<MultiDiffEditorInput> {
 	const checkCancelled = (): void => { if (signal) { throwIfCancelled(signal); } };
 	const read = <T>(promise: Promise<T>): Promise<T> => signal ? raceCancellationError(promise, signal) : promise;
 	checkCancelled();
 	const changeSets = await read(chatService.listTurnChanges(active.session.sessionId, active.threadId));
 	checkCancelled();
-	const selected = changeSetIds === undefined ? selectChangeSets(changeSets, scope) : changeSetIds.map(id => {
-		const changeSet = changeSets.find(candidate => candidate.changeSetId === id);
-		if (!changeSet) throw new Error(`Turn change set '${id}' is no longer available.`);
-		return changeSet;
-	});
+	const exactTurn = typeof scope === 'string' ? undefined : scope.turnId;
+	const selected = typeof scope !== 'string' ? sealedTurnChanges(changeSets, scope.turnId)
+		: changeSetIds === undefined ? selectChangeSets(changeSets, scope) : changeSetIds.map(id => {
+			const changeSet = changeSets.find(candidate => candidate.changeSetId === id);
+			if (!changeSet) throw new Error(`Turn change set '${id}' is no longer available.`);
+			return changeSet;
+		});
 	const latest = selected.at(-1);
-	if (!latest) throw new Error('No Turn changes are available for this selection.');
-	const repositoryChangeSets = selected.filter(changeSet => changeSet.repositoryId === latest.repositoryId);
+	if (!latest) throw new Error(exactTurn === undefined ? 'No Turn changes are available for this selection.' : localize('chat.turnChanges.unavailable', 'This turn’s file changes are no longer available.'));
+	const repositoryChangeSets = exactTurn === undefined ? selected.filter(changeSet => changeSet.repositoryId === latest.repositoryId) : selected;
 	const composed = new Map<string, ComposedTurnFile>();
 	for (const changeSet of repositoryChangeSets) {
 		checkCancelled();
@@ -33,14 +41,15 @@ export async function createTurnMultiDiffEditorInput(chatService: IChatService, 
 			const contents = await read(chatService.readTurnChangeFile(active.session.sessionId, active.threadId, changeSet.changeSetId, file.path));
 			checkCancelled();
 			if (contents.truncated && !contents.binary) throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.'));
-			const existing = composed.get(file.path);
+			const identity = JSON.stringify([changeSet.repositoryId, file.path]);
+			const existing = composed.get(identity);
 			if (existing) {
 				existing.after = contents.after ?? '';
 				existing.binary ||= contents.binary;
 				existing.latestSummary = details.summary;
 				continue;
 			}
-			composed.set(file.path, {
+			composed.set(identity, {
 				file,
 				binary: contents.binary,
 				before: contents.before ?? '',
@@ -54,6 +63,26 @@ export async function createTurnMultiDiffEditorInput(chatService: IChatService, 
 			throw new Error(localize('sessions.changes.captureChanged', 'This Turn capture changed while loading. Reopen its changes to review the latest revision.'));
 		}
 	}
+	if (typeof scope !== 'string') {
+		const current = await read(chatService.listTurnChanges(active.session.sessionId, active.threadId));
+		checkCancelled();
+		const sealed = sealedTurnChanges(current, scope.turnId);
+		if (sealed.length !== selected.length || selected.some(changeSet => !sealed.some(value => value.changeSetId === changeSet.changeSetId && value.revision === changeSet.revision))) {
+			throw new Error(localize('sessions.changes.captureChanged', 'This Turn capture changed while loading. Reopen its changes to review the latest revision.'));
+		}
+		const label = localize('chat.turnChanges.title', 'Turn File Changes');
+		const source = URI.from({
+			scheme: 'ash-multi-diff', path: `/turn/${scope.turnId}`, query: new URLSearchParams({
+				session: active.session.sessionId, thread: active.threadId, captures: JSON.stringify(selected.map(({ changeSetId, revision }) => [changeSetId, revision])),
+			}).toString()
+		});
+		const multipleRepositories = new Set(selected.map(changeSet => changeSet.repositoryId)).size > 1;
+		const items = [...composed.values()].map(file => {
+			const item = turnFileInput(file);
+			return { ...item, label: multipleRepositories ? `${file.latestSummary.repositoryId}: ${item.label}` : item.label, contextKeys: undefined };
+		});
+		return createMultiDiffEditorInput(source, items, label, { kind: 'snapshot', label });
+	}
 	const items = [...composed.values()].map(turnFileInput);
 	const ids = repositoryChangeSets.map(changeSet => changeSet.changeSetId);
 	const source = URI.parse(`ash-multi-diff:/turn/${scope}?session=${encodeURIComponent(active.session.sessionId)}&thread=${encodeURIComponent(active.threadId)}&changes=${encodeURIComponent(ids.join(','))}`);
@@ -64,6 +93,10 @@ export async function createTurnMultiDiffEditorInput(chatService: IChatService, 
 		repositoryId: latest.repositoryId,
 		branchName: latest.targetBranch,
 	});
+}
+
+function sealedTurnChanges(changeSets: readonly TurnChangeSetSummary[], turnId: string): readonly TurnChangeSetSummary[] {
+	return changeSets.filter(changeSet => changeSet.turnId === turnId && changeSet.captureState === 'sealed' && changeSet.statistics.files > 0);
 }
 
 interface ComposedTurnFile {

@@ -115,7 +115,7 @@ import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform
 import { IDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
 import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/common/languageModels.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
-import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
+import { IChatService, type RestoreChatCheckpointOptions } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { IOpenerService } from '../../../src/ash/platform/opener/common/opener.js';
 import type { ChatContentPart, ThreadTranscriptEntry } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { ChatListWidget } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatListWidget.js';
@@ -129,6 +129,9 @@ import { IEditorPart } from '../../../src/ash/workbench/browser/parts/editor/edi
 import { IUntitledTextEditorService } from '../../../src/ash/workbench/services/untitled/common/untitledTextEditorService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { CommandsRegistry, ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
+import { IContextKeyService } from '../../../src/ash/platform/contextkey/common/contextkey.js';
+import { ChatContextKeys } from '../../../src/ash/workbench/contrib/chat/common/actions/chatContextKeys.js';
+import { ForkConversationActionId, type IForkConversationOptions } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatForkActions.js';
 import { CommandService } from '../../../src/ash/workbench/services/commands/common/commandService.js';
 import { BrowserClipboardService } from '../../../src/ash/platform/clipboard/browser/clipboardService.js';
 import { MainThreadSpeech } from '../../../src/ash/workbench/api/browser/mainThreadSpeech.js';
@@ -351,6 +354,9 @@ const openedAppLinks: { uri: string; options: unknown; }[] = [];
 const appServices = resources.add(services.createChild());
 appServices.registerInstance(IOpenerService, { open: async (uri: URI, options: unknown) => { openedAppLinks.push({ uri: uri.toString(), options }); return true; } } as unknown as IOpenerService);
 const listOptions = {
+	openTurnChanges: new URLSearchParams(location.search).has('turnChanges') ? async (source: NonNullable<IChatListItem['feedbackSource']>) => {
+		root.dataset.openedTurn = JSON.stringify(source);
+	} : undefined,
 	promptTimelineChanges: new URLSearchParams(location.search).has('promptTimeline')
 		? (prompt: IChatListItem) => prompt.id === 'second' ? {
 			files: 1, insertions: 2, deletions: 1,
@@ -462,6 +468,11 @@ let historyDecodeTiming = { parseMs: 0, schemaMs: 0, bytes: 0 };
 let requestEditMode = false;
 const requestEdits: { readonly text: string; readonly commandId: string; readonly itemId: string; readonly contexts?: readonly { readonly name: string; readonly content: string; }[]; }[] = [];
 let completeRequestEdit: ((failure?: boolean) => void) | undefined;
+const messageForks: IForkConversationOptions[] = [];
+let pendingMessageFork: DeferredPromise<void> | undefined;
+const checkpointRestores: RestoreChatCheckpointOptions[] = [];
+const checkpointDestinations: string[] = [];
+const messageRowCommands: { id: string; args: readonly unknown[]; }[] = [];
 let lifecycleSessions: SessionsManagementService | undefined;
 let lifecycleCommands: CommandService | undefined;
 const lifecycleRequests: { readonly operation: string; readonly sessionId: string; }[] = [];
@@ -674,6 +685,14 @@ declare global {
 			setConversationChanges(visible: boolean): void;
 			requestEdits(): readonly { readonly text: string; readonly commandId: string; readonly itemId: string; readonly contexts?: readonly { readonly name: string; readonly content: string; }[]; }[];
 			finishRequestEdit(failure?: boolean): void;
+			prepareMessageFork(): void;
+			setMessageForkEnabled(value: boolean): void;
+			messageForks(): readonly IForkConversationOptions[];
+			finishMessageFork(failure?: boolean): Promise<void>;
+			prepareMessageCheckpoint(): void;
+			messageCheckpointState(): { requests: readonly RestoreChatCheckpointOptions[]; opened: readonly string[]; };
+			captureMessageRowCommands(): void;
+			messageRowCommands(): readonly { id: string; args: readonly unknown[]; }[];
 			readingState(): ReturnType<ChatListWidget['getViewState']>;
 			delayAttachments(value: boolean): void;
 			setTranscriptVisible(value: boolean): void;
@@ -883,6 +902,64 @@ window.ashChatTranscriptIntegration = {
 	setConversationChanges: visible => { hasConversationChanges = visible; chatChanges.fire(); },
 	requestEdits: () => requestEdits,
 	finishRequestEdit: failure => completeRequestEdit?.(failure),
+	prepareMessageFork: () => {
+		const commands = services.get(ICommandService);
+		appServices.registerInstance(ICommandService, {
+			onWillExecuteCommand: commands.onWillExecuteCommand,
+			onDidExecuteCommand: commands.onDidExecuteCommand,
+			async executeCommand<T>(id: string, ...args: readonly unknown[]): Promise<T> {
+				if (id !== ForkConversationActionId) return commands.executeCommand<T>(id, ...args);
+				messageForks.push(args[0] as IForkConversationOptions);
+				pendingMessageFork = new DeferredPromise<void>();
+				await pendingMessageFork.p;
+				return undefined as T;
+			},
+		});
+		window.ashChatTranscriptIntegration.setMessageForkEnabled(true);
+		list.render([{
+			id: 'fork-source', type: 'userMessage', text: 'Follow-up request', transient: false,
+			requestSource: { sessionId: 'source', threadId: 'original', turnId: 'turn-2', itemId: 'item-2' }, canForkBeforeRequest: true,
+		}]);
+	},
+	setMessageForkEnabled: value => ChatContextKeys.enabled.bindTo(services.get(IContextKeyService)).set(value),
+	messageForks: () => messageForks,
+	finishMessageFork: async failure => {
+		if (failure) await pendingMessageFork?.error(new Error('Synthetic fork failure'));
+		else await pendingMessageFork?.complete();
+	},
+	prepareMessageCheckpoint: () => {
+		const source = { sessionId: 'source', threadId: 'original' };
+		appServices.registerSingleton(ICommandService, () => appServices.createInstance(StandaloneCommandService));
+		appServices.registerInstance(IChatSessionNavigationService, {
+			revision: 0,
+			getActiveConversation: () => source,
+			openConversation: async (_sessionId, threadId) => { checkpointDestinations.push(threadId); },
+		} as IChatSessionNavigationService);
+		appServices.registerInstance(IChatService, {
+			readCheckpoints: async () => [1, 2].map(index => ({ itemId: `item-${index}`, turnId: `turn-${index}`, sourceThreadId: source.threadId, files: 'git' as const })),
+			restoreCheckpoint: async (options: RestoreChatCheckpointOptions) => {
+				checkpointRestores.push(options);
+				return { sessionId: source.sessionId, threadId: 'restored' };
+			},
+		} satisfies Pick<IChatService, 'readCheckpoints' | 'restoreCheckpoint'> as unknown as IChatService);
+		window.ashChatTranscriptIntegration.setMessageForkEnabled(true);
+		list.render([1, 2].map(index => ({
+			id: `request-${index}`, type: 'userMessage', text: `Request ${index}`, transient: false,
+			requestSource: { ...source, turnId: `turn-${index}`, itemId: `item-${index}` }, canForkBeforeRequest: index > 1,
+		})));
+	},
+	messageCheckpointState: () => ({ requests: checkpointRestores, opened: checkpointDestinations }),
+	captureMessageRowCommands: () => {
+		appServices.registerInstance(ICommandService, {
+			onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None,
+			async executeCommand<T>(id: string, ...args: readonly unknown[]): Promise<T> {
+				messageRowCommands.push({ id, args });
+				return undefined as T;
+			},
+		});
+		window.ashChatTranscriptIntegration.setMessageForkEnabled(true);
+	},
+	messageRowCommands: () => messageRowCommands,
 	readingState: () => list.getViewState(),
 	delayAttachments: value => { delayMedia = value; },
 	setTranscriptVisible: value => {

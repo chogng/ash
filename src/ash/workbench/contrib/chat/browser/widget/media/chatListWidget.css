@@ -278,6 +278,17 @@ article.ash-chat-user-message > pre {
 	display: none;
 }
 
+.ash-chat-fork-action[aria-busy="true"] {
+	display: inline-grid;
+}
+.ash-chat-fork-action[aria-busy="true"] > * {
+	grid-area: 1 / 1;
+	justify-self: center;
+}
+.ash-chat-fork-action[aria-busy="true"] > .ash-button-content {
+	visibility: hidden;
+}
+
 .ash-chat-response-helpful.checked {
 	border-color: var(--ash-widget-border);
 	background: var(--ash-button-activeBackground);

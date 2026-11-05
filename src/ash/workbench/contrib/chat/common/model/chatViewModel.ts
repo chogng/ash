@@ -1,5 +1,5 @@
 import type { IChatToolInvocation } from '../chatService/chatService.js';
-import type { IChatHookPart, ChatContentPart, PlanUpdate, ThreadGoal, ThreadItem, ThreadTranscriptEntry, Turn, TurnError } from '../../../../services/chat/common/chatService.js';
+import type { IChatHookPart, ChatContentPart, PlanUpdate, QueuedMessage, QueueMessageTarget, ThreadGoal, ThreadItem, ThreadTranscriptEntry, Turn, TurnChangeSetSummary, TurnError } from '../../../../services/chat/common/chatService.js';
 import { getNLSLanguage, localize } from '../../../../../nls.js';
 import type { ChatResponseFeedbackTarget } from '../chatResponseFeedback.js';
 
@@ -33,10 +33,15 @@ interface ChatTurnErrorListItemOptions {
 /** One render-ready committed or transient Thread item. */
 export interface IChatListItem {
 	readonly feedbackSource?: ChatResponseFeedbackTarget;
+	readonly canGiveModelFeedback?: boolean;
+	readonly turnChanges?: TurnChangeSetSummary['statistics'];
+	readonly queueTarget?: QueueMessageTarget;
+	readonly historyRedoTarget?: { readonly sessionId: string; readonly threadId: string; readonly expectedSequence: number; };
 	/** Initial accepted request identity; presentation entry IDs are not backend item IDs. */
 	readonly requestSource?: { readonly sessionId: string; readonly threadId: string; readonly turnId: string; readonly itemId: string; };
+	readonly canForkBeforeRequest?: boolean;
 	readonly id: string;
-	readonly type: ThreadItem['type'] | 'turnError' | 'advisor' | 'hook' | 'voiceTranscript';
+	readonly type: ThreadItem['type'] | 'turnError' | 'advisor' | 'hook' | 'voiceTranscript' | 'queuedMessage' | 'historyRedo';
 	readonly content?: readonly ChatContentPart[];
 	/** Resources whose bytes are supplied by the conversation's resource reader. */
 	readonly resources?: readonly {
@@ -64,6 +69,24 @@ export interface IChatListItem {
 	readonly action?: ChatTurnErrorAction;
 }
 
+/** Delivering messages belong to the running turn once accepted by Core. */
+export function chatQueuedMessageListItems(queue: readonly QueuedMessage[]): readonly IChatListItem[] {
+	return queue.filter(message => message.status !== 'delivering').map(message => {
+		const { sessionId, threadId, commandId, revision } = message;
+		return {
+			id: `queue:${JSON.stringify([sessionId, threadId, commandId])}`,
+			type: 'queuedMessage',
+			queueTarget: { sessionId, threadId, commandId, expectedRevision: revision },
+			text: message.text || localize('chat.queue.contextOnly', 'Message with attached context'),
+			label: message.status === 'paused' ? localize('chat.queue.paused', 'Paused')
+				: message.status === 'rejected' ? localize('chat.queue.rejected', 'Failed') : localize('chat.queue.pending', 'Queued'),
+			detail: message.error ?? (message.contextCount ? localize('chat.queue.contextCount', '{0} attached inputs', message.contextCount) : undefined),
+			isError: message.status === 'rejected',
+			transient: false,
+		};
+	});
+}
+
 /** Projects the canonical durable plan owned by a Turn. */
 export function chatPlanListItem(turn: Turn): IChatListItem | undefined {
 	if (!turn.plan) return undefined;
@@ -87,11 +110,35 @@ function chatPlanUpdateListItem(turnId: string, plan: PlanUpdate): IChatListItem
 }
 
 /** Associates backend tool evidence within a Turn while preserving transcript order. */
-export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[], latestTurnId?: string, turns: readonly Turn[] = [], source?: { readonly sessionId: string; readonly threadId: string; }): readonly IChatListItem[] {
-	const completedTurns = new Set(turns.filter(turn => turn.status === 'completed').map(turn => turn.turnId));
+export function chatTranscriptListItems(
+	entries: readonly ThreadTranscriptEntry[],
+	latestTurnId?: string,
+	turns: readonly Turn[] = [],
+	source?: { readonly sessionId: string; readonly threadId: string; },
+	forkHistory?: { readonly archived: boolean; readonly hasOlderTurns?: boolean; },
+	changeSets: readonly TurnChangeSetSummary[] = [],
+): readonly IChatListItem[] {
+	const completedTurns = new Map(turns.filter(turn => turn.status === 'completed').map(turn => [turn.turnId, turn]));
+	const turnChanges = new Map<string, TurnChangeSetSummary['statistics']>();
+	for (const { turnId, captureState, statistics } of changeSets) {
+		if (captureState !== 'sealed' || !statistics.files || !completedTurns.has(turnId)) continue;
+		const previous = turnChanges.get(turnId);
+		turnChanges.set(turnId, previous ? {
+			files: previous.files + statistics.files,
+			additions: previous.additions + statistics.additions,
+			deletions: previous.deletions + statistics.deletions,
+		} : statistics);
+	}
+	const finalReplies = new Map<string, string>();
+	for (const entry of entries) {
+		if (entry.type === 'item' && entry.item.type === 'agentMessage' && !entry.transient && turnChanges.has(entry.turnId)) {
+			finalReplies.set(entry.turnId, entry.entryId);
+		}
+	}
 	const editableRequests = new Map(turns
 		.filter(turn => !turn.kind || turn.kind === 'coding' || turn.kind === 'review')
 		.map(turn => [turn.turnId, turn.items.find(item => item.type === 'userMessage')?.itemId]));
+	const firstRequestTurn = forkHistory?.hasOlderTurns ? undefined : turns.find(turn => editableRequests.get(turn.turnId))?.turnId;
 	// Call IDs are provider-owned and can be reused in another Turn. Keep presentation identity scoped.
 	const key = (turnId: string, toolCallId: string) => JSON.stringify([turnId, toolCallId]);
 	const toolCalls = new Map(entries.flatMap(entry => entry.type === 'item' && entry.item.type === 'toolCall' ? [[key(entry.turnId, entry.item.toolCallId), entry] as const] : []));
@@ -175,11 +222,21 @@ export function chatTranscriptListItems(entries: readonly ThreadTranscriptEntry[
 		}
 		let item = chatTranscriptListItem(entry, { actionsEnabled: entry.turnId === latestTurnId });
 		if (source && entry.type === 'item' && entry.item.type === 'agentMessage' && !entry.transient && completedTurns.has(entry.turnId)) {
-			item = { ...item, feedbackSource: { ...source, turnId: entry.turnId, itemId: entry.item.itemId } };
+			const changes = finalReplies.get(entry.turnId) === entry.entryId ? turnChanges.get(entry.turnId) : undefined;
+			item = {
+				...item,
+				feedbackSource: { sessionId: source.sessionId, threadId: source.threadId, turnId: entry.turnId, itemId: entry.item.itemId },
+				canGiveModelFeedback: !!completedTurns.get(entry.turnId)?.model,
+				...(changes ? { turnChanges: changes } : {}),
+			};
 		}
 		if (source && entry.type === 'item' && entry.item.type === 'userMessage' && !entry.transient) {
 			if (editableRequests.get(entry.turnId) === entry.item.itemId) {
-				item = { ...item, requestSource: { ...source, turnId: entry.turnId, itemId: entry.item.itemId } };
+				item = {
+					...item,
+					requestSource: { ...source, turnId: entry.turnId, itemId: entry.item.itemId },
+					canForkBeforeRequest: !forkHistory?.archived && entry.turnId !== firstRequestTurn,
+				};
 			}
 		}
 		return source && entry.type === 'item' && item.content?.some(part => part.type !== 'text')

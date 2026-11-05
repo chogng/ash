@@ -19,7 +19,8 @@ import type { ResolvedChatContext } from '../../workbench/services/chat/common/c
 import type { SessionHistoryBindingDiagnostic } from '../services/sessions/browser/sessionOpenTelemetryService.js';
 import { findAgentNode, type IActiveSessionThread, type ISession, type IUntitledChatSession, type ModelRef, type SessionId, type ThreadId } from '../services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
-import { chatTranscriptListItems, type IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
+import { chatQueuedMessageListItems, chatTranscriptListItems, type IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
+import { ChatHistoryRedoModel } from '../../workbench/contrib/chat/common/model/chatHistoryRedoModel.js';
 import type { ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../workbench/services/chat/common/modelCatalog.js';
 import type { ApprovalMode } from '../../workbench/services/chat/common/chatService.js';
@@ -87,7 +88,8 @@ export class ChatWidgetModel extends Disposable {
 	private defaults: AgentModelDefaults | undefined;
 	private pendingModelSelection: Promise<void> | undefined;
 	private readonly selectedModes = new Map<string, ChatMode>();
-	private queuedMessages = 0;
+	private queue: Awaited<ReturnType<IChatService['readQueue']>> = [];
+	private readonly historyRedo: ChatHistoryRedoModel;
 	private queueGeneration = 0;
 	private readonly threadModelSelection = new SessionModelSelection();
 	private readonly defaultApprovalMode = observableValue<ApprovalMode>(this, 'manual');
@@ -122,6 +124,7 @@ export class ChatWidgetModel extends Disposable {
 	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService, @IConfigurationService private readonly configuration: IConfigurationService) {
 		super();
 		this.chatService = chatService;
+		this.historyRedo = this._register(new ChatHistoryRedoModel(chatService, () => this._onDidChange.fire()));
 		this.sessionService = sessionService;
 		this.selection = selection;
 		this._register(configuration.onDidChangeConfiguration(event => {
@@ -175,7 +178,7 @@ export class ChatWidgetModel extends Disposable {
 			draftIdentity: { id: this.composerIdentity, generation: this.composerGeneration },
 			mode: this.mode,
 			activeMode: activeTurn(this._thread)?.mode,
-			queuedMessages: this.queuedMessages,
+			queuedMessages: this.queue.filter(message => message.status !== 'rejected').length,
 			phase: this._state,
 			inputBlocked: this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
 			aiDisabled: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
@@ -339,8 +342,14 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	get items(): readonly IChatListItem[] {
-		const latestTurnId = this._thread?.turns.at(-1)?.turnId;
-		return chatTranscriptListItems(this.transcriptEntries, latestTurnId, this._thread?.turns, this._thread);
+		const thread = this._thread;
+		const latestTurnId = thread?.turns.at(-1)?.turnId;
+		const transcript = chatTranscriptListItems(this.transcriptEntries, latestTurnId, thread?.turns, thread, {
+			archived: thread?.status === 'archived', hasOlderTurns: this.historyBoundary?.hasOlderTurns,
+		}, this._changeSets);
+		const redo = this.historyRedo.item(thread);
+		const queued = this.queue.length && thread?.status === 'active' ? chatQueuedMessageListItems(this.queue) : [];
+		return redo || queued.length ? [...transcript, ...(redo ? [redo] : []), ...queued] : transcript;
 	}
 
 	get interaction(): TurnInteraction | undefined {
@@ -929,8 +938,9 @@ export class ChatWidgetModel extends Disposable {
 		this.threadChanges = undefined;
 		this.threadChangesError = undefined;
 		this.summaryRequest++;
-		this.queuedMessages = 0;
+		this.queue = [];
 		this.queueGeneration++;
+		this.historyRedo.reset();
 		this.changeDetails.clear();
 		this.changesGeneration++;
 		this.setState('loading');
@@ -960,6 +970,7 @@ export class ChatWidgetModel extends Disposable {
 			if (snapshot.thread || snapshot.transcript) outcome = 'bound';
 			void this.loadTurnChanges(generation);
 			void this.loadQueue();
+			if (currentThread?.status === 'active') void this.historyRedo.refresh(currentThread.sessionId, currentThread.threadId);
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation || request !== this.readRequest) return;
 			outcome = isCancellationError(error) ? 'cancelled' : 'failed';
@@ -985,6 +996,7 @@ export class ChatWidgetModel extends Disposable {
 			return;
 		}
 		if (update.update.event.type === 'threadHistoryMoved') {
+			void this.historyRedo.refresh(update.sessionId, update.threadId);
 			// Retire the old checkpoint synchronously, before the replacement snapshot arrives.
 			this.summaryRequest++;
 			this.threadChanges = undefined;
@@ -994,6 +1006,7 @@ export class ChatWidgetModel extends Disposable {
 			void this.loadTurnChanges(this.generation);
 			this._onDidChange.fire();
 		}
+		if (update.update.event.type === 'turnAccepted') this.historyRedo.reset();
 		this.acceptCommittedEvent(update);
 		this.scheduleRefresh();
 	}
@@ -1028,9 +1041,9 @@ export class ChatWidgetModel extends Disposable {
 		if (!active) return;
 		const generation = ++this.queueGeneration;
 		try {
-			const count = await this.chatService.queuedMessageCount(active.session.sessionId, active.threadId);
+			const queue = await this.chatService.readQueue(active.session.sessionId, active.threadId);
 			if (this.isDisposed || generation !== this.queueGeneration || active.threadId !== this.threadId) return;
-			this.queuedMessages = count;
+			this.queue = queue;
 			this._onDidChange.fire();
 		} catch (error) {
 			if (!this.isDisposed && generation === this.queueGeneration) this.setError(error);
