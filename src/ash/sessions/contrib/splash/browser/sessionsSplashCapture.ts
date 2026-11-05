@@ -3,8 +3,8 @@ import type { IPartsSplashPartBounds, IPartsSplashSkeleton } from '../../../../p
 
 const partSelector = '.ash-workbench-part:is([data-part="sessions"], [data-part="editor"], [data-part="customview"], [data-part="auxiliarybar"])';
 const gridSelector = '[data-splash-grid]';
-const surfaces = '.ash-chatgpt-composer, .ash-chat-input-container, .ash-chatgpt-turn.user, .ash-canvas-viewport, canvas, iframe, textarea, [contenteditable="true"]';
-const headings = 'h1, h2, h3, .ash-chatgpt-welcome';
+const surfaces = '.ash-chat-input-container, .ash-chat-user-message, .ash-canvas-viewport, canvas, iframe, textarea, [contenteditable="true"]';
+const headings = 'h1, h2, h3';
 const anchors = `${headings}, ${surfaces}, button, input, summary, [role="tab"], [role="row"], [role="treeitem"], [role="option"], li, p, .view-line`;
 
 export function captureSessionsSkeleton(part: HTMLElement, bounds: IPartsSplashPartBounds): IPartsSplashSkeleton | undefined {

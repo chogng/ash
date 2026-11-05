@@ -39,12 +39,37 @@ import { ISessionsService } from '../../../../services/sessions/browser/sessions
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../sessions/browser/views/sessionsView.js';
 import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
+import { NewSessionDraftVisibleContext } from '../../../../common/contextkeys.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 import { SessionsLayoutService, documentEntry } from '../../browser/sessionsLayoutService.js';
 import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
 import type { ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 
 suite('SessionsLayoutService lifecycle and focus', () => {
+	test('New follows the active entry draft and clears while a custom view covers it', async () => {
+		using fixture = new EntryFixture();
+		const entryDraft = observableValue('entry draft', true);
+		const replyEntry: ISessionsEntry = { ...chatEntry, id: 'reply', activityContext: 'test.replySelected', newDraft: entryDraft };
+		const showingDraft = () => fixture.contextKeys.getValue(NewSessionDraftVisibleContext.key);
+		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+
+		await fixture.service.openEntry(replyEntry);
+		assert.equal(showingDraft(), true);
+		entryDraft.set(false, undefined);
+		assert.equal(showingDraft(), false);
+		entryDraft.set(true, undefined);
+		fixture.customViews.showCustomView('automations');
+		assert.equal(showingDraft(), false);
+		fixture.customViews.hideCustomView();
+		assert.equal(showingDraft(), true);
+
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(showingDraft(), false);
+		fixture.conversationDraft.set(true, undefined);
+		assert.equal(showingDraft(), true);
+		await fixture.service.openEntry(chatEntry);
+		assert.equal(showingDraft(), false);
+	});
 
 	test('New follows the active entry and does not retain an override under a Custom View', async () => {
 		using fixture = new EntryFixture();
@@ -65,10 +90,15 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 			using fixture = new EntryFixture();
 			if (saved) { fixture.storage.store('sessions.layout.activeEntry', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE); }
 			const calls: (readonly unknown[])[] = [];
-			using entry = CommandsRegistry.register('sessions.open.new', (_accessor, ...args) => { calls.push(args); });
+			const freshEntry: ISessionsEntry = { ...chatEntry, id: 'reply', content: 'editor', splash: 'chat' };
+			using entry = CommandsRegistry.register('sessions.open.new', (_accessor, source) => {
+				calls.push([source]);
+				assert.equal(source, 'startup');
+				return fixture.service.openEntry(freshEntry, undefined, { source });
+			});
 			using code = CommandsRegistry.register('sessions.open.code', () => assert.fail('Ordinary launch restored Code'));
-			await fixture.service.restore(command => { calls.push([command]); });
-			assert.deepEqual(calls, [['sessions.open.new'], ['startup']]);
+			await fixture.service.restore(entry => { calls.push([entry.content, entry.splash]); });
+			assert.deepEqual(calls, [['startup'], ['editor', 'chat']]);
 		});
 	}
 
@@ -107,9 +137,17 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		const command = 'test.sessions.restoreEntry';
 		fixture.storage.store('sessions.layout.activeEntry', command, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const calls: (readonly unknown[])[] = [];
-		using entry = CommandsRegistry.register(command, (_accessor, ...args) => { calls.push(args); });
-		await fixture.service.restore(resolved => { calls.push([resolved]); });
-		assert.deepEqual(calls, [[command], ['restore']]);
+		const savedEntry: ISessionsEntry = { ...chatEntry, content: 'editor', splash: 'grid', restoreCommand: command };
+		using entry = CommandsRegistry.register(command, (_accessor, source) => {
+			calls.push([source]);
+			assert.equal(source, 'restore');
+			return fixture.service.openEntry(savedEntry, undefined, { source });
+		});
+		await fixture.service.restore(entry => {
+			assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
+			calls.push([entry.content, entry.splash]);
+		});
+		assert.deepEqual(calls, [['restore'], ['editor', 'grid']]);
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
 	});
 
@@ -474,6 +512,7 @@ class TestCustomView extends AbstractCustomView {
 }
 
 class EntryFixture extends Disposable {
+	public readonly conversationDraft = observableValue('conversation draft', false);
 	private readonly dom = new JSDOM('', { url: 'https://entry-layout.test' });
 	public readonly container = this.dom.window.document.body;
 	private readonly services = this._register(new InstantiationService());
@@ -565,6 +604,7 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(ILogService, new NullLoggerService());
 		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
 		this.services.registerInstance(ISessionsConversationService, {
+			newDraftVisible: this.conversationDraft,
 			openInNewWindow: async () => { throw new Error('Unexpected popup'); },
 			focusDraftPicker: () => { throw new Error('Unexpected picker'); },
 			setConversationKind: async () => {

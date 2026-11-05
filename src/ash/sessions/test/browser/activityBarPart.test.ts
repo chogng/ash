@@ -164,18 +164,8 @@ test('Chat navigation includes Search and selects New, Projects, Creator and Cus
 		const contextKeys = services.get(IContextKeyService);
 		contextKeys.setContext('sessions.activity.newSessionDraftVisible', false);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), null);
-		contextKeys.bufferChangeEvents(() => {
-			contextKeys.setContext('sessions.activity.chatSelected', false);
-			contextKeys.setContext('sessions.activity.chatgptSelected', true);
-		});
-		assert.equal(buttons[0]?.getAttribute('aria-current'), null);
-		contextKeys.setContext('sessions.activity.chatgptNewDraft', true);
+		contextKeys.setContext('sessions.activity.newSessionDraftVisible', true);
 		assert.equal(buttons[0]?.getAttribute('aria-current'), 'page');
-		contextKeys.bufferChangeEvents(() => {
-			contextKeys.setContext('sessions.activity.chatgptSelected', false);
-			contextKeys.setContext('sessions.activity.chatSelected', true);
-			contextKeys.setContext('sessions.activity.newSessionDraftVisible', true);
-		});
 		buttons[2]?.click();
 		assert.equal(buttons[2]?.getAttribute('aria-current'), 'page');
 		assert.equal(buttons[0]?.getAttribute('aria-current'), null);
@@ -456,7 +446,11 @@ function registerMenus(services: InstanceType<typeof InstantiationService>): Ins
 	services.registerInstance(IMenuService, services.createInstance(MenuService));
 	contexts.setContext('sessions.activity.newSessionDraftVisible', true);
 	const keys = new Map(['chat', 'collaboration', 'teams', 'projects', 'code', 'creator', 'symphony', 'customize'].map(id => [id, contexts.createKey<boolean>(`sessions.activity.${id}Selected`, id === 'chat')]));
-	const select = (id: string): void => contexts.bufferChangeEvents(() => { contexts.setContext('sessions.workspaceMode', ['code', 'collaboration', 'teams', 'symphony'].includes(id) ? 'code' : 'chat'); for (const [candidate, key] of keys) { key.set(candidate === id); } });
+	const select = (id: string): void => contexts.bufferChangeEvents(() => {
+		contexts.setContext('sessions.workspaceMode', ['code', 'collaboration', 'teams', 'symphony'].includes(id) ? 'code' : 'chat');
+		contexts.setContext('sessions.activity.newSessionDraftVisible', id === 'chat' || id === 'code');
+		for (const [candidate, key] of keys) { key.set(candidate === id); }
+	});
 	services.registerInstance(ISessionsLayoutService, { openEntry: async (entry: { id: string; }) => select(entry.id) } as unknown as import('../../services/layout/common/sessionsLayoutService.js').ISessionsLayoutService);
 	resources.add(registry.register('sessions.open.customize', CommandsRegistry.getCommand('sessions.open.customize')!));
 	resources.add(registry.register('sessions.newSession', () => select(contexts.getValue('sessions.workspaceMode') === 'code' ? 'code' : 'chat')));

@@ -63,10 +63,7 @@ import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from '../../platfo
 import { ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
 import { browserViewChannel } from '../../platform/browserView/electron-main/browserViewIpc.js';
 import { BrowserViewMainService, IBrowserViewMainService } from '../../platform/browserView/electron-main/browserViewMainService.js';
-import { ChatGPTTransport, type ChatGPTTransportOptions } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTTransport.js';
-import { ChatGPTAuthentication } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTAuthentication.js';
-import { ChatGPTVerificationRuntime } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTVerificationRuntime.js';
-import { chatGPTTransportChannel } from '../../sessions/contrib/chatgptweb/common/chatGPTTransport.js';
+import { ChatGPTMain } from '../../sessions/contrib/chatgptweb/electron-main/chatGPTMain.js';
 import { readFile } from 'node:fs/promises';
 import { Client as MessagePortClient } from '../../base/parts/ipc/common/ipc.mp.js';
 import { ProxyChannel, type IServerChannel } from '../../base/parts/ipc/common/ipc.js';
@@ -238,7 +235,7 @@ const AGENTS_WINDOW_KEY = 'agents';
 /** Owns the Electron application's persistent services, Workbench windows, IPC, and shutdown. */
 export class AshApplication extends Disposable {
 	private readonly rendererRoot: string;
-	private readonly chatGPTChannels = new Map<string, IServerChannel<string>>();
+	private readonly chatGPTMain: ChatGPTMain;
 	private readonly appServerStartupMode: AppServerStartupMode;
 	private readonly developmentLauncher: boolean;
 	private readonly disposableTracker: DisposableTracker | undefined;
@@ -426,6 +423,12 @@ export class AshApplication extends Disposable {
 			? this._register(new NativeMenubarMainService(createElectronMenubarHost()))
 			: undefined;
 		this.profileRoot = resolveHome();
+		this.chatGPTMain = this.windowServices.createInstance(ChatGPTMain, this.mainProcessIpcServer, {
+			profileRoot: this.profileRoot,
+			rendererRoot: this.rendererRoot,
+			credentialsEnabled: this.appServerStartupMode !== 'disabled',
+			registerDevelopmentConnection: this.registerDevelopmentAppServerConnection.bind(this),
+		});
 		// Development uses the stock Electron executable; a Windows package must embed this icon in its executable.
 		this.windowIconPath = process.platform === 'win32' && !app.isPackaged
 			? join(app.getAppPath(), 'resources', 'win32', 'ash.ico')
@@ -542,18 +545,6 @@ export class AshApplication extends Disposable {
 			listen: <T>(context: string, event: string, arg: unknown) => {
 				const channel = this.secretChannels.get(context);
 				if (!channel) throw new Error('Window secret storage is unavailable');
-				return channel.listen<T>(context, event, arg);
-			},
-		});
-		this.mainProcessIpcServer.registerChannel(chatGPTTransportChannel, {
-			call: <T>(context: string, command: string, arg: unknown) => {
-				const channel = this.chatGPTChannels.get(context);
-				if (!channel) { throw new Error('ChatGPT is unavailable in this window'); }
-				return channel.call<T>(context, command, arg);
-			},
-			listen: <T>(context: string, event: string, arg: unknown) => {
-				const channel = this.chatGPTChannels.get(context);
-				if (!channel) { throw new Error('ChatGPT is unavailable in this window'); }
 				return channel.listen<T>(context, event, arg);
 			},
 		});
@@ -1418,10 +1409,14 @@ export class AshApplication extends Disposable {
 		}, connectionKind);
 		if (existing) existing.replaceProcessLauncher(processLauncher);
 		if (generationFile) {
-			if (!this.developmentAppServerReloader.value) this.developmentAppServerReloader.value = this.windowServices.createInstance(DevelopmentAppServerReloader, { generationFile });
-			resources.add(this.developmentAppServerReloader.value.registerConnection(connection.launcher, supervisor));
+			resources.add(this.registerDevelopmentAppServerConnection(generationFile, connection.launcher, supervisor));
 		}
 		return supervisor;
+	}
+
+	private registerDevelopmentAppServerConnection(generationFile: string, ...connection: Parameters<DevelopmentAppServerReloader['registerConnection']>): IDisposable {
+		this.developmentAppServerReloader.value ??= this.windowServices.createInstance(DevelopmentAppServerReloader, { generationFile });
+		return this.developmentAppServerReloader.value.registerConnection(...connection);
 	}
 
 	private createRemoteAppServerProcessLauncher(workspace: IAnyWorkspaceIdentifier, resources: DisposableStore, carrier: AppServerDaemonLauncher): RemoteAppServerProcessLauncher {
@@ -2112,32 +2107,7 @@ export class AshApplication extends Disposable {
 					});
 					const systemContextMenu = windowDisposables.add(new ElectronContextMenu(window));
 					const browserServices = this.createBrowserServices(window, session.workspaceContext, remotePortForwardingService, windowDisposables, sessionsRelay, systemContextMenu);
-					const authConnection = this.appServerStartupMode === 'disabled' ? undefined : createAppServerDaemonLauncher({
-						packageLocation: { appPath: app.getAppPath(), expectedVersion: app.getVersion(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath },
-						sourceEnvironment: process.env, profileRoot: this.profileRoot, electronExecutable: process.execPath, role: 'credentials',
-					});
-					if (authConnection) { windowDisposables.add(authConnection.launcher); }
-					const authentication = windowDisposables.add(new ChatGPTAuthentication(authConnection ? { enabled: true, launcher: authConnection.launcher } : { enabled: false }));
-					if (authConnection?.generationFile) {
-						if (!this.developmentAppServerReloader.value) { this.developmentAppServerReloader.value = this.windowServices.createInstance(DevelopmentAppServerReloader, { generationFile: authConnection.generationFile }); }
-						windowDisposables.add(this.developmentAppServerReloader.value.registerConnection(authConnection.launcher, authentication));
-					}
-					const chatGPT = windowDisposables.add(this.windowServices.createInstance(ChatGPTTransport, {
-						authentication,
-						readVerificationScript: async signal => {
-							const devURL = process.env.ASH_RENDERER_URL;
-							if (devURL) {
-								const response = await electronSession.defaultSession.fetch(new URL('browser/chatgpt/verification.js', devURL).href, { signal });
-								if (!response.ok) { throw new Error('ChatGPT verification script is unavailable'); }
-								return response.text();
-							}
-							return readFile(join(this.rendererRoot, 'browser/chatgpt/verification.js'), { encoding: 'utf8', signal });
-						},
-						createRuntime: authorize => new ChatGPTVerificationRuntime(authorize),
-					} satisfies ChatGPTTransportOptions));
-					const chatGPTContext = `window:${window.id}`;
-					this.chatGPTChannels.set(chatGPTContext, chatGPT.getChannel());
-					windowDisposables.add(toDisposable(() => this.chatGPTChannels.delete(chatGPTContext)));
+					this.chatGPTMain.attachWindow(window.id, windowDisposables);
 
 					const remoteWindowContext = windowDisposables.add(new RemoteWindowMainContext({
 						supervisor: sessionsRelay,

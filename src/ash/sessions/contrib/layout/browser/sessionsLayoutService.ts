@@ -23,14 +23,14 @@ import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js
 import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../services/layout/common/sessionsLayoutService.js';
 import { CODE_NAVIGATION_CONTAINER_ID, SESSIONS_NAVIGATION_CONTAINER_ID } from '../../sessions/browser/views/sessionsView.js';
-import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
+import { NewSessionDraftVisibleContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 
 export const documentEntry: ISessionsEntry = {
 	id: 'code', workspaceMode: 'code', activityContext: 'sessions.activity.codeSelected', content: 'documents',
-	sidebarContainerId: CODE_NAVIGATION_CONTAINER_ID, restoreCommand: 'sessions.open.code', focus: 'editor',
+	sidebarContainerId: CODE_NAVIGATION_CONTAINER_ID, restoreCommand: 'sessions.open.code', newDraft: 'conversation', focus: 'editor',
 };
 
 interface EntryVisibility {
@@ -60,6 +60,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	private readonly activityKeys = new Map<string, IContextKey<boolean>>();
 	private readonly pageGroupId: number;
 	private navigationQueue = Promise.resolve();
+	private onWillRestoreEntry: ((entry: ISessionsEntry) => void) | undefined;
 	public isChangingContent = false;
 	public get isSessionContent(): boolean { return !this.customViews.activeCustomView.get() && this.activeEntry.get()?.content !== 'editor'; }
 	public get isDocumentContent(): boolean { return this.documentContent.get(); }
@@ -149,15 +150,21 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				});
 			}
 		}));
+		const newDraftVisible = NewSessionDraftVisibleContext.bindTo(this.contextKeys);
+		this._register(toDisposable(() => newDraftVisible.reset()));
+		let activeActivity: IContextKey<boolean> | undefined;
 		this._register(autorun(reader => {
 			const entry = this.activeEntry.read(reader);
 			const covered = this.customViews.activeCustomView.read(reader) !== undefined;
+			const draft = entry?.newDraft === 'conversation' ? this.conversation.newDraftVisible : entry?.newDraft;
+			const showingDraft = !covered && (draft?.read(reader) ?? false);
 			this.contextKeys.bufferChangeEvents(() => {
-				for (const key of this.activityKeys.values()) key.reset();
-				if (!entry) return;
-				let key = this.activityKeys.get(entry.activityContext);
-				if (!key) { key = this.contextKeys.createKey(entry.activityContext, false); this.activityKeys.set(entry.activityContext, key); }
-				key.set(!covered);
+				let key = entry && this.activityKeys.get(entry.activityContext);
+				if (entry && !key) { key = this.contextKeys.createKey(entry.activityContext, false); this.activityKeys.set(entry.activityContext, key); }
+				if (activeActivity !== key) activeActivity?.reset();
+				activeActivity = key;
+				key?.set(!covered);
+				newDraftVisible.set(showingDraft);
 			});
 		}));
 	}
@@ -172,9 +179,10 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		return pending;
 	}
 
-	public openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: { readonly source: 'restore'; }): Promise<void> {
+	public openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: { readonly source: 'restore' | 'startup'; }): Promise<void> {
 		if (options?.source !== 'restore' && this.customViews.activeCustomView.get()) this.customViews.hideCustomView();
 		return this.runOperation(async () => {
+			if (options && !this.customViews.activeCustomView.get()) this.onWillRestoreEntry?.(entry);
 			await this.controller.prepareContentChange();
 			if (this.isDisposed) { return; }
 			const previousEntry = this.activeEntry.get();
@@ -283,16 +291,20 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		this.storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 	}
 
-	public async restore(onWillRestoreEntry?: (command: string) => void): Promise<void> {
+	public async restore(onWillRestoreEntry?: (entry: ISessionsEntry) => void): Promise<void> {
 		await this.controller.whenSettled();
 		if (this.isDisposed) { return; }
 		const desktopNew = CommandsRegistry.hasCommand('sessions.open.new');
-		if (desktopNew && this.lifecycle.startupKind === StartupKind.NewWindow) {
-			this.customViews.hideCustomView();
-			onWillRestoreEntry?.('sessions.open.new');
-			await this.commands.executeCommand('sessions.open.new', 'startup');
-		} else {
-			await this.restoreSavedEntry(desktopNew ? 'sessions.open.new' : 'sessions.open.chat', onWillRestoreEntry);
+		this.onWillRestoreEntry = onWillRestoreEntry;
+		try {
+			if (desktopNew && this.lifecycle.startupKind === StartupKind.NewWindow) {
+				this.customViews.hideCustomView();
+				await this.commands.executeCommand('sessions.open.new', 'startup');
+			} else {
+				await this.restoreSavedEntry(desktopNew ? 'sessions.open.new' : 'sessions.open.chat');
+			}
+		} finally {
+			this.onWillRestoreEntry = undefined;
 		}
 		if (this.isDisposed) { return; }
 		for (const key of ['sessions.layout.activeMode', 'sessions.layout.primaryPage', 'sessions.activityBar.activePage', 'sessions.layout.primaryEditor']) {
@@ -300,7 +312,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		}
 	}
 
-	private async restoreSavedEntry(defaultEntry: string, onWillRestoreEntry?: (command: string) => void): Promise<void> {
+	private async restoreSavedEntry(defaultEntry: string): Promise<void> {
 		const saved = this.customViews.activeCustomView.get()?.entryCommand ?? this.storage.get(activeEntryKey, StorageScope.WORKSPACE);
 		// These names describe the discarded storage format, not runtime product selection.
 		const oldEditor = this.storage.get('sessions.layout.primaryEditor', StorageScope.WORKSPACE);
@@ -321,7 +333,6 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		// removed. Discard stale navigation state without invoking an unknown command.
 		if (!available) { this.storage.remove(activeEntryKey, StorageScope.WORKSPACE); }
 		const command = available ? requested : defaultEntry;
-		if (!this.customViews.activeCustomView.get()) onWillRestoreEntry?.(command);
 		await this.commands.executeCommand(command, 'restore');
 	}
 }

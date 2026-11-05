@@ -10,7 +10,6 @@ import type { IAccountService } from '../../../../../platform/accounts/common/ac
 import type { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { ChatGPTNewDraftContext } from '../../../../common/contextkeys.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
@@ -115,15 +114,16 @@ suite('ChatGPT entry', () => {
 		resources.add(services.createInstance(ChatGPTWebContribution));
 		await services.invokeFunction(CommandsRegistry.getCommand('sessions.show.chatgptNative')!, undefined);
 		assert.ok(entry?.newSessionCommand);
-		const contexts = services.get(IContextKeyService);
-		assert.equal(contexts.getValue(ChatGPTNewDraftContext.key), false);
+		const draft = entry.newDraft;
+		assert.ok(draft && draft !== 'conversation');
+		assert.equal(draft.get(), false);
 		await services.invokeFunction(CommandsRegistry.getCommand(entry.newSessionCommand)!, undefined);
 		assert.deepEqual({ created, focused }, { created: 1, focused: 1 });
-		assert.equal(contexts.getValue(ChatGPTNewDraftContext.key), true);
+		assert.equal(draft.get(), true);
 		state.set({ ...newChatState, pendingCreation: 'queued' });
-		assert.equal(contexts.getValue(ChatGPTNewDraftContext.key), false);
+		assert.equal(draft.get(), false);
 		state.set({ ...newChatState, conversationId: 'existing' });
-		assert.equal(contexts.getValue(ChatGPTNewDraftContext.key), false);
+		assert.equal(draft.get(), false);
 	});
 
 	test('Desktop New preserves the selected chat on restore and creates a draft only on explicit New', async () => {

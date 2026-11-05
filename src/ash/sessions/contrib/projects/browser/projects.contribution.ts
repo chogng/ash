@@ -41,6 +41,7 @@ CommandsRegistry.register('sessions.show.projects', (accessor, source) =>
 				id: 'projects',
 				activityContext: 'sessions.activity.projectsSelected',
 				content: 'editor',
+				splash: 'grid',
 				sidebarContainerId: SessionsViewRegistry.getViewContainer(CHAT_WORKSPACE_NAVIGATION_ID)?.id,
 				showEditorTabs: false,
 				restoreCommand: 'sessions.show.projects',

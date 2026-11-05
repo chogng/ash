@@ -1,10 +1,8 @@
-import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { autorun, derived } from '../../../../base/common/observable.js';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { derived } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
-import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { ChatGPTNewDraftContext } from '../../../common/contextkeys.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
@@ -50,26 +48,20 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 		@ISessionsSearchService search: ISessionsSearchService,
 		@IEditorService editors: IEditorService,
 		@IStorageService storage: IStorageService,
-		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super();
-		const newDraft = ChatGPTNewDraftContext.bindTo(contextKeys);
-		this._register(autorun(reader => {
-			const state = chat.state.read(reader);
-			newDraft.set(isChatGPTNewDraft(state));
-		}));
-		this._register(toDisposable(() => newDraft.reset()));
+		const newDraft = chat.state.map(isChatGPTNewDraft);
 		const showChat = async (source?: unknown) => {
 			chat.initialize();
 			await layout.openEntry({
-				id: 'chatgpt', activityContext: chatGPTSelectedContext, content: 'editor',
+				id: 'chatgpt', activityContext: chatGPTSelectedContext, content: 'editor', splash: 'chat',
 				sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, showEditorTabs: false,
 				editorInput: {
 					resource: URI.from({ scheme: chatGPTReplyEditor.scheme, path: '/page' }), label: chatGPTReplyEditor.title(),
 					showBreadcrumbs: false, readOnly: true, capabilities: EditorInputCapabilities.CannotClose,
 				},
-				restoreCommand: SHOW_CHATGPT_COMMAND, newSessionCommand: 'sessions.chatgpt.newChat', focus: 'editor',
-			}, undefined, source === 'restore' ? { source } : undefined);
+				restoreCommand: SHOW_CHATGPT_COMMAND, newSessionCommand: 'sessions.chatgpt.newChat', newDraft, focus: 'editor',
+			}, undefined, source === 'restore' || source === 'startup' ? { source } : undefined);
 			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'chatgpt', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		};
 		this._register(search.registerSource(derived<readonly SearchResult[]>(reader => {

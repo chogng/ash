@@ -47,7 +47,8 @@ export class ChatWorkspaceContribution extends Disposable {
 			await layout.openEntry({
 				id: 'ashChat', workspaceMode: 'chat', activityContext: ASH_CHAT_SELECTED_CONTEXT,
 				content: 'conversation', conversationKind: 'code', sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID,
-				restoreCommand: SHOW_ASH_CHAT_COMMAND, newSessionCommand: 'sessions.open.new', focus: 'conversation',
+				splash: 'chat',
+				restoreCommand: SHOW_ASH_CHAT_COMMAND, newSessionCommand: 'sessions.open.new', newDraft: 'conversation', focus: 'conversation',
 			}, undefined, source === 'restore' ? { source } : undefined);
 			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'ash', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		}));

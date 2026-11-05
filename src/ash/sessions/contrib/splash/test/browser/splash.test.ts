@@ -39,7 +39,7 @@ test('Agent Window places its skeleton in cached visible Parts and removes it af
 		main.dataset.part = 'sessions';
 		main.getBoundingClientRect = () => ({ left: sidebarWidth, top: 768 - mainHeight, right: 1024, bottom: 768, width: 1024 - sidebarWidth, height: mainHeight } as DOMRect);
 		const composer = ownerDocument.createElement('div');
-		composer.className = 'ash-chatgpt-composer';
+		composer.className = 'ash-chat-input-container';
 		composer.style.visibility = 'visible';
 		composer.getBoundingClientRect = () => ({ left: 450, top: 670, right: 950, bottom: 750, width: 500, height: 80 } as DOMRect);
 		main.append(composer);
@@ -60,7 +60,7 @@ test('Agent Window places its skeleton in cached visible Parts and removes it af
 		layout.fire({ width: 0, height: 0 });
 		assert.equal(ownerDocument.querySelectorAll('.ash-sessions-splash-fallback .ash-sessions-splash-sidebar > div').length, 3);
 		assert.equal(ownerDocument.querySelector('.ash-sessions-splash-chat'), null);
-		showSessionsSplashForRestore(ownerDocument, 'sessions.open.new');
+		showSessionsSplashForRestore(ownerDocument, { content: 'conversation', splash: 'chat' });
 		assert.equal(ownerDocument.querySelectorAll('.ash-sessions-splash-fallback .ash-sessions-splash-chat > div').length, 2);
 		layout.fire({ width: 1024, height: 768 });
 		assert.ok(ownerDocument.getElementById('ash-parts-splash'));
@@ -83,10 +83,10 @@ test('Agent Window places its skeleton in cached visible Parts and removes it af
 		const legacy = { ...resized, layoutInfo: { ...resized.layoutInfo!, partBounds: [resized.layoutInfo!.partBounds[0], { ...legacyEditor, id: 'editor' }] } };
 		showSessionsSplash(ownerDocument, legacy);
 		assert.equal(ownerDocument.querySelector('.ash-sessions-splash-chat'), null);
-		showSessionsSplashForRestore(ownerDocument, 'sessions.show.projects');
+		showSessionsSplashForRestore(ownerDocument, { content: 'editor', splash: 'grid' });
 		assert.equal(ownerDocument.querySelectorAll('[data-part=editor] .ash-sessions-splash-cards > div').length, 8);
 		showSessionsSplash(ownerDocument, legacy);
-		showSessionsSplashForRestore(ownerDocument, 'sessions.open.customize');
+		showSessionsSplashForRestore(ownerDocument, { content: 'editor' });
 		assert.equal(ownerDocument.querySelector('.ash-sessions-splash-chat, .ash-sessions-splash-cards'), null);
 		showSessionsSplash(ownerDocument, resized);
 		const shell = ownerDocument.getElementById('ash-parts-splash')!;
@@ -168,7 +168,7 @@ test('Agent Window uses the sidebar bounds and border from a cache without Part 
 		const separator = shell.querySelector<HTMLElement>('[data-part="titlebar"] .ash-sessions-splash-titlebar-separator')!;
 		assert.equal(separator.style.left, '224px');
 		assert.equal(separator.style.borderRightWidth, '1px');
-		showSessionsSplashForRestore(document, 'sessions.open.new');
+		showSessionsSplashForRestore(document, { content: 'editor', splash: 'chat' });
 		assert.ok(shell.querySelector('[data-part="legacy-main"] .ash-sessions-splash-chat'));
 	} finally {
 		dom.window.close();

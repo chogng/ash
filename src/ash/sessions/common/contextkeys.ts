@@ -12,8 +12,5 @@ export const ActivityBarItemContext = new RawContextKey<string>('sessions.activi
 /** Describes the row that opened a Sessions context menu. */
 export const SessionsMenuActiveConversationContext = new RawContextKey<boolean>('sessions.menu.activeConversation', false);
 
-/** An empty local draft is visible in the conversation area. */
+/** The current entry is showing its new conversation draft. */
 export const NewSessionDraftVisibleContext = new RawContextKey<boolean>('sessions.activity.newSessionDraftVisible', false);
-
-/** The ChatGPT page is showing its new conversation composer. */
-export const ChatGPTNewDraftContext = new RawContextKey<boolean>('sessions.activity.chatgptNewDraft', false);
