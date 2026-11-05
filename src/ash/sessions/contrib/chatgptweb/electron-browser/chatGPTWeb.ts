@@ -16,7 +16,8 @@ import { ISessionsLayoutService } from '../../../services/layout/common/sessions
 import { CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID } from '../../chat/common/constants.js';
 import type { ReplyChatEditorOptions } from '../../chat/browser/replyChatEditor.js';
 import { ChatGPTWidgetModel } from './chatGPTWidgetModel.js';
-import { IChatGPTService, selectedChatConversationId } from '../browser/chatGPTService.js';
+import { ChatGPTProjectFolderPicker } from './chatGPTProjectFolderPicker.js';
+import { IChatGPTService, isChatGPTNewDraft } from '../browser/chatGPTService.js';
 import { ISessionsSearchService } from '../../search/browser/searchService.js';
 import type { SearchResult } from '../../search/browser/searchModel.js';
 
@@ -31,6 +32,7 @@ export const chatGPTReplyEditor = {
 	title: () => localize('sessions.chatgpt.title', 'ChatGPT'),
 	inputLabel: () => localize('sessions.chatgpt.prompt', 'Ask ChatGPT'),
 	model: new SyncDescriptor(ChatGPTWidgetModel),
+	createDraftPicker: (instantiation, footer, visible) => instantiation.createInstance(ChatGPTProjectFolderPicker, footer, visible),
 	accessibility: {
 		focusContext: 'chatGPTFocused',
 		verbositySetting: AccessibilityVerbositySettingId.ChatGPT,
@@ -54,8 +56,7 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 		const newDraft = ChatGPTNewDraftContext.bindTo(contextKeys);
 		this._register(autorun(reader => {
 			const state = chat.state.read(reader);
-			newDraft.set(!selectedChatConversationId(state) && !state.pendingCreation && !state.messages.length
-				&& !state.coworkTasks.length && state.loading?.kind !== 'conversation');
+			newDraft.set(isChatGPTNewDraft(state));
 		}));
 		this._register(toDisposable(() => newDraft.reset()));
 		const showChat = async (source?: unknown) => {

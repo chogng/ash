@@ -23,6 +23,61 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect.poll(() => page.evaluate(() => window.ashChatGPTIntegration.draft())).toBe(text);
 	}
 
+	test('a new Chat can choose a project and a folder independently and upload selected files', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page);
+		let uploaded: string | null | undefined;
+		let projectMove: unknown;
+		await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+			json: { items: [{ gizmo: { id: 'g-project', display: { name: 'Research' } } }], cursor: null },
+		}));
+		await page.route('**/service/backend-api/files', route => route.fulfill({
+			json: { file_id: 'file-notes', upload_url: 'https://example.test/upload' },
+		}));
+		await page.route('**/service/.upload?*', route => {
+			uploaded = route.request().postData();
+			return route.fulfill({ status: 201 });
+		});
+		await page.route('**/service/backend-api/files/file-notes/uploaded', route => route.fulfill({ json: { status: 'success' } }));
+		await page.route('**/service/backend-api/f/conversation', route => route.fulfill({
+			contentType: 'text/event-stream',
+			body: 'data: {"conversation_id":"fixture-chat"}\n\ndata: [DONE]\n\n',
+		}));
+		await page.route('**/service/backend-api/conversation/fixture-chat', route => {
+			if (route.request().method() !== 'PATCH') return route.fallback();
+			projectMove = route.request().postDataJSON();
+			return route.fulfill({ json: {} });
+		});
+		await page.goto('/chatgptNavigation.html?locale=zh-CN&folderPicker');
+		const picker = page.locator('.ash-chatgpt-widget .ash-chat-input-footer > .ash-chat-input-workspace-slot button');
+		await expect(picker).toHaveAccessibleName('项目或文件夹');
+		await expect(picker).toBeEnabled();
+		await picker.press('Enter');
+		await page.getByText('选择文件夹…', { exact: true }).click();
+		await expect(picker).toHaveAccessibleName('项目或文件夹：fixture-folder');
+		await expect(picker).toBeFocused();
+		expect(uploaded).toBeUndefined();
+		await picker.press('Enter');
+		await page.getByRole('menu').getByText('Research', { exact: true }).click();
+		await expect(picker).toHaveAccessibleName('项目或文件夹：Research · fixture-folder');
+		await picker.press('Enter');
+		await page.getByText('清除项目', { exact: true }).click();
+		await expect(picker).toHaveAccessibleName('项目或文件夹：fixture-folder');
+		await picker.press('Enter');
+		await page.getByRole('menu').getByText('Research', { exact: true }).click();
+		await picker.press('Enter');
+		await page.getByText('从文件夹添加附件…', { exact: true }).click();
+		await expect.poll(() => uploaded).toBe('fixture notes');
+		await expect(page.locator('.ash-chat-staged-file').filter({ hasText: 'notes.txt' })).toContainText('已就绪');
+		await picker.press('Enter');
+		await page.getByText('清除文件夹', { exact: true }).click();
+		await expect(picker).toHaveAccessibleName('项目或文件夹：Research');
+		await fillMessage(page, 'Summarize the attachment');
+		await page.keyboard.press('Enter');
+		await expect.poll(() => projectMove).toEqual({ gizmo_id: 'g-project' });
+		await expect(picker).toBeHidden();
+	});
+
 	test('ChatGPT reuses the left prompt timeline to navigate the visible conversation', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);
@@ -430,6 +485,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 				const composer = page.locator('.ash-chat-input-container');
 				const input = composer.getByRole('textbox', { name: locale === 'en' ? 'Ask ChatGPT' : '询问 ChatGPT' });
 				const attach = composer.locator('.ash-chat-input-attachment-toolbar button');
+				const target = page.getByRole('button', { name: locale === 'en' ? 'Project or folder' : '项目或文件夹', exact: true });
 				const model = page.locator('.ash-chat-input-model-action');
 				await expect(input).toBeFocused();
 				await expect(input).toHaveAttribute('aria-readonly', 'true');
@@ -450,9 +506,14 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 				await page.keyboard.press('Tab');
 				await expect(composer.locator('.ash-chat-input-inline-toolbar:not(.ash-chat-input-attachment-toolbar):focus-within')).toBeVisible();
 				await page.keyboard.press('Tab');
+				await expect(target).toBeFocused();
+				await expect(target).toHaveCSS('outline-style', 'solid');
+				await page.keyboard.press('Tab');
 				await expect(model).toBeFocused();
 				await expect(model).toHaveCSS('outline-style', 'solid');
 				await expect(model).not.toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
+				await page.keyboard.press('Shift+Tab');
+				await expect(target).toBeFocused();
 				await page.keyboard.press('Shift+Tab');
 				await expect(composer.locator('.ash-chat-input-inline-toolbar:not(.ash-chat-input-attachment-toolbar):focus-within')).toBeVisible();
 				await page.keyboard.press('Shift+Tab');

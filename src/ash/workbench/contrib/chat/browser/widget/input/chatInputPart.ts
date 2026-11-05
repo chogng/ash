@@ -174,6 +174,8 @@ export interface ChatInputPartOptions {
 	/** The host supplies its own catalog and model settings when false. */
 	readonly useWorkbenchModelManagement?: boolean;
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
+	/** Mounts host-owned controls before the compact footer's model toolbar. */
+	readonly renderLeadingFooter?: (footer: HTMLElement) => IDisposable;
 	/** Keep attachment and dictation or stop beside the editor; submit with Enter and keep configuration below. */
 	readonly layout?: 'compact';
 	readonly inputLabel?: string;
@@ -491,6 +493,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.attachmentToolbar = surface.attachmentToolbar;
 		this.inlineActionsToolbar = surface.inlineActionsToolbar;
 		this.inputFooter = surface.footer;
+		if (surface.footer && options.renderLeadingFooter && !options.inlineEdit) {
+			this._register(options.renderLeadingFooter(surface.footer));
+		}
 		this.pickerResponsiveLayout = this._register(new ChatInputPickerResponsiveLayout(this.inputToolbar.element));
 		const updateCursorAtTop = (): void => cursorAtTop.set(this.input.isAtHistoryBoundary('previous'));
 		this._register(this.input.onDidChange(updateCursorAtTop));

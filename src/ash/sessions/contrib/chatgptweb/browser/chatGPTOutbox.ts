@@ -8,6 +8,7 @@ export interface PendingChatGPTCreation {
 	readonly text: string;
 	readonly model?: string;
 	readonly thinkingEffort?: string;
+	readonly projectId?: string;
 	readonly submittedAgainst?: readonly string[];
 	readonly remoteId?: string;
 	readonly cancelled?: boolean;
@@ -22,6 +23,7 @@ function isCreation(value: unknown): value is PendingChatGPTCreation {
 		&& typeof value.text === 'string' && value.text.length > 0
 		&& (value.model === undefined || typeof value.model === 'string')
 		&& (value.thinkingEffort === undefined || typeof value.thinkingEffort === 'string')
+		&& (value.projectId === undefined || isId(value.projectId))
 		&& (value.submittedAgainst === undefined || Array.isArray(value.submittedAgainst) && value.submittedAgainst.every(isId))
 		&& (value.remoteId === undefined || isId(value.remoteId) && Array.isArray(value.submittedAgainst))
 		&& (value.cancelled === undefined || typeof value.cancelled === 'boolean');

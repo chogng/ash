@@ -4,6 +4,8 @@ import { IProjectsService, ProjectsService } from '../../../src/ash/sessions/con
 import { ISessionsTitlebarService } from '../../../src/ash/sessions/browser/parts/titlebarPart.js';
 import { IProjectService } from '../../../src/ash/platform/projects/common/projectService.js';
 import { IFileDialogService } from '../../../src/ash/platform/dialogs/common/dialogs.js';
+import { IFileService } from '../../../src/ash/platform/files/common/files.js';
+import { URI } from '../../../src/ash/base/common/uri.js';
 import { IChatResponseResourceFileSystemProvider } from '../../../src/ash/workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js';
 import { IChatSlashCommandService } from '../../../src/ash/workbench/contrib/chat/common/participants/chatSlashCommands.js';
 import { IActionViewItemService } from '../../../src/ash/platform/actions/browser/actionViewItemService.js';
@@ -203,6 +205,19 @@ services.registerSingleton(ISpeechService, () => services.createInstance(SpeechS
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
 registerTestComponentServices(services);
+const attachmentFolder = URI.file('/fixture-folder');
+const attachmentFile = URI.joinPath(attachmentFolder, 'notes.txt');
+if (parameters.has('folderPicker')) {
+	await services.get(IFileService).writeFileBytes(attachmentFile, new TextEncoder().encode('fixture notes'));
+}
+services.registerInstance(IFileDialogService, {
+	async showOpenDialog(options) {
+		if (!parameters.has('folderPicker')) return undefined;
+		if (options.canSelectFolders) return [attachmentFolder];
+		if (options.defaultUri?.toString() === attachmentFolder.toString()) return [attachmentFile];
+		return undefined;
+	},
+} as IFileDialogService);
 resources.add(CommandsRegistry.register('sessions.show.chatgpt', () => { }));
 const commands = resources.add(new CommandService(services));
 const menuService = new MenuService(commands, services.get(IContextKeyService));
@@ -261,7 +276,6 @@ const view = resources.add(services.createInstance(descriptor.ctorDescriptor, ho
 }));
 view.setVisible(true);
 if (parameters.has('projects')) {
-	if (!services.has(IFileDialogService)) services.registerInstance(IFileDialogService, {} as IFileDialogService);
 	services.registerInstance(ISessionsTitlebarService, {
 		setPageContent: content => {
 			document.body.prepend(content);

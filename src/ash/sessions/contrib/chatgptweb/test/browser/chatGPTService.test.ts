@@ -614,12 +614,20 @@ suite('ChatGPT shared service', () => {
 		let available = false;
 		let deleteRequests = 0;
 		let postRequests = 0;
+		const projectMoves: unknown[] = [];
 		const preparedIds: string[] = [];
 		const respond = async (path: string, _signal: AbortSignal, request: ChatGPTRequest): Promise<Response> => {
 			if (request.method === 'DELETE') {
 				assert.ok(path.endsWith('/conversation/id/two'));
 				deleteRequests++;
 				return new Response(null, { status: available ? 204 : 503 });
+			}
+			if (path.includes('/gizmos/snorlax/sidebar?')) {
+				return Response.json({ items: [{ gizmo: { id: 'g-research', display: { name: 'Research' } } }], cursor: null });
+			}
+			if (request.method === 'PATCH' && path.endsWith('/conversation/created-offline')) {
+				projectMoves.push(JSON.parse(String(request.body)));
+				return new Response(null, { status: 204 });
 			}
 			if (path.endsWith('/prepare')) {
 				preparedIds.push(JSON.parse(String(request.body)).messages[0].id);
@@ -639,6 +647,7 @@ suite('ChatGPT shared service', () => {
 		await initial.send();
 		await initial.deleteConversation(selectedChatConversationId(initial.state.get())!);
 		initial.setDraft('Keep this offline chat');
+		initial.setDraftTarget({ projectId: 'g-research' });
 		await initial.send();
 		await initial.deleteConversation('two');
 		const pendingId = selectedChatConversationId(initial.state.get());
@@ -657,6 +666,7 @@ suite('ChatGPT shared service', () => {
 		reopened.setNetworkAvailable(false);
 		await reopened.reload();
 		assert.equal(selectedChatConversationId(reopened.state.get()), pendingId);
+		assert.equal(reopened.state.get().conversations.find(item => item.id === pendingId)?.projectId, 'g-research');
 		assert.equal(reopened.state.get().messages[0]?.text, 'Keep this offline chat');
 		assert.deepEqual(reopened.state.get().conversations.map(item => item.id), [pendingId, 'one']);
 		reopened.setNetworkAvailable(true);
@@ -672,6 +682,8 @@ suite('ChatGPT shared service', () => {
 		assert.equal(preparedIds.length, 2);
 		assert.equal(preparedIds[0], preparedIds[1]);
 		assert.equal(reopened.state.get().conversationId, 'created-offline');
+		assert.equal(reopened.state.get().conversations.find(item => item.id === 'created-offline')?.projectId, 'g-research');
+		assert.deepEqual(projectMoves, [{ gizmo_id: 'g-research' }]);
 		assert.ok(!reopened.state.get().conversations.some(item => item.id === 'two' || item.id.startsWith('pending:')));
 		reopened.dispose();
 		using restarted = fixture(respond, { values });

@@ -4,7 +4,8 @@ import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IChatListCatalog } from './chatListModel.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
-import { autorun, observableFromEvent, observableValue, type IReader } from '../../../../base/common/observable.js';
+import { autorun, observableFromEvent, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
@@ -49,6 +50,7 @@ export interface ReplyChatEditorOptions {
 	readonly title: () => string;
 	readonly inputLabel: () => string;
 	readonly model: SyncDescriptor<IReplyChatEditorModel>;
+	readonly createDraftPicker?: (instantiation: IInstantiationService, footer: HTMLElement, visible: IObservable<boolean>) => IDisposable;
 	readonly accessibility: {
 		readonly focusContext: string;
 		readonly verbositySetting: AccessibilityVerbositySettingId;
@@ -125,6 +127,7 @@ export class ReplyChatEditor extends EditorPane {
 			projectButton.label = project ? project.title : '';
 			projectLink.hidden = !project;
 		}));
+		const createDraftPicker = this.options.createDraftPicker;
 		try {
 			this.widget = this._register(instantiation.createInstance(ChatWidget<IReplyChatEditorModel>,
 				root, 'sessions-chat-reply', model, () => model.newChat(),
@@ -143,6 +146,7 @@ export class ReplyChatEditor extends EditorPane {
 						layout: 'compact', modePicker: 'hidden', modelPickerPosition: 'trailing',
 						useWorkbenchModelManagement: false,
 						renderSecondaryToolbar: false, draftStorage: 'host',
+						renderLeadingFooter: createDraftPicker && ((footer: HTMLElement) => createDraftPicker(instantiation, footer, this.shown)),
 						inputLabel: this.options.inputLabel(),
 					});
 					input.element.classList.add('ash-sessions-chat-input', 'chat-composer');
