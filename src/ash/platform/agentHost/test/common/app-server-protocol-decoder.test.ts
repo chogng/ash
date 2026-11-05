@@ -9,6 +9,19 @@ import {
 	decodeAppServerServerRequest,
 } from '../../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import type { MethodResult } from '../../../../../../.build/protocol/typescript/index.js';
+import { createTestModel } from './testAppServerProtocol.js';
+
+test('model catalog decodes every task recommendation and rejects unknown purposes', () => {
+	const model = createTestModel({
+		model: { provider: 'openai', model: 'example' }, display_name: 'Example',
+		recommended_for: ['advisor', 'review', 'commit', 'threadTitle', 'threadRecap'],
+	});
+	const response = { jsonrpc: '2.0', id: 1, result: { models: [model] } };
+	assert.deepEqual(decodeAppServerResponse('model/list', response), response);
+	assert.throws(() => decodeAppServerResponse('model/list', {
+		...response, result: { models: [{ ...model, recommended_for: ['review', 'commit', 'unknownPurpose'] }] },
+	}), error => error instanceof AppServerProtocolDecodeError && error.path === '$.result.models[0].recommended_for[2]');
+});
 
 test('debug log collection rejects client paths and oversized remote resource collections', () => {
 	assert.throws(() => decodeAppServerRequestParams('session/debugLogs/collect', { sessionId: 'session', path: '/outside/profile' }), AppServerProtocolDecodeError);

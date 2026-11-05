@@ -47,13 +47,16 @@ fn task_recommendations_reach_the_client_and_old_catalogs_default_to_none() {
     let mut info = ModelInfo::new(model.model.clone(), "Example");
     info.recommended_for = vec![
         ash_protocol::ModelPurpose::Advisor,
+        ash_protocol::ModelPurpose::Review,
         ash_protocol::ModelPurpose::Commit,
+        ash_protocol::ModelPurpose::ThreadTitle,
+        ash_protocol::ModelPurpose::ThreadRecap,
     ];
     let entry = ModelCatalogEntry::from_info(model, &info);
     let mut value = serde_json::to_value(&entry).unwrap();
     assert_eq!(
         value["recommended_for"],
-        serde_json::json!(["advisor", "commit"])
+        serde_json::json!(["advisor", "review", "commit", "threadTitle", "threadRecap"])
     );
     assert_eq!(
         serde_json::from_value::<ModelCatalogEntry>(value.clone()).unwrap(),
