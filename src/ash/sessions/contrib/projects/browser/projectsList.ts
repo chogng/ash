@@ -1,0 +1,419 @@
+import type { IAction } from '../../../../base/common/actions.js';
+import { addDisposableListener, getActiveElement, h } from '../../../../base/browser/dom.js';
+import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { Button } from '../../../../base/browser/ui/button/button.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import { IntervalTimer } from '../../../../base/common/async.js';
+import { toErrorMessage } from '../../../../base/common/errorMessage.js';
+import { Disposable, MutableDisposable, toDisposable, type DisposableStore } from '../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
+import { getNLSLanguage, localize } from '../../../../nls.js';
+import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import type { ProjectSummary } from '../../../../platform/projects/common/projectService.js';
+import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import type { ChatListEntry, ChatListGroup } from '../../chat/browser/chatListModel.js';
+import type { ProjectsActions } from './projectsActions.js';
+import { IProjectsService, type ProjectsState } from './projectsService.js';
+
+/** A pinned project shows its removal action in the same slot on hover or focus. */
+class ProjectsPinActionViewItem extends ButtonActionViewItem {
+	override render(container: HTMLElement): void {
+		super.render(container);
+		if (!this.action.checked) {
+			return;
+		}
+		const button = this.button.domNode;
+		const updateIcon = () => {
+			this.button.icon = button.matches(':hover, :focus') ? Lxicon.unpin : this.action.icon;
+		};
+		for (const event of ['mouseenter', 'mouseleave', 'focus', 'blur'] as const) {
+			this._register(addDisposableListener(button, event, updateIcon));
+		}
+		updateIcon();
+	}
+}
+
+interface ProjectsListOptions {
+	readonly openedProject: () => void;
+	readonly isVisible: () => boolean;
+}
+
+/** Renders the project catalogue and its conversation lists in the pane's body. */
+export class ProjectsList extends Disposable {
+	private readonly relativeTimeUpdate = this._register(new IntervalTimer());
+	private readonly relativeTime = new Intl.RelativeTimeFormat(getNLSLanguage(), { numeric: 'always' });
+	private readonly openConversationRequest = this._register(new MutableDisposable());
+
+	constructor(
+		private readonly body: HTMLElement,
+		private readonly actions: ProjectsActions,
+		private readonly options: ProjectsListOptions,
+		@IProjectsService private readonly projects: IProjectsService,
+		@IContextMenuService private readonly contextMenus: IContextMenuService,
+		@IHoverService private readonly hover: IHoverService,
+		@INotificationService private readonly notifications: INotificationService,
+	) {
+		super();
+		this._register(addDisposableListener(body, 'keydown', event => this.navigateCards(event)));
+	}
+
+	focusCard(id?: string): boolean {
+		const cards = this.body.querySelectorAll<HTMLButtonElement>('.ash-projects-card');
+		const card = id === undefined ? cards[0] : Array.from(cards).find(candidate => candidate.dataset.projectControl === id);
+		card?.focus();
+		return !!card;
+	}
+
+	stopUpdatingTimes(): void {
+		this.relativeTimeUpdate.cancel();
+	}
+
+	renderCatalog(state: ProjectsState, groups: readonly ChatListGroup[], archived: readonly ChatListGroup[] | undefined, content: DisposableStore): void {
+		const query = state.query.trim().toLocaleLowerCase();
+		if (archived) {
+			this.renderArchivedProjects(state, archived, query, content);
+			return;
+		}
+		const localIds = new Set(state.projects.map(project => project.id));
+		const conversationCards = groups.filter(group => !localIds.has(group.key) && group.title.toLocaleLowerCase().includes(query));
+		const projects = this.projects.getProjects();
+		if (!state.selectedId && (projects.length || conversationCards.length)) {
+			this.renderCards(projects, conversationCards, content);
+		} else if (state.loading) {
+			this.renderLoading();
+		} else if (!state.message) {
+			this.renderEmpty(!!state.query, content);
+		}
+	}
+
+	private renderEmpty(searching: boolean, content: DisposableStore): void {
+		const document = this.body.ownerDocument;
+		const empty = h(document, 'div', { className: 'ash-projects-empty' });
+		const illustration = h(
+			document,
+			'div',
+			{ className: 'ash-projects-illustration', attributes: { 'aria-hidden': 'true' } },
+			h(document, 'span'),
+			h(document, 'span'),
+			h(document, 'span'),
+		);
+		empty.append(
+			illustration,
+			h(
+				document,
+				'h2',
+				{},
+				searching
+					? localize('projects.noResults', 'No matching projects')
+					: localize('projects.emptyTitle', 'Looking to start a project?'),
+			),
+			h(
+				document,
+				'p',
+				{},
+				searching
+					? localize('projects.searchHint', 'Try another name or clear your search.')
+					: localize('projects.emptyDescription', 'Bring your materials and goals together in one space.'),
+			),
+		);
+		content.add(new Button(empty, {
+			...defaultButtonStyles,
+			label: searching
+				? localize('projects.clearSearch', 'Clear search')
+				: localize('projects.new', 'New project'),
+			presentation: 'secondary',
+			onClick: () => (searching ? this.projects.setQuery('') : this.actions.createProject()),
+		}));
+		this.body.append(empty);
+	}
+
+	private renderCards(projects: readonly ProjectSummary[], conversationCards: readonly ChatListGroup[], disposables: DisposableStore): void {
+		const document = this.body.ownerDocument;
+		const list = h(document, 'ul', {
+			className: 'ash-projects-grid',
+			attributes: { 'aria-label': localize('projects.title', 'Projects') },
+		});
+		for (const project of projects) {
+			const row = h(document, 'li', { className: 'ash-projects-row' });
+			const card = h(document, 'button', {
+				className: 'ash-button ash-button-quiet ash-projects-card',
+				properties: { type: 'button' },
+				attributes: { 'aria-label': project.name },
+			});
+			card.dataset.projectControl = project.id;
+			const mark = h(document, 'span', {
+				className: 'ash-projects-card-mark',
+				attributes: { 'aria-hidden': 'true' },
+			});
+			appendIcon(Lxicon.projects, mark);
+			const content = h(
+				document,
+				'span',
+				{ className: 'ash-projects-card-content' },
+				h(document, 'span', { className: 'ash-projects-card-name' }, project.name),
+			);
+			const timestamp = project.updatedAtMs ?? project.createdAtMs;
+			if (timestamp !== undefined) {
+				const date = new Date(timestamp);
+				const updatedAt = localize('projects.updatedAt', 'Updated {0}', date.toLocaleString(getNLSLanguage()));
+				const caption = h(document, 'time', {
+					className: 'ash-projects-card-caption',
+					properties: { dateTime: date.toISOString(), id: generateUuid() },
+					attributes: { 'aria-label': updatedAt },
+				});
+				card.setAttribute('aria-describedby', caption.id);
+				content.append(caption);
+				disposables.add(this.hover.setupDelayedHover(caption, { content: updatedAt }));
+			}
+			card.append(mark, content);
+			const actionsHost = this.renderCardActions(row, project.id, project.name, this.actions.getProjectActions(project), disposables);
+			disposables.add(this.hover.setupDelayedHover(card, { content: project.name }));
+			disposables.add(
+				addDisposableListener(card, 'click', () => {
+					void this.projects.openProject(project.id).then(() => this.options.openedProject());
+				}),
+			);
+			row.append(card, actionsHost);
+			list.append(row);
+		}
+		for (const project of conversationCards) {
+			const row = h(document, 'li', { className: 'ash-projects-row' });
+			const card = h(document, 'button', {
+				className: 'ash-button ash-button-quiet ash-projects-card',
+				properties: { type: 'button' },
+			});
+			card.dataset.projectControl = project.key;
+			card.dataset.conversationProject = '';
+			const mark = h(document, 'span', { className: 'ash-projects-card-mark', attributes: { 'aria-hidden': 'true' } });
+			appendIcon(Lxicon.projects, mark);
+			card.append(mark, h(document, 'span', { className: 'ash-projects-card-name' }, project.title));
+			disposables.add(addDisposableListener(card, 'click', () => {
+				this.projects.openConversationProject(project.key);
+				this.options.openedProject();
+			}));
+			row.append(card, this.renderCardActions(row, project.key, project.title, this.actions.getConversationProjectActions(project), disposables));
+			list.append(row);
+		}
+		this.body.append(list);
+		this.updateCardTimes();
+		if (this.options.isVisible() && list.querySelector('time')) {
+			this.relativeTimeUpdate.cancelAndSet(() => this.updateCardTimes(), 60_000, document.defaultView!);
+		}
+	}
+
+	private renderArchivedProjects(state: ProjectsState, groups: readonly ChatListGroup[], query: string, content: DisposableStore): void {
+		const document = this.body.ownerDocument;
+		const projects = [
+			...state.projects.filter(project => project.archived).map(project => ({
+				id: project.id, title: project.name, restore: () => this.projects.restore(project),
+			})),
+			...groups.flatMap(group => group.project?.restore ? [{
+				id: group.key, title: group.title, restore: group.project.restore,
+			}] : []),
+		].filter(project => project.title.toLocaleLowerCase().includes(query))
+			.sort((left, right) => left.title.localeCompare(right.title));
+		if (!projects.length) {
+			this.body.append(h(document, 'p', { attributes: { role: 'status' } }, query
+				? localize('projects.noMatchingArchived', 'No matching archived projects.')
+				: localize('projects.noArchived', 'No archived projects.')));
+			return;
+		}
+		const list = h(document, 'ul', {
+			className: 'ash-projects-grid',
+			attributes: { 'aria-label': localize('projects.archived', 'Archived') }
+		});
+		for (const project of projects) {
+			const row = h(document, 'li', { className: 'ash-projects-row' });
+			const button = content.add(new Button(row, {
+				...defaultButtonStyles,
+				label: localize('projects.restoreNamed', 'Unarchive {0}', project.title),
+				icon: Lxicon.archive,
+				onClick: () => {
+					this.actions.restoreProject(project.restore);
+				},
+			}));
+			button.enabled = !state.busy;
+			button.domNode.dataset.projectControl = `restore:${project.id}`;
+			list.append(row);
+		}
+		this.body.append(list);
+	}
+
+	private renderCardActions(row: HTMLElement, id: string, title: string, actions: readonly IAction[], content: DisposableStore): HTMLElement {
+		const actionsHost = h(row.ownerDocument, 'div', { className: 'ash-projects-card-actions' });
+		const pinned = this.projects.isPinned(id);
+		const pinLabel = pinned ? localize('projects.unpin', 'Unpin') : localize('projects.pin', 'Pin');
+		const pin: IAction = {
+			id: 'projects.pin',
+			label: pinLabel,
+			tooltip: pinLabel,
+			icon: pinned ? Lxicon.pinFilled : Lxicon.pinned,
+			enabled: !this.projects.state.get().busy,
+			checked: pinned,
+			run: () => this.projects.togglePinned(id),
+		};
+		const toolbar = content.add(
+			new WorkbenchToolBar(
+				actionsHost,
+				{
+					showContextMenu: delegate => {
+						row.classList.add('menu-visible');
+						this.contextMenus.showContextMenu({
+							...delegate,
+							getMenuClassName: () => 'ash-projects-menu',
+							onHide: didCancel => {
+								row.classList.remove('menu-visible');
+								delegate.onHide?.(didCancel);
+							},
+						});
+						// The menu mounts synchronously in this window; Projects owns its destructive styling.
+						const destructiveAction = row.ownerDocument.querySelector(
+							'.ash-projects-menu [data-action-id="projects.delete"]',
+						);
+						destructiveAction?.classList.add('ash-projects-destructive-action');
+					},
+				},
+				{
+					ariaLabel: localize('projects.actions', 'Actions for {0}', title),
+					presentation: 'inherit-foreground',
+					highlightToggledItems: false,
+					actionViewItemProvider: (action, options) =>
+						action.id === 'projects.pin' ? new ProjectsPinActionViewItem(action, options) : undefined,
+				},
+			),
+		);
+		toolbar.setActions([], actions, [this.actions.getPinAction(id)]);
+		const pinButton = actionsHost.querySelector<HTMLElement>('[data-action-id="projects.pin"] button')!;
+		pinButton.dataset.projectControl = `pin:${id}`;
+		const moreButton = actionsHost.querySelector<HTMLElement>('.ash-toolbar-more-actions button')!;
+		if (moreButton) moreButton.dataset.projectControl = `more:${id}`;
+		return actionsHost;
+	}
+
+	renderConversations(container: HTMLElement, entries: readonly ChatListEntry[], project: ChatListGroup['project'], content: DisposableStore): void {
+		const document = container.ownerDocument;
+		const section = h(document, 'section', { className: 'ash-projects-conversations' });
+		const label = localize('projects.conversations', 'Project conversations');
+		section.append(h(document, 'h2', {}, label));
+		container.append(section);
+		const list = h(document, 'ul', { className: 'ash-projects-conversation-list', attributes: { 'aria-label': label } });
+		const history = project?.history;
+		for (const entry of entries) {
+			const row = h(document, 'li', { className: 'ash-projects-row' });
+			const button = content.add(new Button(row, {
+				...defaultButtonStyles, label: entry.title, icon: entry.defaultIcon, presentation: 'quiet',
+				onClick: () => this.openProjectConversation(entry),
+			}));
+			button.domNode.classList.add('ash-projects-conversation');
+			button.enabled = !entry.disabled;
+			button.domNode.dataset.projectControl = entry.id;
+			list.append(row);
+		}
+		if (entries.length) section.append(list);
+		if (history?.state === 'more' || history?.state === 'error') {
+			const button = content.add(new Button(section, {
+				...defaultButtonStyles,
+				label: history.state === 'more' ? localize('sessions.chatList.loadMoreProjectChats', 'Load more project chats')
+					: localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry'),
+				onClick: history.load,
+			}));
+			button.domNode.dataset.projectControl = 'project-history';
+		} else if (history?.state === 'loading' || history?.state === 'idle') {
+			section.append(h(document, 'p', { attributes: { role: 'status' } },
+				localize('sessions.chatList.loadingProjectChats', 'Loading project chats…')));
+		} else if (history?.state === 'unavailable') {
+			section.append(h(document, 'p', { attributes: { role: 'status' } },
+				localize('sessions.chatList.projectChatsOffline', 'Connect to load project chats.')));
+		} else if (!entries.length) {
+			section.append(h(document, 'p', { attributes: { role: 'status' } },
+				localize('sessions.chatList.emptyProject', 'No chats in this project')));
+		}
+	}
+
+	private openProjectConversation(entry: ChatListEntry): void {
+		const controller = new AbortController();
+		this.openConversationRequest.value = toDisposable(() => controller.abort());
+		void entry.open(controller.signal).catch(error => {
+			if (!controller.signal.aborted) this.notifications.error(toErrorMessage(error));
+		});
+	}
+
+	private updateCardTimes(): void {
+		const now = Date.now();
+		const units = [
+			{ unit: 'year', milliseconds: 365 * 86_400_000 },
+			{ unit: 'month', milliseconds: 30 * 86_400_000 },
+			{ unit: 'day', milliseconds: 86_400_000 },
+			{ unit: 'hour', milliseconds: 3_600_000 },
+			{ unit: 'minute', milliseconds: 60_000 },
+		] as const;
+		// Refresh text in place so time passing never replaces cards or interrupts keyboard focus.
+		for (const caption of this.body.querySelectorAll<HTMLTimeElement>('time.ash-projects-card-caption')) {
+			const elapsed = Math.max(0, now - Date.parse(caption.dateTime));
+			const unit = units.find(candidate => elapsed >= candidate.milliseconds);
+			caption.textContent = unit
+				? this.relativeTime.format(-Math.floor(elapsed / unit.milliseconds), unit.unit)
+				: localize('projects.justNow', 'Just now');
+		}
+	}
+
+	private renderLoading(): void {
+		const document = this.body.ownerDocument;
+		const placeholder = (className: string) =>
+			h(document, 'span', { className: `ash-projects-placeholder ${className}` });
+		const skeleton = h(document, 'div', {
+			className: 'ash-projects-skeleton ash-projects-grid',
+			attributes: { 'aria-hidden': 'true' },
+		});
+		for (let index = 0; index < 6; index++) {
+			const card = h(
+				document,
+				'div',
+				{ className: 'ash-projects-card ash-projects-skeleton-card' },
+				placeholder('ash-projects-card-mark'),
+				h(
+					document,
+					'div',
+					{ className: 'ash-projects-card-content' },
+					placeholder('ash-projects-skeleton-name'),
+					placeholder('ash-projects-skeleton-short'),
+				),
+			);
+			skeleton.append(h(document, 'div', { className: 'ash-projects-row' }, card));
+		}
+		this.body.append(skeleton);
+	}
+
+	private navigateCards(event: KeyboardEvent): void {
+		if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+			return;
+		}
+		const cards = Array.from(this.body.querySelectorAll<HTMLButtonElement>('.ash-projects-card, .ash-projects-conversation:not(:disabled)'));
+		const index = cards.indexOf(getActiveElement(this.body.ownerDocument) as HTMLButtonElement);
+		if (index < 0) {
+			return;
+		}
+		event.preventDefault();
+		const columns = getComputedStyle(cards[index].parentElement!.parentElement!).gridTemplateColumns.split(
+			' ',
+		).length;
+		const next =
+			event.key === 'Home'
+				? 0
+				: event.key === 'End'
+					? cards.length - 1
+					: index +
+					(event.key === 'ArrowDown'
+						? columns
+						: event.key === 'ArrowUp'
+							? -columns
+							: event.key === 'ArrowLeft'
+								? -1
+								: 1);
+		cards[Math.max(0, Math.min(cards.length - 1, next))].focus();
+	}
+}

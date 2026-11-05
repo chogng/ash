@@ -7,6 +7,8 @@ import { AUTOMATIONS_CUSTOM_VIEW_ID } from '../automationsConstants.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -68,14 +70,15 @@ registerAction2(class AddSessionToProjectAction extends Action2 {
 		const target = sessionActionTarget(accessor, argument);
 		const projects = accessor.get(IProjectService);
 		const input = accessor.get(IQuickInputService);
-		const available = (await projects.list()).filter(project => !project.archived);
+		const scope = accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key) === 'code' ? 'code' : 'chat';
+		const available = (await projects.list(scope)).filter(project => !project.archived);
 		if (!available.length) throw new Error(localize('sessions.list.noProjects', 'Create a project before adding this chat.'));
 		const selected = await pickSessionDestination(input, localize('sessions.list.addToProject', 'Add to project'), available.map(project => ({ label: project.name, id: project.id })));
 		if (!selected) return;
 		const session = await target.resolve();
 		// Project identities belong to this host's backend.
 		if (session.backendSessionId) throw new Error(localize('sessions.list.projectHost', 'Projects can only include chats from this host.'));
-		await projects.addSession(await projects.read(selected.id), session.sessionId);
+		await projects.addSession(await projects.read(selected.id, scope), session.sessionId);
 	}
 });
 

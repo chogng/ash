@@ -7,7 +7,7 @@ import { localize } from '../../../nls.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
-import type { IProjectService, Project, ProjectMaterial, ProjectSummary } from '../common/projectService.js';
+import type { IProjectService, Project, ProjectMaterial, ProjectScope, ProjectSummary } from '../common/projectService.js';
 
 export class AppServerProjectService implements IProjectService {
 	public readonly onDidChange: Event<void>;
@@ -19,9 +19,9 @@ export class AppServerProjectService implements IProjectService {
 		);
 	}
 
-	public async list(): Promise<readonly ProjectSummary[]> {
+	public async list(scope?: ProjectScope): Promise<readonly ProjectSummary[]> {
 		try {
-			const result = await appServerRequest(this.connection, 'project/list', {});
+			const result = await appServerRequest(this.connection, 'project/list', { scope });
 			return result.projects.map(project => ({
 				id: project.projectId, revision: project.revision, name: project.name, archived: project.status === 'archived', sessionCount: project.sessionCount,
 				createdAtMs: project.createdAtMs ?? undefined, updatedAtMs: project.updatedAtMs ?? undefined,
@@ -29,14 +29,14 @@ export class AppServerProjectService implements IProjectService {
 		} catch (error) { throw projectError(error); }
 	}
 
-	public async read(id: string): Promise<Project> {
-		try { return fromDto((await appServerRequest(this.connection, 'project/read', { projectId: id })).project); }
+	public async read(id: string, scope?: ProjectScope): Promise<Project> {
+		try { return fromDto((await appServerRequest(this.connection, 'project/read', { projectId: id, scope })).project); }
 		catch (error) { throw projectError(error); }
 	}
 
-	public async create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project> {
+	public async create(id: string, name: string, description: string, materials: readonly ProjectMaterial[], scope?: ProjectScope): Promise<Project> {
 		try {
-			return fromDto((await appServerRequest(this.connection, 'project/create', { commandId: id, projectId: id, name, description, materials: toMaterials(materials) })).project);
+			return fromDto((await appServerRequest(this.connection, 'project/create', { commandId: id, projectId: id, name, description, materials: toMaterials(materials), scope })).project);
 		} catch (error) { throw projectError(error); }
 	}
 

@@ -17,6 +17,7 @@ pub use project::Project;
 pub use project::ProjectMaterial;
 pub use project::ProjectMaterialKind;
 pub use project::ProjectRoot;
+pub use project::ProjectScope;
 pub use project::ProjectStatus;
 pub use store::ProjectCommit;
 pub use store::ProjectStore;

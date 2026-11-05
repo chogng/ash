@@ -37,6 +37,7 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
             "create",
             0,
             ash_projects::ProjectCommand::Create {
+                scope: None,
                 name: "project".into(),
                 description: String::new(),
                 materials: Vec::new(),

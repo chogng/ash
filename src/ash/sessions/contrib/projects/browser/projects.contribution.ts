@@ -39,6 +39,7 @@ CommandsRegistry.register('sessions.show.projects', (accessor, source) =>
 		.openEntry(
 			{
 				id: 'projects',
+				workspaceMode: 'chat',
 				activityContext: 'sessions.activity.projectsSelected',
 				content: 'editor',
 				splash: 'grid',

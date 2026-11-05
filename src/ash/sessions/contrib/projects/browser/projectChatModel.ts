@@ -50,7 +50,7 @@ export class ProjectChatModel extends CoworkWidgetModel {
 		const active = await super.prepareConversation(signal);
 		if (this.associatedSessionId !== active.sessionId) {
 			// Read the current revision so changing materials while composing is safe.
-			const project = await this.projects.read(this.projectId);
+			const project = await this.projects.read(this.projectId, 'chat');
 			if (this.isDisposed || signal?.aborted) throw canceled();
 			if (!project.sessionIds.includes(active.sessionId)) await this.projects.addSession(project, active.sessionId);
 			this.associatedSessionId = active.sessionId;

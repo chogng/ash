@@ -1,7 +1,5 @@
-import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { IChatListCatalog } from './chatListModel.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { autorun, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
@@ -30,6 +28,7 @@ import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widg
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { ChatInputEditorOptions } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { ProjectTitleBarWidget } from '../../projects/browser/projectTitleBarWidget.js';
 import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
 import { ChatWelcomeTitle } from './chatWelcomeTitle.js';
 import './media/chatInput.css';
@@ -104,12 +103,9 @@ export class ReplyChatEditor extends EditorPane {
 		// Nested input editors must inherit this page's accessibility context.
 		const instantiation = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, contextKeys])));
 		const model = instantiation.createInstance(this.options.model);
-		const projectLink = h(parent.ownerDocument, 'div', { className: 'ash-reply-chat-project' });
-		projectLink.hidden = true;
-		root.append(projectLink);
 		let projectId: string | undefined;
-		const projectButton = this._register(new Button(projectLink, {
-			...defaultButtonStyles, label: '', icon: Lxicon.projects, presentation: 'quiet',
+		const projectTitlebar = this._register(instantiation.createInstance(ProjectTitleBarWidget, h(parent.ownerDocument, 'div'), {
+			icon: Lxicon.projects,
 			onClick: () => {
 				if (!projectId) return;
 				void this.commands.executeCommand('sessions.open.projects', projectId)
@@ -117,13 +113,18 @@ export class ReplyChatEditor extends EditorPane {
 			},
 		}));
 		this._register(autorun(reader => {
+			if (!this.shown.read(reader)) {
+				projectId = undefined;
+				projectTitlebar.setVisible(false);
+				return;
+			}
 			const snapshots = this.chatCatalog.sources.map(source => source.snapshot.read(reader));
 			const entry = snapshots.flatMap(snapshot => snapshot.entries).find(entry => entry.selected);
 			const project = entry?.projectId && snapshots.flatMap(snapshot => snapshot.projects ?? [])
 				.find(project => project.id === entry.projectId && !project.archived);
 			projectId = project ? project.id : undefined;
-			projectButton.label = project ? project.title : '';
-			projectLink.hidden = !project;
+			projectTitlebar.setName(project ? project.title : '');
+			projectTitlebar.setVisible(!!project);
 		}));
 		const createDraftPicker = this.options.createDraftPicker;
 		const welcome = this._register(instantiation.createInstance(ChatWelcomeTitle, (reader: IReader) => model.readWelcomeDraft(reader), this.shown, true));

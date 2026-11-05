@@ -151,7 +151,16 @@ if (new URL(location.href).searchParams.has('search') || new URL(location.href).
 	globalThis.ashWebWorkbenchHost = {
 		api: {
 			...globalThis.ashWebWorkbenchHost!.api,
-			projects: { ...disconnectedApi.projects, onDidChange: projectChanges.event, list: async () => [project], read: async () => project },
+			projects: {
+				...disconnectedApi.projects,
+				onDidChange: projectChanges.event,
+				list: async scope => scope === 'code' ? [codeProject] : [project],
+				read: async (id, scope) => {
+					const match = scope === 'code' || id === codeProject.id ? codeProject : project;
+					if (match.id !== id || (scope === 'chat' && match !== project)) throw new Error('Project not found');
+					return match;
+				},
+			},
 			automation: {
 				onDidChange: Event.None,
 				list: async () => [{
@@ -171,6 +180,8 @@ window.addEventListener('pagehide', () => completeCustomizeDetails(), { once: tr
 // Synthetic catalogs exercise the real Sessions composition without using a personal profile.
 if (new URL(location.href).searchParams.has('customize')) {
 	const catalog = { generation: 1, skills: ['research-notes', 'code-review', 'writing-guide'].map(name => ({
+	const codeProject = new URL(location.href).searchParams.has('projectPicker')
+		? { ...project, id: 'code-project', name: 'Code project fixture' } : project;
 		id: { source: 'fixture', name }, description: name === 'writing-guide' ? 'Reusable writing instructions.' : name === 'research-notes' ? 'Reusable research instructions.'
 			: `Reusable ${name.toLowerCase()} instructions with a deliberately long description to verify card wrapping without pushing actions outside the page.`,
 		metadata: { author: 'Ash fixtures' }, contentDigest: 'a'.repeat(64), enabled: true, compatible: true,

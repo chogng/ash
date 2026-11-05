@@ -19,6 +19,7 @@ pub(crate) fn apply(
             ProjectCommand::Create {
                 name,
                 description,
+                scope,
                 materials,
             },
         ) => {
@@ -36,6 +37,7 @@ pub(crate) fn apply(
                 created_at_ms: Some(now_ms),
                 updated_at_ms: Some(now_ms),
                 status: ProjectStatus::Active,
+                scope: *scope,
                 name: name.clone(),
                 description: description.clone(),
                 roots: BTreeMap::new(),

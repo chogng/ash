@@ -149,10 +149,11 @@ export class SessionWorkspacePicker extends Disposable {
 	}
 
 	private readSelectedProject(): void {
-		const id = this.draft?.projectId;
+		const draft = this.draft;
+		const id = draft && this.usesLocalProjects(draft) ? draft.projectId : undefined;
 		const generation = ++this.projectRead;
 		if (!id) return;
-		void this.projects.read(id).then(project => {
+		void this.projects.read(id, 'code').then(project => {
 			if (this.isDisposed || this.projectRead !== generation || this.draft?.projectId !== id) return;
 			this.selectedProject = { id, name: project.name };
 			this.render();
@@ -172,8 +173,9 @@ export class SessionWorkspacePicker extends Disposable {
 
 	private render(): void {
 		const draft = this.draft;
-		if (this.selectedProject?.id !== draft?.projectId) {
-			this.selectedProject = draft?.projectId ? { id: draft.projectId, name: '' } : undefined;
+		const projectId = draft && this.usesLocalProjects(draft) ? draft.projectId : undefined;
+		if (this.selectedProject?.id !== projectId) {
+			this.selectedProject = projectId ? { id: projectId, name: '' } : undefined;
 			this.readSelectedProject();
 		}
 		this.host.hidden = !draft;
@@ -513,7 +515,7 @@ export class SessionWorkspacePicker extends Disposable {
 			if (!accepted || !isCurrent()) { return; }
 			let project: Project | undefined;
 			if (projectId) {
-				project = await this.projects.read(projectId);
+				project = await this.projects.read(projectId, 'code');
 				if (!isCurrent()) return;
 				const resource = URI.file(target.root);
 				const belongs = projectFolders(project).some(folder => extUriBiasedIgnorePathCase.isEqual(folder, resource));
@@ -547,8 +549,8 @@ export class SessionWorkspacePicker extends Disposable {
 	}
 
 	private async readProjects(): Promise<readonly Project[]> {
-		const summaries = await this.projects.list();
-		return Promise.all(summaries.map(project => this.projects.read(project.id)));
+		const summaries = await this.projects.list('code');
+		return Promise.all(summaries.map(project => this.projects.read(project.id, 'code')));
 	}
 
 	private async projectForFolder(projects: readonly Project[], resource: URI): Promise<Project> {
@@ -559,7 +561,7 @@ export class SessionWorkspacePicker extends Disposable {
 		const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(extUriBiasedIgnorePathCase.getComparisonKey(resource)));
 		const id = `folder-${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
 		const name = basename(resource) || resource.fsPath;
-		return this.projects.create(projects.some(project => project.id === id) ? createUuid() : id, name, '', [{ kind: 'folder', resource, name }]);
+		return this.projects.create(projects.some(project => project.id === id) ? createUuid() : id, name, '', [{ kind: 'folder', resource, name }], 'code');
 	}
 
 	private async recordRecentFolder(providerId: string | undefined, target: SessionExecutionTarget): Promise<void> {

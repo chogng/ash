@@ -561,7 +561,10 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await research.press('Enter');
 			const rows = projects.getByRole('list', { name: zh ? '项目对话' : 'Project conversations' }).getByRole('button');
 			await expect(rows).toHaveText([pinned.title, 'First research chat']);
-			await expect(projects.getByRole('heading', { name: 'Research', exact: true })).toBeFocused();
+			await expect(projects).toHaveAccessibleName('Research');
+			await expect(projects).toBeFocused();
+			await expect(projects.getByRole('heading', { level: 1 })).toHaveCount(0);
+			await expect(page.locator('.ash-sessions-titlebar-page-content .ash-project-titlebar-name')).toHaveText('Research');
 			expect(cursors).toEqual([null]);
 			expect(emptyReads).toBe(0);
 			await projects.getByRole('button', { name: zh ? '加载更多项目聊天' : 'Load more project chats', exact: true }).click();

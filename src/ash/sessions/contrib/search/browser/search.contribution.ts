@@ -13,10 +13,12 @@ import {
 	type IConfigurationRegistry,
 } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Menus } from '../../../browser/menus.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsSearchService, SessionsSearchService } from './searchService.js';
 
 registerSingleton(ISessionsSearchService, SessionsSearchService, InstantiationType.Delayed);
@@ -29,11 +31,13 @@ registerAction2(
 				title: localize2('sessions.search.title', 'Search'),
 				icon: Lxicon.search,
 				f1: true,
+				precondition: SessionsWorkspaceModeContext.isEqualTo('chat'),
 				menu: { id: Menus.ActivityBar, group: 'navigation', order: 15 },
 			});
 		}
-		override run(accessor: ServicesAccessor): Promise<void> {
-			return accessor.get(ISessionsSearchService).show();
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			if (accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key) === 'code') return;
+			await accessor.get(ISessionsSearchService).show();
 		}
 	},
 );

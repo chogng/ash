@@ -3,6 +3,7 @@ use ash_projects::ProjectCommand;
 use ash_projects::ProjectCommandDisposition;
 use ash_projects::ProjectCommandRequest;
 use ash_projects::ProjectCoordinator;
+use ash_projects::ProjectScope;
 use ash_projects::ProjectStore;
 use ash_protocol::CommandId;
 use ash_protocol::ProjectId;
@@ -33,7 +34,9 @@ fn sqlite_projects_persist_records_and_original_command_results() {
     drop(coordinator);
 
     let reopened = ProjectCoordinator::new(Arc::new(SqliteProjectStore::open(&path).unwrap()));
-    assert_eq!(reopened.read(&create.project_id).unwrap(), updated.project);
+    let persisted = reopened.read(&create.project_id).unwrap();
+    assert_eq!(persisted.scope(), ProjectScope::Code);
+    assert_eq!(persisted, updated.project);
     let replay = reopened.apply(create).unwrap();
     assert_eq!(replay.disposition, ProjectCommandDisposition::Replayed);
     assert_eq!(replay.project.revision, 1);
@@ -49,6 +52,7 @@ fn legacy_project_times_remain_unknown_until_a_real_update() {
     let mut value = serde_json::to_value(created).unwrap();
     value.as_object_mut().unwrap().remove("createdAtMs");
     value.as_object_mut().unwrap().remove("updatedAtMs");
+    value.as_object_mut().unwrap().remove("scope");
     drop(coordinator);
     Connection::open(&path)
         .unwrap()
@@ -63,6 +67,7 @@ fn legacy_project_times_remain_unknown_until_a_real_update() {
         .unwrap();
     assert_eq!(legacy.created_at_ms, None);
     assert_eq!(legacy.updated_at_ms, None);
+    assert_eq!(legacy.scope(), ProjectScope::Chat);
     let updated = reopened
         .apply(ProjectCommandRequest {
             command_id: CommandId::new("update-legacy-project").unwrap(),
@@ -104,6 +109,7 @@ fn create_request() -> ProjectCommandRequest {
         project_id: ProjectId::new("project-a").unwrap(),
         expected_revision: 0,
         command: ProjectCommand::Create {
+            scope: Some(ProjectScope::Code),
             name: "Ash".into(),
             description: "multi-root project".into(),
             materials: Vec::new(),

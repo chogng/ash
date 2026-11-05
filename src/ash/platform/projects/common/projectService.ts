@@ -27,12 +27,14 @@ export interface Project extends ProjectSummary {
 	readonly sessionIds: readonly string[];
 }
 
+export type ProjectScope = 'chat' | 'code';
+
 /** The backend owns durable projects. Consumers retain only disposable UI projections. */
 export interface IProjectService {
 	readonly onDidChange: Event<void>;
-	list(): Promise<readonly ProjectSummary[]>;
-	read(id: string): Promise<Project>;
-	create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project>;
+	list(scope?: ProjectScope): Promise<readonly ProjectSummary[]>;
+	read(id: string, scope?: ProjectScope): Promise<Project>;
+	create(id: string, name: string, description: string, materials: readonly ProjectMaterial[], scope?: ProjectScope): Promise<Project>;
 	/** Adds a saved Session using the current project revision. */
 	addSession(project: Project, sessionId: string): Promise<Project>;
 	/** Changes one project membership. Other memberships of the Session are independent. */

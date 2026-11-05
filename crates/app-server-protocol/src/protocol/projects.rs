@@ -17,6 +17,13 @@ pub enum ProjectStatusDto {
     Deleted,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ProjectScopeDto {
+    Chat,
+    Code,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectRootDto {
@@ -83,7 +90,11 @@ pub struct ProjectSummaryDto {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(deny_unknown_fields)]
-pub struct ProjectListParams {}
+pub struct ProjectListParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub scope: Option<ProjectScopeDto>,
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -95,6 +106,9 @@ pub struct ProjectListResult {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ProjectReadParams {
     pub project_id: ProjectId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub scope: Option<ProjectScopeDto>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
@@ -112,6 +126,9 @@ pub struct ProjectCreateParams {
     pub project_id: ProjectId,
     pub name: String,
     pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub scope: Option<ProjectScopeDto>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

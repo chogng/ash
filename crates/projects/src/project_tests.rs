@@ -77,6 +77,7 @@ fn project_times_preserve_creation_and_follow_committed_updates() {
         "create-project-time",
         0,
         ProjectCommand::Create {
+            scope: None,
             name: "Ash".into(),
             description: String::new(),
             materials: Vec::new(),
@@ -110,6 +111,7 @@ fn project_commands_are_revision_checked_and_retry_safe() {
         "create-project",
         0,
         ProjectCommand::Create {
+            scope: None,
             name: "Ash".into(),
             description: "multi-root work".into(),
             materials: Vec::new(),
@@ -152,6 +154,7 @@ fn project_roots_and_associations_remain_organizational_facts() {
             "create-project-associations",
             0,
             ProjectCommand::Create {
+                scope: None,
                 name: "Ash".into(),
                 description: String::new(),
                 materials: Vec::new(),
@@ -194,6 +197,7 @@ fn deletion_is_retry_safe_hides_the_catalog_and_prevents_restoration() {
             "delete-create",
             0,
             ProjectCommand::Create {
+                scope: None,
                 name: "Delete me".into(),
                 description: String::new(),
                 materials: Vec::new(),
@@ -268,6 +272,7 @@ fn materials_are_versioned_references_and_invalid_updates_are_atomic() {
             "create-material-project",
             0,
             ProjectCommand::Create {
+                scope: None,
                 name: "Research".into(),
                 description: "Read the evidence".into(),
                 materials: vec![material.clone()],

@@ -18,6 +18,61 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 #[test]
+fn scoped_project_requests_keep_chat_and_code_catalogs_separate() {
+    let fixture = Fixture::new();
+    let mut host = fixture.server.product_host_connection();
+    initialize(&fixture.server, &mut host);
+    let legacy_folder = format!("folder-{}", "a".repeat(64));
+    let mut request_id = 2;
+    for (id, scope) in [
+        ("chat-project", Some("chat")),
+        ("code-project", Some("code")),
+        ("legacy-chat", None),
+        (legacy_folder.as_str(), None),
+    ] {
+        let created = call(
+            &fixture.server,
+            &mut host,
+            request_id,
+            "project/create",
+            serde_json::json!({
+                "commandId": id, "projectId": id, "name": id, "description": "", "scope": scope,
+            }),
+        );
+        assert_eq!(created["result"]["project"]["projectId"], id, "{created}");
+        request_id += 1;
+    }
+    for (scope, expected) in [
+        ("chat", vec!["chat-project", "legacy-chat"]),
+        ("code", vec!["code-project", legacy_folder.as_str()]),
+    ] {
+        let response = call(
+            &fixture.server,
+            &mut host,
+            request_id,
+            "project/list",
+            serde_json::json!({ "scope": scope }),
+        );
+        let ids: Vec<_> = response["result"]["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|project| project["projectId"].as_str().unwrap())
+            .collect();
+        assert_eq!(ids, expected);
+        request_id += 1;
+    }
+    let denied = call(
+        &fixture.server,
+        &mut host,
+        request_id,
+        "project/read",
+        serde_json::json!({ "projectId": "code-project", "scope": "chat" }),
+    );
+    assert_eq!(denied["error"]["message"], "ProjectNotFound");
+}
+
+#[test]
 fn project_delete_rpc_is_revision_checked_retry_safe_and_notifies_other_hosts() {
     let fixture = Fixture::new();
     let mut host = fixture.server.product_host_connection();

@@ -1,0 +1,32 @@
+.ash-projects-materials-empty {
+	padding: var(--ash-spacing-size400) 0;
+	color: var(--ash-description-foreground);
+	text-align: center;
+	line-height: 1.6;
+}
+
+.ash-projects-material-list {
+	padding: 0;
+	margin: var(--ash-spacing-size200) 0;
+	list-style: none;
+}
+
+.ash-projects-material {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	gap: var(--ash-spacing-size40);
+	padding: var(--ash-spacing-size40) 0;
+}
+
+.ash-projects-material > .ash-button:first-child {
+	flex: 1;
+	min-width: 0;
+	justify-content: flex-start;
+}
+
+.ash-projects-source-note {
+	color: var(--ash-description-foreground);
+	line-height: 1.6;
+	font-size: var(--ash-fontSize-body2);
+}

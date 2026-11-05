@@ -45,7 +45,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { Menus } from '../../../../browser/menus.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
-import { extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
+import { basename, extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
 import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { DropdownMenuActionViewItem } from '../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
@@ -175,6 +175,7 @@ class SessionsListDragAndDrop extends Disposable implements TreeDragAndDrop<HTML
 		if (section === 'recent') {
 			if (leavingPinned && item.setPinned) return () => item.setPinned!(false);
 			if (project?.current && source.dataset.parentProjectId) return () => project.move(undefined);
+			if (from?.startsWith('workspace:')) return;
 			if (item.moveToGroup) return () => item.moveToGroup!(null);
 		}
 		if (section?.startsWith('group:') && target.dataset.groupDropTarget === 'true' && item.moveToGroup) {
@@ -412,8 +413,8 @@ export class SessionsList extends DomWidget {
 		this.projectsLoading = true;
 		this.render();
 		try {
-			const summaries = await this.projectService.list();
-			const projects = await Promise.all(summaries.filter(project => !project.archived).map(project => this.projectService.read(project.id)));
+			const summaries = await this.projectService.list(this.mode);
+			const projects = await Promise.all(summaries.filter(project => !project.archived).map(project => this.projectService.read(project.id, this.mode)));
 			if (this.isDisposed || generation !== this.projectLoad) return;
 			this.projects = projects.filter(project => !project.archived);
 			this.projectsFailed = false;
@@ -842,6 +843,29 @@ export class SessionsList extends DomWidget {
 		}
 		const orderedRecent = reorderChildren(recent, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId');
 		const grouping = this.listModel.grouping;
+		if (this.mode === 'code' && (grouping === 'none' || grouping === 'projects')) {
+			// Saved sessions can have a creation workspace without a Code project membership.
+			// Use the Session workspace so managed checkouts of the same folder stay together.
+			const workspaces = new Map<string, { readonly label: string; readonly rows: HTMLElement[]; }>();
+			for (const session of catalog) {
+				const row = remaining.get(session.sessionId);
+				if (!row || !session.workspace) continue;
+				const resource = sessionWorkspaceUri(session.workspace);
+				const path = resource.toEncodedComponents().path.replace(/\/+$/u, '') || '/';
+				const key = extUriBiasedIgnorePathCase.getComparisonKey(resource.withEncodedPath(path));
+				let workspace = workspaces.get(key);
+				if (!workspace) {
+					workspace = { label: basename(resource) || session.workspace.root, rows: [] };
+					workspaces.set(key, workspace);
+				}
+				workspace.rows.push(row);
+				remaining.delete(session.sessionId);
+			}
+			for (const [key, workspace] of [...workspaces].sort((left, right) => left[1].label.localeCompare(right[1].label))) {
+				projects.push(sectionFor(`workspace:${key}`, workspace.label, workspace.rows, 'project'));
+			}
+			hasProjectConversations ||= workspaces.size > 0;
+		}
 		if (grouping === 'none') {
 			orderedRecent.push(...remaining.values());
 		} else {
@@ -873,7 +897,7 @@ export class SessionsList extends DomWidget {
 				orderedRecent.push(sectionFor(`grouping:${grouping}:${id}`, bucket.label, bucket.rows, 'subgroup'));
 			}
 		}
-		const showEmpty = orderedRecent.length === 0 && pinned.length === 0 && chatGroups.length === 0;
+		const showEmpty = orderedRecent.length === 0 && pinned.length === 0 && chatGroups.length === 0 && !hasProjectConversations;
 		const loading = this.sessionService.state === 'loading';
 		this.tree.element.setAttribute('aria-busy', String(loading || this.projectsLoading));
 		const emptyStatus = loading ? localize('sessions.list.loading', 'Loading sessions…') : this.sessionService.error

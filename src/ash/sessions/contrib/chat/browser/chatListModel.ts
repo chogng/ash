@@ -266,7 +266,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			request.sessionIds = sessionIds ?? request.sessionIds;
 			this.membershipVersion.set(this.membershipVersion.get() + 1);
 		};
-		void this.projectService.read(id).then(value => finish(value.sessionIds), () => finish());
+		void this.projectService.read(id, 'chat').then(value => finish(value.sessionIds), () => finish());
 		return request;
 	}
 

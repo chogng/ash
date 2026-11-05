@@ -119,7 +119,8 @@ suite('Projects toolbar', () => {
 			await input.fill('   ');
 			await input.press('Enter');
 			await expect(rename).toBeFocused();
-			await expect(page.locator('.ash-projects h1')).toHaveText('Search project fixture');
+			await expect(rename).toHaveText('Search project fixture');
+			await expect(page.locator('.ash-projects').getByRole('heading', { level: 1 })).toHaveCount(0);
 			await rename.press('Enter');
 			await input.fill('Retain this draft');
 			await input.dispatchEvent('keydown', { key: 'Enter', isComposing: true });
@@ -660,16 +661,13 @@ suite('Projects loading states', () => {
 			try {
 				await projects.getByRole('button', { name: 'Search project fixture', exact: true }).click();
 				await expect(skeleton).toHaveClass(/ash-projects-detail/);
-				await expect(projects.locator('h1')).toHaveAccessibleName(
-					chinese ? '正在加载项目…' : 'Loading projects…',
-				);
-				await expect(page.locator('.ash-projects-breadcrumb-name')).toHaveClass(/ash-projects-placeholder/);
-				await expect(page.locator('.ash-projects-breadcrumb-name')).toHaveAttribute('aria-hidden', 'true');
-				await expect(page.locator('.ash-projects-breadcrumb-name')).toHaveCSS('opacity', '1');
-				await expect(page.locator('.ash-projects-breadcrumb-name')).not.toHaveCSS(
-					'background-color',
-					'rgba(0, 0, 0, 0)',
-				);
+				await expect(projects.getByRole('heading', { level: 1 })).toHaveCount(0);
+				await expect(projects.getByRole('status')).toHaveText(chinese ? '正在加载项目…' : 'Loading projects…');
+				const projectName = page.locator('.ash-sessions-titlebar .ash-project-titlebar-name');
+				await expect(projectName).toHaveClass(/ash-projects-placeholder/);
+				await expect(projectName).toHaveAttribute('aria-hidden', 'true');
+				await expect(projectName).toHaveCSS('opacity', '1');
+				await expect(projectName).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 				for (const width of [1280, 720]) {
 					await page.setViewportSize({ width, height: 720 });
 					await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -685,9 +683,9 @@ suite('Projects loading states', () => {
 					await page.screenshot({ path: info.outputPath(`projects-detail-loading-${locale}-${width}.png`) });
 				}
 				await detailLoad.evaluate(gate => gate.release());
-				await expect(projects.locator('h1')).toHaveText('Search project fixture');
+				await expect(projectName).toHaveText('Search project fixture');
 				await expect(skeleton).toHaveCount(0);
-				await expect(page.locator('.ash-projects-breadcrumb-name')).not.toHaveClass(/ash-projects-placeholder/);
+				await expect(projectName).not.toHaveClass(/ash-projects-placeholder/);
 			} finally {
 				await detailLoad.evaluate(gate => gate.release());
 				await detailLoad.dispose();
@@ -697,7 +695,7 @@ suite('Projects loading states', () => {
 			try {
 				await page.locator('[data-action-id="sessions.open.projects"] button').click();
 				await expect(body).toHaveAttribute('aria-busy', 'true');
-				await expect(projects.locator('h1')).toHaveText('Search project fixture');
+				await expect(page.locator('.ash-sessions-titlebar .ash-project-titlebar-name')).toHaveText('Search project fixture');
 				await expect(projects.locator('.ash-projects-description')).toHaveText(
 					'Synthetic project for Search navigation',
 				);

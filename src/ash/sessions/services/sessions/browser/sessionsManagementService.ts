@@ -319,9 +319,9 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	private async findSessionProject(sessionId: SessionId): Promise<string | undefined> {
 		if (!this.projects) return undefined;
 		try {
-			const projects = await this.projects.list();
+			const projects = await this.projects.list('code');
 			const members = await Promise.all(projects.filter(project => !project.archived && project.sessionCount > 0)
-				.map(project => this.projects!.read(project.id)));
+				.map(project => this.projects!.read(project.id, 'code')));
 			return members.find(project => !project.archived && project.sessionIds.includes(sessionId))?.id;
 		} catch {
 			// The execution target can still seed the picker while Projects reconnects.

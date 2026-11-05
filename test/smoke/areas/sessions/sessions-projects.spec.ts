@@ -1,6 +1,6 @@
 import { readFile, realpath, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
@@ -8,18 +8,26 @@ import { connectProfile, enableFixtureModel } from './sessionProfileFixture.js';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 
-test('Chat and Code organize the same Ash conversation from their sidebars', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+test('Chat and Code organize the same Ash conversation in separate project catalogs', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
 	try {
 		const { client } = connection;
-		const createProject = async (name: string) => (await client.request(APP_SERVER_METHODS['project/create'], {
-			commandId: randomUUID(), projectId: randomUUID(), name, description: '', materials: [],
+		const createProject = async (name: string, scope: 'chat' | 'code') => (await client.request(APP_SERVER_METHODS['project/create'], {
+			commandId: randomUUID(), projectId: randomUUID(), name, description: '', materials: [], scope,
 		})).project;
-		const first = await createProject('First project');
-		const second = await createProject('Second project');
+		const first = await createProject('First Chat project', 'chat');
+		const second = await createProject('Second Chat project', 'chat');
+		const codeWorkspace = await createProject('Code project', 'code');
 		const title = 'Organize this conversation';
 		const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
 			commandId: randomUUID(), title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory },
+		});
+		const { session: previous } = await client.request(APP_SERVER_METHODS['session/create'], {
+			commandId: randomUUID(), title: 'Previous workspace conversation', agent: { type: 'default' },
+			executionTarget: { type: 'local', root: testWorkspace.directory },
+		});
+		await client.request(APP_SERVER_METHODS['project/session/link'], {
+			commandId: randomUUID(), projectId: codeWorkspace.projectId, expectedRevision: codeWorkspace.revision, sessionId: session.sessionId,
 		});
 		const members = async (projectId: string) => (await client.request(APP_SERVER_METHODS['project/read'], { projectId })).project.sessionIds;
 		const page = await workbench.openAgentsWindow(target.kind);
@@ -37,6 +45,8 @@ test('Chat and Code organize the same Ash conversation from their sidebars', { t
 		const row = chat.getByRole('button', { name: title, exact: true });
 		const firstProject = chat.getByRole('button', { name: first.name, exact: true });
 		const secondProject = chat.getByRole('button', { name: second.name, exact: true });
+		await expect(firstProject).toBeVisible();
+		await expect(chat.getByRole('button', { name: codeWorkspace.name, exact: true })).toHaveCount(0);
 		await row.dragTo(firstProject);
 		await expect.poll(() => members(first.projectId)).toEqual([session.sessionId]);
 		await firstProject.click();
@@ -47,10 +57,14 @@ test('Chat and Code organize the same Ash conversation from their sidebars', { t
 
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		const code = page.locator('.ash-sessions-list[data-mode="code"]');
-		const codeProject = code.getByRole('button', { name: second.name, exact: true });
+		const codeProject = code.getByRole('button', { name: codeWorkspace.name, exact: true });
+		await code.getByRole('button', { name: 'More Sessions Actions', exact: true }).press('Enter');
+		await page.getByRole('menuitem', { name: 'Group By', exact: true }).press('ArrowRight');
+		await page.getByRole('menuitemradio', { name: 'Projects', exact: true }).click();
 		const codeRow = code.locator(`[data-row-order-id="${session.sessionId}"]`);
 		const conversation = codeRow.locator(':scope > button.ash-sessions-list-item');
-		await expect(codeRow).toHaveAttribute('data-parent-project-id', second.projectId);
+		await expect(codeRow).toHaveAttribute('data-parent-project-id', codeWorkspace.projectId);
+		await expect(code.getByRole('button', { name: second.name, exact: true })).toHaveCount(0);
 		await expect(conversation).toHaveText(title);
 		await expect(codeProject).toHaveAttribute('aria-expanded', 'true');
 		await codeProject.click();
@@ -63,13 +77,23 @@ test('Chat and Code organize the same Ash conversation from their sidebars', { t
 		await expect(code).toBeVisible();
 		await conversation.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Remove from project', exact: true }).click();
-		await expect.poll(() => members(second.projectId)).toEqual([]);
+		await expect.poll(() => members(codeWorkspace.projectId)).toEqual([]);
+		expect(await members(second.projectId)).toEqual([session.sessionId]);
 		await expect(codeRow).not.toHaveAttribute('data-parent-project-id');
+		const workspace = code.getByRole('button', { name: basename(testWorkspace.directory), exact: true });
+		await expect(workspace).toHaveAttribute('aria-expanded', 'true');
+		await expect(codeRow).toHaveAttribute('data-parent-section', /^workspace:/);
+		const previousRow = code.locator(`[data-row-order-id="${previous.sessionId}"]`);
+		await expect(previousRow).toHaveAttribute('data-parent-section', (await codeRow.getAttribute('data-parent-section'))!);
+		await workspace.press('ArrowLeft');
+		await expect(conversation).toBeHidden();
+		await workspace.press('ArrowRight');
+		await expect(conversation).toBeVisible();
 		await conversation.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Pin', exact: true }).click();
 		await expect(codeRow).toHaveAttribute('data-parent-section', 'pinned');
 		await codeRow.dragTo(code.getByRole('button', { name: 'Recents', exact: true }));
-		await expect(codeRow).not.toHaveAttribute('data-parent-section', 'pinned');
+		await expect(codeRow).toHaveAttribute('data-parent-section', /^workspace:/);
 	} finally {
 		await connection.close();
 	}
@@ -119,10 +143,10 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 			await page.locator('[data-action-id="sessions.open.projects"] button').click();
 			const projects = page.locator('.ash-projects');
 			const card = projects.getByRole('button', { name: project.name, exact: true });
-			const heading = projects.getByRole('heading', { name: project.name, exact: true });
-			await expect(card.or(heading)).toBeVisible();
+			const projectTitle = page.locator('.ash-sessions-titlebar .ash-project-titlebar-name').getByText(project.name, { exact: true });
+			await expect(card.or(projectTitle)).toBeVisible();
 			if (await card.isVisible()) await card.click();
-			await expect(heading).toBeVisible();
+			await expect(projectTitle).toBeVisible();
 		};
 		const projectChats = () => page.getByRole('list', { name: 'Project conversations', exact: true }).getByRole('button');
 		const sidebar = () => page.locator('.ash-chat-navigation-list');
@@ -297,16 +321,17 @@ test(
 		await input.press('Enter');
 		const renamed = breadcrumb.getByRole('button', { name: 'Rename project Renamed project', exact: true });
 		await expect(renamed).toBeFocused();
-		await expect(page.locator('.ash-projects h1')).toHaveText('Renamed project');
+		await expect(renamed).toHaveText('Renamed project');
 		await renamed.press('Enter');
 		await input.fill('Cancelled project');
 		await input.press('Escape');
 		await expect(renamed).toBeFocused();
 		await renamed.press('Space');
 		await input.fill('Saved on blur');
-		await page.locator('.ash-projects h1').click();
-		await expect(page.locator('.ash-projects h1')).toHaveText('Saved on blur');
-		await expect(page.locator('.ash-projects h1')).toBeFocused();
+		const projects = page.locator('.ash-projects');
+		await projects.focus();
+		await expect(projects).toHaveAccessibleName('Saved on blur');
+		await expect(projects).toBeFocused();
 		await expect(
 			breadcrumb.getByRole('button', { name: 'Rename project Saved on blur', exact: true }),
 		).toBeVisible();
@@ -317,7 +342,7 @@ test(
 		page = await workbench.reopenAgentsWindow(application, page);
 		await page.locator('[data-action-id="sessions.open.projects"] button').click();
 		await page.locator('.ash-projects-card').filter({ hasText: 'Saved on blur' }).click();
-		await expect(page.locator('.ash-projects h1')).toHaveText('Saved on blur');
+		await expect(page.locator('.ash-sessions-titlebar .ash-project-titlebar-name')).toHaveText('Saved on blur');
 		await expect(page.locator('.ash-projects-description')).toHaveText('Keep the project goals when renaming.');
 	},
 );
@@ -372,9 +397,10 @@ test('Sessions Projects persists creation and goals through a real backend and r
 	await page.screenshot({ path: testInfo.outputPath('projects-create.png') });
 	await dialog.getByRole('button', { name: 'Create project', exact: true }).click();
 	await expect(dialog).toHaveCount(0);
-	await expect(projects.getByRole('heading', { name: 'Research workspace', exact: true })).toBeVisible();
-	await expect(page.locator('.ash-sessions-titlebar .ash-projects-breadcrumb-name')).toHaveText('Research workspace');
-	await expect(page.locator('.ash-sessions-titlebar .ash-projects-breadcrumb-name')).toHaveAttribute('aria-current', 'page');
+	await expect(projects.getByRole('heading', { level: 1 })).toHaveCount(0);
+	const projectTitle = page.locator('.ash-sessions-titlebar .ash-project-titlebar-name');
+	await expect(projectTitle).toHaveText('Research workspace');
+	await expect(projectTitle).toHaveAttribute('aria-current', 'page');
 	await expect(projects.getByRole('region', { name: 'Materials' })).toBeVisible();
 	await page.screenshot({ path: testInfo.outputPath('projects-detail.png') });
 	await expect(projects.getByText('Collect images, papers and working documents.', { exact: true })).toBeVisible();
@@ -448,6 +474,9 @@ test('Sessions Projects card actions persist pins, merge gallery edits, archive 
 		expect(hoverColor).not.toBe(await rowFor(first.name).locator('.ash-projects-card').evaluate(card => getComputedStyle(card).backgroundColor));
 		await pinFor(first.name).click();
 		await expect(pinFor(first.name)).toHaveAttribute('aria-pressed', 'true');
+		// The pinned control previews the unpin action while hovered or focused.
+		await page.locator('.ash-projects h1').focus();
+		await page.locator('.ash-projects h1').hover();
 		await expect(pinFor(first.name).locator('.ash-icon-pin-filled')).toHaveCount(1);
 		await connection.close();
 		({ application, workbench } = await reloadWorkbench('quit'));
@@ -520,9 +549,10 @@ test('Sessions Projects keeps PDFs and arbitrary file references inside a projec
 		await expect(projects.locator('.ash-projects-material')).toHaveCount(4);
 		await projects.getByRole('button', { name: 'notes.txt', exact: true }).click();
 		await expect(page.getByRole('tabpanel', { name: 'notes.txt', exact: true })).toContainText('Project source material');
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Projects', exact: true }).click();
 		await expect(projects).toBeVisible();
-		await expect(projects.getByRole('heading', { name: 'Mixed materials', exact: true })).toBeVisible();
+		await expect(page.locator('.ash-sessions-titlebar .ash-project-titlebar-name')).toHaveText('Mixed materials');
 		await projects.getByRole('button', { name: 'Remove paper.pdf from project', exact: true }).click();
 		await expect(projects.locator('.ash-projects-material')).toHaveCount(3);
 		expect(await readFile(paths[0], 'utf8')).toBe('Project source material');

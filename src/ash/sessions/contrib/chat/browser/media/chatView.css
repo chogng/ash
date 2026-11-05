@@ -39,12 +39,3 @@
 .ash-reply-chat-editor {
 	flex-direction: column;
 }
-
-.ash-reply-chat-project {
-	flex: none;
-	padding-inline: var(--ash-chat-content-inset, var(--ash-spacing-size120));
-}
-
-.ash-reply-chat-project > .ash-button {
-	max-inline-size: 100%;
-}

@@ -286,6 +286,18 @@ if (parameters.has('mixedCatalog')) {
 	sources.push(ashServices.createInstance(AshChatNavigationSource));
 }
 services.registerInstance(IChatListCatalog, { sources });
+const titlebarContent = document.createElement('div');
+titlebarContent.className = 'ash-sessions-titlebar-page-content';
+titlebarContent.style.display = 'contents';
+document.body.prepend(titlebarContent);
+services.registerInstance(ISessionsTitlebarService, {
+	setPageContent: content => {
+		titlebarContent.replaceChildren(content);
+		return toDisposable(() => {
+			if (content.parentElement === titlebarContent) content.remove();
+		});
+	},
+} as ISessionsTitlebarService);
 widget = resources.add(services.createInstance(ReplyChatEditor, chatGPTReplyEditor));
 widget.create(document.getElementById('editor')!);
 if (parameters.has('screenReader')) { services.get(IAccessibilityService).setAccessibilitySupport(AccessibilitySupport.Enabled); }
@@ -300,12 +312,6 @@ const view = resources.add(services.createInstance(PaneComposite, host, {
 }));
 view.setVisible(true);
 if (parameters.has('projects')) {
-	services.registerInstance(ISessionsTitlebarService, {
-		setPageContent: content => {
-			document.body.prepend(content);
-			return toDisposable(() => content.remove());
-		},
-	} as ISessionsTitlebarService);
 	const projects = resources.add(services.createInstance(ProjectsEditorPane));
 	projects.create(document.getElementById('editor')!);
 	projects.setVisible(true);

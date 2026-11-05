@@ -2142,6 +2142,8 @@ use crate::protocol::projects::ProjectRootRemoveParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectRootUpdateParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::projects::ProjectScopeDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectSessionMutationParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectStatusDto;
@@ -7403,6 +7405,7 @@ typescript_bindings! {
     TurnChangesMutationResult,
     TurnChangesChanged,
     ProjectStatusDto,
+    ProjectScopeDto,
     UnixMillis,
     SymphonyConfigureParams,
     SymphonySubmitParams,
