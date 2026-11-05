@@ -153,6 +153,28 @@ test('ContextView restores focus after Escape closes the topmost view', () => {
 	contextView.dispose();
 });
 
+test('dismissal on a command menu shield leaves the underlying view open', () => {
+	const container = requiredElement<HTMLElement>('main');
+	const document = environment.window.document;
+	const trigger = h(document, 'button');
+	const menuContent = h(document, 'button');
+	using form = new ContextView(container);
+	using menu = new ContextView(container);
+	form.show({ anchor: requiredElement('#anchor'), content: trigger });
+	trigger.focus();
+	menu.show({ anchor: trigger, content: menuContent, presentation: 'menu', blockOutsidePointer: true, focusRestore: ContextViewFocusRestore.Previous });
+	menuContent.focus();
+	const shield = menu.element.querySelector<HTMLElement>('.ash-context-view-pointer-shield')!;
+	shield.dispatchEvent(new environment.window.MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+	assert.equal(form.visible, true);
+	assert.equal(menu.visible, true);
+	assert.equal(document.activeElement, menuContent);
+	shield.click();
+	assert.equal(menu.visible, false);
+	assert.equal(form.visible, true);
+	assert.equal(document.activeElement, trigger);
+});
+
 test('ContextView follows anchor and content size changes', () => {
 	const observers: TestResizeObserver[] = [];
 	class TestResizeObserver {

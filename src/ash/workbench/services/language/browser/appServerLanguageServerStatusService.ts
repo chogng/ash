@@ -179,19 +179,11 @@ export class AppServerLanguageServerStatusService extends Disposable implements 
 		if (isHTMLElement(anchor)) {
 			anchor.focus();
 		}
-		// Prevent pointer default focus from overriding the host's focus restoration.
-		resources.add(addDisposableListener(document, 'pointerdown', event => {
-			if (!isHTMLElement(event.target) || widget.domNode.contains(event.target)
-				|| (isHTMLElement(anchor) && anchor.contains(event.target))
-				|| event.target.closest('dialog:modal')) {
-				return;
-			}
-			event.preventDefault();
-		}, true));
 		const shown = view.show({
 			anchor, content: widget.domNode, anchorPosition: AnchorPosition.Above,
 			// The window's shared tooltip host remains above this independent surface.
 			layer: -1, presentation: 'menu', focusRestore: ContextViewFocusRestore.Previous,
+			blockOutsidePointer: true,
 			isTargetWithin: target => widget.domNode.contains(target),
 			onHide: () => {
 				if (this.popup.value === resources) {

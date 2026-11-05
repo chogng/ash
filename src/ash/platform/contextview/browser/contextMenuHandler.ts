@@ -7,7 +7,7 @@ import {
 	type ContextMenuAnchor,
 	type IContextMenuDelegate,
 } from '../../../base/browser/contextmenu.js';
-import { addDisposableListener, isNode } from '../../../base/browser/dom.js';
+import { isNode } from '../../../base/browser/dom.js';
 import {
 	AnchorPosition,
 	ContextViewFocusRestore,
@@ -126,19 +126,7 @@ export class ContextMenuHandler extends Disposable {
 		if (didHide) { menu.dispose(); return false; }
 		disposables.add(menu);
 		disposables.add(menu.onDidCancel(() => request.hide()));
-		let blurTarget: EventTarget | null = null;
-		disposables.add(addDisposableListener(menu.getContainer(), 'focusout', event => {
-			blurTarget = event.relatedTarget;
-		}, true));
-		disposables.add(menu.onDidBlur(() => {
-			// The anchor owns its click toggle. Closing on pointer-induced focusout
-			// would let that same click reopen the menu immediately afterward.
-			// Chromium may run the blur microtask before activeElement reaches its destination.
-			const focused = blurTarget ?? menu.getContainer().ownerDocument.activeElement;
-			blurTarget = null;
-			if (isNode(anchor) && isNode(focused) && anchor.contains(focused)) return;
-			request.hide();
-		}));
+		disposables.add(menu.onDidBlur(() => request.hide()));
 		// Replacement callbacks can cancel this request or open a successor before it mounts.
 		this.contextViewService.hide();
 		if (didHide) { return false; }
@@ -156,6 +144,7 @@ export class ContextMenuHandler extends Disposable {
 				presentation: 'menu',
 				focusRestore: ContextViewFocusRestore.Previous,
 				layer: delegate.layer ?? 10,
+				blockOutsidePointer: true,
 				isTargetWithin: (target) => menu.contains(target),
 				onHide: finish,
 			});

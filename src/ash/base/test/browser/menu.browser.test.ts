@@ -200,6 +200,35 @@ suite('Menu browser behavior', () => {
 		await expect(browser.page.getByRole('menuitem', { name: 'Файл', exact: true })).toBeFocused();
 	});
 
+	test('the menubar switches categories under the pointer and shields controls outside the menu', async () => {
+		await open('menubar');
+		const { page } = browser;
+		const outside = page.locator('#outside');
+		const category = page.getByRole('menuitem', { name: 'Файл', exact: true });
+		await outside.evaluate(button => button.addEventListener('click', () => { button.dataset.clicked = 'true'; }));
+		await outside.hover();
+		await page.keyboard.press('Alt+f');
+		const save = page.getByRole('menuitem', { name: 'Save', exact: true });
+		await expect(save).toBeFocused();
+		await expect.poll(() => outside.evaluate(button => button.matches(':hover'))).toBe(false);
+		const outsideBounds = (await outside.boundingBox())!;
+		const x = outsideBounds.x + outsideBounds.width / 2;
+		const y = outsideBounds.y + outsideBounds.height / 2;
+		await page.mouse.move(x, y);
+		expect(await outside.evaluate(button => button.matches(':hover'))).toBe(false);
+		await expect(save).toBeFocused();
+		const categoryBounds = (await category.boundingBox())!;
+		await page.mouse.move(categoryBounds.x + categoryBounds.width / 2, categoryBounds.y + categoryBounds.height / 2);
+		await expect(page.getByRole('menu', { name: 'Файл', exact: true })).toBeFocused();
+		await expect(save).toHaveCount(0);
+		await page.mouse.click(x, y);
+		await expect(page.getByRole('menu')).toHaveCount(0);
+		await expect(category).toBeFocused();
+		expect(await outside.getAttribute('data-clicked')).toBeNull();
+		await outside.click();
+		await expect(outside).toHaveAttribute('data-clicked', 'true');
+	});
+
 	for (const phase of ['window capture', 'document capture', 'document bubble'] as const) test(`consumed Control+Alt shortcuts preserve their destination focus in ${phase}`, async () => {
 		await browser.page.goto('/src/ash/base/test/browser/fixtures/menu.html');
 		await browser.page.evaluate(phase => {

@@ -224,9 +224,6 @@ export class MenuBar extends Disposable {
 		button.domNode.setAttribute('aria-haspopup', 'menu');
 		button.domNode.setAttribute('aria-expanded', 'false');
 		button.domNode.tabIndex = index === 0 || index === MenuBar.OVERFLOW_INDEX && this.options.compactMode ? 0 : -1;
-		this.buttonResources.add(addDisposableListener(button.domNode, 'mouseenter', () => {
-			if (this.activeIndex !== undefined && this.activeIndex !== index) this.openMenu(index, false);
-		}));
 	}
 
 	private toggleMenu(index: number, selectFirst: boolean): void {
@@ -267,6 +264,18 @@ export class MenuBar extends Disposable {
 			anchorAlignment: this.options.compactMode?.horizontal === HorizontalDirection.Left ? AnchorAlignment.Right : AnchorAlignment.Left,
 			anchorPosition: this.options.compactMode?.vertical === VerticalDirection.Above ? AnchorPosition.Above : AnchorPosition.Below,
 			gap: 2, focusRestore: ContextViewFocusRestore.Previous,
+			blockOutsidePointer: true,
+			onOutsidePointerMove: event => {
+				if (event.pointerType === 'touch' || event.buttons !== 0) return;
+				const { clientX, clientY } = event;
+				const bar = this.element.getBoundingClientRect();
+				if (clientY < bar.top || clientY >= bar.bottom) return;
+				const category = this.visibleButtons().find(({ button }) => {
+					const { left, right, top, bottom } = button.domNode.getBoundingClientRect();
+					return clientX >= left && clientX < right && clientY >= top && clientY < bottom;
+				});
+				if (category && category.index !== index) this.openMenu(category.index, false);
+			},
 			isTargetWithin: target => menu.contains(target),
 		});
 		if (shown) menu.focus(selectFirst);
