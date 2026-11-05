@@ -138,7 +138,7 @@ export class Separator implements IAction {
 export class SubmenuAction implements IAction {
 	readonly enabled = true;
 	readonly checked = undefined;
-	readonly tooltip = '';
+	readonly tooltip: string = '';
 
 	constructor(
 		readonly id: string,

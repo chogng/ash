@@ -1162,7 +1162,8 @@ suite('sessions browser component', () => {
 		const projects = list.locator('[data-section="projects"]');
 		const heading = projects.getByRole('heading', { level: 3, name: chinese ? '项目' : 'Projects', exact: true });
 		const more = projects.getByRole('button', { name: chinese ? '更多会话操作' : 'More Sessions Actions', exact: true });
-		const add = projects.getByRole('button', { name: chinese ? '新建分组…' : 'New group…', exact: true });
+		const toolbar = projects.getByRole('toolbar');
+		const add = projects.getByRole('button', { name: chinese ? '添加文件夹…' : 'Add folder…', exact: true });
 		await page.goto(`/sessions.html?catalog&search&locale=${locale}`);
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		if (chinese) await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
@@ -1172,9 +1173,11 @@ suite('sessions browser component', () => {
 			const projectRow = list.locator('[data-project-id="search-project"]');
 			await expect(list.getByRole('heading', { level: 2 })).toHaveCount(0);
 			await expect(heading).toBeVisible();
-			await expect(projects.getByRole('toolbar').getByRole('button')).toHaveCount(2);
+			await expect(toolbar.getByRole('button')).toHaveCount(2);
+			await expect(toolbar).toHaveCSS('opacity', '0');
 			await expect(projects.locator('[data-ash-icon-id="list-filter"]')).toBeVisible();
-			await expect(projects.locator('[data-ash-icon-id="add"]')).toBeVisible();
+			await expect(more.locator('.ash-dropdown-menu-indicator')).toBeHidden();
+			await expect(add.locator('[data-ash-icon-id="new-folder"]')).toHaveCount(1);
 			await expect(projectRow).toBeVisible();
 			await toggle.press('ControlOrMeta+f');
 			const search = list.getByRole('searchbox');
@@ -1205,17 +1208,18 @@ suite('sessions browser component', () => {
 			expect(titleBounds.y + titleBounds.height / 2).toBeCloseTo(actionBounds.y + actionBounds.height / 2, 0);
 			const transparent = 'rgba(0, 0, 0, 0)';
 			await toggle.hover();
+			await expect(toolbar).toHaveCSS('opacity', '1');
 			const hoverBackground = await projects.evaluate(element => getComputedStyle(element).backgroundColor);
 			expect(hoverBackground).not.toBe(transparent);
 			await expect(toggle).toHaveCSS('background-color', transparent);
 			for (const action of [more, add]) {
 				await action.hover();
 				await expect(projects).toHaveCSS('background-color', hoverBackground);
-				await expect(action).toHaveCSS('background-color', transparent);
-				await expect(action).toHaveCSS('box-shadow', 'none');
+				await expect(action).not.toHaveCSS('background-color', transparent);
 			}
 			await page.mouse.move(0, 0);
 			await expect(projects).toHaveCSS('background-color', transparent);
+			await expect(toolbar).toHaveCSS('opacity', '1');
 			await page.keyboard.press('Tab');
 			await expect(more).toBeFocused();
 			await expect(more).toHaveCSS('outline-style', 'solid');
@@ -1225,6 +1229,7 @@ suite('sessions browser component', () => {
 			await expect(more).toBeFocused();
 			await page.keyboard.press('Enter');
 			await expect(more).toHaveAttribute('aria-expanded', 'true');
+			await expect(toolbar).toHaveCSS('opacity', '1');
 			const group = page.getByRole('menuitem', { name: chinese ? '分组方式' : 'Group By', exact: true });
 			await expect(group).toBeFocused();
 			await group.press('ArrowRight');

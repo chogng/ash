@@ -25,7 +25,7 @@ test('Chat and Code organize the same Ash conversation from their sidebars', { t
 		const page = await workbench.openAgentsWindow(target.kind);
 		const chat = page.locator('.ash-chat-navigation-list');
 		const projects = chat.locator('[data-section="projects"]');
-		const add = projects.getByRole('button', { name: 'New group…', exact: true });
+		const add = projects.getByRole('button', { name: 'Add folder…', exact: true });
 		await projects.getByRole('button', { name: 'Projects', exact: true }).press('ArrowLeft');
 		await add.press('Enter');
 		const groupName = page.locator('.ash-quick-input-host').getByRole('textbox');

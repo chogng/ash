@@ -77,10 +77,12 @@ test('toolbar submenu items retain toolbar button semantics', async () => {
 	const [
 		{ MenuId, SubmenuItemAction },
 		{ createActionViewItem },
+		{ Lxicon },
 	] =
 		await Promise.all([
 			import('../../../../platform/actions/common/actions.js'),
 			import('../../../../platform/actions/browser/menuEntryActionViewItem.js'),
+			import('../../../../base/common/lxicons.js'),
 		]);
 	let shownOptions:
 		| import('../../../../base/browser/contextmenu.js').IContextMenuDelegate
@@ -96,6 +98,7 @@ test('toolbar submenu items retain toolbar button semantics', async () => {
 		new SubmenuItemAction({
 			title: 'More',
 			submenu: MenuId.for('test.toolbar.submenu'),
+			icon: Lxicon.listFilter,
 		}, [childAction]),
 		{
 			showContextMenu(options) {
@@ -113,6 +116,7 @@ test('toolbar submenu items retain toolbar button semantics', async () => {
 	assert.ok(button instanceof dom.window.HTMLButtonElement);
 	assert.equal(button.hasAttribute('role'), false);
 	assert.equal(button.getAttribute('aria-haspopup'), 'menu');
+	assert.ok(button.querySelector('[data-ash-icon-id="list-filter"]'));
 	assert.ok(button.querySelector(
 		'.ash-dropdown-menu-indicator > .ash-icon',
 	));

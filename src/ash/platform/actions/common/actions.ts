@@ -51,6 +51,7 @@ export interface ISubmenuItem {
 	readonly isSplitButton?: boolean;
 	readonly title: CommandActionTitle;
 	readonly submenu: MenuId;
+	readonly icon?: Icon;
 	readonly when?: ContextKeyExpression;
 	readonly group?: 'navigation' | string;
 	readonly order?: number;
@@ -309,11 +310,14 @@ export class MenuItemAction implements IAction {
 
 /** A submenu contribution resolved into a nested runtime action. */
 export class SubmenuItemAction extends SubmenuAction {
+	override readonly tooltip: string;
+
 	constructor(
 		readonly item: ISubmenuItem,
 		actions: readonly IAction[],
 	) {
-		super(`submenu.${item.submenu.id}`, commandActionLabel(item.title), actions);
+		super(`submenu.${item.submenu.id}`, commandActionLabel(item.title), actions, item.icon);
+		this.tooltip = item.icon ? this.label : '';
 	}
 }
 

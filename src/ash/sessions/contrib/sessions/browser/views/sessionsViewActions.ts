@@ -79,9 +79,9 @@ registerAction2(class AddSessionToProjectAction extends Action2 {
 	}
 });
 
-async function promptForSessionGroupName(input: IQuickInputService): Promise<string | undefined> {
+async function promptForSessionGroupName(input: IQuickInputService, title = localize('sessions.list.groupName', 'Group name')): Promise<string | undefined> {
 	const name = await input.input({
-		title: localize('sessions.list.groupName', 'Group name'),
+		title,
 		validateInput: async value => !value.trim() || value.trim().length > 128 ? localize('sessions.list.invalidGroup', 'Enter a name with 1 to 128 characters.') : undefined,
 	});
 	return name?.trim();
@@ -92,6 +92,7 @@ MenusRegistry.appendMenuItems([
 		id: Menus.SidebarSessionsHeader, item: {
 			submenu: Menus.SessionsViewFilter,
 			title: localize2('sessions.list.moreActions', 'More Sessions Actions'),
+			icon: Lxicon.listFilter,
 			group: 'navigation', order: 10,
 		}
 	},
@@ -99,6 +100,7 @@ MenusRegistry.appendMenuItems([
 		id: Menus.ChatSidebarHeader, item: {
 			submenu: Menus.SessionsViewSort,
 			title: localize2('sessions.list.sortBy', 'Sort By'),
+			icon: Lxicon.listFilter,
 			group: 'navigation', order: 10,
 		}
 	},
@@ -108,15 +110,15 @@ registerAction2(class CreateSessionGroupAction extends Action2 {
 	constructor() {
 		super({
 			id: 'sessionsViewPane.createGroup',
-			title: localize2('sessions.list.newGroup', 'New group…'),
-			icon: Lxicon.add,
+			title: localize2('sessions.list.addFolder', 'Add folder…'),
+			icon: Lxicon.newFolder,
 			menu: [Menus.SidebarSessionsHeader, Menus.ChatSidebarHeader].map(id => ({ id, group: 'navigation', order: 20 })),
 		});
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const groups = accessor.get(ISessionGroupsService);
-		const name = await promptForSessionGroupName(accessor.get(IQuickInputService));
+		const name = await promptForSessionGroupName(accessor.get(IQuickInputService), localize('sessions.list.folderName', 'Folder name'));
 		if (name !== undefined) {
 			await groups.create(name);
 		}

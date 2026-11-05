@@ -1026,7 +1026,7 @@ export class SessionsListToolbar extends MenuWorkbenchToolBar {
 			actionViewItemProvider: (action, options) => {
 				if (!(action instanceof SubmenuItemAction) || action.item.submenu !== submenu) return undefined;
 				return new DropdownMenuActionViewItem(
-					{ ...action, icon: Lxicon.listFilter, tooltip: action.label, run: () => action.run() },
+					action,
 					() => getFilterActions ? getFilterActions(action.actions) : sessionSortActions(model),
 					{
 						showContextMenu: delegate => contextMenus.showContextMenu({
@@ -1042,6 +1042,9 @@ export class SessionsListToolbar extends MenuWorkbenchToolBar {
 			if (action.id === 'sessionsViewPane.createGroup' && error !== undefined) notifications.error(toErrorMessage(error));
 		}));
 		this.element.classList.add('ash-sessions-list-more');
+		this._register(this.onDidChangeDropdownVisibility(visible => {
+			this.element.classList.toggle('menu-visible', visible);
+		}));
 		// Toolbar inputs stay within the header without activating tree rows.
 		this._register(addDisposableListener(this.element, 'click', event => event.stopPropagation()));
 		this._register(addDisposableListener(this.element, 'keydown', event => {

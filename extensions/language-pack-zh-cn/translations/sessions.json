@@ -119,6 +119,8 @@
     "sessions.list.projectHost": "项目只能包含此主机上的聊天。",
     "sessions.list.noProjects": "请先创建项目，再添加此聊天。",
     "sessions.list.newGroup": "新建分组…",
+    "sessions.list.addFolder": "添加文件夹…",
+    "sessions.list.folderName": "文件夹名称",
     "sessions.list.noGroup": "无分组",
     "sessions.list.groupName": "分组名称",
     "sessions.list.invalidGroup": "请输入 1 到 128 个字符的名称。",

@@ -12,19 +12,6 @@
 	flex: 0 0 auto;
 }
 
-.ash-sessions-list-more .ash-button {
-	box-sizing: border-box;
-	width: var(--ash-toolbar-actionSize);
-	height: var(--ash-toolbar-actionSize);
-	min-width: 0;
-	min-height: 0;
-	padding: 0;
-}
-
-.ash-sessions-list-more .ash-dropdown-menu-indicator {
-	display: none;
-}
-
 .ash-sessions-list-search {
 	min-width: 0;
 	min-height: var(--ash-spacing-size320);
@@ -189,6 +176,25 @@
 	min-width: 0;
 }
 
+@media (hover: hover) {
+	.ash-sessions-list-section[data-section="projects"]
+		> .ash-sessions-list-more {
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	.ash-sessions-list-section[data-section="projects"]:is(
+			:hover,
+			:focus-within
+		)
+		> .ash-sessions-list-more,
+	.ash-sessions-list-section[data-section="projects"]
+		> .ash-sessions-list-more.menu-visible {
+		opacity: 1;
+		pointer-events: auto;
+	}
+}
+
 .ash-sessions-list-section-toggle,
 .ash-sessions-list-section > .ash-sessions-list-section-static,
 .ash-sessions-list-subgroup > .ash-sessions-list-section-static {
@@ -229,12 +235,8 @@
 
 .ash-sessions-list-section[data-section="projects"]
 	> h3
-	> .ash-sessions-list-section-toggle:hover,
-.ash-sessions-list-section[data-section="projects"]
-	> .ash-sessions-list-more
-	.ash-button:hover:not(:active, [aria-expanded="true"]) {
+	> .ash-sessions-list-section-toggle:hover {
 	background: transparent;
-	box-shadow: none;
 }
 
 .ash-sessions-list-section-toggle:focus-visible {
