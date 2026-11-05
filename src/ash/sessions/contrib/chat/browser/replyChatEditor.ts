@@ -93,7 +93,7 @@ export class ReplyChatEditor extends EditorPane {
 	}
 	public override create(parent: HTMLElement): void {
 		const root = h(parent.ownerDocument, 'section', {
-			className: `${this.options.rootClass} ash-reply-chat-editor ash-sessions-chat-content`,
+			className: `${this.options.rootClass} ash-reply-chat-editor ash-sessions-chat-content ash-chat-content-layout`,
 			attributes: { 'aria-label': this.options.title() },
 		});
 		root.style.height = '100%';

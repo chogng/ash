@@ -1,7 +1,7 @@
 .ash-chat-sticky-prompt {
 	position: absolute;
 	z-index: 1;
-	inset: 0 var(--ash-spacing-size120) auto;
+	inset: 0 var(--ash-chat-content-inset, var(--ash-spacing-size120)) auto;
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: center;
@@ -70,7 +70,14 @@
 
 .ash-prompt-timeline-gutter {
 	inset-block-start: 50%;
-	inset-inline-start: var(--ash-spacing-size40);
+	/* Keep the full 24px hit target and an 8px gap outside the message column. */
+	inset-inline-start: max(
+		0px,
+		calc(
+			var(--ash-chat-content-inset, var(--ash-spacing-size400)) -
+				var(--ash-spacing-size240) - var(--ash-spacing-size80)
+		)
+	);
 	transform: translateY(-50%);
 }
 

@@ -1,14 +1,17 @@
 .ash-sessions-chat-content {
+	--ash-chat-content-host-inset: var(--ash-sessions-editor-tool-inset, 0px);
+	--ash-chat-content-padding: var(--ash-spacing-size240);
+	/* Reserve the prompt rail's hit target without shifting the column as turns arrive. */
+	--ash-chat-content-min-padding: var(--ash-spacing-size400);
+	--ash-sessions-chat-content-bottom: calc(
+		var(--ash-spacing-size120) - var(--ash-chat-content-host-inset)
+	);
 	display: flex;
 	position: relative;
 	flex: 1;
 	min-width: 0;
 	min-height: 0;
 	overflow: hidden;
-}
-
-.ash-sessions-chat-grid.split .ash-sessions-chat-content {
-	--ash-sessions-chat-content-inset: var(--ash-spacing-size240);
 }
 
 .ash-sessions-chat-content > .ash-chat {
@@ -20,20 +23,6 @@
 .ash-reply-chat-editor > .ash-chat {
 	--ash-chat-transcript-surface: var(--ash-sessions-conversation-background);
 	background: var(--ash-chat-transcript-surface);
-}
-
-.ash-sessions-chat-content
-	> .ash-chat
-	> .ash-chat-list-widget
-	.ash-chat-transcript,
-.ash-sessions-chat-content
-	> .ash-chat
-	> .ash-sessions-chat-input.chat-composer {
-	padding-inline: var(--ash-sessions-chat-content-inset);
-}
-
-.ash-sessions-chat-content .ash-chat-list-widget > .ash-chat-sticky-prompt {
-	inset-inline: var(--ash-sessions-chat-content-inset);
 }
 
 .ash-session-side-chat-editor {
@@ -53,10 +42,7 @@
 
 .ash-reply-chat-project {
 	flex: none;
-	padding-inline: var(
-		--ash-sessions-chat-content-inset,
-		var(--ash-spacing-size120)
-	);
+	padding-inline: var(--ash-chat-content-inset, var(--ash-spacing-size120));
 }
 
 .ash-reply-chat-project > .ash-button {

@@ -82,7 +82,7 @@
 }
 
 .ash-chat-transcript {
-	padding: 6px 12px 16px;
+	padding: 6px var(--ash-chat-content-inset, var(--ash-spacing-size120)) 16px;
 }
 
 @media (forced-colors: none) {
