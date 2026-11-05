@@ -9,7 +9,7 @@ import { IElevatedFileService } from '../workbench/services/files/common/elevate
 import { IRemoteAuthorityResolverService } from '../platform/remote/common/remoteAuthorityResolver.js';
 import { RemoteAuthorityResolverService } from '../platform/remote/browser/remoteAuthorityResolverService.js';
 import { SyncDescriptor } from '../platform/instantiation/common/descriptors.js';
-import { ChatListCatalog, IChatListCatalog } from './contrib/sessions/browser/views/chatListModel.js';
+import { ChatListCatalog, IChatListCatalog } from './contrib/chat/browser/chatListModel.js';
 import './sessions.common.main.js';
 import './browser/parts/menubar.contribution.js';
 import './browser/web.main.js';

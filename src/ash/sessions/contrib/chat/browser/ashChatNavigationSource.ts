@@ -11,7 +11,7 @@ import { ISessionsListModelService } from '../../../services/sessions/browser/se
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { getSessionsListEntries } from '../../sessions/browser/views/sessionsListFilters.js';
-import type { ChatListEntry, ChatListSnapshot, ChatListSource } from '../../sessions/browser/views/chatListModel.js';
+import type { ChatListEntry, ChatListSnapshot, ChatListSource } from './chatListModel.js';
 import { ASH_CHAT_SELECTED_CONTEXT, SHOW_ASH_CHAT_COMMAND } from '../common/constants.js';
 
 /** Projects the local Ash catalog and routes actions to its Session owner. */
@@ -57,6 +57,8 @@ export class AshChatNavigationSource implements ChatListSource {
 				rows.push({
 					id: `ash:${id}`,
 					title: session.title || localize('sessions.list.untitled', 'Untitled Session'),
+					sessionId: id,
+					updatedAt: (thread.updatedAt ?? thread.createdAt)?.getTime(),
 					selected: selectedId === id,
 					status: session.management?.status === 'working' ? working : undefined,
 					defaultIcon: Lxicon.chatSession,

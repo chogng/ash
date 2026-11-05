@@ -1,10 +1,150 @@
 import { readFile, realpath, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
-import { connectProfile } from './sessionProfileFixture.js';
+import { connectProfile, enableFixtureModel } from './sessionProfileFixture.js';
 import { expect, test } from '../../../automation/test.js';
+import { Editor } from '../../../automation/editor.js';
+
+test('Sessions Projects opens its chats and continues the same conversation after Desktop relaunch', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench, reloadWorkbench }, testInfo) => {
+	test.setTimeout(120_000);
+	const model = { provider: 'custom-project-chat-fixture', model: 'project-chat-fixture' };
+	const reply = 'Project chat fixture reply';
+	const server = createServer((request, response) => {
+		if (request.method === 'GET') {
+			response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ data: [{ id: model.model }] }));
+			return;
+		}
+		request.resume();
+		request.on('end', () => {
+			const chunk = (delta: object, finish_reason: string | null) =>
+				`data: ${JSON.stringify({ id: 'project-chat', object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
+			response.writeHead(200, { 'content-type': 'text/event-stream' }).end(chunk({ content: reply }, null) + chunk({}, 'stop') + 'data: [DONE]\n\n');
+		});
+	});
+	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+	let connection: Awaited<ReturnType<typeof connectProfile>> | undefined;
+	try {
+		connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+		const client = connection.client;
+		const address = server.address();
+		if (!address || typeof address === 'string') throw new Error('Project chat model fixture has no port');
+		const config = await client.request(APP_SERVER_METHODS['config/read'], {});
+		await client.request(APP_SERVER_METHODS['provider/configure'], {
+			commandId: randomUUID(), expectedRevision: config.revision, config: {
+				connection: model.provider, provider: model.provider, baseUrl: `http://127.0.0.1:${address.port}/v1`,
+				custom: { name: 'Project chat fixture', protocol: 'chatCompletions', order: 0, contextWindow: 272_000 },
+				modelContext: { [model.model]: { contextWindow: 272_000 } },
+			},
+		});
+		await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: model.provider, apiKey: 'synthetic-project-chat-key' });
+		const configured = await client.request(APP_SERVER_METHODS['config/read'], {});
+		await client.request(APP_SERVER_METHODS['config/update'], { commandId: randomUUID(), expectedRevision: configured.revision, model });
+		await enableFixtureModel(workbench, model, 'en');
+		const project = (await client.request(APP_SERVER_METHODS['project/create'], {
+			commandId: randomUUID(), projectId: randomUUID(), name: 'Magnetism research', description: 'Compare magnetic materials.', materials: [],
+		})).project;
+
+		let page = await workbench.openAgentsWindow(target.kind);
+		const openProject = async () => {
+			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			const projects = page.locator('.ash-projects');
+			const card = projects.getByRole('button', { name: project.name, exact: true });
+			const heading = projects.getByRole('heading', { name: project.name, exact: true });
+			await expect(card.or(heading)).toBeVisible();
+			if (await card.isVisible()) await card.click();
+			await expect(heading).toBeVisible();
+		};
+		const projectChats = () => page.getByRole('list', { name: 'Project conversations', exact: true }).getByRole('button');
+		const sidebar = () => page.locator('.ash-chat-navigation-list');
+		const projectName = () => sidebar().getByRole('button', { name: project.name, exact: true });
+		const sidebarChats = () => sidebar().locator('[data-parent-project] > .ash-chat-navigation-item:visible');
+		const activeChat = () => page.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork):visible');
+		const send = async (editor: Editor, text: string) => {
+			await editor.input.focus();
+			await editor.waitForTypeInEditor(text);
+			await editor.input.press('Enter');
+		};
+		const prompts = ['Compare magnetic models.', 'Organize experiment data.'];
+		const threadIds: string[] = [];
+		const rowIds: string[] = [];
+		await openProject();
+		await expect(page.getByText('No chats in this project', { exact: true })).toBeVisible();
+		for (const prompt of prompts) {
+			await send(new Editor(page.locator('.ash-projects-composer')), prompt);
+			await expect(activeChat()).toContainText(reply);
+			const threadId = (await activeChat().getAttribute('data-thread-id'))!;
+			threadIds.push(threadId);
+			const { sessions } = await client.request(APP_SERVER_METHODS['session/list'], {});
+			const session = sessions.find(session => session.threads.some(thread => thread.threadId === threadId));
+			expect(session).toBeDefined();
+			rowIds.push(`ash:${session!.sessionId}`);
+			await openProject();
+			await expect(projectChats()).toHaveCount(threadIds.length);
+		}
+		expect(new Set(threadIds).size).toBe(2);
+		await expect(projectChats().first()).toHaveAttribute('data-project-control', rowIds[1]);
+		await projectChats().first().focus();
+		await page.keyboard.press('ArrowDown');
+		await expect(projectChats().last()).toBeFocused();
+		await page.keyboard.press('Enter');
+		await expect(activeChat()).toHaveAttribute('data-thread-id', threadIds[0]);
+		await expect(projectName()).toHaveAttribute('aria-expanded', 'false');
+		await expect(sidebarChats()).toHaveCount(0);
+		await expect(sidebar().locator('[data-parent-section="recent"] .ash-chat-navigation-item')).toHaveCount(0);
+		await projectName().getByText(project.name, { exact: true }).click();
+		await expect(activeChat()).toHaveAttribute('data-thread-id', threadIds[0]);
+		await expect(projectName()).toHaveAttribute('aria-expanded', 'true');
+		await expect(sidebarChats()).toHaveText([...prompts].reverse());
+		await projectName().press('ArrowRight');
+		await expect(sidebarChats().first()).toBeFocused();
+		await page.keyboard.press('ArrowLeft');
+		await expect(projectName()).toBeFocused();
+		await sidebarChats().last().press('Enter');
+		await expect(activeChat()).toHaveAttribute('data-thread-id', threadIds[0]);
+		await projectName().press('Enter');
+		await expect(projectName()).toHaveAttribute('aria-expanded', 'false');
+		await expect(sidebarChats()).toHaveCount(0);
+		await projectName().press('Enter');
+		await expect(projectName()).toHaveAttribute('aria-expanded', 'true');
+		await connection.close();
+		connection = undefined;
+
+		({ application, workbench } = await reloadWorkbench('quit'));
+		page = await workbench.openAgentsWindow(target.kind);
+		await expect(projectName()).toHaveAttribute('aria-expanded', 'true');
+		await expect(sidebarChats()).toHaveText([...prompts].reverse());
+		await openProject();
+		await expect(projectChats()).toHaveCount(2);
+		await expect(projectChats().first()).toHaveAttribute('data-project-control', rowIds[1]);
+		await expect(projectChats().last()).toHaveAttribute('data-project-control', rowIds[0]);
+		await page.screenshot({ path: testInfo.outputPath('project-chats-restored.png') });
+		await projectChats().and(page.locator(`[data-project-control="${rowIds[0]}"]`)).click();
+		await expect(activeChat()).toHaveAttribute('data-thread-id', threadIds[0]);
+		await expect(activeChat()).toContainText(prompts[0]);
+		await send(new Editor(activeChat()), 'Continue the first project conversation.');
+		await expect(activeChat().getByText(reply, { exact: true })).toHaveCount(2);
+		await expect(activeChat()).toHaveAttribute('data-thread-id', threadIds[0]);
+		await projectName().hover();
+		await page.screenshot({ path: testInfo.outputPath('sidebar-project-chats-restored.png') });
+
+		await openProject();
+		await page.getByRole('navigation', { name: 'Project navigation' }).getByRole('button', { name: 'Projects', exact: true }).click();
+		const card = page.locator('.ash-projects-row').filter({ has: page.getByRole('button', { name: project.name, exact: true }) });
+		await card.locator('[data-action-id="projects.pin"] button').click();
+		await expect(sidebar().locator('.ash-chat-navigation-project[data-parent-section="pinned"]')).toContainText(project.name);
+		await expect(projectName()).toHaveAttribute('aria-expanded', 'true');
+		await expect(sidebarChats()).toHaveCount(2);
+	} finally {
+		try { await connection?.close(); }
+		finally {
+			server.closeAllConnections();
+			await new Promise<void>(resolve => server.close(() => resolve()));
+		}
+	}
+});
 
 test.describe('Projects sorting persistence', () => {
 	test.use({ electronArgs: ['--agents-window'], electronUserSettings: { 'workbench.locale': 'zh-CN', 'workbench.colorTheme': 'ash-light' } });
@@ -30,6 +170,8 @@ test.describe('Projects sorting persistence', () => {
 			await dialog.getByRole('textbox', { name: '你正在做什么？', exact: true }).fill(name);
 			await dialog.getByRole('button', { name: '创建项目', exact: true }).click();
 			await expect(dialog).toHaveCount(0);
+			await expect(page.getByRole('heading', { name: '项目对话', exact: true })).toBeVisible();
+			await expect(page.getByText('此项目中没有聊天', { exact: true })).toBeVisible();
 			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: '项目', exact: true }).click();
 			for (const caption of await page.locator('.ash-projects-card-caption').all()) { await expect(caption).toHaveText('刚刚'); }
 		}

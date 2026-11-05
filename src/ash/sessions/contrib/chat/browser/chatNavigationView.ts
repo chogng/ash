@@ -1,36 +1,37 @@
-import { addDisposableListener, getActiveElement, getWindow, h, scheduleAtNextAnimationFrame } from '../../../../../base/browser/dom.js';
-import { observeResize } from '../../../../../base/browser/observer.js';
-import { disposableWindowTimeout } from '../../../../../base/browser/scheduler.js';
-import { status } from '../../../../../base/browser/ui/aria/aria.js';
-import { ActionBar } from '../../../../../base/browser/ui/actionbar/actionbar.js';
-import { LabelActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
-import { appendIcon, getRegisteredIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
-import { ProgressBar } from '../../../../../base/browser/ui/progressbar/progressbar.js';
-import type { IAction } from '../../../../../base/common/actions.js';
-import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
-import type { Icon } from '../../../../../base/common/icon.js';
-import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { autorun } from '../../../../../base/common/observable.js';
-import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { ICommandService } from '../../../../../platform/commands/common/commands.js';
-import { IProjectsService } from '../../../projects/browser/projectsService.js';
-import { localize } from '../../../../../nls.js';
-import type { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import { IMenuService } from '../../../../../platform/actions/common/actions.js';
-import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
-import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
-import { defaultButtonStyles, defaultProgressBarStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
-import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
-import { PaneComposite, type PaneCompositeOptions } from '../../../../../workbench/browser/panecomposite.js';
-import { SessionLeadingIcon } from '../../../../browser/ui/sessionLeadingIcon.js';
-import { groupChatList, IChatListCatalog, type ChatListEntry, type ChatListSnapshot } from './chatListModel.js';
-import { SessionListRowRenderer, SessionListSection, SessionsListTree } from './sessionsList.js';
-import '../../../../../base/browser/ui/button/button.css';
-import '../media/chatNavigationView.css';
+import { addDisposableListener, getActiveElement, getWindow, h, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
+import { observeResize } from '../../../../base/browser/observer.js';
+import { disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
+import { status } from '../../../../base/browser/ui/aria/aria.js';
+import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
+import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { appendIcon, getRegisteredIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
+import { ProgressBar } from '../../../../base/browser/ui/progressbar/progressbar.js';
+import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
+import type { IAction } from '../../../../base/common/actions.js';
+import { toErrorMessage } from '../../../../base/common/errorMessage.js';
+import type { Icon } from '../../../../base/common/icon.js';
+import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { autorun } from '../../../../base/common/observable.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { IProjectsService } from '../../projects/browser/projectsService.js';
+import { localize } from '../../../../nls.js';
+import type { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import { IMenuService } from '../../../../platform/actions/common/actions.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IProjectService } from '../../../../platform/projects/common/projectService.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { defaultButtonStyles, defaultProgressBarStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { IThemeService } from '../../../../platform/theme/common/themeService.js';
+import { PaneComposite, type PaneCompositeOptions } from '../../../../workbench/browser/panecomposite.js';
+import { SessionLeadingIcon } from '../../../browser/ui/sessionLeadingIcon.js';
+import { getProjectSessionRows, groupChatList, IChatListCatalog, type ChatListEntry, type ChatListGroup, type ChatListSnapshot } from './chatListModel.js';
+import { SessionListRowRenderer, SessionListSection, SessionsListTree } from '../../sessions/browser/views/sessionsList.js';
+import '../../../../base/browser/ui/button/button.css';
+import './media/chatNavigationView.css';
 
 export const chatNavigationFocusContext = 'chatNavigationFocused';
 
@@ -55,16 +56,16 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 		@INotificationService notifications: INotificationService,
 		@IChatListCatalog catalog: IChatListCatalog,
 		@IProjectsService projects: IProjectsService,
-		@ICommandService commands: ICommandService,
+		@IProjectService projectService: IProjectService,
 	) {
 		super(parent, {
 			...options, paneLayout: 'content', stateScope: StorageScope.PROFILE, mergeViewWithContainerWhenSingleView: false,
 		}, storage, theme, menus, configuration, instantiationService, contextKeys);
 		const { sources } = catalog;
-		const projectRows = this._register(new DisposableMap<string, SessionListRowRenderer>());
-		if (storage.keys(StorageScope.PROFILE, StorageTarget.USER).some(key => key.startsWith('sessions.projects.pinned.'))) {
-			void projects.reload();
-		}
+		const projectRows = this._register(new DisposableMap<string, ChatProjectNavigationRow>());
+		// A project revision changes whenever its durable session references change.
+		const membership = new Map<string, { revision: number; sessionIds?: readonly string[]; failed?: boolean; }>();
+		void projects.reload();
 		const root = this.element;
 		const document = root.ownerDocument;
 		root.classList.add('ash-chat-navigation');
@@ -84,8 +85,13 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 		const tree = this._register(new SessionsListTree(list, conversationsLabel, configuration));
 		const focusConversation = (key: string, preventScroll = false): void => {
 			if (!root.isConnected || root.closest('[hidden]')) return;
-			const row = (this.rows.get(key) ?? projectRows.get(key))?.element;
+			const row = this.rows.get(key)?.element ?? projectRows.get(key)?.element
+				?? tree.getVisibleElements().find(element => element.dataset.item === key);
 			if (row) {
+				if (!row.isConnected && row.dataset.parentProject) {
+					const parent = projectRows.get(row.dataset.parentProject)?.element;
+					if (parent?.isConnected) { tree.focusRow(parent, preventScroll); return; }
+				}
 				tree.focusRow(row, preventScroll);
 				return;
 			}
@@ -100,6 +106,13 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 		const pendingProgress = this._register(new MutableDisposable());
 		this._register(addDisposableListener(list, 'keydown', event => {
 			const active = getActiveElement(document);
+			const parent = active?.closest<HTMLElement>('[data-parent-project]')?.dataset.parentProject;
+			if (event.key === 'ArrowLeft' && parent) {
+				event.preventDefault();
+				event.stopPropagation();
+				focusConversation(parent);
+				return;
+			}
 			if (!active || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { return; }
 			const header = active.classList.contains('ash-sessions-list-section-toggle');
 			const selector = header ? '.ash-sessions-list-section-toggle' : '.ash-chat-navigation-item';
@@ -150,15 +163,19 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			}
 			storage.remove(previousKey, StorageScope.PROFILE);
 		}
-		this._register(tree.onDidChangeCollapseState(({ element, collapsed }) => {
-			const key = element.dataset.section;
+		let syncingCollapse = false;
+		this._register(tree.onDidChangeCollapseState(({ element, node, collapsed }) => {
+			const key = element.dataset.section ?? element.dataset.item;
 			if (key === undefined) return;
 			if (collapsed) {
-				for (const row of this.sections.get(key)?.children ?? []) {
-					this.rows.get(row.dataset.item!)?.closeTransientUI();
+				const descendants = [...node.children];
+				while (descendants.length) {
+					const child = descendants.pop()!;
+					this.rows.get(child.element.dataset.item!)?.closeTransientUI();
+					descendants.push(...child.children);
 				}
 			}
-			storage.store(collapseKey(key), collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
+			if (!syncingCollapse) storage.store(collapseKey(key), collapsed, StorageScope.PROFILE, StorageTarget.MACHINE);
 			scrollable.layout();
 			scheduleLoad();
 		}));
@@ -181,19 +198,103 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			const focusedGroup = focused?.closest<HTMLElement>('[data-group]')?.dataset.group;
 			const top = scrollable.state.top;
 			const projectState = projects.state.get();
-			const shortcuts = new Map(groupChatList(snapshots, 'projects')
-				.filter(group => group.project && projects.isPinned(group.key))
-				.map(group => [group.key, group.title]));
-			for (const project of projectState.projects) {
-				if (!project.archived && projects.isPinned(project.id)) shortcuts.set(project.id, project.name);
+			const activeProjects = projectState.projects.filter(project => !project.archived);
+			const activeIds = new Set(activeProjects.map(project => project.id));
+			for (const id of membership.keys()) {
+				if (!activeIds.has(id)) membership.delete(id);
 			}
-			const groups = groupChatList(snapshots, 'chat', shortcuts.size > 0);
+			const projectGroups = new Map(groupChatList(snapshots, 'projects')
+				.filter(group => group.project).map(group => [group.key, group]));
+			const entries = snapshots.flatMap(snapshot => snapshot.entries);
+			const projectEntryIds = new Set<string>();
+			for (const project of activeProjects) {
+				let current = membership.get(project.id);
+				if (project.sessionCount && current?.revision !== project.revision) {
+					const request = { revision: project.revision, sessionIds: current?.sessionIds, failed: false };
+					membership.set(project.id, request);
+					current = request;
+					const finish = (sessionIds?: readonly string[]) => {
+						if (this.isDisposed || membership.get(project.id) !== request) return;
+						request.failed = sessionIds === undefined;
+						request.sessionIds = sessionIds ?? request.sessionIds;
+						render(snapshotsNow());
+					};
+					void projectService.read(project.id).then(value => finish(value.sessionIds), () => finish());
+				} else if (!project.sessionCount) {
+					membership.delete(project.id);
+					current = undefined;
+				}
+				const existing = projectGroups.get(project.id);
+				const rows = getProjectSessionRows(entries, current?.sessionIds ?? []);
+				for (const row of rows) projectEntryIds.add(row.id);
+				projectGroups.set(project.id, { key: project.id, title: project.name, rows: [...rows, ...(existing?.rows ?? [])], project: existing?.project });
+			}
+			const pinnedProjects = [...projectGroups.values()].filter(project => projects.isPinned(project.key));
+			const otherProjects = [...projectGroups.values()].filter(project => !projects.isPinned(project.key));
+			const groups = [...groupChatList(snapshots, 'chat', pinnedProjects.length > 0)];
+			if (otherProjects.length) groups.splice(groups[0]?.key === 'pinned' ? 1 : 0, 0,
+				{ key: 'projects', title: localize('projects.title', 'Projects'), rows: [] });
 			const usedProjectRows = new Set<string>();
 			const usedRows = new Set<string>();
 			const usedSections = new Set<string>();
-			const children = [];
-			for (const group of groups) {
+			const idleProjects: { row: HTMLElement; load: () => void; }[] = [];
+			const chatNode = (entry: ChatListEntry, group: string, parentProject?: string): ObjectTreeElement<HTMLElement> => {
+				// A conversation can be pinned independently and can belong to more than one local project.
+				const rowKey = parentProject ? JSON.stringify([parentProject, entry.id]) : entry.id;
+				usedRows.add(rowKey);
+				let row = this.rows.get(rowKey);
+				if (!row) {
+					row = this.rows.set(rowKey, instantiationService.createInstance(ChatNavigationRow, document, entry,
+						openConversation, () => focusConversation(rowKey), beforeOpenMenu));
+					row.element.dataset.item = rowKey;
+					if (parentProject) row.element.dataset.parentProject = parentProject;
+				}
+				row.update(entry, group);
+				return { element: row.element };
+			};
+			const projectNode = (project: ChatListGroup, group: string): ObjectTreeElement<HTMLElement> => {
+				const itemId = `project:${project.key}`;
+				const collapsed = storage.getBoolean(collapseKey(itemId), StorageScope.PROFILE, true);
+				usedProjectRows.add(itemId);
+				let row = projectRows.get(itemId);
+				if (!row) {
+					row = projectRows.set(itemId, new ChatProjectNavigationRow(document, itemId, collapsed => {
+						if (collapsed === undefined) tree.toggleCollapsed(itemId);
+						else if (collapsed) tree.collapse(itemId);
+						else if (!tree.expand(itemId)) {
+							const child = tree.getVisibleElements().find(element => element.dataset.parentProject === itemId
+								&& element.querySelector('button:not([hidden]):not(:disabled)'));
+							if (child) tree.focusRow(child);
+						}
+					}));
+				}
+				row.element.dataset.parentSection = group;
+				row.update(project.title, collapsed);
+				const nodes = project.rows.map(entry => chatNode(entry, group, itemId));
+				const current = membership.get(project.key);
+				const history = project.project?.history;
+				if (history?.state === 'idle' && !collapsed) idleProjects.push({ row: row.element, load: history.load });
+				const retry = current?.failed ? () => {
+					membership.delete(project.key);
+					render(snapshotsNow());
+				} : undefined;
+				const action = history?.state === 'error' || history?.state === 'more' ? history.load : retry;
+				const label = history?.state === 'more' ? localize('sessions.chatList.loadMoreProjectChats', 'Load more project chats')
+					: history?.state === 'error' || retry ? localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry')
+						: history?.state === 'unavailable' ? localize('sessions.chatList.projectChatsOffline', 'Connect to load project chats.')
+							: history?.state === 'idle' || history?.state === 'loading' || (current && !current.sessionIds)
+								? localize('sessions.chatList.loadingProjectChats', 'Loading project chats…')
+								: !nodes.length ? localize('sessions.chatList.emptyProject', 'No chats in this project') : undefined;
+				if (label) nodes.push({ element: row.updateHistory(label, action) });
+				return { element: row.element, children: nodes, collapsible: true, collapsed };
+			};
+			const children = groups.map(group => {
 				const { key } = group;
+				const rows = group.rows.filter(entry => key !== 'recent' || !projectEntryIds.has(entry.id))
+					.map(entry => chatNode(entry, key));
+				if (key === 'pinned') rows.push(...pinnedProjects.map(project => projectNode(project, key)));
+				if (key === 'projects') rows.push(...otherProjects.map(project => projectNode(project, key)));
+				if (!rows.length) return undefined;
 				usedSections.add(key);
 				let section = this.sections.get(key);
 				if (!section) {
@@ -202,47 +303,12 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 					section.domNode.classList.add('ash-chat-navigation-group');
 					section.domNode.dataset.group = key;
 				}
-				const rows = group.rows.map(entry => {
-					const rowKey = entry.id;
-					usedRows.add(rowKey);
-					let row = this.rows.get(rowKey);
-					if (!row) {
-						row = this.rows.set(rowKey, instantiationService.createInstance(ChatNavigationRow, document, entry,
-							openConversation, () => focusConversation(rowKey), beforeOpenMenu));
-					}
-					row.update(entry, key);
-					return row.element;
-				});
-				if (key === 'pinned') {
-					for (const [projectId, title] of shortcuts) {
-						const itemId = `project:${projectId}`;
-						usedProjectRows.add(itemId);
-						let row = projectRows.get(itemId);
-						if (!row) {
-							row = projectRows.set(itemId, new SessionListRowRenderer(document));
-							row.element.dataset.item = itemId;
-							row.element.dataset.parentSection = key;
-							row.button.classList.add('ash-chat-navigation-item');
-							appendIcon(Lxicon.projects, row.button);
-							row.button.append(h(document, 'span', { className: 'ash-sessions-list-label' }));
-							row.button.onclick = () => {
-								this.opening.clear();
-								void commands.executeCommand('sessions.open.projects', projectId).catch(error => notifications.error(toErrorMessage(error)));
-							};
-						}
-						row.button.lastElementChild!.textContent = title;
-						row.button.title = title;
-						rows.push(row.element);
-					}
-				}
-				section.update(group.title, rows);
-				children.push({
-					element: section.domNode,
-					children: rows.map(element => ({ element })),
-					collapsible: true,
+				section.update(group.title, rows.map(row => row.element));
+				return {
+					element: section.domNode, children: rows, collapsible: true,
 					collapsed: storage.getBoolean(collapseKey(key), StorageScope.PROFILE, false),
-				});
-			}
+				};
+			}).filter(node => node !== undefined);
 			for (const [key] of projectRows) {
 				if (!usedProjectRows.has(key)) projectRows.deleteAndDispose(key);
 			}
@@ -254,9 +320,25 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			for (const [key] of this.sections) {
 				if (!usedSections.has(key)) this.sections.deleteAndDispose(key);
 			}
-			tree.setChildren(children);
-			for (const { key } of groups) {
-				tree.setSectionCollapsed(key, storage.getBoolean(collapseKey(key), StorageScope.PROFILE, false));
+			syncingCollapse = true;
+			try {
+				tree.setChildren(children);
+				for (const section of children) {
+					tree.setSectionCollapsed(section.element.dataset.section!, section.collapsed);
+					for (const branch of section.children) {
+						if (branch.collapsible && tree.isCollapsed(SessionsListTree.id(branch.element)) !== branch.collapsed) {
+							tree.toggleCollapsed(SessionsListTree.id(branch.element));
+						}
+					}
+				}
+			} finally {
+				syncingCollapse = false;
+			}
+			for (const { row, load } of idleProjects) {
+				// Loading can synchronously update the source. Let the tree commit first.
+				if (row.isConnected) queueMicrotask(() => {
+					if (!this.isDisposed && row.isConnected && !tree.isCollapsed(row.dataset.item!)) load();
+				});
 			}
 			const readingHistory = snapshots.some(snapshot => snapshot.loading);
 			list.setAttribute('aria-busy', String(readingHistory));
@@ -274,7 +356,7 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			scrollable.scrollTo(0, top);
 			scheduleLoad();
 		};
-		const snapshots = () => sources.map(source => source.snapshot.get());
+		const snapshotsNow = () => sources.map(source => source.snapshot.get());
 		this._register(autorun(reader => {
 			projects.state.read(reader);
 			render(sources.map(source => source.snapshot.read(reader)));
@@ -282,7 +364,7 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 		this._register(storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && event.key.endsWith('.collapsed')
 				&& event.key.startsWith(`workbench.viewContainer.${this.id}.${this.id}.`)) {
-				render(snapshots());
+				render(snapshotsNow());
 			}
 		}));
 		for (const source of sources) {
@@ -299,6 +381,72 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 	public override focus(): void { this.element.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus(); }
 }
 
+
+class ChatProjectNavigationRow extends SessionListRowRenderer {
+	private readonly label: HTMLElement;
+	private readonly chevron: HTMLElement;
+	private readonly history: HTMLElement;
+	private readonly historyButton: HTMLButtonElement;
+	private readonly historyStatus: HTMLElement;
+	private historyAction: (() => void) | undefined;
+
+	constructor(document: Document, id: string, toggle: (collapsed?: boolean) => void) {
+		const leading = h(document, 'span', {
+			className: 'ash-session-leading-icon ash-chat-navigation-project-icon',
+			attributes: { 'aria-hidden': 'true' },
+		});
+		super(document, leading);
+		this.element.dataset.item = id;
+		this.element.classList.add('ash-chat-navigation-project');
+		this.button.classList.add('ash-chat-navigation-item');
+		this.label = h(document, 'span', { className: 'ash-sessions-list-label' });
+		this.button.append(this.label);
+		appendIcon(Lxicon.projects, leading);
+		this.chevron = h(document, 'span', {
+			className: 'ash-chat-navigation-project-chevron',
+			attributes: { 'aria-hidden': 'true' },
+		});
+		leading.append(this.chevron);
+		this._register(addDisposableListener(this.button, 'click', () => toggle()));
+		this._register(addDisposableListener(this.element, 'keydown', event => {
+			if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+			event.preventDefault();
+			event.stopPropagation();
+			toggle(event.key === 'ArrowLeft');
+		}));
+		this.history = h(document, 'div', { className: 'ash-chat-navigation-project-history' });
+		this.history.dataset.item = JSON.stringify([id, 'history']);
+		this.history.dataset.parentProject = id;
+		this.historyButton = h(document, 'button', {
+			className: 'ash-button ash-button-quiet ash-sessions-list-item ash-chat-navigation-item',
+			properties: { type: 'button' },
+		});
+		this.historyStatus = h(document, 'span', { attributes: { role: 'status' } });
+		this.history.append(this.historyButton, this.historyStatus);
+		this._register(addDisposableListener(this.historyButton, 'click', () => this.historyAction?.()));
+		this._register(addDisposableListener(this.historyButton, 'keydown', event => {
+			if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+		}));
+	}
+
+	update(title: string, collapsed: boolean): void {
+		this.button.title = this.label.textContent = title;
+		this.button.setAttribute('aria-expanded', String(!collapsed));
+		const icon = collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
+		if (this.chevron.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
+			this.chevron.replaceChildren();
+			appendIcon(icon, this.chevron);
+		}
+	}
+
+	updateHistory(label: string, action: (() => void) | undefined): HTMLElement {
+		this.historyAction = action;
+		this.historyButton.hidden = !action;
+		this.historyStatus.hidden = !!action;
+		(action ? this.historyButton : this.historyStatus).textContent = label;
+		return this.history;
+	}
+}
 
 class ChatNavigationRow extends Disposable {
 	readonly element: HTMLElement;

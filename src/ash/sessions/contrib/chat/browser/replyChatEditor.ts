@@ -2,7 +2,7 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
-import { IChatListCatalog } from '../../sessions/browser/views/chatListModel.js';
+import { IChatListCatalog } from './chatListModel.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
 import { autorun, observableFromEvent, observableValue, type IReader } from '../../../../base/common/observable.js';
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';

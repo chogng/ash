@@ -29,8 +29,8 @@ import { CommandsRegistry } from '../../../src/ash/platform/commands/common/comm
 import { ChatGPTService, IChatGPTService } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTService.js';
 import { ChatGPTList } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTList.js';
 import { ASH_CHAT_SELECTED_CONTEXT } from '../../../src/ash/sessions/contrib/chat/common/constants.js';
-import { ChatNavigationViewPaneContainer } from '../../../src/ash/sessions/contrib/sessions/browser/views/chatNavigationView.js';
-import { IChatListCatalog } from '../../../src/ash/sessions/contrib/sessions/browser/views/chatListModel.js';
+import { ChatNavigationViewPaneContainer } from '../../../src/ash/sessions/contrib/chat/browser/chatNavigationView.js';
+import { IChatListCatalog } from '../../../src/ash/sessions/contrib/chat/browser/chatListModel.js';
 import { ReplyChatEditor } from '../../../src/ash/sessions/contrib/chat/browser/replyChatEditor.js';
 import { chatGPTReplyEditor } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTWeb.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';

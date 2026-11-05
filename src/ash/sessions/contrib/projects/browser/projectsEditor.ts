@@ -34,7 +34,7 @@ import { IHoverService } from '../../../../platform/hover/browser/hoverService.j
 import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
-import { groupChatList, IChatListCatalog, type ChatListEntry, type ChatListGroup, type ConversationProjectEditor } from '../../sessions/browser/views/chatListModel.js';
+import { getProjectSessionRows, groupChatList, IChatListCatalog, type ChatListEntry, type ChatListGroup, type ConversationProjectEditor } from '../../chat/browser/chatListModel.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { IProjectsService, type ProjectSortOrder, type ProjectsState } from './projectsService.js';
@@ -342,7 +342,9 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 			const groups = groupChatList(snapshots, 'projects');
 			const archived = this.showArchived.read(reader) && !id && !state.selectedId;
 			const selected = groups.find(group => group.key === id);
-			this.render(state, groups, selected, archived ? groupChatList(snapshots, 'archived') : undefined);
+			const projectChats = state.selected?.sessionIds.length
+				? getProjectSessionRows(snapshots.flatMap(snapshot => snapshot.entries), state.selected.sessionIds) : [];
+			this.render(state, groups, selected, archived ? groupChatList(snapshots, 'archived') : undefined, projectChats);
 			const history = (selected ?? groups.find(group => group.key === state.selectedId))?.project?.history;
 			if (this.isVisible() && history?.state === 'idle') {
 				history.load();
@@ -392,7 +394,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		}
 	}
 
-	private render(state: ProjectsState, groups: readonly ChatListGroup[], selected: ChatListGroup | undefined, archived: readonly ChatListGroup[] | undefined): void {
+	private render(state: ProjectsState, groups: readonly ChatListGroup[], selected: ChatListGroup | undefined, archived: readonly ChatListGroup[] | undefined, projectChats: readonly ChatListEntry[]): void {
 		// Metadata can refresh while the editor has a selection or an IME composition.
 		// Keep the same detail DOM and composer in that case, replacing only its supporting content.
 		const retainedInput = this.activeProjectInput;
@@ -408,7 +410,6 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.relativeTimeUpdate.cancel();
 		this.content.clear();
 		if (!retainDetail) this.body.replaceChildren();
-		else this.body.querySelector(':scope > .ash-projects-conversations')?.remove();
 		this.breadcrumbSeparator.hidden = !selected && !state.selected && !loadingProject;
 		if (this.rename && this.rename.project.id !== state.selected?.id) {
 			this.finishRename(false);
@@ -464,11 +465,10 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		const query = state.query.trim().toLocaleLowerCase();
 		const conversationCards = groups.filter(group => !localIds.has(group.key) && group.title.toLocaleLowerCase().includes(query));
 		if (selected) {
-			this.renderProjectConversations(selected);
+			this.renderProjectConversations(this.body, selected.rows, selected.project);
 		} else if (state.selected) {
-			this.renderProject(state.selected);
 			const conversations = groups.find(group => group.key === state.selectedId);
-			if (conversations) this.renderProjectConversations(conversations);
+			this.renderProject(state.selected, [...projectChats, ...(conversations?.rows ?? [])], conversations?.project);
 		} else if (loadingProject) {
 			this.renderLoading(true);
 		} else if (archived) {
@@ -821,26 +821,26 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		}
 	}
 
-	private renderProjectConversations(group: ChatListGroup): void {
-		const document = this.domNode.ownerDocument;
+	private renderProjectConversations(container: HTMLElement, entries: readonly ChatListEntry[], project: ChatListGroup['project']): void {
+		const document = container.ownerDocument;
 		const section = h(document, 'section', { className: 'ash-projects-conversations' });
-		this.body.append(section);
-		const list = h(document, 'ul', {
-			className: 'ash-projects-grid',
-			attributes: { 'aria-label': localize('projects.conversations', 'Project conversations') },
-		});
-		const history = group.project?.history;
-		for (const entry of group.rows) {
+		const label = localize('projects.conversations', 'Project conversations');
+		section.append(h(document, 'h2', {}, label));
+		container.append(section);
+		const list = h(document, 'ul', { className: 'ash-projects-conversation-list', attributes: { 'aria-label': label } });
+		const history = project?.history;
+		for (const entry of entries) {
 			const row = h(document, 'li', { className: 'ash-projects-row' });
 			const button = this.content.add(new Button(row, {
 				...defaultButtonStyles, label: entry.title, icon: entry.defaultIcon, presentation: 'quiet',
 				onClick: () => this.openProjectConversation(entry),
 			}));
+			button.domNode.classList.add('ash-projects-conversation');
 			button.enabled = !entry.disabled;
 			button.domNode.dataset.projectControl = entry.id;
 			list.append(row);
 		}
-		section.append(list);
+		if (entries.length) section.append(list);
 		if (history?.state === 'more' || history?.state === 'error') {
 			const button = this.content.add(new Button(section, {
 				...defaultButtonStyles,
@@ -855,7 +855,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		} else if (history?.state === 'unavailable') {
 			section.append(h(document, 'p', { attributes: { role: 'status' } },
 				localize('sessions.chatList.projectChatsOffline', 'Connect to load project chats.')));
-		} else if (!group.rows.length) {
+		} else if (!entries.length) {
 			section.append(h(document, 'p', { attributes: { role: 'status' } },
 				localize('sessions.chatList.emptyProject', 'No chats in this project')));
 		}
@@ -951,7 +951,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		return actions;
 	}
 
-	private renderProject(project: Project): void {
+	private renderProject(project: Project, chats: readonly ChatListEntry[], conversationProject: ChatListGroup['project']): void {
 		const document = this.domNode.ownerDocument;
 		const layout = this.body.querySelector<HTMLElement>('.ash-projects-detail:not(.ash-projects-skeleton)') ?? h(document, 'div', { className: 'ash-projects-detail' });
 		const overview = layout.querySelector<HTMLElement>('.ash-projects-overview') ?? h(document, 'section', { className: 'ash-projects-overview' });
@@ -967,6 +967,8 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.activeProjectInput = input;
 		if (!overview.contains(input.element)) overview.replaceChildren(input.element);
 		input.setVisible(this.isVisible());
+		overview.querySelector('.ash-projects-conversations')?.remove();
+		this.renderProjectConversations(overview, chats, conversationProject);
 		const heading = h(
 			document,
 			'div',
@@ -1560,7 +1562,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
 			return;
 		}
-		const cards = Array.from(this.body.querySelectorAll<HTMLButtonElement>('.ash-projects-card'));
+		const cards = Array.from(this.body.querySelectorAll<HTMLButtonElement>('.ash-projects-card, .ash-projects-conversation:not(:disabled)'));
 		const index = cards.indexOf(getActiveElement(this.domNode.ownerDocument) as HTMLButtonElement);
 		if (index < 0) {
 			return;

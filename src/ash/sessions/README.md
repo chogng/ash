@@ -20,7 +20,7 @@ integration. It owns conversation and project identities, history, messages,
 drafts, model presets and streamed replies. It reports when a conversation
 identity is retired or replaced so the host can maintain its own preferences.
 
-The desktop host presents those records in Ash's Chat sidebar, Projects,
+The desktop host presents those records in Ash's [Chat sidebar](contrib/chat/browser/chatNavigationView.ts), Projects,
 search and `ReplyChatEditor`. Ash owns row grouping and rendering, default
 and custom icons, local project visibility and which conversation is
 highlighted. The adapter maps ChatGPT identities, messages and actions to the

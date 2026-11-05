@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { groupChatList, type ChatListEntry } from '../../browser/views/chatListModel.js';
+import { groupChatList, type ChatListEntry } from '../../browser/chatListModel.js';
 
 suite('Ash chat list model', () => {
 	test('groups records by membership and pin state regardless of which catalog supplied them', () => {

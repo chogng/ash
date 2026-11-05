@@ -395,6 +395,30 @@
 	overflow: visible;
 }
 
+.ash-projects-overview .ash-projects-conversations {
+	margin-top: var(--ash-spacing-size240);
+}
+
+.ash-projects-conversations h2 {
+	margin: 0 0 var(--ash-spacing-size80);
+	font-size: var(--ash-fontSize-heading3);
+}
+
+.ash-projects-conversation-list {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--ash-spacing-size40);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ash-projects .ash-projects-conversation {
+	width: 100%;
+	justify-content: flex-start;
+	text-align: start;
+}
+
 .ash-projects-goals {
 	margin-top: var(--ash-spacing-size240);
 }

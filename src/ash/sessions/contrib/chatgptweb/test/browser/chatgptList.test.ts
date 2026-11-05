@@ -393,10 +393,47 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const writing = projects.getByRole('button', { name: 'Writing', exact: true });
 			await expect(research).toBeVisible();
 			await expect(writing).toBeVisible();
-			await expect(sidebar.locator('.ash-chat-navigation-group')).toHaveCount(2);
+			await expect(sidebar.locator('.ash-chat-navigation-group')).toHaveCount(3);
 			await expect(sidebar.locator('[data-parent-section="pinned"] .ash-chat-navigation-item')).toHaveText(pinned.title);
 			await expect(sidebar.locator('[data-parent-section="recent"] .ash-chat-navigation-item')).toHaveText('Synthetic conversation');
 			expect(cursors).toEqual([]);
+			const toggle = sidebar.getByRole('button', { name: 'Research', exact: true });
+			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+			const projectRow = sidebar.locator('[data-item="project:g-p-one"]');
+			const projectIcon = projectRow.locator('[data-ash-icon-id="projects"]');
+			const chevron = projectRow.locator('.ash-chat-navigation-project-chevron');
+			await page.mouse.move(0, 0);
+			await expect(projectIcon).toBeVisible();
+			await expect(chevron).toBeHidden();
+			await page.keyboard.press('Tab');
+			await toggle.focus();
+			await expect(chevron).toBeVisible();
+			await toggle.blur();
+			const restingBounds = await toggle.boundingBox();
+			await toggle.hover();
+			await expect(chevron).toBeVisible();
+			await expect(projectIcon).toBeHidden();
+			expect(await toggle.boundingBox()).toEqual(restingBounds);
+			await toggle.getByText('Research', { exact: true }).click();
+			await expect(research).toBeVisible();
+			const children = sidebar.locator('[data-parent-project="project:g-p-one"] > .ash-chat-navigation-item');
+			await expect(children).toHaveText([pinned.title, 'First research chat', zh ? '加载更多项目聊天' : 'Load more project chats']);
+			expect(cursors).toEqual([null]);
+			const recentChat = sidebar.getByRole('button', { name: 'Synthetic conversation', exact: true });
+			const projectChat = children.first();
+			const recentBounds = (await recentChat.boundingBox())!;
+			const projectBounds = (await projectChat.boundingBox())!;
+			expect(projectBounds.x).toBe(recentBounds.x);
+			expect(projectBounds.width).toBe(recentBounds.width);
+			await recentChat.hover();
+			const hoverBackground = await recentChat.evaluate(row => getComputedStyle(row).backgroundColor);
+			await projectChat.hover();
+			await expect(projectChat).toHaveCSS('background-color', hoverBackground);
+			await toggle.hover();
+			const arrow = (await chevron.boundingBox())!;
+			await page.mouse.click(arrow.x + arrow.width / 2, arrow.y + arrow.height / 2);
+			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+			await expect(children).toHaveCount(0);
 			await research.press('Enter');
 			const rows = projects.getByRole('list', { name: zh ? '项目对话' : 'Project conversations' }).getByRole('button');
 			await expect(rows).toHaveText([pinned.title, 'First research chat']);
@@ -540,7 +577,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await page.getByRole('menuitem', { name: labels.delete, exact: true }).click();
 			await dialog.getByRole('button', { name: labels.delete, exact: true }).click();
 			await expect(third).toHaveCount(0);
-			await expect(page.locator('.ash-chat-navigation-item')).toHaveText(['Other chat']);
+			await expect(page.locator('.ash-chat-navigation-row .ash-chat-navigation-item')).toHaveText(['Other chat']);
 			expect(writes.map(write => [write.method, write.path])).toEqual([
 				['PATCH', '/service/backend-api/conversation/fixture-chat'], ['PATCH', '/service/backend-api/conversation/fixture-chat'],
 				['POST', '/service/backend-api/conversation/id/fixture-chat/rename'], ['POST', '/service/backend-api/share/v2/create'],

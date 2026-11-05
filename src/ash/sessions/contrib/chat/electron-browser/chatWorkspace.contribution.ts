@@ -9,8 +9,8 @@ import { ViewContainerLocation } from '../../../../workbench/common/views.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
 import { AshChatNavigationSource } from '../browser/ashChatNavigationSource.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../common/constants.js';
-import { ChatListCatalog, IChatListCatalog, type ChatListSource } from '../../sessions/browser/views/chatListModel.js';
-import { ChatNavigationViewPaneContainer, type ChatNavigationAccessibilityHint } from '../../sessions/browser/views/chatNavigationView.js';
+import { ChatListCatalog, IChatListCatalog, type ChatListSource } from '../browser/chatListModel.js';
+import { ChatNavigationViewPaneContainer, type ChatNavigationAccessibilityHint } from '../browser/chatNavigationView.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
 import '../browser/chat.contribution.js';
 

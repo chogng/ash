@@ -1,16 +1,19 @@
-import type { IAction } from '../../../../../base/common/actions.js';
-import type { Icon } from '../../../../../base/common/icon.js';
-import { Disposable, isDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
-import type { IObservable } from '../../../../../base/common/observable.js';
-import type { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
-import { createServiceIdentifier, IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { localize } from '../../../../../nls.js';
-import type { ISessionStatusIcon } from '../../../../browser/sessionStatusIcon.js';
+import type { IAction } from '../../../../base/common/actions.js';
+import type { Icon } from '../../../../base/common/icon.js';
+import { Disposable, isDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import type { IObservable } from '../../../../base/common/observable.js';
+import type { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { localize } from '../../../../nls.js';
+import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 
 export interface ChatListEntry {
 	/** Opaque identity, unique across the entire list. */
 	readonly id: string;
 	readonly title: string;
+	/** Session catalog identity, when this row represents an Ash session. */
+	readonly sessionId?: string;
+	readonly updatedAt?: number;
 	readonly projectId?: string;
 	readonly selected: boolean;
 	readonly status?: ISessionStatusIcon;
@@ -88,6 +91,12 @@ export interface ChatListGroup {
 	readonly title: string;
 	readonly rows: ChatListEntry[];
 	readonly project?: ChatListProject;
+}
+
+export function getProjectSessionRows(entries: readonly ChatListEntry[], sessionIds: readonly string[]): ChatListEntry[] {
+	const members = new Set(sessionIds);
+	return entries.filter(entry => entry.sessionId !== undefined && members.has(entry.sessionId))
+		.sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0));
 }
 
 export function groupChatList(snapshots: readonly ChatListSnapshot[], mode: 'chat' | 'projects' | 'archived' = 'chat', hasPinnedProjects = false): readonly ChatListGroup[] {

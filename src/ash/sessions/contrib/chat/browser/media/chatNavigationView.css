@@ -1,0 +1,85 @@
+.ash-chat-navigation {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-height: 0;
+	min-width: 0;
+	background: var(--ash-sideBar-background, ButtonFace);
+	color: var(--ash-foreground, CanvasText);
+	font-size: var(--ash-fontSize-body1, 14px);
+	line-height: 1.5;
+}
+
+.ash-chat-navigation * {
+	box-sizing: border-box;
+}
+
+.ash-chat-navigation-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+	/* Keep content inset while the scroll track reaches the sidebar edge. */
+	padding-block: var(--ash-spacing-size120);
+	padding-inline: var(--ash-sessions-sidebar-row-inset);
+}
+
+.ash-chat-navigation-project-icon {
+	pointer-events: none;
+}
+
+.ash-chat-navigation-project-icon
+	> :is(.ash-icon, .ash-chat-navigation-project-chevron) {
+	grid-area: 1 / 1;
+}
+
+.ash-chat-navigation-project-icon > .ash-icon {
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
+.ash-chat-navigation-project-chevron {
+	display: grid;
+	place-items: center;
+	font-size: var(--ash-lxiconFontSize-compact);
+	visibility: hidden;
+}
+
+.ash-chat-navigation-project:is(:hover, :has(:focus-visible))
+	.ash-chat-navigation-project-chevron {
+	visibility: visible;
+}
+
+.ash-chat-navigation-project:is(:hover, :has(:focus-visible))
+	.ash-chat-navigation-project-icon
+	> .ash-icon {
+	visibility: hidden;
+}
+
+.ash-chat-navigation-row[data-parent-project] > .ash-session-leading-icon,
+.ash-chat-navigation-row[data-parent-project]
+	> .ash-sessions-list-item
+	> .ash-sessions-list-label {
+	margin-inline-start: var(--ash-spacing-size120);
+}
+
+.ash-chat-navigation-project-history > [hidden] {
+	display: none;
+}
+
+.ash-chat-navigation-project-history > [role="status"]:not([hidden]) {
+	display: block;
+	padding-block: var(--ash-spacing-size40);
+	padding-inline-end: var(--ash-spacing-size120);
+	color: var(--ash-description-foreground);
+}
+
+.ash-chat-navigation-project-history
+	> :is(.ash-sessions-list-item, [role="status"]) {
+	padding-inline-start: var(--ash-spacing-size240);
+}
+
+.ash-menu
+	.ash-action-view-item
+	> .ash-button.ash-chat-navigation-delete-action {
+	color: var(--ash-error-foreground);
+}
