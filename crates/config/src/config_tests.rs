@@ -1744,6 +1744,7 @@ fn provider_entries_validate_their_key_and_static_settings() {
                 connection: connection_id("openai"),
                 config: ModelProviderConfig {
                     model_acceleration: Default::default(),
+                    ultra_models: Default::default(),
                     disabled_acceleration_options: Default::default(),
                     connection: connection_id("anthropic"),
                     custom: None,

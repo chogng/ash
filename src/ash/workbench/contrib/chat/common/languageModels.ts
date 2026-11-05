@@ -367,11 +367,13 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 			&& entry.defaultContextWindow === candidate.defaultContextWindow
 			&& entry.maximumContextWindow === candidate.maximumContextWindow
 			&& entry.selectedAcceleration === candidate.selectedAcceleration
+			&& entry.ultra === candidate.ultra
 			&& entry.accelerationOptions?.length === candidate.accelerationOptions?.length
 			&& (entry.accelerationOptions?.every((option, index) => option.id === candidate.accelerationOptions?.[index]?.id && option.name === candidate.accelerationOptions?.[index]?.name && option.description === candidate.accelerationOptions?.[index]?.description) ?? true)
 			&& entry.longContext === candidate.longContext
 			&& entry.defaultReasoningEffort === candidate.defaultReasoningEffort
 			&& entry.effectiveReasoningEffort === candidate.effectiveReasoningEffort
+			&& entry.reasoningEffortOverride === candidate.reasoningEffortOverride
 			&& entry.supportedReasoningEfforts?.length === candidate.supportedReasoningEfforts?.length
 			&& (entry.supportedReasoningEfforts?.every((option, index) => option.effort === candidate.supportedReasoningEfforts?.[index]?.effort && option.description === candidate.supportedReasoningEfforts?.[index]?.description) ?? true);
 	});

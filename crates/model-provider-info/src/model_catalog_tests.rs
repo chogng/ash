@@ -129,6 +129,7 @@ fn malformed_registered_models_fail_at_the_json_boundary() {
         ("display_name", json!(" ")),
         ("description", json!(" ")),
         ("supported_reasoning_efforts", json!(["low", "medium"])),
+        ("ultra_reasoning_effort", json!("minimal")),
         (
             "supported_reasoning_efforts",
             json!([{"effort":"low","description":" "}]),

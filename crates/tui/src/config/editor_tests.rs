@@ -389,6 +389,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
             default_context_window: None,
             long_context: None,
             selected_acceleration: None,
+            ultra: None,
             acceleration_options: Vec::new(),
             auto_compact_token_limit: None,
             available_context_window: None,
@@ -398,6 +399,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
             supported_reasoning_efforts: Vec::new(),
             default_reasoning_effort: None,
             effective_reasoning_effort: None,
+            reasoning_effort_override: None,
             default_personality: None,
         }],
     };
@@ -412,6 +414,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
         "openai".into(),
         ash_app_server_protocol::protocol::config::ProviderConfigDto {
             model_acceleration: Default::default(),
+            ultra_models: Default::default(),
             disabled_acceleration_options: Default::default(),
             connection: "openai".into(),
             provider: "openai".into(),
@@ -1299,6 +1302,7 @@ fn only_custom_provider_rows_offer_delete_and_order_does_not_follow_names() {
             id.into(),
             ProviderConfigDto {
                 model_acceleration: Default::default(),
+                ultra_models: Default::default(),
                 disabled_acceleration_options: Default::default(),
                 connection: id.into(),
                 provider: id.into(),

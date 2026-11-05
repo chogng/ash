@@ -170,6 +170,7 @@ fn model_ref(provider: &str, model: &str) -> ash_protocol::ModelRef {
 fn model_provider_config_is_serializable_and_has_a_schema() {
     let config = ModelProviderConfig {
         model_acceleration: Default::default(),
+        ultra_models: Default::default(),
         disabled_acceleration_options: Default::default(),
         connection: ModelConnectionId::new("openai").unwrap(),
         custom: None,
@@ -300,6 +301,7 @@ fn token_count_targets_and_model_support_are_normalized_explicitly() {
     let openai = registry
         .normalize(&ModelProviderConfig {
             model_acceleration: Default::default(),
+            ultra_models: Default::default(),
             disabled_acceleration_options: Default::default(),
             connection: ModelConnectionId::new("openai").unwrap(),
             custom: None,
@@ -315,6 +317,7 @@ fn token_count_targets_and_model_support_are_normalized_explicitly() {
     let google_override = registry
         .normalize(&ModelProviderConfig {
             model_acceleration: Default::default(),
+            ultra_models: Default::default(),
             disabled_acceleration_options: Default::default(),
             connection: ModelConnectionId::new("google").unwrap(),
             custom: None,
@@ -478,6 +481,7 @@ fn configured_endpoint_is_required_and_overrides_are_normalized() {
     let normalized = registry
         .normalize(&ModelProviderConfig {
             model_acceleration: Default::default(),
+            ultra_models: Default::default(),
             disabled_acceleration_options: Default::default(),
             connection: ModelConnectionId::new("custom").unwrap(),
             custom: None,
@@ -494,6 +498,7 @@ fn configured_endpoint_is_required_and_overrides_are_normalized() {
 fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
     let invalid_url = ModelProviderConfig {
         model_acceleration: Default::default(),
+        ultra_models: Default::default(),
         disabled_acceleration_options: Default::default(),
         connection: ModelConnectionId::new("custom").unwrap(),
         custom: None,
@@ -509,6 +514,7 @@ fn static_validation_rejects_invalid_urls_and_zero_token_limits() {
 
     let invalid_tokens = ModelProviderConfig {
         model_acceleration: Default::default(),
+        ultra_models: Default::default(),
         disabled_acceleration_options: Default::default(),
         connection: ModelConnectionId::new("custom").unwrap(),
         custom: None,
@@ -528,6 +534,7 @@ fn static_validation_rejects_zero_model_context_limits() {
     let model = ModelId::new("model").unwrap();
     let config = ModelProviderConfig {
         model_acceleration: Default::default(),
+        ultra_models: Default::default(),
         disabled_acceleration_options: Default::default(),
         connection: ModelConnectionId::new("custom").unwrap(),
         custom: None,
@@ -700,6 +707,7 @@ fn static_catalog_exposes_only_model_specific_reasoning_efforts() {
                 ReasoningEffort::Low,
                 ReasoningEffort::Medium,
                 ReasoningEffort::High,
+                ReasoningEffort::ExtraHigh,
                 ReasoningEffort::Max,
             ],
         ),

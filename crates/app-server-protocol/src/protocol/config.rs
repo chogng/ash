@@ -240,6 +240,9 @@ pub struct ProviderConfigDto {
     /// Explicit acceleration option IDs saved separately for each model connection.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub model_acceleration: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    #[ts(as = "Option<Vec<String>>", optional)]
+    pub ultra_models: std::collections::BTreeSet<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub disabled_acceleration_options: BTreeMap<String, std::collections::BTreeSet<String>>,
 }

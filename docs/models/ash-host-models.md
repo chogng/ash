@@ -22,7 +22,7 @@ Kimi K2.7 Code 与 Highspeed 的思考常开、不能关闭；K2.6 才支持开�
 
 这些标签不能跨供应商直接比较，也不能用供应商级的固定枚举替代型号级支持列表。请求构造应依据所选型号和接入协议。
 
-Ash 的模型选择器只显示所接入型号支持的推理档位，`Ultra` / `Ultracode` 不进入此列表。TUI 的 `/effort ultra`、`/effort ultracode` 与 `/effort multitask` 都开启由 Ash 协调的 Multitask，并保留当前 effort；它们不调用外部产品的同名工作流，也不自动改为 `max` / `xhigh`。目录刷新本身不会切换任务模式。使用方式与产品差异见 [Multitask、Ultra 与 Ultracode](../../crates/collaboration-mode-templates/collaboration-modes.md#multitaskultra-与-ultracode)。
+Ash 的模型选择器按有效模型目录显示推理档位。Chat 的 Ultra 开关按型号和连接保存。GPT 开启时使用 `xhigh`，Claude 开启时默认使用 `xhigh`，显式选择的普通档位继续生效。见 [Multitask、Ultra 与 Ultracode](../../crates/collaboration-mode-templates/collaboration-modes.md#multitaskultra-与-ultracode)。
 
 ### 思考开关与 Ash 接入端点
 

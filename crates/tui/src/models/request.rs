@@ -268,6 +268,7 @@ fn configure_model<T: JsonRpcTransport>(
                     model: entry.model.clone(),
                     acceleration: selected.map_or(Patch::Null, Patch::Value),
                     long_context: None,
+                    ultra: None,
                 },
             )?;
         }
@@ -279,6 +280,7 @@ fn configure_model<T: JsonRpcTransport>(
                     model: entry.model.clone(),
                     acceleration: Patch::Missing,
                     long_context: Some(enabled),
+                    ultra: None,
                 },
             )?;
         }

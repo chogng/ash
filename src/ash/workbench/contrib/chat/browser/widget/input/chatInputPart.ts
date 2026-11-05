@@ -2004,6 +2004,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				useWorkbenchModelManagement: this.options.useWorkbenchModelManagement,
 				get chatModelSlider() { return options.chatModelSlider; },
 				onDidChangePresentation: this.modelPickerPresentationChanged.event,
+				getInputLifecycle: () => this.inputLifecycle.signal,
 				getModels: () => this.state.models,
 				canSelectModel: () => this.state.canSelectModel !== false,
 				getSelectedModel: () => this.state.selectedModel,

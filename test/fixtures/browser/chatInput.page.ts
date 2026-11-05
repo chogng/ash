@@ -437,6 +437,7 @@ const modelChanged = resources.add(new Emitter<void>());
 const preferenceWrites: unknown[] = [];
 let selectedReasoningEffort: ModelReasoningEffort | undefined;
 const modelOptions = new URLSearchParams(location.search).get('modelOptions');
+const chatModelSlider = new URLSearchParams(location.search).has('chatModelSlider');
 const multipleAcceleration = new URLSearchParams(location.search).get('acceleration') === 'multiple';
 let holdModelPreference = new URLSearchParams(location.search).has('holdModelPreference');
 let finishModelPreference: ((success: boolean) => void) | undefined;
@@ -457,6 +458,20 @@ if (modelOptions === 'context' || modelOptions === 'none') {
 }
 if (modelOptions === 'effort' || modelOptions === 'context' || modelOptions === 'none') {
 	models = models.map(entry => ({ ...entry, accelerationOptions: [], selectedAcceleration: null }));
+}
+if (chatModelSlider) {
+	const builtin = {
+		...models[0],
+		source: { providerId: 'openai', connectionId: 'openai', metadata: 'providerSeed' },
+		supportedReasoningEfforts: [...models[0].supportedReasoningEfforts ?? [], { effort: 'extraHigh' }],
+		ultra: false,
+	} satisfies ModelCatalogEntry;
+	models = [
+		builtin,
+		{ ...builtin, model: { provider: 'openai', model: 'standard' }, displayName: 'Standard model', accelerationOptions: [], ultra: undefined },
+		{ ...builtin, model: { provider: 'custom-fixture', model: 'custom' }, displayName: 'Custom model', source: { providerId: 'custom-fixture', connectionId: 'custom-fixture', metadata: 'providerLive' } },
+		{ ...builtin, model: { provider: 'anthropic', model: 'claude-fixture' }, displayName: 'Claude Opus 5.5', source: { providerId: 'anthropic', connectionId: 'anthropic', metadata: 'providerSeed' }, accelerationOptions: [] },
+	];
 }
 if (new URLSearchParams(location.search).get('modelSet') === 'multiple') {
 	models = [...models, { ...models[0], model: { provider: 'openai', model: 'extended-model' }, displayName: 'Extended model with a longer display name for coding' }];
@@ -496,6 +511,10 @@ services.registerInstance(ILanguageModelsService, {
 			...entry,
 			selectedAcceleration: update.acceleration !== undefined ? update.acceleration : entry.selectedAcceleration,
 			longContext: update.longContext ?? entry.longContext,
+			ultra: update.ultra ?? entry.ultra,
+			reasoningEffortOverride: model.provider === 'openai' && update.ultra !== undefined
+				? update.ultra ? 'extraHigh' : undefined
+				: entry.reasoningEffortOverride,
 			contextWindow: update.longContext === undefined ? entry.contextWindow : update.longContext ? entry.maximumContextWindow : entry.defaultContextWindow,
 		} : entry);
 		renderModels();
@@ -894,6 +913,7 @@ part = resources.add(services.createInstance(ChatInputPart, document.querySelect
 	modePicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',
 	configureModelInMenu: new URLSearchParams(location.search).has('modelMenuConfiguration'),
+	chatModelSlider,
 	renderSecondaryToolbar: !cowork,
 	workspacePickerDelegate: new URLSearchParams(location.search).has('workspacePicker') ? {
 		getWorkspaces: () => workspaceChoices,
@@ -1199,7 +1219,7 @@ window.ashChatInputIntegration = {
 	openInputLink: () => services.get(ICommandService).executeCommand('editor.action.openLink'),
 	setSlashCommands: slashCommands => { state = { ...state, slashCommands }; part.render(state); },
 	setHistorySkill: digest => part.render({ ...state, skillSelectors: [{ name: 'commit', description: 'Commit the synthetic change', source: 'user', skill: { id: { source: 'user:skill-source:test', name: 'commit' }, version: { type: 'pinnedDigest', digest } } }] }),
-	modelState: () => ({ selectedModel, selectedReasoningEffort, automatic, preferences: models.map(({ model, selectedAcceleration, accelerationOptions, longContext }) => ({ model, selectedAcceleration, accelerationOptions, longContext })), preferenceWrites }),
+	modelState: () => ({ selectedModel, selectedReasoningEffort, automatic, mode: state.mode, preferences: models.map(({ model, selectedAcceleration, accelerationOptions, longContext }) => ({ model, selectedAcceleration, accelerationOptions, longContext })), preferenceWrites }),
 	finishModelPreference: success => finishModelPreference?.(success),
 	restoreProviderModels: () => { models = [...models, ...unavailableProviderModels]; renderModels(); modelChanged.fire(); },
 	setModelsAvailable: available => { if (available) { models = hiddenModels ?? models; hiddenModels = undefined; } else { hiddenModels = models; models = []; } renderModels(); modelChanged.fire(); },

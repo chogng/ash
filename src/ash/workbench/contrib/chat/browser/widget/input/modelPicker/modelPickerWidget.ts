@@ -118,8 +118,11 @@ export class ModelPickerWidget extends Disposable {
 		if (this.delegate.chatModelSlider && selectedPreset && (model?.presets?.length ?? 0) > 1) {
 			label = `${label} · ${selectedPreset.label}`;
 		}
+		const displayedEffort = this.delegate.chatModelSlider && this.delegate.useWorkbenchModelManagement !== false
+			? model?.reasoningEffortOverride ?? selectedEffort
+			: selectedEffort;
 		let effort = this.effortLabel && !automatic && model
-			? getModelConfigEffortLabel(model, selectedEffort)
+			? getModelConfigEffortLabel(model, displayedEffort)
 			: undefined;
 		if (this.delegate.chatModelSlider && effort) {
 			label = `${label} · ${effort}`;

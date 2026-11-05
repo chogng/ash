@@ -437,22 +437,20 @@ fn cooperation_aliases_use_ash_multitask_without_changing_effort() {
                     None,
                 ),
             ));
-            for alias in ["multitask", "ULTRA", "ultracode"] {
-                command(&mut app, "/mode plan");
-                assert_eq!(command(&mut app, &format!("/effort {alias}")), None);
-                assert_eq!(app.collaboration_mode(), CollaborationMode::Multitask);
-                assert_eq!(app.status_line().model_label(), "test-model (high)");
-                assert_eq!(app.approval_mode(), ApprovalMode::Manual);
-                assert!(app.chat_input_focused());
-                assert!(app.input().is_empty());
-                assert!(app.command_panel().is_none());
-                assert_eq!(command(&mut app, &format!("/effort {alias} off")), None);
-                assert_eq!(app.collaboration_mode(), CollaborationMode::Agent);
-                command(&mut app, "/mode plan");
-                command(&mut app, &format!("/effort {alias} off"));
-                assert_eq!(app.collaboration_mode(), CollaborationMode::Plan);
-            }
-            command(&mut app, "/effort ultracode on");
+            command(&mut app, "/mode plan");
+            assert_eq!(command(&mut app, "/effort multitask"), None);
+            assert_eq!(app.collaboration_mode(), CollaborationMode::Multitask);
+            assert_eq!(app.status_line().model_label(), "test-model (high)");
+            assert_eq!(app.approval_mode(), ApprovalMode::Manual);
+            assert!(app.chat_input_focused());
+            assert!(app.input().is_empty());
+            assert!(app.command_panel().is_none());
+            assert_eq!(command(&mut app, "/effort multitask off"), None);
+            assert_eq!(app.collaboration_mode(), CollaborationMode::Agent);
+            command(&mut app, "/mode plan");
+            command(&mut app, "/effort multitask off");
+            assert_eq!(app.collaboration_mode(), CollaborationMode::Plan);
+            command(&mut app, "/effort multitask on");
             assert_eq!(
                 command(&mut app, "/effort high"),
                 Some(AppCommand::Models(crate::models::Command::SetEffort {
@@ -462,7 +460,7 @@ fn cooperation_aliases_use_ash_multitask_without_changing_effort() {
             assert_eq!(app.collaboration_mode(), CollaborationMode::Multitask);
             // Keep the snapshot focused on the final acknowledgement, rather than the matrix.
             app.update(ThreadEvent::TranscriptCleared);
-            command(&mut app, "/effort ultra on");
+            command(&mut app, "/effort multitask on");
             match (screen, language) {
                 (ScreenMode::Fullscreen, crate::nls::Language::English) => {
                     crate::tui_assert_snapshot!(app = &app; "cooperation_alias_fullscreen", render_effort(&app));
@@ -491,7 +489,13 @@ fn cooperation_aliases_use_ash_multitask_without_changing_effort() {
                 _ => {}
             }
             command(&mut app, "/mode plan");
-            for value in ["ultra unknown", "ultracode on extra", "max on"] {
+            for value in [
+                "ultra",
+                "ultracode",
+                "ultra unknown",
+                "ultracode on extra",
+                "max on",
+            ] {
                 assert_eq!(command(&mut app, &format!("/effort {value}")), None);
                 assert_eq!(app.collaboration_mode(), CollaborationMode::Plan);
                 assert_eq!(app.status_line().model_label(), "test-model (high)");
@@ -506,7 +510,7 @@ fn cooperation_alias_during_a_turn_only_changes_the_next_submission() {
     let turn = running_turn(CollaborationMode::Debug);
     app.sync_active_turn(&[turn.clone()]);
     app.update(ThreadEvent::TurnActivityChanged(TurnActivity::Working));
-    assert_eq!(command(&mut app, "/effort ultra"), None);
+    assert_eq!(command(&mut app, "/effort multitask"), None);
     assert_eq!(app.status(), &super::Status::Working);
     app.sync_active_turn(&[turn]);
     assert_eq!(app.collaboration_mode(), CollaborationMode::Multitask);
@@ -932,6 +936,7 @@ fn effort_data() -> crate::models::ModelPickerData {
                 default_context_window: None,
                 long_context: None,
                 selected_acceleration: None,
+                ultra: None,
         acceleration_options: Vec::new(),
                 auto_compact_token_limit: None,
                 available_context_window: None,
@@ -954,6 +959,7 @@ fn effort_data() -> crate::models::ModelPickerData {
                 ],
                 default_reasoning_effort: Some(ReasoningEffort::Low),
                 effective_reasoning_effort: None,
+                reasoning_effort_override: None,
                 default_personality: None,
             },
         ],

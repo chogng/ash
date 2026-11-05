@@ -140,7 +140,7 @@ impl OperationClient for StreamingTransport {
     }
 }
 
-struct StreamingAnthropicTransport;
+struct StreamingAnthropicTransport(&'static str);
 
 impl OperationClient for StreamingAnthropicTransport {
     fn execute(&self, _: &ClientRequest) -> Result<ClientResponse, ClientError> {
@@ -149,9 +149,11 @@ impl OperationClient for StreamingAnthropicTransport {
 
     fn execute_streaming(
         &self,
-        _: &ClientRequest,
+        request: &ClientRequest,
         sink: &mut dyn OperationStreamSink,
     ) -> Result<ClientResponse, ClientError> {
+        let body: Value = serde_json::from_slice(request.body()).unwrap();
+        assert_eq!(body["output_config"]["effort"], self.0);
         let payload = concat!(
             "event: message_start\n",
             "data: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"content\":[],\"stop_reason\":null,\"usage\":{\"input_tokens\":11,\"output_tokens\":0}}}\n\n",
@@ -287,6 +289,7 @@ fn provider_config_with_endpoint(
 ) -> ModelProviderConfig {
     ModelProviderConfig {
         model_acceleration: Default::default(),
+        ultra_models: Default::default(),
         disabled_acceleration_options: Default::default(),
         connection: ash_protocol::ModelConnectionId::new(provider).unwrap(),
         custom: None,
@@ -440,37 +443,127 @@ fn registered_openai_model_propagates_wire_stream_events() {
 }
 
 #[test]
-fn registered_anthropic_model_propagates_wire_stream_events() {
-    let runtime = ModelProviderRuntime::builtin_with_client(Arc::new(StreamingAnthropicTransport));
-    let model = runtime
-        .build_model(
-            &provider_config_with_endpoint("anthropic", "https://example.test"),
-            &model_ref("anthropic", "claude-test"),
-        )
-        .unwrap();
-    let mut events = RecordedModelEvents::default();
+fn registered_anthropic_model_resolves_ultra_and_propagates_wire_stream_events() {
+    let model = model_ref("anthropic", "claude-sonnet-5-5");
+    let mut config = provider_config_with_endpoint("anthropic", "https://example.test");
+    config.ultra_models.insert(model.model.clone());
+    for (selected, wire_effort) in [
+        (None, "xhigh"),
+        (Some(ash_protocol::ReasoningEffort::High), "high"),
+    ] {
+        let runtime = ModelProviderRuntime::builtin_with_client(Arc::new(
+            StreamingAnthropicTransport(wire_effort),
+        ));
+        let model = runtime.build_model(&config, &model).unwrap();
+        let mut events = RecordedModelEvents::default();
 
-    let response = model
-        .stream_with_cancellation(
-            &ModelRequest::text("hello"),
-            &CancellationSource::new().token(),
-            &mut events,
-        )
-        .unwrap();
+        let mut request = ModelRequest::text("hello");
+        request.reasoning = selected.map(|effort| ash_protocol::ReasoningConfig {
+            effort,
+            summary: false,
+        });
+        let response = model
+            .stream_with_cancellation(&request, &CancellationSource::new().token(), &mut events)
+            .unwrap();
 
-    assert_eq!(
-        events.0,
-        vec![
-            ModelStreamEvent::ReasoningDelta("inspect".into()),
-            ModelStreamEvent::TextDelta("live".into()),
-        ]
-    );
-    assert_eq!(response.text(), "live");
-    assert_eq!(response.usage.as_ref().unwrap().output_tokens, Some(4));
-    assert_eq!(
-        response.tool_calls().next().unwrap().arguments,
-        json!({"query": "value"})
-    );
+        assert_eq!(
+            events.0,
+            vec![
+                ModelStreamEvent::ReasoningDelta("inspect".into()),
+                ModelStreamEvent::TextDelta("live".into()),
+                ModelStreamEvent::ToolCallDelta {
+                    id: "toolu_1".into(),
+                    name: "lookup".into(),
+                    arguments: r#"{"query":"value"}"#.into(),
+                },
+            ]
+        );
+        assert_eq!(response.text(), "live");
+        assert_eq!(response.usage.as_ref().unwrap().output_tokens, Some(4));
+        assert_eq!(
+            response.tool_calls().next().unwrap().arguments,
+            json!({"query": "value"})
+        );
+    }
+}
+
+#[test]
+fn registered_openai_models_resolve_ultra_per_model() {
+    let transport = Arc::new(CapturingTransport::new(responses_response("ok")));
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    let mut config = provider_config_with_endpoint("openai", "https://example.test/v1");
+    let mut request = ModelRequest::text("hello");
+    request.reasoning = Some(ash_protocol::ReasoningConfig {
+        effort: ash_protocol::ReasoningEffort::High,
+        summary: false,
+    });
+    for (model, ultra, wire_effort) in [
+        ("gpt-6.1-sol", true, "xhigh"),
+        ("gpt-6-sol", true, "xhigh"),
+        ("gpt-6-sol", false, "high"),
+        ("gpt-6.1-sol", false, "high"),
+        ("gpt-6-luna", true, "high"),
+    ] {
+        let model = model_ref("openai", model);
+        if ultra {
+            config.ultra_models.insert(model.model.clone());
+        } else {
+            config.ultra_models.remove(&model.model);
+        }
+        runtime
+            .build_model(&config, &model)
+            .unwrap()
+            .invoke(&request)
+            .unwrap();
+        let captured = transport.request.lock().unwrap();
+        assert_eq!(
+            captured.as_ref().unwrap().2["reasoning"]["effort"],
+            wire_effort
+        );
+    }
+}
+
+#[test]
+fn openai_ultra_uses_xhigh_with_an_older_catalog_observation() {
+    use ash_protocol::ReasoningEffort;
+
+    let transport = Arc::new(CapturingTransport::new(responses_response("ok")));
+    let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+    let selected = model_ref("openai", "gpt-6-sol");
+    let mut config = provider_config_with_endpoint("openai", "https://example.test/v1");
+    config.ultra_models.insert(selected.model.clone());
+    let mut info = model_provider_info::find_static_model(&selected)
+        .unwrap()
+        .model();
+    info.ultra_reasoning_effort = Some(ReasoningEffort::Max);
+    let mut request = ModelRequest::text("hello");
+    request.reasoning = Some(ash_protocol::ReasoningConfig {
+        effort: ReasoningEffort::High,
+        summary: false,
+    });
+    for (expected_override, wire_effort) in
+        [(Some(ReasoningEffort::ExtraHigh), "xhigh"), (None, "high")]
+    {
+        assert_eq!(config.ultra_mode(&info), expected_override.map(|_| true));
+        assert_eq!(
+            ModelProviderRuntime::ultra_override_reasoning_effort(&config, &info),
+            expected_override
+        );
+        runtime
+            .runtime(
+                ModelRuntimeRequest::new(selected.clone(), config.clone()).with_info(info.clone()),
+            )
+            .unwrap()
+            .invoke(&request)
+            .unwrap();
+        let captured = transport.request.lock().unwrap();
+        assert_eq!(
+            captured.as_ref().unwrap().2["reasoning"]["effort"],
+            wire_effort
+        );
+        info.supported_reasoning_efforts
+            .retain(|option| option.effort != ReasoningEffort::ExtraHigh);
+    }
 }
 
 #[test]

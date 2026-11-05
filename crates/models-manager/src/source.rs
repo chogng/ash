@@ -37,6 +37,9 @@ pub struct ModelMetadataPatch {
     pub capabilities: ModelCapabilitiesPatch,
     pub supported_reasoning_efforts: Option<Vec<ash_protocol::ModelReasoningEffortOption>>,
     pub default_reasoning_effort: Option<ReasoningEffort>,
+    /// Omission preserves known evidence; null withdraws this connection's Ultra mapping.
+    #[serde(default, skip_serializing_if = "ash_protocol::Patch::is_missing")]
+    pub ultra_reasoning_effort: ash_protocol::Patch<ReasoningEffort>,
     pub default_personality: Option<Personality>,
     pub lifecycle: Option<ModelLifecycle>,
     /// Omission preserves known evidence; explicit null withdraws this connection's announcement.
@@ -52,6 +55,14 @@ impl ModelMetadataPatch {
                 .as_deref()
                 .unwrap_or_default(),
         )?;
+        if let ash_protocol::Patch::Value(effort) = self.ultra_reasoning_effort
+            && !self
+                .supported_reasoning_efforts
+                .as_ref()
+                .is_some_and(|options| options.iter().any(|option| option.effort == effort))
+        {
+            return Err("Ultra must map to an observed provider reasoning effort".into());
+        }
         if let ash_protocol::Patch::Value(retirement) = &self.retirement {
             retirement.validate()?;
         }

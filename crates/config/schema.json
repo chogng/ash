@@ -1491,6 +1491,14 @@
         },
         "provider": {
           "$ref": "#/$defs/ProviderId"
+        },
+        "ultraModels": {
+          "description": "Models with the independent Ultra mode enabled on this connection.",
+          "items": {
+            "$ref": "#/$defs/ModelId"
+          },
+          "type": "array",
+          "uniqueItems": true
         }
       },
       "required": [

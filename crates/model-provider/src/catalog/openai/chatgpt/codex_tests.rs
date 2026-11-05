@@ -68,13 +68,19 @@ fn empty_chatgpt_catalog_is_rejected() {
 }
 
 #[test]
-fn codex_ultra_is_not_imported_as_model_reasoning_or_a_default() {
+fn codex_ultra_requires_xhigh() {
     let models: Vec<CodexModel> = serde_json::from_value(serde_json::json!([
         {
-            "id": "gpt-cooperation", "displayName": "GPT Cooperation", "hidden": false,
+            "id": "gpt-6-sol", "displayName": "GPT-6 Sol", "hidden": false,
             "defaultReasoningEffort": "ultra",
             "supportedReasoningEfforts": [
-                {"reasoningEffort": "low"}, {"reasoningEffort": "high"},
+                {"reasoningEffort": "low"}, {"reasoningEffort": "xhigh"},
+                {"reasoningEffort": "max"}, {"reasoningEffort": "ultra"}
+            ]
+        },
+        {
+            "id": "gpt-without-xhigh", "displayName": "GPT Without Xhigh", "hidden": false,
+            "supportedReasoningEfforts": [
                 {"reasoningEffort": "max"}, {"reasoningEffort": "ultra"}
             ]
         }
@@ -98,11 +104,30 @@ fn codex_ultra_is_not_imported_as_model_reasoning_or_a_default() {
                 .collect::<Vec<_>>()),
         Some(vec![
             ReasoningEffort::Low,
-            ReasoningEffort::High,
-            ReasoningEffort::Max
+            ReasoningEffort::ExtraHigh,
+            ReasoningEffort::Max,
         ])
     );
+    assert_eq!(
+        imported[0].metadata.ultra_reasoning_effort,
+        ash_protocol::Patch::Value(ReasoningEffort::ExtraHigh)
+    );
     assert_eq!(imported[0].metadata.default_reasoning_effort, None);
+    assert_eq!(
+        imported[1].metadata.ultra_reasoning_effort,
+        ash_protocol::Patch::Null
+    );
+
+    let entries = serde_json::from_value(serde_json::json!([{
+        "slug": "gpt-6-sol", "visibility": "list", "multi_agent_reasoning_effort": "max",
+        "supported_reasoning_levels": [{"effort": "xhigh"}, {"effort": "max"}, {"effort": "ultra"}]
+    }]))
+    .unwrap();
+    let imported = normalize_models(entries).unwrap();
+    assert_eq!(
+        imported[0].metadata.ultra_reasoning_effort,
+        ash_protocol::Patch::Value(ReasoningEffort::ExtraHigh)
+    );
 }
 
 #[test]

@@ -465,7 +465,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 				await picker.click();
 				const dialog = page.getByRole('dialog', { name: locale === 'en' ? 'Choose a chat model' : '选择聊天模型' });
 				const modelButton = dialog.locator('.ash-chat-slider-model-button');
-				const currentTitle = (await modelButton.textContent())?.split(' · ', 1)[0];
+				const currentTitle = await modelButton.textContent();
 				if (currentTitle !== modelTitle) {
 					await modelButton.click();
 					await page.getByRole('menuitemradio', { name: modelTitle.trim(), exact: true }).click();
@@ -473,7 +473,10 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 				if (presetLabel) {
 					await dialog.getByRole('button', { name: presetLabel.trim(), exact: true }).click();
 				}
-				await expect(modelButton).toHaveAccessibleName(name);
+				await expect(modelButton).toHaveAccessibleName(modelTitle);
+				if (presetLabel) {
+					await expect(dialog.locator('.ash-chat-slider-effort-label')).toHaveText(presetLabel);
+				}
 				await page.keyboard.press('Escape');
 				await expect(picker).toHaveText(name);
 			};
@@ -481,6 +484,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			await picker.press('Enter');
 			const dialog = page.getByRole('dialog', { name: locale === 'en' ? 'Choose a chat model' : '选择聊天模型' });
 			const modelButton = dialog.locator('.ash-chat-slider-model-button');
+			const effortLabel = dialog.locator('.ash-chat-slider-effort-label');
 			const slider = dialog.getByRole('slider');
 			const expectAnchored = async () => {
 				await expect(dialog).toHaveCSS('width', '250px');
@@ -499,15 +503,20 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			await expect(dialog).toHaveClass(/\bash-tabbed-action-list\b/u);
 			const cornerRadius = await dialog.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-cornerRadius-large').trim());
 			await expect(dialog).toHaveCSS('border-top-left-radius', cornerRadius);
-			await expect(modelButton).toHaveAccessibleName(`GPT-6 · ${labels[0]}`);
+			await expect(modelButton).toHaveAccessibleName('GPT-6');
+			await expect(modelButton).toHaveAccessibleDescription(labels[0]!);
+			await expect(modelButton).toHaveAttribute('aria-expanded', 'false');
 			await expect(modelButton).toBeFocused();
-			const [panelBounds, modelBounds, sliderBounds] = await Promise.all([
-				dialog.boundingBox(), modelButton.boundingBox(), slider.boundingBox(),
+			const [panelBounds, modelBounds, effortBounds, sliderBounds] = await Promise.all([
+				dialog.boundingBox(), modelButton.boundingBox(), effortLabel.boundingBox(), slider.boundingBox(),
 			]);
 			expect(Math.abs(modelBounds!.x + modelBounds!.width / 2 - (panelBounds!.x + panelBounds!.width / 2))).toBeLessThan(1);
-			expect(modelBounds!.y + modelBounds!.height).toBeLessThan(sliderBounds!.y);
+			expect(modelBounds!.y + modelBounds!.height).toBeLessThanOrEqual(effortBounds!.y);
+			expect(effortBounds!.y + effortBounds!.height).toBeLessThan(sliderBounds!.y);
 			await page.keyboard.press('Enter');
-			await expect(dialog.getByRole('combobox')).toBeFocused();
+			await expect(modelButton).toHaveAttribute('aria-expanded', 'true');
+			await expect(dialog.getByRole('combobox')).toHaveCount(0);
+			await expect(dialog.getByRole('menuitemradio', { name: 'GPT-6', exact: true })).toBeFocused();
 			const alternativeModel = dialog.getByRole('menuitemradio', { name: 'GPT-5.6 Sol', exact: true });
 			await expect(alternativeModel).toBeInViewport();
 			const [alternativeBounds, expandedButtonBounds] = await Promise.all([
@@ -521,9 +530,12 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			await expect(slider).toBeFocused();
 			await page.keyboard.press('ArrowRight');
 			await expect(slider).toHaveAttribute('aria-valuetext', labels[1]!);
-			await expect(modelButton).toHaveAccessibleName(`GPT-6 · ${labels[1]}`);
+			await expect(modelButton).toHaveAccessibleDescription(labels[1]!);
+			await expect(effortLabel).toHaveText(labels[1]!);
 			await expect(slider).toBeFocused();
 			await expect(page.locator('.ash-chat-slider-tick')).toHaveCount(5);
+			await expect(dialog.getByRole('toolbar')).toHaveCount(0);
+			await expect(dialog.getByText(/^(Faster|Smarter|更快速|更深思)$/u)).toHaveCount(0);
 			await expect(page.getByRole('switch')).toHaveCount(0);
 			await testInfo.attach('chatgpt-model-families', { body: await dialog.screenshot(), contentType: 'image/png' });
 			await page.keyboard.press('Escape');
@@ -576,7 +588,8 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			await expect(page.getByRole('menuitemradio', { name: 'Fixture model' })).toHaveAttribute('aria-checked', 'true');
 			expect(await page.locator('body').getAttribute('data-native-model-providers-read')).toBeNull();
 			await expect(page.getByRole('menuitem', { name: /Add Models|More Models|添加模型|更多模型/ })).toHaveCount(0);
-			await expect(page.getByRole('combobox')).toBeFocused();
+			await expect(page.getByRole('combobox')).toHaveCount(0);
+			await expect(page.getByRole('menuitemradio', { name: 'Fixture model' })).toBeFocused();
 			await page.getByRole('menuitemradio', { name: 'Second model' }).click();
 			await expect(picker).toHaveText('Second model');
 			await expect(picker).toBeFocused();

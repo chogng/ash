@@ -90,6 +90,7 @@ fn entry(provider: &str, model: &str, _access: ModelAccess) -> ModelCatalogEntry
         default_context_window: None,
         long_context: None,
         selected_acceleration: None,
+        ultra: None,
         acceleration_options: Vec::new(),
         auto_compact_token_limit: None,
         available_context_window: None,
@@ -99,6 +100,7 @@ fn entry(provider: &str, model: &str, _access: ModelAccess) -> ModelCatalogEntry
         supported_reasoning_efforts: Vec::new(),
         default_reasoning_effort: None,
         effective_reasoning_effort: None,
+        reasoning_effort_override: None,
         default_personality: None,
     }
 }

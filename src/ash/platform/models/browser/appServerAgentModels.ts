@@ -91,6 +91,7 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 				expected_revision: snapshot.revision,
 				model,
 				...(update.acceleration !== undefined ? { acceleration: update.acceleration } : {}),
+				...(update.ultra !== undefined ? { ultra: update.ultra } : {}),
 				...(update.longContext !== undefined ? { long_context: update.longContext } : {})
 			});
 		},
@@ -301,14 +302,16 @@ function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatal
 		maximumContextWindow: entry.maximum_context_window,
 		accelerationOptions: Object.freeze(entry.acceleration_options.map((option) => Object.freeze({ ...option }))),
 		selectedAcceleration: entry.selected_acceleration,
+		...(entry.ultra != null ? { ultra: entry.ultra } : {}),
 		longContext: entry.long_context,
 		...(entry.discovered === true ? { discovered: true } : {}),
 		contextWindow: entry.context_window,
 		usableContextWindow: entry.usable_context_window,
 		supportedReasoningEfforts: Object.freeze(
-			entry.supported_reasoning_efforts.map((option) => Object.freeze({ ...option }))
+			entry.supported_reasoning_efforts.map(({ effort, description }) => Object.freeze({ effort, description }))
 		),
 		...(entry.default_reasoning_effort != null ? { defaultReasoningEffort: entry.default_reasoning_effort } : {}),
 		...(entry.effective_reasoning_effort != null ? { effectiveReasoningEffort: entry.effective_reasoning_effort } : {}),
+		...(entry.reasoning_effort_override != null ? { reasoningEffortOverride: entry.reasoning_effort_override } : {}),
 	});
 }

@@ -264,8 +264,10 @@ fn normalize_models(
                     "ChatGPT returned an invalid model ID",
                 )
             })?;
-            // Ash keeps Codex Ultra as a cooperation intent, separate from model effort.
-            // Catalog import must not choose Ash's cooperation mode or effort on its behalf.
+            let advertises_ultra = entry
+                .supported_reasoning_levels
+                .iter()
+                .any(|level| level.effort.eq_ignore_ascii_case("ultra"));
             let efforts = entry
                 .supported_reasoning_levels
                 .into_iter()
@@ -278,6 +280,16 @@ fn normalize_models(
                     })
                 })
                 .collect::<Vec<_>>();
+            let ultra_reasoning_effort = if advertises_ultra {
+                model_provider_info::openai_ultra_reasoning_effort(&efforts)
+            } else {
+                None
+            };
+            let default_reasoning_effort = entry
+                .default_reasoning_level
+                .as_deref()
+                .and_then(ReasoningEffort::parse)
+                .filter(|target| efforts.iter().any(|option| option.effort == *target));
             settings.validate().map_err(|message| {
                 CatalogSourceError::new(CatalogSourceErrorKind::InvalidPayload, message)
             })?;
@@ -302,10 +314,9 @@ fn normalize_models(
                     ..ModelCapabilitiesPatch::default()
                 },
                 supported_reasoning_efforts: Some(efforts),
-                default_reasoning_effort: entry
-                    .default_reasoning_level
-                    .as_deref()
-                    .and_then(ReasoningEffort::parse),
+                default_reasoning_effort,
+                ultra_reasoning_effort: ultra_reasoning_effort
+                    .map_or(ash_protocol::Patch::Null, ash_protocol::Patch::Value),
                 ..ModelMetadataPatch::default()
             }))
         })

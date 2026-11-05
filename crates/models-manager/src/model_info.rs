@@ -82,7 +82,10 @@ impl ModelCatalogEntry {
             provider: config.provider.clone(),
             message: message.to_owned(),
         };
-        if update.acceleration.is_missing() && update.long_context.is_none() {
+        if update.acceleration.is_missing()
+            && update.long_context.is_none()
+            && update.ultra.is_none()
+        {
             return Err(invalid("model preference update must contain a change"));
         }
         if let ash_protocol::Patch::Value(option) = &update.acceleration
@@ -99,6 +102,18 @@ impl ModelCatalogEntry {
             return Err(invalid(
                 "long context is unavailable for this model connection",
             ));
+        }
+        if update.ultra == Some(true) && config.ultra_mode(&info).is_none() {
+            return Err(invalid(
+                "Ultra mode is unavailable for this model connection",
+            ));
+        }
+        if let Some(enabled) = update.ultra {
+            if enabled {
+                config.ultra_models.insert(info.id.clone());
+            } else {
+                config.ultra_models.remove(&info.id);
+            }
         }
         match &update.acceleration {
             ash_protocol::Patch::Missing => {}
@@ -198,6 +213,7 @@ impl ModelCatalogEntry {
 pub struct ModelPreferencesUpdate {
     pub acceleration: ash_protocol::Patch<String>,
     pub long_context: Option<bool>,
+    pub ultra: Option<bool>,
 }
 
 pub(crate) fn unlisted_entry(provider: &ProviderId, model: &ModelId) -> ModelCatalogEntry {

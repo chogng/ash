@@ -194,7 +194,8 @@ test.describe('Unified Chat sidebar', () => {
 		await writeUserSettings(workbench.page, JSON.stringify({ ...JSON.parse(settings.content), 'models.hidden': [] }), settings.revision);
 		await expect(ashChoice).toHaveCount(0);
 		await expect(webChoice).toHaveAttribute('aria-checked', 'true');
-		await expect(picker.getByRole('combobox')).toBeFocused();
+		await expect(picker.getByRole('combobox')).toHaveCount(0);
+		await expect(webChoice).toBeFocused();
 		await page.keyboard.press('Escape');
 		await expect(modelButton).toBeFocused();
 
@@ -261,6 +262,8 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(codeTools).toHaveCount(0);
 		await ash.locator('.ash-chat-input-model-action').press('ArrowDown');
 		await expect(picker.locator('.ash-chat-model-slider-widget')).toBeVisible();
+		await expect(picker.getByRole('combobox')).toHaveCount(0);
+		await expect(picker.getByRole('toolbar')).toHaveCount(0);
 		await expect(picker.getByRole('menuitemradio', { name: ashFixtureModel.model, exact: true })).toHaveAttribute('aria-checked', 'true');
 		await page.keyboard.press('Escape');
 		await codeMode.click();

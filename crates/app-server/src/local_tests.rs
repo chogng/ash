@@ -3123,6 +3123,7 @@ fn sol_usable_context_is_independent_of_compaction_and_preserves_output_reservat
                 &ash_models_manager::ModelPreferencesUpdate {
                     acceleration: Patch::Missing,
                     long_context: Some(expanded),
+                    ultra: None,
                 },
             )
             .unwrap();
@@ -3642,6 +3643,88 @@ fn config_backed_model_service_resolves_model_reasoning_effort() {
             .unwrap()
             .effort,
         ReasoningEffort::None
+    );
+
+    let claude = ModelRef::new(
+        ProviderId::new("anthropic").unwrap(),
+        ModelId::new("claude-sonnet-5-5").unwrap(),
+    );
+    let update_ultra = |model: &ModelRef, enabled: bool| {
+        let revision = service.config.read_snapshot().unwrap().revision;
+        service
+            .set_preferences(crate::model_catalog::ModelPreferencesCommand {
+                command_id: CommandId::new(format!("{}-ultra-{enabled}", model.model)).unwrap(),
+                expected_revision: revision,
+                model: model.clone(),
+                update: ash_models_manager::ModelPreferencesUpdate {
+                    acceleration: Patch::Missing,
+                    long_context: None,
+                    ultra: Some(enabled),
+                },
+            })
+            .unwrap();
+    };
+    let gpt_6_sol = ModelRef::new(sol.provider.clone(), ModelId::new("gpt-6-sol").unwrap());
+    for (model, ordinary_effort) in [
+        (&sol, ReasoningEffort::Medium),
+        (&gpt_6_sol, ReasoningEffort::None),
+    ] {
+        for (enabled, expected) in [(true, Some(ReasoningEffort::ExtraHigh)), (false, None)] {
+            update_ultra(model, enabled);
+            let entry = service
+                .list()
+                .unwrap()
+                .into_iter()
+                .find(|entry| &entry.model == model)
+                .unwrap();
+            assert_eq!(entry.reasoning_effort_override, expected);
+            assert_eq!(entry.effective_reasoning_effort, Some(ordinary_effort));
+        }
+    }
+    update_ultra(&claude, true);
+    let entry = service
+        .list()
+        .unwrap()
+        .into_iter()
+        .find(|entry| entry.model == claude)
+        .unwrap();
+    assert_eq!(entry.ultra, Some(true));
+    assert_eq!(entry.reasoning_effort_override, None);
+    assert_eq!(
+        entry.effective_reasoning_effort,
+        Some(ReasoningEffort::High)
+    );
+    let frozen = service
+        .snapshot(ModelSelection::Session(&claude))
+        .unwrap()
+        .unwrap();
+    for (requested, expected) in [
+        (None, ReasoningEffort::ExtraHigh),
+        (Some(ReasoningEffort::Low), ReasoningEffort::Low),
+    ] {
+        for effective in [
+            service.reasoning_config(ModelSelection::Session(&claude), requested),
+            frozen.reasoning_config(ModelSelection::ConfiguredDefault, requested),
+        ] {
+            assert_eq!(effective.unwrap().unwrap().effort, expected);
+        }
+    }
+    update_ultra(&claude, false);
+    assert_eq!(
+        service
+            .reasoning_config(ModelSelection::Session(&claude), None)
+            .unwrap()
+            .unwrap()
+            .effort,
+        ReasoningEffort::High
+    );
+    assert_eq!(
+        frozen
+            .reasoning_config(ModelSelection::ConfiguredDefault, None)
+            .unwrap()
+            .unwrap()
+            .effort,
+        ReasoningEffort::ExtraHigh
     );
 }
 
@@ -5491,6 +5574,7 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
                 .into(),
             ),
             long_context: Some(enabled),
+            ultra: None,
         },
     };
     assert!(matches!(
@@ -5603,6 +5687,7 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
             update: ModelPreferencesUpdate {
                 acceleration: ash_protocol::Patch::Null,
                 long_context: None,
+                ultra: None,
             },
         })
         .unwrap();
@@ -5703,6 +5788,7 @@ fn model_preferences_follow_chatgpt_ultrafast_permission_and_allow_clearing_revo
         update: ModelPreferencesUpdate {
             acceleration,
             long_context: None,
+            ultra: None,
         },
     };
     assert!(

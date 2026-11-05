@@ -2632,6 +2632,7 @@ fn configured_model_summary() -> ModelSummary {
                 default_context_window: Some(200_000),
                 long_context: None,
                 selected_acceleration: None,
+                ultra: None,
                 acceleration_options: Vec::new(),
                 auto_compact_token_limit: None,
                 available_context_window: Some(180_000),
@@ -2644,6 +2645,7 @@ fn configured_model_summary() -> ModelSummary {
                 ],
                 default_reasoning_effort: Some(ReasoningEffort::High),
                 effective_reasoning_effort: None,
+                reasoning_effort_override: None,
                 default_personality: None,
             },
         ],
@@ -2725,6 +2727,7 @@ fn custom_model_choices(
         "custom-gateway".into(),
         ProviderConfigDto {
             model_acceleration: Default::default(),
+            ultra_models: Default::default(),
             disabled_acceleration_options: Default::default(),
             connection: "custom-gateway".into(),
             provider: "custom-gateway".into(),
@@ -2774,6 +2777,7 @@ fn custom_model_choices(
                 default_context_window: Some(272_000),
                 long_context: None,
                 selected_acceleration: None,
+                ultra: None,
                 acceleration_options: Vec::new(),
                 auto_compact_token_limit: None,
                 available_context_window: Some(240_000),
@@ -2783,6 +2787,7 @@ fn custom_model_choices(
                 supported_reasoning_efforts: vec![],
                 default_reasoning_effort: None,
                 effective_reasoning_effort: None,
+                reasoning_effort_override: None,
                 default_personality: None,
             },
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(
@@ -2832,6 +2837,7 @@ fn model_picker_shows_signed_in_chatgpt_and_xai_in_one_chinese_list() {
             provider.into(),
             ProviderConfigDto {
                 model_acceleration: Default::default(),
+                ultra_models: Default::default(),
                 disabled_acceleration_options: Default::default(),
                 connection: provider.into(),
                 provider: provider.into(),

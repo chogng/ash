@@ -63,9 +63,7 @@ pub(crate) fn parse_effort(
 ) -> Result<EffortSelection, String> {
     let mut arguments = value.split_whitespace();
     let selection = arguments.next().unwrap_or_default().to_ascii_lowercase();
-    // These are product cooperation intents, never model effort values. Canonical
-    // submissions keep Ash's mode ID and the independently selected effort.
-    if matches!(selection.as_str(), "multitask" | "ultra" | "ultracode") {
+    if selection == "multitask" {
         let mode = match arguments.next().map(str::to_ascii_lowercase).as_deref() {
             None | Some("on") => CollaborationMode::Multitask,
             Some("off") if current_mode == CollaborationMode::Multitask => CollaborationMode::Agent,
@@ -87,7 +85,7 @@ pub(crate) fn parse_effort(
 }
 
 fn effort_usage() -> &'static str {
-    "Use /effort <level> or /effort multitask|ultra|ultracode [on|off]"
+    "Use /effort <level> or /effort multitask [on|off]"
 }
 
 pub(crate) fn mode_choices(current: CollaborationMode) -> ComposerOptions {

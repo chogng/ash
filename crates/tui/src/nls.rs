@@ -1586,10 +1586,10 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "<agent|plan|debug|multitask|ask>",
     ),
     translation(
-        "Use /effort <level> or /effort multitask|ultra|ultracode [on|off]",
-        "/effort <推論レベル> または /effort multitask|ultra|ultracode [on|off] を使用",
-        "使用 /effort <档位> 或 /effort multitask|ultra|ultracode [on|off]",
-        "Utiliser /effort <niveau> ou /effort multitask|ultra|ultracode [on|off]",
+        "Use /effort <level> or /effort multitask [on|off]",
+        "/effort <推論レベル> または /effort multitask [on|off] を使用",
+        "使用 /effort <档位> 或 /effort multitask [on|off]",
+        "Utiliser /effort <niveau> ou /effort multitask [on|off]",
     ),
     translation(
         "<effort> | multitask [on|off]",

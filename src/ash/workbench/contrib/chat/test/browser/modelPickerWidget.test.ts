@@ -6,6 +6,8 @@ import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import type { TabbedActionListWidget } from '../../../../../platform/actionWidget/browser/tabbedActionListWidget.js';
 import type { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import type { ILanguageModelsService } from '../../common/languageModels.js';
 import type { IModelPickerDelegate } from '../../browser/widget/input/modelPicker/modelPickerActionItem.js';
 import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../services/chat/common/modelCatalog.js';
 import { ChatModelSliderWidget } from '../../browser/widget/input/modelPicker/chatModelSliderWidget.js';
@@ -69,7 +71,7 @@ test('The Chat slider displays effective native reasoning effort and adjusts it 
 				dispose() { },
 				[Symbol.dispose]() { },
 			}),
-		} as unknown as IInstantiationService));
+		} as unknown as IInstantiationService, {} as ILanguageModelsService, {} as INotificationService));
 		picker.show(document.querySelector('button')!);
 		const slider = () => panel.querySelector<HTMLElement>('[role="slider"]')!;
 		assert.equal(slider().getAttribute('aria-valuetext'), 'Medium');

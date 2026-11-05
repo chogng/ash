@@ -301,6 +301,12 @@ fn apply_patch(record: &mut CatalogRecord, patch: &ModelMetadataPatch, source: M
                 merged
             })
             .collect();
+        record.info.ultra_reasoning_effort = match patch.ultra_reasoning_effort {
+            ash_protocol::Patch::Missing => record.info.ultra_reasoning_effort,
+            ash_protocol::Patch::Null => None,
+            ash_protocol::Patch::Value(effort) => Some(effort),
+        }
+        .filter(|effort| record.supports_effort(*effort));
         record.provenance.supported_reasoning_efforts = Some(source);
     }
     if let Some(effort) = patch

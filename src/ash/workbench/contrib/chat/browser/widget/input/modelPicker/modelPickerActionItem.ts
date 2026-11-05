@@ -12,6 +12,7 @@ export interface IModelPickerDelegate {
 	readonly useWorkbenchModelManagement?: boolean;
 	readonly chatModelSlider?: boolean;
 	readonly onDidChangePresentation: Event<void>;
+	getInputLifecycle?(): AbortSignal;
 	getModels(): readonly ModelCatalogEntry[];
 	getSelectedModel(): ModelRef | undefined;
 	getSelectedReasoningEffort(): ModelReasoningEffort | undefined;

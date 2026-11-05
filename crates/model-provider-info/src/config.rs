@@ -2,9 +2,12 @@ use crate::ApiProfile;
 use crate::BaseUrlNormalization;
 use crate::NormalizedInputTokenCountConfig;
 use crate::ProviderConfigError;
+use ash_protocol::Model;
 use ash_protocol::ModelConnectionId;
 use ash_protocol::ModelId;
+use ash_protocol::ModelReasoningEffortOption;
 use ash_protocol::ProviderId;
+use ash_protocol::ReasoningEffort;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -43,9 +46,33 @@ pub struct ModelProviderConfig {
     /// Explicit option IDs, scoped to this connection and model. Absence uses request defaults.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub model_acceleration: BTreeMap<ModelId, String>,
+    /// Models with the independent Ultra mode enabled on this connection.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub ultra_models: BTreeSet<ModelId>,
     /// Each option can be denied independently of the saved selection.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub disabled_acceleration_options: BTreeMap<ModelId, BTreeSet<String>>,
+}
+
+/// Ash uses xhigh for OpenAI Ultra when the active catalog supports it.
+pub fn openai_ultra_reasoning_effort(
+    supported: &[ModelReasoningEffortOption],
+) -> Option<ReasoningEffort> {
+    supported
+        .iter()
+        .find(|option| option.effort == ReasoningEffort::ExtraHigh)
+        .map(|option| option.effort)
+}
+
+/// Resolves declared Ultra capability using the current connection's effort list.
+pub fn effective_ultra_reasoning_effort(provider: &str, model: &Model) -> Option<ReasoningEffort> {
+    let declared = model.ultra_reasoning_effort?;
+    match provider {
+        // Older subscription observations may still carry Codex's Max mapping.
+        "openai" => openai_ultra_reasoning_effort(&model.supported_reasoning_efforts),
+        "anthropic" => Some(declared),
+        _ => None,
+    }
 }
 
 impl ModelProviderConfig {
@@ -58,6 +85,7 @@ impl ModelProviderConfig {
             max_output_tokens: None,
             model_context: BTreeMap::new(),
             model_acceleration: BTreeMap::new(),
+            ultra_models: BTreeSet::new(),
             disabled_acceleration_options: BTreeMap::new(),
         }
     }
@@ -66,6 +94,17 @@ impl ModelProviderConfig {
         let mut config = Self::new(crate::connection_provider(&connection));
         config.connection = connection;
         config
+    }
+
+    /// None means this connection does not expose the switch for the current model.
+    pub fn ultra_mode(&self, model: &Model) -> Option<bool> {
+        if self.custom.is_none()
+            && effective_ultra_reasoning_effort(self.provider.as_str(), model).is_some()
+        {
+            Some(self.ultra_models.contains(&model.id))
+        } else {
+            None
+        }
     }
 
     pub fn access_mode(&self) -> ProviderAccessMode {
@@ -316,6 +355,9 @@ pub struct NormalizedModelProviderConfig {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub model_aliases: BTreeMap<ModelId, ModelId>,
     pub model_acceleration: BTreeMap<ModelId, String>,
+    /// Models with the independent Ultra mode enabled on this connection.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub ultra_models: BTreeSet<ModelId>,
     pub disabled_acceleration_options: BTreeMap<ModelId, BTreeSet<String>>,
     pub api_profile: ApiProfile,
     pub base_url: String,

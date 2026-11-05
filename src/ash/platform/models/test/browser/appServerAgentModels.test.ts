@@ -49,6 +49,8 @@ test('Model preferences send a targeted update with the current revision', async
 	const model = { provider: 'openai', model: 'test-model' };
 	await api.setModelPreferences(model, { acceleration: 'priority' });
 	await api.setModelPreferences(model, { longContext: true });
+	await api.setModelPreferences(model, { ultra: true });
+	await api.setModelPreferences(model, { ultra: false });
 	await api.setModelPreferences(model, { acceleration: null });
 	assert.deepEqual(
 		writes.map(({ command_id, ...update }) => {
@@ -58,10 +60,12 @@ test('Model preferences send a targeted update with the current revision', async
 		[
 			{ expected_revision: 7, model, acceleration: 'priority' },
 			{ expected_revision: 7, model, long_context: true },
+			{ expected_revision: 7, model, ultra: true },
+			{ expected_revision: 7, model, ultra: false },
 			{ expected_revision: 7, model, acceleration: null }
 		]
 	);
-	assert.equal(new Set(writes.map((write) => write.command_id)).size, 3);
+	assert.equal(new Set(writes.map((write) => write.command_id)).size, 5);
 });
 
 test('Review model saves only independent review settings with the current config revision', async () => {

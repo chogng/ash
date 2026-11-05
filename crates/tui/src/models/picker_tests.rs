@@ -31,6 +31,7 @@ fn catalog_entry(provider: &str, model: &str, name: &str) -> ModelCatalogEntry {
 fn provider_config(provider: &str) -> ProviderConfigDto {
     ProviderConfigDto {
         model_acceleration: Default::default(),
+        ultra_models: Default::default(),
         disabled_acceleration_options: Default::default(),
         connection: provider.into(),
         provider: provider.into(),

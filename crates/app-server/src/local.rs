@@ -2859,11 +2859,7 @@ impl ModelService for ConfigBackedModelService {
             return Ok(None);
         }
         let info = self.context_catalog(&config)?.info(&config)?;
-        Ok(model_reasoning_config(
-            &info,
-            config.model_reasoning_effort,
-            requested,
-        ))
+        Ok(invocation_reasoning_config(&config, &info, requested))
     }
 
     fn input_token_measurement_capability(
@@ -3345,6 +3341,9 @@ fn runtime_catalog_entry(
     }
     result.maximum_context_window = context.maximum_window;
     result.long_context = entry.long_context(provider_config);
+    result.ultra = provider_config.ultra_mode(&context.info);
+    result.reasoning_effort_override =
+        ModelProviderRuntime::ultra_override_reasoning_effort(provider_config, &context.info);
     result.selected_acceleration = provider_config
         .model_acceleration
         .get(&entry.model().model)
@@ -3745,14 +3744,37 @@ impl FrozenModelSource {
                 Arc::new(UnavailableModel::new(error.to_string())) as Arc<dyn ModelInvoker>
             }
         };
+        let ultra_default_effort =
+            config
+                .selected_provider()
+                .zip(info.as_ref().ok())
+                .and_then(|(provider, model)| {
+                    ModelProviderRuntime::ultra_default_reasoning_effort(provider, model)
+                });
         Ok(Arc::new(FrozenModelService {
             source: self.clone(),
             provider: ProviderModelService::new(provider),
             budget,
             billing_scope: billing_scope_for_config(&config),
             reasoning_model: info.ok(),
+            ultra_default_effort,
         }))
     }
+}
+
+fn invocation_reasoning_config(
+    config: &ResolvedConfig,
+    info: &ash_protocol::ModelInfo,
+    requested: Option<ash_protocol::ReasoningEffort>,
+) -> Option<ash_protocol::ReasoningConfig> {
+    let ultra_default_effort = config
+        .selected_provider()
+        .and_then(|provider| ModelProviderRuntime::ultra_default_reasoning_effort(provider, info));
+    model_reasoning_config(
+        info,
+        ultra_default_effort.or(config.model_reasoning_effort),
+        requested,
+    )
 }
 
 fn model_reasoning_config(
@@ -3785,6 +3807,7 @@ struct FrozenModelService {
     budget: Result<ContextBudget, CoreError>,
     billing_scope: ModelBillingScope,
     reasoning_model: Option<ash_protocol::ModelInfo>,
+    ultra_default_effort: Option<ash_protocol::ReasoningEffort>,
 }
 impl ModelService for FrozenModelService {
     fn output_transport(
@@ -3841,7 +3864,12 @@ impl ModelService for FrozenModelService {
         requested: Option<ash_protocol::ReasoningEffort>,
     ) -> Result<Option<ash_protocol::ReasoningConfig>, CoreError> {
         Ok(self.reasoning_model.as_ref().and_then(|info| {
-            model_reasoning_config(info, self.source.config.model_reasoning_effort, requested)
+            model_reasoning_config(
+                info,
+                self.ultra_default_effort
+                    .or(self.source.config.model_reasoning_effort),
+                requested,
+            )
         }))
     }
     fn input_token_measurement_capability(

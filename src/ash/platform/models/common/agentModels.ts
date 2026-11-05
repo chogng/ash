@@ -78,9 +78,13 @@ export interface ModelCatalogEntry {
 	readonly maximumContextWindow?: number | null;
 	readonly accelerationOptions?: readonly ModelAccelerationOption[];
 	readonly selectedAcceleration?: string | null;
+	/** Undefined when Ultra is unavailable for the model connection. */
+	readonly ultra?: boolean;
 	readonly supportedReasoningEfforts?: readonly ModelReasoningEffortOption[];
 	readonly defaultReasoningEffort?: ModelReasoningEffort;
 	readonly effectiveReasoningEffort?: ModelReasoningEffort;
+	/** Effective even when the conversation supplies an explicit effort. */
+	readonly reasoningEffortOverride?: ModelReasoningEffort;
 	readonly presets?: readonly { readonly id: string; readonly label: string; readonly isPro?: boolean; readonly thinkingEffort?: string; }[];
 }
 
@@ -148,6 +152,7 @@ export type ModelProviderTestResult =
 
 export interface ModelPreferencesUpdate {
 	readonly acceleration?: string | null;
+	readonly ultra?: boolean;
 	readonly longContext?: boolean;
 }
 
