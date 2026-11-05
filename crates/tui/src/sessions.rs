@@ -43,6 +43,15 @@ use ash_app_server_protocol::protocol::session::SessionRequestParams;
 use ash_protocol::Session;
 use ash_protocol::SessionId;
 
+/// The backend projects the first-message preview until a name is saved.
+fn session_title(session: &Session) -> &str {
+    if session.title.is_empty() {
+        "TUI conversation"
+    } else {
+        &session.title
+    }
+}
+
 /// A completed session operation delivered to the TUI state owner.
 pub(crate) enum Event {
     GroupingSaveFailed(String),

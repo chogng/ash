@@ -301,11 +301,13 @@ suite('ChatGPT transport', () => {
 		const channel = scopedChannel(transport, auth);
 		for (const [method, path, body] of [
 			['GET', '/pins?item_type=conversation', undefined],
+			['GET', '/gizmos/g-p-project/conversations?limit=20&owned_only=false&cursor=next%2Bpage', undefined],
 			['POST', '/conversation/id/chat/rename', { title: 'Renamed' }],
 			['PATCH', '/conversation/chat', { is_starred: true }],
 			['PATCH', '/conversation/chat', { is_archived: true }],
 			['PATCH', '/conversation/chat', { gizmo_id: 'g-p-project' }],
 			['DELETE', '/conversation/id/chat', undefined],
+			['DELETE', '/gizmos/g-p-project', undefined],
 			['POST', '/share/v2/create', { conversation_id: 'chat', current_node_id: 'reply', is_anonymous: true }],
 			['POST', '/f/conversation/resume', { conversation_id: 'chat', offset: 0 }],
 		] as const) {
@@ -313,9 +315,17 @@ suite('ChatGPT transport', () => {
 			await channel.call('', 'request', [id, { path: '/service/backend-api' + path, method, headers: {}, ...(body ? { body: JSON.stringify(body) } : {}) }]);
 			await channel.call('', 'cancel', [id]);
 		}
-		assert.deepEqual(calls.map(call => call.method), ['GET', 'POST', 'PATCH', 'PATCH', 'PATCH', 'DELETE', 'POST', 'POST']);
+		assert.deepEqual(calls.map(call => call.method), ['GET', 'GET', 'POST', 'PATCH', 'PATCH', 'PATCH', 'DELETE', 'DELETE', 'POST', 'POST']);
+		assert.deepEqual(calls[7], { method: 'DELETE', path: '/backend-api/gizmos/g-p-project' });
 		for (const [method, path, body] of [
 			['POST', '/pins', '{}'],
+			['POST', '/gizmos/g-p-project/conversations', '{}'],
+			['GET', '/gizmos/g-custom/conversations?limit=20&owned_only=false', undefined],
+			['GET', '/gizmos/g-p-project/conversations?limit=20&owned_only=false&cursor=one&cursor=two', undefined],
+			['DELETE', '/gizmos/g-custom', undefined],
+			['DELETE', '/gizmos/g-p-project/conversations', undefined],
+			['DELETE', '/gizmos/g-p-project?all=true', undefined],
+			['DELETE', '/gizmos/g-p-project', '{}'],
 			['DELETE', '/models', undefined], ['POST', '/conversation/chat', '{}'], ['PATCH', '/conversation/chat', '{"is_visible":false}'],
 			['PATCH', '/conversation/chat', '{"is_starred":true,"gizmo_id":"g-p-project"}'],
 			['PATCH', '/conversation/chat', '{"gizmo_id":"../../other"}'], ['DELETE', '/conversation/id/chat', '{}'],
@@ -323,7 +333,7 @@ suite('ChatGPT transport', () => {
 		] as const) {
 			await assert.rejects(channel.call('', 'request', [randomUUID(), { path: '/service/backend-api' + path, method, headers: {}, body }]), TypeError);
 		}
-		assert.equal(calls.length, 8);
+		assert.equal(calls.length, 10);
 	}));
 
 	test('only permits ChatGPT response audio with one valid conversation and message', async () => fixture(async auth => {

@@ -3927,6 +3927,7 @@ fn temporary_dir(label: &str) -> std::path::PathBuf {
 
 fn manager_state_session(id: &str) -> Session {
     Session {
+        surface: None,
         source: None,
         model: None,
         session_id: SessionId::new(id).unwrap(),
@@ -4895,4 +4896,17 @@ fn terminal_dictation_controls_are_idempotent_preserve_the_draft_and_ignore_shor
         assert_eq!(app.take_dictation_submission(), None);
         assert!(app.input().contains("Natural language, with punctuation!"));
     }
+}
+
+#[test]
+fn recap_slash_dispatches_as_a_product_command() {
+    let mut app = App::new();
+    app.insert_text("/recap");
+    let Some(AppCommand::Thread(crate::thread::Command::ExecuteProductCommand(invocation))) =
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("recap must run through the typed product dispatcher");
+    };
+    assert_eq!(invocation.command.name, "recap");
+    assert!(invocation.arguments.is_empty());
 }

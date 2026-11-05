@@ -5,6 +5,147 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 suite('model picker browser component', () => {
 	const browserTests = useBrowserTests();
 
+	test('the Chat slider exposes Fast and Ultra for eligible built-in models', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?chatModelSlider&acceleration=multiple&holdModelPreference&locale=zh-CN&theme=hcDark');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		await page.locator('.ash-chat-input-model-action').press('ArrowDown');
+		const picker = page.getByRole('dialog', { name: '选择聊天模型' });
+		const modelButton = picker.locator('.ash-chat-slider-model-button');
+		const effortLabel = picker.locator('.ash-chat-slider-effort-label');
+		const fast = picker.getByRole('button', { name: '快速模式', exact: true });
+		const ultra = picker.getByRole('button', { name: 'Ultra 模式', exact: true });
+		const slider = picker.getByRole('slider');
+		const [fastBounds, modelBounds, ultraBounds] = await Promise.all([fast.boundingBox(), modelButton.boundingBox(), ultra.boundingBox()]);
+		expect(fastBounds!.x + fastBounds!.width).toBeLessThan(modelBounds!.x);
+		expect(ultraBounds!.x).toBeGreaterThan(modelBounds!.x + modelBounds!.width);
+		await expect(fast.locator('.ash-icon-lightning')).toBeVisible();
+		await fast.press('Space');
+		await page.evaluate(() => window.ashChatInputIntegration.finishModelPreference(false));
+		await expect(page.getByLabel('Context error')).toHaveText('无法更新模型设置');
+		await expect(fast).toHaveAttribute('aria-pressed', 'false');
+		await fast.press('Space');
+		await expect(fast).toHaveAttribute('aria-pressed', 'true');
+		await expect(fast.locator('.ash-icon-lightning-filled')).toBeVisible();
+		await expect(fast).toBeFocused();
+		await expect(slider).toHaveAttribute('aria-valuetext', '低');
+		await slider.press('ArrowRight');
+		await expect(slider).toHaveAttribute('aria-valuetext', '高');
+		const ticks = await slider.getByRole('button').count();
+		await ultra.click();
+		await expect(ultra).toHaveAttribute('aria-pressed', 'true');
+		await expect(ultra.locator('.ash-icon-brain')).toBeVisible();
+		await expect(fast).toHaveAttribute('aria-pressed', 'true');
+		await expect(slider).toHaveAttribute('aria-valuetext', '极高');
+		await expect(slider.locator('.ash-chat-slider-thumb')).toHaveAttribute('style', 'left: 94%;');
+		await expect(slider).toHaveAccessibleDescription('Ultra 使用极高档。调整推理档位会关闭 Ultra。');
+		await expect(modelButton).toHaveAccessibleName('Test Model');
+		await expect(modelButton).toHaveAccessibleDescription('极高');
+		await expect(effortLabel).toHaveText('极高');
+		const modelFontSize = await modelButton.locator('.ash-chat-slider-model-title').evaluate(element => getComputedStyle(element).fontSize);
+		await expect(effortLabel).toHaveCSS('font-size', modelFontSize);
+		await expect(picker.getByText('推荐', { exact: true })).toHaveCount(0);
+		await expect(slider.getByRole('button')).toHaveCount(ticks);
+		await expect(ultra).toBeFocused();
+		await slider.getByRole('button', { name: '极高' }).click();
+		await expect(ultra).toHaveAttribute('aria-pressed', 'true');
+		await ultra.press('Space');
+		await expect(ultra).toHaveAttribute('aria-pressed', 'false');
+		await expect(slider).toHaveAttribute('aria-valuetext', '高');
+		await expect(slider.locator('.ash-chat-slider-thumb')).toHaveAttribute('style', 'left: 50%;');
+		await expect(effortLabel).toHaveText('高');
+		await slider.press('ArrowLeft');
+		await expect(slider).toHaveAttribute('aria-valuetext', '低');
+		await ultra.click();
+		await expect(slider).toHaveAttribute('aria-valuetext', '极高');
+		await slider.press('ArrowLeft');
+		await expect(ultra).toHaveAttribute('aria-pressed', 'false');
+		await expect(slider).toHaveAttribute('aria-valuetext', '高');
+		await expect(slider).toBeFocused();
+		await expect(effortLabel).toHaveText('高');
+		await fast.press('Space');
+		await expect(fast).toHaveAttribute('aria-pressed', 'false');
+		expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toMatchObject({
+			mode: 'agent',
+			selectedReasoningEffort: 'high',
+			preferenceWrites: [{ acceleration: 'priority' }, { ultra: true }, { ultra: false }, { ultra: true }, { ultra: false }, { acceleration: null }]
+				.map(update => ({ model: { provider: 'openai', model: 'test-model' }, update })),
+		});
+
+		await modelButton.click();
+		await picker.getByRole('menuitemradio', { name: 'Standard model' }).click();
+		await expect(fast).toHaveCount(0);
+		await expect(ultra).toHaveCount(0);
+		await modelButton.click();
+		await picker.getByRole('menuitemradio', { name: 'Custom model' }).click();
+		await expect(fast).toHaveCount(0);
+		await expect(ultra).toHaveCount(0);
+		await expect(slider).toBeVisible();
+
+		await modelButton.click();
+		await picker.getByRole('menuitemradio', { name: 'Claude Opus 5.5' }).click();
+		await expect(modelButton).toHaveAccessibleName('Claude Opus 5.5');
+		const [claudeButtonBounds, effortLabelBounds] = await Promise.all([modelButton.boundingBox(), effortLabel.boundingBox()]);
+		expect(claudeButtonBounds!.y + claudeButtonBounds!.height).toBeLessThanOrEqual(effortLabelBounds!.y);
+		const claudeEffort = await slider.getAttribute('aria-valuetext');
+		await ultra.click();
+		await expect(ultra).toHaveAttribute('aria-pressed', 'true');
+		await expect(slider).toHaveAttribute('aria-valuetext', claudeEffort!);
+		await slider.getByRole('button', { name: '极高' }).click();
+		await expect(slider).toHaveAttribute('aria-valuetext', '极高');
+		await expect(ultra).toHaveAttribute('aria-pressed', 'true');
+		expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toMatchObject({ selectedReasoningEffort: 'extraHigh' });
+		await ultra.press('Space');
+		await expect(slider).toHaveAttribute('aria-valuetext', '极高');
+	});
+
+	for (const success of [true, false]) {
+		test(`reopening the picker unlocks its controls after a ${success ? 'successful' : 'failed'} save`, async () => {
+			const { page } = browserTests;
+			await page.goto('/chatInput.html?modelMenuConfiguration&holdModelPreference&locale=zh-CN');
+			await page.evaluate(() => window.ashChatInputIntegration.showModels());
+			const trigger = page.locator('.ash-chat-input-model-action');
+			const picker = page.locator('.ash-chat-model-picker');
+			const fast = picker.getByRole('switch', { name: '快速模式' });
+			await trigger.press('ArrowDown');
+			await fast.press('Space');
+			await expect(fast).toHaveAttribute('aria-busy', 'true');
+			await picker.getByRole('combobox').press('Escape');
+			await expect(picker).toHaveCount(0);
+			await trigger.press('ArrowDown');
+			await expect(fast).toBeDisabled();
+
+			await page.evaluate(value => window.ashChatInputIntegration.finishModelPreference(value), success);
+			await expect(fast).toBeEnabled();
+			await expect(fast).toHaveJSProperty('checked', success);
+			await picker.getByRole('menuitem', { name: '推理强度' }).press('ArrowRight');
+			const high = page.getByRole('menuitemradio', { name: '高', exact: true });
+			await expect(high).toBeEnabled();
+			await high.press('Enter');
+			await expect(picker).toHaveCount(0);
+			await expect(trigger).toHaveAccessibleName('Test Model 高');
+			await expect(trigger).toBeFocused();
+		});
+	}
+
+	test('shows the model default without checking an effort when the catalog omits it', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?modelMenuConfiguration&omitEffortDefault&locale=zh-CN');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const trigger = page.locator('.ash-chat-input-model-action');
+		await expect(trigger).toHaveAccessibleName('Test Model 模型默认');
+		await expect(trigger.locator('.ash-chat-input-model-effort')).toHaveText('模型默认');
+		await trigger.press('ArrowDown');
+		const picker = page.locator('.ash-chat-model-picker');
+		await picker.getByRole('menuitem', { name: '推理强度' }).press('ArrowRight');
+		const efforts = page.getByRole('menu', { name: '推理强度' });
+		await expect(efforts.getByRole('menuitemradio', { checked: true })).toHaveCount(0);
+		await efforts.getByRole('menuitemradio', { name: '高', exact: true }).press('Enter');
+		await expect(picker).toHaveCount(0);
+		await expect(trigger).toHaveAccessibleName('Test Model 高');
+		await expect(trigger).toBeFocused();
+	});
+
 	test('effort submenu and model preview replace each other on the same surface', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatInput.html?modelMenuConfiguration');
@@ -246,7 +387,7 @@ suite('model picker browser component', () => {
 			const context = picker.getByRole('radiogroup', { name: chinese ? '上下文大小' : 'Context Size', exact: true });
 			await expect(context.getByRole('radio').first()).toBeChecked();
 			const thinking = picker.getByRole('radiogroup', { name: chinese ? '推理强度' : 'Effort', exact: true });
-			await expect(thinking.getByRole('radio').first()).toBeChecked();
+			await expect(thinking.getByRole('radio', { checked: true })).toHaveAccessibleName(chinese ? '低' : 'Low');
 			await standard.focus();
 			await standard.press('Space');
 			await expect(standard).toBeChecked();

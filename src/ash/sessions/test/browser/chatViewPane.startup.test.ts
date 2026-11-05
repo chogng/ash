@@ -194,6 +194,7 @@ class PendingSessionService implements ISessionsManagementService {
 	discardUntitledSession(_untitledSessionId: string): void { }
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void { }
 	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void { }
+	setUntitledSessionReasoningEffort() { }
 	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void { }
 	setUntitledSessionWorkspace(): void { throw new Error('Unexpected workspace edit'); }
 	cancelUntitledSessionPreparation(): void { throw new Error('Unexpected preparation cancellation'); }
@@ -289,7 +290,7 @@ function unavailableChatService(): IChatService & ILanguageModelsService {
 		startReview: async () => { throw new Error('Unexpected review in this fixture'); },
 		startTurn: () => pending as Promise<void>,
 		queueTurn: () => pending as Promise<void>,
-		queuedMessageCount: () => pending as Promise<number>,
+		readQueue: () => pending,
 		getPendingRequests: async () => { throw new Error('Unexpected queue operation'); },
 		pausePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
 		resumePendingRequest: async () => { throw new Error('Unexpected queue operation'); },

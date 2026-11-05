@@ -51,6 +51,7 @@ pub(crate) fn post_json(
     client: &dyn OperationClient,
     target: &ResolvedApiTarget,
     endpoint: ApiEndpoint,
+    model: &str,
     request: &ModelRequest,
     body: Value,
     cancellation: &CancellationToken,
@@ -59,7 +60,7 @@ pub(crate) fn post_json(
         client,
         target,
         endpoint.relative_path(),
-        endpoint.headers(target, request)?,
+        endpoint.headers(target, model, request)?,
         body,
         cancellation,
     )

@@ -88,6 +88,7 @@ fn root(threads: &ThreadController) -> ash_core::ThreadSnapshot {
         .start_thread(
             &NoThreadWorktreeBinder,
             core_api::StartThreadRequest {
+                surface: None,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,

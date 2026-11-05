@@ -81,7 +81,7 @@ export function installMultiHostSessionsFixture(): {
 					readThread: async (sessionId: string, threadId: string) => { record('read', sessionId, threadId); return read(sessionId, threadId); },
 					subscribeThread: async (sessionId: string, threadId: string) => { record('subscribe', sessionId, threadId); return { ...read(sessionId, threadId), updates: [] }; },
 					unsubscribeThread: async (sessionId: string, threadId: string) => { record('unsubscribe', sessionId, threadId); },
-					readContextUsage: async () => ({ estimatedTokens: 0, categories: [] }), queuedMessageCount: async () => 0,
+					readContextUsage: async () => ({ estimatedTokens: 0, categories: [] }), readQueue: async () => [],
 					listTurnChanges: async () => [], readThreadChanges: async () => ({ sequence: 1, revision: '1', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] }),
 					readHistoryState: async () => ({ sequence: 1, canUndo: false, canRedo: false }), readCheckpoints: async () => [],
 					startTurn: async (options: StartTurnOptions) => {
@@ -145,6 +145,9 @@ export function installMultiHostSessionsFixture(): {
 					usage: { inputTokens: 0, outputTokens: 0 }, joins: [], children: [],
 				};
 				if (nestedDraft) session = { ...session, agentTree: [sourceAgent] };
+				if (!params.has('directorylessSession') || name === 'Host A') {
+					session = { ...session, workspace: { authorityId: 'local', root: name === 'Host A' ? '/workspace/host-a' : '/workspace/host-b' } };
+				}
 				if (params.has('inheritWorkspace') && name === 'Host A') {
 					session = { ...session, workspace: { authorityId: 'local', root: '/workspace/inherited-project' } };
 				}
@@ -156,7 +159,9 @@ export function installMultiHostSessionsFixture(): {
 					automations,
 					id: name, label: name, order: 1, instantiationService: child, onDidChangeCatalog: Event.None, onDidChangeSession: Event.None,
 					list: async () => [catalogSession()], listAgents: async () => nestedDraft ? [replacementAgent] : [],
-					currentWorkspace: (): SessionWorkspaceSelection => ({ type: 'current' }),
+					currentWorkspace: (): SessionWorkspaceSelection => sideChatHostSwitch
+						? { type: 'local', root: name === 'Host A' ? '/workspace/host-a' : '/workspace/host-b' }
+						: { type: 'current' },
 					readCatalog: async () => catalogSession(), subscribe: async () => session, unsubscribe: async () => { },
 					renameSession: async (target: ISession, title: string) => {
 						record('rename', target.sessionId, 'same');

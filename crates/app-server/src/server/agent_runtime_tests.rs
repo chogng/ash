@@ -480,6 +480,7 @@ fn recovered_spawn_with_document_context(documents: bool) {
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
             StartThreadRequest {
+                surface: None,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,

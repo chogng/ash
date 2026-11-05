@@ -694,20 +694,13 @@ impl ThreadController {
     /// Repeating the same request is safe when the durable Thread identity, owner, and title all
     /// match. A conflicting existing stream is rejected.
     pub fn create_thread(&self, request: CreateThreadRequest) -> Result<ThreadSnapshot, CoreError> {
-        self.create_thread_with_events(request, Vec::new())
-    }
-
-    fn create_thread_with_events(
-        &self,
-        request: CreateThreadRequest,
-        initial_events: Vec<ThreadEvent>,
-    ) -> Result<ThreadSnapshot, CoreError> {
-        self.create_thread_with_history(request, initial_events, Vec::new())
+        self.create_thread_with_history(request, None, Vec::new(), Vec::new())
     }
 
     fn create_thread_with_history(
         &self,
         request: CreateThreadRequest,
+        surface: Option<ash_protocol::SessionSurface>,
         initial_events: Vec<ThreadEvent>,
         history_prefixes: Vec<ash_history::HistoryPrefix>,
     ) -> Result<ThreadSnapshot, CoreError> {
@@ -724,13 +717,13 @@ impl ThreadController {
             .lock()
             .map_err(|_| CoreError::Journal("loaded Thread state lock poisoned".into()))?;
         if let Some(existing) = loaded.as_ref() {
-            return matching_created_thread(&existing.snapshot, &request);
+            return matching_created_thread(&existing.snapshot, &request, surface);
         }
         let durable = self.store.load(&request.thread_id)?;
         if !durable.is_empty() {
             let existing = crate::history::HistoryReader::new(self.store.as_ref(), &[])
                 .load_thread(&request.thread_id)?;
-            let existing = matching_created_thread(&existing, &request)?;
+            let existing = matching_created_thread(&existing, &request, surface)?;
             *loaded = Some(self.loaded_threads.install(existing.clone()));
             return Ok(existing);
         }
@@ -741,6 +734,7 @@ impl ThreadController {
             session_id: request.session_id,
             thread_id: request.thread_id.clone(),
             title: request.title,
+            surface,
             execution_target: request.execution_target,
         }];
         events.extend(initial_events);
@@ -775,7 +769,13 @@ impl ThreadController {
         binder: &dyn ThreadWorktreeBinder,
         request: StartThreadRequest,
     ) -> Result<ThreadSnapshot, CoreError> {
-        validate_thread_title(&request.command_id, &request.title)?;
+        // An empty title opts a root Thread into automatic naming. Explicit names
+        // still use the same validation as a rename.
+        if request.title.is_empty() {
+            validate_command_id(&request.command_id)?;
+        } else {
+            validate_thread_title(&request.command_id, &request.title)?;
+        }
         if let Some(agent) = &request.agent {
             agent
                 .validate()
@@ -792,15 +792,20 @@ impl ThreadController {
             branch_name: request.branch_name,
             worktree_start: request.worktree_start,
         })?;
-        self.create_thread(CreateThreadRequest {
-            agent_id,
-            origin: ThreadOrigin::Root,
-            agent: request.agent,
-            session_id,
-            thread_id,
-            title: request.title,
-            execution_target: request.execution_target,
-        })
+        self.create_thread_with_history(
+            CreateThreadRequest {
+                agent_id,
+                origin: ThreadOrigin::Root,
+                agent: request.agent,
+                session_id,
+                thread_id,
+                title: request.title,
+                execution_target: request.execution_target,
+            },
+            request.surface,
+            Vec::new(),
+            Vec::new(),
+        )
     }
 
     /// Creates an empty branch in an existing Session tree.
@@ -931,6 +936,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: source.execution_target,
             },
+            source.surface,
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id,
                 prefix: reference,
@@ -1129,6 +1135,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: source.execution_target.clone(),
             },
+            source.surface,
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id: request.thread_id,
                 prefix: reference,
@@ -1185,6 +1192,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: source.execution_target.clone(),
             },
+            source.surface,
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id: request.thread_id,
                 prefix: reference,
@@ -1383,7 +1391,15 @@ impl ThreadController {
                     disposition: StartTurnDisposition::Replayed,
                 });
             }
-            validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
+            // A recap written after the client read the last Turn changes only catalog text.
+            let only_recap_changed = matches!(
+                (request.expected_sequence, &snapshot.recap),
+                (SequenceExpectation::Exact(expected), Some(recap))
+                    if recap.sequence == snapshot.sequence && expected.checked_add(1) == Some(snapshot.sequence)
+            );
+            if !only_recap_changed {
+                validate_thread_expectation(request.expected_sequence, snapshot.sequence)?;
+            }
             let turn_id =
                 TurnId::new(self.next_identifier("turn")).expect("generated Turn ID is non-empty");
             let input_items =
@@ -1618,6 +1634,17 @@ impl ThreadController {
         title: String,
         source: ash_protocol::ThreadTitleSource,
     ) -> Result<u64, CoreError> {
+        self.rename_thread_with_initial_turn(thread_id, command_id, title, source, None)
+    }
+
+    pub(crate) fn rename_thread_with_initial_turn(
+        &self,
+        thread_id: &ThreadId,
+        command_id: CommandId,
+        title: String,
+        source: ash_protocol::ThreadTitleSource,
+        initial_turn: Option<&TurnId>,
+    ) -> Result<u64, CoreError> {
         validate_thread_title(&command_id, &title)?;
         if title.chars().count() > 256 {
             return Err(CoreError::InvalidInput(
@@ -1639,6 +1666,13 @@ impl ThreadController {
                 } else {
                     Err(CoreError::CommandConflict)
                 };
+            }
+            if let Some(turn) = initial_turn
+                && (!snapshot.title.is_empty()
+                    || snapshot.status != ash_protocol::ThreadStatus::Active
+                    || crate::thread_title::first_message(snapshot).map(|(id, _)| id) != Some(turn))
+            {
+                return Err(CoreError::CommandConflict);
             }
             // A late automatic result must not overwrite an explicit name, even when
             // that name happens to equal an earlier automatic title.
@@ -3975,12 +4009,14 @@ fn fork_origin(
 fn matching_created_thread(
     snapshot: &ThreadSnapshot,
     request: &CreateThreadRequest,
+    surface: Option<ash_protocol::SessionSurface>,
 ) -> Result<ThreadSnapshot, CoreError> {
     if snapshot.session_id == request.session_id
+        && snapshot.surface == surface
         && snapshot.agent_id == request.agent_id
         && snapshot.origin == request.origin
         && snapshot.thread_id == request.thread_id
-        && snapshot.title == request.title
+        && snapshot.creation_title == request.title
         && snapshot.execution_target == request.execution_target
         && snapshot.agent.as_ref() == request.agent.as_ref()
     {
@@ -3999,7 +4035,10 @@ fn thread_catalog_record(snapshot: &ThreadSnapshot) -> ThreadCatalogRecord {
             origin: snapshot.origin.clone(),
         },
         session_id: snapshot.session_id.clone(),
+        surface: snapshot.surface,
+        preview: crate::thread_title::preview(snapshot),
         thread: SessionThread {
+            recap: snapshot.recap.as_ref().map(|recap| recap.text.clone()),
             manager: None,
             thread_id: snapshot.thread_id.clone(),
             title: snapshot.title.clone(),

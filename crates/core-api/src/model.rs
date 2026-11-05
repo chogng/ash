@@ -9,6 +9,7 @@ use ash_protocol::ModelRequest;
 use ash_protocol::ModelResponse;
 use ash_protocol::ModelStreamEvent;
 use ash_protocol::ReasoningConfig;
+use ash_protocol::ReasoningEffort;
 use ash_utils_image::PromptImageDetailLimits;
 
 /// Receives provider-neutral incremental output for one model invocation.
@@ -91,12 +92,16 @@ pub trait ModelService: Send + Sync {
         Ok(PromptImageDetailLimits::default())
     }
 
-    /// Reports whether the selected immutable model can measure input locally or remotely.
+    /// Resolves the requested effort against the selected model and its configuration.
     fn reasoning_config(
         &self,
         _: ModelSelection<'_>,
+        requested: Option<ReasoningEffort>,
     ) -> Result<Option<ReasoningConfig>, CoreError> {
-        Ok(None)
+        Ok(requested.map(|effort| ReasoningConfig {
+            effort,
+            summary: false,
+        }))
     }
 
     /// Reports whether the selected immutable model can measure input locally or remotely.

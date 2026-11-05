@@ -7,13 +7,27 @@ is canonical for the renderer implementation and extension points.
 
 UI design and style boundaries are defined in [Sessions style](STYLE.md).
 
-The desktop Chat workspace composes the Ash and ChatGPT entries. The
-`contrib/chatgptweb` adapter supplies the ChatGPT conversation data and
-operations to the Sessions `ReplyChatEditor`, which owns the compact composer and
-transcript through the shared Chat widget. The Chat sidebar combines ChatGPT
-history with local Ash conversations and opens each row through its source
-adapter. `ChatGPTService` owns drafts, selected conversation, history and
-streamed replies for the window.
+[`sessions.desktop.main.ts`](sessions.desktop.main.ts) wires the
+[`chatgptweb` adapter](contrib/chatgptweb/README.md) into the
+[desktop Chat contribution](contrib/chat/electron-browser/chatWorkspace.contribution.ts).
+The shared Chat workspace consumes catalog and editor contracts. Only the
+desktop entry point imports the adapter from outside its contribution in Sessions.
+The window bootstrap lives in `sessions/electron-browser` in the
+[Sessions core](LAYERS.md#sessions--sessions-core).
+
+The `contrib/chatgptweb` adapter handles ChatGPT authentication and transport
+integration. It owns conversation and project identities, history, messages,
+drafts, model presets and streamed replies. It reports when a conversation
+identity is retired or replaced so the host can maintain its own preferences.
+
+The desktop host presents those records in Ash's [Sessions view](contrib/sessions/browser/views/sessionsView.ts), Projects,
+search and `ReplyChatEditor`. The desktop Chat list model combines catalog
+records and supplies ordered sections and row operations. The view owns
+rendering, keyboard focus and scrolling. The adapter maps ChatGPT identities, messages and actions to the
+host's contracts. In an eligible new Chat draft, selecting an Ash model asks the
+adapter for the current unsent text after model validation. The host opens an
+independent Ash Chat draft without sending a message. Its first send creates a
+Chat-owned Thread through the shared App Server.
 The `ash-chatgpt` editor resource and conversation storage keys stay stable
 across entry restoration. Previous native-experiment restore commands resolve
 to this same entry without creating or sending a new conversation.
@@ -88,17 +102,23 @@ The Sessions adapter owns no picker DOM, focus, popup lifetime, or additional ca
 
 `contrib/chat/browser/chatView.ts` owns the retained Code `NewChatView`, its
 provider scope, model binding and information rail. It creates `NewChatWidget`,
-which specializes the shared `ChatWidget` and owns its `NewChatInputWidget`,
-session toolbar, Tip above the input and footer workspace picker. The view and
+which specializes the shared `ChatWidget` and owns its `ChatInputPart`,
+session toolbar, Tip above the input and footer project picker in Code. The view and
 input survive draft materialization; the existing model remains the only owner
-of the Session identity and first-send operation. `NewChatInputWidget` retains
-editor and draft policy without constructing its parent. File selection, paste,
+of the Session identity and first-send operation. `SharedChatInputComposer` supplies
+editor and draft policy to the shared input. File selection, paste,
 drop, attachment preparation and cancellation belong to the shared Workbench input.
 Its permission slot binds the current model to Workbench `PermissionPickerActionItem`, which owns
 the shared permission menu, keyboard interaction and popup lifetime.
-Its workspace slot binds the draft and execution policy through `SessionWorkspacePicker`
-to the Sessions-owned `WorkspacePicker` in `sessionWorkspacePicker.ts`. That picker
-owns its trigger, folder history, choice list, cancellation and focus restoration.
+In Code, **Choose project** selects a Project and a folder for the new
+conversation. A Project without a folder prompts for one. Opening a local
+folder directly reuses its Project or creates one.
+The draft holds the selected Project ID and the workspace for execution.
+Sessions management links the durable conversation through `IProjectService`
+before the first request can run. Worktrees and Dev Containers change where the
+Agent runs while retaining the selected Project. The picker owns folder history,
+cancellation and focus restoration.
+For an independent remote Agent host, folder selection stays on that host.
 The Workbench Welcome workspace picker has a separate delegate and presentation;
 it does not own the Sessions execution environment.
 
@@ -298,7 +318,7 @@ See [Automation ownership and lifecycle](../../../crates/docs/automation.md).
 | Provider and management               | `contrib/providers/agentHost/browser/workbenchSessionsService.contribution.ts`, `services/sessions/common/sessionsManagement.ts`, and `services/sessions/browser/sessionsManagementService.ts` | the App Server provider adapts transport data; management owns catalog, drafts, and operations; the contribution registers and starts it in the regular Workbench                                                                                                                                                                                                                                                                                                                                                                  |
 | Regular Workbench Chat                | `browser/workbenchChat.contribution.ts`, `browser/chatViewPane.ts`, and `browser/chatWidgetModel.ts`                                                                                           | registers the Session-backed Chat view and navigation/history adapters; Workbench `contrib/chat/browser/actions/chatNewActions.ts` owns New Chat and calls the adapter to create its draft; both list hosts share item commands and profile pin/group state; one model owns draft materialization and Thread subscriptions for each shared `ChatWidget`                                                                                                                                                                            |
 | Main conversation                     | `browser/parts/sessionsPart.ts`, `sessionView.ts`, and `sessionGridLayout.ts`                                                                                                                  | one shared conversation grid with a retained SessionView per slot; Chat/Code switch only the renderer inside each view                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Code composer                         | `contrib/chat/browser/newChatInput.ts` and `media/chatInput.css`                                                                                                                               | retain the existing Code welcome input, attachments and permission menu                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Code composer                         | `contrib/chat/browser/sharedChatInputComposer.ts` and `media/chatInput.css`                                                                                                                    | retain the existing Code welcome input, attachments and permission menu                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | Cowork                                | `contrib/cowork/browser/cowork.contribution.ts`, `coworkWidgetModel.ts`, `newCoworkInput.ts`, and `widget/`                                                                                    | own Chat and Agent Teams conversation rendering, model preferences, welcome layout and draft lifecycle; reuse Workbench Chat input operations, editor, model picker and dictation                                                                                                                                                                                                                                                                                                                                                  |
 | Composer persistence                  | `contrib/chat/common/newChatDraftState.ts`                                                                                                                                                     | owns workspace-scoped drafts keyed by untitled identity or Thread; migrates older Chat/Code keys without discarding conflicting drafts                                                                                                                                                                                                                                                                                                                                                                                             |
 | Welcome tips                          | `contrib/cowork/browser/chatTipService.ts` and `widget/input/chatInputTipPresenter.ts`; Code keeps its Chat implementations                                                                    | each contribution owns its presenter and service while preserving the existing profile dismissal preference                                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -306,7 +326,7 @@ See [Automation ownership and lifecycle](../../../crates/docs/automation.md).
 | Parts                                 | `browser/parts/`                                                                                                                                                                               | hosts the shared Part modules and their owned media; navigation components remain in `sidebar/`, and product-specific Activity Bar components remain in `activitybar/`                                                                                                                                                                                                                                                                                                                                                             |
 | Activity Bar                          | `browser/parts/activitybar/`                                                                                                                                                                   | renders menu commands, persists their order, and owns account entry, DOM, and presentation; uses shared controls, configuration, and menu services as a disposable navigation component, without registering a window Part or importing Workbench Activity Bar styles                                                                                                                                                                                                                                                              |
 | View containers                       | `workbench/services/panecomposite/browser/panecomposite.ts` and `workbench/browser/parts/paneCompositePartService.ts`                                                                          | both windows use the same service to open, hide and focus containers; Parts retain their instances                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Projects and Creator                  | `contrib/projects/browser/projects.contribution.ts` and `contrib/artifacts/browser/artifacts.contribution.ts`                                                                                  | contribute Activity Bar commands and retained EditorPanes; Projects keeps navigation and details inside its EditorPane, with window-local state in `projectsService.ts`; the Project domain owns durable project metadata and material references                                                                                                                                                                                                                                                                                  |
+| Projects and Creator                  | `contrib/projects/browser/projects.contribution.ts` and `contrib/artifacts/browser/artifacts.contribution.ts`                                                                                  | contribute Activity Bar commands and retained EditorPanes; Projects keeps catalog browsing and details inside its EditorPane, with window-local state in `projectsService.ts`; the Project domain owns durable project metadata and material references                                                                                                                                                                                                                                                                            |
 | Creator                               | [`contrib/artifacts/`](contrib/artifacts/README.md)                                                                                                                                            | owns seven independently registered creation workspaces and their shared canvas document, editing and file lifecycle; loads through `sessions.common.main.ts`. Sessions Settings exposes its profile-scoped cursor and accessibility preferences in Design.                                                                                                                                                                                                                                                                        |
 | Application menu and titlebar actions | `browser/menus.ts`, `browser/parts/menubar.contribution.ts`, and `browser/layoutActions.ts`                                                                                                    | Sessions owns its menu root, File menu, and layout action menu; common sections are explicitly shared. The Workbench BrowserMenubarControl owns menu interaction; the layout and Sessions service own sidebar visibility and history                                                                                                                                                                                                                                                                                               |
 | Regular Workbench Chat history        | Workbench `contrib/chat/browser/actions/chatActions.ts`, `contrib/chat/browser/agentSessions/agentSessionsPicker.ts`, and Sessions `browser/chatHistoryModel.ts`                               | Workbench owns the IDE command, picker UI, focus, menus and popup lifetime; the Sessions adapter implements the Workbench presentation contract by projecting existing Session and pin state and invoking existing operations                                                                                                                                                                                                                                                                                                      |
@@ -341,7 +361,7 @@ factories, retaining its models, composer DOM and pending submissions. Switching
 entries transfers unsent text, mode and resolved attachments into the active
 renderer and clears the inactive composer; the grid and SessionView stay attached.
 Code reveals editor tools; Agent Teams
-selects the Teams sidebar. Creator aggregates independently contributed creation tools in its navigation container and retains their workspaces. Projects presents the shared project catalog and keeps search, sorting, project details and material references inside its EditorPane. Creator uses the shared EditorPane and side View hosts. The Sessions layout service accepts entry descriptors from the owning contributions; `DesktopLayoutController` remains responsible for session documents and Editor/Details behavior.
+selects the Teams sidebar. Creator aggregates independently contributed creation tools in its navigation container and retains their workspaces. The Projects EditorPane shows project cards and opens their conversations and any project details and materials. The Chat sidebar shows Pinned and Recent. Creator uses the shared EditorPane and side View hosts. The Sessions layout service accepts entry descriptors from the owning contributions; `DesktopLayoutController` remains responsible for session documents and Editor/Details behavior.
 See [input and conversation state ownership](../../../docs/input-state-ownership.md)
 for the boundary with regular Workbench Chat and SCM.
 
@@ -374,12 +394,12 @@ all use `workbench/contrib/chat/browser/widget/input/chatInputEditor.ts`, backed
 use `chatInputPart.ts` for input operations; ChatGPT owns its service-specific
 controls. Each product owns its composition, model policy and draft lifecycle.
 
-| Host                | Ash component and owner                                                                                   | VS Code relationship                                                                                                                                                                                                                                                                     |
-| ------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Agent Window Code   | `NewChatInputWidget` in `contrib/chat/browser/newChatInput.ts`                                            | Ash's Code composer for both new and existing conversations. The upstream Sessions new-session role lives in `contrib/chat/browser/sharedChatInputComposer.ts`; its public class is `SharedChatInputComposer`. These are different contracts, so the Ash class retains its current name. |
-| Agent Window Cowork | `NewCoworkInputWidget` in `contrib/cowork/browser/newCoworkInput.ts`                                      | Ash product component; keeps Cowork model preferences and conversation policy. Its embedded presentation is used by project pages.                                                                                                                                                       |
-| Agent Window Chat   | Shared `ChatWidget` and `ChatInputPart`                                                                   | `ChatGPTWidgetModel` adapts conversation state and operations from the ChatGPT service. Ash owns the transcript and composer presentation.                                                                                                                                               |
-| IDE Chat            | `ChatInputPart` in `workbench/contrib/chat/browser/widget/input/chatInputPart.ts`, hosted by `ChatWidget` | Same upstream owner, path and public class name. Sessions layout and product policy stay in Sessions.                                                                                                                                                                                    |
+| Host                | Ash component and owner                                                                                   | VS Code relationship                                                                                                                           |
+| ------------------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent Window Code   | `SharedChatInputComposer` in `contrib/chat/browser/sharedChatInputComposer.ts`                            | Composes Sessions input policy for new and existing Code conversations around Workbench `ChatInputPart`.                                       |
+| Agent Window Cowork | `NewCoworkInputWidget` in `contrib/cowork/browser/newCoworkInput.ts`                                      | Ash product component; keeps Cowork model preferences and conversation policy. Its embedded presentation is used by project pages.             |
+| Agent Window Chat   | Shared `ChatWidget` and `ChatInputPart`                                                                   | The desktop host's `ChatGPTWidgetModel` projects the ChatGPT service into Ash's transcript and composer and connects the host's model routing. |
+| IDE Chat            | `ChatInputPart` in `workbench/contrib/chat/browser/widget/input/chatInputPart.ts`, hosted by `ChatWidget` | Same upstream owner, path and public class name. Sessions layout and product policy stay in Sessions.                                          |
 
 In VS Code, `sessions/contrib/chat/browser/newChatComposerInput.ts` defines the
 new-session host options and send contracts; it does not export an input widget.
@@ -457,12 +477,12 @@ Ash Agent Window products. Project pages compose the Cowork input and use
    adds it to a project, or moves it to a group. Organization creates a Session
    record without submitting a request; the retained composer keeps its input,
    attachments and choices while the existing model adopts the durable identity.
-   After the model catalog loads, a new Chat restores the last model selected
-   in Chat Input. Manual selections are saved through the shared model service
-   to the App Server profile; the TypeScript UI profile stores the Auto intent.
-   Auto inherits the App Server's configured runtime model. A manual choice,
-   including Auto, stays with that Chat; existing Threads keep their own model.
-   There is no separate default chat model setting.
+   After the model catalog loads, a new Code draft captures its model and effort
+   from the workspace override, the fixed profile pair, or the last explicit
+   Code selection, in that order. Workspace overrides use the source directory
+   and host identity. A picker change updates the conversation and the last
+   selection for its host. Auto inherits the App Server's configured runtime
+   model.
 6. `SessionsPart` reconciles every visible selection with a retained `SessionView`.
    `SessionGridLayout` hosts these views directly in a `SerializableGrid`, without
    document editor inputs, panes, groups or tab title controls. Ordinary opens

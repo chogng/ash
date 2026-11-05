@@ -14,6 +14,7 @@ use ash_protocol::ModelLifecycle;
 use ash_protocol::ModelMetadataQuality;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
+use ash_protocol::ReasoningEffort;
 use model_provider_info::ProviderDefinition;
 use std::collections::BTreeMap;
 
@@ -90,23 +91,75 @@ impl CatalogRecord {
     }
 
     pub(crate) fn entry(&self, provider: &ProviderId) -> ModelCatalogEntry {
+        let mut info = self.info.clone();
+        let mut provenance = self.provenance.clone();
+        // A temporary restriction hides the declaration until this connection offers it again.
+        if info
+            .default_reasoning_effort
+            .is_some_and(|effort| !self.supports_effort(effort))
+        {
+            info.default_reasoning_effort = None;
+            provenance.default_reasoning_effort = None;
+        }
         let quality = if let Some(source) = self.observation {
             source.quality()
         } else {
-            highest_metadata_source(&self.provenance)
+            highest_metadata_source(&provenance)
                 .map(MetadataSource::quality)
                 .unwrap_or(ModelMetadataQuality::Unknown)
         };
         ModelCatalogEntry::new(
             ModelRef::new(provider.clone(), self.info.id.clone()),
-            self.info.clone(),
+            info,
             self.catalog_order,
             self.availability,
             self.lifecycle,
             quality,
-            self.provenance.clone(),
+            provenance,
             Vec::new(),
         )
+    }
+
+    pub(crate) fn retain_observed_reasoning(
+        &self,
+        patch: &mut ModelMetadataPatch,
+    ) -> Option<ReasoningEffort> {
+        let observed = |source| {
+            matches!(
+                source,
+                Some(MetadataSource::ProviderLive | MetadataSource::PersistedObservation)
+            )
+        };
+        if patch.supported_reasoning_efforts.is_none()
+            && observed(self.provenance.supported_reasoning_efforts)
+        {
+            patch.supported_reasoning_efforts = Some(self.info.supported_reasoning_efforts.clone());
+        }
+        // Keep defaults accepted against live support in the observation. Other accepted
+        // defaults need independent storage so a narrower list or new seed cannot erase them.
+        let accepted = self
+            .info
+            .default_reasoning_effort
+            .filter(|_| observed(self.provenance.default_reasoning_effort));
+        patch.default_reasoning_effort = accepted.filter(|effort| {
+            patch
+                .supported_reasoning_efforts
+                .as_ref()
+                .is_some_and(|options| options.iter().any(|option| option.effort == *effort))
+        });
+        accepted.filter(|_| patch.default_reasoning_effort.is_none())
+    }
+
+    pub(crate) fn restore_observed_default(&mut self, effort: ReasoningEffort) {
+        self.info.default_reasoning_effort = Some(effort);
+        self.provenance.default_reasoning_effort = Some(MetadataSource::PersistedObservation);
+    }
+
+    fn supports_effort(&self, effort: ReasoningEffort) -> bool {
+        self.info
+            .supported_reasoning_efforts
+            .iter()
+            .any(|option| option.effort == effort)
     }
 }
 
@@ -248,9 +301,18 @@ fn apply_patch(record: &mut CatalogRecord, patch: &ModelMetadataPatch, source: M
                 merged
             })
             .collect();
+        record.info.ultra_reasoning_effort = match patch.ultra_reasoning_effort {
+            ash_protocol::Patch::Missing => record.info.ultra_reasoning_effort,
+            ash_protocol::Patch::Null => None,
+            ash_protocol::Patch::Value(effort) => Some(effort),
+        }
+        .filter(|effort| record.supports_effort(*effort));
         record.provenance.supported_reasoning_efforts = Some(source);
     }
-    if let Some(effort) = patch.default_reasoning_effort {
+    if let Some(effort) = patch
+        .default_reasoning_effort
+        .filter(|effort| record.supports_effort(*effort))
+    {
         record.info.default_reasoning_effort = Some(effort);
         record.provenance.default_reasoning_effort = Some(source);
     }

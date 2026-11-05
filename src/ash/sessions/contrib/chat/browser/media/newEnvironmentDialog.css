@@ -65,7 +65,7 @@
 	justify-content: space-between;
 }
 
-.ash-new-environment-dialog .ash-environment-folder > span {
+.ash-new-environment-dialog .ash-environment-folder-name {
 	flex: 1;
 	min-inline-size: 0;
 	overflow: hidden;
@@ -135,7 +135,16 @@
 	max-inline-size: 48%;
 }
 
-.ash-new-environment-dialog .ash-environment-fields > .ash-button {
-	justify-content: flex-start;
+.ash-new-environment-dialog .ash-environment-variables {
+	justify-content: space-between;
+	gap: var(--ash-spacing-size80);
 	padding: var(--ash-spacing-size120);
+	border-color: var(--ash-contrastBorder, var(--ash-dialog-border));
+	text-align: start;
+}
+
+.ash-new-environment-dialog .ash-environment-variables-status {
+	display: block;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
 }

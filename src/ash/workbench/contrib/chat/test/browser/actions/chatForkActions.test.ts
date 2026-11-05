@@ -30,22 +30,29 @@ function fixture(resources: DisposableStore) {
 	let active: { sessionId: string; threadId: string; } | undefined = { sessionId: 'source', threadId: 'original' };
 	let revision = 0;
 	const opened: unknown[] = [];
+	const openedToSide: unknown[] = [];
 	const requests: unknown[] = [];
 	let finish = Promise.resolve();
 	services.registerInstance(IChatSessionNavigationService, {
 		get revision() { return revision; },
 		getActiveConversation: () => active,
 		openConversation: async (sessionId, threadId) => { opened.push({ sessionId, threadId }); },
+		openSideConversation: async (sessionId, threadId) => { openedToSide.push({ sessionId, threadId }); },
 	} as IChatSessionNavigationService);
 	services.registerInstance(IChatService, {
 		readThread: async () => ({ thread: { title: 'Original' } }),
+		restoreCheckpoint: async (options: Parameters<IChatService['restoreCheckpoint']>[0]) => {
+			requests.push(options);
+			await finish;
+			return { sessionId: options.sessionId, threadId: 'forked-thread' };
+		},
 		rewriteRequest: async (options: Parameters<IChatService['rewriteRequest']>[0]) => { requests.push(options); await finish; return { sessionId: options.sessionId, threadId: 'rewritten' }; },
 	} as unknown as IChatService);
 	services.registerInstance(IAgentThreadService, {
 		fork: async options => { requests.push(options); await finish; return { sessionId: options.target === 'session' ? 'forked-session' : options.sessionId, threadId: 'forked-thread' }; },
 	} as IAgentThreadService);
 	return {
-		services, opened, requests,
+		services, opened, openedToSide, requests,
 		run: (id: string, context?: unknown) => Promise.resolve(services.invokeFunction(CommandsRegistry.getCommand(id)!, context)),
 		select: (selection: typeof active) => { active = selection; revision++; },
 		delay: (promise: Promise<void>) => { finish = promise; },
@@ -82,6 +89,25 @@ test('a History action keeps its source and a late Fork cannot replace a newer s
 	await run;
 	assert.equal((f.requests[0] as { sessionId: string; }).sessionId, 'source');
 	assert.deepEqual(f.opened, []);
+});
+
+test('message Fork keeps independent request boundaries and opens through the selected destination', async () => {
+	using resources = new DisposableStore();
+	resources.add(registerAction2(ForkConversationAction));
+	const f = fixture(resources);
+	const pending = new DeferredPromise<void>();
+	f.delay(pending.p);
+	const source = { sessionId: 'source', threadId: 'original' };
+	const first = f.run(ForkConversationActionId, { ...source, beforeItemId: 'item-2', toSide: true });
+	const duplicate = f.run(ForkConversationActionId, { ...source, beforeItemId: 'item-2', toSide: true });
+	const second = f.run(ForkConversationActionId, { ...source, beforeItemId: 'item-3', toSide: false });
+	await f.run(ForkConversationActionId, { ...source, beforeItemId: '' });
+	assert.deepEqual(f.requests, ['item-2', 'item-3'].map(itemId => ({ ...source, itemId, boundary: 'before', title: 'Forked: Original' })));
+	await pending.complete();
+	await Promise.all([first, duplicate, second]);
+	const result = { sessionId: 'source', threadId: 'forked-thread' };
+	assert.deepEqual(f.opened, [result]);
+	assert.deepEqual(f.openedToSide, [result]);
 });
 
 test('edited request opens its result only while its original conversation is selected', async () => {

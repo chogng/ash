@@ -24,9 +24,9 @@ suite('sessions browser component', () => {
 		const input = composer.getByRole('textbox');
 		await expect(input).toBeVisible();
 		const references = composer.locator('.ash-chat-reference-attachment');
-		const otherChat = sidebar.getByRole('group', {
-			name: locale === 'zh-CN' ? 'Task from Host A 中的对话' : 'Conversations in Task from Host A',
-		}).getByRole('button', { name: 'Follow-up chat', exact: true });
+		const otherChat = sidebar.getByRole('treeitem', { name: 'Task from Host A', exact: true })
+			.locator('xpath=following-sibling::*[1]')
+			.getByRole('button', { name: 'Follow-up chat', exact: true });
 
 		await source('Task from Host A').dragTo(composer);
 		await source('Task from Host B').dragTo(composer);
@@ -65,7 +65,7 @@ suite('sessions browser component', () => {
 		await expect(navigation).toHaveCSS('display', 'flex');
 		await expect(navigation).toHaveCSS('justify-content', 'space-between');
 		await expect.poll(() => navigation.evaluate(element => getComputedStyle(element).flexDirection === (element.classList.contains('horizontal') ? 'row' : 'column'))).toBe(true);
-		const icons = navigation.locator('button .ash-icon-label-icon');
+		const icons = navigation.locator('button > .ash-button-content > .ash-icon-label-icon > .ash-icon');
 		const itemWidth = horizontal ? 24 : 36;
 		const itemHeight = horizontal ? 24 : 32;
 		for (const item of await navigation.locator('.ash-composite-bar-navigation-item > button').all()) {
@@ -87,7 +87,7 @@ suite('sessions browser component', () => {
 		for (const icon of await icons.all()) {
 			await expect(icon).toHaveCSS('width', `${size}px`);
 			await expect(icon).toHaveCSS('height', `${size}px`);
-			await expect(icon.locator('.ash-icon')).toHaveCSS('font-size', `${size}px`);
+			await expect(icon).toHaveCSS('font-size', `${size}px`);
 			const bounds = await icon.evaluate(element => {
 				const icon = element.getBoundingClientRect();
 				const button = element.closest('button')!.getBoundingClientRect();
@@ -287,15 +287,27 @@ suite('sessions browser component', () => {
 		await page.goto('/sessions.html?multiHost&locale=zh-CN&inheritWorkspace');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		const newSession = page.locator('[data-action-id="sessions.newSession"] button');
-		const conversation = page.locator('.ash-sessions-list:visible').getByRole('button', { name: 'Task from Host A', exact: true });
+		const tree = page.locator('.ash-sessions-list:visible').getByRole('tree');
+		const row = tree.getByRole('treeitem', { name: 'Task from Host A', exact: true });
+		const conversation = row.getByRole('button', { name: 'Task from Host A', exact: true });
 		const sessionTitle = page.locator('.ash-sessions-titlebar-widget');
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
 		await expect(newSession).toHaveText('新建');
 		await newSession.click();
 		await expect(newSession).toHaveAttribute('aria-current', 'page');
 		await expect(sessionTitle).toBeHidden();
+		await row.hover({ position: { x: 2, y: 16 } });
+		const transparent = 'rgba(0, 0, 0, 0)';
+		await expect(row).not.toHaveCSS('background-color', transparent);
+		await expect(conversation).toHaveCSS('background-color', transparent);
+		const rowBounds = (await row.boundingBox())!;
+		const treeBounds = (await tree.boundingBox())!;
+		expect(rowBounds.x + rowBounds.width).toBeCloseTo(treeBounds.x + treeBounds.width);
+		await row.click({ position: { x: 2, y: 16 } });
+		await expect(row).not.toHaveCSS('background-color', transparent);
 		await conversation.click();
 		await expect(conversation).toHaveAttribute('aria-current', 'page');
+		await expect(row).toHaveAttribute('aria-selected', 'true');
 		await expect(newSession).not.toHaveAttribute('aria-current');
 		await expect(sessionTitle.getByRole('button', { name: '重命名会话（Task from Host A）' })).toBeVisible();
 		await expect(sessionTitle.getByRole('button', { name: '更多会话操作' })).toBeVisible();
@@ -318,7 +330,7 @@ suite('sessions browser component', () => {
 		await expect(page.locator('.ash-sessions-sidebar-tabs')).toHaveCount(0);
 		await page.mouse.move(400, 180);
 		await expect(page.getByRole('button', { name: 'Hide sidebar' })).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await expect(activityNavigation.locator('.ash-sessions-activity-top button .ash-icon').first()).toHaveAttribute('data-ash-icon-id', 'add');
+		await expect(activityNavigation.locator('.ash-sessions-navigation button .ash-icon').first()).toHaveAttribute('data-ash-icon-id', 'add');
 		const more = activityNavigation.getByRole('button', { name: 'More', exact: true });
 		const collaboration = page.getByRole('menuitemradio', { name: 'Collab', exact: true });
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -450,7 +462,7 @@ suite('sessions browser component', () => {
 		expect(second!.y).toBeGreaterThan(first!.y);
 		await page.setViewportSize(viewport);
 		await expect(shortcuts.getByRole('heading', { name: chinese ? '新建 Code 会话' : 'New Code Conversation' })).toBeVisible();
-		const picker = shortcuts.getByRole('listitem').filter({ hasText: chinese ? '聚焦工作区选择器' : 'Focus Workspace Picker' });
+		const picker = shortcuts.getByRole('listitem').filter({ hasText: chinese ? '聚焦项目选择器' : 'Focus Project Picker' });
 		await expect(picker.locator('kbd')).toHaveCount(4);
 		for (const [heading, command, keyCount] of chinese ? [
 			['会话', '在侧栏中搜索会话', 2],
@@ -674,16 +686,24 @@ suite('sessions browser component', () => {
 		const activityNavigation = page.locator('.ash-sessions-activity-content');
 		const chatButton = activityNavigation.locator('button').first();
 		const buttonBounds = await chatButton.boundingBox();
-		const iconBounds = await chatButton.locator('.ash-icon-label-icon').boundingBox();
+		const iconSlot = chatButton.locator('.ash-icon-label-icon');
+		const iconBounds = await iconSlot.boundingBox();
 		expect(buttonBounds).not.toBeNull();
 		expect(iconBounds).not.toBeNull();
 		expect(buttonBounds!.width).toBeGreaterThan(36);
 		expect(buttonBounds!.height).toBe(32);
-		expect(iconBounds!.width).toBe(18);
-		expect(iconBounds!.height).toBe(18);
-		const projectsIcon = activityNavigation.locator('button .ash-icon-label-icon:has(> [data-ash-icon-id="projects"])');
+		expect(iconBounds!.width).toBe(24);
+		expect(iconBounds!.height).toBe(24);
+		const projectsIcon = activityNavigation.locator('button .ash-icon-label-icon > [data-ash-icon-id="projects"]');
 		await expect(projectsIcon).toHaveCSS('width', '18px');
 		expect(Math.abs(iconBounds!.y + iconBounds!.height / 2 - (buttonBounds!.y + buttonBounds!.height / 2))).toBeLessThanOrEqual(1);
+		const sidebar = page.locator('[data-part="sidebar"]');
+		const accountSlot = page.getByRole('button', { name: 'Accounts', exact: true }).locator('.ash-icon-label-icon');
+		await sidebar.evaluate(element => (element as HTMLElement).style.setProperty('--ash-toolbar-actionSize', '32px'));
+		await expect(iconSlot).toHaveCSS('width', '32px');
+		await expect(accountSlot).toHaveCSS('width', '32px');
+		await expect(chatButton).toHaveCSS('height', '40px');
+		await sidebar.evaluate(element => (element as HTMLElement).style.removeProperty('--ash-toolbar-actionSize'));
 		await chatButton.click({ button: 'right' });
 		await expect(page.getByRole('menuitem', { name: 'Activity Bar Size' })).toHaveCount(0);
 		await page.keyboard.press('Escape');
@@ -743,7 +763,7 @@ suite('sessions browser component', () => {
 		const titlebar = page.locator("[data-part='titlebar']");
 		await expect(titlebar).toBeVisible();
 		await expect(titlebar.getByRole('button', { name: 'Return to Workbench' })).toHaveCount(0);
-		await expect(titlebar.locator('.ash-sessions-titlebar-title, .ash-sessions-titlebar-avatar')).toHaveCount(0);
+		await expect(titlebar.getByRole('button', { name: 'Rename session (New Chat)', exact: true })).toBeVisible();
 		const titlebarActions = titlebar.getByRole('toolbar', { name: 'Title bar left actions', exact: true });
 		await expect(titlebarActions).toBeVisible();
 		await expect(titlebarActions.getByRole('menuitem', { name: 'Application menu', exact: true })).toBeVisible();
@@ -1102,14 +1122,13 @@ suite('sessions browser component', () => {
 				await expect(icon).toHaveCSS('width', '18px');
 				await expect(icon).toHaveCSS('height', '18px');
 			}
-			const inlineSize = await inline.evaluate(element => element.closest('[data-section="projects"], [data-section="recent"]') ? '16px' : '18px');
-			await expect(inline).toHaveCSS('width', inlineSize);
-			await expect(inline.locator('.ash-icon')).toHaveCSS('font-size', inlineSize);
+			await expect(inline).toHaveCSS('width', '18px');
+			await expect(inline.locator('.ash-icon')).toHaveCSS('font-size', '18px');
 			await expect(page.getByRole('note').locator('.ash-icon')).toHaveCSS('font-size', '18px');
 			await page.locator('[data-action-id="sessions.newSession"] button').click({ button: 'right' });
 			const auxiliary = page.locator('.ash-menu .ash-submenu-indicator > .ash-icon').first();
-			await expect(auxiliary).toHaveCSS('font-size', '12px');
-			await expect(auxiliary).toHaveCSS('width', '12px');
+			await expect(auxiliary).toHaveCSS('font-size', '16px');
+			await expect(auxiliary).toHaveCSS('width', '16px');
 			await page.keyboard.press('Escape');
 			await accounts.press('Enter');
 			const menuIcons = page.locator('.ash-menu .ash-icon');
@@ -1128,7 +1147,7 @@ suite('sessions browser component', () => {
 		}
 		await expect(baseIcon).toHaveCSS('font-size', '16px');
 		await page.locator('[data-action-id="sessions.newSession"] button').click({ button: 'right' });
-		await expect(page.locator('.ash-menu .ash-submenu-indicator > .ash-icon').first()).toHaveCSS('font-size', '12px');
+		await expect(page.locator('.ash-menu .ash-submenu-indicator > .ash-icon').first()).toHaveCSS('font-size', '16px');
 		await page.keyboard.press('Escape');
 		await page.locator('.ash-sessions-window').evaluate(element => (element as HTMLElement).style.removeProperty('--ash-lxiconFontSize-large'));
 		await baseIcon.evaluate(element => element.remove());
@@ -1146,35 +1165,102 @@ suite('sessions browser component', () => {
 		} finally { await ide.close(); }
 	});
 
-	for (const locale of ['en', 'zh-CN']) test(`Sessions sidebar keeps one heading alongside its menu in both modes (${locale})`, async function () {
+	for (const locale of ['en', 'zh-CN']) test(`Sessions sidebar places its actions beside Projects in both modes (${locale})`, async function () {
 		const { page } = browserTests;
 		const chinese = locale === 'zh-CN';
-		if (chinese) {
-			await page.goto('/sessions.html?catalog&locale=zh-CN');
-		}
 		const list = page.locator('.ash-sessions-list:visible');
 		const modes = page.locator('.ash-window-mode-control').getByRole('button');
-		for (const mode of [modes.nth(0), modes.nth(1)]) {
-			await mode.click();
-			const heading = list.getByRole('heading', { level: 2 });
-			const more = list.getByRole('button', { name: chinese ? '更多会话操作' : 'More Sessions Actions', exact: true });
-			const add = list.getByRole('button', { name: chinese ? '新建分组…' : 'New group…', exact: true });
-			await expect(more.locator('[data-ash-icon-id="list-filter"]')).toBeVisible();
-			await expect(add.locator('[data-ash-icon-id="add"]')).toBeVisible();
-			await expect(heading).toHaveText(chinese ? '会话' : 'Sessions');
+		const projects = list.locator('[data-section="projects"]');
+		const heading = projects.getByRole('heading', { level: 3, name: chinese ? '项目' : 'Projects', exact: true });
+		const more = projects.getByRole('button', { name: chinese ? '更多会话操作' : 'More Sessions Actions', exact: true });
+		const toolbar = projects.getByRole('toolbar');
+		const add = projects.getByRole('button', { name: chinese ? '添加文件夹…' : 'Add folder…', exact: true });
+		const treeRow = list.getByRole('treeitem').filter({ has: page.locator('[data-section="projects"]') });
+		const newSession = page.locator('[data-action-id="sessions.newSession"] button');
+		await page.goto(`/sessions.html?catalog&search&locale=${locale}`);
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		if (chinese) await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
+		for (const code of [false, true]) {
+			await modes.nth(code ? 1 : 0).click();
+			const toggle = projects.getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true });
+			const projectRow = list.locator('[data-project-id="search-project"]');
+			await expect(list.getByRole('heading', { level: 2 })).toHaveCount(0);
 			await expect(heading).toBeVisible();
-			const titleBounds = (await heading.boundingBox())!;
+			await expect(toolbar.getByRole('button')).toHaveCount(code ? 1 : 2);
+			await expect(toolbar).toHaveCSS('opacity', '0');
+			await expect(projects.locator('[data-ash-icon-id="list-filter"]')).toBeVisible();
+			await expect(more.locator('.ash-dropdown-menu-indicator')).toBeHidden();
+			await expect(add.locator('[data-ash-icon-id="new-folder"]')).toHaveCount(code ? 0 : 1);
+			await expect(projectRow).toBeVisible();
+			await toggle.press('ControlOrMeta+f');
+			const search = list.getByRole('searchbox');
+			await search.fill('No matching project');
+			await expect(projectRow).toHaveCount(0);
+			await expect(heading).toBeVisible();
+			await expect(toggle).toHaveCount(0);
+			await expect(more).toBeVisible();
+			if (!code) await expect(add).toBeVisible();
+			const emptyTitleBounds = (await heading.boundingBox())!;
+			const emptyActionBounds = (await more.boundingBox())!;
+			expect(emptyTitleBounds.x + emptyTitleBounds.width).toBeLessThan(emptyActionBounds.x);
+			expect(emptyTitleBounds.y + emptyTitleBounds.height / 2).toBeCloseTo(emptyActionBounds.y + emptyActionBounds.height / 2, 0);
+			await search.press('Escape');
+			await expect(toggle).toBeFocused();
+			await toggle.press('ArrowLeft');
+			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+			await expect(projectRow).toHaveCount(0);
+			const titleBounds = (await toggle.boundingBox())!;
 			const actionBounds = (await more.boundingBox())!;
-			expect(actionBounds.width).toBe(actionBounds.height);
-			const addBounds = (await add.boundingBox())!;
-			expect(addBounds.x).toBeGreaterThanOrEqual(actionBounds.x + actionBounds.width);
-			expect(addBounds.width).toBe(actionBounds.width);
-			expect(addBounds.height).toBe(actionBounds.height);
-			await expect(heading).toHaveCSS('font-weight', '400');
+			expect(actionBounds.width).toBe(24);
+			expect(actionBounds.height).toBe(24);
+			const rowBounds = (await treeRow.boundingBox())!;
+			const navBounds = (await newSession.boundingBox())!;
+			expect(rowBounds.x).toBeCloseTo(navBounds.x);
+			expect(rowBounds.width).toBeCloseTo(navBounds.width);
+			expect(rowBounds.height).toBe(32);
+			await expect(treeRow).toHaveCSS('padding-left', '0px');
+			expect((await projects.boundingBox())!.width).toBeCloseTo(rowBounds.width);
+			await expect(projects).toHaveCSS('padding-inline-end', '4px');
+			if (code) {
+				expect(rowBounds.x + rowBounds.width - (actionBounds.x + actionBounds.width)).toBeCloseTo(4);
+			} else {
+				const addBounds = (await add.boundingBox())!;
+				expect(rowBounds.x + rowBounds.width - (addBounds.x + addBounds.width)).toBeCloseTo(4);
+				expect(addBounds.x - (actionBounds.x + actionBounds.width)).toBeCloseTo(4);
+				expect(addBounds.width).toBe(actionBounds.width);
+				expect(addBounds.height).toBe(actionBounds.height);
+			}
+			await expect(toggle).toHaveCSS('font-weight', '400');
 			expect(titleBounds.x + titleBounds.width).toBeLessThan(actionBounds.x);
 			expect(titleBounds.y + titleBounds.height / 2).toBeCloseTo(actionBounds.y + actionBounds.height / 2, 0);
-			await more.press('Enter');
+			const transparent = 'rgba(0, 0, 0, 0)';
+			await toggle.hover();
+			await expect(toolbar).toHaveCSS('opacity', '1');
+			await expect(projects).toHaveCSS('background-color', transparent);
+			const hoverBackground = await treeRow.evaluate(element => getComputedStyle(element).backgroundColor);
+			expect(hoverBackground).not.toBe(transparent);
+			await expect(toggle).toHaveCSS('background-color', transparent);
+			for (const action of code ? [more] : [more, add]) {
+				await action.hover();
+				await expect(treeRow).toHaveCSS('background-color', hoverBackground);
+				await expect(action).not.toHaveCSS('background-color', transparent);
+				await expect(action).toHaveCSS('border-width', '0px');
+			}
+			await page.mouse.move(0, 0);
+			await expect(treeRow).toHaveCSS('background-color', transparent);
+			await expect(toolbar).toHaveCSS('opacity', '1');
+			await page.keyboard.press('Tab');
+			await expect(more).toBeFocused();
+			await expect(more).toHaveCSS('outline-style', 'solid');
+			if (!code) {
+				await page.keyboard.press('ArrowRight');
+				await expect(add).toBeFocused();
+			}
+			await page.keyboard.press('Home');
+			await expect(more).toBeFocused();
+			await page.keyboard.press('Enter');
 			await expect(more).toHaveAttribute('aria-expanded', 'true');
+			await expect(toolbar).toHaveCSS('opacity', '1');
 			const group = page.getByRole('menuitem', { name: chinese ? '分组方式' : 'Group By', exact: true });
 			await expect(group).toBeFocused();
 			await group.press('ArrowRight');
@@ -1184,9 +1270,10 @@ suite('sessions browser component', () => {
 			await page.keyboard.press('Escape');
 			await expect(more).toHaveAttribute('aria-expanded', 'false');
 			await expect(more).toBeFocused();
+			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 		}
 
-		const add = list.getByRole('button', { name: chinese ? '新建分组…' : 'New group…', exact: true });
+		await modes.nth(0).click();
 		const prompt = page.locator('.ash-quick-input-host').getByRole('textbox');
 		const group = list.getByRole('button', { name: 'Sidebar fixture group', exact: true });
 		await add.press('Enter');
@@ -1200,6 +1287,68 @@ suite('sessions browser component', () => {
 		await prompt.press('Enter');
 		await expect(group).toBeVisible();
 		await expect(add).toBeFocused();
+	});
+
+	for (const locale of ['en', 'zh-CN']) test(`Code opens and creates an environment from the new conversation (${locale})`, async () => {
+		const { page, info: testInfo } = browserTests;
+		const chinese = locale === 'zh-CN';
+		await page.goto(`/sessions.html?multiHost&catalog&search&projectPicker&environmentSetup&locale=${locale}`);
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		if (chinese) await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: chinese ? '代码' : 'Code', exact: true }).click();
+		await page.locator('[data-action-id="sessions.newSession"] button').click();
+		const chat = page.locator('.ash-sessions-chat-slot.active .ash-chat');
+		const card = chat.locator('.ash-sessions-environment-card');
+		const trigger = card.getByRole('button', { name: chinese ? '选择环境' : 'Choose environment', exact: true });
+		const project = chat.locator('.ash-sessions-workspace-picker');
+		const host = chat.locator('.ash-sessions-environment-picker');
+		const dialog = page.getByRole('dialog', { name: chinese ? '新建环境' : 'New Environment', exact: true });
+		const name = dialog.getByRole('textbox', { name: chinese ? '名称' : 'Name', exact: true });
+		await expect(trigger).toBeVisible();
+		const recentProjects = card.getByRole('group', { name: chinese ? '最近打开的项目' : 'Recent projects', exact: true });
+		const recentProject = recentProjects.getByRole('button', { name: 'host-a', exact: true });
+		await expect(project).toHaveText(chinese ? '选择项目' : 'Choose project');
+		await recentProject.press('Enter');
+		await expect(project).toHaveText('Code project fixture');
+		await expect(recentProject).toHaveAttribute('aria-pressed', 'true');
+		await expect(card).toHaveCSS('border-style', 'solid');
+		const bounds = (await card.boundingBox())!;
+		const chatBounds = (await chat.boundingBox())!;
+		const composerBounds = (await chat.locator('.ash-chat-input-part').boundingBox())!;
+		expect(bounds.x + bounds.width / 2).toBeCloseTo(chatBounds.x + chatBounds.width / 2, 0);
+		expect(bounds.y + bounds.height).toBeLessThan(composerBounds.y);
+		await page.screenshot({ path: testInfo.outputPath(`new-chat-environment-${locale}.png`) });
+		await trigger.press('Enter');
+		await expect(dialog).toHaveAttribute('aria-modal', 'true');
+		await expect(name).toBeFocused();
+		await expect(name).toHaveValue('host-a');
+		const runIn = dialog.getByRole('combobox', { name: chinese ? '运行位置' : 'Run in', exact: true });
+		await expect(runIn).toBeVisible();
+		await expect(dialog.getByRole('combobox', { name: chinese ? '/workspace/host-a 的工作树' : 'Worktree for /workspace/host-a' })).toBeVisible();
+		await expect(dialog.getByRole('button', { name: chinese ? '环境变量' : 'Environment variables', exact: true })).toBeVisible();
+		await page.screenshot({ path: testInfo.outputPath(`new-environment-dialog-${locale}.png`) });
+		await page.keyboard.press('Escape');
+		await expect(dialog).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+		await trigger.press('Space');
+		await name.fill('Fixture environment');
+		await dialog.getByRole('button', { name: chinese ? '创建环境' : 'Create environment', exact: true }).click();
+		await expect(dialog).toHaveCount(0);
+		await expect(host).toHaveText('Fixture environment');
+		await expect(project).toHaveText('Code project fixture');
+		await expect(trigger).toBeFocused();
+		await page.locator('.ash-sessions-list').getByRole('button', { name: 'Task from Host A', exact: true }).click();
+		await expect(trigger).toHaveCount(0);
+		await page.locator('[data-action-id="sessions.newSession"] button').click();
+		await trigger.press('Enter');
+		await runIn.selectOption({ label: chinese ? '此电脑' : 'This Computer' });
+		await dialog.getByRole('button', { name: chinese ? '+ 添加' : '+ Add', exact: true }).click();
+		await dialog.getByRole('button', { name: 'host-a', exact: true }).click();
+		await name.fill('Local folder environment');
+		await dialog.getByRole('button', { name: chinese ? '创建环境' : 'Create environment', exact: true }).click();
+		await expect(dialog).toHaveCount(0);
+		await expect(host).toHaveText('Local folder environment');
+		await expect(project).toHaveText('Code project fixture');
 	});
 
 	for (const locale of ['en', 'zh-CN']) test(`Sessions typography stays independent of IDE defaults (${locale})`, async function () {

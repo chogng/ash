@@ -5,8 +5,10 @@ import { ICustomViewService } from '../../../../services/customView/browser/cust
 import { Menus } from '../../../../browser/menus.js';
 import { AUTOMATIONS_CUSTOM_VIEW_ID } from '../automationsConstants.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -68,33 +70,61 @@ registerAction2(class AddSessionToProjectAction extends Action2 {
 		const target = sessionActionTarget(accessor, argument);
 		const projects = accessor.get(IProjectService);
 		const input = accessor.get(IQuickInputService);
-		const available = (await projects.list()).filter(project => !project.archived);
+		const scope = accessor.get(IContextKeyService).getValue(SessionsWorkspaceModeContext.key) === 'code' ? 'code' : 'chat';
+		const available = (await projects.list(scope)).filter(project => !project.archived);
 		if (!available.length) throw new Error(localize('sessions.list.noProjects', 'Create a project before adding this chat.'));
 		const selected = await pickSessionDestination(input, localize('sessions.list.addToProject', 'Add to project'), available.map(project => ({ label: project.name, id: project.id })));
 		if (!selected) return;
 		const session = await target.resolve();
 		// Project identities belong to this host's backend.
 		if (session.backendSessionId) throw new Error(localize('sessions.list.projectHost', 'Projects can only include chats from this host.'));
-		await projects.addSession(await projects.read(selected.id), session.sessionId);
+		await projects.addSession(await projects.read(selected.id, scope), session.sessionId);
 	}
 });
 
-async function promptForSessionGroupName(input: IQuickInputService): Promise<string | undefined> {
+async function promptForSessionGroupName(input: IQuickInputService, title = localize('sessions.list.groupName', 'Group name')): Promise<string | undefined> {
 	const name = await input.input({
-		title: localize('sessions.list.groupName', 'Group name'),
+		title,
 		validateInput: async value => !value.trim() || value.trim().length > 128 ? localize('sessions.list.invalidGroup', 'Enter a name with 1 to 128 characters.') : undefined,
 	});
 	return name?.trim();
 }
 
+MenusRegistry.appendMenuItems([
+	{
+		id: Menus.SidebarSessionsHeader, item: {
+			submenu: Menus.SessionsViewFilter,
+			title: localize2('sessions.list.moreActions', 'More Sessions Actions'),
+			icon: Lxicon.listFilter,
+			group: 'navigation', order: 10,
+		}
+	},
+	{
+		id: Menus.ChatSidebarHeader, item: {
+			submenu: Menus.SessionsViewSort,
+			title: localize2('sessions.list.sortBy', 'Sort By'),
+			icon: Lxicon.listFilter,
+			group: 'navigation', order: 10,
+		}
+	},
+]);
+
 registerAction2(class CreateSessionGroupAction extends Action2 {
 	constructor() {
-		super({ id: 'sessionsViewPane.createGroup', title: localize2('sessions.list.newGroup', 'New group…'), icon: Lxicon.add });
+		super({
+			id: 'sessionsViewPane.createGroup',
+			title: localize2('sessions.list.addFolder', 'Add folder…'),
+			icon: Lxicon.newFolder,
+			menu: [
+				{ id: Menus.SidebarSessionsHeader, group: 'navigation', order: 20, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code') },
+				{ id: Menus.ChatSidebarHeader, group: 'navigation', order: 20 },
+			],
+		});
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const groups = accessor.get(ISessionGroupsService);
-		const name = await promptForSessionGroupName(accessor.get(IQuickInputService));
+		const name = await promptForSessionGroupName(accessor.get(IQuickInputService), localize('sessions.list.folderName', 'Folder name'));
 		if (name !== undefined) {
 			await groups.create(name);
 		}

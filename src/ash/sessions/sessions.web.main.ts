@@ -8,6 +8,8 @@ import { BrowserElevatedFileService } from '../workbench/services/files/browser/
 import { IElevatedFileService } from '../workbench/services/files/common/elevatedFileService.js';
 import { IRemoteAuthorityResolverService } from '../platform/remote/common/remoteAuthorityResolver.js';
 import { RemoteAuthorityResolverService } from '../platform/remote/browser/remoteAuthorityResolverService.js';
+import { SyncDescriptor } from '../platform/instantiation/common/descriptors.js';
+import { ChatListCatalog, IChatListCatalog } from './contrib/chat/browser/chatListModel.js';
 import './sessions.common.main.js';
 import './browser/parts/menubar.contribution.js';
 import './browser/web.main.js';
@@ -15,3 +17,6 @@ import './browser/web.main.js';
 registerSingleton(IElevatedFileService, BrowserElevatedFileService, InstantiationType.Delayed);
 registerSingleton(IUpdateService, BrowserUpdateService, InstantiationType.Delayed);
 registerSingleton(IRemoteAuthorityResolverService, RemoteAuthorityResolverService, InstantiationType.Delayed);
+
+
+registerSingleton(IChatListCatalog, new SyncDescriptor(ChatListCatalog, [[]], true));

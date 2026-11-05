@@ -7,7 +7,7 @@ import type { ILifecycleService } from '../../../../services/lifecycle/common/li
 import { readWorkspaceChanges } from './input/chatInput.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
-import type { ChatSubmissionOptions, ChatRequestQueueKind } from '../../../../services/chat/common/chatService.js';
+import type { ChatSubmissionOptions, ChatRequestQueueKind, QueuedMessage } from '../../../../services/chat/common/chatService.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { applyAgentHostCompletionAction } from '../agentHostCompletionAction.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
@@ -59,7 +59,7 @@ import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/co
 import type { IChatMcpAppDelegate } from './chatContentParts/toolInvocationParts/chatMcpAppModel.js';
 import { VoiceSessionController, pickVoiceConversation } from '../voiceClient/voiceSessionController.js';
 import type { AgentVoiceTaskRequest } from '../../../../../platform/agentHost/common/agent.js';
-import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions, type IChatWidgetViewOptions } from '../chat.js';
+import { IChatWidgetService, type IChatWidget, type IChatFindController, type IChatAcceptInputOptions, type IChatWidgetViewOptions, type IChatWidgetViewState } from '../chat.js';
 import { ChatViewWelcomePart } from '../viewsWelcome/chatViewWelcomeController.js';
 
 /** The presentation consumes one conversation model owned by its product. */
@@ -91,11 +91,13 @@ export interface IChatWidgetModel extends IDisposable {
 	loadOlderHistory?(): Promise<void>;
 	prepareConversation?(): Promise<{ readonly sessionId: string; readonly threadId: string; }>;
 	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], submissionOptions?: ChatSubmissionOptions): Promise<void>;
-	executeServerCommand?(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void>;
+	executeServerCommand?(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void | string>;
+	reportRecapPresence?(sessionId: SessionId, threadId: ThreadId, surface: string, focused: boolean | null): Promise<void>;
 	/** Rejects on failure so Stop and Send can preserve the unsent draft. */
 	interrupt(): Promise<void>;
 	refreshChanges?(): Promise<void>;
 	selectModel(model: ModelRef): Promise<void>;
+	selectPreset?(presetId: string): Promise<void>;
 	selectReasoningEffort?(effort: ModelReasoningEffort | undefined): Promise<void>;
 	selectAutomaticModel?(): Promise<void>;
 	listAgents?(): Promise<readonly ChatAgent[]>;
@@ -130,6 +132,11 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	private historyRecovery: { readonly status: IChatSessionHistoryStatus; readonly generation: number; } | undefined;
 	private submittedMessage = false;
 	private readonly welcome: ChatViewWelcomePart;
+	private readonly recapSurface = generateUuid();
+	private readonly recapFocusListeners = this._register(new DisposableStore());
+	private recapDocument: Document | undefined;
+	private recapView: { sessionId: SessionId; threadId: ThreadId; focused: boolean; } | undefined;
+	private recapPresencePending = Promise.resolve();
 	private displayedConversationId: string | undefined;
 
 	constructor(
@@ -183,6 +190,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		// Detached Markdown fragments still inherit this conversation's command scope.
 		const scopedInstantiation = this._register(instantiationService.createChild(new ServiceCollection([IContextKeyService, context])));
 		const inQuickChat = ChatContextKeys.inQuickChat.bindTo(context);
+		if (model.reportRecapPresence) this._register(toDisposable(() => this.syncRecapPresence(false)));
 		this._register(addDisposableListener(this.element, 'focusin', () => {
 			// Quick Chat borrows this widget by reparenting it; its original scope stays alive.
 			inQuickChat.set(contextKeys.getContext(this.element.parentElement).getValue<boolean>(ChatContextKeys.inQuickChat.key) === true);
@@ -234,6 +242,15 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				},
 			}));
 		}
+		const openChangesForTurn = this.viewOptions?.openTurnChanges;
+		const openTurnChanges: IChatWidgetViewOptions['openTurnChanges'] = openChangesForTurn && (async (source, signal) => {
+			if (!this.visible || model.sessionId !== source.sessionId || model.threadId !== source.threadId) return;
+			using listeners = new DisposableStore();
+			const controller = new AbortController();
+			listeners.add(this.onDidHide(() => controller.abort()));
+			listeners.add(model.onDidChangeComposer(() => controller.abort()));
+			await openChangesForTurn(source, AbortSignal.any([signal, controller.signal]));
+		});
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
 			createRequestInput: ({ container, descriptionId, initialHeight, submit, reportError }: ChatRequestInputOptions) => {
 				const delegate: ChatInputDelegate = {
@@ -264,6 +281,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			readResponseResource: model.readResponseResource?.bind(model),
 			getResponseLinkOpener: model.getResponseLinkOpener?.bind(model),
 			getResponseActions: model.getResponseActions?.bind(model),
+			openTurnChanges,
 			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),
 			getHistoryState: () => this.model.olderHistory,
 			loadOlderHistory: async () => { await this.model.loadOlderHistory?.(); },
@@ -322,9 +340,16 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			executeCommand: (invocation) => invocation.commandId === OPEN_CHAT_PERMISSIONS_COMMAND_ID || invocation.commandId === OPEN_GUARDIAN_SETUP_COMMAND_ID
 				? commandService.executeCommand(invocation.commandId, this.model, invocation.argumentsText)
 				: invocation.argumentsText ? commandService.executeCommand(invocation.commandId, invocation.argumentsText) : commandService.executeCommand(invocation.commandId),
-			executeServerCommand: model.executeServerCommand && ((invocation, submissionSignal) => invocation.name === 'advisor' && !invocation.argumentsText.trim()
-				? commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID)
-				: model.executeServerCommand!(invocation.name, invocation.argumentsText, submissionSignal)),
+			executeServerCommand: model.executeServerCommand && (async (invocation, submissionSignal) => {
+				if (invocation.name === 'advisor' && !invocation.argumentsText.trim()) {
+					await commandService.executeCommand(OPEN_CHAT_SETTINGS_COMMAND_ID);
+					return;
+				}
+				const recap = await model.executeServerCommand!(invocation.name, invocation.argumentsText, submissionSignal);
+				if (typeof recap === 'string') {
+					this.notifications.info(recap);
+				}
+			}),
 			interrupt: () => this.model.interrupt(),
 			openChanges: model.refreshChanges && (async revision => {
 				try { await commandService.executeCommand(OPEN_CHAT_CHANGES_COMMAND_ID, this.model.sessionId, this.model.threadId, revision); }
@@ -332,6 +357,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			}),
 			readWorkspaceChanges: model.refreshChanges && (() => readWorkspaceChanges(commandService)),
 			selectModel: (model) => this.model.selectModel(model),
+			selectPreset: presetId => model.selectPreset?.(presetId) ?? Promise.resolve(),
 			selectReasoningEffort: effort => model.selectReasoningEffort?.(effort) ?? Promise.resolve(),
 			selectAutomaticModel: model.selectAutomaticModel?.bind(model),
 			listAgents: () => model.listAgents?.() ?? Promise.resolve([]),
@@ -442,8 +468,18 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		if (!visible && this.model.voice?.isActive) void this.runVoice(() => this.model.voice!.stop());
 		const voiceClient = this.voiceSessionController;
 		if (!visible && voiceClient?.isActive) void this.runVoice(() => voiceClient.disconnect());
+		this.syncRecapPresence(visible);
 		this.input.setVisible(visible);
 		this.listWidget.setVisible(visible);
+	}
+
+	public getViewState(): IChatWidgetViewState {
+		const { visible, focus, ...state } = this.listWidget.getViewState();
+		return state;
+	}
+
+	public restoreViewState(state: IChatWidgetViewState): void {
+		this.listWidget.restoreViewState({ ...state, visible: this.visible, focus: undefined }, this.model.items);
 	}
 
 	public focus(item?: IChatListItem): void {
@@ -491,9 +527,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		return this.queueEditor.value ? this.queueEditor.value.acceptInput(value, options) : this.input.acceptInput(value, options);
 	}
 
-	public async startEditing(requestId: string): Promise<void> {
+	public async startEditing(request: QueuedMessage): Promise<void> {
 		if (this.queueEditor.value || !this.visible) return;
-		const editor = this.instantiationService.createInstance(ChatQueueEditor, this, requestId);
+		const editor = this.instantiationService.createInstance(ChatQueueEditor, this, request);
 		this.queueEditor.value = editor;
 		try { await editor.show(); }
 		finally { if (this.queueEditor.value === editor) this.queueEditor.clear(); }
@@ -559,7 +595,35 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		}
 	}
 
+	private syncRecapPresence(visible = this.visible): void {
+		if (!this.model.reportRecapPresence) return;
+		const { sessionId, threadId } = this.model;
+		const document = this.element.ownerDocument;
+		if (visible && this.recapDocument !== document) {
+			this.recapDocument = document;
+			this.recapFocusListeners.clear();
+			const report = () => this.syncRecapPresence();
+			if (document.defaultView) {
+				this.recapFocusListeners.add(addDisposableListener(document.defaultView, 'focus', report));
+				this.recapFocusListeners.add(addDisposableListener(document.defaultView, 'blur', report));
+			}
+			this.recapFocusListeners.add(addDisposableListener(document, 'visibilitychange', report));
+		}
+		const focused = document.visibilityState !== 'hidden' && document.hasFocus();
+		const view = visible && sessionId && threadId ? { sessionId, threadId, focused } : undefined;
+		const previous = this.recapView;
+		if (previous?.sessionId === view?.sessionId && previous?.threadId === view?.threadId && previous?.focused === view?.focused) return;
+		this.recapView = view;
+		this.recapPresencePending = this.recapPresencePending.then(async () => {
+			if (previous && (previous.sessionId !== view?.sessionId || previous.threadId !== view.threadId)) {
+				await this.model.reportRecapPresence!(previous.sessionId, previous.threadId, this.recapSurface, null).catch(() => { });
+			}
+			if (view) await this.model.reportRecapPresence!(view.sessionId, view.threadId, this.recapSurface, view.focused).catch(() => { });
+		});
+	}
+
 	private render(): void {
+		this.syncRecapPresence();
 		const conversationId = this.model.threadId ?? this.model.inputState.draftIdentity?.id;
 		if (this.displayedConversationId !== conversationId) {
 			this.displayedConversationId = conversationId;
@@ -633,7 +697,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 				const active = this.element.ownerDocument.activeElement;
 				if (active === this.olderHistoryButton.domNode || active === this.element.ownerDocument.body) {
 					if (this.model.olderHistory) this.olderHistoryButton.focus();
-					else this.listWidget.element.querySelector<HTMLElement>('.ash-chat-transcript')?.focus({ preventScroll: true });
+					else this.listWidget.focusReadingPosition();
 				}
 			}
 		}
@@ -669,7 +733,7 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const input = this.model.inputState;
 		const welcomeTitle = this.viewOptions?.welcomeTitle?.get();
 		const showWelcome = this.viewOptions?.showWelcome !== false && !hasConversation && !input.aiDisabled
-			&& (this.viewOptions?.welcomeTitle ? !!welcomeTitle : this.model.untitledSessionId !== undefined && !input.inputBlocked)
+			&& (welcomeTitle === undefined ? this.model.untitledSessionId !== undefined && !input.inputBlocked : !!welcomeTitle)
 			&& !this.voiceSessionController?.isActive;
 		this.welcome.render(showWelcome ? {
 			title: welcomeTitle ?? (input.mode === 'ask'

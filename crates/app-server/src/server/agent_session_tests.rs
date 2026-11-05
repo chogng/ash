@@ -1835,3 +1835,210 @@ fn thread_naming_updates_the_durable_catalog_and_other_windows_without_opening_d
         "会话最终名"
     );
 }
+
+struct TitleModel {
+    started: mpsc::Sender<(ModelRef, ModelRequest)>,
+    finish: std::sync::Mutex<mpsc::Receiver<()>>,
+}
+
+impl ModelService for TitleModel {
+    fn invoke(
+        &self,
+        selection: ModelSelection<'_>,
+        request: &ModelRequest,
+        _: &CancellationToken,
+    ) -> Result<ModelResponse, CoreError> {
+        let text = if request
+            .instructions
+            .as_deref()
+            .is_some_and(|instructions| instructions.starts_with("Write a short title"))
+        {
+            let ModelSelection::Session(model) = selection else {
+                panic!("title generation must use a selected model");
+            };
+            self.started.send((model.clone(), request.clone())).unwrap();
+            self.finish
+                .lock()
+                .unwrap()
+                .recv_timeout(Duration::from_secs(10))
+                .unwrap();
+            "修复解析器"
+        } else {
+            "Done"
+        };
+        Ok(ModelResponse {
+            output: vec![ResponseItem::Text(text.into())],
+            usage: None,
+            billing: None,
+            stop_reason: StopReason::Completed,
+        })
+    }
+}
+
+#[test]
+fn unnamed_thread_projects_preview_then_persists_the_generated_title() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("title-state.sqlite3");
+    let config_path = directory.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        "[agent.threadTitleModel]\nprovider = 'openai'\nmodel = 'gpt-6-luna'\n",
+    )
+    .unwrap();
+    let config = Arc::new(
+        ConfigStore::open_with_paths(directory.path().join("config.sqlite3"), &config_path)
+            .unwrap(),
+    );
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        ash_state::SqliteThreadStore::open(&path).unwrap(),
+    )));
+    let (started, invoked) = mpsc::channel();
+    let (finish, gate) = mpsc::channel();
+    let server = AppServer::new(
+        threads.clone(),
+        Arc::new(TitleModel {
+            started,
+            finish: std::sync::Mutex::new(gate),
+        }),
+        ash_app_server_diff::compute,
+    )
+    .with_config_store(config)
+    .with_model_catalog(Arc::new(TestModels));
+    let mut first = server.connection();
+    let mut second = server.connection();
+    for connection in [&mut first, &mut second] {
+        call(
+            &server,
+            connection,
+            "initialize",
+            serde_json::json!({"clientInfo":{"name":"titles","version":"1"}}),
+        );
+        call(
+            &server,
+            connection,
+            "session/catalog/subscribe",
+            serde_json::json!({}),
+        );
+    }
+    let params = serde_json::json!({"commandId":"unnamed", "title":"", "executionTarget":null});
+    let created = call(&server, &mut first, "session/create", params.clone());
+    let session = created["result"]["session"]["sessionId"]
+        .as_str()
+        .unwrap_or_else(|| panic!("{created}"));
+    let session_id = ash_protocol::SessionId::new(session).unwrap();
+    let thread_id = ThreadId::new(session).unwrap();
+    let submission = serde_json::json!({
+        "commandId":"first-title-turn", "sessionId":session,
+        "request":{"type":"startTurn", "threadId":session, "expectedSequence":1,
+            "input":[{"type":"text","text":"请修复解析器。\n\n处理空输入。"}]}
+    });
+    let started = call(&server, &mut first, "session/request", submission.clone());
+    assert!(started.get("result").is_some(), "{started}");
+    let (model, request) = invoked.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert_eq!(model.model.as_str(), "gpt-6-luna");
+    assert!(request.tools.is_empty());
+    assert_eq!(request.tool_choice, ash_protocol::ToolChoice::None);
+    assert_eq!(
+        call(
+            &server,
+            &mut second,
+            "session/catalog/read",
+            serde_json::json!({"sessionId":session}),
+        )["result"]["session"]["title"],
+        "请修复解析器。 处理空输入。"
+    );
+    assert!(threads.read_thread(&thread_id).unwrap().title.is_empty());
+    let replay = call(&server, &mut first, "session/request", submission);
+    assert_eq!(replay["result"], started["result"]);
+    assert!(invoked.try_recv().is_err());
+    second.outbound_notifications.drain();
+    finish.send(()).unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let changed = second
+            .outbound_notifications
+            .drain()
+            .into_iter()
+            .any(|item| {
+                item["method"] == "session/changed" && item["params"]["sessionId"] == session
+            });
+        if changed && threads.read_thread(&thread_id).unwrap().title == "修复解析器" {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "title was not published"
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let recreated = call(&server, &mut first, "session/create", params);
+    assert_eq!(recreated["result"]["session"]["sessionId"], session);
+    let restored =
+        ThreadController::with_store(Arc::new(ash_state::SqliteThreadStore::open(&path).unwrap()));
+    assert_eq!(
+        restored
+            .read_session_catalog(&session_id)
+            .unwrap()
+            .unwrap()
+            .title,
+        "修复解析器"
+    );
+}
+
+#[test]
+fn chat_session_surface_survives_replay_and_rejects_a_conflicting_creation() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("chat-surface.sqlite3");
+    let params = serde_json::json!({
+        "commandId": "ash-chat-root",
+        "title": "Ash Chat",
+        "executionTarget": null,
+        "surface": "chat",
+    });
+    let session_id;
+    {
+        let threads = Arc::new(ThreadController::with_store(Arc::new(
+            ash_state::SqliteThreadStore::open(&path).unwrap(),
+        )));
+        let (sender, _) = mpsc::channel();
+        let server = AppServer::new(
+            threads,
+            Arc::new(CaptureModel(sender)),
+            ash_app_server_diff::compute,
+        );
+        let mut connection = server.connection();
+        call(
+            &server,
+            &mut connection,
+            "initialize",
+            serde_json::json!({"clientInfo":{"name":"chat-surface","version":"1"}}),
+        );
+        let created = call(&server, &mut connection, "session/create", params.clone());
+        assert_eq!(created["result"]["session"]["surface"], "chat", "{created}");
+        session_id = ash_protocol::SessionId::new(
+            created["result"]["session"]["sessionId"].as_str().unwrap(),
+        )
+        .unwrap();
+        let replayed = call(&server, &mut connection, "session/create", params.clone());
+        assert_eq!(replayed["result"]["session"], created["result"]["session"]);
+        let mut conflicting = params;
+        conflicting["surface"] = serde_json::json!("code");
+        let rejected = call(&server, &mut connection, "session/create", conflicting);
+        assert!(rejected.get("error").is_some(), "{rejected}");
+    }
+    let reopened =
+        ThreadController::with_store(Arc::new(ash_state::SqliteThreadStore::open(&path).unwrap()));
+    let root = ThreadId::new(session_id.as_str()).unwrap();
+    assert_eq!(
+        reopened.read_thread(&root).unwrap().surface,
+        Some(ash_protocol::SessionSurface::Chat)
+    );
+    assert_eq!(
+        reopened
+            .read_session_catalog(&session_id)
+            .unwrap()
+            .unwrap()
+            .surface,
+        Some(ash_protocol::SessionSurface::Chat)
+    );
+}

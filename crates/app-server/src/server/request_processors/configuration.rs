@@ -455,6 +455,9 @@ impl<'ctx, C: ConfigRequestProcessorContext + ?Sized> ConfigRequestProcessor<'ct
                     approval_review_model: approval_review_model_update_from_dto(
                         params.approval_review_model,
                     )?,
+                    thread_title_model: model_ref_update_from_dto(params.thread_title_model)?,
+                    thread_recap_model: model_ref_update_from_dto(params.thread_recap_model)?,
+                    thread_recap_enabled: params.thread_recap_enabled,
                     code_review_model: model_ref_update_from_dto(params.code_review_model)?,
                     commit_message_model: model_ref_update_from_dto(params.commit_message_model)?,
                     commit_message_enabled: params.commit_message_enabled,
@@ -501,6 +504,9 @@ impl<'ctx, C: ConfigRequestProcessorContext + ?Sized> ConfigRequestProcessor<'ct
                     model: Patch::Missing,
                     model_reasoning_effort: Patch::Missing,
                     approval_review_model: Patch::Missing,
+                    thread_title_model: Patch::Missing,
+                    thread_recap_model: Patch::Missing,
+                    thread_recap_enabled: Patch::Missing,
                     code_review_model: Patch::Missing,
                     commit_message_model: Patch::Missing,
                     commit_message_enabled: Patch::Missing,
@@ -967,6 +973,9 @@ fn config_read_result(
         model: snapshot.values.model.map(model_ref_dto),
         model_reasoning_effort: snapshot.values.model_reasoning_effort,
         approval_review_model: approval_review_model_dto(snapshot.values.approval_review_model),
+        thread_title_model: snapshot.values.thread_title_model.map(model_ref_dto),
+        thread_recap_model: snapshot.values.thread_recap_model.map(model_ref_dto),
+        thread_recap_enabled: snapshot.values.thread_recap_enabled,
         code_review_model: snapshot.values.code_review_model.map(model_ref_dto),
         commit_message_model: snapshot.values.commit_message_model.map(model_ref_dto),
         commit_message_enabled: snapshot.values.commit_message_enabled,
@@ -1476,6 +1485,7 @@ fn approval_review_model_update_from_dto(
 
 fn provider_config_dto(config: ModelProviderConfig) -> ProviderConfigDto {
     ProviderConfigDto {
+        ultra_models: config.ultra_models.into_iter().map(|model| model.to_string()).collect(),
         model_acceleration: config.model_acceleration.into_iter().map(|(model, option)| (model.to_string(), option)).collect(),
         disabled_acceleration_options: config.disabled_acceleration_options.into_iter().map(|(model, options)| (model.to_string(), options)).collect(),
         connection: config.connection.to_string(),
@@ -1564,6 +1574,9 @@ pub(super) fn provider_config_from_dto(
         .transpose()?
         .unwrap_or_default();
     Ok(ModelProviderConfig {
+        ultra_models: config.ultra_models.into_iter().map(|model| {
+            ModelId::new(model).map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))
+        }).collect::<Result<_, RpcError>>()?,
         model_acceleration: config.model_acceleration.into_iter().map(|(model, option)| {
             Ok((ModelId::new(model).map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?, option))
         }).collect::<Result<_, RpcError>>()?,

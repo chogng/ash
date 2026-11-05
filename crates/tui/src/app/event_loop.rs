@@ -47,6 +47,8 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
     let mut output = inline::Output::default();
     let mut process_resource_demand = ProcessResourceDemand::Disabled;
     let mut pending_runtime_event = None;
+    let mut terminal_focused = true;
+    driver.report_recap_presence(terminal_focused);
     if let Err(error) = draw_terminal(&mut terminal, driver.app_mut(), &mut output) {
         let _ = pump.shutdown();
         return Err(error.into());
@@ -188,7 +190,12 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     driver.app_mut().poll_issue_refresh(now)
                 }
                 RuntimeEvent::Terminal(terminal::TerminalEvent::Input(event)) => match event {
+                    Event::FocusLost => {
+                        terminal_focused = false;
+                        None
+                    }
                     Event::FocusGained => {
+                        terminal_focused = true;
                         // Reattached terminals have no live capability snapshot until the CLI reports again.
                         terminal.refresh_program_status();
                         Some(HostCommand::RefreshClipboardImageAvailability.into())
@@ -247,6 +254,7 @@ fn run_session(session: &mut AppServerSession, options: TuiOptions) -> Result<Tu
                     }
                 }
             }
+            driver.report_recap_presence(terminal_focused);
             driver.schedule_refreshes();
             sync_process_resource_demand(
                 &mut pump,

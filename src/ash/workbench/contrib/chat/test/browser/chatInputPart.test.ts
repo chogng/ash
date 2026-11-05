@@ -3759,8 +3759,17 @@ suite('chatInput browser component', () => {
 			await page.evaluate(() => window.ashChatInputIntegration.showModels());
 			const model = page.getByRole('button', { name: 'Test Model 低', exact: true });
 			const effort = model.locator('.ash-chat-input-model-effort');
-			await expect(effort).toBeVisible();
 			await expect(effort).toHaveText('低');
+			await model.press('ArrowDown');
+			const picker = page.locator('.ash-chat-model-picker');
+			await picker.getByRole('menuitem', { name: '推理强度' }).press('ArrowRight');
+			const effortMenu = page.getByRole('menu', { name: '推理强度' });
+			await expect(effortMenu.getByRole('menuitemradio')).toHaveText(['低', '高']);
+			await expect(effortMenu.getByRole('menuitemradio', { checked: true })).toHaveText('低');
+			expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toMatchObject({ selectedReasoningEffort: undefined });
+			await effortMenu.getByRole('menuitemradio', { name: '低', exact: true }).click();
+			await expect(picker).toHaveCount(0);
+			expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toMatchObject({ selectedReasoningEffort: 'low' });
 			await expect(effort).toHaveCSS('color', theme === 'light' ? 'color(srgb 0.505726 0.505726 0.505726)' : 'rgb(255, 255, 255)');
 			const label = model.locator('.ash-chat-input-model-label');
 			await expect(label).toHaveCSS('align-items', 'baseline');
@@ -3772,11 +3781,12 @@ suite('chatInput browser component', () => {
 			expect(labelBounds.y + labelBounds.height / 2).toBeCloseTo(modelBounds.y + modelBounds.height / 2);
 			await expect(page.locator('.ash-chat-input-configuration-action')).toBeHidden();
 			await model.press('ArrowDown');
-			const picker = page.locator('.ash-chat-model-picker');
 			await expect(picker).toBeVisible();
 			await picker.getByRole('menuitem', { name: '推理强度' }).press('ArrowRight');
 			await page.getByRole('menuitemradio', { name: '高', exact: true }).click();
-			await expect(page.getByRole('button', { name: 'Test Model 高', exact: true })).toBeVisible();
+			await expect(picker).toHaveCount(0);
+			await expect(page.getByRole('menu', { name: '推理强度' })).toHaveCount(0);
+			await expect(page.getByRole('button', { name: 'Test Model 高', exact: true })).toBeFocused();
 		});
 	}
 
@@ -3957,7 +3967,6 @@ suite('chatInput browser component', () => {
 			const menu = page.locator('.ash-chat-model-card-configurable');
 			const lowCopy = chinese ? '较轻的推理，更快的响应' : 'Fast responses with lighter reasoning';
 			const highCopy = chinese ? '为复杂问题提供更深入的推理' : 'Greater reasoning depth for complex problems';
-			await expect(trigger).toHaveAttribute('aria-description', lowCopy);
 			await expect(trigger).toHaveText(chinese ? '低' : 'Low');
 			await trigger.press('ArrowDown');
 			await expect(menu.locator('legend')).toHaveText(chinese ? ['推理强度', '上下文大小', '速度'] : ['Effort', 'Context Size', 'Speed']);
@@ -3966,6 +3975,7 @@ suite('chatInput browser component', () => {
 			const low = menu.getByRole('radio', { name: chinese ? '低' : 'Low', exact: true });
 			const high = menu.getByRole('radio', { name: chinese ? '高' : 'High', exact: true });
 			await expect(contextDefault).toBeChecked();
+			await expect(low).toBeChecked();
 			await expect(low).toHaveAttribute('aria-description', lowCopy);
 			await expect(high).toHaveAttribute('aria-description', highCopy);
 			await low.focus();
@@ -3990,6 +4000,7 @@ suite('chatInput browser component', () => {
 			await low.focus();
 			await low.press('Space');
 			await expect(trigger).toHaveText(chinese ? '低' : 'Low');
+			expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toMatchObject({ selectedReasoningEffort: 'low' });
 			await page.keyboard.press('Escape');
 			await expect(trigger).toBeFocused();
 			await expect(trigger).toHaveAttribute('aria-expanded', 'false');

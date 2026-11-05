@@ -4,10 +4,6 @@
 
 任务标签：**可做**表示已能定位现有入口与 owner，可选择一个行为切片实施；**后端前置**表示须先闭合领域或宿主契约；**布局前置**表示须先补齐布局 owner 的位置或移动契约；**复核**表示还需确认具体消费者或复现旧问题；**验收**表示缺真实环境证据；**测量**表示先取得数据；**Ash 产品**表示独立产品需求，不能按 VS Code 是否存在来删除。可选增强统一放在文末的[发展候选（未排期）](#发展候选未排期)，不计入当前交付待办。
 
-## Agents Window · Windows 环境选择器验收
-
-- [ ] **验收 · Windows 冷启动环境枚举** · macOS Desktop 已用受控 IPC 验证菜单即时打开、SSH 与 WSL 独立更新，以及新建环境表单保留选择和焦点。待在装有 WSL 2 的 Windows 实机冷启动 Ash，测量菜单展开、SSH 和 WSL 条目出现的时间，并核对 WSL 发行版列表。
-
 ## Agents Window · 真实 SSH 主机验收
 
 - [ ] **验收 · SSH 工作区信任** · 已通过本地桌面场景和远程路径的定向自动化测试。真实远程主机验收缺少可连接的 SSH 地址及允许创建临时目录的路径。取得这两项后，在隔离目录验证 SSH 工作区启动恢复、已有受限授权时重新提示并在确认后挂载，以及取消后目录未挂载。用远端目录绑定状态核对结果。
@@ -28,25 +24,6 @@
 
   - composition 开发模式复用 WebView2 工作台顶栏，并由 AppWindow 保留系统窗口按钮。125% 实测鼠标可打开搜索和应用菜单、隐藏和恢复主侧栏、拖动空白区并最大化，悬停最大化按钮可见贴靠布局。跨屏 DPI、键盘和系统无障碍仍待验收。记录在 `.build/ash-native-gpu-probe/workbench-system-titlebar/`。
 
-## Rust 后端生命周期 · Windows 验收
-
-- [ ] **验收 · Windows 用户实机** · 同步当前 Rust 改动和新增的 guard／watchdog／managed fixture 源文件，在已配置的 Windows 开发环境执行下列命令，保留完整输出、Windows 版本、架构及实际执行／跳过的测试数。macOS 原生测试及 Linux／Windows 交叉编译不能替代此项；Windows 的 Unix 专属 session/SIGSTOP 用例按 cfg 不执行。
-
-```powershell
-just verify ash-process-hardening --profile ci-test
-just verify ash-utils-pty --profile ci-test
-just verify ash-sandboxing --profile ci-test
-just verify ash-external-ext --profile ci-test
-just verify ash-arg0 --profile ci-test
-just verify ash-app-server-daemon --profile ci-test
-just verify ash-app-server-runtime --profile ci-test --lib --filter managed::tests
-just verify ash-app-server --profile ci-test --process-tests --test managed_lifecycle --test managed_initialize
-```
-
-Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Job Object 对 owned 子孙进程的回收、扩展探测超时后的旧代清理与恢复、停用后不被迟到探测重启，以及 daemon 显式停止后的连接／监听释放和同 profile 重启。另在隔离 profile 启动真实 App Server 与扩展宿主，强制结束 App Server，检查其 Job 内宿主及后代已退出、原监听端口可重新绑定；不要结束日常使用的 profile。只关闭客户端时，仍有有效 lease 的共享 daemon／后台任务应保持运行。命令和实机验收均通过后移除此节。
-
-2026-11-01 本机 Linux arm64 容器已通过上述 8 个包的 214 项定向测试及对应 check／rust-warnings；组合故障场景已验证后代退出、端口重绑及同 profile 重启。测试结束后无残留工作进程或 TCP 监听；Linux 线程枚举导致守护进程提前自杀的问题已修复，macOS PTY 和 daemon 回归通过。原始日志与范围见[验证记录](.build/lifecycle-linux-20261101/validation.json)。
-
 ## 窗口缩放布局 · Windows 验收
 
 - [ ] **验收** · 在 Windows 显示缩放 100%、125%、150%、200% 下，分别检查 IDE 与 Agents：连续拖动四边和四角、往返缩放、最大化后恢复；标题栏左右图标应保持相对窗口边缘的位置，按钮不得抖动、重叠或被裁切。再切换应用界面缩放，检查底部状态栏和右边缘是否出现 1px 裁切。
@@ -57,6 +34,10 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 2026-11-03 Windows 11 23H2（22631）实机验收未通过。IDE 主窗在 100%、125%、150%、200% 连续拖动四边和四角时均测到右侧标题栏按钮短时偏移。最大化、恢复及应用缩放 0、+1、−1 的稳定状态下，主窗与原生客户区对齐。辅助编辑器在 125% 的右边和底边、150% 的右边、200% 的底边各出现 1 个物理像素的越界。紧凑模式键盘切换和焦点恢复通过，菜单和 Agents 会话弹窗仍待验收。复现步骤、采样日志和 IDE 录像索引见 [Windows 验收记录](.build/ash-playwright-mcp/windows-resize/validation.json)。
 
 主窗修复复测（GPU 开启）。旧原生尺寸对根容器的限制已收窄为一个物理像素。125% 完整自托管场景通过，1,782 帧未发现按钮偏移，松手后及应用缩放 0、+1、−1 均与 Win32 客户区对齐。150% 仍有右侧标题栏按钮距边缘的偏移，稳定状态通过。100% 和 200% 的界面隔离场景通过。继续验证 150% 标题栏边距、辅助窗物理边界及 Agents 会话弹窗。见 [125% 日志](.build/ash-playwright-mcp/windows-resize/ide-125-gpu-final.log) 和 [150% 日志](.build/ash-playwright-mcp/windows-resize/ide-150-gpu-final.log)。
+
+2026-11-05 在同一 Windows 11 23H2 x64 主机复测 125%。将测试窗口移出 Windows Shell 浮层覆盖区后，IDE 主窗与辅助编辑器共采样 2,876 帧原生拖拽，布局断言、最大化恢复和辅助编辑器的紧凑模式键盘切换均通过。场景退出清理报 `taskkill` 拒绝访问，复查时该 PID 已退出。复验范围和退出错误见 `.build/todo-local-acceptance-20261105/resize-ide-125-clear-shell.log`。
+
+同一主机在 150%、GPU 合成开启时再次复现 IDE 主窗标题栏右侧短时偏移。原生拖拽 1,187 帧中有 67 帧违反边距断言，样本中偏移约 1.5 个物理像素。松手后的客户区、最大化恢复和应用缩放断言通过。日志位于 `.build/todo-local-acceptance-20261105/resize-ide-150-gpu.log`。
 
 ## Terminal · 滚动命令的渲染就绪边界
 
@@ -80,7 +61,7 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 ## Git 推送 · TODO
 
-- [ ] **修复候选 · 推送拒绝的稳定分类与恢复提示**：当前 `crates/app-server/src/server/request_processors/git.rs` 已保留有界 Git 命令诊断，`extensions/git/src/api.rs`／`commands.rs` 已提供单行错误、打开 Git 日志及只读命令输出，不能再列为“只能显示泛化失败”；参考 [Ash 诊断接线](https://github.com/chogng/ash/commit/e17eb2d3c9116cf9b45c4a569727f8b6ea3307d0)与[输出查看入口](https://github.com/chogng/ash/commit/e20fc992a2013b42e79f2257acd3e7be7fdd90c1)。剩余候选是 `crates/git/src/remote.rs` 的 reviewed push 仍未提供经核实的 non-fast-forward／fetch-first 类型化结果；参考 [非快进推送拒绝提示](https://github.com/zed-industries/zed/pull/47296)（2026-10-27 已合并，已进入 [v1.27.0-pre](https://github.com/zed-industries/zed/releases/tag/v1.27.0-pre) 预发布，稳定 v1.26.2 尚不包含），先确认机器可读结果契约，再由执行 owner 窄分类，沿既有协议补充先获取、审阅并整合远端变更后再推送的恢复方向。本轮仅静态复核，不标为完成。
+- [ ] **修复候选 · 推送拒绝的稳定分类与恢复提示**：当前 `crates/app-server/src/server/request_processors/git.rs` 已保留有界 Git 命令诊断，`extensions/git/src/api.rs`／`commands.rs` 已提供单行错误、打开 Git 日志及只读命令输出，不能再列为“只能显示泛化失败”；参考 [Ash 诊断接线](https://github.com/chogng/ash/commit/e17eb2d3c9116cf9b45c4a569727f8b6ea3307d0)与[输出查看入口](https://github.com/chogng/ash/commit/e20fc992a2013b42e79f2257acd3e7be7fdd90c1)。剩余候选是 `crates/git/src/remote.rs` 的 reviewed push 仍未提供经核实的 non-fast-forward／fetch-first 类型化结果；参考 [非快进推送拒绝提示](https://github.com/zed-industries/zed/pull/47296)（2026-10-27 已合并，已包含于 [Zed v1.27.0](https://github.com/zed-industries/zed/releases/tag/v1.27.0) 稳定版），先确认机器可读结果契约，再由执行 owner 窄分类，沿既有协议补充先获取、审阅并整合远端变更后再推送的恢复方向。本轮仅静态复核，不标为完成。
   - 范围与风险：保留现有一般诊断及用户选择的日志／只读输出入口，不重做通用错误展示层；类型化判断不依赖任意自然语言子串，不把认证、网络、hook 或 lease 拒绝误认作分支落后。未知结果保持既有回退，新分类与本地化恢复提示不增加原始 stderr、含凭据 URL 或路径披露；检查现有诊断边界但不扩大输出采集或持久化范围。不自动 fetch／pull／rebase／force-push／重试，保持 reviewed commit／upstream、权限、取消及失败后状态刷新。
   - 验收：在 `crates/git/src/remote_tests.rs`、`crates/app-server/src/server_tests.rs` 与 `extensions/git/tests/host.rs` 扩展受控 remote 的 diverged／fetch-first、成功、认证／hook／lease 拒绝、取消、未知格式和部分 ref 成功场景；核对分类与本地化恢复提示不泄露新增敏感信息，目标远端／ref 不变且无额外自动操作。复用现有扩展进程反馈测试，保持状态先落定、取消静默、只提示一次、日志与只读输出查看可用，并覆盖本地／SSH 及适用平台；现有合成一般错误测试不等同于推送拒绝分类验收。
 
@@ -89,20 +70,10 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 - [ ] **测量** · 最终独立窗口中最慢暖点击 375.6 ms：extensionHost/invoke/read（connection 1，request 2907）客户端往返 274.3 ms，同 ID 服务端处理 0.088 ms、出站 0.040 ms，Git 请求在之后才开始且仅 3.4 ms。尚未拆清 Renderer→Main→daemon 送达与返程 decode/dispatch，不能归因扩展执行或渲染。下一步补这些边界的 method/request ID 标记，保留极值复现；本轮全部原始数据和已完成实现见[报告](.build/scm-tail-v2/report.md)。
 - [ ] **checkIgnore 排队残余** · 统计读取与普通文件读取的两层共享读已完成；新 16 窗对照中 Git RPC p99 79.8→16.6 ms、资源排队 p99 77→0 ms，暖端到端 p95/p99 均通过预设稳定规则。仍有 1/960 暖点击等待 47 ms，前方三个独占 `git/checkIgnore` 请求依次完成；后续评估该路径须保留取消、写者顺序及仓库权限约束，不直接移除序列化。原始关联与完整结果见[报告](.build/scm-statistics-concurrency/report.md)。
 
-## PR #57 · 合并后剩余项
+## 2026-10-08 main 集成交接余项
 
-[PR #57](https://github.com/chogng/ash/pull/57) 已于 2026-10-20 正常 squash merge（`ee3dea640`）。后续仅在当前 main 本地整批修复与验证；不推送、不主动触发远端 CI、不恢复已暂停的 `pr-57-ci` heartbeat。保留其它任务修改，完整批次提交前准确 stage 并执行 `just commit-check origin/main`。
-
-- [ ] **完整 CI 覆盖**：获准发布后，以新 main SHA 核对原失败矩阵及 Windows sandbox acceptance。[此前失败的 CI](https://github.com/chogng/ash/actions/runs/39490567225) 在旧安全门禁后跳过了前端、Bazel 和 Rust 作业；本地证书修复后 `just dependency-security` 的 advisories／licenses／sources 已全部通过，但尚未发布，不能称远端全绿。已有 Linux x64 47 项通过证据不等于旧 hosted 启动失败根因已证实；尚无完整跨平台全绿证据；Desktop runtime acceptance 的 macOS hosted MCP 进程回归仍需远端通过证据，本机进程补验见 [AgentHost 记录](agenthost-todo.md#2026-10-29-macos-进程补验)。本地证书验证日志 `/tmp/ash-pr57-certificate-{security,dependencies-final,http-final,bazel-final,app-server-build}.log`。本轮 rebase 后 `0d95ccc29` 基线的 macOS 定向复核及首败／修正复验见[验证记录](.build/pr57-rebased/validation.json)；该记录不覆盖随后并行任务的 Activity Bar、Chat 和 Rust 改动。
-
-## MXC · 跨平台验收
-
-- [ ] **验收** · 在支持 PSEC 的 Windows、WSL2 和独立 Linux／x64 运行当前 SDK pin `f1e8694b`，并补外部局域网／公网 IPv6。命令与验收边界见 [MXC 清单](MXC-TODO.md) 与 [适配器验证](crates/mxc-sandbox/README.md#验证)。
-
-## Windows 开发实验资源清理
-
-- 保存 Rust 到 App 可用的 15 秒目标尚未达到。2026-10-19 在 `3df4938da` 暂停开发与同步后完成迁移修复的 20 次匹配尝试：空库成功中位数 20.06 → 19.80 秒（5/5 → 5/5），100 条历史会话 22.27 → 21.15 秒（3/5 → 5/5），历史成功样本快 1.12 秒（5.0%）；仍差 4.80／6.15 秒。空库差异很小，不能用成功样本的条件中位数替代总体延迟或失败率结论。原始样本与阶段成本见 `docs/build.md` 完整循环复测及 `.build/perf-win-edit-20261019-migration/q2-summary.json`。
-- 本轮复测完成，修复内容与正常构建已恢复；此前第五轮的 diff 适配器边界优化仍保留，旧源码上的约 25 秒结果不作为本轮基线。15 秒是体验目标，并非测量推导的性能下限；若继续优化，需根据发布前约 13.7 秒及历史发布后约 7.4 秒的成本选择方向。上述结果仅覆盖 diff 适配器编辑；本机卷均为 NTFS，没有 Dev Drive。
+- [ ] **并行开发** · `/team develop` 已有持久化和冻结工作树绑定，仍缺专用运行时、调度、review/check 执行、RPC/UI 和 SCM 落地。实现前该入口返回不可用。范围见 [Workflows](crates/ext/workflows/README.md)。
+- [ ] **复核 · 浏览器集成中的 scrollbar 点击偶发失败** · 2026-10-08 完整集成 840 项通过、1 项失败，未修改的基线重复 10 次出现 5 次相同失败。调查时保留现有断言。见 [main 集成交接记录](docs/archive/ash-main-handoff-2026-10-08.md#本次实际验证)。
 
 ## Rust 函数级增量编译
 
@@ -145,7 +116,7 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 ## AgentHost · TODO
 
 - [ ] **修复候选 · 保留 Provider 流错误的稳定分类**：沿 `crates/ash-api/src/requests.rs`、endpoint decoder、`crates/app-server/src/model_provider_error.rs` 到 `crates/core/src/turn/executor.rs` 核对以下独立缺口，避免将可诊断的失败降为通用无效响应。既有配置／认证／限流提示已存在，不重复建设错误展示层；以下依据静态调用链，尚未运行真实端点验收，各出处的合并与发布状态分别标注。
-  - **Chat Completions 错误帧**：`crates/ash-api/src/sse/openai_chat_completions.rs` 未识别 `error` envelope，无 `choices` 时直接忽略；若随后结束或只有 `[DONE]`，错误会变为缺少终态的 `InvalidResponse`。参考 [流错误分类保留](https://github.com/zed-industries/zed/pull/66038)（2026-10-23 已合并 main，已进入 [v1.27.0-pre](https://github.com/zed-industries/zed/releases/tag/v1.27.0-pre) 预发布，稳定 v1.26.2 尚不包含），在普通 chunk／usage 处理前识别经确认的错误帧并接回已有分类入口，不照搬上游类型装箱修复。Core 对无效响应只立即重试一次，而 transient 有等待及独立重试预算；须让额度／认证错误终止并给出正确恢复方向、过载沿原 transient 策略处理，而非一概关闭重试。
+  - **Chat Completions 错误帧**：`crates/ash-api/src/sse/openai_chat_completions.rs` 未识别 `error` envelope，无 `choices` 时直接忽略；若随后结束或只有 `[DONE]`，错误会变为缺少终态的 `InvalidResponse`。参考 [流错误分类保留](https://github.com/zed-industries/zed/pull/66038)（2026-10-23 已合并 main，已包含于 [Zed v1.27.0](https://github.com/zed-industries/zed/releases/tag/v1.27.0) 稳定版），在普通 chunk／usage 处理前识别经确认的错误帧并接回已有分类入口，不照搬上游类型装箱修复。Core 对无效响应只立即重试一次，而 transient 有等待及独立重试预算；须让额度／认证错误终止并给出正确恢复方向、过载沿原 transient 策略处理，而非一概关闭重试。
   - **Responses 模型不可用代码**：`requests.rs` 仍按正文子串识别，裸 `model_not_found` 从 `error`／`response.failed` 落为 `InvalidResponse`，同样可能多发一次请求；HTTP 403 则在读取该代码前归为认证错误。参考 [模型不可用终态错误](https://github.com/openai/codex/pull/56445)（2026-10-23 已合并，已包含于 [Codex 0.165.0](https://github.com/openai/codex/releases/tag/rust-v0.165.0)），优先识别可信协议结构中的精确 code，并沿现有稳定错误契约给出更换模型／检查模型访问的恢复方向，不凭自然语言子串推断、不自动切换模型。HTTP 400／404 与含 `invalid_request_error` 的现有路径本已不可重试，不能把所有模型不存在都描述为重试缺陷；未知 403 仍保留原认证语义。
   - **Responses 预算耗尽代码**：当已配置的 Responses 端点实际返回精确 `budget_reached` 流错误且未同时命中现有额度／无效请求正文分类，也会沿 `error`／`response.failed` 落为 `InvalidResponse` 并立即重试一次。参考 [预算耗尽终态分类](https://github.com/openai/codex/pull/59228)（2026-11-03 已合并；尚未包含于 [Codex 0.166.0](https://github.com/openai/codex/releases/tag/rust-v0.166.0)），在同一精确 code 分类入口保留不可重试结果与有界提示，不新增错误架构、不自动换模型或推断额度恢复时间。HTTP 400 的现有路径本已不可重试；含 `usage_limit`／`insufficient_quota`／`invalid_request_error` 等已命中分类的正文不算本缺口。此项为静态协议与调用链核对，未断言真实端点已发生故障。
   - **范围与验收**：在 `crates/ash-api/src/sse/openai_chat_completions_tests.rs`、`crates/ash-api/src/endpoint/responses/events_tests.rs` 和 `crates/app-server/src/model_provider_error_tests.rs` 补受控错误帧与完整 Core 调用次数断言；覆盖错误出现在首帧／部分输出之后、缺少／附带 `[DONE]`、普通 usage-only 帧、嵌套 `response.failed`、SSE／WebSocket 共用解码、400／403／404、取消、未知或畸形错误。额度／认证／已确认模型不可用不额外调用，过载仍按预算等待，终态与历史恢复提示一致；保留既有上下文溢出处理、错误正文截断和脱敏，不把原始 provider 正文直传 UI 或新增账号／provider 抽象。补精确 `budget_reached` 的顶层／嵌套错误帧、部分输出后失败、携带 retry-after 后跟 completed、已有额度／无效请求正文命中及 HTTP 400 场景，断言终态不多调用模型；未知 code 与正常 transient 的原重试策略不变。
@@ -153,7 +124,7 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 - [ ] **修复候选 · 兼容 Chat Completions 的结构化流内容**：`crates/ash-api/src/sse/openai_chat_completions.rs` 仍把 `delta.content` 限定为字符串，已启用 native streaming 的 OpenAI-compatible 端点遇到 text/thinking 数组会报错；参考 [Zed 混合流适配](https://github.com/zed-industries/zed/pull/65915)（已合并 main，已包含于 [Zed v1.26.2](https://github.com/zed-industries/zed/releases/tag/v1.26.2) 稳定版），沿现有 decoder 与 terminal assembly 支持经确认的结构化内容，保持思考与正文分离。不新增 provider 抽象或账号接线。
   - 兼容与验收：记录的 string／thinking-array／text-array 交替流应完整结束，实时事件顺序与最终输出一致；覆盖空 thinking、可选 closed、usage、tool-call 分片、取消和严格 DONE。同步参照 [推理字段选择](https://github.com/zed-industries/zed/pull/65926)（已包含于 [Zed v1.26.2](https://github.com/zed-industries/zed/releases/tag/v1.26.2) 稳定版）验证 reasoning／reasoning_content 的明确优先级与空值回退，不按全局文本去重；Ash 当前只读后者，不把上游双发缺陷误写成已复现 Ash 问题。保留原有 DeepSeek／Kimi／GLM 行为，对未知内容类型明确报错；本条依据静态核对，真实 provider 回归待实施时验收。
 
-- [ ] **修复候选 · Responses 推理文本兼容性**：`crates/ash-api/src/endpoint/responses/events.rs` 仅消费 `response.reasoning_summary_text.delta`，`responses.rs` 的最终推理项也只读取 `summary`；已配置 Responses 的兼容端点若只提供 `reasoning_text`，实时思考与最终推理文本均可能缺失。参考 [Responses 推理文本适配](https://github.com/zed-industries/zed/pull/65938)（2026-10-22 已合并 main，已进入 [v1.27.0-pre](https://github.com/zed-industries/zed/releases/tag/v1.27.0-pre) 预发布，稳定 v1.26.2 尚不包含），沿现有 decoder 与最终解析补齐经确认的事件和内容类型，不新增 provider 抽象或账号入口。本项为静态核对的兼容缺口，尚未复现真实端点故障，与上方 Chat Completions 协议不同。
+- [ ] **修复候选 · Responses 推理文本兼容性**：`crates/ash-api/src/endpoint/responses/events.rs` 仅消费 `response.reasoning_summary_text.delta`，`responses.rs` 的最终推理项也只读取 `summary`；已配置 Responses 的兼容端点若只提供 `reasoning_text`，实时思考与最终推理文本均可能缺失。参考 [Responses 推理文本适配](https://github.com/zed-industries/zed/pull/65938)（2026-10-22 已合并 main，已包含于 [Zed v1.27.0](https://github.com/zed-industries/zed/releases/tag/v1.27.0) 稳定版），沿现有 decoder 与最终解析补齐经确认的事件和内容类型，不新增 provider 抽象或账号入口。本项为静态核对的兼容缺口，尚未复现真实端点故障，与上方 Chat Completions 协议不同。
   - 范围与验收：先明确 summary 与 reasoning content 共存时的选择规则，不盲目拼接或按全局文本去重；保留加密 `ReasoningState` 的回放边界，不能把密文当作展示文本。在 `crates/ash-api/src/endpoint/responses/events_tests.rs`、`responses_tests.rs` 覆盖空／非空 delta、done 不重复发全文、`output_item.done` 与终态合成、非流式 content、未知内容项、仅 summary、两类共存、工具交错、usage、取消与 WebSocket 共用 decoder；实时事件和最终结果保持一致，既有终态／身份校验不放宽。真实兼容端点回归通过后才关闭本项。
 
 以下新产品能力和专项环境验收暂缓，按实际使用需要恢复。
@@ -173,7 +144,7 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 - [ ] **Sessions contribution 对齐余项** · 多对话会话的目录切换还需跨 Thread 原子提交执行目标并保留各自的工作区。远程和 Provider 会话还需对接其拥有方的目录选择和授权契约。列表撤销通知需先由归档、分组和筛选各自提供可撤销操作。常驻列表提示和存储清理提示分别缺少对应的引导和清理建议生产方。
 
-- [ ] **New Environment · Cloud 与 WSL 验收** · Cloud 需要可路由的 Sessions provider 与目标发现和创建契约。仍需在 Windows 实机验证 WSL 首次连接及环境变量注入。
+- [ ] **New Environment · Cloud 与 WSL 环境变量** · Cloud 需要可路由的 Sessions provider 与目标发现和创建契约。Windows 实机的 WSL 首次连接已通过，仍需验证保存的环境变量到达 WSL 会话启动的命令。
 
 ### Artifact Integrations
 
@@ -191,7 +162,7 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 - [ ] **验收前置 · 上游同场景对照** · Ash 当前命令提示、补全、链接及快照已取得 86 项定向回归、2 项链接补验和 Windows Desktop 两个自托管场景的通过证据，范围见 `docs/chat.md`。Actions 的移动命令、工作区选择入口及四个内置 context 来源已完成本地迁移，128 项上下文界面回归、36 项最终定向测试和 macOS Electron 键盘流程通过。后续听写显式注册、New Chat／Helpful 命令契约与 Find 行为已通过本地定向测试，新的 New Chat ID 及附件键盘流程也通过 macOS Electron 自托管。 本轮三个诊断命令、Agent 窗口目录服务装配及日志导出共享入口已通过 IDE／Agent Window 两个 Electron/App Server 场景。本轮插件管理入口及 New Chat 的共享注册／窗口焦点委派通过 89 项定向测试和两个 Desktop 场景。只读 VS Code 源码的测试产物已由其原编译工具补齐，官方 Chromium runner 的 105 项 actions／插件入口测试通过；上游真实桌面的 Plugins 查询、重复打开、搜索焦点及未发送草稿四项语义也已补验。其内置 GitHub／Emmet／Git 扩展产物仍不齐，这组通过结果不覆盖插件安装、授权或 marketplace。仍需对 `chatMoveActions`、`chatExecuteActions`、`chatContext`、`chatNewActions`、`chatTitleActions`、`chatFindActions`、`chatSpeechToTextActions`、`chatDeveloperActions` 的完整界面场景复核输入、焦点／选区、换行和主题；完整上游 API／UI 对齐验收仍未完成。
 - [ ] **PromptSyntax 剩余能力（用户已确认六类均需要）** · 已实现 Skill／Agent／Instructions 的原生 schema 编辑、引用补全与跳转、正文原生文件引用补全、Quick Fix、Agent／Instructions 文件创建与角色管理、保留来源及 digest 的 Skill 执行、从当前已保存 Agent 打开草稿并正常发送，以及项目 Instructions 的审阅导入与后续加载；这些链路已有中英文 Ash 自举与定向回归。已接入用户级 Claude／Codex Instructions 导入、Agent 工具列表 CodeLens 和新聊天浮层。Claude 同步 POSIX PreToolUse 命令可审阅后导入为禁用，重复来源可识别，后端执行继续使用原 Hook 权限。本轮按 Ash 原生范围继续，第三方 harness Hook 兼容与迁移暂缓。原生剩余项包括扩展来源作者契约、模型引用的目录校验（已接入目录补全和引用格式校验）、工具集编辑、通用改写和 URL 入口。当前 Markdown 已可另存为原生 Agent 或 Instructions；逐条沿原 owner 实现并验收，不能以补文件计完成。范围与现状见 [promptSyntax 目录对应](docs/chat.md#promptsyntax-目录对应)，跨产品同场景复核仍待执行。
 
-- [ ] **修复候选 · Chat 回复的相对文件链接**：`src/ash/workbench/contrib/chat/browser/widget/chatListRenderer.ts` 的 `ChatListItemRenderer` 创建及增量更新助手 Markdown 时仍未传入目录基址（[渲染职责拆分](https://github.com/chogng/ash/commit/a748759f3aa13a070d97c20633496c32da82cbff) 已从 `chatListWidget.ts` 迁出逐消息渲染），`src/ash/base/browser/markdownRenderer.ts` 因缺少 `baseUri` 拒绝 `README.md` 等相对链接。现有 `parseInlineFileReference` 与 `resolveFileLink` 已支持显式、无 authority 的本机 `file:///…#L…` 引用并打开到行号，但不解析 `README.md` 等相对路径；保留该受限入口，不将其重复列为缺失。参考 [相对回复链接解析](https://github.com/microsoft/vscode/pull/344087)（2026-10-25 已合并，已包含于 [VS Code 1.144.0](https://github.com/microsoft/vscode/releases/tag/1.144.0)），沿 `src/ash/sessions/browser/chatWidgetModel.ts` 的 Session／Thread owner 与 `chatWidget.ts` 为渲染提供带来源身份的权威工作目录，补齐回复 → 文件打开链路；不借用当前全局工作区、不改写历史原文。本项为静态调用链缺口，尚未运行行为验收，不扩大到任意资源自动读取。
+- [ ] **修复候选 · Chat 回复的相对文件链接**：`src/ash/workbench/contrib/chat/browser/widget/chatListRenderer.ts` 的 `ChatListItemRenderer` 创建及增量更新助手 Markdown 时仍未传入目录基址（[渲染职责拆分](https://github.com/chogng/ash/commit/a748759f3aa13a070d97c20633496c32da82cbff) 已从 `chatListWidget.ts` 迁出逐消息渲染），`src/ash/base/browser/markdownRenderer.ts` 因缺少 `baseUri` 拒绝 `README.md` 等相对链接。现有 `parseInlineFileReference` 与 `resolveFileLink` 已支持显式、无 authority 的本机 `file:///…#L…` 引用并打开到行号，但不解析 `README.md` 等相对路径；保留该受限入口，不将其重复列为缺失。`chatGPTWidgetModel.ts` 已通过 `getResponseLinkOpener` 为外部 Web 回复提供独立外链策略，具有 Ash 来源的内嵌回复仍回到原入口；此候选只补原生 Ash Session／Thread 的相对文件链接，不将外部回复套用本机目录。参考 [相对回复链接解析](https://github.com/microsoft/vscode/pull/344087)（2026-10-25 已合并，已包含于 [VS Code 1.144.0](https://github.com/microsoft/vscode/releases/tag/1.144.0)），沿 `src/ash/sessions/browser/chatWidgetModel.ts` 的 Session／Thread owner 与 `chatWidget.ts` 为渲染提供带来源身份的权威工作目录，补齐回复 → 文件打开链路；不借用当前全局工作区、不改写历史原文。本项为静态调用链缺口，尚未运行行为验收，不扩大到任意资源自动读取。
   - 前提与范围：复用 `ISessionWorkspace` 的 `authorityId`／`root`、既有本地／SSH URI 和 `openChatMarkdownLink` 打开边界；优先采用所属 Thread 的执行目录，不能用父 Session 的目录覆盖子 agent／worktree；目录 URI 须保留目录基址语义。先明确历史回复所属目录的来源，目录未水合、历史来源不确定或 provider 不支持时不猜测回退本机。来源 Session／Thread／目录变化时使对应渲染基址失效；不全局放宽 file scheme、不将模型 Markdown 标为可信，也不新增第二份工作区状态。
   - 验收：在 `src/ash/workbench/contrib/chat/test/browser/chatListWidget.test.ts` 和 `widget/chatContentMarkdownRenderer.test.ts` 补实时／历史恢复、切换会话及线程、流式重渲染、空格／Unicode／父目录路径、本地与 SSH 同名文件场景，并从真实 Chat 点击验证目标执行环境。复用现有打开与文件权限检查，不跨连接；外链和已有会话链接保持可用，脚本与未信任 command 仍拒绝，缺少来源的链接不伪造可打开地址。
 
@@ -238,11 +209,11 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 测量入口与约束见[审计与测量](docs/ash-app-server-data-path-audit.md)。以下先量化，再决定方案，不能把隔离 microbenchmark 当成整条 Desktop 收益。
 
 - [ ] **测量** · 量化 receive／assemble／decode／parse／schema／adapter／apply／paint 阶段、队列 bytes／elapsed 与真实 task yield；核对 ACK 跟随消费和跨进程时钟关系。
-- [ ] **具体消费者测量 · 长 Chat 历史首次解析**：`src/ash/workbench/contrib/chat/browser/widget/chatListWidget.ts` 在面板显示时为当前已加载条目建立 `ChatListItemRenderer`，由 `chatListRenderer.ts` 创建 Markdown（[渲染职责拆分](https://github.com/chogng/ash/commit/a748759f3aa13a070d97c20633496c32da82cbff)）；`chatContentParts/chatMarkdownContentPart.ts` 对短文本立即解析、长文本排到下一帧；隐藏面板已只保留最新投影，代码块派生文档已按视口及焦点／选区准入，但 Markdown 首次解析尚非逐行视口准入。参考 [按需首次解析 Markdown](https://github.com/zed-industries/zed/pull/65470)（2026-10-21 已合并，已进入 [v1.27.0-pre](https://github.com/zed-industries/zed/releases/tag/v1.27.0-pre) 预发布，稳定 v1.26.2 尚不包含），先测相同长历史首开时屏幕外解析次数、主线程时间、峰值内存和首次可读绘制；现有增量复用／每帧合并／代码块延迟资源不重复列为缺失，不把上游数据当作 Ash 收益。
+- [ ] **具体消费者测量 · 长 Chat 历史首次解析**：`src/ash/workbench/contrib/chat/browser/widget/chatListWidget.ts` 在面板显示时为当前已加载条目建立 `ChatListItemRenderer`，由 `chatListRenderer.ts` 创建 Markdown（[渲染职责拆分](https://github.com/chogng/ash/commit/a748759f3aa13a070d97c20633496c32da82cbff)）；`chatContentParts/chatMarkdownContentPart.ts` 对短文本立即解析、长文本排到下一帧；隐藏面板已只保留最新投影，代码块派生文档已按视口及焦点／选区准入，但 Markdown 首次解析尚非逐行视口准入。参考 [按需首次解析 Markdown](https://github.com/zed-industries/zed/pull/65470)（2026-10-21 已合并，已包含于 [Zed v1.27.0](https://github.com/zed-industries/zed/releases/tag/v1.27.0) 稳定版），先测相同长历史首开时屏幕外解析次数、主线程时间、峰值内存和首次可读绘制；现有增量复用／每帧合并／代码块延迟资源不重复列为缺失，不把上游数据当作 Ash 收益。
   - 仅在测量显示屏幕外解析占据实质成本后，评估现有 row／block owner 的首次激活，保留完整原文与唯一 transcript；否则记录结果并停止，不预设全列表虚拟化或另建缓存。使用普通文本、代码及工具 Markdown 的重复样本，覆盖恢复滚动／阅读锚点、异步高度变化、流式尾部、复制／搜索／导出、辅助阅读与焦点；成本下降且上述行为不退化才采用。
 - [ ] **测量** · 把后端结果构造和 writer／producer 等待纳入资源准入测量，评估有界数据／控制输出契约与同连接队头阻塞；不靠降低既有文件上限掩盖成本。
 
-- [ ] **测量 · 消息文件检查点的提交与完成成本**：`crates/core/src/thread_controller.rs` 在含 `ItemCompleted` 的批次同步捕获一次检查点并供批内条目共享；`crates/app-server/src/server/message_checkpoints.rs` 经 `crates/git-turn-changes/src/ledger.rs` 等待各仓库捕获，`crates/git/src/objects.rs` 创建临时索引并执行 `read-tree`／`add --all`／`write-tree`，普通目录则由 `crates/worktree/src/directory_checkpoint.rs` 完整复制与散列后才按 digest 去重。参考 [消息检查点成本反馈](https://github.com/zed-industries/zed/pull/65989)（2026-10-26 已合并，已进入 [v1.27.0-pre](https://github.com/zed-industries/zed/releases/tag/v1.27.0-pre) 预发布，稳定 v1.26.2 尚不包含），先量化大目录或无文件变化时的排队、复制／Git 捕获、持久提交与首次模型调用时间；没有 Ash 实测，不能移用上游卡顿结论或删除恢复能力。
+- [ ] **测量 · 消息文件检查点的提交与完成成本**：`crates/core/src/thread_controller.rs` 在含 `ItemCompleted` 的批次同步捕获一次检查点并供批内条目共享；`crates/app-server/src/server/message_checkpoints.rs` 经 `crates/git-turn-changes/src/ledger.rs` 等待各仓库捕获，`crates/git/src/objects.rs` 创建临时索引并执行 `read-tree`／`add --all`／`write-tree`，普通目录则由 `crates/worktree/src/directory_checkpoint.rs` 完整复制与散列后才按 digest 去重。参考 [消息检查点成本反馈](https://github.com/zed-industries/zed/pull/65989)（2026-10-26 已合并，已包含于 [Zed v1.27.0](https://github.com/zed-industries/zed/releases/tag/v1.27.0) 稳定版），先量化大目录或无文件变化时的排队、复制／Git 捕获、持久提交与首次模型调用时间；没有 Ash 实测，不能移用上游卡顿结论或删除恢复能力。
   - 范围与前提：记录文件／字节量、仓库数和重复样本，分别覆盖本地与 SSH 执行 owner；保留事件／文件恢复顺序、写租约、目录身份、真实 Git index、私有 ref 生命周期及外部编辑冲突语义。不预设跳过捕获、增加开关／缓存或改变异步边界；只有捕获成本确有实质占比才选择保持同一快照语义的窄优化，否则记录结果并停止。
   - 验收：复用 `crates/core/src/thread_controller/restore_tests.rs`、`crates/git/src/objects/tree_tests.rs`、`crates/git-turn-changes/src/turn_changes_tests.rs`、`crates/worktree/src/worktree_tests.rs` 及 `crates/app-server/src/checkpoint_live_tests.rs`，覆盖大仓库无变更／已修改、未跟踪／忽略文件、多仓库、普通目录与符号链接、活动写入时不可用、捕获中断清理、重启／fork／恢复及私有 ref 释放；记录 Windows／macOS／Linux 各自真实测量边界，不能用局部耗时替代整条提交体验或恢复正确性。
 
@@ -264,6 +235,12 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 | Sessions 跨客户端审阅与 provider changeset | 当前 read marker 只属于窗口并绑定 revision。需要跨客户端 reviewed-file、transient/provider changeset、隔离或反馈评论时，先确定共享领域契约和真实消费者，不因上游身份模型不同新增 facade。                                                                                                                                                                                                                  |
 | Configuration 其他契约                     | configuration variables、Remote User、缓存默认值／实验覆盖、跨 profile 规则，以及 registry／schema、typed parse/serialize、控件描述与 `ashBinding` 均按具体调用需求复核，不按上游成员表整体补齐；Rust `config.toml` 的编辑入口仍归其宿主。设置呈现与接入规则见 [Settings 接入边界](src/ash/workbench/contrib/preferences/README.md#当前实现)。                                                             |
 | 托管策略强制新鲜度门禁                     | 当前生产账户映射仅 `ChatDefaultModel`；未接入 `forceRemoteSettingsRefresh`、跨重启的刷新要求或执行端门禁。若纳入企业治理，先确定 Ash 管理来源、作用域、启动／重载要求及 App Server 执行 owner，再贯通 pending／blocked／satisfied、显式恢复和跨端校验；普通网络失败不自动升级为全产品 AI 禁用，Renderer 禁用输入不作为执行端强制保证。                                                                     |
+
+### Minimap 相邻区段标题可读性
+
+- [ ] **修复候选 · Minimap 相邻区段标题重叠**：`src/ash/editor/contrib/sectionHeaders/browser/sectionHeadersController.ts` 已将 region／MARK 标题交给现有 Minimap；`src/ash/editor/browser/viewParts/minimap/minimap.ts` 仍逐条按源行位置绘制完整字号的标题与背景，没有处理相邻标题的占用区域。行距小于标题高度时，后绘制的标题会覆盖前一条。参考 [VS Code 区段标题防重叠](https://github.com/microsoft/vscode/pull/346190)（2026-11-05 已合并 main，稳定版 [1.145.0](https://github.com/microsoft/vscode/releases/tag/1.145.0) 尚不包含），在现有绘制 owner 内按源行顺序处理标题碰撞，保留每个标题的可读性；这是静态绘制链确认的修复候选，尚未完成 Ash 实机复现。
+  - 范围与风险：只调整标题标签的布局，不新增扫描器或第二份文档模型，不隐藏冲突标题；非冲突标题、分隔线、标记及点击／拖动导航保持既有源行语义。密集标题堆叠可能占用更多缩略图区，须明确视口底部裁切与滚动时的稳定行为；不顺带导入上游 fill 模式缩放或编辑器边框改动。
+  - 验收：扩展 `src/ash/editor/test/browser/editorDecorationViewport.test.ts` 的 Canvas 绘制记录及 Minimap 定向测试，覆盖相邻／嵌套 region、长标题后紧邻另一标题、分散标题、空标签与分隔线，并在真实编辑器核对字体大小、DPI、滚动、折叠、换行与紧凑采样场景。断言每个应显示标签均保留且绘制区域不互相覆盖，原有导航与非标题装饰不退化；不得把上游截图或测试数量当作 Ash 验收。
 
 ### 网络目录上的状态数据库策略
 
@@ -323,14 +300,10 @@ Windows 验收须覆盖 watchdog 对无进度进程的终止与端口释放、Jo
 
 ### SCM 文件拖入终端
 
-- [ ] **候选／链路补齐（未排期）· SCM 文件拖入终端**：`src/ash/workbench/contrib/scm/browser/scmViewPane.ts` 的变更树尚未提供 drag policy，共享 Tree／List 仅在消费者提供 `dnd.getDragURI` 时启用行拖动；终端已接入 URI-list 文件拖放和 `sendPath(resource, false)`。参考 [Zed Git 面板文件拖放](https://github.com/zed-industries/zed/pull/66423)（2026-11-02 已合并 main，稳定 v1.26.2 尚不包含），补齐从已显示的 SCM 工作文件到现有终端的路径输入，减少先定位 Explorer 或复制路径的步骤。本项是静态确认的入口缺口，不是执行失败或数据丢失缺陷。
+- [ ] **候选／链路补齐（未排期）· SCM 文件拖入终端**：`src/ash/workbench/contrib/scm/browser/scmViewPane.ts` 的变更树尚未提供 drag policy，共享 Tree／List 仅在消费者提供 `dnd.getDragURI` 时启用行拖动；终端已接入 URI-list 文件拖放和 `sendPath(resource, false)`。参考 [Zed Git 面板文件拖放](https://github.com/zed-industries/zed/pull/66423)（2026-11-02 已合并 main，稳定 v1.27.0 尚不包含），补齐从已显示的 SCM 工作文件到现有终端的路径输入，减少先定位 Explorer 或复制路径的步骤。本项是静态确认的入口缺口，不是执行失败或数据丢失缺陷。
   - 前提与范围：先限定单个文件行，沿现有 `TreeDragAndDrop` 和 Explorer 的 `text/uri-list` 契约导出权威 `sourceUri`，终端继续使用既有宿主 URI 转换及 shell 引号；只允许可确认的本地／同连接远端工作文件，分组、目录、已删除项、Git 历史／虚拟资源不伪装为工作文件。拖放只填入路径，不附加回车、不执行命令，不增加文件读写、上传或 provider 动作。当前终端只消费首个 URI，不能把上游多选行为直接照搬或静默截断成“多文件支持”；本候选不扩张到批量拖放。
   - 风险与验收：在 `src/ash/workbench/contrib/scm/test/browser/scmViewPane.test.ts` 与 `src/ash/workbench/contrib/terminal/test/browser/terminalService.test.ts` 补来源／接收链测试，并走真实 Desktop SCM → 终端拖放；覆盖 staged／unstaged 同一工作文件、删除与重命名、列表／树视图、刷新后旧行、空格／中文／引号／shell 元字符、本地与 SSH 同名路径。异连接、只读或已退出终端、未知 shell、控制字符及转换期间进程重启仍拒绝；点击预览、键盘打开、inline actions 和文件菜单不退化。沿用现有取消与执行主机检查，不绕开 `sendPath`。
 
 ## Chat accessibility · 缺失宿主入口
 
 - [ ] **前置** · `src/ash/workbench/contrib/chat/browser/accessibility/` 已接入消息标签、响应纯文本视图和 Chat 信号 owner；37 项定向测试与 1 项 Desktop 自托管场景通过。上游对应的 `chatTerminalOutputAccessibleView.ts`、`chatBackgroundShellOutputAccessibleView.ts`、`chatPetJumpGameAccessibleView.ts` 尚无 Ash 生产入口：缺少终端工具输出的焦点／内容契约、后台 Shell 输出视图和宠物游戏 owner。先闭合各自真实宿主及焦点恢复契约，再在对应路径接入 Accessible View 并验证键盘、内容更新和释放；不提前创建无调用方文件。
-
-## Chat Status · 订阅额度最终 Desktop 复验
-
-- [ ] **验证阻塞** · `chatStatusEntry.ts` 已通过 `IAccountService.readRateLimits` 接入现有 `account/rateLimits/read`，42 项定向测试（含中英文真实 Chromium 渲染、账号切换、取消、精确余额与未知额度）通过，独立本地化生成缺失 0 项。最后执行 `pnpm run test:smoke:ui test/smoke/areas/chat/chat-status.spec.ts` 时，准备与 Renderer 类型检查通过，但 Vite 的 `ash-browser-extensions` 内嵌本地化生成报 `Unknown translation: zh-CN/ash.chat/chat.context.invalidProviderData`；相同源码由 `bun build/resources/localization.ts` 独立生成成功。先排查 Vite 配置内嵌提取与独立提取的差异，再重跑原 Desktop 场景，不删断言或忽略未知翻译。证据：`/tmp/ash-chat-quota-verified.log`、`/tmp/ash-chat-quota-localization-fix.log`、`/tmp/ash-chat-quota-desktop-verified.log`；中英文截图在 `.build/desktop/playwright/unit-browser-hAxd3m/`。成功复验后移除此项。

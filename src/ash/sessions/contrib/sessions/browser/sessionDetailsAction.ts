@@ -7,8 +7,10 @@ import type { ServicesAccessor } from '../../../../platform/instantiation/common
 import { IsSessionsWindowContext } from '../../../../workbench/common/contextkeys.js';
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
+import { Menus } from '../../../browser/menus.js';
 import { sessionResource } from '../../../browser/chatHistoryModel.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
+import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
 import type { ISession } from '../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
@@ -51,6 +53,34 @@ registerAction2(class ShowSessionDetailsAction extends Action2 {
 			resource: URI.from({ scheme: 'ash-session-details', path: '/sessions.txt', query: generateUuid() }),
 			label: detailsTitle(),
 			initialText: formatSessionDetails(catalog),
+			languageId: 'plaintext',
+			readOnly: true,
+			showBreadcrumbs: false,
+		}, { pinned: true });
+	}
+});
+
+registerAction2(class ShowConversationRecapAction extends Action2 {
+	constructor() {
+		super({
+			id: 'sessions.showConversationRecap',
+			title: localize2({ bundle: 'ash.sessions', key: 'sessions.recap.command' }, 'Show Conversation Recap'),
+			f1: true,
+			menu: { id: Menus.SidebarSessionContext, group: 'conversation' },
+			precondition: ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ChatContextKeys.enabled.isEqualTo(true)),
+		});
+	}
+
+	override async run(accessor: ServicesAccessor, selection?: SessionsViewSelection): Promise<void> {
+		const target = selection ?? accessor.get(ISessionsService).activeSelection;
+		if (target?.kind !== 'session') { return; }
+		const { session, threadId } = target.active;
+		const current = accessor.get(ISessionsManagementService).sessions.find(item => item.sessionId === session.sessionId) ?? session;
+		const recap = current.chats.find(chat => chat.threadId === threadId)?.recap;
+		await accessor.get(IEditorService).openEditor({
+			resource: URI.from({ scheme: 'ash-session-details', path: '/recap.txt', query: generateUuid() }),
+			label: localize({ bundle: 'ash.sessions', key: 'sessions.recap.editorTitle' }, 'Conversation Recap'),
+			initialText: recap ?? localize({ bundle: 'ash.sessions', key: 'sessions.recap.empty' }, 'A recap is not available for this conversation yet.'),
 			languageId: 'plaintext',
 			readOnly: true,
 			showBreadcrumbs: false,

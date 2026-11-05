@@ -184,7 +184,7 @@ WebSocket eligibility 由独立的 `WebSocketApiProfile` 声明，不能从
 
 ChatGPT subscription 通过 `ash-chatgpt` 提供的 fresh authenticated target 进入 OpenAI Responses adapter；Agent loop 仍由 Ash Core `TurnExecutor` 持有。该订阅接口拒绝公开 API 的 `prompt_cache_breakpoint` 字段；runtime 选择明确的 `ApiEndpoint::ChatGptResponses`，不改写缓存字段或组装路由头。`ash-api` 统一处理这些协议规则，完整结果、流式调用和认证重试共用同一 API 入口。
 
-Codex 的 `Ultra` 和 Claude Code 的 `Ultracode` 表达产品协作设置，不作为 Ash 模型推理档位。ChatGPT 目录标准化仅保留已识别的 `ReasoningEffort`；目录中 `ultra` 的候选和默认值不会进入推理配置，也不会触发模式切换。TUI 的同名命令别名统一选择 Ash Multitask，保留独立 effort，委托仍由 Core 执行；当前没有启用 OpenAI 托管多 Agent 的请求参数，也没有 Claude Code 执行通道。完整边界见 [Multitask、Ultra 与 Ultracode](../collaboration-mode-templates/collaboration-modes.md#multitaskultra-与-ultracode)。
+Ash 按连接和型号保存独立的 Ultra 开关。支持 Ultra 的 OpenAI 模型在开启后以 `xhigh` 覆盖请求档位。模型还需在当前连接支持 `xhigh`。Anthropic 在没有显式档位时使用该值作为默认值，显式档位继续生效。模型目录向客户端提供开关状态和生效的请求档位覆盖。Chat 滑块在覆盖开始时移到对应档位。此时选择其他档位会关闭 Ultra 并应用新档位，直接关闭开关会恢复普通档位。见 [Multitask、Ultra 与 Ultracode](../collaboration-mode-templates/collaboration-modes.md#multitaskultra-与-ultracode)。
 
 新增能力应保持 invoker immutable、profile explicit、
 provider adapter private，以及 config/catalog/codec/operation/network 分层。

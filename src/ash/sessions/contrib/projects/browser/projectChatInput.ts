@@ -28,7 +28,7 @@ export class ProjectChatInput extends Disposable {
 		super();
 		// Projects belong to this host, independently of the foreground conversation's host.
 		const draft = sessions.createUntitledSession(
-			localize('chat.title.new', 'New Chat'),
+			undefined,
 			undefined,
 			LOCAL_AGENT_HOST_PROVIDER_ID,
 			false,

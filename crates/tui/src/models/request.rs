@@ -188,6 +188,9 @@ where
         expected_revision: config.revision,
         model,
         model_reasoning_effort,
+        thread_title_model: Patch::Missing,
+        thread_recap_model: Patch::Missing,
+        thread_recap_enabled: Patch::Missing,
         code_review_model: Patch::Missing,
         commit_message_model: Patch::Missing,
         commit_message_enabled: Patch::Missing,
@@ -265,6 +268,7 @@ fn configure_model<T: JsonRpcTransport>(
                     model: entry.model.clone(),
                     acceleration: selected.map_or(Patch::Null, Patch::Value),
                     long_context: None,
+                    ultra: None,
                 },
             )?;
         }
@@ -276,6 +280,7 @@ fn configure_model<T: JsonRpcTransport>(
                     model: entry.model.clone(),
                     acceleration: Patch::Missing,
                     long_context: Some(enabled),
+                    ultra: None,
                 },
             )?;
         }
@@ -321,6 +326,9 @@ fn write_pins<T: JsonRpcTransport>(
         expected_revision: config.revision,
         model: Patch::Missing,
         model_reasoning_effort: Patch::Missing,
+        thread_title_model: Patch::Missing,
+        thread_recap_model: Patch::Missing,
+        thread_recap_enabled: Patch::Missing,
         code_review_model: Patch::Missing,
         commit_message_model: Patch::Missing,
         commit_message_enabled: Patch::Missing,

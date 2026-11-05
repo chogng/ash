@@ -46,6 +46,7 @@ impl<'a> ModelRequestProcessor<'a> {
                 update: ash_models_manager::ModelPreferencesUpdate {
                     acceleration: params.acceleration,
                     long_context: params.long_context,
+                    ultra: params.ultra,
                 },
             })
             .map_err(|error| match error {

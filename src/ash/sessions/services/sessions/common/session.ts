@@ -1,3 +1,4 @@
+import type { SessionSurface } from '../../../../platform/agentHost/common/agent.js';
 import type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agent.js';
 export type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agent.js';
 import type { ApprovalMode, ChatAgent, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
@@ -5,6 +6,7 @@ import type { TurnChangeFile, TurnChangeSetSummary } from '../../../../workbench
 import type { IObservable } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
+import type { ModelReasoningEffort } from '../../../../platform/models/common/agentModels.js';
 
 export const enum SessionChangesetOperationScope {
 	Changeset = 'changeset',
@@ -133,8 +135,14 @@ export interface IChat {
 	readonly origin: ThreadOrigin;
 	readonly status: ChatStatus;
 	readonly title?: string;
+	readonly recap?: string;
 	readonly executionStatus?: AgentThreadExecutionStatus;
 	readonly management?: SessionManagementInfo;
+}
+
+/** Unhydrated chats inherit the session directory. An explicit null means the chat has no directory. */
+export function chatExecutionWorkspace(session: ISession, chat: IChat | undefined): ISessionWorkspace | null | undefined {
+	return chat?.workspace === undefined ? session.workspace : chat.workspace;
 }
 
 export type SessionStatus = 'active' | 'archived';
@@ -171,6 +179,7 @@ export interface ISession {
 	readonly application?: ISessionApplication;
 	readonly sessionId: SessionId;
 	readonly source?: 'automation';
+	readonly surface?: SessionSurface;
 	readonly title: string;
 	readonly status: SessionStatus;
 	readonly model?: ModelRef | null;
@@ -199,14 +208,22 @@ export interface SessionEnvironmentSelection {
 export interface IUntitledChatSession {
 	readonly providerId?: string;
 	readonly untitledSessionId: string;
+	/** The draft label is provisional until the backend receives the first message. */
+	readonly automaticTitle?: true;
 	readonly forkSource?: { readonly sessionId: SessionId; readonly threadId: ThreadId; };
 	readonly environment?: SessionEnvironmentSelection;
 	readonly title: string;
 	readonly model: ModelRef | undefined;
 	/** Distinguishes an explicit Auto choice from a draft awaiting its default. */
 	readonly modelSelectionKind?: 'manual';
+	/** Defaults captured when the draft began in this workspace. */
+	readonly modelDefaults?: { readonly workspace: string | null; readonly effort?: ModelReasoningEffort; };
+	/** A manual choice for this draft; null clears the captured effort. */
+	readonly reasoningEffortSelection?: ModelReasoningEffort | null;
 	readonly agent: ChatAgent | undefined;
 	readonly workspace: SessionWorkspaceSelection;
+	/** Selected Project to link when this draft acquires a durable Session. */
+	readonly projectId?: string;
 	/** Prepare the source workspace's container before creating the first durable Session. */
 	readonly devContainer?: boolean;
 	/** Created with the conversation on first send, never while selecting its workspace. */

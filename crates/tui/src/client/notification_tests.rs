@@ -77,6 +77,7 @@ fn thread_update_preserves_typed_scope_and_sequence() {
         stream_cursor: None,
         update: ThreadUpdate::Committed {
             event: ThreadEvent::ThreadCreated {
+                surface: None,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,

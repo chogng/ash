@@ -535,19 +535,10 @@ fn live_luna_websocket_uses_two_responses_on_one_caller_owned_session() {
 
 #[tokio::test]
 async fn responses_socket_admits_each_acceleration_option_before_connect_and_warmup() {
-    let mut info = model_provider_info::find_static_model(&model_ref("openai", "gpt-6.1-sol"))
+    let info = model_provider_info::find_static_model(&model_ref("openai", "gpt-6.1-sol"))
         .unwrap()
         .model();
     let selected = model_ref("ws-fixture", "gpt-6.1-sol");
-    info.settings
-        .service_tiers
-        .as_mut()
-        .unwrap()
-        .push(ash_protocol::ModelServiceTier {
-            id: "ultrafast".into(),
-            name: "Ultra Fast".into(),
-            description: "Fastest processing".into(),
-        });
     let mut definition = ProviderConfigRegistry::builtin()
         .get(&provider_id("openai"))
         .unwrap()

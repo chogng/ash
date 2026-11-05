@@ -33,6 +33,7 @@ fn setup(root: &Path) -> (AppServer, Value) {
     );
     let thread = server
         .start_thread(StartThreadRequest {
+            surface: None,
             execution_target: None,
             branch_name: None,
             worktree_start: None,

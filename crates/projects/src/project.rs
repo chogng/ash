@@ -19,6 +19,13 @@ pub enum ProjectStatus {
     Deleted,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ProjectScope {
+    Chat,
+    Code,
+}
+
 /// One host-resolved directory reference in a Project catalog.
 ///
 /// This is organizational metadata. It is never an executable directory authorization.
@@ -61,6 +68,8 @@ pub struct Project {
     #[serde(default)]
     pub updated_at_ms: Option<u64>,
     pub status: ProjectStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<ProjectScope>,
     pub name: String,
     pub description: String,
     pub roots: BTreeMap<DirId, ProjectRoot>,
@@ -70,6 +79,25 @@ pub struct Project {
 }
 
 impl Project {
+    pub fn scope(&self) -> ProjectScope {
+        self.scope.unwrap_or_else(|| {
+            let id = self.project_id.as_str();
+            // The Desktop folder picker and the TUI workspace flow used deterministic IDs
+            // before the scope was stored. Other legacy projects keep their Chat listing.
+            let workspace_id = id
+                .strip_prefix("folder-")
+                .or_else(|| id.strip_prefix("project-"))
+                .is_some_and(|hash| {
+                    hash.len() == 64 && hash.bytes().all(|byte| byte.is_ascii_hexdigit())
+                });
+            if workspace_id {
+                ProjectScope::Code
+            } else {
+                ProjectScope::Chat
+            }
+        })
+    }
+
     pub fn validate(&self) -> Result<(), crate::ProjectError> {
         if self.schema_version != PROJECT_SCHEMA_VERSION {
             return Err(crate::ProjectError::InvalidInput(format!(

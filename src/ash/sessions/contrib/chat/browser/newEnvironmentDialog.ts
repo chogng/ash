@@ -1,9 +1,11 @@
 import { parseSessionEnvironment } from '../../../services/sessions/common/sessionEnvironment.js';
 import './media/newEnvironmentDialog.css';
-import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import type { SessionExecutionTarget } from '../../../services/sessions/common/session.js';
@@ -23,11 +25,11 @@ interface EnvironmentFolder {
 interface EnvironmentDialogOptions {
 	readonly hosts: readonly EnvironmentHost[];
 	readonly selected: number;
-	readonly initial?: SessionExecutionTarget;
+	readonly initialFolders: readonly SessionExecutionTarget[];
 	readonly browse: (source: SessionExecutionTarget | undefined) => Promise<readonly SessionExecutionTarget[]>;
 	readonly recent: (source: SessionExecutionTarget | undefined) => Promise<readonly SessionExecutionTarget[]>;
 	readonly worktrees: (providerId: string, target: SessionExecutionTarget) => Promise<readonly { readonly label: string; readonly target: SessionExecutionTarget; }[]>;
-	readonly create: (name: string, providerId: string, folders: readonly SessionExecutionTarget[], variables: string) => Promise<void>;
+	readonly create: (name: string, providerId: string, folders: readonly EnvironmentFolder[], variables: string) => Promise<void>;
 }
 
 export class NewEnvironmentDialog extends Disposable {
@@ -38,7 +40,7 @@ export class NewEnvironmentDialog extends Disposable {
 	constructor(container: HTMLElement, options: EnvironmentDialogOptions) {
 		super();
 		const doc = container.ownerDocument;
-		const folders: EnvironmentFolder[] = options.initial ? [{ target: options.initial }] : [];
+		const folders: EnvironmentFolder[] = options.initialFolders.map(target => ({ target }));
 		let variables = '';
 		let busy = false;
 		let host: Awaited<ReturnType<EnvironmentHost['resolve']>>;
@@ -79,7 +81,7 @@ export class NewEnvironmentDialog extends Disposable {
 		};
 
 		const name = doc.createElement('input');
-		name.value = options.initial?.root.split(/[\\/]/).filter(Boolean).at(-1) ?? '';
+		name.value = folders[0]?.target.root.split(/[\\/]/).filter(Boolean).at(-1) ?? '';
 		field(main, localize('sessions.environment.name', 'Name'), name);
 		const select = doc.createElement('select');
 		const localHosts = doc.createElement('optgroup');
@@ -219,7 +221,8 @@ export class NewEnvironmentDialog extends Disposable {
 			for (const folder of folders) {
 				const row = doc.createElement('div');
 				row.className = 'ash-environment-row ash-environment-folder';
-				const path = doc.createElement('span');
+				appendIcon(Lxicon.folder, row);
+				const path = h(doc, 'span', { className: 'ash-environment-folder-name' });
 				path.textContent = folder.target.root.split(/[\\/]/).filter(Boolean).at(-1) ?? folder.target.root;
 				path.title = folder.target.root;
 				row.append(path);
@@ -281,7 +284,18 @@ export class NewEnvironmentDialog extends Disposable {
 			if (editing) { textarea.value = variables; textarea.focus(); }
 			else variableButton.focus();
 		};
-		const variableButton = button(main, variableTitle, () => switchPage(true));
+		const variableButton = h(doc, 'button', {
+			className: 'ash-button ash-button-secondary ash-environment-variables',
+			attributes: { type: 'button', 'aria-label': variableTitle },
+		});
+		const variableLabels = h(doc, 'span');
+		const noVariables = localize('sessions.environment.noVariables', 'None for this environment');
+		const variableStatus = h(doc, 'span', { className: 'ash-environment-variables-status' }, noVariables);
+		variableLabels.append(h(doc, 'span', variableTitle), variableStatus);
+		variableButton.append(variableLabels);
+		appendIcon(Lxicon.chevronRight, variableButton);
+		main.append(variableButton);
+		this._register(addDisposableListener(variableButton, 'click', () => switchPage(true)));
 		const mainActions = doc.createElement('div');
 		const editorActions = doc.createElement('div');
 		mainActions.className = editorActions.className = 'ash-environment-actions';
@@ -293,7 +307,7 @@ export class NewEnvironmentDialog extends Disposable {
 			if (!name.value.trim()) { name.focus(); throw new Error(localize('sessions.environment.nameRequired', 'Enter an environment name.')); }
 			const current = await resolveHost();
 			if (!current || this.isDisposed) return;
-			await options.create(name.value.trim(), current.providerId, folders.map(folder => folder.worktree ?? folder.target), variables);
+			await options.create(name.value.trim(), current.providerId, folders, variables);
 			close();
 		}), true);
 		button(editorActions, localize('sessions.environment.back', 'Back'), () => switchPage(false));
@@ -306,13 +320,15 @@ export class NewEnvironmentDialog extends Disposable {
 			}
 			variables = textarea.value;
 			switchPage(false);
-			variableButton.label = variables.trim()
-				? localize('sessions.environment.variablesConfigured', 'Environment variables · Configured')
-				: variableTitle;
+			const label = variables.trim() ? localize('sessions.environment.variablesConfigured', 'Configured') : noVariables;
+			variableStatus.textContent = label;
+			variableButton.setAttribute('aria-description', label);
 		}, true);
+		variableButton.setAttribute('aria-description', noVariables);
 		this.dialog = this._register(new Dialog(container, this.title, [], {
 			buttonStyles: defaultButtonStyles, checkboxStyles: defaultCheckboxStyles, inputBoxStyles: defaultInputBoxStyles,
 			dialogStyles: defaultDialogStyles, disableDefaultAction: true, extraClasses: ['ash-new-environment-dialog'],
+			closeOnBackdropClick: true,
 			renderBody: body => body.append(main, editor, error),
 			renderFooter: element => element.append(footer),
 		}));

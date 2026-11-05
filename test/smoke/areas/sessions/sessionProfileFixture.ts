@@ -1,14 +1,27 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { join, resolve } from 'node:path';
 import { developmentAshPackagePath } from '../../../../build/desktop/runtimeStore.js';
 import { createTestEnvironment } from '../../../automation/testEnvironment.js';
 import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
 import type { WebLaunchResult } from '../../../automation/playwrightWeb.js';
+import type { Workbench } from '../../../automation/workbench.js';
 import { AppServerProtocolClient } from '../../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import { ChildProcessJsonlTransport } from '../../../../src/ash/platform/agentHost/node/childProcessJsonlTransport.js';
 import { createAppServerDaemonLauncher } from '../../../../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
 import { decodeWebSessionInfo } from '../../../../.build/protocol/typescript/WebProtocolDecoder.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../../../../src/ash/platform/agentHost/common/appServerTransport.js';
+
+export async function enableFixtureModel(workbench: Workbench, model: { provider: string; model: string; }, locale: string): Promise<void> {
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectGroup('agents');
+	await workbench.settingsEditor.selectCategory('models');
+	const declarations = workbench.page.locator(`[data-provider-id="${model.provider}"] .ash-models-custom-declarations`);
+	await declarations.locator('summary').click();
+	const enabled = declarations.getByRole('switch', { name: `${locale === 'zh-CN' ? '启用' : 'Enable'} ${model.model}`, exact: true });
+	if (!await enabled.isChecked()) await enabled.press('Space');
+	await expect(enabled).toBeChecked();
+	await workbench.page.locator('.ash-modal-editor-close').click();
+}
 
 // Each scenario shares its product's real profile daemon. This extra connection
 // seeds durable facts through the public API and is released before fixture cleanup.
@@ -73,7 +86,20 @@ export async function connectProfile(application: PlaywrightApplication, web: We
 	} : await (application as Extract<PlaywrightApplication, { evaluate: unknown; }>).evaluate(({ app }) => ({
 		appPath: app.getAppPath(), resourcesPath: process.resourcesPath, electronExecutable: process.execPath,
 		isPackaged: app.isPackaged,
-		profileRoot: process.env.ASH_HOME!, sourceEnvironment: { PATH: process.env.PATH, HOME: process.env.HOME, SystemRoot: process.env.SystemRoot, ASH_RG_PATH: process.env.ASH_RG_PATH, ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH, ASH_USE_INMEMORY_SECRETSTORAGE: process.env.ASH_USE_INMEMORY_SECRETSTORAGE },
+		profileRoot: process.env.ASH_HOME!,
+		sourceEnvironment: {
+			PATH: process.env.PATH,
+			HOME: process.env.HOME,
+			SystemRoot: process.env.SystemRoot,
+			ASH_RG_PATH: process.env.ASH_RG_PATH,
+			ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH,
+			ASH_USE_INMEMORY_SECRETSTORAGE: process.env.ASH_USE_INMEMORY_SECRETSTORAGE,
+			// Select the running Desktop's backend, including its development generation.
+			ASH_RENDERER_URL: process.env.ASH_RENDERER_URL,
+			ASH_DEV_APP_SERVER_RELOAD: process.env.ASH_DEV_APP_SERVER_RELOAD,
+			ASH_DEV_APP_SERVER_GENERATION: process.env.ASH_DEV_APP_SERVER_GENERATION,
+			ASH_DEV_SUBSECOND: process.env.ASH_DEV_SUBSECOND,
+		},
 	}));
 	const { launcher } = createAppServerDaemonLauncher({ ...host, profileRoot: options.profileRoot ?? host.profileRoot, packageLocation: { appPath: host.appPath, resourcesPath: host.resourcesPath, isPackaged: host.isPackaged, platform: process.platform }, workspaceRoot, role: options.directoryGrantsHost ? 'workbench' : 'agents' });
 	let frames: ChildProcessJsonlTransport | undefined;

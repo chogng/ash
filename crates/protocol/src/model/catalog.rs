@@ -74,6 +74,8 @@ pub enum ModelPurpose {
     Advisor,
     Review,
     Commit,
+    ThreadTitle,
+    ThreadRecap,
 }
 
 /// A confirmed retirement announcement for the catalog's exact model and connection scope.
@@ -199,6 +201,10 @@ pub struct ModelInfo {
     pub supported_reasoning_efforts: Vec<ModelReasoningEffortOption>,
     /// Catalog default when the user has not selected an effort; not the provider's implicit default.
     pub default_reasoning_effort: Option<ReasoningEffort>,
+    /// Provider reasoning value used by the model's separate Ultra mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub ultra_reasoning_effort: Option<ReasoningEffort>,
     pub default_personality: Option<Personality>,
     #[serde(default)]
     /// Supported parameters and Ash defaults, not the values selected for a particular invocation.
@@ -244,6 +250,22 @@ impl ModelInfo {
             self.description.as_deref(),
             &self.supported_reasoning_efforts,
         )?;
+        if let Some(effort) = self.default_reasoning_effort
+            && !self
+                .supported_reasoning_efforts
+                .iter()
+                .any(|option| option.effort == effort)
+        {
+            return Err("default reasoning effort is not supported".into());
+        }
+        if let Some(effort) = self.ultra_reasoning_effort
+            && !self
+                .supported_reasoning_efforts
+                .iter()
+                .any(|option| option.effort == effort)
+        {
+            return Err("Ultra must map to a supported provider reasoning effort".into());
+        }
         if let Some(retirement) = &self.retirement {
             retirement.validate()?;
         }
@@ -263,6 +285,7 @@ impl ModelInfo {
             capabilities: ModelCapabilities::UNKNOWN,
             supported_reasoning_efforts: Vec::new(),
             default_reasoning_effort: None,
+            ultra_reasoning_effort: None,
             default_personality: None,
             settings: crate::ModelSettings::default(),
         }

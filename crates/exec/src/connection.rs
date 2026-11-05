@@ -193,6 +193,7 @@ impl ExecConnection for ServerConnection {
     ) -> Result<Session, ConnectionError> {
         self.client
             .create_session(SessionCreateParams {
+                surface: None,
                 branch_name: None,
                 worktree_start: None,
                 environment_variables: None,

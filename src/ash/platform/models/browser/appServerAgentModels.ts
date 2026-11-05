@@ -44,6 +44,9 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 				commitMessageModel: config.commitMessageModel ? { ...config.commitMessageModel } : null,
 				commitMessageEnabled: config.commitMessageEnabled,
 				codeReviewModel: config.codeReviewModel ? { ...config.codeReviewModel } : null,
+				...(config.threadTitleModel ? { threadTitleModel: { ...config.threadTitleModel } } : {}),
+				...(config.threadRecapEnabled !== undefined ? { threadRecapEnabled: config.threadRecapEnabled } : {}),
+				...(config.threadRecapModel ? { threadRecapModel: { ...config.threadRecapModel } } : {}),
 				revision: config.revision,
 				model: config.model ? { ...config.model } : null,
 				reasoningEffort: config.modelReasoningEffort ?? null,
@@ -55,6 +58,9 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 				...(update.commitMessageEnabled !== undefined ? { commitMessageEnabled: update.commitMessageEnabled } : {}),
 				...(update.commitMessageModel !== undefined ? { commitMessageModel: update.commitMessageModel } : {}),
 				...(update.codeReviewModel !== undefined ? { codeReviewModel: update.codeReviewModel } : {}),
+				...(update.threadTitleModel !== undefined ? { threadTitleModel: update.threadTitleModel } : {}),
+				...(update.threadRecapEnabled !== undefined ? { threadRecapEnabled: update.threadRecapEnabled } : {}),
+				...(update.threadRecapModel !== undefined ? { threadRecapModel: update.threadRecapModel } : {}),
 				...(update.model !== undefined ? { model: update.model } : {}),
 				...(update.reasoningEffort !== undefined ? { modelReasoningEffort: update.reasoningEffort } : {}),
 			});
@@ -85,6 +91,7 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 				expected_revision: snapshot.revision,
 				model,
 				...(update.acceleration !== undefined ? { acceleration: update.acceleration } : {}),
+				...(update.ultra !== undefined ? { ultra: update.ultra } : {}),
 				...(update.longContext !== undefined ? { long_context: update.longContext } : {})
 			});
 		},
@@ -262,11 +269,23 @@ function modelDiscoveryMessage(code: ProviderModelsListFailureCodeDto): string {
 	}
 }
 
+function modelDisplayName(entry: ModelListResult['models'][number]): string {
+	const provider = entry.source?.provider_id ?? entry.model.provider;
+	if (provider !== 'openai' && provider !== 'chatgpt-subscription' && provider !== 'chatgpt-plan') {
+		return entry.display_name;
+	}
+	// A catalog refresh can swap seed and discovered metadata for the same GPT model.
+	const match = /^gpt-(\d+(?:\.\d+)*)(?:-([a-z]+))?$/i.exec(entry.model.model);
+	if (!match) { return entry.display_name; }
+	const [, version, variant] = match;
+	return variant ? `GPT-${version} ${variant.charAt(0).toUpperCase()}${variant.slice(1).toLowerCase()}` : `GPT-${version}`;
+}
+
 function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatalogEntry {
-	const purposes = { advisor: ModelPurpose.Advisor, review: ModelPurpose.Review, commit: ModelPurpose.Commit };
+	const purposes = { advisor: ModelPurpose.Advisor, review: ModelPurpose.Review, commit: ModelPurpose.Commit, threadTitle: ModelPurpose.ThreadTitle, threadRecap: ModelPurpose.ThreadRecap };
 	return Object.freeze({
 		model: Object.freeze({ ...entry.model }),
-		displayName: entry.display_name,
+		displayName: modelDisplayName(entry),
 		recommendedFor: Object.freeze((entry.recommended_for ?? []).map(purpose => purposes[purpose])),
 		capabilities: Object.freeze({ toolCalling: entry.capabilities.tools, agentMode: entry.capabilities.agent_mode ?? 'unknown' }),
 		source: entry.source ? Object.freeze({ providerId: entry.source.provider_id, connectionId: entry.source.connection_id, metadata: entry.source.metadata }) : undefined,
@@ -283,13 +302,16 @@ function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatal
 		maximumContextWindow: entry.maximum_context_window,
 		accelerationOptions: Object.freeze(entry.acceleration_options.map((option) => Object.freeze({ ...option }))),
 		selectedAcceleration: entry.selected_acceleration,
+		...(entry.ultra != null ? { ultra: entry.ultra } : {}),
 		longContext: entry.long_context,
 		...(entry.discovered === true ? { discovered: true } : {}),
 		contextWindow: entry.context_window,
 		usableContextWindow: entry.usable_context_window,
 		supportedReasoningEfforts: Object.freeze(
-			entry.supported_reasoning_efforts.map((option) => Object.freeze({ ...option }))
+			entry.supported_reasoning_efforts.map(({ effort, description }) => Object.freeze({ effort, description }))
 		),
-		...(entry.default_reasoning_effort != null ? { defaultReasoningEffort: entry.default_reasoning_effort } : {})
+		...(entry.default_reasoning_effort != null ? { defaultReasoningEffort: entry.default_reasoning_effort } : {}),
+		...(entry.effective_reasoning_effort != null ? { effectiveReasoningEffort: entry.effective_reasoning_effort } : {}),
+		...(entry.reasoning_effort_override != null ? { reasoningEffortOverride: entry.reasoning_effort_override } : {}),
 	});
 }

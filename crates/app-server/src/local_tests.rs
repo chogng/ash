@@ -1548,6 +1548,24 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
 #[test]
 #[ignore = "requires explicitly provisioned Windows sandbox and ASH_WINDOWS_SANDBOX_BIN"]
 fn windows_shell_turn_enforces_account_isolation_through_rpc() {
+    windows_shell_turn_enforces_isolation_through_rpc(WindowsShellSandbox::Account);
+}
+
+#[cfg(windows)]
+#[test]
+#[ignore = "requires a PSEC-capable Windows host without the account sandbox service"]
+fn windows_shell_turn_enforces_psec_isolation_through_rpc() {
+    windows_shell_turn_enforces_isolation_through_rpc(WindowsShellSandbox::Psec);
+}
+
+#[cfg(windows)]
+enum WindowsShellSandbox {
+    Account,
+    Psec,
+}
+
+#[cfg(windows)]
+fn windows_shell_turn_enforces_isolation_through_rpc(backend: WindowsShellSandbox) {
     use std::time::Instant;
 
     let powershell = Path::new(&std::env::var_os("SystemRoot").unwrap())
@@ -1574,14 +1592,28 @@ fn windows_shell_turn_enforces_account_isolation_through_rpc() {
         "the product acceptance must run without elevation"
     );
     let owner = host_script("[Security.Principal.WindowsIdentity]::GetCurrent().User.Value");
-    let helper = std::env::var_os("ASH_WINDOWS_SANDBOX_BIN").unwrap();
-    let plan = Command::new(helper)
-        .args(["plan", "remove"])
-        .output()
-        .unwrap();
-    assert!(plan.status.success(), "{plan:?}");
-    let plan: serde_json::Value = serde_json::from_slice(&plan.stdout).unwrap();
-    let accounts = plan["changes"]["accounts"].as_array().unwrap();
+    let account_plan: Option<serde_json::Value> = match backend {
+        WindowsShellSandbox::Account => {
+            let helper = std::env::var_os("ASH_WINDOWS_SANDBOX_BIN").unwrap();
+            let plan = Command::new(helper)
+                .args(["plan", "remove"])
+                .output()
+                .unwrap();
+            assert!(plan.status.success(), "{plan:?}");
+            Some(serde_json::from_slice(&plan.stdout).unwrap())
+        }
+        WindowsShellSandbox::Psec => {
+            // With RequireSandbox and no account service, successful execution
+            // with real filesystem restrictions can only use PSEC.
+            assert_eq!(
+                host_script(
+                    "if (Get-Service -Name AshWindowsSandbox -ErrorAction SilentlyContinue) { 'installed' } else { 'absent' }"
+                ),
+                "absent"
+            );
+            None
+        }
+    };
 
     let profile = tempfile::tempdir().unwrap();
     let fixture = tempfile::tempdir().unwrap();
@@ -1716,7 +1748,7 @@ fn windows_shell_turn_enforces_account_isolation_through_rpc() {
     );
     let identity = std::fs::read_to_string(work.join("identity")).unwrap();
     let identity = identity.trim();
-    assert_ne!(identity, owner);
+    assert!(!identity.is_empty());
     assert_eq!(
         dunce::canonicalize(
             std::fs::read_to_string(work.join("execution-root"))
@@ -1727,10 +1759,14 @@ fn windows_shell_turn_enforces_account_isolation_through_rpc() {
         work,
         "execution did not use the requested directory"
     );
-    assert!(
-        accounts.iter().any(|account| account["sid"] == identity),
-        "unexpected identity: {identity}"
-    );
+    if let Some(plan) = account_plan {
+        let accounts = plan["changes"]["accounts"].as_array().unwrap();
+        assert_ne!(identity, owner);
+        assert!(
+            accounts.iter().any(|account| account["sid"] == identity),
+            "unexpected identity: {identity}"
+        );
+    }
     assert_eq!(
         std::fs::read_to_string(work.join("attempts"))
             .unwrap()
@@ -3087,6 +3123,7 @@ fn sol_usable_context_is_independent_of_compaction_and_preserves_output_reservat
                 &ash_models_manager::ModelPreferencesUpdate {
                     acceleration: Patch::Missing,
                     long_context: Some(expanded),
+                    ultra: None,
                 },
             )
             .unwrap();
@@ -3527,14 +3564,28 @@ fn config_backed_model_service_resolves_model_reasoning_effort() {
     };
     assert_eq!(
         service
-            .reasoning_config(ModelSelection::ConfiguredDefault)
+            .reasoning_config(ModelSelection::ConfiguredDefault, None)
             .unwrap(),
         Some(ash_protocol::ReasoningConfig {
             effort: ReasoningEffort::High,
             summary: false,
         })
     );
-    service
+    let catalog = service.catalog_snapshot().unwrap();
+    let entry = catalog
+        .models
+        .iter()
+        .find(|entry| entry.model.model == model)
+        .unwrap();
+    assert_eq!(
+        entry.default_reasoning_effort,
+        Some(ReasoningEffort::Medium)
+    );
+    assert_eq!(
+        entry.effective_reasoning_effort,
+        Some(ReasoningEffort::High)
+    );
+    let cleared = service
         .config
         .apply(ConfigCommandRequest {
             command_id: CommandId::new("clear-selected-effort").unwrap(),
@@ -3547,12 +3598,133 @@ fn config_backed_model_service_resolves_model_reasoning_effort() {
         .unwrap();
     assert_eq!(
         service
-            .reasoning_config(ModelSelection::ConfiguredDefault)
+            .reasoning_config(ModelSelection::ConfiguredDefault, None)
             .unwrap(),
         Some(ash_protocol::ReasoningConfig {
             effort: ReasoningEffort::Medium,
             summary: false,
         })
+    );
+
+    let luna = ModelRef::new(provider.clone(), ModelId::new("gpt-6-luna").unwrap());
+    let sol = ModelRef::new(provider, ModelId::new("gpt-6.1-sol").unwrap());
+    service
+        .config
+        .apply(ConfigCommandRequest {
+            command_id: CommandId::new("select-luna-with-no-reasoning").unwrap(),
+            expected_revision: cleared.revision,
+            command: UserConfigCommand::UpdatePreferences(PreferencesUpdate {
+                model: Patch::Value(luna),
+                model_reasoning_effort: Patch::Value(ReasoningEffort::None),
+                ..Default::default()
+            }),
+        })
+        .unwrap();
+    let frozen = service
+        .snapshot(ModelSelection::Session(&sol))
+        .unwrap()
+        .unwrap();
+    for (requested, expected) in [
+        (None, ReasoningEffort::Medium),
+        (Some(ReasoningEffort::None), ReasoningEffort::Medium),
+        (Some(ReasoningEffort::High), ReasoningEffort::High),
+    ] {
+        for effective in [
+            service.reasoning_config(ModelSelection::Session(&sol), requested),
+            frozen.reasoning_config(ModelSelection::ConfiguredDefault, requested),
+        ] {
+            assert_eq!(effective.unwrap().unwrap().effort, expected);
+        }
+    }
+    assert_eq!(
+        service
+            .reasoning_config(ModelSelection::ConfiguredDefault, None)
+            .unwrap()
+            .unwrap()
+            .effort,
+        ReasoningEffort::None
+    );
+
+    let claude = ModelRef::new(
+        ProviderId::new("anthropic").unwrap(),
+        ModelId::new("claude-sonnet-5-5").unwrap(),
+    );
+    let update_ultra = |model: &ModelRef, enabled: bool| {
+        let revision = service.config.read_snapshot().unwrap().revision;
+        service
+            .set_preferences(crate::model_catalog::ModelPreferencesCommand {
+                command_id: CommandId::new(format!("{}-ultra-{enabled}", model.model)).unwrap(),
+                expected_revision: revision,
+                model: model.clone(),
+                update: ash_models_manager::ModelPreferencesUpdate {
+                    acceleration: Patch::Missing,
+                    long_context: None,
+                    ultra: Some(enabled),
+                },
+            })
+            .unwrap();
+    };
+    let gpt_6_sol = ModelRef::new(sol.provider.clone(), ModelId::new("gpt-6-sol").unwrap());
+    for (model, ordinary_effort) in [
+        (&sol, ReasoningEffort::Medium),
+        (&gpt_6_sol, ReasoningEffort::None),
+    ] {
+        for (enabled, expected) in [(true, Some(ReasoningEffort::ExtraHigh)), (false, None)] {
+            update_ultra(model, enabled);
+            let entry = service
+                .list()
+                .unwrap()
+                .into_iter()
+                .find(|entry| &entry.model == model)
+                .unwrap();
+            assert_eq!(entry.reasoning_effort_override, expected);
+            assert_eq!(entry.effective_reasoning_effort, Some(ordinary_effort));
+        }
+    }
+    update_ultra(&claude, true);
+    let entry = service
+        .list()
+        .unwrap()
+        .into_iter()
+        .find(|entry| entry.model == claude)
+        .unwrap();
+    assert_eq!(entry.ultra, Some(true));
+    assert_eq!(entry.reasoning_effort_override, None);
+    assert_eq!(
+        entry.effective_reasoning_effort,
+        Some(ReasoningEffort::High)
+    );
+    let frozen = service
+        .snapshot(ModelSelection::Session(&claude))
+        .unwrap()
+        .unwrap();
+    for (requested, expected) in [
+        (None, ReasoningEffort::ExtraHigh),
+        (Some(ReasoningEffort::Low), ReasoningEffort::Low),
+    ] {
+        for effective in [
+            service.reasoning_config(ModelSelection::Session(&claude), requested),
+            frozen.reasoning_config(ModelSelection::ConfiguredDefault, requested),
+        ] {
+            assert_eq!(effective.unwrap().unwrap().effort, expected);
+        }
+    }
+    update_ultra(&claude, false);
+    assert_eq!(
+        service
+            .reasoning_config(ModelSelection::Session(&claude), None)
+            .unwrap()
+            .unwrap()
+            .effort,
+        ReasoningEffort::High
+    );
+    assert_eq!(
+        frozen
+            .reasoning_config(ModelSelection::ConfiguredDefault, None)
+            .unwrap()
+            .unwrap()
+            .effort,
+        ReasoningEffort::ExtraHigh
     );
 }
 
@@ -3596,6 +3768,9 @@ fn select_model(
                 model: Patch::Value(model_ref(model)),
                 model_reasoning_effort: Patch::Missing,
                 approval_review_model: Patch::Missing,
+                thread_title_model: Patch::Missing,
+                thread_recap_model: Patch::Missing,
+                thread_recap_enabled: Patch::Missing,
                 code_review_model: Patch::Missing,
                 commit_message_model: Patch::Missing,
                 commit_message_enabled: Patch::Missing,
@@ -4247,7 +4422,9 @@ fn built_in_catalog_excludes_configured_custom_models() {
         .map(|entry| entry.model.model.as_str())
         .collect::<Vec<_>>();
     assert!(api_models.contains(&"gpt-5.6"));
-    assert!(!api_models.contains(&"gpt-5.4"));
+    for model in ["gpt-5.4", "gpt-5.5", "o3"] {
+        assert!(!api_models.contains(&model), "{model}");
+    }
     assert!(models.iter().any(|entry| {
         entry.model.provider.as_str() == "openai" && entry.model.model.as_str() == "gpt-6-astra"
     }));
@@ -4277,15 +4454,6 @@ fn built_in_catalog_excludes_configured_custom_models() {
         .unwrap();
     assert_eq!(openai.context_window, Some(272_000));
     assert_eq!(openai.maximum_context_window, Some(872_000));
-    let legacy = models
-        .iter()
-        .find(|entry| {
-            entry.model.provider.as_str() == "openai" && entry.model.model.as_str() == "gpt-5.5"
-        })
-        .unwrap();
-    assert_eq!(legacy.context_window, Some(272_000));
-    assert_eq!(legacy.maximum_context_window, Some(272_000));
-    assert_eq!(legacy.long_context, None);
     assert_eq!(
         openai.capabilities.image_detail_original,
         ash_protocol::CapabilitySupport::Supported
@@ -5399,6 +5567,7 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
                 .into(),
             ),
             long_context: Some(enabled),
+            ultra: None,
         },
     };
     assert!(matches!(
@@ -5511,6 +5680,7 @@ fn model_preferences_survive_unready_connections_and_reject_stale_or_invalid_upd
             update: ModelPreferencesUpdate {
                 acceleration: ash_protocol::Patch::Null,
                 long_context: None,
+                ultra: None,
             },
         })
         .unwrap();
@@ -5611,6 +5781,7 @@ fn model_preferences_follow_chatgpt_ultrafast_permission_and_allow_clearing_revo
         update: ModelPreferencesUpdate {
             acceleration,
             long_context: None,
+            ultra: None,
         },
     };
     assert!(

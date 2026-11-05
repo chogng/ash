@@ -37,6 +37,7 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
             "create",
             0,
             ash_projects::ProjectCommand::Create {
+                scope: None,
                 name: "project".into(),
                 description: String::new(),
                 materials: Vec::new(),
@@ -281,6 +282,7 @@ fn memories_are_recollected_after_preflight_compaction_and_revocation() {
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
             core_api::StartThreadRequest {
+                surface: None,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,

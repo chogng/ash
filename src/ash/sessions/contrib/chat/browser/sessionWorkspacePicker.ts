@@ -2,14 +2,16 @@ import { trackChatInputPickerFocus } from '../../../../workbench/contrib/chat/br
 import { ActionWidgetDropdown } from '../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { SessionsRecentWorkspacesService } from '../../../services/sessions/browser/sessionsRecentWorkspacesService.js';
 import { SessionWorkspaceFallback } from './sessionWorkspaceFallback.js';
+import { projectFolders, projectForFolder, readCodeProjects } from './sessionWorkspaceProjects.js';
 import { URI } from '../../../../base/common/uri.js';
 import { createUuid } from '../../../../base/common/uuid.js';
-import { basename } from '../../../../base/common/resources.js';
+import { basename, extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { observableValue } from '../../../../base/common/observable.js';
 import { IWorkspacesService, type IRecentlyOpened } from '../../../../platform/workspaces/common/workspaces.js';
 import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
 import { WorkspaceSelectionOrigin, type IWorkspaceSelectionSnapshot } from '../../../common/workspaceSelection.js';
-import { h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
 import { structuralEquals } from '../../../../base/common/equals.js';
@@ -24,11 +26,12 @@ import { cloneRepository } from '../../../services/sessions/browser/cloneReposit
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IProjectService, type Project } from '../../../../platform/projects/common/projectService.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
 import { ActionListItemKind, type IActionListItem, type IActionListItemInlineToggle } from '../../../../platform/actionWidget/browser/actionList.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
-import type { IManagedHover } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import { getHoverDelegate } from '../../../../base/browser/ui/hover/hoverDelegate.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID, type IAgentHostSessionsProvider } from '../../../common/agentHostSessionsProvider.js';
@@ -37,8 +40,12 @@ import { ISessionFolderAuthorizationService, sessionWorkspaceUri } from '../../.
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { IUntitledChatSession, SessionExecutionTarget } from '../../../services/sessions/common/session.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 
 const MAX_NEW_PICKER_RECENT_WORKSPACES = 10;
+const MAX_SETUP_RECENT_PROJECTS = 3;
+
+type RecentFolder = { readonly label: string; readonly target: SessionExecutionTarget; };
 
 type WorktreeCatalog = Awaited<ReturnType<NonNullable<IAgentHostSessionsProvider['getWorktrees']>>>;
 
@@ -82,6 +89,8 @@ export class SessionWorkspacePicker extends Disposable {
 	private visible = true;
 	private readonly worktreeRequest = this._register(new MutableDisposable());
 	private worktreeQuery: IWorkspaceWorktreeQuery | undefined;
+	private selectedProject: { readonly id: string; readonly name: string; } | undefined;
+	private projectRead = 0;
 
 	constructor(
 		container: HTMLElement,
@@ -97,11 +106,10 @@ export class SessionWorkspacePicker extends Disposable {
 		@IWorkspacesService private readonly workspaces: IWorkspacesService,
 		@ILocalGitService private readonly git: ILocalGitService,
 		@ISessionFolderAuthorizationService private readonly folderAuthorization: ISessionFolderAuthorizationService,
+		@IProjectService private readonly projects: IProjectService,
+		@IContextKeyService private readonly contextKeys: IContextKeyService,
 	) {
 		super();
-		const host = this.host = h(container.ownerDocument, 'div', { className: 'ash-sessions-chat-input-workspace' });
-		container.prepend(host);
-		this._register(toDisposable(() => host.remove()));
 		const owner = this;
 		this.workspaceFallback = instantiation.createInstance(SessionWorkspaceFallback);
 		this.recentWorkspaces = instantiation.createInstance(SessionsRecentWorkspacesService);
@@ -116,19 +124,45 @@ export class SessionWorkspacePicker extends Disposable {
 					run: () => this.openPicker(),
 				},
 				onDidChange: this.presentationChanged.event,
-				placeholder: localize('sessions.workspace.searchFolders', 'Search folders'),
+				placeholder: localize({ bundle: 'ash.sessions', key: 'sessions.project.search' }, 'Search projects and folders'),
 			},
 		}));
-		this.picker.render(host);
+		this.host = this.picker.render(container);
 		this._register(sessions.onDidChange(() => this.render()));
 		this._register(model.onDidChange(() => this.render()));
 		this._register(workspace.onDidChangeWorkspaceFolders(() => this.render()));
 		this._register(providers.onDidChangeProviders(() => this.render()));
+		this._register(projects.onDidChange(() => this.readSelectedProject()));
+		this._register(contextKeys.onDidChangeContext(event => {
+			if (event.affectsSome(new Set([SessionsWorkspaceModeContext.key]))) {
+				this.picker.hide();
+				this.pending.clear();
+				this.render();
+			}
+		}));
 		this.render();
 	}
 
 	private get draft(): IUntitledChatSession | undefined {
 		return this.sessions.untitledSessions.find(draft => draft.untitledSessionId === this.model.untitledSessionId);
+	}
+
+	private get isCode(): boolean { return this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code'; }
+
+	private usesLocalProjects(draft: IUntitledChatSession): boolean {
+		return this.isCode && (!draft.providerId || draft.providerId === LOCAL_AGENT_HOST_PROVIDER_ID);
+	}
+
+	private readSelectedProject(): void {
+		const draft = this.draft;
+		const generation = ++this.projectRead;
+		const id = draft && this.usesLocalProjects(draft) ? draft.projectId : undefined;
+		if (!id) return;
+		void this.projects.read(id, 'code').then(project => {
+			if (this.isDisposed || this.projectRead !== generation || this.draft?.projectId !== id) return;
+			this.selectedProject = { id, name: project.name };
+			this.render();
+		}, () => { /* The picker can still show the selected folder during a reconnect. */ });
 	}
 
 	public setVisible(visible: boolean): void {
@@ -140,21 +174,116 @@ export class SessionWorkspacePicker extends Disposable {
 			this.picker.hide();
 			this.prepareWorktrees(undefined);
 		}
+		this.presentationChanged.fire();
+	}
+
+	public renderRecentProjects(container: HTMLElement): DisposableStore {
+		const lifetime = new DisposableStore();
+		const rowListeners = lifetime.add(new DisposableStore());
+		const document = container.ownerDocument;
+		const group = h(document, 'div', {
+			className: 'ash-sessions-environment-card-projects',
+			attributes: { role: 'group', 'aria-label': localize({ bundle: 'ash.sessions', key: 'sessions.project.recent' }, 'Recent projects') },
+		});
+		container.prepend(group);
+		lifetime.add(toDisposable(() => group.remove()));
+		let history: readonly RecentFolder[] | undefined;
+		let choices: readonly RecentFolder[] = [];
+		let request = 0;
+		let loading = false;
+		const rows = new Map<string, { readonly button: HTMLButtonElement; readonly check: HTMLElement; }>();
+		const keyFor = (target: SessionExecutionTarget) => extUriBiasedIgnorePathCase.getComparisonKey(sessionWorkspaceUri(buildAgentHostSessionWorkspace(target)!));
+		const render = () => {
+			const draft = this.draft;
+			if (!draft || !this.isCode || !this.visible) { group.hidden = true; return; }
+			if (!history && !loading) refresh();
+			const source = this.workspaceSource(draft);
+			const next = (history ?? []).filter(({ target }) => source
+				? acceptsWorkspaceTarget(target, source) : this.usesLocalProjects(draft) && target.type === 'local').slice(0, MAX_SETUP_RECENT_PROJECTS);
+			group.hidden = next.length === 0;
+			if (!structuralEquals(choices, next)) {
+				const focused = [...rows].find(([, row]) => row.button === document.activeElement)?.[0];
+				choices = next;
+				rowListeners.clear();
+				rows.clear();
+				group.replaceChildren();
+				for (const { label, target } of choices) {
+					const key = keyFor(target);
+					if (rows.has(key)) continue;
+					const button = h(document, 'button', {
+						className: 'ash-sessions-environment-card-folder',
+						attributes: { type: 'button', title: target.root },
+					});
+					appendIcon(Lxicon.folder, button);
+					button.append(h(document, 'span', { className: 'ash-sessions-environment-card-folder-label' }, label));
+					const check = appendIcon(Lxicon.check, button);
+					rows.set(key, { button, check });
+					rowListeners.add(addDisposableListener(button, 'click', () => {
+						const current = this.draft;
+						if (!current || !this.enabled || !this.visible || !this.isCode) return;
+						const localProject = this.usesLocalProjects(current) && target.type === 'local';
+						if (button.getAttribute('aria-pressed') === 'true' && (!localProject || current.projectId)) return;
+						void this.selectWorkspace(current, 'folder', target, undefined, localProject ? () => readCodeProjects(this.projects) : undefined,
+							() => { if (this.isCode && !group.hidden) rows.get(key)?.button.focus(); });
+					}));
+					group.append(button);
+				}
+				if (focused) rows.get(focused)?.button.focus();
+			}
+			const selected = draft.workspace.type === 'current' ? undefined : source && keyFor(source);
+			for (const [key, { button, check }] of rows) {
+				button.disabled = !this.enabled;
+				button.setAttribute('aria-pressed', String(key === selected));
+				check.hidden = key !== selected;
+			}
+		};
+		const refresh = () => {
+			const generation = ++request;
+			loading = true;
+			void this.picker.getRecentFolders([], () => true).then(folders => this.trustedFolders(folders)).catch(() => []).then(folders => {
+				if (lifetime.isDisposed || generation !== request) return;
+				loading = false;
+				history = folders;
+				render();
+			});
+		};
+		lifetime.add(this.presentationChanged.event(render));
+		lifetime.add(this.workspaces.onDidChangeRecentlyOpened(() => {
+			if (this.visible && this.isCode && this.draft) refresh();
+			else {
+				request++;
+				loading = false;
+				history = undefined;
+			}
+		}));
+		render();
+		return lifetime;
 	}
 
 	private render(): void {
 		const draft = this.draft;
+		const projectId = draft && this.usesLocalProjects(draft) ? draft.projectId : undefined;
+		if (this.selectedProject?.id !== projectId) {
+			this.selectedProject = projectId ? { id: projectId, name: '' } : undefined;
+			this.readSelectedProject();
+		}
 		this.host.hidden = !draft;
 		const session = this.sessions.sessions.find(session => session.sessionId === this.model.sessionId);
 		const selection = draft?.workspace;
 		const root = selection && 'root' in selection ? selection.root : session?.workspace?.root;
-		const name = root?.replace(/[/\\]+$/, '').split(/[/\\]/).pop()
-			|| this.workspace.getWorkspace().folders.map(folder => folder.name).join(', ')
-			|| localize('sessions.workspace.select', 'Select workspace');
+		const folderName = root?.replace(/[/\\]+$/, '').split(/[/\\]/).pop()
+			|| this.workspace.getWorkspace().folders.map(folder => folder.name).join(', ');
+		const chooseProject = localize({ bundle: 'ash.sessions', key: 'sessions.project.choose' }, 'Choose project');
+		const name = draft && this.usesLocalProjects(draft)
+			? (draft.projectId && (this.selectedProject?.name || folderName)) || chooseProject
+			: folderName || (this.isCode ? chooseProject : localize('sessions.workspace.select', 'Choose folder'));
 		const label = draft?.devContainer || session?.workspace?.runtime?.providerId === 'ash.dev-containers'
 			? localize('sessions.workspace.containerLabel', 'Dev Container · {0}', name) : name;
 		this.label = label;
-		this.tooltip = localize('sessions.workspace.label', 'Workspace: {0}', root ? `${label}\n${root}` : label);
+		const detail = root ? `${label}\n${root}` : label;
+		this.tooltip = this.isCode
+			? root ? localize({ bundle: 'ash.sessions', key: 'sessions.project.label' }, 'Project: {0}', detail) : label
+			: localize('sessions.workspace.label', 'Folder: {0}', detail);
 		this.enabled = !!draft && !this.model.inputState.aiDisabled && this.model.inputState.phase !== 'submitting';
 		if (!this.enabled || this.pendingDraftId && this.pendingDraftId !== draft?.untitledSessionId) { this.pending.clear(); }
 		if (this.pickerDraft && (this.pickerDraft.untitledSessionId !== draft?.untitledSessionId || this.pickerDraft.workspace !== draft?.workspace)) {
@@ -214,10 +343,14 @@ export class SessionWorkspacePicker extends Disposable {
 		this.pending.clear();
 		this.pickerDraft = draft;
 		const source = this.workspaceSource(draft);
+		const projectCatalog = this.usesLocalProjects(draft)
+			&& (!source || source.type === 'local') ? readCodeProjects(this.projects) : undefined;
+		let projectActions: IWorkspacePickerAction[] = [];
 		const worktreeQuery = this.prepareWorktrees(draft, true);
 		const isCurrent = (): boolean => !this.isDisposed && this.visible && this.enabled
 			&& this.draft?.untitledSessionId === draft.untitledSessionId
-			&& this.draft.workspace === draft.workspace && this.draft.providerId === draft.providerId;
+			&& this.draft.workspace === draft.workspace && this.draft.providerId === draft.providerId
+			&& this.draft.projectId === draft.projectId;
 		const toAction = (item: IWorkspaceModeItem): IWorkspacePickerAction => ({
 			recent: item.recent,
 			id: `sessions.workspace.${item.mode}.${item.target?.root ?? ''}`,
@@ -229,7 +362,7 @@ export class SessionWorkspacePicker extends Disposable {
 			run: async () => {
 				if (!isCurrent()) return;
 				if (item.mode === 'browse' || item.mode === 'clone' || item.mode === 'folder' || item.mode === 'worktree') {
-					await this.selectWorkspace(draft, item.mode, item.target ?? source);
+					await this.selectWorkspace(draft, item.mode, item.target ?? source, undefined, projectCatalog && (() => projectCatalog));
 				} else {
 					this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, item.target ?? source ?? draft.workspace, {
 						devContainer: item.mode === 'container',
@@ -250,23 +383,15 @@ export class SessionWorkspacePicker extends Disposable {
 		const folders = selectionFromWorkspace(workspace);
 		const workspaceFolders = folders.type === 'multiple' ? folders.folders
 			: folders.type === 'current' ? [] : [{ label: workspace.folders[0]!.name, target: folders }];
-		const accepts = (candidate: SessionExecutionTarget): boolean =>
-			source?.type === 'ssh' ? candidate.type === 'ssh' && candidate.host === source.host
-				: source?.type === 'remote' ? candidate.type === 'remote' && candidate.authority === source.authority
-					: candidate.type === 'local';
+		const accepts = (candidate: SessionExecutionTarget): boolean => acceptsWorkspaceTarget(candidate, source);
 		const windowFolders = workspaceFolders.filter(folder => accepts(folder.target));
-		let candidates: typeof windowFolders = [];
-		let recents: Awaited<ReturnType<WorkspacePicker['getRecentFolders']>> = [];
+		let candidates: readonly RecentFolder[] = [];
+		let recents: readonly RecentFolder[] = [];
 		const folderUri = (target: SessionExecutionTarget): URI => sessionWorkspaceUri(buildAgentHostSessionWorkspace(target)!);
-		const trustedFolders = async (folders: typeof recents) => {
-			const trusted = await Promise.all(folders.map(({ target }) => target.type !== 'local'
-				|| this.folderAuthorization.isTrusted(target.root).catch(() => false)));
-			return folders.filter((_, index) => trusted[index]);
-		};
 		const buildActions = () => {
 			const environmentItems: IWorkspaceModeItem[] = [];
 			if (hasContainer) {
-				environmentItems.push({ label: localize('sessions.workspace.useHost', 'Use workspace host'), mode: 'workspace', picked: !draft.devContainer });
+				environmentItems.push({ label: localize('sessions.workspace.useHost', 'Use this host'), mode: 'workspace', picked: !draft.devContainer });
 				environmentItems.push({ label: localize('sessions.workspace.useContainer', 'Use Dev Container'), mode: 'container', picked: draft.devContainer });
 			}
 			const worktreesOnHost = allWorktrees ?? [];
@@ -347,6 +472,7 @@ export class SessionWorkspacePicker extends Disposable {
 				}).map(folder => folderAction(folder, true)),
 			];
 			return Separator.join(
+				projectActions,
 				[...folderActions, ...environmentItems.map(toAction)],
 				[...actions, openFolder],
 				worktreeActions,
@@ -358,6 +484,29 @@ export class SessionWorkspacePicker extends Disposable {
 			};
 			const provider = this.providers.getProvider(draft.providerId ?? '') as IAgentHostSessionsProvider | undefined;
 			await Promise.all([
+				projectCatalog?.then(projects => {
+					projectActions = projects.filter(project => !project.archived).map(project => {
+						const folders = projectFolders(project);
+						const chooseFolder = (folder: URI): IWorkspacePickerAction => ({
+							id: `sessions.project.${project.id}.${folder.toString()}`,
+							label: basename(folder) || folder.fsPath, tooltip: folder.fsPath, rowTooltip: folder.fsPath,
+							enabled: true, icon: Lxicon.folder,
+							run: () => { if (isCurrent()) return this.selectWorkspace(draft, 'folder', selectionFromResource(folder), project.id); },
+						});
+						return {
+							id: `sessions.project.${project.id}`, label: project.name, icon: Lxicon.projects,
+							tooltip: folders.length === 1 ? folders[0]!.fsPath : project.name, enabled: true,
+							checked: draft.projectId === project.id,
+							submenu: folders.length > 1 ? folders.map(chooseFolder) : undefined,
+							run: () => {
+								if (!isCurrent()) return;
+								if (folders.length === 1) return chooseFolder(folders[0]!).run();
+								if (!folders.length) return this.selectWorkspace(draft, 'browse', source, project.id);
+							},
+						};
+					});
+					update();
+				}, () => { /* Folder and worktree choices can load independently of the project catalog. */ }),
 				worktreeQuery?.result.then(result => {
 					if (!token.isCancellationRequested && isCurrent() && worktreeQuery.error !== undefined) this.notifications.error(getErrorMessage(worktreeQuery.error));
 					if (structuralEquals(allWorktrees, result)) return;
@@ -368,7 +517,7 @@ export class SessionWorkspacePicker extends Disposable {
 					.then(available => { if (available) { hasContainer = true; update(); } }, error => {
 						if (!token.isCancellationRequested && !isCancellationError(error)) this.notifications.error(error);
 					}),
-				trustedFolders(windowFolders).then(result => {
+				this.trustedFolders(windowFolders).then(result => {
 					candidates = result;
 					if (candidates.length) update();
 				}),
@@ -376,14 +525,20 @@ export class SessionWorkspacePicker extends Disposable {
 					if (token.isCancellationRequested || !isCurrent()) return;
 					const known = new Set([...windowFolders, ...history].map(({ target }) => folderUri(target).toString()));
 					const sessionFolders = this.workspaceFallback.getWorkspaces(draft.providerId, known, accepts);
-					recents = await trustedFolders([...history, ...sessionFolders]);
+					recents = await this.trustedFolders([...history, ...sessionFolders]);
 					if (recents.length) update();
 				}),
 			]);
 		});
 	}
 
-	private async selectWorkspace(draft: IUntitledChatSession, mode: 'browse' | 'clone' | 'folder' | 'worktree', source: SessionExecutionTarget | undefined): Promise<void> {
+	private async trustedFolders(folders: readonly RecentFolder[]): Promise<readonly RecentFolder[]> {
+		const trusted = await Promise.all(folders.map(({ target }) => target.type !== 'local'
+			|| this.folderAuthorization.isTrusted(target.root).catch(() => false)));
+		return folders.filter((_, index) => trusted[index]);
+	}
+
+	private async selectWorkspace(draft: IUntitledChatSession, mode: 'browse' | 'clone' | 'folder' | 'worktree', source: SessionExecutionTarget | undefined, projectId?: string, projectCatalog?: () => Promise<readonly Project[]>, restoreFocus = () => this.picker.focus()): Promise<void> {
 		const lifetime = new DisposableStore();
 		this.pending.value = lifetime;
 		this.pendingDraftId = draft.untitledSessionId;
@@ -393,7 +548,7 @@ export class SessionWorkspacePicker extends Disposable {
 		lifetime.add(toDisposable(() => cancellation.dispose(true)));
 		lifetime.add(toDisposable(() => {
 			this.pendingDraftId = undefined;
-			if (!this.isDisposed && this.enabled && this.visible) { this.picker.focus(); }
+			if (!this.isDisposed && this.enabled && this.visible) { restoreFocus(); }
 		}));
 		try {
 			let target = source;
@@ -417,7 +572,7 @@ export class SessionWorkspacePicker extends Disposable {
 			} else if (mode === 'browse') {
 				if (source && source.type !== 'local') {
 					const root = await this.quickInput.input({
-						title: localize('sessions.workspace.browseTitle', 'Choose a conversation folder'),
+						title: localize('sessions.workspace.browseTitle', 'Choose a folder'),
 						value: source.root,
 						placeHolder: localize('sessions.workspace.remotePath', 'Absolute folder path on this conversation’s host'),
 						validateInput: async value => value.startsWith('/') && !value.includes('\0') ? undefined
@@ -428,7 +583,7 @@ export class SessionWorkspacePicker extends Disposable {
 				} else {
 					const defaultUri = source && sessionWorkspaceUri(buildAgentHostSessionWorkspace(source)!);
 					const folders = await this.fileDialogs.showOpenDialog({
-						title: localize('sessions.workspace.browseTitle', 'Choose a conversation folder'),
+						title: localize('sessions.workspace.browseTitle', 'Choose a folder'),
 						canSelectFiles: false, canSelectFolders: true, canSelectMany: false, defaultUri,
 					});
 					if (!folders?.[0]) { return; }
@@ -437,16 +592,41 @@ export class SessionWorkspacePicker extends Disposable {
 			}
 			// Native dialogs may outlive their composer; a late result must not change another draft.
 			const isCurrent = () => !authorization.signal.aborted && this.draft?.untitledSessionId === draft.untitledSessionId
-				&& this.draft.workspace === draft.workspace && this.draft.providerId === draft.providerId && this.model.inputState.phase !== 'submitting';
+				&& this.draft.workspace === draft.workspace && this.draft.providerId === draft.providerId
+				&& this.draft.projectId === draft.projectId && this.model.inputState.phase !== 'submitting';
 			if (!target || !isCurrent()) { return; }
 			const provider = draft.providerId && this.providers.getProvider(draft.providerId) as IAgentHostSessionsProvider | undefined;
 			const accepted = provider && provider.authorizeWorkspace
 				? await provider.authorizeWorkspace(target, authorization.signal)
 				: target.type !== 'local' || await this.folderAuthorization.authorize(target.root, authorization.signal);
 			if (!accepted || !isCurrent()) { return; }
+			let project: Project | undefined;
+			if (projectId) {
+				project = await this.projects.read(projectId, 'code');
+				if (!isCurrent()) return;
+				const resource = URI.file(target.root);
+				const belongs = projectFolders(project).some(folder => extUriBiasedIgnorePathCase.isEqual(folder, resource));
+				if (project.archived || (!belongs && mode !== 'browse')) {
+					throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.project.unavailable' }, 'This project is unavailable. Choose another project.'));
+				}
+				if (!belongs) {
+					project = await this.projects.update(project, project.name, project.description, [
+						...project.materials, { kind: 'folder', name: basename(resource) || target.root, resource },
+					]);
+				}
+			} else if (!projectId && projectCatalog && target.type === 'local' && (mode !== 'worktree' || !draft.projectId)) {
+				const checkoutSource = mode === 'worktree' ? this.workspaceSource(draft) : undefined;
+				const resource = URI.file(checkoutSource?.type === 'local' ? checkoutSource.root : target.root);
+				const projects = await projectCatalog();
+				if (!isCurrent()) return;
+				project = await projectForFolder(this.projects, projects, resource);
+			}
+			if (!isCurrent()) return;
 			this.sessions.setUntitledSessionWorkspace(draft.untitledSessionId, target, mode === 'worktree'
-				? { devContainer: this.draft?.devContainer, branchName: this.draft?.branchName } : { branchName: undefined });
-			status(localize('sessions.workspace.selected', 'Conversation folder: {0}', target.root));
+				? { devContainer: this.draft?.devContainer, branchName: this.draft?.branchName, projectId: draft.projectId ?? project?.id }
+				: { projectId: projectId ?? project?.id });
+			status(this.isCode ? localize({ bundle: 'ash.sessions', key: 'sessions.project.folderSelected' }, 'Project folder: {0}', target.root)
+				: localize('sessions.workspace.selected', 'Conversation folder: {0}', target.root));
 			if (mode !== 'worktree') await this.recordRecentFolder(draft.providerId, target);
 		} catch (error) {
 			if (!cancellation.token.isCancellationRequested && !isCancellationError(error)) { this.notifications.error(getErrorMessage(error)); }
@@ -462,6 +642,12 @@ export class SessionWorkspacePicker extends Disposable {
 		await this.workspaces.addRecentlyOpened([{ folderUri, label }]);
 	}
 
+}
+
+function acceptsWorkspaceTarget(candidate: SessionExecutionTarget, source: SessionExecutionTarget | undefined): boolean {
+	if (source?.type === 'ssh') return candidate.type === 'ssh' && candidate.host === source.host;
+	if (source?.type === 'remote') return candidate.type === 'remote' && candidate.authority === source.authority;
+	return candidate.type === 'local';
 }
 
 // Restrict the derived name to one portable path segment before giving it to the host.
@@ -495,7 +681,7 @@ export class WorkspacePicker extends Disposable {
 		folderUri: undefined, origin: WorkspaceSelectionOrigin.None, state: 'none', historyState: 'loading',
 	});
 
-	private hover!: IManagedHover;
+	private readonly renderDisposables = this._register(new DisposableStore());
 	private dropdown: ActionWidgetDropdown | undefined;
 
 	constructor(
@@ -505,9 +691,12 @@ export class WorkspacePicker extends Disposable {
 		@INotificationService private readonly notifications: INotificationService,
 	) { super(); }
 
-	public render(container: HTMLElement): void {
+	public render(container: HTMLElement): HTMLElement {
+		this.renderDisposables.clear();
 		const trigger = this.options.trigger!;
-		const dropdown = this.dropdown = this._register(new ActionWidgetDropdown(container, {
+		const slot = h(container.ownerDocument, 'div', { className: 'ash-sessions-chat-input-workspace' });
+		container.prepend(slot);
+		const dropdown = this.dropdown = this.renderDisposables.add(new ActionWidgetDropdown(slot, {
 			label: trigger.action.label, ariaLabel: trigger.action.tooltip,
 			buttonOptions: { icon: trigger.action.icon, presentation: 'quiet', size: 'small' },
 			onOpen: () => { trigger.action.run(); },
@@ -523,17 +712,22 @@ export class WorkspacePicker extends Disposable {
 			},
 		}, trigger.actionWidget));
 		dropdown.element.classList.add('ash-sessions-workspace-picker');
-		this._register(trackChatInputPickerFocus(container));
-		this.hover = this._register(getHoverDelegate().setupHover({ target: dropdown.element, content: trigger.action.tooltip }));
+		this.renderDisposables.add(trackChatInputPickerFocus(slot));
+		const hover = this.renderDisposables.add(getHoverDelegate().setupHover({ target: dropdown.element, content: trigger.action.tooltip }));
 		const update = (): void => {
 			dropdown.setLabel(trigger.action.label);
 			dropdown.setEnabled(trigger.action.enabled);
 			dropdown.element.tabIndex = trigger.action.enabled ? 0 : -1;
 			dropdown.element.setAttribute('aria-label', trigger.action.tooltip);
-			this.hover.update(trigger.action.tooltip);
+			hover.update(trigger.action.tooltip);
 		};
-		this._register(trigger.onDidChange(update));
+		this.renderDisposables.add(trigger.onDidChange(update));
+		this.renderDisposables.add(toDisposable(() => {
+			this.dropdown = undefined;
+			slot.remove();
+		}));
 		update();
+		return slot;
 	}
 	public focus(): void {
 		this.dropdown?.focus();

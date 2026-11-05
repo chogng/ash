@@ -73,7 +73,7 @@ fn session_item(
             session_id: session.session_id.to_string(),
         },
     );
-    ListSelectionItem::new(session.title.clone())
+    ListSelectionItem::new(super::session_title(session).to_owned())
         .with_id(item_id)
         .with_description(format!(
             "{}  ·  {}",

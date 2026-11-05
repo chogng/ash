@@ -168,6 +168,10 @@ TMPDIR=/tmp just test ash-mxc-sandbox --test wsl --locked -- --ignored --test-th
 
 第二轮将 `TMPDIR` 设为 Windows 挂载上预先创建的测试目录，用相同命令重跑。
 
+2026-11-05 使用当前 SDK pin，在 Windows 11 23H2 x64 的 `AshBuild`（Ubuntu 24.04.5、WSL2 内核 `6.18.54.1-microsoft-standard-WSL2`、Bubblewrap 0.9.0）复测。Linux `/tmp` 与 Windows 挂载目录各通过 3 项，覆盖文件与元数据、退出／超时／取消回收，以及普通进程可运行 Windows `cmd.exe` 而 Denied／Managed 沙箱拒绝互操作。
+
+`just verify ash-sandboxing`、`just verify ash-mxc-sandbox`（含 6 项 PTY）和 `just verify ash-exec-server` 均通过。Linux 受管网络用例及 DNS／IPv6／宿主路由矩阵各通过 1 项，使用隔离解包的 `slirp4netns` 1.2.1 和 `iptables`／`ip6tables` 1.8.10。证据见 `.build/todo-local-acceptance-20261105/` 下的 `wsl-mxc-mounts-with-tools.log` 和 `wsl-mxc-matrix-final.log`。
+
 ### macOS 局域网与 Unix socket
 
 接收端由测试创建，`ASH_SANDBOX_LAN_IP` 使用本机可达的私有 IPv4 地址。测试覆盖直连拒绝、代理批准／拒绝、私有 IPC 目录内创建与连接、目录外 socket 及 SSH agent socket 拒绝。私有 IPC 目录必须与命令目录分开授权。

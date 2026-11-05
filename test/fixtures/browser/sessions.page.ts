@@ -2,6 +2,7 @@ import { IAgentHostConnectionsService } from '../../../src/ash/platform/agentHos
 import { ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { ICommandService } from '../../../src/ash/platform/commands/common/commands.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
+import { IWorkspacesService } from '../../../src/ash/platform/workspaces/common/workspaces.js';
 import { createServiceIdentifier } from '../../../src/ash/platform/instantiation/common/instantiation.js';
 import { registerWorkbenchServiceContribution } from '../../../src/ash/workbench/browser/workbenchServiceContributions.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
@@ -12,6 +13,7 @@ import { sessionIdentity } from '../../../src/ash/sessions/services/sessions/com
 import { installMultiHostSessionsFixture } from './multiHostSessionsFixture.js';
 import { errorHandler } from '../../../src/ash/base/common/errors.js';
 import { Emitter, Event } from '../../../src/ash/base/common/event.js';
+import { URI } from '../../../src/ash/base/common/uri.js';
 import { IUpdateService, type UpdateCheckResult, type UpdateReadyResult, type UpdateState } from '../../../src/ash/platform/update/common/updateService.js';
 import { DeferredPromise } from '../../../src/ash/base/common/async.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
@@ -81,6 +83,29 @@ globalThis.ashWebWorkbenchHost = {
 		github: { ...disconnectedApi.github, listAccounts: async () => [] },
 	}
 };
+if (new URL(location.href).searchParams.has('environmentSetup')) {
+	registerWorkbenchServiceContribution({
+		service: createServiceIdentifier<object>('test.environmentSetup'),
+		dependencies: [IWorkspacesService],
+		install: context => {
+			context.blockRestorationUntil(context.container.get(IWorkspacesService).addRecentlyOpened([
+				{ folderUri: URI.file('/workspace/host-a'), label: 'host-a' },
+			]));
+			return {};
+		},
+	});
+	globalThis.ashWebWorkbenchHost = { api: {
+		...globalThis.ashWebWorkbenchHost.api,
+		appServer: { ...disconnectedApi.appServer, getConnectionState: async () => 'ready' },
+		session: {
+			...disconnectedApi.session,
+			list: async () => ({ sessions: [] }),
+			subscribeCatalog: async () => ({ sessions: [] }),
+			unsubscribeCatalog: async () => { },
+			listAgents: async () => ({ agents: [] }),
+		},
+	} };
+}
 if (new URL(location.href).searchParams.has('remoteManagement')) {
 	const { SSHAgentHostContribution } = await import('../../../src/ash/sessions/contrib/providers/remoteAgentHost/browser/sshAgentHost.contribution.js');
 	const { WSLAgentHostContribution } = await import('../../../src/ash/sessions/contrib/providers/remoteAgentHost/browser/wslAgentHost.contribution.js');
@@ -140,15 +165,28 @@ if (new URL(location.href).searchParams.has('search') || new URL(location.href).
 	const createdAt = new URL(location.href).searchParams.get('projectCreatedAt');
 	const project = {
 		id: 'search-project', revision: 1, name: 'Search project fixture', archived: false, sessionCount: 0,
-		description: 'Synthetic project for Search navigation', materials: [],
+		description: 'Synthetic project for Search navigation',
+		materials: new URL(location.href).searchParams.has('projectPicker')
+			? [{ kind: 'folder' as const, name: 'source', resource: URI.file('/workspace/host-a') }] : [],
 		sessionIds: new URL(location.href).searchParams.has('sidebarGroups') ? [sessionIdentity('Host A', 'same', 'local-agent-host')] : [],
 		updatedAtMs: updatedAt === null ? undefined : Number(updatedAt), createdAtMs: createdAt === null ? undefined : Number(createdAt),
 	};
+	const codeProject = new URL(location.href).searchParams.has('projectPicker')
+		? { ...project, id: 'code-project', name: 'Code project fixture' } : project;
 	const unexpectedAutomation = async (): Promise<never> => { throw new Error('Search must not mutate or run the fixture schedule'); };
 	globalThis.ashWebWorkbenchHost = {
 		api: {
 			...globalThis.ashWebWorkbenchHost!.api,
-			projects: { ...disconnectedApi.projects, onDidChange: projectChanges.event, list: async () => [project], read: async () => project },
+			projects: {
+				...disconnectedApi.projects,
+				onDidChange: projectChanges.event,
+				list: async scope => scope === 'code' ? [codeProject] : [project],
+				read: async (id, scope) => {
+					const match = scope === 'code' || id === codeProject.id ? codeProject : project;
+					if (match.id !== id || (scope === 'chat' && match !== project)) throw new Error('Project not found');
+					return match;
+				},
+			},
 			automation: {
 				onDidChange: Event.None,
 				list: async () => [{

@@ -3690,8 +3690,14 @@ impl ModelService for ScriptedModel {
     fn reasoning_config(
         &self,
         _: ModelSelection<'_>,
+        requested: Option<ash_protocol::ReasoningEffort>,
     ) -> Result<Option<ReasoningConfig>, CoreError> {
-        Ok(self.reasoning.clone())
+        Ok(requested
+            .map(|effort| ReasoningConfig {
+                effort,
+                summary: self.reasoning.as_ref().is_some_and(|config| config.summary),
+            })
+            .or_else(|| self.reasoning.clone()))
     }
 
     fn invoke(

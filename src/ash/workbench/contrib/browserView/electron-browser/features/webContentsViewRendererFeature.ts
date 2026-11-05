@@ -3,7 +3,7 @@ import { BrowserViewCommandId } from '../../../../../platform/browserView/common
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { IBrowserViewModel } from '../../common/browserView.js';
-import { BrowserEditor, BrowserEditorContribution } from '../browserEditor.js';
+import { BrowserEditor, BrowserEditorContribution, BrowserWidgetLocation } from '../browserEditor.js';
 import { BrowserWelcomeFeature } from './browserWelcomeFeature.js';
 import { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { WebContentsViewHost } from '../webContentsViewHost.js';
@@ -23,7 +23,13 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 		this.host = this._register(instantiation.createInstance(WebContentsViewHost, editor.browserContainer.ownerDocument.defaultView!));
 		this.welcome = this._register(new BrowserWelcomeFeature(editor.browserContainer, () => editor.focus()));
 	}
-	override onContainerCreated(container: HTMLElement): void { this.host.onContainerCreated(container); }
+	override onContainerCreated(container: HTMLElement): void {
+		this.host.onContainerCreated(container);
+		const actions = [...this.editor.getContributions()].flatMap(contribution => contribution.widgets)
+			.filter(widget => widget.location === BrowserWidgetLocation.WelcomeActions)
+			.sort((a, b) => a.order - b.order);
+		this.welcome.appendActions(actions.map(action => action.element));
+	}
 	protected override onModelAttached(model: IBrowserViewModel, store: DisposableStore): void {
 		this.model = model;
 		this.host.setModel(model);

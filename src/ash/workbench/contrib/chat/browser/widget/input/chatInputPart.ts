@@ -146,6 +146,7 @@ interface ChatInputToolbarState {
 	readonly canSelectModel?: boolean;
 	readonly selectedModel?: ModelRef;
 	readonly selectedReasoningEffort?: ModelReasoningEffort;
+	readonly selectedPreset?: string;
 	readonly isAutomaticModel: boolean;
 	readonly selectedAgent?: ChatAgent;
 	readonly agentName?: string;
@@ -173,12 +174,21 @@ export interface ChatInputPartOptions {
 	readonly configureModelInMenu?: boolean;
 	/** The host supplies its own catalog and model settings when false. */
 	readonly useWorkbenchModelManagement?: boolean;
+	readonly chatModelSlider?: boolean;
+	readonly showContextUsage?: boolean;
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
+	/** Mounts host-owned controls before the compact footer's model toolbar. */
+	readonly renderLeadingFooter?: (footer: HTMLElement) => IDisposable;
 	/** Keep attachment and dictation or stop beside the editor; submit with Enter and keep configuration below. */
 	readonly layout?: 'compact';
 	readonly inputLabel?: string;
 	readonly inlineEdit?: { readonly descriptionId: string; readonly initialHeight: number; readonly reportError: (error: unknown) => void; };
 	readonly renderSecondaryToolbar?: boolean;
+	/** Places the shared context meter in the host's composer footer. */
+	readonly contextUsageInFooter?: boolean;
+	readonly accessibilityHelp?: () => string;
+	/** Lets the host adapt status text using its conversation and attachment policy. */
+	readonly statusText?: (state: ChatInputState, contexts: readonly ChatContextAttachment[], defaultText: string) => string;
 	/** Opens a fresh conversation through a model route supplied by the host. */
 	/** Host-owned permission policy presented immediately after the mode picker. */
 	readonly primaryPermissionPicker?: {
@@ -491,6 +501,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.attachmentToolbar = surface.attachmentToolbar;
 		this.inlineActionsToolbar = surface.inlineActionsToolbar;
 		this.inputFooter = surface.footer;
+		if (surface.footer && options.renderLeadingFooter && !options.inlineEdit) {
+			this._register(options.renderLeadingFooter(surface.footer));
+		}
 		this.pickerResponsiveLayout = this._register(new ChatInputPickerResponsiveLayout(this.inputToolbar.element));
 		const updateCursorAtTop = (): void => cursorAtTop.set(this.input.isAtHistoryBoundary('previous'));
 		this._register(this.input.onDidChange(updateCursorAtTop));
@@ -678,13 +691,20 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this._register(this.executeMenu.onDidChange(() => this.renderToolbarActions()));
 		this._register(presentations.onDidChange(menu => { if (menu === MenuId.ChatExecute) this.renderToolbarActions(); }));
 		this.renderToolbarActions();
+		if (options.contextUsageInFooter && this.inputFooter) {
+			this.createContextUsageToolbar(this.inputFooter, contextMenuService);
+		}
+		if (options.statusText) {
+			this._register(this.onDidChangeInput(() => this.renderStatus()));
+			this.renderStatus();
+		}
 		this._register(toDisposable(() => this.element.remove()));
 		this._register(toDisposable(() => this.inputLifecycle.abort()));
 		this._register(toDisposable(() => this.conversationDrafts.clear()));
 		this._register(toDisposable(() => { this.logDictationSample(false); void this.stopDictation().catch(() => undefined); }));
 	}
 
-	protected setHistoryScope(scope: string | undefined): void {
+	public setHistoryScope(scope: string | undefined): void {
 		if (!this.history.setScope(scope)) return;
 		this.historyInputRevision++;
 		this.historySearch.clear();
@@ -889,6 +909,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 
 	get changesActionsHost(): HTMLElement { return this.changesPill.domNode; }
 	get composerForm(): HTMLElement { return this.inputContainer; }
+	get composerFooter(): HTMLElement | undefined { return this.inputFooter; }
 
 	public createEditor(options: ChatInputEditorOptions): IChatInputEditor {
 		return this.editorProvider.create(options);
@@ -1249,6 +1270,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.state.interaction?.request.type === 'toolResultReview' ? localize('chat.resultReview.help', 'This tool has already executed. Tab to Results awaiting review to read its captured output. Share results sends it to the model; Skip results withholds it without undoing changes. Restoring supported file changes is a separate checkpoint operation.') : '',
 			this.options.workspacePickerDelegate ? localize('chat.workspace.help', 'The workspace picker chooses the Welcome submission target. In an empty window, use Tab to reach Workspace and Enter, Space or an arrow key to open it, or run Chat: Open Workspace Picker from the Command Palette. Use arrow keys to choose a trusted recent folder or workspace, Enter to select and Escape to return. With a target selected, submitting opens that workspace with the draft and attachments prefilled; it never sends automatically. A failed open keeps your draft.') : '',
 			this.contexts.map(attachment => attachment.name).join('\n'),
+			this.options.accessibilityHelp?.(),
 		].filter(Boolean).join('\n');
 	}
 
@@ -1376,12 +1398,14 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 
-	/** Layout hosts borrow this composer; changing hosts never copies or consumes its draft. */
-	bindDraftStorage(model: IChatWidgetModel, storage: IChatDraftStorage, onWillShutdown: ILifecycleService['onWillShutdown']): void {
+	/** Returns a checkpoint for hosts that must save the current draft before releasing this composer. */
+	bindDraftStorage(model: IChatWidgetModel, storage: IChatDraftStorage, onWillShutdown: ILifecycleService['onWillShutdown']): () => Promise<void> {
 		if (this.persistentDrafts) throw new Error('Chat composer already has a draft store');
 		this.persistentDrafts = true;
-		let threadId = model.threadId;
-		let identity = threadId ?? `untitled:${model.untitledSessionId!}`;
+		const draftIdentity = () => model.threadId ?? `untitled:${model.untitledSessionId!}`;
+		let identity = draftIdentity();
+		let generation = model.composerGeneration;
+		let wasUntitled = model.threadId === undefined;
 		let restoring = false;
 		let restoreFailed = false;
 		const revisions = new Map<string, number>();
@@ -1401,26 +1425,21 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			const { text, contexts: attachments } = this.snapshotDraftReferences();
 			const mode = this.mode;
 			if (attachments.length === 0) { storage.write(draftId, { mode, text, contexts: [] }); return; }
-			const contexts = await Promise.all(attachments.map(async attachment => ({
-				id: attachment.id, kind: attachment.kind, name: attachment.name,
-				content: (await attachment.resolve()).content,
-				...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
-				...(attachment.reference ? { reference: attachment.reference } : {}),
-				...(attachment.terminalSnapshot ? { terminalSnapshot: attachment.terminalSnapshot } : {}),
-			}))).catch(error => {
+			const draft = await captureChatDraft(text, mode, attachments).catch(error => {
 				if (revision !== revisions.get(draftId)) return undefined;
 				throw error;
 			});
-			if (contexts && revision === revisions.get(draftId)) storage.write(draftId, { mode, text, contexts });
+			if (draft && revision === revisions.get(draftId)) storage.write(draftId, draft);
 		};
-		const save = (): void => {
+		const save = (reportError = true): Promise<void> | undefined => {
 			if (restoreFailed || restoring) return;
 			const operation = write();
 			pending.add(operation);
 			void operation.then(() => pending.delete(operation), error => {
 				pending.delete(operation);
-				if (!this.isDisposed) this.notifications.error(localize('sessions.chat.draftFailed', 'Could not save the Chat draft: {0}', String(error)));
+				if (reportError && !this.isDisposed) this.notifications.error(localize('sessions.chat.draftFailed', 'Could not save the Chat draft: {0}', String(error)));
 			});
+			return operation;
 		};
 		restoring = true;
 		restore();
@@ -1446,24 +1465,46 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			for (const [id, revision] of revisions) revisions.set(id, revision + 1);
 		}));
 		this._register(model.onDidChange(() => {
-			if (threadId === model.threadId) return;
-			if (threadId !== undefined) {
+			const nextIdentity = draftIdentity();
+			const nextGeneration = model.composerGeneration;
+			if (identity === nextIdentity) {
+				generation = nextGeneration;
+				return;
+			}
+			const promoted = wasUntitled && model.threadId !== undefined && generation === nextGeneration;
+			if (promoted) {
+				// Promotion consumes the untitled identity without creating another composer.
+				revisions.set(identity, (revisions.get(identity) ?? 0) + 1);
+				storage.write(identity, undefined);
+			} else {
 				save();
 				restoring = true;
 				this.setInputValue('');
 				this.attachmentModel.clear();
-			} else {
-				// Promotion consumes the untitled identity without creating another composer.
-				revisions.set(identity, (revisions.get(identity) ?? 0) + 1);
-				storage.write(identity, undefined);
 			}
-			const changingThread = threadId !== undefined;
-			threadId = model.threadId;
-			identity = threadId ?? `untitled:${model.untitledSessionId!}`;
-			if (changingThread) restore();
+			generation = nextGeneration;
+			wasUntitled = model.threadId === undefined;
+			identity = nextIdentity;
+			if (!promoted) restore();
 			restoring = false;
 			save();
 		}));
+		return async () => {
+			const lifecycle = this.inputLifecycle.signal;
+			const draftId = identity;
+			// Edits can supersede a write while an attachment is being serialized.
+			// Wait for the current snapshot before the host replaces this input.
+			while (!this.isDisposed && !lifecycle.aborted && identity === draftId) {
+				if (this.attachmentModel.hasPendingContext) {
+					await this.attachmentModel.resolvePendingContext();
+					continue;
+				}
+				const revision = this.draftRevision;
+				const mode = this.mode;
+				await save(false);
+				if (this.draftRevision === revision && this.mode === mode && !this.attachmentModel.hasPendingContext) return;
+			}
+		};
 	}
 
 	private selectDraft(identity: ChatInputState['draftIdentity']): ChatInputMode | undefined {
@@ -1553,6 +1594,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			canSelectModel: this.state.canSelectModel,
 			selectedModel: this.state.selectedModel,
 			selectedReasoningEffort: this.state.selectedReasoningEffort,
+			selectedPreset: this.state.selectedPreset,
 			isAutomaticModel: this.state.isAutomaticModel,
 			selectedAgent: this.state.selectedAgent,
 			agentName: this.state.agentName,
@@ -1571,6 +1613,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			state.canSelectModel === this.toolbarState.canSelectModel &&
 			sameModel(state.selectedModel, this.toolbarState.selectedModel) &&
 			state.selectedReasoningEffort === this.toolbarState.selectedReasoningEffort &&
+			state.selectedPreset === this.toolbarState.selectedPreset &&
 			state.isAutomaticModel === this.toolbarState.isAutomaticModel &&
 			state.selectedAgent?.name === this.toolbarState.selectedAgent?.name &&
 			state.selectedAgent?.sourceId === this.toolbarState.selectedAgent?.sourceId &&
@@ -1588,6 +1631,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			this.queueContextKeys.progress.set(this.state.inputBlocked === true);
 		});
 		this.renderToolbarActions();
+	}
+
+	/** Reapply host-owned controls when the presentation changes without a model update. */
+	public refreshPresentation(): void {
+		this.renderToolbarActions();
+		this.renderFooter();
 	}
 
 	private renderToolbarActions(): void {
@@ -1820,7 +1869,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	}
 
 	protected renderStatus(): void {
-		const text = this.statusText(this.state);
+		const defaultText = this.statusText(this.state);
+		const text = this.options.statusText?.(this.state, this.contexts, defaultText) ?? defaultText;
 		const showNotifications = !this.state.aiDisabled && (!this.state.inputBlocked || !!this.delegate.draft);
 		const error = showNotifications && (this.state.error || (this.state.phase === 'error' ? text : ''));
 		this.notificationVisible.set(this.visible && showNotifications, undefined);
@@ -1902,12 +1952,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.renderWorkspacePicker();
 		if (!this.footerContextToolbar || !this.footerContextAction) return;
 		const showWhenEmpty = this.options.layout === 'compact';
-		const showMeter = showWhenEmpty || this.state.contextUsage !== undefined;
+		const showMeter = this.options.showContextUsage !== false && (showWhenEmpty || this.state.contextUsage !== undefined);
 		this.footerContextToolbar.setActions(showMeter ? [this.footerContextAction] : []);
 		if (showMeter) {
 			this.contextUsageWidget?.update(this.state.contextUsage, showWhenEmpty);
 			if (!this.visible) this.contextUsageWidget?.hide();
 		} else {
+			this.contextUsageWidget?.hide();
 			this.contextUsageWidget = undefined;
 		}
 		this.footerContextToolbar.element.hidden = !showMeter;
@@ -1955,17 +2006,22 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (action instanceof MenuItemAction && action.id === this.dictationSession.action.id) { return this.instantiationService.createInstance(DictationActionViewItem, action, undefined, this.dictationSession.activeState); }
 		if (!(action instanceof ChatInputAction)) return undefined;
 		if (action.presentation === 'model') {
+			const options = this.options;
 			return this.modelPickerActionItem = this.instantiationService.createInstance(ModelPickerActionItem, action, {
 				configureInMenu: this.options.configureModelInMenu,
 				useWorkbenchModelManagement: this.options.useWorkbenchModelManagement,
+				get chatModelSlider() { return options.chatModelSlider; },
 				onDidChangePresentation: this.modelPickerPresentationChanged.event,
+				getInputLifecycle: () => this.inputLifecycle.signal,
 				getModels: () => this.state.models,
 				canSelectModel: () => this.state.canSelectModel !== false,
 				getSelectedModel: () => this.state.selectedModel,
 				getSelectedReasoningEffort: () => this.state.selectedReasoningEffort,
+				getSelectedPreset: () => this.state.selectedPreset,
 				isAutomaticModel: () => this.state.isAutomaticModel,
 				getModelsError: () => this.state.modelsError,
 				selectModel: (model: ModelRef) => this.delegate.selectModel(model),
+				selectPreset: (presetId: string) => this.delegate.selectPreset?.(presetId) ?? Promise.resolve(),
 				selectAutomaticModel: this.delegate.selectAutomaticModel,
 				selectReasoningEffort: (effort: ModelReasoningEffort | undefined) => this.delegate.selectReasoningEffort(effort),
 				openSettings: () => this.delegate.openModelSettings(),
@@ -2336,7 +2392,7 @@ export class ChatQueueEditor extends Disposable {
 
 	constructor(
 		private readonly widget: IChatWidget,
-		private readonly requestId: string,
+		private readonly original: QueuedMessage,
 		@IChatService private readonly chat: IChatService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IMenuService private readonly menus: IMenuService,
@@ -2352,13 +2408,12 @@ export class ChatQueueEditor extends Disposable {
 	}
 
 	async show(): Promise<void> {
-		const { sessionId, threadId } = this.widget;
-		if (!sessionId || !threadId || !this.widget.visible) return;
-		let current = () => !this.isDisposed && this.widget.visible && this.widget.sessionId === sessionId && this.widget.threadId === threadId;
-		const messages = await this.chat.getPendingRequests(sessionId, threadId);
+		const original = this.original;
+		const { sessionId, threadId } = original;
+		const generation = this.widget.model?.composerGeneration;
+		let current = () => !this.isDisposed && this.widget.visible && this.widget.sessionId === sessionId && this.widget.threadId === threadId
+			&& this.widget.model?.composerGeneration === generation;
 		if (!current()) return;
-		const original = messages.find(message => message.commandId === this.requestId);
-		if (!original) throw new Error(localize('chat.queue.conflict', 'This queued message changed or has already started. Choose it again from the queue.'));
 		const target = (message: QueuedMessage) => ({ sessionId, threadId, commandId: message.commandId, expectedRevision: message.revision });
 		const paused = await this.chat.pausePendingRequest(target(original));
 		const resume = () => original.status === 'pending' ? this.chat.resumePendingRequest(target(paused)).then(() => undefined) : Promise.resolve();

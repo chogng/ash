@@ -180,41 +180,55 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	}));
 	await page.setViewportSize({ width: 960, height: 300 });
 	await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=light');
-	const sidebar = page.locator('.ash-chatgpt-navigation');
-	const headers = sidebar.locator('.ash-sessions-list-section-toggle');
-	await expect(headers).toHaveText(['置顶', '其他项目', '最近']);
-	const row = sidebar.locator('[data-conversation="fixture-chat"].ash-chatgpt-navigation-row');
-	const item = row.locator('.ash-chatgpt-conversation');
-	const actions = row.locator('.ash-chatgpt-conversation-actions');
-	const recent = sidebar.locator('[data-group="recent"]');
-	const other = sidebar.locator('[data-group="other"]');
+	const sidebar = page.locator('.ash-chat-navigation');
+	const projectsHeader = sidebar.locator('[data-section="projects"]');
+	await expect(projectsHeader).toBeVisible();
+	await expect(sidebar.locator('[data-item="chatgpt:fixture-other"]')).toHaveCount(0);
+	const row = sidebar.locator('[data-item="chatgpt:fixture-chat"].ash-chat-navigation-row');
+	const sessionIcon = '[data-ash-icon-id="chat-session"]';
+	await expect(sidebar.locator('[data-item="chatgpt:fixture-pinned"]').locator(sessionIcon)).toBeVisible();
+	await expect(row.locator(sessionIcon)).toBeVisible();
+	const item = row.locator('.ash-chat-navigation-item');
+	const actions = row.locator('.ash-chat-navigation-actions');
+	const recent = sidebar.locator('[data-section="recent"]');
+	const pinnedHeader = sidebar.getByRole('button', { name: '置顶', exact: true });
+	const recentHeader = sidebar.getByRole('button', { name: '最近', exact: true });
 	await expect.poll(() => recent.evaluate(group => {
 		const header = group.querySelector('.ash-sessions-list-section-toggle')!.getBoundingClientRect();
 		const treeRow = group.closest('.ash-tree-row')!;
 		const [first, second] = treeRow.parentElement!.querySelectorAll('[data-parent-section="recent"]');
 		const a = first!.getBoundingClientRect();
 		const b = second!.getBoundingClientRect();
-		const previous = treeRow.previousElementSibling!
-			.querySelector('.ash-chatgpt-navigation-row')!.getBoundingClientRect();
+		const previous = treeRow.previousElementSibling!.getBoundingClientRect();
 		return [header.height, a.height, a.top - header.bottom, b.top - a.bottom, header.top - previous.bottom, a.width - header.width];
 	})).toEqual([32, 32, 2, 2, 8, 0]);
-	await other.locator('.ash-sessions-list-section-toggle').click();
-	await expect.poll(async () => (await headers.nth(2).boundingBox())!.y - (await headers.nth(1).boundingBox())!.y).toBe(40);
-	await other.locator('.ash-sessions-list-section-toggle').click();
+	await pinnedHeader.click();
+	await expect(pinnedHeader).toHaveAttribute('aria-expanded', 'false');
+	await expect.poll(async () => {
+		const pinned = (await pinnedHeader.boundingBox())!;
+		const projects = (await projectsHeader.boundingBox())!;
+		const recent = (await recentHeader.boundingBox())!;
+		return [projects.y - pinned.y, recent.y - projects.y];
+	}).toEqual([40, 40]);
+	await pinnedHeader.click();
+	await expect(pinnedHeader).toHaveAttribute('aria-expanded', 'true');
 
+	const transparent = 'rgba(0, 0, 0, 0)';
+	const rowBackground = () => row.evaluate(element => getComputedStyle(element, '::before').backgroundColor);
+	const resting = await rowBackground();
 	await item.hover();
-	await expect(item).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-	const hovered = await item.evaluate(element => getComputedStyle(element).backgroundColor);
+	const hovered = await rowBackground();
+	expect(hovered).not.toBe(resting);
 	await expect(actions).toHaveCSS('opacity', '1');
-	await expect(item).toHaveCSS('background-color', hovered);
-	await expect(actions).toHaveCSS('background-color', hovered);
+	await expect(item).toHaveCSS('background-color', transparent);
+	await expect(actions).toHaveCSS('background-color', transparent);
 	await expect(actions).toHaveCSS('background-image', 'none');
 	await testInfo.attach('sidebar-unselected-hover', { body: await sidebar.screenshot(), contentType: 'image/png' });
 	await item.click();
 	await expect(item).toHaveAttribute('aria-current', 'page');
 	await page.mouse.move(350, 1);
 	await expect(actions).toHaveCSS('opacity', '0');
-	const selected = await item.evaluate(element => getComputedStyle(element).backgroundColor);
+	const selected = await rowBackground();
 	expect(selected).not.toBe(hovered);
 	const navigationStyle = await item.evaluate(element => {
 		const document = element.ownerDocument;
@@ -237,41 +251,41 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	expect(hovered).toBe(navigationStyle.hoverBackground);
 	await expect(item).toHaveCSS('height', navigationStyle.height);
 	await expect(item).toHaveCSS('border-radius', navigationStyle.borderRadius);
-	await expect(item).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	await expect(item).toHaveCSS('background-color', transparent);
 	await expect.poll(() => row.evaluate(element => {
 		const row = element.getBoundingClientRect();
-		const host = element.closest('.ash-chatgpt-navigation')!.getBoundingClientRect();
+		const host = element.closest('.ash-chat-navigation')!.getBoundingClientRect();
 		return [row.left - host.left, host.right - row.right];
 	})).toEqual([8, 8]);
 	await testInfo.attach('sidebar-rest', { body: await sidebar.screenshot(), contentType: 'image/png' });
 	await item.hover();
 	await expect(actions).toHaveCSS('opacity', '1');
-	await expect(item).toHaveCSS('background-color', selected);
-	await expect(actions).toHaveCSS('background-color', selected);
+	await expect.poll(rowBackground).toBe(selected);
+	await expect(item).toHaveCSS('background-color', transparent);
+	await expect(actions).toHaveCSS('background-color', transparent);
 	await expect(actions).toHaveCSS('background-image', 'none');
-	await expect(item).toHaveCSS('background-color', selected);
 	await expect(actions.locator('[data-action-id]')).toHaveCount(2);
-	await expect(actions.locator('[data-action-id]').last()).toHaveAttribute('data-action-id', 'sessions.chatgpt.more');
+	await expect(actions.getByRole('button').last()).toHaveAccessibleName('更多操作');
 	await expect.poll(() => row.evaluate(element => {
 		const centerY = (node: Element): number => {
 			const bounds = node.getBoundingClientRect();
 			return bounds.top + bounds.height / 2;
 		};
 		const rowCenter = centerY(element);
-		return [...element.querySelectorAll('.ash-chatgpt-conversation-actions button')]
+		return [...element.querySelectorAll('.ash-chat-navigation-actions button')]
 			.map(button => centerY(button) - rowCenter);
 	})).toEqual([0, 0]);
 	await expect.poll(async () => {
 		const bounds = (await row.boundingBox())!;
 		const more = (await actions.locator('button').last().boundingBox())!;
 		return bounds.x + bounds.width - more.x - more.width;
-	}).toBe(5);
+	}).toBe(2);
 	await actions.locator('button').first().hover();
 	await testInfo.attach('sidebar-hover', { body: await sidebar.screenshot(), contentType: 'image/png' });
 
 	await page.mouse.move(350, 1);
 	await item.press('Shift+F10');
-	const more = actions.locator('[data-action-id="sessions.chatgpt.more"] button');
+	const more = actions.getByRole('button', { name: '更多操作', exact: true });
 	await expect(more).toHaveAttribute('aria-expanded', 'true');
 	await expect(page.getByRole('menuitem', { name: '重命名' })).toBeVisible();
 	await page.keyboard.press('Escape');
@@ -289,12 +303,12 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 	await mockChatGPTRequests(page);
 	await page.setViewportSize({ width: 900, height: 520 });
 	await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=light');
-	const row = page.locator('.ash-chatgpt-navigation-row[data-conversation="fixture-chat"]');
+	const row = page.locator('.ash-chat-navigation-row[data-item="chatgpt:fixture-chat"]');
 	const title = row.getByRole('button', { name: 'Synthetic conversation', exact: true });
 	const trigger = row.getByRole('button', { name: '更换「Synthetic conversation」的图标' });
 	const picker = page.getByRole('dialog', { name: '更换图标', exact: true });
 	const search = picker.getByRole('combobox', { name: '搜索图标' });
-	const defaultIcon = trigger.locator('[data-ash-icon-id="chat"]');
+	const defaultIcon = trigger.locator('[data-ash-icon-id="chat-session"]');
 	await expect(defaultIcon).toBeVisible();
 	await expect(defaultIcon).toHaveCSS('width', '18px');
 	await expect.poll(async () => {
@@ -345,6 +359,11 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
 	await expect(trigger.locator('.ash-pixel-spinner')).toHaveCount(0);
 	await expect(trigger.locator('.ash-session-status-icon-layer')).toHaveCount(1);
+	await expect(title).toHaveAttribute('aria-current', 'page');
+	await page.evaluate(() => window.ashChatGPTIntegration.setAshChatSelected(true));
+	await expect(title).not.toHaveAttribute('aria-current');
+	await page.evaluate(() => window.ashChatGPTIntegration.setAshChatSelected(false));
+	await expect(title).toHaveAttribute('aria-current', 'page');
 	await page.reload();
 	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
 	await trigger.click();
@@ -353,9 +372,9 @@ test('ChatGPT sidebar icon picker selects, persists and resets a conversation ic
 	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
 	await trigger.click();
 	await picker.getByRole('button', { name: '恢复默认图标' }).click();
-	await expect(trigger.locator('[data-ash-icon-id="chat"]')).toBeVisible();
+	await expect(trigger.locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
 	await page.reload();
-	await expect(trigger.locator('[data-ash-icon-id="chat"]')).toBeVisible();
+	await expect(trigger.locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
 });
 
 test('Work rows use the same leading action and persist an independent icon', async ({ page }) => {
@@ -369,7 +388,7 @@ test('Work rows use the same leading action and persist an independent icon', as
 	await picker.getByRole('option', { name: 'folder', exact: true }).click();
 	await page.reload();
 	await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
-	await expect(page.getByRole('button', { name: '更换「Synthetic conversation」的图标' }).locator('[data-ash-icon-id="chat"]')).toBeVisible();
+	await expect(page.getByRole('button', { name: '更换「Synthetic conversation」的图标' }).locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
 });
 
 test('ChatGPT dictation inserts text at the cursor and cancels on navigation without sending', async ({ page }) => {

@@ -184,7 +184,7 @@ impl Fixture {
 #[test]
 fn context_inspection_preserves_thread_history_without_execution_or_updates() {
     let fixture = Fixture::new(Failure::None);
-    let runtime: &dyn AgentRuntime = &fixture.runtime();
+    let runtime = fixture.runtime();
     let turn = runtime
         .submit_turn(&fixture.thread_id, fixture.submit("inspect this history"))
         .unwrap();
@@ -224,7 +224,7 @@ fn context_inspection_preserves_thread_history_without_execution_or_updates() {
 #[test]
 fn submitted_turn_replays_one_receipt_and_rejects_changed_input() {
     let fixture = Fixture::new(Failure::None);
-    let runtime: &dyn AgentRuntime = &fixture.runtime();
+    let runtime = fixture.runtime();
     let first = runtime
         .submit_turn(&fixture.thread_id, fixture.submit("hello"))
         .unwrap();
@@ -256,7 +256,7 @@ fn submitted_turn_replays_one_receipt_and_rejects_changed_input() {
 #[test]
 fn submitted_turn_rejects_replay_with_a_different_collaboration_mode() {
     let fixture = Fixture::new(Failure::None);
-    let runtime: &dyn AgentRuntime = &fixture.runtime();
+    let runtime = fixture.runtime();
     let mut first_request = fixture.submit("hello");
     first_request.mode = ash_protocol::CollaborationMode::Plan;
     runtime

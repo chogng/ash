@@ -59,7 +59,7 @@ export class SSHAgentHostContribution extends Disposable {
 		}));
 		const command = { id: manageHostsCommand, title: localize2({ bundle: 'ash.workbench', key: 'agentHosts.manage' }, 'Agents: Manage Connected Hosts') };
 		this._register(MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command }));
-		this._register(MenusRegistry.appendMenuItem(Menus.SidebarSessionsHeader, { command, group: '2_manage' }));
+		this._register(MenusRegistry.appendMenuItem(Menus.SessionsViewFilter, { command, group: '2_manage' }));
 	}
 
 	private async addEnvironment(transport?: 'ssh' | 'tunnel'): Promise<boolean> {

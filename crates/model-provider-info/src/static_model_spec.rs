@@ -100,6 +100,8 @@ pub struct StaticModelSpec {
     pub supported_reasoning_efforts: Vec<ModelReasoningEffortOption>,
     /// Ash's default effort; when present it must reference a declared selectable value.
     pub default_reasoning_effort: Option<ReasoningEffort>,
+    /// Request effort for the separate Ultra switch. Omission means Ultra is unavailable.
+    pub ultra_reasoning_effort: Option<ReasoningEffort>,
     /// Parameter support, Ash defaults, acceleration mechanism, and model-visible tool-result budget.
     #[serde(default, deserialize_with = "model_settings")]
     #[schemars(with = "ModelSettingsDeclaration", transform = remove_runtime_default)]
@@ -132,6 +134,7 @@ impl StaticModelSpec {
         model.capabilities = self.capabilities;
         model.supported_reasoning_efforts = self.supported_reasoning_efforts.clone();
         model.default_reasoning_effort = self.default_reasoning_effort;
+        model.ultra_reasoning_effort = self.ultra_reasoning_effort;
         model.settings = self.settings.clone();
         model
     }

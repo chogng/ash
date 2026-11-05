@@ -78,6 +78,7 @@ fn normal_conversation_streams_completes_and_preserves_multi_turn_context() {
             expected_revision: revision,
             config: ProviderConfigDto {
                 model_acceleration: Default::default(),
+                ultra_models: Default::default(),
                 disabled_acceleration_options: Default::default(),
                 connection: "openai".into(),
                 custom: None,

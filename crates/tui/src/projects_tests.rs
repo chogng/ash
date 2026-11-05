@@ -134,6 +134,7 @@ fn adding_a_project_root_persists_project_identity_and_keeps_permissions_explici
     let project = client
         .read_project(ProjectReadParams {
             project_id: projects.projects[0].project_id.clone(),
+            scope: None,
         })
         .unwrap()
         .project;

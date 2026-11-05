@@ -155,17 +155,17 @@ cache_hit_rate = cached_input_tokens / input_tokens
 
 ### 当前内置模型覆盖
 
-| Ash 模型                                                         | 接入方式                                    | 首版计价状态                                                         |
-| ---------------------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------- |
-| `openai/gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna`、`gpt-5.5` | ChatGPT subscription                        | `Unpriced(SubscriptionPlan)`                                         |
-| `openai/gpt-5.6`                                                 | OpenAI 按量 API；当前别名指向 `gpt-5.6-sol` | 使用 OpenAI API 表；仍记录实际返回模型                               |
-| `anthropic/claude-sonnet-4-20250514`                             | Anthropic API key                           | 有公开历史价格；供应商当前标记为 retired，新调用需按实际计费平台判断 |
-| `google/gemini-3.6-flash`                                        | Gemini 按量 API                             | 已覆盖 Standard、Batch、Flex、Priority                               |
-| `xai/grok-4.5`                                                   | xAI 按量 API                                | 已覆盖 Standard、Priority                                            |
-| `kimi/kimi-k2.6`                                                 | Kimi 按量 API                               | 已覆盖                                                               |
-| `kimi/kimi-k2.7-code`                                            | Kimi Code subscription                      | `Unpriced(SubscriptionPlan)`                                         |
-| `deepseek/deepseek-v4-pro`                                       | DeepSeek 按量 API                           | 已覆盖峰谷 UTC 时段                                                  |
-| `zai/glm-5.1`                                                    | Z.AI 按量 API                               | 已覆盖                                                               |
+| Ash 模型                                              | 接入方式                                    | 首版计价状态                                                         |
+| ----------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------- |
+| `openai/gpt-5.6-sol`、`gpt-5.6-terra`、`gpt-5.6-luna` | ChatGPT subscription                        | `Unpriced(SubscriptionPlan)`                                         |
+| `openai/gpt-5.6`                                      | OpenAI 按量 API；当前别名指向 `gpt-5.6-sol` | 使用 OpenAI API 表；仍记录实际返回模型                               |
+| `anthropic/claude-sonnet-4-20250514`                  | Anthropic API key                           | 有公开历史价格；供应商当前标记为 retired，新调用需按实际计费平台判断 |
+| `google/gemini-3.6-flash`                             | Gemini 按量 API                             | 已覆盖 Standard、Batch、Flex、Priority                               |
+| `xai/grok-4.5`                                        | xAI 按量 API                                | 已覆盖 Standard、Priority                                            |
+| `kimi/kimi-k2.6`                                      | Kimi 按量 API                               | 已覆盖                                                               |
+| `kimi/kimi-k2.7-code`                                 | Kimi Code subscription                      | `Unpriced(SubscriptionPlan)`                                         |
+| `deepseek/deepseek-v4-pro`                            | DeepSeek 按量 API                           | 已覆盖峰谷 UTC 时段                                                  |
+| `zai/glm-5.1`                                         | Z.AI 按量 API                               | 已覆盖                                                               |
 
 ### 加速调用如何进入计价
 
@@ -185,7 +185,7 @@ cache_hit_rate = cached_input_tokens / input_tokens
 
 OpenAI 请求可传 `fast` 或历史名称 `priority`，GPT-5.6 响应都报告 `priority`；流量爬升过快时也可能报告 `default` 并按 Standard 收费。xAI 同样只在响应报告 `priority` 时收 Priority 价格。硬预算按本次请求可能产生的最高价格预留，最终按响应事实结算。若供应商没有返回足以确认实际等级或实际模型的字段，则该调用为 `Unpriced(MissingBillingContext)`。
 
-当前内置的 `claude-sonnet-4-20250514` 没有 Fast mode。Anthropic 目前只对 Claude Opus 5 和 Opus 4.8 的第一方 Claude API 提供 Fast research preview，公开基准为输入 $10、输出 $50，并且不支持 Batch。只有这些模型进入 Ash catalog 后才加入对应 rate rules，不能把该价格套到 Sonnet 4。[来源：Anthropic Fast mode](https://platform.claude.com/docs/en/build-with-claude/fast-mode)
+Claude Opus 5.5 的公开 Fast 基准价为每百万输入 token $8、输出 token $40。Opus 5 与 Opus 4.8 的研究预览价为输入 $10、输出 $50。Fast 调用的实际速度由 `usage.speed` 报告，`usage.service_tier` 则报告服务等级。现有 Ash rate card 尚未覆盖 Claude Fast。[Anthropic Fast mode](https://platform.claude.com/docs/en/build-with-claude/fast-mode)
 
 ### OpenAI GPT-5.6 API
 

@@ -187,6 +187,8 @@ export interface IAgentSessionService {
 }
 
 export interface IAgentThreadService {
+	setRecapPresence?(params: Agent.SessionMutationParams & { readonly threadId: string; readonly surface: string; readonly focused: boolean | null; }): Promise<void>;
+	generateRecap?(params: Agent.SessionMutationParams & { readonly threadId: string; }): Promise<string>;
 	canCreateSideChat(sessionId: string): boolean;
 	createSideChat(params: Agent.SessionMutationParams & {
 		readonly threadId: string; readonly sourceTurnId: string; readonly title: string; readonly selection?: string;

@@ -6,6 +6,7 @@ import type { ServicesAccessor } from '../../../../../platform/instantiation/com
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IIssueFormService, IssueType, IWorkbenchIssueService } from '../../../issue/common/issue.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
+import { isChatResponseFeedbackTarget } from '../../common/chatResponseFeedback.js';
 import { IChatWidgetService } from '../chat.js';
 import { CHAT_CATEGORY } from './chatActions.js';
 
@@ -17,8 +18,10 @@ export function registerChatModelFeedbackSurveyActions(): void {
 		constructor() {
 			super({ id: ChatModelFeedbackSurveyActionId, category: CHAT_CATEGORY, title: localize2('chat.modelFeedback.open', 'Give Model Feedback...'), f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true) });
 		}
-		override async run(accessor: ServicesAccessor): Promise<void> {
+		override async run(accessor: ServicesAccessor, target?: unknown): Promise<void> {
 			if (accessor.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId)) return;
+			const explicit = isChatResponseFeedbackTarget(target) ? target : undefined;
+			if (target !== undefined && !explicit) return;
 			const form = accessor.get(IIssueFormService);
 			const reporter = accessor.get(IWorkbenchIssueService);
 			if (form.state.submitting || form.state.createdIssue || form.state.issueTitle.trim() || form.state.issueBody.trim()) {
@@ -26,12 +29,15 @@ export function registerChatModelFeedbackSurveyActions(): void {
 				await reporter.openReporter();
 				return;
 			}
-			const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
+			const widgets = accessor.get(IChatWidgetService);
+			const widget = explicit ? widgets.getAllWidgets().find(candidate => candidate.visible
+				&& candidate.sessionId === explicit.sessionId && candidate.threadId === explicit.threadId) : widgets.lastFocusedWidget;
 			if (!widget?.visible) return;
-			const source = widget.getFocus()?.feedbackSource;
+			const source = explicit ?? widget.getFocus()?.feedbackSource;
 			// An existing reply retains its own model when the composer selection changes.
 			const model = source
-				? widget.threadId === source.threadId ? widget.model?.thread?.turns.find(turn => turn.turnId === source.turnId)?.model : undefined
+				? widget.threadId === source.threadId ? widget.model?.thread?.turns.find(turn => turn.turnId === source.turnId
+					&& (!explicit || (turn.status === 'completed' && turn.items.some(item => item.type === 'agentMessage' && item.itemId === explicit.itemId))))?.model : undefined
 				: widget.model?.inputState.selectedModel;
 			if (!model) throw new Error(localize('chat.modelFeedback.noModel', 'Select a model in Chat, or focus a completed reply with a known model, before giving model feedback.'));
 			await reporter.openReporter({

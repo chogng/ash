@@ -10,7 +10,7 @@ import { IndexTree } from '../../browser/ui/tree/indexTree.js';
 import { IndexTreeModel } from '../../browser/ui/tree/indexTreeModel.js';
 import { CompressibleObjectTree, ObjectTree } from '../../browser/ui/tree/objectTree.js';
 import { ObjectTreeModel } from '../../browser/ui/tree/objectTreeModel.js';
-import { TreeVisibility, type ITreeRenderer } from '../../browser/ui/tree/tree.js';
+import { ObjectTreeElementCollapseState, TreeVisibility, type ITreeRenderer } from '../../browser/ui/tree/tree.js';
 import { h, svg } from '../../browser/dom.js';
 import { isMacintosh } from '../../common/platform.js';
 import { DeferredPromise } from '../../common/async.js';
@@ -181,6 +181,7 @@ suite('ObjectTree partial update lifecycle', () => {
 				modelOptions: { identityProvider: { getId: item => item.id } },
 				dnd: { getDragURI: item => item.label === 'Sibling' ? item.id : undefined, onDragOver: () => false, drop: () => { } },
 				renderElement: item => h(dom.window.document, 'button', undefined, item.label),
+				rowClassName: item => item.label === 'Sibling' ? 'unread' : undefined,
 			});
 			const folder = { id: 'folder', label: 'Folder' };
 			const sibling = { id: 'sibling', label: 'Sibling' };
@@ -189,6 +190,7 @@ suite('ObjectTree partial update lifecycle', () => {
 			const siblingRow = tree.element.querySelector<HTMLElement>('[data-tree-id="sibling"]')!;
 			const control = siblingRow.querySelector('button')!;
 			assert.equal(siblingRow.draggable, true);
+			assert.equal(siblingRow.classList.contains('unread'), true);
 			control.focus();
 			tree.expand('folder');
 			assert.equal(tree.element.querySelector('[data-tree-id="sibling"]'), siblingRow);
@@ -202,6 +204,7 @@ suite('ObjectTree partial update lifecycle', () => {
 			assert.equal(siblingRow.textContent, 'Updated sibling');
 			assert.equal(siblingRow.getAttribute('aria-posinset'), '2');
 			assert.equal(siblingRow.draggable, false, 'retained model nodes project drag capability from their updated payload');
+			assert.equal(siblingRow.classList.contains('unread'), false, 'retained rows remove stale renderer classes');
 		} finally { dom.window.close(); }
 	});
 });
@@ -299,6 +302,7 @@ test('ObjectTree supports unindented graph content and reports viewport scrollin
 		const file: TestNode = { id: 'file', label: 'File', expanded: false };
 		using tree = new ObjectTree<TestNode>(dom.window.document.body, {
 			indent: 0,
+			defaultIndent: 0,
 			modelOptions: { identityProvider: { getId: element => element.id } },
 			renderElement: element => h(dom.window.document, 'span', element.label),
 		});
@@ -306,6 +310,7 @@ test('ObjectTree supports unindented graph content and reports viewport scrollin
 		tree.setFocus('file');
 		tree.setSelection(['file']);
 		assert.equal(tree.element.style.getPropertyValue('--ash-tree-indent'), '0px');
+		assert.equal(tree.element.style.getPropertyValue('--ash-list-row-padding-start'), '0px');
 		assert.equal(tree.element.querySelector('[data-tree-id="file"]')?.getAttribute('aria-level'), '2');
 		assert.deepEqual(tree.selection, [file]);
 		const positions: number[] = [];
@@ -1156,13 +1161,14 @@ test('ObjectTreeModel owns hierarchy, local replacement, and collapse state', ()
 
 	model.setChildren([{ element: parent, children: [{ element: child }] }]);
 	assert.equal(model.getNode('child')?.element, child);
+	assert.equal(model.getParent('parent'), undefined);
 	assert.equal(model.getParent('child')?.element, parent);
 	assert.equal(model.getNode('child')?.depth, 2);
 	assert.deepEqual(model.visibleNodes.map((node) => node.id), ['parent', 'child']);
 	assert.equal(model.collapse('parent'), true);
 	assert.deepEqual(model.visibleNodes.map((node) => node.id), ['parent']);
 	const parentNode = model.getNode('parent');
-	model.setChildren([{ element: { id: 'parent', label: 'Updated parent', expanded: false }, children: [{ element: child }] }]);
+	model.setChildren([{ element: { id: 'parent', label: 'Updated parent', expanded: false }, collapsed: false, children: [{ element: child }] }]);
 	assert.equal(model.getNode('parent')?.collapsed, true);
 	assert.equal(model.getNode('parent'), parentNode);
 	model.setNodeChildren('parent', [{ element: { id: 'replacement', label: 'Replacement', expanded: false } }]);
@@ -1174,6 +1180,12 @@ test('ObjectTreeModel owns hierarchy, local replacement, and collapse state', ()
 	]), /Duplicate tree node ID/);
 	assert.equal(model.getNode('replacement')?.element.label, 'Replacement');
 	assert.deepEqual(changes, ['structure', 'collapse', 'structure', 'structure']);
+	model.setChildren([{ element: parent, collapsed: ObjectTreeElementCollapseState.Expanded, children: [{ element: child }] }]);
+	assert.equal(model.getNode('parent'), parentNode);
+	assert.deepEqual(model.visibleNodes.map(node => node.id), ['parent', 'child']);
+	model.setChildren([{ element: parent, collapsed: ObjectTreeElementCollapseState.Collapsed, children: [{ element: child }] }]);
+	assert.equal(model.getNode('parent'), parentNode);
+	assert.deepEqual(model.visibleNodes.map(node => node.id), ['parent']);
 	assert.deepEqual(collapseChanges, ['parent:true']);
 	model.dispose();
 });

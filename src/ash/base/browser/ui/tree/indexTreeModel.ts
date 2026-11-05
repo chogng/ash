@@ -1,6 +1,6 @@
 import { Emitter, type Event } from '../../../common/event.js';
 import { Disposable } from '../../../common/lifecycle.js';
-import { TreeVisibility, type ITreeNode, type IndexTreeLocation, type TreeElement, type TreeFilter, type TreeFilterResult, type TreeVisibleSplice } from './tree.js';
+import { ObjectTreeElementCollapseState, TreeVisibility, type ITreeNode, type IndexTreeLocation, type TreeElement, type TreeFilter, type TreeFilterResult, type TreeVisibleSplice } from './tree.js';
 
 export type IndexTreeModelChangeKind = 'structure' | 'collapse' | 'filter' | 'rerender';
 
@@ -237,7 +237,10 @@ export class IndexTreeModel<T> extends Disposable {
 			node.declaredCollapsible = treeElement.collapsible;
 			node.children = this.buildNodes(treeElement.children, node, previous);
 			node.collapsible = treeElement.collapsible ?? node.children.length > 0;
-			node.collapsed = node.collapsible ? oldNode?.collapsed ?? treeElement.collapsed ?? this.defaultCollapseState === 'collapsed' : false;
+			const requested = treeElement.collapsed;
+			if (!node.collapsible) node.collapsed = false;
+			else if (typeof requested === 'string') node.collapsed = requested === ObjectTreeElementCollapseState.Collapsed;
+			else node.collapsed = oldNode?.collapsed ?? requested ?? this.defaultCollapseState === 'collapsed';
 			return node;
 		});
 	}

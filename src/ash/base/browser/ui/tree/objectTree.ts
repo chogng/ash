@@ -19,6 +19,7 @@ export interface ObjectTreeOptions<TNode> {
 	readonly scrolling?: ListScrolling;
 	readonly smoothScrolling?: boolean;
 	readonly indent?: number;
+	readonly defaultIndent?: number;
 	readonly indentGuides?: TreeIndentGuides;
 	readonly twistieAdditionalCssClass?: (element: TNode) => string | undefined;
 	readonly expandOnDoubleClick?: boolean;
@@ -38,6 +39,8 @@ export interface ObjectTreeOptions<TNode> {
 	/** Releases resources for a discarded row or replaced payload; data-tree-id identifies its model node. */
 	readonly onDidRemoveRow?: (row: HTMLDivElement) => void;
 	readonly renderElement: (element: TNode, node: ObjectTreeNode<TNode>) => HTMLElement;
+	/** Projects a renderer-owned CSS class onto the list row, including retained rows. */
+	readonly rowClassName?: (element: TNode) => string | undefined;
 	readonly virtualDelegate?: never;
 	readonly renderers?: never;
 	readonly renderTwistie?: (element: TNode, state: TreeTwistieState, container: HTMLSpanElement) => void;
@@ -124,7 +127,7 @@ export class ObjectTree<TNode> extends Disposable {
 	readonly onDidChangeFind: Event<ObjectTreeFindResult<TNode>> = this._onDidChangeFind.event;
 	readonly onDidScroll: Event<number>;
 
-	public updateOptions(options: Pick<ObjectTreeOptions<TNode>, 'indent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'>): void {
+	public updateOptions(options: Pick<ObjectTreeOptions<TNode>, 'indent' | 'defaultIndent' | 'indentGuides' | 'twistieAdditionalCssClass' | 'smoothScrolling'>): void {
 		this.tree.updateOptions({ ...options, twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element) : undefined });
 	}
 
@@ -158,6 +161,7 @@ export class ObjectTree<TNode> extends Disposable {
 			scrolling: options.scrolling,
 			smoothScrolling: options.smoothScrolling,
 			indent: options.indent,
+			defaultIndent: options.defaultIndent,
 			indentGuides: options.indentGuides,
 			twistieAdditionalCssClass: options.twistieAdditionalCssClass ? node => options.twistieAdditionalCssClass!(node.element) : undefined,
 			expandOnDoubleClick: options.expandOnDoubleClick,
@@ -172,6 +176,7 @@ export class ObjectTree<TNode> extends Disposable {
 			enableStickyScroll: options.enableStickyScroll,
 			stickyScrollMaxItemCount: options.stickyScrollMaxItemCount,
 			reuseRows: templates ? false : options.reuseRows,
+			rowClassName: options.rowClassName && (node => options.rowClassName!(node.element)),
 			onDidRemoveRow: templates ? release : options.onDidRemoveRow,
 			updateElement: templates ? (node, index, content) => {
 				const entry = mounted.get(content);

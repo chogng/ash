@@ -188,6 +188,9 @@ const itemRegistration = MenusRegistry.appendMenuItem(RefactorMenu, {
 默认情况下，解析后为空的 submenu 不会出现；调用方显式传入
 `preserveEmptySubmenus: true` 时才保留。循环引用会在解析时抛出错误。
 
+子菜单入口需要图标时，在 `ISubmenuItem.icon` 中声明。解析后的 `SubmenuItemAction`
+携带该图标，工具栏使用与其他图标操作相同的布局。
+
 ## 条件语义
 
 下面几个字段看起来相似，但 owner 和效果不同：
@@ -253,57 +256,30 @@ const toolbar = new MenuWorkbenchToolBar(
 Titlebar 因而只依赖 `MenuId.TitleBar`，不需要知道 Toggle Panel 是哪个模块注册的；Panel
 模块也不需要取得 Titlebar 实例。MenuId 是二者之间稳定、低耦合的组合边界。
 
-## Toolbar 三层边界
-
-三层按 action 来源和依赖方向拆分，不按视觉拆分；它们最终都保持 `role="toolbar"`：
-
-```text
-ToolBar
-  ↑ 提供 platform action view item 适配
-WorkbenchToolBar
-  ↑ 提供 MenuId 自动解析与刷新
-MenuWorkbenchToolBar
-```
-
-| 层                     | 调用方式                         | 典型用途                                                     |
-| ---------------------- | -------------------------------- | ------------------------------------------------------------ |
-| `ToolBar`              | `setActions(primary, secondary)` | base 控件和不应依赖 platform actions 的底层调用方            |
-| `WorkbenchToolBar`     | `setActions(primary, secondary)` | 调用方已经拥有 actions，但其中可能包含 platform menu actions |
-| `MenuWorkbenchToolBar` | 构造时传入 `MenuId`              | Host 只拥有贡献槽位，actions 由 MenuService 提供             |
-
-`WorkbenchToolBar` 当前的真实职责是 action representation 适配：调用方可以手工传入
-`MenuItemAction`、`SubmenuItemAction` 或普通 `IAction`，它会选择正确的 toolbar view item。
-它不自动读取 `MenuId`，也没有复制 VS Code 的 action 隐藏、遥测、配置快捷键或复杂 overflow
-策略。以后只有这些能力形成真实共享需求时，才继续加入这一层。
-
-`MenuWorkbenchToolBar` 在此基础上拥有 `IMenu` 生命周期、group 到
-primary/secondary 的投影和刷新。它的 `Menu` 表示 action 来源，不表示 ARIA role；常驻
-按钮区域仍是 toolbar，只有 More Actions 弹层及应用菜单使用 menu/menuitem。
-
 ## 什么时候使用哪一层
 
-| 场景                                                              | 推荐                            |
-| ----------------------------------------------------------------- | ------------------------------- |
-| 多个模块会向同一区域贡献 action                                   | 使用 MenuId-backed Toolbar/Menu |
-| action 需要随 Context Key 动态出现、禁用或 checked                | 使用 MenuId + MenuService       |
-| 同一 Command 要进入 Titlebar、Menubar、Command Palette 等多个入口 | 使用 `Action2` 的多个 placement |
-| Workbench 调用方已经拥有完整 action 列表                          | 使用 `WorkbenchToolBar`         |
-| base 控件内部一次性构造固定 action，且不应依赖 platform actions   | 使用 `ToolBar`                  |
-| 只需要程序调用或快捷键，不需要 UI 入口                            | 只注册 Command/Keybinding       |
+先判断谁提供 action，再判断是否需要把它们分成行内操作和 More Actions。
 
-选择 Toolbar 时按以下顺序机械判断，不根据外观或所在 Part 猜测：
+| 组件                   | 什么时候用                                                                                            | 谁提供 action                                                                                                             |
+| ---------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `MenuWorkbenchToolBar` | 工具栏消费一个菜单贡献槽位。适合多个模块贡献操作，或使用 Context Key 声明操作的显隐、可用和选中状态。 | 宿主传入 `MenuId` 和适用的 context。组件拥有 `IMenu` 的生命周期，将菜单分组映射为 primary/secondary，并自动刷新。         |
+| `WorkbenchToolBar`     | Workbench 或 Sessions 的宿主已经知道要显示哪些操作，并需要标准工具栏。                                | 宿主调用 `setActions(primary, secondary)`。组件为普通 `IAction`、`MenuItemAction` 和 `SubmenuItemAction` 选择对应的呈现。 |
+| `ToolBar`              | 通用 UI 控件需要 primary/secondary 编排、More Actions 或按可用宽度处理溢出。                          | 宿主在构造时传入弹层 provider，通过 `setActions(primary, secondary)` 提供基础 `IAction`。Quick Input 标题区使用这一层。   |
+| `ActionBar`            | 组合控件只需要直接排列一组 action，并复用方向键和焦点管理。                                           | 宿主提供一组 `IAction`。例如搜索框内的大小写、全词和正则选项。                                                            |
 
-| 判断                                                     | 是                                        | 否                            |
-| -------------------------------------------------------- | ----------------------------------------- | ----------------------------- |
-| action 是否来自 `MenuId` / `MenuService`？               | 使用 `MenuWorkbenchToolBar`               | 继续判断                      |
-| 调用方是否已经拥有完整的 primary/secondary action 列表？ | Workbench 产品代码使用 `WorkbenchToolBar` | 先明确 action 的 owner 和来源 |
-| 是否是 `src/ash/base` 内部的领域无关控件？               | 可以使用 `ToolBar`                        | 不得直接构造 base `ToolBar`   |
+`ToolBar` 内部用 `ActionBar` 排列操作。`WorkbenchToolBar` 继承 `ToolBar` 并适配平台 action，
+`MenuWorkbenchToolBar` 再接管菜单数据的解析和刷新。常驻工具栏使用 `role="toolbar"`，
+它的按钮可以打开菜单。按钮能打开菜单这件事本身与 action 来源无关。
 
-只有 base UI 和 `platform/actions` 中实现标准适配层的代码可以直接依赖 base `ToolBar`。
-Workbench Part、View、Contribution 等产品代码必须在 `WorkbenchToolBar` 与
-`MenuWorkbenchToolBar` 之间选择。`MenuWorkbenchToolBar` 自己拥有 action 列表；调用方
-通过注册 Command、Menu contribution 和更新 Context Key 改变内容，不调用
-`setActions()`。
+Workbench Part、View 或 Contribution 需要标准工具栏时，按 action 来源选择
+`WorkbenchToolBar` 或 `MenuWorkbenchToolBar`。后者通过菜单贡献和 Context Key 更新内容，
+由它自己管理 action 列表。
+
+Agents Window 的 **Projects 标题行**使用 `MenuWorkbenchToolBar`。Code 消费
+`Menus.SidebarSessionsHeader`，Chat 消费 `Menus.ChatSidebarHeader`。筛选或排序入口与
+`Add folder…` 都在菜单中声明。侧栏负责整行悬停时显示工具栏，并在打开筛选或排序菜单时
+读取当前列表状态。下方的 **Chat 会话行**使用 `WorkbenchToolBar`，行组件根据当前会话
+直接提供「置顶 / 取消置顶」和「更多」操作。
 
 Titlebar、Editor title、Chat title 与 Terminal title 当前都使用
 `MenuWorkbenchToolBar`。Terminal 拥有 `MenuId.TerminalTitle`，其 profile、New、Relaunch

@@ -17,7 +17,7 @@ import { AppServerProtocolIncompatibleError } from '../../common/appServerProtoc
 import { appServerRequest } from '../../browser/appServerRequest.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { AppServerFrame, type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../../common/appServerTransport.js';
-import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
+import { createTestInitializeResult, createTestModel } from '../common/testAppServerProtocol.js';
 import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../../remote/common/remote.js';
 import { AppServerFrameDecoder } from '../../browser/appServerFrameDecoder.js';
 import { createAppServerExtensionHostApi } from '../../../extensions/browser/extensionHostApi.js';
@@ -725,6 +725,83 @@ test('connection recovery bounds failed acquisition attempts and a manual reques
 		await recovery.connect();
 		assert.equal(client.state, 'ready');
 		assert.equal(opens, 5);
+	} finally { mock.timers.reset(); }
+});
+
+for (const offThread of [false, true]) test(`connection recovery stops after a ${offThread ? 'Worker' : 'synchronous'} model decode failure until manually retried`, async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		const transport = new ProtocolTransport();
+		const port = new TestAppServerDecodePort();
+		const client = new AppServerProtocolClient(transport, {}, new AppServerFrameDecoder(offThread ? () => port : undefined));
+		using cleanup = toDisposable(() => { client.dispose(); port.dispose(); });
+		let opens = 0;
+		const errors: unknown[] = [];
+		using recovery = new AppServerConnectionRecovery(client, async () => {
+			opens++;
+			client.disconnect();
+			await client.connect();
+		}, (_message, error) => errors.push(error));
+		await recovery.connect();
+		const rejected = assert.rejects(appServerRequest(client, 'model/list', {}), /recommended_for\[2\]/);
+		const model = createTestModel({ model: { provider: 'openai', model: 'example' }, display_name: 'Example' });
+		const response = {
+			id: transport.frames.at(-1)!.id,
+			result: { models: [{ ...model, recommended_for: ['review', 'commit', 'unknownPurpose'] }] },
+		};
+		if (offThread) {
+			largeFrame(transport, response);
+			await port.release();
+		} else {
+			transport.frame(response);
+		}
+		await rejected;
+		assert.equal(client.state, 'crashed');
+		assert.equal(recovery.status, 'failed');
+		assert.match(recovery.error!, /recommended_for\[2\]/);
+		mock.timers.tick(100_000);
+		recovery.suspend();
+		recovery.resume();
+		mock.timers.tick(100_000);
+		assert.equal(opens, 1, 'neither timers nor OS wake can repair an invalid contract');
+		assert.equal(recovery.status, 'failed');
+		assert.equal(errors.length, 1);
+		await recovery.reconnect();
+		assert.equal(opens, 2);
+		assert.equal(client.state, 'ready');
+		assert.equal(recovery.status, 'idle');
+		assert.equal(recovery.error, undefined);
+	} finally { mock.timers.reset(); }
+});
+
+test('connection recovery stops when the replacement runtime has an incompatible schema', async () => {
+	mock.timers.enable({ apis: ['setTimeout'] });
+	try {
+		let incompatible = false;
+		const transport = new ProtocolTransport(() => ({ ...createTestInitializeResult(), ...(incompatible ? { schemaHash: `sha256:${'0'.repeat(64)}` } : {}) }));
+		const client = new AppServerProtocolClient(transport);
+		using cleanup = toDisposable(() => client.dispose());
+		let opens = 0;
+		using recovery = new AppServerConnectionRecovery(client, async () => {
+			opens++;
+			client.disconnect();
+			await client.connect();
+		}, () => { });
+		await recovery.connect();
+		incompatible = true;
+		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'runtime replaced' });
+		mock.timers.tick(100);
+		await assert.rejects(recovery.whenConnected(), AppServerProtocolIncompatibleError);
+		assert.equal(recovery.status, 'failed');
+		mock.timers.tick(100_000);
+		recovery.suspend();
+		recovery.resume();
+		mock.timers.tick(100_000);
+		assert.equal(opens, 2);
+		assert.equal(recovery.status, 'failed');
+		incompatible = false;
+		await recovery.reconnect();
+		assert.equal(client.state, 'ready');
 	} finally { mock.timers.reset(); }
 });
 

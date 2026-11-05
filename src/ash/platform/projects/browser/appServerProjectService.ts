@@ -7,7 +7,7 @@ import { localize } from '../../../nls.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { appServerRequest } from '../../agentHost/browser/appServerRequest.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
-import type { IProjectService, Project, ProjectMaterial, ProjectSummary } from '../common/projectService.js';
+import type { IProjectService, Project, ProjectMaterial, ProjectScope, ProjectSummary } from '../common/projectService.js';
 
 export class AppServerProjectService implements IProjectService {
 	public readonly onDidChange: Event<void>;
@@ -19,9 +19,9 @@ export class AppServerProjectService implements IProjectService {
 		);
 	}
 
-	public async list(): Promise<readonly ProjectSummary[]> {
+	public async list(scope?: ProjectScope): Promise<readonly ProjectSummary[]> {
 		try {
-			const result = await appServerRequest(this.connection, 'project/list', {});
+			const result = await appServerRequest(this.connection, 'project/list', { scope });
 			return result.projects.map(project => ({
 				id: project.projectId, revision: project.revision, name: project.name, archived: project.status === 'archived', sessionCount: project.sessionCount,
 				createdAtMs: project.createdAtMs ?? undefined, updatedAtMs: project.updatedAtMs ?? undefined,
@@ -29,14 +29,14 @@ export class AppServerProjectService implements IProjectService {
 		} catch (error) { throw projectError(error); }
 	}
 
-	public async read(id: string): Promise<Project> {
-		try { return fromDto((await appServerRequest(this.connection, 'project/read', { projectId: id })).project); }
+	public async read(id: string, scope?: ProjectScope): Promise<Project> {
+		try { return fromDto((await appServerRequest(this.connection, 'project/read', { projectId: id, scope })).project); }
 		catch (error) { throw projectError(error); }
 	}
 
-	public async create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project> {
+	public async create(id: string, name: string, description: string, materials: readonly ProjectMaterial[], scope?: ProjectScope): Promise<Project> {
 		try {
-			return fromDto((await appServerRequest(this.connection, 'project/create', { commandId: id, projectId: id, name, description, materials: toMaterials(materials) })).project);
+			return fromDto((await appServerRequest(this.connection, 'project/create', { commandId: id, projectId: id, name, description, materials: toMaterials(materials), scope })).project);
 		} catch (error) { throw projectError(error); }
 	}
 
@@ -45,6 +45,24 @@ export class AppServerProjectService implements IProjectService {
 			return fromDto((await appServerRequest(this.connection, 'project/session/link', {
 				commandId: generateUuid(), projectId: project.id, expectedRevision: project.revision, sessionId,
 			})).project);
+		} catch (error) { throw projectError(error); }
+	}
+
+	public async moveSession(sessionId: string, fromProjectId: string | undefined, toProjectId: string | undefined): Promise<void> {
+		if (fromProjectId === toProjectId) return;
+		// Link first so a failed transfer preserves the existing membership.
+		// Retrying can skip a link that already succeeded.
+		if (toProjectId) {
+			const destination = await this.read(toProjectId);
+			if (!destination.sessionIds.includes(sessionId)) await this.addSession(destination, sessionId);
+		}
+		if (!fromProjectId) return;
+		const source = await this.read(fromProjectId);
+		if (!source.sessionIds.includes(sessionId)) return;
+		try {
+			await appServerRequest(this.connection, 'project/session/unlink', {
+				commandId: generateUuid(), projectId: source.id, expectedRevision: source.revision, sessionId,
+			});
 		} catch (error) { throw projectError(error); }
 	}
 
@@ -57,6 +75,12 @@ export class AppServerProjectService implements IProjectService {
 	public async archive(project: ProjectSummary): Promise<Project> {
 		try {
 			return fromDto((await appServerRequest(this.connection, 'project/archive', { commandId: generateUuid(), projectId: project.id, expectedRevision: project.revision })).project);
+		} catch (error) { throw projectError(error); }
+	}
+
+	public async restore(project: ProjectSummary): Promise<Project> {
+		try {
+			return fromDto((await appServerRequest(this.connection, 'project/restore', { commandId: generateUuid(), projectId: project.id, expectedRevision: project.revision })).project);
 		} catch (error) { throw projectError(error); }
 	}
 
@@ -73,6 +97,7 @@ function fromDto(project: ProjectDto): Project {
 		id: project.projectId, revision: project.revision, name: project.name, archived: project.status === 'archived',
 		createdAtMs: project.createdAtMs ?? undefined, updatedAtMs: project.updatedAtMs ?? undefined,
 		description: project.description, sessionIds: project.sessionIds, sessionCount: project.sessionIds.length,
+		roots: project.roots.map(root => URI.parse(root.path)),
 		materials: project.materials.map(material => ({ name: material.name, kind: material.kind, resource: URI.parse(material.path) })),
 	};
 }

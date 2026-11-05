@@ -2,6 +2,7 @@ import './sessionsSplash.css';
 import type { IPartsSplash, IPartsSplashPartBounds, IPartsSplashSkeleton } from '../../../../platform/theme/common/themeService.js';
 import { showPartsSplash } from '../../../../workbench/contrib/splash/browser/splash.js';
 import { SessionsLayoutPolicy } from '../../../browser/layoutPolicy.js';
+import type { ISessionsEntry } from '../../../services/layout/common/sessionsLayoutService.js';
 
 export function showSessionsSplash(document: Document, splash: IPartsSplash): void {
 	splash = identifyLegacyChrome(splash);
@@ -93,18 +94,14 @@ function identifyLegacyChrome(splash: IPartsSplash): IPartsSplash {
 }
 
 /** Fill an uncached main region only after navigation has resolved the actual restore target. */
-export function showSessionsSplashForRestore(document: Document, command: string): void {
+export function showSessionsSplashForRestore(document: Document, entry: Pick<ISessionsEntry, 'content' | 'splash'>): void {
+	if (!entry.splash) return;
 	const shell = document.querySelector<HTMLElement>('#ash-parts-splash.ash-sessions-splash');
 	if (!shell || shell.querySelector('[data-splash-captured], .ash-sessions-splash-cards, .ash-sessions-splash-chat, .ash-sessions-splash-scaled')) return;
-	const projects = command === 'sessions.show.projects';
-	const agentChat = command === 'sessions.open.chat';
-	const desktopChat = command === 'sessions.open.new' || command === 'sessions.show.chatgpt'
-		|| command === 'sessions.show.chatgptNative' || command === 'sessions.open.chatgptNative';
-	if (!projects && !agentChat && !desktopChat) return;
-	const part = agentChat ? 'sessions' : 'editor';
+	const part = entry.content === 'editor' ? 'editor' : 'sessions';
 	const region = shell.querySelector<HTMLElement>(`.ash-sessions-splash-uncached-main, [data-part="${part}"], [data-part="legacy-main"]`);
 	if (!region) return;
-	if (projects) appendCards(region);
+	if (entry.splash === 'grid') appendCards(region);
 	else appendDefaultChat(region);
 }
 

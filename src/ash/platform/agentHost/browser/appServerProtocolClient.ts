@@ -7,9 +7,10 @@ import type { AppServerConnectionState, IAppServerConnectionRecovery } from '../
 import { computeReconnectDelay, hasExhaustedReconnectAttempts, type IRemoteAgentHostReconnectPolicy } from '../common/reconnectPolicy.js';
 import { AppServerConnectionStoppedError, AppServerRemoteError } from '../common/appServerError.js';
 import type { DisposableHandle } from '../../ipc/common/ipc.js';
-import { checkAppServerInitializeCompatibility } from '../common/appServerProtocolCompatibility.js';
+import { AppServerProtocolIncompatibleError, checkAppServerInitializeCompatibility } from '../common/appServerProtocolCompatibility.js';
 import type { AppServerServerRequestDefinition, AppServerServerRequestMethod, ClientCapabilities, JsonRpcId, ServerRequestParams, ServerRequestResult } from '../../../../../.build/protocol/typescript/index.js';
-import { decodeAppServerServerRequestResult } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
+import { AppServerProtocolDecodeError, decodeAppServerServerRequestResult } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
+import { WebWorkerRemoteError } from '../../../base/common/worker/webWorker.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
@@ -655,6 +656,11 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 			} else if (state === 'crashed') {
 				this.failure = error;
 				this.onFailure('Renderer connection failed', error);
+				if (isProtocolFailure(error)) {
+					this.clearTimer();
+					this.publish('failed');
+					return;
+				}
 				if (!this.startedAt) this.startedAt = Date.now();
 				this.schedule();
 			}
@@ -692,6 +698,7 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 		this.suspended = false;
 		if (this.startedAt) this.startedAt += Date.now() - this.suspendedAt;
 		if (!this.isActive || this.status === 'unavailable') return;
+		if (isProtocolFailure(this.failure)) { this.publish('failed'); return; }
 		if (this.client.state === 'ready' && !this.task) { this.publish('idle'); return; }
 		if (this.policy && !this.policy.autoRestore) {
 			if (!this.task) { this.publish('failed'); }
@@ -741,14 +748,14 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 			this.failure = toError(error);
 			if (error instanceof AppServerConnectionStoppedError) { this.publish('unavailable'); return; }
 			this.onFailure('App Server connection recovery failed', error);
-			if (!this.isActive) this.publish('failed');
+			if (!this.isActive || isProtocolFailure(this.failure)) this.publish('failed');
 			else this.schedule();
 		});
 		return operation;
 	}
 
 	private schedule(): void {
-		if (this.isDisposed || !this.isActive || this.task || this.timer !== undefined || this.status === 'unavailable') return;
+		if (this.isDisposed || !this.isActive || this.task || this.timer !== undefined || this.status === 'unavailable' || isProtocolFailure(this.failure)) return;
 		if (this.suspended) { this.publish('suspended'); return; }
 		if (this.policy && (!this.policy.autoRestore || hasExhaustedReconnectAttempts(this.policy, this.attempts)
 			|| this.policy.maxElapsedTimeMs !== undefined && Date.now() - this.startedAt >= this.policy.maxElapsedTimeMs)) {
@@ -780,6 +787,13 @@ export class AppServerConnectionRecovery extends Disposable implements IAppServe
 			this.timer = undefined;
 		}
 	}
+}
+
+/** Reconnecting cannot repair a contract mismatch, including failures decoded off-thread. */
+function isProtocolFailure(error: Error | undefined): boolean {
+	return error instanceof AppServerProtocolIncompatibleError
+		|| error instanceof AppServerProtocolDecodeError
+		|| error instanceof WebWorkerRemoteError && error.remoteName === 'AppServerProtocolDecodeError';
 }
 
 function validateConnectedPayload(payload: unknown): AppServerConnectionMetadata {

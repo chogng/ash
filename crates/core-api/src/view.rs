@@ -42,6 +42,8 @@ pub struct ThreadView {
     pub parent_thread_id: Option<ThreadId>,
     pub forked_from_id: Option<ThreadId>,
     pub title: String,
+    /// Original title supplied to the creation command, for idempotent replay.
+    pub creation_title: String,
     pub status: ThreadStatus,
     pub archived_at_unix_ms: Option<u64>,
     pub archive_reason: Option<ThreadArchiveReason>,

@@ -1,0 +1,107 @@
+.ash-sessions-environment-setup {
+	display: grid;
+	place-items: safe center;
+	flex: 1 1 auto;
+	min-block-size: 0;
+	overflow: auto;
+	padding-inline: var(--ash-chat-content-inset);
+}
+
+.ash-sessions-environment-setup:is([hidden], :empty),
+.ash-sessions-environment-card-projects[hidden] {
+	display: none;
+}
+
+.ash-sessions-environment-card {
+	box-sizing: border-box;
+	inline-size: min(100%, 20rem);
+	border: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+	border-radius: var(--ash-cornerRadius-xLarge);
+	color: var(--ash-foreground);
+}
+
+.ash-sessions-environment-card-folder,
+.ash-sessions-environment-card-trigger {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size80);
+	padding: var(--ash-spacing-size120);
+}
+
+.ash-sessions-environment-card-folder-label {
+	flex: 1;
+	min-inline-size: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ash-sessions-environment-card-folder > .ash-icon[hidden] {
+	display: none;
+}
+
+.ash-sessions-environment-card-folder,
+.ash-sessions-environment-card-trigger {
+	inline-size: 100%;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: start;
+	cursor: pointer;
+}
+
+.ash-sessions-environment-card-projects {
+	border-radius: inherit;
+}
+
+.ash-sessions-environment-card-folder:first-child {
+	border-start-start-radius: inherit;
+	border-start-end-radius: inherit;
+}
+
+.ash-sessions-environment-card-trigger {
+	border-end-start-radius: inherit;
+	border-end-end-radius: inherit;
+}
+
+.ash-sessions-environment-card-projects:not([hidden])
+	+ .ash-sessions-environment-card-trigger {
+	border-block-start: var(--ash-strokeThickness) solid
+		var(--ash-contrastBorder, var(--ash-border));
+}
+
+.ash-sessions-environment-card-trigger:first-child,
+.ash-sessions-environment-card-projects[hidden]
+	+ .ash-sessions-environment-card-trigger {
+	border-start-start-radius: inherit;
+	border-start-end-radius: inherit;
+}
+
+:is(
+		.ash-sessions-environment-card-folder,
+		.ash-sessions-environment-card-trigger
+	):enabled:hover {
+	background: var(--ash-list-hoverBackground);
+}
+
+:is(
+	.ash-sessions-environment-card-folder,
+	.ash-sessions-environment-card-trigger
+):focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
+}
+
+:is(
+	.ash-sessions-environment-card-folder,
+	.ash-sessions-environment-card-trigger
+):disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.ash-sessions-environment-card-trigger > .ash-icon {
+	font-size: var(--ash-lxiconFontSize-compact);
+}

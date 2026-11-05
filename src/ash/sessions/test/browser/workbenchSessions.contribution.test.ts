@@ -316,6 +316,34 @@ test('Conversation review keeps identical paths in different repositories and re
 	await assert.rejects(() => createThreadMultiDiffEditorInput(chat, 'session', 'thread'), /conversation changed/);
 });
 
+test('Reply turn changes include every sealed repository of that turn and reject a changed capture', async () => {
+	const summary = (changeSetId: string, turnId: string, captureState: TurnChangeSetSummary['captureState']): TurnChangeSetSummary => ({
+		changeSetId, sessionId: 'session', threadId: 'thread', turnId, repositoryId: changeSetId, captureState,
+		statistics: { files: 1, additions: 1, deletions: 1 }, revision: 1, messageState: 'unconfigured', commitState: 'idle',
+		committedPaths: [], dependencies: [], externalDependencyPaths: [], warnings: [], conflictPaths: [],
+	});
+	const captures = [summary('one', 'reply', 'sealed'), summary('two', 'reply', 'sealed'), summary('discarded', 'reply', 'discarded'), summary('later', 'later', 'sealed')];
+	const chat = {
+		listTurnChanges: async () => captures,
+		readTurnChange: async (_session: string, _thread: string, id: string) => ({
+			summary: captures.find(capture => capture.changeSetId === id), files: [{ path: 'same.txt', kind: 'modified', binary: false, additions: 1, deletions: 1 }],
+		}),
+		readTurnChangeFile: async (_session: string, _thread: string, id: string) => ({ path: 'same.txt', binary: false, truncated: false, before: 'before', after: id }),
+	} as unknown as IChatService;
+	const source = { session: { sessionId: 'session' }, threadId: 'thread' };
+	const input = await createTurnMultiDiffEditorInput(chat, source, { turnId: 'reply' });
+	assert.deepEqual(input.items.map(item => [item.label, item.modified.initialText, item.modified.readOnly]), [
+		['one: same.txt', 'one', true], ['two: same.txt', 'two', true],
+	]);
+	assert.equal(input.source?.kind, 'snapshot');
+	const readFile = chat.readTurnChangeFile;
+	chat.readTurnChangeFile = async (session, thread, id, path) => {
+		if (id === 'two') captures[0] = { ...captures[0], captureState: 'discarded', revision: 2 };
+		return readFile(session, thread, id, path);
+	};
+	await assert.rejects(createTurnMultiDiffEditorInput(chat, source, { turnId: 'reply' }), /capture changed/);
+});
+
 test('Chat opens the current checkpoint when composer counts arrive before its final revision', async () => {
 	let revision = 'sealed';
 	let summaryReads = 0;

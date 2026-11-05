@@ -23,7 +23,7 @@ export interface ILanguageModelsService {
 	getDefaultNewChatModel(models: readonly ModelCatalogEntry[]): ModelRef | undefined;
 	readModelDefaults(): Promise<AgentModelDefaults>;
 	rememberSelectedModel(model: ModelRef | undefined): Promise<void>;
-	saveReasoningEffort(model: ModelRef, effort: ModelReasoningEffort | undefined): Promise<void>;
+	saveReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
 	listModelCatalog(): Promise<readonly ModelCatalogEntry[]>;
 	listCustomModelProviders(): Promise<readonly CustomModelProvider[]>;
 	saveCustomModelProvider(provider: CustomModelProvider): Promise<void>;
@@ -147,22 +147,21 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 			}
 			const defaults = await this.modelApi.readDefaults();
 			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
-			const same = defaults.model && modelRefIdentity(model) === modelRefIdentity(defaults.model);
-			await this.modelApi.configureDefaults({ model, ...(!same ? { reasoningEffort: null } : {}) }, defaults.revision);
+			await this.modelApi.configureDefaults({ model }, defaults.revision);
 			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			await this.readModelDefaults();
 			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			this.preferences.rememberSelectedModel(null);
 		});
 	}
-	public saveReasoningEffort(model: ModelRef, effort: ModelReasoningEffort | undefined): Promise<void> {
+	public saveReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void> {
 		const epoch = this.connectionEpoch;
 		const generation = this.appServer.connectionGeneration;
 		return this.selectionUpdates.schedule(async () => {
 			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			const defaults = await this.modelApi.readDefaults();
 			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
-			await this.modelApi.configureDefaults({ model, reasoningEffort: effort ?? null }, defaults.revision);
+			await this.modelApi.configureDefaults({ reasoningEffort: effort ?? null }, defaults.revision);
 			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
 			await this.readModelDefaults();
 			if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
@@ -368,10 +367,13 @@ function sameModelCatalog(left: readonly ModelCatalogEntry[], right: readonly Mo
 			&& entry.defaultContextWindow === candidate.defaultContextWindow
 			&& entry.maximumContextWindow === candidate.maximumContextWindow
 			&& entry.selectedAcceleration === candidate.selectedAcceleration
+			&& entry.ultra === candidate.ultra
 			&& entry.accelerationOptions?.length === candidate.accelerationOptions?.length
 			&& (entry.accelerationOptions?.every((option, index) => option.id === candidate.accelerationOptions?.[index]?.id && option.name === candidate.accelerationOptions?.[index]?.name && option.description === candidate.accelerationOptions?.[index]?.description) ?? true)
 			&& entry.longContext === candidate.longContext
 			&& entry.defaultReasoningEffort === candidate.defaultReasoningEffort
+			&& entry.effectiveReasoningEffort === candidate.effectiveReasoningEffort
+			&& entry.reasoningEffortOverride === candidate.reasoningEffortOverride
 			&& entry.supportedReasoningEfforts?.length === candidate.supportedReasoningEfforts?.length
 			&& (entry.supportedReasoningEfforts?.every((option, index) => option.effort === candidate.supportedReasoningEfforts?.[index]?.effort && option.description === candidate.supportedReasoningEfforts?.[index]?.description) ?? true);
 	});

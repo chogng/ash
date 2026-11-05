@@ -20,6 +20,7 @@ use crate::cache::classify_freshness;
 use crate::cache::read_lock;
 use crate::cache::rebuild_snapshot;
 use crate::cache::write_lock;
+use crate::disk_cache::CachedCatalog;
 use crate::disk_cache::DiskCatalogCache;
 use crate::filter::matches_query;
 use crate::filter::validate_requirements;
@@ -375,13 +376,19 @@ impl ModelsManager {
             && let Some(cache) = &self.inner.disk_cache
         {
             match cache.load(scope) {
-                Ok(Some(catalog)) => {
+                Ok(Some(cached)) => {
                     let mut state = write_lock(&managed.state);
+                    let catalog = cached.observation;
                     apply_discovery(
                         &mut state.records,
                         &catalog,
                         crate::MetadataSource::PersistedObservation,
                     );
+                    for (id, effort) in cached.reasoning_defaults {
+                        if let Some(record) = state.records.get_mut(&id) {
+                            record.restore_observed_default(effort);
+                        }
+                    }
                     state.last_discovered_ids = catalog
                         .models
                         .iter()
@@ -464,24 +471,12 @@ impl ModelsManager {
             self.commit_failure(scope, managed, error.clone());
             return Err(error);
         }
-        if let Some(cache) = &self.inner.disk_cache {
-            let saved = match &outcome {
-                CatalogDiscoveryOutcome::Modified(catalog) => cache.store(catalog),
-                CatalogDiscoveryOutcome::NotModified(observation) => cache.touch(observation),
-            };
-            if let Err(error) = saved {
-                log::warn!(
-                    "could not persist model catalog for {}: {error}",
-                    scope.provider()
-                );
-            }
-        }
         let mut state = write_lock(&managed.state);
-        match outcome {
+        let cached = match &outcome {
             CatalogDiscoveryOutcome::Modified(catalog) => {
                 apply_discovery(
                     &mut state.records,
-                    &catalog,
+                    catalog,
                     crate::MetadataSource::ProviderLive,
                 );
                 state.last_discovered_ids = catalog
@@ -491,23 +486,45 @@ impl ModelsManager {
                     .collect();
                 state.last_success = Some(catalog.observed_at);
                 state.cache_hint = catalog.cache_hint;
-                state.validator = catalog.validator;
+                state.validator = catalog.validator.clone();
                 state.has_live_observation = true;
+                self.inner
+                    .disk_cache
+                    .as_ref()
+                    .map(|_| CachedCatalog::new(catalog.clone(), &state.records))
             }
             CatalogDiscoveryOutcome::NotModified(catalog) => {
                 state.last_success = Some(catalog.observed_at);
                 state.cache_hint = catalog.cache_hint;
                 if catalog.validator.is_some() {
-                    state.validator = catalog.validator;
+                    state.validator = catalog.validator.clone();
                 }
+                None
             }
-        }
+        };
         state.warnings.clear();
         state.refresh_serial = state.refresh_serial.saturating_add(1);
         state.last_refresh_error = None;
         let freshness = classify_freshness(&state, self.inner.clock.now(), self.inner.freshness);
         rebuild_snapshot(scope, &mut state, freshness);
-        Ok(state.snapshot.clone())
+        let snapshot = state.snapshot.clone();
+        drop(state);
+        if let Some(cache) = &self.inner.disk_cache {
+            let saved = if let Some(cached) = cached {
+                cache.store(cached)
+            } else if let CatalogDiscoveryOutcome::NotModified(observation) = &outcome {
+                cache.touch(observation)
+            } else {
+                Ok(())
+            };
+            if let Err(error) = saved {
+                log::warn!(
+                    "could not persist model catalog for {}: {error}",
+                    scope.provider()
+                );
+            }
+        }
+        Ok(snapshot)
     }
 
     fn commit_failure(

@@ -1,3 +1,5 @@
+import { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
+import { ISessionContext } from '../../../../../services/sessions/browser/sessionContext.js';
 import { SessionSectionOrderService } from '../../../../../services/sessions/browser/sessionSectionOrderService.js';
 import { SessionsListModelService } from '../../../../../services/sessions/browser/sessionsListModelService.js';
 import { BrowserContextViewService } from '../../../../../../platform/contextview/browser/contextViewService.js';
@@ -274,7 +276,11 @@ toolbarServices.registerInstance(ISessionProviderScopeService, scopes);
 toolbarServices.registerInstance(ICustomViewService, listCustomViews);
 toolbarServices.registerInstance(ISessionGitHubService, github);
 toolbarServices.registerInstance(INotificationService, notifications);
-const toolbar = resources.add(new SessionChatInputToolbar(main, () => input.focus(), toolbarModel, github, opener, notifications, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService, resources.add(new BrowserContextViewService(document.body)), toolbarServices));
+toolbarServices.registerInstance(ISessionContext, toolbarModel);
+toolbarServices.registerInstance(IOpenerService, opener);
+toolbarServices.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(document.body)));
+toolbarServices.registerInstance(IEditorService, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService);
+const toolbar = resources.add(toolbarServices.createInstance(SessionChatInputToolbar, main, () => input.focus()));
 if (inputStack) {
 	// Exercise the real PR producer against the same slot contract used by NewChatWidget.
 	main.classList.add('ash-chat-input-part', chatInputStackClass);

@@ -120,7 +120,7 @@ impl ActiveConversation {
     }
 
     pub(crate) fn title(&self) -> &str {
-        &self.session.title
+        super::session_title(&self.session)
     }
 
     pub(crate) fn session_id(&self) -> &SessionId {
@@ -217,11 +217,7 @@ impl ActiveConversation {
     where
         T: JsonRpcTransport,
     {
-        let title = if arguments.is_empty() {
-            "TUI conversation".to_owned()
-        } else {
-            arguments.to_owned()
-        };
+        let title = arguments.to_owned();
         let (conversation, _) =
             create_conversation(client, title, self.session.execution_target.clone())?;
         *self = conversation;
@@ -240,7 +236,7 @@ impl ActiveConversation {
         T: JsonRpcTransport,
     {
         let title = if arguments.is_empty() {
-            format!("Branch of {}", self.session.title)
+            format!("Branch of {}", self.title())
         } else {
             arguments.to_owned()
         };
@@ -279,7 +275,7 @@ impl ActiveConversation {
     where
         T: JsonRpcTransport,
     {
-        let title = format!("Rewind of {}", self.session.title);
+        let title = format!("Rewind of {}", self.title());
         let result = client
             .request_session(SessionRequestParams {
                 command_id: new_command_id("rewind"),
@@ -317,7 +313,7 @@ impl ActiveConversation {
     where
         T: JsonRpcTransport,
     {
-        let title = format!("Rewind of {}", self.session.title);
+        let title = format!("Rewind of {}", self.title());
         let result = client
             .request_session(SessionRequestParams {
                 command_id: new_command_id("rewind"),
@@ -412,6 +408,7 @@ where
     T: JsonRpcTransport,
 {
     let session = client.create_session(SessionCreateParams {
+        surface: None,
         agent_id: None,
         agent: ash_protocol::AgentRoleSelection::Default,
         command_id: new_command_id("session"),

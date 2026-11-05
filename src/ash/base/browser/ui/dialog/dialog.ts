@@ -63,6 +63,7 @@ export interface IDialogOptions {
 	})[];
 	readonly disableCloseAction?: boolean;
 	readonly disableCloseButton?: boolean;
+	readonly closeOnBackdropClick?: boolean;
 	readonly disableDefaultAction?: boolean;
 	readonly focusCancelButton?: boolean;
 	readonly onVisibilityChange?: (window: Window, visible: boolean) => void;
@@ -219,6 +220,27 @@ export class Dialog extends Disposable {
 		}
 		element.append(header, body);
 		container.append(element);
+		if (options.closeOnBackdropClick && !options.disableCloseAction) {
+			if (typeof element.closedBy === 'string') {
+				element.setAttribute('closedby', 'any');
+			} else {
+				// The dialog also receives clicks on its own padding. Check where the pointer started and ended.
+				const isBackdrop = (event: MouseEvent) => {
+					if (event.target !== element) return false;
+					const { left, top, right, bottom } = element.getBoundingClientRect();
+					return event.clientX < left || event.clientX > right || event.clientY < top || event.clientY > bottom;
+				};
+				let pressedBackdrop = false;
+				this._register(addDisposableListener(element, 'pointerdown', event => {
+					pressedBackdrop = event.isPrimary && event.button === 0 && isBackdrop(event);
+				}));
+				this._register(addDisposableListener(element, 'click', event => {
+					if (!pressedBackdrop || event.detail === 0 || !isBackdrop(event)) return;
+					event.stopPropagation();
+					this.finish(options.cancelId ?? 0);
+				}));
+			}
+		}
 		this._register(addDisposableListener(element, 'keydown', event => {
 			options.keyEventProcessor?.(new StandardKeyboardEvent(event));
 			if (event.defaultPrevented || event.isComposing) return;

@@ -113,7 +113,7 @@ export function createDisconnectedRendererApi(isAvailable = false): IWorkbenchHo
 		contentSearch: createDisconnectedContentSearchApi(unavailableOperation),
 		contentSearchConfiguration: createDisconnectedContentSearchConfigurationApi(unavailableOperation),
 		terminal: new DisconnectedTerminalProcessService(unavailableOperation, appServer),
-		projects: { addSession: () => unavailableOperation('project/session/link'), onDidChange: Event.None, list: () => unavailableOperation('project/list'), read: () => unavailableOperation('project/read'), create: () => unavailableOperation('project/create'), update: () => unavailableOperation('project/details/update'), archive: () => unavailableOperation('project/archive'), remove: () => unavailableOperation('project/delete') },
+		projects: { addSession: () => unavailableOperation('project/session/link'), moveSession: (_id, _from, to) => unavailableOperation(to ? 'project/session/link' : 'project/session/unlink'), onDidChange: Event.None, list: () => unavailableOperation('project/list'), read: () => unavailableOperation('project/read'), create: () => unavailableOperation('project/create'), update: () => unavailableOperation('project/details/update'), archive: () => unavailableOperation('project/archive'), restore: () => unavailableOperation('project/restore'), remove: () => unavailableOperation('project/delete') },
 		assets: {
 			getCatalog: () => unavailableOperation('asset/catalog'),
 			updateEntry: () => unavailableOperation('asset/catalog/update'),

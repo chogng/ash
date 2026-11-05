@@ -154,6 +154,34 @@ impl ThreadController {
         .map(|receipt| receipt.sequence)
     }
 
+    pub(crate) fn save_thread_recap(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        source_item: &ItemId,
+        source_sequence: u64,
+        previous_recap_sequence: Option<u64>,
+        text: String,
+    ) -> Result<Option<u64>, CoreError> {
+        self.mutate_thread(thread_id, |snapshot| {
+            if !crate::thread_recap::can_recap(snapshot, turn_id)
+                || snapshot.item_sequences.get(source_item) != Some(&source_sequence)
+                || snapshot.recap.as_ref().map(|recap| recap.sequence) != previous_recap_sequence
+            {
+                return Ok(None);
+            }
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::ThreadRecapUpdated {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    text,
+                }],
+            )?;
+            Ok(Some(snapshot.sequence))
+        })
+    }
+
     /// Completes a Turn that intentionally produced no agent message.
     pub fn complete_turn_without_agent_message(
         &self,

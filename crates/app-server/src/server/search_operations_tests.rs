@@ -488,6 +488,7 @@ fn file_glob_session_target_requires_that_sessions_directory_authorization() {
         .unwrap();
     let session = server
         .start_thread(core_api::StartThreadRequest {
+            surface: None,
             execution_target: None,
             branch_name: None,
             worktree_start: None,

@@ -73,14 +73,21 @@ suite('Chat transcript navigation', () => {
 		const marks = gutter.locator('.ash-prompt-timeline-gutter-marks > span');
 		await expect(marks).toHaveCount(2);
 		await expect(marks.first()).toHaveClass('active');
-		const position = await gutter.evaluate(element => {
-			const rail = element.getBoundingClientRect();
-			const transcript = element.parentElement!.getBoundingClientRect();
-			return { inset: rail.left - transcript.left, centerOffset: rail.top + rail.height / 2 - (transcript.top + transcript.height / 2) };
-		});
-		expect(position.inset).toBeGreaterThanOrEqual(0);
-		expect(position.inset).toBeLessThan(12);
-		expect(Math.abs(position.centerOffset)).toBeLessThan(1);
+		const host = page.locator('main');
+		await host.evaluate(element => element.classList.add('ash-chat-content-layout'));
+		for (const width of [1200, 600]) {
+			await host.evaluate((element, width) => { element.style.width = `${width}px`; }, width);
+			const position = await gutter.evaluate(element => {
+				const rail = element.getBoundingClientRect();
+				const pane = element.parentElement!.getBoundingClientRect();
+				return {
+					inset: rail.left - pane.left,
+					centerOffset: rail.top + rail.height / 2 - (pane.top + pane.height / 2),
+				};
+			});
+			expect(position.inset).toBeCloseTo(4);
+			expect(Math.abs(position.centerOffset)).toBeLessThan(1);
+		}
 		const panel = gutter.locator('.ash-prompt-timeline-panel');
 		const firstPrompt = panel.getByRole('button', { name: 'First request', exact: true });
 		const secondPrompt = panel.getByRole('button', { name: 'Second request', exact: true });
@@ -156,6 +163,31 @@ suite('Chat transcript navigation', () => {
 		await expect(help).not.toHaveValue(/Use |<keybinding:/u);
 		await help.press('Escape');
 		await expect(page.locator('[data-item-id="reply-second"]')).toBeFocused();
+	});
+
+	test('transcript scroll layers stay unoutlined even with keyboard focus', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		await page.evaluate(messages => window.ashChatTranscriptIntegration.renderItems(
+			messages.map(item => item.type === 'agentMessage' ? { ...item, text: (item.text + '\n\n').repeat(30) } : item),
+		), messages);
+		const transcript = page.getByRole('log');
+		const viewport = page.locator('.ash-chat-transcript-viewport > .ash-scrollbar-viewport');
+		await viewport.evaluate(element => { element.scrollTop = 0; });
+		await transcript.click({ position: { x: 2, y: 20 } });
+		await expect(transcript).toBeFocused();
+		await expect(transcript).toHaveCSS('outline-style', 'none');
+
+		await page.keyboard.press('Tab');
+		const row = page.locator('[data-item-id="first"]');
+		await row.focus();
+		await expect(row).toHaveCSS('outline-style', 'solid');
+		for (const layer of [page.locator('.ash-chat-transcript-viewport'), viewport, transcript]) {
+			await layer.focus();
+			await expect(layer).toBeFocused();
+			expect(await layer.evaluate(element => element.matches(':focus-visible'))).toBe(true);
+			await expect(layer).toHaveCSS('outline-style', 'none');
+		}
 	});
 
 	for (const theme of ['light', 'dark', 'hc', 'hcLight'] as const) {

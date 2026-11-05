@@ -69,6 +69,7 @@ fn trace_contains_the_complete_nested_history_prefix_closure() {
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
             core_api::StartThreadRequest {
+                surface: None,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,

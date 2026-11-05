@@ -3,7 +3,9 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
-import { ArtifactDetailsPanel } from '../../browser/artifactDetailsPanel.js';
+import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ArtifactDetailsContextView } from '../../browser/artifactDetailsContextView.js';
 
 test('Artifact details describes an action before returning its explicit selection', async () => {
 	using lifetime = new DisposableStore();
@@ -12,7 +14,9 @@ test('Artifact details describes an action before returning its explicit selecti
 	const document = dom.window.document;
 	const anchor = document.querySelector('button')!;
 	const context = lifetime.add(new BrowserContextViewService(document.body));
-	const panel = lifetime.add(new ArtifactDetailsPanel(anchor, context));
+	const services = lifetime.add(new InstantiationService());
+	services.registerInstance(IContextViewService, context);
+	const panel = lifetime.add(services.createInstance(ArtifactDetailsContextView, anchor));
 	const action = { id: 'merge', label: 'Merge', description: 'Merge the reviewed head commit', invoke: async () => assert.fail('Selection alone does not invoke an action') };
 	const binding = { id: 'binding', artifact: { id: 'pr', resource: 'https://example.test/pr', label: 'PR #12' }, actions: [action] };
 

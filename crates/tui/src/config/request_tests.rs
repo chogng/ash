@@ -216,6 +216,7 @@ fn advisor_model_command_selects_a_configured_provider_model() {
         "openai".into(),
         ash_app_server_protocol::protocol::config::ProviderConfigDto {
             model_acceleration: Default::default(),
+            ultra_models: Default::default(),
             disabled_acceleration_options: Default::default(),
             connection: "openai".into(),
             provider: "openai".into(),
@@ -254,6 +255,7 @@ fn advisor_model_command_selects_a_configured_provider_model() {
             default_context_window: None,
             long_context: None,
             selected_acceleration: None,
+            ultra: None,
             acceleration_options: Vec::new(),
             auto_compact_token_limit: None,
             available_context_window: None,
@@ -262,6 +264,8 @@ fn advisor_model_command_selects_a_configured_provider_model() {
             settings: Default::default(),
             supported_reasoning_efforts: Vec::new(),
             default_reasoning_effort: None,
+            effective_reasoning_effort: None,
+            reasoning_effort_override: None,
             default_personality: None,
         }],
     };
@@ -363,6 +367,7 @@ fn probing_unsaved_values_does_not_write_configuration_or_credentials() {
                 revision: 7,
                 config: ash_app_server_protocol::protocol::config::ProviderConfigDto {
                     model_acceleration: Default::default(),
+                    ultra_models: Default::default(),
                     disabled_acceleration_options: Default::default(),
                     connection: "custom-test".into(),
                     provider: "custom-test".into(),
@@ -433,6 +438,7 @@ fn probe_transport_failure_returns_without_writing_or_refreshing() {
             revision: 0,
             config: ash_app_server_protocol::protocol::config::ProviderConfigDto {
                 model_acceleration: Default::default(),
+                ultra_models: Default::default(),
                 disabled_acceleration_options: Default::default(),
                 connection: "custom-test".into(),
                 provider: "custom-test".into(),
@@ -453,6 +459,7 @@ fn probe_transport_failure_returns_without_writing_or_refreshing() {
 fn custom_provider_saves_settings_and_key_separately_then_refreshes() {
     let config = ash_app_server_protocol::protocol::config::ProviderConfigDto {
         model_acceleration: Default::default(),
+        ultra_models: Default::default(),
         disabled_acceleration_options: Default::default(),
         connection: "custom-one".into(),
         provider: "custom-one".into(),
@@ -552,6 +559,7 @@ fn rejected_connection_update_does_not_send_key_or_report_saved() {
             revision: 7,
             config: ash_app_server_protocol::protocol::config::ProviderConfigDto {
                 model_acceleration: Default::default(),
+                ultra_models: Default::default(),
                 disabled_acceleration_options: Default::default(),
                 connection: "openai-compatible".into(),
                 provider: "openai-compatible".into(),
@@ -643,6 +651,7 @@ fn saving_unchanged_connection_with_no_model_still_configures_provider() {
     let mut current = empty_config_snapshot();
     let config = ash_app_server_protocol::protocol::config::ProviderConfigDto {
         model_acceleration: Default::default(),
+        ultra_models: Default::default(),
         disabled_acceleration_options: Default::default(),
         connection: "openai".into(),
         provider: "openai".into(),

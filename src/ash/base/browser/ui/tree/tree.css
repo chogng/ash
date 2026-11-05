@@ -80,7 +80,7 @@
 	top: 0;
 	bottom: 0;
 	/* The guide continues through the center of its ancestor's 16px twistie. */
-	left: 16px;
+	left: calc(var(--ash-list-row-padding-start) + var(--ash-spacing-size80));
 	pointer-events: none;
 }
 
@@ -112,10 +112,6 @@
 		--ash-list-style-list-hover-background,
 		var(--ash-list-hoverBackground)
 	);
-}
-
-.ash-tree-row.focused {
-	background: transparent;
 }
 
 .ash-tree-selection-subtle .ash-tree-row.selected {

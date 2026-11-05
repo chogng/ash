@@ -21,6 +21,7 @@ import { SessionGridLayout } from './sessionGridLayout.js';
 import { Direction, type IView } from '../../../base/browser/ui/grid/grid.js';
 import type { IPositionedRectangle } from '../../../base/browser/geometry.js';
 import { Disposable, DisposableStore, type IDisposable, setDisposableOwner, toDisposable } from '../../../base/common/lifecycle.js';
+import type { IObservable } from '../../../base/common/observable.js';
 import { localize } from '../../../nls.js';
 import { WELCOME_COMPLETE_KEY } from '../../common/welcome.js';
 import type { SessionId } from '../../services/sessions/common/session.js';
@@ -39,6 +40,7 @@ import type {
 } from '../../services/sessions/common/sessionsConversation.js';
 
 export interface SessionsPartOptions {
+	readonly newDraftVisible: IObservable<boolean>;
 	readonly createCoworkPane: (
 		container: HTMLElement,
 		panelId: string,
@@ -52,6 +54,7 @@ export interface SessionsPartOptions {
 
 /** Owns one conversation grid and one retained view per visible Session. */
 export class SessionsPart extends Part implements ISessionsConversationService {
+	get newDraftVisible(): IObservable<boolean> { return this.options.newDraftVisible; }
 	private readonly content: HTMLElement;
 	private readonly grid: SessionGridLayout;
 	private readonly empty: SessionsChatEmptyView;
@@ -502,15 +505,9 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	): ISessionsConversationPane {
 		const options = this.options;
 		if (kind === 'cowork') return options.createCoworkPane(container, panelId, selection);
-		const view = this.services.createInstance(NewChatView, container.ownerDocument, panelId, selection,
-			options.createNewSession, () => this.updateInfoContext());
-		try {
-			view.render(container);
-			return view;
-		} catch (error) {
-			view.dispose();
-			throw error;
-		}
+		return this.services.createInstance(NewChatView, container, {
+			panelId, selection, createNewSession: options.createNewSession, onDidChangeInfo: () => this.updateInfoContext(),
+		});
 	}
 }
 

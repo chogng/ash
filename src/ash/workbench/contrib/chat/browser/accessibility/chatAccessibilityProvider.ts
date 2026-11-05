@@ -18,6 +18,8 @@ export class ChatAccessibilityProvider {
 			case 'userImageAttachment':
 			case 'userAudioAttachment':
 				return localize('chat.transcript.you', 'You');
+			case 'queuedMessage': return localize('chat.queue.pending', 'Queued');
+			case 'historyRedo': return localize('chat.history.undoneMarker', 'Request undone');
 			case 'agentMessage':
 				return 'Ash';
 			case 'reasoning':

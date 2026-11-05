@@ -186,7 +186,16 @@ suite('language browser component', () => {
 				await expect(stop).toBeDisabled();
 				expect((await page.evaluate(() => window.languageIntegration.controls())).map(request => request.action)).toEqual(['restart', 'stop']);
 				expect(await widget.evaluate((node, original) => node === original, widgetNode)).toBe(true);
-				await page.locator('#install').click();
+				const outside = page.locator('#install');
+				const bounds = (await outside.boundingBox())!;
+				const x = bounds.x + bounds.width / 2;
+				const y = bounds.y + bounds.height / 2;
+				await page.mouse.move(x, y);
+				expect(await outside.evaluate(button => button.matches(':hover'))).toBe(false);
+				await page.mouse.down();
+				await expect(widget).toBeVisible();
+				await expect(outside).not.toBeFocused();
+				await page.mouse.up();
 				await expect(widget).toHaveCount(0);
 				await expect(trigger).toBeFocused();
 				await trigger.press('Enter');

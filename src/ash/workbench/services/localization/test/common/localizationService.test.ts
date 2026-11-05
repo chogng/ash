@@ -138,7 +138,7 @@ suite('Workbench localization', () => {
 				localize('sessions.layout.showEditor', ''),
 				localize('sessions.layout.openChanges', ''),
 			],
-			['切换终端', '隐藏编辑器', '显示编辑器', '打开更改标签'],
+			['切换终端', '隐藏编辑器', '显示编辑器', '打开更改'],
 		);
 		assert.match(localize('sessions.changes.editorHelp', ''), /Alt\+F2 阅读文件列表和前后内容/u);
 		assert.match(localize('sessions.activity.help', ''), /每个会话恢复自己的编辑器标签/u);
@@ -449,7 +449,8 @@ suite('Workbench localization', () => {
 			['显示侧边栏', '隐藏侧边栏', '聊天', '代码'],
 		);
 		const activityHelp = localization.translate('ash', 'sessions.activity.help', '');
-		assert.match(activityHelp, /每个 ChatGPT 会话和 Agent 会话分别保留自己的历史、未发送的文字和附件/u);
+		assert.match(activityHelp, /会话会保留各自的历史、未发送的文字和附件/u);
+		assert.doesNotMatch(activityHelp, /ChatGPT/u);
 		assert.match(activityHelp, /每个会话恢复自己的编辑器标签/u);
 		assert.equal(
 			localization.translate('ash', 'chat.modelPicker.context', '{0} context tokens', { '0': '128,000' }),

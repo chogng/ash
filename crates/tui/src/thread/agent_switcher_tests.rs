@@ -231,6 +231,7 @@ fn pointer_hover_uses_the_complete_thread_row_without_moving_keyboard_focus() {
 
 fn session() -> Session {
     Session {
+        surface: None,
         source: None,
         model: None,
         session_id: session_id("root"),
@@ -244,6 +245,7 @@ fn session() -> Session {
 
 fn root() -> SessionThread {
     SessionThread {
+        recap: None,
         manager: None,
         thread_id: thread_id("root"),
         title: "Main Task".into(),
@@ -260,6 +262,7 @@ fn root() -> SessionThread {
 
 fn child(value: &str) -> SessionThread {
     SessionThread {
+        recap: None,
         manager: None,
         thread_id: thread_id(value),
         title: value.into(),

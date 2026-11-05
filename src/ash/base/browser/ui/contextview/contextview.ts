@@ -51,6 +51,8 @@ export interface ContextViewOptions {
 	readonly layer?: number;
 	/** Shield background controls from pointer interaction while the popup is open. */
 	readonly blockOutsidePointer?: boolean;
+	/** Handle pointer movement over the shield within a composite control such as a menu bar. */
+	readonly onOutsidePointerMove?: (event: PointerEvent) => void;
 	readonly isTargetWithin?: (target: Node) => boolean;
 	/** Handle Escape inside the popup before the default dismissal. */
 	readonly onEscape?: (event: KeyboardEvent) => boolean;
@@ -137,13 +139,24 @@ export class ContextView
 			const shield = h(ownerDocument, 'div', { className: 'ash-context-view-pointer-shield' });
 			shield.setAttribute('aria-hidden', 'true');
 			this.element.prepend(shield);
-			// Let pointerdown leave the menu input before restoring trigger focus on click.
-			// The shield still consumes the full click.
+			if (options.presentation === 'menu') {
+				// Keep the command menu focused until click dismisses it. A blur on
+				// pointerdown could remove the shield before the pointer is released.
+				this.visibleListeners.add(addDisposableListener(shield, 'pointerdown', event => event.preventDefault()));
+				this.visibleListeners.add(addDisposableListener(ownerDocument, 'focusin', event => {
+					const target = event.composedPath()[0];
+					if (isNode(target) && !this.contains(target)) this.hide();
+				}, true));
+			}
+			// Consume the dismissal click before it can reach the background.
 			this.visibleListeners.add(addDisposableListener(shield, 'click', event => {
 				event.stopPropagation();
 				this.hide(ContextViewHideReason.OutsidePointer);
 			}));
 			this.visibleListeners.add(addDisposableListener(shield, 'contextmenu', event => event.preventDefault()));
+			if (options.onOutsidePointerMove) {
+				this.visibleListeners.add(addDisposableListener(shield, 'pointermove', options.onOutsidePointerMove));
+			}
 		}
 		this.element.className =
 			`ash-context-view ash-context-view-${options.presentation ?? 'default'}`;
@@ -175,6 +188,8 @@ export class ContextView
 			(event: PointerEvent) => {
 				const target = event.composedPath()[0] ?? event.target;
 				if (isTargetInAnotherModal(target, this.element)) return;
+				// A shield owns the dismissal gesture, even when another view is open beneath it.
+				if (isHTMLElement(target) && target.classList.contains('ash-context-view-pointer-shield')) return;
 				if (
 					isNode(target) &&
 					!this.element.contains(target) &&

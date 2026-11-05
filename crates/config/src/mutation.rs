@@ -254,6 +254,21 @@ fn apply_preferences(document: &mut UserConfigDocument, update: &PreferencesUpda
         Patch::Null => document.agent.advisor = None,
         Patch::Value(advisor) => document.agent.advisor = Some(advisor.clone()),
     }
+    match &update.thread_title_model {
+        Patch::Missing => {}
+        Patch::Null => document.agent.thread_title_model = None,
+        Patch::Value(model) => document.agent.thread_title_model = Some(model.clone()),
+    }
+    match update.thread_recap_enabled {
+        Patch::Missing => {}
+        Patch::Null => document.agent.thread_recap_enabled = false,
+        Patch::Value(enabled) => document.agent.thread_recap_enabled = enabled,
+    }
+    match &update.thread_recap_model {
+        Patch::Missing => {}
+        Patch::Null => document.agent.thread_recap_model = None,
+        Patch::Value(model) => document.agent.thread_recap_model = Some(model.clone()),
+    }
     match &update.code_review_model {
         Patch::Missing => {}
         Patch::Null => document.agent.code_review_model = None,

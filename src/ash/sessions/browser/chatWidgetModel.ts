@@ -17,9 +17,10 @@ import { localize } from '../../nls.js';
 import type { SkillReference } from '../../platform/agentHost/common/appServerApi.js';
 import type { ResolvedChatContext } from '../../workbench/services/chat/common/chatContextService.js';
 import type { SessionHistoryBindingDiagnostic } from '../services/sessions/browser/sessionOpenTelemetryService.js';
-import { findAgentNode, type IActiveSessionThread, type ISession, type IUntitledChatSession, type ModelRef, type SessionId, type ThreadId } from '../services/sessions/common/session.js';
+import { chatExecutionWorkspace, findAgentNode, type IActiveSessionThread, type ISession, type IUntitledChatSession, type ModelRef, type SessionId, type ThreadId } from '../services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
-import { chatTranscriptListItems, type IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
+import { chatQueuedMessageListItems, chatTranscriptListItems, type IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
+import { ChatHistoryRedoModel } from '../../workbench/contrib/chat/common/model/chatHistoryRedoModel.js';
 import type { ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../workbench/services/chat/common/modelCatalog.js';
 import type { ApprovalMode } from '../../workbench/services/chat/common/chatService.js';
@@ -29,6 +30,11 @@ import type { IChatSessionHistoryStatus } from '../../platform/chat/common/chatS
 import { ChatAIDisabledSettingId } from '../../platform/chat/common/chatSettings.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import type { ThreadHistoryBoundary, ThreadRead } from '../../workbench/services/chat/common/chatService.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
+import { codeConversationDefaultsSetting, codeConversationWorkspaceKey, parseCodeConversationModel, type CodeConversationDefaults, type CodeConversationModel } from '../common/codeConversationDefaults.js';
+import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../common/agentHostSessionsProvider.js';
+import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
+import { SessionsWorkspaceModeContext } from '../common/contextkeys.js';
 
 const historyPageTurns = 20;
 
@@ -85,16 +91,17 @@ export class ChatWidgetModel extends Disposable {
 	private modelsError: string | undefined;
 	private modelsGeneration = 0;
 	private defaults: AgentModelDefaults | undefined;
-	private pendingModelSelection: Promise<void> | undefined;
 	private readonly selectedModes = new Map<string, ChatMode>();
-	private queuedMessages = 0;
+	private queue: Awaited<ReturnType<IChatService['readQueue']>> = [];
+	private readonly historyRedo: ChatHistoryRedoModel;
 	private queueGeneration = 0;
 	private readonly threadModelSelection = new SessionModelSelection();
 	private readonly defaultApprovalMode = observableValue<ApprovalMode>(this, 'manual');
 	private approvalGeneration = 0;
 	private readonly selectedApprovalModes = observableValue<ReadonlyMap<string, ApprovalMode>>(this, new Map());
 	// A New Chat's key is replaced with its Thread ID when the first message materializes it.
-	private readonly selectedReasoningEfforts = new Map<string, { model: string; effort: ModelReasoningEffort | undefined; }>();
+	private readonly selectedReasoningEfforts = new Map<string, { effort: ModelReasoningEffort | undefined; }>();
+	private readonly recapViews = new Map<string, { sessionId: SessionId; threadId: ThreadId; focused: boolean; }>();
 	private _slashCommands: readonly SlashCommandDefinition[] = [];
 	private _skillSelectors: readonly SkillSelectorDefinition[] = [];
 	private skillCatalogGeneration = 0;
@@ -119,11 +126,18 @@ export class ChatWidgetModel extends Disposable {
 		return composer?.generation === this.composerGeneration && composer.threadId === this.threadId ? composer.untitledSessionId : undefined;
 	}
 
-	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService, @IConfigurationService private readonly configuration: IConfigurationService) {
+	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService, @IConfigurationService private readonly configuration: IConfigurationService, @IStorageService private readonly storage: IStorageService, @IContextKeyService private readonly contextKeys?: IContextKeyService) {
 		super();
 		this.chatService = chatService;
+		this.historyRedo = this._register(new ChatHistoryRedoModel(chatService, () => this._onDidChange.fire()));
 		this.sessionService = sessionService;
 		this.selection = selection;
+		if (contextKeys) {
+			const keys = new Set([SessionsWorkspaceModeContext.key]);
+			this._register(contextKeys.onDidChangeContext(event => {
+				if (event.affectsSome(keys)) this._onDidChange.fire();
+			}));
+		}
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(ChatAIDisabledSettingId)) this._onDidChange.fire();
 		}));
@@ -137,7 +151,12 @@ export class ChatWidgetModel extends Disposable {
 		this._register(chatService.onDidChangeInteractionOffer(change => {
 			if (change.sessionId === this.sessionId && change.threadId === this.threadId) this._onDidChange.fire();
 		}));
-		this._register(chatService.onDidBecomeReady(() => void this.reconnect()));
+		this._register(chatService.onDidBecomeReady(() => {
+			for (const [surface, view] of this.recapViews) {
+				void this.reportRecapPresence(view.sessionId, view.threadId, surface, view.focused).catch(() => { });
+			}
+			void this.reconnect();
+		}));
 		this._register(execution.onDidChange(() => void this.loadDefaultApprovalMode()));
 		this._register(this.languageModels.onDidChangeModels(() => void this.loadModels()));
 		this._register(chatService.onDidChangeQueue(() => void this.loadQueue()));
@@ -171,13 +190,15 @@ export class ChatWidgetModel extends Disposable {
 		const agentSession = forkSource ? this.sessionService.sessions.find(session => session.sessionId === forkSource.sessionId) : active?.session;
 		const agentThreadId = forkSource?.threadId ?? active?.threadId;
 		const agentTree = agentSession?.agentTree;
+		const workspaceRequired = this.workspaceRequiredMessage;
 		return {
 			draftIdentity: { id: this.composerIdentity, generation: this.composerGeneration },
 			mode: this.mode,
 			activeMode: activeTurn(this._thread)?.mode,
-			queuedMessages: this.queuedMessages,
+			queuedMessages: this.queue.filter(message => message.status !== 'rejected').length,
 			phase: this._state,
-			inputBlocked: this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
+			inputBlocked: workspaceRequired !== undefined || this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
+			status: workspaceRequired,
 			aiDisabled: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
 			error: this.historyStatus ? undefined : this._error,
 			canInterrupt: this.canInterrupt,
@@ -201,6 +222,20 @@ export class ChatWidgetModel extends Disposable {
 			interaction: this.interaction,
 			pendingUserInputRequestId: pendingInteraction?.kind === 'userInput' ? pendingInteraction.requestId : undefined,
 		};
+	}
+
+	private get workspaceRequiredMessage(): string | undefined {
+		if (this.selection.kind === 'session' || this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) !== 'code') return undefined;
+		const { forkSource, workspace, providerId, projectId } = this.selection.session;
+		if (forkSource) {
+			const session = this.sessionService.sessions.find(candidate => candidate.sessionId === forkSource.sessionId);
+			if (session && chatExecutionWorkspace(session, session.chats.find(chat => chat.threadId === forkSource.threadId))) return undefined;
+		} else {
+			const requiresProject = !providerId || providerId === LOCAL_AGENT_HOST_PROVIDER_ID;
+			if ((!requiresProject || projectId)
+				&& workspace.type !== 'current' && (workspace.type !== 'multiple' || workspace.folders.length)) return undefined;
+		}
+		return localize({ bundle: 'ash.sessions', key: 'sessions.code.workspaceRequired' }, 'Choose a project before sending.');
 	}
 
 	get error(): string | undefined {
@@ -324,23 +359,29 @@ export class ChatWidgetModel extends Disposable {
 
 	get selectedReasoningEffort(): ModelReasoningEffort | undefined {
 		const model = this.selectedModel;
-		const key = this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
 		if (this.isAutomaticModel || !model) return undefined;
 		const identity = modelRefIdentity(model);
-		const selection = this.selectedReasoningEfforts.get(key);
-		const lastTurn = this._thread?.turns.at(-1);
-		// A local "Default" choice must override the last durable Turn's explicit effort.
-		const effort = selection
-			? selection.model === identity ? selection.effort : undefined
-			: lastTurn?.model && modelRefIdentity(lastTurn.model) === identity ? lastTurn.reasoningEffort ?? undefined
-				: this.defaults?.model && modelRefIdentity(this.defaults.model) === identity ? this.defaults.reasoningEffort ?? undefined : undefined;
+		const effort = this.preferredReasoningEffort();
 		const entry = this._models.find(candidate => modelRefIdentity(candidate.model) === identity);
 		return effort && entry?.supportedReasoningEfforts?.some(option => option.effort === effort) ? effort : undefined;
 	}
 
+	private preferredReasoningEffort(): ModelReasoningEffort | undefined {
+		if (this.selection.kind === 'untitled') return draftReasoningEffort(this.selection.session);
+		const selection = this.selectedReasoningEfforts.get(this.composerIdentity);
+		if (selection) return selection.effort;
+		return this._thread?.turns.at(-1)?.reasoningEffort ?? undefined;
+	}
+
 	get items(): readonly IChatListItem[] {
-		const latestTurnId = this._thread?.turns.at(-1)?.turnId;
-		return chatTranscriptListItems(this.transcriptEntries, latestTurnId, this._thread?.turns, this._thread);
+		const thread = this._thread;
+		const latestTurnId = thread?.turns.at(-1)?.turnId;
+		const transcript = chatTranscriptListItems(this.transcriptEntries, latestTurnId, thread?.turns, thread, {
+			archived: thread?.status === 'archived', hasOlderTurns: this.historyBoundary?.hasOlderTurns,
+		}, this._changeSets);
+		const redo = this.historyRedo.item(thread);
+		const queued = this.queue.length && thread?.status === 'active' ? chatQueuedMessageListItems(this.queue) : [];
+		return redo || queued.length ? [...transcript, ...(redo ? [redo] : []), ...queued] : transcript;
 	}
 
 	get interaction(): TurnInteraction | undefined {
@@ -445,7 +486,10 @@ export class ChatWidgetModel extends Disposable {
 		if (this.selection.kind !== 'untitled' || this.selection.session.untitledSessionId !== session.untitledSessionId) {
 			throw new Error(`ChatWidgetModel cannot select another Untitled Chat Session: ${session.untitledSessionId}`);
 		}
+		const sameProvider = this.selection.session.providerId === session.providerId;
 		this.selection = { kind: 'untitled', session };
+		if (sameProvider) this.applyDefaultNewChatModel();
+		this._onDidChange.fire();
 		void this.loadModels();
 	}
 
@@ -453,32 +497,23 @@ export class ChatWidgetModel extends Disposable {
 		if (!this._models.some(entry => modelRefIdentity(entry.model) === modelRefIdentity(model))) {
 			throw new Error(localize('chat.modelPicker.unavailable', 'The selected model is not available'));
 		}
-		const identity = this.composerIdentity;
-		await this.saveModelSelection(() => this.languageModels.rememberSelectedModel(model), () => {
-			if (this.isDisposed || identity !== this.composerIdentity) return;
-			if (this.selection.kind === 'untitled') {
-				this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, model);
-				this.refreshUntitledSelection();
-			} else {
-				this.threadModelSelection.select(this.selection.active.threadId, model);
-			}
-			this._onDidChange.fire();
-		});
+		this.setConversationModel(model);
 	}
 
 	async selectAutomaticModel(): Promise<void> {
-		const identity = this.composerIdentity;
-		await this.saveModelSelection(() => this.languageModels.rememberSelectedModel(undefined), () => {
-			if (this.isDisposed || identity !== this.composerIdentity) return;
-			if (this.selection.kind === 'untitled') {
-				this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, undefined);
-				this.refreshUntitledSelection();
-			} else {
-				this.threadModelSelection.select(this.selection.active.threadId, undefined);
-			}
-			this.selectedReasoningEfforts.delete(identity);
-			this._onDidChange.fire();
-		});
+		this.setConversationModel(undefined);
+	}
+
+	private setConversationModel(model: ModelRef | undefined): void {
+		if (this.isDisposed) return;
+		this.rememberConversationModel({ model: model ?? null, effort: model ? this.preferredReasoningEffort() : undefined });
+		if (this.selection.kind === 'untitled') {
+			this.sessionService.setUntitledSessionModel(this.selection.session.untitledSessionId, model);
+			this.refreshUntitledSelection();
+		} else {
+			this.threadModelSelection.select(this.selection.active.threadId, model);
+		}
+		this._onDidChange.fire();
 	}
 
 	async selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void> {
@@ -488,19 +523,15 @@ export class ChatWidgetModel extends Disposable {
 		if (!entry || (effort !== undefined && !entry.supportedReasoningEfforts?.some(option => option.effort === effort))) {
 			throw new Error('The selected model does not support this thinking effort');
 		}
-		const identity = this.composerIdentity;
-		await this.saveModelSelection(() => this.languageModels.saveReasoningEffort(model, effort), () => {
-			if (this.isDisposed || identity !== this.composerIdentity || !sameModel(model, this.selectedModel) || this.isAutomaticModel) return;
-			this.selectedReasoningEfforts.set(identity, { model: modelRefIdentity(model), effort });
+		if (this.isDisposed) return;
+		this.rememberConversationModel({ model, effort });
+		if (this.selection.kind === 'untitled') {
+			this.sessionService.setUntitledSessionReasoningEffort(this.selection.session.untitledSessionId, effort ?? null);
+			this.refreshUntitledSelection();
+		} else {
+			this.selectedReasoningEfforts.set(this.composerIdentity, { effort });
 			this._onDidChange.fire();
-		});
-	}
-
-	private async saveModelSelection(save: () => Promise<void>, apply: () => void): Promise<void> {
-		const pending = save().then(apply);
-		this.pendingModelSelection = pending;
-		try { await pending; }
-		finally { if (this.pendingModelSelection === pending) this.pendingModelSelection = undefined; }
+		}
 	}
 
 	async listAgents(): Promise<readonly ChatAgent[]> {
@@ -520,18 +551,13 @@ export class ChatWidgetModel extends Disposable {
 	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions): Promise<void> {
 		if (!text.trim() && !contexts?.length) return;
 		this.assertAIEnabled();
+		this.assertWorkspaceSelected();
 		const operation = this.captureOperation(options);
 		const stateRequest = ++this.stateRequest;
 		try {
 			this.requireCurrentOperation(operation);
-			await this.waitForModelSelection(operation);
-			this.requireCurrentOperation(operation);
 			await this.initialize();
 			this.requireCurrentOperation(operation);
-			if (this.pendingModelSelection) {
-				await this.waitForModelSelection(operation);
-				this.requireCurrentOperation(operation);
-			}
 			if (this.historyStatus) throw new Error(this.historyStatus.message);
 			this.assertAIEnabled();
 			// Once accepted, this request keeps its model even if the picker changes during preparation.
@@ -609,7 +635,6 @@ export class ChatWidgetModel extends Disposable {
 	async prepareConversation(signal?: AbortSignal): Promise<{ readonly sessionId: SessionId; readonly threadId: ThreadId; }> {
 		this.assertAIEnabled();
 		const operation = this.captureOperation({ signal });
-		await this.waitForModelSelection(operation);
 		await this.awaitOperationPreparation(this.initialize(), operation);
 		this.requireCurrentOperation(operation);
 		const active = await this.ensureActiveSession(signal);
@@ -626,8 +651,22 @@ export class ChatWidgetModel extends Disposable {
 		return this.selection.kind === 'untitled' ? this.selection.session.untitledSessionId : this.selection.active.threadId;
 	}
 
-	async executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void> {
+	reportRecapPresence(sessionId: SessionId, threadId: ThreadId, surface: string, focused: boolean | null): Promise<void> {
+		if (focused === null) this.recapViews.delete(surface);
+		else this.recapViews.set(surface, { sessionId, threadId, focused });
+		return this.chatService.setRecapPresence?.(sessionId, threadId, surface, focused) ?? Promise.resolve();
+	}
+
+	async executeServerCommand(name: string, argumentsText: string, submissionSignal?: AbortSignal): Promise<void | string> {
 		this.assertAIEnabled();
+		if (name === 'recap') {
+			const operation = this.captureOperation({ signal: submissionSignal });
+			const active = this.activeSession;
+			if (!active || !this.chatService.generateRecap) throw new Error(localize('chat.recap.needsConversation', 'Finish a conversation turn before using /recap.'));
+			const recap = await this.chatService.generateRecap(active.session.sessionId, active.threadId);
+			this.requireCurrentOperation(operation);
+			return recap;
+		}
 		if (name !== 'compact' && name !== 'advisor') {
 			await this.send(`/${name}${argumentsText ? ` ${argumentsText}` : ''}`, this.mode, undefined, undefined, { signal: submissionSignal });
 			return;
@@ -852,10 +891,36 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private applyDefaultNewChatModel(): void {
-		if (this.selection.kind !== 'untitled' || this.selection.session.modelSelectionKind === 'manual') return;
-		const model = this.languageModels.getDefaultNewChatModel(this._models);
-		this.sessionService.setUntitledSessionDefaultModel(this.selection.session.untitledSessionId, model);
+		if (this.selection.kind !== 'untitled' || !this._models.length) return;
+		const draft = this.selection.session;
+		const workspace = codeConversationWorkspaceKey(draft.workspace) ?? null;
+		if (draft.modelDefaults?.workspace === workspace) return;
+		const settings = this.configuration.getValue<CodeConversationDefaults>(codeConversationDefaultsSetting);
+		const last = this.lastConversationModel();
+		const defaults = (workspace ? settings?.workspaces[workspace] : undefined) ?? settings?.profile ?? last;
+		const model = defaults.model ?? undefined;
+		this.sessionService.setUntitledSessionDefaultModel(draft.untitledSessionId, model, { workspace, effort: defaults.effort });
 		this.refreshUntitledSelection();
+	}
+
+	private get lastConversationModelKey(): string {
+		const provider = this.selection.kind === 'untitled' ? this.selection.session.providerId : this.selection.active.session.providerId;
+		return `sessions.code.lastConversationModel.${provider ?? LOCAL_AGENT_HOST_PROVIDER_ID}`;
+	}
+
+	private lastConversationModel(): CodeConversationModel {
+		const raw = this.storage.get(this.lastConversationModelKey, StorageScope.PROFILE);
+		if (raw !== undefined) {
+			try { return parseCodeConversationModel(JSON.parse(raw)); } catch { /* Recover an invalid saved selection from backend defaults. */ }
+		}
+		const model = this.languageModels.getDefaultNewChatModel(this._models) ?? null;
+		const selection = { model };
+		if (this.defaults) this.rememberConversationModel(selection);
+		return selection;
+	}
+
+	private rememberConversationModel(selection: CodeConversationModel): void {
+		this.storage.store(this.lastConversationModelKey, JSON.stringify(selection), StorageScope.PROFILE, StorageTarget.MACHINE);
 	}
 
 	private refreshUntitledSelection(): void {
@@ -929,8 +994,9 @@ export class ChatWidgetModel extends Disposable {
 		this.threadChanges = undefined;
 		this.threadChangesError = undefined;
 		this.summaryRequest++;
-		this.queuedMessages = 0;
+		this.queue = [];
 		this.queueGeneration++;
+		this.historyRedo.reset();
 		this.changeDetails.clear();
 		this.changesGeneration++;
 		this.setState('loading');
@@ -960,6 +1026,7 @@ export class ChatWidgetModel extends Disposable {
 			if (snapshot.thread || snapshot.transcript) outcome = 'bound';
 			void this.loadTurnChanges(generation);
 			void this.loadQueue();
+			if (currentThread?.status === 'active') void this.historyRedo.refresh(currentThread.sessionId, currentThread.threadId);
 		} catch (error) {
 			if (this.isDisposed || generation !== this.generation || request !== this.readRequest) return;
 			outcome = isCancellationError(error) ? 'cancelled' : 'failed';
@@ -985,6 +1052,7 @@ export class ChatWidgetModel extends Disposable {
 			return;
 		}
 		if (update.update.event.type === 'threadHistoryMoved') {
+			void this.historyRedo.refresh(update.sessionId, update.threadId);
 			// Retire the old checkpoint synchronously, before the replacement snapshot arrives.
 			this.summaryRequest++;
 			this.threadChanges = undefined;
@@ -994,6 +1062,7 @@ export class ChatWidgetModel extends Disposable {
 			void this.loadTurnChanges(this.generation);
 			this._onDidChange.fire();
 		}
+		if (update.update.event.type === 'turnAccepted') this.historyRedo.reset();
 		this.acceptCommittedEvent(update);
 		this.scheduleRefresh();
 	}
@@ -1028,9 +1097,9 @@ export class ChatWidgetModel extends Disposable {
 		if (!active) return;
 		const generation = ++this.queueGeneration;
 		try {
-			const count = await this.chatService.queuedMessageCount(active.session.sessionId, active.threadId);
+			const queue = await this.chatService.readQueue(active.session.sessionId, active.threadId);
 			if (this.isDisposed || generation !== this.queueGeneration || active.threadId !== this.threadId) return;
-			this.queuedMessages = count;
+			this.queue = queue;
 			this._onDidChange.fire();
 		} catch (error) {
 			if (!this.isDisposed && generation === this.queueGeneration) this.setError(error);
@@ -1354,15 +1423,6 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 
-	private async waitForModelSelection(operation: ReturnType<ChatWidgetModel['captureOperation']>): Promise<void> {
-		// A draft must retain the chosen model when preparation gives it a durable owner.
-		while (this.pendingModelSelection) {
-			await this.awaitOperationPreparation(this.pendingModelSelection, operation);
-			this.requireCurrentOperation(operation);
-		}
-	}
-
-
 	private async awaitOperationPreparation<T>(pending: Promise<T>, operation: ReturnType<ChatWidgetModel['captureOperation']>): Promise<T> {
 		const result = operation.signal ? await raceCancellationError(pending, operation.signal) : await pending;
 		this.requireCurrentOperation(operation);
@@ -1387,6 +1447,7 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	private async ensureActiveSession(signal?: AbortSignal): Promise<IActiveSessionThread> {
+		this.assertWorkspaceSelected();
 		if (this.selection.kind === 'session') return this.selection.active;
 		const untitledSession = this.selection.session;
 		const generation = this.composerGeneration;
@@ -1409,6 +1470,11 @@ export class ChatWidgetModel extends Disposable {
 		});
 	}
 
+	private assertWorkspaceSelected(): void {
+		const message = this.workspaceRequiredMessage;
+		if (message) throw new Error(message);
+	}
+
 	/** Keep this composer's choices when organization gives its draft a durable identity. */
 	private adoptUntitledSession(untitledSession: IUntitledChatSession, created: IActiveSessionThread): void {
 		const currentDraft = this.sessionService.untitledSessions.find(draft => draft.untitledSessionId === untitledSession.untitledSessionId) ?? untitledSession;
@@ -1419,17 +1485,19 @@ export class ChatWidgetModel extends Disposable {
 		const mode = this.selectedModes.get(untitledSession.untitledSessionId);
 		if (mode) this.selectedModes.set(created.threadId, mode);
 		this.selectedModes.delete(untitledSession.untitledSessionId);
-		const effort = this.selectedReasoningEfforts.get(untitledSession.untitledSessionId);
 		const approvalModes = new Map(this.selectedApprovalModes.get());
 		const approvalMode = approvalModes.get(untitledSession.untitledSessionId);
 		if (approvalMode) approvalModes.set(created.threadId, approvalMode);
 		approvalModes.delete(untitledSession.untitledSessionId);
 		this.selectedApprovalModes.set(approvalModes);
-		if (effort) this.selectedReasoningEfforts.set(created.threadId, effort);
-		this.selectedReasoningEfforts.delete(untitledSession.untitledSessionId);
+		this.selectedReasoningEfforts.set(created.threadId, { effort: draftReasoningEffort(currentDraft) });
 		this.threadModelSelection.select(created.threadId, currentDraft.model);
 	}
 
+}
+
+function draftReasoningEffort(draft: IUntitledChatSession): ModelReasoningEffort | undefined {
+	return draft.reasoningEffortSelection === undefined ? draft.modelDefaults?.effort : draft.reasoningEffortSelection ?? undefined;
 }
 
 function activeTurn(thread: Thread | undefined): Turn | undefined {

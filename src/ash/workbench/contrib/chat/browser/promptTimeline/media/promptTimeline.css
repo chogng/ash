@@ -1,7 +1,7 @@
 .ash-chat-sticky-prompt {
 	position: absolute;
 	z-index: 1;
-	inset: 0 var(--ash-spacing-size120) auto;
+	inset: 0 var(--ash-chat-content-inset, var(--ash-spacing-size120)) auto;
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
 	align-items: center;

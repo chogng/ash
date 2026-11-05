@@ -55,10 +55,10 @@ function fixture(useRealWidget = false) {
 	const action = { id: 'workspace', label: 'Project', tooltip: 'Workspace: Project', enabled: true, run: (): void => control.showPicker(choices) };
 	services.registerInstance(IWorkspacesService, { getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
 	const control: WorkspacePicker = lifetime.add(services.createInstance(WorkspacePicker, { trigger: { actionWidget, action, onDidChange: changed.event, placeholder: 'Choose a workspace' } }));
-	control.render(dom.window.document.body);
-	const button = dom.window.document.querySelector('button')!;
+	const slot = control.render(dom.window.document.body);
+	const button = slot.querySelector('button')!;
 	return {
-		control, action, changed, choices, dismiss, button, errors, actionWidget,
+		control, action, changed, choices, dismiss, button, errors, actionWidget, slot,
 		get items() { return items; },
 		filter(text: string) {
 			const input = dom.window.document.querySelector<HTMLInputElement>('.ash-action-widget-filter input')!;
@@ -166,4 +166,16 @@ test('Workspace picker limits unfiltered recents and finds older folders while s
 	f.control.showPicker(f.choices, load);
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.deepEqual(visibleLabels(), defaultLabels);
+});
+
+test('Rendering the workspace picker again retires its previous trigger and popup', () => {
+	using f = fixture();
+	f.press('ArrowDown');
+	assert.equal(f.button.getAttribute('aria-expanded'), 'true');
+	const replacement = f.control.render(f.slot.parentElement!);
+	assert.equal(f.slot.isConnected, false);
+	assert.equal(f.closed, 1);
+	f.action.label = 'Replacement project';
+	f.changed.fire();
+	assert.equal(replacement.querySelector('button')?.textContent, 'Replacement project');
 });

@@ -28,9 +28,13 @@ export interface ISessionsEntry {
 	readonly showEditorTabs?: boolean;
 	readonly detailsContainerId?: string;
 	readonly editorInput?: IResourceEditorInput;
+	/** Placeholder for this entry's main Part when no captured startup skeleton is available. */
+	readonly splash?: 'chat' | 'grid';
 	readonly restoreCommand: string;
 	/** Routes the window's New action to this entry's own conversation owner. */
 	readonly newSessionCommand?: string;
+	/** Use the shared conversation Part's draft state or supply the state of an entry-owned composer. */
+	readonly newDraft?: 'conversation' | IObservable<boolean>;
 	readonly focus: 'conversation' | 'sidebar' | 'editor';
 }
 
@@ -44,9 +48,9 @@ export interface ISessionsLayoutService extends IDisposable {
 	readonly onDidChangeConversationVisibility: Event<void>;
 	setConversationVisible(visible: boolean): Promise<void>;
 	/** Initialize retained content after its editor is created. Restoration preserves any covering Custom View and its focus. */
-	openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: { readonly source: 'restore'; }): Promise<void>;
-	/** Notify startup of the resolved command before opening an uncovered entry. */
-	restore(onWillRestoreEntry?: (command: string) => void): Promise<void>;
+	openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: { readonly source: 'restore' | 'startup'; }): Promise<void>;
+	/** Notify startup of the entry's layout before opening it, unless a Custom View covers it. */
+	restore(onWillRestoreEntry?: (entry: ISessionsEntry) => void): Promise<void>;
 }
 
 export const ISessionsLayoutService = createServiceIdentifier<ISessionsLayoutService>('sessionsLayoutService');

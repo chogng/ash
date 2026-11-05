@@ -1,0 +1,101 @@
+.ash-projects-form input,
+.ash-projects-form textarea,
+.ash-projects-form select {
+	width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+	border: var(--ash-strokeThickness) solid
+		var(--ash-input-border, var(--ash-widget-border));
+	border-radius: var(--ash-cornerRadius-small);
+	padding: var(--ash-spacing-size120);
+	background: var(--ash-input-background);
+	color: var(--ash-input-foreground);
+	font: inherit;
+	user-select: text;
+}
+
+.ash-projects-form input::placeholder,
+.ash-projects-form textarea::placeholder {
+	color: var(--ash-input-placeholderForeground);
+}
+
+.ash-projects-dialog.ash-dialog {
+	width: 700px;
+	max-width: calc(100vw - 40px);
+	max-height: calc(100vh - 40px);
+	overflow: auto;
+	border-radius: var(--ash-cornerRadius-xLarge);
+}
+
+.ash-projects-dialog .ash-dialog-header {
+	height: var(--ash-spacing-size280);
+	padding: 0;
+	margin: var(--ash-spacing-size160) var(--ash-spacing-size200);
+}
+
+.ash-projects-dialog .ash-dialog-title {
+	line-height: var(--ash-spacing-size280);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.ash-projects-form {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size240);
+}
+
+.ash-projects-form label {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size80);
+	line-height: 1.5;
+}
+
+.ash-projects-form input,
+.ash-projects-form textarea {
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-projects-form input {
+	min-height: var(--ash-spacing-size360);
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size120);
+	line-height: 1.5;
+}
+
+.ash-projects-form textarea {
+	min-height: 100px;
+	resize: vertical;
+}
+.ash-projects-conflicts:not([hidden]) {
+	display: flex;
+	flex-direction: column;
+	gap: var(--ash-spacing-size160);
+}
+.ash-projects-conflicts span {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	max-height: 160px;
+	overflow: auto;
+}
+.ash-projects-form-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--ash-spacing-size120);
+	min-width: 0;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+}
+.ash-projects-form-error {
+	color: var(--ash-error-foreground);
+	margin: 0;
+}
+.ash-projects-form-error:empty {
+	display: none;
+}
+
+:is(.hc-black, .hc-light) .ash-projects-dialog {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}

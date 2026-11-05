@@ -240,7 +240,7 @@ impl SessionNavigation {
         self.preview_generation = self.preview_generation.wrapping_add(1);
         self.preview = Some(ConversationPreview::new(
             self.preview_generation,
-            session.title.clone(),
+            super::session_title(session).to_owned(),
             params.clone(),
         ));
         Some(super::Command::Preview {

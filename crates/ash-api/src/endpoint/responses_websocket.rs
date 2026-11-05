@@ -81,7 +81,7 @@ impl ResponsesWebSocketSession {
         }
         let mut request = ModelRequest::text("handshake");
         request.prompt_cache_key = cache_key.clone();
-        let mut headers = endpoint.headers(target, &request)?;
+        let mut headers = endpoint.headers(target, model, &request)?;
         if endpoint == ApiEndpoint::ChatGptResponses {
             crate::headers::insert(
                 &mut headers,

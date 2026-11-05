@@ -31,7 +31,7 @@ registerAction2(class NewSessionFromPullRequestAction extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.newSessionFromPullRequest', title, f1: true, precondition: when,
-			menu: { id: Menus.SidebarSessionsHeader, when, group: 'create' },
+			menu: { id: Menus.SessionsViewFilter, when, group: 'create' },
 		});
 	}
 

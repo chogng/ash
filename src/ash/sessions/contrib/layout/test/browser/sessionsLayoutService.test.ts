@@ -31,7 +31,7 @@ import { IEditorPart } from '../../../../../workbench/browser/parts/editor/edito
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
 import type { EditorPartChangeEvent } from '../../../../../workbench/services/editor/common/editorState.js';
 import type { IResourceEditorInput } from '../../../../../workbench/common/editor.js';
-import { ILifecycleService } from '../../../../../workbench/services/lifecycle/common/lifecycle.js';
+import { ILifecycleService, StartupKind } from '../../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { AbstractLifecycleService } from '../../../../../workbench/services/lifecycle/common/lifecycleService.js';
 import { IViewsService } from '../../../../../workbench/services/views/common/viewsService.js';
 import { IPaneCompositePartService } from '../../../../../workbench/services/panecomposite/browser/panecomposite.js';
@@ -39,12 +39,37 @@ import { ISessionsService } from '../../../../services/sessions/browser/sessions
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
 import { SESSIONS_NAVIGATION_CONTAINER_ID } from '../../../sessions/browser/views/sessionsView.js';
 import { ISessionsConversationService } from '../../../../services/sessions/common/sessionsConversation.js';
+import { NewSessionDraftVisibleContext } from '../../../../common/contextkeys.js';
 import { ISessionChangesService } from '../../../changes/common/sessionChangesService.js';
 import { SessionsLayoutService, documentEntry } from '../../browser/sessionsLayoutService.js';
 import { SessionChangesEditorInput } from '../../../changes/browser/sessionChangesEditorInput.js';
 import type { ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 
 suite('SessionsLayoutService lifecycle and focus', () => {
+	test('New follows the active entry draft and clears while a custom view covers it', async () => {
+		using fixture = new EntryFixture();
+		const entryDraft = observableValue('entry draft', true);
+		const replyEntry: ISessionsEntry = { ...chatEntry, id: 'reply', activityContext: 'test.replySelected', newDraft: entryDraft };
+		const showingDraft = () => fixture.contextKeys.getValue(NewSessionDraftVisibleContext.key);
+		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+
+		await fixture.service.openEntry(replyEntry);
+		assert.equal(showingDraft(), true);
+		entryDraft.set(false, undefined);
+		assert.equal(showingDraft(), false);
+		entryDraft.set(true, undefined);
+		fixture.customViews.showCustomView('automations');
+		assert.equal(showingDraft(), false);
+		fixture.customViews.hideCustomView();
+		assert.equal(showingDraft(), true);
+
+		await fixture.service.openEntry(documentEntry);
+		assert.equal(showingDraft(), false);
+		fixture.conversationDraft.set(true, undefined);
+		assert.equal(showingDraft(), true);
+		await fixture.service.openEntry(chatEntry);
+		assert.equal(showingDraft(), false);
+	});
 
 	test('New follows the active entry and does not retain an override under a Custom View', async () => {
 		using fixture = new EntryFixture();
@@ -60,12 +85,30 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.service.newSessionCommand, undefined);
 	});
 
-	for (const saved of [undefined, 'sessions.show.removedFeature']) {
-		test(`restores the Desktop New entry when the saved entry is ${saved ?? 'absent'}`, async () => {
+	for (const saved of [undefined, 'sessions.open.code']) {
+		test(`opens a fresh Desktop New when the saved entry is ${saved ?? 'absent'}`, async () => {
 			using fixture = new EntryFixture();
 			if (saved) { fixture.storage.store('sessions.layout.activeEntry', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE); }
 			const calls: (readonly unknown[])[] = [];
-			using entry = CommandsRegistry.register('sessions.open.new', (_accessor, ...args) => { calls.push(args); });
+			const freshEntry: ISessionsEntry = { ...chatEntry, id: 'reply', content: 'editor', splash: 'chat' };
+			using entry = CommandsRegistry.register('sessions.open.new', (_accessor, source) => {
+				calls.push([source]);
+				assert.equal(source, 'startup');
+				return fixture.service.openEntry(freshEntry, undefined, { source });
+			});
+			using code = CommandsRegistry.register('sessions.open.code', () => assert.fail('Ordinary launch restored Code'));
+			await fixture.service.restore(entry => { calls.push([entry.content, entry.splash]); });
+			assert.deepEqual(calls, [['startup'], ['editor', 'chat']]);
+		});
+	}
+
+	for (const kind of [StartupKind.ReloadedWindow, StartupKind.ReopenedWindow]) {
+		test(`restores the saved Desktop entry on ${StartupKind[kind]}`, async () => {
+			using fixture = new EntryFixture(undefined, kind);
+			fixture.storage.store('sessions.layout.activeEntry', 'sessions.show.chatgpt', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			const calls: (readonly unknown[])[] = [];
+			using entry = CommandsRegistry.register('sessions.show.chatgpt', (_accessor, ...args) => { calls.push(args); });
+			using fresh = CommandsRegistry.register('sessions.open.new', () => assert.fail('Restoration started a fresh chat'));
 			await fixture.service.restore();
 			assert.deepEqual(calls, [['restore']]);
 		});
@@ -94,9 +137,17 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		const command = 'test.sessions.restoreEntry';
 		fixture.storage.store('sessions.layout.activeEntry', command, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const calls: (readonly unknown[])[] = [];
-		using entry = CommandsRegistry.register(command, (_accessor, ...args) => { calls.push(args); });
-		await fixture.service.restore(resolved => { calls.push([resolved]); });
-		assert.deepEqual(calls, [[command], ['restore']]);
+		const savedEntry: ISessionsEntry = { ...chatEntry, content: 'editor', splash: 'grid', restoreCommand: command };
+		using entry = CommandsRegistry.register(command, (_accessor, source) => {
+			calls.push([source]);
+			assert.equal(source, 'restore');
+			return fixture.service.openEntry(savedEntry, undefined, { source });
+		});
+		await fixture.service.restore(entry => {
+			assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
+			calls.push([entry.content, entry.splash]);
+		});
+		assert.deepEqual(calls, [['restore'], ['editor', 'grid']]);
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
 	});
 
@@ -139,7 +190,8 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 	test('opening an ordinary document from Cowork reveals its body after switching to Code', async () => {
 		using fixture = new EntryFixture();
 		await fixture.service.openEntry(chatEntry);
-		fixture.openDocument({ resource: URI.parse('ash-chat-transcript:/saved.md'), readOnly: true, initialText: 'Saved transcript' });
+		fixture.changeActiveDocument({ resource: URI.parse('ash-chat-transcript:/saved.md'), readOnly: true, initialText: 'Saved transcript' });
+		fixture.revealActiveEditor.fire();
 		await fixture.service.runOperation(async () => { });
 		await fixture.service.runOperation(async () => { });
 		assert.equal(fixture.service.isDocumentContent, true);
@@ -156,6 +208,22 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.service.isDocumentContent, true);
 		assert.equal(fixture.visible.get('editor'), true);
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), documentEntry.restoreCommand);
+	});
+
+	test('passive changes in a retained Code group preserve the Chat entry', async () => {
+		using fixture = new EntryFixture();
+		const nativeChat = { ...chatEntry, id: 'ashChat', conversationKind: 'code' } as const;
+		await fixture.service.openEntry(documentEntry);
+		fixture.changeActiveDocument({ resource: URI.parse('untitled:/retained-code-file') });
+		await fixture.service.openEntry(nativeChat);
+		assert.equal(fixture.groupVisibility.get('documents'), false);
+
+		const groupId = fixture.activeGroupId;
+		fixture.editorChanged.fire({ kind: 'activeGroupChanged', groupId });
+		fixture.changeActiveDocument({ resource: URI.parse('untitled:/another-retained-code-file') });
+		await fixture.service.runOperation(async () => { });
+		assert.equal(fixture.service.isDocumentContent, false);
+		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), nativeChat.restoreCommand);
 	});
 
 	test('disposal during conversation preparation stops queued entries and Part mutations', async () => {
@@ -202,7 +270,7 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		await fixture.service.runOperation(async () => { });
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), chatEntry.restoreCommand);
 		assert.equal(fixture.partChanges.length, before);
-		fixture.editorChanged.fire({ kind: 'activeGroupChanged', groupId: 1 });
+		fixture.revealActiveEditor.fire();
 		await fixture.service.runOperation(async () => { });
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), documentEntry.restoreCommand);
 	});
@@ -461,11 +529,12 @@ class TestCustomView extends AbstractCustomView {
 }
 
 class EntryFixture extends Disposable {
+	public readonly conversationDraft = observableValue('conversation draft', false);
 	private readonly dom = new JSDOM('', { url: 'https://entry-layout.test' });
 	public readonly container = this.dom.window.document.body;
 	private readonly services = this._register(new InstantiationService());
 	public readonly storage = this._register(new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'sessions', backend: this.dom.window.localStorage, flushInterval: 0 }));
-	public readonly lifecycle = this._register(new TestLifecycle(undefined, new NullLoggerService(), this.storage));
+	public readonly lifecycle: TestLifecycle;
 	public readonly contextKeys = this._register(new ContextKeyService());
 	public readonly customViews = this._register(new CustomViewService(new NullLoggerService(), this.storage));
 	private readonly workspace = this._register(new TestWorkspaceService({ id: 'sessions', folders: [] }));
@@ -493,13 +562,15 @@ class EntryFixture extends Disposable {
 	public readonly service: SessionsLayoutService;
 	public readonly outputReveal = this._register(new Emitter<void>());
 	public readonly viewVisibility = this._register(new Emitter<{ id: string; location: ViewContainerLocation; visible: boolean; }>());
-	public openDocument(input: IResourceEditorInput): void {
+	public get activeGroupId() { return this.services.get(IEditorPart).activeGroup.id; }
+	public changeActiveDocument(input: IResourceEditorInput): void {
 		this.activeInput = input;
-		this.editorChanged.fire({ kind: 'groupChanged', groupId: this.services.get(IEditorPart).activeGroup.id, event: { kind: 'activeEditorChanged', editor: undefined } });
+		this.editorChanged.fire({ kind: 'groupChanged', groupId: this.activeGroupId, event: { kind: 'activeEditorChanged', editor: undefined } });
 	}
 
-	constructor(savedVisibility?: unknown) {
+	constructor(savedVisibility?: unknown, startupKind?: StartupKind) {
 		super();
+		this.lifecycle = this._register(new TestLifecycle(startupKind, new NullLoggerService(), this.storage));
 		this._register(toDisposable(() => this.dom.window.close()));
 		if (savedVisibility) { this.storage.store('sessions.layout.entryVisibility', JSON.stringify(savedVisibility), StorageScope.PROFILE, StorageTarget.MACHINE); }
 		const fixture = this;
@@ -551,6 +622,7 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(ILogService, new NullLoggerService());
 		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
 		this.services.registerInstance(ISessionsConversationService, {
+			newDraftVisible: this.conversationDraft,
 			openInNewWindow: async () => { throw new Error('Unexpected popup'); },
 			focusDraftPicker: () => { throw new Error('Unexpected picker'); },
 			setConversationKind: async () => {

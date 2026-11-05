@@ -19,6 +19,7 @@ use ash_app_server_protocol::protocol::projects::ProjectReadResult;
 use ash_app_server_protocol::protocol::projects::ProjectRootAddParams;
 use ash_app_server_protocol::protocol::projects::ProjectRootRemoveParams;
 use ash_app_server_protocol::protocol::projects::ProjectRootUpdateParams;
+use ash_app_server_protocol::protocol::projects::ProjectScopeDto;
 use ash_app_server_protocol::protocol::projects::ProjectSessionMutationParams;
 use ash_projects::ProjectCommand;
 use ash_projects::ProjectCommandDisposition;
@@ -29,6 +30,7 @@ use ash_projects::ProjectError;
 use ash_projects::ProjectMaterial;
 use ash_projects::ProjectMaterialKind;
 use ash_projects::ProjectRoot;
+use ash_projects::ProjectScope;
 use serde_json::Value;
 
 /// Borrows only the projects domain services for one request.
@@ -62,12 +64,14 @@ impl<'a> ProjectRequestProcessor<'a> {
         connection: &ConnectionState,
         params: &Value,
     ) -> Result<Value, RpcError> {
-        let _: ProjectListParams = decode(params)?;
+        let params: ProjectListParams = decode(params)?;
+        let scope = params.scope.map(project_scope);
         let projects = self
             .project_coordinator(connection)?
             .list()
             .map_err(project_error)?
             .iter()
+            .filter(|project| scope.is_none_or(|scope| scope == project.scope()))
             .map(project_projection::summary)
             .collect();
         result(&ProjectListResult { projects })
@@ -83,6 +87,14 @@ impl<'a> ProjectRequestProcessor<'a> {
             .project_coordinator(connection)?
             .read(&params.project_id)
             .map_err(project_error)?;
+        if params
+            .scope
+            .is_some_and(|scope| project_scope(scope) != project.scope())
+        {
+            return Err(project_error(ProjectError::NotFound(
+                params.project_id.to_string(),
+            )));
+        }
         result(&ProjectReadResult {
             project: project_projection::project(&project),
         })
@@ -103,6 +115,7 @@ impl<'a> ProjectRequestProcessor<'a> {
                 command: ProjectCommand::Create {
                     name: params.name,
                     description: params.description,
+                    scope: params.scope.map(project_scope),
                     materials: params
                         .materials
                         .into_iter()
@@ -353,6 +366,13 @@ fn projects_unavailable() -> RpcError {
 
 fn invalid_project_reference() -> RpcError {
     RpcError::new(-32602, AppServerErrorName::InvalidParams)
+}
+
+fn project_scope(scope: ProjectScopeDto) -> ProjectScope {
+    match scope {
+        ProjectScopeDto::Chat => ProjectScope::Chat,
+        ProjectScopeDto::Code => ProjectScope::Code,
+    }
 }
 
 fn project_error(error: ProjectError) -> RpcError {

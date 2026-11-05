@@ -49,6 +49,7 @@ fn shell(script: String) -> CommandRequest {
         arguments: vec!["-c".into(), script],
         working_directory: ".".into(),
         input: CommandInput::Closed,
+        environment: Default::default(),
     }
 }
 

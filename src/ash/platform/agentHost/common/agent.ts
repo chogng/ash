@@ -104,7 +104,10 @@ export interface SessionWorktreeStart {
 	readonly commit: string;
 }
 
+export type SessionSurface = 'chat' | 'code';
+
 export interface SessionCreateParams {
+	readonly surface?: SessionSurface;
 	readonly worktreeStart?: SessionWorktreeStart;
 	readonly environmentVariables?: Readonly<Record<string, string>>;
 	readonly commandId: string;
@@ -140,6 +143,7 @@ export interface AgentSessionChange {
 }
 
 export interface AgentSession {
+	readonly surface?: SessionSurface;
 	readonly sessionId: string;
 	readonly source?: 'automation';
 	readonly title: string;
@@ -152,6 +156,7 @@ export interface AgentSession {
 		readonly title: string;
 		readonly createdAtUnixMs?: number;
 		readonly lastActivityAtUnixMs?: number;
+		readonly recap?: string | null;
 		readonly parentThreadId?: string | null;
 		readonly forkedFromId?: string | null;
 		readonly status: 'active' | 'archived';
@@ -796,6 +801,7 @@ export type ThreadCommittedEvent =
 		readonly type:
 		| 'threadCreated'
 		| 'threadTitleChanged'
+		| 'threadRecapUpdated'
 		| 'advisorConfigured'
 		| 'modelProvidersMigrated'
 		| 'threadArchived'

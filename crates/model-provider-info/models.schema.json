@@ -221,7 +221,9 @@
       "enum": [
         "advisor",
         "review",
-        "commit"
+        "commit",
+        "threadTitle",
+        "threadRecap"
       ]
     },
     "ModelReasoningEffortOption": {
@@ -531,6 +533,17 @@
           "items": {
             "$ref": "#/$defs/ModelReasoningEffortOption"
           }
+        },
+        "ultra_reasoning_effort": {
+          "description": "Request effort for the separate Ultra switch. Omission means Ultra is unavailable.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffort"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,

@@ -170,6 +170,22 @@ fn denied_interaction_is_interrupted_and_reported_without_waiting_for_ui() {
 }
 
 #[test]
+fn tool_result_review_is_reported_as_an_approval() {
+    let ids = TestIds::new();
+    let mut waiting = turn(&ids, TurnStatus::WaitingForApproval, vec![]);
+    let request_id = ash_protocol::RequestId::new("tool-result-review").unwrap();
+    waiting.pending_interaction = Some(ash_protocol::PendingInteraction {
+        request_id: request_id.clone(),
+        item_id: None,
+        kind: ash_protocol::AgentInteractionKind::ToolResultReview,
+        deadline: None,
+    });
+    let interaction = crate::turn_outcome::required_interaction(&waiting).unwrap();
+    assert_eq!(interaction.kind, ExecInteractionKind::Approval);
+    assert_eq!(interaction.request_id, Some(request_id));
+}
+
+#[test]
 fn connection_close_never_fabricates_a_failed_turn() {
     let ids = TestIds::new();
     let mut connection = FakeConnection::new(

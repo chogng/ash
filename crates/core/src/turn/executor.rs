@@ -1268,17 +1268,8 @@ impl TurnExecutor {
             let model = invocation.model().as_service_selection();
             request.reasoning = self
                 .model
-                .reasoning_config(model)
+                .reasoning_config(model, turn.reasoning_effort)
                 .map_err(ExecutionFailure::service)?;
-            if let Some(effort) = turn.reasoning_effort {
-                request.reasoning = Some(ash_protocol::ReasoningConfig {
-                    effort,
-                    summary: request
-                        .reasoning
-                        .as_ref()
-                        .is_some_and(|config| config.summary),
-                });
-            }
             let billing_scope = self
                 .model
                 .billing_scope(model)

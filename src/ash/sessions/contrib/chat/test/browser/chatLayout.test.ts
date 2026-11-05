@@ -44,6 +44,10 @@ suite('sessionsCreator browser component', () => {
 			const chat = page.locator('.ash-sessions-chat-slot :is(.ash-chat,.ash-cowork):visible').first();
 			await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toBeVisible();
 			await expect(chat.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')).toHaveAttribute('aria-busy', 'false');
+			if (session === 1) {
+				await expect(chat.getByText('Choose a project before sending.', { exact: true })).toBeVisible();
+				await expect(chat.getByRole('button', { name: 'Scroll to Latest', exact: true })).toBeHidden();
+			}
 			if (session === 2) {
 				await chat.getByRole('button', { name: 'Dismiss tip', exact: true }).click();
 			}
@@ -61,6 +65,7 @@ suite('sessionsCreator browser component', () => {
 				const observer = new MutationObserver(sample);
 				observer.observe(document.querySelector('[data-part="sessions"]')!, { childList: true, subtree: true });
 				try {
+					sample();
 					while (!finished) {
 						await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
 						sample();

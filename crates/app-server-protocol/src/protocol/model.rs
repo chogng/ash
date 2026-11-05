@@ -84,6 +84,10 @@ pub struct ModelCatalogEntry {
     pub long_context: Option<bool>,
     /// Current preference on the active connection; capability support is reported separately.
     pub selected_acceleration: Option<String>,
+    /// Omitted when Ultra is unavailable, otherwise the independent switch state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub ultra: Option<bool>,
     /// Effective choices after connection restrictions and per-option denials.
     pub acceleration_options: Vec<ash_protocol::ModelAccelerationOption>,
     /// Model or custom connection ceiling before applying its context budget preference.
@@ -108,6 +112,14 @@ pub struct ModelCatalogEntry {
     pub supported_reasoning_efforts: Vec<ash_protocol::ModelReasoningEffortOption>,
     /// Catalog default, used when no reasoning effort is selected for the invocation.
     pub default_reasoning_effort: Option<ReasoningEffort>,
+    /// Effort resolved for this connection when a Turn supplies no explicit choice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub effective_reasoning_effort: Option<ReasoningEffort>,
+    /// An active provider override, applied even when a Turn supplies an explicit effort.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub reasoning_effort_override: Option<ReasoningEffort>,
     pub default_personality: Option<Personality>,
     #[serde(default)]
     pub settings: ash_protocol::ModelSettings,
@@ -138,6 +150,7 @@ impl ModelCatalogEntry {
             },
             long_context: None,
             selected_acceleration: None,
+            ultra: None,
             acceleration_options: if info.capabilities.fast_mode
                 == ash_protocol::CapabilitySupport::Unsupported
             {
@@ -153,6 +166,8 @@ impl ModelCatalogEntry {
             pricing: Vec::new(),
             supported_reasoning_efforts: info.supported_reasoning_efforts.clone(),
             default_reasoning_effort: info.default_reasoning_effort,
+            effective_reasoning_effort: None,
+            reasoning_effort_override: None,
             default_personality: info.default_personality,
             settings: info.settings.clone(),
         }
@@ -178,6 +193,9 @@ pub struct ModelPreferencesUpdateParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub long_context: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub ultra: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

@@ -20,39 +20,59 @@ import { raceCancellationError } from '../../../../../base/common/async.js';
 import { throwIfCancelled } from '../../../../../base/common/cancellation.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
+import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 
-export function registerChatEditingActions(): void {
+export const RestoreCheckpointActionId = 'workbench.action.chat.restoreCheckpoint';
+export const RedoChatHistoryActionId = 'workbench.action.chat.redoEdit';
+
+export function registerChatRestoreCheckpointAction(): void {
 	registerAction2(class RestoreCheckpointAction extends Action2 {
 		constructor() {
-			super({ id: 'workbench.action.chat.restoreCheckpoint', title: localize2('chat.restoreCheckpoint.label', 'Chat: Restore Checkpoint'), f1: true });
+			super({ id: RestoreCheckpointActionId, title: localize2('chat.restoreCheckpoint.label', 'Chat: Restore Checkpoint'), precondition: ChatContextKeys.enabled.isEqualTo(true), f1: true });
 		}
 
-		public override async run(accessor: ServicesAccessor): Promise<void> {
+		public override async run(accessor: ServicesAccessor, target?: unknown): Promise<void> {
 			const navigation = accessor.get(IChatSessionNavigationService);
 			const source = navigation.getActiveConversation();
 			if (!source) { return; }
+			let itemId: string | undefined;
+			if (target !== undefined) {
+				if (!target || typeof target !== 'object' || !('sessionId' in target) || target.sessionId !== source.sessionId
+					|| !('threadId' in target) || target.threadId !== source.threadId || !('itemId' in target)
+					|| typeof target.itemId !== 'string' || !target.itemId) return;
+				itemId = target.itemId;
+			}
 			const revision = navigation.revision;
 			const viewingSource = (): boolean => {
 				const current = navigation.getActiveConversation();
 				return navigation.revision === revision && current?.sessionId === source.sessionId && current.threadId === source.threadId;
 			};
 			const chat = accessor.get(IChatService);
-			const checkpoints = await chat.readCheckpoints(source.sessionId, source.threadId);
+			const notifications = accessor.get(INotificationService);
+			const quickInput = accessor.get(IQuickInputService);
+			const checkpoints = (await chat.readCheckpoints(source.sessionId, source.threadId))
+				.filter(checkpoint => itemId === undefined || checkpoint.itemId === itemId);
 			if (!viewingSource()) { return; }
 			const available = checkpoints.filter(checkpoint => checkpoint.files !== 'unavailable');
 			if (available.length === 0) {
-				accessor.get(INotificationService).info(localize('chat.restoreCheckpoint.empty', 'No restorable checkpoints are available. {0}', checkpoints.map(checkpoint => checkpoint.unavailableReason).filter(Boolean).join('\n')));
+				notifications.info(localize('chat.restoreCheckpoint.empty', 'No restorable checkpoints are available. {0}', checkpoints.map(checkpoint => checkpoint.unavailableReason).filter(Boolean).join('\n')));
 				return;
 			}
 			const store = new DisposableStore();
 			type CheckpointItem = IQuickPickItem & { checkpoint: ChatCheckpoint; boundary: 'before' | 'after'; };
-			const picker = store.add(accessor.get(IQuickInputService).createQuickPick<CheckpointItem>());
+			const picker = store.add(quickInput.createQuickPick<CheckpointItem>());
 			picker.ariaLabel = picker.placeholder = localize('chat.restoreCheckpoint.choose', 'Choose a checkpoint to restore into a new chat');
 			picker.sortByLabel = false;
+			const messageLabels = itemId === undefined ? undefined : {
+				before: localize('chat.restoreCheckpoint.beforeMessage', 'Before this message'),
+				after: localize('chat.restoreCheckpoint.afterMessage', 'After this message'),
+			};
 			picker.items = available.flatMap((checkpoint, index) => (['before', 'after'] as const).map(boundary => ({
 				checkpoint, boundary,
-				label: boundary === 'before' ? localize('chat.restoreCheckpoint.before', 'Before checkpoint {0}', index + 1) : localize('chat.restoreCheckpoint.after', 'After checkpoint {0}', index + 1),
-				description: checkpoint.turnId,
+				label: messageLabels?.[boundary] ?? (boundary === 'before'
+					? localize('chat.restoreCheckpoint.before', 'Before checkpoint {0}', index + 1)
+					: localize('chat.restoreCheckpoint.after', 'After checkpoint {0}', index + 1)),
+				description: itemId === undefined ? checkpoint.turnId : undefined,
 				detail: checkpoint.files !== 'noFiles'
 					? localize('chat.restoreCheckpoint.files', 'Creates a new chat and restores checkpoint files in a new directory. The original chat and directory are kept.')
 					: localize('chat.restoreCheckpoint.noFiles', 'Creates a new chat at this message boundary. This checkpoint contains no files.'),
@@ -77,21 +97,30 @@ export function registerChatEditingActions(): void {
 			status(localize('chat.restoreCheckpoint.done', 'Checkpoint restored in a new chat.'));
 		}
 	});
+}
 
+export function registerChatHistoryActions(): void {
 	for (const direction of ['undo', 'redo'] as const) {
 		registerAction2(class MoveChatHistoryAction extends Action2 {
 			constructor() {
 				super({
-					id: direction === 'undo' ? 'workbench.action.chat.undoEdit' : 'workbench.action.chat.redoEdit',
+					id: direction === 'undo' ? 'workbench.action.chat.undoEdit' : RedoChatHistoryActionId,
 					title: direction === 'undo' ? localize2('chatEditing.history.undo', 'Chat: Undo Last Request') : localize2('chatEditing.history.redo', 'Chat: Redo Last Request'),
-					f1: true,
+					f1: true, precondition: ChatContextKeys.enabled.isEqualTo(true),
 				});
 			}
 
-			public override async run(accessor: ServicesAccessor): Promise<void> {
+			public override async run(accessor: ServicesAccessor, target?: unknown): Promise<void> {
 				const navigation = accessor.get(IChatSessionNavigationService);
 				const source = navigation.getActiveConversation();
 				if (!source) { return; }
+				let expectedSequence: number | undefined;
+				if (target !== undefined) {
+					if (direction !== 'redo' || !target || typeof target !== 'object' || !('sessionId' in target) || target.sessionId !== source.sessionId
+						|| !('threadId' in target) || target.threadId !== source.threadId || !('expectedSequence' in target)
+						|| typeof target.expectedSequence !== 'number' || !Number.isSafeInteger(target.expectedSequence) || target.expectedSequence < 0) return;
+					expectedSequence = target.expectedSequence;
+				}
 				const revision = navigation.revision;
 				const viewingSource = (): boolean => {
 					const current = navigation.getActiveConversation();
@@ -99,16 +128,18 @@ export function registerChatEditingActions(): void {
 				};
 				const chat = accessor.get(IChatService);
 				const notifications = accessor.get(INotificationService);
+				const workingCopies = accessor.get(IWorkingCopyService);
 				try {
 					const [history, read] = await Promise.all([chat.readHistoryState(source.sessionId, source.threadId), chat.readThread(source.sessionId, source.threadId)]);
 					if (!viewingSource()) { return; }
+					if (expectedSequence !== undefined && history.sequence !== expectedSequence) throw new ChatHistoryConflictError();
 					if (!(direction === 'undo' ? history.canUndo : history.canRedo)) {
 						notifications.info(localize('chatEditing.history.unavailable', 'No request is available for this history action. Wait for the current request to finish.'));
 						return;
 					}
 					const directory = read.directory;
 					const root = directory ? (directory.type === 'local' ? URI.file(directory.root) : directory.type === 'ssh' ? createSshRemoteWorkspaceUri(directory.host, directory.root) : directory.type === 'remote' ? withRemoteWorkspacePath(URI.from({ scheme: 'ash-remote', authority: directory.authority }), directory.root) : createProviderRemoteWorkspaceUri(directory.providerId, directory.workspace, directory.root, directory.hostAuthority)) : undefined;
-					if (root && accessor.get(IWorkingCopyService).getAll().some(copy => copy.isDirty && extUriBiasedIgnorePathCase.isEqualOrParent(copy.resource, root))) {
+					if (root && workingCopies.getAll().some(copy => copy.isDirty && extUriBiasedIgnorePathCase.isEqualOrParent(copy.resource, root))) {
 						notifications.info(localize('chatEditing.history.dirty', 'Save or revert unsaved files in this chat directory before changing its history.'));
 						return;
 					}
@@ -126,8 +157,10 @@ export function registerChatEditingActions(): void {
 			}
 		});
 	}
+}
 
 
+export function registerChatEditingActions(): void {
 	registerAction2(class RenameChatAction extends Action2 {
 		constructor() {
 			super({ id: 'workbench.action.chat.rename', title: localize2('chat.rename.label', 'Chat: Rename Conversation'), f1: true });

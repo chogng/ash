@@ -206,6 +206,15 @@ pub struct AgentConfig {
     pub model_reasoning_effort: Option<ReasoningEffort>,
     #[serde(default)]
     pub approval_review_model: ApprovalReviewModelSelection,
+    /// Optional dedicated model for automatic thread titles. None uses a catalog recommendation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread_title_model: Option<ModelRef>,
+    /// Optional dedicated model for recaps. None uses a catalog recommendation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread_recap_model: Option<ModelRef>,
+    /// Opts in to automatic conversation recaps.
+    #[serde(default)]
+    pub thread_recap_enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub code_review_model: Option<ModelRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -425,6 +434,22 @@ impl UserConfigDocument {
                 )));
             }
         }
+        if let Some(model) = &self.agent.thread_title_model
+            && !self.has_model_provider(&model.provider)
+        {
+            return Err(ConfigError(format!(
+                "thread-title model provider '{}' is not configured",
+                model.provider
+            )));
+        }
+        if let Some(model) = &self.agent.thread_recap_model
+            && !self.has_model_provider(&model.provider)
+        {
+            return Err(ConfigError(format!(
+                "thread-recap model provider '{}' is not configured",
+                model.provider
+            )));
+        }
         if let Some(model) = &self.agent.code_review_model
             && !self.has_model_provider(&model.provider)
         {
@@ -505,6 +530,9 @@ pub struct ResolvedConfig {
     pub model: Option<ModelRef>,
     pub model_reasoning_effort: Option<ReasoningEffort>,
     pub approval_review_model: ApprovalReviewModelSelection,
+    pub thread_title_model: Option<ModelRef>,
+    pub thread_recap_model: Option<ModelRef>,
+    pub thread_recap_enabled: bool,
     pub code_review_model: Option<ModelRef>,
     pub commit_message_model: Option<ModelRef>,
     pub commit_message_enabled: bool,
@@ -704,6 +732,9 @@ impl From<&UserConfigDocument> for ResolvedConfig {
             model: document.agent.model.clone(),
             model_reasoning_effort: document.agent.model_reasoning_effort,
             approval_review_model: document.agent.approval_review_model.clone(),
+            thread_title_model: document.agent.thread_title_model.clone(),
+            thread_recap_model: document.agent.thread_recap_model.clone(),
+            thread_recap_enabled: document.agent.thread_recap_enabled,
             code_review_model: document.agent.code_review_model.clone(),
             commit_message_model: document.agent.commit_message_model.clone(),
             commit_message_enabled: document.agent.commit_message_enabled,

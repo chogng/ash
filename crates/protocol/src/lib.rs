@@ -257,6 +257,7 @@ pub use session::SessionRuntimeRequest;
 pub use session::SessionRuntimeResult;
 pub use session::SessionSource;
 pub use session::SessionStatus;
+pub use session::SessionSurface;
 pub use session::SessionThread;
 pub use session::ThreadOrigin;
 pub use skill::ContentDigest;

@@ -73,8 +73,10 @@ fn fast_mode_uses_speed_and_preserves_existing_beta_headers() {
         "anthropic-beta",
         "other-beta",
     )];
-    headers(&request, &mut values).unwrap();
-    headers(&request, &mut values).unwrap();
+    headers("claude-opus-5-5", &request, &mut values).unwrap();
+    assert_eq!(values[0].value(), "other-beta");
+    headers("claude-opus-5", &request, &mut values).unwrap();
+    headers("claude-opus-4-8", &request, &mut values).unwrap();
     assert_eq!(
         values
             .iter()
@@ -92,7 +94,7 @@ fn fast_mode_uses_speed_and_preserves_existing_beta_headers() {
             .is_none()
     );
     let mut values = Vec::new();
-    headers(&request, &mut values).unwrap();
+    headers("claude-opus-4-8", &request, &mut values).unwrap();
     assert!(
         values
             .iter()

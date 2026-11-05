@@ -14,7 +14,7 @@ import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessio
 import type { ISession } from '../../../../services/sessions/common/session.js';
 import { sessionIdentity, sessionProviderAuthority } from '../../../../services/sessions/common/sessionIdentity.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
-import '../../browser/openSessionLinkOpener.contribution.js';
+import '../../browser/chat.contribution.js';
 
 test('Conversation link previews follow the matching host catalog for the contribution lifetime', () => {
 	using changes = new Emitter<void>();

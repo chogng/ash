@@ -24,6 +24,7 @@ pub(super) enum RequestKey {
     Interrupt,
     Interaction,
     Thread,
+    RecapPresence,
     Config,
     NetworkDiagnostics,
     Keymap,

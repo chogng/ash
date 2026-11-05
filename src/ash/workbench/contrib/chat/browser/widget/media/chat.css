@@ -1,3 +1,22 @@
+.ash-chat,
+.ash-chat-content-layout {
+	/* Share one content column without narrowing the transcript's scroll viewport.
+	 * Hosts may supply insets and padding; the maximum includes the inner padding. */
+	--ash-chat-content-inset: max(
+		calc(
+			var(
+					--ash-chat-content-min-padding,
+					var(--ash-chat-content-padding, var(--ash-spacing-size120))
+				) -
+				var(--ash-chat-content-host-inset, 0px)
+		),
+		calc(
+			(100% - 950px) / 2 +
+				var(--ash-chat-content-padding, var(--ash-spacing-size120))
+		)
+	);
+}
+
 .ash-chat {
 	min-height: 0;
 	height: 100%;
@@ -27,7 +46,7 @@
 	align-items: center;
 	flex-wrap: wrap;
 	gap: var(--ash-spacing-size80);
-	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size80) var(--ash-chat-content-inset);
 }
 
 .ash-chat-history-pagination[hidden] {
@@ -46,7 +65,7 @@
 	align-items: center;
 	gap: var(--ash-spacing-size80);
 	margin-top: auto;
-	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size80) var(--ash-chat-content-inset);
 	color: var(--ash-error-foreground);
 	font-size: var(--ash-fontSize-label1);
 }
@@ -78,7 +97,7 @@
 	min-height: 0;
 	flex: 0 0 auto;
 	margin-top: auto;
-	padding: var(--ash-spacing-size40) var(--ash-spacing-size120);
+	padding: var(--ash-spacing-size40) var(--ash-chat-content-inset);
 }
 
 .ash-chat:has(> .ash-chat-transcript-overlaps-composer) > .ash-chat-input-part {

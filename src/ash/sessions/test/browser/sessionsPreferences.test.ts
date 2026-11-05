@@ -4,6 +4,7 @@ import { ChatWidgetService } from '../../../workbench/contrib/chat/browser/widge
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { IAgentSessionService } from '../../../platform/agentHost/common/agentService.js';
+import { IAgentModelsService } from '../../../platform/models/common/agentModels.js';
 import { ITeamsManagementService } from '../../services/teams/common/teamsManagement.js';
 import { constObservable } from '../../../base/common/observable.js';
 import '../../../workbench/contrib/advisor/browser/advisor.contribution.js';
@@ -59,6 +60,7 @@ import { TestWorkspaceService } from '../../../workbench/services/configuration/
 import { IAppServerRemoteAgentService } from '../../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
+import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
 import { IFileService } from '../../../platform/files/common/files.js';
 import { ILanguagePackService } from '../../../platform/languagePacks/common/languagePacks.js';
@@ -172,6 +174,9 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	using chatWidgets = services.createInstance(ChatWidgetService);
 	services.registerInstance(IChatWidgetService, chatWidgets);
 	services.registerInstance(ILanguageModelsService, chat as unknown as ILanguageModelsService);
+	services.registerInstance(IAgentModelsService, {
+		readDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null, codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false }),
+	} as IAgentModelsService);
 	services.registerInstance(ISecretStorageStatusService, { readState: async () => ({ status: 'available' }), authorizeAccess: async () => ({ status: 'available' }), setStorageMode: async mode => ({ status: 'available', mode }) });
 	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } });
 	services.registerInstance(IConfigurationService, configuration);
@@ -258,6 +263,7 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	services.registerInstance(IAgentSessionService, { listAgents: async () => ({ agents: [], diagnostics: [] }), readRoleCatalog: async () => ({ agents: [], diagnostics: [] }) } as unknown as IAgentSessionService);
 	services.registerInstance(ITeamsManagementService, { teams: constObservable([]), refresh: async () => { } } as unknown as ITeamsManagementService);
 	services.registerInstance(ISessionsService, { onDidChange: Event.None, openThread: async () => { throw new Error('Unexpected team conversation navigation'); } } as unknown as ISessionsService);
+	services.registerInstance(ISessionsManagementService, { onDidChange: Event.None } as unknown as ISessionsManagementService);
 	const editorOpens: { resource: string; target: unknown; }[] = [];
 	services.registerInstance(IEditorService, {
 		openEditor: async (input, _options, target) => {
@@ -555,6 +561,11 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	await Promise.resolve();
 	await Promise.resolve();
 	assert.equal(window.document.querySelector('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="switch"]'), null);
+	const titleSelector = window.document.querySelector<HTMLButtonElement>('.ash-settings-section[data-settings-item-id="chat.threadTitle"] [role="combobox"]');
+	assert.ok(titleSelector);
+	assert.equal(titleSelector.textContent?.trim(), 'Automatic');
+	const recapSelector = window.document.querySelector<HTMLButtonElement>('.ash-settings-section[data-settings-item-id="chat.threadRecap"] [role="combobox"]');
+	assert.equal(recapSelector?.textContent?.trim(), 'Automatic');
 	const advisorSelector = window.document.querySelector<HTMLButtonElement>('.ash-settings-section[data-settings-item-id="chat.advisor"] [role="combobox"]');
 	assert.ok(advisorSelector);
 	advisorSelector.click();

@@ -203,7 +203,7 @@ just generate-model-catalog-schema --check
 
 `settings` 保存会影响真实调用的模型声明：输入模态、verbosity 和推理摘要参数的支持情况及默认值、服务等级选项及默认值、加速机制、工具输出限额。`verbosity` 和 `reasoning_summary` 同样使用 `true / false / null`，省略表示未知。目录解析后转换为 Rust 的三态枚举；运行时、插件与传输契约仍使用 `CapabilitySupport`。类型与校验由 [`ModelSettings`](../protocol/src/model/parameters.rs) 定义；省略的字段表示没有证据。默认值必须有相应支持声明，列表必须非空且不重复，工具输出限额必须大于零。静态 JSON、插件定义与动态目录在各自入口校验这些约定。
 
-已与本地 Codex 清单准确匹配的 8 个 OpenAI 型号补入已声明的模态、verbosity、摘要和工具输出预算，并补齐并行工具与原图能力。服务等级的 `id` 保存供应商请求值，`name` 和 `description` 保存展示名称及说明；`Fast` 是名称，OpenAI 的等级 ID 是 `priority`，不再同时声明 `fast` 和 `priority` 两个选项。声明不证明账号权益。没有证据的字段继续保持未知。Codex 的模型简介和推理档位说明已进入这份数据；升级提示、展示排序、搜索工具类型及尚无调用方的字段不写入模型规格。
+与本地 Codex 清单匹配的 OpenAI 型号补入已声明的模态、verbosity、摘要、工具输出预算、并行工具与原图能力。服务等级的 `id` 保存供应商请求值，`name` 和 `description` 保存展示名称及说明。OpenAI Fast 沿用 `priority` 作为等级 ID，Ultra Fast 使用 `ultrafast`。Claude 的 `speed=fast` 和 `service_tier=auto` 分别显示为 Fast 和 Priority。`capabilities.fast_mode` 表示通用的加速能力，具体档位从设置解析。型号、端点与权益对照见 [API 加速档位](../../docs/models/ash-host-models.md#fast-与-ultra-fast)。没有证据的字段继续保持未知。Codex 的模型简介和推理档位说明已进入这份数据；升级提示、展示排序、搜索工具类型及尚无调用方的字段不写入模型规格。
 
 服务等级和加速声明使用以下可解析格式：
 
@@ -220,13 +220,13 @@ just generate-model-catalog-schema --check
 
 以上对象放在条目的 `settings` 中。ID 唯一，ID、名称与说明不能空白；`default_service_tier` 和服务等级加速选项都必须引用已声明的 ID。默认值是 Ash 的请求默认值，不代表供应商的默认配置。速度倍数未经实测时，说明不承诺固定倍数；说明也不参与价格计算。
 
-| 加速机制 | `settings.acceleration`                                                                                                               | 真实请求                                                               |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| 服务等级 | `{"type":"service_tier","service_tier":"priority"}`                                                                                   | 发送准确的 `service_tier`；Anthropic 调度选项使用它自己的 `auto` ID    |
-| 速度参数 | `{"type":"speed","speed":"fast","name":"Fast","description":"Faster responses, increased usage"}`                                     | 独立的 `speed=fast` 和所属接口的 beta Header；不伪造一个 Fast 服务等级 |
-| 高速型号 | `{"type":"model","model":"kimi-k2.7-code-highspeed","name":"Fast","description":"Uses a separate high-speed model, increased usage"}` | 从冻结的模型声明选择高速型号，再应用所选连接的上游 ID 别名             |
+| 加速机制 | `settings.acceleration`                                                                                                               | 真实请求                                                            |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 服务等级 | `{"type":"service_tier","service_tier":"priority"}`                                                                                   | 发送准确的 `service_tier`；Anthropic 调度选项使用它自己的 `auto` ID |
+| 速度参数 | `{"type":"speed","speed":"fast","name":"Fast","description":"Faster responses, increased usage"}`                                     | 独立的 `speed=fast`。Claude 预览型号另发送 beta 头                  |
+| 高速型号 | `{"type":"model","model":"kimi-k2.7-code-highspeed","name":"Fast","description":"Uses a separate high-speed model, increased usage"}` | 从冻结的模型声明选择高速型号，再应用所选连接的上游 ID 别名          |
 
-Astra 的 `settings.service_tiers` 声明 `ultrafast`；这是模型能力，不能直接赋予 ChatGPT 账号资格。订阅账号还需要通过[套餐及工作区授权](../../docs/models/plans-and-pricing.md#astra-ultra-fast-的套餐资格)，API Key 按 API 条件处理。
+Astra 和 GPT-6.1 Sol 的 `settings.service_tiers` 声明 `ultrafast`。订阅账号还需要满足[套餐及工作区授权](../../docs/models/plans-and-pricing.md#fast-和-ultra-fast-的套餐资格)，API Key 按 API 条件处理。
 
 每个接入的 `modelAcceleration` 按模型保存准确的选项 ID。服务等级沿用原始 ID，速度参数使用 `speed:fast`，高速型号使用 `model:<型号>`。目录中的非默认服务等级以及速度或型号声明形成可选列表；`disabledAccelerationOptions` 按模型独立禁用各档位，禁用 Fast 不会连带禁用 Ultra Fast。后端在保存、HTTP 调用、WebSocket 连接和预热前校验选项。显式请求等级或速度优先于同类参数的加速偏好，也必须通过接入限制；清除选择使用声明的请求默认等级。配置文件 schema 9 将旧 `fastModels` 一次性迁移成原声明的选项 ID，未知映射或冲突会报错并保留原文件。服务等级 ID 原样传到请求字段，只有 ChatGPT 订阅的显式 `default` 按接口约定省略。预先计数不发送等级、速度或加速 beta Header。订阅连接仍单独限制是否可加速，不能从公开 API 能力推断。
 

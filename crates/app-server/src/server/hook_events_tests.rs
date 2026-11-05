@@ -91,6 +91,7 @@ fn real_hook_processes_publish_results_and_replay_without_reexecution() {
         .unwrap();
         let thread = server
             .start_thread(StartThreadRequest {
+                surface: None,
                 execution_target: Some(ash_protocol::SessionExecutionTarget::Local {
                     root: directory.path().to_path_buf(),
                 }),

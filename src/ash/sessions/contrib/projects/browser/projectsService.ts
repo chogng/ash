@@ -12,6 +12,7 @@ const sortOrderStorageKey = 'sessions.projects.sortOrder';
 export interface ProjectsState {
 	readonly projects: readonly ProjectSummary[];
 	readonly selectedId: string | undefined;
+	readonly conversationProjectId?: string;
 	readonly selected: Project | undefined;
 	readonly query: string;
 	readonly sortOrder: ProjectSortOrder;
@@ -20,18 +21,20 @@ export interface ProjectsState {
 	readonly message: string | undefined;
 }
 
-/** Page navigation and profile view state; IProjectService owns the durable project catalog. */
+/** Chat Projects navigation and view state; IProjectService owns the durable catalog. */
 export interface IProjectsService {
 	readonly state: IObservable<ProjectsState>;
 	setQuery(query: string): void;
 	setSortOrder(sortOrder: ProjectSortOrder): void;
 	openProject(id: string): Promise<void>;
+	openConversationProject(id: string): void;
 	showProjects(): void;
 	reload(): Promise<void>;
 	create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean>;
 	update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean>;
 	readProject(id: string): Promise<Project | undefined>;
 	archive(project: ProjectSummary): Promise<boolean>;
+	restore(project: ProjectSummary): Promise<boolean>;
 	remove(project: ProjectSummary): Promise<boolean>;
 	isPinned(id: string): boolean;
 	togglePinned(id: string): void;
@@ -76,13 +79,18 @@ export class ProjectsService extends Disposable implements IProjectsService {
 	}
 	public showProjects(): void {
 		this.loadSequence++;
-		this.patch({ selectedId: undefined, selected: undefined, loading: false, message: undefined });
+		this.patch({ selectedId: undefined, conversationProjectId: undefined, selected: undefined, loading: false, message: undefined });
 		void this.reload();
 	}
 
 	public async openProject(id: string): Promise<void> {
-		this.patch({ selectedId: id, selected: undefined, message: undefined });
+		this.patch({ selectedId: id, conversationProjectId: undefined, selected: undefined, message: undefined });
 		await this.reload();
+	}
+
+	public openConversationProject(id: string): void {
+		this.loadSequence++;
+		this.patch({ conversationProjectId: id, selectedId: undefined, selected: undefined, loading: false, message: undefined });
 	}
 
 	public async reload(): Promise<void> {
@@ -90,9 +98,9 @@ export class ProjectsService extends Disposable implements IProjectsService {
 		const selectedId = this.state.get().selectedId;
 		this.patch({ loading: true, message: undefined });
 		try {
-			const projects = await this.projects.list();
+			const projects = await this.projects.list('chat');
 			if (this.isDisposed || sequence !== this.loadSequence) { return; }
-			const selected = selectedId && projects.some(project => project.id === selectedId && !project.archived) ? await this.projects.read(selectedId) : undefined;
+			const selected = selectedId && projects.some(project => project.id === selectedId && !project.archived) ? await this.projects.read(selectedId, 'chat') : undefined;
 			if (this.isDisposed || sequence !== this.loadSequence) { return; }
 			this.patch({ projects, selected, selectedId: selected ? selectedId : undefined, loading: false });
 		} catch (error) {
@@ -103,19 +111,20 @@ export class ProjectsService extends Disposable implements IProjectsService {
 	}
 
 	public create(id: string, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean> {
-		return this.mutate(() => this.projects.create(id, name, description, materials), true);
+		return this.mutate(() => this.projects.create(id, name, description, materials, 'chat'), true);
 	}
 	public update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<boolean> {
 		return this.mutate(() => this.projects.update(project, name, description, materials));
 	}
 	public async readProject(id: string): Promise<Project | undefined> {
-		try { return await this.projects.read(id); }
+		try { return await this.projects.read(id, 'chat'); }
 		catch (error) {
 			if (!this.isDisposed) { this.patch({ message: error instanceof Error ? error.message : localize('projects.loadFailed', 'Could not load projects. Try again.') }); }
 			return undefined;
 		}
 	}
 	public archive(project: ProjectSummary): Promise<boolean> { return this.mutate(() => this.projects.archive(project)); }
+	public restore(project: ProjectSummary): Promise<boolean> { return this.mutate(() => this.projects.restore(project)); }
 	public async remove(project: ProjectSummary): Promise<boolean> {
 		const removed = await this.mutate(() => this.projects.remove(project), false, project.id);
 		if (removed) { this.storage.remove(`sessions.projects.pinned.${project.id}`, StorageScope.PROFILE); }

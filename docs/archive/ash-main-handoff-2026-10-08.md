@@ -1,4 +1,4 @@
-# Ash main 集成与后续工作
+# Ash main 集成交接记录（2026-10-08）
 
 更新：2026-10-08。本次把工作树中 main 缺少的有效改动提交到 main，并保留线性历史。后续工程工作从 `/Volumes/1t/ash` 的 main 接手。
 
@@ -25,13 +25,11 @@ AgentHost、Output、平台存储等工作树提交已经进入 main。旧工作
 - App Server：`just verify ash-app-server` 通过，644 项单元测试通过、3 项原有忽略、18 项集成测试通过。最终冻结绑定 2 项测试和警告检查通过。
 - 图标字体工具：真实 FontTools 流水线测试通过，检查 TTF 与 WOFF2 输出。
 - 改动文件的格式和 `git diff --check` 通过。
-- `2ea5892bc` 的 frontend、Rust、codespell、dependencies、Ubuntu 和部分 Trace CI 已通过；protocol、TUI、Bazel 检查失败的具体原因见 [CI 交接](ci-project-todo.md)。其余平台检查仍可能运行中，不能把本次结果写为全部 CI 通过。
+- `2ea5892bc` 的 frontend、Rust、codespell、dependencies、Ubuntu 和部分 Trace CI 已通过；protocol、TUI、Bazel 检查失败的具体原因见 [CI 交接](../../ci-project-todo.md#2026-10-08-历史失败记录)。其余平台检查仍可能运行中，不能把本次结果写为全部 CI 通过。
 
-## 后续工作
+## 后续工作入口
 
-- [ ] 并发开发：持久化状态与目录绑定已发布；专用 Runtime、调度、review/check 执行、RPC/UI 和 SCM 落地还需实现。当前 `/team develop` 明确返回 unavailable，没有伪装成已完成产品功能。
-- [ ] CI：Python metadata/cache 与三个本地套件已在 Windows 复验通过；继续按最新 main 核对完整 CI、Bazel 锁文件／Linux 真实场景及 protocol／V8 构建结果，范围与验收入口见 [CI 交接](ci-project-todo.md)。
-- [ ] 调查完整浏览器集成中的 scrollbar 点击偶发失败，保留现有断言。
+并行开发和 scrollbar 偶发失败由 [根 TODO](../../TODO.md#2026-10-08-main-集成交接余项) 跟踪，CI 余项见 [CI 清单](../../ci-project-todo.md#接手顺序)。
 
 ## 清理与恢复
 

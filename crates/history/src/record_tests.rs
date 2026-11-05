@@ -80,6 +80,7 @@ fn stored_event_round_trip_preserves_history_contract() {
             },
         }),
         event: ThreadEvent::ThreadCreated {
+            surface: None,
             execution_target: None,
             agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
             origin: Default::default(),

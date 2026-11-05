@@ -249,6 +249,7 @@ impl ProviderConfigRegistry {
             connection: config.connection.clone(),
             access_mode: config.access_mode(),
             model_acceleration: config.model_acceleration.clone(),
+            ultra_models: config.ultra_models.clone(),
             disabled_acceleration_options: config.disabled_acceleration_options.clone(),
             api_profile: definition.api_profile,
             base_url,

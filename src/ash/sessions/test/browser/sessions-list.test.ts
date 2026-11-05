@@ -14,7 +14,8 @@ import type { IContextMenuService } from '../../../platform/contextview/browser/
 import type { INotificationService } from '../../../platform/notification/common/notification.js';
 import { observableValue } from '../../../base/common/observable.js';
 import type { ICustomViewService } from '../../services/customView/browser/customViewService.js';
-import type { IMenuService } from '../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../platform/actions/common/menuService.js';
+import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../nls.js';
 import { sessionManagementLabel } from '../../browser/sessionManagementLabels.js';
@@ -23,7 +24,7 @@ import { URI } from '../../../base/common/uri.js';
 import { computePullRequestIcon } from '../../../workbench/common/chatPullRequest.js';
 import type { IResolvedSessionPullRequest } from '../../contrib/github/common/types.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suiteTeardown, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { SubmenuAction, type IAction } from '../../../base/common/actions.js';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -35,14 +36,17 @@ import type { IHoverService, HoverSetupOptions } from '../../../platform/hover/b
 import type { HoverContent } from '../../../base/browser/ui/hover/hover.js';
 import { getSessionSummaryHoverData } from '../../contrib/sessions/browser/sessionHoverContent.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
+import '../../contrib/sessions/browser/views/sessionsViewActions.js';
 
 
 const listCustomViews = { activeCustomView: observableValue('testCustomView', undefined) } as unknown as ICustomViewService;
-const listMenus = { createMenu: () => ({ getActions: () => [], onDidChange: Event.None, ...toDisposable(() => { }) }) } as unknown as IMenuService;
 const listNotifications = { error: (error: unknown) => { throw error; } } as unknown as INotificationService;
 const emptyGroups = { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService;
 const emptyProjects = { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService;
 const listCommands = { executeCommand: async () => undefined } as unknown as ICommandService;
+const menuContexts = new ContextKeyService();
+const listMenus = new MenuService(listCommands, menuContexts);
+suiteTeardown(() => menuContexts.dispose());
 const listContextMenus = { showContextMenu() { } } as unknown as IContextMenuService;
 
 test('SessionsList keeps session buttons and focus while refreshing', async () => {
@@ -115,8 +119,10 @@ test('SessionsList keeps session buttons and focus while refreshing', async () =
 	untitledSessions = [];
 	changes.fire();
 	list.focus();
-	assert.equal(list.domNode.querySelector('.ash-sessions-list-section'), null);
-	assert.equal(dom.window.document.activeElement, list.domNode);
+	const projects = list.domNode.querySelector('[data-section="projects"]');
+	assert.equal(projects?.querySelector('h3')?.textContent, 'Projects');
+	assert.equal(projects?.querySelector('h3 button'), null);
+	assert.equal(dom.window.document.activeElement, projects?.querySelector('.ash-sessions-list-more button'));
 
 	list.dispose();
 	changes.dispose();
@@ -137,7 +143,7 @@ for (const mode of ['chat', 'code'] as const) {
 				const attachment = { untitledSessionId: 'attachment', title: 'Attachment' };
 				const corrupt = { untitledSessionId: 'corrupt', title: 'Unreadable' };
 				let drafts = [blank, attachment, corrupt];
-				const saved = { sessionId: 'saved', title: 'Saved conversation', status: 'active', chats: [{ threadId: 'root', origin: { type: 'root' }, status: 'active' }] };
+				const saved = { sessionId: 'saved', title: 'Saved conversation', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, chats: [{ threadId: 'root', origin: { type: 'root' }, status: 'active' }] };
 				const management = { get untitledSessions() { return drafts; }, sessions: [saved], state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
 				const opened: string[] = [];
 				const view = {
@@ -223,14 +229,16 @@ test('SessionsList updates passive status without changing row identity or selec
 	Object.defineProperties(viewport, { clientHeight: { value: 80 }, scrollHeight: { value: 160 } });
 	viewport.scrollTop = 37;
 	viewport.dispatchEvent(new dom.window.Event('scroll'));
-	assert.equal(button.querySelector('.ash-sessions-list-management')?.textContent, 'Working');
+	assert.equal(button.textContent, 'Background session');
+	assert.equal(button.parentElement?.querySelector('[aria-live="polite"]')?.textContent, 'Working');
 	assert.equal(button.hasAttribute('title'), false);
 	assert.equal((summaries.get(button) as HTMLElement).children[1].textContent, 'Working');
 
 	session = { ...session, management: { status: 'needsInput', statusChangedAtUnixMs: 20 } };
 	changes.fire();
 	assert.equal(list.domNode.querySelector('.ash-sessions-list-item'), button);
-	assert.equal(button.querySelector('.ash-sessions-list-management')?.textContent, 'Needs input');
+	assert.equal(button.textContent, 'Background session');
+	assert.equal(button.parentElement?.querySelector('[aria-live="polite"]')?.textContent, 'Needs input');
 	assert.equal((summaries.get(button) as HTMLElement).children[1].textContent, 'Needs input');
 	assert.equal(button.getAttribute('aria-label'), 'Background session. Needs input. fixture/repo #7 · Synthetic PR · Open · Checks failed');
 	assert.equal(button.querySelector('[data-ash-icon-id="git-pull-request-error"]')?.getAttribute('aria-hidden'), 'true');
@@ -273,6 +281,7 @@ test('The localized keyboard menu targets the saved Session folder and the origi
 	const chat = (threadId: string, title: string) => ({ threadId, title, status: 'active' as const, origin: { type: 'root' as const } });
 	const session = (sessionId: string, chats: ISession['chats']): ISession => ({
 		sessionId, title: sessionId, status: 'active', chats, nextApprovalMode: 'manual',
+		workspace: { authorityId: 'local', root: '/workspace' },
 	});
 	const source = session('source', [chat('source', 'Source root'), chat('original', 'Move me')]);
 	const destination = session('target', [chat('target', 'Target root')]);
@@ -314,11 +323,11 @@ test('Session hover localizes workspace and provider without translating their v
 			sessionId: 'session', title: 'Session', status: 'active', nextApprovalMode: 'manual', chats: [],
 			providerLabel: 'Provider name', workspace: { authorityId: 'local', root: '/workspace' },
 		};
-		assert.deepEqual(getSessionSummaryHoverData(session), ['工作区：/workspace', '提供方：Provider name']);
+		assert.deepEqual(getSessionSummaryHoverData(session), ['项目文件夹：/workspace', '提供方：Provider name']);
 		assert.deepEqual(getSessionSummaryHoverData(session, {
 			threadId: 'child', status: 'active', origin: { type: 'root' },
 			workspace: { authorityId: 'remote', root: '/child-workspace' },
-		}), ['工作区：/child-workspace', '提供方：Provider name']);
+		}), ['项目文件夹：/child-workspace', '提供方：Provider name']);
 		assert.deepEqual(getSessionSummaryHoverData(session, {
 			threadId: 'directoryless', status: 'active', origin: { type: 'root' }, workspace: null,
 		}), ['提供方：Provider name']);
@@ -397,6 +406,7 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'list', flushInterval: 0 });
 	const catalog = ['one', 'two', 'three'].map(sessionId => ({
 		sessionId, title: sessionId, status: 'active' as const, nextApprovalMode: 'manual' as const,
+		workspace: { authorityId: 'local', root: '/workspace' },
 		chats: [{ threadId: 'root', status: 'active' as const, origin: { type: 'root' as const } }],
 	}));
 	let sessions = catalog;
@@ -457,6 +467,7 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 		const firstRow = list.domNode.querySelector<HTMLElement>('[data-row-order-id="two"]')!;
 		const secondRow = list.domNode.querySelector<HTMLElement>('[data-row-order-id="one"]')!;
 		firstRow.dispatchEvent(new dom.window.Event('dragstart', { bubbles: true }));
+		secondRow.dispatchEvent(new dom.window.Event('dragover', { bubbles: true, cancelable: true }));
 		secondRow.dispatchEvent(new dom.window.Event('drop', { bubbles: true, cancelable: true }));
 		assert.deepEqual(rows(list), ['one', 'two']);
 		await moveUp(list.domNode.querySelector<HTMLButtonElement>('[data-item="session:two"] button')!);
@@ -486,6 +497,7 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	const source = restored.domNode.querySelector<HTMLElement>('[data-row-order-id="two"]')!;
 	const destination = restored.domNode.querySelector<HTMLElement>('[data-section="group:release"] > h3 button')!;
 	source.dispatchEvent(new dom.window.Event('dragstart', { bubbles: true }));
+	destination.dispatchEvent(new dom.window.Event('dragover', { bubbles: true, cancelable: true }));
 	destination.dispatchEvent(new dom.window.Event('drop', { bubbles: true, cancelable: true }));
 	await Promise.resolve();
 	assert.deepEqual(rows(restored), ['one']);
@@ -507,7 +519,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	const remoteId = sessionIdentity(remote, 'run', local);
 	const makeSession = (sessionId: string): ISession => ({
 		sessionId, title: sessionId, status: 'active', nextApprovalMode: 'manual',
-		chats: [{ threadId: 'root', status: 'active', origin: { type: 'root' } }],
+		chats: [{ threadId: 'root', status: 'active', origin: { type: 'root' }, workspace: { authorityId: 'local', root: '/workspace' } }],
 	});
 	const manual: ISession = {
 		...makeSession('manual'),
@@ -569,6 +581,8 @@ test('The sidebar filters durable automation metadata and preserves the active s
 
 	using code = makeList('code');
 	assert.deepEqual(rows(code), ['manual', 'run']);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(code.domNode.querySelector('[data-row-order-id="manual"]')?.getAttribute('data-parent-section'), 'projects');
 	assert.equal(filter(code).checked, false);
 	await filter(code).run();
 	assert.deepEqual(rows(code), ['manual', 'run', remoteId]);
@@ -618,7 +632,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	assert.equal(chat.domNode.querySelector('[data-section="grouping:environment:local"] h3 button')?.textContent, '本地');
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.repository').run();
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual(repositoryReads, Array.from({ length: 2 }, () => ({ sessionId: 'manual', path: '/workspace/repo/folder' })));
+	assert.deepEqual(repositoryReads, [{ sessionId: 'manual', path: '/workspace/repo/folder' }]);
 	assert.ok([...chat.domNode.querySelectorAll('[data-section^="grouping:repository:"] > h3 button')].some(button => button.textContent === 'team/repo'));
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.none').run();
 	assert.equal(chat.domNode.querySelector('[data-section^="grouping:"]'), null);

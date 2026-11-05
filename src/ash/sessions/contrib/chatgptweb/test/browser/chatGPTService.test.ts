@@ -1,3 +1,4 @@
+import { ILifecycleService } from '../../../../../workbench/services/lifecycle/common/lifecycle.js';
 import type { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { Thread } from '../../../../../workbench/services/chat/common/chatService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
@@ -20,6 +21,8 @@ import { ChatGPTAuthenticationError, IChatGPTTransport, type ChatGPTRequest } fr
 import { ChatGPTService, IChatGPTService, selectedChatConversationId } from '../../browser/chatGPTService.js';
 import { ElectronChatGPTTransport } from '../../electron-browser/electronChatGPTTransport.js';
 
+const lifecycle = { onWillShutdown: Event.None } as ILifecycleService;
+
 function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>, options?: { values: Map<string, string>; instantiation?: IInstantiationService; cacheScope?: () => string | undefined; onDidChangeAuthentication?: Event<void>; }) {
 	const requests = new Map<string, { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array>; }>();
 	const transport: IChatGPTTransport = {
@@ -36,7 +39,7 @@ function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRe
 		async cancel(id) { const request = requests.get(id); requests.delete(id); request?.controller.abort(); await request?.reader?.cancel().catch(() => { }); },
 	};
 	const values = options?.values ?? new Map<string, string>();
-	return new ChatGPTService(transport, { get: (key: string) => values.get(key), keys: () => [...values.keys()], store: (key: string, value: string) => { values.set(key, value); }, remove: (key: string) => { values.delete(key); }, flush: async () => { } } as unknown as IStorageService, options?.instantiation);
+	return new ChatGPTService(transport, { get: (key: string) => values.get(key), keys: () => [...values.keys()], store: (key: string, value: string) => { values.set(key, value); }, remove: (key: string) => { values.delete(key); }, flush: async () => { } } as unknown as IStorageService, lifecycle, options?.instantiation);
 }
 function response(path: string): Response {
 	assert.ok(!path.endsWith('/me'), 'The chat must not request an account identity');
@@ -52,6 +55,66 @@ suite('ChatGPT shared service', () => {
 	const mainWindowDisposables = getWindowById(1)?.disposables;
 	suiteTeardown(() => mainWindowDisposables?.dispose());
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('window restoration keeps the selected conversation and its unsent text, while fresh New stays blank', async () => {
+		const values = new Map<string, string>();
+		const respond = async (path: string) => response(path);
+		{
+			using chat = fixture(respond, { values });
+			await chat.reload();
+			chat.setDraft('Old New draft');
+			await chat.select('one');
+			chat.setDraft('Unsent follow-up');
+		}
+		{
+			using restored = fixture(respond, { values });
+			await restored.reload();
+			assert.equal(restored.state.get().conversationId, 'one');
+			assert.equal(restored.state.get().draft, 'Unsent follow-up');
+		}
+		{
+			const loaded = new DeferredPromise<void>();
+			using fresh = fixture(async path => {
+				if (path.includes('/conversations?')) { void loaded.complete(); }
+				return response(path);
+			}, { values });
+			fresh.newChat({ clearDraft: true });
+			await loaded.p;
+			assert.equal(fresh.state.get().draft, '');
+			assert.equal(selectedChatConversationId(fresh.state.get()), undefined);
+			fresh.setDraft('New draft to restore');
+		}
+		using restoredNew = fixture(respond, { values });
+		await restoredNew.reload();
+		assert.equal(selectedChatConversationId(restoredNew.state.get()), undefined);
+		assert.equal(restoredNew.state.get().draft, 'New draft to restore');
+		await restoredNew.select('one');
+		assert.equal(restoredNew.state.get().draft, 'Unsent follow-up');
+	});
+	test('restores an attachment-only New draft for its account and marks interrupted uploads for retry', async () => {
+		const draftId = crypto.randomUUID();
+		const ready = { id: crypto.randomUUID(), name: 'ready.txt', size: 5 };
+		const interrupted = { id: crypto.randomUUID(), name: 'interrupted.txt', size: 6 };
+		const values = new Map([
+			['sessions.chatgpt.newDraftId', draftId],
+			[`sessions.chatgpt.draftAttachments:${draftId}`, JSON.stringify({
+				scope: 'a'.repeat(64),
+				attachments: [
+					{ ...ready, status: 'ready', file: { id: 'file-ready', mimeType: 'text/plain' } },
+					{ ...interrupted, status: 'uploading' },
+				],
+			})],
+		]);
+		using restored = fixture(async path => response(path), { values });
+		await restored.reload();
+		assert.equal(restored.state.get().draft, '');
+		assert.equal(restored.state.get().localConversationId, draftId);
+		assert.deepEqual(restored.state.get().attachments.map(item => [item.id, item.status, item.file?.id]), [
+			[ready.id, 'ready', 'file-ready'], [interrupted.id, 'failed', undefined],
+		]);
+		using otherAccount = fixture(async path => response(path), { values, cacheScope: () => 'b'.repeat(64) });
+		await otherAccount.reload();
+		assert.deepEqual(otherAccount.state.get().attachments, []);
+	});
 	test('closing the window scope cancels pending initialization without resolving disposed services or dispatching late requests', async () => {
 		const ready = new DeferredPromise<string>();
 		const entered = new DeferredPromise<void>();
@@ -67,6 +130,7 @@ suite('ChatGPT shared service', () => {
 			},
 		};
 		using services = new InstantiationService(new ServiceCollection(
+			[ILifecycleService, lifecycle],
 			[IChatGPTTransport, new SyncDescriptor(ElectronChatGPTTransport, [], true)],
 			[IChatGPTService, new SyncDescriptor(ChatGPTService, [], true)],
 			[IStorageService, { get: () => undefined, keys: () => [], store() { }, remove() { } } as unknown as IStorageService],
@@ -550,12 +614,20 @@ suite('ChatGPT shared service', () => {
 		let available = false;
 		let deleteRequests = 0;
 		let postRequests = 0;
+		const projectMoves: unknown[] = [];
 		const preparedIds: string[] = [];
 		const respond = async (path: string, _signal: AbortSignal, request: ChatGPTRequest): Promise<Response> => {
 			if (request.method === 'DELETE') {
 				assert.ok(path.endsWith('/conversation/id/two'));
 				deleteRequests++;
 				return new Response(null, { status: available ? 204 : 503 });
+			}
+			if (path.includes('/gizmos/snorlax/sidebar?')) {
+				return Response.json({ items: [{ gizmo: { id: 'g-research', display: { name: 'Research' } } }], cursor: null });
+			}
+			if (request.method === 'PATCH' && path.endsWith('/conversation/created-offline')) {
+				projectMoves.push(JSON.parse(String(request.body)));
+				return new Response(null, { status: 204 });
 			}
 			if (path.endsWith('/prepare')) {
 				preparedIds.push(JSON.parse(String(request.body)).messages[0].id);
@@ -575,6 +647,7 @@ suite('ChatGPT shared service', () => {
 		await initial.send();
 		await initial.deleteConversation(selectedChatConversationId(initial.state.get())!);
 		initial.setDraft('Keep this offline chat');
+		initial.setDraftTarget({ projectId: 'g-research' });
 		await initial.send();
 		await initial.deleteConversation('two');
 		const pendingId = selectedChatConversationId(initial.state.get());
@@ -593,6 +666,7 @@ suite('ChatGPT shared service', () => {
 		reopened.setNetworkAvailable(false);
 		await reopened.reload();
 		assert.equal(selectedChatConversationId(reopened.state.get()), pendingId);
+		assert.equal(reopened.state.get().conversations.find(item => item.id === pendingId)?.projectId, 'g-research');
 		assert.equal(reopened.state.get().messages[0]?.text, 'Keep this offline chat');
 		assert.deepEqual(reopened.state.get().conversations.map(item => item.id), [pendingId, 'one']);
 		reopened.setNetworkAvailable(true);
@@ -608,6 +682,8 @@ suite('ChatGPT shared service', () => {
 		assert.equal(preparedIds.length, 2);
 		assert.equal(preparedIds[0], preparedIds[1]);
 		assert.equal(reopened.state.get().conversationId, 'created-offline');
+		assert.equal(reopened.state.get().conversations.find(item => item.id === 'created-offline')?.projectId, 'g-research');
+		assert.deepEqual(projectMoves, [{ gizmo_id: 'g-research' }]);
 		assert.ok(!reopened.state.get().conversations.some(item => item.id === 'two' || item.id.startsWith('pending:')));
 		reopened.dispose();
 		using restarted = fixture(respond, { values });
@@ -754,6 +830,8 @@ suite('ChatGPT shared service', () => {
 		assert.equal(chat.state.get().conversations[0]!.pinned, true);
 		await chat.moveToProject('one', 'g-p-project');
 		assert.equal(chat.state.get().conversations[0]!.projectId, 'g-p-project');
+		await chat.moveToProject('one', null);
+		assert.equal(chat.state.get().conversations[0]!.projectId, undefined);
 		reject = true;
 		await chat.archive('one');
 		assert.equal(chat.state.get().conversations.length, 2);
@@ -769,7 +847,7 @@ suite('ChatGPT shared service', () => {
 		await chat.deleteConversation('two');
 		assert.equal(chat.state.get().conversations.length, 0);
 		assert.deepEqual(writes.map(item => [item.method, item.body]), [
-			['POST', { title: 'Renamed' }], ['PATCH', { is_starred: true }], ['PATCH', { gizmo_id: 'g-p-project' }],
+			['POST', { title: 'Renamed' }], ['PATCH', { is_starred: true }], ['PATCH', { gizmo_id: 'g-p-project' }], ['PATCH', { gizmo_id: null }],
 			['PATCH', { is_archived: true }], ['PATCH', { is_archived: true }], ['DELETE', undefined],
 		]);
 		assert.ok(writes[0]!.path.endsWith('/conversation/id/one/rename'));

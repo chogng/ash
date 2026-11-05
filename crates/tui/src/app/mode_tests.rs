@@ -430,6 +430,7 @@ fn session_catalog() -> Vec<ash_protocol::Session> {
     ["first", "second"]
         .into_iter()
         .map(|name| ash_protocol::Session {
+            surface: None,
             source: None,
             model: None,
             session_id: ash_protocol::SessionId::new(name).unwrap(),
@@ -438,6 +439,7 @@ fn session_catalog() -> Vec<ash_protocol::Session> {
             execution_target: None,
             manager: Default::default(),
             threads: vec![ash_protocol::SessionThread {
+                recap: None,
                 manager: None,
                 thread_id: ash_protocol::ThreadId::new(name).unwrap(),
                 title: "main".into(),

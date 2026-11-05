@@ -96,6 +96,7 @@ impl<'a> Runtime<'a> {
             &ThreadId,
             crate::StartTurnRequest,
         ) -> Result<crate::StartTurnResult, CoreError>,
+        schedule_title: impl FnOnce(crate::ThreadTitleRequest, Arc<dyn ThreadUpdateSink>),
     ) -> Result<TurnReceipt, CoreError> {
         if let Some(receipt) = self.replay_turn(
             thread_id,
@@ -109,7 +110,12 @@ impl<'a> Runtime<'a> {
         )? {
             return Ok(receipt);
         }
-        let before = self.threads.read_thread(thread_id)?.sequence;
+        let snapshot = self.threads.read_thread(thread_id)?;
+        let before = snapshot.sequence;
+        let needs_title = request.kind == ash_protocol::TurnKind::Coding
+            && snapshot.title.is_empty()
+            && crate::thread_title::first_message(&snapshot).is_none();
+        drop(snapshot);
         let command_id = request.command_id.clone();
         let input = request.input.clone();
         let tool_mode = request.tool_mode;
@@ -150,6 +156,12 @@ impl<'a> Runtime<'a> {
                 .ok_or_else(|| CoreError::Journal("accepted Turn receipt is missing".into()));
         }
         self.publish(thread_id, before)?;
+        if needs_title
+            && let Ok(snapshot) = self.threads.read_thread(thread_id)
+            && let Some(title) = crate::ThreadTitleRequest::for_turn(&snapshot, &start.turn_id)
+        {
+            schedule_title(title, Arc::clone(&self.updates));
+        }
         self.dispatch(
             thread_id,
             &start.turn_id,
@@ -225,9 +237,12 @@ impl AgentRuntime for Runtime<'_> {
         thread_id: &ThreadId,
         request: SubmitTurnRequest,
     ) -> Result<TurnReceipt, CoreError> {
-        self.submit_turn_with_admission(thread_id, request, |thread, request| {
-            self.threads.start_turn(thread, request)
-        })
+        self.submit_turn_with_admission(
+            thread_id,
+            request,
+            |thread, request| self.threads.start_turn(thread, request),
+            |_, _| {},
+        )
     }
 
     fn submit_tool(

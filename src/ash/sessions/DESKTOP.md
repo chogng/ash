@@ -6,7 +6,7 @@ The Agents window uses retained Workbench Parts. Session state and working-set r
 
 ## Code composition
 
-The window composes Sidebar, Conversation and a desktop editor area. Its outer Grid arranges independent Files, Changes, Browser and Terminal EditorParts. Each Part owns its editor groups, tabs and splits. DesktopMainEditorPart owns a contextual DesktopAuxiliaryBarPart beside its Files groups; Files contributes the Explorer view. Agent Window does not host Workbench Panel views, including Output and the legacy terminal panel. Product pages keep their independent Auxiliary Bar properties.
+The window composes Sidebar, Conversation and a desktop editor area. Its outer Grid arranges tool cards, each with its own EditorPart. DesktopMainEditorPart owns a contextual DesktopAuxiliaryBarPart beside its Files groups, and Files contributes the Explorer view. Agent Window does not host Workbench Panel views, including Output and the legacy terminal panel. Product pages keep their independent Auxiliary Bar properties.
 
 | Surface                   | Owner                                           | Visibility behavior                                                                                                                 |
 | ------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |

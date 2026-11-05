@@ -52,6 +52,19 @@ test('native IPC type checks follow import aliases, namespaces and re-exports', 
 	assert.ok(violations.every(item => item.message.includes('IMainProcessService')));
 });
 
+test('only desktop Sessions composition can import the ChatGPT Web adapter from another contribution', t => {
+	const project = fixture(t);
+	const consumer = 'sessions/contrib/chat/electron-browser/chatWorkspace.contribution.ts';
+	project.write('sessions/contrib/chatgptweb/browser/chatGPTService.ts', 'export interface ChatGPTState {}');
+	project.write('sessions/contrib/chat/browser/replyChatEditor.ts', 'export interface ReplyChatEditorModel {}');
+	project.write('sessions/contrib/chatgptweb/electron-browser/chatGPTWeb.contribution.ts', "import type { ReplyChatEditorModel } from '../../chat/browser/replyChatEditor.js';");
+	project.write('sessions/sessions.desktop.main.ts', "import './contrib/chatgptweb/electron-browser/chatGPTWeb.contribution.js';");
+	project.write(consumer, "import type { ChatGPTState } from '../../chatgptweb/browser/chatGPTService.js';");
+	const violations = project.check();
+	assert.deepEqual(violations.map(item => relative(project.sourceRoot, item.fileName).replaceAll('\\', '/')), [consumer]);
+	assert.match(violations[0]!.message, /shared Chat contracts/);
+});
+
 test('native IPC checks identify inferred receivers without a native type name in the consumer', t => {
 	const project = fixture(t);
 	project.write('platform/ipc/electron-browser/factory.ts', "import type { IMainProcessService } from '../common/mainProcessService.js'; export declare function getHost(): IMainProcessService;");

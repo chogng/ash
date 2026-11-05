@@ -3,9 +3,8 @@ import '../workbench/contrib/remote/browser/remote.contribution.js';
 import '../workbench/contrib/workspace/browser/workspace.contribution.js';
 import './contrib/workspace/browser/workspace.contribution.js';
 import './contrib/chat/browser/chat.contribution.js';
-import './contrib/chat/browser/newSessionAction.js';
+import './contrib/chat/browser/sharedChatInputComposer.contribution.js';
 import './contrib/github/browser/createSessionFromPullRequestAction.js';
-import './contrib/chat/browser/openSessionLinkOpener.contribution.js';
 import '../workbench/contrib/accessibility/browser/accessibility.contribution.js';
 import '../workbench/contrib/debug/browser/debug.service.contribution.js';
 import '../workbench/services/testing/browser/testingServiceRegistration.js';
@@ -61,6 +60,7 @@ import '../workbench/contrib/trace/browser/trace.contribution.js';
 import './contrib/files/browser/files.contribution.js';
 import './contrib/fileTreeView/browser/fileTreeView.contribution.js';
 import './contrib/cowork/browser/cowork.contribution.js';
+import './contrib/editor/browser/diffEditor.sessions.contribution.js';
 import './contrib/changes/browser/changes.contribution.js';
 import './contrib/trace/browser/trace.contribution.js';
 import './contrib/artifacts/browser/creatorEditor.contribution.js';
@@ -99,8 +99,7 @@ import { ICommandService } from '../platform/commands/common/commands.js';
 import { ContextKeyExpr } from '../platform/contextkey/common/contextkey.js';
 import { localize2 } from '../nls.js';
 import { Menus } from './browser/menus.js';
-import { ChatGPTNewDraftContext, NewSessionDraftVisibleContext } from './common/contextkeys.js';
-import { ASH_CHAT_SELECTED_CONTEXT } from './contrib/chat/common/constants.js';
+import { NewSessionDraftVisibleContext } from './common/contextkeys.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
 import { IWebWorkerService } from '../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../platform/webWorker/browser/webWorkerServiceImpl.js';
@@ -110,13 +109,7 @@ registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed
 
 MenusRegistry.appendMenuItem(Menus.ActivityBar, {
 	command: {
-		id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.or(
-			ContextKeyExpr.and(NewSessionDraftVisibleContext.isEqualTo(true), ContextKeyExpr.or(
-				ContextKeyExpr.has('sessions.activity.chatSelected'),
-				ContextKeyExpr.has(ASH_CHAT_SELECTED_CONTEXT),
-			)),
-			ContextKeyExpr.and(ChatGPTNewDraftContext.isEqualTo(true), ContextKeyExpr.has('sessions.activity.chatgptSelected')),
-		)
+		id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: NewSessionDraftVisibleContext.isEqualTo(true),
 	},
 	group: 'navigation', order: 10,
 });
@@ -124,7 +117,7 @@ MenusRegistry.appendMenuItem(Menus.ActivityBar, {
 MenusRegistry.appendMenuItems([
 	{
 		id: Menus.CodeActivityBar,
-		item: { command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: ContextKeyExpr.and(NewSessionDraftVisibleContext.isEqualTo(true), ContextKeyExpr.has('sessions.activity.codeSelected')) }, group: 'navigation', order: 10 },
+		item: { command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: NewSessionDraftVisibleContext.isEqualTo(true) }, group: 'navigation', order: 10 },
 	},
 	{
 		id: Menus.CodeActivityBar,

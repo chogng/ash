@@ -1,3 +1,4 @@
+use super::thread_recap::RecapTurnChange;
 use crate::server::notification_queue::NotificationQueue;
 use crate::server::notification_queue::NotificationQueueHandle;
 use ash_app_server_protocol::protocol::account::AccountLoginCompleted;
@@ -69,6 +70,7 @@ pub(super) fn unix_time_millis() -> u64 {
 }
 
 pub(crate) struct UpdateBroker {
+    pub(super) recap_presence: Arc<super::thread_recap::RecapPresence>,
     hooks: Arc<RwLock<Option<Arc<dyn HookService>>>>,
     hook_events: Arc<Mutex<Option<mpsc::SyncSender<HookEventRequest>>>>,
     state: Arc<Mutex<BrokerState>>,
@@ -189,6 +191,7 @@ impl ThreadSubscription {
 impl Default for UpdateBroker {
     fn default() -> Self {
         Self {
+            recap_presence: Arc::default(),
             hooks: Arc::new(RwLock::new(None)),
             hook_events: Arc::new(Mutex::new(None)),
             state: Arc::new(Mutex::new(BrokerState::default())),
@@ -235,6 +238,7 @@ impl UpdateBroker {
 
     pub(crate) fn fork_scope(&self) -> Self {
         Self {
+            recap_presence: Arc::clone(&self.recap_presence),
             hooks: Arc::clone(&self.hooks),
             hook_events: Arc::clone(&self.hook_events),
             state: Arc::clone(&self.state),
@@ -350,10 +354,27 @@ impl UpdateBroker {
         }
     }
 
+    pub(super) fn set_recap_presence(
+        &self,
+        worker: &Arc<super::thread_recap::ThreadRecaps>,
+        connection: u64,
+        thread: ThreadId,
+        surface: String,
+        focused: Option<bool>,
+    ) {
+        if let Ok(state) = self.state.lock()
+            && state.subscribers.contains_key(&connection)
+        {
+            self.recap_presence
+                .set(Arc::downgrade(worker), thread, connection, surface, focused);
+        }
+    }
+
     pub(super) fn unregister(&self, connection_id: u64) -> Vec<AgentRequestEnvelope> {
         if let Ok(mut state) = self.state.lock() {
             let lost = take_owned_dynamic_interactions(&mut state, connection_id, |_| true);
             state.subscribers.remove(&connection_id);
+            self.recap_presence.close_connection(connection_id);
             state
                 .interaction_assignments
                 .retain(|_, owner| *owner != connection_id);
@@ -816,7 +837,7 @@ impl UpdateBroker {
                     sessions
                 },
             );
-        let sessions_with_timing_change = updates
+        let sessions_with_thread_details_change = updates
             .iter()
             .filter_map(|update| match &update.update {
                 ThreadUpdate::Committed {
@@ -824,7 +845,8 @@ impl UpdateBroker {
                         ThreadEvent::TurnStarted { .. }
                         | ThreadEvent::TurnCompleted { .. }
                         | ThreadEvent::TurnFailed { .. }
-                        | ThreadEvent::TurnInterrupted { .. },
+                        | ThreadEvent::TurnInterrupted { .. }
+                        | ThreadEvent::ThreadRecapUpdated { .. },
                 } => Some(&update.session_id),
                 _ => None,
             })
@@ -832,11 +854,15 @@ impl UpdateBroker {
         let Ok(mut state) = self.state.lock() else {
             return;
         };
+        let mut recap_turn_change = None;
         for update in updates {
             let ThreadUpdate::Committed { event } = &update.update else {
                 continue;
             };
             match event {
+                ThreadEvent::TurnAccepted { .. } => {
+                    recap_turn_change = Some((update.durable_sequence, RecapTurnChange::Started));
+                }
                 ThreadEvent::InteractionRequested {
                     turn_id,
                     interaction,
@@ -888,7 +914,7 @@ impl UpdateBroker {
                 ThreadEvent::TurnCompleted { turn_id, .. }
                 | ThreadEvent::TurnFailed { turn_id, .. }
                 | ThreadEvent::TurnInterrupted { turn_id, .. } => {
-                    record_interaction_version(
+                    let newly_ended = record_interaction_version(
                         &mut state,
                         &update.session_id,
                         &update.thread_id,
@@ -896,6 +922,10 @@ impl UpdateBroker {
                         update.durable_sequence,
                         InteractionDeliveryStatus::TurnEnded,
                     );
+                    if newly_ended {
+                        recap_turn_change =
+                            Some((update.durable_sequence, RecapTurnChange::Finished));
+                    }
                 }
                 _ => {}
             }
@@ -932,7 +962,7 @@ impl UpdateBroker {
                     ));
                 }
             }
-            for session_id in &sessions_with_timing_change {
+            for session_id in &sessions_with_thread_details_change {
                 if !subscriber.catalog && subscriber_observes_session(subscriber, session_id) {
                     queue.push(notification(
                         ServerNotificationMethod::SessionChanged,
@@ -946,6 +976,10 @@ impl UpdateBroker {
             true
         });
         reconcile_interaction_assignments(&mut state, &self.hooks, &self.hook_events);
+        if let Some((sequence, change)) = recap_turn_change {
+            self.recap_presence
+                .turn_changed(thread_id, sequence, change);
+        }
     }
 
     pub(super) fn publish_thread_update(&self, update: ThreadUpdateEnvelope) {
@@ -1545,6 +1579,7 @@ fn event_changes_agent_tree(event: &ThreadEvent) -> bool {
             | ThreadEvent::ThreadMovedToSession { .. }
             | ThreadEvent::ThreadDirectoryChanged { .. }
             | ThreadEvent::ThreadTitleChanged { .. }
+            | ThreadEvent::ThreadRecapUpdated { .. }
             | ThreadEvent::HistoryImported { .. }
             | ThreadEvent::ForkHistoryImported { .. }
             | ThreadEvent::ForkTurnImported { .. }

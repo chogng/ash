@@ -7,7 +7,7 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDis
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 
 export type ISessionStatusIcon = { readonly label: string; } & (
-	| { readonly kind: 'inProgress'; readonly icon: Icon; }
+	| { readonly kind: 'inProgress' | 'static'; readonly icon: Icon; }
 	| { render(container: HTMLElement, reducedMotion: boolean): IDisposable | void; }
 );
 
@@ -54,9 +54,9 @@ export class SessionStatusIcon extends Disposable {
 	private render(animate: boolean, motionChanged = false): void {
 		const reducedMotion = this.accessibility.isMotionReduced();
 		const custom = this.status && 'render' in this.status ? this.status.render : undefined;
-		const progress = this.status && 'kind' in this.status ? this.status : undefined;
-		const icon = progress?.icon ?? this.restingIcon;
-		const key = custom ?? (progress && !reducedMotion ? spinner : icon?.id);
+		const statusIcon = this.status && 'kind' in this.status ? this.status : undefined;
+		const icon = statusIcon?.icon ?? this.restingIcon;
+		const key = custom ?? (statusIcon?.kind === 'inProgress' && !reducedMotion ? spinner : icon?.id);
 		const previous = this.current;
 		// Keep the spinner running when the label changes between in-progress states.
 		if (previous?.key === key && !(custom && motionChanged)) { return; }

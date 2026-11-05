@@ -276,10 +276,6 @@ fn catalog_defaults_and_long_context_are_model_and_connection_scoped() {
             spec.context_window
         );
         let can_expand = spec.model().context_window != spec.context_window;
-        if model.provider.as_str() == "openai" && model.model.as_str() == "gpt-5.5" {
-            assert_eq!(spec.context_window, ContextWindow::Known(272_000));
-            assert!(!can_expand);
-        }
         if model.provider.as_str() == "openai" && model.model.as_str() == "gpt-6-astra" {
             assert_eq!(
                 entry
@@ -298,6 +294,7 @@ fn catalog_defaults_and_long_context_are_model_and_connection_scoped() {
         let update = crate::ModelPreferencesUpdate {
             acceleration: ash_protocol::Patch::Missing,
             long_context: Some(true),
+            ultra: None,
         };
         let result = entry.entry().apply_preferences(&mut config, &update);
         if can_expand {
@@ -319,6 +316,7 @@ fn catalog_defaults_and_long_context_are_model_and_connection_scoped() {
                     &crate::ModelPreferencesUpdate {
                         acceleration: ash_protocol::Patch::Missing,
                         long_context: Some(false),
+                        ultra: None,
                     },
                 )
                 .unwrap();
@@ -358,6 +356,7 @@ fn long_context_tracks_current_capacity_and_preserves_compaction() {
             .apply_preferences(
                 &mut config,
                 &crate::ModelPreferencesUpdate {
+                    ultra: None,
                     acceleration: ash_protocol::Patch::Value("unavailable".into()),
                     long_context: Some(true)
                 }
@@ -372,6 +371,7 @@ fn long_context_tracks_current_capacity_and_preserves_compaction() {
                 &crate::ModelPreferencesUpdate {
                     acceleration: ash_protocol::Patch::Missing,
                     long_context: Some(enabled),
+                    ultra: None,
                 },
             )
             .unwrap();
@@ -389,6 +389,7 @@ fn long_context_tracks_current_capacity_and_preserves_compaction() {
             &crate::ModelPreferencesUpdate {
                 acceleration: ash_protocol::Patch::Missing,
                 long_context: Some(true),
+                ultra: None,
             },
         )
         .unwrap();
@@ -451,7 +452,8 @@ fn model_preferences_reject_fast_on_an_unsupported_connection() {
                 &mut config,
                 &crate::ModelPreferencesUpdate {
                     acceleration: ash_protocol::Patch::Value("priority".into()),
-                    long_context: None
+                    long_context: None,
+                    ultra: None,
                 }
             )
             .is_err()
@@ -501,6 +503,7 @@ fn acceleration_selections_and_denials_remain_scoped_to_the_connection() {
                 &crate::ModelPreferencesUpdate {
                     acceleration: ash_protocol::Patch::Value(option.into()),
                     long_context: None,
+                    ultra: None,
                 },
             );
             assert_eq!(
@@ -522,6 +525,7 @@ fn acceleration_selections_and_denials_remain_scoped_to_the_connection() {
                 &crate::ModelPreferencesUpdate {
                     acceleration: ash_protocol::Patch::Null,
                     long_context: None,
+                    ultra: None,
                 },
             )
             .unwrap();

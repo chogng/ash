@@ -58,6 +58,7 @@ fn assert_service_denied(program: &str, arguments: Vec<String>, expected: &str) 
                 arguments,
                 working_directory: ".".into(),
                 input: CommandInput::Closed,
+                environment: Default::default(),
             },
             CommandExecutionAuthority::Sandboxed(SandboxPolicy::new(
                 FileSystemAccess::ReadOnly,

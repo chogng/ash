@@ -74,6 +74,33 @@ suite('Bundled ChatGPT client', () => {
 		assert.deepEqual(cursors, [null, 'next-page']);
 	});
 
+	test('filters and pages accessible history when the project route rejects the sign-in', async () => {
+		const projectId = 'g-p-research';
+		const requests: string[] = [];
+		const client = new ChatGPTClient((async input => {
+			const url = new URL(String(input), 'https://fixture.test');
+			if (url.pathname.endsWith('/gizmos/g-p-research/conversations')) {
+				requests.push('project');
+				return new Response(null, { status: 401 });
+			}
+			assert.equal(url.pathname, '/service/backend-api/conversations');
+			const offset = Number(url.searchParams.get('offset'));
+			requests.push(String(offset));
+			return json({
+				items: offset === 0 ? [{ id: 'outside', title: 'Outside project', gizmo_id: 'g-p-other' }]
+					: [{ id: `project-${offset}`, title: 'In project', gizmo_id: projectId }],
+				total: 3,
+			});
+		}) as typeof fetch);
+		const first = await client.projectConversations(projectId, undefined, signal());
+		assert.deepEqual(first.items.map(item => item.id), ['project-1']);
+		assert.deepEqual(first.cursor, { kind: 'recent', offset: 2 });
+		const next = await client.projectConversations(projectId, first.cursor, signal());
+		assert.deepEqual(next.items.map(item => item.id), ['project-2']);
+		assert.equal(next.cursor, undefined);
+		assert.deepEqual(requests, ['project', '0', '1', '2']);
+	});
+
 	test('shows only version families and preserves the five product presets and their request targets', async () => {
 		const client = new ChatGPTClient((async () => json(chatGPTModelCatalog())) as typeof fetch);
 		const catalog = await client.models(signal());

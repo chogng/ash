@@ -70,11 +70,13 @@ test('ToolBar reports menu visibility once per presentation and drops removed it
 		toolbar.setActions([], [action('secondary')]);
 		toolbar.element.querySelector('button')!.click();
 		const menu = provider.lastOptions!;
+		assert.equal(toolbar.element.classList.contains('ash-toolbar-menu-visible'), true);
 		toolbar.setActions([action('replacement')]);
 		assert.deepEqual(visibility, [true]);
 		menu.onHide?.(true);
 		await Promise.resolve();
 		assert.deepEqual(visibility, [true, false]);
+		assert.equal(toolbar.element.classList.contains('ash-toolbar-menu-visible'), false);
 		assert.equal(toolbar.getItemAction(0)?.id, 'replacement');
 		menu.onHide?.(true);
 		assert.deepEqual(visibility, [true, false]);

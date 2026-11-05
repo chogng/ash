@@ -65,6 +65,7 @@ fn manager_rejects_a_snapshot_older_than_its_observed_sequence() {
 
 fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
     ThreadSnapshot {
+        surface: None,
         voice_transcripts: Vec::new(),
         execution_target: None,
         advisor: Default::default(),
@@ -81,6 +82,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
         parent_thread_id: None,
         forked_from_id: None,
         title: "test".into(),
+        creation_title: "test".into(),
         status: ash_protocol::ThreadStatus::Active,
         archived_at_unix_ms: None,
         archive_reason: None,
@@ -145,6 +147,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
         sent_agent_messages: BTreeMap::new(),
         received_agent_messages: BTreeMap::new(),
         fork_import: None,
+        recap: None,
     }
 }
 

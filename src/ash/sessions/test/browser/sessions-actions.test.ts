@@ -13,7 +13,8 @@ import { SHOW_SESSIONS_PICKER_COMMAND_ID } from '../../contrib/sessions/browser/
 import '../../browser/actions/sessionsChatActions.js';
 import '../../contrib/sessions/browser/sessionDetailsAction.js';
 import { IEditorService } from '../../../workbench/services/editor/common/editorService.js';
-import { NewChatInSessionsWindowAction } from '../../contrib/chat/browser/newSessionAction.js';
+import { NEW_SESSION_ACTION_ID } from '../../contrib/chat/common/constants.js';
+import '../../contrib/chat/browser/chat.contribution.js';
 import { registerNewChatActions } from '../../../workbench/contrib/chat/browser/actions/chatNewActions.js';
 import { registerChatActions } from '../../../workbench/contrib/chat/browser/actions/chatActions.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -103,10 +104,10 @@ test('Sessions owns its New Session command and routes explicit provider choices
 	services.registerInstance(ISessionsProvidersService, providers);
 	using commands = new CommandService(services);
 
-	await commands.executeCommand(NewChatInSessionsWindowAction.ID);
+	await commands.executeCommand(NEW_SESSION_ACTION_ID);
 
-	await commands.executeCommand(NewChatInSessionsWindowAction.ID, 'ssh-host');
-	await assert.rejects(commands.executeCommand(NewChatInSessionsWindowAction.ID, {}), TypeError);
+	await commands.executeCommand(NEW_SESSION_ACTION_ID, 'ssh-host');
+	await assert.rejects(commands.executeCommand(NEW_SESSION_ACTION_ID, {}), TypeError);
 	assert.deepEqual(created, [undefined, 'ssh-host']);
 	onDidChange.dispose();
 });
@@ -183,7 +184,10 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 	} as unknown as ISessionsService);
 	services.registerInstance(ISessionsManagementService, {
 		resolveNewSessionTarget: async () => ({ providerId: 'test', workspace: { type: 'current' } }),
-		sessions: [{ sessionId: 'session', title: 'Session', status: 'active', chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }] }],
+		sessions: [
+			{ sessionId: 'session', title: 'Session', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }] },
+			{ sessionId: 'legacy', title: 'Legacy session', status: 'active', chats: [{ threadId: 'legacy', status: 'active', origin: { type: 'root' } }] },
+		],
 	} as unknown as ISessionsManagementService);
 	services.registerInstance(IConfigurationService, { getValue: () => false } as unknown as IConfigurationService);
 	services.registerInstance(IContextKeyService, { getValue: () => 'code', onDidChangeContext: Event.None } as unknown as IContextKeyService);
@@ -201,7 +205,7 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 	assert.deepEqual(created, ['test']);
 	assert.deepEqual(focus, ['code', 'composer']);
 	await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
-	assert.deepEqual(input.picker?.items.map(item => item.label), ['Session']);
+	assert.deepEqual(input.picker?.items.map(item => item.label), ['Session', 'Legacy session']);
 	input.picker!.acceptFirst();
 	assert.deepEqual(opened, ['session/thread']);
 });
@@ -335,6 +339,29 @@ test('Session Details opens a localized read-only snapshot of active user sessio
 		assert.match(input.initialText ?? '', /会话：Local Task\n工作目录：C:\\work\n资源：ash-agent-session:/);
 		assert.doesNotMatch(input.initialText ?? '', /Archived task|Automated task/);
 	} finally { resetNlsResolver(); }
+});
+
+test('Show Conversation Recap opens the latest saved text for the selected branch', async () => {
+	using services = new InstantiationService();
+	using commands = new CommandService(services);
+	const opened: Parameters<IEditorService['openEditor']>[] = [];
+	const session: ISession = {
+		sessionId: 'session', title: 'Task', status: 'active', nextApprovalMode: 'manual',
+		chats: [
+			{ threadId: 'root', origin: { type: 'root' }, status: 'active', recap: 'Root recap' },
+			{ threadId: 'branch', origin: { type: 'root' }, status: 'active', recap: 'Branch recap' },
+		],
+	};
+	services.registerInstance(ISessionsService, {
+		activeSelection: { kind: 'session', active: { session: { ...session, chats: [] }, threadId: 'branch' } },
+	} as unknown as ISessionsService);
+	services.registerInstance(ISessionsManagementService, { sessions: [session] } as unknown as ISessionsManagementService);
+	services.registerInstance(IEditorService, {
+		openEditor: async (...args: Parameters<IEditorService['openEditor']>) => { opened.push(args); },
+	} as unknown as IEditorService);
+	await commands.executeCommand('sessions.showConversationRecap');
+	assert.equal(opened[0]?.[0].initialText, 'Branch recap');
+	assert.equal(opened[0]?.[0].readOnly, true);
 });
 
 test('Moving a conversation follows its destination only if navigation stayed on the original conversation', async () => {

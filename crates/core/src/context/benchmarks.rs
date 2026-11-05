@@ -46,6 +46,7 @@ impl Fixture {
             .start_thread(
                 &crate::NoThreadWorktreeBinder,
                 StartThreadRequest {
+                    surface: None,
                     execution_target: None,
                     branch_name: None,
                     worktree_start: None,

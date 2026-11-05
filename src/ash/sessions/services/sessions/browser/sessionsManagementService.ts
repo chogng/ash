@@ -2,6 +2,7 @@ import { IStorageService } from '../../../../platform/storage/common/storage.js'
 import { SessionsRecentWorkspacesService } from './sessionsRecentWorkspacesService.js';
 import { IAgentConnection } from '../../../../platform/agentHost/common/agentService.js';
 import { ISecretStorageService } from '../../../../platform/secrets/common/secrets.js';
+import { IProjectService } from '../../../../platform/projects/common/projectService.js';
 import { parseSessionEnvironment } from '../common/sessionEnvironment.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
@@ -10,7 +11,7 @@ import { canceled, isCancellationError } from '../../../../base/common/errors.js
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { observableValue } from '../../../../base/common/observable.js';
-import type { IActiveSessionThread, IUntitledChatSession, ISession, SessionManagementInfo, SessionEnvironmentSelection, ModelRef, SessionId, SessionWorkspaceSelection, SessionExecutionTarget, ThreadId } from '../common/session.js';
+import type { IActiveSessionThread, IUntitledChatSession, ISession, SessionManagementInfo, ModelRef, SessionId, SessionWorkspaceSelection, SessionExecutionTarget, ThreadId } from '../common/session.js';
 import type { ISessionsManagementService, SessionsManagementState } from '../common/sessionsManagement.js';
 import type { ISessionCreateOptions, ISessionsProvider } from '../common/sessionsProvider.js';
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
@@ -58,6 +59,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		@IStorageService storage?: IStorageService,
 		@IAgentConnection private readonly localHost?: IAgentConnection,
 		@ISecretStorageService private readonly windowSecrets?: ISecretStorageService,
+		@IProjectService private readonly projects?: IProjectService,
 	) {
 		super();
 		this.recentWorkspaces = storage && new SessionsRecentWorkspacesService(storage);
@@ -252,13 +254,24 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		await this.owner(sessionId).interrupt(backendSession(session, this.defaultProviderId), parseSessionIdentity(threadId, this.defaultProviderId).backendSessionId);
 	}
 
-	createUntitledSession(title = localize('chat.title.new', 'New Chat'), workspace?: SessionWorkspaceSelection, providerId?: string, activate = true, forkSource?: IUntitledChatSession['forkSource'], options?: { readonly devContainer?: boolean; }): IUntitledChatSession {
+	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection, providerId?: string, activate = true, forkSource?: IUntitledChatSession['forkSource'], options?: Parameters<ISessionsManagementService['createUntitledSession']>[5]): IUntitledChatSession {
 		const provider = this.creationProvider(workspace, providerId);
 		if (!workspace) {
 			const current = provider.currentWorkspace();
 			workspace = (activate && !forkSource ? this.recentWorkspaces?.getSelected(provider.id, current) : undefined) ?? current;
 		}
-		const session = { untitledSessionId: createUuid(), providerId: provider.id, title, model: undefined, agent: undefined, workspace, ...(forkSource ? { forkSource } : {}), ...(options?.devContainer ? { devContainer: true } : {}) };
+		const session: IUntitledChatSession = {
+			untitledSessionId: createUuid(),
+			providerId: provider.id,
+			title: title ?? localize('chat.title.new', 'New Chat'),
+			model: undefined,
+			agent: undefined,
+			workspace,
+			...(options?.projectId ? { projectId: options.projectId } : {}),
+			...(title === undefined ? { automaticTitle: true } : {}),
+			...(forkSource ? { forkSource } : {}),
+			...(options?.devContainer ? { devContainer: true } : {}),
+		};
 		this._untitledSessions = [session, ...this._untitledSessions];
 		if (activate) {
 			this.selectionRevision++;
@@ -285,7 +298,9 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			const devContainer = draft?.devContainer === true || runtime?.providerId === 'ash.dev-containers';
 			if (target && target.type !== 'current' && await this.canReuseWorkspace(provider, target, devContainer)
 				&& this.isAvailableForNewSession(provider)) {
-				return { providerId, workspace: target, ...(devContainer ? { devContainer: true } : {}) };
+				const projectId = draft?.projectId ?? (session && providerId === this.defaultProviderId
+					? await this.findSessionProject(session.sessionId) : undefined);
+				return { providerId, workspace: target, ...(devContainer ? { devContainer: true } : {}), ...(projectId ? { projectId } : {}) };
 			}
 		}
 		const fallback = provider && this.isAvailableForNewSession(provider) ? provider : this.requireProvider(this.defaultProviderId);
@@ -299,6 +314,19 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			}
 		}
 		return { providerId: this.isAvailableForNewSession(fallback) ? fallback.id : this.defaultProviderId, workspace: { type: 'current' } };
+	}
+
+	private async findSessionProject(sessionId: SessionId): Promise<string | undefined> {
+		if (!this.projects) return undefined;
+		try {
+			const projects = await this.projects.list('code');
+			const members = await Promise.all(projects.filter(project => !project.archived && project.sessionCount > 0)
+				.map(project => this.projects!.read(project.id, 'code')));
+			return members.find(project => !project.archived && project.sessionIds.includes(sessionId))?.id;
+		} catch {
+			// The execution target can still seed the picker while Projects reconnects.
+			return undefined;
+		}
 	}
 
 	private isAvailableForNewSession(provider: ISessionsProvider): boolean {
@@ -358,10 +386,20 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined): void {
+	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined, defaults: NonNullable<IUntitledChatSession['modelDefaults']>): void {
 		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
-		if (!current || current.modelSelectionKind === 'manual' || sameModel(current.model, model)) return;
-		this._untitledSessions = this._untitledSessions.map(session => session.untitledSessionId === untitledSessionId ? { ...session, model } : session);
+		if (!current || current.modelDefaults?.workspace === defaults.workspace) return;
+		this._untitledSessions = this._untitledSessions.map(session => session === current
+			? { ...session, model: session.modelSelectionKind === 'manual' ? session.model : model, modelDefaults: defaults }
+			: session);
+		this._onDidChange.fire();
+	}
+
+	setUntitledSessionReasoningEffort(untitledSessionId: string, effort: NonNullable<IUntitledChatSession['reasoningEffortSelection']> | null): void {
+		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
+		if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
+		if (current.reasoningEffortSelection === effort) return;
+		this._untitledSessions = this._untitledSessions.map(session => session === current ? { ...session, reasoningEffortSelection: effort } : session);
 		this._onDidChange.fire();
 	}
 
@@ -375,7 +413,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	setUntitledSessionWorkspace(untitledSessionId: string, workspace: SessionWorkspaceSelection | undefined, options?: { readonly devContainer?: boolean; readonly branchName?: string; readonly providerId?: string; readonly environment?: SessionEnvironmentSelection; readonly clearEnvironment?: boolean; }): void {
+	setUntitledSessionWorkspace(untitledSessionId: string, workspace: SessionWorkspaceSelection | undefined, options?: Parameters<ISessionsManagementService['setUntitledSessionWorkspace']>[2]): void {
 		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
 		if (!current) throw new Error(`Untitled Chat Session is not available: ${untitledSessionId}`);
 		// Once creation starts, its command identity and execution directory are immutable.
@@ -386,9 +424,10 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._untitledSessions = this._untitledSessions.map(session => session === current
 			? {
 				...session, providerId, workspace: selection,
+				projectId: options?.projectId ?? (!changedHost && selection === current.workspace ? current.projectId : undefined),
 				environment: options?.environment ?? (changedHost || options?.clearEnvironment ? undefined : current.environment),
 				devContainer: options?.devContainer === true, branchName: options?.branchName,
-				...(changedHost ? { model: undefined, agent: undefined } : {}),
+				...(changedHost ? { model: undefined, modelSelectionKind: undefined, modelDefaults: undefined, agent: undefined } : {}),
 			} : session);
 		this._onDidChange.fire();
 	}
@@ -407,6 +446,10 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			if (!session) return Promise.reject(new Error(`Untitled Chat Session is not available: ${untitledSessionId}`));
 			const cancellation = new CancellationTokenSource();
 			const creating = Promise.resolve().then(async () => {
+				const project = session.projectId && await this.projects?.read(session.projectId);
+				if (session.projectId && (!project || project.archived)) {
+					throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.project.unavailable' }, 'This project is unavailable. Choose another project.'));
+				}
 				let environmentVariables: Readonly<Record<string, string>> | undefined;
 				if (session.environment?.hasVariables) {
 					const id = session.environment.id;
@@ -429,10 +472,23 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				const workspace = session.workspace;
 				const additionalFolders = session.environment?.folders.filter(folder =>
 					!('root' in workspace) || workspace.type !== folder.type || workspace.root !== folder.root);
-				return this.createSession(session.title, workspace, session.agent, untitledSessionId, session.providerId, {
+				const active = await this.createSession(session.title, workspace, session.agent, untitledSessionId, session.providerId, {
 					token: cancellation.token, devContainer: session.devContainer, branchName: session.branchName,
-					additionalFolders, environmentVariables,
+					additionalFolders, environmentVariables, automaticTitle: session.automaticTitle,
 				}, session.forkSource);
+				if (project && !project.sessionIds.includes(active.session.sessionId)) {
+					// The same draft creation ID recovers this Session if linking needs a retry.
+					try {
+						await this.projects!.addSession(project, active.session.sessionId);
+					} catch (error) {
+						const latest = await this.projects!.read(project.id);
+						if (!latest.sessionIds.includes(active.session.sessionId)) {
+							if (latest.archived || latest.revision === project.revision) throw error;
+							await this.projects!.addSession(latest, active.session.sessionId);
+						}
+					}
+				}
+				return active;
 			});
 			entry = { promise: creating, cancellation, waiters: 0, settled: false };
 			this.materializations.set(untitledSessionId, entry);
@@ -485,7 +541,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 	async startNewSession(title = 'New Chat', background?: Parameters<ISessionsManagementService['startNewSession']>[1]): Promise<IActiveSessionThread> {
 		const revision = background ? undefined : ++this.selectionRevision;
-		const active = await this.createSession(title, background?.workspace ?? this.creationProvider().currentWorkspace(), undefined, createUuid(), background?.providerId, background?.creation);
+		const active = await this.createSession(title, background?.workspace ?? this.creationProvider().currentWorkspace(), undefined, background?.creationId ?? createUuid(), background?.providerId, background?.creation);
 		this._sessions = [active.session, ...this._sessions.filter(session => session.sessionId !== active.session.sessionId)];
 		if (revision === this.selectionRevision) {
 			this._active = active;
@@ -520,7 +576,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	getChatMoveDestinations(sessionId: SessionId, threadId: ThreadId): readonly ISession[] {
 		const source = this._sessions.find(session => session.sessionId === sessionId);
 		const thread = source?.chats.find(chat => chat.threadId === threadId);
-		if (!source || source.source || source.status !== 'active' || !thread || threadId === sessionId
+		if (!source || source.source || source.surface === 'chat' || source.status !== 'active' || !thread || threadId === sessionId
 			|| !source.chats.some(chat => chat.threadId === sessionId && chat.status === 'active')
 			|| thread.status !== 'active' || thread.origin.type !== 'root'
 			|| thread.executionStatus === 'queued' || thread.executionStatus === 'running' || thread.executionStatus === 'waiting'
@@ -532,7 +588,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		const workspace = source.workspace;
 		if (workspace === undefined) return [];
 		return this._sessions.filter(session => session.sessionId !== sessionId && !session.source
-			&& session.status === 'active' && session.providerId === source.providerId
+			&& session.status === 'active' && session.surface !== 'chat' && session.providerId === source.providerId
 			&& session.chats.some(chat => chat.threadId === session.sessionId && chat.status === 'active')
 			&& (workspace === null ? session.workspace === null : session.workspace?.root === workspace.root
 				&& session.workspace.authorityId === workspace.authorityId
@@ -797,7 +853,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 function firstActiveThread(sessions: readonly ISession[]): IActiveSessionThread | undefined {
 	for (const session of sessions) {
-		if (session.status !== 'active') continue;
+		if (session.status !== 'active' || session.surface === 'chat') continue;
 		const thread = session.chats.find(candidate => candidate.status === 'active' && candidate.origin.type === 'root') ?? session.chats.find(candidate => candidate.status === 'active');
 		if (thread) return { session, threadId: thread.threadId };
 	}
@@ -819,10 +875,10 @@ function sameManagement(left: SessionManagementInfo | undefined, right: SessionM
 
 function sameSession(left: ISession | undefined, right: ISession | undefined): boolean {
 	if (!left || !right) return left === right;
-	if (left.title !== right.title || left.status !== right.status || left.agentTree !== right.agentTree || left.chats.length !== right.chats.length) return false;
+	if (left.title !== right.title || left.surface !== right.surface || left.status !== right.status || left.agentTree !== right.agentTree || left.chats.length !== right.chats.length) return false;
 	if (left.nextApprovalMode !== right.nextApprovalMode || !sameManagement(left.management, right.management) || !sameModel(left.model, right.model) || left.workspace?.authorityId !== right.workspace?.authorityId || left.workspace?.root !== right.workspace?.root) return false;
 	return left.chats.every((chat, index) => {
 		const next = right.chats[index];
-		return next?.threadId === chat.threadId && next.status === chat.status && next.title === chat.title && next.executionStatus === chat.executionStatus && sameManagement(next.management, chat.management);
+		return next?.threadId === chat.threadId && next.status === chat.status && next.title === chat.title && next.recap === chat.recap && next.executionStatus === chat.executionStatus && sameManagement(next.management, chat.management);
 	});
 }

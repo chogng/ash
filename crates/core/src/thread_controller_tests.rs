@@ -3939,3 +3939,122 @@ fn steering_preserves_frozen_context_and_tool_selection_through_replay() {
         snapshot.items
     );
 }
+
+#[test]
+fn thread_recap_persists_without_blocking_the_next_turn_or_overwriting_newer_history() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = ThreadController::with_store(store.clone());
+    let thread_id = create_thread(&threads, "recap");
+    let first = start_turn(&threads, &thread_id, "recap-first");
+    let completed = threads
+        .complete_turn(&thread_id, &first, "First reply".into())
+        .unwrap();
+    let source_item = completed.item.item_id();
+    let first_item_sequence = completed.sequence - 1;
+    let recap_sequence = threads
+        .save_thread_recap(
+            &thread_id,
+            &first,
+            source_item,
+            first_item_sequence,
+            None,
+            "First task is complete.".into(),
+        )
+        .unwrap()
+        .unwrap();
+    assert_eq!(recap_sequence, completed.sequence + 1);
+    assert_eq!(
+        threads
+            .save_thread_recap(
+                &thread_id,
+                &first,
+                source_item,
+                first_item_sequence,
+                None,
+                "Duplicate".into(),
+            )
+            .unwrap(),
+        None
+    );
+
+    // The second request was composed before the background recap was saved.
+    let mut second_request = start_request("recap-second");
+    second_request.expected_sequence = SequenceExpectation::Exact(completed.sequence);
+    let second = threads
+        .start_turn(&thread_id, second_request)
+        .unwrap()
+        .turn_id;
+    let second_completion = threads
+        .complete_turn(&thread_id, &second, "Second reply".into())
+        .unwrap();
+    start_turn(&threads, &thread_id, "recap-third");
+    assert_eq!(
+        threads
+            .save_thread_recap(
+                &thread_id,
+                &second,
+                second_completion.item.item_id(),
+                second_completion.sequence - 1,
+                Some(recap_sequence),
+                "Stale recap".into(),
+            )
+            .unwrap(),
+        None
+    );
+
+    let reopened = ThreadController::with_store(store);
+    let snapshot = reopened.read_thread(&thread_id).unwrap();
+    assert_eq!(snapshot.recap.unwrap().text, "First task is complete.");
+}
+
+#[test]
+fn automatic_recap_requires_three_completed_turns_then_two_new_turns() {
+    let threads = ThreadController::with_store(Arc::new(InMemoryThreadStore::default()));
+    let thread = create_thread(&threads, "recap-thresholds");
+    let complete = |index: u32| {
+        let mut request = start_request(&format!("recap-turn-{index}"));
+        request.model = Some(ModelRef::new(
+            ProviderId::new("openai").unwrap(),
+            ModelId::new("gpt-6-luna").unwrap(),
+        ));
+        let turn = threads.start_turn(&thread, request).unwrap().turn_id;
+        let completed = threads
+            .complete_turn(&thread, &turn, format!("Reply {index}"))
+            .unwrap();
+        (turn, completed)
+    };
+    let eligible = |automatic| {
+        crate::ThreadRecapRequest::prepare(&threads, &thread, automatic)
+            .unwrap()
+            .is_some()
+    };
+
+    complete(1);
+    assert!(eligible(false));
+    assert!(!eligible(true));
+    complete(2);
+    assert!(!eligible(true));
+    let (third, completed) = complete(3);
+    assert!(eligible(true));
+    threads
+        .save_thread_recap(
+            &thread,
+            &third,
+            completed.item.item_id(),
+            completed.sequence - 1,
+            None,
+            "First recap".into(),
+        )
+        .unwrap()
+        .unwrap();
+    assert!(!eligible(true));
+    assert!(eligible(false));
+    complete(4);
+    assert!(eligible(false));
+    assert!(!eligible(true));
+    complete(5);
+    assert!(eligible(true));
+    start_turn(&threads, &thread, "running-after-five");
+    assert!(!eligible(true));
+    assert!(!eligible(false));
+}

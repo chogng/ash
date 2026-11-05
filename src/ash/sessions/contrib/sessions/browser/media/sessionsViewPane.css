@@ -9,6 +9,6 @@
 }
 
 .ash-sessions-navigation-view.embedded > .ash-sessions-list {
+	--ash-sessions-sidebar-row-inset: var(--ash-spacing-sizeNone);
 	flex: 0 0 auto;
-	padding-inline: 0;
 }

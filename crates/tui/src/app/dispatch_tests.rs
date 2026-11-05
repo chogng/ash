@@ -919,6 +919,7 @@ fn model_command_updates_and_clears_model_with_config_revision() {
             expected_revision: revision,
             config: ProviderConfigDto {
                 model_acceleration: Default::default(),
+                ultra_models: Default::default(),
                 disabled_acceleration_options: Default::default(),
                 connection: "custom-test".into(),
                 custom: Some(ash_app_server_protocol::protocol::config::CustomProviderConfigDto {
@@ -1536,6 +1537,7 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
             command_id: CommandId::new(format!("configure-{id}")).unwrap(), expected_revision: revision,
             config: ProviderConfigDto {
  model_acceleration: Default::default(),
+                ultra_models: Default::default(),
         disabled_acceleration_options: Default::default(),
  connection: id.into(),
                 provider: id.into(), base_url: Some("https://example.invalid/v1".into()), max_output_tokens: None, model_context: Default::default(),
@@ -1624,6 +1626,7 @@ fn model_picker_uses_builtin_catalog_and_allows_manual_custom_selection() {
     let (mut client, root, transport) = client_with_model_probe();
     let mut config = ProviderConfigDto {
         model_acceleration: Default::default(),
+        ultra_models: Default::default(),
         disabled_acceleration_options: Default::default(),
         connection: "custom-gateway".into(),
         provider: "custom-gateway".into(),
@@ -1680,6 +1683,7 @@ fn model_picker_lists_builtin_models_without_provider_discovery() {
             expected_revision: revision,
             config: ProviderConfigDto {
                 model_acceleration: Default::default(),
+                ultra_models: Default::default(),
                 disabled_acceleration_options: Default::default(),
                 connection: "openai".into(),
                 provider: "openai".into(),
@@ -1708,6 +1712,7 @@ fn set_model_sets_and_clears_model_reasoning_effort() {
     let (mut client, root, transport) = client_with_model_probe();
     let config = ProviderConfigDto {
         model_acceleration: Default::default(),
+        ultra_models: Default::default(),
         disabled_acceleration_options: Default::default(),
         connection: "openai".into(),
         provider: "openai".into(),
@@ -1888,6 +1893,7 @@ fn model_options_save_without_changing_selected_model_and_refresh_context_budget
             expected_revision: config.revision,
             config: ProviderConfigDto {
                 model_acceleration: Default::default(),
+                ultra_models: Default::default(),
                 disabled_acceleration_options: Default::default(),
                 connection: "openai".into(),
                 provider: "openai".into(),
@@ -2014,6 +2020,7 @@ fn model_options_save_for_other_providers_and_refresh_their_context_budgets() {
                 expected_revision: config.revision,
                 config: ProviderConfigDto {
                     model_acceleration: Default::default(),
+                    ultra_models: Default::default(),
                     disabled_acceleration_options: Default::default(),
                     connection: connection.into(),
                     provider: provider.into(),

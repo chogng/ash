@@ -131,6 +131,18 @@ impl RewritePhase {
 /// Coordinates the existing owners needed by the agent adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait AgentRequestProcessorContext: Send + Sync {
+    fn set_recap_presence(
+        &self,
+        connection: u64,
+        thread: ash_protocol::ThreadId,
+        surface: String,
+        focused: Option<bool>,
+    );
+    fn generate_recap(
+        &self,
+        thread: &ash_protocol::ThreadId,
+    ) -> Result<String, core_api::CoreError>;
+
     fn read_host_context(
         &self,
         owner: u64,
@@ -556,13 +568,61 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             session_id,
             request,
         } = decode(params)?;
-        self.session_view(&session_id)?;
+        let session = if matches!(
+            &request,
+            SessionRequest::SetRecapPresence { focused: None, .. }
+        ) {
+            None
+        } else {
+            Some(self.session_view(&session_id)?)
+        };
         let mutation = SessionMutation {
             command_id: command_id.clone(),
             session_id: session_id.clone(),
         };
 
         match request {
+            SessionRequest::SetRecapPresence {
+                thread_id,
+                surface,
+                focused,
+            } => {
+                if surface.is_empty()
+                    || surface.len() > 80
+                    || !surface
+                        .bytes()
+                        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+                {
+                    return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+                }
+                // Release is tied to the caller's surface, even if the Thread moved or was deleted.
+                if session.is_some_and(|session| {
+                    !session
+                        .threads
+                        .iter()
+                        .any(|thread| thread.thread_id == thread_id)
+                }) {
+                    return Err(RpcError::new(
+                        -32010,
+                        AppServerErrorName::CoreOperationFailed,
+                    ));
+                }
+                self.context.set_recap_presence(
+                    connection.connection_id,
+                    thread_id,
+                    surface,
+                    focused,
+                );
+                result(&SessionRequestResult::RecapPresenceUpdated)
+            }
+            SessionRequest::GenerateRecap { thread_id } => {
+                self.read_session_thread_snapshot(&session_id, &thread_id)?;
+                result(&SessionRequestResult::Recap(
+                    self.context
+                        .generate_recap(&thread_id)
+                        .map_err(core_error)?,
+                ))
+            }
             SessionRequest::RenameSession { title } => {
                 // The backend's Session identity is owned by its root Thread. Keep
                 // this relationship here rather than asking UI providers to infer it.

@@ -14,6 +14,9 @@ const readPaths = new Set(['/backend-api/models', '/backend-api/conversations', 
 const writePaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/f/conversation/resume', '/backend-api/stop_conversation', '/backend-api/files', '/backend-api/share/v2/create', '/realtime/vp']);
 const uploadedPath = (path: string): boolean => /^\/backend-api\/files\/[^/]+\/uploaded$/u.test(path);
 const conversationPath = (path: string): boolean => /^\/backend-api\/conversation\/[^/]+$/u.test(path);
+const projectDetailsPath = (path: string): boolean => /^\/backend-api\/gizmos\/g-p-[A-Za-z0-9_-]{1,240}$/u.test(path);
+const projectUpdatePath = (path: string): boolean => /^\/backend-api\/projects\/g-p-[A-Za-z0-9_-]{1,240}$/u.test(path);
+const projectConversationsPath = (path: string): boolean => /^\/backend-api\/gizmos\/g-p-[A-Za-z0-9_-]{1,240}\/conversations$/u.test(path);
 const renamePath = (path: string): boolean => /^\/backend-api\/conversation\/id\/[^/]+\/rename$/u.test(path);
 const deletePath = (path: string): boolean => /^\/backend-api\/conversation\/id\/[^/]+$/u.test(path);
 const filePath = (path: string): boolean => /^\/backend-api\/(?:files\/[^/]+(?:\/download)?|conversation\/[^/]+\/(?:interpreter\/download|files\/[^/]+(?:\/download)?)|estuary\/content)$/u.test(path);
@@ -300,16 +303,31 @@ function readRequest(value: unknown): ChatGPTRequest {
 	const synthesis = url.pathname === synthesisPath && query.size === 4
 		&& validIdentifier(query.get('conversation_id')) && validIdentifier(query.get('message_id'))
 		&& query.get('voice') === 'juniper' && query.get('format') === 'mp3';
+	const projectConversations = projectConversationsPath(url.pathname) && query.get('limit') === '20' && query.get('owned_only') === 'false'
+		&& query.size === (query.has('cursor') ? 3 : 2) && (!query.has('cursor') || (query.get('cursor')?.length ?? 0) > 0);
 	const allowed = url.origin === 'https://chatgpt.com' && !/%(?:2f|5c|00|25)/iu.test(url.pathname) && (headersOnly
 		? value.method === 'POST' && url.pathname === '/backend-api/f/conversation' && !url.search && value.body === undefined
 		: value.method === 'GET'
-			? readPaths.has(url.pathname) || conversationPath(url.pathname) || synthesis
+			? readPaths.has(url.pathname) || conversationPath(url.pathname) || projectConversations || (!url.search && projectDetailsPath(url.pathname)) || synthesis
 			: !url.search && (value.method === 'POST'
 				? writePaths.has(url.pathname) || uploadedPath(url.pathname) || renamePath(url.pathname)
-				: value.method === 'PATCH' ? conversationPath(url.pathname)
-					: value.method === 'DELETE' && deletePath(url.pathname)));
+				: value.method === 'PATCH' ? conversationPath(url.pathname) || projectUpdatePath(url.pathname)
+					: value.method === 'DELETE' && (deletePath(url.pathname) || projectDetailsPath(url.pathname))));
 	if (!allowed || (value.method === 'GET' && value.body !== undefined)) { throw new TypeError('Invalid ChatGPT endpoint'); }
 	if (value.method === 'DELETE' && value.body !== undefined) { throw new TypeError('Invalid ChatGPT deletion'); }
+	if (value.method === 'PATCH' && projectUpdatePath(url.pathname)) {
+		let body: unknown;
+		try { body = typeof value.body === 'string' ? JSON.parse(value.body) : undefined; }
+		catch { throw new TypeError('Invalid ChatGPT project update'); }
+		if (!isRecord(body) || Object.keys(body).length !== 4
+			|| typeof body.name !== 'string' || !body.name.trim() || body.name.length > 200
+			|| typeof body.instructions !== 'string' || body.instructions.length > 20000
+			|| !(body.emoji === null || typeof body.emoji === 'string' && body.emoji.length <= 256)
+			|| !(body.theme === null || typeof body.theme === 'string' && body.theme.length <= 256)) {
+			throw new TypeError('Invalid ChatGPT project update');
+		}
+		return value as unknown as ChatGPTRequest;
+	}
 	if (value.method === 'PATCH' || renamePath(url.pathname) || url.pathname === '/backend-api/share/v2/create') {
 		let body: unknown;
 		try { body = typeof value.body === 'string' ? JSON.parse(value.body) : undefined; }

@@ -141,7 +141,7 @@ import { ILocalGitService } from '../../platform/git/common/localGitService.js';
 import { AppServerPluginManagementService } from '../../workbench/services/extensionManagement/browser/appServerPluginManagementService.js';
 import { IAppServerRemoteAgentService } from '../../workbench/services/remote/common/appServerRemoteAgentService.js';
 import { AppServerRemoteAgentService } from '../../workbench/services/remote/browser/appServerRemoteAgentService.js';
-import { autorun, observableFromEvent, observableSignalFromEvent } from '../../base/common/observable.js';
+import { autorun, derived, observableFromEvent, observableSignalFromEvent } from '../../base/common/observable.js';
 import { CustomViewGridPart } from './parts/customViewGridPart.js';
 import { ICustomViewService } from '../services/customView/browser/customViewService.js';
 import { ICustomViewGridPartService } from '../services/customView/browser/customViewGridPartService.js';
@@ -155,7 +155,7 @@ import './media/style.css';
 import './media/workbench.css';
 import { SHOW_SESSIONS_PICKER_COMMAND_ID } from '../contrib/sessions/browser/sessionsActions.js';
 import './actions/sessionsChatActions.js';
-import { NewChatInSessionsWindowAction } from '../contrib/chat/browser/newSessionAction.js';
+import { NEW_SESSION_ACTION_ID } from '../contrib/chat/common/constants.js';
 import './activityBarAccessibility.js';
 import '../../workbench/contrib/accessibility/browser/accessibilityConfiguration.js';
 import { NotificationActionRunner } from '../../workbench/browser/parts/notifications/notificationsCommands.js';
@@ -196,7 +196,7 @@ import { TextResourcePropertiesService } from '../../workbench/services/textreso
 import { CoworkPaneFactory } from '../contrib/cowork/browser/cowork.contribution.js';
 import { ISessionsConversationService } from '../services/sessions/common/sessionsConversation.js';
 import { ChatTipService, IChatTipService } from '../../workbench/contrib/chat/browser/chatTipService.js';
-import { NewSessionDraftVisibleContext } from '../common/contextkeys.js';
+import { SessionsWorkspaceModeContext } from '../common/contextkeys.js';
 import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
@@ -220,7 +220,7 @@ import type { INativeHostApi, IOpenAgentsWindowOptions } from '../../platform/na
 import { IStorageService, WillSaveStateReason, StorageScope } from '../../platform/storage/common/storage.js';
 import { IThemeService } from '../../platform/theme/common/themeService.js';
 import { WorkbenchState, IWorkspaceContextService, type IWorkspace } from '../../platform/workspace/common/workspace.js';
-import { SessionsWorkspaceContextService } from '../services/workspace/browser/workspaceContextService.js';
+import { ISessionsWorkspaceContextService } from '../services/workspace/browser/workspaceContextService.js';
 import { IMarkerService } from '../../platform/markers/common/markers.js';
 import { MarkerService } from '../../platform/markers/common/markerService.js';
 import { GitHubService as SessionsGitHubService, IGitHubService as ISessionsGitHubService } from '../contrib/github/browser/githubService.js';
@@ -577,7 +577,10 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
 		services.registerSingleton(IAgentSessionsService, () => services.createInstance(ChatHistoryModel));
 		const workspace = configurationService;
-		this._register(services.createInstance(SessionsWorkspaceContextService, options.workspace, (next: IWorkspace) => workspace.updateWorkspace(next)));
+		services.registerInstance(ISessionsWorkspaceContextService, {
+			getHostWorkspace: options.workspace,
+			updateWorkspace: next => workspace.updateWorkspace(next),
+		});
 		services.registerInstance(IWorkspaceContextService, workspace);
 		services.registerInstance(IMarkerService, this._register(new MarkerService()));
 		const files = this._register(services.createInstance(SessionFileService, options.api, () => [...options.workspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment' as const, dirId: folder.id } })), ...sessions.sessions.filter(session => (session.providerId ?? provider.id) === provider.id).flatMap(session => [session.workspace, ...session.chats.map(chat => chat.workspace)].flatMap(workspace => workspace ? [{ uri: sessionWorkspaceUri(workspace), target: { type: 'session' as const, sessionId: session.backendSessionId ?? session.sessionId, path: workspace.root } }] : []))]));
@@ -752,6 +755,12 @@ export abstract class Workbench extends Disposable {
 		workspaceFolderCount.set(workspace.getWorkspace().folders.length);
 		this._register(workspace.onDidChangeWorkspace(() => workspaceFolderCount.set(workspace.getWorkspace().folders.length)));
 		services.registerInstance(IContextKeyService, contextKeys);
+		const workspaceModeKeys = new Set([SessionsWorkspaceModeContext.key]);
+		this._register(contextKeys.onDidChangeContext(event => {
+			if (event.affectsSome(workspaceModeKeys)) {
+				view.setWorkspaceMode(contextKeys.getValue<'chat' | 'code'>(SessionsWorkspaceModeContext.key) ?? 'chat');
+			}
+		}));
 		// Locale changes resolve the host, which uses this window's context keys.
 		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
 		services.registerInstance(IAccessibilityService, this._register(options.nativeHostApi
@@ -865,7 +874,7 @@ export abstract class Workbench extends Disposable {
 				return new AccessibleContentProvider(
 					AccessibleViewProviderId.SessionsActivityBar,
 					{ type: AccessibleViewType.Help },
-					() => localize('sessions.activity.sidebarHelp', 'Expanded navigation shows icons and names in the sidebar, with Accounts at the bottom. Use the title bar sidebar toggle to hide the entire sidebar, including navigation, Accounts and the workspace mode control; expanding restores them. On Desktop in Chat mode, New opens ChatGPT and focuses its message input. In Code and Browser, New creates an Agent session. In Chat, the list below contains Pinned, Projects and Chats. In Code, it contains Pinned and Recents. Enter or Space toggles a group, Left Arrow collapses it and Right Arrow expands it. Code subgroups use folder icons and their chat rows have leading icons. Use Up and Down Arrow, Home and End to move through visible rows. Right-click a chat or press Shift+F10 to pin or unpin it. Expansion is saved separately for Chat and Code. Fork Conversation is available in the Command Palette. Input tips appear above the message input.') + ' ' + localize('sessions.list.menuHelp', 'Use Tab to reach the change icon button on a saved conversation. Hover or focus a chat to reveal More actions, or press Shift+F10. The menu offers pin, rename, archive, add to project, move to group, delete and open in new window. Every chat item supports these actions before its first message. Organizing a chat preserves its draft and does not send a message. A separate Agent chat window keeps the same conversation and draft. Return to main window or close it to bring the chat back; Keep window on top pins the desktop window above others.') + ' ' + localize('sessions.list.automationFilterHelp', 'Open More Sessions Actions to find Group By, Sort By, and Show. Use Right Arrow to enter a submenu and Left Arrow to return. Sort By offers a sort field and direction. Show controls comparison groups and automation conversations. Automations keeps its run history when automation conversations are hidden. Choose New group next to More Sessions Actions, enter a name, and press Enter to create it. Escape cancels the prompt.') + ' ' + localize('sessions.list.groupAppearanceHelp', 'Focus a group title and press Shift+F10 to change its icon or color. Select Default in the picker to reset it.') + ' ' + localize('sessions.search.navigationHelp', 'In the Chat sidebar, Search below New opens a categorized search panel. Type a name to filter sessions, projects and schedules. Use arrow keys to choose a result and Enter to open it; Escape closes Search and restores focus.') + ' ' + localize('sessions.chatgpt.activityHelp', 'On Desktop, New starts a ChatGPT conversation and focuses its message input. ChatGPT offers model selection, attachments, dictation, voice conversation, Send and Stop. Switching conversations and pages retains their drafts, and reopening restores the last selected chat. Login uses the existing Codex account credentials. Press Alt+F1 for help.') + ' ' + localize({ bundle: 'ash', key: 'windowMode.help' }, 'The title bar workspace mode control switches between Chat / Agents and Code in this window, retaining the current session and draft. Each workspace has its own sidebar. The workspace mode control is visible only while the sidebar is expanded. Code navigation contains New, Automations, Collab and Symphony. New creates a session in the current workspace. Navigation order is saved separately for Chat and Code. Select the current mode again to return from a product page to its conversation. Use arrow keys, Home and End to focus a mode, then Enter or Space to switch pages. In narrow title bars, Back and Forward are available in the Go menu.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. New focuses the message input: ChatGPT in Desktop Chat mode, or an Agent session in Code and Browser. Chat keeps a flat conversation list; Code groups conversations by workspace or connected Agent host. In a new Code conversation, use the Run on menu to choose its host before sending. Use arrow keys and Enter to choose, or Escape to close the menu. Each draft keeps its chosen host when switching conversations. Code custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Each ChatGPT conversation and Agent session retains its own history, unsent text and attachments when switching pages. Each session restores its editor tabs. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Files opens the file tree in its editor group. Opening a document shows the editor; closing the last document hides it and keeps Files visible. Use arrow keys on separators to resize. Collab opens the channel preview and Calls in the sidebar. Settings > Agents manages roles and teams. Use Left and Right to move between its tabs, then Enter or Space to open a view. Projects and Creator are product pages selected from the Activity Bar. Projects retains its search and selected project. Materials are organized inside each project. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens Settings, Account, Open IDE and Keyboard Shortcuts. On Desktop, Open IDE opens or focuses the IDE while keeping the Agents window and its unsent drafts open. Use arrow keys to move through the menu, Enter to choose an action and Escape to close it and return focus to Accounts.') + ' ' + localize('sessions.update.help', 'After an update finishes downloading, Restart to Update remains above Accounts. Tab to the button and press Enter or Space to install the update and restart.') + ' ' + localize('sessions.activity.moreHelp', 'In the Code sidebar, open More to find Collab, Symphony and other navigation items. Use Up or Down Arrow to browse, Enter to open an item, or Escape to return to More. Press Right Arrow and Enter to pin or unpin a focused item. It stays in More. You can also unpin it from its sidebar context menu.') + ' ' + localize('customize.activityHelp', 'Customize opens Skills, Connectors and Plugins. Switch between Yours and Discover, search resources and open details to manage them.') + ' ' + localize('automations.activityHelp', 'Automations opens schedules and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('pinnedCanvas.activityHelp', 'Use Add Canvas to Sidebar from a Canvas tab menu or the Command Palette to keep a registered Canvas in navigation. Choose its sidebar item to open the full page without switching conversations. Its page header and sidebar context menu offer Go to Chat, Reconnect Canvas, Remove from Sidebar and Close Canvas. Removing a pin keeps its page in the conversation. Up to five Canvases can be pinned.') + ' ' + localize('agentTrace.activityHelp', 'View Execution Trace opens saved execution from the conversation menu or Command Palette.') + (options.api.agentHosts ? ' ' + localize({ bundle: 'ash.workbench', key: 'agentHosts.help' }, 'Use Agents: Manage Connected Hosts in the Command Palette. In Remote Environments, use Tab to reach the connection actions and Escape to close the dialog.') : ''),
+					() => localize('sessions.activity.sidebarHelp', 'Expanded navigation shows icons and names in the sidebar, with Accounts at the bottom. Use the title bar sidebar toggle to hide the entire sidebar, including navigation, Accounts and the workspace mode control; expanding restores them. New starts a conversation in the current workspace and focuses the message input. In Desktop Chat, the list below contains Pinned and Recent. Open Projects to browse conversations by project. In Code, it contains Pinned and Recents. Enter or Space toggles a group, Left Arrow collapses it and Right Arrow expands it. Code subgroups use folder icons and their chat rows have leading icons. Use Up and Down Arrow, Home and End to move through visible rows. Right-click a chat or press Shift+F10 to pin or unpin it. Expansion is saved separately for Chat and Code. Fork Conversation is available in the Command Palette. Input tips appear above the message input.') + ' ' + localize('sessions.list.menuHelp', 'Use Tab to reach the change icon button on a saved conversation. Hover or focus a chat to reveal More actions, or press Shift+F10. The menu offers pin, rename, archive, project and group actions, delete and open in new window. Saved conversations can be moved to a project or removed from their current project. Dragging a pinned conversation to Recents unpins it and keeps its memberships. Organizing a chat preserves its draft and does not send a message. A separate Agent chat window keeps the same conversation and draft. Return to main window or close it to bring the chat back; Keep window on top pins the desktop window above others.') + ' ' + localize('sessions.list.automationFilterHelp', 'Open More Sessions Actions to find Group By, Sort By, and Show. Use Right Arrow to enter a submenu and Left Arrow to return. Sort By offers a sort field and direction. Show controls comparison groups and automation conversations. Automations keeps its run history when automation conversations are hidden. In the Chat sidebar, choose Add folder next to Sort By, enter a name, and press Enter to create it. Escape cancels the prompt.') + ' ' + localize('sessions.list.groupAppearanceHelp', 'Focus a group title and press Shift+F10 to change its icon or color. Select Default in the picker to reset it.') + ' ' + localize('sessions.search.navigationHelp', 'In the Chat sidebar, Search below New opens a categorized search panel. Type a name to filter sessions, projects and schedules. Use arrow keys to choose a result and Enter to open it; Escape closes Search and restores focus.') + ' ' + localize({ bundle: 'ash', key: 'windowMode.help' }, 'The title bar workspace mode control switches between Chat / Agents and Code in this window, retaining the current session and draft. Each workspace has its own sidebar. The workspace mode control is visible only while the sidebar is expanded. Code navigation contains New, Automations, Collab and Symphony. New creates a session in the current workspace. Navigation order is saved separately for Chat and Code. Select the current mode again to return from a product page to its conversation. Use arrow keys, Home and End to focus a mode, then Enter or Space to switch pages. In narrow title bars, Back and Forward are available in the Go menu.') + ' ' + localize('sessions.activity.help', 'Sessions Activity Bar\nUse Tab and Shift+Tab to enter navigation and Accounts. Use arrow keys, Home and End to move between actions. Press Enter or Space to open the focused action. Drag icons to reorder them, or choose Move earlier and Move later with the Context Menu key or Shift+F10. Navigation order is saved across restarts and Activity Bar positions. The menu also offers position and size options. Chat keeps a flat conversation list; Code groups conversations by workspace or connected Agent host. In a new Code conversation, use the Run on menu to choose its host before sending. Use arrow keys and Enter to choose, or Escape to close the menu. Each draft keeps its chosen host when switching conversations. Code custom group headings organize tasks; use Tab to reach a task and Enter to open it. Application tools can create, rename and remove groups without deleting tasks. Conversations retain their history, unsent text and attachments when you switch pages. Each session restores its editor tabs. Toggle details, Hide editor and Show editor change the side panel. Toggle Code side panel closes and reopens the composition. Files opens the file tree in its editor group. Opening a document shows the editor; closing the last document hides it and keeps Files visible. Use arrow keys on separators to resize. Collab opens the channel preview and Calls in the sidebar. Settings > Agents manages roles and teams. Use Left and Right to move between its tabs, then Enter or Space to open a view. Projects and Creator are product pages selected from the Activity Bar. Projects retains its search and selected project. Materials are organized inside each project. Creator opens seven workspaces. Creator home returns to the mode list. Each workspace retains its document, selection and viewport. Code retains its own file and comparison tabs when you leave the page. Accounts opens Settings, Account, Open IDE and Keyboard Shortcuts. On Desktop, Open IDE opens or focuses the IDE while keeping the Agents window and its unsent drafts open. Use arrow keys to move through the menu, Enter to choose an action and Escape to close it and return focus to Accounts.') + ' ' + localize('sessions.update.help', 'After an update finishes downloading, Restart to Update remains above Accounts. Tab to the button and press Enter or Space to install the update and restart.') + ' ' + localize('sessions.activity.moreHelp', 'In the Code sidebar, open More to find Collab, Symphony and other navigation items. Use Up or Down Arrow to browse, Enter to open an item, or Escape to return to More. Press Right Arrow and Enter to pin or unpin a focused item. It stays in More. You can also unpin it from its sidebar context menu.') + ' ' + localize('customize.activityHelp', 'Customize opens Skills, Connectors and Plugins. Switch between Yours and Discover, search resources and open details to manage them.') + ' ' + localize('automations.activityHelp', 'Automations opens schedules and run history. Create or edit a plan, run it now, pause future runs, or open a result in its conversation.') + ' ' + localize('symphony.activityHelp', 'Symphony schedules tasks inside Ash. The monitor shows conversation messages, status, cumulative tokens and runtime.') + ' ' + localize('pinnedCanvas.activityHelp', 'Use Add Canvas to Sidebar from a Canvas tab menu or the Command Palette to keep a registered Canvas in navigation. Choose its sidebar item to open the full page without switching conversations. Its page header and sidebar context menu offer Go to Chat, Reconnect Canvas, Remove from Sidebar and Close Canvas. Removing a pin keeps its page in the conversation. Up to five Canvases can be pinned.') + ' ' + localize('agentTrace.activityHelp', 'View Execution Trace opens saved execution from the conversation menu or Command Palette.') + (options.api.agentHosts ? ' ' + localize({ bundle: 'ash.workbench', key: 'agentHosts.help' }, 'Use Agents: Manage Connected Hosts in the Command Palette. In Remote Environments, use Tab to reach the connection actions and Escape to close the dialog.') : ''),
 					() => focused.focus(),
 					AccessibilityVerbositySettingId.SessionsActivityBar,
 				);
@@ -876,9 +885,26 @@ export abstract class Workbench extends Disposable {
 			if (event.affectsConfiguration(AccessibilityVerbositySettingId.SessionsActivityBar)) updateActivityBarHelpHint();
 		}));
 		updateActivityBarHelpHint();
+		const conversationVisible = observableFromEvent(this, layout.onDidChangePartVisibility, () => layout.isPartVisible('sessions'));
+		const draftChanged = observableSignalFromEvent(this, listener => storage.onDidChangeValue(event => {
+			const active = view.activeSelection;
+			if (active?.kind === 'untitled' && event.scope === StorageScope.WORKSPACE
+				&& event.key === `sessions.inputDraft:untitled:${active.session.untitledSessionId}`) listener(event);
+		}));
+		const newDraftVisible = derived(reader => {
+			const active = view.getSelection(reader).activeSelection;
+			if (!conversationVisible.read(reader) || active?.kind !== 'untitled' || active.session.forkSource) return false;
+			draftChanged.read(reader);
+			try {
+				const draft = readNewChatDraftState(storage, `untitled:${active.session.untitledSessionId}`, chatInputStatePersistence);
+				return !draft || (!draft.text.trim() && draft.contexts.length === 0);
+			} catch { /* The composer owns reporting unreadable drafts. */ }
+			return false;
+		});
 		const cowork = this._register(services.createInstance(CoworkPaneFactory));
 		sessionsPart = this.sessionsPart = this._register(
 			services.createInstance(SessionsPart, this.domNode, {
+				newDraftVisible,
 				createComparisonControls: container => services.createInstance(SessionComparisonControls, container),
 				createCoworkPane: (container, panelId, selection) =>
 					cowork.createPane(container, panelId, selection, () => {
@@ -896,27 +922,6 @@ export abstract class Workbench extends Disposable {
 			} satisfies SessionsPartOptions),
 		);
 		services.registerInstance(ISessionsConversationService, sessionsPart);
-		const newSessionDraftVisible = NewSessionDraftVisibleContext.bindTo(contextKeys);
-		const conversationVisible = observableFromEvent(this, layout.onDidChangePartVisibility, () => layout.isPartVisible('sessions'));
-		const draftChanged = observableSignalFromEvent(this, listener => storage.onDidChangeValue(event => {
-			const active = view.activeSelection;
-			if (active?.kind === 'untitled' && event.scope === StorageScope.WORKSPACE
-				&& event.key === `sessions.inputDraft:untitled:${active.session.untitledSessionId}`) listener(event);
-		}));
-		this._register(autorun(reader => {
-			const active = view.getSelection(reader).activeSelection;
-			const visible = conversationVisible.read(reader);
-			draftChanged.read(reader);
-			let emptyDraft = false;
-			if (visible && active?.kind === 'untitled' && !active.session.forkSource) {
-				try {
-					const draft = readNewChatDraftState(storage, `untitled:${active.session.untitledSessionId}`, chatInputStatePersistence);
-					emptyDraft = !draft || (!draft.text.trim() && draft.contexts.length === 0);
-				} catch { /* The composer owns reporting unreadable drafts. */ }
-			}
-			newSessionDraftVisible.set(emptyDraft);
-		}));
-		this._register(toDisposable(() => newSessionDraftVisible.reset()));
 		const part = sessionsPart;
 		this._register(autorun(reader => {
 			const { visibleSelections, activeSelection } = view.getSelection(reader);
@@ -961,7 +966,7 @@ export abstract class Workbench extends Disposable {
 				if (!options) { await commandService.executeCommand('sessions.newSession'); return true; }
 				// Select the Agent presentation before creating its mode-scoped draft.
 				if (options?.focus) await commandService.executeCommand('sessions.open.code');
-				const created = await commandService.executeCommand<IUntitledChatSession | undefined>(NewChatInSessionsWindowAction.ID, options.providerId);
+				const created = await commandService.executeCommand<IUntitledChatSession | undefined>(NEW_SESSION_ACTION_ID, options.providerId);
 				if (!created) return false;
 				if (options?.agent) sessions.setUntitledSessionAgent(created.untitledSessionId, options.agent);
 				if (options?.focus) sessionsPart!.focus();
@@ -1216,7 +1221,7 @@ export abstract class Workbench extends Disposable {
 		else if (options.draft) {
 			const selected = this.sessionsView.activeSelection;
 			if (selected?.kind !== 'untitled' || !sameWorkspace(selected.session.workspace, this.workspaceSelection())) {
-				this.sessionsView.openNewSession('New code session');
+				this.sessionsView.openNewSession();
 			}
 		}
 		await this.showChat();
@@ -1240,7 +1245,7 @@ export abstract class Workbench extends Disposable {
 			storage.remove(recovered.key, StorageScope.WORKSPACE);
 		}
 		view.activateSelection(selected, { source: 'restore' });
-		await entryLayout.restore(command => showSessionsSplashForRestore(ownerWindow.document, command));
+		await entryLayout.restore(entry => showSessionsSplashForRestore(ownerWindow.document, entry));
 		if (this.isDisposed) return;
 		const revision = view.navigationRevision;
 		void this.sessionsPart.didActiveCodeHistoryFail().then(failed => {

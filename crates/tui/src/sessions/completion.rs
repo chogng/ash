@@ -282,8 +282,7 @@ pub(crate) fn create_manager_session_and_start(
     approval_mode: ApprovalMode,
     root: &Path,
 ) -> Result<ManagerSessionCompletion, String> {
-    let title = submission.display_text.clone();
-    let conversation = ActiveConversation::start_at(&mut client, title, root)
+    let conversation = ActiveConversation::start_at(&mut client, String::new(), root)
         .map_err(|error| error.to_string())?;
     let change = ConversationChange {
         notice: String::new(),

@@ -106,6 +106,7 @@ impl ApiEndpoint {
     pub(crate) fn headers(
         self,
         target: &ResolvedApiTarget,
+        model: &str,
         request: &ModelRequest,
     ) -> Result<Vec<HttpHeader>, ApiError> {
         let mut headers = Vec::new();
@@ -117,7 +118,7 @@ impl ApiEndpoint {
             ApiProtocol::OpenAiCompletions => {
                 chat_completions::headers(self, request, &mut headers)?
             }
-            ApiProtocol::AnthropicMessages => anthropic::headers(request, &mut headers)?,
+            ApiProtocol::AnthropicMessages => anthropic::headers(model, request, &mut headers)?,
         }
         Ok(headers)
     }

@@ -336,6 +336,7 @@ fn install(loaded_threads: &LoadedThreads, snapshot: ThreadSnapshot) {
 
 fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
     ThreadSnapshot {
+        surface: None,
         voice_transcripts: Vec::new(),
         execution_target: None,
         advisor: Default::default(),
@@ -352,6 +353,7 @@ fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
         parent_thread_id: None,
         forked_from_id: None,
         title: "test".into(),
+        creation_title: "test".into(),
         status: ash_protocol::ThreadStatus::Active,
         archived_at_unix_ms: None,
         archive_reason: None,
@@ -384,6 +386,7 @@ fn snapshot(thread_id: &ThreadId) -> ThreadSnapshot {
         agent_joins: BTreeMap::new(),
         produced_delegation_results: BTreeMap::new(),
         fork_import: None,
+        recap: None,
         received_delegation_results: BTreeMap::new(),
         sent_agent_messages: BTreeMap::new(),
         received_agent_messages: BTreeMap::new(),

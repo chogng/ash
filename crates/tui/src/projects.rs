@@ -18,6 +18,7 @@ use ash_app_server_protocol::protocol::projects::ProjectDto;
 use ash_app_server_protocol::protocol::projects::ProjectReadParams;
 use ash_app_server_protocol::protocol::projects::ProjectRootAddParams;
 use ash_app_server_protocol::protocol::projects::ProjectRootDto;
+use ash_app_server_protocol::protocol::projects::ProjectScopeDto;
 use ash_app_server_protocol::protocol::projects::ProjectSessionMutationParams;
 use ash_app_server_protocol::protocol::projects::ProjectStatusDto;
 use ash_protocol::ProjectId;
@@ -121,6 +122,7 @@ where
         let project = client
             .read_project(ProjectReadParams {
                 project_id: summary.project_id,
+                scope: None,
             })
             .map_err(|error| error.to_string())?
             .project;
@@ -241,7 +243,10 @@ where
         .any(|summary| summary.project_id == project_id);
     let mut project = if existing {
         client
-            .read_project(ProjectReadParams { project_id })
+            .read_project(ProjectReadParams {
+                project_id,
+                scope: None,
+            })
             .map_err(|error| error.to_string())?
             .project
     } else {
@@ -252,6 +257,7 @@ where
                 project_id,
                 name: path_name(workspace),
                 description: String::new(),
+                scope: Some(ProjectScopeDto::Code),
             })
             .map_err(|error| error.to_string())?
             .project

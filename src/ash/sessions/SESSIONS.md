@@ -8,6 +8,29 @@ The Sessions subsystem provides the provider-neutral model used by the Agents Wi
 
 This specification covers stable service ownership, domain contracts, and lifecycles. Layout, list presentation, and provider implementations have separate owning specifications in [README.md](README.md).
 
+## Chat and Code model ownership
+
+The target architecture gives Chat and Code a common Sessions foundation and
+separate conversation models. Sessions owns the window shell, layout, focus,
+and reusable navigation and conversation UI. Each surface supplies its own data
+and actions through the UI contracts. Both surfaces can use the same model catalog
+or execution service through requests scoped to the owning conversation.
+
+Chat owns its conversation catalog, history, drafts, and replies through its
+conversation sources. Code owns its Session and Thread catalog, turns, execution
+context, approvals, and workspace changes. Each surface scopes conversation
+identity, selection, pins, recents, and restoration to its own catalog. Switching
+surfaces restores the destination's selection and drafts. A user-initiated handoff
+passes selected draft content or an owner-qualified reference. Mutations always
+go through the owner of the target record.
+
+On Desktop, the ChatGPT Web source owns its conversation records. The native Ash
+source creates its own root Threads through the shared App Server and persists
+its selection and drafts under the Chat workspace. The backend records the
+conversation surface at creation and projects it in the Session catalog. Chat
+and Code select from their respective records. Sessions without a recorded surface
+remain accessible through Code.
+
 ## Architecture
 
 ```text
@@ -88,11 +111,12 @@ Explicit opens of durable conversations and custom pages update a workspace-loca
 
 ### `ISessionsConversationService`
 
-The Sessions Part owns conversation UI selection. Code uses the existing Chat
-implementation; Chat, Collaboration and conversations beside product editors use
-Cowork. Each implementation retains its own panes and models. Switching transfers
-the unsent drafts of all visible conversations while the window Sessions service
-keeps one selection, arrangement and navigation history.
+In the current shared Session path, the Sessions Part owns conversation UI
+selection. Code uses the existing Chat implementation. Chat, Collaboration and
+conversations beside product editors use Cowork. Each implementation retains its
+own panes and models. Switching transfers the unsent drafts of all visible
+conversations while the window Sessions service keeps one selection, arrangement
+and navigation history.
 
 ### Scoped session context
 

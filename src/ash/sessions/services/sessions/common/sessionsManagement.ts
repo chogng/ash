@@ -31,21 +31,22 @@ export interface ISessionsManagementService {
 	selectThread(sessionId: SessionId, threadId: ThreadId): void;
 	interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	/** Background presentations can retain a draft without changing foreground selection. */
-	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection, providerId?: string, activate?: boolean, forkSource?: IUntitledChatSession['forkSource'], options?: { readonly devContainer?: boolean; }): IUntitledChatSession;
-	resolveNewSessionTarget(): Promise<{ readonly providerId: string; readonly workspace: SessionWorkspaceSelection; readonly devContainer?: boolean; }>;
+	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection, providerId?: string, activate?: boolean, forkSource?: IUntitledChatSession['forkSource'], options?: { readonly devContainer?: boolean; readonly projectId?: string; }): IUntitledChatSession;
+	resolveNewSessionTarget(): Promise<{ readonly providerId: string; readonly workspace: SessionWorkspaceSelection; readonly devContainer?: boolean; readonly projectId?: string; }>;
 	restoreUntitledSession(session: IUntitledChatSession): void;
 	selectUntitledSession(untitledSessionId: string): void;
 	discardUntitledSession(untitledSessionId: string): void;
 	setUntitledSessionModel(untitledSessionId: string, model: ModelRef | undefined): void;
-	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined): void;
+	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined, defaults: NonNullable<IUntitledChatSession['modelDefaults']>): void;
+	setUntitledSessionReasoningEffort(untitledSessionId: string, effort: NonNullable<IUntitledChatSession['reasoningEffortSelection']> | null): void;
 	setUntitledSessionAgent(untitledSessionId: string, agent: ChatAgent | undefined): void;
-	setUntitledSessionWorkspace(untitledSessionId: string, workspace: SessionWorkspaceSelection | undefined, options?: { readonly devContainer?: boolean; readonly branchName?: string; readonly providerId?: string; readonly environment?: SessionEnvironmentSelection; readonly clearEnvironment?: boolean; }): void;
+	setUntitledSessionWorkspace(untitledSessionId: string, workspace: SessionWorkspaceSelection | undefined, options?: { readonly devContainer?: boolean; readonly branchName?: string; readonly providerId?: string; readonly environment?: SessionEnvironmentSelection; readonly clearEnvironment?: boolean; readonly projectId?: string; }): void;
 	/** Organization and first send share one creation; creating a durable identity does not submit a request. */
 	materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal): Promise<IActiveSessionThread>;
 	cancelUntitledSessionPreparation(untitledSessionId: string): void;
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void;
 	ensureActiveThread(): Promise<IActiveSessionThread>;
-	startNewSession(title?: string, background?: { readonly workspace: SessionWorkspaceSelection; readonly providerId: string; readonly creation: ISessionCreateOptions; }): Promise<IActiveSessionThread>;
+	startNewSession(title?: string, background?: { readonly workspace: SessionWorkspaceSelection; readonly providerId: string; readonly creation: ISessionCreateOptions; readonly creationId?: string; }): Promise<IActiveSessionThread>;
 	stopSession(sessionId: SessionId): Promise<void>;
 	archiveSession(sessionId: SessionId): Promise<void>;
 	/** Restores the canonical catalog entry without changing foreground selection or drafts. */

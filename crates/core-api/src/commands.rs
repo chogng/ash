@@ -16,6 +16,7 @@ pub enum SequenceExpectation {
 }
 
 pub struct StartThreadRequest {
+    pub surface: Option<ash_protocol::SessionSurface>,
     pub agent_id: Option<ash_protocol::AgentId>,
     pub agent: Option<ash_protocol::AgentConfiguration>,
     pub command_id: CommandId,

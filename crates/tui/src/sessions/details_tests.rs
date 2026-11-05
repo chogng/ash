@@ -19,6 +19,7 @@ fn response() -> SessionResult {
         ("fork-1", "Alternative"),
     ] {
         threads.push(ash_protocol::SessionThread {
+            recap: None,
             manager: None,
             thread_id: ThreadId::new(id).unwrap(),
             title: title.into(),
@@ -32,11 +33,13 @@ fn response() -> SessionResult {
             status: ash_protocol::ThreadStatus::Active,
         });
     }
+    threads[0].recap = Some("The parser now handles empty input.".into());
     threads[2].status = ash_protocol::ThreadStatus::Archived;
     SessionResult {
         environment_applied: None,
         worktree_start_applied: None,
         session: Session {
+            surface: None,
             source: None,
             model: None,
             session_id: SessionId::new("thread:session-1").unwrap(),
@@ -201,4 +204,18 @@ fn details_poll_only_when_due_or_invalidated() {
     assert!(details.take_request().is_none());
     details.invalidate();
     assert!(details.take_request().is_some());
+}
+
+#[test]
+fn details_localize_the_recap_label_and_keep_the_saved_text() {
+    let mut result = response();
+    result.session.threads[0].recap = Some("Working".into());
+    let mut detail = render_details(&result);
+    detail.localize(crate::nls::Language::Chinese);
+    let row = detail
+        .rows()
+        .iter()
+        .find(|row| row.label() == "对话回顾")
+        .unwrap();
+    assert_eq!(row.value(), "Working");
 }

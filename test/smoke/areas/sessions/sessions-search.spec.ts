@@ -103,7 +103,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				await installHistory(application);
 				const page = await workbench.openAgentsWindow(target.kind);
 				await page.locator('[data-action-id="sessions.newSession"] button').click();
-				const sidebar = page.locator('.ash-chatgpt-navigation');
+				const sidebar = page.locator('.ash-chat-navigation');
 				await expect(sidebar.getByRole('button', { name: 'First native history', exact: true })).toBeVisible();
 				await expect(sidebar.getByRole('searchbox')).toHaveCount(0);
 				const recent = sidebar.getByRole('button', { name: locale === 'en' ? 'Recent' : '最近', exact: true });

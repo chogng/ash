@@ -274,14 +274,23 @@ fn unsupported_candidates_are_skipped_before_any_process_starts() {
 fn operational_failures_do_not_select_a_different_backend() {
     let next = Candidate::new("next", Behavior::Ready);
     let calls = Arc::clone(&next.prepares);
-    let manager = manager(vec![Candidate::new("broken", Behavior::Broken), next]);
-    assert!(matches!(
-        manager.prepare(
-            &SandboxCommand::new("command", Vec::<String>::new(), "."),
-            policy()
-        ),
-        Err(SandboxError::BackendUnavailable { .. })
-    ));
+    let manager = manager(vec![
+        Candidate::new("unsupported", Behavior::Unsupported),
+        Candidate::new("broken", Behavior::Broken),
+        next,
+    ]);
+    assert_eq!(
+        manager
+            .prepare(
+                &SandboxCommand::new("command", Vec::<String>::new(), "."),
+                policy()
+            )
+            .unwrap_err(),
+        SandboxError::BackendUnavailable {
+            backend: SandboxKind::Restricted,
+            message: "unsupported: unsupported; broken: runtime integrity check failed".into(),
+        }
+    );
     assert_eq!(calls.load(Ordering::SeqCst), 0);
 }
 

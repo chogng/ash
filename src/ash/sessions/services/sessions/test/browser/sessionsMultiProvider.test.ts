@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
-import { Emitter } from '../../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { JSDOM } from 'jsdom';
@@ -12,6 +12,7 @@ import { SessionsProvidersService } from '../../browser/sessionsProvidersService
 import { sessionIdentity, parseSessionIdentity } from '../../common/sessionIdentity.js';
 import type { ISession, IActiveSessionThread, SessionWorkspaceSelection } from '../../common/session.js';
 import type { ISessionsProvider } from '../../common/sessionsProvider.js';
+import type { IProjectService, Project } from '../../../../../platform/projects/common/projectService.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 class Provider extends Disposable implements ISessionsProvider {
@@ -43,6 +44,38 @@ class Provider extends Disposable implements ISessionsProvider {
 	async deleteSession(session: ISession) { this.calls.push(`delete:${session.sessionId}`); }
 	async interrupt(session: ISession, threadId: string) { this.calls.push(`interrupt:${session.sessionId}:${threadId}`); }
 }
+
+test('materializing a Project draft links the durable session before resolving, even after a concurrent project update', async () => {
+	using registry = new SessionsProvidersService();
+	using primary = new Provider('primary');
+	using registration = registry.registerProvider(primary);
+	let project: Project = { id: 'project', name: 'Project', description: '', archived: false, revision: 1, materials: [], sessionIds: [], sessionCount: 0 };
+	const linked: [number, string][] = [];
+	const projects = {
+		onDidChange: Event.None,
+		read: async () => project,
+		addSession: async (snapshot: Project, sessionId: string) => {
+			linked.push([snapshot.revision, sessionId]);
+			if (snapshot.revision === 1) {
+				project = { ...project, revision: 2, sessionIds: ['other'], sessionCount: 1 };
+				throw new Error('Concurrent project update');
+			}
+			project = { ...project, revision: 3, sessionIds: [...project.sessionIds, sessionId], sessionCount: 2 };
+			return project;
+		},
+	} as unknown as IProjectService;
+	using management = new SessionsManagementService(primary.id, registry, undefined, undefined, undefined, projects);
+	const draft = management.createUntitledSession();
+	management.setUntitledSessionWorkspace(draft.untitledSessionId, { type: 'local', root: '/project' }, { projectId: project.id });
+	const [first, second] = await Promise.all([
+		management.materializeUntitledSession(draft.untitledSessionId),
+		management.materializeUntitledSession(draft.untitledSessionId),
+	]);
+	assert.deepEqual(first, second);
+	assert.deepEqual(primary.calls, ['create:local']);
+	assert.deepEqual(linked, [[1, first.session.sessionId], [2, first.session.sessionId]]);
+	assert.deepEqual(project.sessionIds, ['other', first.session.sessionId]);
+});
 
 test('equal backend Session and Thread IDs retain separate owners for selection and mutations', async () => {
 	using registry = new SessionsProvidersService();

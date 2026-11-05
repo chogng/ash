@@ -2,6 +2,7 @@ import { KeyChord, KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { ContextKeyExpr, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IsSessionsWindowContext } from '../../../../workbench/common/contextkeys.js';
 import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
+import { ASH_CHAT_SELECTED_CONTEXT } from '../common/constants.js';
 
 export const NewSessionPickersAvailableContext = new RawContextKey<boolean>('sessions.newSessionPickersAvailable', false);
 
@@ -10,4 +11,4 @@ export const FOCUS_NEW_SESSION_ENVIRONMENT_PICKER_KEYBINDING = KeyChord(KeyMod.C
 
 const focusNewSessionPickerWhen = ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), NewSessionPickersAvailableContext.isEqualTo(true), ChatContextKeys.inChatInput.isEqualTo(true));
 export const FOCUS_NEW_SESSION_WORKSPACE_PICKER_WHEN = focusNewSessionPickerWhen;
-export const FOCUS_NEW_SESSION_ENVIRONMENT_PICKER_WHEN = focusNewSessionPickerWhen;
+export const FOCUS_NEW_SESSION_ENVIRONMENT_PICKER_WHEN = ContextKeyExpr.and(focusNewSessionPickerWhen, ContextKeyExpr.not(ASH_CHAT_SELECTED_CONTEXT));

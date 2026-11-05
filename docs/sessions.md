@@ -65,6 +65,12 @@ ArtifactsPage 拥有工作空间实例，文档内容和工作副本仍由各模
 | `layoutConstants.ts`              | Part 标识与侧栏尺寸                                                                                                                           | 既有布局；保留原实现                                                 |
 | `theme.ts`                        | Sessions 专属颜色注册                                                                                                                         | 主题服务；保留原实现                                                 |
 
+### 环境选择器
+
+2026-11-05 在 Windows 11 23H2 x64 上，以 `308f54241b` 启动新的 Ash Desktop 进程和隔离 profile。首次打开 Code 草稿的 Run on 菜单时，从自动化发起点击到检测到菜单项为 283 ms，两条 WSL 条目分别在 289 ms 和 294 ms 可见，合成的已保存 SSH 条目在 550 ms 可见。Ash 显示的 `AshBuild` 和 `AshPsecX64` 与 `wsl.exe --list --verbose` 的 WSL2 清单一致。日志位于 `.build/todo-local-acceptance-20261105/environment-picker-second.log`。
+
+同一主机使用当前 checkout 构建的 Linux Remote runtime 和仓库固定的搜索工具，在独立 profile 通过首次连接。Code 草稿从 Run on 选择 `AshBuild`，为合成目录确认 Trust and Open，随后草稿切换到 `AshBuild` provider。日志位于 `.build/todo-local-acceptance-20261105/wsl-remote-first-connect-approved.log`。
+
 ## Docker Provider
 
 新增 `extensions/dev-containers` 独立 Rust executable，使用现有 Rust SDK、

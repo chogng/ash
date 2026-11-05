@@ -1,3 +1,5 @@
+import { SharedChatInputComposerContribution } from '../../contrib/chat/browser/sharedChatInputComposer.contribution.js';
+import { ISessionsChatViewStateService, SessionsChatViewStateService } from '../../contrib/chat/browser/chatViewStateService.js';
 import { createDisconnectedAgentHostInputCompletionService } from '../../../platform/agentHost/browser/appServerAgentService.js';
 
 import { IEditorGroupsService } from '../../../workbench/services/editor/common/editorGroupsService.js';
@@ -37,6 +39,7 @@ import { IWorkspaceContextService } from '../../../platform/workspace/common/wor
 import { IWorkspacesService } from '../../../platform/workspaces/common/workspaces.js';
 import { TestWorkspaceService } from '../../../workbench/services/configuration/test/common/testServices.js';
 import { IDialogService, IFileDialogService } from '../../../platform/dialogs/common/dialogs.js';
+import { IProjectService } from '../../../platform/projects/common/projectService.js';
 import { DialogService } from '../../../workbench/services/dialogs/common/dialogService.js';
 import { FileDialogService } from '../../../workbench/services/dialogs/browser/fileDialogService.js';
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
@@ -166,6 +169,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		},
 		setUntitledSessionModel() { },
 		setUntitledSessionDefaultModel() { },
+		setUntitledSessionReasoningEffort() { },
 		setUntitledSessionAgent() { },
 		setUntitledSessionWorkspace() { throw new Error('Unexpected workspace edit'); },
 		cancelUntitledSessionPreparation() { throw new Error('Unexpected preparation cancellation'); },
@@ -246,7 +250,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		async startReview() { throw new Error('Unexpected review in this fixture'); },
 		async startTurn() { },
 		async queueTurn() { },
-		async queuedMessageCount() { return 0; },
+		async readQueue() { return []; },
 		getPendingRequests: async () => { throw new Error('Unexpected queue operation'); },
 		pausePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
 		resumePendingRequest: async () => { throw new Error('Unexpected queue operation'); },
@@ -332,6 +336,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	}));
 	services.registerInstance(IUriIdentityService, resources.add(services.createInstance(UriIdentityService)));
 	services.registerInstance(IWorkspaceContextService, resources.add(new TestWorkspaceService({ id: 'sessions-test', folders: [] })));
+	services.registerInstance(IProjectService, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService);
 	services.registerInstance(IWorkspacesService, {
 		onDidChangeRecentlyOpened: Event.None,
 		getRecentlyOpened: async () => ({ workspaces: [] }),
@@ -389,7 +394,10 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	});
 	paneServices.registerInstance(IImageEditorService, resources.add(paneServices.createInstance(BrowserImageEditorService)));
 	const cowork = resources.add(paneServices.createInstance(CoworkPaneFactory));
+	paneServices.registerInstance(ISessionsChatViewStateService, new SessionsChatViewStateService());
+	using composerContribution = paneServices.createInstance(SharedChatInputComposerContribution);
 	using part = paneServices.createInstance(SessionsPart, dom.window.document.body, {
+		newDraftVisible: observableValue('draft visibility', false),
 		createCoworkPane: (container, panelId, selection) => cowork.createPane(container, panelId, selection, () => { viewService.openNewSession(); }),
 		activateSelection: selection => viewService.activateSelection(selection),
 		closeSelection: selection => viewService.closeVisibleSelection(selection),

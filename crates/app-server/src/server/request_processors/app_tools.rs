@@ -132,7 +132,7 @@ impl<'ctx, C: AppToolsRequestProcessorContext + ?Sized> AppToolsRequestProcessor
             AppToolOperation::ReadThread { session_id, thread_id } => self.context.session_thread_read(&json!({"sessionId":session_id,"threadId":thread_id,"history":{"type":"latest","turnLimit":20}})).map_err(rpc_error)?,
             AppToolOperation::CreateThread { title } => {
                 let caller = self.context.session_view(&context.session_id).map_err(rpc_error)?;
-                serde_json::to_value(self.context.create_session(SessionCreateParams { agent_id: None, agent: Default::default(), command_id, title, execution_target: caller.execution_target, branch_name: None, worktree_start: None, environment_variables: None }).map_err(rpc_error)?).map_err(json_error)?
+                serde_json::to_value(self.context.create_session(SessionCreateParams { surface: None, agent_id: None, agent: Default::default(), command_id, title, execution_target: caller.execution_target, branch_name: None, worktree_start: None, environment_variables: None }).map_err(rpc_error)?).map_err(json_error)?
             }
             AppToolOperation::ForkThread { session_id, thread_id, title } => serde_json::to_value(self.context.fork_session_request(SessionMutation { command_id, session_id }, thread_id, title).map_err(rpc_error)?).map_err(json_error)?,
             AppToolOperation::SetThreadArchived { session_id, archived } => {

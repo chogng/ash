@@ -1,7 +1,10 @@
+import { Lxicon } from '../../../../base/common/lxicons.js';
+import { toErrorMessage } from '../../../../base/common/errorMessage.js';
+import { IChatListCatalog } from './chatListModel.js';
 import { addDisposableListener, h, type IDimension } from '../../../../base/browser/dom.js';
-import { autorun, observableFromEvent, observableValue, type IReader } from '../../../../base/common/observable.js';
+import { autorun, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { observableConfigValue } from '../../../../platform/observable/common/platformObservableUtils.js';
-import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { localize } from '../../../../nls.js';
 import { IAccessibleViewService, type AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -10,7 +13,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
-import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { EditorPane, EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
@@ -25,10 +28,14 @@ import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widg
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { ChatInputEditorOptions } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
-import { NEW_SESSION_WELCOME_MESSAGES_SETTING, NEW_SESSION_WELCOME_NAME_SETTING, NEW_SESSION_WELCOME_PHRASES_SETTING, SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
-import { getNewSessionWelcomePhrases, type INewSessionWelcomeMessagesConfiguration } from '../common/welcomePhrases.js';
+import { ProjectTitleBarWidget } from '../../projects/browser/projectTitleBarWidget.js';
+import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
+import { ChatWelcomeTitle } from './chatWelcomeTitle.js';
 import './media/chatInput.css';
 import './media/chatInputCard.css';
+import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
+import * as chatInputStatePersistence from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
+import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
 import './media/chatView.css';
 
 export interface IReplyChatEditorModel extends IChatWidgetModel {
@@ -44,12 +51,16 @@ export interface ReplyChatEditorOptions {
 	readonly title: () => string;
 	readonly inputLabel: () => string;
 	readonly model: SyncDescriptor<IReplyChatEditorModel>;
+	readonly persistentDraftScope?: string;
+	readonly useWorkbenchModelManagement?: true;
+	readonly advanceWelcomePhrase?: false;
+	readonly createDraftPicker?: (instantiation: IInstantiationService, footer: HTMLElement, visible: IObservable<boolean>) => IDisposable;
 	readonly accessibility: {
 		readonly focusContext: string;
 		readonly verbositySetting: AccessibilityVerbositySettingId;
 		readonly hint: () => string;
 	};
-	readonly scrollOptimizationSetting: string;
+	readonly scrollOptimizationSetting?: string;
 }
 
 export function registerReplyChatEditor(options: ReplyChatEditorOptions): void {
@@ -80,14 +91,15 @@ export class ReplyChatEditor extends EditorPane {
 		@IEditorService private readonly editors: IEditorService,
 		@IThemeService theme: IThemeService,
 		@IStorageService private readonly profileStorage: IStorageService,
-		@IAccessibilityService private readonly accessibility: IAccessibilityService,
+		@ILifecycleService private readonly lifecycle: ILifecycleService,
+		@IChatListCatalog private readonly chatCatalog: IChatListCatalog,
 	) {
 		super(options.id, theme, profileStorage);
 		this.id = options.id;
 	}
 	public override create(parent: HTMLElement): void {
 		const root = h(parent.ownerDocument, 'section', {
-			className: `${this.options.rootClass} ash-reply-chat-editor ash-sessions-chat-content`,
+			className: `${this.options.rootClass} ash-reply-chat-editor ash-sessions-chat-content ash-chat-content-layout`,
 			attributes: { 'aria-label': this.options.title() },
 		});
 		root.style.height = '100%';
@@ -98,9 +110,34 @@ export class ReplyChatEditor extends EditorPane {
 		// Nested input editors must inherit this page's accessibility context.
 		const instantiation = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, contextKeys])));
 		const model = instantiation.createInstance(this.options.model);
+		let projectId: string | undefined;
+		const projectTitlebar = this._register(instantiation.createInstance(ProjectTitleBarWidget, h(parent.ownerDocument, 'div'), {
+			icon: Lxicon.projects,
+			onClick: () => {
+				if (!projectId) return;
+				void this.commands.executeCommand('sessions.open.projects', projectId)
+					.catch(error => this.notifications.error(toErrorMessage(error)));
+			},
+		}));
+		this._register(autorun(reader => {
+			if (!this.shown.read(reader)) {
+				projectId = undefined;
+				projectTitlebar.setVisible(false);
+				return;
+			}
+			const snapshots = this.chatCatalog.sources.map(source => source.snapshot.read(reader));
+			const entry = snapshots.flatMap(snapshot => snapshot.entries).find(entry => entry.selected);
+			const project = entry?.projectId && snapshots.flatMap(snapshot => snapshot.projects ?? [])
+				.find(project => project.id === entry.projectId && !project.archived);
+			projectId = project ? project.id : undefined;
+			projectTitlebar.setName(project ? project.title : '');
+			projectTitlebar.setVisible(!!project);
+		}));
+		const createDraftPicker = this.options.createDraftPicker;
+		const welcome = this._register(instantiation.createInstance(ChatWelcomeTitle, (reader: IReader) => model.readWelcomeDraft(reader), this.shown, this.options.advanceWelcomePhrase !== false));
 		try {
 			this.widget = this._register(instantiation.createInstance(ChatWidget<IReplyChatEditorModel>,
-				root, 'sessions-chat-reply', model, () => model.newChat(),
+				root, this.options.id, model, () => model.newChat(),
 				this.menus, this.contextViews, this.commands, this.accessibleViews, this.notifications,
 				this.opener, this.editors, undefined,
 				(container: HTMLElement, delegate: ChatInputDelegate) => {
@@ -114,22 +151,34 @@ export class ReplyChatEditor extends EditorPane {
 						}),
 					}, [], {
 						layout: 'compact', modePicker: 'hidden', modelPickerPosition: 'trailing',
-						useWorkbenchModelManagement: false,
+						useWorkbenchModelManagement: this.options.useWorkbenchModelManagement === true,
+						chatModelSlider: true, configureModelInMenu: true,
 						renderSecondaryToolbar: false, draftStorage: 'host',
+						renderLeadingFooter: createDraftPicker && ((footer: HTMLElement) => createDraftPicker(instantiation, footer, this.shown)),
 						inputLabel: this.options.inputLabel(),
 					});
+					const draftScope = this.options.persistentDraftScope;
+					if (draftScope) {
+						input.bindDraftStorage(model, {
+							read: identity => readNewChatDraftState(this.profileStorage, `${draftScope}:${identity}`, chatInputStatePersistence),
+							write: (identity, draft) => writeNewChatDraftState(this.profileStorage, draft, `${draftScope}:${identity}`, chatInputStatePersistence),
+							flush: () => this.profileStorage.flush(),
+						}, this.lifecycle.onWillShutdown);
+					}
 					input.element.classList.add('ash-sessions-chat-input', 'chat-composer');
 					input.composerForm.classList.add('ash-sessions-chat-input-card', 'floating-card');
 					return input;
-				}, { showPromptTimeline: true, welcomeTitle: this.createWelcomeTitle(model) }));
+				}, { showPromptTimeline: true, welcomeTitle: welcome.title }));
 		} catch (error) {
 			model.dispose();
 			throw error;
 		}
-		const scrollOptimization = observableConfigValue(this.options.scrollOptimizationSetting, false, this.configuration);
-		this._register(autorun(reader => {
-			root.classList.toggle('ash-chat-defer-completed', scrollOptimization.read(reader));
-		}));
+		if (this.options.scrollOptimizationSetting) {
+			const scrollOptimization = observableConfigValue(this.options.scrollOptimizationSetting, false, this.configuration);
+			this._register(autorun(reader => {
+				root.classList.toggle('ash-chat-defer-completed', scrollOptimization.read(reader));
+			}));
+		}
 		this._register(addDisposableListener(root, 'focusin', event => {
 			const { hint, verbositySetting } = this.options.accessibility;
 			if (!root.contains(event.relatedTarget as Node) && this.configuration.getValue<boolean>(verbositySetting)) {
@@ -147,37 +196,4 @@ export class ReplyChatEditor extends EditorPane {
 		this.shown.set(visible, undefined);
 	}
 
-	private createWelcomeTitle(model: IReplyChatEditorModel) {
-		const title = observableValue<string | undefined>(this, undefined);
-		const enabled = observableConfigValue(NEW_SESSION_WELCOME_PHRASES_SETTING, true, this.configuration);
-		const name = observableConfigValue(NEW_SESSION_WELCOME_NAME_SETTING, '', this.configuration);
-		const messages = observableConfigValue<INewSessionWelcomeMessagesConfiguration | undefined>(NEW_SESSION_WELCOME_MESSAGES_SETTING, undefined, this.configuration);
-		const verbosityKey = 'accessibility.verbosity.newSessionWelcome';
-		const verbosity = observableConfigValue(verbosityKey, true, this.configuration);
-		const screenReader = observableFromEvent(this, this.accessibility.onDidChangeScreenReaderOptimized, () => this.accessibility.isScreenReaderOptimized());
-		let identity: string | undefined;
-		let draftRevision = -1;
-		let index = 0;
-		let announced = false;
-		this._register(autorun(reader => {
-			const draft = model.readWelcomeDraft(reader);
-			if (draft && (identity !== draft.id || draftRevision !== draft.revision)) {
-				identity = draft.id;
-				draftRevision = draft.revision;
-				announced = false;
-				const key = 'agentSessions.newSession.welcomePhraseIndex';
-				const stored = this.profileStorage.getNumber(key, StorageScope.PROFILE, 0);
-				index = Number.isSafeInteger(stored) && stored >= 0 ? stored : 0;
-				this.profileStorage.store(key, index < Number.MAX_SAFE_INTEGER - 1 ? index + 1 : 0, StorageScope.PROFILE, StorageTarget.MACHINE);
-			}
-			const phrases = getNewSessionWelcomePhrases(messages.read(reader), name.read(reader).trim() || undefined);
-			const phrase = draft && enabled.read(reader) && phrases.length ? phrases[index % phrases.length] : undefined;
-			title.set(phrase, undefined);
-			if (this.shown.read(reader) && phrase && !announced && screenReader.read(reader) && verbosity.read(reader)) {
-				announced = true;
-				this.accessibility.status(localize('newSession.welcome.announcement', '{0}\nTo disable this announcement, set {1} to false.', phrase, verbosityKey));
-			}
-		}));
-		return title;
-	}
 }

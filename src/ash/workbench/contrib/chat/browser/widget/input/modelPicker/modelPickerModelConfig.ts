@@ -4,15 +4,18 @@ import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../
 /** The toolbar shows effort and an explicitly selected acceleration mode. */
 export function getModelConfigSummary(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): string {
 	const values: string[] = [];
-	if (entry.supportedReasoningEfforts?.length) {
-		values.push(modelPickerEffortLabel(selectedEffort ?? entry.defaultReasoningEffort));
-	}
+	const effort = getModelConfigEffortLabel(entry, selectedEffort);
+	if (effort) { values.push(effort); }
 	if (entry.selectedAcceleration) {
 		const acceleration = modelPickerAccelerationOptions(entry).find(option => option.value === entry.selectedAcceleration);
 		if (acceleration) { values.push(acceleration.label); }
 	}
-	if (values.length) { return values.join(' · '); }
-	return entry.longContext !== null || entry.accelerationOptions?.length ? localize('chat.modelPicker.configuration', 'Model options') : '';
+	return values.join(' · ');
+}
+
+export function getModelConfigEffortLabel(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): string | undefined {
+	const options = modelPickerEffortOptions(entry, selectedEffort);
+	return options.length ? options.find(option => option.checked)?.label ?? localize('chat.modelPicker.modelDefault', 'Model default') : undefined;
 }
 
 /** The catalog already reflects connection availability; preserve each provider's exact option ID. */
@@ -38,6 +41,7 @@ function accelerationLabel(name: string): string {
 	switch (name) {
 		case 'Fast': return localize('chat.modelPicker.fast', 'Fast');
 		case 'Ultra Fast': return localize('chat.modelPicker.ultraFast', 'Ultra Fast');
+		case 'Priority': return localize('chat.modelPicker.priority', 'Priority');
 		default: return name;
 	}
 }
@@ -46,6 +50,7 @@ function accelerationDescription(description: string): string {
 	switch (description) {
 		case 'Faster responses, increased usage': return localize('chat.modelPicker.fastDescription', 'Faster responses, increased usage');
 		case 'Priority processing, increased usage': return localize('chat.modelPicker.priorityDescription', 'Priority processing, increased usage');
+		case 'Uses committed Priority Tier capacity when available': return localize('chat.modelPicker.committedPriorityDescription', 'Uses committed Priority Tier capacity when available');
 		default: return description;
 	}
 }
@@ -60,18 +65,15 @@ export function getModelConfigValueLabel(tokens: number): string {
 	return String(tokens);
 }
 
-/** Both configuration surfaces write undefined when the configured default is chosen. */
-export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): readonly { effort: ModelReasoningEffort | undefined; value: ModelReasoningEffort | undefined; label: string; description?: string; checked: boolean; }[] {
-	const defaultEffort = entry.defaultReasoningEffort;
-	const efforts = defaultEffort === undefined || !entry.supportedReasoningEfforts?.some(option => option.effort === defaultEffort)
-		? [{ effort: undefined, description: undefined }, ...(entry.supportedReasoningEfforts ?? [])]
-		: entry.supportedReasoningEfforts ?? [];
-	return efforts.map(({ effort, description }) => ({
+export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): readonly { effort: ModelReasoningEffort; label: string; description?: string; checked: boolean; }[] {
+	const supported = entry.supportedReasoningEfforts ?? [];
+	const displayedEffort = [selectedEffort, entry.effectiveReasoningEffort, entry.defaultReasoningEffort]
+		.find(candidate => supported.some(({ effort }) => effort === candidate));
+	return supported.map(({ effort, description }) => ({
 		effort,
-		value: effort === defaultEffort ? undefined : effort,
 		label: modelPickerEffortLabel(effort),
 		description: modelPickerEffortDescription(description),
-		checked: effort === (selectedEffort ?? (efforts.some(option => option.effort === defaultEffort) ? defaultEffort : undefined)),
+		checked: effort === displayedEffort,
 	}));
 }
 
@@ -89,9 +91,8 @@ export function modelPickerEffortDescription(description: string | null | undefi
 	}
 }
 
-export function modelPickerEffortLabel(effort: ModelReasoningEffort | undefined): string {
+export function modelPickerEffortLabel(effort: ModelReasoningEffort): string {
 	switch (effort) {
-		case undefined: return localize('chat.modelPicker.defaultEffort', 'Default');
 		case 'none': return localize('chat.modelPicker.effortNone', 'None');
 		case 'minimal': return localize('chat.modelPicker.effortMinimal', 'Minimal');
 		case 'low': return localize('chat.modelPicker.effortLow', 'Low');

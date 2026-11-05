@@ -673,6 +673,7 @@ fn exec_policy_authority_serializes_exact_rule_and_revision() {
 #[test]
 fn canonical_session_contains_root_model_and_thread_lineage_without_history() {
     let mut session = Session {
+        surface: None,
         source: None,
         model: None,
         session_id: SessionId::new("session_1").expect("test ID is non-empty"),
@@ -682,6 +683,7 @@ fn canonical_session_contains_root_model_and_thread_lineage_without_history() {
         manager: Default::default(),
         threads: vec![
             SessionThread {
+                recap: None,
                 manager: None,
                 thread_id: ThreadId::new("thread_root").expect("test ID is non-empty"),
                 title: "task".into(),
@@ -695,6 +697,7 @@ fn canonical_session_contains_root_model_and_thread_lineage_without_history() {
                 status: ThreadStatus::Active,
             },
             SessionThread {
+                recap: None,
                 manager: None,
                 thread_id: ThreadId::new("thread_child").expect("test ID is non-empty"),
                 title: "review".into(),

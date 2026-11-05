@@ -10,9 +10,17 @@ export enum ModelPurpose {
 	Advisor = 'advisor',
 	Review = 'review',
 	Commit = 'commit',
+	ThreadTitle = 'threadTitle',
+	ThreadRecap = 'threadRecap',
 }
 
 export type ModelReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max';
+
+export const modelReasoningEfforts = ['none', 'minimal', 'low', 'medium', 'high', 'extraHigh', 'max'] as const satisfies readonly ModelReasoningEffort[];
+
+export function isModelReasoningEffort(value: unknown): value is ModelReasoningEffort {
+	return modelReasoningEfforts.some(effort => effort === value);
+}
 
 export interface ModelReasoningEffortOption {
 	readonly effort: ModelReasoningEffort;
@@ -76,8 +84,14 @@ export interface ModelCatalogEntry {
 	readonly maximumContextWindow?: number | null;
 	readonly accelerationOptions?: readonly ModelAccelerationOption[];
 	readonly selectedAcceleration?: string | null;
+	/** Undefined when Ultra is unavailable for the model connection. */
+	readonly ultra?: boolean;
 	readonly supportedReasoningEfforts?: readonly ModelReasoningEffortOption[];
 	readonly defaultReasoningEffort?: ModelReasoningEffort;
+	readonly effectiveReasoningEffort?: ModelReasoningEffort;
+	/** Effective even when the conversation supplies an explicit effort. */
+	readonly reasoningEffortOverride?: ModelReasoningEffort;
+	readonly presets?: readonly { readonly id: string; readonly label: string; readonly isPro?: boolean; readonly thinkingEffort?: string; }[];
 }
 
 export interface AdvisorConfig {
@@ -144,6 +158,7 @@ export type ModelProviderTestResult =
 
 export interface ModelPreferencesUpdate {
 	readonly acceleration?: string | null;
+	readonly ultra?: boolean;
 	readonly longContext?: boolean;
 }
 
@@ -164,6 +179,10 @@ export interface AgentModelDefaults {
 	readonly commitMessageEnabled: boolean;
 	/** Null follows the reviewing Thread's current model. */
 	readonly codeReviewModel: ModelRef | null;
+	/** Null selects a recommended model on the conversation provider. */
+	readonly threadTitleModel?: ModelRef | null;
+	readonly threadRecapModel?: ModelRef | null;
+	readonly threadRecapEnabled?: boolean;
 	readonly revision: number;
 	readonly model: ModelRef | null;
 	readonly reasoningEffort: ModelReasoningEffort | null;
@@ -173,6 +192,9 @@ export interface AgentModelDefaultsUpdate {
 	readonly commitMessageModel?: ModelRef | null;
 	readonly commitMessageEnabled?: boolean;
 	readonly codeReviewModel?: ModelRef | null;
+	readonly threadTitleModel?: ModelRef | null;
+	readonly threadRecapModel?: ModelRef | null;
+	readonly threadRecapEnabled?: boolean;
 	readonly model?: ModelRef | null;
 	readonly reasoningEffort?: ModelReasoningEffort | null;
 }

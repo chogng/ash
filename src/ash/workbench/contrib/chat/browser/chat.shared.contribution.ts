@@ -26,6 +26,7 @@ import { registerChatCopyActions } from './actions/chatCopyActions.js';
 import { registerChatApprovalEnvironmentActions } from './actions/chatApprovalEnvironmentActions.js';
 import { registerChatCodeBlockActions } from './actions/chatCodeblockActions.js';
 import { registerChatToolActions } from './actions/chatToolActions.js';
+import { AgentTaskModelSettingsModel } from '../../preferences/browser/agentTaskModelSettingsModel.js';
 import { registerChatTitleActions } from './actions/chatTitleActions.js';
 import { registerChatElicitationActions } from './actions/chatElicitationActions.js';
 import { registerChatExecuteActions } from './actions/chatExecuteActions.js';
@@ -44,7 +45,7 @@ import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import type { ChatDebugEditor } from './chatDebug/chatDebugEditor.js';
 import { chatDebugEditorId } from './chatDebug/chatDebugEditorInput.js';
-import { registerChatChangesActions } from './chatEditing/chatEditingActions.js';
+import { registerChatChangesActions, registerChatHistoryActions, registerChatRestoreCheckpointAction } from './chatEditing/chatEditingActions.js';
 import { registerAgentSessionActions } from './agentSessions/agentSessionsActions.js';
 import { Extensions as WorkbenchExtensions, type IConfigurationMigrationRegistry } from '../../../common/configuration.js';
 import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
@@ -134,6 +135,16 @@ registerSingleton(IChatSpeechToTextService, ChatSpeechToTextService, Instantiati
 registerSingleton(IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient, InstantiationType.Delayed);
 registerSingleton(IChatWidgetService, ChatWidgetService, InstantiationType.Delayed);
 registerSingleton(IChatLayoutService, ChatLayoutService, InstantiationType.Delayed);
+registerSettingsSection({
+	id: 'chat.threadTitle', categoryId: 'agents', model: new SyncDescriptor(AgentTaskModelSettingsModel, ['threadTitleModel']),
+	accessibleViewProviderId: AccessibleViewProviderId.ChatModelConfiguration,
+	accessibilityVerbositySettingId: AccessibilityVerbositySettingId.ChatModelConfiguration,
+});
+registerSettingsSection({
+	id: 'chat.threadRecap', categoryId: 'agents', model: new SyncDescriptor(AgentTaskModelSettingsModel, ['threadRecapModel']),
+	accessibleViewProviderId: AccessibleViewProviderId.ChatModelConfiguration,
+	accessibilityVerbositySettingId: AccessibilityVerbositySettingId.ChatModelConfiguration,
+});
 registerSettingsSection({
 	id: 'chat.subscriptionUsage', categoryId: 'chat-usage', model: new SyncDescriptor(SubscriptionUsageSettingsModel),
 	accessibleViewProviderId: AccessibleViewProviderId.ChatUsage,
@@ -602,6 +613,8 @@ Registry.as<IConfigurationMigrationRegistry>(WorkbenchExtensions.ConfigurationMi
 registerAgentSessionActions();
 
 registerChatChangesActions();
+registerChatHistoryActions();
+registerChatRestoreCheckpointAction();
 
 registerEditorPane({
 	id: chatDebugEditorId,

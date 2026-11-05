@@ -77,16 +77,14 @@ pub(super) fn hash(path: &Path) -> Result<String> {
 
 fn read_state() -> Result<(PathBuf, State)> {
     let root = root()?;
-    let _pins = win::pin_executable(&root.join("state.dpapi"))?;
-    for path in [
-        super::service::directory()?,
-        root.clone(),
-        root.join("state.dpapi"),
-    ] {
+    let journal = root.join("state.dpapi");
+    let _pins = pin_runtime_journal(&root, &journal)?;
+    for path in [super::service::directory()?, root.clone(), journal.clone()] {
         win::verify_service_path(&path)?;
     }
-    let mut data = account::unseal(&root.join("state.dpapi"))
-        .map_err(|_| "the Ash user runtime requires setup; use ash-windows-sandbox setup with explicit account and network authorization")?;
+    let mut data = account::unseal(&journal).map_err(|error| {
+        format!("could not read the encrypted Ash user runtime journal: {error}")
+    })?;
     let parsed =
         serde_json::from_slice::<State>(&data).map_err(|_| "invalid Ash user runtime state");
     for byte in &mut data {
@@ -103,6 +101,18 @@ fn read_state() -> Result<(PathBuf, State)> {
         return Err("the runtime journal has an unexpected owner, version, or account set".into());
     }
     Ok((root, state))
+}
+
+fn pin_runtime_journal(root: &Path, journal: &Path) -> Result<Vec<win::Handle>> {
+    win::pin_executable(journal).map_err(|error| {
+        // An absent per-user root requires setup. A partial or inaccessible
+        // installation needs recovery and must retain its underlying error.
+        if matches!(std::fs::symlink_metadata(root), Err(error) if error.kind() == std::io::ErrorKind::NotFound) {
+            "the Ash user runtime requires setup; use ash-windows-sandbox setup with explicit account and network authorization".into()
+        } else {
+            format!("could not open the Ash user runtime journal: {error}")
+        }
+    })
 }
 
 fn checked_state() -> Result<(PathBuf, State, Vec<win::Handle>)> {

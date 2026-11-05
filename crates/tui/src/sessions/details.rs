@@ -69,7 +69,7 @@ impl SessionDetails {
 
 fn summary_rows(session: &Session) -> Vec<DetailListRow> {
     vec![
-        DetailListRow::new("Session", &session.title),
+        DetailListRow::new("Session", super::session_title(session)),
         DetailListRow::new(
             "Session ID",
             session
@@ -164,6 +164,12 @@ fn render_details(result: &SessionResult) -> DetailList {
                     }
                 ),
             ));
+            if let Some(recap) = &thread.recap {
+                rows.push(DetailListRow::with_raw_value(
+                    "Conversation recap",
+                    format!("{indent}{recap}"),
+                ));
+            }
         }
         for join in &node.joins {
             let status = match join.status {

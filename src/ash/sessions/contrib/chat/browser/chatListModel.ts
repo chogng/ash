@@ -1,0 +1,361 @@
+import { toErrorMessage } from '../../../../base/common/errorMessage.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IProjectService } from '../../../../platform/projects/common/projectService.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import { Menus } from '../../../browser/menus.js';
+import { ISessionsListModelService } from '../../../services/sessions/browser/sessionsListModelService.js';
+import { IProjectsService } from '../../projects/browser/projectsService.js';
+import type { SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
+import type { SessionsCatalogListModel } from '../../sessions/browser/views/sessionsView.js';
+import { CHAT_WORKSPACE_NAVIGATION_ID } from '../common/constants.js';
+import { Separator, type IAction } from '../../../../base/common/actions.js';
+import type { Icon } from '../../../../base/common/icon.js';
+import { Disposable, isDisposable, type IDisposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { derived, observableFromEvent, observableValue, type IObservable } from '../../../../base/common/observable.js';
+import type { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { localize } from '../../../../nls.js';
+import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
+
+import type { SessionGroup } from '../../../services/sessions/browser/sessionGroupsService.js';
+import { sessionListProjectActions, sessionProjectOrganization, sessionSortActions, type SessionListOrganization } from '../../sessions/browser/views/sessionsListActions.js';
+
+export interface ChatListEntry extends SessionListOrganization {
+	/** Opaque identity, unique across the entire list. */
+	readonly id: string;
+	readonly title: string;
+	/** Session catalog identity, when this row represents an Ash session. */
+	readonly sessionId?: string;
+	/** Milliseconds since the Unix epoch, when supplied by the catalog. */
+	readonly createdAt?: number;
+	readonly updatedAt?: number;
+	readonly projectId?: string;
+	readonly selected: boolean;
+	readonly status?: ISessionStatusIcon;
+	readonly disabled?: boolean;
+	readonly actionsDisabled?: boolean;
+	readonly defaultIcon: Icon;
+	readonly iconId?: string;
+	readonly setIcon?: (icon: Icon | undefined) => void;
+	readonly open: (signal: AbortSignal) => Promise<void>;
+	readonly getActions: (signal: AbortSignal, restoreFocus: () => void) => readonly IAction[] | Promise<readonly IAction[]>;
+}
+
+type ProjectHistory =
+	| { readonly state: 'idle' | 'more' | 'error'; readonly load: () => void; }
+	| { readonly state: 'loading' | 'complete' | 'unavailable'; };
+
+export interface ConversationProjectDetails {
+	readonly name: string;
+	readonly description: string;
+}
+
+export interface ConversationProjectEditor {
+	readonly details: ConversationProjectDetails;
+	save(details: ConversationProjectDetails): Promise<void>;
+}
+
+export interface ChatListProject {
+	/** Stable identity for membership and persisted expansion. */
+	readonly id: string;
+	readonly title: string;
+	readonly history: ProjectHistory;
+	readonly archived?: boolean;
+	readonly archive?: () => void;
+	readonly restore?: () => void;
+	readonly remove?: { readonly removesContents: boolean; run(): Promise<void>; };
+	readonly editDetails?: (signal: AbortSignal) => Promise<ConversationProjectEditor>;
+}
+
+export interface ChatListSnapshot {
+	readonly entries: readonly ChatListEntry[];
+	readonly projects?: readonly ChatListProject[];
+	readonly groups?: readonly SessionGroup[];
+	readonly loading?: boolean;
+}
+
+/** Catalog owners supply records and operations. The list owns their placement. */
+export interface ChatListSource {
+	readonly snapshot: IObservable<ChatListSnapshot>;
+	attach?(window: Window & typeof globalThis, isVisible: () => boolean): IDisposable;
+	loadMore?(retry: boolean): void;
+}
+
+export interface IChatListCatalog {
+	readonly sources: readonly ChatListSource[];
+}
+
+export const IChatListCatalog = createServiceIdentifier<IChatListCatalog>('chatListCatalog');
+
+export class ChatListCatalog extends Disposable implements IChatListCatalog {
+	readonly sources: readonly ChatListSource[];
+
+	constructor(adapters: readonly SyncDescriptor<ChatListSource>[], @IInstantiationService instantiation: IInstantiationService) {
+		super();
+		this.sources = adapters.map(adapter => {
+			const source = instantiation.createInstance(adapter);
+			if (isDisposable(source)) this._register(source);
+			return source;
+		});
+	}
+}
+
+export interface ChatListGroup {
+	readonly key: string;
+	readonly title: string;
+	readonly rows: ChatListEntry[];
+	readonly project?: ChatListProject;
+}
+
+export function getProjectSessionRows(entries: readonly ChatListEntry[], sessionIds: readonly string[]): ChatListEntry[] {
+	const members = new Set(sessionIds);
+	return entries.filter(entry => entry.sessionId !== undefined && members.has(entry.sessionId))
+		.sort((left, right) => (right.updatedAt ?? 0) - (left.updatedAt ?? 0));
+}
+
+export function groupChatList(snapshots: readonly ChatListSnapshot[], mode: 'chat' | 'projects' | 'archived' = 'chat', hasPinnedProjects = false): readonly ChatListGroup[] {
+	const pinned: ChatListGroup = { key: 'pinned', title: localize('sessions.chatList.pinnedGroup', 'Pinned'), rows: [] };
+	const other: ChatListGroup = { key: 'other', title: localize('sessions.chatList.otherProjects', 'Other projects'), rows: [] };
+	const recent: ChatListGroup = { key: 'recent', title: localize('sessions.chatList.recentGroup', 'Recent'), rows: [] };
+	const projects = new Map<string, ChatListGroup>();
+	for (const snapshot of snapshots) {
+		for (const project of snapshot.projects ?? []) {
+			projects.set(project.id, { key: project.id, title: project.title, rows: [], project });
+		}
+	}
+	for (const snapshot of snapshots) {
+		for (const entry of snapshot.entries) {
+			const project = entry.projectId ? projects.get(entry.projectId) ?? other : undefined;
+			const group = mode !== 'chat' ? project : entry.pinned ? pinned : entry.projectId ? undefined : recent;
+			group?.rows.push(entry);
+		}
+	}
+	if (mode === 'archived') return [...projects.values()].filter(group => group.project?.archived);
+	return (mode === 'projects' ? [...projects.values(), other] : [pinned, recent])
+		.filter(group => !group.project?.archived && (group.project || group.rows.length || group === pinned && hasPinnedProjects));
+}
+
+interface ProjectMembership {
+	readonly revision: number;
+	sessionIds?: readonly string[];
+	failed?: boolean;
+}
+
+/** Combines the desktop conversation sources into the sidebar's ordered tree. */
+export class ChatWorkspaceListModel extends Disposable implements SessionsCatalogListModel {
+	private readonly membership = new Map<string, ProjectMembership>();
+	private readonly membershipVersion = observableValue(this, 0);
+	private readonly opening = this._register(new MutableDisposable());
+	readonly snapshot;
+	readonly collapseStatePrefix = `workbench.viewContainer.${CHAT_WORKSPACE_NAVIGATION_ID}.${CHAT_WORKSPACE_NAVIGATION_ID}.`;
+	readonly headerActions = {
+		menu: Menus.ChatSidebarHeader,
+		submenu: Menus.SessionsViewSort,
+		getActions: (): readonly IAction[] => sessionSortActions(this.listModel),
+	};
+
+	constructor(
+		@IChatListCatalog private readonly catalog: IChatListCatalog,
+		@IProjectsService private readonly projects: IProjectsService,
+		@IProjectService private readonly projectService: IProjectService,
+		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
+		@INotificationService private readonly notifications: INotificationService,
+		@IStorageService storage: IStorageService,
+	) {
+		super();
+		this.migrateCollapseState(storage);
+		const sort = observableFromEvent(this, listModel.onDidChange, () => `${listModel.sortMode}:${listModel.sortDirection}`);
+		this.snapshot = derived(reader => {
+			const projects = this.projects.state.read(reader).projects.filter(project => !project.archived);
+			this.membershipVersion.read(reader);
+			sort.read(reader);
+			const snapshots = this.catalog.sources.map(source => source.snapshot.read(reader));
+			const projectIds = new Set(projects.map(project => project.id));
+			for (const id of this.membership.keys()) {
+				if (!projectIds.has(id)) this.membership.delete(id);
+			}
+			const projectGroups = new Map(groupChatList(snapshots, 'projects').filter(group => group.project).map(group => [group.key, group]));
+			const entries = snapshots.flatMap(snapshot => snapshot.entries);
+			const projectEntryIds = new Set<string>();
+			for (const project of projects) {
+				const membership = this.readMembership(project.id, project.revision, project.sessionCount);
+				const existing = projectGroups.get(project.id);
+				const rows = getProjectSessionRows(entries, membership?.sessionIds ?? []);
+				for (const row of rows) projectEntryIds.add(row.id);
+				projectGroups.set(project.id, { key: project.id, title: project.name, rows: [...rows, ...(existing?.rows ?? [])], project: existing?.project });
+			}
+
+			const pinnedProjects = [...projectGroups.values()].filter(project => this.projects.isPinned(project.key));
+			const otherProjects = [...projectGroups.values()].filter(project => !this.projects.isPinned(project.key));
+			const groups = [...groupChatList(snapshots, 'chat', pinnedProjects.length > 0)];
+			if (!groups.some(group => group.key === 'recent') && entries.some(entry => entry.pinned || entry.projectId || projectEntryIds.has(entry.id))) {
+				groups.push({ key: 'recent', title: localize('sessions.chatList.recentGroup', 'Recent'), rows: [] });
+			}
+			const recent = groups.find(group => group.key === 'recent');
+			const grouped = new Set<string>();
+			for (const group of snapshots.flatMap(snapshot => snapshot.groups ?? [])) {
+				const members = new Set(group.sessionIds);
+				const rows = (recent?.rows ?? []).filter(entry => entry.sessionId && members.has(entry.sessionId)
+					&& !projectEntryIds.has(entry.id) && !grouped.has(entry.id));
+				for (const row of rows) grouped.add(row.id);
+				groups.splice(recent ? groups.indexOf(recent) : groups.length, 0, { key: `group:${group.sectionId}`, title: group.name, rows });
+			}
+			groups.splice(groups[0]?.key === 'pinned' ? 1 : 0, 0,
+				{ key: 'projects', title: localize('projects.title', 'Projects'), rows: [] });
+
+			return {
+				loading: snapshots.some(snapshot => snapshot.loading),
+				sections: groups.flatMap(group => {
+					const { key } = group;
+					const groupDropTarget = key.startsWith('group:');
+					const rows = this.sortRows(group.rows.filter(entry => key !== 'recent' || !projectEntryIds.has(entry.id) && !grouped.has(entry.id)))
+						.map(entry => this.toRow(entry, projects));
+					const projectGroups = key === 'pinned' ? pinnedProjects : key === 'projects' ? otherProjects : [];
+					if (!rows.length && key !== 'projects' && key !== 'recent' && !groupDropTarget && !projectGroups.length) return [];
+					return [{
+						key, title: group.title, rows, groupDropTarget, showActions: key === 'projects',
+						collapsible: key !== 'projects' || projectGroups.length > 0,
+						projects: projectGroups.map(project => this.toProject(project, projects)),
+					}];
+				}),
+			} satisfies SessionsCatalogSnapshot;
+		});
+	}
+
+	attach(window: Window & typeof globalThis, isVisible: () => boolean): void {
+		void this.projects.reload();
+		for (const source of this.catalog.sources) {
+			if (source.attach) this._register(source.attach(window, isVisible));
+		}
+	}
+
+	loadMore(retry: boolean): void {
+		for (const source of this.catalog.sources) source.loadMore?.(retry);
+	}
+
+	private migrateCollapseState(storage: IStorageService): void {
+		const previousPrefix = 'sessions.chatgpt.navigation.collapsed.';
+		for (const previousKey of storage.keys(StorageScope.PROFILE, StorageTarget.MACHINE)) {
+			if (!previousKey.startsWith(previousPrefix)) continue;
+			const key = previousKey.slice(previousPrefix.length);
+			if (key && key !== 'projects') {
+				const nextKey = `${this.collapseStatePrefix}${key}.collapsed`;
+				const previous = storage.getBoolean(previousKey, StorageScope.PROFILE);
+				if (previous !== undefined && storage.getBoolean(nextKey, StorageScope.PROFILE) === undefined) {
+					storage.store(nextKey, previous, StorageScope.PROFILE, StorageTarget.MACHINE);
+				}
+			}
+			storage.remove(previousKey, StorageScope.PROFILE);
+		}
+	}
+
+	private readMembership(id: string, revision: number, sessionCount: number): ProjectMembership | undefined {
+		if (!sessionCount) {
+			this.membership.delete(id);
+			return undefined;
+		}
+		const current = this.membership.get(id);
+		if (current?.revision === revision) return current;
+
+		// Keep the last known membership until the new project revision is read.
+		const request: ProjectMembership = { revision, sessionIds: current?.sessionIds };
+		this.membership.set(id, request);
+		const finish = (sessionIds?: readonly string[]): void => {
+			if (this.isDisposed || this.membership.get(id) !== request) return;
+			request.failed = sessionIds === undefined;
+			request.sessionIds = sessionIds ?? request.sessionIds;
+			this.membershipVersion.set(this.membershipVersion.get() + 1);
+		};
+		void this.projectService.read(id, 'chat').then(value => finish(value.sessionIds), () => finish());
+		return request;
+	}
+
+	private sortRows(rows: readonly ChatListEntry[]): readonly ChatListEntry[] {
+		const { sortMode, sortDirection } = this.listModel;
+		const sign = sortDirection === 'ascending' ? 1 : -1;
+		if (sortMode === 'name') {
+			return [...rows].sort((left, right) => sign * left.title.localeCompare(right.title, undefined, { numeric: true }));
+		}
+		const time = (row: ChatListEntry) => sortMode === 'created' ? row.createdAt : row.updatedAt ?? row.createdAt;
+		// Preserve catalog order for records that do not carry the requested date.
+		const dated = rows.flatMap(row => {
+			const timestamp = time(row);
+			return timestamp === undefined ? [] : [{ row, timestamp }];
+		}).sort((left, right) => sign * (left.timestamp - right.timestamp));
+		let index = 0;
+		return rows.map(row => time(row) === undefined ? row : dated[index++]!.row);
+	}
+
+	private toProject(project: ChatListGroup, destinations: readonly { readonly id: string; readonly name: string; }[]): SessionsCatalogProject {
+		const rows = this.sortRows(project.rows).map(entry => this.toRow(entry, destinations, project.key));
+		const current = this.membership.get(project.key);
+		const history = project.project?.history;
+		const retry = current?.failed ? () => {
+			this.membership.delete(project.key);
+			this.membershipVersion.set(this.membershipVersion.get() + 1);
+		} : undefined;
+		const action = history?.state === 'error' || history?.state === 'more' ? history.load : retry;
+		const label = history?.state === 'more' ? localize('sessions.chatList.loadMoreProjectChats', 'Load more project chats')
+			: history?.state === 'error' || retry ? localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry')
+				: history?.state === 'unavailable' ? localize('sessions.chatList.projectChatsOffline', 'Connect to load project chats.')
+					: history?.state === 'idle' || history?.state === 'loading' || (current && !current.sessionIds)
+						? localize('sessions.chatList.loadingProjectChats', 'Loading project chats…')
+						: !rows.length ? localize('sessions.chatList.emptyProject', 'No chats in this project') : undefined;
+		return { key: project.key, title: project.title, rows, history: label ? { label, action } : undefined, onExpand: history?.state === 'idle' ? history.load : undefined };
+	}
+
+	private toRow(entry: ChatListEntry, destinations: readonly { readonly id: string; readonly name: string; }[], parentProject?: string): SessionsCatalogRow {
+		const sessionId = entry.sessionId;
+		const project = sessionId ? () => {
+			const memberships = destinations.filter(project => this.membership.get(project.id)?.sessionIds?.includes(sessionId));
+			const current = parentProject ?? (memberships.length === 1 ? memberships[0]!.id : undefined);
+			return sessionProjectOrganization(this.projectService, sessionId, current, destinations);
+		} : () => entry.project;
+		return {
+			id: entry.id,
+			title: entry.title,
+			selected: entry.selected,
+			status: entry.status,
+			disabled: entry.disabled,
+			actionsDisabled: entry.actionsDisabled,
+			defaultIcon: entry.defaultIcon,
+			iconId: entry.iconId,
+			setIcon: entry.setIcon,
+			pinned: entry.pinned,
+			setPinned: entry.setPinned,
+			organization: () => entry.disabled || entry.actionsDisabled ? undefined : {
+				pinned: entry.pinned, setPinned: entry.setPinned, moveToGroup: entry.moveToGroup, project: project(),
+			},
+			open: () => {
+				const controller = new AbortController();
+				this.opening.value = toDisposable(() => controller.abort());
+				void entry.open(controller.signal).catch(error => {
+					if (!controller.signal.aborted) this.notifications.error(toErrorMessage(error));
+				});
+			},
+			getActions: async (signal, restoreFocus) => {
+				const actions = [...await entry.getActions(signal, restoreFocus)];
+				const organization = project();
+				if (!signal.aborted && organization && (organization.current || organization.destinations.length || organization.loadDestinations)) {
+					try {
+						const destinations = organization.loadDestinations ? await organization.loadDestinations(signal) : organization.destinations;
+						if (signal.aborted) return actions;
+						const projectActions = sessionListProjectActions(organization, destinations, async run => {
+							try {
+								await run();
+								restoreFocus();
+							} catch (error) {
+								this.notifications.error(toErrorMessage(error));
+							}
+						});
+						const separator = actions.map(action => action instanceof Separator).lastIndexOf(true);
+						actions.splice(separator < 0 ? actions.length : separator, 0, ...projectActions);
+					} catch (error) {
+						if (!signal.aborted) this.notifications.error(toErrorMessage(error));
+					}
+				}
+				return actions;
+			},
+		};
+	}
+}

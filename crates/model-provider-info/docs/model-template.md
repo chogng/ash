@@ -68,6 +68,10 @@ ChatGPT Web 的订阅对话由 Sessions ChatGPT contribution 单独接入：`/ba
 
 必须分别描述四件事：是否思考、投入多深、允许用多少 token、是否返回摘要或历史凭据。同名 effort 不保证跨型号、跨厂商有相同投入。思考预算和整次响应预算还要描述共享关系，避免把推理 token 与可见输出预算重复计算。
 
+默认档位由模型目录按接入声明。公开 API 条目以对应厂商资料为准，订阅发现结果可覆盖该连接的默认值。模型定义要求默认档位属于支持列表，动态目录仅发布当前列表支持的默认值。App Server 分别返回目录声明的 `default_reasoning_effort` 和结合当前配置解析的 `effective_reasoning_effort`。会话未指定档位时，选择器与执行都使用解析后的档位。OpenAI API 与 Codex 目录可有不同默认值，例如 GPT-6.1 Sol 的公开 API 默认 `medium`，Codex 内置目录为 `low`。[OpenAI 推理文档](https://developers.openai.com/api/docs/guides/reasoning)
+
+`ultra_reasoning_effort` 声明独立 Ultra 开关对应的请求值，必须引用同一型号的 `supported_reasoning_efforts`，省略时该型号没有开关。GPT 在 Ash 中使用 `xhigh`。订阅目录须同时声明 Ultra 与 `xhigh`，普通档位照常按连接提供。Claude 使用 [Ultracode 启动预设](https://code.claude.com/docs/en/model-config#adjust-effort-level) 中的 `xhigh`。
+
 历史推理回放预算（2026-10-13 核对）：OpenAI Responses 的有效 `reasoning.context` 由每次响应报告；`current_turn` 不渲染以前用户轮次的推理，`all_turns` 渲染可用且兼容的历史推理。完整请求的 `input_tokens`／输入计数已经包含实际渲染的输入，不再额外加历史推理。Ash 保留响应报告的模式，以一次响应的 `output_tokens_details.reasoning_tokens` 为回放估算总量，并在多个密文 item 间只分配一次；生成用量不是准确的回放输入测量。未知模式或旧记录保留为估算，不能根据型号名称猜测模式。Grok 的 Responses 密文历史走同一回放载体，但未报告 OpenAI 模式时仍是未知；Claude、Gemini、GLM、Kimi、DeepSeek、Meta 等当前非 Responses 接入不获得这套密文模式。是否测量完整请求由所选接入的计数能力决定，ChatGPT 订阅接入没有公开 API 计数端口。Core 的本地预算与界面类别使用同一估算，界面百分比的分母为执行中的自动压缩输入阈值（包含已生效的用量校准），模型总容量单独展示。[OpenAI 推理回放规则](https://developers.openai.com/api/docs/guides/reasoning#preserve-reasoning-across-calls)、[输入计数](https://developers.openai.com/api/docs/guides/token-counting)
 
 Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头的逐消息 effort 变更协议。不能把这类专门的 `role=system` 消息当成普通系统文本，也不能只靠一个“支持 system role”布尔值描述。[逐消息 effort](https://platform.claude.com/docs/en/build-with-claude/effort)
@@ -293,18 +297,18 @@ Chat Debug／Agent Debug Logs 逐次显示客户端计时；`rollout-trace` 统�
 
 当前类型以 [StaticModelSpec](../src/static_model_spec.rs)、[ModelSettings](../../protocol/src/model/parameters.rs) 和 [接入定义](../src/definition.rs) 为准。当前目录的 [JSON Schema](../models.schema.json) 从 Rust 解析声明生成，App Server 的 JSON Schema 和 TypeScript 类型从共享协议生成，避免另建一份手工类型。当前服务等级格式与示例见 [可解析的模型设置](../README.md#统一静态模型清单)。
 
-| 范围           | 当前状态                                                                       | 规范要求补充                                                         |
-| -------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
-| 身份与基础正文 | 已有准确身份、显示名、可选简介、完整提示词；冻结版本由正文摘要生成             | 字段级来源、适用型号/接入版本与复核状态                              |
-| 推荐用途       | `recommended_for` 显式维护 `advisor`、`review`、`commit`，供对应选择器筛选     | 新用途在接入实际消费者时扩展；不从型号名称或推理能力推断             |
-| 上下文         | 已有容量、执行预算选项、压缩阈值                                               | 独立输入/输出上限、计数语义；模型事实与 Ash 执行策略明确分组         |
-| 模态           | `ModelSettings` 有 text/image/audio 输入列表；前端图片附件消费该字段           | video/document、输出模态、组合、媒体限制与操作范围                   |
-| 推理           | 已有带可选说明的支持档位与默认档位                                             | 模式、数值预算、合法组合、摘要与历史重放、跨轮变化规则               |
-| 请求设置       | 已有 verbosity、摘要；服务等级含 ID、名称、说明与默认值，加速机制独立声明      | 通用参数描述器、采样/停止/输出格式/schema 子集；默认值分清官方和 Ash |
-| 工具           | 已有工具和并行能力标记、工具输出预算                                           | 工具选择、strict、schema 子集、数量限制、结果/历史协议               |
-| 接入           | 已有 API profile、独立流式/语音协议、计数声明                                  | 型号＋操作级参数绑定和限制；Google 新协议需独立实现后才可声明已接入  |
-| 退役公告       | 已有连接范围内的公告与可选确定日期，菜单徽标消费（见第 10 节）                 | 其他接入公告来源尚未自动接入；静态清单不声明接入特定日期             |
-| 缓存与状态     | 协议实现已有部分缓存、会话行为；思考历史重放存在已确认的编码缺口（见第 11 节） | 可审阅的型号/操作声明，TTL、失效条件、历史与实际 usage 语义          |
+| 范围           | 当前状态                                                                                                 | 规范要求补充                                                         |
+| -------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 身份与基础正文 | 已有准确身份、显示名、可选简介、完整提示词；冻结版本由正文摘要生成                                       | 字段级来源、适用型号/接入版本与复核状态                              |
+| 推荐用途       | `recommended_for` 显式维护 `advisor`、`review`、`commit`、`threadTitle`、`threadRecap`，供对应选择器筛选 | 新用途在接入实际消费者时扩展；不从型号名称或推理能力推断             |
+| 上下文         | 已有容量、执行预算选项、压缩阈值                                                                         | 独立输入/输出上限、计数语义；模型事实与 Ash 执行策略明确分组         |
+| 模态           | `ModelSettings` 有 text/image/audio 输入列表；前端图片附件消费该字段                                     | video/document、输出模态、组合、媒体限制与操作范围                   |
+| 推理           | 已有带可选说明的支持档位与默认档位                                                                       | 模式、数值预算、合法组合、摘要与历史重放、跨轮变化规则               |
+| 请求设置       | 已有 verbosity、摘要；服务等级含 ID、名称、说明与默认值，加速机制独立声明                                | 通用参数描述器、采样/停止/输出格式/schema 子集；默认值分清官方和 Ash |
+| 工具           | 已有工具和并行能力标记、工具输出预算                                                                     | 工具选择、strict、schema 子集、数量限制、结果/历史协议               |
+| 接入           | 已有 API profile、独立流式/语音协议、计数声明                                                            | 型号＋操作级参数绑定和限制；Google 新协议需独立实现后才可声明已接入  |
+| 退役公告       | 已有连接范围内的公告与可选确定日期，菜单徽标消费（见第 10 节）                                           | 其他接入公告来源尚未自动接入；静态清单不声明接入特定日期             |
+| 缓存与状态     | 协议实现已有部分缓存、会话行为；思考历史重放存在已确认的编码缺口（见第 11 节）                           | 可审阅的型号/操作声明，TTL、失效条件、历史与实际 usage 语义          |
 
 Chat 输入从所选模型的 `settings.input_modalities` 判断图片入口和发送条件：明确的列表不含 image 时禁用；省略或 null 表示未知，保留现有入口，不从厂商或型号名称推断。自动选择模型时没有确定型号，也按未知处理。上传、剪贴板和截图共用浏览器解码、最长边 2048 像素的缩放及原始字节去重；20 MB 输入限额属于 Ash 的前端资源限制，不替代接入层的媒体规格校验。
 
@@ -312,7 +316,7 @@ Chat 输入从所选模型的 `settings.input_modalities` 判断图片入口和�
 
 `recommended_for` 是 Ash 维护的用途推荐，不是厂商请求字段、能力声明或账户权益。GPT、Claude、Gemini、GLM、Kimi、Grok、DeepSeek、Meta 采用相同格式；推荐按准确模型条目维护，不按厂商或型号前缀推断。省略或空数组表示没有推荐用途，重复或未知用途会在目录边界被拒绝。远端发现可以更新模型能力与可用状态，但不会覆盖此推荐。
 
-客户端通过 `recommendedFor` 读取该字段，三个设置入口共用用途筛选与 SelectBox。隐藏状态继续约束候选项，Off 与继承对话模型由对应设置提供。推荐变化只更新候选项；已保存的模型仍保留显示，不能自动改选或仅因推荐被撤下就将其判为不可用。初始 Advisor 标记迁移原精选名单，Review 和 Commit 保留现有内置模型范围；这些标记不参与模型请求编码或执行权限判断。
+客户端通过 `recommendedFor` 读取该字段，各任务设置共用用途筛选与 SelectBox。隐藏状态继续约束候选项，Off 与继承对话模型由对应设置提供。推荐变化只更新候选项；已保存的模型仍保留显示，不能自动改选或仅因推荐被撤下就将其判为不可用。初始 Advisor 标记迁移原精选名单，Review 和 Commit 保留现有内置模型范围；`threadTitle` 为对话标题推荐低成本候选。自动命名仅从对话 provider 的目录选择可用候选；用户可保存专用模型。`threadRecap` 为完成后的对话回顾推荐低成本模型，默认从当前 provider 的可用候选中选择，OpenAI 优先 GPT-6 Luna。用户可在 Agents 中单独保存 Recap 模型。用途推荐不改变请求编码或执行权限。
 
 Advisor 设置在模型前提供“继承聊天设置”和“禁用”，模型选项携带目录声明的推理档位；配置省略 `agent.advisor.model`（RPC 可省略或传 `null`）时，继承发起聊天的模型与推理强度，Core 在每轮开始时冻结为明确选择。未配置 `agent.advisor` 仍表示禁用；切换继承、模型或禁用均保留调用次数和输出预算。
 
@@ -348,10 +352,10 @@ Codex 的完整模型字段定义在相邻源码 `codex-rs/protocol/src/openai_m
 | `supports_reasoning_effort_updates`                                                                         | 接入历史编码与请求构造器                                                        | 尚无同名能力声明；当前 effort 通过普通请求参数发送                                       |
 | `auto_review_model_override`                                                                                | Provider 审批模型默认值、`agent.approvalReviewModel`                            | 已有自动／显式选择；显式引用包含 provider、model 和可选连接，不导入 Codex 的型号覆盖字段 |
 | `guardian`、`node_repl_auto_review_required`、`node_repl_disabled`                                          | Guardian、权限和 REPL 功能                                                      | 属于 Ash 执行策略；不能从外部目录改写安全或工具配置                                      |
-| `tool_mode`、`multi_agent_version`、`multi_agent_reasoning_effort`                                          | 工具模式与协作功能                                                              | 不导入 Codex 的协作选择；Ultra 不是 Ash 模型推理档位                                     |
+| `tool_mode`、`multi_agent_version`、`multi_agent_reasoning_effort`                                          | 工具模式与协作功能                                                              | 订阅目录用 `ultra` 声明可用性，Ash 按支持列表使用 `xhigh`                                |
 | `used_fallback_model_metadata`                                                                              | Codex 内部解析标记                                                              | 不属于 JSON 型号声明，也不写入 Ash 目录                                                  |
 
-GPT-6.1 Sol 的默认窗口为 `500000`、最大窗口为 `872000`，本次选定的可用窗口策略为 95%，正常输出预留下分别提供 `475000` 和 `828400` 个输入 token；显式输出预留较大时仍以实际预算为限。其他 GPT 型号保留现有目录声明，旧型号 `gpt-5.5` 的默认和最大窗口仍均为 `272000`。容量和策略按具体型号及连接处理，不能给整个 provider 统一套用。Models 设置中所有支持上下文切换的模型都使用容量文字按钮，并读取 App Server 的 `usable_context_window`（前端领域字段 `usableContextWindow`），对应执行层扣除输出、安全预留后的硬输入容量；`available_context_window` 继续表示受自动压缩阈值约束的输入预算，两者分开。切换只更新既有 `long_context` 偏好，前端不另算比例；`true` 使用所选连接的最大窗口，`false` 使用默认窗口，最大窗口不高于默认窗口时不提供切换。
+GPT-6.1 Sol 的默认窗口为 `500000`、最大窗口为 `872000`，本次选定的可用窗口策略为 95%，正常输出预留下分别提供 `475000` 和 `828400` 个输入 token；显式输出预留较大时仍以实际预算为限。其他 GPT 型号沿用各自的目录声明。容量和策略按具体型号及连接处理，不能给整个 provider 统一套用。Models 设置中所有支持上下文切换的模型都使用容量文字按钮，并读取 App Server 的 `usable_context_window`（前端领域字段 `usableContextWindow`），对应执行层扣除输出、安全预留后的硬输入容量；`available_context_window` 继续表示受自动压缩阈值约束的输入预算，两者分开。切换只更新既有 `long_context` 偏好，前端不另算比例；`true` 使用所选连接的最大窗口，`false` 使用默认窗口，最大窗口不高于默认窗口时不提供切换。
 
 `comp_hash` 若要成为 Ash 的跨 provider 契约，需要同时接入目录合并、压缩历史保存、恢复和切换模型时的兼容性判断。兼容性必须包含 provider 和连接来源，不能因为两个厂商都返回 `3000` 就认定它们的历史可互用。审批模型与专用型号的限制则由各自的执行策略负责；目录中的 `null` 不能代替这些调用链。
 

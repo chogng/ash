@@ -281,6 +281,8 @@ async fn conpty_ctrl_c_interrupts_powershell_foreground_child() -> anyhow::Resul
     let args = vec![
         "-NoLogo".to_string(),
         "-NoProfile".to_string(),
+        // The test drives native commands through ConPTY and needs no PowerShell prompts.
+        "-NonInteractive".to_string(),
         "-NoExit".to_string(),
         "-Command".to_string(),
         startup.to_string(),

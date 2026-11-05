@@ -188,7 +188,7 @@ test('Sessions shared Tree switches retained drafts, searches and pins the captu
 	await expect(input.input).toBeFocused();
 	const background = tree.locator(`[data-item="draft:${firstId}"]`);
 	await background.hover();
-	await workbench.menus.select(application, () => background.click({ button: 'right' }), ['Pin chat']);
+	await workbench.menus.select(application, () => background.click({ button: 'right' }), ['Pin']);
 	await expect(tree.locator('h3').first()).toHaveText('Pinned');
 	await input.waitForEditorContents(text => text === 'Tree draft B');
 	await tree.locator('[data-item^="session:"]').click();

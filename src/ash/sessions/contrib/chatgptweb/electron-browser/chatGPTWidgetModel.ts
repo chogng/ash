@@ -4,7 +4,7 @@ import { raceCancellationError } from '../../../../base/common/async.js';
 import { canceled } from '../../../../base/common/errors.js';
 import { isPortableLinkTarget } from '../../../../base/common/htmlContent.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { autorun, type IReader } from '../../../../base/common/observable.js';
+import { autorun, derived, observableSignalFromEvent, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
@@ -18,14 +18,20 @@ import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/
 import { chatListItem, type IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import type { ChatSubmissionOptions } from '../../../../workbench/services/chat/common/chatService.js';
-import { decodeChatGPTReply } from './chatGPTRichContent.js';
+import { decodeChatGPTReply } from '../browser/chatGPTRichContent.js';
 import type { ChatReplyMessage } from '../../../common/chatReplyBackend.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
-import { canQueueChatGPTCreation, canUseCodeModels, coworkTaskStatus, IChatGPTService, pendingCreationStatus, type ChatGPTState } from './chatGPTService.js';
+import { canQueueChatGPTCreation, coworkTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 import { shareChatGPTConversation } from './chatGPTShare.js';
 
-/** Projects the provider's one conversation record into the existing Chat widget. */
+export function canUseAshModels(state: ChatGPTState): boolean {
+	// Existing conversations and drafts with provider-owned attachments keep their reply route.
+	return !selectedChatConversationId(state) && !state.pendingCreation && !state.uncertain
+		&& state.loading?.kind !== 'conversation' && !state.messages.length && !state.coworkTasks.length && !state.attachments.length;
+}
+
+/** Projects ChatGPT's data into the Ash composer and offers the host's Ash Chat draft handoff. */
 export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorModel {
 	private readonly changed = this._register(new Emitter<void>());
 	private readonly composerChanged = this._register(new Emitter<void>());
@@ -39,11 +45,11 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	private generation = 0;
 	private draftRevision = 0;
 	private localId: string | undefined;
-	private catalog: ChatGPTState['models'] | undefined;
-	private entries: readonly ModelCatalogEntry[] = [];
-	private codeEntries: readonly ModelCatalogEntry[] = [];
-	private draftEntries: readonly ModelCatalogEntry[] = [];
-	private codeCatalogRequest = 0;
+	private readonly webEntries: IObservable<readonly ModelCatalogEntry[]>;
+	private readonly ashCatalog = observableValue<readonly ModelCatalogEntry[]>(this, []);
+	private readonly ashEntries: IObservable<readonly ModelCatalogEntry[]>;
+	private readonly pickerEntries: IObservable<readonly ModelCatalogEntry[]>;
+	private ashCatalogRequest = 0;
 	private currentItems: readonly IChatListItem[] = [];
 	private transcriptState: ChatGPTState | undefined;
 	private readonly decoded = new WeakMap<ChatReplyMessage, { readonly conversationId: string | undefined; readonly reply: ReturnType<typeof decodeChatGPTReply>; }>();
@@ -59,7 +65,25 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		@ICommandService private readonly commands: ICommandService,
 	) {
 		super();
+		const ashModelsChanged = observableSignalFromEvent(this, primary.models.onDidChangeModels);
+		this.webEntries = backend.state.map(state => state.models).map(families => families.map(family => ({
+			model: { provider: 'chatgpt', model: family.id },
+			displayName: family.title,
+			longContext: null,
+			presets: family.presets,
+		})));
+		this.ashEntries = derived(reader => {
+			// Visibility is a local preference and can change while App Server reads are pending.
+			ashModelsChanged.read(reader);
+			return this.ashCatalog.read(reader).filter(entry => primary.models.isModelVisible(entry.model));
+		});
+		const ashEligible = backend.state.map(canUseAshModels);
+		this.pickerEntries = derived(reader => {
+			const web = this.webEntries.read(reader);
+			return ashEligible.read(reader) ? [...web, ...this.ashEntries.read(reader)] : web;
+		});
 		this._register(autorun(reader => {
+			this.pickerEntries.read(reader);
 			const state = backend.state.read(reader);
 			const switched = this.localId !== state.localConversationId || this.draftRevision !== backend.newDraftRevision;
 			this.draftRevision = backend.newDraftRevision;
@@ -67,15 +91,6 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 			if (switched) {
 				this.generation++;
 				this.playback.clear();
-			}
-			if (this.catalog !== state.models) {
-				this.catalog = state.models;
-				this.entries = state.models.flatMap(family => family.presets.map(preset => ({
-					model: { provider: 'chatgpt', model: JSON.stringify([family.id, preset.id]) },
-					displayName: family.presets.length === 1 ? family.title : `${family.title} · ${preset.label}`,
-					longContext: null,
-				})));
-				this.draftEntries = [...this.entries, ...this.codeEntries];
 			}
 			const previous = this.transcriptState;
 			if (!previous || previous.messages !== state.messages || previous.voiceTranscript !== state.voiceTranscript
@@ -87,8 +102,10 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 			if (switched) this.composerChanged.fire();
 			this.changed.fire();
 		}));
-		this._register(primary.models.onDidChangeModels(() => void this.loadCodeModels()));
-		void this.loadCodeModels();
+		this._register(autorun(reader => {
+			ashModelsChanged.read(reader);
+			void this.loadAshModels();
+		}));
 	}
 
 	get composerGeneration(): number { return this.generation; }
@@ -102,13 +119,12 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		return { id: state.localConversationId, revision: this.backend.newDraftRevision };
 	}
 
-	private async loadCodeModels(): Promise<void> {
-		const request = ++this.codeCatalogRequest;
-		const entries = await this.primary.models.listModels().catch(() => []);
-		if (this.isDisposed || request !== this.codeCatalogRequest) return;
-		this.codeEntries = entries;
-		this.draftEntries = [...this.entries, ...entries];
-		this.changed.fire();
+	private async loadAshModels(): Promise<void> {
+		const request = ++this.ashCatalogRequest;
+		// The handoff needs the catalog, not the backend's default model.
+		const entries = await this.primary.models.listModelCatalog().catch(() => []);
+		if (this.isDisposed || request !== this.ashCatalogRequest) return;
+		this.ashCatalog.set(entries);
 	}
 
 	readonly draft: NonNullable<IReplyChatEditorModel['draft']> = {
@@ -154,17 +170,20 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 			canInterrupt: state.sending,
 			interruptKind: 'reply',
 			error: state.error || undefined,
+			// The destination row shows loading; an empty status suppresses the composer's fallback text.
 			status: state.voice === 'connecting' ? localize('sessions.chatgpt.voiceConnecting', 'Connecting voice…')
 				: state.voice === 'connected' ? localize('sessions.chatgpt.voiceConnected', 'Voice conversation is active')
 					: state.voice === 'stopping' ? localize('sessions.chatgpt.voiceStopping', 'Finishing voice conversation…')
-						: loading ? localize('sessions.loadingConversation', 'Loading conversation…')
+						: loading ? ''
 							: state.sending ? localize('sessions.chatgpt.replying', 'ChatGPT is replying…')
 								: state.stopped ? localize('sessions.chatgpt.replyStopped', 'Reply stopped') : pendingCreationStatus(state),
 			queuedMessages: 0,
 			approvalMode: 'manual',
-			models: canUseCodeModels(state) ? this.draftEntries : this.entries,
+			models: this.pickerEntries.get(),
 			canSelectModel: !state.busy && !state.sending && !state.managing && !voice,
-			selectedModel: this.entries.find(entry => entry.model.model === JSON.stringify([state.model, state.modelPreset]))?.model,
+			selectedModel: this.webEntries.get().find(entry => entry.model.model === state.model)?.model
+				?? this.webEntries.get().find(entry => entry.model.model === JSON.stringify([state.model, state.modelPreset]))?.model,
+			selectedPreset: state.modelPreset,
 			isAutomaticModel: false,
 			slashCommands: [],
 			skillSelectors: [],
@@ -176,19 +195,30 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		const state = this.backend.state.get();
 		if (state.busy || state.sending || state.managing || state.voice !== 'idle') return;
 		if (model.provider === 'chatgpt') {
-			for (const family of state.models) {
-				const preset = family.presets.find(candidate => JSON.stringify([family.id, candidate.id]) === model.model);
+			const family = state.models.find(candidate => candidate.id === model.model);
+			if (family) {
+				this.backend.setModel(family.id);
+				return;
+			}
+			for (const f of state.models) {
+				const preset = f.presets.find(candidate => JSON.stringify([f.id, candidate.id]) === model.model);
 				if (preset) {
-					this.backend.setModel(family.id, preset.id);
+					this.backend.setModel(f.id, preset.id);
 					return;
 				}
 			}
 		}
-		if (canUseCodeModels(state) && this.codeEntries.some(entry => modelRefIdentity(entry.model) === modelRefIdentity(model))) {
+		if (canUseAshModels(state) && this.ashEntries.get().some(entry => modelRefIdentity(entry.model) === modelRefIdentity(model))) {
 			await this.commands.executeCommand(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, model);
 			return;
 		}
 		throw new Error(localize('sessions.newChatModel.unavailable', 'The selected model is no longer available.'));
+	}
+
+	async selectPreset(presetId: string): Promise<void> {
+		const state = this.backend.state.get();
+		if (state.busy || state.sending || state.managing || state.voice !== 'idle') return;
+		this.backend.setModel(state.model, presetId);
 	}
 
 	async send(text: string, _mode?: unknown, _skills?: unknown, _contexts?: unknown, options?: ChatSubmissionOptions): Promise<void> {

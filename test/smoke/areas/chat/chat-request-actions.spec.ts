@@ -4,7 +4,7 @@ import { Workbench } from '../../../automation/workbench.js';
 import { APP_SERVER_METHODS as methods } from '../../../../.build/protocol/typescript/index.js';
 import { connectProfile } from '../sessions/sessionProfileFixture.js';
 
-test.use({ gitRepository: true });
+test.use({ gitRepository: true, reportIssueUrl: 'https://github.com/chogng/ash/issues' });
 
 test('IDE archives and unarchives from History with the default labels and preserves the draft', { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, webAppServer, workbench, testWorkspace }, testInfo) => {
 	test.setTimeout(90_000);
@@ -56,8 +56,23 @@ test('IDE archives and unarchives from History with the default labels and prese
 	}
 });
 
-for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) for (const clipboardOnly of [false, true]) {
-	test(`${surface} ${clipboardOnly ? 'copies response selections through the native clipboard and restores its draft' : 'edits requests, starts a new chat and forks history through the owning App Server'}`, { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
+const requestActionScenarios = {
+	history: 'edits requests, starts a new chat and forks history through the owning App Server',
+	clipboard: 'copies response selections through the native clipboard and restores its draft',
+	checkpoint: 'forks before a request through the owning App Server',
+	restore: 'restores a message checkpoint through the owning App Server',
+	redo: 'redoes a request from its transcript marker through the owning App Server',
+	queue: 'manages queued messages from their transcript rows through the owning App Server',
+	turnChanges: 'opens only the captured changes for the selected reply',
+};
+
+for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) for (const scenario of ['history', 'clipboard', 'checkpoint', 'restore', 'redo', 'queue', 'turnChanges'] as const) {
+	if ((scenario === 'restore' || scenario === 'redo' || scenario === 'queue' || scenario === 'turnChanges') && surface !== 'IDE') continue;
+	test(`${surface} ${requestActionScenarios[scenario]}`, { tag: ['@electron-app-server', '@browser-app-server'] }, async ({ application, target, webAppServer, workbench, testWorkspace }, testInfo) => {
+		const clipboardOnly = scenario === 'clipboard';
+		const needsCheckpoint = scenario === 'checkpoint' || scenario === 'restore' || scenario === 'redo' || scenario === 'turnChanges';
+		const mode = scenario === 'turnChanges' ? 'agent' : 'ask';
+		const approvalMode = scenario === 'turnChanges' ? 'bypassPermissions' : 'manual';
 		test.setTimeout(180_000);
 		let modelCalls = 0;
 		const server = createServer(async (request, response) => {
@@ -68,8 +83,17 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) for (con
 			for await (const _chunk of request) { /* Consume the model input before completing the controlled response. */ }
 			modelCalls++;
 			response.writeHead(200, { 'content-type': 'text/event-stream' });
-			const content = `Request action answer ${modelCalls}\n\nSee **[source.ts](ash-remote://fixture/source.ts)** and [Docs](https://example.com).`;
-			response.end(`data: ${JSON.stringify({ id: 'request-actions', object: 'chat.completion.chunk', choices: [{ index: 0, delta: { content }, finish_reason: null }] })}\n\ndata: {"id":"request-actions","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n`);
+			if (scenario === 'turnChanges' && (modelCalls === 1 || modelCalls === 3)) {
+				const file = modelCalls === 1 ? 'first-turn.txt' : 'second-turn.txt';
+				const patch = `*** Begin Patch\n*** Add File: ${file}\n+Captured by ${file}\n*** End Patch`;
+				const delta = { tool_calls: [{ index: 0, id: `turn-changes-${modelCalls}`, type: 'function', function: { name: 'apply_patch', arguments: JSON.stringify({ patch }) } }] };
+				response.end(`data: ${JSON.stringify({ id: 'request-actions', object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason: null }] })}\n\ndata: {"id":"request-actions","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}\n\ndata: [DONE]\n\n`);
+				return;
+			}
+			const content = `Request action answer ${scenario === 'turnChanges' ? modelCalls / 2 : modelCalls}\n\nSee **[source.ts](ash-remote://fixture/source.ts)** and [Docs](https://example.com).`;
+			response.write(`data: ${JSON.stringify({ id: 'request-actions', object: 'chat.completion.chunk', choices: [{ index: 0, delta: { content }, finish_reason: null }] })}\n\n`);
+			if (scenario === 'queue' && modelCalls === 1) return;
+			response.end('data: {"id":"request-actions","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
 		});
 		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 		let connection: Awaited<ReturnType<typeof connectProfile>> | undefined;
@@ -77,6 +101,10 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) for (con
 			const agents = surface !== 'IDE';
 			const page = agents ? await workbench.openAgentsWindow(target.kind) : workbench.page;
 			const window = new Workbench(page);
+			const openCowork = async () => {
+				await page.locator('[data-action-id="sessions.activity.more"] button').click();
+				await page.getByRole('menuitemradio', { name: 'Collab', exact: true }).click();
+			};
 			connection = await connectProfile(application, webAppServer, testWorkspace.directory, page);
 			const { client } = connection;
 			const address = server.address();
@@ -101,16 +129,32 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) for (con
 			const before = await read(root);
 			await client.request(methods['session/request'], {
 				sessionId, commandId: 'request-actions-turn', request: {
-					type: 'startTurn', threadId: root, expectedSequence: before.sequence, mode: 'ask', approvalMode: 'manual', model,
+					type: 'startTurn', threadId: root, expectedSequence: before.sequence, mode, approvalMode, model,
 					input: [{ type: 'context', name: 'Accepted file', content: 'Original immutable context' }, { type: 'text', text: 'Original request' }],
 				}
 			});
-			await expect.poll(async () => (await read(root)).turns.at(-1)?.status).toBe('completed');
-			await expect.poll(async () => (await client.request(methods['turnChanges/list'], { sessionId, threadId: root })).changeSets.at(-1)?.captureState).toBe('sealed');
+			if (scenario === 'queue') {
+				await expect.poll(() => modelCalls).toBe(1);
+				await expect.poll(async () => (await read(root)).turns.at(-1)?.status).toBe('running');
+			} else {
+				await expect.poll(async () => (await read(root)).turns.at(-1)?.status).toBe('completed');
+				await expect.poll(async () => (await client.request(methods['turnChanges/list'], { sessionId, threadId: root })).changeSets.at(-1)?.captureState).toBe('sealed');
+			}
+			if (needsCheckpoint) {
+				const source = await read(root);
+				await client.request(methods['session/request'], {
+					sessionId, commandId: 'request-actions-follow-up', request: {
+						type: 'startTurn', threadId: root, expectedSequence: source.sequence, mode, approvalMode, model,
+						input: [{ type: 'text', text: 'Follow-up request' }],
+					},
+				});
+				await expect.poll(async () => (await read(root)).turns.at(-1)?.status).toBe('completed');
+				await expect.poll(async () => (await client.request(methods['turnChanges/list'], { sessionId, threadId: root })).changeSets.at(-1)?.captureState).toBe('sealed');
+			}
 			if (agents) {
 				await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 				await page.locator('.ash-sessions-list-item').filter({ hasText: 'Request actions source' }).click();
-				if (surface === 'Agents Cowork') await page.locator('[data-action-id="sessions.open.collaboration"] button').click();
+				if (surface === 'Agents Cowork') await openCowork();
 			} else {
 				await window.quickaccess.runCommand('workbench.action.chat.open');
 				if (!await page.locator('.ash-chat-sessions-sidebar').isVisible()) await window.quickaccess.runCommand('agentSessions.toggleAgentSessionsSidebar');
@@ -122,6 +166,88 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) for (con
 			const draft = composer.locator('.stanza-editor-input');
 			await expect(chat).toHaveAttribute('data-thread-id', root);
 			await expect(transcript).toContainText('Request action answer 1');
+			if (scenario === 'turnChanges') {
+				const replies = transcript.locator('.ash-chat-item-agentMessage');
+				const changes = (answer: number) => replies.filter({ hasText: `Request action answer ${answer}` })
+					.getByRole('button', { name: 'Open Turn Changes: 1 file, added 1, removed 0', exact: true });
+				const diff = page.locator('.stanza-multi-diff-editor:visible');
+				await changes(1).press('Enter');
+				await expect(diff).toContainText('Captured by first-turn.txt');
+				await expect(diff).not.toContainText('second-turn.txt');
+				await changes(2).click();
+				await expect(diff).toContainText('Captured by second-turn.txt');
+				await expect(diff).not.toContainText('first-turn.txt');
+				return;
+			}
+			if (scenario === 'queue') {
+				await draft.focus();
+				await page.keyboard.insertText('Keep this unsent draft');
+				const queued = async (commandId: string) => (await client.request(methods['queue/list'], { sessionId, threadId: root })).messages.find(message => message.request.commandId === commandId);
+				for (const [commandId, text] of [['queue-edit', 'Edit this queued request'], ['queue-remove', 'Remove this queued request'], ['queue-send', 'Send this queued request']]) {
+					await client.request(methods['queue/enqueue'], { sessionId, threadId: root, commandId, mode: 'ask', approvalMode: 'manual', model, input: [{ type: 'text', text }] });
+				}
+				const row = (text: string) => transcript.locator('.ash-chat-item-queuedMessage').filter({ hasText: text });
+				await row('Edit this queued request').getByRole('button', { name: 'Edit queued message', exact: true }).press('Enter');
+				const editor = page.getByRole('textbox', { name: 'Edit queued message', exact: true });
+				await expect(editor).toHaveValue('Edit this queued request');
+				await expect.poll(async () => (await queued('queue-edit'))?.status).toBe('paused');
+				await editor.press('Escape');
+				await expect.poll(async () => (await queued('queue-edit'))?.status).toBe('pending');
+				await row('Remove this queued request').getByRole('button', { name: 'Remove queued message', exact: true }).click();
+				await expect.poll(async () => (await queued('queue-remove'))?.status).toBe('cancelled');
+				await expect(row('Remove this queued request')).toHaveCount(0);
+				await row('Send this queued request').getByRole('button', { name: 'Send queued message immediately', exact: true }).click();
+				await expect.poll(async () => (await queued('queue-send'))?.status).toBe('started');
+				await expect(row('Send this queued request')).toHaveCount(0);
+				await expect(composer.locator('.view-lines')).toHaveText('Keep this unsent draft');
+				return;
+			}
+			if (scenario === 'redo') {
+				await expect(transcript).toContainText('Follow-up request');
+				const redo = transcript.getByRole('button', { name: 'Redo last request', exact: true });
+				await expect(redo).toHaveCount(0);
+				await window.quickaccess.runCommand('workbench.action.chat.undoEdit');
+				await expect(transcript).not.toContainText('Follow-up request');
+				await redo.press('Enter');
+				await expect(transcript).toContainText('Follow-up request');
+				await expect(redo).toHaveCount(0);
+				expect((await read(root)).turns).toHaveLength(2);
+				expect(modelCalls).toBe(2);
+				const reply = transcript.locator('.ash-chat-item-agentMessage').filter({ hasText: 'Request action answer 1' });
+				await reply.getByRole('button', { name: 'Give model feedback', exact: true }).click();
+				const reporter = page.locator('.ash-issue-reporter');
+				await expect(reporter).toBeVisible({ timeout: 30_000 });
+				await expect(reporter.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue(`Model feedback: ${model.model}`);
+				await expect(reporter.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue(new RegExp(`Connection: ${provider}`, 'u'));
+				return;
+			}
+			if (needsCheckpoint) {
+				const messages = transcript.locator('.ash-chat-user-message');
+				const action = { name: scenario === 'restore' ? 'Restore checkpoint' : 'Fork conversation from this point', exact: true };
+				const initial = messages.filter({ hasText: 'Original request' });
+				await expect(initial).toBeVisible();
+				await expect(initial.getByRole('button', action)).toHaveCount(0);
+				const button = messages.filter({ hasText: 'Follow-up request' }).getByRole('button', action);
+				if (scenario === 'restore') {
+					await button.press('Enter');
+					const picker = page.getByRole('combobox', { name: 'Choose a checkpoint to restore into a new chat' });
+					await picker.fill('Before this message');
+					await picker.press('Enter');
+				} else if (surface === 'Agents Code') {
+					await button.press('Alt+Enter');
+				} else {
+					await button.click();
+				}
+				await expect(chat).not.toHaveAttribute('data-thread-id', root);
+				await expect(chat).toHaveAttribute('data-session-id', sessionId);
+				const branch = (await chat.getAttribute('data-thread-id'))!;
+				const userMessages = (thread: Awaited<ReturnType<typeof read>>) => thread.turns.flatMap(turn => turn.items).filter(item => item.type === 'userMessage').map(item => item.text);
+				expect(userMessages(await read(branch))).toEqual(['Original request']);
+				expect(userMessages(await read(root))).toEqual(['Original request', 'Follow-up request']);
+				expect(modelCalls).toBe(2);
+				if (surface === 'Agents Code') await expect(page.locator(`.ash-sessions-chat-slot:visible .ash-chat[data-thread-id="${root}"]`)).toBeVisible();
+				return;
+			}
 			await draft.focus();
 			await page.keyboard.insertText('Unsent original draft');
 			if (!clipboardOnly) {
@@ -190,7 +316,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) for (con
 			const beforeNewChat = (await client.request(methods['session/read'], { sessionId })).session.threads.map(thread => thread.threadId);
 			await page.locator(agents ? '[data-action-id="sessions.newSession"] button' : '.ash-chat-title-actions .ash-split-action-primary button').click();
 			// New opens Code in this workspace; Collab presents the same draft in Cowork.
-			if (surface === 'Agents Cowork') await page.locator('[data-action-id="sessions.open.collaboration"] button').click();
+			if (surface === 'Agents Cowork') await openCowork();
 			await expect(chat).toHaveAttribute('data-untitled-session-id', /.+/u);
 			await expect(composer.locator('.view-lines')).not.toContainText('Unsent original draft');
 			expect((await client.request(methods['session/read'], { sessionId })).session.threads.map(thread => thread.threadId)).toEqual(beforeNewChat);

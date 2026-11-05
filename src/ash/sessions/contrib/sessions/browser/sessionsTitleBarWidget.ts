@@ -258,7 +258,7 @@ export class SessionsTitleBarWidget extends Disposable {
 					label = basename(sessionWorkspaceUri(location)) || path;
 				}
 			}
-			const workspaceLabel = label || localize('sessions.titlebar.noWorkspace', 'No workspace');
+			const workspaceLabel = label || localize('sessions.titlebar.noWorkspace', 'No project folder');
 			const contextLabel = branch ? localize('sessions.titlebar.branch', '{0} · {1}', workspaceLabel, branch) : workspaceLabel;
 			button.icon = undefined;
 			const title = selection?.kind === 'session' ? selection.active.session.title : selection?.session.title;

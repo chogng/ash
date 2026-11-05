@@ -28,13 +28,12 @@ pub(super) fn run(
     let mut drafts = None;
     let mut start_empty = false;
     loop {
-        let mut options =
-            ash_tui::TuiOptions::new(format!("Remote SSH: {}", profile.target().host().as_str()))
-                .with_announcement(announcement.clone())
-                .with_remote_dir(PathBuf::from(profile.target().dir().as_str()))
-                .with_profile_root(
-                    ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?,
-                );
+        let mut options = ash_tui::TuiOptions::new("")
+            .with_announcement(announcement.clone())
+            .with_remote_dir(PathBuf::from(profile.target().dir().as_str()))
+            .with_profile_root(
+                ash_utils_home_dir::find_ash_home().map_err(|error| error.to_string())?,
+            );
         if let Some(state) = recovery.take() {
             options = options.with_recovery(state);
         }

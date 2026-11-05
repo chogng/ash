@@ -25,6 +25,8 @@ pub use config::ModelContextConfig;
 pub use config::ModelProviderConfig;
 pub use config::NormalizedModelProviderConfig;
 pub use config::ProviderAccessMode;
+pub use config::effective_ultra_reasoning_effort;
+pub use config::openai_ultra_reasoning_effort;
 pub use definition::ApiKeyHeader;
 pub use definition::ApiKeyPolicy;
 pub use definition::ApiProfile;

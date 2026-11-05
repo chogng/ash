@@ -191,7 +191,9 @@ test('Artifacts keeps creation and ownership controls legible across themes', { 
 test('Sessions pages keep Code tabs separate and retain dirty files and Design state', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
-	const code = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
+	const modes = page.locator('.ash-window-mode-control');
+	const code = modes.getByRole('button', { name: 'Code', exact: true });
+	const chat = modes.getByRole('button', { name: 'Chat / Agents', exact: true });
 	const creator = navigation.getByRole('button', { name: 'Artifacts', exact: true });
 	const projects = navigation.getByRole('button', { name: 'Projects', exact: true });
 	await code.click();
@@ -202,7 +204,7 @@ test('Sessions pages keep Code tabs separate and retain dirty files and Design s
 	await file.waitForEditorFocus();
 	await page.keyboard.insertText('Keep this unsaved Code file');
 	const tabs = await codeTabs.allTextContents();
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	await chat.click();
 	await creator.click();
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	await expect(creator).toHaveAttribute('aria-current', 'page');
@@ -229,8 +231,8 @@ test('Sessions pages keep Code tabs separate and retain dirty files and Design s
 	await expect(codeEditor).toBeVisible();
 	await file.waitForEditorContents(text => text === 'Keep this unsaved Code file');
 	await expect(codeTabs).toHaveText(tabs);
-	await creator.focus();
-	await page.keyboard.press('Enter');
+	await chat.click();
+	await creator.press('Enter');
 	await page.locator('.ash-creator').getByRole('button', { name: 'Design', exact: true }).click();
 	await expect(canvas).toBeVisible();
 	await expect.poll(() => world.evaluate(element => (element as HTMLElement).style.transform)).toBe(transform);
@@ -244,7 +246,8 @@ test('Sessions pages keep Code tabs separate and retain dirty files and Design s
 test('Sessions registered pages coordinate Parts and retain drafts through drag and keyboard ordering', async ({ application, target, workbench }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	const navigation = page.locator('.ash-sessions-activity-content');
-	const items = navigation.locator('.ash-sessions-activity-top .ash-action-view-item');
+	const items = navigation.locator('.ash-sessions-navigation > .ash-action-view-item');
+	const readOrder = () => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId));
 	const trace = navigation.getByRole('button', { name: 'Trace', exact: true });
 	await expect(trace).toHaveCount(0);
 	const chat = navigation.getByRole('button', { name: 'New', exact: true });
@@ -254,10 +257,14 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await page.keyboard.insertText('Retain the navigation draft');
 	await editor.waitForEditorContents(text => text === 'Retain the navigation draft');
 	const retainedChat = await chat.elementHandle();
+	const currentBeforeDrag = await chat.getAttribute('aria-current');
+	const [first, ...remaining] = await readOrder();
+	expect(first).toBe('sessions.newSession');
+	const otherActions = remaining.filter(id => id !== 'sessions.open.creator');
 	await navigation.locator('[data-action-id="sessions.open.creator"]').dragTo(navigation.locator('[data-action-id="sessions.newSession"]'), { targetPosition: { x: 8, y: 2 } });
 	await expect(items.first()).toHaveAttribute('draggable', 'true');
-	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.open.creator', 'sessions.newSession', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.projects']);
-	await expect(chat).toHaveAttribute('aria-current', 'page');
+	await expect.poll(readOrder).toEqual(['sessions.open.creator', first, ...otherActions]);
+	await expect.poll(() => chat.getAttribute('aria-current')).toBe(currentBeforeDrag);
 	expect(await chat.evaluate((element, retained) => element === retained, retainedChat)).toBe(true);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await new QuickAccess(page).runCommand('workbench.action.files.newUntitledFile');
@@ -282,10 +289,11 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 	await editor.waitForEditorContents(text => text === 'Retain the navigation draft');
 	await creator.focus();
+	const currentBeforeKeyboardMove = await chat.getAttribute('aria-current');
 	await new Menus(page).select(application, () => page.keyboard.press('Shift+F10'), ['Move later']);
 	await expect(creator).toBeFocused();
-	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.newSession', 'sessions.open.creator', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : []), 'sessions.open.projects']);
-	await expect(chat).toHaveAttribute('aria-current', 'page');
+	await expect.poll(readOrder).toEqual([first, 'sessions.open.creator', ...otherActions]);
+	await expect.poll(() => chat.getAttribute('aria-current')).toBe(currentBeforeKeyboardMove);
 	await page.keyboard.press('Home');
 	await expect(chat).toBeFocused();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
@@ -307,16 +315,18 @@ test('Sessions registered pages coordinate Parts and retain drafts through drag 
 	await new Menus(page).select(application, () => chat.click({ button: 'right' }), ['Activity Bar Position', 'Top']);
 	await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
 	await expect(navigation.locator('.ash-sessions-navigation[role="toolbar"]')).toHaveAttribute('aria-orientation', 'horizontal');
+	const currentBeforeHorizontalDrag = await chat.getAttribute('aria-current');
 	await navigation.locator('[data-action-id="sessions.open.projects"]').dragTo(navigation.locator('[data-action-id="sessions.open.creator"]'), { targetPosition: { x: 2, y: 8 } });
-	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.newSession', 'sessions.open.projects', 'sessions.open.creator', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : [])]);
-	await expect(chat).toHaveAttribute('aria-current', 'page');
+	const horizontalOrder = [first, 'sessions.open.projects', 'sessions.open.creator', ...otherActions.filter(id => id !== 'sessions.open.projects')];
+	await expect.poll(readOrder).toEqual(horizontalOrder);
+	await expect.poll(() => chat.getAttribute('aria-current')).toBe(currentBeforeHorizontalDrag);
 	await chat.focus();
 	await page.keyboard.press('ArrowRight');
 	await expect(navigation.getByRole('button', { name: 'Projects', exact: true })).toBeFocused();
 	await page.reload();
 	await expect(page.locator('.ash-sessions-activity-host.top')).toBeVisible();
-	await expect(chat).toHaveAttribute('aria-current', 'page');
-	await expect.poll(() => items.evaluateAll(elements => elements.map(element => (element as HTMLElement).dataset.actionId))).toEqual(['sessions.newSession', 'sessions.open.projects', 'sessions.open.creator', ...(target.kind === 'electron' ? ['sessions.open.chatgpt'] : [])]);
+	await expect.poll(() => chat.getAttribute('aria-current')).toBe(currentBeforeHorizontalDrag);
+	await expect.poll(readOrder).toEqual(horizontalOrder);
 	await editor.waitForEditorContents(text => text === 'Retain the navigation draft');
 	await new QuickAccess(page).runCommand('sessions.trace.import');
 	await expect(trace).toHaveCount(0);

@@ -37,6 +37,8 @@ import { IStorageService } from '../../../../../platform/storage/common/storage.
 import { constObservable } from '../../../../../base/common/observable.js';
 import { createSessionFileChange } from '../../../../services/sessions/common/session.js';
 import { SessionChangesEditorInput } from '../../browser/sessionChangesEditorInput.js';
+import { resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
+import { productLanguagePackCatalogs } from '../../../../../workbench/services/localization/common/localizationCatalogs.js';
 
 const emptySummary: ThreadChangesSummary = { sequence: 1, revision: 'empty', statistics: { files: 0, additions: 0, deletions: 0 }, repositories: [], warnings: [] };
 
@@ -138,6 +140,17 @@ test('a hidden Changes editor ignores a late ledger result and loads fresh conte
 			assert.equal(provider.provideContent(), pane.getAccessibleContent());
 		} else {
 			assert.match(provider.provideContent(), /The file list and comparisons share this editor/u);
+			assert.match(provider.provideContent(), /Changes is a separate tool card with a title toolbar for each editor group/u);
+			assert.match(provider.provideContent(), /open Diff View to choose Inline, Side by Side, or Automatic/u);
+			const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN');
+			assert.ok(chinese);
+			setNlsResolver((bundle, key, fallback) => chinese.bundles[bundle]?.[key] ?? fallback);
+			try {
+				assert.match(provider.provideContent(), /“更改”是一张独立工具卡，每个编辑器组都有自己的标题工具栏/u);
+				assert.match(provider.provideContent(), /打开“差异视图”.*“行内”“并排”或“自动”/u);
+			} finally {
+				resetNlsResolver();
+			}
 		}
 		provider.dispose();
 		assert.equal(dom.window.document.activeElement, dom.window.document.querySelector('.ash-sessions-changes-editor'));

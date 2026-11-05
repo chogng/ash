@@ -45,10 +45,11 @@ import { NativeMenubarControl } from '../../workbench/electron-browser/parts/tit
 import { Menus } from '../browser/menus.js';
 import { getSessionsTitlebarBackground, TitlebarPart } from '../browser/parts/titlebarPart.js';
 import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
-import { RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
+import { AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL } from '../../platform/window/common/window.js';
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { ElectronLifecycleService } from '../../workbench/services/lifecycle/electron-browser/lifecycleService.js';
+import { StartupKind } from '../../workbench/services/lifecycle/common/lifecycle.js';
 import { NativeHostColorSchemeService } from '../../workbench/services/themes/electron-browser/nativeHostColorSchemeService.js';
 import { showStartupError } from '../../workbench/browser/startupError.js';
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
@@ -126,9 +127,13 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 	let logger: NativeLogService;
 	let api: Awaited<ReturnType<typeof createElectronRendererApi>>;
 	let documentClient: AppServerProtocolClient | undefined;
+	let restoreEntry: boolean;
 	try {
 		const windowId = await invoke<unknown>('ash:ipc:window-id');
 		if (!Number.isSafeInteger(windowId) || (windowId as number) <= 0) { throw new TypeError('Invalid Main IPC window ID'); }
+		const startupIntent = await invoke<unknown>(AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL);
+		if (typeof startupIntent !== 'boolean') { throw new TypeError('Invalid Agents startup intent'); }
+		restoreEntry = startupIntent;
 		// Release automation dependencies before their Main IPC connection during window shutdown.
 		profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
 		const mainProcessService = profileServices.get(IMainProcessService);
@@ -191,7 +196,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 		let workspaceSelection = selectionFromWorkspace(workspace);
 		let workspaceGeneration = 0;
 		const initialWorkspaceReady = api.workspaceDirectoriesReady.then(async () => {
-			if (sessions.isDisposed || workspaceGeneration !== 0 || !api.appServer.isAvailable) return;
+			const state = await api.appServer.getConnectionState();
+			if (sessions.isDisposed || workspaceGeneration !== 0 || state !== 'ready') return;
 			const boundFolders = await Promise.all(initialWorkspace.folders.map(async folder =>
 				hasDevelopmentPermissions(await api.workspaceTrust.readWorkspaceDirectory(folder.id))));
 			if (!sessions.isDisposed && workspaceGeneration === 0 && boundFolders.every(Boolean)) {
@@ -208,7 +214,8 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			workspaceChange = workspaceChange.then(async () => {
 				if (sessions.isDisposed || generation !== workspaceGeneration) return;
 				await api.reloadWorkspaceDirectories();
-				if (sessions.isDisposed || generation !== workspaceGeneration || !api.appServer.isAvailable) return;
+				const state = await api.appServer.getConnectionState();
+				if (sessions.isDisposed || generation !== workspaceGeneration || state !== 'ready') return;
 				workspace = next;
 				workspaceSelection = selectionFromWorkspace(workspace);
 			}).catch(error => { if (!isCancellationError(error)) onUnexpectedError(error); });
@@ -278,6 +285,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.call',
 					'sessions.contrib.multiDiffSource',
 					'sessions.openSessionLinkOpener',
+					'sessions.contrib.sharedChatInputComposer',
 					'sessions.contrib.remoteAgentHostContribution',
 					'sessions.contrib.sshAgentHostContribution',
 					'sessions.contrib.wslAgentHostContribution',
@@ -307,6 +315,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.output',
 					'workbench.contrib.logs',
 					'workbench.contrib.workspaceTrustRequestHandler',
+					'workbench.contrib.workspaceFolderManagement',
 					'sessions.contrib.workspaceStatus',
 					'workbench.contrib.githubLinkPresentations',
 					'workbench.contrib.githubFileSystemProvider',
@@ -352,6 +361,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					lifecycleService = services.createInstance(ElectronLifecycleService, {
 						ownerWindow: window,
 						onError: onUnexpectedError,
+						startupKind: restoreEntry ? StartupKind.ReopenedWindow : undefined,
 					});
 					sessions.add(
 						lifecycleService.onWillShutdown(event =>

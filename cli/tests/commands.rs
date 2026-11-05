@@ -662,6 +662,7 @@ fn session_commands_fork_archive_and_restore_the_exact_session() {
     let created = connection
         .client()
         .create_session(SessionCreateParams {
+            surface: None,
             branch_name: None,
             worktree_start: None,
             agent_id: None,
@@ -669,6 +670,7 @@ fn session_commands_fork_archive_and_restore_the_exact_session() {
             command_id: CommandId::new("create-cli-fixture").unwrap(),
             title: "Original".into(),
             execution_target: None,
+            environment_variables: None,
         })
         .unwrap();
     connection.shutdown().unwrap();

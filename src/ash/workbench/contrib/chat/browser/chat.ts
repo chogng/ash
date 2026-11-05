@@ -1,7 +1,7 @@
 import type { PromptTurnChanges } from './promptTimeline/promptTimelineModel.js';
 import type { ChatMode } from '../../../services/chat/common/chatService.js';
 import type { IChatInputPart } from './widget/input/chatInputPart.js';
-import type { ChatRequestQueueKind } from '../../../services/chat/common/chatService.js';
+import type { ChatRequestQueueKind, QueuedMessage } from '../../../services/chat/common/chatService.js';
 import type { IView } from '../../../common/views.js';
 import type { AgentSessionsViewerOrientation } from './agentSessions/agentSessions.js';
 import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
@@ -13,9 +13,15 @@ import type { ChatContextAttachment } from '../../../services/chat/common/chatCo
 import type { IRange } from '../../../../editor/common/core/range.js';
 import type { IChatCopiedInlinePrompt } from './attachments/chatVariables.js';
 import type { Selection } from '../../../../editor/common/core/selection.js';
+import type { ChatListWidget } from './widget/chatListWidget.js';
 import type { ChatWidget } from './widget/chatWidget.js';
 import type { IChatListItem } from '../common/model/chatViewModel.js';
 import type { ChatEditorInput } from './widgetHosts/editor/chatEditorInput.js';
+
+export const CHAT_WIDGET_VIEW_STATE_CACHE_LIMIT = 100;
+
+/** Retained transcript presentation independent of the host's visibility and DOM focus. */
+export type IChatWidgetViewState = Omit<ReturnType<ChatListWidget['getViewState']>, 'visible' | 'focus'>;
 
 export interface IChatAcceptInputOptions {
 	readonly queue?: ChatRequestQueueKind;
@@ -52,13 +58,17 @@ export interface IWorkspacePickerDelegate {
 /** Host routing receives the accepted snapshot before model send; the live editor may already hold another draft. */
 export interface IChatWidgetViewOptions {
 	readonly showWelcome?: boolean;
-	readonly welcomeTitle?: import('../../../../base/common/observable.js').IObservable<string | undefined>;
+	/** Use the default title for undefined, or hide the welcome for null. */
+	readonly welcomeTitle?: import('../../../../base/common/observable.js').IObservable<string | null | undefined>;
 	readonly configureModelInMenu?: boolean;
 	readonly showPromptTimeline?: boolean;
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
+	readonly openTurnChanges?: ChatTurnChangesOpener;
 	readonly workspacePickerDelegate?: IWorkspacePickerDelegate;
 	readonly submitHandler?: (query: string, mode: ChatMode, attachedContext: readonly ChatContextAttachment[], signal?: AbortSignal) => Promise<boolean>;
 }
+
+export type ChatTurnChangesOpener = (source: NonNullable<IChatListItem['feedbackSource']>, signal: AbortSignal) => Promise<void>;
 
 /** The live presentation owns the input; the registry never owns a conversation model. */
 export interface IChatWidget {
@@ -77,7 +87,7 @@ export interface IChatWidget {
 	readonly onDidChangeViewModel: Event<void>;
 	acceptInput(query?: string, options?: IChatAcceptInputOptions): Promise<void>;
 	/** Edits a queued request without replacing the unsent composer draft. */
-	startEditing(requestId: string): void | Promise<void>;
+	startEditing(request: QueuedMessage): void | Promise<void>;
 	cancelTranscriptProgress?(): boolean;
 	retryFailedTurn(turnId?: string): Promise<void>;
 	getFindController(): IChatFindController | undefined;

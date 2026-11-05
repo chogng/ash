@@ -1,6 +1,24 @@
 use super::*;
 
 #[test]
+fn absent_user_runtime_reports_setup_and_incomplete_runtime_reports_the_journal() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("runtime");
+    let journal = root.join("state.dpapi");
+    assert!(
+        pin_runtime_journal(&root, &journal)
+            .err()
+            .unwrap()
+            .contains("requires setup")
+    );
+    assert!(!root.exists());
+    std::fs::create_dir(&root).unwrap();
+    let error = pin_runtime_journal(&root, &journal).err().unwrap();
+    assert!(error.starts_with("could not open the Ash user runtime journal:"));
+    assert!(!journal.exists());
+}
+
+#[test]
 fn installation_requires_approval_of_the_current_complete_plan() {
     let runner = std::env::current_exe().unwrap();
     let one = setup_plan(1, &runner).unwrap();

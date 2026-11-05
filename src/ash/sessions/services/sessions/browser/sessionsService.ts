@@ -1,4 +1,3 @@
-import { localize } from '../../../../nls.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
@@ -33,7 +32,7 @@ export interface ISessionsService {
 	openThread(sessionId: SessionId, threadId: ThreadId, options?: { readonly sideBySide?: boolean; }): Promise<void>;
 	openSession(sessionId: SessionId, threadId: ThreadId): void;
 	openUntitledSession(untitledSessionId: string): void;
-	openNewSession(title?: string, options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; readonly workspace?: SessionWorkspaceSelection; readonly devContainer?: boolean; readonly forkSource?: IUntitledChatSession['forkSource']; }): IUntitledChatSession;
+	openNewSession(title?: string, options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; readonly workspace?: SessionWorkspaceSelection; readonly devContainer?: boolean; readonly projectId?: string; readonly forkSource?: IUntitledChatSession['forkSource']; }): IUntitledChatSession;
 	activateSelection(selection: SessionsViewSelection, options?: { readonly source: 'restore'; }): void;
 	closeVisibleSelection(selection: SessionsViewSelection): void;
 	reopenLastClosedItem(): Promise<void>;
@@ -52,6 +51,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 	private readonly sessionService: ISessionsManagementService;
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	private readonly slots = new VisibleSessions(reference => this.resolve(reference));
+	private workspaceMode: 'chat' | 'code' = 'chat';
 	private readonly recency: SessionsRecencyHistory;
 	private readonly closedItems = new ClosedItemHistory();
 	private readonly navigation = new SessionsNavigation<NavigationEntry>(
@@ -104,13 +104,21 @@ export class SessionsService extends Disposable implements ISessionsService {
 	get recentSessions(): readonly SessionRecencyEntry[] { return this.recency.entries.filter((entry): entry is SessionRecencyEntry => !('kind' in entry)); }
 	getLastViewedAt(entry: SessionRecencyEntry): number | undefined { return this.recency.getLastViewedAt(entry); }
 	get navigationRevision(): number { return this._navigationRevision; }
-	get visibleSelections(): readonly SessionsViewSelection[] { return this.slots.read().visibleSelections; }
-	get activeSelection(): SessionsViewSelection | undefined { return this.slots.read().activeSelection; }
+	get visibleSelections(): readonly SessionsViewSelection[] { return this.getSelection().visibleSelections; }
+	get activeSelection(): SessionsViewSelection | undefined { return this.getSelection().activeSelection; }
 	get canNavigateBack(): boolean { return this.navigation.canGoBack; }
 	get canNavigateForward(): boolean { return this.navigation.canGoForward; }
 
 	getSelection(reader?: IReader): SessionsSelection {
 		return this.slots.read(reader);
+	}
+
+	setWorkspaceMode(mode: 'chat' | 'code'): void {
+		if (this.workspaceMode === mode) return;
+		// Switching shells supersedes pending opens without changing the visible conversations.
+		this.workspaceMode = mode;
+		this._navigationRevision++;
+		this._onDidChange.fire();
 	}
 
 	async initialize(): Promise<void> {
@@ -172,7 +180,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 			await this.sessionService.prepareThread(sessionId, threadId);
 			preparedAt = performance.now();
 			if (this.isDisposed) throw canceled();
-			if (revision !== this._navigationRevision) return;
+			if (revision !== this._navigationRevision || !this.resolve({ kind: 'session', sessionId, threadId })) return;
 			const sideThread = sideBySide && this.slots.find(reference =>
 				reference.kind === 'session' && reference.sessionId === sessionId && reference.threadId !== threadId);
 			this.activate({ kind: 'session', sessionId, threadId, ...(sideThread ? { sideThread: true } : {}) }, sideBySide ? 'add' : 'open');
@@ -186,14 +194,14 @@ export class SessionsService extends Disposable implements ISessionsService {
 		}
 	}
 	openUntitledSession(untitledSessionId: string): void { this.activate({ kind: 'untitled', untitledSessionId }); }
-	openNewSession(title = localize({ bundle: 'ash', key: 'chat.sessions.new' }, 'New Session'), options?: { readonly sideBySide?: boolean; readonly source?: 'restore'; readonly providerId?: string; readonly workspace?: SessionWorkspaceSelection; readonly devContainer?: boolean; readonly forkSource?: IUntitledChatSession['forkSource']; }): IUntitledChatSession {
+	openNewSession(title?: string, options?: Parameters<ISessionsService['openNewSession']>[1]): IUntitledChatSession {
 		const session = this.sessionService.createUntitledSession(title, options?.workspace, options?.providerId, true, options?.forkSource, options);
 		this.select({ kind: 'untitled', session }, options?.sideBySide ? 'add' : 'open', options?.source === 'restore' ? 'automatic' : 'explicit');
 		return session;
 	}
 	activateSelection(selection: SessionsViewSelection, options?: { readonly source: 'restore'; }): void { this.activate(referenceForSelection(selection), 'focus', options?.source === 'restore' ? 'automatic' : 'explicit'); }
 	closeVisibleSelection(selection: SessionsViewSelection): void {
-		const removed = this.slots.remove(selection);
+		const removed = this.slots.remove(selection, this.activeSelection);
 		if (!removed) {
 			return;
 		}
@@ -209,7 +217,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 		}
 		if (wasActive && replacement) this.activate(replacement, 'focus', 'automatic');
 		else if (wasActive) {
-			const session = this.sessionService.createUntitledSession('New chat');
+			const session = this.sessionService.createUntitledSession();
 			this.select({ kind: 'untitled', session }, 'open', 'automatic');
 		}
 		this.slots.publish(this.catalogUnavailable);
@@ -228,6 +236,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 			}
 			return;
 		}
+		if (!this.resolve(reference)) return;
 		const revision = ++this._navigationRevision;
 		await this.sessionService.prepareThread(reference.sessionId, reference.threadId);
 		if (this.isDisposed || this._navigationRevision !== revision || !this.resolve(reference)) {
@@ -318,8 +327,10 @@ export class SessionsService extends Disposable implements ISessionsService {
 	private activate(reference: SessionsViewReference, mode: SessionPlacement = 'open', intent: 'explicit' | 'automatic' | 'history' = 'explicit'): void {
 		// Ordinary navigation to an already visible side Thread keeps that slot.
 		const visible = this.slots.find(candidate => referenceKey(candidate) === referenceKey(reference)) ?? reference;
+		if (!this.resolve(visible)) return;
 		this.updateManagementSelection(visible);
-		this.select(this.resolve(visible)!, mode, intent);
+		const current = this.resolve(visible);
+		if (current) this.select(current, mode, intent);
 	}
 
 	private updateManagementSelection(reference: SessionsViewReference): void {
@@ -333,7 +344,7 @@ export class SessionsService extends Disposable implements ISessionsService {
 			const session = this.sessionService.untitledSessions.find(candidate => candidate.untitledSessionId === reference.untitledSessionId);
 			return session ? { kind: 'untitled', session } : undefined;
 		}
-		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === reference.sessionId && candidate.status === 'active');
+		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === reference.sessionId && candidate.status === 'active' && candidate.surface !== 'chat');
 		const thread = session?.chats.find(candidate => candidate.threadId === reference.threadId && candidate.status === 'active');
 		return session && thread ? { kind: 'session', active: { session, threadId: thread.threadId }, ...(reference.sideThread ? { sideThread: true } : {}) } : undefined;
 	}

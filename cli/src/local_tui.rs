@@ -48,7 +48,7 @@ fn run_entry(mut dir_root: PathBuf, profile_root: PathBuf, entry: Entry) -> Resu
     let mut drafts = None;
     let mut start_empty = false;
     loop {
-        let mut options = ash_tui::TuiOptions::new("TUI conversation")
+        let mut options = ash_tui::TuiOptions::new("")
             .with_announcement(announcement.clone())
             .with_dir_root(&dir_root)
             .with_profile_root(&profile_root);

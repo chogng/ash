@@ -54,10 +54,9 @@ export class ActivityBar extends Disposable {
 	private readonly pinnedCodeActions = observableValue<ReadonlySet<string>>(this, new Set());
 	private orderedActions: ActivityAction[] = [];
 	private draggedActionId: string | undefined;
-	private readonly bottomDomNode: HTMLDivElement;
 	private labeled = true;
 
-	public get accountContainer(): HTMLElement { return this.bottomDomNode; }
+	public get accountContainer(): HTMLElement { return this.accounts.domNode; }
 
 	constructor(
 		container: HTMLElement,
@@ -73,22 +72,12 @@ export class ActivityBar extends Disposable {
 		this.domNode = h(container.ownerDocument, 'div');
 		this.domNode.className = 'ash-sessions-activity-content labeled';
 		container.append(this.domNode);
+		this._register(toDisposable(() => this.domNode.remove()));
 		this.order = this.readOrder();
 		this.pinnedCodeActions.set(this.readPinnedCodeActions());
 		const menu = this._register(menus.createMenu(Menus.ActivityBar, contextKeys));
 		const codeMenu = this._register(menus.createMenu(Menus.CodeActivityBar, contextKeys));
-		const top = h(container.ownerDocument, 'div');
-		top.className = 'ash-sessions-activity-top';
-		const bottom = h(container.ownerDocument, 'div');
-		bottom.className = 'ash-sessions-activity-bottom labeled';
-		this.bottomDomNode = bottom;
-		// Accounts can live outside the navigation root; both mounts share this lifetime.
-		this._register(toDisposable(() => {
-			this.domNode.remove();
-			this.bottomDomNode.remove();
-		}));
-
-		this.navigation = this._register(new ActionBar(top, {
+		this.navigation = this._register(new ActionBar(this.domNode, {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: localize('sessions.activity.navigation', 'Navigation'),
 			orientation: 'vertical',
@@ -157,14 +146,14 @@ export class ActivityBar extends Disposable {
 		const accountLabel = localize('workbench.accounts', 'Accounts');
 		this.accountAction = { id: 'sessions.activity.accounts', label: accountLabel, tooltip: accountLabel, icon: Lxicon.account, enabled: true, run() { } };
 		this.showAccountMenu = (anchor, selectFirst) => delegate.showAccountMenu(anchor, selectFirst);
-		this.accounts = this._register(new ActionBar(bottom, {
+		this.accounts = this._register(new ActionBar(this.domNode, {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: accountLabel,
 			orientation: 'vertical',
 			actionViewItemProvider: (action, options) => this.createAccountActionViewItem(action, options, 'sidebar'),
 		}));
+		this.accounts.domNode.classList.add('ash-sessions-activity-bottom', 'labeled');
 		this.accounts.setActions([this.accountAction]);
-		this.domNode.append(top, bottom);
 		this._register(addDisposableListener(this.domNode, 'contextmenu', event => this.showContextMenu(event)));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => {
 			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showContextMenu(event);
@@ -175,7 +164,8 @@ export class ActivityBar extends Disposable {
 		const focused = this.domNode.ownerDocument.activeElement as HTMLElement | null;
 		const focusedId = focused?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
 		const navigationTabStop = this.navigation.domNode.querySelector('[tabindex="0"]')?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
-		const restoreFocus = focused && (this.domNode.contains(focused) || this.bottomDomNode.contains(focused));
+		const accounts = this.accounts.domNode;
+		const restoreFocus = focused && (this.domNode.contains(focused) || accounts.contains(focused));
 		const labeled = location === ActivityBarPosition.DEFAULT;
 		const presentationChanged = this.labeled !== labeled;
 		this.labeled = labeled;
@@ -185,9 +175,9 @@ export class ActivityBar extends Disposable {
 			if (!host || labeled && !accountHost) throw new Error(`Sessions Activity Bar host is missing for ${location}`);
 			host.append(this.domNode);
 		}
-		(labeled ? accountHost! : this.domNode).append(this.bottomDomNode);
+		(labeled ? accountHost! : this.domNode).append(accounts);
 		this.domNode.classList.toggle('labeled', labeled);
-		this.bottomDomNode.classList.toggle('labeled', labeled);
+		accounts.classList.toggle('labeled', labeled);
 		const horizontal = location === ActivityBarPosition.TOP || location === ActivityBarPosition.BOTTOM;
 		this.domNode.classList.toggle('horizontal', horizontal);
 		this.navigation.setOrientation(horizontal ? 'horizontal' : 'vertical');

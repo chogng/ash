@@ -11,6 +11,8 @@ suite('Sessions Chat accessibility help', () => {
 			await page.goto(`/sessions.html?locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: locale === 'en' ? 'Code' : '代码', exact: true }).click();
+			const controls = page.locator('.ash-sessions-chat-slot.active').getByRole('toolbar', { name: locale === 'en' ? 'Session controls' : '会话控件', exact: true });
+			await expect(controls.getByRole('button')).toHaveCount(2);
 			const input = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor .stanza-editor').getByRole('textbox');
 			await expect(input).toBeVisible();
 			await input.focus();
@@ -26,7 +28,7 @@ suite('Sessions Chat accessibility help', () => {
 			const worktreeHelp = locale === 'en' ? /Use Enter or Space on New worktree to toggle it/ : /在“新建工作树”上按 Enter 或空格可切换开关/;
 			expect(text).toMatch(worktreeHelp);
 			expect(text).toMatch(locale === 'en' ? /With focus in the Sessions sidebar, press Control\+F or Command\+F to search/ : /焦点位于会话侧栏时，按 Control\+F 或 Command\+F 搜索/);
-			expect(text).toMatch(locale === 'en' ? /Focus Workspace Picker or Focus Environment Picker/ : /聚焦工作区选择器.*聚焦环境选择器/);
+			expect(text).toMatch(locale === 'en' ? /Focus Project Picker or Focus Environment Picker/ : /聚焦项目选择器.*聚焦环境选择器/);
 			expect(text.match(locale === 'en' ? /Chat: Configure Tools/g : /聊天：配置工具/g)).toHaveLength(1);
 			await page.keyboard.press('Escape');
 			await expect(content).toBeHidden();
@@ -49,6 +51,11 @@ suite('Sessions Chat accessibility help', () => {
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		const composer = page.locator('.ash-sessions-chat-slot.active');
 		const input = composer.locator('.ash-chat-input-editor .stanza-editor').getByRole('textbox');
+		const environment = composer.locator('.ash-sessions-environment-picker');
+		const workspace = composer.locator('.ash-sessions-workspace-picker');
+		await environment.focus();
+		await environment.press('ArrowRight');
+		await expect(workspace).toBeFocused();
 		await input.focus();
 		await page.keyboard.insertText('Keep this draft');
 

@@ -261,6 +261,33 @@ test('Sessions view service replaces visible sessions on open and Back/Forward n
 	assert.deepEqual(view.visibleSelections.map(selectionId), ['session:session-2:thread-2']);
 });
 
+test('Code retains and reopens directoryless conversations through session navigation', async () => {
+	const legacy = session('legacy', 'legacy-root');
+	const bound = { ...session('bound', 'bound-root'), workspace: { authorityId: 'local', root: '/workspace' } };
+	using sessions = new FakeSessionService([legacy, bound]);
+	using storage = createTestStorage();
+	using view = createView(sessions, storage);
+	await view.initialize();
+	await view.openThread('bound', 'bound-root', { sideBySide: true });
+	view.openSession('legacy', 'legacy-root');
+	assert.equal(selectionId(view.activeSelection), 'session:legacy:legacy-root');
+
+	view.setWorkspaceMode('code');
+	assert.ok(view.visibleSelections.some(selection => selectionId(selection) === 'session:legacy:legacy-root'));
+	assert.equal(selectionId(view.activeSelection), 'session:legacy:legacy-root');
+	view.openSession('bound', 'bound-root');
+	assert.equal(selectionId(view.activeSelection), 'session:bound:bound-root');
+	await view.openThread('legacy', 'legacy-root');
+	assert.equal(selectionId(view.activeSelection), 'session:legacy:legacy-root');
+	await view.openPreviousSession();
+	assert.equal(selectionId(view.activeSelection), 'session:bound:bound-root');
+	await view.openNextSession();
+	assert.equal(selectionId(view.activeSelection), 'session:legacy:legacy-root');
+
+	view.setWorkspaceMode('chat');
+	assert.equal(selectionId(view.activeSelection), 'session:legacy:legacy-root');
+});
+
 test('a side Thread retains its source slot and restores both slots from workspace state', async () => {
 	const root = session('session', 'source');
 	using sessions = new FakeSessionService([{
@@ -646,7 +673,7 @@ test('Sessions merges legacy selections and restores one order, active selection
 	using storage = createTestStorage();
 	using sessions = new FakeSessionService([session('session-1', 'thread-1'), session('session-2', 'thread-2')]);
 	const chatDraft = { kind: 'untitled', session: { untitledSessionId: 'saved-chat', title: 'Chat draft', workspace: { type: 'current' } } };
-	const firstCode = { kind: 'untitled', session: { untitledSessionId: 'saved-code-first', title: 'New code session', workspace: { type: 'current' } } };
+	const firstCode = { kind: 'untitled', session: { untitledSessionId: 'saved-code-first', title: 'New code session', workspace: { type: 'current' }, automaticTitle: true, modelDefaults: { workspace: null, effort: 'high' } } };
 	const secondCode = { kind: 'untitled', session: { untitledSessionId: 'saved-code-second', title: 'Second Code draft', workspace: { type: 'current' } } };
 	storage.store('sessions.viewState', JSON.stringify({
 		version: 1, pages: {
@@ -666,6 +693,7 @@ test('Sessions merges legacy selections and restores one order, active selection
 	assert.deepEqual({ visible: restored.visibleSelections.map(selectionId), active: selectionId(restored.activeSelection) }, expected);
 	assert.equal(JSON.parse(storage.get('sessions.viewState', StorageScope.WORKSPACE)!).version, 2);
 	assert.deepEqual(nextCatalog.untitledSessions.map(draft => draft.title).sort(), ['Chat draft', 'New code session', 'Second Code draft']);
+	assert.deepEqual(nextCatalog.untitledSessions.find(draft => draft.untitledSessionId === firstCode.session.untitledSessionId), firstCode.session);
 });
 
 test('Sessions restoration prunes unavailable conversations and persists materialized identities', async () => {
@@ -719,11 +747,17 @@ test('a choice during catalog loading supersedes the saved foreground selection'
 test('invalid persisted Sessions arrangements are rejected at service creation', () => {
 	using storage = createTestStorage();
 	using sessions = new FakeSessionService([]);
-	for (const visible of [[{ kind: 'session', sessionId: '', threadId: 'thread' }], [{ kind: 'untitled', session: { untitledSessionId: 'draft', title: 'Draft', workspace: { type: 'ssh', root: '/workspace' } } }]]) {
+	const draft = { untitledSessionId: 'draft', title: 'Draft', workspace: { type: 'current' }, automaticTitle: true, modelDefaults: { workspace: null, effort: 'high' } };
+	for (const reference of [
+		{ kind: 'session', sessionId: '', threadId: 'thread' },
+		{ kind: 'untitled', session: { ...draft, workspace: { type: 'ssh', root: '/workspace' } } },
+		{ kind: 'untitled', session: { ...draft, automaticTitle: false } },
+		{ kind: 'untitled', session: { ...draft, modelDefaults: { ...draft.modelDefaults, effort: 'invalid' } } },
+	]) {
 		storage.store('sessions.viewState', JSON.stringify({
 			version: 1,
 			pages: {
-				chat: { visible, active: 0 },
+				chat: { visible: [reference], active: 0 },
 				code: {
 					visible: [],
 					active: -1
@@ -834,6 +868,7 @@ class FakeSessionService implements ISessionsManagementService {
 
 	setUntitledSessionModel(_untitledSessionId: string, _model: ModelRef): void { }
 	setUntitledSessionDefaultModel(_untitledSessionId: string, _model: ModelRef | undefined): void { }
+	setUntitledSessionReasoningEffort() { }
 	setUntitledSessionAgent(_untitledSessionId: string, _agent: import('../../../workbench/services/chat/common/chatService.js').ChatAgent | undefined): void { }
 	setUntitledSessionWorkspace(): void { throw new Error('Unexpected workspace edit'); }
 	cancelUntitledSessionPreparation(): void { throw new Error('Unexpected preparation cancellation'); }

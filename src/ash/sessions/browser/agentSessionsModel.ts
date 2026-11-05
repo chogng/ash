@@ -18,7 +18,7 @@ export function createSessionItemActions(selection: SessionsViewSelection, comma
 	});
 	return [
 		{
-			...action('sessions.list.togglePin', pinned ? localize('sessions.list.unpin', 'Unpin chat') : localize('sessions.list.pin', 'Pin chat'), pinned ? Lxicon.unpin : Lxicon.pin),
+			...action('sessions.list.togglePin', pinned ? localize('sessions.list.unpin', 'Unpin') : localize('sessions.list.pin', 'Pin'), pinned ? Lxicon.unpin : Lxicon.pin),
 			run: async () => {
 				try { const id = await commands.executeCommand<string>('sessions.list.togglePin', target); didPin?.(id); }
 				catch (error) { notifications.error(String(error)); }

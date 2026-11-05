@@ -22,6 +22,7 @@ fn start(
         .start_thread(
             &NoThreadWorktreeBinder,
             StartThreadRequest {
+                surface: None,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,

@@ -490,6 +490,24 @@ impl Provider {
         request: &ModelRequest,
     ) -> Result<ModelRequest, ModelProviderError> {
         let mut request = request.clone();
+        if self.config.ultra_models.contains(&model.id)
+            && let Some(effort) = ultra_override_effort(self.config.provider.as_str(), model)
+                .or_else(|| {
+                    if request.reasoning.is_none() {
+                        ultra_default_effort(self.config.provider.as_str(), model)
+                    } else {
+                        None
+                    }
+                })
+        {
+            request
+                .reasoning
+                .get_or_insert(ash_protocol::ReasoningConfig {
+                    effort,
+                    summary: false,
+                })
+                .effort = effort;
+        }
         request.max_output_tokens = request.max_output_tokens.or(self.config.max_output_tokens);
         let acceleration = self.selected_acceleration(model)?;
         // An explicit request may override the saved choice, but it cannot bypass this
@@ -978,7 +996,48 @@ pub struct ModelProviderRuntime {
     diagnostics: Option<Arc<dyn ResponseDiagnosticSink>>,
 }
 
+fn ultra_override_effort(provider: &str, model: &Model) -> Option<ash_protocol::ReasoningEffort> {
+    if provider == "openai" {
+        model_provider_info::effective_ultra_reasoning_effort(provider, model)
+    } else {
+        None
+    }
+}
+
+fn ultra_default_effort(provider: &str, model: &Model) -> Option<ash_protocol::ReasoningEffort> {
+    if provider == "anthropic" {
+        model_provider_info::effective_ultra_reasoning_effort(provider, model)
+    } else {
+        None
+    }
+}
+
 impl ModelProviderRuntime {
+    /// Catalog projection of the effort that Ultra applies even to an explicit selection.
+    pub fn ultra_override_reasoning_effort(
+        config: &ModelProviderConfig,
+        model: &Model,
+    ) -> Option<ash_protocol::ReasoningEffort> {
+        if config.ultra_mode(model) == Some(true) {
+            ultra_override_effort(config.provider.as_str(), model)
+        } else {
+            None
+        }
+    }
+
+    /// Resolve the Ultra default before the ordinary model fallback consumes the absence
+    /// of an explicit effort. Catalog presentation continues to use the ordinary default.
+    pub fn ultra_default_reasoning_effort(
+        config: &ModelProviderConfig,
+        model: &Model,
+    ) -> Option<ash_protocol::ReasoningEffort> {
+        if config.ultra_mode(model) == Some(true) {
+            ultra_default_effort(config.provider.as_str(), model)
+        } else {
+            None
+        }
+    }
+
     /// Admits subscription dictation independently of the selected text model or API key.
     pub fn codex_dictation(&self) -> Result<ash_chatgpt::ChatGptDictation, ModelProviderError> {
         let auth = self.chatgpt_oauth.as_ref().ok_or_else(|| {

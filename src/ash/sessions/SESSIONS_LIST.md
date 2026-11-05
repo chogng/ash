@@ -17,17 +17,23 @@ This specification defines stable placement and state-ownership rules. Row styli
 | Sidebar collapse state                        | `WorkbenchObjectTree`, persisted by each sidebar |
 | Custom groups and membership                  | `ISessionGroupsService`                          |
 | Top-level group/workspace order               | `ISessionSectionOrderService`                    |
-| Tree composition and presentation             | `SessionsView` and `SessionsList`                |
+| Tree interaction and drop targets             | `SessionsListTree`                               |
+| Desktop Chat placement, ordering and paging   | Desktop Chat list model                          |
+| Row rendering, keyboard focus and scrolling   | Sidebar view and list controls                   |
 
-Chat and Code consume the same session selection and pins. Chat presents flat conversation rows in top-level custom groups and a remaining conversation section beside pinned conversations and project entries. Code lists project entries separately from Recents, which includes unpinned conversations across workspaces and projects. Explicit custom groups remain inside Recents. Each mode owns separate section expansion state. Project records and membership remain owned by `IProjectService`; the sidebar holds only a disposable projection.
+Chat and Code consume the same session selection and pins. Chat presents flat conversation rows in top-level custom groups and a remaining conversation section beside pinned conversations and project entries. Code shows unpinned project conversations below their Project in the sidebar. Recents contains explicit custom groups and conversations left after project and workspace placement. Each mode owns separate section expansion state. `IProjectService` owns project records and membership. The workspace is the Agent's execution directory, which can be a worktree or container for the same Project.
 
-The Desktop Chat sidebar projects ChatGPT history and active local Ash sessions into one tree using the shared Sessions list renderers. Pins and Recents contain entries from both sources, and ChatGPT project groups retain their original membership. Each source owns its history and actions, including its pin state. Opening a row delegates to its source. The sidebar retains its existing profile collapse state.
+Chat and Code query separate project scopes. The Projects page, Chat Search and the Chat sidebar read local Chat projects. The Projects page and Chat sidebar also show projects supplied by Chat providers. The Code sidebar and its project picker read Code projects. Each scope has its own memberships even when both projects include the same Ash conversation. App Server persists the scope for newly created projects and recognizes legacy workspace-derived project IDs as Code. Other legacy local projects remain in Chat.
+
+Desktop Chat and Projects consume the conversation catalog contract owned by the Chat contribution. Sources supply opaque conversation and project identities, membership, paging state, and operations. The Desktop Chat sidebar shows pinned projects in Pinned and other active projects in Projects. Each project can expand to show its conversations. Project membership also keeps unpinned conversations out of Recent. A pinned conversation has a shortcut in Pinned and remains visible inside each of its projects. Project pins and expansion are profile preferences. The Projects page shares the project pins. The Projects main page groups conversations by project identity regardless of their source, includes pinned conversations in their projects, and loads project history when a project opens. A conversation with a known project links back to that project from its header. Sources own membership, history and pin state. When a source supports editing project details, its adapter reads and saves them through the shared Projects form. Project actions route through the owning adapter. For catalogs without a project archive operation, the adapter stores archive visibility in the current profile, scoped to the connected account, and leaves the underlying conversations intact. The Archived view uses the project owner’s restore operation. Restoring a locally archived project clears the same stored marker. The views keep only their presentation state.
 
 List-owned state is local presentation state. It is not synchronized back to a provider and must not mutate provider timestamps or metadata.
 
 ## Inputs
 
 The list consumes sessions from `ISessionsManagementService`. Providers expose workspace, quick-chat, and archived state through provider-neutral fields. The Session catalog exposes durable automation creation provenance. The sidebar uses that metadata for its automation filter, including after the automation plan has been deleted.
+
+Code and the regular IDE project saved Ash conversations from the same provider catalogs. An active conversation can be opened and continued in either surface with its existing execution context, including when it has no execution folder. Code's project and folder requirements apply to draft creation.
 
 Sessions created by automation runs are hidden by default, with an exception for the active session. Chat and Code share the automation visibility preference and per-session overrides. The reply-based mode lists an automation session after the first accepted user submission. Runs that continue an existing conversation leave its classification intact. Automations retains its own run history. Surfaces that need session-row presentation without sectioning use `SessionsFlatList`.
 
@@ -47,7 +53,7 @@ Archived
 
 - Archived sessions appear only in the final archived section.
 - Pinned sessions appear in the pinned section, retaining their project and custom-group membership. Unpinning derives placement from that membership again.
-- Chat project entries open the project page; unpinned conversations remain flat within their custom group or the conversation section.
+- The Desktop Chat sidebar nests project members under their project. The Projects page provides access to project home pages. The standard Sessions list keeps Chat conversations flat within their custom group or the conversation section.
 - A valid custom-group membership places an unpinned, unarchived session in that group, including a quick chat.
 - When dedicated external sectioning is enabled, remaining external sessions appear together before the archived section. Pinning and custom-group membership retain their precedence; disabling sectioning returns external sessions to the ordinary grouping rules without changing that presentation state.
 - Remaining unpinned quick chats appear in the dedicated chats section.
@@ -70,7 +76,7 @@ The sidebar may group otherwise ungrouped conversations under Chats or Recents b
 
 ### Workspace grouping
 
-User-created groups and workspace sections share a user-managed order below the fixed sections. Workspace capping may initially hide inactive workspaces; search and explicit user promotion reveal them.
+In the default Code sidebar and when grouped by Projects, unpinned conversations without an active Code project or custom group appear in workspace groups under Projects. The group uses the Session's saved creation workspace, including its authority. Code sorts these groups by folder name and keeps the user-managed order of custom groups in Recents. Project membership remains with `IProjectService`.
 
 ### Date grouping
 
@@ -104,7 +110,7 @@ Filters compose across session type, status, archive/read state, and provider. T
 
 ## Drag and drop
 
-The target determines which service handles the drop.
+Chat and Code supply row capabilities to the same list tree. The tree interprets the destination, and the row's source owns the mutation. A drop from the Pinned shortcut into Recents unpins the conversation and retains its memberships. A drop from a project row into Recents removes that project membership.
 
 - sessions may reorder within valid sections;
 - sessions may move into user-created groups;

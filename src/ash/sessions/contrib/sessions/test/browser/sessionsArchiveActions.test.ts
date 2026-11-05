@@ -400,8 +400,9 @@ test('sidebar destination commands act on the captured chat and reread the proje
 	current.services.registerInstance(IProjectService, {
 		onDidChange: Event.None, list: async () => [{ ...project, revision: 1 }], read: async () => project,
 		addSession: async (value, id) => { added.push([value.revision, id]); return { ...value, sessionIds: [id] }; },
+		moveSession: async () => { throw new Error('Unexpected project membership transfer'); },
 		create: async () => { throw new Error('Unexpected project creation'); }, update: async () => { throw new Error('Unexpected project edit'); },
-		archive: async () => { throw new Error('Unexpected project archive'); }, remove: async () => { throw new Error('Unexpected project deletion'); },
+		archive: async () => { throw new Error('Unexpected project archive'); }, restore: async () => { throw new Error('Unexpected project restore'); }, remove: async () => { throw new Error('Unexpected project deletion'); },
 	});
 	current.services.registerInstance(ISessionGroupsService, {
 		groups: [{ sectionId: 'group', name: 'Test group', sessionIds: [] }], onDidChange: Event.None,
@@ -443,8 +444,9 @@ for (const action of ['sessions.list.togglePin', 'agentSession.rename', 'agentSe
 		services.registerInstance(IProjectService, {
 			onDidChange: Event.None, list: async () => [project], read: async () => project,
 			addSession: async (value, id) => { linked.push(id); return value; },
+			moveSession: async () => { throw new Error('Unexpected project membership transfer'); },
 			create: async () => { throw new Error('Unexpected project creation'); }, update: async () => { throw new Error('Unexpected project edit'); },
-			archive: async () => { throw new Error('Unexpected project archive'); }, remove: async () => { throw new Error('Unexpected project deletion'); },
+			archive: async () => { throw new Error('Unexpected project archive'); }, restore: async () => { throw new Error('Unexpected project restore'); }, remove: async () => { throw new Error('Unexpected project deletion'); },
 		});
 		const moved: string[] = [];
 		services.registerInstance(ISessionGroupsService, {

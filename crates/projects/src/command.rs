@@ -1,5 +1,6 @@
 use crate::ProjectMaterial;
 use crate::ProjectRoot;
+use crate::ProjectScope;
 use ash_file_access::DirId;
 use ash_protocol::CommandId;
 use ash_protocol::ProjectId;
@@ -13,6 +14,8 @@ pub enum ProjectCommand {
     Create {
         name: String,
         description: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        scope: Option<ProjectScope>,
         #[serde(default)]
         materials: Vec<ProjectMaterial>,
     },

@@ -45,6 +45,7 @@ pub(crate) fn complete(
         client,
         target,
         endpoint,
+        model,
         request,
         build_request(model, request)?,
         cancellation,
@@ -72,7 +73,7 @@ pub(crate) fn stream(
         ash_http_client::HttpMethod::Post,
         target.endpoint(endpoint.relative_path())?,
         crate::headers::build(
-            endpoint.headers(target, request)?,
+            endpoint.headers(target, model, request)?,
             crate::headers::ResponseFormat::EventStream,
         )?,
         body,

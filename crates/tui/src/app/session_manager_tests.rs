@@ -853,6 +853,7 @@ fn active_session_app() -> App {
 
 fn session() -> Session {
     Session {
+        surface: None,
         source: None,
         model: None,
         session_id: SessionId::new("current").unwrap(),
@@ -866,6 +867,7 @@ fn session() -> Session {
             summary: None,
         },
         threads: vec![SessionThread {
+            recap: None,
             manager: None,
             thread_id: ThreadId::new("current").unwrap(),
             title: "main".into(),

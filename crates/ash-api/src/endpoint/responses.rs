@@ -90,6 +90,7 @@ pub(crate) fn complete(
         client,
         &target,
         endpoint,
+        model,
         request,
         build_request(endpoint, model, request)?,
         cancellation,
@@ -117,7 +118,7 @@ pub(crate) fn stream(
         ash_http_client::HttpMethod::Post,
         target.endpoint(endpoint.relative_path())?,
         crate::headers::build(
-            endpoint.headers(&target, request)?,
+            endpoint.headers(&target, model, request)?,
             crate::headers::ResponseFormat::EventStream,
         )?,
         body,
@@ -187,7 +188,7 @@ pub(crate) fn count_input_tokens(
         client,
         target,
         "responses/input_tokens",
-        endpoint.headers(&target, request)?,
+        endpoint.headers(&target, model, request)?,
         build_count_request(model, request)?,
         cancellation,
     )?;

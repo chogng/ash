@@ -20,6 +20,7 @@ impl From<crate::ThreadSnapshot> for core_api::ThreadView {
             parent_thread_id: snapshot.parent_thread_id,
             forked_from_id: snapshot.forked_from_id,
             title: snapshot.title,
+            creation_title: snapshot.creation_title,
             status: snapshot.status,
             archived_at_unix_ms: snapshot.archived_at_unix_ms,
             archive_reason: snapshot.archive_reason,

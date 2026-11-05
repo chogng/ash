@@ -918,6 +918,16 @@ fn chat_completions_streams_wire_deltas_and_reassembles_tool_calls() {
             ModelStreamEvent::TextDelta("sun".into()),
             ModelStreamEvent::ReasoningDelta("check ".into()),
             ModelStreamEvent::TextDelta("ny".into()),
+            ModelStreamEvent::ToolCallDelta {
+                id: "call_1".into(),
+                name: "weather".into(),
+                arguments: "{\"city\":".into(),
+            },
+            ModelStreamEvent::ToolCallDelta {
+                id: "call_1".into(),
+                name: "weather".into(),
+                arguments: "\"Paris\"}".into(),
+            },
         ]
     );
     assert_eq!(response.text(), "sunny");
@@ -1079,7 +1089,19 @@ fn anthropic_messages_streams_wire_deltas_and_reassembles_tool_use() {
 
     assert_eq!(
         events.events,
-        vec![ModelStreamEvent::TextDelta("sunny".into())]
+        vec![
+            ModelStreamEvent::TextDelta("sunny".into()),
+            ModelStreamEvent::ToolCallDelta {
+                id: "toolu_1".into(),
+                name: "weather".into(),
+                arguments: "{\"city\":".into(),
+            },
+            ModelStreamEvent::ToolCallDelta {
+                id: "toolu_1".into(),
+                name: "weather".into(),
+                arguments: "\"Paris\"}".into(),
+            },
+        ]
     );
     assert_eq!(response.text(), "sunny");
     assert_eq!(

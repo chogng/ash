@@ -80,6 +80,33 @@ where
                 command.command()
             )));
         }
+        TuiSlashCommandAction::Recap => {
+            use ash_app_server_protocol::protocol::session::{
+                SessionRequest, SessionRequestParams, SessionRequestResult,
+            };
+            let current = require_conversation(conversation)?;
+            let result = client
+                .request_session(SessionRequestParams {
+                    command_id: crate::client::new_command_id("recap"),
+                    session_id: current.session_id().clone(),
+                    request: SessionRequest::GenerateRecap {
+                        thread_id: current.thread_id().clone(),
+                    },
+                })
+                .map_err(|error| CommandExecutionError(error.to_string()))?;
+            let SessionRequestResult::Recap(result) = result else {
+                return Err(CommandExecutionError(
+                    "Expected a conversation recap".into(),
+                ));
+            };
+            output.events.push(
+                crate::thread::Event::CommandCompleted {
+                    command: "/recap".into(),
+                    result,
+                }
+                .into(),
+            );
+        }
         TuiSlashCommandAction::Status => {
             output.events.push(
                 status::Event::PanelOpened(status::load_status_panel(
@@ -306,12 +333,7 @@ where
                 );
                 return Ok(output);
             }
-            let title = if arguments.is_empty() {
-                "TUI conversation".to_owned()
-            } else {
-                arguments
-            };
-            *conversation = Some(ActiveConversation::start_at(client, title, workspace)?);
+            *conversation = Some(ActiveConversation::start_at(client, arguments, workspace)?);
             output.conversation_change = Some(ConversationChange {
                 notice: "Started a new session.".into(),
                 transcript: crate::sessions::ConversationTranscript::Clear,

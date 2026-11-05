@@ -47,6 +47,7 @@ impl Settings {
             .cloned()
             .unwrap_or_else(|| ProviderConfigDto {
                 model_acceleration: Default::default(),
+                ultra_models: Default::default(),
                 disabled_acceleration_options: Default::default(),
                 provider: custom_id.clone(),
                 connection: custom_id,

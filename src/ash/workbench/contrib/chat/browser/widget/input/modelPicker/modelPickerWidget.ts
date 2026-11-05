@@ -10,11 +10,12 @@ import { getHoverDelegate, type IManagedHover } from '../../../../../../../base/
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
 import { renderModelConfigurationButton } from './modelPickerConfiguration.js';
-import { modelPickerEffortOptions } from './modelPickerModelConfig.js';
+import { getModelConfigEffortLabel } from './modelPickerModelConfig.js';
 import { TabbedModelPicker } from './modelPickerTabbedWidget.js';
+import { ChatModelSliderWidget } from './chatModelSliderWidget.js';
 import { renderChatInputPickerSplit, trackChatInputPickerFocus } from '../chatInputPickerActionItem.js';
 
-/** Toolbar controls project the delegate; TabbedModelPicker owns their shared popup interaction. */
+/** Toolbar controls project the delegate and choose a presentation for the model picker panel. */
 export class ModelPickerWidget extends Disposable {
 	private readonly hoverGroupId = createUuid();
 	private nameButton: HTMLElement | undefined;
@@ -24,6 +25,7 @@ export class ModelPickerWidget extends Disposable {
 	private readonly configurationHover = this._register(new MutableDisposable<IManagedHover>());
 	private actionEnabled = true;
 	private picker: TabbedModelPicker | undefined;
+	private sliderPicker: ChatModelSliderWidget | undefined;
 
 	constructor(
 		private readonly delegate: IModelPickerDelegate,
@@ -52,7 +54,6 @@ export class ModelPickerWidget extends Disposable {
 		options.classList.add('ash-chat-input-configuration-action');
 		name.setAttribute('aria-haspopup', 'dialog');
 		options.setAttribute('aria-haspopup', 'dialog');
-		this.picker = this._register(this.instantiationService.createInstance(TabbedModelPicker, this.delegate));
 		this._register(bindActionWidgetActivation(name, () => {
 			name.focus();
 			if (this.visible) { this.hide(); }
@@ -103,16 +104,30 @@ export class ModelPickerWidget extends Disposable {
 	}
 
 	private updateButtons(): void {
+		if (this.delegate.chatModelSlider) this.picker?.hide();
+		else this.sliderPicker?.hide();
 		const selected = this.delegate.getSelectedModel();
 		const model = this.delegate.getModels().find(entry => entry.model.provider === selected?.provider && entry.model.model === selected.model);
 		const automatic = this.delegate.isAutomaticModel();
 		const selectedEffort = this.delegate.getSelectedReasoningEffort();
-		const label = automatic
+		const selectedPresetId = this.delegate.getSelectedPreset?.();
+		const selectedPreset = model?.presets?.find(p => p.id === selectedPresetId);
+		let label = automatic
 			? localize('chat.modelPicker.auto', 'Auto')
 			: model?.displayName ?? selected?.model ?? localize('chat.modelPicker.selectModel', 'Select model');
-		const effort = this.effortLabel && !automatic && model?.supportedReasoningEfforts?.length
-			? modelPickerEffortOptions(model, selectedEffort).find(option => option.checked)?.label
+		if (this.delegate.chatModelSlider && selectedPreset && (model?.presets?.length ?? 0) > 1) {
+			label = `${label} · ${selectedPreset.label}`;
+		}
+		const displayedEffort = this.delegate.chatModelSlider && this.delegate.useWorkbenchModelManagement !== false
+			? model?.reasoningEffortOverride ?? selectedEffort
+			: selectedEffort;
+		let effort = this.effortLabel && !automatic && model
+			? getModelConfigEffortLabel(model, displayedEffort)
 			: undefined;
+		if (this.delegate.chatModelSlider && effort) {
+			label = `${label} · ${effort}`;
+			effort = undefined;
+		}
 		this.nameButton!.querySelector('.ash-chat-input-picker-label')!.textContent = label;
 		if (this.effortLabel) {
 			this.effortLabel.textContent = effort ?? '';
@@ -132,12 +147,21 @@ export class ModelPickerWidget extends Disposable {
 		this.updateAvailability();
 	}
 
-	public get visible(): boolean { return this.picker?.isVisible ?? false; }
+	public get visible(): boolean { return (this.sliderPicker?.isVisible || this.picker?.isVisible) ?? false; }
 
-	public hide(): void { this.picker?.hide(); }
+	public hide(): void {
+		this.sliderPicker?.hide();
+		this.picker?.hide();
+	}
 
 	public show(anchor: HTMLElement = this.nameButton!, detailsModel?: ModelRef): void {
 		if (!this.enabled || this.visible) { return; }
-		this.picker?.show(anchor, detailsModel, this.delegate.configureInMenu === true);
+		if (this.delegate.chatModelSlider) {
+			this.sliderPicker ??= this._register(this.instantiationService.createInstance(ChatModelSliderWidget, this.delegate));
+			this.sliderPicker.show(anchor);
+		} else {
+			this.picker ??= this._register(this.instantiationService.createInstance(TabbedModelPicker, this.delegate));
+			this.picker.show(anchor, detailsModel, this.delegate.configureInMenu === true);
+		}
 	}
 }

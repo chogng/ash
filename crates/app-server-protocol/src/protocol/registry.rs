@@ -2142,6 +2142,8 @@ use crate::protocol::projects::ProjectRootRemoveParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectRootUpdateParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::projects::ProjectScopeDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectSessionMutationParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectStatusDto;
@@ -3018,6 +3020,8 @@ use ash_protocol::SessionRuntimeResult;
 use ash_protocol::SessionSource;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionStatus;
+#[cfg(any(test, feature = "export"))]
+use ash_protocol::SessionSurface;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionThread;
 #[cfg(any(test, feature = "export"))]
@@ -7093,6 +7097,7 @@ typescript_bindings! {
     DirectoryGrantsForgetParams,
     SessionStatus,
     SessionSource,
+    SessionSurface,
     SessionManagerStatus,
     SessionManagerActivity,
     SessionManagerInfo,
@@ -7403,6 +7408,7 @@ typescript_bindings! {
     TurnChangesMutationResult,
     TurnChangesChanged,
     ProjectStatusDto,
+    ProjectScopeDto,
     UnixMillis,
     SymphonyConfigureParams,
     SymphonySubmitParams,

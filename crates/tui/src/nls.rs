@@ -1586,10 +1586,10 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "<agent|plan|debug|multitask|ask>",
     ),
     translation(
-        "Use /effort <level> or /effort multitask|ultra|ultracode [on|off]",
-        "/effort <推論レベル> または /effort multitask|ultra|ultracode [on|off] を使用",
-        "使用 /effort <档位> 或 /effort multitask|ultra|ultracode [on|off]",
-        "Utiliser /effort <niveau> ou /effort multitask|ultra|ultracode [on|off]",
+        "Use /effort <level> or /effort multitask [on|off]",
+        "/effort <推論レベル> または /effort multitask [on|off] を使用",
+        "使用 /effort <档位> 或 /effort multitask [on|off]",
+        "Utiliser /effort <niveau> ou /effort multitask [on|off]",
     ),
     translation(
         "<effort> | multitask [on|off]",
@@ -3290,6 +3290,12 @@ const UI_TRANSLATIONS: &[Translation] = &[
     translation("Branch", "ブランチ", "分支", "Branche"),
     translation("Forked from", "フォーク元", "派生自", "Dérivé de"),
     translation("Join", "参加", "加入", "Jonction"),
+    translation(
+        "Conversation recap",
+        "会話の振り返り",
+        "对话回顾",
+        "Récapitulatif de la conversation",
+    ),
     translation(
         "Delivered result",
         "配信済み結果",
@@ -5484,6 +5490,12 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "ターミナルショートカットを参照・カスタマイズ",
         "浏览并自定义终端快捷键",
         "parcourir et personnaliser les raccourcis du terminal",
+    ),
+    translation(
+        "Generate a recap of this conversation",
+        "この会話の振り返りを生成する",
+        "生成这段对话的回顾",
+        "Générer un récapitulatif de cette conversation",
     ),
     translation(
         "export this conversation as Markdown",

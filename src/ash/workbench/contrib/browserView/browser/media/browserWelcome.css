@@ -22,6 +22,14 @@
 	font-size: var(--ash-fontSize-body1);
 }
 
-.ash-browser-welcome > .ash-button {
+.ash-browser-welcome-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: var(--ash-spacing-size80);
 	margin-top: var(--ash-spacing-size120);
+}
+
+.ash-browser-welcome-actions > [hidden] {
+	display: none;
 }

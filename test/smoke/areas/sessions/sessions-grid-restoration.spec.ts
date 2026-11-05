@@ -7,7 +7,7 @@ for (const locale of ['en', 'zh-CN']) {
 		test('Files split groups survive closing and reopening the window without layout errors', { tag: ['@electron-app-server'] }, async ({ application, target, workbench, driver }, testInfo) => {
 			let page = await workbench.openAgentsWindow(target.kind);
 			// This regression closes a settled Code layout after the initial Chat entry finishes loading.
-			await expect(page.locator('.ash-chatgpt-navigation-list')).toHaveAttribute('aria-busy', 'false');
+			await expect(page.locator('.ash-chat-navigation-list')).toHaveAttribute('aria-busy', 'false');
 			await page.locator('.ash-window-mode-control').getByRole('button').nth(1).click();
 			const files = () => page.locator('[data-editor-tool="files"]');
 			const groups = () => files().locator('.ash-editor-group:not(.ash-code-page-group):visible');

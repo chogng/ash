@@ -91,6 +91,7 @@ export class ToolBar extends Disposable {
 		this.onDidChangeDropdownVisibility = this.actionBar.onDidChangeDropdownVisibility;
 		this._register(this.onDidChangeDropdownVisibility(visible => {
 			this.dropdownVisible = visible;
+			this.element.classList.toggle('ash-toolbar-menu-visible', visible);
 			if (!visible) this.layoutScheduler?.schedule();
 		}));
 		const ownerWindow = this.element.ownerDocument.defaultView;

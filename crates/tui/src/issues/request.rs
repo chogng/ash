@@ -181,6 +181,7 @@ fn start_session<T: ash_app_server_client::JsonRpcTransport>(
     let created = client
         .create_session(
             ash_app_server_protocol::protocol::session::SessionCreateParams {
+                surface: None,
                 branch_name: None,
                 worktree_start: None,
                 environment_variables: None,

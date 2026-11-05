@@ -1,6 +1,7 @@
 import { Emitter, type Event } from '../../../base/common/event.js';
 import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
-import type { IChatService, ThreadRead, Thread, ThreadGoal } from '../../../workbench/services/chat/common/chatService.js';
+import { localize } from '../../../nls.js';
+import type { IChatService, SessionId, ThreadId, ThreadRead, Thread, ThreadGoal } from '../../../workbench/services/chat/common/chatService.js';
 import type { AgentInteractionOffer } from '../../../platform/agentHost/common/agent.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from './sessionProviderScopeService.js';
 
@@ -121,12 +122,8 @@ export class SessionsChatService extends Disposable implements IChatService {
 		return scope.services.chat.unsubscribeThread(scope.backendIdentity(args[0]), scope.backendIdentity(args[1]), args[2]);
 	}
 
-	queuedMessageCount(...args: Parameters<IChatService['queuedMessageCount']>): ReturnType<IChatService['queuedMessageCount']> {
-		return this.run(args[0], async scope => {
-			const [sessionId, threadId, ...rest] = args;
-			const result = await scope.services.chat.queuedMessageCount(scope.backendIdentity(sessionId), scope.backendIdentity(threadId), ...rest);
-			return result;
-		});
+	readQueue(sessionId: string, threadId: string): ReturnType<IChatService['readQueue']> {
+		return this.run(sessionId, async scope => (await scope.services.chat.readQueue(scope.backendIdentity(sessionId), scope.backendIdentity(threadId))).map(value => pair(value, scope)));
 	}
 	getPendingRequests(...args: Parameters<IChatService['getPendingRequests']>): ReturnType<IChatService['getPendingRequests']> {
 		const [sessionId, threadId] = args;
@@ -284,6 +281,18 @@ export class SessionsChatService extends Disposable implements IChatService {
 			return result;
 		});
 	}
+	setRecapPresence(sessionId: SessionId, threadId: ThreadId, surface: string, focused: boolean | null): Promise<void> {
+		return this.run(sessionId, async scope => { await scope.services.chat.setRecapPresence?.(scope.backendIdentity(sessionId), scope.backendIdentity(threadId), surface, focused); });
+	}
+
+	generateRecap(sessionId: SessionId, threadId: ThreadId): Promise<string> {
+		return this.run(sessionId, async scope => {
+			const recap = await scope.services.chat.generateRecap?.(scope.backendIdentity(sessionId), scope.backendIdentity(threadId));
+			if (!recap) throw new Error(localize('chat.recap.unavailable', 'A recap is unavailable. Finish a conversation turn and check the recap model in Agents settings.'));
+			return recap;
+		});
+	}
+
 	compactContext(options: Parameters<IChatService['compactContext']>[0]): ReturnType<IChatService['compactContext']> {
 		return this.run(options.sessionId, async scope => {
 			const result = await scope.services.chat.compactContext(backendOptions(options, scope));

@@ -10,25 +10,48 @@ import type { SettingsSectionField, SettingsSectionModel } from '../../../servic
 export class AgentTaskModelSettingsModel extends Disposable implements SettingsSectionModel {
 	public readonly categoryId = 'agents';
 	public readonly groupId = null;
-	public get itemId(): string { return this.kind === 'codeReviewModel' ? 'chat.codeReview' : 'chat.commitMessage'; }
+	public get itemId(): string {
+		switch (this.kind) {
+			case 'codeReviewModel': return 'chat.codeReview';
+			case 'commitMessageModel': return 'chat.commitMessage';
+			case 'threadTitleModel': return 'chat.threadTitle';
+			case 'threadRecapModel': return 'chat.threadRecap';
+		}
+	}
 	public get keywords(): readonly string[] {
+		if (this.kind === 'threadRecapModel') { return ['recap', 'summary', 'conversation', 'model', this.title]; }
+		if (this.kind === 'threadTitleModel') { return ['title', 'conversation', 'model', this.title]; }
 		return this.kind === 'codeReviewModel'
 			? ['review', 'model', 'code review', 'find issues', localize('codeReview.settings.keyword', 'Code review'), localize('scm.review.findIssues', 'Find Issues')]
 			: ['commit', 'model', 'commit message', 'git'];
 	}
 	public get title(): string {
+		if (this.kind === 'threadRecapModel') { return localize('threadRecap.settings.title', 'Conversation recap'); }
+		if (this.kind === 'threadTitleModel') { return localize('threadTitle.settings.title', 'Conversation titles'); }
 		if (this.kind === 'commitMessageModel') {
 			return localize('commitMessage.settings.title', 'Commit');
 		}
 		return localize('codeReview.settings.title', 'Review');
 	}
 	public get description(): string {
+		if (this.kind === 'threadRecapModel') {
+			return localize('threadRecap.settings.description', 'Choose the model for /recap and automatic conversation recaps. Automatic model selection uses a recommended low-cost model from the conversation provider when available.');
+		}
+		if (this.kind === 'threadTitleModel') {
+			return localize('threadTitle.settings.description', 'Generate a short title from the first message. Automatic uses a recommended low-cost model from the conversation provider when available.');
+		}
 		if (this.kind === 'commitMessageModel') {
 			return localize('commitMessage.settings.description', 'Changing the model requires authorizing directories again.');
 		}
 		return '';
 	}
 	public get help(): string {
+		if (this.kind === 'threadRecapModel') {
+			return localize('threadRecap.settings.help', 'Conversation recap settings\nUse Tab to reach Generate recaps automatically and Space to toggle it. Automatic recaps require at least three completed turns and 30 minutes with the conversation idle and unfocused. Use Tab to reach Model, Enter or Space to open it, and the arrow keys and Enter to save. Use /recap in an idle conversation to request a recap at any time. Escape closes this help and returns focus.');
+		}
+		if (this.kind === 'threadTitleModel') {
+			return localize('threadTitle.settings.help', 'Conversation title settings\nUse Tab to reach Model. Press Enter or Space to open the selector, use the arrow keys to select a model, and press Enter to save. Automatic uses a recommended low-cost model from the conversation provider when available. Escape closes this help and returns focus.');
+		}
 		if (this.kind === 'commitMessageModel') {
 			return localize('commitMessage.settings.help', 'Commit message settings\nUse Tab to reach Automatically generate commit messages and Space to toggle it. Turning it off keeps the selected model. Use Tab to reach Model. Press Enter or Space to open it, use the arrow keys to select a model, and press Enter to save immediately. Inherit conversation model uses the model from the conversation turn that produced the changes, even if you later change the conversation model. If that model is unavailable, choose a dedicated model. Changing the selection clears directory authorizations; authorize the resolved model before its source changes can be sent. Models and connections are managed in Models. Escape closes this help and returns focus.');
 		}
@@ -45,7 +68,7 @@ export class AgentTaskModelSettingsModel extends Disposable implements SettingsS
 	private message = '';
 
 	constructor(
-		private readonly kind: 'codeReviewModel' | 'commitMessageModel',
+		private readonly kind: 'codeReviewModel' | 'commitMessageModel' | 'threadTitleModel' | 'threadRecapModel',
 		@IAgentModelsService private readonly modelApi: IAgentModelsService,
 		@ILanguageModelsService private readonly languageModels: ILanguageModelsService,
 	) {
@@ -59,10 +82,22 @@ export class AgentTaskModelSettingsModel extends Disposable implements SettingsS
 
 	public get fields(): readonly SettingsSectionField[] {
 		const selected = this.snapshot?.[this.kind];
-		const purpose = this.kind === 'codeReviewModel' ? ModelPurpose.Review : ModelPurpose.Commit;
+		const [purpose, fieldId, defaultLabel] = this.kind === 'threadRecapModel'
+			? [ModelPurpose.ThreadRecap, 'thread-recap-model', localize('threadTitle.settings.automatic', 'Automatic')]
+			: this.kind === 'threadTitleModel'
+				? [ModelPurpose.ThreadTitle, 'thread-title-model', localize('threadTitle.settings.automatic', 'Automatic')]
+				: this.kind === 'commitMessageModel'
+					? [ModelPurpose.Commit, 'commit-message-model', localize('commitMessage.settings.inherit', 'Inherit conversation model')]
+					: [ModelPurpose.Review, 'code-review-model', localize('codeReview.settings.follow', 'Follow Current Model')];
+		const recommended = modelsRecommendedFor(this.models, purpose);
+		const candidates = this.kind === 'threadRecapModel'
+			? [...recommended, ...this.models.filter(entry => !entry.recommendedFor?.includes(purpose)
+				&& (entry.inputModalities == null || entry.inputModalities.includes('text'))
+				&& entry.discovered !== false && !entry.retirement)]
+			: recommended;
 		const options = [
-			{ value: '', label: this.kind === 'commitMessageModel' ? localize('commitMessage.settings.inherit', 'Inherit conversation model') : localize('codeReview.settings.follow', 'Follow Current Model') },
-			...modelsRecommendedFor(this.models, purpose).filter(entry => this.languageModels.isModelVisible(entry.model)).map(entry => ({ value: modelRefIdentity(entry.model), label: entry.displayName })),
+			{ value: '', label: defaultLabel },
+			...candidates.filter(entry => this.languageModels.isModelVisible(entry.model)).map(entry => ({ value: modelRefIdentity(entry.model), label: entry.displayName })),
 		];
 		const value = selected ? modelRefIdentity(selected) : '';
 		if (selected && !options.some(option => option.value === value)) {
@@ -71,7 +106,7 @@ export class AgentTaskModelSettingsModel extends Disposable implements SettingsS
 		}
 		const fields: SettingsSectionField[] = [
 			{
-				id: this.kind === 'codeReviewModel' ? 'code-review-model' : 'commit-message-model',
+				id: fieldId,
 				kind: 'select',
 				label: localize('codeReview.settings.selector', 'Model'),
 				description: this.description,
@@ -82,8 +117,16 @@ export class AgentTaskModelSettingsModel extends Disposable implements SettingsS
 					void this.save({ [this.kind]: model ?? null });
 				}
 			},
-			{ id: this.kind === 'codeReviewModel' ? 'code-review-status' : 'commit-message-status', kind: 'status', text: this.message },
+			{ id: fieldId.replace(/-model$/, '-status'), kind: 'status', text: this.message },
 		];
+		if (this.kind === 'threadRecapModel') {
+			fields.unshift({
+				id: 'thread-recap-enabled', kind: 'boolean',
+				label: localize('threadRecap.settings.enabled', 'Generate recaps automatically'),
+				value: this.snapshot?.threadRecapEnabled ?? false, enabled: !!this.snapshot && !this.busy,
+				setValue: enabled => { void this.save({ threadRecapEnabled: enabled }); },
+			});
+		}
 		if (this.kind === 'commitMessageModel') {
 			fields.unshift({
 				id: 'commit-message-enabled', kind: 'boolean',
@@ -109,7 +152,11 @@ export class AgentTaskModelSettingsModel extends Disposable implements SettingsS
 		this.busy = true;
 		this.message = this.kind === 'commitMessageModel'
 			? localize('commitMessage.settings.loading', 'Loading commit message settings...')
-			: localize('codeReview.settings.loading', 'Loading review model...');
+			: this.kind === 'threadTitleModel'
+				? localize('threadTitle.settings.loading', 'Loading title model...')
+				: this.kind === 'threadRecapModel'
+					? localize('threadRecap.settings.loading', 'Loading recap model...')
+					: localize('codeReview.settings.loading', 'Loading review model...');
 		this.changed.fire();
 		try {
 			const [snapshot, models] = await Promise.all([this.modelApi.readDefaults(), this.languageModels.listModelCatalog()]);
@@ -121,7 +168,11 @@ export class AgentTaskModelSettingsModel extends Disposable implements SettingsS
 			if (this.isCurrent(revision)) {
 				this.message = this.kind === 'commitMessageModel'
 					? localize('commitMessage.settings.loadFailed', 'Could not load commit message settings: {0}', String(error))
-					: localize('codeReview.settings.loadFailed', 'Could not load review model: {0}', String(error));
+					: this.kind === 'threadTitleModel'
+						? localize('threadTitle.settings.loadFailed', 'Could not load title model: {0}', String(error))
+						: this.kind === 'threadRecapModel'
+							? localize('threadRecap.settings.loadFailed', 'Could not load recap model: {0}', String(error))
+							: localize('codeReview.settings.loadFailed', 'Could not load review model: {0}', String(error));
 			}
 		} finally {
 			this.finish(revision);
@@ -145,12 +196,20 @@ export class AgentTaskModelSettingsModel extends Disposable implements SettingsS
 			this.snapshot = snapshot;
 			this.message = this.kind === 'commitMessageModel'
 				? localize('commitMessage.settings.saved', 'Commit message settings saved.')
-				: localize('codeReview.settings.saved', 'Review model saved.');
+				: this.kind === 'threadTitleModel'
+					? localize('threadTitle.settings.saved', 'Title model saved.')
+					: this.kind === 'threadRecapModel'
+						? localize('threadRecap.settings.saved', 'Recap model saved.')
+						: localize('codeReview.settings.saved', 'Review model saved.');
 		} catch (error) {
 			if (this.isCurrent(revision)) {
 				this.message = this.kind === 'commitMessageModel'
 					? localize('commitMessage.settings.saveFailed', 'Could not save commit message settings: {0}', String(error))
-					: localize('codeReview.settings.saveFailed', 'Could not save review model: {0}', String(error));
+					: this.kind === 'threadTitleModel'
+						? localize('threadTitle.settings.saveFailed', 'Could not save title model: {0}', String(error))
+						: this.kind === 'threadRecapModel'
+							? localize('threadRecap.settings.saveFailed', 'Could not save recap model: {0}', String(error))
+							: localize('codeReview.settings.saveFailed', 'Could not save review model: {0}', String(error));
 			}
 		} finally {
 			this.finish(revision);

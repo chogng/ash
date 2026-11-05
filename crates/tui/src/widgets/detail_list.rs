@@ -2,6 +2,7 @@
 pub(crate) struct DetailListRow {
     label: String,
     value: String,
+    localize_value: bool,
 }
 
 impl DetailListRow {
@@ -9,6 +10,14 @@ impl DetailListRow {
         Self {
             label: label.into(),
             value: value.into(),
+            localize_value: true,
+        }
+    }
+
+    pub(crate) fn with_raw_value(label: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            localize_value: false,
+            ..Self::new(label, value)
         }
     }
 
@@ -54,7 +63,9 @@ impl DetailList {
         self.title = crate::nls::localize_owned(language, &self.title);
         for row in &mut self.rows {
             row.label = crate::nls::localize_owned(language, &row.label);
-            row.value = crate::nls::localize_owned(language, &row.value);
+            if row.localize_value {
+                row.value = crate::nls::localize_owned(language, &row.value);
+            }
         }
     }
 }

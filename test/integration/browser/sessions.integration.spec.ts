@@ -121,7 +121,7 @@ for (const locale of ['en', 'zh-CN'])
 		if (locale === 'en') {
 			await input.press('Alt+F1');
 			const help = page.getByRole('dialog', { name: 'Accessibility Help', exact: true });
-			await expect(help.getByRole('textbox')).toHaveValue(/Search finds saved sessions/);
+			await expect(help.getByRole('textbox')).toHaveValue(/Search finds sessions, drafts, projects and schedules by name/);
 			await help.press('Escape');
 			await expect(help).toHaveCount(0);
 			await expect(input).toBeFocused();
@@ -191,7 +191,7 @@ for (const locale of ['en', 'zh-CN'])
 		await input.fill('Search project fixture');
 		await expect(picker.getByRole('option')).toHaveCount(1);
 		await input.press('Enter');
-		await expect(page.locator('.ash-projects h1')).toHaveText('Search project fixture');
+		await expect(page.locator('.ash-sessions-titlebar .ash-project-titlebar-name')).toHaveText('Search project fixture');
 		if (!(await search.isVisible())) {
 			await page
 				.getByRole('button', { name: locale === 'en' ? 'Show sidebar' : '显示侧栏', exact: true })
@@ -380,13 +380,15 @@ for (const locale of ['en', 'zh-CN'])
 		});
 		const code = modes.getByRole('button', { name: locale === 'zh-CN' ? '代码' : 'Code', exact: true });
 		const pane = page.locator('.ash-sessions-chat-view:visible .ash-sessions-chat-slot > [role="region"]');
+		const draftWidget = page.locator('.ash-sessions-chat-view:visible .ash-sessions-chat-slot.active [data-untitled-session-id]');
 		const root = await page.locator('.ash-sessions-window').elementHandle();
 		const url = page.url();
 		const pageCount = page.context().pages().length;
 		const draft = 'A retained draft across workspace pages';
 		await pane.locator('.ash-chat-input-editor').getByRole('textbox').focus();
 		await page.keyboard.insertText(draft);
-		const session = await pane.getAttribute('data-untitled-session-id');
+		await expect(draftWidget).toHaveAttribute('data-untitled-session-id', /.+/);
+		const session = await draftWidget.getAttribute('data-untitled-session-id');
 		await expect(chat.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'chat');
 		for (const mode of [code, chat]) {
 			await mode.click();
@@ -398,7 +400,7 @@ for (const locale of ['en', 'zh-CN'])
 			const bounds = await modes.boundingBox();
 			expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(sidebar!.x + sidebar!.width);
 			await expect(pane.locator('.ash-chat-input-editor')).toContainText(draft);
-			await expect(pane).toHaveAttribute('data-untitled-session-id', session!);
+			await expect(draftWidget).toHaveAttribute('data-untitled-session-id', session!);
 			expect(page.url()).toBe(url);
 			expect(page.context().pages()).toHaveLength(pageCount);
 			expect(await root!.evaluate(element => element === document.querySelector('.ash-sessions-window'))).toBe(
@@ -640,14 +642,15 @@ test('New navigation creates distinct sessions in Code and preserves the previou
 test('Sessions can directly dispose and recreate a restored window without capturing released editor grids', async ({
 	page,
 }) => {
-	const navigation = page.locator('.ash-sessions-activity-content');
+	const code = page.getByRole('toolbar', { name: 'Workspace mode', exact: true }).getByRole('button', { name: 'Code', exact: true });
+	const changes = page.getByRole('region', { name: 'Editor', exact: true }).getByText('Changes appear after the agent edits files.', { exact: true });
 	for (let attempt = 0; attempt < 2; attempt++) {
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		await expect(
-			page
-				.locator('[data-part="editor"] .ash-editor-title-control')
-				.getByRole('tab', { name: 'Changes', exact: true }),
-		).toBeVisible();
+		await code.click();
+		await expect(code).toHaveAttribute('aria-pressed', 'true');
+		if (!await changes.isVisible()) {
+			await page.getByRole('toolbar', { name: 'Code layout', exact: true }).getByRole('button', { name: 'Changes', exact: true }).click();
+		}
+		await expect(changes).toBeVisible();
 		await page.evaluate(() => window.ashSessionsIntegration.remountAfterDirectDispose());
 		await expect(page.locator('.ash-sessions-window')).toHaveCount(1);
 		await expect(page.locator('[data-action-id="sessions.newSession"] button')).toBeVisible();
@@ -926,6 +929,69 @@ test('Artifacts canvas responds to wheel, drag and keyboard input', async ({ pag
 	await expect(canvas).toBeHidden();
 });
 
+test('Code binds the selected project folder and lists associated conversations under Projects', async ({ page }) => {
+	await page.goto('/sessions.html?multiHost&sidebarGroups&projectPicker&locale=zh-CN');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	await page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+	const sidebar = page.locator('.ash-sessions-list');
+	await expect(sidebar.locator('[data-row-order-id][data-parent-project-id="code-project"]')).toContainText('Task from Host A');
+	await expect(sidebar.locator('[data-section^="workspace:"][data-parent-section="projects"]')).toHaveText('host-b');
+	await expect(sidebar.locator('[data-row-order-id][data-parent-section^="workspace:"]')).toContainText('Task from Host B');
+	await expect(sidebar.getByRole('button', { name: 'Search project fixture', exact: true })).toHaveCount(0);
+	await page.locator('[data-action-id="sessions.newSession"] button').click();
+	const chooser = page.locator('.ash-sessions-chat-slot.active .ash-sessions-workspace-picker');
+	await expect(chooser).toContainText('选择项目');
+	await chooser.press('ArrowDown');
+	await expect(page.getByRole('menuitemradio', { name: 'Search project fixture', exact: true })).toHaveCount(0);
+	await page.getByRole('menuitemradio', { name: 'Code project fixture', exact: true }).click();
+	await expect(chooser).toContainText('Code project fixture');
+	const recentProjects = page.getByRole('group', { name: '最近打开的项目', exact: true });
+	const recentProject = recentProjects.getByRole('button', { name: 'host-a', exact: true });
+	await expect(recentProject).toHaveAttribute('aria-pressed', 'true');
+	const chooseEnvironment = page.getByRole('button', { name: '选择环境', exact: true });
+	await recentProject.press('Tab');
+	await expect(chooseEnvironment).toBeFocused();
+	await chooseEnvironment.press('Enter');
+	const environment = page.getByRole('dialog', { name: '新建环境', exact: true });
+	await expect(environment).toHaveAttribute('aria-modal', 'true');
+	const name = environment.getByRole('textbox', { name: '名称', exact: true });
+	await name.click();
+	await expect(name).toBeFocused();
+	const dialogBounds = (await environment.boundingBox())!;
+	await page.mouse.click(dialogBounds.x / 2, dialogBounds.y / 2);
+	await expect(environment).toBeHidden();
+	await expect(chooseEnvironment).toBeFocused();
+	await chooseEnvironment.press('Enter');
+	await expect(environment).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(chooseEnvironment).toBeFocused();
+	const input = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor').getByRole('textbox');
+	await input.focus();
+	await page.keyboard.insertText('Draft for the selected project');
+	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-input-send-action')).toBeEnabled();
+	await expect(sidebar.locator('[data-item^="untitled:"][data-parent-section="projects"]')).toHaveCount(1);
+});
+
+test('Code keeps saved conversations without a workspace in Recents', async ({ page }) => {
+	await page.goto('/sessions.html?multiHost&directorylessSession');
+	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+	const sidebar = page.locator('.ash-sessions-list');
+	const mode = page.locator('.ash-window-mode-control');
+	const legacy = sidebar.getByRole('button', { name: 'Task from Host B', exact: true });
+	const legacyPane = page.locator('.ash-sessions-chat-slot').getByRole('region', { name: 'Task from Host B', exact: true });
+	await legacy.click();
+	await expect(legacyPane).toBeVisible();
+
+	await mode.getByRole('button', { name: 'Code', exact: true }).click();
+	await expect(sidebar.getByRole('button', { name: 'Task from Host A', exact: true })).toBeVisible();
+	await expect(sidebar.locator('[data-row-order-id][data-parent-section="recent"]')).toContainText('Task from Host B');
+	await expect(legacyPane).toBeVisible();
+
+	await mode.getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+	await legacy.click();
+	await expect(legacyPane).toBeVisible();
+});
+
 test('multiple Agent hosts keep equal backend IDs, model scopes and retained Code/Cowork drafts isolated', async ({
 	page,
 }) => {
@@ -946,8 +1012,9 @@ test('multiple Agent hosts keep equal backend IDs, model scopes and retained Cod
 		)
 		.toEqual(expect.arrayContaining(['Host A', 'Host B']));
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(sidebar.getByRole('heading', { name: 'Host A', exact: true })).toBeVisible();
-	await expect(sidebar.getByRole('heading', { name: 'Host B', exact: true })).toBeVisible();
+	await expect(sidebar.getByRole('heading', { name: 'Recents', exact: true })).toBeVisible();
+	await expect(sidebar.getByRole('button', { name: 'Task from Host A', exact: true })).toBeVisible();
+	await expect(sidebar.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
 	await page.evaluate(() => window.ashSessionsIntegration.multiHost!.open('Host A', true));
 	const active = page.locator('.ash-sessions-chat-slot.active');
 	await active.locator('.stanza-editor-input').focus();
@@ -957,7 +1024,7 @@ test('multiple Agent hosts keep equal backend IDs, model scopes and retained Cod
 	await page.keyboard.insertText('Private Host B draft');
 	await expect(active).toContainText('Host B model');
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
-	await sidebar.getByRole('button', { name: 'Host A draft', exact: true }).click();
+	await sidebar.getByRole('button', { name: 'Host A draft (draft)', exact: true }).click();
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	await expect(active.locator('.stanza-editor-line-text')).toContainText('Private Host A draft');
 	await expect(active).toContainText('Host A model');
@@ -974,7 +1041,7 @@ test('multiple Agent hosts keep equal backend IDs, model scopes and retained Cod
 	await expect(modelPicker.getByRole('menuitemradio')).toHaveCount(1);
 	await modelPicker.getByRole('menuitemradio', { name: 'Host A model', exact: true }).click();
 	await expect(active).toContainText('Host A model');
-	await sidebar.getByRole('button', { name: 'Host B draft', exact: true }).click();
+	await sidebar.getByRole('button', { name: 'Host B draft (draft)', exact: true }).click();
 	await expect(active.locator('.stanza-editor-line-text')).toContainText('Private Host B draft');
 	await active.locator('.ash-chat-input-model-action').click();
 	await expect(automaticModel).toHaveAttribute('aria-checked', 'true');
@@ -1189,6 +1256,8 @@ test('the new Session composer keeps its pickers and dictation in keyboard navig
 	const input = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-editor').getByRole('textbox');
 	await input.focus();
 	await page.keyboard.press('Tab');
+	await expect(page.locator('.ash-sessions-chat-slot.active').getByRole('button', { name: 'Add context' })).toBeFocused();
+	await page.keyboard.press('Tab');
 	const dictation = page.locator('.ash-sessions-chat-slot.active [data-action-id="workbench.action.chat.toggleSpeechToText"] button');
 	await expect(dictation).toBeFocused();
 	const actions = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-toolbars.ash-chat-input-inline-toolbar');
@@ -1203,8 +1272,11 @@ test('the new Session composer keeps its pickers and dictation in keyboard navig
 	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-input-mode-action')).toBeFocused();
 	await input.focus();
 	await page.keyboard.insertText('Draft');
-	await expect(send).toBeEnabled();
-	await expect(send).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	await expect(send).toBeDisabled();
+	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-status'))
+		.toHaveText('Choose a project before sending.');
+	await input.press('Enter');
+	await expect(page.locator('.ash-sessions-chat-slot.active .stanza-editor-line-text')).toContainText('Draft');
 	await expect.poll(() => actions.evaluate(element => {
 		const mic = element.querySelector('.ash-chat-input-mic-action')!;
 		const send = element.querySelector('.ash-chat-input-send-action')!;
@@ -1286,25 +1358,30 @@ for (const locale of ['en', 'zh-CN']) {
 
 for (const locale of ['en', 'zh-CN'])
 	test(`Sidebar groups retain pins and separate Chat and Code expansion (${locale})`, async ({ page }, testInfo) => {
-		await page.goto(`/sessions.html?multiHost&sidebarGroups&locale=${locale}`);
+		await page.goto(`/sessions.html?multiHost&sidebarGroups&projectPicker&locale=${locale}`);
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		const chinese = locale === 'zh-CN';
 		const list = page.locator('.ash-sessions-list:visible');
 		const mode = page.locator('.ash-window-mode-control');
-		const groups = list.locator(':scope > .ash-sessions-list-items > .ash-sessions-list-section > h3 > button');
+		const chatMode = mode.getByRole('button', { name: chinese ? '聊天 / Agents' : 'Chat / Agents', exact: true });
+		const codeMode = mode.getByRole('button', { name: chinese ? '代码' : 'Code', exact: true });
+		const groups = list.getByRole('treeitem', { level: 1 }).getByRole('heading', { level: 3 }).getByRole('button');
 		const recent = list.locator('[data-section=recent] > h3 button');
 		const pinned = list.locator('[data-section=pinned]');
+		const pinnedRows = list.locator('[data-parent-section=pinned]');
 		const projects = list.locator('[data-section=projects]');
+		const chatProject = list.locator('[data-parent-section=projects]').getByRole('button', { name: 'Search project fixture', exact: true });
 		await expect(list.locator('input')).toHaveCount(0);
 		await expect(groups).toHaveText(chinese ? ['项目', '聊天'] : ['Projects', 'Chats']);
 		await expect(pinned).toHaveCount(0);
 		await expect(list.locator('.ash-sessions-list-subgroup')).toHaveCount(0);
-		await expect(projects.getByRole('button', { name: 'Search project fixture', exact: true })).toBeVisible();
+		await expect(chatProject).toBeVisible();
 		const taskB = list.getByRole('button', { name: 'Task from Host B', exact: true });
+		const pinnedB = pinnedRows.getByRole('button', { name: 'Task from Host B', exact: true });
 		await taskB.focus();
 		await taskB.press('Shift+F10');
-		await page.getByRole('menuitem', { name: chinese ? '置顶聊天' : 'Pin chat', exact: true }).click();
-		await expect(pinned.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
+		await page.getByRole('menuitem', { name: chinese ? '置顶' : 'Pin', exact: true }).click();
+		await expect(pinnedB).toBeVisible();
 		await expect(list.getByRole('button', { name: 'Task from Host B', exact: true })).toHaveCount(1);
 		await expect(groups).toHaveText(chinese ? ['置顶', '项目', '聊天'] : ['Pinned', 'Projects', 'Chats']);
 		for (const heading of await groups.all()) {
@@ -1323,32 +1400,36 @@ for (const locale of ['en', 'zh-CN'])
 		await expect(recent.locator('[data-ash-icon-id=chevron-right]')).toBeVisible();
 		await recent.press('ArrowDown');
 		await expect(recent).toBeFocused();
-		await mode.getByRole('button', { name: chinese ? '代码' : 'Code', exact: true }).click();
+		await codeMode.click();
 		await expect(groups).toHaveText(chinese ? ['置顶', '项目', '最近使用'] : ['Pinned', 'Projects', 'Recents']);
 		await expect(recent).toHaveAttribute('aria-expanded', 'true');
-		await expect(pinned.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
+		await expect(pinnedB).toBeVisible();
 		await expect(list.getByRole('button', { name: chinese ? '更多会话操作' : 'More Sessions Actions', exact: true })).toBeVisible();
 		const projectToggle = projects.locator(':scope > h3 button');
 		const projectChevron = projectToggle.locator('.ash-sessions-list-section-icon');
-		await expect(projectChevron).toHaveCSS('width', '16px');
-		await expect(projectChevron).toHaveCSS('height', '16px');
-		await expect(projectChevron).toHaveCSS('opacity', '0');
+		await expect(projectChevron).toHaveCSS('width', '18px');
+		await expect(projectChevron).toHaveCSS('height', '18px');
+		await expect(projectChevron).toHaveCSS('visibility', 'hidden');
 		await projectToggle.hover();
-		await expect(projectChevron).toHaveCSS('opacity', '1');
+		await expect(projectChevron).toHaveCSS('visibility', 'visible');
 		await page.mouse.move(0, 0);
-		const project = projects.getByRole('button', { name: 'Search project fixture', exact: true });
-		const taskA = list.locator('[data-section=recent]').getByRole('button', { name: 'Task from Host A', exact: true });
+		const codeProject = list.getByRole('button', { name: 'Code project fixture', exact: true });
+		const projectRows = list.locator('[data-parent-project-id=code-project]');
+		const taskA = projectRows.getByRole('button', { name: 'Task from Host A', exact: true });
+		const taskAIcon = projectRows.locator('.ash-session-leading-icon [data-ash-icon-id=circle]');
 		await expect(taskA).toBeVisible();
-		await expect(project).toBeVisible();
+		await expect(codeProject).toBeVisible();
 		await projectToggle.focus();
 		await projectToggle.press('ArrowLeft');
-		await expect(projectChevron).toHaveCSS('opacity', '1');
+		await expect(projectChevron).toHaveCSS('visibility', 'visible');
 		await expect(projectToggle).toHaveAttribute('aria-expanded', 'false');
-		await expect(project).toBeHidden();
-		await expect(taskA).toBeVisible();
+		await expect(codeProject).toBeHidden();
+		await expect(taskA).toBeHidden();
+		await expect(pinnedB).toBeVisible();
 		await projectToggle.press('ArrowRight');
-		await expect(project).toBeVisible();
-		await expect(taskA.locator(':scope > [data-ash-icon-id=chat]')).toBeVisible();
+		await expect(codeProject).toBeVisible();
+		await expect(taskA).toBeVisible();
+		await expect(taskAIcon).toBeVisible();
 		await taskA.click();
 		await expect
 			.poll(() =>
@@ -1360,12 +1441,12 @@ for (const locale of ['en', 'zh-CN'])
 			)
 			.toBe(true);
 		await taskA.press('Shift+F10');
-		await page.getByRole('menuitem', { name: chinese ? '置顶聊天' : 'Pin chat', exact: true }).click();
-		const pinnedA = pinned.getByRole('button', { name: 'Task from Host A', exact: true });
+		await page.getByRole('menuitem', { name: chinese ? '置顶' : 'Pin', exact: true }).click();
+		const pinnedA = pinnedRows.getByRole('button', { name: 'Task from Host A', exact: true });
 		await expect(pinnedA).toBeVisible();
 		await expect(taskA).toHaveCount(0);
 		await pinnedA.press('Shift+F10');
-		await page.getByRole('menuitem', { name: chinese ? '取消置顶聊天' : 'Unpin chat', exact: true }).click();
+		await page.getByRole('menuitem', { name: chinese ? '取消置顶' : 'Unpin', exact: true }).click();
 		await expect(taskA).toBeVisible();
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
@@ -1382,31 +1463,32 @@ for (const locale of ['en', 'zh-CN'])
 					);
 				}),
 			).toBe(true);
-			await expect(taskA.locator(':scope > [data-ash-icon-id=chat]')).toBeVisible();
+			await expect(taskAIcon).toBeVisible();
 		}
 		await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-light'));
 		await page.screenshot({ path: testInfo.outputPath(`sidebar-code-groups-${locale}.png`) });
 		await projectToggle.click();
 		await page.evaluate(() => window.ashSessionsIntegration.remountAfterDirectDispose());
 		await expect(projectToggle).toHaveAttribute('aria-expanded', 'false');
-		await mode.getByRole('button', { name: chinese ? '聊天 / Agents' : 'Chat / Agents', exact: true }).click();
+		await chatMode.click();
 		await expect(recent).toHaveAttribute('aria-expanded', 'false');
-		await expect(pinned.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
-		await pinned.getByRole('button', { name: 'Task from Host B', exact: true }).click({ button: 'right' });
-		await page.getByRole('menuitem', { name: chinese ? '取消置顶聊天' : 'Unpin chat', exact: true }).click();
+		await expect(pinnedB).toBeVisible();
+		await pinnedB.click({ button: 'right' });
+		await page.getByRole('menuitem', { name: chinese ? '取消置顶' : 'Unpin', exact: true }).click();
 		await expect(pinned).toHaveCount(0);
 		await expect(recent).toBeFocused();
 		await recent.press('ArrowRight');
 		await expect(taskB).toBeVisible();
 		await page.screenshot({ path: testInfo.outputPath(`sidebar-chat-groups-${locale}.png`) });
-		await mode.getByRole('button', { name: chinese ? '代码' : 'Code', exact: true }).click();
-		const recentSection = list.locator('[data-section=recent]');
-		await expect(recentSection.locator('.ash-sessions-list-subgroup')).toHaveCount(0);
-		await expect(recentSection.getByRole('button', { name: 'Task from Host A', exact: true })).toBeVisible();
-		await expect(recentSection.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
+		await codeMode.click();
+		await expect(projectToggle).toHaveAttribute('aria-expanded', 'false');
 		await projectToggle.press('ArrowRight');
-		await project.click();
-		await expect(page.locator('.ash-projects h1')).toHaveText('Search project fixture');
+		await expect(taskA).toBeVisible();
+		const workspaceRows = list.locator('[data-parent-section^="workspace:"]');
+		await expect(workspaceRows.getByRole('button', { name: 'Task from Host B', exact: true })).toBeVisible();
+		await chatMode.click();
+		await chatProject.click();
+		await expect(page.locator('.ash-sessions-titlebar .ash-project-titlebar-name')).toHaveText('Search project fixture');
 	});
 
 test('Accounts menu focuses the first item only on keyboard open', async ({ page }) => {

@@ -10,13 +10,17 @@ export interface IModelPickerDelegate {
 	canSelectModel?(): boolean;
 	readonly configureInMenu?: boolean;
 	readonly useWorkbenchModelManagement?: boolean;
+	readonly chatModelSlider?: boolean;
 	readonly onDidChangePresentation: Event<void>;
+	getInputLifecycle?(): AbortSignal;
 	getModels(): readonly ModelCatalogEntry[];
 	getSelectedModel(): ModelRef | undefined;
 	getSelectedReasoningEffort(): ModelReasoningEffort | undefined;
+	getSelectedPreset?(): string | undefined;
 	isAutomaticModel(): boolean;
 	getModelsError(): string | undefined;
 	selectModel(model: ModelRef): Promise<void>;
+	selectPreset?(presetId: string): Promise<void>;
 	selectAutomaticModel?(): Promise<void>;
 	selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void>;
 	openSettings(): Promise<void>;

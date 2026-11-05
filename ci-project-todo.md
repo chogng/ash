@@ -1,6 +1,6 @@
 # CI 后续工作
 
-更新：2026-10-30。本文件随 2026-10-08 工作树清理进入 main。旧 CI 工作树的完整交接与证据已保存在 `/Volumes/1t/ash/.git/worktree-cleanup/20261008/`；后续从 main 开始。
+本文件随 2026-10-08 工作树清理进入 main。旧 CI 工作树的完整交接与证据已保存在 `/Volumes/1t/ash/.git/worktree-cleanup/20261008/`；后续从 main 开始。
 
 ## 已进入 main
 
@@ -41,11 +41,18 @@
 
 完整入口首跑还发现 LiveKit 测试在 Windows 断言 POSIX 权限位；现按实际宿主断言 Windows 可写位，保留 POSIX 的 `0755` 检查及原有内容、摘要、时间和发布断言。使用仓库虚拟环境的 Python 3.14.7／Ruff 0.15.13，`just test-python build scripts code` 最终退出 0：build 275 项／6 跳过、scripts 218 项／7 跳过、code 28 项／1 跳过，均无失败。5 个相关 Python 文件的 Ruff lint／format、6 个改动文件的 `just fmt-check` 和 `git diff --check` 通过。首败及最终日志分别保留在 `.build/todo-acceptance-20261030/python-suites.log` 与 `python-suites-final.log`。
 
-只读核对同一 SHA 的[最新 CI](https://github.com/chogng/ash/actions/runs/40915659255)：依赖安全、Python lint、Rust 格式和拼写失败，frontend、Bazel、Rust 与 tooling 等下游作业被跳过。因此继续保留完整矩阵验收；本轮没有发布或触发远端 CI。
+同一 SHA 的 [CI 记录](https://github.com/chogng/ash/actions/runs/40915659255) 中，依赖安全、Python lint、Rust 格式和拼写失败，frontend、Bazel、Rust 与 tooling 等下游作业被跳过。
+
+[PR #57](https://github.com/chogng/ash/pull/57) 于 2026-10-20 squash 合并（`ee3dea640`）。[当时的 CI](https://github.com/chogng/ash/actions/runs/39490567225) 在安全门禁失败后跳过了前端、Bazel 和 Rust 作业。本地证书修复后，`just dependency-security` 的 advisories、licenses 和 sources 检查通过。Linux x64 已有 47 项通过记录，旧 hosted 启动失败的根因仍待确认。证书复验日志为 `/tmp/ash-pr57-certificate-{security,dependencies-final,http-final,bazel-final,app-server-build}.log`，基线 `0d95ccc29` 的 macOS 定向复核记录位于 `.build/pr57-rebased/validation.json`。
+
+2026-11-05 复核时，`6188dbb239` 的 [main CI #972](https://github.com/chogng/ash/actions/runs/41954524140) 因 `codespell` 失败。`c31875f2fe` 的 [Windows 沙箱专项](https://github.com/chogng/ash/actions/runs/41942142909) 已通过。
+
+2026-11-05 在 Windows x64 用 Bazel 9.0.0 和仓库外的输出目录重建 `MODULE.bazel.lock`，随后用 `bazel mod deps --lockfile_mode=error` 验证通过。日志位于 `.build/todo-local-acceptance-20261105/bazel-lockfile-final.log`。Linux TUI 真实场景仍单独验收。
 
 ## 接手顺序
 
-- [ ] Bazel：按当前 `rules_rs 0.0.96`、现有兼容补丁和 `MODULE.bazel.lock` 复核 `--lockfile_mode=error`，不再应用旧 zlib snapshot 草案。
+- [ ] 在获准发布后按新 main SHA 核对完整 CI 矩阵。PR #57 后续验证在本地进行，发布、主动触发远端 CI 和恢复 `pr-57-ci` heartbeat 均需单独授权。
+- [ ] 补 Desktop runtime acceptance 的 macOS hosted MCP 进程回归通过证据。已有 [macOS 本机补验](agenthost-todo.md#2026-10-29-macos-进程补验)。
 - [ ] 在 Linux CI 真正执行 `//cli:tui-real-scenarios`，不能以本机 query 代替。
 - [ ] 根据最新 protocol 和 TUI 日志检查依赖准备与 V8 构建产物；保留依赖边界和产品断言。
 
