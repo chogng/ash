@@ -246,6 +246,14 @@ impl ModelInfo {
             self.description.as_deref(),
             &self.supported_reasoning_efforts,
         )?;
+        if let Some(effort) = self.default_reasoning_effort
+            && !self
+                .supported_reasoning_efforts
+                .iter()
+                .any(|option| option.effort == effort)
+        {
+            return Err("default reasoning effort is not supported".into());
+        }
         if let Some(retirement) = &self.retirement {
             retirement.validate()?;
         }

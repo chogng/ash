@@ -308,6 +308,7 @@ function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatal
 		supportedReasoningEfforts: Object.freeze(
 			entry.supported_reasoning_efforts.map((option) => Object.freeze({ ...option }))
 		),
-		...(entry.default_reasoning_effort != null ? { defaultReasoningEffort: entry.default_reasoning_effort } : {})
+		...(entry.default_reasoning_effort != null ? { defaultReasoningEffort: entry.default_reasoning_effort } : {}),
+		...(entry.effective_reasoning_effort != null ? { effectiveReasoningEffort: entry.effective_reasoning_effort } : {}),
 	});
 }

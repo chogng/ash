@@ -2643,6 +2643,7 @@ fn configured_model_summary() -> ModelSummary {
                     ReasoningEffort::High.into(),
                 ],
                 default_reasoning_effort: Some(ReasoningEffort::High),
+                effective_reasoning_effort: None,
                 default_personality: None,
             },
         ],
@@ -2781,6 +2782,7 @@ fn custom_model_choices(
                 settings: Default::default(),
                 supported_reasoning_efforts: vec![],
                 default_reasoning_effort: None,
+                effective_reasoning_effort: None,
                 default_personality: None,
             },
             ash_app_server_protocol::protocol::model::ModelCatalogEntry::from_info(

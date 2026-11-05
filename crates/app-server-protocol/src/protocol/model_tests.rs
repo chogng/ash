@@ -72,6 +72,36 @@ fn task_recommendations_reach_the_client_and_old_catalogs_default_to_none() {
 }
 
 #[test]
+fn catalog_serializes_the_resolved_effort_separately_from_the_declared_default() {
+    use ash_protocol::ReasoningEffort;
+
+    let model = ModelRef::new(
+        ash_protocol::ProviderId::new("openai").unwrap(),
+        ash_protocol::ModelId::new("example").unwrap(),
+    );
+    let mut info = ModelInfo::new(model.model.clone(), "Example");
+    info.default_reasoning_effort = Some(ReasoningEffort::Medium);
+    info.supported_reasoning_efforts =
+        vec![ReasoningEffort::Medium.into(), ReasoningEffort::High.into()];
+    let mut entry = ModelCatalogEntry::from_info(model, &info);
+    let legacy = serde_json::to_value(&entry).unwrap();
+    assert!(legacy.get("effective_reasoning_effort").is_none());
+    assert_eq!(
+        serde_json::from_value::<ModelCatalogEntry>(legacy).unwrap(),
+        entry
+    );
+
+    entry.effective_reasoning_effort = Some(ReasoningEffort::High);
+    let value = serde_json::to_value(&entry).unwrap();
+    assert_eq!(value["default_reasoning_effort"], "medium");
+    assert_eq!(value["effective_reasoning_effort"], "high");
+    assert_eq!(
+        serde_json::from_value::<ModelCatalogEntry>(value).unwrap(),
+        entry
+    );
+}
+
+#[test]
 fn catalog_metadata_does_not_expose_an_execution_path() {
     let model = ash_protocol::ModelRef::new(
         ash_protocol::ProviderId::new("openai").unwrap(),

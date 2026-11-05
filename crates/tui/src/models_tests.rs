@@ -98,6 +98,7 @@ fn entry(provider: &str, model: &str, _access: ModelAccess) -> ModelCatalogEntry
         settings: Default::default(),
         supported_reasoning_efforts: Vec::new(),
         default_reasoning_effort: None,
+        effective_reasoning_effort: None,
         default_personality: None,
     }
 }

@@ -890,6 +890,7 @@ async fn model_settings_merge_preserves_known_fields_and_old_snapshots() {
         effort: ReasoningEffort::Medium,
         description: Some("Seed explanation".into()),
     }];
+    seed.default_reasoning_effort = Some(ReasoningEffort::Medium);
     seed.settings.verbosity = CapabilitySupport::Supported;
     seed.settings.default_verbosity = Some(ash_protocol::ModelVerbosity::Low);
     seed.settings.service_tiers = Some(vec![ash_protocol::ModelServiceTier {
@@ -916,6 +917,7 @@ async fn model_settings_merge_preserves_known_fields_and_old_snapshots() {
     let scope = dynamic_scope("strict", "settings-account");
     let first = ModelMetadataPatch {
         supported_reasoning_efforts: Some(vec![ReasoningEffort::Medium.into()]),
+        default_reasoning_effort: Some(ReasoningEffort::High),
         settings: ash_protocol::ModelSettings {
             tool_output_limit: Some(ash_protocol::ModelToolOutputLimit::Tokens(4000)),
             ..Default::default()
@@ -989,6 +991,11 @@ async fn model_settings_merge_preserves_known_fields_and_old_snapshots() {
         ReasoningEffort::Medium
     );
     assert_eq!(
+        before.entries()[0].info().default_reasoning_effort,
+        Some(ReasoningEffort::Medium)
+    );
+    assert_eq!(after.entries()[0].info().default_reasoning_effort, None);
+    assert_eq!(
         after.entries()[0].info().supported_reasoning_efforts[0]
             .description
             .as_deref(),
@@ -1021,6 +1028,119 @@ async fn model_settings_merge_preserves_known_fields_and_old_snapshots() {
     assert_eq!(
         before.entries()[0].info().settings.default_verbosity,
         Some(ash_protocol::ModelVerbosity::Low)
+    );
+}
+
+#[tokio::test]
+async fn catalog_default_returns_when_supported_again_without_restarting() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut seed = ModelInfo::new(model_id("alpha"), "Alpha");
+    seed.supported_reasoning_efforts = vec![ReasoningEffort::Medium.into()];
+    seed.default_reasoning_effort = Some(ReasoningEffort::Medium);
+    let providers = ProviderConfigRegistry::from_definitions([definition(
+        "strict",
+        ModelCatalogPolicy::ListedOnly,
+    )
+    .with_models([seed])])
+    .unwrap();
+    let manager = ModelsManager::new(providers.clone()).with_disk_cache(directory.path().into());
+    let scope = dynamic_scope("strict", "effort-account");
+    let source = Arc::new(QueueSource::new(
+        [
+            vec![ReasoningEffort::High.into()],
+            vec![ReasoningEffort::High.into(), ReasoningEffort::Medium.into()],
+        ]
+        .map(|efforts| {
+            Ok(modified(
+                &scope,
+                DiscoveryCoverage::Partial,
+                [
+                    DiscoveredModel::new(model_id("alpha")).with_metadata(ModelMetadataPatch {
+                        supported_reasoning_efforts: Some(efforts),
+                        ..Default::default()
+                    }),
+                ],
+            ))
+        }),
+    ));
+    let restricted = manager
+        .refresh(scope.clone(), source.clone())
+        .await
+        .unwrap();
+    assert_eq!(
+        restricted.entries()[0].info().default_reasoning_effort,
+        None
+    );
+    let restored = manager.refresh(scope.clone(), source).await.unwrap();
+    let restarted = ModelsManager::new(providers).with_disk_cache(directory.path().into());
+    for snapshot in [restored, restarted.snapshot(&scope).unwrap()] {
+        assert_eq!(
+            snapshot.entries()[0].info().default_reasoning_effort,
+            Some(ReasoningEffort::Medium)
+        );
+    }
+}
+
+#[tokio::test]
+async fn discovered_reasoning_default_survives_omission_and_restart() {
+    let directory = tempfile::tempdir().unwrap();
+    let restart = || ModelsManager::new(registry()).with_disk_cache(directory.path().into());
+    let manager = restart();
+    let scope = dynamic_scope("strict", "effort-account");
+    let source = Arc::new(QueueSource::new(
+        [
+            ModelMetadataPatch {
+                supported_reasoning_efforts: Some(vec![ReasoningEffort::High.into()]),
+                default_reasoning_effort: Some(ReasoningEffort::High),
+                ..Default::default()
+            },
+            ModelMetadataPatch::default(),
+            ModelMetadataPatch {
+                supported_reasoning_efforts: Some(vec![ReasoningEffort::Low.into()]),
+                ..Default::default()
+            },
+            ModelMetadataPatch {
+                supported_reasoning_efforts: Some(vec![ReasoningEffort::High.into()]),
+                ..Default::default()
+            },
+        ]
+        .map(|metadata| {
+            Ok(modified(
+                &scope,
+                DiscoveryCoverage::Partial,
+                [DiscoveredModel::new(model_id("alpha")).with_metadata(metadata)],
+            ))
+        }),
+    ));
+    let effort = |snapshot: Arc<crate::ModelCatalogSnapshot>| {
+        snapshot.entries()[0].info().default_reasoning_effort
+    };
+    let first = manager
+        .refresh(scope.clone(), source.clone())
+        .await
+        .unwrap();
+    assert_eq!(effort(first), Some(ReasoningEffort::High));
+    let omitted = manager
+        .refresh(scope.clone(), source.clone())
+        .await
+        .unwrap();
+    assert_eq!(effort(omitted), Some(ReasoningEffort::High));
+    assert_eq!(
+        effort(restart().snapshot(&scope).unwrap()),
+        Some(ReasoningEffort::High)
+    );
+    let narrowed = manager
+        .refresh(scope.clone(), source.clone())
+        .await
+        .unwrap();
+    assert_eq!(effort(narrowed), None);
+    let restarted = restart();
+    assert_eq!(effort(restarted.snapshot(&scope).unwrap()), None);
+    let restored = restarted.refresh(scope.clone(), source).await.unwrap();
+    assert_eq!(effort(restored), Some(ReasoningEffort::High));
+    assert_eq!(
+        effort(restart().snapshot(&scope).unwrap()),
+        Some(ReasoningEffort::High)
     );
 }
 

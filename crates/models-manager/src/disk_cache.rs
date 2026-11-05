@@ -1,10 +1,14 @@
 use crate::CatalogScopeKey;
 use crate::DiscoveredCatalog;
+use crate::merge::CatalogRecord;
 use crate::source::CatalogNotModified;
+use ash_protocol::ModelId;
 use ash_protocol::ProviderId;
+use ash_protocol::ReasoningEffort;
 use fs2::FileExt;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::fs::OpenOptions;
 use std::io;
@@ -22,7 +26,38 @@ pub(crate) struct DiskCatalogCache {
 #[derive(Default, Deserialize, Serialize)]
 struct CacheDocument {
     schema_version: u32,
-    catalogs: Vec<DiscoveredCatalog>,
+    catalogs: Vec<CachedCatalog>,
+}
+
+#[derive(Deserialize, Serialize)]
+pub(crate) struct CachedCatalog {
+    #[serde(flatten)]
+    pub(crate) observation: DiscoveredCatalog,
+    // Defaults can be temporarily absent from the current list of supported efforts.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(crate) reasoning_defaults: BTreeMap<ModelId, ReasoningEffort>,
+}
+
+impl CachedCatalog {
+    pub(crate) fn new(
+        mut observation: DiscoveredCatalog,
+        records: &BTreeMap<ModelId, CatalogRecord>,
+    ) -> Self {
+        let reasoning_defaults = observation
+            .models
+            .iter_mut()
+            .filter_map(|model| {
+                let effort = records
+                    .get(&model.id)?
+                    .retain_observed_reasoning(&mut model.metadata)?;
+                Some((model.id.clone(), effort))
+            })
+            .collect();
+        Self {
+            observation,
+            reasoning_defaults,
+        }
+    }
 }
 
 impl DiskCatalogCache {
@@ -30,7 +65,7 @@ impl DiskCatalogCache {
         Self { directory }
     }
 
-    pub(crate) fn load(&self, scope: &CatalogScopeKey) -> io::Result<Option<DiscoveredCatalog>> {
+    pub(crate) fn load(&self, scope: &CatalogScopeKey) -> io::Result<Option<CachedCatalog>> {
         if !self.directory.exists() {
             return Ok(None);
         }
@@ -41,19 +76,19 @@ impl DiskCatalogCache {
         Ok(document
             .catalogs
             .into_iter()
-            .find(|catalog| &catalog.scope == scope))
+            .find(|catalog| &catalog.observation.scope == scope))
     }
 
-    pub(crate) fn store(&self, catalog: &DiscoveredCatalog) -> io::Result<()> {
+    pub(crate) fn store(&self, catalog: CachedCatalog) -> io::Result<()> {
         std::fs::create_dir_all(&self.directory)?;
-        let path = self.path_for(catalog.scope.provider());
+        let path = self.path_for(catalog.observation.scope.provider());
         let lock = Self::lock_file(&path)?;
         lock.lock_exclusive()?;
-        let mut document = Self::read_document(&path, catalog.scope.provider())?;
+        let mut document = Self::read_document(&path, catalog.observation.scope.provider())?;
         document
             .catalogs
-            .retain(|entry| entry.scope != catalog.scope);
-        document.catalogs.push(catalog.clone());
+            .retain(|entry| entry.observation.scope != catalog.observation.scope);
+        document.catalogs.push(catalog);
         document.schema_version = SCHEMA_VERSION;
         self.write_document(&path, &document)
     }
@@ -69,6 +104,7 @@ impl DiskCatalogCache {
         let Some(catalog) = document
             .catalogs
             .iter_mut()
+            .map(|entry| &mut entry.observation)
             .find(|entry| entry.scope == observation.scope)
         else {
             return Ok(());
@@ -125,8 +161,9 @@ impl DiskCatalogCache {
                 .catalogs
                 .into_iter()
                 .filter(|catalog| {
-                    catalog.scope.provider() == provider
+                    catalog.observation.scope.provider() == provider
                         && catalog
+                            .observation
                             .models
                             .iter()
                             .all(|model| model.metadata.validate().is_ok())

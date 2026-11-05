@@ -10,7 +10,7 @@ import { getHoverDelegate, type IManagedHover } from '../../../../../../../base/
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
 import { renderModelConfigurationButton } from './modelPickerConfiguration.js';
-import { modelPickerEffortOptions } from './modelPickerModelConfig.js';
+import { getModelConfigEffortLabel } from './modelPickerModelConfig.js';
 import { TabbedModelPicker } from './modelPickerTabbedWidget.js';
 import { renderChatInputPickerSplit, trackChatInputPickerFocus } from '../chatInputPickerActionItem.js';
 
@@ -110,8 +110,8 @@ export class ModelPickerWidget extends Disposable {
 		const label = automatic
 			? localize('chat.modelPicker.auto', 'Auto')
 			: model?.displayName ?? selected?.model ?? localize('chat.modelPicker.selectModel', 'Select model');
-		const effort = this.effortLabel && !automatic && model?.supportedReasoningEfforts?.length
-			? modelPickerEffortOptions(model, selectedEffort).find(option => option.checked)?.label
+		const effort = this.effortLabel && !automatic && model
+			? getModelConfigEffortLabel(model, selectedEffort)
 			: undefined;
 		this.nameButton!.querySelector('.ash-chat-input-picker-label')!.textContent = label;
 		if (this.effortLabel) {

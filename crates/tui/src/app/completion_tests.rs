@@ -336,6 +336,7 @@ fn status_line_context_follows_thread_snapshots() {
                 settings: Default::default(),
                 supported_reasoning_efforts: vec![],
                 default_reasoning_effort: None,
+                effective_reasoning_effort: None,
                 default_personality: None,
             },
         ],

@@ -80,6 +80,7 @@ export interface ModelCatalogEntry {
 	readonly selectedAcceleration?: string | null;
 	readonly supportedReasoningEfforts?: readonly ModelReasoningEffortOption[];
 	readonly defaultReasoningEffort?: ModelReasoningEffort;
+	readonly effectiveReasoningEffort?: ModelReasoningEffort;
 }
 
 export interface AdvisorConfig {

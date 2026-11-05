@@ -1,9 +1,10 @@
 import { connectProfile } from './sessionProfileFixture.js';
 import { createServer } from 'node:http';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { Page, TestInfo } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
@@ -816,6 +817,69 @@ const defaultsTest = test.extend<{
 	},
 });
 
+async function chooseEffortFixtureProject(client: AppServerProtocolClient, page: Page, composer: ReturnType<Page['locator']>, directory: string): Promise<void> {
+	const { project } = await client.request(APP_SERVER_METHODS['project/create'], {
+		commandId: randomUUID(), projectId: randomUUID(), name: 'Effort fixture project', description: '',
+		materials: [{ kind: 'folder', name: 'Workspace', path: pathToFileURL(directory).href }],
+	});
+	const projectPicker = composer.locator('.ash-sessions-workspace-picker');
+	await projectPicker.click();
+	await page.getByRole('menu').getByText(project.name, { exact: true }).click();
+	await expect(projectPicker).toHaveText(project.name);
+}
+
+defaultsTest('Effective effort reaches direct and queued model requests', { tag: '@electron-app-server' }, async ({ application, target, webAppServer, workbench, testWorkspace, defaultsEndpoint }) => {
+	const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page, { directoryGrantsHost: true });
+	const { client } = connection;
+	try {
+		const model = { provider: 'openai', model: 'gpt-6.1-sol' };
+		await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: 'openai', apiKey: 'isolated-effort-fixture-key' });
+		const config = await client.request(APP_SERVER_METHODS['config/read'], {});
+		await client.request(APP_SERVER_METHODS['config/update'], {
+			commandId: 'effort-profile', expectedRevision: config.revision, model, modelReasoningEffort: 'high',
+		});
+		const catalog = await client.request(APP_SERVER_METHODS['model/list'], {});
+		expect(catalog.models.find(entry => entry.model.provider === model.provider && entry.model.model === model.model)).toMatchObject({
+			default_reasoning_effort: 'medium', effective_reasoning_effort: 'high',
+		});
+		const page = await workbench.openAgentsWindow(target.kind);
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		const composer = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+		await chooseEffortFixtureProject(client, page, composer, testWorkspace.directory);
+		const modelButton = composer.locator('.ash-chat-input-model-action');
+		await modelButton.press('ArrowDown');
+		const picker = page.getByRole('dialog', { name: 'Choose a chat model', exact: true });
+		await picker.getByRole('combobox').fill(model.model);
+		await picker.getByRole('menuitemradio', { name: 'GPT-6.1 Sol', exact: true }).click();
+		await expect(modelButton).toHaveAccessibleName('GPT-6.1 Sol High');
+		await modelButton.press('ArrowDown');
+		await picker.getByRole('menuitem', { name: 'Effort', exact: true }).press('ArrowRight');
+		await expect(page.getByRole('menu', { name: 'Effort', exact: true }).getByRole('menuitemradio', { name: 'High', exact: true })).toBeChecked();
+		await page.keyboard.press('Escape');
+		await page.keyboard.press('Escape');
+
+		const input = composer.locator('.stanza-editor-input');
+		await input.focus();
+		await page.keyboard.insertText('Verify the inherited model effort.');
+		await input.press('Enter');
+		await expect(composer).toHaveAttribute('data-thread-id', /.+/);
+		const threadId = (await composer.getAttribute('data-thread-id'))!;
+		const sessionId = (await composer.getAttribute('data-session-id'))!;
+		const completed = async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread.turns.filter(turn => turn.status === 'completed').length;
+		await expect.poll(completed).toBe(1);
+		expect(defaultsEndpoint.requests.at(-1)).toMatchObject({ model: model.model, reasoning: { effort: 'high' } });
+
+		await client.request(APP_SERVER_METHODS['queue/enqueue'], {
+			commandId: 'stale-queued-effort', sessionId, threadId, mode: 'agent', approvalMode: 'manual',
+			model, reasoningEffort: 'none', input: [{ type: 'text', text: 'Verify fallback from an unsupported queued effort.' }],
+		});
+		await expect.poll(completed).toBe(2);
+		expect(defaultsEndpoint.requests.at(-1)).toMatchObject({ model: model.model, reasoning: { effort: 'high' } });
+	} finally {
+		await connection.close();
+	}
+});
+
 for (const locale of ['en', 'zh-CN']) {
 	defaultsTest(
 		`Saved model, effort, Advisor and permission defaults reach a real Turn after reopen in ${locale}`,
@@ -823,10 +887,14 @@ for (const locale of ['en', 'zh-CN']) {
 		async ({ application, target, webAppServer, workbench, restartWorkbench, testWorkspace, defaultsEndpoint }, testInfo) => {
 			test.setTimeout(240_000);
 			if (locale === 'zh-CN') {
-				await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-				const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
-				await language.fill('简体中文');
-				await language.press('Enter');
+				await workbench.page.keyboard.press('ControlOrMeta+,');
+				const editor = workbench.page.locator('.ash-settings-editor');
+				await editor.locator('[data-settings-category-id="display-language"]').click();
+				const language = editor.locator('[data-settings-item-id="workbench.locale"]').getByRole('combobox');
+				await language.click();
+				await workbench.page.keyboard.press('End');
+				await workbench.page.keyboard.press('Enter');
+				await expect(language).toHaveText('简体中文');
 				({ application, workbench } = await restartWorkbench());
 			}
 			const copy =
@@ -835,8 +903,9 @@ for (const locale of ['en', 'zh-CN']) {
 						code: '代码',
 						picker: '选择聊天模型',
 						auto: '自动',
+						medium: '中',
 						high: '高',
-						execution: '执行与权限',
+						environment: '环境',
 						approval: '默认审批模式',
 						files: '命令文件访问',
 						readOnly: '只读',
@@ -845,14 +914,15 @@ for (const locale of ['en', 'zh-CN']) {
 						stale: '后端设置已变化',
 						agents: '智能体',
 						advisor: '顾问模型',
-						enabledAdvisor: '启用顾问',
+						disableAdvisor: '禁用',
 					}
 					: {
 						code: 'Code',
 						picker: 'Choose a chat model',
 						auto: 'Auto',
+						medium: 'Medium',
 						high: 'High',
-						execution: 'Execution and permissions',
+						environment: 'Environment',
 						approval: 'Default approval mode',
 						files: 'Command file access',
 						readOnly: 'Read only',
@@ -861,7 +931,7 @@ for (const locale of ['en', 'zh-CN']) {
 						stale: 'Backend settings changed',
 						agents: 'Agents',
 						advisor: 'Advisor model',
-						enabledAdvisor: 'Enable Advisor',
+						disableAdvisor: 'Disable',
 					};
 			const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page, { directoryGrantsHost: true });
 			const { client } = connection;
@@ -887,7 +957,8 @@ for (const locale of ['en', 'zh-CN']) {
 				let page = await workbench.openAgentsWindow(target.kind);
 				await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 				const composer = (): ReturnType<Page['locator']> => page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
-				await composer().locator('.ash-chat-input-model-action').press('ArrowDown');
+				const modelButton = () => composer().locator('.ash-chat-input-model-action');
+				await modelButton().press('ArrowDown');
 				const picker = page.getByRole('dialog', { name: copy.picker, exact: true });
 				const auto = picker.getByRole('switch', { name: copy.auto, exact: true });
 				if (await auto.isChecked()) {
@@ -896,16 +967,16 @@ for (const locale of ['en', 'zh-CN']) {
 				}
 				await picker.getByRole('combobox').fill(primary.model.model);
 				await picker.getByRole('combobox').press('Enter');
-				await expect(composer().locator('.ash-chat-input-model-action')).toHaveText(primary.display_name);
-				await composer().locator('.ash-chat-input-configuration-action').press('ArrowDown');
-				await page.locator('[data-action-id="ash.chat.input.effort.high"] button').click();
-				await expect(composer().locator('.ash-chat-input-configuration-action')).toHaveText(copy.high);
-				expect((await client.request(APP_SERVER_METHODS['config/read'], {})).model).toEqual(primary.model);
-				expect((await client.request(APP_SERVER_METHODS['config/read'], {})).modelReasoningEffort).toBe('high');
-				await page.keyboard.press('ControlOrMeta+,');
-				let settings = page.locator('.ash-sessions-settings-dialog');
-				await settings.getByRole('button', { name: copy.execution, exact: true }).click();
-				let approval = settings.getByRole('combobox', { name: copy.approval, exact: true });
+				await expect(modelButton()).toHaveAccessibleName(`${primary.display_name} ${copy.medium}`);
+				const defaults = await client.request(APP_SERVER_METHODS['config/read'], {});
+				await client.request(APP_SERVER_METHODS['config/update'], {
+					commandId: `defaults-model-effort-${locale}`, expectedRevision: defaults.revision, model: primary.model, modelReasoningEffort: 'high',
+				});
+				await expect(modelButton()).toHaveAccessibleName(`${primary.display_name} ${copy.high}`);
+				await new QuickAccess(page).runCommand('workbench.action.openSettings');
+				const settings = () => page.locator('.ash-sessions-settings-dialog');
+				await settings().getByRole('button', { name: copy.environment, exact: true }).click();
+				let approval = settings().getByRole('combobox', { name: copy.approval, exact: true });
 				await approval.click();
 				await page.getByRole('option', { name: copy.auto, exact: true }).click();
 				// Another real connection changes a revision while the UI has a draft; the editor must block a stale save.
@@ -915,30 +986,28 @@ for (const locale of ['en', 'zh-CN']) {
 					expectedRevision: before.revision,
 					execution: { ...before.execution, commandNetworkAccess: 'allowed' },
 				});
-				await expect(settings).toContainText(copy.stale);
-				await expect(settings.getByRole('button', { name: copy.save, exact: true })).toBeDisabled();
-				await settings.getByRole('button', { name: copy.refresh, exact: true }).click();
-				approval = settings.getByRole('combobox', { name: copy.approval, exact: true });
+				await expect(settings()).toContainText(copy.stale);
+				await expect(settings().getByRole('button', { name: copy.save, exact: true })).toBeDisabled();
+				await settings().getByRole('button', { name: copy.refresh, exact: true }).click();
+				approval = settings().getByRole('combobox', { name: copy.approval, exact: true });
 				await approval.click();
 				await page.getByRole('option', { name: copy.auto, exact: true }).click();
-				await settings.getByRole('combobox', { name: copy.files, exact: true }).click();
+				await settings().getByRole('combobox', { name: copy.files, exact: true }).click();
 				await page.getByRole('option', { name: copy.readOnly, exact: true }).click();
-				await settings.getByRole('button', { name: copy.save, exact: true }).click();
-				await expect(settings.getByRole('button', { name: copy.save, exact: true })).toBeDisabled();
+				await settings().getByRole('button', { name: copy.save, exact: true }).click();
+				await expect(settings().getByRole('button', { name: copy.save, exact: true })).toBeDisabled();
 				await expect
 					.poll(async () => (await client.request(APP_SERVER_METHODS['config/read'], {})).execution)
 					.toEqual({ approvalMode: 'auto', commandFileAccess: 'readOnly', commandNetworkAccess: 'allowed' });
-				await settings.getByRole('button', { name: copy.agents, exact: true }).click();
-				const advisorButton = settings.getByRole('button', { name: copy.advisor, exact: true });
-				await expect(advisorButton).toBeEnabled();
-				await advisorButton.click();
-				await page.getByRole('menuitemradio', { name: advisor.display_name, exact: true }).click();
-				await expect(settings.getByRole('switch', { name: copy.enabledAdvisor, exact: true })).toBeChecked();
-				await expect.poll(async () => (await client.request(APP_SERVER_METHODS['config/read'], {})).advisor?.model).toEqual(advisor.model);
+				await settings().getByRole('button', { name: copy.agents, exact: true }).click();
+				const advisorPicker = () => settings().getByRole('combobox', { name: copy.advisor, exact: true });
+				await advisorPicker().click();
+				await page.getByRole('option').filter({ hasText: advisor.display_name }).first().click();
+				await expect.poll(async () => (await client.request(APP_SERVER_METHODS['config/read'], {})).advisor).toMatchObject({ model: advisor.model, enabled: true });
 				await page.keyboard.press('Escape');
 				page = await workbench.reopenAgentsWindow(application, page);
-				await expect(composer().locator('.ash-chat-input-model-action')).toHaveText(primary.display_name);
-				await expect(composer().locator('.ash-chat-input-configuration-action')).toHaveText(copy.high);
+				await expect(modelButton()).toHaveAccessibleName(`${primary.display_name} ${copy.high}`);
+				await chooseEffortFixtureProject(client, page, composer(), testWorkspace.directory);
 				await composer().locator('[data-action-id="ash.chat.input.mode"] button').click();
 				await page.getByRole('menuitemradio', { name: /^(Plan|计划)$/u, exact: true }).click();
 				const input = composer().locator('.stanza-editor-input');
@@ -954,13 +1023,13 @@ for (const locale of ['en', 'zh-CN']) {
 				const turn = thread.thread.turns.at(-1)!;
 				expect({
 					model: turn.model,
-					effort: turn.reasoningEffort,
+					effort: turn.reasoningEffort ?? null,
 					approval: turn.approvalMode,
 					mode: turn.mode,
 					advisor: turn.advisor?.model,
 				}).toEqual({
 					model: primary.model,
-					effort: 'high',
+					effort: null,
 					approval: 'auto',
 					mode: 'plan',
 					advisor: advisor.model,
@@ -969,12 +1038,11 @@ for (const locale of ['en', 'zh-CN']) {
 				expect(primaryRequests.length).toBeGreaterThanOrEqual(2);
 				expect(primaryRequests.every(request => request.reasoning?.effort === 'high')).toBe(true);
 				expect(defaultsEndpoint.requests.some(request => request.model === advisor.model.model)).toBe(true);
-				await page.keyboard.press('ControlOrMeta+,');
-				settings = page.locator('.ash-sessions-settings-dialog');
-				await settings.getByRole('button', { name: copy.agents, exact: true }).click();
-				const enabled = settings.getByRole('switch', { name: copy.enabledAdvisor, exact: true });
-				await expect(enabled).toBeChecked();
-				await enabled.press('Space');
+				await new QuickAccess(page).runCommand('workbench.action.openSettings');
+				await settings().getByRole('button', { name: copy.agents, exact: true }).click();
+				await expect(advisorPicker()).toContainText(advisor.display_name);
+				await advisorPicker().click();
+				await page.getByRole('option', { name: copy.disableAdvisor, exact: true }).click();
 				await expect.poll(async () => (await client.request(APP_SERVER_METHODS['config/read'], {})).advisor?.enabled).toBe(false);
 				expect((await client.request(APP_SERVER_METHODS['config/read'], {})).advisor?.model).toEqual(advisor.model);
 				await page.keyboard.press('Escape');

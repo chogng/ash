@@ -397,6 +397,7 @@ fn configured_advisor_model_is_selected_when_opening_config() {
             settings: Default::default(),
             supported_reasoning_efforts: Vec::new(),
             default_reasoning_effort: None,
+            effective_reasoning_effort: None,
             default_personality: None,
         }],
     };

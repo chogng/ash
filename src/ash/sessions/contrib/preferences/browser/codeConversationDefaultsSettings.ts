@@ -91,19 +91,21 @@ export class CodeConversationDefaultsSettings extends Disposable implements Sett
 					if (!value) { void this.save(workspace?.key, undefined); return; }
 					const next = entries.find(model => modelRefIdentity(model.model) === value);
 					if (!next) return;
-					const efforts = next.supportedReasoningEfforts ?? [];
-					const effort = efforts.find(option => option.effort === saved?.effort)?.effort
-						?? efforts.find(option => option.effort === next.defaultReasoningEffort)?.effort ?? efforts[0]?.effort;
+					const effort = next.supportedReasoningEfforts?.find(option => option.effort === saved?.effort)?.effort;
 					void this.save(workspace?.key, { model: next.model, effort });
 				},
 			},
 			{
-				id: `${prefix}-effort`, kind: 'select', value: effortOptions.find(option => option.effort === saved?.effort)?.effort, enabled: enabled && effortOptions.length > 0,
+				id: `${prefix}-effort`, kind: 'select', value: effortOptions.find(option => option.effort === saved?.effort)?.effort ?? '', enabled: enabled && effortOptions.length > 0,
 				label: workspace ? localize('sessions.code.defaults.workspaceEffort', 'Workspace effort') : localize('sessions.code.defaults.effort', 'New conversation effort'),
-				options: effortOptions.map(option => ({ value: option.effort, label: modelPickerEffortLabel(option.effort) })),
+				options: [
+					{ value: '', label: localize('sessions.code.defaults.inheritEffort', 'Use default effort') },
+					...effortOptions.map(option => ({ value: option.effort, label: modelPickerEffortLabel(option.effort) })),
+				],
 				setValue: value => {
+					if (!enabled || !entry) return;
 					const effort = effortOptions.find(option => option.effort === value)?.effort;
-					if (enabled && entry && effort) void this.save(workspace?.key, { model: entry.model, effort });
+					if (value === '' || effort) void this.save(workspace?.key, { model: entry.model, effort });
 				},
 			},
 		];

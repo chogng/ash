@@ -262,6 +262,7 @@ fn advisor_model_command_selects_a_configured_provider_model() {
             settings: Default::default(),
             supported_reasoning_efforts: Vec::new(),
             default_reasoning_effort: None,
+            effective_reasoning_effort: None,
             default_personality: None,
         }],
     };

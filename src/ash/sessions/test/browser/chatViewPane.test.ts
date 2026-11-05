@@ -2,7 +2,7 @@ import { ISessionContext } from '../../services/sessions/browser/sessionContext.
 import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
 import { ISessionFolderAuthorizationService } from '../../common/sessionWorkspace.js';
-import { codeConversationDefaultsSetting, codeConversationWorkspaceKey } from '../../common/codeConversationDefaults.js';
+import { codeConversationDefaultsSetting, codeConversationWorkspaceKey, type CodeConversationDefaults } from '../../common/codeConversationDefaults.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ILocalGitService } from '../../../platform/git/common/localGitService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../services/sessions/browser/sessionsListModelService.js';
@@ -646,6 +646,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 		contextWindow: 128000,
 		supportedReasoningEfforts: [{ effort: 'low' }, { effort: 'medium' }, { effort: 'high' }] as const,
 		defaultReasoningEffort: 'medium' as const,
+		effectiveReasoningEffort: 'high' as const,
 	};
 	const fake = fakeApi({
 		sessions: [
@@ -965,8 +966,8 @@ test('Chat title and history switching retain conversations and drafts', async (
 		);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='ash.chat.input.mode'] button")?.textContent, 'Agent');
 		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action .ash-chat-input-picker-label')?.textContent, 'GPT-6.1 Sol');
-		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-effort')?.hidden, true);
-		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-label'), 'GPT-6.1 Sol');
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-effort')?.textContent, 'High');
+		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-model-action')?.getAttribute('aria-label'), 'GPT-6.1 Sol High');
 		assert.equal(inputToolbar?.querySelector<HTMLElement>('.ash-chat-input-configuration-action')?.hidden, true);
 		assert.equal(inputToolbar?.querySelector('.ash-chat-input-model-access-badge'), null);
 		assert.equal(inputToolbar?.querySelector<HTMLButtonElement>("[data-action-id='workbench.action.chat.toggleSpeechToText'] button")?.disabled, true);
@@ -1016,14 +1017,14 @@ test('Chat title and history switching retain conversations and drafts', async (
 	};
 	let effortMenu = openEffort();
 	assert.deepEqual([...effortMenu.querySelectorAll('[role="menuitemradio"]')].map(item => item.getAttribute('aria-label')), ['Low', 'Medium', 'High']);
-	assert.equal(effortMenu.querySelector('[aria-checked="true"]'), null);
-	effortMenu.querySelector<HTMLButtonElement>('[aria-label="High"]')!.click();
+	assert.equal(effortMenu.querySelector('[aria-checked="true"]')?.getAttribute('aria-label'), 'High');
+	effortMenu.querySelector<HTMLButtonElement>('[aria-label="Low"]')!.click();
 	await waitFor(() => !reopenedPicker.isConnected);
 	assert.equal(effortMenu.isConnected, false);
-	assert.equal(modelButton?.querySelector('.ash-chat-input-model-effort')?.textContent, 'High');
+	assert.equal(modelButton?.querySelector('.ash-chat-input-model-effort')?.textContent, 'Low');
 	reopenedPicker = reopenPicker();
 	effortMenu = openEffort();
-	assert.equal(effortMenu.querySelector('[aria-checked="true"]')?.getAttribute('aria-label'), 'High');
+	assert.equal(effortMenu.querySelector('[aria-checked="true"]')?.getAttribute('aria-label'), 'Low');
 	effortMenu.querySelector<HTMLButtonElement>('[aria-label="Medium"]')!.click();
 	await waitFor(() => !reopenedPicker.isConnected);
 	assert.equal(modelButton?.querySelector('.ash-chat-input-model-effort')?.textContent, 'Medium');
@@ -2858,6 +2859,7 @@ interface FakeOptions {
 		readonly contextWindow?: number | null;
 		readonly supportedReasoningEfforts?: readonly { readonly effort: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max'; readonly description?: string | null; }[];
 		readonly defaultReasoningEffort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'extraHigh' | 'max';
+		readonly effectiveReasoningEffort?: import('../../../platform/models/common/agentModels.js').ModelReasoningEffort;
 	}[];
 	readonly configuredProviders?: readonly string[];
 	readonly providers?: readonly ModelProviderCredentialStatus[];
@@ -3490,6 +3492,48 @@ test('New Code conversations resolve workspace and profile pairs before the last
 	using inherited = start(target);
 	await inherited.initialize();
 	assert.deepEqual(pair(inherited), [sol, 'low']);
+});
+
+test('New Code defaults preserve inheritance when selecting a model or clearing an effort', async () => {
+	const { CodeConversationDefaultsSettings } = await import('../../contrib/preferences/browser/codeConversationDefaultsSettings.js');
+	const sol = { provider: 'openai', model: 'gpt-6.1-sol' };
+	const luna = { provider: 'openai', model: 'gpt-6-luna' };
+	const fake = fakeApi({
+		models: [
+			{ model: sol, displayName: 'Sol', supportedReasoningEfforts: [{ effort: 'medium' }, { effort: 'high' }], defaultReasoningEffort: 'medium' },
+			{ model: luna, displayName: 'Luna', supportedReasoningEfforts: [{ effort: 'low' }] },
+		]
+	});
+	using configuration = new WorkbenchConfigurationService();
+	using chat = createChatService(fake.api, configuration);
+	using sessions = new SessionsManagementService(fake.api);
+	using services = new InstantiationService();
+	services.registerInstance(IConfigurationService, configuration);
+	services.registerInstance(ILanguageModelsService, modelsFor(chat));
+	services.registerInstance(ISessionsManagementService, sessions);
+	using settings = services.createInstance(CodeConversationDefaultsSettings);
+	const select = (id: string) => {
+		const field = settings.fields.find(field => field.id === id);
+		assert.equal(field?.kind, 'select');
+		return field;
+	};
+	const profile = () => configuration.getValue<CodeConversationDefaults>(codeConversationDefaultsSetting).profile;
+	settings.setVisible(true);
+	await waitFor(() => select('profile-model').enabled);
+	initializeTestLocalization('zh-CN');
+	try {
+		select('profile-model').setValue(select('profile-model').options.find(option => option.label === 'GPT-6.1 Sol')!.value);
+		await waitFor(() => profile()?.model?.model === sol.model && select('profile-effort').enabled);
+		assert.equal(profile()?.effort, undefined);
+		assert.equal(select('profile-effort').options.find(option => option.value === '')?.label, '使用默认推理强度');
+		select('profile-effort').setValue('high');
+		await waitFor(() => profile()?.effort === 'high' && select('profile-effort').enabled);
+		select('profile-effort').setValue('');
+		await waitFor(() => profile()?.effort === undefined && select('profile-model').enabled);
+		select('profile-model').setValue(select('profile-model').options.find(option => option.label === 'GPT-6 Luna')!.value);
+		await waitFor(() => profile()?.model?.model === luna.model);
+		assert.equal(profile()?.effort, undefined);
+	} finally { resetNlsResolver(); }
 });
 
 test('Model discovery refreshes the picker after an older catalog request completes', async () => {
@@ -4258,6 +4302,7 @@ function fakeApi(options: FakeOptions = {}): {
 					recommended_for: [...entry.recommendedFor ?? []],
 					context_window: entry.contextWindow ?? null,
 					default_reasoning_effort: entry.defaultReasoningEffort ?? null,
+					effective_reasoning_effort: entry.effectiveReasoningEffort,
 					supported_reasoning_efforts: (entry.supportedReasoningEfforts ?? []).map(option => ({ ...option, description: option.description ?? null })),
 				})));
 			},

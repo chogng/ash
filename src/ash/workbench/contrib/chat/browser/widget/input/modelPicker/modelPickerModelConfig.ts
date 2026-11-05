@@ -4,13 +4,18 @@ import type { ModelCatalogEntry, ModelReasoningEffort } from '../../../../../../
 /** The toolbar shows effort and an explicitly selected acceleration mode. */
 export function getModelConfigSummary(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): string {
 	const values: string[] = [];
-	const effort = modelPickerEffortOptions(entry, selectedEffort).find(option => option.checked);
-	if (effort) { values.push(effort.label); }
+	const effort = getModelConfigEffortLabel(entry, selectedEffort);
+	if (effort) { values.push(effort); }
 	if (entry.selectedAcceleration) {
 		const acceleration = modelPickerAccelerationOptions(entry).find(option => option.value === entry.selectedAcceleration);
 		if (acceleration) { values.push(acceleration.label); }
 	}
 	return values.join(' · ');
+}
+
+export function getModelConfigEffortLabel(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): string | undefined {
+	const options = modelPickerEffortOptions(entry, selectedEffort);
+	return options.length ? options.find(option => option.checked)?.label ?? localize('chat.modelPicker.modelDefault', 'Model default') : undefined;
 }
 
 /** The catalog already reflects connection availability; preserve each provider's exact option ID. */
@@ -59,11 +64,14 @@ export function getModelConfigValueLabel(tokens: number): string {
 }
 
 export function modelPickerEffortOptions(entry: ModelCatalogEntry, selectedEffort: ModelReasoningEffort | undefined): readonly { effort: ModelReasoningEffort; label: string; description?: string; checked: boolean; }[] {
-	return (entry.supportedReasoningEfforts ?? []).map(({ effort, description }) => ({
+	const supported = entry.supportedReasoningEfforts ?? [];
+	const displayedEffort = [selectedEffort, entry.effectiveReasoningEffort, entry.defaultReasoningEffort]
+		.find(candidate => supported.some(({ effort }) => effort === candidate));
+	return supported.map(({ effort, description }) => ({
 		effort,
 		label: modelPickerEffortLabel(effort),
 		description: modelPickerEffortDescription(description),
-		checked: effort === selectedEffort,
+		checked: effort === displayedEffort,
 	}));
 }
 

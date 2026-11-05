@@ -3563,12 +3563,26 @@ fn config_backed_model_service_resolves_model_reasoning_effort() {
     };
     assert_eq!(
         service
-            .reasoning_config(ModelSelection::ConfiguredDefault)
+            .reasoning_config(ModelSelection::ConfiguredDefault, None)
             .unwrap(),
         Some(ash_protocol::ReasoningConfig {
             effort: ReasoningEffort::High,
             summary: false,
         })
+    );
+    let catalog = service.catalog_snapshot().unwrap();
+    let entry = catalog
+        .models
+        .iter()
+        .find(|entry| entry.model.model == model)
+        .unwrap();
+    assert_eq!(
+        entry.default_reasoning_effort,
+        Some(ReasoningEffort::Medium)
+    );
+    assert_eq!(
+        entry.effective_reasoning_effort,
+        Some(ReasoningEffort::High)
     );
     let cleared = service
         .config
@@ -3583,7 +3597,7 @@ fn config_backed_model_service_resolves_model_reasoning_effort() {
         .unwrap();
     assert_eq!(
         service
-            .reasoning_config(ModelSelection::ConfiguredDefault)
+            .reasoning_config(ModelSelection::ConfiguredDefault, None)
             .unwrap(),
         Some(ash_protocol::ReasoningConfig {
             effort: ReasoningEffort::Medium,
@@ -3609,15 +3623,21 @@ fn config_backed_model_service_resolves_model_reasoning_effort() {
         .snapshot(ModelSelection::Session(&sol))
         .unwrap()
         .unwrap();
-    for effective in [
-        service.reasoning_config(ModelSelection::Session(&sol)),
-        frozen.reasoning_config(ModelSelection::ConfiguredDefault),
+    for (requested, expected) in [
+        (None, ReasoningEffort::Medium),
+        (Some(ReasoningEffort::None), ReasoningEffort::Medium),
+        (Some(ReasoningEffort::High), ReasoningEffort::High),
     ] {
-        assert_eq!(effective.unwrap().unwrap().effort, ReasoningEffort::Medium);
+        for effective in [
+            service.reasoning_config(ModelSelection::Session(&sol), requested),
+            frozen.reasoning_config(ModelSelection::ConfiguredDefault, requested),
+        ] {
+            assert_eq!(effective.unwrap().unwrap().effort, expected);
+        }
     }
     assert_eq!(
         service
-            .reasoning_config(ModelSelection::ConfiguredDefault)
+            .reasoning_config(ModelSelection::ConfiguredDefault, None)
             .unwrap()
             .unwrap()
             .effort,

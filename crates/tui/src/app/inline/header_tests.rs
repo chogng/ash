@@ -44,6 +44,7 @@ fn wide_header_keeps_pet_and_identity_information_together() {
                 settings: Default::default(),
                 supported_reasoning_efforts: Vec::new(),
                 default_reasoning_effort: None,
+                effective_reasoning_effort: None,
                 default_personality: None,
             },
         ],

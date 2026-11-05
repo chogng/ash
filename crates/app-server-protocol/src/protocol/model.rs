@@ -108,6 +108,10 @@ pub struct ModelCatalogEntry {
     pub supported_reasoning_efforts: Vec<ash_protocol::ModelReasoningEffortOption>,
     /// Catalog default, used when no reasoning effort is selected for the invocation.
     pub default_reasoning_effort: Option<ReasoningEffort>,
+    /// Effort resolved for this connection when a Turn supplies no explicit choice.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub effective_reasoning_effort: Option<ReasoningEffort>,
     pub default_personality: Option<Personality>,
     #[serde(default)]
     pub settings: ash_protocol::ModelSettings,
@@ -153,6 +157,7 @@ impl ModelCatalogEntry {
             pricing: Vec::new(),
             supported_reasoning_efforts: info.supported_reasoning_efforts.clone(),
             default_reasoning_effort: info.default_reasoning_effort,
+            effective_reasoning_effort: None,
             default_personality: info.default_personality,
             settings: info.settings.clone(),
         }

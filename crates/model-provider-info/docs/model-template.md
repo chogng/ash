@@ -68,6 +68,8 @@ ChatGPT Web 的订阅对话由 Sessions ChatGPT contribution 单独接入：`/ba
 
 必须分别描述四件事：是否思考、投入多深、允许用多少 token、是否返回摘要或历史凭据。同名 effort 不保证跨型号、跨厂商有相同投入。思考预算和整次响应预算还要描述共享关系，避免把推理 token 与可见输出预算重复计算。
 
+默认档位由模型目录按接入声明。公开 API 条目以对应厂商资料为准，订阅发现结果可覆盖该连接的默认值。模型定义要求默认档位属于支持列表，动态目录仅发布当前列表支持的默认值。App Server 分别返回目录声明的 `default_reasoning_effort` 和结合当前配置解析的 `effective_reasoning_effort`。会话未指定档位时，选择器与执行都使用解析后的档位。OpenAI API 与 Codex 目录可有不同默认值，例如 GPT-6.1 Sol 的公开 API 默认 `medium`，Codex 内置目录为 `low`。[OpenAI 推理文档](https://developers.openai.com/api/docs/guides/reasoning)
+
 历史推理回放预算（2026-10-13 核对）：OpenAI Responses 的有效 `reasoning.context` 由每次响应报告；`current_turn` 不渲染以前用户轮次的推理，`all_turns` 渲染可用且兼容的历史推理。完整请求的 `input_tokens`／输入计数已经包含实际渲染的输入，不再额外加历史推理。Ash 保留响应报告的模式，以一次响应的 `output_tokens_details.reasoning_tokens` 为回放估算总量，并在多个密文 item 间只分配一次；生成用量不是准确的回放输入测量。未知模式或旧记录保留为估算，不能根据型号名称猜测模式。Grok 的 Responses 密文历史走同一回放载体，但未报告 OpenAI 模式时仍是未知；Claude、Gemini、GLM、Kimi、DeepSeek、Meta 等当前非 Responses 接入不获得这套密文模式。是否测量完整请求由所选接入的计数能力决定，ChatGPT 订阅接入没有公开 API 计数端口。Core 的本地预算与界面类别使用同一估算，界面百分比的分母为执行中的自动压缩输入阈值（包含已生效的用量校准），模型总容量单独展示。[OpenAI 推理回放规则](https://developers.openai.com/api/docs/guides/reasoning#preserve-reasoning-across-calls)、[输入计数](https://developers.openai.com/api/docs/guides/token-counting)
 
 Claude 的常规系统指导使用顶层 `system`；新型号另有带 beta 头的逐消息 effort 变更协议。不能把这类专门的 `role=system` 消息当成普通系统文本，也不能只靠一个“支持 system role”布尔值描述。[逐消息 effort](https://platform.claude.com/docs/en/build-with-claude/effort)

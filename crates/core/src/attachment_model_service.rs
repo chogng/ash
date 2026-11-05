@@ -150,8 +150,9 @@ impl ModelService for AttachmentModelService {
     fn reasoning_config(
         &self,
         selection: ModelSelection<'_>,
+        requested: Option<ash_protocol::ReasoningEffort>,
     ) -> Result<Option<ReasoningConfig>, CoreError> {
-        self.inner.reasoning_config(selection)
+        self.inner.reasoning_config(selection, requested)
     }
 
     fn measure_input(

@@ -119,16 +119,6 @@ fn validate_model(spec: &StaticModelSpec) -> Result<(), serde_json::Error> {
             "auto compact token limit must be positive",
         ));
     }
-    if let Some(effort) = spec.default_reasoning_effort
-        && !spec
-            .supported_reasoning_efforts
-            .iter()
-            .any(|option| option.effort == effort)
-    {
-        return Err(serde_json::Error::custom(
-            "default reasoning effort is not supported",
-        ));
-    }
     let messages = &spec.model_messages;
     let texts = std::iter::once(&messages.system_instructions)
         .chain(messages.tools.values().map(|tool| &tool.description))

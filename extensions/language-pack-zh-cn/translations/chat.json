@@ -938,6 +938,7 @@
     "chat.modelPicker.configurationAriaLabel": "模型选项：{0}",
     "chat.modelPicker.contextSize": "上下文大小",
     "chat.modelPicker.thinkingEffort": "推理强度",
+    "chat.modelPicker.modelDefault": "模型默认",
     "chat.modelPicker.defaultEffort": "默认",
     "chat.modelPicker.effortNone": "无",
     "chat.modelPicker.effortMinimal": "最低",

@@ -9,24 +9,29 @@ const entry: ModelCatalogEntry = {
 	defaultReasoningEffort: 'medium', supportedReasoningEfforts: [{ effort: 'medium' }, { effort: 'high' }]
 };
 
-test('The picker lists only supported levels and leaves an unset preference unchecked', () => {
+test('The picker shows the model default until an effort is selected', () => {
 	const options = modelPickerEffortOptions(entry, undefined);
 	assert.deepEqual(options.map(({ effort, checked }) => ({ effort, checked })), [
-		{ effort: 'medium', checked: false }, { effort: 'high', checked: false },
+		{ effort: 'medium', checked: true }, { effort: 'high', checked: false },
 	]);
-	assert.deepEqual(modelPickerEffortOptions(entry, 'medium').filter(option => option.checked).map(option => option.effort), ['medium']);
+	assert.deepEqual(modelPickerEffortOptions(entry, 'high').filter(option => option.checked).map(option => option.effort), ['high']);
 });
 
-test('An unsupported preference is omitted from the summary and left unchecked', () => {
-	const model = { ...entry, supportedReasoningEfforts: [{ effort: 'high' }] } satisfies ModelCatalogEntry;
-	assert.ok(modelPickerEffortOptions(model, 'medium').every(option => !option.checked));
-	assert.equal(getModelConfigSummary(model, 'medium'), '');
+test('An unsupported effort falls back to the first supported declaration', () => {
+	const model = { ...entry, effectiveReasoningEffort: 'high' } satisfies ModelCatalogEntry;
+	assert.equal(getModelConfigSummary(model, 'low'), 'High');
+	assert.equal(getModelConfigSummary({ ...model, effectiveReasoningEffort: 'low' }, 'max'), 'Medium');
+	const stale = { ...model, supportedReasoningEfforts: [{ effort: 'low' }] } satisfies ModelCatalogEntry;
+	assert.ok(modelPickerEffortOptions(stale, 'max').every(option => !option.checked));
+	assert.equal(getModelConfigSummary(stale, 'max'), 'Model default');
+	assert.equal(getModelConfigSummary({ ...model, supportedReasoningEfforts: [] }, 'max'), '');
 });
 
 test('Effort labels use the active Chinese NLS catalog', () => {
 	setNlsMessages('zh-CN', { ash: { 'chat.modelPicker.effortMedium': '中', 'chat.modelPicker.effortHigh': '高' } });
 	try {
 		assert.deepEqual(modelPickerEffortOptions(entry, undefined).map(option => option.label), ['中', '高']);
+		assert.equal(getModelConfigSummary(entry, undefined), '中');
 	} finally { resetNlsResolver(); }
 });
 

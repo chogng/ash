@@ -34,6 +34,24 @@ suite('model picker browser component', () => {
 		});
 	}
 
+	test('shows the model default without checking an effort when the catalog omits it', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatInput.html?modelMenuConfiguration&omitEffortDefault&locale=zh-CN');
+		await page.evaluate(() => window.ashChatInputIntegration.showModels());
+		const trigger = page.locator('.ash-chat-input-model-action');
+		await expect(trigger).toHaveAccessibleName('Test Model 模型默认');
+		await expect(trigger.locator('.ash-chat-input-model-effort')).toHaveText('模型默认');
+		await trigger.press('ArrowDown');
+		const picker = page.locator('.ash-chat-model-picker');
+		await picker.getByRole('menuitem', { name: '推理强度' }).press('ArrowRight');
+		const efforts = page.getByRole('menu', { name: '推理强度' });
+		await expect(efforts.getByRole('menuitemradio', { checked: true })).toHaveCount(0);
+		await efforts.getByRole('menuitemradio', { name: '高', exact: true }).press('Enter');
+		await expect(picker).toHaveCount(0);
+		await expect(trigger).toHaveAccessibleName('Test Model 高');
+		await expect(trigger).toBeFocused();
+	});
+
 	test('effort submenu and model preview replace each other on the same surface', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatInput.html?modelMenuConfiguration');
@@ -265,7 +283,7 @@ suite('model picker browser component', () => {
 			await fast.focus();
 			await fast.press('Space');
 			await expect(fast).toBeChecked();
-			await expect(options).toHaveText(chinese ? '快速' : 'Fast');
+			await expect(options).toHaveText(chinese ? '低 · 快速' : 'Low · Fast');
 			await ultra.focus();
 			await ultra.press('Space');
 			await expect(ultra).toBeChecked();
@@ -275,11 +293,11 @@ suite('model picker browser component', () => {
 			const context = picker.getByRole('radiogroup', { name: chinese ? '上下文大小' : 'Context Size', exact: true });
 			await expect(context.getByRole('radio').first()).toBeChecked();
 			const thinking = picker.getByRole('radiogroup', { name: chinese ? '推理强度' : 'Effort', exact: true });
-			await expect(thinking.getByRole('radio', { checked: true })).toHaveCount(0);
+			await expect(thinking.getByRole('radio', { checked: true })).toHaveAccessibleName(chinese ? '低' : 'Low');
 			await standard.focus();
 			await standard.press('Space');
 			await expect(standard).toBeChecked();
-			await expect(options).toHaveText(chinese ? '模型选项' : 'Model options');
+			await expect(options).toHaveText(chinese ? '低' : 'Low');
 			const after = await page.evaluate(() => window.ashChatInputIntegration.modelState());
 			expect(after).toEqual({
 				...before as Record<string, unknown>,

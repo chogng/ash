@@ -446,7 +446,7 @@ let models: readonly ModelCatalogEntry[] = [{
 	longContext: false, contextWindow: 272_000, defaultContextWindow: 272_000, maximumContextWindow: 872_000,
 	description: 'A model for everyday tasks',
 	supportedReasoningEfforts: [{ effort: 'low', description: 'Fast responses with lighter reasoning' }, { effort: 'high', description: 'Greater reasoning depth for complex problems' }],
-	defaultReasoningEffort: 'low',
+	defaultReasoningEffort: new URLSearchParams(location.search).has('omitEffortDefault') ? undefined : 'low',
 	selectedAcceleration: null, accelerationOptions: [{ id: 'priority', name: 'Fast', description: 'Faster responses, increased usage' }, ...(multipleAcceleration ? [{ id: 'ultrafast', name: 'Ultra Fast', description: 'Priority processing, increased usage' }] : [])],
 }];
 if (modelOptions === 'effort' || modelOptions === 'none') {

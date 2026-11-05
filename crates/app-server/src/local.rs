@@ -1755,7 +1755,7 @@ pub fn open_app_server_with_codebase_providers(
         let Some((identity, runtime)) = model.approval_review_model()? else {
             return Ok(ash_extension_api::ApprovalReviewer::Unavailable);
         };
-        let reasoning = runtime.reasoning_config(ModelSelection::ConfiguredDefault)?;
+        let reasoning = runtime.reasoning_config(ModelSelection::ConfiguredDefault, None)?;
         Ok(guardian_v2::reviewer(
             guardian_v2::ProviderReviewModel::new(
                 identity,
@@ -2852,13 +2852,18 @@ impl ModelService for ConfigBackedModelService {
     fn reasoning_config(
         &self,
         selection: ModelSelection<'_>,
+        requested: Option<ash_protocol::ReasoningEffort>,
     ) -> Result<Option<ash_protocol::ReasoningConfig>, CoreError> {
         let config = self.config_for_selection(selection)?;
         if config.model.is_none() {
             return Ok(None);
         }
         let info = self.context_catalog(&config)?.info(&config)?;
-        Ok(model_reasoning_config(&info, config.model_reasoning_effort))
+        Ok(model_reasoning_config(
+            &info,
+            config.model_reasoning_effort,
+            requested,
+        ))
     }
 
     fn input_token_measurement_capability(
@@ -3306,6 +3311,9 @@ fn runtime_catalog_entry(
         entry.model().clone(),
         &context.info,
     );
+    result.effective_reasoning_effort =
+        model_reasoning_config(&context.info, config.model_reasoning_effort, None)
+            .map(|reasoning| reasoning.effort);
     result.source = Some(
         ash_app_server_protocol::protocol::model::ModelCatalogSource {
             provider_id: provider_config.provider.clone(),
@@ -3737,16 +3745,12 @@ impl FrozenModelSource {
                 Arc::new(UnavailableModel::new(error.to_string())) as Arc<dyn ModelInvoker>
             }
         };
-        let reasoning = info
-            .as_ref()
-            .ok()
-            .and_then(|info| model_reasoning_config(info, config.model_reasoning_effort));
         Ok(Arc::new(FrozenModelService {
             source: self.clone(),
             provider: ProviderModelService::new(provider),
             budget,
             billing_scope: billing_scope_for_config(&config),
-            reasoning,
+            reasoning_model: info.ok(),
         }))
     }
 }
@@ -3754,14 +3758,19 @@ impl FrozenModelSource {
 fn model_reasoning_config(
     info: &ash_protocol::ModelInfo,
     preferred: Option<ash_protocol::ReasoningEffort>,
+    requested: Option<ash_protocol::ReasoningEffort>,
 ) -> Option<ash_protocol::ReasoningConfig> {
-    // The profile preference survives model switches. Apply it only when this model offers it.
-    preferred
-        .filter(|effort| {
-            info.supported_reasoning_efforts
-                .iter()
-                .any(|option| option.effort == *effort)
-        })
+    let supports_effort = |effort| {
+        info.supported_reasoning_efforts
+            .iter()
+            .any(|option| option.effort == effort)
+    };
+    // Unlisted models can still accept an explicit request when their capabilities are unknown.
+    let effort_is_unknown = info.supported_reasoning_efforts.is_empty()
+        && info.capabilities.reasoning == ash_protocol::CapabilitySupport::Unknown;
+    requested
+        .filter(|effort| effort_is_unknown || supports_effort(*effort))
+        .or_else(|| preferred.filter(|effort| supports_effort(*effort)))
         .or(info.default_reasoning_effort)
         .map(|effort| ash_protocol::ReasoningConfig {
             effort,
@@ -3775,7 +3784,7 @@ struct FrozenModelService {
     provider: ProviderModelService,
     budget: Result<ContextBudget, CoreError>,
     billing_scope: ModelBillingScope,
-    reasoning: Option<ash_protocol::ReasoningConfig>,
+    reasoning_model: Option<ash_protocol::ModelInfo>,
 }
 impl ModelService for FrozenModelService {
     fn output_transport(
@@ -3829,8 +3838,11 @@ impl ModelService for FrozenModelService {
     fn reasoning_config(
         &self,
         _: ModelSelection<'_>,
+        requested: Option<ash_protocol::ReasoningEffort>,
     ) -> Result<Option<ash_protocol::ReasoningConfig>, CoreError> {
-        Ok(self.reasoning.clone())
+        Ok(self.reasoning_model.as_ref().and_then(|info| {
+            model_reasoning_config(info, self.source.config.model_reasoning_effort, requested)
+        }))
     }
     fn input_token_measurement_capability(
         &self,

@@ -294,7 +294,7 @@ impl<'ctx> ApprovalEnvironmentRequestProcessor<'ctx> {
             request.parallel_tool_calls = false;
             request.max_output_tokens = Some(4096);
             request.reasoning = runtime
-                .reasoning_config(runtime_selection)
+                .reasoning_config(runtime_selection, None)
                 .map_err(core_error)?;
             let response = runtime
                 .invoke(runtime_selection, &request, cancellation)

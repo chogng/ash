@@ -370,7 +370,7 @@ export class ChatWidgetModel extends Disposable {
 		if (this.selection.kind === 'untitled') return draftReasoningEffort(this.selection.session);
 		const selection = this.selectedReasoningEfforts.get(this.composerIdentity);
 		if (selection) return selection.effort;
-		return this._thread?.turns.at(-1)?.reasoningEffort ?? this.defaults?.reasoningEffort ?? undefined;
+		return this._thread?.turns.at(-1)?.reasoningEffort ?? undefined;
 	}
 
 	get items(): readonly IChatListItem[] {
@@ -914,7 +914,7 @@ export class ChatWidgetModel extends Disposable {
 			try { return parseCodeConversationModel(JSON.parse(raw)); } catch { /* Recover an invalid saved selection from backend defaults. */ }
 		}
 		const model = this.languageModels.getDefaultNewChatModel(this._models) ?? null;
-		const selection = { model, effort: model ? this.defaults?.reasoningEffort ?? undefined : undefined };
+		const selection = { model };
 		if (this.defaults) this.rememberConversationModel(selection);
 		return selection;
 	}

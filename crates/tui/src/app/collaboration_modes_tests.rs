@@ -953,6 +953,7 @@ fn effort_data() -> crate::models::ModelPickerData {
                     },
                 ],
                 default_reasoning_effort: Some(ReasoningEffort::Low),
+                effective_reasoning_effort: None,
                 default_personality: None,
             },
         ],

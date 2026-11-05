@@ -779,6 +779,7 @@
     "sessions.code.defaults.model": "新对话模型",
     "sessions.code.defaults.workspaceEffort": "工作区推理强度",
     "sessions.code.defaults.effort": "新对话推理强度",
+    "sessions.code.defaults.inheritEffort": "使用默认推理强度",
     "sessions.code.defaults.loadFailed": "无法加载模型。",
     "sessions.code.defaults.saveFailed": "无法保存对话默认设置。",
     "sessions.settings.chatModels": "聊天模型",
