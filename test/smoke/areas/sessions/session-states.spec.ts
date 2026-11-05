@@ -6,7 +6,7 @@ import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { Workbench } from '../../../automation/workbench.js';
 import { APP_SERVER_METHODS, type ModelRef, type Session } from '../../../../.build/protocol/typescript/index.js';
-import { connectProfile } from './sessionProfileFixture.js';
+import { connectProfile, enableFixtureModel } from './sessionProfileFixture.js';
 
 test.use({ video: 'on' });
 
@@ -140,13 +140,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const config = await client.request(APP_SERVER_METHODS['config/read'], {});
 			await client.request(APP_SERVER_METHODS['provider/configure'], { commandId: 'management-provider', expectedRevision: config.revision, config: { connection: provider, provider, baseUrl: `http://127.0.0.1:${address.port}/v1`, custom: { name: 'Isolated management model', protocol: 'chatCompletions', order: 0, contextWindow: 272_000 }, modelContext: { 'management-model': { contextWindow: 272_000 } } } });
 			await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: provider, apiKey: 'isolated-fixture-key' });
-			await workbench.settingsEditor.openUserSettingsUI();
-			await workbench.settingsEditor.selectGroup('agents');
-			await workbench.settingsEditor.selectCategory('models');
-			const enabled = workbench.page.getByRole('switch', { name: `${locale === 'zh-CN' ? '启用' : 'Enable'} ${model.model}`, exact: true });
-			if (!await enabled.isChecked()) await enabled.press('Space');
-			await expect(enabled).toBeChecked();
-			await workbench.page.locator('.ash-modal-editor-close').click();
+			await enableFixtureModel(workbench, model, locale);
 			const create = async (commandId: string, title: string): Promise<Session> => (await client.request(APP_SERVER_METHODS['session/create'], { commandId, title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
 			// Catalog order follows durable IDs. Keep its initial selected Session separate
 			// so this background tree is never hydrated before the passive assertions.
@@ -155,7 +149,8 @@ for (const locale of ['en', 'zh-CN']) {
 			const sessionId = background.sessionId;
 			const root = background.threads[0];
 			if (!root) throw new Error('Expected management root');
-			const fork = await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'management-fork', sessionId, request: { type: 'forkThread', parentThreadId: root.threadId, title: 'Background branch' } });
+			const branchTitle = 'Background branch';
+			const fork = await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'management-fork', sessionId, request: { type: 'forkThread', parentThreadId: root.threadId, title: branchTitle } });
 			if (fork.type !== 'thread') throw new Error('Expected management branch');
 			for (let index = 0; index < 14; index++) await create(`management-padding-${index}`, `Padding ${index}`);
 			const read = async (): Promise<Session> => {
@@ -176,22 +171,39 @@ for (const locale of ['en', 'zh-CN']) {
 			}
 			page = await agentsWorkbench.openAgentsWindow(target.kind);
 			await page.evaluate(observeDetails);
-			await page.locator('.ash-sessions-activity-content').getByRole('button', { name: copy.code, exact: true }).click();
+			await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 			await page.locator('[data-action-id="sessions.newSession"] button').click();
 			const active = (): ReturnType<Page['locator']> => page!.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork)');
 			const editor = new Editor(active());
-			await editor.waitForEditorFocus(); await page.keyboard.insertText('Keep the unsent management draft');
+			await expect(active()).toHaveAttribute('data-untitled-session-id', /.+/u);
 			const draftId = await active().getAttribute('data-untitled-session-id');
-			expect(draftId).toBeTruthy();
 			await active().locator('.ash-chat-input-model-action').press('ArrowDown');
 			const picker = page.getByRole('dialog', { name: copy.picker, exact: true });
 			const auto = picker.getByRole('switch', { name: locale === 'zh-CN' ? '自动' : 'Auto', exact: true });
 			if (await auto.isChecked()) await auto.press('Space');
 			const search = picker.getByRole('combobox');
 			await search.fill(model.model); await expect(picker.getByRole('menuitemradio')).toHaveCount(1); await search.press('Enter');
+			// Keep row order stable while status changes update the last activity time.
+			await page.locator('.ash-sessions-list-more [data-action-id="sessions.list.headerMore"] button').click();
+			await page.getByRole('menuitem', { name: locale === 'zh-CN' ? '排序方式' : 'Sort By', exact: true }).press('ArrowRight');
+			await page.getByRole('menuitemradio', { name: locale === 'zh-CN' ? '创建日期' : 'Date Created', exact: true }).click();
+			await expect(active().locator('.ash-chat-input-model-action')).toHaveText(model.model);
+			await editor.waitForEditorFocus();
+			await editor.waitForTypeInEditor('Keep the unsent management draft');
 			const row = (): ReturnType<Page['locator']> => page!.locator('.ash-sessions-list-item').filter({ hasText: 'Background management' });
-			const status = (): ReturnType<Page['locator']> => row().locator('.ash-sessions-list-management');
-			await expect(status()).toHaveText(copy.idle);
+			const assertStatus = (label: string, glyph: string): Promise<void> => test.step(`Verify sidebar status icon for ${label}`, async () => {
+				await expect(row()).toHaveAccessibleName(new RegExp(`^Background management\\. ${label}(?:\\.|$)`, 'u'));
+				await expect(row()).toHaveText('Background management');
+				const layer = row().locator('..').locator('.ash-session-status-icon-layer');
+				await expect(layer).toHaveCount(1);
+				if (glyph === 'working') {
+					await expect(layer.locator('.ash-pixel-spinner, [data-ash-icon-id="sync"]')).toBeVisible();
+				} else {
+					await expect(layer.locator(`[data-ash-icon-id="${glyph}"]`)).toBeVisible();
+				}
+			});
+			await assertStatus(copy.idle, 'chat-session');
+			const rowHeight = (await row().boundingBox())!.height;
 			await row().focus();
 			const rowIdentity = await row().elementHandle();
 			const list = page.locator('.ash-sessions-list-items > .ash-scrollbar-viewport');
@@ -199,6 +211,7 @@ for (const locale of ['en', 'zh-CN']) {
 			expect(scroll).toBeGreaterThan(0);
 			const preserve = async (): Promise<void> => {
 				await expect(row()).toBeFocused();
+				expect((await row().boundingBox())!.height).toBe(rowHeight);
 				expect(await row().evaluate((element, previous) => element === previous, rowIdentity)).toBe(true);
 				expect(await list.evaluate(element => element.scrollTop)).toBe(scroll);
 				await expect(row()).not.toHaveAttribute('aria-current', 'page');
@@ -210,7 +223,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await start(fork.value.threadId, 'fixture-hold-branch');
 			await expect.poll(() => branchState(root.threadId)).toBe('working');
 			await expect.poll(() => branchState(fork.value.threadId)).toBe('working');
-			await expect(status()).toHaveText(copy.working); await preserve();
+			await assertStatus(copy.working, 'working'); await preserve();
 			await expect.poll(() => held.size).toBe(2);
 			const release = async (marker: string): Promise<void> => {
 				const response = [...held].find(([prompt]) => prompt.includes(marker))?.[1];
@@ -219,7 +232,7 @@ for (const locale of ['en', 'zh-CN']) {
 			};
 			await release('fixture-hold-branch');
 			await expect.poll(() => branchState(fork.value.threadId)).toBe('readyForReview');
-			await expect(status()).toHaveText(copy.working); await preserve();
+			await assertStatus(copy.working, 'working'); await preserve();
 			const beforeStop = (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId: root.threadId })).thread;
 			const turn = beforeStop.turns.at(-1);
 			if (!turn) throw new Error('Expected held Turn');
@@ -229,13 +242,13 @@ for (const locale of ['en', 'zh-CN']) {
 			const stopped = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId: root.threadId });
 			await client.request(APP_SERVER_METHODS['session/request'], interrupt);
 			expect((await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId: root.threadId })).thread).toEqual(stopped.thread);
-			await expect(status()).toHaveText(copy.stopped); await preserve();
+			await assertStatus(copy.stopped, 'stop-circle'); await preserve();
 			await start(root.threadId, 'fixture-failure');
 			await expect.poll(() => branchState(root.threadId), { timeout: 30_000 }).toBe('failed');
-			await expect(status()).toHaveText(copy.failed); await preserve();
+			await assertStatus(copy.failed, 'error'); await preserve();
 			await start(root.threadId, 'fixture-retry-complete');
 			await expect.poll(() => branchState(root.threadId)).toBe('readyForReview');
-			await expect(status()).toHaveText(copy.readyForReview); await preserve();
+			await assertStatus(copy.readyForReview, 'code-review'); await preserve();
 			const requests = await page.evaluate(() => (window as Window & { sessionStateRequests?: { method: string; sessionId?: string; }[]; }).sessionStateRequests!);
 			expect(requests.filter(request => request.sessionId === sessionId && ['session/read', 'session/subscribe', 'session/thread/read'].includes(request.method))).toEqual([]);
 			await rowIdentity?.dispose();
@@ -249,13 +262,13 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(workbench.page.locator('.ash-chat-view-pane :is(.ash-chat,.ash-cowork):visible')).toHaveAttribute('data-thread-id', root.threadId);
 			await start(root.threadId, 'fixture-question');
 			await expect.poll(() => branchState(root.threadId), { timeout: 30_000 }).toBe('needsInput');
-			await expect(status()).toHaveText(copy.needsInput);
+			await assertStatus(copy.needsInput, 'question');
 			await expect(row()).toHaveAttribute('aria-label', /Synthetic management choice/u);
 			await expect(active()).toHaveAttribute('data-untitled-session-id', draftId!);
 			await editor.waitForEditorContents(text => text === 'Keep the unsent management draft');
-			const question = workbench.page.getByRole('combobox', { name: 'Synthetic management choice', exact: true });
+			const question = workbench.page.getByRole('combobox', { name: 'switch_mode — Synthetic management choice', exact: true });
 			await expect(question).toBeVisible();
-			await expect(question.getByRole('option')).toHaveText(['agent', 'ask']);
+			await expect(question.getByRole('option', { disabled: false })).toHaveText(['agent', 'ask']);
 			// A headless desktop may have no microphone. Record and dismiss only that
 			// environment notification so it cannot cover the real Stop control.
 			const audioFailure = workbench.page.locator('.ash-notification').filter({ hasText: 'Microphone enumeration failed' });
@@ -267,7 +280,7 @@ for (const locale of ['en', 'zh-CN']) {
 			}
 			await workbench.page.locator('[data-action-id="ash.chat.input.interrupt"] button:visible').click();
 			await expect.poll(() => branchState(root.threadId)).toBe('stopped');
-			await expect(status()).toHaveText(copy.stopped);
+			await assertStatus(copy.stopped, 'stop-circle');
 			const finalRequests = await page.evaluate(() => (window as Window & { sessionStateRequests?: { method: string; sessionId?: string; }[]; }).sessionStateRequests!);
 			expect(finalRequests.filter(request => request.sessionId === sessionId && ['session/read', 'session/subscribe', 'session/thread/read'].includes(request.method))).toEqual([]);
 			await writeFile(testInfo.outputPath('management-transitions.json'), JSON.stringify({ locale, session: await read(), productRequests: finalRequests, stoppedReplay: stopped.thread }, null, 2));
@@ -286,19 +299,15 @@ for (const locale of ['en', 'zh-CN']) {
 			} else {
 				page = await agentsWorkbench.reopenAgentsWindow(application, page);
 			}
-			await expect(status()).toHaveText(copy.stopped);
+			await assertStatus(copy.stopped, 'stop-circle');
 			await expect(active()).toHaveAttribute('data-untitled-session-id', draftId!);
 			await new Editor(active()).waitForEditorContents(text => text === 'Keep the unsent management draft');
 			await row().click();
 			await expect(active()).toHaveAttribute('data-thread-id', root.threadId);
-			// The Agents history action is exposed through its existing slash command.
-			const reopenedEditor = new Editor(active());
-			await reopenedEditor.waitForEditorFocus();
-			await page.keyboard.insertText('/history');
-			await reopenedEditor.waitForEditorContents(text => text === '/history');
-			await page.keyboard.press('Escape');
-			await page.keyboard.press('Enter');
-			await expect(page.locator('.ash-quick-pick .ash-list-row').filter({ hasText: 'Background management' }).filter({ hasText: `${copy.thread} ${index + 1}` })).toContainText(copy.stopped);
+			const sessionHistory = new QuickAccess(page);
+			await sessionHistory.runCommand('sessions.showSessionsPicker');
+			await sessionHistory.search('Background management');
+			await expect(sessionHistory.items.filter({ hasText: 'Background management', hasNotText: branchTitle })).toContainText(copy.stopped);
 			await page.keyboard.press('Escape');
 			await page.screenshot({ path: testInfo.outputPath('reopened-history.png') });
 		} finally {

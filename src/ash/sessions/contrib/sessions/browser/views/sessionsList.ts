@@ -54,7 +54,6 @@ import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { Icon } from '../../../../../base/common/icon.js';
 import { SessionLeadingIcon } from '../../../../browser/ui/sessionLeadingIcon.js';
-import type { ISessionStatusIcon } from '../../../../browser/sessionStatusIcon.js';
 import { createSessionSummaryHover, getSessionSummaryHoverData } from '../sessionHoverContent.js';
 import { IHoverService, type IManagedHover } from '../../../../../platform/hover/browser/hoverService.js';
 import { LocalChatSessionUri } from '../../../../../workbench/contrib/chat/common/model/chatUri.js';
@@ -64,6 +63,16 @@ interface SessionBucket {
 	readonly id: string;
 	readonly label: string;
 }
+
+const managementIcons: Record<SessionManagementInfo['status'], Icon | undefined> = {
+	idle: undefined,
+	needsInput: Lxicon.question,
+	working: Lxicon.sync,
+	readyForReview: Lxicon.codeReview,
+	completed: Lxicon.check,
+	failed: Lxicon.error,
+	stopped: Lxicon.stopCircle,
+};
 
 export type SessionsListPresentation = 'chat' | 'code' | { readonly openCommand: string; readonly activeContext: string; };
 
@@ -77,11 +86,6 @@ export class SessionsList extends DomWidget {
 	private branches: readonly ObjectTreeElement<HTMLElement>[] = [];
 	private readonly parents = new Map<HTMLElement, ObjectTreeElement<HTMLElement> | undefined>();
 	private readonly feedback = this._register(new SessionActionFeedback());
-	private readonly workingIcon: ISessionStatusIcon = {
-		label: localize('sessions.management.working', 'Working'),
-		kind: 'inProgress',
-		icon: Lxicon.sync,
-	};
 	private readonly rowMenuContext = this._register(new MutableDisposable<IScopedContextKeyService>());
 	readonly domNode: HTMLElement;
 	private readonly list: HTMLDivElement;
@@ -752,7 +756,6 @@ export class SessionsList extends DomWidget {
 				&& (matchesSession || this.search.matches(chat.title, chat.workspace?.root, ...fields)));
 			if (!matchesSession && !nested.length && !nestedDrafts.has(session.sessionId)) continue;
 			const item = itemFor(`session:${session.sessionId}`, this.mode === 'code' ? Lxicon.chatSession : Lxicon.cowork, true);
-			item.leadingIcon?.setStatus(session.management?.status === 'working' ? this.workingIcon : undefined);
 			item.target = { sessionId: session.sessionId, threadId: thread.threadId };
 			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, () => this.openRow(() => this.viewService.openSession(session.sessionId, thread.threadId)), session.management);
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor));
@@ -760,7 +763,6 @@ export class SessionsList extends DomWidget {
 			item.updateSummary(this.hoverService, getSessionSummaryHoverData(session, thread));
 			const children = nested.map(chat => {
 				const child = itemFor(`chat:${JSON.stringify([session.sessionId, chat.threadId])}`, Lxicon.chatSession, true);
-				child.leadingIcon?.setStatus(chat.management?.status === 'working' ? this.workingIcon : undefined);
 				child.target = { sessionId: session.sessionId, threadId: chat.threadId };
 				child.domNode.draggable = true;
 				child.update(chat.title || localize('sessions.list.untitledChat', 'Untitled Chat'), current?.threadId === chat.threadId,
@@ -923,7 +925,7 @@ class SessionListItem extends AbstractDisposable {
 	private readonly label: HTMLSpanElement;
 	private readonly pullRequest: HTMLSpanElement;
 	children: readonly HTMLElement[] = [];
-	private readonly management: HTMLSpanElement;
+	private readonly statusAnnouncement: HTMLSpanElement;
 	private managementDescription: string | undefined;
 	private pullRequestDescription = '';
 	private readonly summaryHover = new MutableDisposable<IManagedHover>();
@@ -960,20 +962,18 @@ class SessionListItem extends AbstractDisposable {
 		this.actions.domNode.querySelector('button')?.setAttribute('aria-haspopup', 'menu');
 		this.label = h(ownerDocument, 'span');
 		this.label.className = 'ash-sessions-list-label';
-		this.management = h(ownerDocument, 'span');
-		this.management.className = 'ash-sessions-list-management';
-		this.management.hidden = true;
-		this.management.setAttribute('aria-live', 'polite');
-		const content = h(ownerDocument, 'span');
-		content.className = 'ash-sessions-list-content';
-		content.append(this.label, this.management);
+		this.statusAnnouncement = h(ownerDocument, 'span', {
+			className: 'ash-aria-live',
+			attributes: { 'aria-live': 'polite' },
+		});
+		this.domNode.append(this.statusAnnouncement);
 		this.pullRequest = h(ownerDocument, 'span');
 		this.pullRequest.className = 'ash-sessions-list-pr';
 		this.pullRequest.setAttribute('aria-hidden', 'true');
 		this.pullRequest.hidden = true;
 		if (icon && !leadingIcon) appendIcon(icon, this.button);
 		// Keep attention metadata clear of the trailing hover actions.
-		this.button.append(this.pullRequest, content);
+		this.button.append(this.pullRequest, this.label);
 		this.clickListener = addDisposableListener(this.button, 'click', () => this.open());
 		const showMenu = (event: MouseEvent | KeyboardEvent): void => {
 			if (!this.contextMenu) return;
@@ -1002,9 +1002,11 @@ class SessionListItem extends AbstractDisposable {
 		if (this.label.textContent !== title) this.label.textContent = title;
 		this.leadingIcon?.setTitle(title);
 		const state = sessionManagementLabel(management);
-		if (this.management.textContent !== (state ?? '')) this.management.textContent = state ?? '';
-		this.management.hidden = state === undefined;
-		this.button.classList.toggle('has-management', state !== undefined);
+		const icon = management && managementIcons[management.status];
+		this.leadingIcon?.setStatus(state && icon ? {
+			label: state, kind: management?.status === 'working' ? 'inProgress' : 'static', icon,
+		} : undefined);
+		if (this.statusAnnouncement.textContent !== (state ?? '')) this.statusAnnouncement.textContent = state ?? '';
 		this.managementDescription = [state, management?.activity?.text, management?.summary].filter(Boolean).join('. ');
 		this.updateDescription();
 		this.domNode.classList.toggle('selected', selected);

@@ -99,30 +99,6 @@
 	background-clip: padding-box;
 }
 
-.ash-sessions-list-item.has-management {
-	min-height: 64px;
-}
-
-.ash-sessions-list-content {
-	display: flex;
-	flex: 1;
-	min-width: 0;
-	flex-direction: column;
-	gap: var(--ash-spacing-size40);
-}
-
-.ash-sessions-list-management {
-	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label2);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.ash-sessions-list-management[hidden] {
-	display: none;
-}
-
 .ash-sessions-list-pr {
 	display: inline-flex;
 	flex: 0 0 auto;

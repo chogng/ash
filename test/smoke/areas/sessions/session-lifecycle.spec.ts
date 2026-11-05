@@ -1,12 +1,21 @@
 import { createServer } from 'node:http';
 import { writeFile } from 'node:fs/promises';
+import { basename } from 'node:path';
 import type { Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { Workbench } from '../../../automation/workbench.js';
 import { Editor } from '../../../automation/editor.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { APP_SERVER_METHODS, type ModelRef } from '../../../../.build/protocol/typescript/index.js';
-import { connectProfile } from './sessionProfileFixture.js';
+import { connectProfile, enableFixtureModel } from './sessionProfileFixture.js';
+
+async function chooseWorkspaceProject(page: Page, directory: string): Promise<void> {
+	const chooser = page.locator('.ash-sessions-chat-slot.active .ash-sessions-workspace-picker');
+	const folder = basename(directory);
+	await chooser.click();
+	await page.getByRole('menuitemradio', { name: folder, exact: true }).click();
+	await expect(chooser).toHaveText(folder);
+}
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`Session first send uses one atomic root and restores drafts in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, webAppServer, workbench, restartWorkbench, testWorkspace }, testInfo) => {
@@ -18,7 +27,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await language.press('Enter');
 			({ application, workbench } = await restartWorkbench());
 		}
-		const copy = locale === 'zh-CN' ? { code: '代码', picker: '选择聊天模型', auto: '自动', enable: '启用' } : { code: 'Code', picker: 'Choose a chat model', auto: 'Auto', enable: 'Enable' };
+		const copy = locale === 'zh-CN' ? { code: '代码', picker: '选择聊天模型', auto: '自动' } : { code: 'Code', picker: 'Choose a chat model', auto: 'Auto' };
 		const invokedModels: string[] = [];
 		const modelServer = createServer(async (request, response) => {
 			if (request.method === 'GET') {
@@ -54,13 +63,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: provider, apiKey: 'isolated-fixture-key' });
 			const configured = await client.request(APP_SERVER_METHODS['config/read'], {});
 			await client.request(APP_SERVER_METHODS['config/update'], { commandId: 'lifecycle-default', expectedRevision: configured.revision, model });
-			await workbench.settingsEditor.openUserSettingsUI();
-			await workbench.settingsEditor.selectGroup('agents');
-			await workbench.settingsEditor.selectCategory('models');
-			const enabled = workbench.page.getByRole('switch', { name: `${copy.enable} ${model.model}`, exact: true });
-			if (!await enabled.isChecked()) await enabled.press('Space');
-			await expect(enabled).toBeChecked();
-			await workbench.page.locator('.ash-modal-editor-close').click();
+			await enableFixtureModel(workbench, model, locale);
 
 			let agentsWorkbench = workbench;
 			if (target.kind === 'browser') {
@@ -73,6 +76,7 @@ for (const locale of ['en', 'zh-CN']) {
 			page = await agentsWorkbench.openAgentsWindow(target.kind);
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 			await page.locator('[data-action-id="sessions.newSession"] button').click();
+			await chooseWorkspaceProject(page, testWorkspace.directory);
 			const active = (): ReturnType<Page['locator']> => page!.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 			const editor = new Editor(active());
 			await editor.waitForEditorFocus();
@@ -101,11 +105,11 @@ for (const locale of ['en', 'zh-CN']) {
 			await expect(active()).toContainText('Isolated lifecycle answer');
 
 			await page.locator('[data-action-id="sessions.newSession"] button').click();
+			await expect(active()).toHaveAttribute('data-untitled-session-id', /.+/u);
+			const draftId = await active().getAttribute('data-untitled-session-id');
 			const draftEditor = new Editor(active());
 			await draftEditor.waitForEditorFocus();
 			await draftEditor.waitForTypeInEditor('Keep this unsent lifecycle draft.');
-			const draftId = await active().getAttribute('data-untitled-session-id');
-			expect(draftId).toBeTruthy();
 			page = await agentsWorkbench.reopenAgentsWindow(application, page);
 			await page.locator('.ash-window-mode-control').getByRole('button', { name: copy.code, exact: true }).click();
 			await expect(active()).toHaveAttribute('data-untitled-session-id', draftId!);
@@ -113,7 +117,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const readCatalog = async () => (await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId: created.sessionId })).session;
 			const persisted = await readCatalog();
 			expect(persisted?.threads).toHaveLength(1);
-			const durableRows = (): ReturnType<Page['locator']> => page!.locator('.ash-sessions-list-item').filter({ has: page!.locator('.ash-sessions-list-management:not([hidden])') });
+			const durableRows = (): ReturnType<Page['locator']> => page!.locator('[data-item^="session:"] > .ash-sessions-list-item');
 			await expect(durableRows()).toHaveCount(1);
 			await client.request(APP_SERVER_METHODS['session/request'], { commandId: 'lifecycle-archive', sessionId: created.sessionId, request: { type: 'archive' } });
 			await expect.poll(async () => (await readCatalog())?.status).toBe('archived');
@@ -203,6 +207,7 @@ test('Agents title bar replaces the first-message preview and /recap saves a con
 		const page = await workbench.openAgentsWindow(target.kind);
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await page.locator('[data-action-id="sessions.newSession"] button').click();
+		await chooseWorkspaceProject(page, testWorkspace.directory);
 		const active = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 		const editor = new Editor(active);
 		await editor.waitForEditorFocus();

@@ -1,14 +1,27 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { join, resolve } from 'node:path';
 import { developmentAshPackagePath } from '../../../../build/desktop/runtimeStore.js';
 import { createTestEnvironment } from '../../../automation/testEnvironment.js';
 import type { PlaywrightApplication } from '../../../automation/playwrightDriver.js';
 import type { WebLaunchResult } from '../../../automation/playwrightWeb.js';
+import type { Workbench } from '../../../automation/workbench.js';
 import { AppServerProtocolClient } from '../../../../src/ash/platform/agentHost/browser/appServerProtocolClient.js';
 import { ChildProcessJsonlTransport } from '../../../../src/ash/platform/agentHost/node/childProcessJsonlTransport.js';
 import { createAppServerDaemonLauncher } from '../../../../src/ash/platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
 import { decodeWebSessionInfo } from '../../../../.build/protocol/typescript/WebProtocolDecoder.js';
 import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../../../../src/ash/platform/agentHost/common/appServerTransport.js';
+
+export async function enableFixtureModel(workbench: Workbench, model: { provider: string; model: string; }, locale: string): Promise<void> {
+	await workbench.settingsEditor.openUserSettingsUI();
+	await workbench.settingsEditor.selectGroup('agents');
+	await workbench.settingsEditor.selectCategory('models');
+	const declarations = workbench.page.locator(`[data-provider-id="${model.provider}"] .ash-models-custom-declarations`);
+	await declarations.locator('summary').click();
+	const enabled = declarations.getByRole('switch', { name: `${locale === 'zh-CN' ? '启用' : 'Enable'} ${model.model}`, exact: true });
+	if (!await enabled.isChecked()) await enabled.press('Space');
+	await expect(enabled).toBeChecked();
+	await workbench.page.locator('.ash-modal-editor-close').click();
+}
 
 // Each scenario shares its product's real profile daemon. This extra connection
 // seeds durable facts through the public API and is released before fixture cleanup.

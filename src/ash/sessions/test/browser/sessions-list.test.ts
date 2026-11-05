@@ -223,14 +223,16 @@ test('SessionsList updates passive status without changing row identity or selec
 	Object.defineProperties(viewport, { clientHeight: { value: 80 }, scrollHeight: { value: 160 } });
 	viewport.scrollTop = 37;
 	viewport.dispatchEvent(new dom.window.Event('scroll'));
-	assert.equal(button.querySelector('.ash-sessions-list-management')?.textContent, 'Working');
+	assert.equal(button.textContent, 'Background session');
+	assert.equal(button.parentElement?.querySelector('[aria-live="polite"]')?.textContent, 'Working');
 	assert.equal(button.hasAttribute('title'), false);
 	assert.equal((summaries.get(button) as HTMLElement).children[1].textContent, 'Working');
 
 	session = { ...session, management: { status: 'needsInput', statusChangedAtUnixMs: 20 } };
 	changes.fire();
 	assert.equal(list.domNode.querySelector('.ash-sessions-list-item'), button);
-	assert.equal(button.querySelector('.ash-sessions-list-management')?.textContent, 'Needs input');
+	assert.equal(button.textContent, 'Background session');
+	assert.equal(button.parentElement?.querySelector('[aria-live="polite"]')?.textContent, 'Needs input');
 	assert.equal((summaries.get(button) as HTMLElement).children[1].textContent, 'Needs input');
 	assert.equal(button.getAttribute('aria-label'), 'Background session. Needs input. fixture/repo #7 · Synthetic PR · Open · Checks failed');
 	assert.equal(button.querySelector('[data-ash-icon-id="git-pull-request-error"]')?.getAttribute('aria-hidden'), 'true');
