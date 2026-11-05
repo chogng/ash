@@ -111,6 +111,8 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 				return {
 					id: `chatgpt:${id}`,
 					title, pinned,
+					createdAt: conversation.createdAt,
+					updatedAt: conversation.updatedAt,
 					projectId: currentProject,
 					selected: selected && showSelection,
 					status: state.loading?.kind === 'conversation' && state.loading.id === id ? this.loadingStatus

@@ -30,6 +30,56 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
+		test(`Chat sorts its conversation rows from the empty Projects header (${locale})`, async () => {
+			const { page } = browserTests;
+			const chinese = locale === 'zh-CN';
+			await mockChatGPTRequests(page);
+			await page.route('**/service/backend-api/conversations?*', route => route.fulfill({
+				json: {
+					items: [
+						{ id: 'echo', title: 'Echo', create_time: '2026-01-03T00:00:00Z', update_time: '2026-01-04T00:00:00Z' },
+						{ id: 'zulu', title: 'Zulu', create_time: '2026-01-02T00:00:00Z', update_time: '2026-01-03T00:00:00Z' },
+						{ id: 'alpha', title: 'Alpha', create_time: Date.UTC(2026, 0, 1) / 1000, update_time: '2026-01-02T00:00:00Z' },
+					], total: 3
+				},
+			}));
+			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${chinese ? 'hcDark' : 'light'}`);
+			const list = page.locator('.ash-chat-navigation-list');
+			const projects = list.locator('[data-section="projects"]');
+			const toolbar = projects.getByRole('toolbar');
+			const sort = toolbar.getByRole('button', { name: chinese ? '排序方式' : 'Sort By', exact: true });
+			const add = toolbar.getByRole('button', { name: chinese ? '新建分组…' : 'New group…', exact: true });
+			const rows = list.locator('[data-parent-section="recent"] .ash-chat-navigation-item');
+			await expect(rows).toHaveText(['Echo', 'Zulu', 'Alpha']);
+			await expect(projects.getByRole('heading')).toHaveText(chinese ? '项目' : 'Projects');
+			await expect(projects.locator('.ash-sessions-list-section-toggle')).toHaveCount(0);
+			await expect(toolbar.getByRole('button')).toHaveCount(2);
+			await projects.getByRole('heading').hover();
+			const background = await projects.evaluate(node => getComputedStyle(node).backgroundColor);
+			expect(background).not.toBe('rgba(0, 0, 0, 0)');
+			await add.hover();
+			await expect(projects).toHaveCSS('background-color', background);
+			await expect(add).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await sort.focus();
+			await sort.press('ArrowRight');
+			await expect(add).toBeFocused();
+			await add.press('ArrowLeft');
+			await expect(sort).toBeFocused();
+			const choose = async (name: string) => {
+				await sort.press('Enter');
+				await page.getByRole('menuitemradio', { name, exact: true }).click();
+			};
+			await choose(chinese ? '名称' : 'Name');
+			await expect(rows).toHaveText(['Alpha', 'Echo', 'Zulu']);
+			await choose(chinese ? '创建日期' : 'Date Created');
+			await expect(rows).toHaveText(['Echo', 'Zulu', 'Alpha']);
+			await choose(chinese ? '升序' : 'Ascending');
+			await expect(rows).toHaveText(['Alpha', 'Zulu', 'Echo']);
+			await sort.press('Enter');
+			await page.keyboard.press('Escape');
+			await expect(sort).toBeFocused();
+		});
+
 		test(`ChatGPT history group sizing waits for its detached sidebar to mount (${locale})`, async () => {
 			const { page } = browserTests;
 			await mockChatGPTRequests(page);

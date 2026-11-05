@@ -9,7 +9,7 @@ import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import type { Icon } from '../../../../base/common/icon.js';
 import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { autorun } from '../../../../base/common/observable.js';
+import { autorun, observableFromEvent } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IProjectsService } from '../../projects/browser/projectsService.js';
 import { localize } from '../../../../nls.js';
@@ -27,8 +27,9 @@ import { defaultProgressBarStyles } from '../../../../platform/theme/browser/def
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { PaneComposite, type PaneCompositeOptions } from '../../../../workbench/browser/panecomposite.js';
 import { SessionLeadingIcon } from '../../../browser/ui/sessionLeadingIcon.js';
+import { ISessionsListModelService } from '../../../services/sessions/browser/sessionsListModelService.js';
 import { getProjectSessionRows, groupChatList, IChatListCatalog, type ChatListEntry, type ChatListGroup, type ChatListSnapshot } from './chatListModel.js';
-import { sessionListProjectActions, sessionProjectOrganization, SessionListRowRenderer, SessionListSection, SessionsListTree, type SessionListOrganization } from '../../sessions/browser/views/sessionsList.js';
+import { sessionListProjectActions, sessionProjectOrganization, SessionListRowRenderer, SessionListSection, SessionsListToolbar, SessionsListTree, type SessionListOrganization } from '../../sessions/browser/views/sessionsList.js';
 import '../../../../base/browser/ui/button/button.css';
 import './media/chatNavigationView.css';
 
@@ -56,6 +57,8 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 		@IChatListCatalog catalog: IChatListCatalog,
 		@IProjectsService projects: IProjectsService,
 		@IProjectService projectService: IProjectService,
+		@ISessionsListModelService listModel: ISessionsListModelService,
+		@IContextMenuService contextMenus: IContextMenuService,
 	) {
 		super(parent, {
 			...options, paneLayout: 'content', stateScope: StorageScope.PROFILE, mergeViewWithContainerWhenSingleView: false,
@@ -80,6 +83,7 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 		scrollable.element.classList.add('ash-chat-navigation-scrollable');
 		const list = h(document, 'div', { className: 'ash-chat-navigation-list' });
 		scrollable.contentElement.append(list);
+		const listToolbar = this._register(new SessionsListToolbar(list, menus, contextMenus, notifications, listModel, this.scopedContextKeyService));
 		const conversationsLabel = localize('sessions.chatList.conversations', 'Conversations');
 		const tree = this._register(new SessionsListTree(list, conversationsLabel, configuration, 'external', {
 			organization: element => this.rows.get(element.dataset.item ?? '')?.organization,
@@ -251,12 +255,27 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 				for (const row of rows) grouped.add(row.id);
 				groups.splice(recent ? groups.indexOf(recent) : groups.length, 0, { key: `group:${group.sectionId}`, title: group.name, rows });
 			}
-			if (otherProjects.length) groups.splice(groups[0]?.key === 'pinned' ? 1 : 0, 0,
+			groups.splice(groups[0]?.key === 'pinned' ? 1 : 0, 0,
 				{ key: 'projects', title: localize('projects.title', 'Projects'), rows: [] });
 			const usedProjectRows = new Set<string>();
 			const usedRows = new Set<string>();
 			const usedSections = new Set<string>();
 			const idleProjects: { row: HTMLElement; load: () => void; }[] = [];
+			const { sortMode, sortDirection } = listModel;
+			const sortSign = sortDirection === 'ascending' ? 1 : -1;
+			const sortRows = (rows: readonly ChatListEntry[]): readonly ChatListEntry[] => {
+				if (sortMode === 'name') {
+					return [...rows].sort((left, right) => sortSign * left.title.localeCompare(right.title, undefined, { numeric: true }));
+				}
+				const time = (row: ChatListEntry) => sortMode === 'created' ? row.createdAt : row.updatedAt ?? row.createdAt;
+				// Preserve catalog order for records that do not carry the requested date.
+				const dated = rows.flatMap(row => {
+					const timestamp = time(row);
+					return timestamp === undefined ? [] : [{ row, timestamp }];
+				}).sort((left, right) => sortSign * (left.timestamp - right.timestamp));
+				let index = 0;
+				return rows.map(row => time(row) === undefined ? row : dated[index++]!.row);
+			};
 			const chatNode = (entry: ChatListEntry, group: string, parentProject?: string): ObjectTreeElement<HTMLElement> => {
 				// A conversation can be pinned independently and can belong to more than one local project.
 				const rowKey = parentProject ? JSON.stringify([`project:${parentProject}`, entry.id]) : entry.id;
@@ -300,7 +319,7 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 				row.element.dataset.parentSection = group;
 				row.element.dataset.projectId = project.key;
 				row.update(project.title, collapsed);
-				const nodes = project.rows.map(entry => chatNode(entry, group, project.key));
+				const nodes = sortRows(project.rows).map(entry => chatNode(entry, group, project.key));
 				const current = membership.get(project.key);
 				const history = project.project?.history;
 				if (history?.state === 'idle' && !collapsed) idleProjects.push({ row: row.element, load: history.load });
@@ -320,11 +339,11 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			};
 			const children = groups.map(group => {
 				const { key } = group;
-				const rows = group.rows.filter(entry => key !== 'recent' || !projectEntryIds.has(entry.id) && !grouped.has(entry.id))
+				const rows = sortRows(group.rows.filter(entry => key !== 'recent' || !projectEntryIds.has(entry.id) && !grouped.has(entry.id)))
 					.map(entry => chatNode(entry, key));
 				if (key === 'pinned') rows.push(...pinnedProjects.map(project => projectNode(project, key)));
 				if (key === 'projects') rows.push(...otherProjects.map(project => projectNode(project, key)));
-				if (!rows.length && key !== 'recent' && !key.startsWith('group:')) return undefined;
+				if (!rows.length && key !== 'projects' && key !== 'recent' && !key.startsWith('group:')) return undefined;
 				usedSections.add(key);
 				let section = this.sections.get(key);
 				if (!section) {
@@ -332,12 +351,14 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 						collapsed => tree.setSectionCollapsed(key, collapsed)));
 					section.domNode.classList.add('ash-chat-navigation-group');
 					section.domNode.dataset.group = key;
+					if (key === 'projects') section.domNode.append(listToolbar.element);
 				}
 				section.domNode.dataset.groupDropTarget = String(key.startsWith('group:'));
 				section.update(group.title, rows.map(row => row.element));
+				const collapsible = key !== 'projects' || rows.length > 0;
 				return {
-					element: section.domNode, children: rows, collapsible: true,
-					collapsed: storage.getBoolean(collapseKey(key), StorageScope.PROFILE, false),
+					element: section.domNode, children: rows, collapsible,
+					collapsed: collapsible && storage.getBoolean(collapseKey(key), StorageScope.PROFILE, false),
 				};
 			}).filter(node => node !== undefined);
 			for (const [key] of projectRows) {
@@ -382,14 +403,18 @@ export class ChatNavigationViewPaneContainer extends PaneComposite {
 			scrollable.layout();
 			if (focusedId && hadFocus && !root.contains(getActiveElement(document))) { focusConversation(focusedId, true, focusedRow?.dataset.conversationId); }
 			if (focusedGroup && !root.contains(getActiveElement(document))) {
-				this.sections.get(focusedGroup)?.button.focus({ preventScroll: true });
+				if (focused && root.contains(focused)) focused.focus({ preventScroll: true });
+				else if (focusedGroup === 'projects' && !this.sections.get(focusedGroup)?.button.isConnected) listToolbar.focus();
+				else this.sections.get(focusedGroup)?.button.focus({ preventScroll: true });
 			}
 			scrollable.scrollTo(0, top);
 			scheduleLoad();
 		};
 		const snapshotsNow = () => sources.map(source => source.snapshot.get());
+		const sortPreference = observableFromEvent(this, listModel.onDidChange, () => `${listModel.sortMode}:${listModel.sortDirection}`);
 		this._register(autorun(reader => {
 			projects.state.read(reader);
+			sortPreference.read(reader);
 			render(sources.map(source => source.snapshot.read(reader)));
 		}));
 		this._register(storage.onDidChangeValue(event => {

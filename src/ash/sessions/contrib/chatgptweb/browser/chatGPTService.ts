@@ -406,8 +406,12 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			for (const item of page.items) {
 				const existing = items.get(item.id);
 				if (existing) {
-					if (existing === previousItems.get(item.id) && existing.projectId !== projectId) {
-						items.set(item.id, { ...existing, projectId });
+					if (existing === previousItems.get(item.id)) {
+						items.set(item.id, {
+							...existing, projectId,
+							createdAt: existing.createdAt ?? item.createdAt,
+							updatedAt: existing.updatedAt ?? item.updatedAt,
+						});
 					}
 				} else if (!previousItems.has(item.id) && !this.outbox?.isDeleted(item.id)) {
 					// A project page augments the catalog without advancing recent history.
@@ -1265,7 +1269,12 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				for (const item of pins.value) {
 					const listed = items.get(item.id);
 					const previous = listed ?? this.model.get().conversations.find(candidate => candidate.id === item.id);
-					items.set(item.id, { ...item, projectId: item.projectId ?? previous?.projectId, ...(previous?.projectOnly ? { projectOnly: true } : {}) });
+					items.set(item.id, {
+						...item, projectId: item.projectId ?? previous?.projectId,
+						createdAt: item.createdAt ?? previous?.createdAt,
+						updatedAt: listed?.updatedAt ?? item.updatedAt ?? previous?.updatedAt,
+						...(previous?.projectOnly ? { projectOnly: true } : {}),
+					});
 				}
 			}
 			const hidden = await this.reconcilePendingCreations(items, signal);
@@ -1512,12 +1521,17 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	}
 
 	/** An accepted turn already supplies its canonical title and ID; do not refetch every recent chat. */
-	private rememberHistory(history: Pick<ChatGPTHistory, 'id' | 'title'>): void {
+	private rememberHistory(history: Pick<ChatGPTHistory, 'id' | 'title'>, acceptedAt?: number): void {
 		if (this.outbox?.isDeleted(history.id)) { return; }
 		const state = this.model.get();
 		const previous = state.conversations.find(item => item.id === history.id);
 		if (!previous?.projectOnly && !this.recentIds.has(history.id)) { this.recentIds.add(history.id); this.recentOffset++; }
-		this.updateCatalog({ conversations: [{ ...previous, id: history.id, title: history.title }, ...state.conversations.filter(item => item.id !== history.id)] });
+		const entry = {
+			...previous, id: history.id, title: history.title,
+			createdAt: previous ? previous.createdAt : acceptedAt,
+			updatedAt: acceptedAt ?? previous?.updatedAt,
+		};
+		this.updateCatalog({ conversations: [entry, ...state.conversations.filter(item => item.id !== history.id)] });
 	}
 
 	public async loadMore(): Promise<void> {
@@ -1530,7 +1544,11 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			const items = new Map(this.model.get().conversations.filter(item => !item.local).map(item => [item.id, item]));
 			for (const item of result.items) {
 				const previous = items.get(item.id);
-				items.set(item.id, { ...item, pinned: item.pinned || previous?.pinned === true });
+				items.set(item.id, {
+					...item, pinned: item.pinned || previous?.pinned === true,
+					createdAt: item.createdAt ?? previous?.createdAt,
+					updatedAt: item.updatedAt ?? previous?.updatedAt,
+				});
 			}
 			const hidden = await this.reconcilePendingCreations(items, signal);
 			if (generation !== this.generation) { return; }
@@ -1608,9 +1626,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			const currentId = current.conversationId;
 			if (currentId && !controller.signal.aborted && this.stream === controller) {
 				this.persistHistory({ id: currentId, title: current.title, parentId: current.parentId, messages: current.messages });
-				if (!current.conversations.some(item => item.id === currentId)) {
-					this.rememberHistory({ id: currentId, title: current.title });
-				}
+				this.rememberHistory({ id: currentId, title: current.title }, Date.now());
 				try {
 					const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]);
 					const history = await this.client.history(currentId, signal);

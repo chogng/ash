@@ -4,8 +4,7 @@ import { ISessionsListModelService, type ISessionsListTreeNode, type SessionGrou
 import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
-import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
-import { WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
+import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
 import '../media/sessionsList.css';
@@ -29,9 +28,8 @@ import { sessionManagementLabel } from '../../../../browser/sessionManagementLab
 import type { ISession, SessionManagementInfo } from '../../../../services/sessions/common/session.js';
 import type { ThemeIcon } from '../../../../../base/common/themables.js';
 import { colorCssVariable } from '../../../../../platform/theme/common/colorUtils.js';
-import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { autorun } from '../../../../../base/common/observable.js';
-import { IMenuService, type MenuActionGroup } from '../../../../../platform/actions/common/actions.js';
+import { IMenuService, SubmenuItemAction } from '../../../../../platform/actions/common/actions.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
@@ -44,7 +42,6 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { Menus } from '../../../../browser/menus.js';
-import { ActionBar } from '../../../../../base/browser/ui/actionbar/actionbar.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
 import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
@@ -237,6 +234,7 @@ export class SessionsList extends DomWidget {
 	private readonly rowMenuContext = this._register(new MutableDisposable<IScopedContextKeyService>());
 	readonly domNode: HTMLElement;
 	private readonly list: HTMLDivElement;
+	private readonly listActions: HTMLElement;
 	private readonly items = this._register(new DisposableMap<string, SessionListItem>());
 	private readonly sections = this._register(new DisposableMap<string, SessionListSection>());
 	private projects: readonly Project[] = [];
@@ -247,9 +245,6 @@ export class SessionsList extends DomWidget {
 	private projectsLoading = false;
 	private readonly empty: HTMLParagraphElement;
 	private readonly projectError: HTMLButtonElement;
-	private readonly navigation: HTMLElement;
-	private readonly navigationButtons = this._register(new DisposableMap<string, Button>());
-	private readonly navigationActions = new Map<string, MenuActionGroup[1][number]>();
 
 	public get element(): HTMLElement { return this.domNode; }
 
@@ -281,11 +276,6 @@ export class SessionsList extends DomWidget {
 		this.domNode.className = 'ash-sessions-list';
 		this.domNode.tabIndex = -1;
 		this.domNode.dataset.mode = mode;
-		this.navigation = h(ownerDocument, 'nav', { className: 'ash-sessions-list-navigation', attributes: { 'aria-label': localize('sessions.list.navigation', 'Sessions navigation') } });
-		const header = h(ownerDocument, 'header', { className: 'ash-sessions-list-header' });
-		const heading = h(ownerDocument, 'h2', { className: 'ash-sessions-list-title' });
-		heading.textContent = title;
-		header.append(heading);
 		const config = configuration ?? this._register(new InMemoryConfigurationService());
 		// Embedded Sessions shares Chat's viewport with the conversation history.
 		this.tree = this._register(new SessionsListTree(this.domNode, title, config, this.entry ? 'external' : 'managed', {
@@ -332,12 +322,13 @@ export class SessionsList extends DomWidget {
 		this.projectError.type = 'button';
 		this.projectError.textContent = localize('sessions.list.projectsRetry', 'Could not load projects. Retry');
 		this._register(addDisposableListener(this.projectError, 'click', () => { void this.loadProjects(); }));
-		this.domNode.append(this.navigation, header, this.list);
+		this.domNode.append(this.list);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener(this.list, 'keydown', event => {
 			if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
-			const buttons = [...this.list.querySelectorAll<HTMLButtonElement>('button:not(.ash-session-leading-icon button)')].filter(button => !button.closest('[hidden]'));
+			const buttons = [...this.list.querySelectorAll<HTMLButtonElement>('button:not(.ash-session-leading-icon button, .ash-sessions-list-more button)')]
+				.filter(button => !button.closest('[hidden]'));
 			const index = buttons.indexOf(ownerDocument.activeElement as HTMLButtonElement);
 			if (index < 0) return;
 			event.preventDefault();
@@ -367,56 +358,11 @@ export class SessionsList extends DomWidget {
 		this._register(viewService.onDidChange(() => this.render()));
 		this._register(github.onDidChange(() => this.render()));
 		this._register(groups.onDidChange(() => this.render()));
-		const menu = this._register(menus.createMenu(Menus.SidebarSessionsHeader));
-
-		const moreLabel = localize('sessions.list.moreActions', 'More Sessions Actions');
-		const createGroupLabel = localize('sessions.list.newGroup', 'New group…');
-		const headerActions = this._register(new ActionBar(header, {
-			ariaLabel: localize('sessions.list.headerActions', 'Sessions List Actions'),
-			actions: [
-				{ id: 'sessions.list.headerMore', label: moreLabel, tooltip: moreLabel, icon: Lxicon.listFilter, enabled: true, run: () => { } },
-				{
-					id: 'sessionsViewPane.createGroup', label: createGroupLabel, tooltip: createGroupLabel, icon: Lxicon.add, enabled: true,
-					run: () => this.commands.executeCommand('sessionsViewPane.createGroup').catch(error => this.notifications.error(String(error))),
-				},
-			],
-			actionViewItemOptions: { iconOnly: true, buttonStyles: defaultButtonStyles, buttonPresentation: 'quiet' },
-			actionViewItemProvider: (action, options) => action.id === 'sessions.list.headerMore' ? new DropdownMenuActionViewItem(
-				action,
-				() => this.getHeaderActions(menu.getActions()),
-				{
-					showContextMenu: delegate => this.contextMenus.showContextMenu({
-						...delegate, getMenuClassName: () => 'ash-sessions-list-menu',
-						getCheckedActionsRepresentation: item => item.id.startsWith('sessions.list.groupBy.') || item.id.startsWith('sessions.list.sort') ? 'radio' : 'checkbox',
-					})
-				},
-				options,
-			) : undefined,
-		}));
-		headerActions.domNode.classList.add('ash-sessions-list-more');
-		const updateNavigation = (): void => {
-			const actions = this.entry ? [] : menu.getActions().filter(([group]) => group === 'navigation').flatMap(([, actions]) => actions);
-			this.navigationActions.clear();
-			for (const action of actions) {
-				this.navigationActions.set(action.id, action);
-				let button = this.navigationButtons.get(action.id);
-				if (!button) {
-					button = this.navigationButtons.set(action.id, new Button(this.navigation, {
-						...defaultButtonStyles,
-						label: action.label,
-						presentation: 'quiet',
-						onClick: () => { void Promise.resolve().then(() => this.navigationActions.get(action.id)?.run()).catch(error => notifications.error(String(error))); },
-					}));
-				}
-				button.label = action.label;
-				button.enabled = action.enabled;
-				button.domNode.setAttribute('aria-current', action.checked ? 'page' : 'false');
-			}
-			for (const id of this.navigationButtons.keys()) if (!this.navigationActions.has(id)) this.navigationButtons.deleteAndDispose(id);
-			this.navigation.hidden = actions.length === 0;
-		};
-		this._register(menu.onDidChange(updateNavigation));
-		updateNavigation();
+		const menuContext = contextKeys && this._register(contextKeys.createScoped(this.domNode));
+		this.listActions = this._register(new SessionsListToolbar(
+			this.domNode, menus, contextMenus, notifications, listModel, menuContext,
+			actions => this.getFilterActions(actions),
+		)).element;
 		this._register(autorun(reader => {
 			customViews.activeCustomView.read(reader);
 			this.render();
@@ -433,15 +379,11 @@ export class SessionsList extends DomWidget {
 		}).catch(error => this.notifications.error(String(error)));
 	}
 
-	private getHeaderActions(contributed: readonly MenuActionGroup[]): readonly IAction[] {
+	private getFilterActions(contributed: readonly IAction[]): readonly IAction[] {
 		const model = this.listModel;
 		const choice = (id: string, label: string, checked: boolean, run: () => void): IAction => ({ id, label, tooltip: '', enabled: true, checked, run });
 		const group = (value: SessionGrouping, label: string): IAction =>
 			choice(`sessions.list.groupBy.${value}`, label, model.grouping === value, () => model.setGrouping(value));
-		const sort = (value: SessionSortMode, label: string): IAction =>
-			choice(`sessions.list.sortBy.${value}`, label, model.sortMode === value, () => model.setSortMode(value));
-		const direction = (value: SessionSortDirection, label: string): IAction =>
-			choice(`sessions.list.sortDirection.${value}`, label, model.sortDirection === value, () => model.setSortDirection(value));
 		const automation = model.automationSessionsMode;
 		return Separator.join([
 			new SubmenuAction('sessions.list.groupBy', localize('sessions.list.groupBy', 'Group By'), [
@@ -452,14 +394,7 @@ export class SessionsList extends DomWidget {
 				new Separator(),
 				group('none', localize('sessions.list.groupNone', 'None')),
 			]),
-			new SubmenuAction('sessions.list.sortBy', localize('sessions.list.sortBy', 'Sort By'), [
-				sort('name', localize('sessions.list.sortName', 'Name')),
-				sort('updated', localize('sessions.list.sortUpdated', 'Last Updated')),
-				sort('created', localize('sessions.list.sortCreated', 'Date Created')),
-				new Separator(),
-				direction('ascending', localize('sessions.list.sortAscending', 'Ascending')),
-				direction('descending', localize('sessions.list.sortDescending', 'Descending')),
-			]),
+			new SubmenuAction('sessions.list.sortBy', localize('sessions.list.sortBy', 'Sort By'), sessionSortActions(model)),
 			new SubmenuAction('sessions.list.show', localize('sessions.list.show', 'Show'), [
 				choice('sessions.list.showComparisonGroups', localize('sessions.list.showComparisonGroups', 'Comparison Groups'),
 					model.showComparisonGroups, () => model.setShowComparisonGroups(!model.showComparisonGroups)),
@@ -475,12 +410,10 @@ export class SessionsList extends DomWidget {
 			tooltip: '',
 			enabled: true,
 			run: () => this.search.open(),
-		}], ...contributed.filter(([group]) => group !== 'navigation').map(([, actions]) => [...actions]));
+		}], [...contributed]);
 	}
 
 	focus(): void {
-		const activeNavigation = this.navigation.querySelector<HTMLButtonElement>('[aria-current="page"]');
-		if (activeNavigation) { activeNavigation.focus(); return; }
 		const firstItem = this.list.querySelector<HTMLButtonElement>('button:not(.ash-session-leading-icon button)');
 		(firstItem ?? this.domNode).focus();
 	}
@@ -489,8 +422,7 @@ export class SessionsList extends DomWidget {
 		const active = this.domNode.ownerDocument.activeElement;
 		const item = [...this.items].find(([, item]) => item.domNode.contains(active));
 		const section = [...this.sections].find(([, section]) => section.button === active);
-		const navigation = [...this.navigationButtons].find(([, button]) => button.domNode === active);
-		return { top: this.tree.scrollTop, focus: navigation ? `navigation:${navigation[0]}` : section ? `section:${section[0]}` : item?.[0] };
+		return { top: this.tree.scrollTop, focus: section ? `section:${section[0]}` : item?.[0] };
 	}
 
 	public closeIconPickers(): void {
@@ -500,8 +432,7 @@ export class SessionsList extends DomWidget {
 	public restoreViewState(state: ReturnType<SessionsList['getViewState']>): void {
 		this.render();
 		this.tree.scrollTop = state.top;
-		if (state.focus?.startsWith('navigation:')) this.navigationButtons.get(state.focus.slice('navigation:'.length))?.focus();
-		else if (state.focus) {
+		if (state.focus) {
 			let row = state.focus.startsWith('section:')
 				? this.sections.get(state.focus.slice('section:'.length))?.domNode
 				: this.items.get(state.focus)?.domNode;
@@ -696,7 +627,7 @@ export class SessionsList extends DomWidget {
 			const key = element.dataset.section;
 			if (key !== undefined) {
 				return [{
-					id: key, kind: 'section', label: this.sections.get(key)!.title,
+					id: key, kind: element.dataset.projectId === undefined ? 'section' : 'project', label: this.sections.get(key)!.title,
 					collapsed: this.tree.isCollapsed(SessionsListTree.id(element)) ?? false, children,
 				}];
 			}
@@ -908,11 +839,17 @@ export class SessionsList extends DomWidget {
 			hasProjectConversations ||= members.length > 0;
 			const drafts = projectDrafts.get(project.id) ?? [];
 			if (!members.length && !drafts.length && !this.search.matches(project.name)) continue;
-			const item = itemFor(`project:${project.id}`, Lxicon.projects);
-			item.domNode.dataset.projectId = project.id;
-			item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
-			item.children = [...members, ...drafts];
-			projects.push(item.domNode);
+			const key = `project:${project.id}`;
+			if (this.mode === 'code') {
+				const section = sectionFor(key, project.name, [...members, ...drafts], true);
+				section.dataset.projectId = project.id;
+				projects.push(section);
+			} else {
+				const item = itemFor(key, Lxicon.projects);
+				item.domNode.dataset.projectId = project.id;
+				item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
+				projects.push(item.domNode);
+			}
 		}
 		if (this.projectsFailed && !this.search.hasQuery) projects.push(this.projectError);
 		for (const group of this.groups.groups) {
@@ -969,7 +906,9 @@ export class SessionsList extends DomWidget {
 		if (showEmpty && emptyStatus) { this.empty.textContent = emptyStatus; }
 		const ordered: HTMLElement[] = [];
 		if (pinned.length) ordered.push(sectionFor('pinned', localize('sessions.list.pinned', 'Pinned'), pinned));
-		if (projects.length) ordered.push(sectionFor('projects', localize('projects.title', 'Projects'), projects));
+		const projectsSection = sectionFor('projects', localize('projects.title', 'Projects'), projects);
+		if (this.listActions.parentElement !== projectsSection) projectsSection.append(this.listActions);
+		ordered.push(projectsSection);
 		ordered.push(...reorderChildren(chatGroups, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId'));
 		if (orderedRecent.length || !this.search.hasQuery && (pinned.length || hasProjectConversations)) {
 			ordered.push(sectionFor('recent', this.mode === 'chat' ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents'), orderedRecent));
@@ -986,9 +925,14 @@ export class SessionsList extends DomWidget {
 			const section = key === undefined ? undefined : this.sections.get(key);
 			const item = this.items.get(element.dataset.item ?? '');
 			const children: ObjectTreeElement<HTMLElement>[] = [];
-			const branch = { element, children, collapsible: !!section, collapsed: !!section && !this.search.hasQuery && this.storage.getBoolean(this.collapseKey(key!), StorageScope.PROFILE, false) };
+			const projectSection = key === 'projects' || element.dataset.projectId !== undefined;
+			const collapsible = section !== undefined && (!projectSection || section.children.length > 0);
+			const collapsed = key !== undefined && collapsible && !this.search.hasQuery
+				&& this.storage.getBoolean(this.collapseKey(key), StorageScope.PROFILE, false);
+			const branch = { element, children, collapsible, collapsed };
 			this.parents.set(element, parent);
-			const projectId = parent?.element.dataset.projectId ?? parent?.element.dataset.parentProjectId;
+			const parentProject = parent?.element.dataset.projectId;
+			const projectId = parentProject ?? parent?.element.dataset.parentProjectId;
 			if (projectId) element.dataset.parentProjectId = projectId;
 			else delete element.dataset.parentProjectId;
 			const groupDropTarget = parent?.element.dataset.groupDropTarget;
@@ -996,8 +940,10 @@ export class SessionsList extends DomWidget {
 				if (groupDropTarget) element.dataset.groupDropTarget = groupDropTarget;
 				else delete element.dataset.groupDropTarget;
 			}
-			if (parent) element.dataset.parentSection = parent.element.dataset.section ?? parent.element.dataset.parentSection ?? '';
-			else delete element.dataset.parentSection;
+			if (parent) {
+				const { section, parentSection } = parent.element.dataset;
+				element.dataset.parentSection = (parentProject === undefined ? section : undefined) ?? parentSection ?? '';
+			} else delete element.dataset.parentSection;
 			for (const child of section?.children ?? item?.children ?? []) children.push(project(child, branch));
 			return branch;
 		};
@@ -1045,6 +991,63 @@ function reorderChildren(children: readonly HTMLElement[], order: (ids: readonly
 	const ordered = order([...movable.keys()]).map(id => movable.get(id)!);
 	let next = 0;
 	return children.map(child => child.dataset[attribute] ? ordered[next++]! : child);
+}
+
+function sessionSortActions(model: ISessionsListModelService): IAction[] {
+	const sort = (value: SessionSortMode, label: string): IAction => ({
+		id: `sessions.list.sortBy.${value}`, label, tooltip: '', enabled: true,
+		checked: model.sortMode === value, run: () => model.setSortMode(value),
+	});
+	const direction = (value: SessionSortDirection, label: string): IAction => ({
+		id: `sessions.list.sortDirection.${value}`, label, tooltip: '', enabled: true,
+		checked: model.sortDirection === value, run: () => model.setSortDirection(value),
+	});
+	return [
+		sort('name', localize('sessions.list.sortName', 'Name')),
+		sort('updated', localize('sessions.list.sortUpdated', 'Last Updated')),
+		sort('created', localize('sessions.list.sortCreated', 'Date Created')),
+		new Separator(),
+		direction('ascending', localize('sessions.list.sortAscending', 'Ascending')),
+		direction('descending', localize('sessions.list.sortDescending', 'Descending')),
+	];
+}
+
+/** Shared Projects header controls for the conversation catalogs. */
+export class SessionsListToolbar extends MenuWorkbenchToolBar {
+	constructor(container: HTMLElement, menus: IMenuService, contextMenus: IContextMenuService, notifications: INotificationService,
+		model: ISessionsListModelService, contextKeys: IContextKeyService | undefined,
+		getFilterActions?: (contributed: readonly IAction[]) => readonly IAction[]) {
+		const submenu = getFilterActions ? Menus.SessionsViewFilter : Menus.SessionsViewSort;
+		super(container, menus, contextMenus, getFilterActions ? Menus.SidebarSessionsHeader : Menus.ChatSidebarHeader, {
+			ariaLabel: localize('sessions.list.headerActions', 'Sessions List Actions'),
+			contextKeyService: contextKeys,
+			// The popup reads list state even when the submenu has no registered commands.
+			menuOptions: { preserveEmptySubmenus: true },
+			actionViewItemProvider: (action, options) => {
+				if (!(action instanceof SubmenuItemAction) || action.item.submenu !== submenu) return undefined;
+				return new DropdownMenuActionViewItem(
+					{ ...action, icon: Lxicon.listFilter, tooltip: action.label, run: () => action.run() },
+					() => getFilterActions ? getFilterActions(action.actions) : sessionSortActions(model),
+					{
+						showContextMenu: delegate => contextMenus.showContextMenu({
+							...delegate, getMenuClassName: () => 'ash-sessions-list-menu',
+							getCheckedActionsRepresentation: item => item.id.startsWith('sessions.list.groupBy.') || item.id.startsWith('sessions.list.sort') ? 'radio' : 'checkbox',
+						}),
+					},
+					{ ...options, iconOnly: true },
+				);
+			},
+		});
+		this._register(this.actionRunner.onDidRun(({ action, error }) => {
+			if (action.id === 'sessionsViewPane.createGroup' && error !== undefined) notifications.error(toErrorMessage(error));
+		}));
+		this.element.classList.add('ash-sessions-list-more');
+		// Toolbar inputs stay within the header without activating tree rows.
+		this._register(addDisposableListener(this.element, 'click', event => event.stopPropagation()));
+		this._register(addDisposableListener(this.element, 'keydown', event => {
+			if (['Enter', ' ', 'ArrowUp', 'ArrowDown', 'PageUp', 'PageDown'].includes(event.key)) event.stopPropagation();
+		}));
+	}
 }
 
 class SessionListItem extends AbstractDisposable {
@@ -1192,6 +1195,7 @@ export class SessionListSection extends AbstractDisposable {
 	readonly domNode: HTMLElement;
 	readonly button: HTMLButtonElement;
 	children: readonly HTMLElement[] = [];
+	private readonly heading: HTMLElement;
 	private readonly label: HTMLElement;
 	private readonly icon: HTMLElement;
 	private readonly appearanceIcon: HTMLElement;
@@ -1206,15 +1210,15 @@ export class SessionListSection extends AbstractDisposable {
 		this.domNode = h(document, 'section', { className: subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section' });
 		this.domNode.dataset.section = key;
 		sectionRenderers.set(this.domNode, this);
-		const heading = h(document, 'h3');
+		this.heading = h(document, 'h3');
 		this.button = h(document, 'button', { className: 'ash-sessions-list-section-toggle' });
 		this.button.type = 'button';
 		this.icon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
 		this.appearanceIcon = h(document, 'span', { className: 'ash-sessions-list-section-icon' });
 		this.label = h(document, 'span', { className: 'ash-sessions-list-section-label' });
 		this.button.append(...(subgroup ? [this.icon, this.label] : [this.label, this.icon]));
-		heading.append(this.button);
-		this.domNode.append(heading);
+		this.heading.append(this.button);
+		this.domNode.append(this.heading);
 		this.listeners = [
 			addDisposableListener(this.button, 'click', event => { event.stopPropagation(); if (this.open) this.open(); else toggle(); }),
 			addDisposableListener(this.button, 'contextmenu', event => {
@@ -1265,8 +1269,21 @@ export class SessionListSection extends AbstractDisposable {
 		}
 	}
 
-	renderCollapse(collapsed: boolean): void {
-		this.button.setAttribute('aria-expanded', String(!collapsed));
+	renderCollapse(collapsed: boolean, collapsible: boolean): void {
+		if (!collapsible) {
+			if (this.label.parentElement !== this.heading) {
+				this.heading.classList.add('ash-sessions-list-section-static');
+				this.heading.replaceChildren(...(this.subgroup ? [this.icon, this.label] : [this.label]));
+			}
+			if (!this.subgroup) return;
+		} else {
+			if (this.button.parentElement !== this.heading) {
+				this.button.append(...(this.subgroup ? [this.icon, this.label] : [this.label, this.icon]));
+				this.heading.replaceChildren(this.button);
+				this.heading.classList.remove('ash-sessions-list-section-static');
+			}
+			this.button.setAttribute('aria-expanded', String(!collapsed));
+		}
 		const icon = this.subgroup ? collapsed ? Lxicon.folder : Lxicon.folderOpened : collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
 		if (this.icon.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
 			this.icon.replaceChildren();
@@ -1324,7 +1341,7 @@ export class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
 			reuseRows: true,
 			renderElement: element => element,
 			renderTwistie: (element, state) => {
-				if (element.dataset.section !== undefined) sectionRenderers.get(element)?.renderCollapse(!state.expanded);
+				sectionRenderers.get(element)?.renderCollapse(!state.expanded, state.collapsible);
 			},
 		});
 		if (dnd) this._register(dnd);

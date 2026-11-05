@@ -16,6 +16,8 @@ export interface ChatListEntry extends SessionListOrganization {
 	readonly title: string;
 	/** Session catalog identity, when this row represents an Ash session. */
 	readonly sessionId?: string;
+	/** Milliseconds since the Unix epoch, when supplied by the catalog. */
+	readonly createdAt?: number;
 	readonly updatedAt?: number;
 	readonly projectId?: string;
 	readonly selected: boolean;

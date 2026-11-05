@@ -14,7 +14,8 @@ import type { IContextMenuService } from '../../../platform/contextview/browser/
 import type { INotificationService } from '../../../platform/notification/common/notification.js';
 import { observableValue } from '../../../base/common/observable.js';
 import type { ICustomViewService } from '../../services/customView/browser/customViewService.js';
-import type { IMenuService } from '../../../platform/actions/common/actions.js';
+import { MenuService } from '../../../platform/actions/common/menuService.js';
+import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
 import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../nls.js';
 import { sessionManagementLabel } from '../../browser/sessionManagementLabels.js';
@@ -23,7 +24,7 @@ import { URI } from '../../../base/common/uri.js';
 import { computePullRequestIcon } from '../../../workbench/common/chatPullRequest.js';
 import type { IResolvedSessionPullRequest } from '../../contrib/github/common/types.js';
 import assert from 'node:assert/strict';
-import { test } from 'mocha';
+import { suiteTeardown, test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { SubmenuAction, type IAction } from '../../../base/common/actions.js';
 import { Emitter, Event } from '../../../base/common/event.js';
@@ -35,14 +36,17 @@ import type { IHoverService, HoverSetupOptions } from '../../../platform/hover/b
 import type { HoverContent } from '../../../base/browser/ui/hover/hover.js';
 import { getSessionSummaryHoverData } from '../../contrib/sessions/browser/sessionHoverContent.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
+import '../../contrib/sessions/browser/views/sessionsViewActions.js';
 
 
 const listCustomViews = { activeCustomView: observableValue('testCustomView', undefined) } as unknown as ICustomViewService;
-const listMenus = { createMenu: () => ({ getActions: () => [], onDidChange: Event.None, ...toDisposable(() => { }) }) } as unknown as IMenuService;
 const listNotifications = { error: (error: unknown) => { throw error; } } as unknown as INotificationService;
 const emptyGroups = { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService;
 const emptyProjects = { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService;
 const listCommands = { executeCommand: async () => undefined } as unknown as ICommandService;
+const menuContexts = new ContextKeyService();
+const listMenus = new MenuService(listCommands, menuContexts);
+suiteTeardown(() => menuContexts.dispose());
 const listContextMenus = { showContextMenu() { } } as unknown as IContextMenuService;
 
 test('SessionsList keeps session buttons and focus while refreshing', async () => {
@@ -115,8 +119,10 @@ test('SessionsList keeps session buttons and focus while refreshing', async () =
 	untitledSessions = [];
 	changes.fire();
 	list.focus();
-	assert.equal(list.domNode.querySelector('.ash-sessions-list-section'), null);
-	assert.equal(dom.window.document.activeElement, list.domNode);
+	const projects = list.domNode.querySelector('[data-section="projects"]');
+	assert.equal(projects?.querySelector('h3')?.textContent, 'Projects');
+	assert.equal(projects?.querySelector('h3 button'), null);
+	assert.equal(dom.window.document.activeElement, projects?.querySelector('.ash-sessions-list-more button'));
 
 	list.dispose();
 	changes.dispose();

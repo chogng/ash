@@ -31,6 +31,7 @@ import { ChatGPTList } from '../../../src/ash/sessions/contrib/chatgptweb/electr
 import { ASH_CHAT_SELECTED_CONTEXT } from '../../../src/ash/sessions/contrib/chat/common/constants.js';
 import { ChatNavigationViewPaneContainer } from '../../../src/ash/sessions/contrib/chat/browser/chatNavigationView.js';
 import { IChatListCatalog } from '../../../src/ash/sessions/contrib/chat/browser/chatListModel.js';
+import { ISessionsListModelService, SessionsListModelService } from '../../../src/ash/sessions/services/sessions/browser/sessionsListModelService.js';
 import { ReplyChatEditor } from '../../../src/ash/sessions/contrib/chat/browser/replyChatEditor.js';
 import { chatGPTReplyEditor } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTWeb.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
@@ -107,6 +108,7 @@ sessionsRoot.append(document.getElementById('navigation')!, document.getElementB
 document.body.append(sessionsRoot);
 const locale = parameters.get('locale') ?? 'zh-CN';
 if (locale !== 'en') { setNlsMessages(locale, productLanguagePackCatalogs.find(catalog => catalog.locale === locale)!.bundles); }
+await import('../../../src/ash/sessions/contrib/sessions/browser/views/sessionsViewActions.js');
 const resources = new DisposableStore();
 if (parameters.has('dictation')) resources.add(installTestDictationAudio(window));
 const themes = { light: lightColorTheme, dark: darkColorTheme, hcDark: highContrastDarkColorTheme, hcLight: highContrastLightColorTheme };
@@ -242,6 +244,7 @@ window.ashChatGPTIntegration = {
 	setAshChatSelected: selected => ashChatSelected.set(selected),
 };
 services.registerInstance(IChatListCatalog, { sources: [resources.add(services.createInstance(ChatGPTList))] });
+services.registerInstance(ISessionsListModelService, new SessionsListModelService(storage));
 services.registerInstance(IProjectService, { list: async () => [], onDidChange: Event.None } as unknown as IProjectService);
 services.registerInstance(IProjectsService, resources.add(services.createInstance(ProjectsService)));
 widget = resources.add(services.createInstance(ReplyChatEditor, chatGPTReplyEditor));

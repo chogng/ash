@@ -8,6 +8,8 @@ import { SSEParser } from '../../../../base/common/sseParser.js';
 export interface ChatGPTConversation {
 	readonly id: string;
 	readonly title: string;
+	readonly createdAt?: number;
+	readonly updatedAt?: number;
 	readonly pinned?: boolean;
 	readonly projectId?: string;
 	readonly local?: boolean;
@@ -16,6 +18,20 @@ export interface ChatGPTConversation {
 }
 export interface ChatGPTProject { readonly id: string; readonly title: string; }
 export type ChatGPTProjectCursor = { readonly kind: 'project'; readonly value: string; } | { readonly kind: 'recent'; readonly offset: number; };
+
+function conversationTimestamp(value: unknown): number | undefined {
+	const time = typeof value === 'number' ? value * 1000 : typeof value === 'string' ? Date.parse(value) : NaN;
+	return Number.isFinite(time) ? time : undefined;
+}
+
+function conversationTimestamps(item: Record<string, unknown>): Pick<ChatGPTConversation, 'createdAt' | 'updatedAt'> {
+	const createdAt = conversationTimestamp(item.create_time);
+	const updatedAt = conversationTimestamp(item.update_time);
+	return {
+		...(createdAt === undefined ? {} : { createdAt }),
+		...(updatedAt === undefined ? {} : { updatedAt }),
+	};
+}
 
 /** A product model family and its selectable presets from the web model picker. */
 export interface ChatGPTModel {
@@ -106,7 +122,8 @@ export class ChatGPTClient {
 	async conversations(offset: number, signal: AbortSignal): Promise<{ items: readonly ChatGPTConversation[]; hasMore: boolean; nextOffset: number; }> {
 		const value = await this.json(`/conversations?offset=${offset}&limit=50&order=updated&hide_snorlax=false`, signal);
 		if (!isRecord(value) || !Array.isArray(value.items)) { throw this.invalidResponse(); }
-		const items = value.items.flatMap(item => isRecord(item) && typeof item.id === 'string' && typeof item.title === 'string' ? [{ id: item.id, title: item.title, pinned: item.is_starred === true, projectId: typeof item.gizmo_id === 'string' ? item.gizmo_id : undefined }] : []);
+		const items = value.items.flatMap(item => isRecord(item) && typeof item.id === 'string' && typeof item.title === 'string'
+			? [{ id: item.id, title: item.title, ...conversationTimestamps(item), pinned: item.is_starred === true, projectId: typeof item.gizmo_id === 'string' ? item.gizmo_id : undefined }] : []);
 		return { items, nextOffset: offset + value.items.length, hasMore: value.items.length > 0 && (typeof value.total === 'number' ? offset + value.items.length < value.total : value.items.length === 50) };
 	}
 
@@ -116,7 +133,7 @@ export class ChatGPTClient {
 		return value.flatMap(pin => {
 			const item = isRecord(pin) ? pin.item : undefined;
 			return isRecord(item) && typeof item.id === 'string' && typeof item.title === 'string'
-				? [{ id: item.id, title: item.title, pinned: true, projectId: typeof item.gizmo_id === 'string' ? item.gizmo_id : undefined }] : [];
+				? [{ id: item.id, title: item.title, ...conversationTimestamps(item), pinned: true, projectId: typeof item.gizmo_id === 'string' ? item.gizmo_id : undefined }] : [];
 		});
 	}
 
@@ -204,7 +221,7 @@ export class ChatGPTClient {
 		const items = value.items.flatMap(item =>
 			isRecord(item) && typeof item.id === 'string' && typeof item.title === 'string' && item.is_archived !== true
 				&& (item.gizmo_id == null || item.gizmo_id === projectId)
-				? [{ id: item.id, title: item.title, pinned: item.is_starred === true, projectId }] : []);
+				? [{ id: item.id, title: item.title, ...conversationTimestamps(item), pinned: item.is_starred === true, projectId }] : []);
 		return { items, cursor: value.cursor || undefined };
 	}
 

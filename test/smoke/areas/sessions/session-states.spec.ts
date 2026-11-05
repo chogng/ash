@@ -114,7 +114,7 @@ test.describe('Saved conversations shared with the IDE', () => {
 });
 
 for (const locale of ['en', 'zh-CN']) {
-	test(`Code sidebar scrolls sessions under a fixed header in ${locale}`, { tag: ['@electron-app-server'] }, async ({ application, target, workbench, restartWorkbench, testWorkspace }) => {
+	test(`Code sidebar scrolls and restores its position with the Projects toolbar in ${locale}`, { tag: ['@electron-app-server'] }, async ({ application, target, workbench, restartWorkbench, testWorkspace }) => {
 		if (locale === 'zh-CN') {
 			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 			const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
@@ -124,6 +124,9 @@ for (const locale of ['en', 'zh-CN']) {
 		}
 		const { client, close } = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
 		try {
+			await client.request(APP_SERVER_METHODS['project/create'], {
+				commandId: 'sidebar-scroll-project', projectId: 'sidebar-scroll-project', name: 'Sidebar project', description: '', materials: [],
+			});
 			for (let index = 0; index < 28; index++) {
 				await client.request(APP_SERVER_METHODS['session/create'], {
 					commandId: `sidebar-scroll-${index}`, title: `Sidebar fixture ${index}`,
@@ -142,11 +145,11 @@ for (const locale of ['en', 'zh-CN']) {
 		const viewport = sidebar.locator('.ash-sessions-list-items > .ash-scrollbar-viewport');
 		const scrollbar = sidebar.getByRole('scrollbar').and(sidebar.locator('[aria-orientation="vertical"]'));
 		const thumb = scrollbar.locator('.ash-scrollbar-thumb');
-		const header = sidebar.locator('.ash-sessions-list-header');
-		await expect(sidebar.getByRole('heading', { level: 2, name: locale === 'zh-CN' ? '会话' : 'Sessions', exact: true })).toBeVisible();
-		const headerTop = (await header.boundingBox())!.y;
+		const toolbar = sidebar.locator('[data-section="projects"] .ash-sessions-list-more');
+		await expect(toolbar.getByRole('button', { name: locale === 'zh-CN' ? '更多会话操作' : 'More Sessions Actions', exact: true })).toBeVisible();
 		await scrollbar.press('Home');
 		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(0);
+		await expect(toolbar).toBeInViewport();
 		await viewport.hover();
 		await expect(thumb).toHaveCSS('border-left-width', '1px');
 		const { x, y, height } = (await thumb.boundingBox())!;
@@ -165,7 +168,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(top);
 		await scrollbar.press('End');
 		await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThanOrEqual(1);
-		expect((await header.boundingBox())!.y).toBe(headerTop);
+		await expect(toolbar).not.toBeInViewport();
 	});
 
 	test(`Background branch management preserves drafts and survives stop, failure and reopen in ${locale}`, { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, webAppServer, workbench, restartWorkbench, testWorkspace }, testInfo) => {
@@ -266,7 +269,7 @@ for (const locale of ['en', 'zh-CN']) {
 			const search = picker.getByRole('combobox');
 			await search.fill(model.model); await expect(picker.getByRole('menuitemradio')).toHaveCount(1); await search.press('Enter');
 			// Keep row order stable while status changes update the last activity time.
-			await page.locator('.ash-sessions-list-more [data-action-id="sessions.list.headerMore"] button').click();
+			await page.locator('.ash-sessions-list-more').getByRole('button', { name: locale === 'zh-CN' ? '更多会话操作' : 'More Sessions Actions', exact: true }).click();
 			await page.getByRole('menuitem', { name: locale === 'zh-CN' ? '排序方式' : 'Sort By', exact: true }).press('ArrowRight');
 			await page.getByRole('menuitemradio', { name: locale === 'zh-CN' ? '创建日期' : 'Date Created', exact: true }).click();
 			await expect(active().locator('.ash-chat-input-model-action')).toHaveText(model.model);

@@ -5,7 +5,7 @@ import { ICustomViewService } from '../../../../services/customView/browser/cust
 import { Menus } from '../../../../browser/menus.js';
 import { AUTOMATIONS_CUSTOM_VIEW_ID } from '../automationsConstants.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -87,9 +87,31 @@ async function promptForSessionGroupName(input: IQuickInputService): Promise<str
 	return name?.trim();
 }
 
+MenusRegistry.appendMenuItems([
+	{
+		id: Menus.SidebarSessionsHeader, item: {
+			submenu: Menus.SessionsViewFilter,
+			title: localize2('sessions.list.moreActions', 'More Sessions Actions'),
+			group: 'navigation', order: 10,
+		}
+	},
+	{
+		id: Menus.ChatSidebarHeader, item: {
+			submenu: Menus.SessionsViewSort,
+			title: localize2('sessions.list.sortBy', 'Sort By'),
+			group: 'navigation', order: 10,
+		}
+	},
+]);
+
 registerAction2(class CreateSessionGroupAction extends Action2 {
 	constructor() {
-		super({ id: 'sessionsViewPane.createGroup', title: localize2('sessions.list.newGroup', 'New group…'), icon: Lxicon.add });
+		super({
+			id: 'sessionsViewPane.createGroup',
+			title: localize2('sessions.list.newGroup', 'New group…'),
+			icon: Lxicon.add,
+			menu: [Menus.SidebarSessionsHeader, Menus.ChatSidebarHeader].map(id => ({ id, group: 'navigation', order: 20 })),
+		});
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {

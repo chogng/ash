@@ -24,6 +24,16 @@ test('Chat and Code organize the same Ash conversation from their sidebars', { t
 		const members = async (projectId: string) => (await client.request(APP_SERVER_METHODS['project/read'], { projectId })).project.sessionIds;
 		const page = await workbench.openAgentsWindow(target.kind);
 		const chat = page.locator('.ash-chat-navigation-list');
+		const projects = chat.locator('[data-section="projects"]');
+		const add = projects.getByRole('button', { name: 'New group…', exact: true });
+		await projects.getByRole('button', { name: 'Projects', exact: true }).press('ArrowLeft');
+		await add.press('Enter');
+		const groupName = page.locator('.ash-quick-input-host').getByRole('textbox');
+		await groupName.fill('Chat sidebar group');
+		await groupName.press('Enter');
+		await expect(chat.getByRole('button', { name: 'Chat sidebar group', exact: true })).toBeVisible();
+		await expect(add).toBeFocused();
+		await projects.getByRole('button', { name: 'Projects', exact: true }).press('ArrowRight');
 		const row = chat.getByRole('button', { name: title, exact: true });
 		const firstProject = chat.getByRole('button', { name: first.name, exact: true });
 		const secondProject = chat.getByRole('button', { name: second.name, exact: true });
@@ -37,10 +47,20 @@ test('Chat and Code organize the same Ash conversation from their sidebars', { t
 
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		const code = page.locator('.ash-sessions-list[data-mode="code"]');
+		const codeProject = code.getByRole('button', { name: second.name, exact: true });
 		const codeRow = code.locator(`[data-row-order-id="${session.sessionId}"]`);
 		const conversation = codeRow.locator(':scope > button.ash-sessions-list-item');
 		await expect(codeRow).toHaveAttribute('data-parent-project-id', second.projectId);
 		await expect(conversation).toHaveText(title);
+		await expect(codeProject).toHaveAttribute('aria-expanded', 'true');
+		await codeProject.click();
+		await expect(codeProject).toHaveAttribute('aria-expanded', 'false');
+		await expect(conversation).toHaveCount(0);
+		await codeProject.press('ArrowRight');
+		await expect(conversation).toBeVisible();
+		await conversation.click();
+		await expect(conversation).toHaveAttribute('aria-current', 'page');
+		await expect(code).toBeVisible();
 		await conversation.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Remove from project', exact: true }).click();
 		await expect.poll(() => members(second.projectId)).toEqual([]);

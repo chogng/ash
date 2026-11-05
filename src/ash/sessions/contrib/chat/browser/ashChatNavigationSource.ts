@@ -62,6 +62,7 @@ export class AshChatNavigationSource implements ChatListSource {
 					id: `ash:${id}`,
 					title: session.title || localize('sessions.list.untitled', 'Untitled Session'),
 					sessionId: id,
+					createdAt: thread.createdAt?.getTime(),
 					updatedAt: (thread.updatedAt ?? thread.createdAt)?.getTime(),
 					selected: selectedId === id,
 					status: session.management?.status === 'working' ? working : undefined,
