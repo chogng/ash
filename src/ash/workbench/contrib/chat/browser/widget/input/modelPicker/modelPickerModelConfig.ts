@@ -41,6 +41,7 @@ function accelerationLabel(name: string): string {
 	switch (name) {
 		case 'Fast': return localize('chat.modelPicker.fast', 'Fast');
 		case 'Ultra Fast': return localize('chat.modelPicker.ultraFast', 'Ultra Fast');
+		case 'Priority': return localize('chat.modelPicker.priority', 'Priority');
 		default: return name;
 	}
 }
@@ -49,6 +50,7 @@ function accelerationDescription(description: string): string {
 	switch (description) {
 		case 'Faster responses, increased usage': return localize('chat.modelPicker.fastDescription', 'Faster responses, increased usage');
 		case 'Priority processing, increased usage': return localize('chat.modelPicker.priorityDescription', 'Priority processing, increased usage');
+		case 'Uses committed Priority Tier capacity when available': return localize('chat.modelPicker.committedPriorityDescription', 'Uses committed Priority Tier capacity when available');
 		default: return description;
 	}
 }

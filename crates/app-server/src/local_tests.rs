@@ -4422,7 +4422,9 @@ fn built_in_catalog_excludes_configured_custom_models() {
         .map(|entry| entry.model.model.as_str())
         .collect::<Vec<_>>();
     assert!(api_models.contains(&"gpt-5.6"));
-    assert!(!api_models.contains(&"gpt-5.4"));
+    for model in ["gpt-5.4", "gpt-5.5", "o3"] {
+        assert!(!api_models.contains(&model), "{model}");
+    }
     assert!(models.iter().any(|entry| {
         entry.model.provider.as_str() == "openai" && entry.model.model.as_str() == "gpt-6-astra"
     }));
@@ -4452,15 +4454,6 @@ fn built_in_catalog_excludes_configured_custom_models() {
         .unwrap();
     assert_eq!(openai.context_window, Some(272_000));
     assert_eq!(openai.maximum_context_window, Some(872_000));
-    let legacy = models
-        .iter()
-        .find(|entry| {
-            entry.model.provider.as_str() == "openai" && entry.model.model.as_str() == "gpt-5.5"
-        })
-        .unwrap();
-    assert_eq!(legacy.context_window, Some(272_000));
-    assert_eq!(legacy.maximum_context_window, Some(272_000));
-    assert_eq!(legacy.long_context, None);
     assert_eq!(
         openai.capabilities.image_detail_original,
         ash_protocol::CapabilitySupport::Supported

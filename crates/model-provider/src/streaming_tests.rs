@@ -145,7 +145,17 @@ fn every_chat_provider_delivers_live_events_and_the_same_complete_result() {
             events.events,
             vec![
                 ModelStreamEvent::ReasoningDelta("inspect".into()),
-                ModelStreamEvent::TextDelta("live".into())
+                ModelStreamEvent::TextDelta("live".into()),
+                ModelStreamEvent::ToolCallDelta {
+                    id: "call_1".into(),
+                    name: "lookup".into(),
+                    arguments: "{\"query\":".into(),
+                },
+                ModelStreamEvent::ToolCallDelta {
+                    id: "call_1".into(),
+                    name: "lookup".into(),
+                    arguments: "\"value\"}".into(),
+                },
             ],
             "{id}"
         );

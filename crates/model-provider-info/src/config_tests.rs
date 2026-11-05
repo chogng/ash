@@ -1054,6 +1054,7 @@ fn acceleration_preferences_are_persisted_per_connection_and_catalog_controls_av
     for model in [
         "gpt-6-astra",
         "gpt-6.1-sol",
+        "gpt-6.1-terra",
         "gpt-6-sol",
         "gpt-6-luna",
         "gpt-5.6-sol",
@@ -1072,6 +1073,22 @@ fn acceleration_preferences_are_persisted_per_connection_and_catalog_controls_av
         );
     }
     let mut config = ModelProviderConfig::new(ProviderId::new("openai").unwrap());
+    for (model, options) in [
+        ("gpt-6.1-sol", &["priority", "ultrafast"][..]),
+        ("gpt-6.1-terra", &["priority"][..]),
+    ] {
+        let model = crate::find_static_model(&model_ref("openai", model))
+            .unwrap()
+            .model();
+        assert_eq!(
+            config
+                .acceleration_options(&model)
+                .iter()
+                .map(|option| option.id.as_str())
+                .collect::<Vec<_>>(),
+            options,
+        );
+    }
     config
         .model_acceleration
         .insert(ModelId::new("gpt-6-astra").unwrap(), "priority".into());
@@ -1176,6 +1193,8 @@ fn fast_preferences_preserve_connection_aliases_and_use_declared_model_support()
         ("xai-subscription", "grok-4.7"),
         ("kimi", "kimi-k2.7-code"),
         ("anthropic", "claude-fable-5-1"),
+        ("anthropic", "claude-sonnet-5-5"),
+        ("anthropic", "claude-sonnet-5"),
         ("deepseek", "deepseek-v4-pro"),
         ("glm", "glm-5.3"),
     ] {

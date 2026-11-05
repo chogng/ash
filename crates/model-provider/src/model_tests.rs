@@ -2709,16 +2709,23 @@ fn fast_model_preference_reaches_openai_requests_and_off_selects_standard() {
 }
 
 #[test]
-fn fast_mode_reaches_other_provider_requests_and_off_restores_standard_inference() {
-    for (provider, id) in [
-        ("anthropic", "claude-opus-5-5"),
-        ("anthropic", "claude-opus-4-8"),
-        ("anthropic", "claude-opus-4-7"),
-        ("anthropic", "claude-opus-4-6"),
-        ("anthropic", "claude-sonnet-4-6"),
-        ("anthropic", "claude-haiku-4-5-20251001"),
-        ("google", "gemini-3.8-flash"),
-        ("xai", "grok-4.7"),
+fn acceleration_reaches_other_provider_requests_and_off_restores_standard_inference() {
+    for (provider, id, option, name, fast_beta) in [
+        ("anthropic", "claude-opus-5-5", "speed:fast", "Fast", false),
+        ("anthropic", "claude-opus-5", "speed:fast", "Fast", true),
+        ("anthropic", "claude-opus-4-8", "speed:fast", "Fast", true),
+        ("anthropic", "claude-opus-4-7", "auto", "Priority", false),
+        ("anthropic", "claude-opus-4-6", "auto", "Priority", false),
+        ("anthropic", "claude-sonnet-4-6", "auto", "Priority", false),
+        (
+            "anthropic",
+            "claude-haiku-4-5-20251001",
+            "auto",
+            "Priority",
+            false,
+        ),
+        ("google", "gemini-3.8-flash", "priority", "Fast", false),
+        ("xai", "grok-4.7", "priority", "Fast", false),
     ] {
         let response = match provider {
             "anthropic" => {
@@ -2729,19 +2736,20 @@ fn fast_mode_reaches_other_provider_requests_and_off_restores_standard_inference
         };
         let transport = Arc::new(CapturingTransport::new(response));
         let runtime = ModelProviderRuntime::builtin_with_client(transport.clone());
+        let info = model_provider_info::find_static_model(&model_ref(provider, id))
+            .unwrap()
+            .model();
         for enabled in [true, false] {
             let mut config = provider_config(provider);
+            let options = runtime.acceleration_options(&config, &info).unwrap();
+            assert_eq!(
+                (options[0].id.as_str(), options[0].name.as_str()),
+                (option, name)
+            );
             if enabled {
-                config.model_acceleration.insert(
-                    ModelId::new(id).unwrap(),
-                    model_provider_info::find_static_model(&model_ref(provider, id))
-                        .unwrap()
-                        .model()
-                        .settings
-                        .acceleration
-                        .unwrap()
-                        .id(),
-                );
+                config
+                    .model_acceleration
+                    .insert(ModelId::new(id).unwrap(), option.into());
             }
             let model = runtime
                 .build_model(&config, &model_ref(provider, id))
@@ -2750,14 +2758,14 @@ fn fast_mode_reaches_other_provider_requests_and_off_restores_standard_inference
             let (_, headers, body) = transport.request.lock().unwrap().clone().unwrap();
             match provider {
                 "anthropic" => {
-                    let speed = enabled && matches!(id, "claude-opus-5-5" | "claude-opus-4-8");
+                    let speed = enabled && option == "speed:fast";
                     assert_eq!(body.get("speed"), speed.then_some(&json!("fast")));
                     assert_eq!(
                         headers
                             .iter()
                             .any(|header| header.name() == "anthropic-beta"
                                 && header.value() == "fast-mode-2026-02-01"),
-                        speed
+                        enabled && fast_beta
                     );
                     assert_eq!(
                         body["service_tier"],
@@ -2965,18 +2973,6 @@ fn explicit_standard_tier_disables_stored_speed_and_speed_requires_model_support
 #[test]
 fn acceleration_options_are_admitted_independently_before_http_requests() {
     let selected = model_ref("openai", "gpt-6.1-sol");
-    let mut info = model_provider_info::find_static_model(&selected)
-        .unwrap()
-        .model();
-    info.settings
-        .service_tiers
-        .as_mut()
-        .unwrap()
-        .push(ash_protocol::ModelServiceTier {
-            id: "ultrafast".into(),
-            name: "Ultra Fast".into(),
-            description: "Fastest processing".into(),
-        });
     for disabled in [
         vec![],
         vec!["priority"],
@@ -3000,11 +2996,7 @@ fn acceleration_options_are_admitted_independently_before_http_requests() {
                 } else {
                     request.service_tier = Some(option.into());
                 }
-                let model = runtime
-                    .runtime(
-                        ModelRuntimeRequest::new(selected.clone(), config).with_info(info.clone()),
-                    )
-                    .unwrap();
+                let model = runtime.build_model(&config, &selected).unwrap();
                 let result = model.invoke(&request);
                 if disabled.contains(&option) {
                     assert!(

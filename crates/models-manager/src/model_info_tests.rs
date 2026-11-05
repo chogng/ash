@@ -276,10 +276,6 @@ fn catalog_defaults_and_long_context_are_model_and_connection_scoped() {
             spec.context_window
         );
         let can_expand = spec.model().context_window != spec.context_window;
-        if model.provider.as_str() == "openai" && model.model.as_str() == "gpt-5.5" {
-            assert_eq!(spec.context_window, ContextWindow::Known(272_000));
-            assert!(!can_expand);
-        }
         if model.provider.as_str() == "openai" && model.model.as_str() == "gpt-6-astra" {
             assert_eq!(
                 entry

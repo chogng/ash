@@ -42,6 +42,7 @@ pub(crate) fn complete(
         client,
         target,
         endpoint,
+        model,
         request,
         build_request_with_prelude(model, request, options.system_prelude)?,
         cancellation,
@@ -71,7 +72,7 @@ pub(crate) fn stream(
         ash_http_client::HttpMethod::Post,
         target.endpoint(endpoint.relative_path())?,
         crate::headers::build(
-            endpoint.headers(target, request)?,
+            endpoint.headers(target, model, request)?,
             crate::headers::ResponseFormat::EventStream,
         )?,
         body,
@@ -146,7 +147,7 @@ pub(crate) fn count_input_tokens(
         client,
         target,
         &format!("{}/count_tokens", endpoint.relative_path()),
-        endpoint.headers(target, &count_request)?,
+        endpoint.headers(target, model, &count_request)?,
         build_count_request(model, request)?,
         cancellation,
     )?;
@@ -555,11 +556,14 @@ pub(super) fn path(endpoint: ApiEndpoint) -> &'static str {
     }
 }
 pub(super) fn headers(
+    model: &str,
     request: &ModelRequest,
     headers: &mut Vec<ash_http_client::HttpHeader>,
 ) -> Result<(), ApiError> {
     crate::headers::insert(headers, "anthropic-version", "2023-06-01")?;
-    if request.speed == Some(ash_protocol::ModelSpeed::Fast) {
+    // Opus 5.5 accepts speed as a standard parameter. Keep the preview header for
+    // older models and compatible endpoints that still use the preview contract.
+    if request.speed == Some(ash_protocol::ModelSpeed::Fast) && model != "claude-opus-5-5" {
         const FAST_BETA: &str = "fast-mode-2026-02-01";
         if let Some(header) = headers
             .iter_mut()
