@@ -4,7 +4,6 @@ import { registerAddFileAsContextAction } from '../contrib/editor/browser/editor
 import { ISessionSectionOrderService, SessionSectionOrderService } from '../services/sessions/browser/sessionSectionOrderService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../services/sessions/browser/sessionsListModelService.js';
 import { ISymphonyBackendService } from '../../platform/symphony/common/symphonyService.js';
-import { showSessionsSplashForRestore } from '../contrib/splash/browser/sessionsSplash.js';
 import { IRemoteAgentHostService, NullRemoteAgentHostService } from '../../platform/agentHost/common/remoteAgentHostService.js';
 import * as chatInputStatePersistence from '../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { bindSashFeedbackPresentation } from '../../base/browser/ui/sash/sash.js';
@@ -1245,7 +1244,7 @@ export abstract class Workbench extends Disposable {
 			storage.remove(recovered.key, StorageScope.WORKSPACE);
 		}
 		view.activateSelection(selected, { source: 'restore' });
-		await entryLayout.restore(entry => showSessionsSplashForRestore(ownerWindow.document, entry));
+		await entryLayout.restore();
 		if (this.isDisposed) return;
 		const revision = view.navigationRevision;
 		void this.sessionsPart.didActiveCodeHistoryFail().then(failed => {

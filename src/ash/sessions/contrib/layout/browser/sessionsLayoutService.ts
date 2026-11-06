@@ -60,7 +60,6 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	private readonly activityKeys = new Map<string, IContextKey<boolean>>();
 	private readonly pageGroupId: number;
 	private navigationQueue = Promise.resolve();
-	private onWillRestoreEntry: ((entry: ISessionsEntry) => void) | undefined;
 	public isChangingContent = false;
 	public get isSessionContent(): boolean { return !this.customViews.activeCustomView.get() && this.activeEntry.get()?.content !== 'editor'; }
 	public get isDocumentContent(): boolean { return this.documentContent.get(); }
@@ -183,7 +182,6 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	public openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: { readonly source: 'restore' | 'startup'; }): Promise<void> {
 		if (options?.source !== 'restore' && this.customViews.activeCustomView.get()) this.customViews.hideCustomView();
 		return this.runOperation(async () => {
-			if (options && !this.customViews.activeCustomView.get()) this.onWillRestoreEntry?.(entry);
 			await this.controller.prepareContentChange();
 			if (this.isDisposed) { return; }
 			const previousEntry = this.activeEntry.get();
@@ -292,20 +290,15 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		this.storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 	}
 
-	public async restore(onWillRestoreEntry?: (entry: ISessionsEntry) => void): Promise<void> {
+	public async restore(): Promise<void> {
 		await this.controller.whenSettled();
 		if (this.isDisposed) { return; }
 		const desktopNew = CommandsRegistry.hasCommand('sessions.open.new');
-		this.onWillRestoreEntry = onWillRestoreEntry;
-		try {
-			if (desktopNew && this.lifecycle.startupKind === StartupKind.NewWindow) {
-				this.customViews.hideCustomView();
-				await this.commands.executeCommand('sessions.open.new', 'startup');
-			} else {
-				await this.restoreSavedEntry(desktopNew ? 'sessions.open.new' : 'sessions.open.chat');
-			}
-		} finally {
-			this.onWillRestoreEntry = undefined;
+		if (desktopNew && this.lifecycle.startupKind === StartupKind.NewWindow) {
+			this.customViews.hideCustomView();
+			await this.commands.executeCommand('sessions.open.new', 'startup');
+		} else {
+			await this.restoreSavedEntry(desktopNew ? 'sessions.open.new' : 'sessions.open.chat');
 		}
 		if (this.isDisposed) { return; }
 		for (const key of ['sessions.layout.activeMode', 'sessions.layout.primaryPage', 'sessions.activityBar.activePage', 'sessions.layout.primaryEditor']) {

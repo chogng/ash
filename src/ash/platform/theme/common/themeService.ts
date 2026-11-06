@@ -26,10 +26,13 @@ export interface IPartsSplash {
 		readonly version: 2;
 		readonly width: number;
 		readonly height: number;
-		readonly partBounds: readonly (IPartsSplashPartBounds & {
+		readonly partBounds: readonly {
+			readonly top: number;
+			readonly left: number;
+			readonly width: number;
+			readonly height: number;
 			readonly background: string;
 			readonly id?: string;
-			readonly skeleton?: IPartsSplashSkeleton;
 			/** Resolved linear-gradient paint; offsets are CSS pixels along the gradient line. */
 			readonly backgroundGradient?: {
 				readonly angle: number;
@@ -43,38 +46,8 @@ export interface IPartsSplash {
 				readonly color: string;
 				readonly style: string;
 			}[];
-		})[];
+		}[];
 	};
-}
-
-export interface IPartsSplashPartBounds {
-	readonly top: number;
-	readonly left: number;
-	readonly width: number;
-	readonly height: number;
-}
-
-export interface IPartsSplashSkeleton {
-	readonly grid?: true;
-	/** Placeholder bounds as fractions of the enclosing part. No content is cached. */
-	readonly shapes: readonly (IPartsSplashPartBounds & { readonly surface?: true; })[];
-}
-
-function validateSplashSkeleton(value: unknown): IPartsSplashSkeleton | undefined {
-	if (!isRecord(value) || (value.grid !== undefined && value.grid !== true)
-		|| !Array.isArray(value.shapes) || value.shapes.length > 32) return undefined;
-	const shapes: IPartsSplashSkeleton['shapes'][number][] = [];
-	for (const shape of value.shapes) {
-		if (!isRecord(shape) || !validOffset(shape.left) || !validOffset(shape.top)
-			|| !validSize(shape.width) || !validSize(shape.height)
-			|| shape.left + shape.width > 1.001 || shape.top + shape.height > 1.001
-			|| (shape.surface !== undefined && shape.surface !== true)) return undefined;
-		shapes.push({
-			left: shape.left, top: shape.top, width: shape.width, height: shape.height,
-			...(shape.surface ? { surface: true } : {}),
-		});
-	}
-	return { shapes, ...(value.grid ? { grid: true } : {}) };
 }
 
 /** Persistence and IPC accept only resolved, opaque colors, never arbitrary CSS. */
@@ -139,12 +112,10 @@ export function validatePartsSplash(value: unknown): IPartsSplash {
 				});
 				backgroundGradient = { angle: gradient.angle, stops };
 			}
-			const skeleton = validateSplashSkeleton(part.skeleton);
 			return {
 				top: part.top, left: part.left, width: part.width, height: part.height,
 				background: part.background, borderRadii, borders,
 				...(part.id !== undefined ? { id: part.id } : {}),
-				...(skeleton ? { skeleton } : {}),
 				...(backgroundGradient ? { backgroundGradient } : {}),
 			};
 		});

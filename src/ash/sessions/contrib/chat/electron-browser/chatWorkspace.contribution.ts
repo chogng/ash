@@ -97,7 +97,7 @@ export class ChatWorkspaceContribution extends Disposable {
 			await layout.openEntry({
 				id: 'ashChat', workspaceMode: 'chat', activityContext: ASH_CHAT_SELECTED_CONTEXT,
 				content: 'editor', sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID,
-				splash: 'chat', showEditorTabs: false,
+				showEditorTabs: false,
 				editorInput: {
 					resource: URI.from({ scheme: ashChatEditor.scheme, path: '/page' }), label: ashChatEditor.title(),
 					showBreadcrumbs: false, readOnly: true, capabilities: EditorInputCapabilities.CannotClose,

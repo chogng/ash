@@ -107,7 +107,7 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 		const showChat = async (source?: unknown) => {
 			chat.initialize();
 			await layout.openEntry({
-				id: 'chatgpt', activityContext: chatGPTSelectedContext, content: 'editor', splash: 'chat',
+				id: 'chatgpt', activityContext: chatGPTSelectedContext, content: 'editor',
 				sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, showEditorTabs: false,
 				editorInput: {
 					resource: URI.from({ scheme: chatGPTReplyEditor.scheme, path: '/page' }), label: chatGPTReplyEditor.title(),

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { DeferredPromise } from '../../../../../base/common/async.js';
 import { constObservable } from '../../../../../base/common/observable.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -10,7 +11,7 @@ import { ServiceCollection } from '../../../../../platform/instantiation/common/
 import { ILayoutService } from '../../../../../platform/layout/browser/layoutService.js';
 import { createColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
 import { ColorScheme } from '../../../../../platform/theme/common/theme.js';
-import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
+import { IThemeService, validatePartsSplash } from '../../../../../platform/theme/common/themeService.js';
 import { TestThemeService } from '../../../../../platform/theme/test/common/testThemeService.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../../workbench/common/contributions.js';
 import { ILifecycleService, LifecyclePhase, type IWillShutdownEvent } from '../../../../../workbench/services/lifecycle/common/lifecycle.js';
@@ -18,9 +19,9 @@ import { browserSplashStorageKey, readBrowserPartsSplash } from '../../../../../
 import '../../../../../workbench/common/theme.js';
 import '../../../../../workbench/contrib/splash/browser/browserSplashStorageService.js';
 import '../../browser/splash.contribution.js';
-import { showSessionsSplash, showSessionsSplashForRestore } from '../../browser/sessionsSplash.js';
+import { showSessionsSplash } from '../../browser/sessionsSplash.js';
 
-test('Agent Window places its skeleton in cached visible Parts and removes it after page restoration', async () => {
+test('Agent Window hands off at the first live layout and caches only shell paint after restoration', async () => {
 	const dom = new JSDOM('<main></main>', { url: 'https://ash.test/browser/sessions/sessions.html' });
 	try {
 		const ownerWindow = dom.window as unknown as Window;
@@ -38,11 +39,10 @@ test('Agent Window places its skeleton in cached visible Parts and removes it af
 		main.className = 'ash-workbench-part';
 		main.dataset.part = 'sessions';
 		main.getBoundingClientRect = () => ({ left: sidebarWidth, top: 768 - mainHeight, right: 1024, bottom: 768, width: 1024 - sidebarWidth, height: mainHeight } as DOMRect);
-		const composer = ownerDocument.createElement('div');
-		composer.className = 'ash-chat-input-container';
-		composer.style.visibility = 'visible';
-		composer.getBoundingClientRect = () => ({ left: 450, top: 670, right: 950, bottom: 750, width: 500, height: 80 } as DOMRect);
-		main.append(composer);
+		const content = ownerDocument.createElement('p');
+		content.style.visibility = 'visible';
+		content.getBoundingClientRect = () => assert.fail('Splash cache measured conversation content');
+		main.append(content);
 		root.append(sidebar, main);
 		const editorKey = 'ash.partsSplash:/browser/workbench/workbench.html:[null,null,null]';
 		ownerWindow.localStorage.setItem(editorKey, 'editor-owned-cache');
@@ -54,18 +54,18 @@ test('Agent Window places its skeleton in cached visible Parts and removes it af
 		services.registerInstance(ICustomViewService, { activeCustomViewOpen: constObservable(undefined) } as ICustomViewService);
 		services.registerInstance(ILayoutService, { mainContainer: root, onDidLayoutMainContainer: layout.event } as ILayoutService);
 		services.registerInstance(IThemeService, themes);
-		services.registerInstance(ILifecycleService, { phase: LifecyclePhase.Restored, when: () => Promise.resolve(), onWillShutdown: shutdown.event } as unknown as ILifecycleService);
+		const restored = new DeferredPromise<void>();
+		let phase = LifecyclePhase.Ready;
+		services.registerInstance(ILifecycleService, { get phase() { return phase; }, when: () => restored.p, onWillShutdown: shutdown.event } as unknown as ILifecycleService);
 		using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['sessions.contrib.splash']);
 		host.advance(WorkbenchPhase.BlockStartup);
 		layout.fire({ width: 0, height: 0 });
-		assert.equal(ownerDocument.querySelectorAll('.ash-sessions-splash-fallback .ash-sessions-splash-sidebar > div').length, 3);
-		assert.equal(ownerDocument.querySelector('.ash-sessions-splash-chat'), null);
-		showSessionsSplashForRestore(ownerDocument, { content: 'conversation', splash: 'chat' });
-		assert.equal(ownerDocument.querySelectorAll('.ash-sessions-splash-fallback .ash-sessions-splash-chat > div').length, 2);
+		assert.equal(ownerDocument.getElementById('ash-parts-splash')!.children.length, 0);
 		layout.fire({ width: 1024, height: 768 });
-		assert.ok(ownerDocument.getElementById('ash-parts-splash'));
-		await Promise.resolve();
 		assert.equal(ownerDocument.getElementById('ash-parts-splash'), null);
+		assert.equal(ownerWindow.localStorage.getItem(browserSplashStorageKey(ownerWindow)), null);
+		phase = LifecyclePhase.Restored;
+		await restored.complete(undefined);
 		assert.deepEqual(readBrowserPartsSplash(ownerWindow).layoutInfo?.partBounds.map(part => [part.width, part.height]), [[300, 768], [724, 168]]);
 		const saveBeforeShutdown = async (): Promise<void> => {
 			const writes: Promise<unknown>[] = [];
@@ -78,59 +78,20 @@ test('Agent Window places its skeleton in cached visible Parts and removes it af
 		await saveBeforeShutdown();
 		const resized = readBrowserPartsSplash(ownerWindow);
 		assert.deepEqual(resized.layoutInfo?.partBounds.map(part => [part.left, part.top, part.width, part.height]), [[0, 0, 412, 768], [412, 532, 612, 236]]);
-		// An older cache can still supply the shell geometry, but never guesses the page.
-		const { skeleton: _skeleton, ...legacyEditor } = resized.layoutInfo!.partBounds[1];
-		const legacy = { ...resized, layoutInfo: { ...resized.layoutInfo!, partBounds: [resized.layoutInfo!.partBounds[0], { ...legacyEditor, id: 'editor' }] } };
-		showSessionsSplash(ownerDocument, legacy);
-		assert.equal(ownerDocument.querySelector('.ash-sessions-splash-chat'), null);
-		showSessionsSplashForRestore(ownerDocument, { content: 'editor', splash: 'grid' });
-		assert.equal(ownerDocument.querySelectorAll('[data-part=editor] .ash-sessions-splash-cards > div').length, 8);
-		showSessionsSplash(ownerDocument, legacy);
-		showSessionsSplashForRestore(ownerDocument, { content: 'editor' });
-		assert.equal(ownerDocument.querySelector('.ash-sessions-splash-chat, .ash-sessions-splash-cards'), null);
 		showSessionsSplash(ownerDocument, resized);
 		const shell = ownerDocument.getElementById('ash-parts-splash')!;
 		assert.equal(shell.getAttribute('aria-hidden'), 'true');
 		assert.equal(shell.inert, true);
 		assert.equal((shell.firstElementChild as HTMLElement).style.width, '412px');
 		assert.equal((shell.lastElementChild as HTMLElement).style.height, '236px');
-		assert.equal(shell.querySelectorAll('[data-part=sidebar] .ash-sessions-splash-sidebar > div').length, 3);
-		assert.equal(shell.querySelectorAll('[data-part=sessions] .ash-sessions-splash-shape.surface').length, 1);
-		assert.equal(shell.querySelector('.ash-sessions-splash-cards'), null);
-		assert.equal(shell.querySelector('.ash-sessions-splash-fallback'), null);
+		assert.equal(shell.querySelectorAll(':scope > div > *').length, 0);
 		sidebar.hidden = true;
 		layout.fire({ width: 1024, height: 768 });
 		await saveBeforeShutdown();
 		const hiddenSidebar = readBrowserPartsSplash(ownerWindow);
 		assert.deepEqual(hiddenSidebar.layoutInfo?.partBounds.map(part => part.id), ['sessions']);
-		assert.deepEqual(hiddenSidebar.layoutInfo?.partBounds[0]?.skeleton, resized.layoutInfo!.partBounds[1].skeleton);
 		showSessionsSplash(ownerDocument, hiddenSidebar);
-		assert.equal(ownerDocument.querySelector('.ash-sessions-splash-sidebar'), null);
-
-		// A page switch inside the same part can change the splash without resizing the window.
-		main.dataset.part = 'editor';
-		const projects = ownerDocument.createElement('section');
-		projects.toggleAttribute('data-splash-grid', true);
-		projects.getBoundingClientRect = main.getBoundingClientRect;
-		main.replaceChildren(projects);
-		await new Promise(resolve => setTimeout(resolve, 150));
-		showSessionsSplash(ownerDocument, readBrowserPartsSplash(ownerWindow));
-		assert.equal(ownerDocument.querySelectorAll('[data-part=editor] .ash-sessions-splash-cards > div').length, 8);
-		// Restorable custom views capture their own content instead of the outgoing editor.
-		main.dataset.part = 'customview';
-		const view = ownerDocument.createElement('section');
-		main.replaceChildren(view);
-		const heading = ownerDocument.createElement('h1');
-		heading.style.visibility = 'visible';
-		heading.textContent = 'Private project name';
-		heading.getBoundingClientRect = () => ({ left: 430, top: 560, right: 700, bottom: 600, width: 270, height: 40 } as DOMRect);
-		view.append(heading);
-		await saveBeforeShutdown();
-		const customView = readBrowserPartsSplash(ownerWindow);
-		assert.equal(JSON.stringify(customView).includes(heading.textContent), false);
-		showSessionsSplash(ownerDocument, customView);
-		assert.equal(ownerDocument.querySelectorAll('[data-part=customview] .ash-sessions-splash-shape').length, 1);
-		assert.equal(ownerDocument.querySelector('.ash-sessions-splash-cards'), null);
+		assert.equal(ownerDocument.querySelector('#ash-parts-splash [data-part="sidebar"]'), null);
 		assert.equal(ownerWindow.localStorage.getItem(editorKey), 'editor-owned-cache');
 		assert.deepEqual(Object.keys(ownerWindow.localStorage).sort(), [editorKey, browserSplashStorageKey(ownerWindow)].sort());
 	} finally {
@@ -138,7 +99,7 @@ test('Agent Window places its skeleton in cached visible Parts and removes it af
 	}
 });
 
-test('Agent Window uses the sidebar bounds and border from a cache without Part IDs', () => {
+test('Agent Window keeps older shell paint and drops cached content geometry', () => {
 	const dom = new JSDOM();
 	try {
 		const { document, innerWidth, innerHeight, performance } = dom.window;
@@ -150,7 +111,7 @@ test('Agent Window uses the sidebar bounds and border from a cache without Part 
 			borders: Array.from({ length: 4 }, () => emptyBorder),
 			borderRadii: Array.from({ length: 4 }, () => [0, 0] as const),
 		};
-		showSessionsSplash(document, {
+		const legacy = {
 			baseTheme: ColorScheme.Light,
 			colorInfo: { background: '#ffffff', foreground: '#000000' },
 			layoutInfo: {
@@ -158,18 +119,26 @@ test('Agent Window uses the sidebar bounds and border from a cache without Part 
 				partBounds: [
 					{ ...paint, left: 0, top: 0, width: innerWidth, height: 35 },
 					{ ...paint, left: 0, top: 35, width: 225, height: innerHeight - 35, borders: [emptyBorder, sidebarBorder, emptyBorder, emptyBorder] },
-					{ ...paint, left: 225, top: 35, width: innerWidth - 225, height: innerHeight - 35 },
+					{
+						...paint, left: 225, top: 35, width: innerWidth - 225, height: innerHeight - 35,
+						skeleton: { shapes: [{ left: 0.1, top: 0.2, width: 0.8, height: 0.1 }] },
+					},
 				],
 			},
-		});
+		};
+		const splash = validatePartsSplash(legacy);
+		assert.equal('skeleton' in splash.layoutInfo!.partBounds[2], false);
+		showSessionsSplash(document, splash);
 		const shell = document.querySelector('#ash-parts-splash')!;
-		assert.equal(shell.querySelector('.ash-sessions-splash-fallback'), null);
-		assert.equal(shell.querySelectorAll('[data-part="sidebar"] .ash-sessions-splash-sidebar > div').length, 3);
+		assert.equal(shell.children.length, 3);
+		assert.equal(shell.querySelector('[data-part="sidebar"]')!.children.length, 0);
+		assert.equal(shell.lastElementChild!.children.length, 0);
 		const separator = shell.querySelector<HTMLElement>('[data-part="titlebar"] .ash-sessions-splash-titlebar-separator')!;
 		assert.equal(separator.style.left, '224px');
 		assert.equal(separator.style.borderRightWidth, '1px');
-		showSessionsSplashForRestore(document, { content: 'editor', splash: 'chat' });
-		assert.ok(shell.querySelector('[data-part="legacy-main"] .ash-sessions-splash-chat'));
+
+		showSessionsSplash(document, { ...splash, layoutInfo: { ...splash.layoutInfo!, width: innerWidth + 100 } });
+		assert.equal(document.querySelector('#ash-parts-splash')!.children.length, 0);
 	} finally {
 		dom.window.close();
 	}
