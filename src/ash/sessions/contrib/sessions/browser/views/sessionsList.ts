@@ -9,6 +9,7 @@ import { ISessionGroupsService, type SessionGroup } from '../../../../services/s
 import { CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
 import '../media/sessionsList.css';
 import { addDisposableListener, getWindow, h } from '../../../../../base/browser/dom.js';
+import { observeResize } from '../../../../../base/browser/observer.js';
 import { appendIcon, getRegisteredIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
@@ -703,15 +704,15 @@ export class SessionsList extends DomWidget {
 			? undefined : this.viewService.activeSelection;
 		const restingIcon = this.mode === 'code' ? quietSessionIcon : undefined;
 		const statusIcons = this.mode === 'code' ? codeManagementIcons : managementIcons;
-		const itemFor = (key: string, icon = restingIcon, conversation = false): SessionListItem => {
+		const itemFor = (key: string, kind: 'conversation' | 'draft' | 'project', icon = restingIcon): SessionListItem => {
 			present.add(key);
 			let item = this.items.get(key);
 			if (!item) {
-				const leading = conversation && this.instantiation
+				const leading = kind === 'conversation' && this.instantiation
 					? this.instantiation.createInstance(SessionLeadingIcon, ownerDocument, '',
 						(picked: Icon | undefined) => this.listModel.setRowIcon(key, picked?.id))
 					: undefined;
-				item = this.items.set(key, new SessionListItem(ownerDocument, this.contextMenus, statusIcons, icon, leading));
+				item = this.items.set(key, new SessionListItem(ownerDocument, this.contextMenus, statusIcons, kind, icon, leading));
 			}
 			item.domNode.dataset.item = key;
 			if (item.leadingIcon) {
@@ -749,7 +750,7 @@ export class SessionsList extends DomWidget {
 			if (!session.forkSource && (!draft || (!draft.text.trim() && draft.contexts.length === 0))) continue;
 			if (!this.search.matches(session.title)) continue;
 			const selected = activeSelection?.kind === 'untitled' && activeSelection.session.untitledSessionId === session.untitledSessionId;
-			const item = itemFor(`untitled:${session.untitledSessionId}`);
+			const item = itemFor(`untitled:${session.untitledSessionId}`, 'draft');
 			item.update(localize('sessions.list.draft', '{0} (draft)', session.title || localize('chat.sessions.new', 'New Session')), selected, () => this.openRow(() => this.viewService.openUntitledSession(session.untitledSessionId)));
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'untitled', session }, item, anchor));
 			if (session.forkSource) {
@@ -782,14 +783,14 @@ export class SessionsList extends DomWidget {
 			const nested = activeChats.filter(chat => chat !== thread && chat.origin.type !== 'agentSpawn'
 				&& (matchesSession || this.search.matches(chat.title, chat.workspace?.root, ...fields)));
 			if (!matchesSession && !nested.length && !nestedDrafts.has(session.sessionId)) continue;
-			const item = itemFor(`session:${session.sessionId}`, restingIcon ?? Lxicon.cowork, true);
+			const item = itemFor(`session:${session.sessionId}`, 'conversation', restingIcon ?? Lxicon.cowork);
 			item.target = { sessionId: session.sessionId, threadId: thread.threadId };
 			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, () => this.openRow(() => this.viewService.openSession(session.sessionId, thread.threadId)), session.management);
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor));
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
 			item.updateSummary(this.hoverService, getSessionSummaryHoverData(session, thread));
 			const children = nested.map(chat => {
-				const child = itemFor(`chat:${JSON.stringify([session.sessionId, chat.threadId])}`, restingIcon ?? Lxicon.chatSession, true);
+				const child = itemFor(`chat:${JSON.stringify([session.sessionId, chat.threadId])}`, 'conversation', restingIcon ?? Lxicon.chatSession);
 				child.target = { sessionId: session.sessionId, threadId: chat.threadId };
 				child.update(chat.title || localize('sessions.list.untitledChat', 'Untitled Chat'), current?.threadId === chat.threadId,
 					() => this.openRow(() => this.viewService.openSession(session.sessionId, chat.threadId)), chat.management);
@@ -821,7 +822,7 @@ export class SessionsList extends DomWidget {
 				section.dataset.projectId = project.id;
 				projects.push(section);
 			} else {
-				const item = itemFor(key, Lxicon.projects);
+				const item = itemFor(key, 'project', Lxicon.projects);
 				item.domNode.dataset.projectId = project.id;
 				item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
 				projects.push(item.domNode);
@@ -1037,7 +1038,6 @@ class SessionListItem extends AbstractDisposable {
 	private readonly button: HTMLButtonElement;
 	private readonly actions: WorkbenchToolBar;
 	private readonly row: SessionListRowRenderer;
-	private readonly label: HTMLSpanElement;
 	private readonly pullRequest: HTMLSpanElement;
 	private readonly statusAnnouncement: HTMLSpanElement;
 	private managementDescription: string | undefined;
@@ -1053,14 +1053,16 @@ class SessionListItem extends AbstractDisposable {
 		const id = this.domNode.dataset.item!;
 		const kind = id.startsWith('session:') ? 'session' : id.startsWith('chat:') ? 'chat' : id.startsWith('project:') ? 'project' : 'draft';
 		return {
-			id, kind, label: this.label.textContent ?? '', ...this.target,
+			id, kind, label: this.row.title, ...this.target,
 			...(children.length ? { children } : {})
 		};
 	}
 
-	constructor(ownerDocument: Document, contextMenus: IContextMenuService, private readonly statusIcons: typeof managementIcons, icon?: ThemeIcon, readonly leadingIcon?: SessionLeadingIcon) {
+	constructor(ownerDocument: Document, contextMenus: IContextMenuService, private readonly statusIcons: typeof managementIcons,
+		kind: 'conversation' | 'draft' | 'project', icon?: ThemeIcon, readonly leadingIcon?: SessionLeadingIcon,
+	) {
 		super();
-		this.row = new SessionListRowRenderer(ownerDocument, leadingIcon?.element);
+		this.row = new SessionListRowRenderer(ownerDocument, kind === 'project' ? 'static' : 'scrollOnHover', leadingIcon?.element);
 		this.domNode = this.row.element;
 		this.button = this.row.button;
 		this.actions = new WorkbenchToolBar(this.domNode, contextMenus, {
@@ -1074,8 +1076,6 @@ class SessionListItem extends AbstractDisposable {
 		this.actions.element.classList.add('ash-sessions-list-actions');
 		this.actions.element.hidden = true;
 		this.actions.element.querySelector('button')?.setAttribute('aria-haspopup', 'menu');
-		this.label = h(ownerDocument, 'span');
-		this.label.className = 'ash-sessions-list-label';
 		this.statusAnnouncement = h(ownerDocument, 'span', {
 			className: 'ash-aria-live',
 			attributes: { 'aria-live': 'polite' },
@@ -1085,9 +1085,11 @@ class SessionListItem extends AbstractDisposable {
 		this.pullRequest.className = 'ash-sessions-list-pr';
 		this.pullRequest.setAttribute('aria-hidden', 'true');
 		this.pullRequest.hidden = true;
-		if (icon && !leadingIcon) appendIcon(icon, this.button);
 		// Keep attention metadata clear of the trailing hover actions.
-		this.button.append(this.pullRequest, this.label);
+		this.button.prepend(this.pullRequest);
+		if (icon && !leadingIcon) {
+			this.button.prepend(appendIcon(icon, this.button));
+		}
 		this.clickListener = addDisposableListener(this.button, 'click', () => this.open());
 		const showMenu = (event: MouseEvent | KeyboardEvent): void => {
 			if (!this.contextMenu) return;
@@ -1113,7 +1115,7 @@ class SessionListItem extends AbstractDisposable {
 	}
 
 	update(title: string, selected: boolean, open: () => void, management?: SessionManagementInfo): void {
-		if (this.label.textContent !== title) this.label.textContent = title;
+		this.row.setTitle(title);
 		this.leadingIcon?.setTitle(title);
 		const state = sessionManagementLabel(management);
 		const icon = management && this.statusIcons[management.status];
@@ -1140,14 +1142,14 @@ class SessionListItem extends AbstractDisposable {
 	}
 
 	private updateDescription(): void {
-		const parts = [this.label.textContent, this.managementDescription, this.pullRequestDescription].filter(Boolean);
+		const parts = [this.row.title, this.managementDescription, this.pullRequestDescription].filter(Boolean);
 		if (!this.summaryHover.value) this.button.title = parts.join('\n');
 		this.button.setAttribute('aria-label', parts.join('. '));
 	}
 
 	updateSummary(hoverService: IHoverService | undefined, metadata: readonly string[]): void {
 		if (!hoverService) return;
-		const title = this.label.textContent ?? '';
+		const title = this.row.title;
 		const details = [this.managementDescription, ...metadata, this.pullRequestDescription].filter((value): value is string => !!value);
 		const summaryText = JSON.stringify([title, details]);
 		if (this.summaryText === summaryText) return;
@@ -1290,11 +1292,31 @@ export class SessionListSection extends Disposable {
 export class SessionListRowRenderer extends Disposable {
 	readonly element: HTMLElement;
 	readonly button: HTMLButtonElement;
+	private readonly titleText: HTMLSpanElement;
+	private readonly titleViewport: HTMLSpanElement;
+	private readonly titleResize = this._register(new MutableDisposable());
 
-	constructor(document: Document, leading?: HTMLElement) {
+	constructor(document: Document, titleBehavior: 'static' | 'scrollOnHover', leading?: HTMLElement) {
 		super();
 		this.element = h(document, 'div', { className: 'ash-sessions-list-row' });
 		this.button = h(document, 'button', { className: 'ash-sessions-list-item', attributes: { type: 'button' } });
+		this.titleViewport = h(document, 'span', { className: 'ash-sessions-list-label' });
+		this.titleText = titleBehavior === 'scrollOnHover' ? h(document, 'span') : this.titleViewport;
+		if (titleBehavior === 'scrollOnHover') {
+			this.titleViewport.append(this.titleText);
+			this._register(addDisposableListener(this.element, 'pointerenter', event => {
+				if (event.pointerType === 'touch') {
+					return;
+				}
+				this.updateTitleOverflow();
+				this.titleResize.value = observeResize(this.titleViewport, () => this.updateTitleOverflow());
+			}));
+			this._register(addDisposableListener(this.element, 'pointerleave', () => {
+				this.titleResize.clear();
+				this.titleViewport.classList.remove('title-overflows');
+			}));
+		}
+		this.button.append(this.titleViewport);
 		if (leading) {
 			this.element.classList.add('has-leading-icon');
 			this.element.append(leading);
@@ -1306,6 +1328,31 @@ export class SessionListRowRenderer extends Disposable {
 			if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
 		}));
 		this._register(toDisposable(() => this.element.remove()));
+	}
+
+	get title(): string {
+		return this.titleText.textContent ?? '';
+	}
+
+	setTitle(title: string): void {
+		if (this.title === title) {
+			return;
+		}
+		this.titleText.textContent = title;
+		if (this.titleResize.value) {
+			this.updateTitleOverflow();
+		}
+	}
+
+	private updateTitleOverflow(): void {
+		const width = this.titleViewport.clientWidth;
+		const overflow = this.titleText.offsetWidth - width;
+		const hasOverflow = width > 0 && overflow > 0;
+		this.titleViewport.classList.toggle('title-overflows', hasOverflow);
+		if (hasOverflow) {
+			this.titleViewport.style.setProperty('--sessions-row-title-distance', `${overflow}px`);
+			this.titleViewport.style.setProperty('--sessions-row-title-duration', `${Math.max(650, overflow * 18)}ms`);
+		}
 	}
 
 	protected setCollapseRenderer(renderCollapse: (collapsed: boolean) => void): void {

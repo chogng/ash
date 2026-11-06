@@ -288,12 +288,17 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const row = page.locator('.ash-chat-navigation-row[data-item="chatgpt:fixture-chat"]');
 			const title = row.locator('.ash-chat-navigation-item');
 			await expect(title).toBeVisible();
+			await expect(row.locator('.ash-session-leading-icon [data-ash-icon-id="chat-session"]')).toBeVisible();
 			for (const direction of ['ltr', 'rtl']) {
 				await page.locator('#navigation').evaluate((element, dir) => { element.setAttribute('dir', dir); }, direction);
 				await page.keyboard.press('Tab');
 				await title.focus();
 				await title.hover();
-				await expect(row.locator('.ash-sessions-list-actions')).toHaveCSS('opacity', '1');
+				const actions = row.locator('.ash-sessions-list-actions');
+				await expect(actions).toHaveCSS('opacity', '1');
+				await expect(row).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				await expect(title).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				await expect(actions).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 				await testInfo.attach(`conversation-focused-${theme}-${direction}`, { body: await row.screenshot(), contentType: 'image/png' });
 				await expectVisibleFocusOutline(title);
 				await row.locator('.ash-sessions-list-actions').getByRole('button').first().click({ trial: true });
@@ -301,6 +306,51 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				await expect(row.locator('.ash-sessions-list-actions').getByRole('button').first()).toBeFocused();
 			}
 		}
+	});
+
+	test('an overflowing chat title scrolls to its end on hover and resets on exit', async () => {
+		const { page } = browserTests;
+		const longTitle = '用于测试悬停滚动的长会话标题，最后几个字必须完整显示';
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/conversations?*', route => route.fulfill({
+			json: { items: [{ id: 'long', title: longTitle }, { id: 'short', title: '短标题' }], total: 2 },
+		}));
+		await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=light');
+		const button = page.getByRole('button', { name: longTitle, exact: true });
+		const label = button.locator('.ash-sessions-list-label');
+		const text = label.locator('span');
+		const short = page.getByRole('button', { name: '短标题', exact: true });
+		await expect(label).toHaveCSS('text-overflow', 'ellipsis');
+		for (const direction of ['ltr', 'rtl']) {
+			await page.locator('#navigation').evaluate((element, dir) => { element.setAttribute('dir', dir); }, direction);
+			await button.hover();
+			await expect(label).not.toHaveCSS('mask-image', 'none');
+			await expect(text).toHaveCSS('animation-name', 'ash-sessions-row-title-scroll');
+			expect(await text.evaluate((element, dir) => {
+				element.getAnimations()[0]!.finish();
+				const viewport = element.parentElement!.getBoundingClientRect();
+				const content = element.getBoundingClientRect();
+				return dir === 'rtl' ? content.left - viewport.left : viewport.right - content.right;
+			}, direction)).toBeGreaterThanOrEqual(15);
+			await expect(label).toHaveCSS('mask-size', '100% 100%');
+
+			await short.hover();
+			await expect(text).toHaveCSS('transform', 'none');
+			await expect(short.locator('.ash-sessions-list-label')).toHaveCSS('mask-image', 'none');
+		}
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		await button.hover();
+		await expect(text).toHaveCSS('animation-name', 'none');
+		await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'no-preference' });
+		await expect(label).toHaveCSS('mask-image', 'none');
+		await expect(label).toHaveCSS('text-overflow', 'ellipsis');
+		await expect(text).toHaveCSS('animation-name', 'none');
+		await page.emulateMedia({ forcedColors: 'none' });
+		await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=hcDark');
+		await button.hover();
+		await expect(label).toHaveCSS('mask-image', 'none');
+		await expect(label).toHaveCSS('text-overflow', 'ellipsis');
+		await expect(text).toHaveCSS('animation-name', 'none');
 	});
 
 	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {

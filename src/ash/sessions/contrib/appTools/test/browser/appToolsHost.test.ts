@@ -4,13 +4,53 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 
 suite('appTools browser component', () => {
 	const browserTests = useBrowserTests();
+	for (const mode of ['Code', 'Chat']) {
+		test(`${mode} scrolls overflowing root and nested conversation titles beside the toolbar`, async () => {
+			const { page } = browserTests;
+			const rootTitle = '测试主对话的长标题，悬停以后应完整显示最后几个字';
+			const nestedTitle = '测试分支对话的长标题，悬停以后也应完整显示末尾';
+			const params = new URLSearchParams({ nested: '', leadingIcons: '', locale: 'zh-CN', rootTitle, nestedTitle });
+			if (mode === 'Chat') {
+				params.set('chatMode', '');
+			}
+			await page.goto(`/appTools.html?${params}`);
+			const list = page.locator('.ash-sessions-list');
+			await list.evaluate(node => {
+				node.style.inlineSize = '260px';
+				node.style.blockSize = '320px';
+			});
+			const short = list.getByRole('button', { name: 'Task 1', exact: true });
+			for (const title of [rootTitle, nestedTitle]) {
+				const titleButton = page.getByRole('button', { name: title, exact: true });
+				const row = list.locator('.ash-sessions-list-row').filter({ has: titleButton });
+				const button = row.getByRole('button', { name: title, exact: true });
+				const label = button.locator('.ash-sessions-list-label');
+				const text = label.locator('span');
+				const toolbar = row.locator('.ash-sessions-list-actions');
+				await expect(label).toHaveCSS('text-overflow', 'ellipsis');
+				await button.hover();
+				await expect(toolbar).toBeVisible();
+				await expect(text).toHaveCSS('animation-name', 'ash-sessions-row-title-scroll');
+				expect(await text.evaluate(element => {
+					element.getAnimations()[0]!.finish();
+					const viewport = element.parentElement!.getBoundingClientRect();
+					const actions = element.closest('.ash-sessions-list-row')!.querySelector('.ash-sessions-list-actions')!.getBoundingClientRect();
+					return Math.min(viewport.right, actions.left) - element.getBoundingClientRect().right;
+				})).toBeGreaterThanOrEqual(15);
+				await short.hover();
+				await expect(text).toHaveCSS('transform', 'none');
+				await expect(short.locator('.ash-sessions-list-label')).toHaveCSS('mask-image', 'none');
+			}
+		});
+	}
+
 	test('Code and Agent lists share the leading icon picker and saved row icons', async function () {
 		const { page } = browserTests;
 		await page.goto('/appTools.html?leadingIcons&locale=zh-CN');
 		const row = page.locator('[data-item="session:session-1"]');
 		const trigger = row.getByRole('button', { name: '更换「Task 1」的图标' });
 		const picker = page.getByRole('dialog', { name: '更换图标', exact: true });
-		await expect(trigger.locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
+		await expect(trigger.locator('[data-ash-icon-id="circle"]')).toBeVisible();
 		await trigger.press('Enter');
 		await picker.getByRole('combobox', { name: '搜索图标' }).fill('folder');
 		await picker.getByRole('option', { name: 'folder', exact: true }).click();
@@ -24,7 +64,7 @@ suite('appTools browser component', () => {
 		await expect(trigger.locator('[data-ash-icon-id="folder"]')).toBeVisible();
 		await trigger.press('Enter');
 		await picker.getByRole('button', { name: '恢复默认图标' }).click();
-		await expect(trigger.locator('[data-ash-icon-id="chat-session"]')).toBeVisible();
+		await expect(trigger.locator('[data-ash-icon-id="circle"]')).toBeVisible();
 	});
 
 	test('application tools adapt file, review and browser resources into window services', async function () {

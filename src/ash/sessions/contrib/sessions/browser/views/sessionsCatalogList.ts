@@ -372,7 +372,6 @@ export class SessionsCatalogList extends Disposable {
 }
 
 class SessionsCatalogProjectRenderer extends SessionListRowRenderer {
-	private readonly label: HTMLElement;
 	private readonly chevron: HTMLElement;
 	private readonly spinner: HTMLSpanElement;
 	private readonly history: HTMLElement;
@@ -385,12 +384,10 @@ class SessionsCatalogProjectRenderer extends SessionListRowRenderer {
 			className: 'ash-session-leading-icon ash-chat-navigation-project-icon',
 			attributes: { 'aria-hidden': 'true' },
 		});
-		super(document, leading);
+		super(document, 'static', leading);
 		this.element.dataset.item = id;
 		this.element.classList.add('ash-chat-navigation-project');
 		this.button.classList.add('ash-chat-navigation-item');
-		this.label = h(document, 'span', { className: 'ash-sessions-list-label' });
-		this.button.append(this.label);
 		appendIcon(Lxicon.projects, leading);
 		this.chevron = h(document, 'span', {
 			className: 'ash-chat-navigation-project-chevron',
@@ -423,7 +420,8 @@ class SessionsCatalogProjectRenderer extends SessionListRowRenderer {
 	}
 
 	update(title: string, loading: boolean): void {
-		this.button.title = this.label.textContent = title;
+		this.setTitle(title);
+		this.button.title = title;
 		this.element.classList.toggle('loading', loading);
 		this.spinner.hidden = !loading;
 		this.button.setAttribute('aria-busy', String(loading));
@@ -449,8 +447,8 @@ class SessionsCatalogProjectRenderer extends SessionListRowRenderer {
 
 class SessionsCatalogRowRenderer extends Disposable {
 	readonly element: HTMLElement;
+	private readonly row: SessionListRowRenderer;
 	private readonly button: HTMLButtonElement;
-	private readonly label: HTMLElement;
 	private readonly leadingIcon: SessionLeadingIcon;
 	private readonly toolbar: WorkbenchToolBar;
 	private readonly more: IAction;
@@ -472,14 +470,12 @@ class SessionsCatalogRowRenderer extends Disposable {
 		this.entry = entry;
 		this.leadingIcon = this._register(instantiation.createInstance(SessionLeadingIcon, document, entry.title,
 			entry.setIcon && ((icon: Icon | undefined) => this.entry.setIcon?.(icon))));
-		const row = this._register(new SessionListRowRenderer(document, this.leadingIcon.element));
+		const row = this.row = this._register(new SessionListRowRenderer(document, 'scrollOnHover', this.leadingIcon.element));
 		this.element = row.element;
 		this.element.classList.add('ash-chat-navigation-row');
 		this.element.dataset.item = entry.id;
 		this.button = row.button;
 		this.button.classList.add('ash-chat-navigation-item');
-		this.label = h(document, 'span', { className: 'ash-sessions-list-label' });
-		this.button.append(this.label);
 		this._register(addDisposableListener(this.button, 'click', () => this.entry.open()));
 		this.more = this.action('more', localize('sessions.chatList.more', 'More actions'), Lxicon.ellipsis,
 			() => this.showMore(this.moreButton.matches(':focus-visible')));
@@ -521,8 +517,9 @@ class SessionsCatalogRowRenderer extends Disposable {
 		const previous = this.entry;
 		this.entry = entry;
 		this.element.dataset.parentSection = group;
-		if (this.label.textContent !== entry.title) {
-			this.button.title = this.label.textContent = entry.title;
+		if (this.row.title !== entry.title) {
+			this.row.setTitle(entry.title);
+			this.button.title = entry.title;
 			this.leadingIcon.setTitle(entry.title);
 			this.toolbar.setAriaLabel(localize('sessions.chatList.conversationActions', 'Actions for {0}', entry.title));
 		}

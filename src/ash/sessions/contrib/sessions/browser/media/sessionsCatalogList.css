@@ -15,7 +15,6 @@
 }
 
 .ash-chat-navigation-list {
-	--chat-navigation-fade-direction: to right;
 	display: flex;
 	flex-direction: column;
 	gap: var(--ash-spacing-size80);
@@ -25,22 +24,19 @@
 .ash-chat-navigation-list .ash-sessions-list-row {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;
+	border-radius: var(--ash-cornerRadius-large);
 }
 
-/* Paint once across the title and actions, including translucent hover colors. */
-.ash-chat-navigation-list .ash-sessions-list-row::before {
-	content: "";
-	grid-area: 1 / 1 / 2 / -1;
-	border-radius: var(--ash-cornerRadius-large);
+/* Paint translucent states once, under both the title and actions. */
+.ash-chat-navigation-list
+	.ash-sessions-list-row:is(:hover, :focus-within, .menu-visible, .selected) {
 	background: var(--sessions-row-background);
-	pointer-events: none;
 }
 
 .ash-chat-navigation-list .ash-sessions-list-row > .ash-sessions-list-item {
 	position: relative;
 	grid-area: 1 / 1;
 	padding: var(--ash-sessions-sidebar-item-inset);
-	background: transparent;
 }
 
 .ash-chat-navigation-list .ash-sessions-list-row > .ash-session-leading-icon {
@@ -57,55 +53,9 @@
 }
 
 .ash-chat-navigation-list .ash-sessions-list-row > .ash-sessions-list-actions {
-	position: relative;
 	grid-area: 1 / 2;
 	align-self: center;
-	inset: auto;
-	transform: none;
 	margin-inline-end: var(--ash-sessions-sidebar-item-inset);
-	padding-inline-end: 0;
-	background: transparent;
-}
-
-.ash-chat-navigation-list .ash-sessions-list-actions::before {
-	content: none;
-}
-
-[dir="rtl"] .ash-chat-navigation-list {
-	--chat-navigation-fade-direction: to left;
-}
-
-.ash-chat-navigation-list
-	.ash-sessions-list-row:has(> .ash-sessions-list-actions:not([hidden])):is(
-		:hover,
-		:focus-within,
-		.menu-visible
-	)
-	> .ash-sessions-list-item
-	> .ash-sessions-list-label {
-	text-overflow: var(--chat-navigation-title-overflow, clip);
-	/* Alpha masks fade the title without painting over the row's background. */
-	mask-image: var(
-		--chat-navigation-title-mask,
-		linear-gradient(
-			var(--chat-navigation-fade-direction),
-			#000 calc(100% - var(--ash-spacing-size160)),
-			transparent
-		)
-	);
-}
-
-.ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
-	.ash-chat-navigation-list {
-	--chat-navigation-title-mask: none;
-	--chat-navigation-title-overflow: ellipsis;
-}
-
-@media (forced-colors: active) {
-	.ash-chat-navigation-list {
-		--chat-navigation-title-mask: none;
-		--chat-navigation-title-overflow: ellipsis;
-	}
 }
 
 .ash-chat-navigation-project-history {
