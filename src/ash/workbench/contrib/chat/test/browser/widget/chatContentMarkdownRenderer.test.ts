@@ -197,6 +197,49 @@ suite('Shared chat Markdown rendering', () => {
 		assert.deepEqual(actions, [next]);
 	});
 
+	for (const [inline, selector] of [['**bold**', 'strong'], ['[Open](https://example.com)', 'a']] as const) {
+		test(`streaming Markdown resumes after closed ${selector} without inline code`, async () => {
+			using scope = services();
+			using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+			const prefix = `Read ${inline} for context. `.repeat(224);
+			let didRender: () => void = () => { };
+			using part = scope.createInstance(ChatMarkdownContentPart, {
+				ownerDocument: document,
+				asyncRenderCallback: () => didRender(),
+			});
+			const render = (value: string, incomplete: boolean) => new Promise<void>(resolve => {
+				didRender = resolve;
+				part.tryIncrementalUpdate({ value }, incomplete);
+			});
+			await render(prefix, true);
+			const stable = part.domNode.querySelector(selector);
+			assert.ok(stable);
+			const lexer = mock.method(Lexer, 'lex');
+			const appended = `${prefix}More **text** and [a link](https://example.org).`;
+			try {
+				await render(appended, true);
+				const lengths = lexer.mock.calls.map(call => call.arguments[0].length);
+				assert.ok(lengths.length && lengths.every(length => length < prefix.length), `Lexed source lengths: ${lengths.join(', ')}`);
+			} finally {
+				lexer.mock.restore();
+			}
+			assert.equal(part.domNode.querySelector(selector), stable);
+			using expected = renderer.render({ value: appended }, { fillInIncompleteTokens: true });
+			assert.equal(fragmentContents(part.domNode), expected.element.innerHTML);
+
+			const heading = `${appended}\n---`;
+			await render(heading, true);
+			using expectedHeading = renderer.render({ value: heading }, { fillInIncompleteTokens: true });
+			assert.equal(fragmentContents(part.domNode), expectedHeading.element.innerHTML);
+			assert.ok(part.domNode.querySelector('h2'));
+
+			const corrected = appended.replace('Read', 'Corrected');
+			await render(corrected, false);
+			using expectedCorrection = renderer.render({ value: corrected });
+			assert.equal(fragmentContents(part.domNode), expectedCorrection.element.innerHTML);
+		});
+	}
+
 	test('streaming Markdown list markers retain the checkpoint until the last item is filled', async () => {
 		using scope = services();
 		using renderer = scope.createInstance(ChatContentMarkdownRenderer);

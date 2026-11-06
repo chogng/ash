@@ -104,8 +104,9 @@ function paragraphCheckpoint(
 	previous?: MarkdownTailCheckpoint,
 ): MarkdownTailCheckpoint | undefined {
 	if (source.includes('\n') || previous && (previous.kind !== 'paragraph' || raw.firstChild?.nodeName !== 'CODE')) return undefined;
-	const code = [...raw.children].filter(element => element.tagName === 'CODE');
-	if (code.length <= (previous ? 1 : 0)) return previous;
+	const contextChildren = previous ? 1 : 0;
+	const elements = [...raw.children];
+	if (!elements.some((node, index) => index >= contextChildren && (node.tagName === 'CODE' || node.tagName === 'STRONG' || node.tagName === 'A'))) return previous;
 	// Searching for a checkpoint is optional. Bound the extra lexer pass even
 	// when a full fallback render contains a long, uncheckpointable paragraph.
 	const prefix = source.slice(0, paragraphCheckpointScanLimit);
@@ -113,41 +114,50 @@ function paragraphCheckpoint(
 	const paragraph = tokens[0];
 	if (tokens.length !== 1 || paragraph?.type !== 'paragraph' || paragraph.raw !== prefix || !paragraph.tokens) return previous;
 	let offset = 0;
-	let codeIndex = 0;
+	let elementIndex = 0;
 	let boundary: { readonly offset: number; readonly node: Element; } | undefined;
+	// Literal or unmatched syntax can bind to future text. Stop at the first
+	// token whose boundary cannot be carried over to the next render.
+	inline:
 	for (const token of paragraph.tokens) {
 		const start = offset;
 		offset += token.raw.length;
 		const spaceBefore = source[start - 1] === ' ';
 		const spaceAfter = source[offset] === ' ';
+		let tag: string;
 		switch (token.type) {
 			case 'text':
 				if (plainInline.test(token.raw)) continue;
-				break;
+				break inline;
 			case 'strong':
-				if (spaceBefore && spaceAfter && token.raw === `**${token.text}**` && plainInline.test(token.text)) continue;
+				if (!spaceBefore || !spaceAfter || token.raw !== `**${token.text}**` || !plainInline.test(token.text)) break inline;
+				tag = 'STRONG';
 				break;
 			case 'link':
-				if (spaceBefore && spaceAfter && /^https?:\/\/[\w./%+-]+$/u.test(token.href)
-					&& plainInline.test(token.text) && token.raw === `[${token.text}](${token.href})`) continue;
+				if (!spaceBefore || !spaceAfter || !/^https?:\/\/[\w./%+-]+$/u.test(token.href)
+					|| !plainInline.test(token.text) || token.raw !== `[${token.text}](${token.href})`) break inline;
+				tag = 'A';
 				break;
-			case 'codespan': {
-				const node = code[codeIndex++];
-				if (node?.textContent !== token.text || !/^`[^`]+`$/u.test(token.raw)) break;
-				if (offset < prefix.length && spaceBefore && (spaceAfter || prefix.startsWith('. ', offset))) boundary = { offset, node };
-				continue;
-			}
+			case 'codespan':
+				if (!/^`[^`]+`$/u.test(token.raw)) break inline;
+				tag = 'CODE';
+				break;
+			default:
+				break inline;
 		}
-		// Literal or unmatched syntax can bind to future text. Only use a
-		// checkpoint reached before it, where the inline tokens are closed.
-		break;
+		const node = elements[elementIndex++];
+		if (node?.tagName !== tag) break;
+		if (node.textContent !== token.text) {
+			if (tag === 'CODE') break;
+			continue;
+		}
+		if (offset < prefix.length && spaceBefore && (spaceAfter || tag === 'CODE' && prefix.startsWith('. ', offset))) boundary = { offset, node };
 	}
 	if (!boundary) return previous;
 
-	// A synthetic code span gives the suffix the same left boundary without
-	// copying the already rendered prefix. It is removed before DOM patching.
+	// The synthetic code span supplies the verified left context for the
+	// suffix. It is removed before patching the DOM.
 	const contextLength = previous?.context.length ?? 0;
-	const contextChildren = previous ? 1 : 0;
 	return {
 		kind: 'paragraph',
 		context: paragraphContext,

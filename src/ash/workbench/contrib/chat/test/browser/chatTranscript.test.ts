@@ -1000,7 +1000,11 @@ suite('chatTranscript browser component', () => {
 			await strong.evaluate(element => window.getSelection()!.setBaseAndExtent(element.firstChild!, 6, element.firstChild!, 1));
 			await link.focus();
 			await page.evaluate(prefix => {
-				for (let index = 0; index < 8; index++) window.ashChatTranscriptIntegration.stream(prefix + `terminal ${index}`, index === 7);
+				let appended = prefix + 'initial';
+				for (let index = 0; index < 8; index++) {
+					appended += ` terminal ${index}`;
+					window.ashChatTranscriptIntegration.stream(appended, index === 7);
+				}
 			}, prefix);
 			await expect(article).toContainText('terminal 7');
 			expect(await strong.evaluate((element, old) => element === old, retained)).toBe(true);
