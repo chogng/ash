@@ -1,11 +1,16 @@
 .ash-chat-attach-menu {
 	min-width: 220px;
 	max-width: 280px;
-	background: var(--ash-menu-background, var(--ash-editor-background, #ffffff));
+	background: var(
+		--ash-menu-background,
+		var(--ash-editor-background, #ffffff)
+	);
 	color: var(--ash-menu-foreground, var(--ash-foreground, #1f2937));
-	border: var(--ash-strokeThickness, 1px) solid var(--ash-menu-border, var(--ash-border, rgba(0, 0, 0, 0.1)));
+	border: var(--ash-strokeThickness, 1px) solid var(--ash-border);
 	border-radius: var(--ash-cornerRadius-large, 12px);
-	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+	box-shadow:
+		0 4px 20px rgba(0, 0, 0, 0.12),
+		0 2px 6px rgba(0, 0, 0, 0.06);
 	padding: 6px 4px;
 	box-sizing: border-box;
 	display: flex;
@@ -32,7 +37,9 @@
 	border-radius: var(--ash-cornerRadius-small, 6px);
 	cursor: pointer;
 	box-sizing: border-box;
-	transition: background-color 80ms ease, color 80ms ease;
+	transition:
+		background-color 80ms ease,
+		color 80ms ease;
 	outline: none;
 	position: relative;
 	color: inherit;
@@ -60,7 +67,6 @@
 	justify-content: center;
 	margin-right: 8px;
 	flex-shrink: 0;
-	color: var(--ash-icon-foreground, inherit);
 }
 
 .ash-chat-attach-menu-item-label {
@@ -83,7 +89,7 @@
 
 .ash-chat-attach-menu-item-shortcut {
 	font-size: 12px;
-	color: var(--ash-descriptionForeground, rgba(0, 0, 0, 0.45));
+	color: var(--ash-description-foreground);
 	letter-spacing: 0.5px;
 }
 
@@ -95,7 +101,7 @@
 .ash-chat-attach-menu-item-arrow {
 	--ash-lxiconFontSize: var(--ash-lxiconFontSize-compact, 12px);
 	font-size: 12px;
-	color: var(--ash-descriptionForeground, rgba(0, 0, 0, 0.4));
+	color: var(--ash-description-foreground);
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -106,7 +112,7 @@
 }
 
 .ash-chat-attach-menu-item-check {
-	color: var(--ash-accent, #2563eb);
+	color: var(--ash-accent-foreground);
 	--ash-lxiconFontSize: 14px;
 	font-size: 14px;
 	display: inline-flex;
@@ -118,9 +124,14 @@
 	visibility: hidden;
 }
 
+.ash-chat-attach-menu-item:hover .ash-chat-attach-menu-item-check,
+.ash-chat-attach-menu-item.focused .ash-chat-attach-menu-item-check {
+	color: inherit;
+}
+
 .ash-chat-attach-menu-divider {
 	height: var(--ash-strokeThickness, 1px);
-	background: var(--ash-menu-separatorBackground, var(--ash-border, rgba(0, 0, 0, 0.08)));
+	background: var(--ash-border);
 	margin: 4px 6px;
 	border: 0;
 	flex-shrink: 0;
