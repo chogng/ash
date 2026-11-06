@@ -65,6 +65,7 @@ fn renderer_admission_is_projected_from_the_catalog_proof_and_omitted_after_revo
         manifest_sha256: digest.clone(),
         package_sha256: digest.clone(),
         runtime_binding: None,
+        deferred_package: None,
         renderer_client: Some(ExtensionRendererClient {
             runtime_id: "ash.academy".into(),
             api_version: 1,

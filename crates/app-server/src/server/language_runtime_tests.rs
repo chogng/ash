@@ -431,12 +431,13 @@ fn acquisition_uses_configured_environment_and_failure_does_not_block_other_serv
         "configured"
     );
 
-    runtime
-        .sources
-        .lock()
-        .unwrap()
-        .acquisitions
-        .insert(acquisition.id.clone(), acquisition);
+    runtime.sources.lock().unwrap().acquisitions.insert(
+        acquisition.id.clone(),
+        super::CatalogLanguageServer {
+            acquisition,
+            package: None,
+        },
+    );
     runtime.reconcile_configuration(&configuration);
     // Changing an authoritative override retires that acquisition while other languages remain usable.
     runtime

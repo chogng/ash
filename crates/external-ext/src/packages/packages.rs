@@ -10,7 +10,9 @@ use std::sync::Arc;
 use super::budget::PackageBudget;
 use super::budget::PackageLimit;
 use super::bundled_index;
+use super::bundled_index::IndexedExtensionPackage;
 use super::diagnostic::diagnostic;
+use super::package::DeferredExtensionPackage;
 use super::package::ExtensionPackageSnapshot;
 use super::package::MAX_MANIFEST_BYTES;
 use super::package::PackageSnapshotError;
@@ -65,6 +67,8 @@ pub struct ExtensionDescriptor {
     pub renderer_client: Option<ExtensionRendererClient>,
     /// Trusted executable package identity, independent of the frozen-resource hash domain.
     pub runtime_binding: Option<ExtensionRuntimeBinding>,
+    /// Product-owned integrity binding for a bundled runtime read on demand.
+    pub deferred_package: Option<Arc<DeferredExtensionPackage>>,
 }
 
 /// Provenance attached to a discovered extension descriptor.
@@ -159,9 +163,34 @@ pub struct ExtensionPackages {
 
 #[derive(Clone)]
 struct DiscoveredExtension {
-    package: Arc<ExtensionPackageSnapshot>,
+    package: CatalogPackage,
     descriptor: ExtensionDescriptor,
     dynamic_source: Option<DynamicExtensionPackageSource>,
+}
+
+#[derive(Clone)]
+enum CatalogPackage {
+    Frozen(Arc<ExtensionPackageSnapshot>),
+    Deferred(Arc<DeferredExtensionPackage>),
+}
+
+impl CatalogPackage {
+    fn total_bytes(&self) -> usize {
+        match self {
+            Self::Frozen(package) => package.total_bytes(),
+            Self::Deferred(package) => package.index.total_bytes,
+        }
+    }
+
+    fn read(&self, path: &str) -> Result<Vec<u8>, ExtensionPackagesError> {
+        match self {
+            Self::Frozen(package) => package
+                .file(path)
+                .map(<[u8]>::to_vec)
+                .ok_or(ExtensionPackagesError::ResourceNotFound),
+            Self::Deferred(package) => package.read(path),
+        }
+    }
 }
 
 impl ExtensionPackages {
@@ -240,7 +269,7 @@ impl ExtensionPackages {
         snapshot
     }
 
-    /// Opens one bounded resource frozen into the requested current catalog generation.
+    /// Opens one bounded resource from the requested current catalog generation.
     pub fn open_resource(
         &mut self,
         generation: u64,
@@ -254,10 +283,7 @@ impl ExtensionPackages {
             .map(|segment| segment.to_string_lossy())
             .collect::<Vec<_>>()
             .join("/");
-        let bytes = package
-            .file(&key)
-            .ok_or(ExtensionPackagesError::ResourceNotFound)?
-            .to_vec();
+        let bytes = package.read(&key)?;
         Ok(ExtensionResource {
             mime_type: mime_type(&relative_path),
             bytes,
@@ -274,14 +300,17 @@ impl ExtensionPackages {
         path: &str,
     ) -> Result<Option<Vec<(String, String)>>, ExtensionPackagesError> {
         let package = self.resource_package(generation, extension_id)?;
-        Ok(super::theme::color_theme_sources(package, path))
+        Ok(match package {
+            CatalogPackage::Frozen(snapshot) => super::theme::color_theme_sources(snapshot, path),
+            CatalogPackage::Deferred(_) => None,
+        })
     }
 
     fn resource_package(
         &mut self,
         generation: u64,
         extension_id: &str,
-    ) -> Result<&ExtensionPackageSnapshot, ExtensionPackagesError> {
+    ) -> Result<&CatalogPackage, ExtensionPackagesError> {
         if self.snapshot.is_none() {
             let _ = self.list(ExtensionPackagesReload::Cached);
         }
@@ -290,7 +319,7 @@ impl ExtensionPackages {
         }
         self.discovered
             .get(extension_id)
-            .map(|extension| extension.package.as_ref())
+            .map(|extension| &extension.package)
             .ok_or(ExtensionPackagesError::NotFound)
     }
 
@@ -473,18 +502,27 @@ fn scan_root(
     for (subject, package_path) in packages {
         if let Some(snapshot) = indexed.remove(&subject)
             && let Ok(package_root) = package_location(&canonical_root, &package_path)
-            && let Ok(extension) = describe_package(root, package_root, None, snapshot)
         {
-            publish_discovered(
-                root,
-                subject,
-                extension,
-                extensions,
-                diagnostics,
-                discovered,
-                budget,
-            );
-            continue;
+            let package = match snapshot {
+                IndexedExtensionPackage::Frozen(snapshot) => {
+                    CatalogPackage::Frozen(Arc::new(snapshot))
+                }
+                IndexedExtensionPackage::Deferred(index) => CatalogPackage::Deferred(Arc::new(
+                    DeferredExtensionPackage::new(package_root.clone(), index),
+                )),
+            };
+            if let Ok(extension) = describe_package(root, package_root, None, package) {
+                publish_discovered(
+                    root,
+                    subject,
+                    extension,
+                    extensions,
+                    diagnostics,
+                    discovered,
+                    budget,
+                );
+                continue;
+            }
         }
         publish_package(
             root,
@@ -708,7 +746,12 @@ fn discover_package(
     let package_root = package_location(canonical_root, package_path)?;
     let package =
         ExtensionPackageSnapshot::load(&package_root, limits).map_err(package_snapshot_error)?;
-    describe_package(root, package_root, normalized_manifest_json, package)
+    describe_package(
+        root,
+        package_root,
+        normalized_manifest_json,
+        CatalogPackage::Frozen(Arc::new(package)),
+    )
 }
 
 fn package_location(
@@ -746,12 +789,23 @@ fn describe_package(
     root: &ExtensionRoot,
     package_root: PathBuf,
     normalized_manifest_json: Option<&str>,
-    package: ExtensionPackageSnapshot,
+    package: CatalogPackage,
 ) -> Result<DiscoveredExtension, (ExtensionDiagnosticCode, &'static str)> {
-    let package_manifest_bytes = package.file("package.json").ok_or((
-        ExtensionDiagnosticCode::InvalidManifest,
-        "extension package.json is missing",
-    ))?;
+    let (package_manifest_bytes, package_sha256, deferred_package) = match &package {
+        CatalogPackage::Frozen(snapshot) => (
+            snapshot.file("package.json").ok_or((
+                ExtensionDiagnosticCode::InvalidManifest,
+                "extension package.json is missing",
+            ))?,
+            snapshot.sha256().to_owned(),
+            None,
+        ),
+        CatalogPackage::Deferred(deferred) => (
+            deferred.index.manifest.as_slice(),
+            deferred.index.sha256.clone(),
+            Some(Arc::clone(deferred)),
+        ),
+    };
     if package_manifest_bytes.len() > MAX_MANIFEST_BYTES {
         return Err((
             ExtensionDiagnosticCode::InvalidManifest,
@@ -820,9 +874,8 @@ fn describe_package(
         )
     })?;
     let manifest_sha256 = format!("sha256:{:x}", Sha256::digest(canonical_manifest.as_bytes()));
-    let package_sha256 = package.sha256().to_owned();
     Ok(DiscoveredExtension {
-        package: Arc::new(package),
+        package,
         dynamic_source: None,
         descriptor: ExtensionDescriptor {
             id,
@@ -837,6 +890,7 @@ fn describe_package(
             package_sha256,
             renderer_client: None,
             runtime_binding: None,
+            deferred_package,
         },
     })
 }

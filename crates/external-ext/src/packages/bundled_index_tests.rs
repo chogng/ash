@@ -1,7 +1,9 @@
+use super::DEFERRED_MAGIC;
 use super::MAGIC;
 use super::MANIFEST_KEY;
 use super::decode;
 use crate::packages::ExtensionPackages;
+use crate::packages::ExtensionPackagesError;
 use crate::packages::ExtensionPackagesReload;
 use crate::packages::ExtensionRoot;
 use flate2::Compression;
@@ -110,4 +112,91 @@ fn executable_packages_are_left_to_the_directory_scanner() {
         let index = index_with_manifest(manifest, "resource.json", b"content");
         assert!(decode(&mut index.as_slice()).unwrap().is_empty());
     }
+}
+
+#[test]
+fn typescript_catalog_uses_declarations_and_verifies_resources_and_runtime_on_demand() {
+    let install = tempfile::tempdir().unwrap();
+    let resources = install.path().join("ash-resources");
+    let extensions = resources.join("extensions");
+    let package = extensions.join("typescript-basics");
+    fs::create_dir_all(&package).unwrap();
+    let manifest = br#"{"name":"typescript","publisher":"vscode","version":"1.0.0","ashLanguageServers":{"version":2}}"#;
+    let entry = b"verified entrypoint";
+    let files = [
+        ("package.json", manifest.as_slice()),
+        ("server.mjs", entry.as_slice()),
+    ];
+    let mut raw = DEFERRED_MAGIC.to_vec();
+    write_number(&mut raw, 1);
+    write_field(&mut raw, b"typescript-basics");
+    write_number(&mut raw, 0);
+    write_number(&mut raw, files.len());
+    let mut aggregate = Sha256::new();
+    aggregate.update(b"ash-extension-package-v1\0");
+    for (path, bytes) in files {
+        write_field(&mut raw, path.as_bytes());
+        write_number(&mut raw, bytes.len());
+        raw.extend(Sha256::digest(bytes));
+        if path == "package.json" {
+            raw.extend(bytes);
+        }
+        aggregate.update((path.len() as u64).to_be_bytes());
+        aggregate.update(path.as_bytes());
+        aggregate.update((bytes.len() as u64).to_be_bytes());
+        aggregate.update(bytes);
+    }
+    let digest = aggregate.finalize();
+    raw.extend(digest);
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::fast());
+    encoder.write_all(&raw).unwrap();
+    let bytes = encoder.finish().unwrap();
+    let metadata = install.path().join("ash-package.json");
+    fs::write(
+        &metadata,
+        serde_json::json!({ "files": { MANIFEST_KEY: format!("{:x}", Sha256::digest(&bytes)) } })
+            .to_string(),
+    )
+    .unwrap();
+    fs::write(resources.join("extensions.index"), bytes).unwrap();
+
+    let root = ExtensionRoot::built_in(extensions).with_package_metadata(metadata);
+    let mut catalog = ExtensionPackages::new(vec![root]);
+    let snapshot = catalog.list(ExtensionPackagesReload::Cached);
+    let descriptor = &snapshot.extensions[0];
+    assert_eq!(descriptor.id, "vscode.typescript");
+    assert_eq!(descriptor.package_sha256, format!("sha256:{digest:x}"));
+    let deferred = descriptor.deferred_package.as_ref().unwrap();
+    let open = |catalog: &mut ExtensionPackages| {
+        catalog.open_resource(snapshot.generation, &descriptor.id, "server.mjs")
+    };
+    assert_eq!(
+        open(&mut catalog),
+        Err(ExtensionPackagesError::OperationFailed)
+    );
+    assert_eq!(
+        deferred.verify(),
+        Err(ExtensionPackagesError::OperationFailed)
+    );
+
+    fs::write(package.join("package.json"), manifest).unwrap();
+    fs::write(package.join("server.mjs"), entry).unwrap();
+    assert_eq!(open(&mut catalog).unwrap().bytes, entry);
+    assert_eq!(deferred.verify(), Ok(()));
+    fs::write(package.join("server.mjs"), b"tampered entrypoint").unwrap();
+    assert_eq!(
+        open(&mut catalog),
+        Err(ExtensionPackagesError::OperationFailed)
+    );
+    assert_eq!(
+        deferred.verify(),
+        Err(ExtensionPackagesError::OperationFailed)
+    );
+
+    fs::write(package.join("server.mjs"), entry).unwrap();
+    fs::write(package.join("unindexed.js"), b"extra runtime file").unwrap();
+    assert_eq!(
+        deferred.verify(),
+        Err(ExtensionPackagesError::OperationFailed)
+    );
 }

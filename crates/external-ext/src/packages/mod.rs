@@ -13,6 +13,7 @@ mod resource;
 mod source;
 mod theme;
 
+pub use package::DeferredExtensionPackage;
 pub use packages::ExtensionDescriptor;
 pub use packages::ExtensionDiagnostic;
 pub use packages::ExtensionDiagnosticCode;

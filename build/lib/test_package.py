@@ -16,6 +16,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from build.builtin import copy_builtin_extensions
+from build.builtin import write_builtin_extension_index
 from build.lib.package_test_support import (
     prepare_builtin_fixture,
     copy_debug_runtime_fixture,
@@ -81,6 +82,28 @@ class PackageTests(unittest.TestCase):
         )
         boundary.start()
         self.addCleanup(boundary.stop)
+
+    def test_typescript_index_keeps_manifest_and_digest_without_resource_body(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            extensions = root / "extensions"
+            package = extensions / "typescript-basics"
+            package.mkdir(parents=True)
+            manifest = b'{"name":"typescript","publisher":"vscode","ashLanguageServers":{"version":2}}'
+            body = b"typescript runtime payload excluded from the index"
+            (package / "package.json").write_bytes(manifest)
+            (package / "server.mjs").write_bytes(body)
+            index = root / "extensions.index"
+
+            write_builtin_extension_index(extensions, index)
+
+            contents = gzip.decompress(index.read_bytes())
+            self.assertTrue(contents.startswith(b"ASH-EXTENSIONS\0\x02"))
+            self.assertIn(manifest, contents)
+            self.assertIn(hashlib.sha256(body).digest(), contents)
+            self.assertNotIn(body, contents)
 
     def test_release_builder_reads_update_key_from_environment(self) -> None:
         with patch.dict(os.environ, {"ASH_UPDATE_PUBLIC_KEY": "a" * 64}):
@@ -639,7 +662,7 @@ class PackageTests(unittest.TestCase):
             self.assertFalse((output / "ash-resources/extensions/academy").exists())
             index = output / "ash-resources/extensions.index"
             with gzip.open(index, "rb") as packed:
-                self.assertEqual(packed.read(16), b"ASH-EXTENSIONS\0\x01")
+                self.assertEqual(packed.read(16), b"ASH-EXTENSIONS\0\x02")
             metadata = json.loads((output / "ash-package.json").read_text())
             self.assertIn("ash-resources/extensions.index", metadata["files"])
             self.assertEqual(

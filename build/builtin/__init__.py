@@ -1,6 +1,7 @@
 """Repository-owned builtin extension selection, staging and validation."""
 
 import gzip
+import hashlib
 import json
 import os
 import re
@@ -74,10 +75,16 @@ def validate_builtin_extensions(extensions_directory: Path) -> None:
 
 
 def write_builtin_extension_index(extensions: Path, output: Path) -> None:
-    """Freeze resources for built-ins that the catalog serves as declarations."""
+    """Freeze declarative resources and index the TypeScript package for verified reads."""
     validate_builtin_extensions(extensions)
+    typescript = extensions / "typescript-basics"
+    deferred = typescript.is_dir() and _is_typescript_package(typescript)
     packages = sorted(
-        (path for path in extensions.iterdir() if _is_declarative(path)),
+        (
+            path
+            for path in extensions.iterdir()
+            if path == typescript and deferred or _is_declarative(path)
+        ),
         key=lambda path: path.name,
     )
     if not packages:
@@ -104,7 +111,7 @@ def write_builtin_extension_index(extensions: Path, output: Path) -> None:
             number(len(encoded))
             index.write(encoded)
 
-        index.write(b"ASH-EXTENSIONS\0\x01")
+        index.write(b"ASH-EXTENSIONS\0\x02" if deferred else b"ASH-EXTENSIONS\0\x01")
         number(len(packages))
         total_bytes = 0
         for package in packages:
@@ -127,7 +134,13 @@ def write_builtin_extension_index(extensions: Path, output: Path) -> None:
             if not 0 < len(files) <= 4096:
                 raise RuntimeError("Invalid built-in extension file count")
             name(package.name)
-            number(len(files))
+            defer_package = deferred and package == typescript
+            # Version 2 uses a zero count to distinguish the digest record
+            # from the existing frozen resource records.
+            number(0 if defer_package else len(files))
+            if defer_package:
+                number(len(files))
+                package_hash = hashlib.sha256(b"ash-extension-package-v1\0")
             package_bytes = 0
             for path in files:
                 info = path.lstat()
@@ -143,14 +156,27 @@ def write_builtin_extension_index(extensions: Path, output: Path) -> None:
                     raise RuntimeError(
                         "Built-in extensions exceed the catalog byte limit"
                     )
-                name(path.relative_to(package).as_posix())
+                relative = path.relative_to(package).as_posix()
+                name(relative)
                 number(info.st_size)
                 content = path.read_bytes()
                 if len(content) != info.st_size:
                     raise RuntimeError(
                         "Built-in extension changed during package assembly"
                     )
-                index.write(content)
+                if defer_package:
+                    index.write(hashlib.sha256(content).digest())
+                    encoded = relative.encode("utf-8")
+                    package_hash.update(struct.pack(">Q", len(encoded)))
+                    package_hash.update(encoded)
+                    package_hash.update(struct.pack(">Q", len(content)))
+                    package_hash.update(content)
+                    if relative == "package.json":
+                        index.write(content)
+                else:
+                    index.write(content)
+            if defer_package:
+                index.write(package_hash.digest())
         if index.tell() > 272 * 1024 * 1024:
             raise RuntimeError("Built-in extension index exceeds its size limit")
 
@@ -171,3 +197,14 @@ def _is_declarative(package: Path) -> bool:
         return False
     contributions = manifest.get("contributes")
     return not isinstance(contributions, dict) or "debuggers" not in contributions
+
+
+def _is_typescript_package(package: Path) -> bool:
+    manifest = json.loads((package / "package.json").read_bytes())
+    return (
+        isinstance(manifest, dict)
+        and manifest.get("name") == "typescript"
+        and manifest.get("publisher") == "vscode"
+        and "ashLanguageServers" in manifest
+        and not any(key in manifest for key in ("main", "browser", "ashRuntime"))
+    )
