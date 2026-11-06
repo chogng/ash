@@ -17,7 +17,7 @@
 
 下载器先校验已有缓存；缓存缺失或摘要不匹配时重新下载，并在原子替换前再次校验。默认包装入口显式传递已校验的 archive、binding 路径和 `RUSTY_V8_ARCHIVE_SHA256`，让上游再次验证静态库，并避免 Cargo 恢复缓存时误用旧 binding。`V8_FROM_SOURCE=1` 明确选择源码构建并跳过预编译产物解析。
 
-Rust binding crate 使用 crates.io 发布的 v8 152.2.0，不维护本地源码副本；引擎版本、静态库 ABI 和锁定配对保持一致。`V8_FROM_SOURCE=1` 使用发布包自带的源码与上游构建入口。停止维护宏依赖的逐项审查见 [依赖安全策略](../../.cargo/deny.toml)。
+Rust binding crate 使用 crates.io 发布的 v8 152.2.0。`V8_FROM_SOURCE=1` 使用发布包自带的源码与上游构建入口。停止维护宏依赖的逐项审查见 [依赖安全策略](../../.cargo/deny.toml)。
 
 发布包自带的源码尚未包含 Array.sort 混合元素类型修复。共享 `ash-v8-runtime`
 初始化始终关闭 Maglev、Turbolev 和 TurboFan 数组内建函数内联，覆盖
@@ -98,7 +98,7 @@ V8、ICU、Chromium libc++/libc++abi、Rust C++ binding、torque、mksnapshot
 和生成源码；每个编译动作由 Bazel 跟踪并复用本地 action cache。
 `rusty_v8_source_pair` 是源码配对入口，`ash-v8-poc` 通过现有 crate override
 消费同一图的 archive/binding，消费代码修改不需要重新打包或上传 V8。
-发布使用 `rusty_v8_source_release_pair`，包含原始 archive 和固定 crate binding，
+发布使用 `rusty_v8_source_release_pair`，包含原始 archive 和同配置生成的 binding，
 不包含 Linux Bazel 消费端的符号弱化或 ARM builtins 合并。
 源码和预编译适配规则统一由主仓库 `BUILD.bazel` 拥有；注入 crate 规则的
 `ash_v8_targets` 仓库只通过 `targets.BUILD.bazel` 转发两个配对输入。
@@ -109,7 +109,7 @@ V8、ICU、Chromium libc++/libc++abi、Rust C++ binding、torque、mksnapshot
 bazel cquery //third_party/v8:rusty_v8_source_pair --config=v8-source --platforms=@llvm//platforms:linux_amd64_gnu.2.28
 bazel aquery 'mnemonic("CppCompile", filter("v8_152_2_0_binding", deps(//third_party/v8:rusty_v8_source_archive)))' --config=v8-source --platforms=@llvm//platforms:linux_amd64_gnu.2.28 --include_artifacts=false
 bazel build //third_party/v8:rusty_v8_source_pair --config=v8-source --platforms=@llvm//platforms:linux_amd64_gnu.2.28
-bazel test //crates/v8-poc:v8-poc-unit-tests --config=v8-source --platforms=@llvm//platforms:linux_amd64_gnu.2.28 --test_arg=--test-threads=1
+bazel test //crates/v8-poc:v8-poc-unit-tests --config=v8-source --platforms=@llvm//platforms:linux_amd64_gnu.2.28 --test_arg=--test-threads=1 --test_arg=--include-ignored
 ```
 
 图查询只分析，不编译完整 V8。首轮源码构建仍需要下载工具链和编译 C++；
@@ -136,8 +136,9 @@ Python 模板依赖和生成器路径统一使用 Ash 的 Python 3.12 工具链�
 构建选择精确版本，不根据宿主机碰巧安装的 `>=3.10` 解释器改变 wheel 配对。
 源码 Linux archive 使用与预编译消费相同的异常 ABI 弱化和 ARM builtins
 适配；原始源码 archive 仍可通过 `rusty_v8_source_archive` 单独构建。
-`source.bzl` 的配置转换只在 archive 依赖内启用 Chromium libc++、指针压缩
-和 sandbox；外围 Rust 构建工具继续使用 Ash 默认 C++ 头文件与运行库。
+`source.bzl` 对 archive 和 bindgen 应用同一个配置转换，在各自依赖内启用
+Chromium libc++、指针压缩和 sandbox。bindgen 从 archive 的 C++ binding
+目标读取头文件和宏，复用它的 C++ 选项，并按目标平台解析布局。
 这避免把 V8 的 `-nostdinc++` 策略传播到 Rust process wrapper 等辅助程序。
 
 ### 独立产物发布
@@ -147,7 +148,7 @@ Python 模板依赖和生成器路径统一使用 Ash 的 Python 3.12 工具链�
 | 环节                 | Codex                                        | Ash 当前状态                                                                          |
 | -------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Linux/macOS 产物生产 | Bazel 源码配对目标                           | 发布复用本地 Bazel 源码图，保存原始 archive                                           |
-| Linux/macOS binding  | 使用固定 crate 的 release binding            | 相同；不在发布时运行 bindgen                                                          |
+| Linux/macOS binding  | 从 C++ 编译上下文运行 bindgen                | 源码消费和发布共用同一生成目标                                                        |
 | 本地源码反馈         | Bazel 跟踪各个 C++ 动作                      | 相同依赖闭包；Linux GNU/musl x64 源码、Cargo 与 Bazel 消费探针已通过                  |
 | Windows MSVC         | 上游 Cargo/GN                                | 源码生产保留同一路线；Bazel 独立 MSVC 宿主消费预编译 archive，GNU 客户端通过 IPC 调用 |
 | C++ 配置范围         | 发布命令统一配置 Chromium libc++             | Ash 只在 V8 archive 依赖闭包启用，避免影响外围 Rust 构建工具                          |
@@ -159,11 +160,11 @@ Linux/macOS 使用 `build/v8/release.py bazel-stage` 构建原始配对目标，
 再以同一平台与 CPU 配置查询输出，避免把上一次配置留下的文件误当新产物。
 宿主与目标 CPU 相同时复用 `v8-source` 本地配置；交叉构建显式选择目标 CPU，
 让宿主 mksnapshot 生成正确的代码，构建记录保留宿主 CPU 与所用配置。
-V8、ICU、Chromium 运行库、LLVM SDK 和 crate binding 由 `MODULE.bazel`
-及源码补丁锁定，不再准备 GN 编译器、Clang 19 bindgen 或系统 musl/GNU SDK。
+V8、ICU、Chromium 运行库、LLVM SDK 和 crate 头文件由 `MODULE.bazel`
+及源码补丁锁定。Bazel 工具链提供 libclang 和目标 SDK。
 Windows 从 `source-lock.json` 固定的 `denoland/rusty_v8` commit 递归检出，
 校验子模块、Rust、源码补丁和 Chromium 编译器 pin 后使用 Cargo/GN 构建，
-保持 archive 的 MSVC ABI。当前不自动运行跨平台源码矩阵。
+从同一 GN 输出取 archive 和生成的 binding，保持 MSVC ABI。
 
 手动运行 workflow 只构建和验证；推送 `rusty-v8-v<crate-version>` tag
 才会在当前仓库创建独立的 prerelease，不覆盖已有 release。
@@ -180,13 +181,14 @@ Bazel 与 Windows x64 Cargo/GN 源码生产，复用上述 pin、补丁、产物
 默认锁定产物的两个测试包还在 Linux、Windows、macOS 上执行并检查警告。
 发布前验证 Cargo manifest、Cargo lock 和产物 lock 的版本一致，
 每个目标的 checksum 必须精确覆盖 archive 和 binding 两项。
-macOS、GNU Linux 和 Windows x64 使用 `ash-v8-poc` 链接并执行产物；
-执行探针时串行运行测试，避免多个首批 isolate 并发初始化进程级沙箱地址池。
+八组发布产物均通过 `ash-v8-poc` 在对应架构执行；ARM64 GNU、musl 和 Windows
+在 x64 构建机交叉链接测试程序，再传到 ARM64 runner 执行。
+探针串行运行，避免多个首批 isolate 并发初始化进程级沙箱地址池。
 探针通过上游 C binding 检查所链接 V8 的真实 sandbox 配置，不能只检查
 Rust feature；archive 与 feature 不匹配必须使测试失败。
-Windows ARM64 和 musl ARM64 验证交叉链接；musl x64 链接并执行探针。
-GNU ARM64 使用 Bazel exec 配置中的 x64 生成工具交叉编译，并在单独的 ARM64 runner
-对同一份新产物执行 Cargo 与 Bazel 测试；发布汇总依赖该运行验证通过。
+TypedArray 探针对比小数组的实际存放位置与 binding 声明的阈值，再验证读取内容。
+现有 Codex release 的部分 binding 阈值失配，因此严格探针由源码和候选产物
+检查通过 `--include-ignored` 启用。采用新产物锁时移除该探针的忽略标记。
 Windows 使用 `152.2.0` 的上游 Cargo build script 下载固定的 Chromium Clang
 与同 revision 的 libclang，并自动为 bindgen 设置编译器和内置头文件目录。
 不再通过 Chocolatey 安装另一份 Clang 或手工传递 bindgen 参数。产物打包时
@@ -204,8 +206,8 @@ ARM64 Cargo 所需的 `__clear_cache` 单独从该固定 Zig 包的 compiler-rt 
 保留 sandbox 和指针压缩；发布汇总会验证参数。Bazel 的功能开关由 archive
 配置转换拥有，汇总核对源码图摘要、平台、CPU 配置和 Bazel 版本，拒绝混入
 GN 生成的 Linux/macOS 产物。
-全部 macOS/Linux 目标还通过仓库现有 Bazel 消费图验证同一份新产物，
-ARM64 musl 只链接，其余目标执行测试。Windows MSVC 发布产物仍使用 Cargo 验证；
+全部 macOS/Linux 目标还通过仓库现有 Bazel 消费图验证同一份新产物。
+ARM64 musl 在 Bazel 中验证链接，并执行交叉链接的 Cargo 探针。Windows MSVC 发布产物使用 Cargo 验证；
 Windows 独立宿主的 Bazel MSVC 消费另行验证，不生产 Windows GNU V8 archive。
 Linux 的 Bazel 消费规则会在派生 archive 中弱化两份 libc++ 共用的异常 ABI
 入口，避免重复符号；下载文件和发布摘要保持原样。
@@ -252,14 +254,14 @@ python3 -B build/v8/release.py bazel-stage --target x86_64-unknown-linux-gnu --o
 python3 -B build/v8/smoke.py pair --target x86_64-unknown-linux-gnu --artifacts .build/v8-release/x86_64-unknown-linux-gnu
 RUSTY_V8_ARCHIVE="$PWD/.build/v8-release/x86_64-unknown-linux-gnu/librusty_v8_ptrcomp_sandbox_release_x86_64-unknown-linux-gnu.a.gz" \
 RUSTY_V8_SRC_BINDING_PATH="$PWD/.build/v8-release/x86_64-unknown-linux-gnu/src_binding_ptrcomp_sandbox_release_x86_64-unknown-linux-gnu.rs" \
-just test ash-v8-poc --locked --target x86_64-unknown-linux-gnu --features sandbox -- --test-threads=1
+just test ash-v8-poc --locked --target x86_64-unknown-linux-gnu --features sandbox -- --test-threads=1 --include-ignored
 python3 -B build/v8/smoke.py bazel --target x86_64-unknown-linux-gnu --artifacts .build/v8-release/x86_64-unknown-linux-gnu --output .build/v8-release/bazel-inputs
 python3 -B -m unittest build.v8.test_release build.v8.test_smoke build.lib.test_v8
 ```
 
 ### 消费端版本升级
 
-升级 `v8` crate 时必须同步更新根 `Cargo.toml`、`Cargo.lock`、`runtime-lock.json`、`source-lock.json`、`MODULE.bazel` 中的 Bazel 下载声明以及目标选择规则。源码 pin 必须来自对应版本的上游 commit，并同步其 Rust 与 Chromium 编译器版本。Bazel 源码入口还需同步 V8 tag、Chromium libc++/libc++abi/LLVM-libc revision、crate binding 名称及补丁上下文。每个 release checksum 文件必须精确覆盖 archive 和 binding 两项；不接受未校验下载，也不把预编译二进制提交到仓库。
+升级 `v8` crate 时必须同步更新根 `Cargo.toml`、`Cargo.lock`、`runtime-lock.json`、`source-lock.json`、`MODULE.bazel` 中的 Bazel 下载声明以及目标选择规则。源码 pin 必须来自对应版本的上游 commit，并同步其 Rust 与 Chromium 编译器版本。Bazel 源码入口还需同步 V8 tag、Chromium libc++/libc++abi/LLVM-libc revision、crate 的 binding 头文件及补丁上下文。每个 release checksum 文件必须精确覆盖 archive 和 binding 两项；不接受未校验下载，也不把预编译二进制提交到仓库。
 
 验证入口：
 

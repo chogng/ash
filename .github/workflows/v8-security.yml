@@ -146,7 +146,7 @@ jobs:
           RUSTY_V8_ARCHIVE: ${{ steps.stage.outputs.archive }}
           RUSTY_V8_SRC_BINDING_PATH: ${{ steps.stage.outputs.binding }}
         run: |
-          just test ash-v8-poc --locked --target "$TARGET" --features sandbox -- --test-threads=1
+          just test ash-v8-poc --locked --target "$TARGET" --features sandbox -- --test-threads=1 --include-ignored
           just test ash-v8-runtime --locked --target "$TARGET" -- --test-threads=1
       - name: Execute the new pair through the Bazel consumer
         if: runner.os == 'Linux'

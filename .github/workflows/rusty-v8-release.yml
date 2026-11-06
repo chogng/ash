@@ -29,6 +29,7 @@ jobs:
       source_revision: ${{ steps.metadata.outputs.source_revision }}
       release_tag: ${{ steps.metadata.outputs.release_tag }}
       matrix: ${{ steps.metadata.outputs.matrix }}
+      cross_smoke_matrix: ${{ steps.metadata.outputs.cross_smoke_matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -156,19 +157,24 @@ jobs:
         if: endsWith(matrix.target, '-linux-musl')
         run: python -B build/v8/smoke.py musl-linker --target "$TARGET" --output "$RUNNER_TEMP/v8-musl-linker" --github-env "$GITHUB_ENV"
       - name: Test staged pair with Ash
+        if: matrix.smoke == 'run'
         env:
-          SMOKE: ${{ matrix.smoke }}
           RUSTY_V8_ARCHIVE: ${{ steps.stage.outputs.archive }}
           RUSTY_V8_SRC_BINDING_PATH: ${{ steps.stage.outputs.binding }}
         run: |
-          args=(ash-v8-poc --locked --target "$TARGET" --features sandbox)
-          if [ "$SMOKE" = link ]; then
-            args+=(--no-run)
-          else
-            # Concurrent first isolates can race V8's process-wide sandbox pool setup.
-            args+=(-- --test-threads=1)
-          fi
-          just test "${args[@]}"
+          # Concurrent first isolates can race V8's process-wide sandbox pool setup.
+          just test ash-v8-poc --locked --target "$TARGET" --features sandbox -- --test-threads=1 --include-ignored
+      - name: Cross-link the staged pair with Ash
+        if: matrix.smoke == 'link'
+        run: python -B build/v8/smoke.py cargo-probe --target "$TARGET" --artifacts "dist/$TARGET" --output "probes/$TARGET"
+      - name: Upload cross-linked probe
+        if: matrix.smoke == 'link'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: v8-probe-${{ matrix.target }}
+          path: probes/${{ matrix.target }}/*
+          if-no-files-found: error
+          overwrite: true
       - name: Verify staged pair through the Bazel consumer
         if: runner.os != 'Windows'
         env:
@@ -178,40 +184,54 @@ jobs:
           if [ "$SMOKE" = link ]; then args+=(--link-only); fi
           python -B build/v8/smoke.py "${args[@]}"
 
-  test-arm-gnu:
-    name: Execute sandbox / aarch64-unknown-linux-gnu
-    # Chromium ships x64 Linux build tools. Execute the cross-built pair on ARM64.
+  test-arm:
+    name: Execute sandbox / ${{ matrix.target }}
     needs: [metadata, build]
-    runs-on: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.metadata.outputs.cross_smoke_matrix) }}
     env:
-      TARGET: aarch64-unknown-linux-gnu
+      TARGET: ${{ matrix.target }}
     steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: v8-probe-${{ matrix.target }}
+          path: probe
+      - name: Execute the cross-linked Ash probe on ARM64
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then
+            probe/v8-probe.exe --test-threads=1 --include-ignored
+          else
+            chmod +x probe/v8-probe
+            probe/v8-probe --test-threads=1 --include-ignored
+          fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
         with:
           persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
         with:
           python-version: "3.12"
-      - uses: ./.github/actions/setup-just
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
         with:
-          name: rusty-v8-${{ needs.metadata.outputs.version }}-aarch64-unknown-linux-gnu
-          path: dist/aarch64-unknown-linux-gnu
-      - name: Validate downloaded pair and select Cargo inputs
-        run: python -B build/v8/smoke.py pair --target "$TARGET" --artifacts "dist/$TARGET" --github-env "$GITHUB_ENV"
-      - name: Execute staged pair with Ash on ARM64
-        run: just test ash-v8-poc --locked --target "$TARGET" --features sandbox -- --test-threads=1
+          name: rusty-v8-${{ needs.metadata.outputs.version }}-${{ matrix.target }}
+          path: dist/${{ matrix.target }}
       - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
         with:
           bazelisk-cache: true
           disk-cache: v8-consumer-aarch64-gnu-execution
           repository-cache: true
       - name: Execute staged pair through Bazel on ARM64
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: python -B build/v8/smoke.py bazel --target "$TARGET" --artifacts "dist/$TARGET" --output "$RUNNER_TEMP/v8-bazel-inputs"
 
   verify:
-    needs: [metadata, build, test-arm-gnu]
+    needs: [metadata, build, test-arm]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

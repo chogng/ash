@@ -25,6 +25,7 @@ from build.download.artifacts import (  # noqa: E402
     sha256,
     temporary_file,
 )
+from build.lib.cargo import cargo_artifact_executable, parse_cargo_message  # noqa: E402
 from build.lib.file_lock import exclusive_lock  # noqa: E402
 from build.lib.v8 import LockedFile, load_v8_lock  # noqa: E402
 from build.v8.release import BAZEL_PLATFORMS, checksum_name, source_lock  # noqa: E402
@@ -195,6 +196,48 @@ def pair_environment(target: str, artifacts: Path, root: Path = ROOT) -> dict[st
     }
 
 
+def build_cargo_probe(
+    target: str, artifacts: Path, output: Path, root: Path = ROOT
+) -> None:
+    """Cross-link the exact staged pair for execution on a native runner."""
+    env = os.environ | pair_environment(target, artifacts, root)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "scripts/cargo.py",
+            "test",
+            "-p",
+            "ash-v8-poc",
+            "--locked",
+            "--lib",
+            "--no-run",
+            "--target",
+            target,
+            "--features",
+            "sandbox",
+            "--message-format=json-render-diagnostics",
+        ],
+        cwd=root,
+        env=env,
+        stdout=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    executables = []
+    for line in result.stdout.splitlines():
+        message = parse_cargo_message(line)
+        if message and message.get("profile", {}).get("test"):
+            if executable := cargo_artifact_executable(
+                message, "ash_v8_poc", target_kind="lib"
+            ):
+                executables.append(Path(executable))
+    if len(executables) != 1:
+        raise ValueError("Expected exactly one Cargo V8 probe executable")
+    output.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(executables[0], output / ("v8-probe" + executables[0].suffix))
+
+
 def bazel_arguments(
     target: str, artifacts: Path, output: Path, *, run: bool, root: Path = ROOT
 ) -> list[str]:
@@ -228,7 +271,11 @@ def bazel_arguments(
         # Override the two downloaded files, preserving all real consumer rules.
         arguments.append(f"--override_repository={repository}={directory}")
     if run:
-        arguments += ["--test_arg=--test-threads=1", "--test_output=errors"]
+        arguments += [
+            "--test_arg=--test-threads=1",
+            "--test_arg=--include-ignored",
+            "--test_output=errors",
+        ]
         if target == "x86_64-unknown-linux-musl":
             arguments.append(
                 "--extra_toolchains=//third_party/v8:musl_x64_tests_on_linux_host"
@@ -253,6 +300,10 @@ def main() -> None:
     pair.add_argument("--target", choices=load_v8_lock(), required=True)
     pair.add_argument("--artifacts", type=Path, required=True)
     pair.add_argument("--github-env", type=Path)
+    cargo = commands.add_parser("cargo-probe")
+    cargo.add_argument("--target", choices=load_v8_lock(), required=True)
+    cargo.add_argument("--artifacts", type=Path, required=True)
+    cargo.add_argument("--output", type=Path, required=True)
     bazel = commands.add_parser("bazel")
     bazel.add_argument("--target", choices=BAZEL_PLATFORMS, required=True)
     bazel.add_argument("--artifacts", type=Path, required=True)
@@ -271,6 +322,8 @@ def main() -> None:
             with args.github_env.open("a", encoding="utf-8", newline="\n") as stream:
                 for key, value in values.items():
                     stream.write(f"{key}={value}\n")
+    elif args.command == "cargo-probe":
+        build_cargo_probe(args.target, args.artifacts, args.output)
     else:
         arguments = bazel_arguments(
             args.target, args.artifacts, args.output, run=not args.link_only
