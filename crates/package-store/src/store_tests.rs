@@ -104,6 +104,42 @@ fn publishing_identical_contents_reuses_the_selected_package() {
 }
 
 #[test]
+fn a_digest_mismatch_in_a_large_package_preserves_the_current_selection() {
+    let temporary = TempDir::new().unwrap();
+    let store = PackageStore::open(temporary.path().join("store")).unwrap();
+    let current = store
+        .publish(package(temporary.path(), "current", "one"))
+        .unwrap();
+    let incoming = package(temporary.path(), "incoming", "two");
+    let metadata_path = incoming.join("ash-package.json");
+    let mut metadata: serde_json::Value =
+        serde_json::from_slice(&fs::read(&metadata_path).unwrap()).unwrap();
+    let mut files: BTreeMap<String, String> =
+        serde_json::from_value(metadata["files"].take()).unwrap();
+    let digest = format!("{:x}", Sha256::digest(b"resource"));
+    for index in 0..128 {
+        let name = format!("resource-{index:03}");
+        fs::write(incoming.join(&name), b"resource").unwrap();
+        files.insert(name, digest.clone());
+    }
+    metadata["buildId"] = json!(build_id(&files));
+    metadata["files"] = json!(files);
+    fs::write(metadata_path, serde_json::to_vec(&metadata).unwrap()).unwrap();
+    fs::write(incoming.join("resource-097"), b"tampered").unwrap();
+
+    let error = store.publish(&incoming).unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "package file digest does not match: resource-097"
+    );
+    assert_eq!(store.current().unwrap().unwrap().sequence, current.sequence);
+
+    fs::write(incoming.join("resource-097"), b"resource").unwrap();
+    let published = store.publish(&incoming).unwrap();
+    assert_eq!(published.sequence, current.sequence + 1);
+}
+
+#[test]
 fn installation_bindings_advance_selection_without_changing_signed_package_bytes() {
     let temporary = TempDir::new().unwrap();
     let store = PackageStore::open(temporary.path().join("store")).unwrap();

@@ -7,6 +7,7 @@ import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import { URI } from '../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { Range } from '../../editor/common/core/range.js';
+import { EditorOpenSource } from '../../platform/editor/common/editor.js';
 import { WINDOW_OPEN_FILES_CHANNEL, WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validateWindowFilesRequest, type IWindowFilesRequest } from '../../platform/window/common/window.js';
 import { IEditorService } from '../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
@@ -36,7 +37,7 @@ export class ElectronWindow extends Disposable {
 		super();
 	}
 
-	public async initialize(): Promise<void> {
+	public async initialize(whenRestored: Promise<void>): Promise<void> {
 		this.assertNotDisposed();
 		const subscription = this.ipc.subscribe<unknown>(WINDOW_OPEN_FILES_CHANNEL, value => {
 			const request = validateWindowFilesRequest(value);
@@ -46,12 +47,15 @@ export class ElectronWindow extends Disposable {
 		this._register(toDisposable(() => subscription.dispose()));
 		this._register(this.groups.onDidChangeGroups(() => this.completeClosedFiles()));
 		await this.ipc.invoke<void>(WINDOW_OPEN_FILES_RESPONSE_CHANNEL, { kind: 'ready' });
-		// The shell and launch-file handshake remain available while installation files are scanned.
-		void this.updateTitleProperties().catch(error => {
-			if (this.isDisposed) { return; }
-			this.log.error('integrity', 'Desktop environment detection failed', error);
-			this.notifications.warn(localize('integrity.failed', 'Ash could not verify its desktop environment. See the logs for details.'));
-		});
+		// Do not compete with editor restoration for disk reads on a cold start.
+		void whenRestored.then(() => {
+			if (this.isDisposed) return;
+			void this.updateTitleProperties().catch(error => {
+				if (this.isDisposed) { return; }
+				this.log.error('integrity', 'Desktop environment detection failed', error);
+				this.notifications.warn(localize('integrity.failed', 'Ash could not verify its desktop environment. See the logs for details.'));
+			});
+		}, () => undefined);
 	}
 
 	private async updateTitleProperties(): Promise<void> {
@@ -71,7 +75,8 @@ export class ElectronWindow extends Disposable {
 		try {
 			for (const file of request.files) {
 				const selection = file.line === undefined ? undefined : new Range(file.line, file.column ?? 1, file.line, file.column ?? 1);
-				await this.editors.openEditor({ resource: URI.parse(file.uri) }, { pinned: true, selection, ignoreError: true });
+				// Explicit launch files use the same backup-restoration barrier as Explorer opens.
+				await this.editors.openEditor({ resource: URI.parse(file.uri) }, { pinned: true, selection, ignoreError: true, source: EditorOpenSource.USER });
 			}
 			if (request.wait) {
 				this.waiting.set(request.id, request);

@@ -374,7 +374,9 @@ fn start_new_unlocked(
 ) -> Result<LifecycleOutput, String> {
     let _startup = crate::startup_trace::StartupTrace::span("daemon-start");
     remove_stale_process_record(&endpoint.pid)?;
+    let spawn = crate::startup_trace::StartupTrace::span("daemon-spawn");
     let mut spawned = spawn_backend(endpoint, options, daemon)?;
+    drop(spawn);
     let result = (|| {
         let deadline = Instant::now() + START_TIMEOUT;
         let mut last_error = None;

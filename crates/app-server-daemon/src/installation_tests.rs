@@ -14,6 +14,35 @@ use super::selected_backend;
 use super::selected_is_pinned;
 
 #[test]
+fn desktop_preparation_publishes_once_without_starting_the_backend() {
+    let directory = TempDir::new().unwrap();
+    let first = package(directory.path(), "first", "0.1.0");
+    let second = package(directory.path(), "second", "0.2.0");
+    let profile = directory.path().join("profile");
+    let electron = directory.path().join("Ash.exe");
+    let arguments = [
+        "prepare-desktop".into(),
+        "--profile".into(),
+        profile.to_str().unwrap().into(),
+        "--electron".into(),
+        electron.to_str().unwrap().into(),
+    ];
+
+    // The fixture provides its own Node runtime and never executes either binary.
+    crate::run_command(arguments.clone(), &first).unwrap();
+    crate::run_command(arguments, &second).unwrap();
+    let store = ash_package_store::PackageStore::open(profile.join("app-server-packages")).unwrap();
+    let selected = store.current().unwrap().unwrap();
+    assert_eq!(selected.sequence, 1);
+    assert_eq!(
+        fs::read(super::backend_in(&selected.package_root)).unwrap(),
+        b"0.1.0"
+    );
+    assert!(!selected_is_pinned(&profile).unwrap());
+    assert!(!profile.join("state.sqlite3").exists());
+}
+
+#[test]
 fn clients_with_different_versions_keep_the_profile_backend_selection() {
     let directory = TempDir::new().unwrap();
     let first = package(directory.path(), "client-one", "0.1.0");

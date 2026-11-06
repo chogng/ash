@@ -246,18 +246,29 @@ fn a_node_runtime_replaced_after_binding_cannot_start_an_extension() {
     let bootstrap = root.path().join("node.mjs");
     std::fs::write(&executable, b"first installation").unwrap();
     std::fs::write(&bootstrap, b"bootstrap").unwrap();
+    let digest = super::executable_digest(&executable).unwrap();
     let launcher =
-        crate::ProductNodeLauncher::new(executable.clone(), bootstrap, BTreeMap::new()).unwrap();
-    std::fs::write(executable, b"replacement installation").unwrap();
+        crate::ProductNodeLauncher::new(executable.clone(), bootstrap.clone(), BTreeMap::new())
+            .unwrap();
+    std::fs::write(&executable, b"replacement installation").unwrap();
+    let installed_launcher = crate::ProductNodeLauncher::with_runtime_digest(
+        executable,
+        bootstrap,
+        BTreeMap::new(),
+        Some(&digest),
+    )
+    .unwrap();
     let command = crate::ExtensionLaunchCommand::ash(Vec::<String>::new(), root.path()).unwrap();
     let limits = crate::ExtensionHostLimits {
         isolation: crate::ProcessIsolationPolicy::AuthorizedNode,
         ..Default::default()
     };
-    assert!(matches!(
-        launcher.spawn(&command, &limits),
-        Err(crate::ExtensionHostError::IsolationUnavailable)
-    ));
+    for launcher in [launcher, installed_launcher] {
+        assert!(matches!(
+            launcher.spawn(&command, &limits),
+            Err(crate::ExtensionHostError::IsolationUnavailable)
+        ));
+    }
 }
 
 #[test]
@@ -329,8 +340,14 @@ exports.activate = context => context.subscriptions.push(v.commands.register('te
     let environment = std::env::var_os("SYSTEMROOT")
         .map(|value| BTreeMap::from([("SYSTEMROOT".into(), value)]))
         .unwrap_or_default();
-    let launcher =
-        crate::ProductNodeLauncher::new(node, root.join("node.mjs"), environment).unwrap();
+    let digest = super::executable_digest(&node).unwrap();
+    let launcher = crate::ProductNodeLauncher::with_runtime_digest(
+        node,
+        root.join("node.mjs"),
+        environment,
+        Some(&digest),
+    )
+    .unwrap();
     let command = crate::ExtensionLaunchCommand::ash(
         vec![
             "--extension-id".into(),

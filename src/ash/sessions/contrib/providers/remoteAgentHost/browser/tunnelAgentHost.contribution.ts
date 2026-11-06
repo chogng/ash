@@ -13,7 +13,6 @@ import { IRemoteAgentHostService } from '../../../../../platform/agentHost/commo
 
 /** Connects Ash's authenticated loopback URL after the user establishes its SSH forward. */
 export class TunnelAgentHostContribution extends Disposable {
-	public static readonly ID = 'sessions.contrib.tunnelAgentHostContribution';
 	private readonly pending = this._register(new DisposableStore());
 	constructor(
 		@IRemoteAgentHostService private readonly remoteHosts: IRemoteAgentHostService,

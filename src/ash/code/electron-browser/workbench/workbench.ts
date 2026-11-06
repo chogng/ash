@@ -11,23 +11,29 @@ import { productLanguagePackCatalogs } from '../../../workbench/services/localiz
 import { createAppServerDebugAdapterCapability } from '../../../platform/debug/browser/appServerDebugAdapterProcessService.js';
 
 try {
-	showPartsSplash(document, validatePartsSplash(await invoke<unknown>(WINDOW_SPLASH_READ_CHANNEL)));
+	const splash = validatePartsSplash(await invoke<unknown>(WINDOW_SPLASH_READ_CHANNEL));
+	showPartsSplash(document, splash);
 	const preference = await invoke<unknown>(NLS_CONFIGURATION_CHANNEL);
 	const catalog = await resolveLanguagePackCatalog(typeof preference === 'string' ? preference : 'en', productLanguagePackCatalogs, new BrowserLanguagePackStore());
 	setNlsMessages(catalog.locale, catalog.bundles);
 	await invoke<void>(NLS_ACTIVATE_CHANNEL, catalog);
-	performance.mark('ash.desktop.contributions-start');
-	await import('../../../workbench/workbench.desktop.main.js');
-	await import('../../../sessions/common/configuration.js');
-	await import('../../../sessions/common/theme.js');
-	await import('../../../sessions/contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js');
-	await import('../../../sessions/contrib/providers/agentHost/browser/workbenchSessionsService.contribution.js');
-	await import('../../../sessions/browser/workbenchChat.contribution.js');
-	await import('../../../sessions/contrib/providers/remoteAgentHost/browser/remoteAgentHost.contribution.js');
-	await import('../../../sessions/contrib/changes/browser/changesMultiDiffSourceResolver.js');
-	const { main } = await import('../../../workbench/electron-browser/desktop.main.js');
-	performance.mark('ash.desktop.contributions-ready');
-	await main({ productName: AshWorkbenchName }, [createAppServerDebugAdapterCapability]);
+	const desktopMain = import('../../../workbench/electron-browser/desktop.main.js');
+	const contributionsReady = (async () => {
+		performance.mark('ash.desktop.contributions-start');
+		await import('../../../workbench/workbench.desktop.main.js');
+		await import('../../../sessions/common/configuration.js');
+		await import('../../../sessions/common/theme.js');
+		await import('../../../sessions/contrib/openAgentsWindow/electron-browser/openAgentsWindow.contribution.js');
+		await import('../../../sessions/contrib/providers/agentHost/browser/workbenchSessionsService.contribution.js');
+		await import('../../../sessions/browser/workbenchChat.contribution.js');
+		await import('../../../sessions/contrib/providers/remoteAgentHost/browser/remoteAgentHost.contribution.js');
+		await import('../../../sessions/contrib/changes/browser/changesMultiDiffSourceResolver.js');
+		performance.mark('ash.desktop.contributions-ready');
+	})();
+	// DesktopMain observes registration failures when it joins the startup tasks.
+	void contributionsReady.catch(() => undefined);
+	const { main } = await desktopMain;
+	await main({ productName: AshWorkbenchName, splashTheme: splash.baseTheme }, [createAppServerDebugAdapterCapability], contributionsReady);
 } catch (error) {
 	showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text));
 }

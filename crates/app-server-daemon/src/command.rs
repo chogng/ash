@@ -20,6 +20,20 @@ pub fn run_command(
     {
         return crate::development::hold_runtime_lease(Path::new(generation_file));
     }
+    if let [command, profile_flag, profile, electron_flag, electron] = arguments.as_slice()
+        && command == "prepare-desktop"
+        && profile_flag == "--profile"
+        && electron_flag == "--electron"
+    {
+        if !Path::new(electron).is_absolute() {
+            return Err("Desktop must provide an absolute Electron executable".into());
+        }
+        return crate::installation::prepare_desktop_backend(
+            Path::new(profile),
+            backend_executable,
+            Path::new(electron),
+        );
+    }
     let (command, product_services) = parse(&arguments)?;
     let _trace = crate::startup_trace::StartupTrace::enter(
         crate::startup_trace::StartupTrace::from_environment(),
@@ -146,6 +160,21 @@ fn usage() -> &'static str {
     "usage: ash-app-server-daemon <connect|connect-selected|update|start|ensure-selected|restart|stop|version> [--product-services PATH]"
 }
 
+/// Runs the daemon executable's command, selecting the bundled backend for Setup.
+pub fn run_installed_command(arguments: Vec<String>) -> Result<(), String> {
+    // Setup owns the adjacent package. A development override inherited from
+    // the launching shell must not select a different profile backend.
+    let executable = if arguments
+        .first()
+        .is_some_and(|command| command == "prepare-desktop")
+    {
+        bundled_backend_executable_path()?
+    } else {
+        backend_executable_path()?
+    };
+    run_command(arguments, &executable)
+}
+
 /// Resolves the App Server executable managed by this command adapter.
 pub fn backend_executable_path() -> Result<PathBuf, String> {
     if let Some(path) = std::env::var_os(crate::APP_SERVER_PATH_ENV) {
@@ -158,6 +187,10 @@ pub fn backend_executable_path() -> Result<PathBuf, String> {
         }
         return Ok(path);
     }
+    bundled_backend_executable_path()
+}
+
+fn bundled_backend_executable_path() -> Result<PathBuf, String> {
     let executable = std::env::current_exe().map_err(|error| error.to_string())?;
     let directory = executable
         .parent()

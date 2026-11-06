@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
+import { QuickAccess } from '../../../automation/quickaccess.js';
 import { appServerDaemonExecutablePath, appServerExecutablePath } from '../../../../src/ash/platform/app-server-daemon/node/appServerDaemonPackage.js';
 
 const execFileAsync = promisify(execFile);
@@ -42,6 +43,11 @@ test('Desktop development startup opens Agents with prepared runtime resources',
 		const agents = await opened;
 		await expect(agents.locator('.ash-sessions-window')).toBeVisible();
 		await expect(agents.getByRole('heading', { name: 'Unable to start Ash' })).toHaveCount(0);
+		await expect(agents.locator('.ash-sessions-window')).toHaveAttribute('aria-busy', 'false');
+		await new QuickAccess(agents).runCommand('sessions.action.manageAgentHosts');
+		const remotes = agents.getByRole('dialog', { name: 'Remote Environments' });
+		await expect(remotes.getByRole('status')).toHaveText('No remote environments');
+		await remotes.getByRole('button', { name: 'Close', exact: true }).click();
 	} finally {
 		try {
 			await desktop?.close();
@@ -155,18 +161,23 @@ test('startup marks record shell readiness and completed restoration in the runn
 		expect(timings[`ash.workbench.${workbenchStages[index]}`], `${workbenchStages[index]} follows ${workbenchStages[index - 1]}`).toBeGreaterThanOrEqual(timings[`ash.workbench.${workbenchStages[index - 1]}`]!);
 	}
 	if (target.kind === 'electron') {
-		const desktopStages = ['contributions-start', 'contributions-ready', 'open-start', 'api-ready', 'themes-ready', 'workspace-ready', 'configuration-ready', 'workbench-start', 'workbench-created', 'lifecycle-ready'];
+		const desktopStages = ['open-start', 'api-ready', 'configuration-ready', 'workbench-start', 'workbench-created', 'lifecycle-ready'];
 		for (let index = 0; index < desktopStages.length; index++) {
 			const mark = timings[`ash.desktop.${desktopStages[index]}`];
 			expect(mark, desktopStages[index]).toBeDefined();
 			if (index > 0) { expect(mark).toBeGreaterThanOrEqual(timings[`ash.desktop.${desktopStages[index - 1]}`]!); }
 		}
+		for (const stage of ['contributions-ready', 'themes-ready', 'workspace-ready']) {
+			const mark = timings[`ash.desktop.${stage}`];
+			expect(mark, stage).toBeLessThanOrEqual(timings['ash.desktop.configuration-ready']!);
+		}
+		expect(timings['ash.desktop.contributions-start']).toBeLessThanOrEqual(timings['ash.desktop.contributions-ready']!);
 		if (target.appServerMode === 'required') {
-			const connectionStages = ['start', 'acquire-start', 'acquired', 'initialized', 'workspace-initialized'];
+			const connectionStages = ['rendererApi.start', 'rendererApi.connect-start', 'appServer.acquire-start', 'appServer.acquired', 'rendererApi.initialized', 'rendererApi.workspace-initialized'];
 			for (let index = 0; index < connectionStages.length; index++) {
-				const mark = timings[`ash.rendererApi.${connectionStages[index]}`];
+				const mark = timings[`ash.${connectionStages[index]}`];
 				expect(mark, connectionStages[index]).toBeDefined();
-				if (index > 0) { expect(mark).toBeGreaterThanOrEqual(timings[`ash.rendererApi.${connectionStages[index - 1]}`]!); }
+				if (index > 0) { expect(mark).toBeGreaterThanOrEqual(timings[`ash.${connectionStages[index - 1]}`]!); }
 			}
 		} else {
 			expect(timings['ash.rendererApi.initialized']).toBeUndefined();

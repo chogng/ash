@@ -9,6 +9,7 @@ use std::io::Write;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
+use std::thread;
 
 use fs2::FileExt;
 use serde::Deserialize;
@@ -440,14 +441,7 @@ fn validate_package(root: &Path) -> io::Result<PackageMetadata> {
             "package file manifest does not match the directory",
         ));
     }
-    for (path, file) in &files {
-        let digest = file_sha256(file)?;
-        if metadata.files.get(path) != Some(&digest) {
-            return Err(invalid(format!(
-                "package file digest does not match: {path}"
-            )));
-        }
-    }
+    validate_file_digests(files, &metadata.files)?;
     let expected_build_id = package_build_id(identity, &metadata.files)?;
     if metadata.build_id != expected_build_id {
         return Err(invalid(
@@ -455,6 +449,43 @@ fn validate_package(root: &Path) -> io::Result<PackageMetadata> {
         ));
     }
     Ok(metadata)
+}
+
+fn validate_file_digests(
+    files: BTreeMap<String, PathBuf>,
+    expected: &BTreeMap<String, String>,
+) -> io::Result<()> {
+    let files: Vec<_> = files.into_iter().collect();
+    // Opening freshly copied files can wait on filesystem scanning. Bound the
+    // number of concurrent reads and spread adjacent paths across workers.
+    let workers = thread::available_parallelism()
+        .map_or(1, |count| count.get().min(8))
+        .min(files.len().div_ceil(64).max(1));
+    let verify = |worker| {
+        for (path, file) in files.iter().skip(worker).step_by(workers) {
+            let digest = file_sha256(file)?;
+            if expected.get(path) != Some(&digest) {
+                return Err(invalid(format!(
+                    "package file digest does not match: {path}"
+                )));
+            }
+        }
+        Ok(())
+    };
+    if workers == 1 {
+        return verify(0);
+    }
+    thread::scope(|scope| {
+        let tasks = (1..workers)
+            .map(|worker| thread::Builder::new().spawn_scoped(scope, move || verify(worker)))
+            .collect::<io::Result<Vec<_>>>()?;
+        verify(0)?;
+        for task in tasks {
+            task.join()
+                .map_err(|_| io::Error::other("package digest worker panicked"))??;
+        }
+        Ok(())
+    })
 }
 
 fn package_build_id(mut identity: Value, files: &BTreeMap<String, String>) -> io::Result<String> {

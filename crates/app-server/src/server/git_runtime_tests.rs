@@ -23,6 +23,27 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+#[test]
+fn deferred_directory_git_is_discovered_by_the_first_query() {
+    let repository = TestRepository::init();
+    let runtime = GitRuntime::new_deferred(
+        inspection_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    );
+    assert!(!runtime.has_discovered().unwrap());
+    assert!(runtime.repositories().repositories.is_empty());
+
+    // Status and discovery can arrive in either order on the first connection.
+    let (discovered, status) = std::thread::scope(|scope| {
+        let discover = scope.spawn(|| runtime.discover_for(1, None).unwrap());
+        let status = scope.spawn(|| runtime.status_for(None).unwrap());
+        (discover.join().unwrap(), status.join().unwrap())
+    });
+    assert_eq!(discovered.repositories.len(), 1);
+    assert_eq!(discovered.repositories[0].id, status.repository_id);
+    assert!(runtime.has_discovered().unwrap());
+}
+
 #[cfg(unix)]
 #[test]
 fn discovery_reuses_equal_scans_within_one_request_but_observes_new_repositories_next_time() {

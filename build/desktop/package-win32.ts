@@ -1,4 +1,4 @@
-import { copyHostOutput } from './host.ts';
+import { bundleWindowsMain, copyHostOutput } from './host.ts';
 import { packager } from '@electron/packager';
 import { writeApplicationChecksums } from './host.ts';
 import { ignoreApplicationFile, prepareProductionDependencyWorkspace, productionDependencyDeployOptions } from './packageApplication.ts';
@@ -74,6 +74,7 @@ async function assembleBundle(stage: string, bundlePath: string, options: Map<st
 		if (part === 'main') await copyHostOutput(join(buildRoot, part), join(appStage, 'dist', part));
 		else await cp(join(buildRoot, part), join(appStage, 'dist', part), { recursive: true });
 	}
+	await bundleWindowsMain(join(appStage, 'dist', 'main'));
 	await cp(join(repositoryRoot, 'resources', 'tray'), join(appStage, 'resources', 'tray'), { recursive: true });
 
 	const electronMetadata = JSON.parse(await readFile(join(appRoot, 'node_modules', 'electron', 'package.json'), 'utf8'));

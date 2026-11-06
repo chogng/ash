@@ -3170,6 +3170,31 @@ test('EditorPart saves and restores groups, tabs, previews, active state, and pa
 	dom.window.close();
 });
 
+test('a file requested during startup opens after recovery and takes precedence over the fallback editor', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const panes: TestEditorPane[] = [];
+	const registry = new EditorPaneRegistry();
+	using registration = registry.registerEditorPane(descriptor('ash.test.startup', '.ts', () => trackPane(panes, 'ash.test.startup')));
+	using editor = createEditorPart(dom.window.document.body, { registry });
+	const recovery = new DeferredPromise<void>();
+	using editors = new BrowserEditorService(editor, recovery.p);
+	const restored = input('C:/project/restored.ts');
+	const requested = input('C:/project/requested.ts');
+	await editor.openEditor(restored, { pinned: true });
+	const saved = editor.saveWorkingSet('startup');
+	await editor.closeAllEditors();
+	const opening = editors.openEditor(requested, { source: EditorOpenSource.USER, pinned: true }, 'activeGroup');
+	await editors.openEditor(input('C:/project/fallback.ts'), { onlyWhenEmpty: true });
+	assert.equal(editor.activeGroup.inputs.length, 0);
+	await editor.applyWorkingSet(saved);
+	assert.equal(editor.activeInput?.resource.toString(), restored.resource.toString());
+	await recovery.complete();
+	await opening;
+	assert.equal(editor.activeInput, requested);
+	assert.deepEqual(editor.activeGroup.inputs.map(input => input.resource.toString()), [restored.resource.toString(), requested.resource.toString()]);
+	dom.window.close();
+});
+
 test('working-set restoration retains excluded live groups and hidden pane state', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const panes: TestEditorPane[] = [];

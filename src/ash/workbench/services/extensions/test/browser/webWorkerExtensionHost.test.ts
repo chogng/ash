@@ -228,6 +228,87 @@ test('declarative packages do not delay executable host startup with translation
 	assert.equal(resourceReads, 0);
 });
 
+test('a bundled language Worker reads its entry only on matching first use and retires on package change', async () => {
+	const originalWorker = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
+	const activated: string[] = [];
+	let terminated = 0;
+	class WorkerFixture extends EventTarget {
+		postMessage(message: BrowserExtensionHostRequest): void {
+			if (message.type === 'activate') activated.push(message.extensionId);
+			queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', {
+				data: { id: message.id, success: true, result: message.type === 'activate' ? [] : null },
+			})));
+		}
+		terminate(): void { terminated++; }
+	}
+	Object.defineProperty(globalThis, 'Worker', { configurable: true, value: WorkerFixture });
+	try {
+		using remote = new RemoteHost();
+		remote.reconcile = async () => ({ generation: 1, extensions: [] });
+		remote.registerClientHandler = () => Disposable.None;
+		remote.activateByEvent = async () => assert.fail('Browser language activation belongs to this window');
+		using changed = new Emitter<void>();
+		let digest = 'a';
+		const reads: string[] = [];
+		let entryRead: DeferredPromise<void> | undefined;
+		const entryReadStarted = new DeferredPromise<void>();
+		const extensions: IExtensionApi = {
+			onDidChange: changed.event,
+			list: async () => ({
+				generation: 1, diagnostics: [], extensions: [{
+					id: 'ash.json', name: 'json', publisher: 'ash', version: '1', displayName: 'JSON', sourceKind: 'builtIn',
+					manifestJson: '{"browser":"./main.js","activationEvents":["onLanguage:json"],"capabilities":{"untrustedWorkspaces":{"supported":true}}}',
+					manifestSha256: `sha256:${'b'.repeat(64)}`, packageSha256: `sha256:${digest.repeat(64)}`,
+				}],
+			}),
+			resources: new ExtensionResourceLoaderService(async ({ path }) => {
+				reads.push(path);
+				if (entryRead) {
+					void entryReadStarted.complete();
+					await entryRead.p;
+				}
+				return new Uint8Array();
+			}),
+		};
+		using api = remote.instantiation.createInstance(WebWorkerExtensionHost, extensions, remote);
+		const subscription = api.registerClientHandler(async () => ({ result: 'initialization', initialization: { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: null } }));
+		using handler = toDisposable(() => subscription.dispose());
+		const [dormant] = (await api.reconcile('refresh')).extensions;
+		assert.equal(dormant!.lifecycle, 'dormant');
+		assert.equal(dormant!.incarnation, undefined);
+		assert.deepEqual(reads, []);
+		const request = { extensionId: dormant!.id, activationGeneration: dormant!.activationGeneration, event: { type: 'language' as const, languageId: 'json' } };
+		await assert.rejects(api.activateByEvent({ ...request, event: { type: 'language', languageId: 'plaintext' } }), /does not declare/);
+		const [first, second] = await Promise.all([api.activateByEvent(request), api.activateByEvent(request)]);
+		assert.equal(first.extensions[0]!.lifecycle, 'ready');
+		assert.strictEqual(first.extensions[0], second.extensions[0]);
+		assert.equal(first.extensions[0]!.activationGeneration, request.activationGeneration);
+		assert.deepEqual(activated, ['ash.json']);
+		assert.deepEqual(reads, ['main.js']);
+		assert.strictEqual((await api.reconcile('refresh')).extensions[0], first.extensions[0]);
+		digest = 'c';
+		const [replacement] = (await api.reconcile('refresh')).extensions;
+		assert.equal(replacement!.lifecycle, 'dormant');
+		assert.notEqual(replacement!.activationGeneration, request.activationGeneration);
+		await assert.rejects(api.activateByEvent(request), /retired activation/);
+		assert.equal(terminated, 1);
+		assert.deepEqual(reads, ['main.js']);
+		entryRead = new DeferredPromise<void>();
+		const retiring = api.activateByEvent({ ...request, activationGeneration: replacement!.activationGeneration });
+		await entryReadStarted.p;
+		digest = 'd';
+		changed.fire();
+		await entryRead.complete();
+		const [updated] = (await retiring).extensions;
+		assert.equal(updated!.lifecycle, 'dormant');
+		assert.notEqual(updated!.activationGeneration, replacement!.activationGeneration);
+		assert.deepEqual(activated, ['ash.json'], 'The retired in-flight entry must not execute');
+	} finally {
+		if (originalWorker) Object.defineProperty(globalThis, 'Worker', originalWorker);
+		else Reflect.deleteProperty(globalThis, 'Worker');
+	}
+});
+
 test('browser refresh preserves unchanged Workers and pending calls, and cleans up changed packages before replacement', async () => {
 	const originalWorker = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
 	const order: string[] = [];

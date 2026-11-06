@@ -51,7 +51,7 @@ fn rejects_same_length_file_replacement_after_inspection() {
     fs::write(&path, b"new-bytes").expect("replacement file");
 
     assert_eq!(
-        read_bounded_file_after_inspection(&root, &path, 9, inspected, &canonical),
+        read_bounded_file_after_inspection(&root, &path, 9, 9, inspected, &canonical),
         Err(PackageSnapshotError::Unavailable)
     );
 }

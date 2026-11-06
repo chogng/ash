@@ -373,7 +373,7 @@ if (parameters.has('hosts')) {
 		connect: async () => { throw new Error('The Agents host picker must retain this window'); },
 	});
 	services.registerInstance(IRemoteConnectionService, resources.add(services.createInstance(RemoteConnectionService)));
-	const { RemoteAgentHostContribution } = await import('../../../../providers/remoteAgentHost/browser/remoteAgentHost.contribution.js');
+	const { RemoteAgentHostContribution } = await import('../../../../providers/remoteAgentHost/browser/remoteAgentHostContribution.js');
 	resources.add(services.createInstance(RemoteAgentHostContribution));
 	const { SSHAgentHostContribution } = await import('../../../../providers/remoteAgentHost/browser/sshAgentHost.contribution.js');
 	resources.add(services.createInstance(SSHAgentHostContribution));

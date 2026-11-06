@@ -1,6 +1,7 @@
 import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import type { IEditorIdentifier, IEditorPane, IResourceEditorInput } from '../../../common/editor.js';
 import { Schemas } from '../../../../base/common/network.js';
+import { EditorOpenSource } from '../../../../platform/editor/common/editor.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
@@ -20,6 +21,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 	private activeEditorSignature: string;
 	private visibleEditorSignature: string;
 	private lastVisiblePanes: readonly IEditorPane[];
+	private pendingOpens = 0;
 
 	readonly onDidActiveEditorChange = this.activeEditorChangeEmitter.event;
 	readonly onDidVisibleEditorsChange = this.visibleEditorsChangeEmitter.event;
@@ -29,7 +31,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 	readonly onDidActivateGroup = this.groupActivateEmitter.event;
 	readonly whenReady = Promise.resolve();
 
-	constructor(private readonly editorPart: IEditorPart) {
+	constructor(private readonly editorPart: IEditorPart, private readonly startupRestoration?: Promise<void>) {
 		super();
 		this.activeEditorSignature = this.getActiveEditorSignature();
 		this.visibleEditorSignature = this.getVisibleEditorSignature();
@@ -97,13 +99,21 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 	}
 
 	async openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<void> {
+		if (options?.onlyWhenEmpty && (this.pendingOpens > 0 || this.visibleEditors.length > 0)) return;
+		this.pendingOpens++;
 		try {
+			if (options?.source === EditorOpenSource.USER && this.startupRestoration) {
+				await this.startupRestoration;
+				if (this.isDisposed) return;
+			}
 			await this.editorPart.openEditor(input, options, target);
 		} catch (error) {
 			// Resource navigation can be replaced or closed while its pane loads.
 			// The part retains its rejection contract; UI callers need no error or focus change.
 			if (isCancellationError(error) && !options?.ignoreError) return;
 			throw error;
+		} finally {
+			this.pendingOpens--;
 		}
 		if (options?.preserveFocus !== true) this.editorPart.focus();
 	}

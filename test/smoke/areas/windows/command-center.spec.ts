@@ -52,6 +52,18 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(workbench.page.locator('[data-part="sidebar"] [data-view-container-id="ash.sidebar"]')).toBeVisible();
 		await workbench.menus.select(application, open, [chinese ? '隐藏主侧栏' : 'Hide Primary Side Bar']);
 		await expect(workbench.page.locator('[data-part="sidebar"]')).toBeHidden();
+		const searchTab = () => workbench.page.locator('[data-part="activitybar"]').getByRole('tab', { name: chinese ? '搜索' : 'Search', exact: true });
+		const sidebarToggle = () => workbench.page.locator('[data-action-id="workbench.action.toggleSideBar"] button').first();
+		const searchView = () => workbench.page.locator('[data-part="sidebar"] .ash-search');
+		await searchTab().click();
+		await expect(searchView()).toBeVisible();
+		await sidebarToggle().press('Enter');
+		await expect(searchView()).toBeHidden();
+		({ workbench } = await reloadWorkbench());
+		await expect(searchView()).toHaveCount(0);
+		await sidebarToggle().press('Enter');
+		await expect(searchView()).toBeVisible();
+		await expect(searchTab()).toHaveAttribute('aria-selected', 'true');
 	});
 }
 

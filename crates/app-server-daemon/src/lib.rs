@@ -336,6 +336,7 @@ mod tests;
 mod command;
 pub use command::backend_executable_path;
 pub use command::run_command;
+pub use command::run_installed_command;
 pub use update::AutomaticUpdater;
 pub use update::start_automatic_updates;
 

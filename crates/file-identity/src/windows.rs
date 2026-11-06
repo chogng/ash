@@ -1,15 +1,58 @@
 #![allow(unsafe_code)]
 
 use crate::FileInformation;
+use std::ffi::OsString;
 use std::fs::File;
 use std::io;
 use std::mem::size_of;
+use std::os::windows::ffi::OsStringExt;
+use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::io::AsRawHandle;
+use std::path::Path;
+use std::path::PathBuf;
 use windows_sys::Win32::Foundation::HANDLE;
 use windows_sys::Win32::Storage::FileSystem::{
     FILE_ID_128, FILE_ID_INFO, FILE_STANDARD_INFO, FileIdInfo, FileStandardInfo,
     GetFileInformationByHandleEx,
 };
+
+pub(super) fn open_for_inspection(path: &Path) -> io::Result<File> {
+    use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS;
+    use windows_sys::Win32::Storage::FileSystem::FILE_READ_ATTRIBUTES;
+
+    // Directory and file identity checks need attributes rather than file contents.
+    std::fs::OpenOptions::new()
+        .access_mode(FILE_READ_ATTRIBUTES)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path)
+}
+
+pub(super) fn canonical_path(file: &File) -> io::Result<PathBuf> {
+    use windows_sys::Win32::Storage::FileSystem::FILE_NAME_NORMALIZED;
+    use windows_sys::Win32::Storage::FileSystem::GetFinalPathNameByHandleW;
+    use windows_sys::Win32::Storage::FileSystem::VOLUME_NAME_DOS;
+
+    let mut buffer = vec![0u16; 260];
+    loop {
+        // SAFETY: the handle stays open and the output buffer is writable for the given length.
+        let length = unsafe {
+            GetFinalPathNameByHandleW(
+                file.as_raw_handle() as HANDLE,
+                buffer.as_mut_ptr(),
+                buffer.len() as u32,
+                FILE_NAME_NORMALIZED | VOLUME_NAME_DOS,
+            )
+        } as usize;
+        if length == 0 {
+            return Err(io::Error::last_os_error());
+        }
+        if length < buffer.len() {
+            return Ok(PathBuf::from(OsString::from_wide(&buffer[..length])));
+        }
+        // An undersized buffer returns the required length including the terminator.
+        buffer.resize(length, 0);
+    }
+}
 
 pub(super) fn inspect(file: &File) -> io::Result<FileInformation> {
     let handle = file.as_raw_handle() as HANDLE;

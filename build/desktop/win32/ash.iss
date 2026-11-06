@@ -107,17 +107,24 @@ end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  ProfilePath, UserDataPath: String;
+  ProfilePath, UserDataPath, DaemonPath: String;
+  ExitCode: Integer;
 begin
   if CurStep = ssPostInstall then begin
-    { Electron creates userData before Main can register it. Record whether the
-      default paths already existed before the first application launch. }
+    { Record ownership before preparation or Electron creates either path. }
     ProfilePath := GetEnv('ASH_HOME');
     if ProfilePath = '' then ProfilePath := GetEnv('USERPROFILE') + '\.ash';
     UserDataPath := GetEnv('APPDATA') + '\Ash';
-    if not RunMaintenance(ExpandConstant('{app}\resources\bin\ash-app-server-daemon.exe'), 'register',
+    DaemonPath := ExpandConstant('{app}\resources\bin\ash-app-server-daemon.exe');
+    if not RunMaintenance(DaemonPath, 'register',
         '--profile "' + ProfilePath + '" --user-data "' + UserDataPath + '"') then
       RaiseException(InstallationMessage('InstallCleanupFailed'));
+    if FileExists(ExpandConstant('{app}\resources\ash-package.json')) then begin
+      if not Exec(DaemonPath, 'prepare-desktop --profile "' + ProfilePath + '" --electron "' +
+          ExpandConstant('{app}\Ash.exe') + '"', '', SW_HIDE, ewWaitUntilTerminated, ExitCode) or
+          (ExitCode <> 0) then
+        RaiseException(InstallationMessage('InstallCleanupFailed'));
+    end;
   end;
 end;
 

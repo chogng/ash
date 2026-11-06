@@ -1442,6 +1442,8 @@ use crate::protocol::initialize::ProtocolVersion;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::initialize::ServerCapabilities;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::initialize::TransportHelloResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::instructions::InstructionDiagnosticDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::instructions::InstructionDto;
@@ -3848,6 +3850,9 @@ client_methods! {
     },
     AutomationStop => "automation/stop" {
         params: AutomationStopParams, response: AutomationRun, serialization: None,
+    },
+    TransportHello => "transport/hello" {
+        params: (), response: TransportHelloResult, serialization: None,
     },
     Initialize => "initialize" {
         params: InitializeParams,
@@ -7069,6 +7074,7 @@ typescript_bindings! {
     crate::protocol::input_completions::InputCompletionItem,
     InitializeParams,
     InitializeResult,
+    TransportHelloResult,
     DirGrantDto,
     EnvDirDto,
     EnvDirReadParams,

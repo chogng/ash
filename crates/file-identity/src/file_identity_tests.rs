@@ -46,12 +46,34 @@ fn compares_path_and_multiple_handle_observations_for_the_same_file() {
     fs::write(&path, "same").unwrap();
 
     let from_path = FileInformation::from_path(&path).unwrap();
+    let (with_canonical, canonical) = FileInformation::from_path_with_canonical(&path).unwrap();
     let first_handle = FileInformation::from_file(&File::open(&path).unwrap()).unwrap();
     let second_handle = FileInformation::from_file(&File::open(&path).unwrap()).unwrap();
 
     assert!(from_path.same_file_as(first_handle));
+    assert!(with_canonical.same_file_as(first_handle));
+    assert_eq!(canonical, fs::canonicalize(&path).unwrap());
     assert!(first_handle.same_file_as(second_handle));
     assert!(!from_path.has_multiple_links());
+}
+
+#[cfg(windows)]
+#[test]
+fn resolves_paths_that_outgrow_the_initial_windows_buffer() {
+    let directory = TestDirectory::new();
+    let segment = "a".repeat(100);
+    let parent = directory
+        .path()
+        .join(&segment)
+        .join(&segment)
+        .join(&segment);
+    fs::create_dir_all(&parent).unwrap();
+    let path = parent.join("file.txt");
+    fs::write(&path, "content").unwrap();
+
+    let (information, canonical) = FileInformation::from_path_with_canonical(&path).unwrap();
+    assert_eq!(canonical, fs::canonicalize(&path).unwrap());
+    assert!(information.same_file_as(FileInformation::from_path(&path).unwrap()));
 }
 
 #[test]

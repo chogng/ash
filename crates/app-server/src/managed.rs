@@ -11,9 +11,22 @@ pub(crate) use gateway::task_request;
 use ash_app_server_daemon::ConnectionOptions;
 use ash_app_server_daemon::ConnectionRole;
 use ash_app_server_daemon::GrantSource;
+use ash_app_server_daemon::ManagedConnection;
 use ash_app_server_daemon::ManagedEndpoint;
+use ash_app_server_protocol::protocol::initialize::TransportHelloResult;
+use ash_app_server_protocol::protocol::registry::ClientMethod;
+use ash_app_server_protocol::protocol::registry::client_method;
+use ash_app_server_protocol::rpc::JsonRpcRequest;
+use ash_app_server_protocol::rpc::JsonRpcSuccess;
+use ash_app_server_transport::DEFAULT_MAX_MESSAGE_BYTES;
+use ash_app_server_transport::JsonlReader;
+use ash_app_server_transport::JsonlWriter;
 use ash_app_server_transport::LocalConnections;
 use std::io;
+use std::io::BufRead;
+use std::io::Cursor;
+use std::io::Read;
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
@@ -40,8 +53,11 @@ pub(crate) fn run(
     let startup_trace = ash_app_server_daemon::startup_trace::StartupTrace::from_environment();
     let _trace = ash_app_server_daemon::startup_trace::StartupTrace::enter(startup_trace);
     let startup = ash_app_server_daemon::startup_trace::StartupTrace::span("managed-startup");
+    let history_open = ash_app_server_daemon::startup_trace::StartupTrace::span("managed-history");
     let history = ash_state::SqliteThreadStore::open(profile_root.join("state.sqlite3"))
         .map_err(|error| error.to_string())?;
+    drop(history_open);
+    let profile_open = ash_app_server_daemon::startup_trace::StartupTrace::span("managed-profile");
     // Once ownership transfers, this host is execution-only. Opening the profile services
     // would replay old Turns and restart automation against history owned by the receiver.
     let registry = match history
@@ -62,6 +78,7 @@ pub(crate) fn run(
         )?)),
     };
     drop(history);
+    drop(profile_open);
     let idle_timeout = configured_idle_timeout()?;
     let connection_contract = match &registry {
         Some(_) => ash_app_server_daemon::ManagedConnectionContract::Agent {
@@ -70,7 +87,9 @@ pub(crate) fn run(
         },
         None => ash_app_server_daemon::ManagedConnectionContract::Execution,
     };
+    let bind = ash_app_server_daemon::startup_trace::StartupTrace::span("managed-bind");
     let mut endpoint = ManagedEndpoint::bind(&profile_root, connection_contract)?;
+    drop(bind);
     drop(startup);
     drop(_trace);
     // Keep the endpoint leased until directory and profile destructors finish, so a
@@ -161,6 +180,14 @@ pub(crate) fn run(
                         }
                         return;
                     }
+                    if connection.options.role() == ConnectionRole::Workbench && connection.web.is_none() {
+                        if let Err(error) = serve_workbench(&web_registry, connection)
+                            && !is_peer_disconnect(&error)
+                        {
+                            eprintln!("managed App Server connection failed: {error}");
+                        }
+                        return;
+                    }
                     let server = match web_registry.server_for(connection.options.clone()) {
                         Ok(server) => server,
                         Err(error) => {
@@ -227,6 +254,69 @@ pub(crate) fn run(
             endpoint.wait_for_activity(IDLE_POLL_INTERVAL)?;
         }
     }
+}
+
+fn serve_workbench(
+    registry: &ProfileAppServerRegistry,
+    mut connection: ManagedConnection,
+) -> io::Result<()> {
+    let shutdown = connection.writer.try_clone()?;
+    let server = thread::scope(|scope| {
+        let handshake = thread::Builder::new()
+            .name("ash-workbench-transport-hello".into())
+            .spawn_scoped(scope, || {
+                read_workbench_hello(&mut connection.reader, &mut connection.writer)
+            })?;
+        // Directory preparation keeps its existing connection thread and trace.
+        // A slow directory cannot hold the protocol identity response.
+        let server = registry.server_for(connection.options);
+        if server.is_err() {
+            // Wake the reader if startup fails before the client sends its first frame.
+            let _ = shutdown.shutdown(std::net::Shutdown::Both);
+        }
+        let first = handshake
+            .join()
+            .map_err(|_| io::Error::other("App Server handshake worker panicked"))?;
+        Ok::<_, io::Error>((server.map_err(io::Error::other)?, first?))
+    })?;
+    let (server, first) = server;
+    match first {
+        WorkbenchFirstFrame::Hello(id) => {
+            server.serve_product_host_stream_after_hello(connection.reader, connection.writer, id)
+        }
+        WorkbenchFirstFrame::Replay(first) => server.serve_product_host_stream(
+            Cursor::new(first).chain(connection.reader),
+            connection.writer,
+        ),
+    }
+}
+
+enum WorkbenchFirstFrame {
+    Hello(u64),
+    Replay(Vec<u8>),
+}
+
+fn read_workbench_hello(
+    reader: impl BufRead,
+    writer: impl Write,
+) -> io::Result<WorkbenchFirstFrame> {
+    let Some(first) = JsonlReader::new(reader, DEFAULT_MAX_MESSAGE_BYTES).read_message()? else {
+        return Ok(WorkbenchFirstFrame::Replay(Vec::new()));
+    };
+    if let Ok(request) = serde_json::from_str::<JsonRpcRequest<()>>(&first)
+        && client_method(&request.method) == Some(ClientMethod::TransportHello)
+        && let Some(id) = request.id.as_u64().filter(|id| *id > 0)
+    {
+        let response = JsonRpcSuccess::new(request.id, TransportHelloResult::current());
+        let message = serde_json::to_string(&response).map_err(io::Error::other)?;
+        JsonlWriter::new(writer, DEFAULT_MAX_MESSAGE_BYTES).write_message(&message)?;
+        return Ok(WorkbenchFirstFrame::Hello(id));
+    }
+    // Existing clients still send initialize first. Replay the frame verbatim
+    // through the normal dispatcher without discarding buffered follow-up frames.
+    let mut first = first.into_bytes();
+    first.push(b'\n');
+    Ok(WorkbenchFirstFrame::Replay(first))
 }
 
 fn profile_needs_host(registry: &Option<Arc<ProfileAppServerRegistry>>) -> Result<bool, String> {

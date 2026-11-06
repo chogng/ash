@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 from build.builtin import (
     copy_builtin_extensions as _copy_builtin_extensions,
     validate_builtin_extensions as _validate_builtin_extensions,
+    write_builtin_extension_index,
 )
 from build.lib.tree import copy_regular_tree
 
@@ -322,6 +323,9 @@ def assemble_package(staging: Path, inputs: dict) -> None:
         from build.lib.js_debug import copy_runtime
 
         copy_runtime(source_root, resources / "extensions/debug-javascript/runtime")
+    write_builtin_extension_index(
+        resources / "extensions", resources / "extensions.index"
+    )
     copy_regular_tree(
         source_root / "resources/product-services",
         resources / "product-services",

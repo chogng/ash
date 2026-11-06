@@ -263,7 +263,7 @@ export interface IExtensionHostApi {
 	start(environment: Readonly<Record<string, string | null>>): Promise<ExtensionHostFleetSnapshot>;
 	list(): Promise<ExtensionHostFleetSnapshot>;
 	reconcile(mode: ExtensionHostReconcileMode): Promise<ExtensionHostFleetSnapshot>;
-	/** Asks Rust to match editor intent against one exact authorized package generation. */
+	/** Activates one exact authorized package generation for a matching editor intent. */
 	activateByEvent(request: ExtensionHostActivationRequest): Promise<ExtensionHostFleetSnapshot>;
 	invoke(request: ExtensionHostInvocationRequest, signal: AbortSignal): Promise<JsonValue>;
 	getConnectionState(): Promise<AppServerConnectionState>;

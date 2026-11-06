@@ -42,6 +42,7 @@ use super::UpdateBroker;
 use super::extension_packages_extension_sources::ExtensionsExtensionSourceProvider;
 use super::extension_packages_language_runtime::ExtensionsLanguageRuntime;
 use super::extension_packages_runtime::ExtensionsChangeWatcher;
+use super::extension_packages_runtime::LanguageExtensionChanges;
 use super::notification_queue::NotificationQueue;
 
 const LANGUAGE_MANIFEST: &[u8] = br#"{
@@ -229,15 +230,10 @@ fn installed_language_package_projects_assets_and_packaged_server() {
     let peer = Arc::new(std::sync::Mutex::new(
         super::language_runtime::AppServerLanguageRuntime::new(Arc::new(UpdateBroker::default())),
     ));
+    let changes = LanguageExtensionChanges::subscribe(Some(&policy), &runtime).unwrap();
     peer.lock()
         .unwrap()
         .set_server_providers(runtime.providers().unwrap());
-    let _watcher = ExtensionsChangeWatcher::start_language_runtime(
-        Some(&policy),
-        runtime.clone(),
-        peer.clone(),
-    )
-    .unwrap();
     let peer_servers = || {
         peer.lock()
             .unwrap()
@@ -246,6 +242,7 @@ fn installed_language_package_projects_assets_and_packaged_server() {
             .len()
     };
     assert_eq!(peer_servers(), 1);
+    // A policy change between discovery and watcher startup must still reach the peer.
     policy
         .set(
             &installed.package,
@@ -254,6 +251,7 @@ fn installed_language_package_projects_assets_and_packaged_server() {
             policy.generation(),
         )
         .unwrap();
+    let _watcher = changes.start(runtime.clone(), peer.clone()).unwrap();
     assert!(
         !runtime
             .providers()
@@ -960,8 +958,10 @@ fn language_package_changes_retire_idle_peer_runtime_and_complete_deferred_unins
         )
         .unwrap(),
     ));
-    let _watcher =
-        ExtensionsChangeWatcher::start_language_runtime(None, runtime, peer.clone()).unwrap();
+    let _watcher = LanguageExtensionChanges::subscribe(None, &runtime)
+        .unwrap()
+        .start(runtime, peer.clone())
+        .unwrap();
     assert!(
         manager
             .uninstall(UninstallPackageRequest {

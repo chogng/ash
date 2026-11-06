@@ -35,6 +35,7 @@ class ProtocolTransport implements AppServerTransport {
 	public readonly frames: Record<string, unknown>[] = [];
 	public shouldCloseSynchronously = false;
 	public initializeDelayMs = 0;
+	public holdInitialize = false;
 	public onInitialize: (() => void) | undefined;
 	public onDisconnect: (() => void) | undefined;
 	public rejectFrameWrites = false;
@@ -58,7 +59,7 @@ class ProtocolTransport implements AppServerTransport {
 			if (this.rejectFrameWrites) throw new Error('Peer socket already closed');
 			const frame = JSON.parse((payload as { frame: string; }).frame) as Record<string, unknown>;
 			this.frames.push(frame);
-			if (frame.method === 'initialize') {
+			if (frame.method === 'initialize' && !this.holdInitialize) {
 				const reply = () => { this.frame({ id: frame.id, result: this.initialize() }); this.onInitialize?.(); };
 				if (this.initializeDelayMs) { setTimeout(reply, this.initializeDelayMs); } else { reply(); }
 			}
@@ -75,6 +76,40 @@ class ProtocolTransport implements AppServerTransport {
 }
 
 const flushHandlers = (): Promise<void> => new Promise<void>(resolve => setImmediate(resolve));
+
+test('Transport hello is pipelined while domain requests wait for full initialization', async () => {
+	const transport = new ProtocolTransport();
+	transport.holdInitialize = true;
+	const client = new AppServerProtocolClient(transport, { transportHandshake: true });
+	using cleanup = toDisposable(() => client.dispose());
+	const connecting = client.connect();
+	await flushHandlers();
+	const [hello, initialize] = transport.frames;
+	assert.equal(hello?.method, 'transport/hello');
+	assert.equal(initialize?.method, 'initialize');
+	const result = createTestInitializeResult();
+	transport.frame({ id: hello?.id, result: { protocolVersion: result.protocolVersion, schemaHash: result.schemaHash } });
+	await flushHandlers();
+	assert.equal(client.state, 'initializing');
+	assert.equal(client.capabilities, undefined);
+	await assert.rejects(client.request(APP_SERVER_METHODS['config/read'], {}), /App Server is not ready: initializing/);
+	transport.frame({ id: initialize?.id, result });
+	await connecting;
+	assert.equal(client.state, 'ready');
+});
+
+test('Transport hello falls back to the full response on peers with the old startup sequence', async () => {
+	const transport = new ProtocolTransport();
+	const client = new AppServerProtocolClient(transport, { transportHandshake: true });
+	using cleanup = toDisposable(() => client.dispose());
+	const connecting = client.connect();
+	await flushHandlers();
+	const hello = transport.frames[0];
+	assert.equal(hello?.method, 'transport/hello');
+	transport.frame({ id: hello?.id, error: { code: -32001, message: 'Not initialized', data: { kind: 'NotInitialized' } } });
+	await connecting;
+	assert.equal(client.state, 'ready');
+});
 
 test('Concurrent config reads share one request and retry after rejection', async () => {
 	const transport = new ProtocolTransport();

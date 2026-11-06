@@ -132,8 +132,14 @@ impl Default for GitDiscoveryOptions {
 
 #[derive(Default)]
 struct GitRepositoryRegistry {
+    discovered: bool,
     repositories: Vec<Arc<GitRepositoryRuntime>>,
     repositories_by_id: HashMap<String, Arc<GitRepositoryRuntime>>,
+}
+
+enum Discovery {
+    Initial,
+    Refresh,
 }
 
 struct GitRepositoryRuntime {
@@ -304,6 +310,16 @@ impl GitRuntime {
         authorization: Authorization,
         updates: Arc<UpdateBroker>,
     ) -> Result<Arc<Self>, GitRuntimeError> {
+        let runtime = Self::new_deferred(authorization, updates);
+        runtime.ensure_discovered()?;
+        Ok(runtime)
+    }
+
+    /// The Directory can serve file requests while Git discovers its repositories.
+    pub(super) fn new_deferred(
+        authorization: Authorization,
+        updates: Arc<UpdateBroker>,
+    ) -> Arc<Self> {
         Self::new_dirs(vec![(None, authorization)], HashMap::new(), updates)
     }
 
@@ -323,15 +339,17 @@ impl GitRuntime {
         dirs.sort_by_key(|(_, authorization)| {
             std::cmp::Reverse(authorization.dir().canonical_path().components().count())
         });
-        Self::new_dirs(dirs, dir_order, updates)
+        let runtime = Self::new_dirs(dirs, dir_order, updates);
+        runtime.ensure_discovered()?;
+        Ok(runtime)
     }
 
     fn new_dirs(
         dirs: Vec<(Option<String>, Authorization)>,
         dir_order: HashMap<String, usize>,
         updates: Arc<UpdateBroker>,
-    ) -> Result<Arc<Self>, GitRuntimeError> {
-        let runtime = Arc::new(Self {
+    ) -> Arc<Self> {
+        Arc::new(Self {
             dirs,
             dir_order,
             updates,
@@ -339,9 +357,7 @@ impl GitRuntime {
             discovery_interests: Mutex::new(HashMap::new()),
             registry_changed: tokio::sync::watch::channel(()).0,
             registry: RwLock::new(GitRepositoryRegistry::default()),
-        });
-        runtime.reconcile_with_notification(false, &CancellationSource::new().token())?;
-        Ok(runtime)
+        })
     }
 
     pub(super) fn initialize(
@@ -376,25 +392,45 @@ impl GitRuntime {
 
     /// Keep unchanged repository owners alive: their streams and graph cursors belong to clients.
     pub(super) fn reconcile(&self) -> Result<(), GitRuntimeError> {
-        self.reconcile_with_notification(true, &CancellationSource::new().token())
+        self.reconcile_discovery(Discovery::Refresh, &CancellationSource::new().token())
     }
 
-    fn reconcile_with_notification(
+    fn has_discovered(&self) -> Result<bool, GitRuntimeError> {
+        Ok(self
+            .registry
+            .read()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?
+            .discovered)
+    }
+
+    fn ensure_discovered(&self) -> Result<(), GitRuntimeError> {
+        if self.has_discovered()? {
+            return Ok(());
+        }
+        self.reconcile_discovery(Discovery::Initial, &CancellationSource::new().token())
+    }
+
+    fn reconcile_discovery(
         &self,
-        notify: bool,
+        mode: Discovery,
         cancellation: &CancellationToken,
     ) -> Result<(), GitRuntimeError> {
-        self.reconcile_with_scans(notify, cancellation, &mut GitDiscoveryScans::new())
+        self.reconcile_with_scans(mode, cancellation, &mut GitDiscoveryScans::new())
     }
 
     fn reconcile_with_scans(
         &self,
-        notify: bool,
+        mode: Discovery,
         cancellation: &CancellationToken,
         scans: &mut GitDiscoveryScans,
     ) -> Result<(), GitRuntimeError> {
         let _discovery = crate::git_service::lock_for_request(&self.discovery, cancellation)
             .map_err(GitRuntimeError::Service)?;
+        // If the watcher or another query completed discovery while we waited,
+        // use its registry, including an empty result for a non-Git Directory.
+        if matches!(mode, Discovery::Initial) && self.has_discovered()? {
+            return Ok(());
+        }
         let previous = self.repository_runtimes();
         let mut repositories = Vec::new();
         let mut worktrees = Vec::<PathBuf>::new();
@@ -487,24 +523,28 @@ impl GitRuntime {
         cancellation
             .check()
             .map_err(|_| GitRuntimeError::Service(GitServiceError::Cancelled))?;
-        if !unchanged {
+        let mut registry = self
+            .registry
+            .write()
+            .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))?;
+        if unchanged {
+            registry.discovered = true;
+        } else {
             let repositories_by_id = repositories
                 .iter()
                 .map(|runtime| (runtime.descriptor.id.clone(), Arc::clone(runtime)))
                 .collect();
-            *self
-                .registry
-                .write()
-                .map_err(|_| GitRuntimeError::Service(GitServiceError::Runtime))? =
-                GitRepositoryRegistry {
-                    repositories,
-                    repositories_by_id,
-                };
+            *registry = GitRepositoryRegistry {
+                discovered: true,
+                repositories,
+                repositories_by_id,
+            };
+            drop(registry);
             // Discovery can be requested by a client after the watcher has gone
             // idle. Notify every authorized watcher to add/remove child watches
             // without requiring an unrelated filesystem event to wake it first.
             self.registry_changed.send_replace(());
-            if notify {
+            if matches!(mode, Discovery::Refresh) {
                 self.updates.publish_git_repositories_changed();
             }
         }
@@ -558,7 +598,13 @@ impl GitRuntime {
                 .lock()
                 .expect("Git discovery interests")
                 .insert(connection_id, folders);
-            self.reconcile_with_scans(true, &CancellationSource::new().token(), &mut scans)?;
+            self.reconcile_with_scans(
+                Discovery::Refresh,
+                &CancellationSource::new().token(),
+                &mut scans,
+            )?;
+        } else {
+            self.ensure_discovered()?;
         }
         let interests = self
             .discovery_interests
@@ -1398,6 +1444,7 @@ impl GitRuntime {
         &self,
         repository_id: Option<&str>,
     ) -> Result<Arc<GitRepositoryRuntime>, GitRuntimeError> {
+        self.ensure_discovered()?;
         let registry = self
             .registry
             .read()
@@ -3043,7 +3090,9 @@ fn watch_repositories(
     let mut receiver = DebouncedWatchReceiver::new(receiver, GIT_WATCH_INTERVAL);
     let mut children = HashMap::<String, (Arc<GitRepositoryRuntime>, GitWatcher)>::new();
     let mut registry_changes = runtime.registry_changed.subscribe();
-    let mut ready = Some(ready);
+    // With the root subscription armed, discover repositories and install child
+    // watches on this worker while the Directory becomes available to clients.
+    let _ = ready.send(());
     enum DiscoveryWake {
         RegistryChanged,
         Files(FileWatcherEvent),
@@ -3053,7 +3102,7 @@ fn watch_repositories(
         if cancellation.is_cancelled() {
             break;
         }
-        if let Err(error) = runtime.reconcile_with_notification(true, &cancellation) {
+        if let Err(error) = runtime.reconcile_discovery(Discovery::Refresh, &cancellation) {
             if cancellation.is_cancelled() {
                 break;
             }
@@ -3093,9 +3142,6 @@ fn watch_repositories(
                     };
                     (repository, watcher)
                 });
-        }
-        if let Some(ready) = ready.take() {
-            let _ = ready.send(());
         }
         let next_paths = runtime.discovery_paths(&watch_dirs);
         if next_paths != paths {

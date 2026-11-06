@@ -15,20 +15,35 @@ pub(crate) struct ExtensionsChangeWatcher {
     update_cancelled: Option<Arc<std::sync::atomic::AtomicBool>>,
 }
 
-impl ExtensionsChangeWatcher {
-    pub(super) fn start_language_runtime(
+pub(super) struct LanguageExtensionChanges {
+    packages: mpsc::Receiver<u64>,
+    policy: Option<mpsc::Receiver<u64>>,
+}
+
+impl LanguageExtensionChanges {
+    pub(super) fn subscribe(
         policy: Option<&ash_core_plugins::EditorExtensionPolicy>,
-        runtime: super::extension_packages_language_runtime::ExtensionsLanguageRuntime,
-        language: Arc<std::sync::Mutex<super::language_runtime::AppServerLanguageRuntime>>,
+        runtime: &super::extension_packages_language_runtime::ExtensionsLanguageRuntime,
     ) -> Option<Self> {
-        let changes = match runtime.subscribe() {
+        let packages = match runtime.subscribe() {
             Ok(changes) => changes,
             Err(error) => {
                 log::error!("failed to subscribe to language-server package changes: {error}");
                 return None;
             }
         };
-        let policy_changes = policy.map(ash_core_plugins::EditorExtensionPolicy::subscribe);
+        Some(Self {
+            packages,
+            policy: policy.map(ash_core_plugins::EditorExtensionPolicy::subscribe),
+        })
+    }
+
+    pub(super) fn start(
+        self,
+        runtime: super::extension_packages_language_runtime::ExtensionsLanguageRuntime,
+        language: Arc<std::sync::Mutex<super::language_runtime::AppServerLanguageRuntime>>,
+    ) -> Option<ExtensionsChangeWatcher> {
+        let Self { packages, policy } = self;
         let (shutdown, shutdown_receiver) = mpsc::channel();
         let thread = match std::thread::Builder::new()
             .name("ash-language-extension-changes".into())
@@ -37,15 +52,15 @@ impl ExtensionsChangeWatcher {
                     if shutdown_receiver.try_recv().is_ok() {
                         break;
                     }
-                    let mut changed = match changes.recv_timeout(Duration::from_millis(100)) {
+                    let mut changed = match packages.recv_timeout(Duration::from_millis(100)) {
                         Ok(_) => true,
                         Err(mpsc::RecvTimeoutError::Timeout) => false,
                         Err(mpsc::RecvTimeoutError::Disconnected) => break,
                     };
-                    while changes.try_recv().is_ok() {
+                    while packages.try_recv().is_ok() {
                         changed = true;
                     }
-                    if let Some(policy) = &policy_changes {
+                    if let Some(policy) = &policy {
                         while policy.try_recv().is_ok() {
                             changed = true;
                         }
@@ -81,7 +96,7 @@ impl ExtensionsChangeWatcher {
                 return None;
             }
         };
-        Some(Self {
+        Some(ExtensionsChangeWatcher {
             shutdown: Some(shutdown),
             thread: Some(thread),
             update_shutdown: None,
@@ -89,7 +104,9 @@ impl ExtensionsChangeWatcher {
             update_cancelled: None,
         })
     }
+}
 
+impl ExtensionsChangeWatcher {
     pub(crate) fn start(
         manager: &Arc<ExtensionPackageManager>,
         updates: Arc<UpdateBroker>,

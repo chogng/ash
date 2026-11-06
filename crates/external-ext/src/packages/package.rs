@@ -11,9 +11,9 @@ use super::resource::validate_relative_path;
 
 pub(crate) const MAX_MANIFEST_BYTES: usize = 4 * 1024 * 1024;
 pub(crate) const MAX_PACKAGE_FILE_BYTES: usize = 16 * 1024 * 1024;
-const MAX_PACKAGE_BYTES: usize = 64 * 1024 * 1024;
+pub(super) const MAX_PACKAGE_BYTES: usize = 64 * 1024 * 1024;
 const MAX_PACKAGE_ENTRIES: usize = 8_192;
-const MAX_PACKAGE_FILES: usize = 4_096;
+pub(super) const MAX_PACKAGE_FILES: usize = 4_096;
 
 pub(crate) struct ExtensionPackageSnapshot {
     files: BTreeMap<String, Vec<u8>>,
@@ -68,6 +68,15 @@ impl ExtensionPackageSnapshot {
 
     pub(crate) fn total_bytes(&self) -> usize {
         self.total_bytes
+    }
+
+    pub(super) fn from_indexed_files(files: BTreeMap<String, Vec<u8>>, total_bytes: usize) -> Self {
+        let sha256 = package_digest(&files);
+        Self {
+            files,
+            sha256,
+            total_bytes,
+        }
     }
 }
 
@@ -165,25 +174,41 @@ fn read_bounded_file(
     path: &Path,
     expected_length: u64,
 ) -> Result<Vec<u8>, PackageSnapshotError> {
-    if expected_length > MAX_PACKAGE_FILE_BYTES as u64 {
+    read_bounded_regular_file(root, path, expected_length, MAX_PACKAGE_FILE_BYTES as u64)
+}
+
+pub(super) fn read_bounded_regular_file(
+    root: &Path,
+    path: &Path,
+    expected_length: u64,
+    max_bytes: u64,
+) -> Result<Vec<u8>, PackageSnapshotError> {
+    if expected_length > max_bytes {
         return Err(PackageSnapshotError::FileTooLarge);
     }
-    let inspected =
-        FileInformation::from_path(path).map_err(|_| PackageSnapshotError::Unavailable)?;
+    let (inspected, canonical) = FileInformation::from_path_with_canonical(path)
+        .map_err(|_| PackageSnapshotError::Unavailable)?;
     if inspected.has_multiple_links() {
         return Err(PackageSnapshotError::UnsafeEntry);
     }
-    let canonical = fs::canonicalize(path).map_err(|_| PackageSnapshotError::Unavailable)?;
     if !is_within(root, &canonical) {
         return Err(PackageSnapshotError::UnsafeEntry);
     }
-    read_bounded_file_after_inspection(root, path, expected_length, inspected, &canonical)
+    read_bounded_file_after_inspection(
+        root,
+        path,
+        expected_length,
+        max_bytes,
+        inspected,
+        &canonical,
+    )
 }
 
 fn read_bounded_file_after_inspection(
     root: &Path,
     path: &Path,
     expected_length: u64,
+    max_bytes: u64,
     inspected: FileInformation,
     canonical: &Path,
 ) -> Result<Vec<u8>, PackageSnapshotError> {
@@ -205,17 +230,15 @@ fn read_bounded_file_after_inspection(
     }
     let mut bytes = Vec::with_capacity(expected_length as usize);
     file.by_ref()
-        .take(MAX_PACKAGE_FILE_BYTES as u64 + 1)
+        .take(max_bytes + 1)
         .read_to_end(&mut bytes)
         .map_err(|_| PackageSnapshotError::Unavailable)?;
-    if bytes.len() > MAX_PACKAGE_FILE_BYTES {
+    if bytes.len() as u64 > max_bytes {
         return Err(PackageSnapshotError::FileTooLarge);
     }
     let current = fs::symlink_metadata(path).map_err(|_| PackageSnapshotError::Unavailable)?;
-    let current_canonical =
-        fs::canonicalize(path).map_err(|_| PackageSnapshotError::Unavailable)?;
-    let observed_information =
-        FileInformation::from_path(path).map_err(|_| PackageSnapshotError::Unavailable)?;
+    let (observed_information, current_canonical) = FileInformation::from_path_with_canonical(path)
+        .map_err(|_| PackageSnapshotError::Unavailable)?;
     if current.file_type().is_symlink()
         || !current.is_file()
         || bytes.len() as u64 != expected_length

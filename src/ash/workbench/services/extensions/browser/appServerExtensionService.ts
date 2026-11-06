@@ -13,7 +13,7 @@ import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IConfigurationNode, type IConfigurationDefaults } from '../../../../platform/configuration/common/configurationRegistry.js';
 import { registerProblemMatcherContributions, type ProblemMatcherContributions } from '../../../contrib/tasks/common/problemMatcher.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
-import { raceCancellationError } from '../../../../base/common/async.js';
+import { DeferredPromise, raceCancellationError } from '../../../../base/common/async.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { ColorExtensionPoint } from '../../themes/common/colorExtensionPoint.js';
 import { IconExtensionPoint } from '../../themes/common/iconExtensionPoint.js';
@@ -53,6 +53,8 @@ export interface AppServerExtensionServiceOptions {
 	readonly eventApi?: IServerEventApi;
 	readonly languageService?: IAshLanguageService;
 	readonly languageConfigurationService?: ILanguageConfigurationService;
+	/** Allow the first window to finish restoring editors before loading optional assets. */
+	readonly loadStartupAssetsAfter?: Promise<void>;
 }
 
 interface LanguageConfigurationContribution {
@@ -86,6 +88,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		diagnostics: Object.freeze([]),
 	});
 	private loading: Promise<void> | undefined;
+	private readonly editorDeclarationsReady = new DeferredPromise<void>();
 	private activeCatalogSignature: string | undefined;
 	private activationHandler: ((event: string, signal?: AbortSignal) => Promise<void>) | undefined;
 	private reloadQueued: ExtensionCatalogReload | undefined;
@@ -207,6 +210,18 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		return this.requestReload('refresh');
 	}
 
+	whenEditorContributionsReady(): Promise<void> {
+		const loading = this.start();
+		return this.options.loadStartupAssetsAfter && this.activeCatalogSignature === undefined
+			? Promise.race([this.editorDeclarationsReady.p, loading])
+			: loading;
+	}
+
+	get hasExecutableEditorDeclarations(): boolean {
+		return this.manifests.some(({ description, manifest }) => manifest.contributes.customEditors.some(editor =>
+			description.sourceKind !== 'builtIn' || !getBuiltinEditorPaneFactory(description.id, editor.viewType)));
+	}
+
 	private requestReload(reload: ExtensionCatalogReload): Promise<void> {
 		this.assertNotDisposed();
 		if (this.reloadQueued !== 'refresh') this.reloadQueued = reload;
@@ -277,6 +292,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 	}
 
 	private async loadAndRegister(reload: ExtensionCatalogReload): Promise<ExtensionServiceFailure | undefined> {
+		const startup = this.options.loadStartupAssetsAfter !== undefined && !this.editorDeclarationsReady.isSettled;
 		const themeContributions: ThemeContributions = { colors: [], icons: [], fonts: [], types: [], modifiers: [] };
 		const languages: LanguageDescriptionContribution[] = [];
 		const languageConfigurations: LanguageConfigurationContribution[] = [];
@@ -299,8 +315,10 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		const editorPanes: IEditorPaneDescriptor[] = [];
 		let activeExtension: ExtensionDescriptor | undefined;
 		try {
+			if (startup) performance.mark('ash.workbench.extension-catalog-start');
 			const transportCatalog = await this.options.api.list(reload);
 			if (this.isDisposed) return;
+			if (startup) performance.mark('ash.workbench.extension-catalog-ready');
 			const snippetOwnerRevision = this.snippetOwnerRevision;
 			// Frozen package digests identify every resource in this snapshot. An
 			// unchanged scan must preserve factory identities and pending Debug launches.
@@ -311,9 +329,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			const keybindings: IKeybindingRule[] = [];
 			let nextExtension = 0;
 			const preparationFailures = new Map<number, ExtensionServiceFailure>();
-			// Package resources are independent, but publishing contributions is one
-			// ordered transaction. Bound I/O here instead of serializing every small
-			// file's open/read/release round trips on the startup critical path.
+			// Verify and localize the snapshot in parallel, then publish in catalog order.
 			await Promise.all(Array.from({ length: Math.min(8, transportCatalog.extensions.length) }, async () => {
 				while (!this.isDisposed && preparationFailures.size === 0 && nextExtension < transportCatalog.extensions.length) {
 					const index = nextExtension++;
@@ -325,6 +341,84 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 						if (this.isDisposed) return;
 						const manifest = parseExtensionManifest(manifestJson, extension);
 						preparedManifests.set(extension.id, manifest);
+					} catch (error) {
+						preparationFailures.set(index, Object.freeze({ extension: projectExtensionDescriptor(extension), error }));
+					}
+				}
+			}));
+			if (this.isDisposed) return;
+			if (preparationFailures.size > 0) return preparationFailures.get(Math.min(...preparationFailures.keys()));
+			for (const extension of transportCatalog.extensions) {
+				activeExtension = projectExtensionDescriptor(extension);
+				const manifest = preparedManifests.get(extension.id)!;
+				keybindings.push(...manifest.contributes.keybindings
+					.filter(rule => extension.sourceKind === 'builtIn' || rule.args === undefined && declarativeEditingCommands.has(rule.command))
+					.map(rule => ({ ...rule, source: KeybindingSource.Workbench, priority: extension.sourceKind === 'builtIn' ? KeybindingWeight.BuiltinExtension : KeybindingWeight.ExternalExtension })));
+				manifests.push({ description: activeExtension, manifest });
+				configurations.push(...manifest.contributes.configuration);
+				configurationDefaults.push(...manifest.contributes.configurationDefaults);
+				if (extension.sourceKind === 'builtIn') {
+					for (const editor of manifest.contributes.customEditors) {
+						const factory = getBuiltinEditorPaneFactory(extension.id, editor.viewType);
+						if (!factory) { continue; }
+						let name = editor.displayName;
+						const key = /^%(.+)%$/.exec(name)?.[1];
+						if (key) {
+							const locale = getNLSLanguage() === 'en' ? '' : '.' + getNLSLanguage();
+							const messages = parseJsonc(new TextDecoder().decode(await this.loadResource(resources, catalog.generation, extension.id, `package.nls${locale}.json`)), 'Editor labels') as Record<string, unknown>;
+							if (typeof messages[key] !== 'string') { throw new TypeError(`Missing editor label '${key}' in '${extension.id}'`); }
+							name = messages[key];
+						}
+						editorPanes.push({
+							id: editor.viewType, name, create: options => factory.create(options, name),
+							createInput: factory.createInput,
+							...(factory.documentType ? {
+								documentType: {
+									...factory.documentType,
+									extensions: editor.selector.map(selector => selector.filenamePattern).filter((pattern): pattern is string => pattern !== undefined && /^\*\.[A-Za-z0-9-]+$/.test(pattern)).map(pattern => pattern.slice(1).toLowerCase()),
+								}
+							} : {}),
+							canOpen: input => {
+								if (isResourceDiffEditorInput(input)) { return EditorPaneMatch.None; }
+								const mediaType = input.contentType?.split(';', 1)[0].trim().toLowerCase();
+								const supported = editor.selector.some(selector => selector.filenamePattern !== undefined && match(selector.filenamePattern.toLowerCase(), (selector.filenamePattern.includes('/') ? input.resource.path : basename(input.resource)).toLowerCase()) || mediaType !== undefined && selector.mimeType === mediaType);
+								if (!supported) { return EditorPaneMatch.None; }
+								return editor.priority === 'default' ? EditorPaneMatch.Default : EditorPaneMatch.Optional;
+							},
+						});
+					}
+				}
+				for (const language of manifest.contributes.languages) {
+					languages.push({
+						description: {
+							id: language.id,
+							aliases: language.aliases,
+							extensions: language.extensions,
+							filenames: language.filenames,
+							filenamePatterns: language.filenamePatterns,
+							mimetypes: language.mimetypes,
+							...(language.firstLine === undefined ? {} : { firstLine: language.firstLine }),
+						}, options: { priority: 100 }
+					});
+				}
+			}
+			if (startup) {
+				// Do not expose a generation invalidated while its manifests were being verified.
+				if (this.reloadQueued) return;
+				this.registerStartupDeclarations(catalog, manifests, editorPanes, languages, configurations, configurationDefaults, keybindings);
+				performance.mark('ash.workbench.editor-declarations-ready');
+				void this.editorDeclarationsReady.complete();
+				await this.options.loadStartupAssetsAfter;
+				if (this.isDisposed || this.reloadQueued) return;
+				performance.mark('ash.workbench.extension-assets-start');
+			}
+			nextExtension = 0;
+			await Promise.all(Array.from({ length: Math.min(8, transportCatalog.extensions.length) }, async () => {
+				while (!this.isDisposed && preparationFailures.size === 0 && nextExtension < transportCatalog.extensions.length) {
+					const index = nextExtension++;
+					const extension = transportCatalog.extensions[index]!;
+					const manifest = preparedManifests.get(extension.id)!;
+					try {
 						const paths = new Set([
 							...(this.options.languageService ? manifest.contributes.languages.flatMap(language => language.configuration ? [language.configuration] : []) : []),
 							...(this.options.languageService ? manifest.contributes.snippets.map(snippet => snippet.path) : []),
@@ -368,50 +462,13 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			for (const extension of transportCatalog.extensions) {
 				activeExtension = projectExtensionDescriptor(extension);
 				const manifest = preparedManifests.get(extension.id)!;
-				keybindings.push(...manifest.contributes.keybindings
-					.filter(rule => extension.sourceKind === 'builtIn' || rule.args === undefined && declarativeEditingCommands.has(rule.command))
-					.map(rule => ({ ...rule, source: KeybindingSource.Workbench, priority: extension.sourceKind === 'builtIn' ? KeybindingWeight.BuiltinExtension : KeybindingWeight.ExternalExtension })));
-				manifests.push({ description: activeExtension, manifest });
 				welcome.push(...manifest.contributes.viewsWelcome.map(entry => [entry.view, { content: entry.contents, when: entry.when ? ContextKeyExpr.deserialize(entry.when) : undefined, precondition: entry.precondition ? ContextKeyExpr.deserialize(entry.precondition) : undefined, group: entry.group, order: entry.order }] as Parameters<typeof ViewsRegistry.registerViewWelcomeContent>));
-				configurations.push(...manifest.contributes.configuration);
-				configurationDefaults.push(...manifest.contributes.configurationDefaults);
 				for (const submenu of manifest.contributes.submenus) {
 					for (const placement of submenu.placements) {
 						const [group, orderText] = (placement.group ?? '').split('@');
 						const order = orderText === undefined ? undefined : Number(orderText);
 						if (order !== undefined && !Number.isFinite(order)) throw new TypeError('Invalid submenu order');
 						submenus.push({ menu: placement.menu, item: { submenu: extensionMenuId(submenu.id), title: submenu.label, group, order, when: placement.when ? ContextKeyExpr.deserialize(placement.when) : undefined } });
-					}
-				}
-				if (extension.sourceKind === 'builtIn') {
-					for (const editor of manifest.contributes.customEditors) {
-						const factory = getBuiltinEditorPaneFactory(extension.id, editor.viewType);
-						if (!factory) { continue; }
-						let name = editor.displayName;
-						const key = /^%(.+)%$/.exec(name)?.[1];
-						if (key) {
-							const locale = getNLSLanguage() === 'en' ? '' : '.' + getNLSLanguage();
-							const messages = parseJsonc(new TextDecoder().decode(await this.loadResource(resources, catalog.generation, extension.id, `package.nls${locale}.json`)), 'Editor labels') as Record<string, unknown>;
-							if (typeof messages[key] !== 'string') { throw new TypeError(`Missing editor label '${key}' in '${extension.id}'`); }
-							name = messages[key];
-						}
-						editorPanes.push({
-							id: editor.viewType, name, create: options => factory.create(options, name),
-							createInput: factory.createInput,
-							...(factory.documentType ? {
-								documentType: {
-									...factory.documentType,
-									extensions: editor.selector.map(selector => selector.filenamePattern).filter((pattern): pattern is string => pattern !== undefined && /^\*\.[A-Za-z0-9-]+$/.test(pattern)).map(pattern => pattern.slice(1).toLowerCase()),
-								}
-							} : {}),
-							canOpen: input => {
-								if (isResourceDiffEditorInput(input)) { return EditorPaneMatch.None; }
-								const mediaType = input.contentType?.split(';', 1)[0].trim().toLowerCase();
-								const supported = editor.selector.some(selector => selector.filenamePattern !== undefined && match(selector.filenamePattern.toLowerCase(), (selector.filenamePattern.includes('/') ? input.resource.path : basename(input.resource)).toLowerCase()) || mediaType !== undefined && selector.mimeType === mediaType);
-								if (!supported) { return EditorPaneMatch.None; }
-								return editor.priority === 'default' ? EditorPaneMatch.Default : EditorPaneMatch.Optional;
-							},
-						});
 					}
 				}
 				themeContributions.colors.push(...manifest.contributes.colors);
@@ -431,17 +488,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					throw new Error(`Extension '${extension.id}' contributes language features but no editor language service is available`);
 				}
 				for (const language of manifest.contributes.languages) {
-					languages.push({
-						description: {
-							id: language.id,
-							aliases: language.aliases,
-							extensions: language.extensions,
-							filenames: language.filenames,
-							filenamePatterns: language.filenamePatterns,
-							mimetypes: language.mimetypes,
-							...(language.firstLine === undefined ? {} : { firstLine: language.firstLine }),
-						}, options: { priority: 100 }
-					});
 					if (language.configuration !== undefined) {
 						const key = `${extension.id}\0${language.configuration}`;
 						const configuration = languageConfigurationResources.get(key) ?? this.loadLanguageConfiguration(resources, catalog.generation, extension.id, language.configuration);
@@ -487,7 +533,6 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 				problemMatchers.push(...manifest.contributes.problemMatchers);
 				problemPatterns.push(...manifest.contributes.problemPatterns);
 				for (const debuggerContribution of manifest.contributes.debuggers) debugAdapters.push(Object.freeze({ extensionId: extension.id, ...debuggerContribution }));
-
 			}
 			if (snippetOwnerRevision !== this.snippetOwnerRevision) {
 				this.reloadQueued ??= 'cached';
@@ -520,15 +565,14 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			}
 			try {
 				runWithBufferedEvents(() => {
-					this.editorPaneRegistration.replace(editorPanes);
+					if (!startup) this.editorPaneRegistration.replace(editorPanes);
 					this.submenuRegistrations.clear();
 					for (const submenu of submenus) this.submenuRegistrations.add(MenusRegistry.appendMenuItem(extensionMenuId(submenu.menu), submenu.item));
 					this.welcomeRegistrations.clear();
 					for (const args of welcome) this.welcomeRegistrations.add(ViewsRegistry.registerViewWelcomeContent(...args));
-					this.replaceContributions(languages, languageConfigurations, themes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions, { matchers: problemMatchers, patterns: problemPatterns }, configurations, configurationDefaults);
+					this.replaceContributions(languages, languageConfigurations, themes, fileTemplates, debugAdapters, debugAdapterFactories, fileIconThemes, productIconThemes, themeContributions, { matchers: problemMatchers, patterns: problemPatterns }, configurations, configurationDefaults, startup);
 					snippetActivation?.commit();
-					this.keybindingRegistrations.clear();
-					for (const rule of keybindings) { this.keybindingRegistrations.add(KeybindingsRegistry.registerKeybindingRule(rule)); }
+					if (!startup) this.replaceKeybindings(keybindings);
 					this.activeThemeContributions = themeContributions;
 					this.activeLanguages = Object.freeze([...languages]);
 					this.activeLanguageConfigurations = Object.freeze([...languageConfigurations]);
@@ -541,6 +585,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					this.activeSnippetOwnerRevision = snippetOwnerRevision;
 					this.changeEmitter.fire(catalog);
 				});
+				if (startup) performance.mark('ash.workbench.extension-assets-ready');
 			} catch (error) {
 				snippetActivation?.rollback();
 				this.editorPaneRegistration.replace(this.activeEditorPanes);
@@ -551,6 +596,36 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			if (this.isDisposed) return;
 			return Object.freeze({ extension: activeExtension, error });
 		}
+	}
+
+	private registerStartupDeclarations(catalog: ExtensionCatalog, manifests: typeof this.manifests, editorPanes: readonly IEditorPaneDescriptor[], languages: readonly LanguageDescriptionContribution[], configurations: IConfigurationNode[], defaults: IConfigurationDefaults[], keybindings: readonly IKeybindingRule[]): void {
+		runWithBufferedEvents(() => {
+			try {
+				this.editorPaneRegistration.replace(editorPanes);
+				this.languageRegistration?.replace(languages);
+				this.replaceConfiguration(configurations, defaults);
+			} catch (error) {
+				this.editorPaneRegistration.replace(this.activeEditorPanes);
+				this.languageRegistration?.replace(this.activeLanguages);
+				throw error;
+			}
+			this.replaceKeybindings(keybindings);
+			this.activeEditorPanes = editorPanes;
+			this.activeLanguages = Object.freeze([...languages]);
+			this.manifests = Object.freeze(manifests);
+			this.catalog = catalog;
+		});
+	}
+
+	private replaceKeybindings(keybindings: readonly IKeybindingRule[]): void {
+		this.keybindingRegistrations.clear();
+		for (const rule of keybindings) this.keybindingRegistrations.add(KeybindingsRegistry.registerKeybindingRule(rule));
+	}
+
+	private replaceConfiguration(configurations: IConfigurationNode[], defaults: IConfigurationDefaults[]): void {
+		Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).deltaConfiguration({ addedConfigurations: configurations, removedConfigurations: this.activeConfigurations, addedDefaults: defaults, removedDefaults: this.activeConfigurationDefaults });
+		this.activeConfigurations = configurations;
+		this.activeConfigurationDefaults = defaults;
 	}
 
 	private async localizeManifest(extension: TransportExtensionDescriptor, generation: number, resources: Map<string, Promise<Uint8Array>>): Promise<string> {
@@ -577,15 +652,14 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 		return JSON.stringify(localizeManifest(JSON.parse(extension.manifestJson), messages));
 	}
 
-
-	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], themes: readonly ExtensionThemeDefinition[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[], fileIconThemes: readonly IWorkbenchFileIconTheme[], productIconThemes: readonly IWorkbenchProductIconTheme[], themeContributions: ThemeContributions, problemContributions: ProblemMatcherContributions, configurations: IConfigurationNode[], configurationDefaults: IConfigurationDefaults[]): void {
+	private replaceContributions(languages: readonly LanguageDescriptionContribution[], languageConfigurations: readonly LanguageConfigurationContribution[], themes: readonly ExtensionThemeDefinition[], fileTemplates: readonly ExtensionFileTemplateDefinition[], debugAdapters: readonly ExtensionDebugAdapterDefinition[], debugAdapterFactories: readonly DebugAdapterFactory[], fileIconThemes: readonly IWorkbenchFileIconTheme[], productIconThemes: readonly IWorkbenchProductIconTheme[], themeContributions: ThemeContributions, problemContributions: ProblemMatcherContributions, configurations: IConfigurationNode[], configurationDefaults: IConfigurationDefaults[], declarationsAlreadyRegistered: boolean): void {
 		const previousThemes = this.themeRegistry.currentCatalog.themes;
 		const previousFileTemplates = this.fileTemplateRegistry.currentCatalog.templates;
 		const previousDebugAdapters = this.debugAdapterRegistry.definitions;
 		const previousProblemContributions = this.problemMatcherRegistration.contributions;
 		try {
 			this.replaceThemeContributions(themeContributions);
-			this.languageRegistration?.replace(languages);
+			if (!declarationsAlreadyRegistered) this.languageRegistration?.replace(languages);
 			this.replaceLanguageConfigurations(languageConfigurations);
 			this.themeRegistry.replace(themes);
 			this.fileTemplateRegistry.replace(fileTemplates);
@@ -594,9 +668,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 			this.fileIconRegistration.replace(fileIconThemes);
 			this.productIconRegistration.replace(productIconThemes);
 			this.problemMatcherRegistration.replace(problemContributions);
-			Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).deltaConfiguration({ addedConfigurations: configurations, removedConfigurations: this.activeConfigurations, addedDefaults: configurationDefaults, removedDefaults: this.activeConfigurationDefaults });
-			this.activeConfigurations = configurations;
-			this.activeConfigurationDefaults = configurationDefaults;
+			if (!declarationsAlreadyRegistered) this.replaceConfiguration(configurations, configurationDefaults);
 		} catch (error) {
 			try {
 				this.replaceThemeContributions(this.activeThemeContributions);

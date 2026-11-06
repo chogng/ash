@@ -6,7 +6,6 @@ import { readDefaultLogLevels, DefaultLogLevelsService, IDefaultLogLevelsService
 import '../services/configuration/common/jsonEditingService.js';
 import { IWorkspaceEditingService, WorkspaceTransitionCommittedError } from '../services/workspaces/common/workspaceEditing.js';
 import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../platform/browserView/common/browserPasswordService.js';
-import { IWorkspacesService } from '../../platform/workspaces/common/workspaces.js';
 import { IChannelService } from '../../platform/collab/common/channelService.js';
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../services/treeSitter/browser/treeSitterLibraryService.js';
 import { ITreeSitterLibraryService } from '../../editor/common/services/treeSitter/treeSitterLibraryService.js';
@@ -86,6 +85,7 @@ import {
 	toDisposable,
 } from '../../base/common/lifecycle.js';
 import { CancellationError, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
+import { DeferredPromise } from '../../base/common/async.js';
 import { assertDefined } from '../../base/common/types.js';
 import { URI } from '../../base/common/uri.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
@@ -419,11 +419,13 @@ export async function startWorkbench({
 	createAuxiliaryWindowService,
 }: IStartWorkbenchOptions): Promise<Workbench> {
 	const themes = new ExtensionColorThemeService(api.extensions, api.events);
+	const editorRestoration = new DeferredPromise<void>();
+	const startupThemePreferences = new DeferredPromise<readonly string[]>();
 	const logger = createLogService();
 	const wasInert = container.inert;
 	container.inert = true;
 	performance.mark('ash.workbench.themes-start');
-	const themesReady = themes.start().then(() => { performance.mark('ash.workbench.themes-ready'); });
+	const themesReady = themes.start({ preferences: startupThemePreferences.p, loadRemainingAfter: editorRestoration.p }).then(() => { performance.mark('ash.workbench.themes-ready'); });
 	// Startup owns the eventual failure; storage awaits must not leave an early
 	// theme rejection unobserved before the Workbench can take ownership.
 	void themesReady.catch(() => undefined);
@@ -474,6 +476,8 @@ export async function startWorkbench({
 			webWorkspaceClient,
 			themes,
 			themesReady,
+			startupThemePreferences,
+			editorRestoration,
 			storage,
 			logger,
 			createWorkingCopyBackupService,
@@ -490,6 +494,8 @@ export async function startWorkbench({
 		await themesReady;
 		return workbench;
 	} catch (error) {
+		void startupThemePreferences.complete([]);
+		void editorRestoration.complete();
 		userDataFiles?.dispose();
 		logger.error('startup', 'Workbench startup failed', error);
 		workbench?.dispose();
@@ -552,6 +558,8 @@ export class Workbench extends Disposable {
 		webWorkspaceClient: IWebWorkspaceClient | undefined,
 		themes: ExtensionColorThemeService,
 		themesReady: Promise<void>,
+		startupThemePreferences: DeferredPromise<readonly string[]>,
+		editorRestoration: DeferredPromise<void>,
 		storageService: IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void>; },
 		logger: LogService,
 		createWorkingCopyBackupService: IStartWorkbenchOptions['createWorkingCopyBackupService'],
@@ -568,6 +576,10 @@ export class Workbench extends Disposable {
 		super();
 		performance.mark('ash.workbench.constructor-start');
 		this._register(themes);
+		this._register(toDisposable(() => {
+			void startupThemePreferences.complete([]);
+			void editorRestoration.complete();
+		}));
 		if (clipboardService) {
 			serviceCollection.set(IClipboardService, clipboardService);
 		}
@@ -820,10 +832,11 @@ export class Workbench extends Disposable {
 		services.registerInstance(IMarkerService, markerService);
 		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
 		if (languageDiagnosticsService) this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
-		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: api.events, languageService, languageConfigurationService }));
+		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: api.events, languageService, languageConfigurationService, loadStartupAssetsAfter: editorRestoration.p }));
 		services.registerInstance(IExtensionService, extensionService);
 		services.get(ISnippetsService);
 		const extensionReady = extensionService.start();
+		const editorDeclarationsReady = extensionService.whenEditorContributionsReady();
 		void extensionReady.catch(error => logService.error('extensions', 'Declarative extension activation failed', error));
 		services.registerInstance(IFileSearchService, api.appServer.isAvailable ? api.fileSearch : services.createInstance(BrowserFileSearchService));
 		services.registerInstance(
@@ -895,6 +908,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(IThemeService, themeService);
 		services.registerInstance(IWorkbenchThemeService, themeService);
 		themeService.initialize();
+		// The profile theme can be shown while a newly opened folder awaits its grant.
+		void startupThemePreferences.complete(themeService.getColorThemePreferences());
 		const auxiliaryWindows = this._register(createAuxiliaryWindowService ? createAuxiliaryWindowService(ownerWindow, workbenchRoot, services) : services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot));
 		services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
 		const layoutService = this._register(services.createInstance(WorkbenchLayout, workbenchRoot, {
@@ -1019,13 +1034,19 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPolicyService, policies);
 		// Language-server initialization consumes extension-contributed defaults too.
 		// Starting earlier can launch expensive server work with upstream defaults.
-		serviceContributionReady.push(Promise.all([workspaceDirectoriesReady.then(() => {
+		const workspaceConfigurationReady = workspaceDirectoriesReady.then(() => {
 			if (!this.isDisposed) return configuration.initialize(fileService, policies, workingCopyService);
-		}), extensionReady]).then(() => {
+		});
+		void Promise.all([workspaceConfigurationReady, extensionReady]).then(() => {
+			if (this.isDisposed) return;
 			languageLifecycle?.start();
 			languageProviders?.start();
 			languageDiagnosticsService?.start();
-		}));
+		}).catch(error => logService.error('startup', 'Language service startup failed', error));
+		const editorThemeReady = Promise.allSettled([workspaceConfigurationReady, editorDeclarationsReady]).then(async () => {
+			await themesReady;
+			if (!this.isDisposed) await themes.ensureStartupTheme(themeService.getColorThemePreferences());
+		});
 		const accessibilityService = this._register(nativeHostApi
 			? services.createInstance(NativeAccessibilityService, workbenchRoot)
 			: new AccessibilityService({
@@ -1211,7 +1232,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IEditorPart, editorParts);
 		const historyService = this._register(instantiationService.createInstance(HistoryService));
 		services.registerInstance(IHistoryService, historyService);
-		const editorService = this._register(new BrowserEditorService(editorParts));
+		const editorService = this._register(new BrowserEditorService(editorParts, editorRestoration.p));
 		services.registerInstance(IEditorService, editorService);
 		services.registerInstance(IEditorGroupsService, editorService);
 		// Document hosts resolve Chat editing signals and IDE context from the window's accessibility and editor services.
@@ -1298,23 +1319,39 @@ export class Workbench extends Disposable {
 		// Extension adapters require the completed editor and view service graph.
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		performance.mark('ash.workbench.services-ready');
+		const deferredPaneLocations = new Map<WorkbenchPartId, ViewContainerLocation>();
+		this._register(layout.onDidChangePartVisibility(({ partId, visible }) => {
+			const location = deferredPaneLocations.get(partId);
+			if (!visible || location === undefined) return;
+			deferredPaneLocations.delete(partId);
+			// Layout commands can reveal a Part directly. Explicit view commands already opened it.
+			if (!panes.getActivePaneComposite(location)) {
+				void panes.openPaneComposite(undefined, location).catch(onUnexpectedError);
+			}
+		}));
 		// Workspace switches reuse this operation; startup marks describe only its first run.
 		let isStartupRestoration = true;
 		this.restoreActiveViewContainers = async () => {
 			const isStartup = isStartupRestoration;
 			isStartupRestoration = false;
+			deferredPaneLocations.clear();
 			// Restore retained containers against ordinary visibility. Revealing a
 			// hidden container during restoration must not discard a maximized startup.
 			const auxiliaryBarMaximized = layout.isAuxiliaryBarMaximized();
 			if (auxiliaryBarMaximized) layout.setAuxiliaryBarMaximized(false);
 			const openings: Promise<unknown>[] = [];
 			for (const [location, part] of paneParts) {
-				if (location === ViewContainerLocation.AgentSidebar && !layout.isPartVisible('agentSidebar')) { continue; }
+				const partId = panes.getPartId(location);
+				const visible = layout.isPartVisible(partId);
+				if (location === ViewContainerLocation.AgentSidebar && !visible) { continue; }
 				if (viewDescriptors.getViewContainers(location).length === 0) {
-					layout.hidePart(panes.getPartId(location));
+					layout.hidePart(partId);
 					continue;
 				}
-				const visible = layout.isPartVisible(panes.getPartId(location));
+				if (isStartup && !visible) {
+					deferredPaneLocations.set(partId, location);
+					continue;
+				}
 				const container = requiredViewContainerToRestore(viewDescriptors, location, part.getCompositeIdToRestore());
 				// Restore retained content without changing the saved visibility of its region.
 				if (isStartup) {
@@ -1332,17 +1369,23 @@ export class Workbench extends Disposable {
 		// Construct services and Parts while theme resources are in flight. Keep
 		// view creation and the splash's first layout behind the verified theme,
 		// so overlapping startup does not expose a temporary fallback appearance.
-		const paneRestoration = themesReady.then(async () => {
+		const shellReady = themesReady.then(() => {
 			if (this.isDisposed) return;
 			contributions.advance(WorkbenchPhase.BlockStartup);
 			performance.mark('ash.workbench.shell-ready');
+			const restoresMaximizedLayout = layout.isAuxiliaryBarMaximized();
 			const viewsReady = this.restoreActiveViewContainers!();
 			lifecycleService.phase = LifecyclePhase.Ready;
 			contributions.advance(WorkbenchPhase.BlockRestore);
 			layoutService.layout();
-			await viewsReady;
+			return { viewsReady, restoresMaximizedLayout };
 		});
-		this.whenRestored = this.completeStartupRestoration([keybindingsReady, extensionReady, paneRestoration, services.get(IWorkspacesService).getRecentlyOpened().then(() => { }), ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions, saveFontInfo);
+		const paneRestoration = shellReady.then(shell => shell?.viewsReady);
+		// The initial layout is required. Ordinary view restoration can finish
+		// alongside editors, while a maximized view still owns editor visibility.
+		const editorLayoutReady = shellReady.then(shell => shell?.restoresMaximizedLayout ? shell.viewsReady : undefined);
+		const editorProvidersReady = editorDeclarationsReady.then(() => extensionService.hasExecutableEditorDeclarations ? Promise.allSettled(serviceContributionReady).then(() => undefined) : undefined);
+		this.whenRestored = this.completeStartupRestoration([keybindingsReady, editorThemeReady, editorLayoutReady, editorProvidersReady], paneRestoration, workingCopyBackups, editor, editorParts, editorRestoration, contributions, saveFontInfo);
 		if (createWindow) {
 			this._register(createWindow(services));
 		}
@@ -1378,12 +1421,20 @@ export class Workbench extends Disposable {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async completeStartupRestoration(extensionReady: readonly Promise<void>[], backups: IWorkingCopyBackupService, editor: IEditorPart, editorParts: IEditorPartsService, contributions: WorkbenchContributionHost, saveFontInfo: () => void): Promise<void> {
-		await Promise.allSettled(extensionReady);
-		if (this.isDisposed) return;
-		await this.restoreEditorParts(editorParts);
-		if (this.isDisposed) return;
-		await this.restoreWorkingCopyBackups(backups, editor);
+	private async completeStartupRestoration(editorPrerequisites: readonly Promise<void>[], paneRestoration: Promise<void>, backups: IWorkingCopyBackupService, editor: IEditorPart, editorParts: IEditorPartsService, editorRestoration: DeferredPromise<void>, contributions: WorkbenchContributionHost, saveFontInfo: () => void): Promise<void> {
+		const panesSettled = Promise.allSettled([paneRestoration]);
+		try {
+			await Promise.allSettled(editorPrerequisites);
+			if (this.isDisposed) return;
+			await this.restoreEditorParts(editorParts);
+			if (this.isDisposed) return;
+			await this.restoreWorkingCopyBackups(backups, editor);
+			performance.mark('ash.workbench.editor-ready');
+		} finally {
+			// A click in the already-visible Explorer must survive both editor and backup recovery.
+			void editorRestoration.complete();
+		}
+		await panesSettled;
 		if (this.isDisposed) return;
 		// Persist the fonts used by restored editors before navigation can disconnect this document.
 		saveFontInfo();

@@ -1,3 +1,4 @@
+import gzip
 import hashlib
 import io
 import json
@@ -636,6 +637,11 @@ class PackageTests(unittest.TestCase):
                 (output / "ash-resources/extensions/reference-manager").exists()
             )
             self.assertFalse((output / "ash-resources/extensions/academy").exists())
+            index = output / "ash-resources/extensions.index"
+            with gzip.open(index, "rb") as packed:
+                self.assertEqual(packed.read(16), b"ASH-EXTENSIONS\0\x01")
+            metadata = json.loads((output / "ash-package.json").read_text())
+            self.assertIn("ash-resources/extensions.index", metadata["files"])
             self.assertEqual(
                 b"markdown-extension",
                 (output / "bin" / "ash-markdown-language-features").read_bytes(),

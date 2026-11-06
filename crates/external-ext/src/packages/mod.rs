@@ -5,6 +5,7 @@
 //! descriptors and bounded resource bytes to their own transport and presentation layers.
 
 mod budget;
+mod bundled_index;
 mod diagnostic;
 mod package;
 mod packages;

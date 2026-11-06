@@ -38,9 +38,7 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let result = ash_app_server_daemon::backend_executable_path().and_then(|executable| {
-        ash_app_server_daemon::run_command(std::env::args().skip(1), &executable)
-    });
+    let result = ash_app_server_daemon::run_installed_command(std::env::args().skip(1).collect());
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {

@@ -1710,13 +1710,20 @@ impl AppServer {
         if let Some(policy) = &self.editor_extension_policy {
             runtime.set_editor_extension_policy(Arc::clone(policy));
         }
+        // Subscribe before the first snapshot so changes during discovery are delivered
+        // after the initial providers have been installed.
+        let changes = extension_packages_runtime::LanguageExtensionChanges::subscribe(
+            self.editor_extension_policy.as_deref(),
+            &runtime,
+        );
         let providers = runtime.providers()?;
         self.language
             .lock()
             .map_err(|_| "new App Server language runtime mutex is poisoned".to_string())?
             .set_server_providers(providers);
+        self._language_extension_watcher =
+            changes.and_then(|changes| changes.start(runtime.clone(), Arc::clone(&self.language)));
         self.extension_packages_language_runtime = Some(runtime);
-        self.rebind_language_extension_watcher();
         Ok(self)
     }
 
@@ -2358,11 +2365,11 @@ impl AppServer {
             .extension_packages_language_runtime
             .as_ref()
             .and_then(|runtime| {
-                extension_packages_runtime::ExtensionsChangeWatcher::start_language_runtime(
+                extension_packages_runtime::LanguageExtensionChanges::subscribe(
                     self.editor_extension_policy.as_deref(),
-                    runtime.clone(),
-                    Arc::clone(&self.language),
+                    runtime,
                 )
+                .and_then(|changes| changes.start(runtime.clone(), Arc::clone(&self.language)))
             });
     }
 
@@ -3111,6 +3118,18 @@ impl AppServer {
         )
     }
 
+    /// Continues a managed connection that already answered its first protocol request.
+    pub(crate) fn serve_product_host_stream_after_hello<R: BufRead, W: Write + Send>(
+        &self,
+        reader: R,
+        writer: W,
+        hello_id: u64,
+    ) -> Result<(), std::io::Error> {
+        let connection = self.product_host_connection();
+        connection.record_request_id(hello_id);
+        self.serve_jsonl_connection(reader, writer, connection, InputEnd::Disconnect)
+    }
+
     /// Remote workspaces retain editor/Agent host services, while devices stay on the client.
     pub(crate) fn serve_remote_jsonl<R: BufRead, W: Write + Send>(
         &self,
@@ -3312,14 +3331,23 @@ impl AppServer {
         request: &mut JsonRpcRequest<Value>,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        if client_method(&request.method) == Some(ClientMethod::Initialize) {
-            return self.initialize(connection, &request.params);
+        match client_method(&request.method) {
+            Some(ClientMethod::TransportHello) => {
+                decode::<()>(&request.params)?;
+                return result(
+                    &ash_app_server_protocol::protocol::initialize::TransportHelloResult::current(),
+                );
+            }
+            Some(ClientMethod::Initialize) => return self.initialize(connection, &request.params),
+            _ => {}
         }
         if !connection.is_initialized() {
             return Err(RpcError::new(-32001, AppServerErrorName::NotInitialized));
         }
         match client_method(&request.method) {
-            Some(ClientMethod::Initialize) => unreachable!("initialize handled before gate"),
+            Some(ClientMethod::Initialize | ClientMethod::TransportHello) => {
+                unreachable!("startup requests are handled before the initialization gate")
+            }
             Some(ClientMethod::BrowserConfigure) => self
                 .browser_processor()
                 .configure(connection, &request.params),

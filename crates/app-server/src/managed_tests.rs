@@ -26,6 +26,33 @@ use std::io;
 use super::is_peer_disconnect;
 
 #[test]
+fn workbench_hello_responds_before_consuming_the_directory_initialize() {
+    let hello = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"transport/hello\",\"params\":null}\n";
+    let initialize = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"initialize\",\"params\":{}}\n";
+    let mut input = io::Cursor::new(format!("{hello}{initialize}").into_bytes());
+    let mut output = Vec::new();
+    let first = super::read_workbench_hello(&mut input, &mut output).unwrap();
+    assert!(matches!(first, super::WorkbenchFirstFrame::Hello(1)));
+    let reply: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(reply["id"], 1);
+    assert_eq!(
+        reply["result"]["schemaHash"],
+        ash_app_server_protocol::schema_hash()
+    );
+    assert_eq!(
+        &input.get_ref()[input.position() as usize..],
+        initialize.as_bytes()
+    );
+
+    output.clear();
+    let first = super::read_workbench_hello(io::Cursor::new(initialize), &mut output).unwrap();
+    assert!(
+        matches!(first, super::WorkbenchFirstFrame::Replay(bytes) if bytes == initialize.as_bytes())
+    );
+    assert!(output.is_empty());
+}
+
+#[test]
 fn peer_disconnects_are_normal_transport_shutdowns() {
     for kind in [
         io::ErrorKind::BrokenPipe,

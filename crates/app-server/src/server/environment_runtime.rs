@@ -32,6 +32,7 @@ use crate::tool_composition::combine_tool_ports_at_generation_with_search;
 use crate::tool_search_models::ToolSearchEmbeddingStatus;
 use crate::tool_search_models::resolve_tool_search;
 use agent::MultiAgentToolService;
+use ash_app_server_daemon::startup_trace::StartupTrace;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::fs::FsDirectoryTarget;
 use ash_app_server_protocol::protocol::fs::FsResolvePathResult;
@@ -828,6 +829,9 @@ impl EnvRuntimeControl {
         runtime.workspace.codebase_semantic = None;
         runtime.workspace.codebase_semantic_job = None;
         runtime.selected_file_system = Some(Arc::new(LocalFileSystem::new(replacement.clone())));
+        if let Some(customizations) = &customizations {
+            customizations.replace_repository_grant(&replacement);
+        }
         runtime.selected_grant = Some(replacement);
         runtime.workspace.git = replacement_git;
         runtime.workspace._git_watcher = replacement_git_watcher;
@@ -1680,6 +1684,7 @@ impl AppServer {
             .env_runtime_gate
             .lock()
             .map_err(|_| EnvRuntimeError::Failed("Environment runtime gate poisoned".into()))?;
+        let grant_span = StartupTrace::span("directory-initial-grant");
         let dir =
             Dir::open_local(root).map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
         let authorization = match policy {
@@ -1736,6 +1741,7 @@ impl AppServer {
         } else {
             authorization
         };
+        drop(grant_span);
         self.activate_dir_runtime(authorization, host)
     }
 
@@ -2573,7 +2579,11 @@ impl AppServer {
                 .unwrap_or_else(|poisoned| poisoned.into_inner())
                 .dir_grants
                 .clone();
-            let grep = self.open_grep()?;
+            let grep = {
+                let _span = StartupTrace::span("directory-grep");
+                self.open_grep()?
+            };
+            let tools_span = StartupTrace::span("directory-tools");
             let local = compose_local_tools_with_config(
                 authorization.clone(),
                 &env_config.tools,
@@ -2586,6 +2596,7 @@ impl AppServer {
                 Arc::clone(&self.session_environments),
             )
             .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+            drop(tools_span);
             self.commit_full_env_runtime(authorization, local, grep, host)
         };
         if result.is_ok() {
@@ -2610,6 +2621,7 @@ impl AppServer {
         self.revoke_cloud_index_for_dir(&dir);
         let file_system: Arc<dyn FileSystem> =
             Arc::new(LocalFileSystem::new(authorization.clone()));
+        let search_span = StartupTrace::span("directory-search");
         let grep = if authorization.permissions().allows(Permission::SearchFiles) {
             Some(self.open_grep()?)
         } else {
@@ -2641,33 +2653,32 @@ impl AppServer {
         if let Some(codebase) = &codebase {
             self.retry_persisted_cloud_index_deletion(codebase);
         }
+        drop(search_span);
+        let git_span = StartupTrace::span("directory-git");
         let git = authorization
             .authorize(Permission::InspectRepository)
             .ok()
-            .map(|permission| GitRuntime::new(permission, Arc::clone(&self.updates)))
-            .transpose()
-            .map_err(|_| EnvRuntimeError::Failed("failed to initialize Git runtime".into()))?;
+            .map(|permission| GitRuntime::new_deferred(permission, Arc::clone(&self.updates)));
+        drop(git_span);
         let dir_grants = self
             .env_runtime
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .dir_grants
             .clone();
+        let contributions_span = StartupTrace::span("directory-agent-contributions");
         let customizations = DirContributions::discover(
             &canonical_root,
             dir_grants,
             authorization.authorize(Permission::LoadInstructions).ok(),
             self.home.clone(),
-            if authorization
-                .permissions()
-                .allows(Permission::InspectRepository)
-            {
-                super::agent_environment_source::RepositoryInspection::Allowed
-            } else {
-                super::agent_environment_source::RepositoryInspection::Omit
-            },
+            authorization
+                .authorize(Permission::InspectRepository)
+                .map_or(RepositoryInspection::Omit, RepositoryInspection::OnSnapshot),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+        drop(contributions_span);
+        let watch_span = StartupTrace::span("directory-file-watcher");
         let file_system_watcher = if authorization.permissions().allows(Permission::WatchFiles) {
             Some(
                 match (&codebase, &symbol_index) {
@@ -2692,6 +2703,7 @@ impl AppServer {
         } else {
             None
         };
+        drop(watch_span);
 
         host.hooks.unbind_dir();
         host.tools.replace_executable(None, false)?;
@@ -2758,6 +2770,7 @@ impl AppServer {
         let dir = authorization.dir().clone();
         let file_system: Arc<dyn FileSystem> =
             Arc::new(LocalFileSystem::new(authorization.clone()));
+        let search_span = StartupTrace::span("directory-search");
         let codebase = if authorization.permissions().allows(Permission::SearchFiles) {
             Some(self.open_codebase_runtime(dir.clone(), Some(grep.clone()))?)
         } else {
@@ -2787,6 +2800,7 @@ impl AppServer {
         let cloud_codebase = codebase
             .as_ref()
             .and_then(|codebase| self.open_cloud_codebase_controller(codebase));
+        drop(search_span);
         let canonical_root = dir.canonical_path().to_path_buf();
         let dir_grants = self
             .env_runtime
@@ -2794,28 +2808,26 @@ impl AppServer {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .dir_grants
             .clone();
+        let contributions_span = StartupTrace::span("directory-agent-contributions");
         let customizations = DirContributions::discover(
             &canonical_root,
             dir_grants,
             authorization.authorize(Permission::LoadInstructions).ok(),
             self.home.clone(),
-            if authorization
-                .permissions()
-                .allows(Permission::InspectRepository)
-            {
-                super::agent_environment_source::RepositoryInspection::Allowed
-            } else {
-                super::agent_environment_source::RepositoryInspection::Omit
-            },
+            authorization
+                .authorize(Permission::InspectRepository)
+                .map_or(RepositoryInspection::Omit, RepositoryInspection::OnSnapshot),
         )
         .map_err(|error| EnvRuntimeError::Failed(error.to_string()))?;
+        drop(contributions_span);
+        let git_span = StartupTrace::span("directory-git");
         let git = authorization
             .authorize(Permission::MutateRepository)
             .ok()
             .or_else(|| authorization.authorize(Permission::InspectRepository).ok())
-            .map(|permission| GitRuntime::new(permission, Arc::clone(&self.updates)))
-            .transpose()
-            .map_err(|_| EnvRuntimeError::Failed("failed to initialize Git runtime".into()))?;
+            .map(|permission| GitRuntime::new_deferred(permission, Arc::clone(&self.updates)));
+        drop(git_span);
+        let watch_span = StartupTrace::span("directory-file-watcher");
         let file_system_watcher = if authorization.permissions().allows(Permission::WatchFiles) {
             Some(
                 match (&codebase, &symbol_index) {
@@ -2840,6 +2852,7 @@ impl AppServer {
         } else {
             None
         };
+        drop(watch_span);
         let action_policy_revision = local.action_policy_revision().clone();
         let local = if let Some(codebase) = &codebase {
             append_local_tool(
@@ -2940,7 +2953,9 @@ impl AppServer {
         }
         customizations.bind_hooks(Arc::clone(&host.hooks));
         host.tools.replace_executable(Some(local_port), true)?;
+        let skills_span = StartupTrace::span("directory-skills");
         self.bind_dir_skills(&authorization)?;
+        drop(skills_span);
         let context_source = if let Some(codebase) = &codebase {
             Some(Arc::new(CodebaseRetrievalContextSource::new(
                 codebase
@@ -3030,6 +3045,7 @@ impl AppServer {
         {
             log::warn!("failed to bind executable Editor Extensions to the new dir");
         }
+        let git_watch_span = StartupTrace::span("directory-git-watcher");
         let git_watcher = git
             .as_ref()
             .filter(|_| {
@@ -3052,6 +3068,7 @@ impl AppServer {
                     .collect();
                 git.start_watching(self.config.clone(), watch_dirs)
             });
+        drop(git_watch_span);
         let mut runtime = self
             .env_runtime
             .write()

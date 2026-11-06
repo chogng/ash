@@ -35,8 +35,9 @@ test('Electron renderer assembles its connection Worker dependency before Workbe
 		_serviceBrand: undefined,
 		getChannel: name => ({
 			listen: event => () => subscribe(`${name}:${event}`),
-			call: async command => {
+			call: async <T>(command: string): Promise<T> => {
 				assert.equal(name, 'localFilesystem');
+				if (command === 'userHome') return 'file:///startup-test-home' as T;
 				assert.equal(command, 'userDataHome');
 				throw nextBoundary;
 			},
@@ -55,7 +56,7 @@ test('Electron renderer assembles its connection Worker dependency before Workbe
 			assert.equal(subscriptions.size, 0, 'failed connection composition must retire its listeners before retry');
 		}
 		assert.deepEqual(subscribed, Array.from({ length: 2 }, () => [
-			'ash:app-server:restart', 'powerMonitor:onDidSuspendOS', 'powerMonitor:onDidResumeOS', 'localFilesystem:fileChange',
+			'localFilesystem:fileChange', 'ash:app-server:restart', 'powerMonitor:onDidSuspendOS', 'powerMonitor:onDidResumeOS',
 		]).flat());
 	} finally {
 		for (const name of Object.keys(values)) {

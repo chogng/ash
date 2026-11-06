@@ -1,4 +1,5 @@
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
 import { URI } from '../../../../base/common/uri.js';
 import { FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
 import type { ITextFileService } from '../../textfile/common/textfiles.js';
@@ -9,15 +10,23 @@ import { WorkbenchThemesRegistry } from '../../../common/theme.js';
 import { parseExtensionManifest, verifyExtensionManifestDigest } from '../common/extensionManifest.js';
 import {
 	createExtensionWorkbenchColorTheme,
+	extensionWorkbenchThemeId,
 	getDevelopmentThemeLocation,
 	loadExtensionTheme,
 } from '../common/extensionTheme.js';
+
+interface StartupColorThemes {
+	readonly preferences: Promise<readonly string[]>;
+	readonly loadRemainingAfter: Promise<void>;
+}
 
 /** Owns manifest-contributed color theme loading and registration for one renderer. */
 export class ExtensionColorThemeService extends Disposable {
 	private readonly registration = this._register(WorkbenchThemesRegistry.registerColorThemes([]));
 	private loading: Promise<void> | undefined;
 	private reloadQueued = false;
+	private startup: (StartupColorThemes & { readonly ready: DeferredPromise<void>; }) | undefined;
+	private loadPreferred: ((preferences: readonly string[]) => Promise<void>) | undefined;
 	private sourceFiles = new Set<string>();
 	/** The window supplies checkout reads once its scoped text file service is available. */
 	private textFiles: ITextFileService | undefined;
@@ -46,8 +55,20 @@ export class ExtensionColorThemeService extends Disposable {
 		this._register(toDisposable(() => subscription.dispose()));
 	}
 
-	start(): Promise<void> {
-		return this.reload();
+	start(startup?: StartupColorThemes): Promise<void> {
+		if (!startup) return this.reload();
+		const ready = new DeferredPromise<void>();
+		this.startup = { ...startup, ready };
+		const loading = this.reload();
+		void loading.catch(error => {
+			if (ready.isSettled) console.error('Background extension color theme load failed', error);
+		});
+		return Promise.race([ready.p, loading]);
+	}
+
+	/** Workspace settings can select another theme after the profile shell has been shown. */
+	async ensureStartupTheme(preferences: readonly string[]): Promise<void> {
+		await this.loadPreferred?.(preferences);
 	}
 
 	/** Source saves refresh the existing registration owner, including included syntax files. */
@@ -84,10 +105,12 @@ export class ExtensionColorThemeService extends Disposable {
 	}
 
 	private async loadAndRegister(): Promise<void> {
+		const startup = this.startup;
+		this.startup = undefined;
 		const catalog = await this.api.list('refresh');
 		const themes: IColorTheme[] = [];
 		const sourceFiles = new Set<string>();
-		const loads: (() => Promise<IColorTheme>)[] = [];
+		const loads: { id: string; load(): Promise<IColorTheme>; }[] = [];
 		for (const extension of catalog.extensions) {
 			await verifyExtensionManifestDigest(extension);
 			if (this.isDisposed) return;
@@ -122,20 +145,51 @@ export class ExtensionColorThemeService extends Disposable {
 				return bytes;
 			} : undefined;
 			for (const [index, contribution] of manifest.contributes.themes.entries()) {
-				loads.push(async () => {
-					const load = (read: (path: string) => Promise<Uint8Array>) => loadExtensionTheme(read, extension.id, contribution, index);
-					if (readSource) {
-						try {
-							return createExtensionWorkbenchColorTheme(await load(readSource));
-						} catch (error) {
-							const code = error instanceof Error ? toFileSystemProviderErrorCode(error) : FileSystemProviderErrorCode.Unknown;
-							if (code !== FileSystemProviderErrorCode.FileNotFound && code !== FileSystemProviderErrorCode.NoPermissions) throw error;
-							// Resolve the whole theme again so checkout files and package includes never mix.
+				loads.push({
+					id: extensionWorkbenchThemeId(extension.id, contribution.id, index), load: async () => {
+						const load = (read: (path: string) => Promise<Uint8Array>) => loadExtensionTheme(read, extension.id, contribution, index);
+						if (readSource) {
+							try {
+								return createExtensionWorkbenchColorTheme(await load(readSource));
+							} catch (error) {
+								const code = error instanceof Error ? toFileSystemProviderErrorCode(error) : FileSystemProviderErrorCode.Unknown;
+								if (code !== FileSystemProviderErrorCode.FileNotFound && code !== FileSystemProviderErrorCode.NoPermissions) throw error;
+								// Resolve the whole theme again so checkout files and package includes never mix.
+							}
 						}
+						return createExtensionWorkbenchColorTheme(await load(readPackage));
 					}
-					return createExtensionWorkbenchColorTheme(await load(readPackage));
 				});
 			}
+		}
+		const requests = new Map<number, Promise<void>>();
+		const load = (index: number) => {
+			let request = requests.get(index);
+			if (!request) {
+				request = loads[index]!.load().then(theme => { themes[index] = theme; });
+				requests.set(index, request);
+			}
+			return request;
+		};
+		if (startup) {
+			this.loadPreferred = async preferences => {
+				for (const id of preferences) {
+					if (WorkbenchThemesRegistry.getColorTheme(id)) return;
+					const selected = loads.flatMap((entry, index) => entry.id === id ? [index] : []);
+					if (!selected.length) continue;
+					await Promise.all(selected.map(load));
+					if (!this.isDisposed) {
+						this.sourceFiles = sourceFiles;
+						this.registration.replace(themes.filter(theme => theme !== undefined));
+					}
+					return;
+				}
+			};
+			try {
+				await this.ensureStartupTheme(await startup.preferences);
+				void startup.ready.complete();
+				await startup.loadRemainingAfter;
+			} finally { this.loadPreferred = undefined; }
 		}
 		// Includes remain ordered within a theme; independent themes share a bounded
 		// pool. Wait for admitted reads before reporting a failure or replacing state.
@@ -144,7 +198,7 @@ export class ExtensionColorThemeService extends Disposable {
 		await Promise.all(Array.from({ length: Math.min(8, loads.length) }, async () => {
 			while (!this.isDisposed && failures.size === 0 && next < loads.length) {
 				const index = next++;
-				try { themes[index] = await loads[index]!(); }
+				try { await load(index); }
 				catch (error) { failures.set(index, error); }
 			}
 		}));

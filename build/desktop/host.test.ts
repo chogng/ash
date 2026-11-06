@@ -6,8 +6,29 @@ import { join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import test from 'node:test';
-import { copyHostOutput, writeApplicationChecksums } from './host.ts';
+import { bundleWindowsMain, copyHostOutput, writeApplicationChecksums } from './host.ts';
 import { createHash } from 'node:crypto';
+
+test('Windows packaging bundles the Main entry and keeps optional modules lazy', async t => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-main-bundle-'));
+	t.after(() => rm(root, { recursive: true, force: true }));
+	const directory = join(root, 'src');
+	const entry = join(directory, 'main.js');
+	await mkdir(directory);
+	await writeFile(join(root, 'package.json'), '{"type":"module"}');
+	await writeFile(join(directory, 'startup.js'), 'export const message = "ready";');
+	await writeFile(join(directory, 'optional.js'), 'console.log("optional");');
+	await writeFile(entry, 'import { message } from "./startup.js"; console.log(message); if (process.argv[2]) await import("./optional.js");');
+
+	await bundleWindowsMain(root);
+	await rm(join(directory, 'startup.js'));
+	await rm(join(directory, 'optional.js'));
+	for (const [args, output] of [[[], 'ready'], [['open'], 'ready\noptional']] as const) {
+		const result = spawnSync(process.execPath, [entry, ...args], { encoding: 'utf8', windowsHide: true });
+		assert.equal(result.status, 0, result.stderr);
+		assert.equal(result.stdout.trim().replaceAll('\r\n', '\n'), output);
+	}
+});
 
 test('packaging publishes final desktop assets without hashing metadata or user files', async t => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-publish-checksums-'));

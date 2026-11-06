@@ -2,7 +2,7 @@ import { directoryPermissionPrompt } from '../../../automation/dialogs.js';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
 import { Workbench } from '../../../automation/workbench.js';
-import { createTestWorkspace, disposeTestWorkspace } from '../../../automation/testWorkspace.js';
+import { createTestWorkspace, disposeTestWorkspace, type TestWorkspace } from '../../../automation/testWorkspace.js';
 import { createTestEnvironment } from '../../../automation/testEnvironment.js';
 import { developmentAshPackagePath } from '../../../../build/desktop/runtimeStore.js';
 import { checkAppServerInitializeCompatibility } from '../../../../src/ash/platform/agentHost/common/appServerProtocolCompatibility.js';
@@ -48,7 +48,7 @@ async function observeProtocol(page: Page): Promise<void> {
 				try { frame = JSON.parse(text) as Record<string, unknown>; } catch { continue; }
 				if (frame.jsonrpc !== '2.0') { continue; }
 				if (direction === 'send') {
-					if (!['initialize', 'fs/readFile', 'env/dirs/set'].includes(String(frame.method))) { continue; }
+					if (!['transport/hello', 'initialize', 'fs/readFile', 'env/dirs/set'].includes(String(frame.method))) { continue; }
 					connection.selected.add(frame.id);
 				} else if (!connection.selected.has(frame.id)) { continue; }
 				if (frames.length < 300) { frames.push({ connection: connection.id, direction, frame }); }
@@ -81,7 +81,11 @@ async function observeProtocol(page: Page): Promise<void> {
 }
 
 async function initializationEvidence(page: Page): Promise<{ requestId: unknown; schemaHash: string; server: string; frames: ObservedFrame[]; }> {
-	await expect.poll(() => page.evaluate(() => (globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[]; }).ashProtocolEvidence?.some(entry => entry.direction === 'receive' && 'result' in entry.frame))).toBe(true);
+	await expect.poll(() => page.evaluate(() => {
+		const observed = (globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[]; }).ashProtocolEvidence;
+		const request = observed?.find(entry => entry.direction === 'send' && entry.frame.method === 'initialize');
+		return !!request && observed.some(entry => entry.direction === 'receive' && entry.connection === request.connection && entry.frame.id === request.frame.id);
+	})).toBe(true);
 	const frames = await page.evaluate(() => (globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[]; }).ashProtocolEvidence);
 	const request = frames.find(entry => entry.direction === 'send' && entry.frame.method === 'initialize');
 	expect(request).toBeDefined();
@@ -198,10 +202,22 @@ test('Browser protocol isolates matching request IDs and closing a page preserve
 	} finally { if (!peer.isClosed()) { await peer.close(); } }
 });
 
-test('Desktop MessagePort handshakes isolate equal IDs and closing one window preserves the other', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }, testInfo) => {
+const desktopProtocolTest = test.extend<{ secondWorkspace: TestWorkspace; }>({
+	// Automatic setup precedes the application fixture, so Windows releases the
+	// backend's directory handles before the peer workspace is removed.
+	secondWorkspace: [async ({ }, use) => {
+		const workspace = await createTestWorkspace();
+		try {
+			await use(workspace);
+		} finally {
+			await disposeTestWorkspace(workspace);
+		}
+	}, { auto: true }],
+});
+
+desktopProtocolTest('Desktop MessagePort handshakes isolate equal IDs and closing one window preserves the other', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace, secondWorkspace }, testInfo) => {
 	const electron = application as ElectronApplication;
 	const firstPage = workbench.page;
-	const secondWorkspace = await createTestWorkspace();
 	let secondPage: Page | undefined;
 	try {
 		const firstProof = join(testWorkspace.directory, 'protocol-scope.txt');
@@ -223,7 +239,17 @@ test('Desktop MessagePort handshakes isolate equal IDs and closing one window pr
 		await secondPage.reload();
 		await peerWorkbench.waitForReady();
 		const second = await initializationEvidence(secondPage);
-		expect(first.requestId).toBe(1);
+		for (const initialized of [first, second]) {
+			const hello = initialized.frames.find(entry => entry.direction === 'send' && entry.frame.method === 'transport/hello');
+			expect(hello?.frame.id).toBe(1);
+			const helloIndex = initialized.frames.findIndex(entry => entry.direction === 'receive' && entry.connection === hello!.connection && entry.frame.id === hello!.frame.id);
+			const readyIndex = initialized.frames.findIndex(entry => entry.direction === 'receive' && entry.connection === hello!.connection && entry.frame.id === initialized.requestId);
+			expect(helloIndex).toBeGreaterThan(-1);
+			expect(helloIndex).toBeLessThan(readyIndex);
+			const decoded = decodeAppServerResponse('transport/hello', initialized.frames[helloIndex]!.frame);
+			expect('result' in decoded && decoded.result.schemaHash).toBe(initialized.schemaHash);
+		}
+		expect(first.requestId).toBe(2);
 		expect(second.requestId).toBe(first.requestId);
 		expect(second.schemaHash).toBe(first.schemaHash);
 		const backendEnvironment = await electron.evaluate(() => ({ HOME: process.env.HOME, ASH_HOME: process.env.ASH_HOME, ASH_PRODUCT_SERVICES_PATH: process.env.ASH_PRODUCT_SERVICES_PATH }));
@@ -259,6 +285,5 @@ test('Desktop MessagePort handshakes isolate equal IDs and closing one window pr
 		await testInfo.attach('desktop-protocol-isolation', { body: JSON.stringify({ first, second, before, after, survivingFrames: await secondPage.evaluate(() => (globalThis as typeof globalThis & { ashProtocolEvidence: ObservedFrame[]; }).ashProtocolEvidence) }), contentType: 'application/json' });
 	} finally {
 		if (secondPage && !secondPage.isClosed()) { await secondPage.close().catch(() => undefined); }
-		await disposeTestWorkspace(secondWorkspace);
 	}
 });

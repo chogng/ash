@@ -51,6 +51,7 @@ function createServices(resources: DisposableStore): {
 		onDidChange: catalogChanged.event,
 		onDidFail: Event.None,
 		start: async () => { },
+		whenEditorContributionsReady: async () => { },
 		reload: async () => { },
 		activateByEvent: async () => { },
 		registerActivationHandler: () => toDisposable(() => { }),

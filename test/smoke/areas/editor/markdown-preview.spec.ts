@@ -1,7 +1,52 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import type { Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
+
+const emptyWindowTest = test.extend({ openWorkspace: false });
+
+async function jsonWorkerActive(page: Page): Promise<boolean> {
+	const hosts = page.workers().filter(worker => worker.url().includes('extensionHostWorker'));
+	const names = await Promise.all(hosts.map(worker => worker.evaluate(() => self.name)));
+	return names.includes('Ash Web Extension Host: ash.json-language-features');
+}
+
+emptyWindowTest('an empty Desktop window leaves the bundled JSON Worker dormant', { tag: ['@electron-app-server'] }, async ({ workbench }) => {
+	expect(await jsonWorkerActive(workbench.page)).toBe(false);
+});
+
+test('plain editing and Markdown preview leave the bundled JSON Worker dormant until a JSON file opens', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ testWorkspace, workbench }) => {
+	const page = workbench.page;
+	const plain = join(testWorkspace.directory, 'startup-plain.txt');
+	await Promise.all([
+		writeFile(plain, 'First file\n'),
+		writeFile(join(testWorkspace.directory, 'startup-preview.md'), '# Preview on request\n'),
+		writeFile(join(testWorkspace.directory, 'startup-language.json'), '{"enabled": }\n'),
+	]);
+	await workbench.quickaccess.runCommand('workbench.action.closeAllEditors');
+	expect(await jsonWorkerActive(page)).toBe(false);
+	await workbench.openExplorer();
+	const explorer = page.locator('.ash-explorer');
+	const group = workbench.editors.groupAt(0);
+	await explorer.getByRole('treeitem', { name: 'startup-plain.txt', exact: true }).dblclick();
+	await group.editor.waitForEditorContents(text => text.includes('First file'));
+	await group.editor.waitForEditorFocus();
+	await page.keyboard.press('ControlOrMeta+A');
+	await page.keyboard.insertText('Saved before JSON');
+	await page.keyboard.press('ControlOrMeta+S');
+	await expect.poll(() => readFile(plain, 'utf8')).toBe('Saved before JSON');
+	expect(await jsonWorkerActive(page)).toBe(false);
+	await explorer.getByRole('treeitem', { name: 'startup-preview.md', exact: true }).dblclick();
+	await group.editor.waitForEditorContents(text => text.includes('# Preview on request'));
+	await workbench.quickaccess.runCommand('markdown.reopenAsPreview');
+	await expect(group.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe').getByRole('heading', { name: 'Preview on request', exact: true })).toBeVisible();
+	expect(await jsonWorkerActive(page)).toBe(false);
+	await explorer.getByRole('treeitem', { name: 'startup-language.json', exact: true }).dblclick();
+	await group.editor.waitForEditorContents(text => text.includes('"enabled"'));
+	await expect.poll(() => jsonWorkerActive(page)).toBe(true);
+	await expect(group.editor.element.locator('.squiggly-error')).not.toHaveCount(0);
+});
 
 test('Markdown preview loads an image relative to a workspace document', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench, runningApplication }) => {
 	const documents = join(testWorkspace.directory, 'preview-docs');

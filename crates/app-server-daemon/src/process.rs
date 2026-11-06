@@ -479,7 +479,9 @@ pub(crate) fn spawn_backend(
         }
     }
     detach_command(&mut command)?;
+    let spawn = crate::startup_trace::StartupTrace::span("daemon-spawn-command");
     let child = command.spawn().map_err(io_error)?;
+    drop(spawn);
     let mut spawned = SpawnedBackend {
         child: Some(child),
         endpoint: endpoint.clone(),

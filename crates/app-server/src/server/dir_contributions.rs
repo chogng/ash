@@ -14,6 +14,7 @@ use ash_core::HarnessContextRequest;
 use ash_core::HarnessContextScope;
 use ash_core::HarnessInstructions;
 use ash_file_access::Authorization;
+use ash_file_access::Grant;
 use ash_home::AshHome;
 use ash_instructions::InstructionCatalog;
 use ash_instructions::InstructionCatalogSnapshot;
@@ -38,7 +39,7 @@ struct DirContributionCatalog {
 }
 
 pub(super) struct DirContributions {
-    environment: AgentEnvironmentSource,
+    environment: RwLock<AgentEnvironmentSource>,
     dir_root: PathBuf,
     home: Option<Arc<AshHome>>,
     env_dir: Mutex<Option<DirContributionCatalog>>,
@@ -83,7 +84,7 @@ impl DirContributions {
         let hooks: Arc<RwLock<Option<Arc<ash_hooks::DeclarativeHookRuntime>>>> =
             Arc::new(RwLock::new(None));
         Ok(Arc::new(Self {
-            environment,
+            environment: RwLock::new(environment),
             dir_root,
             home,
             env_dir: Mutex::new(env_dir),
@@ -367,7 +368,22 @@ impl DirContributions {
         path: &Path,
         repository_inspection: RepositoryInspection,
     ) -> Result<AgentEnvironmentSource, ash_agent_environment::AgentEnvironmentError> {
-        self.environment.for_directory(path, repository_inspection)
+        let environment = self.workspace_environment();
+        environment.for_directory(path, repository_inspection)
+    }
+
+    pub(super) fn replace_repository_grant(&self, grant: &Grant) {
+        self.environment
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .replace_repository_grant(grant);
+    }
+
+    fn workspace_environment(&self) -> AgentEnvironmentSource {
+        self.environment
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     pub(super) fn forget_ungranted_session_directory(&self, session_id: &SessionId) {
@@ -687,7 +703,7 @@ impl HarnessContextProvider for DirContributions {
             .session_id()
             .and_then(|session_id| environments.get(session_id))
             .cloned()
-            .unwrap_or_else(|| self.environment.clone());
+            .unwrap_or_else(|| self.workspace_environment());
         drop(environments);
         let thread_dir = match &request.scope {
             HarnessContextScope::Environment => None,

@@ -221,7 +221,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		});
 	}
 
-	private resolveColorTheme(): IColorTheme {
+	private resolveColorThemePreference(): { preference: string; bootstrap: IColorTheme; } {
 		let preference = this.configurationService.getValue<string>(WorkbenchConfiguration.colorTheme);
 		const settings = ThemeConfigurationSettings;
 		if (this.hostColorScheme.highContrast && this.configurationService.getValue<boolean>(settings.autoDetectHighContrast)) {
@@ -229,14 +229,24 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		} else if (this.configurationService.getValue<boolean>(settings.autoDetectColorScheme) || preference === SystemColorThemePreference) {
 			preference = this.configurationService.getValue(this.hostColorScheme.dark ? settings.preferredDarkColorTheme : settings.preferredLightColorTheme);
 		}
-		const registeredTheme = WorkbenchThemesRegistry.getColorTheme(preference);
 		// These base colors keep a disconnected window usable; extension themes still come from
 		// the Rust catalog and replace this bootstrap view when their registration arrives.
 		let bootstrap = this.hostColorScheme.dark ? darkColorTheme : lightColorTheme;
 		if (this.hostColorScheme.highContrast && this.configurationService.getValue<boolean>(settings.autoDetectHighContrast)) {
 			bootstrap = this.hostColorScheme.dark ? highContrastDarkColorTheme : highContrastLightColorTheme;
 		}
-		const theme = registeredTheme ?? WorkbenchThemesRegistry.getColorTheme(bootstrap.id) ?? bootstrap;
+		return { preference, bootstrap };
+	}
+
+	/** Ordered IDs for loading the theme used by this window's effective configuration. */
+	public getColorThemePreferences(): readonly string[] {
+		const { preference, bootstrap } = this.resolveColorThemePreference();
+		return [preference, bootstrap.id];
+	}
+
+	private resolveColorTheme(): IColorTheme {
+		const { preference, bootstrap } = this.resolveColorThemePreference();
+		const theme = WorkbenchThemesRegistry.getColorTheme(preference) ?? WorkbenchThemesRegistry.getColorTheme(bootstrap.id) ?? bootstrap;
 		return applyThemeCustomizations(theme, this.configurationService);
 	}
 

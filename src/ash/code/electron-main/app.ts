@@ -172,6 +172,13 @@ import { parseLanguagePackCatalog } from '../../platform/languagePacks/common/la
 import type { LanguagePackCatalog } from '../../platform/languagePacks/common/languagePackContract.js';
 import { NLS_CONFIGURATION_CHANNEL, NLS_ACTIVATE_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
 import { HOST_RESTART_CHANNEL, WINDOW_OPEN_EXTERNAL_URI_CHANNEL, WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL } from '../../platform/window/common/window.js';
+
+// Packaged Main can be bundled independently of the native helpers and utility entries.
+const mainOutput = app.isPackaged
+	? join(app.getAppPath(), 'dist', 'main')
+	: fileURLToPath(new URL('../../../../', import.meta.url));
+const utilityOutput = join(mainOutput, 'src', 'ash', 'code', 'electron-utility');
+
 export type AppServerStartupMode = 'required' | 'disabled';
 
 export interface AshApplicationOptions {
@@ -250,7 +257,7 @@ export class AshApplication extends Disposable {
 	private readonly secretChannels = new Map<string, IServerChannel<string>>();
 	private readonly sharedProcess = this._register(new UtilityProcess({
 		name: 'Ash Browser Automation',
-		entryPoint: fileURLToPath(new URL('../electron-utility/sharedProcess/sharedProcessMain.js', import.meta.url)),
+		entryPoint: join(utilityOutput, 'sharedProcess', 'sharedProcessMain.js'),
 	}));
 	private updateMainService!: UpdateMainService;
 	private readonly nativeKeyboardLayout: NativeKeyboardLayoutMainService;
@@ -356,7 +363,7 @@ export class AshApplication extends Disposable {
 	private invitationPersistence: Promise<void> = Promise.resolve();
 	private readonly loggerService = this._register(new LoggerService({
 		logsHome: app.getPath('logs'),
-		start: () => spawn(fileURLToPath(new URL(`../../../../${hostLogExecutable}`, import.meta.url)), [], { stdio: 'pipe', windowsHide: true }),
+		start: () => spawn(join(mainOutput, hostLogExecutable), [], { stdio: 'pipe', windowsHide: true }),
 		appServerLog: async () => {
 			if (this.appServerStartupMode === 'disabled') return undefined;
 			const connection = createAppServerDaemonLauncher({
@@ -679,16 +686,11 @@ export class AshApplication extends Disposable {
 		this.windowServices.registerInstance(IThemeMainService, this.themeMainService);
 		this.mainProcessIpcServer.registerChannel('colorScheme', colorSchemeChannel(this.themeMainService));
 		this.mainProcessIpcServer.registerChannel('powerMonitor', powerMonitorChannel(powerMonitor));
-		this.mainProcessIpcServer.registerChannel('checksum', checksumChannel(app.getAppPath(), app.isPackaged, this._register(new ChecksumService(fileURLToPath(new URL(`../../../../${hostIntegrityExecutable}`, import.meta.url))))));
+		this.mainProcessIpcServer.registerChannel('checksum', checksumChannel(app.getAppPath(), app.isPackaged, this._register(new ChecksumService(join(mainOutput, hostIntegrityExecutable)))));
 		const wasUpdated = this.lifecycleMainService.wasRestarted;
 		const workspaces = new WorkspacesManagementMainService();
 		this.workspaces = workspaces;
 		this.remoteConnections = this.createRemoteConnections(workspaces);
-		if (this.remoteConnections) {
-			// Warm the local catalog independently of the window's initial mode.
-			void this.remoteConnections.list().catch(error => this.logService.debug('Remote catalog warmup failed', error));
-			void this.wslHosts.listDistros().catch(error => this.logService.debug('WSL catalog warmup failed', error));
-		}
 		launchServices.registerInstance(IWindowsMainService, this.windowsMainService);
 		launchServices.registerInstance(ILogService, this.logService);
 		this.launchMainService = this._register(launchServices.createInstance(LaunchMainService));
@@ -1113,7 +1115,7 @@ export class AshApplication extends Disposable {
 			if (process.platform !== 'win32') {
 				const watcherProcess = this._register(new UtilityProcess({
 					name: 'Ash File Watcher',
-					entryPoint: fileURLToPath(new URL('../electron-utility/fileWatcher/fileWatcherMain.js', import.meta.url)),
+					entryPoint: join(utilityOutput, 'fileWatcher', 'fileWatcherMain.js'),
 					args: [this.profileRoot],
 				}));
 				const watcherPort = watcherProcess.connect('profile');

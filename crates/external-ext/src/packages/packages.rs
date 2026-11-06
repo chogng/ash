@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use super::budget::PackageBudget;
 use super::budget::PackageLimit;
+use super::bundled_index;
 use super::diagnostic::diagnostic;
 use super::package::ExtensionPackageSnapshot;
 use super::package::MAX_MANIFEST_BYTES;
@@ -380,6 +381,12 @@ fn scan_root(
             return CatalogScanControl::Continue;
         }
     };
+    let mut indexed = root
+        .package_metadata
+        .as_ref()
+        .filter(|_| root.kind == ExtensionRootKind::BuiltIn)
+        .and_then(|metadata| bundled_index::load(&canonical_root, metadata))
+        .unwrap_or_default();
     let entries = match fs::read_dir(&canonical_root) {
         Ok(entries) => entries,
         Err(_) => {
@@ -444,6 +451,21 @@ fn scan_root(
     }
     packages.sort_by(|left, right| left.0.cmp(&right.0));
     for (subject, package_path) in packages {
+        if let Some(snapshot) = indexed.remove(&subject)
+            && let Ok(package_root) = package_location(&canonical_root, &package_path)
+            && let Ok(extension) = describe_package(root, package_root, None, snapshot)
+        {
+            publish_discovered(
+                root,
+                subject,
+                extension,
+                extensions,
+                diagnostics,
+                discovered,
+                budget,
+            );
+            continue;
+        }
         publish_package(
             root,
             &canonical_root,
@@ -488,6 +510,7 @@ fn scan_dynamic_packages(
         let root = ExtensionRoot {
             kind,
             path: root_path,
+            package_metadata: None,
         };
         if let Err(limit) = budget.claim_package_candidate() {
             budget.push_diagnostic(
@@ -662,6 +685,16 @@ fn discover_package(
     normalized_manifest_json: Option<&str>,
     limits: PackageSnapshotLimits,
 ) -> Result<DiscoveredExtension, (ExtensionDiagnosticCode, &'static str)> {
+    let package_root = package_location(canonical_root, package_path)?;
+    let package =
+        ExtensionPackageSnapshot::load(&package_root, limits).map_err(package_snapshot_error)?;
+    describe_package(root, package_root, normalized_manifest_json, package)
+}
+
+fn package_location(
+    canonical_root: &Path,
+    package_path: &Path,
+) -> Result<PathBuf, (ExtensionDiagnosticCode, &'static str)> {
     let package_metadata = fs::symlink_metadata(package_path).map_err(|_| {
         (
             ExtensionDiagnosticCode::InvalidManifest,
@@ -686,8 +719,15 @@ fn discover_package(
             "extension package escapes its source root",
         ));
     }
-    let package =
-        ExtensionPackageSnapshot::load(&package_root, limits).map_err(package_snapshot_error)?;
+    Ok(package_root)
+}
+
+fn describe_package(
+    root: &ExtensionRoot,
+    package_root: PathBuf,
+    normalized_manifest_json: Option<&str>,
+    package: ExtensionPackageSnapshot,
+) -> Result<DiscoveredExtension, (ExtensionDiagnosticCode, &'static str)> {
     let package_manifest_bytes = package.file("package.json").ok_or((
         ExtensionDiagnosticCode::InvalidManifest,
         "extension package.json is missing",
