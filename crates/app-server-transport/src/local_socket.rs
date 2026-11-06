@@ -4,6 +4,7 @@ use std::io::Read;
 use std::net::Shutdown;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -16,8 +17,29 @@ use ash_uds::IpcStream;
 /// IO waits remain interruptible: EOF on the reader ends queued output even when the peer keeps
 /// its read half open without consuming data. Finite stdio transports do not use this contract.
 pub struct LocalStream {
+    state: Arc<LocalStreamState>,
+}
+
+struct LocalStreamState {
     stream: IpcStream,
-    closed: Arc<std::sync::atomic::AtomicBool>,
+    closed: AtomicBool,
+}
+
+impl LocalStreamState {
+    fn close(&self) {
+        if !self.closed.swap(true, Ordering::AcqRel) {
+            let _ = self.stream.shutdown(Shutdown::Both);
+        }
+    }
+}
+
+/// Closes both halves of a local connection, including IO waiting for socket readiness.
+pub struct LocalStreamShutdown(Arc<LocalStreamState>);
+
+impl LocalStreamShutdown {
+    pub fn close(&self) {
+        self.0.close();
+    }
 }
 
 impl LocalStream {
@@ -27,32 +49,29 @@ impl LocalStream {
         // that write repeats bytes (including JSONL delimiters) under backpressure.
         // Nonblocking WouldBlock commits no bytes and is safe to retry.
         stream.set_nonblocking(true)?;
-        let writer = stream.try_clone()?;
-        let closed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let state = Arc::new(LocalStreamState {
+            stream,
+            closed: AtomicBool::new(false),
+        });
         Ok((
             Self {
-                stream,
-                closed: Arc::clone(&closed),
+                state: Arc::clone(&state),
             },
-            Self {
-                stream: writer,
-                closed,
-            },
+            Self { state },
         ))
     }
 
-    /// Clones the socket solely for the process owner's shutdown registration.
-    pub fn try_clone(&self) -> io::Result<IpcStream> {
-        self.stream.try_clone()
+    /// Shares the close signal with the owner responsible for joining the IO workers.
+    pub fn shutdown_handle(&self) -> LocalStreamShutdown {
+        LocalStreamShutdown(Arc::clone(&self.state))
     }
 
     fn close(&self) {
-        self.closed.store(true, Ordering::Release);
-        let _ = self.stream.shutdown(Shutdown::Both);
+        self.state.close();
     }
 
     fn ensure_open(&self) -> io::Result<()> {
-        if self.closed.load(Ordering::Acquire) {
+        if self.state.closed.load(Ordering::Acquire) {
             Err(io::Error::from(io::ErrorKind::ConnectionAborted))
         } else {
             Ok(())
@@ -61,7 +80,7 @@ impl LocalStream {
 
     #[cfg(unix)]
     fn wait(&self, events: rustix::event::PollFlags) -> io::Result<()> {
-        let mut descriptor = rustix::event::PollFd::new(&self.stream, events);
+        let mut descriptor = rustix::event::PollFd::new(&self.state.stream, events);
         let timeout = rustix::event::Timespec::try_from(std::time::Duration::from_millis(25))
             .expect("fixed poll duration");
         match rustix::event::poll(std::slice::from_mut(&mut descriptor), Some(&timeout)) {
@@ -78,7 +97,7 @@ impl Read for LocalStream {
         }
         loop {
             self.ensure_open()?;
-            match self.stream.read(output) {
+            match (&self.state.stream).read(output) {
                 Ok(0) => {
                     self.close();
                     return Ok(0);
@@ -94,7 +113,7 @@ impl Read for LocalStream {
                     #[cfg(windows)]
                     ash_uds::wait_for_ipc_activity(
                         None,
-                        &[&self.stream],
+                        &[&self.state.stream],
                         &[],
                         std::time::Duration::from_millis(25),
                     )?;
@@ -113,7 +132,7 @@ impl std::io::Write for LocalStream {
     fn write(&mut self, input: &[u8]) -> io::Result<usize> {
         loop {
             self.ensure_open()?;
-            match self.stream.write(input) {
+            match (&self.state.stream).write(input) {
                 Err(error)
                     if matches!(
                         error.kind(),
@@ -126,7 +145,7 @@ impl std::io::Write for LocalStream {
                     ash_uds::wait_for_ipc_activity(
                         None,
                         &[],
-                        &[&self.stream],
+                        &[&self.state.stream],
                         std::time::Duration::from_millis(25),
                     )?;
                 }
@@ -250,7 +269,7 @@ fn validate_local_identity(peer: ash_uds::PeerIdentity) -> io::Result<()> {
 pub struct LocalConnections {
     next_id: AtomicU64,
     count: AtomicUsize,
-    streams: Mutex<BTreeMap<u64, IpcStream>>,
+    streams: Mutex<BTreeMap<u64, LocalStreamShutdown>>,
 }
 
 impl LocalConnections {
@@ -276,7 +295,7 @@ impl LocalConnections {
     /// Registers a connection shutdown handle and returns its lifetime guard.
     pub fn register(
         self: &Arc<Self>,
-        shutdown_stream: IpcStream,
+        shutdown_stream: LocalStreamShutdown,
     ) -> io::Result<LocalConnectionGuard> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         self.streams
@@ -294,7 +313,7 @@ impl LocalConnections {
     pub fn shutdown_all(&self) {
         if let Ok(streams) = self.streams.lock() {
             for stream in streams.values() {
-                let _ = stream.shutdown(Shutdown::Both);
+                stream.close();
             }
         }
     }

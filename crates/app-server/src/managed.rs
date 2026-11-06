@@ -148,12 +148,8 @@ pub(crate) fn run(
         }
         if let Some(mut connection) = endpoint.poll_connection()? {
             idle_since = None;
-            let shutdown_stream = connection
-                .writer
-                .try_clone()
-                .map_err(|error| error.to_string())?;
             let registration = active_connections
-                .register(shutdown_stream)
+                .register(connection.writer.shutdown_handle())
                 .map_err(|error| error.to_string())?;
             let web_registry = registry.clone();
             let execution_registry = Arc::clone(&execution);
@@ -196,13 +192,13 @@ pub(crate) fn run(
                         }
                     };
                     if connection.options.role() == ConnectionRole::Credentials {
-                        let shutdown = connection.writer.try_clone().ok();
+                        let shutdown = connection.writer.shutdown_handle();
                         if let Err(error) = server.serve_host_credentials(connection.reader, connection.writer)
                             && !is_peer_disconnect(&error)
                         {
                             eprintln!("managed private credential connection failed: {error}");
                         }
-                        if let Some(stream) = shutdown { let _ = stream.shutdown(std::net::Shutdown::Both); }
+                        shutdown.close();
                         return;
                     }
                     if let Some(options) = connection.web.take() {
@@ -260,7 +256,7 @@ fn serve_workbench(
     registry: &ProfileAppServerRegistry,
     mut connection: ManagedConnection,
 ) -> io::Result<()> {
-    let shutdown = connection.writer.try_clone()?;
+    let shutdown = connection.writer.shutdown_handle();
     let server = thread::scope(|scope| {
         let handshake = thread::Builder::new()
             .name("ash-workbench-transport-hello".into())
@@ -272,7 +268,7 @@ fn serve_workbench(
         let server = registry.server_for(connection.options);
         if server.is_err() {
             // Wake the reader if startup fails before the client sends its first frame.
-            let _ = shutdown.shutdown(std::net::Shutdown::Both);
+            shutdown.close();
         }
         let first = handshake
             .join()

@@ -7,7 +7,6 @@ use std::io;
 use std::io::BufReader;
 use std::io::Read;
 use std::io::Write;
-use std::net::Shutdown;
 use std::process::Command;
 use std::process::Stdio;
 use std::sync::mpsc;
@@ -17,7 +16,7 @@ pub(super) fn serve(
     mut connection: ManagedConnection,
     target: &SshConnectionOptions,
 ) -> io::Result<()> {
-    let shutdown = connection.writer.try_clone()?;
+    let shutdown = connection.writer.shutdown_handle();
     let executable = std::env::var_os("ASH_SSH_PATH").unwrap_or_else(|| "ssh".into());
     let mut child = Command::new(executable)
         .args([
@@ -79,7 +78,7 @@ pub(super) fn serve(
         let result = completion
             .recv()
             .map_err(|_| io::Error::other("SSH carrier workers closed"))?;
-        let _ = shutdown.shutdown(Shutdown::Both);
+        shutdown.close();
         let _ = child.kill();
         let _ = child.wait();
         result

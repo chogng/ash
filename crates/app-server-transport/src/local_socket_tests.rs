@@ -80,7 +80,7 @@ fn connection_close_interrupts_a_backpressured_writer() -> io::Result<()> {
             .unwrap();
     });
     assert!(result.recv_timeout(Duration::from_millis(20)).is_err());
-    reader.close();
+    reader.shutdown_handle().close();
     assert!(
         result
             .recv_timeout(Duration::from_secs(1))
@@ -183,8 +183,9 @@ fn pending_peer_activity_wakes_without_a_new_listener_connection() -> io::Result
 #[test]
 fn connection_guard_tracks_and_removes_connection() -> io::Result<()> {
     let (stream, _peer) = IpcStream::pair()?;
+    let (reader, _writer) = crate::LocalStream::pair(stream)?;
     let connections = Arc::new(LocalConnections::new());
-    let guard = connections.register(stream.try_clone()?)?;
+    let guard = connections.register(reader.shutdown_handle())?;
     assert_eq!(connections.len(), 1);
 
     drop(guard);

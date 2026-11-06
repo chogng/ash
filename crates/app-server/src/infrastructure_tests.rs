@@ -392,7 +392,7 @@ fn trace_websocket_and_diagnostics_observe_the_same_local_rpc_without_content() 
     .unwrap();
     assert_trace_rpc(&server, address, &token);
     drop(server);
-    assert!(std::net::TcpStream::connect(address).is_err());
+    assert_trace_endpoint_closed(address);
 }
 
 #[test]
@@ -421,7 +421,22 @@ fn trace_websocket_is_owned_once_by_the_shared_profile() {
     assert_trace_rpc(&second, address, &token);
     drop(second);
     drop(runtime);
-    assert!(std::net::TcpStream::connect(address).is_err());
+    assert_trace_endpoint_closed(address);
+}
+
+fn assert_trace_endpoint_closed(address: std::net::SocketAddr) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let result = std::net::TcpStream::connect_timeout(&address, Duration::from_millis(100));
+        if result.is_err_and(|error| error.kind() == std::io::ErrorKind::ConnectionRefused) {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Trace listener remained open at {address}"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }
 
 fn assert_trace_rpc(server: &crate::AppServer, address: std::net::SocketAddr, token: &str) {

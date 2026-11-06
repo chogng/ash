@@ -16,6 +16,7 @@ pub use local_socket::LocalConnectionGuard;
 pub use local_socket::LocalConnections;
 pub use local_socket::LocalSocketAccept;
 pub use local_socket::LocalStream;
+pub use local_socket::LocalStreamShutdown;
 pub use local_socket::PollingLocalListener;
 pub use local_socket::validate_local_peer;
 pub use websocket::CapabilityTokenSha256;

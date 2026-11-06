@@ -741,7 +741,14 @@ fn stalled_ssh_initialize_leaves_local_requests_available_and_eof_reaps_the_chil
 #[cfg(unix)]
 #[test]
 fn ssh_initialize_timeout_completes_the_catalog_and_preserves_the_gateway() {
-    let mut gateway = stalled_gateway(std::time::Duration::from_secs(1));
+    // Let the fixture read initialize under load, and let the client outwait the gateway deadline.
+    let timeout = std::time::Duration::from_secs(5);
+    let mut gateway = stalled_gateway(timeout);
+    gateway
+        .client
+        .writer
+        .set_read_timeout(Some(timeout * 2))
+        .unwrap();
     gateway
         .client
         .send(2, "session/list", serde_json::json!({}));

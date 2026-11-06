@@ -70,30 +70,38 @@ fn peer_disconnects_are_normal_transport_shutdowns() {
 #[cfg(any(unix, windows))]
 fn connection_workers_close_sockets_and_release_services_before_returning() {
     use ash_app_server_transport::LocalConnections;
+    use ash_app_server_transport::LocalStream;
     use ash_uds::IpcStream;
     use std::io::Read;
     use std::sync::Arc;
 
-    let (mut stream, _peer) = IpcStream::pair().unwrap();
-    stream
-        .set_read_timeout(Some(std::time::Duration::from_secs(2)))
-        .unwrap();
+    let (stream, peer) = IpcStream::pair().unwrap();
+    let (mut reader, writer) = LocalStream::pair(stream).unwrap();
     let connections = Arc::new(LocalConnections::new());
-    let registration = connections.register(stream.try_clone().unwrap()).unwrap();
+    let registration = connections.register(writer.shutdown_handle()).unwrap();
     let service = Arc::new(());
     let released = Arc::downgrade(&service);
     let (ended, completion) = std::sync::mpsc::channel();
     let worker = std::thread::spawn(move || {
         let _service = service;
         let _registration = registration;
-        ended.send(stream.read(&mut [0])).unwrap();
+        ended.send(reader.read(&mut [0])).unwrap();
     });
     let workers = super::ConnectionWorkers {
         connections: Arc::clone(&connections),
         workers: vec![worker],
     };
 
-    drop(workers);
+    // Keep the peer open and silent. If shutdown fails, closing it here also unblocks the join.
+    let (joined, shutdown) = std::sync::mpsc::channel();
+    let owner = std::thread::spawn(move || {
+        drop(workers);
+        joined.send(()).unwrap();
+    });
+    let result = shutdown.recv_timeout(std::time::Duration::from_secs(5));
+    drop(peer);
+    owner.join().unwrap();
+    result.expect("managed connection owner did not finish shutdown");
 
     let closed = completion.recv().unwrap();
     assert!(

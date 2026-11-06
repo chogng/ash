@@ -1815,8 +1815,9 @@ fn managed_network_approval_resumes_the_same_shell_process_through_rpc() {
                 Err(error) => panic!("approved request did not reach origin: {error}"),
             }
         };
+        // The fixture must give the proxy the same request budget as the shell's curl.
         stream
-            .set_read_timeout(Some(Duration::from_secs(3)))
+            .set_read_timeout(Some(Duration::from_secs(10)))
             .unwrap();
         let mut buffer = [0; 4096];
         assert!(stream.read(&mut buffer).unwrap() > 0);
@@ -1968,7 +1969,8 @@ fn managed_network_approval_resumes_the_same_shell_process_through_rpc() {
             }),
         );
         assert!(resolved["result"].is_object(), "{resolved}");
-        let deadline = Instant::now() + Duration::from_secs(5);
+        // The two sequential curl calls can wait for up to 10 and 3 seconds.
+        let deadline = Instant::now() + Duration::from_secs(15);
         loop {
             let snapshot = server.threads().read_thread(&thread_id_typed).unwrap();
             if snapshot.turns.last().unwrap().status == ash_protocol::TurnStatus::Completed {
