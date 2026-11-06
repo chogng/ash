@@ -671,6 +671,7 @@
     "chat.sessionLink.help": "在聊天的“更多操作”中选择“复制对话链接”，或在命令面板中选择“聊天：复制对话链接”。也可右击对话标题，或聚焦标题后按 Shift+F10 打开菜单。请先在草稿中发送消息。按 Tab 移动到聊天回复中的对话链接，按 Enter 打开链接。链接会保留准确的对话分支；所属连接不可用时不会改为打开其他对话。",
     "chat.message.readAloud": "朗读",
     "chat.message.actions": "回复操作",
+    "chat.message.actionsHelp": "按 Tab 移动到回复下方的“回复操作”工具栏。按左方向键或右方向键在操作之间移动，再按 Enter 或空格执行当前操作。",
     "chat.message.share": "分享回复",
     "chat.message.stopReadAloud": "停止朗读",
     "chat.message.readAloudFailed": "无法朗读回复：{0}",

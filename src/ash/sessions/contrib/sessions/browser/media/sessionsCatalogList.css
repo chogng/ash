@@ -21,6 +21,13 @@
 	padding-block: var(--ash-spacing-size120);
 }
 
+.ash-chat-navigation-history-status:not(:empty) {
+	padding: var(--ash-spacing-size40) var(--ash-sessions-sidebar-row-inset);
+	color: var(--ash-description-foreground);
+	overflow-wrap: anywhere;
+	white-space: pre-line;
+}
+
 .ash-chat-navigation-list .ash-sessions-list-row {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;

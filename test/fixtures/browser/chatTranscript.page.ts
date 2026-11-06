@@ -1,3 +1,4 @@
+import './chatFixtureLocalization.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../src/ash/sessions/services/sessions/browser/sessionsListModelService.js';
 import { IChatEntitlementService } from '../../../src/ash/workbench/services/chat/common/chatEntitlementService.js';
 import * as chatInputStatePersistence from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
@@ -145,7 +146,7 @@ import { IThemeService } from '../../../src/ash/platform/theme/common/themeServi
 import { bindTestColorTheme } from './themeFixture.js';
 import { darkColorTheme, lightColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../src/ash/platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../src/ash/platform/theme/test/common/testThemeService.js';
-import { localize, setNlsMessages } from '../../../src/ash/nls.js';
+import { localize } from '../../../src/ash/nls.js';
 import type { IChatSessionHistoryStatus } from '../../../src/ash/platform/chat/common/chatSessionHistory.js';
 import { decodeAppServerResponse } from '../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import type { SessionThreadReadResult } from '../../../.build/protocol/typescript/index.js';
@@ -159,13 +160,7 @@ import { AppServerSessionsProvider } from '../../../src/ash/sessions/contrib/pro
 import { SessionsManagementService } from '../../../src/ash/sessions/services/sessions/browser/sessionsManagementService.js';
 import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
 import { TestConfigurationService as WorkbenchConfigurationService } from '../../../src/ash/workbench/services/configuration/test/common/testServices.js';
-import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 
-const locale = new URLSearchParams(location.search).get('locale');
-if (locale) {
-	const catalog = productLanguagePackCatalogs.find(candidate => candidate.locale === locale)!;
-	setNlsMessages(locale, catalog.bundles);
-}
 if (new URLSearchParams(location.search).has('workbench')) {
 	await import('../../../src/ash/workbench/browser/media/style.css');
 	document.body.classList.add('ash-workbench');

@@ -296,8 +296,9 @@ article.ash-chat-user-message > pre {
 	visibility: hidden;
 }
 
-.ash-chat-response-helpful.checked {
-	border-color: var(--ash-widget-border);
+.ash-chat-message-actions
+	[data-action-id="workbench.action.chat.markHelpful"]
+	> .ash-button.checked {
 	background: var(--ash-button-activeBackground);
 }
 

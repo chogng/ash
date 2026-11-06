@@ -109,6 +109,7 @@ export interface ChatGPTState {
 	readonly projects: readonly ChatGPTProject[];
 	readonly projectHistory: ReadonlyMap<string, ProjectHistory>;
 	readonly hasMore: boolean;
+	readonly historyListError?: string;
 	readonly models: readonly ChatGPTModel[];
 	readonly model: string;
 	readonly modelPreset?: string;
@@ -296,6 +297,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.update({
 			coworkTasks: [], localConversationId: this.newConversationId, draft, attachments: [], connected: false, busy: false, sending: false, managing: false,
 			loading: undefined, conversations: this.localConversations(), projects: [], projectHistory: new Map(), models: [], model: '', modelPreset: undefined,
+			historyListError: undefined,
 			conversationId: undefined, messages: [], parentId: crypto.randomUUID(), title: 'ChatGPT',
 			voice: 'idle', voiceTranscript: [], uncertain: false, stopped: false, hasMore: false, error: '',
 		});
@@ -1126,7 +1128,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		this.cacheScope = scope;
 		this.remoteTimeline = new ChatTimelineStorage(this.storage, `chatgpt-web:${scope}`);
 		this.outbox = new ChatGPTOutbox(this.storage, scope);
-		this.update({ conversations: this.withLocalConversations([]), attachments: this.readDraft(this.draftKey())?.attachments ?? [] });
+		this.update({ conversations: this.withLocalConversations([]), historyListError: undefined, attachments: this.readDraft(this.draftKey())?.attachments ?? [] });
 		const raw = this.storage.get(`${catalogKey}:${scope}`, StorageScope.PROFILE);
 		if (!raw) { return; }
 		let value: unknown;
@@ -1358,7 +1360,6 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				deleted.add(retained);
 			}
 			if (conversations.status === 'fulfilled') { this.resetRecentPage(conversations.value); }
-			const listError = conversations.status === 'rejected' ? localize('sessions.chatgpt.historyListFailed', 'Could not refresh the conversation list. You can continue the current chat. {0}', this.errorText(conversations.reason)) : '';
 			const state = this.model.get();
 			const currentProjects = projects.status === 'fulfilled' ? projects.value : state.projects;
 			if (conversations.status === 'fulfilled') {
@@ -1378,8 +1379,9 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				...(catalog ? { models: catalog.models } : {}),
 				...(selected ? { model: selected.id, modelPreset: this.resolveModelPreset(selected, state.modelPreset) } : {}),
 				conversations: this.withLocalConversations([...items.values()]), hasMore: conversations.status === 'fulfilled' ? conversations.value.hasMore : state.hasMore,
+				historyListError: conversations.status === 'rejected' ? this.historyListErrorText(conversations.reason) : undefined,
 				projects: currentProjects,
-				...(!background ? { error: [...[projects, pins].filter(result => result.status === 'rejected').map(result => this.errorText(result.reason)), listError, modelError].filter(Boolean).join('\n') } : {}),
+				...(!background ? { error: [...[projects, pins].filter(result => result.status === 'rejected').map(result => this.errorText(result.reason)), modelError].filter(Boolean).join('\n') } : {}),
 			});
 			const requested = this.retainedConversation();
 			if (!background && requested && requested !== retained && !requested.startsWith('local:')) {
@@ -1401,7 +1403,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 				} else {
 					this.markHistoryValidated(value);
 				}
-				if (listError && !items.has(value.id) && !value.archived) { this.rememberHistory(value); }
+				if (conversations.status === 'rejected' && !items.has(value.id) && !value.archived) { this.rememberHistory(value); }
 			} else if (history?.status === 'rejected' && !background) {
 				this.update({ error: this.errorText(history.reason) });
 			}
@@ -1596,7 +1598,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	public async loadMore(): Promise<void> {
 		if (!this.model.get().connected || this.model.get().busy || this.model.get().sending || this.model.get().managing || !this.model.get().hasMore) { return; }
 		const { signal, generation } = this.beginOperation();
-		this.update({ busy: true, loading: { kind: 'history' }, error: '' });
+		this.update({ busy: true, loading: { kind: 'history' } });
 		try {
 			const result = await this.client.conversations(this.recentOffset, signal);
 			if (generation !== this.generation) { return; }
@@ -1624,14 +1626,14 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			});
 			this.updateCatalog({
 				conversations: this.withLocalConversations([...ordered, ...items.values()]),
-				hasMore: result.hasMore, busy: false, loading: undefined,
+				hasMore: result.hasMore, busy: false, loading: undefined, historyListError: undefined,
 			});
 		} catch (error) {
 			if (generation === this.generation) {
 				this.update({
 					busy: false,
 					loading: undefined,
-					error: this.errorText(error)
+					historyListError: this.historyListErrorText(error),
 				});
 			}
 		}
@@ -1751,6 +1753,12 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		controller.abort();
 		try { await this.stopping; }
 		finally { this.stopping = undefined; }
+	}
+
+	private historyListErrorText(error: unknown): string {
+		return error instanceof ChatGPTRequestError && error.status === 429
+			? localize('sessions.chatgpt.historyListRateLimited', 'ChatGPT is limiting history requests. Try again later.')
+			: localize('sessions.chatgpt.historyListFailed', 'Could not load ChatGPT history. Try again later.');
 	}
 
 	private errorText(error: unknown): string {

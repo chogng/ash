@@ -355,6 +355,7 @@ suite('ChatGPT shared service', () => {
 	}
 	test('pinned history merges once without advancing recent pagination, including after an archive', async () => {
 		const offsets: number[] = [];
+		let failNextPage = true;
 		using chat = fixture(async (path, _signal, request) => {
 			if (request.method === 'PATCH') { return Response.json({ success: true }); }
 			if (path.includes('/pins?')) { return Response.json([{ item: { id: 'old-pin', title: 'Old pin' } }, { item: { id: 'one', title: 'One' } }]); }
@@ -363,6 +364,10 @@ suite('ChatGPT shared service', () => {
 				const query = new URL(path, 'https://test.invalid').searchParams;
 				const offset = Number(query.get('offset')); offsets.push(offset);
 				assert.equal(query.get('hide_snorlax'), 'false');
+				if (offset && failNextPage) {
+					failNextPage = false;
+					return new Response(null, { status: 429 });
+				}
 				return Response.json({ items: offset ? [{ id: 'three', title: 'Three', gizmo_id: 'g-p-project' }] : [{ id: 'one', title: 'One' }, { id: 'two', title: 'Two' }], total: 3 });
 			}
 			return response(path);
@@ -372,7 +377,11 @@ suite('ChatGPT shared service', () => {
 		assert.deepEqual(chat.state.get().projects, [{ id: 'g-p-project', title: 'Project' }]);
 		await chat.archive('two');
 		await chat.loadMore();
-		assert.deepEqual(offsets, [0, 1]);
+		assert.equal(chat.state.get().error, '');
+		assert.match(chat.state.get().historyListError ?? '', /limiting history requests/u);
+		await chat.loadMore();
+		assert.deepEqual(offsets, [0, 1, 1]);
+		assert.equal(chat.state.get().historyListError, undefined);
 		assert.equal(chat.state.get().conversations.filter(item => item.id === 'one').length, 1);
 		assert.equal(chat.state.get().conversations.find(item => item.id === 'three')?.projectId, 'g-p-project');
 	});
@@ -500,13 +509,14 @@ suite('ChatGPT shared service', () => {
 
 	test('cold restore and followup remain usable when only the recent list is rate-limited', async () => {
 		let sends = 0;
+		let historyRateLimited = true;
 		const legacyTimeline = 'sessions.chat.timeline.v1:chatgpt-web:one';
 		const values = new Map([
 			['sessions.chatgpt.conversation', 'one'],
 			[legacyTimeline, JSON.stringify({ localId: 'legacy-local-id', tasks: [], history: { title: 'Legacy title', parentId: 'legacy-reply', messages: [] } })],
 		]);
 		using chat = fixture(async (path, _signal, request) => {
-			if (path.includes('/conversations?')) { return new Response(null, { status: 429 }); }
+			if (historyRateLimited && path.includes('/conversations?')) { return new Response(null, { status: 429 }); }
 			if (path.includes('/.headers/')) { return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' }); }
 			if (path.endsWith('/prepare')) { return Response.json({ conduit_token: 'fixture' }); }
 			if (path.endsWith('/f/conversation')) {
@@ -523,9 +533,14 @@ suite('ChatGPT shared service', () => {
 		assert.equal(values.has(legacyTimeline), false);
 		assert.equal(chat.state.get().messages[0]?.text, 'one reply');
 		assert.equal(chat.state.get().conversations[0]?.id, 'one');
-		assert.match(chat.state.get().error, /conversation list.*continue the current chat/u);
+		assert.equal(chat.state.get().error, '');
+		assert.match(chat.state.get().historyListError ?? '', /limiting history requests/u);
 		chat.setDraft('Continue after reopening'); await chat.send();
 		assert.equal(sends, 1); assert.equal(chat.state.get().error, '');
+		assert.match(chat.state.get().historyListError ?? '', /limiting history requests/u);
+		historyRateLimited = false;
+		await chat.refresh();
+		assert.equal(chat.state.get().historyListError, undefined);
 	});
 
 	test('refresh synchronizes cloud additions, edits and confirmed deletions across loaded pages and disk', async () => {

@@ -1261,7 +1261,9 @@ suite('chatTranscript browser component', () => {
 				const row = page.locator('[data-item-id="copy-response"]');
 				await expect(row).toHaveAccessibleName('Ash');
 				await expect(row.getByText('Ash', { exact: true })).toHaveCount(0);
-				const button = row.getByRole('button', { name: locale === 'zh-CN' ? '复制消息' : 'Copy message', exact: true });
+				const footer = row.getByRole('toolbar', { name: locale === 'zh-CN' ? '回复操作' : 'Response actions', exact: true });
+				const button = footer.getByRole('button', { name: locale === 'zh-CN' ? '复制消息' : 'Copy message', exact: true });
+				await expect(button).toHaveText('', { useInnerText: true });
 				await expect(row.getByRole('button', { name: locale === 'zh-CN' ? '朗读' : 'Read aloud', exact: true })).toHaveCount(0);
 				for (const theme of ['dark', 'light', 'hc'] as const) {
 					await page.evaluate(theme => { window.ashChatTranscriptIntegration.setTheme(theme); document.querySelector<HTMLElement>('[data-item-id="copy-response"]')!.closest('main')!.style.width = '220px'; }, theme);
@@ -1298,12 +1300,17 @@ suite('chatTranscript browser component', () => {
 				await page.goto(`/chatTranscript.html?locale=${locale}`);
 				await page.evaluate(({ cowork }) => window.ashChatTranscriptIntegration.showReadAloudMessage('**Hello** 世界', cowork), { cowork });
 				const row = page.locator('[data-item-id="copy-response"]');
-				const read = () => row.getByRole('button', { name: locale === 'zh-CN' ? '朗读' : 'Read aloud', exact: true });
-				const stop = () => row.getByRole('button', { name: locale === 'zh-CN' ? '停止朗读' : 'Stop reading aloud', exact: true });
+				const footer = row.getByRole('toolbar', { name: locale === 'zh-CN' ? '回复操作' : 'Response actions', exact: true });
+				const copy = footer.getByRole('button', { name: locale === 'zh-CN' ? '复制消息' : 'Copy message', exact: true });
+				const read = () => footer.getByRole('button', { name: locale === 'zh-CN' ? '朗读' : 'Read aloud', exact: true });
+				const stop = () => footer.getByRole('button', { name: locale === 'zh-CN' ? '停止朗读' : 'Stop reading aloud', exact: true });
 				let count = 0;
 				for (const theme of ['dark', 'light', 'hc'] as const) {
 					await page.evaluate(theme => { window.ashChatTranscriptIntegration.setTheme(theme); document.querySelector<HTMLElement>('[data-item-id="copy-response"]')!.closest('main')!.style.width = '220px'; }, theme);
-					await read().focus(); await page.keyboard.press('Enter'); await expect(stop()).toBeFocused();
+					await copy.focus();
+					await page.keyboard.press('ArrowRight');
+					await expect(read()).toBeFocused();
+					await page.keyboard.press('Enter'); await expect(stop()).toBeFocused();
 					await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.readAloudState().text.length)).toBe(++count);
 					expect(await page.evaluate(() => window.ashChatTranscriptIntegration.readAloudState().text.at(-1))).toBe('Hello 世界');
 					expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);

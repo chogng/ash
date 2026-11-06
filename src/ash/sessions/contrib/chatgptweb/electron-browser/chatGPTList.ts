@@ -167,6 +167,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 					};
 				}),
 				loading: state.loading?.kind === 'history',
+				historyStatus: state.historyListError,
 			};
 		});
 	}
@@ -208,7 +209,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 
 	loadMore(retry: boolean): void {
 		const state = this.chat.state.get();
-		if (state.connected && !state.busy && !state.sending && !state.managing && state.hasMore && (retry || !state.error)) {
+		if (state.connected && state.networkAvailable && !state.busy && !state.sending && !state.managing && state.hasMore && (retry || !state.error && !state.historyListError)) {
 			void this.chat.loadMore();
 		}
 	}

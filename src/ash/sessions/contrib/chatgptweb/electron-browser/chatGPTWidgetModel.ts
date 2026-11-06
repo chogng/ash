@@ -7,6 +7,7 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '..
 import { autorun, derived, observableSignalFromEvent, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
+import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -247,19 +248,32 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	getResponseActions(item: IChatListItem): ChatResponseActions | undefined {
 		const state = this.backend.state.get();
 		const source = this.sources.get(item.id);
-		if (item.transient || item.isError || !source?.conversationId || source.conversationId !== state.conversationId
-			|| !state.connected || !state.networkAvailable || state.loading?.kind === 'conversation' || state.uncertain) return undefined;
+		if (item.type !== 'agentMessage' || item.transient || item.isError || !source?.conversationId || source.conversationId !== state.conversationId) return undefined;
 		const { conversationId, messageId } = source;
-		return {
-			readAloud: (window, signal) => this.readResponseAloud(conversationId, messageId, window, signal),
-			forkLabel: localize('sessions.chatgpt.forkResponse', 'Fork in ChatGPT'),
-			fork: async () => {
-				const url = `https://chatgpt.com/branch/${encodeURIComponent(conversationId)}/${encodeURIComponent(messageId)}`;
-				if (!await this.opener.open(url, { openExternal: true })) {
-					throw new Error(localize('sessions.chatgpt.openForkFailed', 'Could not open the conversation branch in ChatGPT.'));
+		const openOriginal = {
+			label: localize('sessions.chatgpt.openConversationOnWeb', 'Open conversation in ChatGPT'),
+			icon: Lxicon.openai,
+			run: async () => {
+				const url = `https://chatgpt.com/c/${encodeURIComponent(conversationId)}`;
+				if (!await this.opener.open(url, { openExternal: true, fromUserGesture: true })) {
+					throw new Error(localize('sessions.chatgpt.openConversationOnWebFailed', 'Could not open the conversation in ChatGPT.'));
 				}
 			},
-			share: () => shareChatGPTConversation(this.backend, this.dialogs, this.clipboard, conversationId, state.title, messageId),
+		};
+		if (!state.connected || !state.networkAvailable || state.loading?.kind === 'conversation' || state.uncertain) return { openOriginal };
+		return {
+			openOriginal,
+			remote: {
+				readAloud: (window, signal) => this.readResponseAloud(conversationId, messageId, window, signal),
+				forkLabel: localize('sessions.chatgpt.forkResponse', 'Fork in ChatGPT'),
+				fork: async () => {
+					const url = `https://chatgpt.com/branch/${encodeURIComponent(conversationId)}/${encodeURIComponent(messageId)}`;
+					if (!await this.opener.open(url, { openExternal: true })) {
+						throw new Error(localize('sessions.chatgpt.openForkFailed', 'Could not open the conversation branch in ChatGPT.'));
+					}
+				},
+				share: () => shareChatGPTConversation(this.backend, this.dialogs, this.clipboard, conversationId, state.title, messageId),
+			},
 		};
 	}
 

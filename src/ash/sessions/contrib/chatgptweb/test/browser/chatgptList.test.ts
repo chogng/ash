@@ -19,30 +19,45 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 
 		await ash.press('Enter');
 		await expect(page.locator('body')).toHaveAttribute('data-opened-ash', 'fixture-chat/fixture-thread');
+		await expect(ash).toHaveAttribute('aria-current', 'page');
 		await chatGPT.press('Enter');
 		await expect(page.locator('.ash-chatgpt-widget')).toContainText('Synthetic answer');
+		await expect(chatGPT).toHaveAttribute('aria-current', 'page');
 	});
 
 	test('ChatGPT refreshes the visible history when the window comes back online', async () => {
 		const { page } = browserTests;
+		let rateLimited = false;
 		let changed = false;
 		await mockChatGPTRequests(page);
-		await page.route('**/service/backend-api/conversations?*', route => changed
-			? route.fulfill({ json: { items: [{ id: 'remote-new', title: 'New on another device' }], total: 1 } })
-			: route.fallback());
+		await page.route('**/service/backend-api/conversations?*', route => {
+			if (rateLimited) return route.fulfill({ status: 429 });
+			if (changed) return route.fulfill({ json: { items: [{ id: 'remote-new', title: 'New on another device' }], total: 1 } });
+			return route.fallback();
+		});
 		await page.route('**/service/backend-api/conversation/fixture-chat', route => changed
 			? route.fulfill({ status: 404 })
 			: route.fallback());
 		await page.goto('/chatgptNavigation.html?locale=zh-CN');
 		const previous = page.getByRole('button', { name: 'Synthetic conversation', exact: true });
 		await previous.click();
-		await expect(page.locator('.ash-chatgpt-widget')).toContainText('Synthetic answer');
+		const chat = page.locator('.ash-chatgpt-widget');
+		await expect(chat).toContainText('Synthetic answer');
+		const historyStatus = page.locator('.ash-chat-navigation').getByRole('status').filter({ hasText: 'ChatGPT 暂时限制了历史列表请求' });
+		rateLimited = true;
+		await page.evaluate(() => window.dispatchEvent(new Event('online')));
+		await expect(historyStatus).toBeVisible();
+		await expect(previous).toBeVisible();
+		await expect(chat.locator('.ash-chat-input-notification-message')).toBeHidden();
+		await expect(chat).toContainText('Synthetic answer');
 
+		rateLimited = false;
 		changed = true;
 		await page.evaluate(() => window.dispatchEvent(new Event('online')));
 		await expect(page.getByRole('button', { name: 'New on another device', exact: true })).toBeVisible();
 		await expect(previous).toHaveCount(0);
-		await expect(page.locator('.ash-chatgpt-widget')).not.toContainText('Synthetic answer');
+		await expect(historyStatus).toHaveCount(0);
+		await expect(chat).not.toContainText('Synthetic answer');
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
@@ -451,12 +466,15 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await expect(list.locator('.ash-chat-navigation-item:visible')).toHaveCount(20);
 		await list.hover();
 		await page.mouse.wheel(0, 2000);
-		await expect(page.locator('.ash-chat-input-notification-message')).toBeVisible();
+		const historyStatus = page.locator('.ash-chat-navigation').getByRole('status').filter({ hasText: 'Could not load ChatGPT history' });
+		await expect(historyStatus).toBeInViewport();
+		await expect(page.locator('.ash-chat-input-notification-message')).toBeHidden();
 		await expect(list).toHaveAttribute('aria-busy', 'false');
 		expect(offsets).toEqual([0, 20]);
 		await page.mouse.wheel(0, -100);
 		await page.mouse.wheel(0, 200);
 		await expect(list.locator('.ash-chat-navigation-item:visible')).toHaveCount(40);
+		await expect(historyStatus).toHaveCount(0);
 		expect(offsets).toEqual([0, 20, 20]);
 	});
 

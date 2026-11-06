@@ -13,7 +13,7 @@ import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index
 import { connectProfile } from './sessionProfileFixture.js';
 
 declare global {
-	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; };
+	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; };
 }
 
 /** Keep production IPC, Rust authentication, transport, verification and UI; replace only service I/O. */
@@ -27,6 +27,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		let sends = 0; let step = 0; let reply: ReadableStreamDefaultController<Uint8Array> | undefined;
 		let cancelledInitializations = 0;
 		let offline = false;
+		let recentHistoryRateLimited = false;
 		let uploadsHeld = false;
 		let heldUploads = 0;
 		const uploadedFiles: Record<string, string> = {};
@@ -45,6 +46,7 @@ async function installService(application: ElectronApplication, holdInitializati
 			get pendingInitializations() { return initializing.size; },
 			get cancelledInitializations() { return cancelledInitializations; },
 			setOffline(value) { offline = value; },
+			setRecentHistoryRateLimited(value) { recentHistoryRateLimited = value; },
 			holdUploads(value) { uploadsHeld = value; },
 			get heldUploads() { return heldUploads; },
 			get uploadedFiles() { return uploadedFiles; },
@@ -108,6 +110,7 @@ async function installService(application: ElectronApplication, holdInitializati
 				if (url.pathname.endsWith('/pins')) { return Response.json([{ item: { id: 'history-pin', title: 'Pinned native history' } }]); }
 				if (url.pathname.endsWith('/gizmos/snorlax/sidebar')) { return Response.json({ items: [], cursor: null }); }
 				if (url.pathname.endsWith('/conversations')) {
+					if (recentHistoryRateLimited) return new Response(null, { status: 429 });
 					const items = [{ id: 'history-one', title: 'First native history' }, { id: 'history-two', title: 'Second native history' }, ...Array.from({ length: 30 }, (_, index) => ({ id: `history-extra-${index}`, title: `Additional history ${index}` }))];
 					return Response.json({ items, total: items.length });
 				}
@@ -516,17 +519,30 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(history.getByRole('button', { name: 'Second native history', exact: true })).toBeVisible();
 			await expect(history.getByRole('button', { name: 'Pinned native history', exact: true })).toBeVisible();
 			await expect(editor).toContainText('History one answer');
+			const openOriginal = editor.getByRole('button', { name: locale === 'en' ? 'Open conversation in ChatGPT' : '在 ChatGPT 中打开对话', exact: true });
+			await expect(openOriginal).toBeVisible();
+			const readAloud = editor.getByRole('button', { name: locale === 'en' ? 'Read aloud' : '朗读', exact: true });
+			await expect(readAloud).toHaveCount(0);
 			await new Editor(editor).waitForEditorContents(text => text === 'Unsent native follow-up');
 			await expect(staged(reopened, ready)).toContainText(locale === 'en' ? 'Ready' : '就绪');
 			const retry = staged(reopened, pending).getByRole('button', { name: locale === 'en' ? 'Retry ' + pending : '重试 ' + pending, exact: true });
 			await expect(retry).toBeVisible();
 			await application.evaluate(() => {
 				globalThis.ashNativeFixture.setOffline(false);
+				globalThis.ashNativeFixture.setRecentHistoryRateLimited(true);
 				globalThis.ashNativeFixture.holdUploads(false);
 			});
+			await reopened.evaluate(() => window.dispatchEvent(new Event('online')));
+			await expect(readAloud).toBeVisible();
+			const historyStatus = history.getByRole('status').filter({ hasText: locale === 'en' ? 'ChatGPT is limiting history requests' : 'ChatGPT 暂时限制了历史列表请求' });
+			await expect(historyStatus).toBeVisible();
+			await expect(editor.locator('.ash-chat-input-notification-message')).toBeHidden();
 			await retry.click();
 			await expect(staged(reopened, pending)).toContainText(locale === 'en' ? 'Ready' : '就绪');
 			expect(await application.evaluate(() => globalThis.ashNativeFixture.uploadedFiles)).toEqual({ [ready]: 'Ready draft bytes', [pending]: 'Pending draft bytes' });
+			await application.evaluate(() => globalThis.ashNativeFixture.setRecentHistoryRateLimited(false));
+			await reopened.evaluate(() => window.dispatchEvent(new Event('online')));
+			await expect(historyStatus).toHaveCount(0);
 
 			const restarted = await reloadWorkbench('quit');
 			await installService(restarted.application as ElectronApplication);

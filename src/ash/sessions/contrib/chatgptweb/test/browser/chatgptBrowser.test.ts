@@ -226,12 +226,14 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect(chat.getByRole('link', { name: 'Local file' })).toHaveCount(0);
 		await chat.getByRole('link', { name: 'Web source' }).click();
 		await expect(page.locator('body')).toHaveAttribute('data-opened-external', 'https://example.test/source');
-		const toolbar = page.getByRole('toolbar', { name: '回复操作', exact: true });
+		const reply = chat.locator('.ash-chat-item-agentMessage').filter({ hasText: 'memory:fixture' });
+		const toolbar = reply.getByRole('toolbar', { name: '回复操作', exact: true });
 		const copy = toolbar.getByRole('button', { name: '复制消息' });
 		const readAloud = toolbar.getByRole('button', { name: '朗读', exact: true });
 		const fork = toolbar.getByRole('button', { name: '在 ChatGPT 中创建分支' });
 		const shareResponse = toolbar.getByRole('button', { name: '分享回复' });
-		await expect(toolbar.getByRole('button')).toHaveCount(4);
+		const openOriginal = toolbar.getByRole('button', { name: '在 ChatGPT 中打开对话' });
+		await expect(toolbar.getByRole('button')).toHaveCount(5);
 		await expect(toolbar).toHaveText('', { useInnerText: true });
 		await copy.focus();
 		await page.keyboard.press('ArrowRight');
@@ -249,6 +251,13 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect(page.locator('body')).toHaveAttribute('data-opened-external', 'https://chatgpt.com/branch/fixture-chat/previous-reply');
 		await page.keyboard.press('ArrowRight');
 		await expect(shareResponse).toBeFocused();
+		await page.keyboard.press('ArrowRight');
+		await expect(openOriginal).toBeFocused();
+		await expectVisibleFocusOutline(openOriginal);
+		await page.keyboard.press('Enter');
+		await expect(page.locator('body')).toHaveAttribute('data-opened-external', 'https://chatgpt.com/c/fixture-chat');
+		await page.keyboard.press('ArrowLeft');
+		await expect(shareResponse).toBeFocused();
 		await page.keyboard.press('Enter');
 		const dialog = page.getByRole('dialog');
 		await expect(dialog).toContainText('截至这条回复');
@@ -256,6 +265,22 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await dialog.getByRole('button', { name: '分享', exact: true }).click();
 		await expect(page.locator('body')).toHaveAttribute('data-copied-link', 'https://chatgpt.com/share/fixture-response');
 		expect(share).toEqual({ conversation_id: 'fixture-chat', current_node_id: 'previous-reply', is_anonymous: true });
+
+		const markdown = reply.locator('.ash-chat-markdown-part');
+		const retained = await markdown.elementHandle();
+		await readAloud.press('Enter');
+		await expect(page.locator('body')).toHaveAttribute('data-audio-playing', 'true');
+		await openOriginal.focus();
+		await page.context().setOffline(true);
+		await expect(toolbar.getByRole('button')).toHaveCount(2);
+		await expect(copy).toBeEnabled();
+		await expect(openOriginal).toBeFocused();
+		await expect(page.locator('body')).toHaveAttribute('data-audio-playing', 'false');
+		await page.context().setOffline(false);
+		await expect(toolbar.getByRole('button')).toHaveCount(5);
+		await expect(openOriginal).toBeFocused();
+		expect(await markdown.evaluate((node, previous) => node === previous, retained)).toBe(true);
+		await retained?.dispose();
 	});
 
 	test('ChatGPT saves an offline first message and automatically sends it after reconnection', async () => {

@@ -3,10 +3,14 @@ import { parseInlineFileReference } from '../../common/widget/annotations.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ChatLayoutTrace } from './chatLayoutTrace.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
-import { ActionBar } from '../../../../../base/browser/ui/actionbar/actionbar.js';
+import { ButtonActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import type { IAction } from '../../../../../base/common/actions.js';
 import { ICommandService, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
-import { IContextKeyService } from '../../../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { MenuWorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
+import { createActionViewItem, MenuEntryActionViewItem } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import { IMenuService, MenuId, MenuItemAction } from '../../../../../platform/actions/common/actions.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { HasSpeechProvider, TextToSpeechInProgress } from '../../../speech/common/speechService.js';
@@ -39,6 +43,7 @@ import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 import { captureAnimationTarget, triggerClickAnimation, ClickAnimation } from '../../../../../base/browser/ui/animations/animations.js';
 import { ChatResponseFeedbackStoragePrefix, ChatUpvoteAnimationSettingId, isResponseHelpful, type ChatUpvoteAnimation } from '../../common/chatResponseFeedback.js';
 import { MarkHelpfulActionId } from '../actions/chatTitleActions.js';
+import { CopyItemActionId } from '../actions/chatCopyActions.js';
 import { ChatEditPendingRequestAction, ChatRemovePendingRequestAction, ChatSendPendingImmediatelyAction } from '../actions/chatQueueActions.js';
 import { ChatModelFeedbackSurveyActionId } from '../actions/chatModelFeedbackSurveyActions.js';
 import type { Icon } from '../../../../../base/common/icon.js';
@@ -64,10 +69,13 @@ export interface ChatRequestInputOptions {
 
 /** The conversation model supplies response capabilities and any destination-specific labels. */
 export interface ChatResponseActions {
-	readonly readAloud: (window: Window & typeof globalThis, signal: AbortSignal) => Promise<void>;
-	readonly forkLabel: string;
-	readonly fork: () => Promise<void>;
-	readonly share: () => Promise<void>;
+	readonly remote?: {
+		readonly readAloud: (window: Window & typeof globalThis, signal: AbortSignal) => Promise<void>;
+		readonly forkLabel: string;
+		readonly fork: () => Promise<void>;
+		readonly share: () => Promise<void>;
+	};
+	readonly openOriginal?: { readonly label: string; readonly icon: Icon; readonly run: () => Promise<void>; };
 }
 
 interface ChatListItemRendererOptions {
@@ -107,10 +115,7 @@ export class ChatListItemRenderer extends Disposable {
 	private readonly edit = this._register(new MutableDisposable<DisposableStore>());
 	private copyButton: Button | undefined;
 	private readonly responsePlayback = this._register(new MutableDisposable());
-	private updateResponseActions: (() => void) | undefined;
-	private updateReadAloud: (() => void) | undefined;
-	private updateHelpful: (() => void) | undefined;
-	private updateModelFeedback: (() => void) | undefined;
+	private updateResponseActions: ((beforeLayout?: () => void) => boolean) | undefined;
 	private updateTurnChanges: (() => void) | undefined;
 	private readonly reading = this._register(new MutableDisposable<IDisposable & { readonly source: CancellationTokenSource; readonly item: IChatListItem; }>());
 	private readonly memoryReferences = this._register(new DisposableMap<string, IDisposable & { readonly element: HTMLButtonElement; }>());
@@ -143,19 +148,14 @@ export class ChatListItemRenderer extends Disposable {
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IStorageService private readonly storageService: IStorageService,
 		@INotificationService private readonly notifications: INotificationService,
+		@IMenuService private readonly menus: IMenuService,
+		@IContextMenuService private readonly contextMenus: IContextMenuService,
 	) {
 		super();
 		this.element = h(ownerDocument, 'article');
 		this.renderItem(item);
 		this.refreshContent();
 		this.layoutTrace.trace('renderElement', () => `create type=${item.type} chars=${item.text.length} transient=${item.transient}`);
-		if (this.updateHelpful) {
-			this._register(this.storageService.onDidChangeValue(event => {
-				if (event.scope === StorageScope.PROFILE && event.key.startsWith(ChatResponseFeedbackStoragePrefix)) {
-					this.updateHelpful?.();
-				}
-			}));
-		}
 	}
 
 	/** Captures the scroll anchor before a synchronous row change, or queues a text-only update for the next frame. */
@@ -165,6 +165,8 @@ export class ChatListItemRenderer extends Disposable {
 		const same = sameItem(this.item, item);
 		if (same && this.item.content === item.content && (!contentPart || contentPart.hasSameContent(item))) {
 			this.item = item;
+			// Providers can gain or lose response actions without changing the transcript.
+			if (this.options.getResponseActions && this.updateResponseActions?.(beforeLayout)) return 'updated';
 			return 'unchanged';
 		}
 		if (item.text.length >= markdownFrameThreshold && this.tryQueuePlainResponse(item)) return 'queued';
@@ -223,10 +225,7 @@ export class ChatListItemRenderer extends Disposable {
 		if (this.copyButton) this.copyButton.enabled = this.item.text.length > 0;
 		const reading = this.reading.value;
 		if (reading && (reading.item.text !== this.item.text || reading.item.attachmentSource?.sessionId !== this.item.attachmentSource?.sessionId || reading.item.attachmentSource?.threadId !== this.item.attachmentSource?.threadId)) this.reading.clear();
-		this.updateReadAloud?.();
 		this.updateResponseActions?.();
-		this.updateHelpful?.();
-		this.updateModelFeedback?.();
 		this.updateTurnChanges?.();
 		this.renderAttachments();
 		this.renderMemoryReferences();
@@ -304,32 +303,27 @@ export class ChatListItemRenderer extends Disposable {
 			enabled: this.item.text.length > 0,
 		}));
 		this.copyButton = button;
-		const copy = this.createCopyHandler(actions, lifetime, button.domNode);
-		lifetime.add(button.onDidClick(() => void copy()));
-		if (this.item.type === 'agentMessage') {
-			this.renderReadAloudAction(actions, lifetime);
-			if (!this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key)) this.renderHelpfulAction(actions, lifetime);
-		}
+		const copy = this.createCopyHandler(actions, lifetime);
+		lifetime.add(button.onDidClick(() => void copy(button.domNode, item => this.commands.executeCommand(CopyItemActionId, item))));
 		return actions;
 	}
 
-	private createCopyHandler(actions: HTMLElement, lifetime: DisposableStore, busyTarget?: HTMLElement): () => Promise<void> {
+	private createCopyHandler(actions: HTMLElement, lifetime: DisposableStore) {
 		const feedback = h(this.element.ownerDocument, 'span');
 		feedback.className = 'ash-chat-message-copy-status';
 		feedback.setAttribute('role', 'status');
 		actions.append(feedback);
 		const clear = lifetime.add(new RunOnceScheduler(() => { feedback.textContent = ''; }, 2000));
 		let copying = false;
-		return async () => {
+		return async (button: HTMLElement, run: (item: IChatListItem) => unknown) => {
 			if (copying || this.isDisposed || !this.options.isVisible() || !this.item.text) return;
 			const item = this.item;
-			const context = { type: item.type, text: item.text };
 			copying = true;
-			busyTarget?.setAttribute('aria-busy', 'true');
+			button.setAttribute('aria-busy', 'true');
 			clear.cancel();
 			feedback.textContent = '';
 			try {
-				await this.commands.executeCommand('workbench.action.chat.copyItem', context);
+				await run(item);
 				if (this.isDisposed || this.item !== item) return;
 				feedback.textContent = localize('chat.message.copied', 'Message copied.');
 				clear.schedule();
@@ -338,28 +332,37 @@ export class ChatListItemRenderer extends Disposable {
 				feedback.textContent = localize('chat.message.copyFailed', 'Could not copy message: {0}', String(error));
 			} finally {
 				copying = false;
-				busyTarget?.removeAttribute('aria-busy');
+				button.removeAttribute('aria-busy');
 			}
 		};
 	}
 
-	private renderResponseActionBar(lifetime: DisposableStore): HTMLElement {
+	private renderResponseFooter(lifetime: DisposableStore): void {
 		const actions = this.createMessageActions();
-		const bar = lifetime.add(new ActionBar(actions, {
-			ariaLabel: localize('chat.message.actions', 'Response actions'),
-			actionViewItemOptions: { iconOnly: true, buttonStyles: defaultButtonStyles, buttonPresentation: 'quiet' },
-		}));
 		const copy = this.createCopyHandler(actions, lifetime);
-		const action = (id: string, label: string, icon: IAction['icon'], run: () => unknown): IAction => ({
-			id, label, tooltip: label, icon, enabled: true, run: () => {
-				if (!this.isDisposed && this.options.isVisible()) return run();
+		const context = lifetime.add(this.contextKeys.createScoped(actions));
+		const hasText = ChatContextKeys.responseHasText.bindTo(context);
+		hasText.set(!!this.item.text);
+		const toolbar = lifetime.add(new MenuWorkbenchToolBar(actions, this.menus, this.contextMenus, MenuId.ChatMessageFooter, {
+			ariaLabel: localize('chat.message.actions', 'Response actions'),
+			contextKeyService: context,
+			menuOptions: { shouldForwardArgs: true },
+			actionViewItemProvider: (action, options) => {
+				const buttonOptions = { ...options, iconOnly: true, buttonPresentation: 'quiet' as const };
+				if (action instanceof MenuItemAction && action.id === CopyItemActionId) {
+					return new class extends MenuEntryActionViewItem {
+						protected override runAction(): Promise<void> {
+							return copy(this.button.domNode, item => action.run(item));
+						}
+					}(action, buttonOptions);
+				}
+				return createActionViewItem(action, this.contextMenus, buttonOptions) ?? new ButtonActionViewItem(action, buttonOptions);
 			},
-		});
-		const copyAction = action('chat.response.copy', localize('chat.message.copy', 'Copy message'), Lxicon.copy, copy);
-		const disabledCopy = { ...copyAction, enabled: false };
+		}));
+		actions.prepend(toolbar.element);
 		const getActions = () => this.options.getResponseActions?.(this.item);
-		const read = action('chat.response.readAloud', localize('chat.message.readAloud', 'Read aloud'), Lxicon.unmute, async () => {
-			const available = getActions();
+		const read = this.responseAction('chat.response.readAloud', localize('chat.message.readAloud', 'Read aloud'), Lxicon.unmute, async () => {
+			const available = getActions()?.remote;
 			if (!available || this.responsePlayback.value) return;
 			const controller = new AbortController();
 			const playback = toDisposable(() => controller.abort());
@@ -369,7 +372,7 @@ export class ChatListItemRenderer extends Disposable {
 				await available.readAloud(getWindow(this.element), controller.signal);
 			} catch (error) {
 				if (!controller.signal.aborted && !isCancellationError(error) && !this.isDisposed) {
-					this.instantiationService.getOptional(INotificationService)?.error(localize('chat.message.readAloudFailed', 'Could not read response aloud: {0}', String(error)));
+					this.notifications.error(localize('chat.message.readAloudFailed', 'Could not read response aloud: {0}', String(error)));
 				}
 			} finally {
 				if (this.responsePlayback.value === playback) {
@@ -378,41 +381,92 @@ export class ChatListItemRenderer extends Disposable {
 				}
 			}
 		});
-		const stop = action(read.id, localize('chat.message.stopReadAloud', 'Stop reading aloud'), Lxicon.mute, () => {
+		const stop = this.responseAction(read.id, localize('chat.message.stopReadAloud', 'Stop reading aloud'), Lxicon.mute, () => {
 			this.responsePlayback.clear();
 			update();
 		});
 		let fork: IAction | undefined;
-		const share = action('chat.response.share', localize('chat.message.share', 'Share response'), Lxicon.share, () => getActions()?.share());
-		const update = (): void => {
+		let openOriginal: IAction | undefined;
+		const share = this.responseAction('chat.response.share', localize('chat.message.share', 'Share response'), Lxicon.share, () => getActions()?.remote?.share());
+		let trailing: readonly IAction[] = [];
+		const update = (beforeLayout?: () => void): boolean => {
+			if (this.isDisposed) return false;
+			toolbar.context = this.item;
+			hasText.set(!!this.item.text);
 			const available = getActions();
-			const next = [this.item.text ? copyAction : disabledCopy];
-			if (available) {
-				if (fork?.label !== available.forkLabel) {
-					fork = action('chat.response.fork', available.forkLabel, Lxicon.fork, () => getActions()?.fork());
+			const next: IAction[] = [];
+			if (available?.remote) {
+				if (fork?.label !== available.remote.forkLabel) {
+					fork = this.responseAction('chat.response.fork', available.remote.forkLabel, Lxicon.fork, () => getActions()?.remote?.fork());
 				}
 				next.push(this.responsePlayback.value ? stop : read, fork, share);
+			} else {
+				this.responsePlayback.clear();
 			}
-			if (next.length !== bar.length() || next.some((entry, index) => bar.getAction(index) !== entry)) bar.setActions(next);
+			const original = available?.openOriginal;
+			if (original && this.contextKeys.getValue(ChatContextKeys.enabled.key) === true) {
+				if (openOriginal?.label !== original.label || openOriginal.icon !== original.icon) {
+					openOriginal = this.responseAction('chat.response.openOriginal', original.label, original.icon, () => getActions()?.openOriginal?.run());
+				}
+				next.push(openOriginal);
+			}
+			const nativeRead = getNativeRead?.();
+			const helpful = getHelpful?.();
+			if (nativeRead) next.push(nativeRead);
+			if (helpful) next.push(helpful);
+			if (getModelFeedbackTarget()) next.push(modelFeedback);
+			if (next.length === trailing.length && next.every((action, index) => trailing[index] === action)) return false;
+			beforeLayout?.();
+			trailing = next;
+			toolbar.setTrailingActions(next);
+			return true;
 		};
+		const getNativeRead = this.options.getResponseActions ? undefined : this.createReadAloudAction(actions, lifetime, update);
+		const getHelpful = this.options.getResponseActions || this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key)
+			? undefined : this.createHelpfulAction(actions, lifetime, update);
+		const getModelFeedbackTarget = () => this.contextKeys.getValue(ChatContextKeys.enabled.key) === true
+			&& this.item.canGiveModelFeedback && !this.item.transient && !this.item.isError ? this.item.feedbackSource : undefined;
+		let openingFeedback = false;
+		const feedbackLabel = localize('chat.modelFeedback.messageAction', 'Give model feedback');
+		const modelFeedback = this.responseAction(ChatModelFeedbackSurveyActionId, feedbackLabel, Lxicon.comment, async () => {
+			const target = getModelFeedbackTarget();
+			if (!target || openingFeedback) return;
+			openingFeedback = true;
+			try {
+				await this.commands.executeCommand(ChatModelFeedbackSurveyActionId, target);
+			} catch (error) {
+				if (!this.isDisposed && !isCancellationError(error)) {
+					this.notifications.error(localize('chat.messageAction.failed', 'Could not run {0}: {1}', feedbackLabel, String(error)));
+				}
+			} finally {
+				openingFeedback = false;
+			}
+		});
+		lifetime.add(this.contextKeys.onDidChangeContext(event => { if (event.affectsSome(chatEnabledContextKeys)) update(); }));
 		this.updateResponseActions = update;
-		lifetime.add(bar.onDidRun(event => {
-			if (event.error && !this.isDisposed) this.instantiationService.getOptional(INotificationService)?.error(String(event.error));
+		lifetime.add(toolbar.actionRunner.onDidRun(event => {
+			if (event.error && !this.isDisposed && !isCancellationError(event.error)) this.notifications.error(String(event.error));
 		}));
 		lifetime.add(addDisposableListener(this.element, 'keydown', event => {
-			if (event.key !== 'Escape' || !this.responsePlayback.value) return;
+			if (event.key !== 'Escape' || (!this.responsePlayback.value && !this.reading.value)) return;
 			this.responsePlayback.clear();
+			this.reading.clear();
 			update();
 			event.preventDefault();
 			event.stopPropagation();
 		}));
-		return actions;
+		this.renderTurnChanges(actions, lifetime);
 	}
 
-	private renderResponseExtras(actions: HTMLElement, lifetime: DisposableStore): void {
-		this.updateModelFeedback = this.renderMessageCommandActions(actions, lifetime, [{
-			id: ChatModelFeedbackSurveyActionId, label: localize('chat.modelFeedback.messageAction', 'Give model feedback'), icon: Lxicon.comment,
-		}], () => this.item.canGiveModelFeedback && !this.item.transient && !this.item.isError ? this.item.feedbackSource : undefined);
+	private responseAction(id: string, label: string, icon: Icon, run: () => unknown): IAction {
+		return {
+			id, label, tooltip: label, icon, enabled: true, run: () => {
+				if (!this.isDisposed && this.options.isVisible()) return run();
+			},
+		};
+	}
+
+	private renderTurnChanges(actions: HTMLElement, lifetime: DisposableStore): void {
 		const open = this.options.openTurnChanges;
 		if (open) {
 			let pill: ChatTurnChangesPill | undefined;
@@ -498,43 +552,48 @@ export class ChatListItemRenderer extends Disposable {
 		return update;
 	}
 
-	private renderHelpfulAction(actions: HTMLElement, lifetime: DisposableStore): void {
-		const button = lifetime.add(new Button(actions, {
-			...defaultButtonStyles, label: localize('chat.response.helpful', 'Helpful'),
-			title: localize('chat.response.helpfulTooltip', 'Mark this response helpful in Ash'),
-			icon: Lxicon.thumbsup, iconOnly: true, presentation: 'quiet', size: 'small', checked: false,
-		}));
-		button.domNode.classList.add('ash-chat-response-helpful');
+	private createHelpfulAction(actions: HTMLElement, lifetime: DisposableStore, update: () => void): () => IAction | undefined {
 		const status = h(actions.ownerDocument, 'span');
 		status.setAttribute('role', 'status');
 		actions.append(status);
 		const feedback = lifetime.add(new MutableDisposable());
 		let pending = false;
-		const update = (): void => {
-			const target = this.item.feedbackSource;
-			button.hidden = !target || this.item.transient || this.item.isError === true;
-			button.enabled = !pending;
-			button.checked = !!target && isResponseHelpful(this.storageService, target);
-		};
-		this.updateHelpful = update;
-		update();
-		lifetime.add(button.onDidClick(() => {
-			const target = this.item.feedbackSource;
-			if (!target || pending || this.isDisposed || !this.options.isVisible()) return;
-			const captured = captureAnimationTarget(button.domNode);
+		const getTarget = () => !this.item.transient && !this.item.isError ? this.item.feedbackSource : undefined;
+		const helpful = this.responseAction(MarkHelpfulActionId, localize('chat.response.helpful', 'Helpful'), Lxicon.thumbsup, async () => {
+			const target = getTarget();
+			if (!target || pending) return;
+			const button = actions.querySelector<HTMLElement>(`[data-action-id="${MarkHelpfulActionId}"] > button`);
+			const captured = button && captureAnimationTarget(button);
 			pending = true;
 			status.textContent = '';
 			update();
-			void this.commands.executeCommand<boolean>(MarkHelpfulActionId, target).then(changed => {
-				if (this.isDisposed || this.item.feedbackSource !== target || !changed) return;
+			try {
+				const changed = await this.commands.executeCommand<boolean>(MarkHelpfulActionId, target);
+				if (this.isDisposed || getTarget() !== target || !changed) return;
 				status.textContent = localize('chat.response.helpfulSaved', 'Marked helpful in Ash.');
 				const kind = this.configurationService.getValue<ChatUpvoteAnimation>(ChatUpvoteAnimationSettingId) ?? 'floatingThumbs';
 				const animation = { confetti: ClickAnimation.Confetti, floatingThumbs: ClickAnimation.FloatingIcons, pulseWave: ClickAnimation.PulseWave, radiantLines: ClickAnimation.RadiantLines };
-				if (kind !== 'off') feedback.value = triggerClickAnimation(captured, animation[kind], Lxicon.thumbsup);
-			}, error => {
+				if (captured && kind !== 'off') feedback.value = triggerClickAnimation(captured, animation[kind], Lxicon.thumbsup);
+			} catch (error) {
 				if (!this.isDisposed) status.textContent = localize('chat.response.helpfulFailed', 'Could not save feedback in Ash: {0}', String(error));
-			}).finally(() => { pending = false; if (!this.isDisposed) update(); });
+			} finally {
+				pending = false;
+				update();
+			}
+		});
+		const tooltip = localize('chat.response.helpfulTooltip', 'Mark this response helpful in Ash');
+		let action = { ...helpful, tooltip, checked: false };
+		lifetime.add(this.storageService.onDidChangeValue(event => {
+			if (event.scope === StorageScope.PROFILE && event.key.startsWith(ChatResponseFeedbackStoragePrefix)) update();
 		}));
+		return () => {
+			const target = getTarget();
+			if (!target) return undefined;
+			const checked = isResponseHelpful(this.storageService, target);
+			const enabled = !pending;
+			if (action.checked !== checked || action.enabled !== enabled) action = { ...action, checked, enabled };
+			return action;
+		};
 	}
 
 	private renderEditAction(requestText: HTMLElement, lifetime: DisposableStore, actions?: HTMLElement): void {
@@ -696,58 +755,45 @@ export class ChatListItemRenderer extends Disposable {
 		}));
 	}
 
-	private renderReadAloudAction(actions: HTMLElement, lifetime: DisposableStore): void {
-		const button = lifetime.add(new Button(actions, {
-			...defaultButtonStyles,
-			label: localize('chat.message.readAloud', 'Read aloud'),
-			presentation: 'quiet',
-			size: 'small',
-		}));
+	private createReadAloudAction(actions: HTMLElement, lifetime: DisposableStore, update: () => void): () => IAction | undefined {
 		const feedback = h(actions.ownerDocument, 'span');
 		feedback.className = 'ash-chat-message-read-status';
 		feedback.setAttribute('role', 'status');
 		actions.append(feedback);
-		const update = () => {
-			if (this.isDisposed) return;
-			const context = this.contextKeys.getContext();
-			const hidden = !CommandsRegistry.hasCommand('workbench.action.chat.readChatResponseAloud') || context.getValue(HasSpeechProvider.key) !== true;
-			if (button.domNode.hidden !== hidden) button.domNode.hidden = hidden;
-			const reading = !!this.reading.value;
-			const label = reading ? localize('chat.message.stopReadAloud', 'Stop reading aloud') : localize('chat.message.readAloud', 'Read aloud');
-			if (button.label !== label) button.label = label;
-			const enabled = reading || !this.item.transient && !!this.item.text && context.getValue(TextToSpeechInProgress.key) !== true;
-			if (button.enabled !== enabled) button.enabled = enabled;
-			const pressed = String(reading);
-			if (button.domNode.getAttribute('aria-pressed') !== pressed) button.domNode.setAttribute('aria-pressed', pressed);
-		};
-		this.updateReadAloud = update;
 		lifetime.add(this.contextKeys.onDidChangeContext(event => { if (event.affectsSome(speechContextKeys)) update(); }));
 		lifetime.add(CommandsRegistry.onDidChangeCommands(update));
-		lifetime.add(addDisposableListener(this.element, 'keydown', event => {
-			if ((event as KeyboardEvent).key !== 'Escape' || !this.reading.value) return;
-			this.reading.clear(); update(); event.preventDefault(); event.stopPropagation();
-		}));
-		lifetime.add(button.onDidClick(() => {
-			if (this.isDisposed || !this.options.isVisible()) return;
-			const current = this.reading.value;
-			if (current) {
-				void this.commands.executeCommand('workbench.action.chat.stopReadChatItemAloud', { source: current.source });
-				return;
-			}
+		const hasProvider = () => CommandsRegistry.hasCommand('workbench.action.chat.readChatResponseAloud') && this.contextKeys.getValue(HasSpeechProvider.key) === true;
+		const read = this.responseAction('chat.response.readAloud', localize('chat.message.readAloud', 'Read aloud'), Lxicon.unmute, async () => {
+			if (!hasProvider() || this.reading.value || this.item.transient || !this.item.text || this.contextKeys.getValue(TextToSpeechInProgress.key) === true) return;
 			const item = this.item;
 			const source = new CancellationTokenSource();
 			const operation = Object.assign(toDisposable(() => source.dispose(true)), { source, item });
 			this.reading.value = operation; feedback.textContent = ''; update();
-			void this.commands.executeCommand('workbench.action.chat.readChatResponseAloud', { type: item.type, text: item.text, source }).catch(error => {
+			try {
+				await this.commands.executeCommand('workbench.action.chat.readChatResponseAloud', { type: item.type, text: item.text, source });
+			} catch (error) {
 				if (!this.isDisposed && this.reading.value === operation && !source.token.isCancellationRequested && !isCancellationError(error)) {
 					feedback.textContent = localize('chat.message.readAloudFailed', 'Could not read response aloud: {0}', String(error));
 				}
-			}).finally(() => {
+			} finally {
 				if (this.reading.value === operation) this.reading.clear();
 				update();
-			});
-		}));
-		update();
+			}
+		});
+		const ready = { ...read, checked: false };
+		const disabled = { ...ready, enabled: false };
+		const stop = {
+			...this.responseAction(read.id, localize('chat.message.stopReadAloud', 'Stop reading aloud'), Lxicon.mute, () => {
+				const source = this.reading.value?.source;
+				if (source) return this.commands.executeCommand('workbench.action.chat.stopReadChatItemAloud', { source });
+			}),
+			checked: true,
+		};
+		return () => {
+			if (!hasProvider()) return undefined;
+			if (this.reading.value) return stop;
+			return !this.item.transient && this.item.text && this.contextKeys.getValue(TextToSpeechInProgress.key) !== true ? ready : disabled;
+		};
 	}
 
 	private renderMemoryReferences(): void {
@@ -917,8 +963,7 @@ export class ChatListItemRenderer extends Disposable {
 		this.markdownPart = markdownPart;
 		this.attachments = attachments;
 		if (item.type === 'agentMessage') {
-			const actions = this.options.getResponseActions ? this.renderResponseActionBar(disposables) : this.renderCopyAction(disposables);
-			this.renderResponseExtras(actions, disposables);
+			this.renderResponseFooter(disposables);
 		} else if (item.historyRedoTarget) {
 			this.renderMessageCommandActions(this.createMessageActions(), disposables, [{
 				id: RedoChatHistoryActionId, label: localize('chat.history.redoMessage', 'Redo last request'), icon: Lxicon.redo,

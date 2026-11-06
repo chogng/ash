@@ -13,6 +13,7 @@ export namespace ChatContextKeys {
 	export const enabled = new RawContextKey<boolean>('chatIsEnabled', false);
 	export const hasActiveRequest = new RawContextKey<boolean>('chatSessionHasActiveRequest', false);
 	export const inChatSession = new RawContextKey<boolean>('inChat', false);
+	export const responseHasText = new RawContextKey<boolean>('chatResponseHasText', false);
 	export const inputCursorAtTop = new RawContextKey<boolean>('chatCursorAtTop', false);
 	export const inChatInput = new RawContextKey<boolean>('inChatInput', false);
 	export const inQuickChat = new RawContextKey<boolean>('quickChatHasFocus', false);

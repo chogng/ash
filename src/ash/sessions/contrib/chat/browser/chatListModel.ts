@@ -72,6 +72,7 @@ export interface ChatListSnapshot {
 	readonly projects?: readonly ChatListProject[];
 	readonly groups?: readonly SessionGroup[];
 	readonly loading?: boolean;
+	readonly historyStatus?: string;
 }
 
 /** Catalog owners supply records and operations. The list owns their placement. */
@@ -205,6 +206,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 
 			return {
 				loading: snapshots.some(snapshot => snapshot.loading),
+				historyStatus: snapshots.map(snapshot => snapshot.historyStatus).filter(Boolean).join('\n'),
 				sections: groups.flatMap(group => {
 					const { key } = group;
 					const groupDropTarget = key.startsWith('group:');
