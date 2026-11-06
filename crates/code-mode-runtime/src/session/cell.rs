@@ -460,6 +460,8 @@ fn apply_tool_completion(
                 completion.runtime_tool_call_id
             )
         })?;
+    // Only the live Promise should retain the response once delivery finishes.
+    v8::scope!(let scope, scope);
     let resolver = v8::Local::new(scope, resolver);
     match completion.result {
         Ok(value) => {
@@ -613,3 +615,7 @@ fn send_result(
         stored_value_writes,
     });
 }
+
+#[cfg(test)]
+#[path = "cell_tests.rs"]
+mod tests;
