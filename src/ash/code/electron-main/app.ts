@@ -509,13 +509,7 @@ export class AshApplication extends Disposable {
 			throw new Error('Ash application startup requires Electron to be ready');
 		}
 		this._register(new WebviewProtocolProvider(this.rendererRoot, process.env.ASH_RENDERER_URL));
-		if (process.platform === 'darwin') {
-			assertDefined(app.dock, 'macOS Dock API is unavailable');
-			// Dock customization must not gate creation of the first Workbench window.
-			if (!app.isPackaged) {
-				app.dock.setIcon(join(app.getAppPath(), 'resources', 'darwin', 'ash.png'));
-			}
-		} else {
+		if (process.platform !== 'darwin') {
 			clearElectronApplicationMenu();
 		}
 
@@ -713,6 +707,11 @@ export class AshApplication extends Disposable {
 		if (this.windowsMainService.getWindowCount() === 0 && this.windowsMainService.managedWindowValues().length === 0) {
 			if (!this.quitRequested) app.quit();
 			return;
+		}
+		if (process.platform === 'darwin' && !app.isPackaged) {
+			// The development icon can decode once the first window is underway.
+			assertDefined(app.dock, 'macOS Dock API is unavailable');
+			app.dock.setIcon(join(app.getAppPath(), 'resources', 'darwin', 'ash.png'));
 		}
 		await this.windowSessionStateHandler.saveSession();
 		this.maintenance.value = disposableTimeout(() => {

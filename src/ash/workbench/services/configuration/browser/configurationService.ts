@@ -524,10 +524,13 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		const models = [previous.base, previous.workspace, previous.policy, ...previous.folders.map(folder => folder.model), current.base, current.workspace, current.policy, ...current.folders.map(folder => folder.model)];
 		const resources = [undefined, ...previous.folders.map(folder => folder.root), ...current.folders.map(folder => folder.root)];
 		const identifiers = [...new Set(models.flatMap(model => model.overrides.flatMap(block => block.identifiers)))];
+		// Each scope uses the same merged models for every key in this comparison.
+		const before = configurationModelsByScope(previous);
+		const after = configurationModelsByScope(current);
 		// Policy changes also affect editability when every resource resolves to the same value.
 		const changed = (key: string, identifier?: string): boolean =>
 			!equals(previous.policy.getValue(key), current.policy.getValue(key)) ||
-			resources.some(resource => !equals(resolveConfiguration(previous, key, { resource, overrideIdentifier: identifier }), resolveConfiguration(current, key, { resource, overrideIdentifier: identifier })));
+			resources.some(resource => !equals(before(resource, identifier).getValue(key), after(resource, identifier).getValue(key)));
 		const keys = [...new Set(models.flatMap(model => model.keys))].filter(key => changed(key) || identifiers.some(identifier => changed(key, identifier)));
 		const overrides: [string, string[]][] = identifiers.map(identifier => [identifier, keys.filter(key => changed(key, identifier))]);
 		if (keys.length) this.changeEmitter.fire(configurationChangeEvent({ keys, overrides: overrides.filter(([, keys]) => keys.length) }, previous, current, target));
@@ -637,11 +640,36 @@ function matchingFolder(state: ConfigurationState, resource: URI | null | undefi
 }
 
 function resolveConfiguration(state: ConfigurationState, section: string, overrides?: IConfigurationOverrides): unknown {
+	const model = configurationForResource(state, overrides?.resource);
+	return applyConfigurationOverride(model, state.policy, overrides?.overrideIdentifier).getValue(section);
+}
+
+function configurationForResource(state: ConfigurationState, resource: URI | null | undefined): ConfigurationModel {
 	let model = state.base.merge(state.workspace);
-	const folder = matchingFolder(state, overrides?.resource);
+	const folder = matchingFolder(state, resource);
 	if (folder) model = model.merge(folder.model);
-	if (overrides?.overrideIdentifier) model = model.override(overrides.overrideIdentifier);
-	return model.merge(state.policy).getValue(section);
+	return model;
+}
+
+function applyConfigurationOverride(model: ConfigurationModel, policy: ConfigurationModel, identifier?: string | null): ConfigurationModel {
+	return (identifier ? model.override(identifier) : model).merge(policy);
+}
+
+function configurationModelsByScope(state: ConfigurationState): (resource: URI | undefined, identifier?: string) => ConfigurationModel {
+	const resources = new Map<URI | undefined, { base: ConfigurationModel; overrides: Map<string | undefined, ConfigurationModel>; }>();
+	return (resource, identifier) => {
+		let scope = resources.get(resource);
+		if (!scope) {
+			scope = { base: configurationForResource(state, resource), overrides: new Map() };
+			resources.set(resource, scope);
+		}
+		let model = scope.overrides.get(identifier);
+		if (!model) {
+			model = applyConfigurationOverride(scope.base, state.policy, identifier);
+			scope.overrides.set(identifier, model);
+		}
+		return model;
+	};
 }
 
 function supportsTarget(setting: IRegisteredConfiguration, target: ConfigurationTarget): boolean {

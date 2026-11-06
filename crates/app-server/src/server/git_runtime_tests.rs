@@ -3591,8 +3591,8 @@ fn capability_scoped_git_watch_paths_exclude_other_roots_and_revoked_proofs() {
             ("second".into(), inspection_authorization(second.root())),
         ],
         Arc::new(UpdateBroker::default()),
-    )
-    .unwrap();
+    );
+    assert!(!runtime.has_discovered().unwrap());
     let grant = Grant::for_environment(
         Dir::open_local(second.root()).unwrap(),
         GrantSource::HostConfiguration,
@@ -3602,12 +3602,10 @@ fn capability_scoped_git_watch_paths_exclude_other_roots_and_revoked_proofs() {
     let paths = runtime.discovery_paths(&proofs);
     assert!(paths.iter().any(|path| path.path == second.root()));
     assert!(!paths.iter().any(|path| path.path.starts_with(first.root())));
-    assert!(
-        runtime
-            .watched_repositories(&proofs)
-            .iter()
-            .all(|repository| repository.service.dir().id() == grant.dir().id())
-    );
+    runtime.ensure_discovered().unwrap();
+    let watched = runtime.watched_repositories(&proofs);
+    assert_eq!(watched.len(), 1);
+    assert_eq!(watched[0].service.dir().id(), grant.dir().id());
     grant.revoke();
     assert!(runtime.discovery_paths(&proofs).is_empty());
     assert!(runtime.watched_repositories(&proofs).is_empty());

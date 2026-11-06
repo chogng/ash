@@ -4871,7 +4871,9 @@ client_methods! {
     ExtensionList => "extensions/list" {
         params: ExtensionListParams,
         response: ExtensionListResult,
-        serialization: GlobalSharedRead,
+        // The extension catalog owns its snapshot lock. A cold scan must not delay
+        // independent operations such as binding the window's authorized file routes.
+        serialization: None,
     },
     ExtensionResourceOpen => "extensions/resource/open" {
         params: ExtensionResourceOpenParams,

@@ -8,7 +8,7 @@ import { migrateLegacyBrowserSettings } from '../services/userData/browser/userD
 import { IndexedDBFileSystemProvider } from '../../platform/files/browser/indexedDBFileSystemProvider.js';
 import { Schemas } from '../../base/common/network.js';
 import { BrowserURLService } from '../services/url/browser/urlService.js';
-import type { IStartWorkbenchOptions } from './workbench.js';
+import type { IStartWorkbenchOptions, IWorkbenchStartupHost } from './workbench.js';
 import { IndexedDbWorkingCopyBackupService } from '../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
 import { addDisposableListener } from '../../base/browser/dom.js';
 import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
@@ -76,13 +76,15 @@ export async function createWebWorkbench(
 			productName: options.productName,
 			environmentService: new BrowserWorkbenchEnvironmentService(ownerWindow.location, options.webviewEndpoint, { updateProvider: options.updateProvider }),
 			createURLService: services => services.createInstance(BrowserURLService, options.urlCallbackProvider),
-			createTextDocumentHost: options.createTextDocumentHost,
 			createStorageService: async storageOptions => new BrowserStorageService(storageOptions),
-			createWorkingCopyBackupService: (_services, workspaceId) => new IndexedDbWorkingCopyBackupService(workspaceId),
 			createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
 			createUserDataFileSystemProvider: async () => userFiles,
 			defaultLayout: options.defaultLayout,
-			api: options.api,
+			host: {
+				api: options.api,
+				createTextDocumentHost: options.createTextDocumentHost,
+				createWorkingCopyBackupService: (_services, workspaceId) => new IndexedDbWorkingCopyBackupService(workspaceId),
+			},
 			webWorkspaceClient: options.webWorkspaceClient,
 			browserFileSystemProvider: options.browserFileSystemProvider,
 			createWindow: options.browserFileSystemProvider || options.webWorkspaceClient?.updateWorkspace ? services => {
@@ -146,7 +148,7 @@ function getEmptyWorkspaceIdentifier(): IEmptyWorkspaceIdentifier {
 export async function startWebWorkbench(
 	options: Pick<IStartWorkbenchOptions, 'productName'>,
 	hostLifetime?: IDisposable,
-	createTextDocumentHost?: IStartWorkbenchOptions['createTextDocumentHost'],
+	createTextDocumentHost?: IWorkbenchStartupHost['createTextDocumentHost'],
 ): Promise<IDisposable> {
 	const host = readWebWorkbenchHost();
 	const workbench = new DisposableStore();

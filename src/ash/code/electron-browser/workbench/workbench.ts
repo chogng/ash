@@ -23,7 +23,7 @@ try {
 	// by the time the Workbench starts using host services.
 	const nativeLocalizationReady = invoke<void>(NLS_ACTIVATE_CHANNEL, catalog);
 	const desktopMain = import('../../../workbench/electron-browser/desktop.main.js');
-	const contributionsReady = (async () => {
+	const loadContributions = async (): Promise<void> => {
 		performance.mark('ash.desktop.contributions-start');
 		await import('../../../workbench/workbench.desktop.main.js');
 		await import('../../../sessions/common/configuration.js');
@@ -34,11 +34,9 @@ try {
 		await import('../../../sessions/contrib/providers/remoteAgentHost/browser/remoteAgentHost.contribution.js');
 		await import('../../../sessions/contrib/changes/browser/changesMultiDiffSourceResolver.js');
 		performance.mark('ash.desktop.contributions-ready');
-	})();
-	// DesktopMain observes registration failures when it joins the startup tasks.
-	void contributionsReady.catch(() => undefined);
+	};
 	const [{ main }] = await Promise.all([desktopMain, nativeLocalizationReady]);
-	await main({ productName: AshWorkbenchName, splashTheme: splash.baseTheme }, [createAppServerDebugAdapterCapability], contributionsReady);
+	await main({ productName: AshWorkbenchName, splashTheme: splash.baseTheme }, [createAppServerDebugAdapterCapability], loadContributions);
 } catch (error) {
 	console.error('Unable to start Ash', error);
 }

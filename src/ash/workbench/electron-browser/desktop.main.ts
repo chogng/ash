@@ -37,6 +37,7 @@ import { IChatEditingService } from '../contrib/chat/common/editing/chatEditingS
 import { addDisposableListener } from '../../base/browser/dom.js';
 import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
 import { Disposable, DisposableTracker, installDisposableTracker, toDisposable } from '../../base/common/lifecycle.js';
+import { timeout } from '../../base/common/async.js';
 import { CancellationError, onUnexpectedError } from '../../base/common/errors.js';
 import { URI } from '../../base/common/uri.js';
 import { Schemas } from '../../base/common/network.js';
@@ -52,7 +53,7 @@ import { ElectronIPCMainProcessService } from '../../platform/ipc/electron-brows
 import { createElectronRendererApi, ElectronRendererLocalApi, type ElectronRendererCapabilityContribution } from './rendererApi.js';
 import { getWorkspaceRemoteAuthority, parseWorkspace } from '../../platform/workspace/common/workspace.js';
 import { NativeHostColorSchemeService } from '../services/themes/electron-browser/nativeHostColorSchemeService.js';
-import type { IStartWorkbenchOptions, Workbench } from '../browser/workbench.js';
+import type { IStartWorkbenchOptions, IWorkbenchStartupHost, Workbench } from '../browser/workbench.js';
 import { ElectronContextMenuService } from '../services/contextmenu/electron-browser/contextMenuService.js';
 import { loadUserThemes } from '../services/themes/browser/workbenchThemeService.js';
 import { ElectronLifecycleService } from '../services/lifecycle/electron-browser/lifecycleService.js';
@@ -94,7 +95,7 @@ export class DesktopMain extends Disposable {
 		super();
 	}
 
-	public async open(contributionsReady: Promise<void>): Promise<void> {
+	public async open(loadContributions: () => Promise<void>): Promise<void> {
 		this.assertNotDisposed();
 		if (this.opened) {
 			throw new Error('Desktop startup has already begun');
@@ -146,6 +147,10 @@ export class DesktopMain extends Disposable {
 				performance.mark('ash.desktop.api-ready');
 				return this._register(api);
 			});
+			void apiReady.catch(() => undefined);
+			// Request the backend connection before evaluating Workbench registrations.
+			const contributionsReady = loadContributions();
+			void contributionsReady.catch(() => undefined);
 			const workbenchModule = import('../browser/workbench.js');
 			void workbenchModule.catch(() => undefined);
 			const profileReady = local.paths.then(([userDataHome]) => {
@@ -155,6 +160,17 @@ export class DesktopMain extends Disposable {
 				this._register(files.registerProvider(Schemas.vscodeUserData, provider));
 				profileServices.registerInstance(IFileService, files);
 			});
+			const userThemesReady = profileReady.then(async () => {
+				this.assertNotDisposed();
+				const themes = await loadUserThemes(profileServices, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/themes' }));
+				if (this.isDisposed) {
+					themes.dispose();
+					throw new CancellationError();
+				}
+				performance.mark('ash.desktop.themes-ready');
+				return this._register(themes);
+			});
+			void userThemesReady.catch(() => undefined);
 			const workspaceReady = local.workspace.getWorkspace().then(value => {
 				performance.mark('ash.desktop.workspace-ready');
 				return parseWorkspace(value);
@@ -189,47 +205,76 @@ export class DesktopMain extends Disposable {
 				const { createStartupCommandPalette } = await import('./startupCommandPalette.js');
 				if (startingCommands && !this.isDisposed) palette.value = createStartupCommandPalette(profileServices, window, local, storage, this.options.splashTheme, pickFolder);
 			}).catch(error => { if (!this.isDisposed) onUnexpectedError(error); });
-			const [api, expectsTerminalTransfer, defaultLogLevels, storage] = await Promise.all([
-				apiReady,
+			const [expectsTerminalTransfer, defaultLogLevels, workspace, userThemes, hostColorScheme, { startWorkbench }] = await Promise.all([
 				invoke<unknown>(WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL),
 				mainProcessService.getChannel('logger').call<unknown>('getDefaultLogLevels'),
+				workspaceReady,
+				userThemesReady,
+				local.nativeHost.getOSColorScheme(),
+				workbenchModule,
+				contributionsReady,
 				storageReady,
-				profileReady,
 			]);
+			this.assertNotDisposed();
 			if (typeof expectsTerminalTransfer !== 'boolean') throw new TypeError('Invalid terminal window startup intent');
 			const environment = new ElectronWorkbenchEnvironmentService(defaultLogLevels, expectsTerminalTransfer, sandboxProcess.isBuilt);
 			profileServices.registerInstance(IWorkbenchEnvironmentService, environment);
 			const logger = this._register(profileServices.createInstance(NativeLogService, 'workbench'));
-			const [userThemes, workspace, hostColorScheme, { startWorkbench }] = await Promise.all([
-				loadUserThemes(profileServices, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/themes' })).then(themes => {
-					if (this.isDisposed) {
-						themes.dispose();
-						throw new CancellationError();
-					}
-					performance.mark('ash.desktop.themes-ready');
-					return this._register(themes);
-				}),
-				api.workspace.getWorkspace().then(value => parseWorkspace(value)),
-				api.nativeHost.getOSColorScheme(),
-				workbenchModule,
-				contributionsReady,
-			]);
-			performance.mark('ash.desktop.configuration-ready');
 			profileServices.registerCollection(new ServiceCollection(...getSingletonServiceDescriptors().filter(([id]) => id === IPlaywrightService)));
 			const playwrightService = profileServices.get(IPlaywrightService);
 			let lifecycleService!: ElectronLifecycleService;
 			let desktopWindow!: ElectronWindow;
 			let restorePalette: ((query: string) => void) | undefined;
 			let applyFolder!: (folder: URI) => Promise<void>;
-			if (workspace.id !== (await workspaceReady).id) await storage.switchWorkspace(workspace.id);
-			startingCommands = false;
-			const query = palette.value?.query;
-			palette.clear();
-			performance.mark('ash.desktop.workbench-start');
+			let query: string | undefined;
+			const host = apiReady.then(async (api): Promise<IWorkbenchStartupHost> => {
+				// Give the grant check a chance to queue directory binding before synchronous
+				// Workbench construction. A slow check must not hold back the shell.
+				const deadline = timeout(16);
+				const [workspace] = await Promise.all([
+					api.workspace.getWorkspace().then(value => parseWorkspace(value)),
+					Promise.race([api.workspaceStartupScheduled, deadline]).finally(() => deadline.cancel()),
+				]);
+				this.assertNotDisposed();
+				startingCommands = false;
+				query = palette.value?.query;
+				palette.clear();
+				performance.mark('ash.desktop.configuration-ready');
+				performance.mark('ash.desktop.workbench-start');
+				return {
+					api,
+					workspace,
+					workspaceDirectoriesReady: api.workspaceDirectoriesReady,
+					createTextDocumentHost: documentClient ? services => {
+						const editing = services.get(IChatEditingService);
+						const hosts = new DisposableStore();
+						hosts.add(services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) }));
+						const ide = hosts.add(services.createInstance(AppServerIdeHost, documentClient!));
+						hosts.add(services.get(IEnvironmentVariableService).registerCollectionProvider('ash.ide', async () => {
+							const key = await ide.readTerminalWindowKey();
+							return {
+								persistent: false,
+								map: key ? new Map([['ASH_IDE_WINDOW', { variable: 'ASH_IDE_WINDOW', type: EnvironmentVariableMutatorType.Replace, value: key }]]) : new Map(),
+							};
+						}));
+						return hosts;
+					} : undefined,
+					createBrowserHost: documentClient ? services => {
+						const browsers = services.get(IBrowserViewWorkbenchService);
+						const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService), api.localTcp);
+						const browserHost = registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService), services.get(IAgentHostCanvasCollection), owner => browsers.resolveNetwork(owner));
+						return toDisposable(() => { browserHost.dispose(); networkHost.dispose(); });
+					} : undefined,
+					createWorkingCopyBackupService: (services, workspaceId) => {
+						if (!api.backup) return new IndexedDbWorkingCopyBackupService(workspaceId);
+						return services.createChild(new ServiceCollection([IBackupService, api.backup])).createInstance(WorkingCopyBackupService);
+					},
+				};
+			});
 			const workbench = this._register(await startWorkbench({
 				productName: this.options.productName,
 				serviceCollection: new ServiceCollection(
-					[IWorkspaceEditingService, new SyncDescriptor(WorkspaceEditingService, [api.workspace])],
+					[IWorkspaceEditingService, new SyncDescriptor(WorkspaceEditingService, [local.workspace])],
 					[ILoggerService, logger],
 					[IPolicyService, this._register(new PolicyChannelClient(mainProcessService.getChannel('policy')))],
 					[IBrowserPasswordService, ProxyChannel.toService<IBrowserPasswordService>(mainProcessService.getChannel('browserPasswords'))],
@@ -243,40 +288,15 @@ export class DesktopMain extends Disposable {
 				createURLService: services => {
 					return services.createInstance(RelayURLService, windowId as number);
 				},
-				createTextDocumentHost: documentClient ? services => {
-					const editing = services.get(IChatEditingService);
-					const hosts = new DisposableStore();
-					hosts.add(services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) }));
-					const ide = hosts.add(services.createInstance(AppServerIdeHost, documentClient!));
-					hosts.add(services.get(IEnvironmentVariableService).registerCollectionProvider('ash.ide', async () => {
-						const key = await ide.readTerminalWindowKey();
-						return {
-							persistent: false,
-							map: key ? new Map([['ASH_IDE_WINDOW', { variable: 'ASH_IDE_WINDOW', type: EnvironmentVariableMutatorType.Replace, value: key }]]) : new Map(),
-						};
-					}));
-					return hosts;
-				} : undefined,
-				createBrowserHost: documentClient ? services => {
-					const browsers = services.get(IBrowserViewWorkbenchService);
-					const networkHost = registerBrowserNetworkHost(services.get(IMainProcessService), services.get(IAgentHostConnectionsService), services.get(IWorkspaceContextService), api.localTcp);
-					const browserHost = registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService), services.get(IAgentHostCanvasCollection), owner => browsers.resolveNetwork(owner));
-					return toDisposable(() => { browserHost.dispose(); networkHost.dispose(); });
-				} : undefined,
 				createLogService: () => {
 					// The factory owns failure cleanup and transfers the logger to the Workbench.
 					this._store.delete(logger);
 					return logger;
 				},
-				createWorkingCopyBackupService: (services, workspaceId) => {
-					if (!api.backup) return new IndexedDbWorkingCopyBackupService(workspaceId);
-					return services.createChild(new ServiceCollection([IBackupService, api.backup])).createInstance(WorkingCopyBackupService);
-				},
 				createStorageService: async () => startupStorage.clearAndLeak()!,
-				api,
+				host,
 				container,
 				workspace,
-				workspaceDirectoriesReady: api.workspaceDirectoriesReady,
 				createLifecycleService: services => {
 					lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError });
 					this._register(lifecycleService.onWillShutdown(event => event.join(logger.flush().catch(error => console.error('Could not flush Desktop logs during shutdown', error)), 'Desktop logs flush')));
@@ -290,7 +310,7 @@ export class DesktopMain extends Disposable {
 						catch (error) { if (!this.isDisposed) await dialogs.error(error instanceof Error ? error.message : String(error)); }
 					};
 					const context = services.get(IWorkspaceContextService);
-					if (api.workspace.onWillChangeFolders) this._register(api.workspace.onWillChangeFolders(event => {
+					if (local.workspace.onWillChangeFolders) this._register(local.workspace.onWillChangeFolders(event => {
 						try { services.get(IWorkspaceEditingService).validateFolders(event.folders); }
 						catch (error) { event.veto(error instanceof Error ? error : new Error(String(error))); }
 					}));
@@ -305,22 +325,23 @@ export class DesktopMain extends Disposable {
 					this._register(toDisposable(() => errors.dispose()));
 					return desktopWindow = services.createInstance(ElectronWindow, { invoke, subscribe });
 				},
-				createUserDataFileSystemProvider: async () => new FileUserDataProvider(api.localFiles, api.userDataHome),
-				keyboardLayoutProvider: api.keyboardLayout,
-				userKeyboardLayoutApi: api.userKeyboardLayout,
-				nativeHostApi: api.nativeHost,
+				createUserDataFileSystemProvider: async () => new FileUserDataProvider(local.localFiles, (await local.paths)[0]),
+				keyboardLayoutProvider: local.keyboardLayout,
+				userKeyboardLayoutApi: local.userKeyboardLayout,
+				nativeHostApi: local.nativeHost,
 				createHostColorSchemeService: services => {
 					const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
 					void colors.initialize().catch(onUnexpectedError);
 					return colors;
 				},
 				clipboardService: new ElectronRendererClipboardService(),
-				dialogHandler: new NativeDialogHandler(api.nativeHost, container),
+				dialogHandler: new NativeDialogHandler(local.nativeHost, container),
 				userThemeService: userThemes,
-				createContextMenuService: services => services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
+				createContextMenuService: services => services.createInstance(ElectronContextMenuService, local.nativeContextMenu),
 				createAuxiliaryWindowService: (owner, root, services) => services.createInstance(ElectronAuxiliaryWindowService, owner, root),
 				createTitleService: (container, productName, groups, services) => services.createInstance(ElectronTitleService, container, productName, createElectronTitlebarPartFactory(), groups),
 			}));
+			const api = await apiReady;
 			if (query !== undefined) restorePalette?.(query);
 			performance.mark('ash.desktop.workbench-created');
 			const subscription = api.workspace.onDidChange(workspace => {
@@ -384,6 +405,6 @@ export class DesktopMain extends Disposable {
 	}
 }
 
-export function main(options: DesktopOptions, rendererCapabilities: readonly ElectronRendererCapabilityContribution[], contributionsReady: Promise<void>): Promise<void> {
-	return new DesktopMain(options, rendererCapabilities).open(contributionsReady);
+export function main(options: DesktopOptions, rendererCapabilities: readonly ElectronRendererCapabilityContribution[], loadContributions: () => Promise<void>): Promise<void> {
+	return new DesktopMain(options, rendererCapabilities).open(loadContributions);
 }

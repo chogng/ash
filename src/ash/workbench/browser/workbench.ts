@@ -87,6 +87,7 @@ import {
 	type IDisposable,
 	Disposable,
 	DisposableStore,
+	MutableDisposable,
 	toDisposable,
 } from '../../base/common/lifecycle.js';
 import { CancellationError, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
@@ -342,6 +343,16 @@ import type { IUserKeyboardLayoutApi } from '../../platform/keyboardLayout/commo
 import { BrowserClipboardService } from '../services/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
 
+/** Capabilities that are attached when the host connection has been initialized. */
+export interface IWorkbenchStartupHost {
+	readonly api: IWorkbenchHost;
+	readonly workspace?: IWorkspace;
+	readonly workspaceDirectoriesReady?: Promise<void>;
+	readonly createWorkingCopyBackupService: (services: IInstantiationService, workspaceId: string) => IWorkingCopyBackupService;
+	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
+	readonly createBrowserHost?: (services: IInstantiationService) => IDisposable;
+}
+
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
 	/** Host-owned services are borrowed by this window's container before consumers are created. */
@@ -353,7 +364,7 @@ export interface IStartWorkbenchOptions {
 	readonly contributionIds?: readonly string[];
 	/** Host-specific presentations share the registered views' identity, commands and layout. */
 	readonly viewConstructors?: ReadonlyMap<string, SyncDescriptor<IView>>;
-	readonly api: IWorkbenchHost;
+	readonly host: IWorkbenchStartupHost | Promise<IWorkbenchStartupHost>;
 	/** Optional host-owned execution boundary; declarative extension assets remain available. */
 	readonly extensionHost?: IExtensionHostApi;
 	readonly browserFileSystemProvider?: HTMLFileSystemProvider;
@@ -362,15 +373,11 @@ export interface IStartWorkbenchOptions {
 	readonly webWorkspaceClient?: IWebWorkspaceClient;
 	readonly container: HTMLElement;
 	readonly workspace: IWorkspace;
-	readonly workspaceDirectoriesReady?: Promise<void>;
 	/** The host selects its implementation; the Workbench supplies initialized window services. */
 	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
 	readonly createURLService: (services: InstantiationService) => IURLService & IDisposable;
-	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
-	readonly createBrowserHost?: (services: IInstantiationService) => IDisposable;
 	readonly createWindow?: (services: IInstantiationService) => IDisposable;
 	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void>; }>;
-	readonly createWorkingCopyBackupService: (services: IInstantiationService, workspaceId: string) => IWorkingCopyBackupService;
 	readonly createLogService: () => LogService;
 	readonly initialConfiguration?: IConfigurationModel;
 	readonly createUserDataFileSystemProvider: () => Promise<IFileSystemProvider & IDisposable>;
@@ -386,6 +393,18 @@ export interface IStartWorkbenchOptions {
 	readonly createTitleService: (container: HTMLElement, productName: string, editorGroupsContainer: IEditorGroupsContainer, services: IInstantiationService) => BrowserTitleService;
 }
 
+interface WorkbenchFoundation {
+	readonly lifetime: DisposableStore;
+	readonly storage: Awaited<ReturnType<IStartWorkbenchOptions['createStorageService']>>;
+	readonly logger: LogService;
+	readonly files: FileService;
+	readonly userProfile: UserDataProfileService;
+	readonly workspace: WorkspaceService;
+	readonly language: LanguageService;
+	readonly colors: HostColorSchemeService;
+	readonly theme: WorkbenchThemeService;
+}
+
 /** Starts the browser workbench and binds its commands to the initial UI. */
 export async function startWorkbench({
 	serviceCollection,
@@ -394,21 +413,17 @@ export async function startWorkbench({
 	defaultLayout,
 	contributionIds,
 	viewConstructors,
-	api,
+	host,
 	extensionHost,
 	browserFileSystemProvider,
 	workspaceFileSystemProvider,
 	webWorkspaceClient,
 	container,
 	workspace,
-	workspaceDirectoriesReady,
 	createLifecycleService,
 	createURLService,
 	createWindow,
-	createTextDocumentHost,
-	createBrowserHost,
 	createStorageService,
-	createWorkingCopyBackupService,
 	createLogService,
 	initialConfiguration,
 	createUserDataFileSystemProvider,
@@ -423,55 +438,83 @@ export async function startWorkbench({
 	createTitleService,
 	createAuxiliaryWindowService,
 }: IStartWorkbenchOptions): Promise<Workbench> {
-	const themes = new ExtensionColorThemeService(api.extensions, api.events);
+	const lifetime = new DisposableStore();
+	const logger = lifetime.add(createLogService());
+	// Dispose the local theme listeners before retiring the extension theme registrations.
+	const extensionThemes = lifetime.add(new MutableDisposable<ExtensionColorThemeService>());
 	const editorRestoration = new DeferredPromise<void>();
 	const startupThemePreferences = new DeferredPromise<readonly string[]>();
 	const startupThemeApplied = new DeferredPromise<void>();
-	const logger = createLogService();
-	const wasInert = container.inert;
-	container.inert = true;
-	performance.mark('ash.workbench.themes-start');
-	const themesReady = themes.start({
-		preferences: startupThemePreferences.p,
-		loadRemainingAfter: Promise.all([editorRestoration.p, startupThemeApplied.p]).then(() => undefined),
-	}).then(() => { performance.mark('ash.workbench.themes-ready'); });
-	void themesReady.catch(error => logger.error('startup', 'Extension color theme startup failed', error));
-	let workbench: Workbench | undefined;
-	let storage: Awaited<ReturnType<IStartWorkbenchOptions['createStorageService']>> | undefined;
-	let userDataFiles: IFileSystemProvider & IDisposable | undefined;
+	const hostReady = Promise.resolve(host).then(connection => {
+		if (lifetime.isDisposed) throw new CancellationError();
+		const { api } = connection;
+		const themes = extensionThemes.value = new ExtensionColorThemeService(api.extensions, api.events);
+		performance.mark('ash.workbench.themes-start');
+		const themesReady = themes.start({
+			preferences: startupThemePreferences.p,
+			loadRemainingAfter: Promise.all([editorRestoration.p, startupThemeApplied.p]).then(() => undefined),
+		}).then(() => { performance.mark('ash.workbench.themes-ready'); });
+		void themesReady.catch(error => logger.error('startup', 'Extension color theme startup failed', error));
+		return { connection, themes, themesReady };
+	});
+	void hostReady.catch(() => undefined);
+	let wasInert: boolean | undefined;
 	try {
 		const ownerWindow = container.ownerDocument.defaultView;
 		if (!ownerWindow) { throw new Error('Workbench requires an owner window'); }
-		storage = await createStorageService({ ownerWindow, workspaceId: workspace.id });
-		userDataFiles = await createUserDataFileSystemProvider();
-		{
-			using startupFiles = new FileService();
-			using registration = startupFiles.registerProvider(Schemas.vscodeUserData, userDataFiles);
-			const levels = await readDefaultLogLevels(startupFiles, environmentService, logger);
-			logger.setLevel(levels.default);
-			serviceCollection ??= new ServiceCollection();
-			serviceCollection.set(IDefaultLogLevelsService, new SyncDescriptor(DefaultLogLevelsService, [levels]));
+		performance.mark('ash.workbench.profile-start');
+		const storage = lifetime.add(await createStorageService({ ownerWindow, workspaceId: workspace.id }));
+		const userDataFiles = lifetime.add(await createUserDataFileSystemProvider());
+		const files = lifetime.add(new FileService());
+		lifetime.add(files.registerProvider(Schemas.vscodeUserData, userDataFiles));
+		const userProfile = new UserDataProfileService();
+		const settingsReady = initialConfiguration ? Promise.resolve(initialConfiguration) : readInitialUserConfiguration(files, userProfile);
+		const [settings, levels] = await Promise.all([settingsReady, readDefaultLogLevels(files, environmentService, logger)]);
+		logger.setLevel(levels.default);
+		serviceCollection ??= new ServiceCollection();
+		serviceCollection.set(IDefaultLogLevelsService, new SyncDescriptor(DefaultLogLevelsService, [levels]));
+		// These instances keep the same ownership when workspace capabilities are attached.
+		using profileServices = new InstantiationService(new ServiceCollection(
+			[IFileService, files],
+			[ILogService, logger],
+			[IUserDataProfileService, userProfile],
+			[ITelemetryService, NullTelemetryService],
+		));
+		const workspaceContext = lifetime.add(profileServices.createInstance(WorkspaceService, { workspace, initialConfiguration: settings }));
+		profileServices.registerInstance(IConfigurationService, workspaceContext);
+		const language = lifetime.add(new LanguageService());
+		profileServices.registerInstance(ILanguageService, language);
+		if (nativeHostApi) {
+			if (!createHostColorSchemeService) throw new Error('Desktop Workbench requires its system appearance service');
+			profileServices.registerInstance(INativeHostService, nativeHostApi);
 		}
-		if (!initialConfiguration) {
-			using profileFiles = new FileService();
-			using registration = profileFiles.registerProvider(Schemas.vscodeUserData, userDataFiles);
-			using settings = new UserSettings(URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }), {}, extUriBiasedIgnorePathCase, profileFiles, new NullLoggerService());
-			initialConfiguration = (await settings.loadConfiguration()).toJSON();
+		const colors = lifetime.add(createHostColorSchemeService ? createHostColorSchemeService(profileServices) : new BrowserHostColorSchemeService(ownerWindow));
+		profileServices.registerInstance(IHostColorSchemeService, colors);
+		const theme = lifetime.add(profileServices.createInstance(WorkbenchThemeService, container));
+		theme.initialize();
+		void startupThemePreferences.complete(theme.getColorThemePreferences());
+		restoreWorkbenchFontInfo(ownerWindow, storage, workspaceContext, logger);
+		const foundation: WorkbenchFoundation = { lifetime, storage, logger, files, userProfile, workspace: workspaceContext, language, colors, theme };
+		performance.mark('ash.workbench.profile-ready');
+
+		const { connection, themes, themesReady } = await hostReady;
+		if (connection.workspace) {
+			if (connection.workspace.id !== workspace.id) await storage.switchWorkspace(connection.workspace.id);
+			workspaceContext.updateWorkspace(connection.workspace);
 		}
-		workbench = new Workbench(
+		wasInert = container.inert;
+		container.inert = true;
+		return new Workbench(
 			productName,
 			defaultLayout,
-			api,
+			connection.api,
 			extensionHost,
 			container,
-			workspace,
+			foundation,
 			createLifecycleService,
-			initialConfiguration,
-			userDataFiles,
 			keyboardLayoutProvider,
 			userKeyboardLayoutApi,
 			nativeHostApi,
-			createHostColorSchemeService,
 			clipboardService,
 			dialogHandler,
 			userThemeService,
@@ -483,37 +526,51 @@ export async function startWorkbench({
 			webWorkspaceClient,
 			themes,
 			themesReady,
-			startupThemePreferences,
 			startupThemeApplied,
 			editorRestoration,
-			storage,
-			logger,
-			createWorkingCopyBackupService,
+			connection.createWorkingCopyBackupService,
 			createWindow,
-			createTextDocumentHost,
-			createBrowserHost,
+			connection.createTextDocumentHost,
+			connection.createBrowserHost,
 			createURLService,
 			environmentService,
 			serviceCollection,
 			contributionIds,
 			viewConstructors,
-			workspaceDirectoriesReady,
+			connection.workspaceDirectoriesReady,
 		);
-		return workbench;
 	} catch (error) {
 		void startupThemePreferences.complete([]);
 		void startupThemeApplied.complete();
 		void editorRestoration.complete();
-		userDataFiles?.dispose();
 		logger.error('startup', 'Workbench startup failed', error);
-		workbench?.dispose();
-		logger.dispose();
-		storage?.dispose();
-		themes.dispose();
+		lifetime.dispose();
 		throw error;
 	} finally {
-		container.inert = wasInert;
+		if (wasInert !== undefined) container.inert = wasInert;
 	}
+}
+
+async function readInitialUserConfiguration(files: IFileService, profile: UserDataProfileService): Promise<IConfigurationModel> {
+	using settings = new UserSettings(profile.currentProfile.settingsResource, {}, extUriBiasedIgnorePathCase, files, new NullLoggerService());
+	return (await settings.loadConfiguration()).toJSON();
+}
+
+function restoreWorkbenchFontInfo(ownerWindow: Window, storage: IStorageService, configuration: IConfigurationService, logger: ILogService): void {
+	const saved = storage.get('editorFontInfo', StorageScope.APPLICATION);
+	if (saved !== undefined) {
+		try {
+			const entries: unknown = JSON.parse(saved);
+			if (!Array.isArray(entries)) throw new TypeError('Saved editor font information must be an array');
+			FontMeasurements.restoreFontInfo(ownerWindow, entries);
+		} catch (error) {
+			storage.remove('editorFontInfo', StorageScope.APPLICATION);
+			logger.warn('editor', 'Discarded invalid saved font information', error);
+		}
+	}
+	FontMeasurements.readFontInfo(ownerWindow, createBareFontInfoFromRawSettings(
+		configuration.getValue<IEditorOptions>('editor'), PixelRatio.getInstance(ownerWindow).value,
+	));
 }
 
 /** Owns the renderer workbench, its parts, commands, and runtime layout. */
@@ -547,14 +604,11 @@ export class Workbench extends Disposable {
 		api: IWorkbenchHost,
 		extensionHost: IExtensionHostApi | undefined,
 		workbenchRoot: HTMLElement,
-		workspace: IWorkspace,
+		foundation: WorkbenchFoundation,
 		createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable,
-		initialConfiguration: IConfigurationModel | undefined,
-		userDataFileSystemProvider: IFileSystemProvider & IDisposable,
 		keyboardLayoutProvider: IKeyboardLayoutProvider | undefined,
 		userKeyboardLayoutApi: IUserKeyboardLayoutApi | undefined,
 		nativeHostApi: INativeHostApi | undefined,
-		createHostColorSchemeService: ((services: IInstantiationService) => HostColorSchemeService & IDisposable) | undefined,
 		clipboardService: IClipboardService | undefined,
 		dialogHandler: IDialogHandler | undefined,
 		userThemeService: IUserThemeServiceContract | undefined,
@@ -566,15 +620,12 @@ export class Workbench extends Disposable {
 		webWorkspaceClient: IWebWorkspaceClient | undefined,
 		themes: ExtensionColorThemeService,
 		themesReady: Promise<void>,
-		startupThemePreferences: DeferredPromise<readonly string[]>,
 		startupThemeApplied: DeferredPromise<void>,
 		editorRestoration: DeferredPromise<void>,
-		storageService: IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void>; },
-		logger: LogService,
-		createWorkingCopyBackupService: IStartWorkbenchOptions['createWorkingCopyBackupService'],
+		createWorkingCopyBackupService: IWorkbenchStartupHost['createWorkingCopyBackupService'],
 		createWindow: ((services: IInstantiationService) => IDisposable) | undefined,
-		createTextDocumentHost: ((services: IInstantiationService) => IDisposable) | undefined,
-		createBrowserHost: IStartWorkbenchOptions['createBrowserHost'],
+		createTextDocumentHost: IWorkbenchStartupHost['createTextDocumentHost'],
+		createBrowserHost: IWorkbenchStartupHost['createBrowserHost'],
 		createURLService: IStartWorkbenchOptions['createURLService'],
 		environmentService: IWorkbenchEnvironmentService,
 		serviceCollection = new ServiceCollection(),
@@ -584,9 +635,10 @@ export class Workbench extends Disposable {
 	) {
 		super();
 		performance.mark('ash.workbench.constructor-start');
-		this._register(themes);
+		const { lifetime, storage, logger: logService, files: fileService, userProfile, workspace: workspaceContext, language: languageService, colors: hostColors, theme: themeService } = foundation;
+		this._register(lifetime);
+		const workspace = workspaceContext.getWorkspace();
 		this._register(toDisposable(() => {
-			void startupThemePreferences.complete([]);
 			void startupThemeApplied.complete();
 			void editorRestoration.complete();
 		}));
@@ -633,7 +685,7 @@ export class Workbench extends Disposable {
 		const windowServices = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id !== IPolicyService));
 		const hostServices = this._register(new InstantiationService(hostPolicies));
 		const services = this._register(hostServices.createChild(windowServices));
-		services.registerInstance(IStorageService, storageService);
+		services.registerInstance(IStorageService, storage);
 		if (!services.has(ISecretStorageService)) services.registerInstance(ISecretStorageService, this._register(new BaseSecretStorageService()));
 		const extensionManagementService = this._register(new AppServerExtensionManagementService(api.extensionManagement, api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
@@ -653,7 +705,6 @@ export class Workbench extends Disposable {
 		const contextKeys = this._register(new ContextKeyService());
 		services.registerInstance(IContextKeyService, contextKeys);
 		const instantiationService = services;
-		const logService = this._register(logger);
 		this.logService = logService;
 		this.registerErrorHandler(logService);
 		services.registerInstance(ILogService, logService);
@@ -667,12 +718,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(IExtensionResourceLoaderService, enabledExtensions.resources);
 		services.registerInstance(IExtensionApi, enabledExtensions);
 		services.registerInstance(IExtensionBackendApi, api.extensionBackend);
-		const fileService = this._register(services.createInstance(FileService));
-		this._register(userDataFileSystemProvider);
-		this._register(fileService.registerProvider(Schemas.vscodeUserData, userDataFileSystemProvider));
-		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
+		services.registerInstance(IUserDataProfileService, userProfile);
 		services.registerInstance(IFileService, fileService);
-		const workspaceContext = this._register(services.createInstance(WorkspaceService, { workspace, initialConfiguration }));
 		const configuration = workspaceContext;
 		this.configurationService = configuration;
 		services.registerInstance(IConfigurationService, configuration);
@@ -788,7 +835,6 @@ export class Workbench extends Disposable {
 		const workingCopyBackups = this._register(createWorkingCopyBackupService(services, workspace.id));
 		this.workingCopyBackups = workingCopyBackups;
 		services.registerInstance(IWorkingCopyBackupService, workingCopyBackups);
-		const languageService = this._register(new LanguageService());
 		services.registerInstance(ILanguageService, languageService);
 		const languageConfigurationService = services.get(ILanguageConfigurationService);
 		const languageFeaturesService = this._register(new LanguageFeaturesService());
@@ -907,19 +953,12 @@ export class Workbench extends Disposable {
 			ownerWindow.addEventListener('beforeunload', onBeforeUnload);
 			this._register(toDisposable(() => ownerWindow.removeEventListener('beforeunload', onBeforeUnload)));
 		}
-		const storage = this._register(storageService);
 		this.workbenchWindow = workbenchWindow;
 		this.storage = storage;
 		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
-		if (nativeHostApi && !createHostColorSchemeService) { throw new Error('Desktop Workbench requires its system appearance service'); }
-		const hostColors = this._register(createHostColorSchemeService ? createHostColorSchemeService(services) : new BrowserHostColorSchemeService(this.ownerWindow));
 		services.registerInstance(IHostColorSchemeService, hostColors);
-		const themeService = this._register(services.createInstance(WorkbenchThemeService, workbenchRoot));
 		services.registerInstance(IThemeService, themeService);
 		services.registerInstance(IWorkbenchThemeService, themeService);
-		themeService.initialize();
-		// The profile theme can be shown while a newly opened folder awaits its grant.
-		void startupThemePreferences.complete(themeService.getColorThemePreferences());
 		const auxiliaryWindows = this._register(createAuxiliaryWindowService ? createAuxiliaryWindowService(ownerWindow, workbenchRoot, services) : services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot));
 		services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
 		const layoutService = this._register(services.createInstance(WorkbenchLayout, workbenchRoot, {
@@ -939,20 +978,6 @@ export class Workbench extends Disposable {
 		if (!services.has(IChatService)) services.registerSingleton(IChatService, () => services.createInstance(ChatService));
 		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
-		const savedFontInfo = storage.get('editorFontInfo', StorageScope.APPLICATION);
-		if (savedFontInfo !== undefined) {
-			try {
-				const entries: unknown = JSON.parse(savedFontInfo);
-				if (!Array.isArray(entries)) throw new TypeError('Saved editor font information must be an array');
-				FontMeasurements.restoreFontInfo(ownerWindow, entries);
-			} catch (error) {
-				storage.remove('editorFontInfo', StorageScope.APPLICATION);
-				logService.warn('editor', 'Discarded invalid saved font information', error);
-			}
-		}
-		FontMeasurements.readFontInfo(ownerWindow, createBareFontInfoFromRawSettings(
-			configuration.getValue<IEditorOptions>('editor'), PixelRatio.getInstance(ownerWindow).value,
-		));
 		const saveFontInfo = (): void => {
 			const entries = FontMeasurements.serializeFontInfo(ownerWindow);
 			if (entries !== undefined) {

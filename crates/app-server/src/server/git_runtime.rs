@@ -325,7 +325,7 @@ impl GitRuntime {
     pub(super) fn new_for_dirs(
         dirs: Vec<(String, Authorization)>,
         updates: Arc<UpdateBroker>,
-    ) -> Result<Arc<Self>, GitRuntimeError> {
+    ) -> Arc<Self> {
         let dir_order = dirs
             .iter()
             .enumerate()
@@ -338,9 +338,7 @@ impl GitRuntime {
         dirs.sort_by_key(|(_, authorization)| {
             std::cmp::Reverse(authorization.dir().canonical_path().components().count())
         });
-        let runtime = Self::new_dirs(dirs, dir_order, updates);
-        runtime.ensure_discovered()?;
-        Ok(runtime)
+        Self::new_dirs(dirs, dir_order, updates)
     }
 
     fn new_dirs(
@@ -1322,22 +1320,15 @@ impl GitRuntime {
         {
             return GitWatcher::default();
         }
-        let (ready, started) = mpsc::channel();
         let (shutdown, shutdown_rx) = tokio::sync::oneshot::channel();
         let runtime = Arc::downgrade(self);
         let cancellation = CancellationSource::new();
         let token = cancellation.token();
         let thread = std::thread::Builder::new()
             .name("ash-git-discovery".into())
-            .spawn(move || {
-                watch_repositories(runtime, config, token, shutdown_rx, watch_dirs, ready)
-            })
+            .spawn(move || watch_repositories(runtime, config, token, shutdown_rx, watch_dirs))
+            .inspect_err(|error| log::warn!("Git discovery worker could not start: {error}"))
             .ok();
-        if started.recv_timeout(Duration::from_secs(10)).is_err() {
-            // This domain remains usable for explicit queries even if its optional watcher fails.
-            log::warn!("Git discovery subscription did not become ready");
-            cancellation.cancel();
-        }
         GitWatcher {
             shutdown: Some(shutdown),
             thread,
@@ -3040,8 +3031,10 @@ fn watch_repositories(
     cancellation: CancellationToken,
     mut shutdown: tokio::sync::oneshot::Receiver<()>,
     watch_dirs: Vec<Authorization>,
-    ready: mpsc::Sender<()>,
 ) {
+    if cancellation.is_cancelled() {
+        return;
+    }
     let Some(runtime) = runtime.upgrade() else {
         return;
     };
@@ -3072,15 +3065,18 @@ fn watch_repositories(
     };
     let (subscriber, receiver) = watcher.add_subscriber();
     let mut paths = runtime.discovery_paths(&watch_dirs);
-    let Ok(mut registration) = subscriber.register_paths(paths.clone()) else {
-        return;
+    let mut registration = match subscriber.register_paths(paths.clone()) {
+        Ok(registration) => registration,
+        Err(error) => {
+            log::warn!("Git discovery subscription failed: {error}");
+            return;
+        }
     };
     let mut receiver = DebouncedWatchReceiver::new(receiver, GIT_WATCH_INTERVAL);
     let mut children = HashMap::<String, (Arc<GitRepositoryRuntime>, GitWatcher)>::new();
     let mut registry_changes = runtime.registry_changed.subscribe();
-    // With the root subscription armed, discover repositories and install child
-    // watches on this worker while the Directory becomes available to clients.
-    let _ = ready.send(());
+    // Arm the root subscription before the initial scan, so Git changes during
+    // startup are reconciled without holding up authorized file operations.
     enum DiscoveryWake {
         RegistryChanged,
         Files(FileWatcherEvent),

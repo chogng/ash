@@ -41,7 +41,9 @@ async function holdFullInitialization(page: Page): Promise<() => Promise<void>> 
 		requestHeld: 'ashReleaseFullInitialize' in window,
 		transportReady: performance.getEntriesByName('ash.appServer.protocol-negotiated').length > 0,
 		startupCommandsReady: performance.getEntriesByName('ash.desktop.startup-commands-ready').length > 0,
-	})), { timeout: 15_000 }).toEqual({ requestHeld: true, transportReady: true, startupCommandsReady: true });
+		profileReady: performance.getEntriesByName('ash.workbench.profile-ready').length > 0,
+		workbenchAttached: performance.getEntriesByName('ash.workbench.constructor-start').length > 0,
+	})), { timeout: 15_000 }).toEqual({ requestHeld: true, transportReady: true, startupCommandsReady: true, profileReady: true, workbenchAttached: false });
 	return () => page.evaluate(() => (window as unknown as { ashReleaseFullInitialize(): void; }).ashReleaseFullInitialize());
 }
 

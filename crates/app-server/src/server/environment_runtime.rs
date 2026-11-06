@@ -2002,21 +2002,10 @@ impl AppServer {
             .iter()
             .filter_map(|(_, grant)| grant.authorize(Permission::WatchFiles).ok())
             .collect::<Vec<_>>();
-        let git = if git_dirs.is_empty() {
-            None
-        } else {
-            Some(
-                GitRuntime::new_for_dirs(git_dirs, Arc::clone(&self.updates)).map_err(|error| {
-                    EnvRuntimeError::Failed(format!(
-                        "failed to initialize multi-root Git runtime: {error:?}"
-                    ))
-                })?,
-            )
-        };
-        let watcher = git
-            .as_ref()
-            .filter(|_| !watch_dirs.is_empty())
-            .map(|git| git.start_watching(self.config.clone(), watch_dirs));
+        // Git requests discover repositories on demand. Binding file routes only
+        // needs the authorized roots and can start discovery after preparation.
+        let git = (!git_dirs.is_empty())
+            .then(|| GitRuntime::new_for_dirs(git_dirs, Arc::clone(&self.updates)));
         let primary_id = primary_id.clone();
         let primary = primary.clone();
         let dirs = dirs.into_iter().collect::<BTreeMap<_, _>>();
@@ -2162,6 +2151,10 @@ impl AppServer {
             );
         }
         directories.extend(retained);
+        let watcher = git
+            .as_ref()
+            .filter(|_| !watch_dirs.is_empty())
+            .map(|git| git.start_watching(self.config.clone(), watch_dirs));
         let (previous_watcher, previous_directories) = {
             let mut runtime = self
                 .env_runtime

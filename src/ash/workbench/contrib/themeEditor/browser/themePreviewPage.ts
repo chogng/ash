@@ -283,7 +283,10 @@ const workbench = resources.add(
 	await startWorkbench({
 		productName: 'Ash',
 		container: root,
-		api,
+		host: {
+			api,
+			createWorkingCopyBackupService: (_services, workspaceId) => new InMemoryWorkingCopyBackupService(workspaceId),
+		},
 		serviceCollection,
 		viewConstructors: new Map([[TERMINAL_VIEW_ID, new SyncDescriptor(TerminalPreviewPane)]]),
 		extensionHost: api.extensionHost,
@@ -329,7 +332,6 @@ const workbench = resources.add(
 		clipboardService: clipboard,
 		createStorageService: async () => storage,
 		createUserDataFileSystemProvider: async () => new InMemoryFileSystemProvider(),
-		createWorkingCopyBackupService: (_services, workspaceId) => new InMemoryWorkingCopyBackupService(workspaceId),
 		createLogService: () => new LogService({ sinks: [new ConsoleLogSink()] }),
 		createLifecycleService: host.createLifecycleService,
 		createContextMenuService: scope => scope.createInstance(BrowserContextMenuService),

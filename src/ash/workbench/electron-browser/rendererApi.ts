@@ -41,7 +41,7 @@ import { AppServerMemoryDiagnosticsService } from '../../platform/memory/browser
 import type { MemoryObservation } from '../../platform/memory/common/memoryDiagnosticsService.js';
 import { LocalAgentHostServiceClient } from '../../platform/agentHost/electron-browser/localAgentHostService.js';
 import { WorkbenchAgentHostService } from '../services/agentHost/electron-browser/agentHostService.js';
-import { createRendererHost, type RendererCapabilityContribution } from '../browser/webRendererApi.js';
+import type { RendererCapabilityContribution } from '../browser/webRendererApi.js';
 import { ElectronRendererClipboardService } from '../../platform/clipboard/electron-browser/electronRendererClipboardService.js';
 import { createDisconnectedRendererApi } from '../browser/rendererApi.js';
 import { AppServerAutomationService } from '../../platform/automations/browser/appServerAutomationService.js';
@@ -83,6 +83,8 @@ export interface AshElectronRendererApi extends IWorkbenchHost {
 	readonly localFiles: IFileSystemProvider;
 	readonly userDataHome: URI;
 	readonly workspace: IWorkspaceContextApi;
+	/** Settles once the initial binding is queued, needs a visible prompt, or has ended. */
+	readonly workspaceStartupScheduled: Promise<void>;
 	/** Settles after the first directory binding, including a declined startup prompt. */
 	readonly workspaceDirectoriesReady: Promise<void>;
 	readonly startWorkspaceDirectories: () => void;
@@ -144,18 +146,32 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		const localClient = localConnection.client;
 
 		performance.mark('ash.rendererApi.connect-start');
-		const [enabled, [userDataHome, localUserHome]] = await Promise.all([agentHost.connect(), local.paths]);
+		// Connect while the Workbench domain adapters load. The wire handshake only
+		// needs the connection services above.
+		const [enabled, [userDataHome, localUserHome], { createRendererHost }] = await Promise.all([
+			agentHost.connect(), local.paths, import('../browser/webRendererApi.js'),
+		]);
 		const connection = agentHost.connection;
 		const client = agentHost.client;
 		let backend: IWorkbenchHost;
 		const workspaceChanges = resources.add(new Emitter<void>());
 		const workspaceWindowReady = new DeferredPromise<void>();
-		resources.add(toDisposable(() => { void workspaceWindowReady.complete(); }));
+		const workspaceStartupScheduled = new DeferredPromise<void>();
+		const finishWorkspaceScheduling = (): void => {
+			if (workspaceStartupScheduled.isSettled) return;
+			performance.mark('ash.rendererApi.workspace-startup-scheduled');
+			void workspaceStartupScheduled.complete();
+		};
+		resources.add(toDisposable(() => {
+			void workspaceWindowReady.complete();
+			void workspaceStartupScheduled.complete();
+		}));
 		// Previously authorized folders can bind while the Workbench is being
 		// restored. Only a new permission prompt needs the window to be ready.
 		const startupTrust: IDirectoryPermissionRequestService = {
 			requiresDevelopmentTrust: workspaceTrust.requiresDevelopmentTrust,
 			async requestDirectoryPermissions(request, signal) {
+				finishWorkspaceScheduling();
 				await (signal ? raceCancellationError(workspaceWindowReady.p, signal) : workspaceWindowReady.p);
 				if (resources.isDisposed) throw new CancellationError();
 				return workspaceTrust.requestDirectoryPermissions(request, signal);
@@ -191,7 +207,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 					remoteHostLabel = remoteConnection.authority;
 				}
 				if (resources.isDisposed) throw new CancellationError();
-				return trackWorkspaceInitialization(initializeWorkspace(client, startupTrust, backend.workspaceTrust, workspaceApi, { remoteHostLabel }));
+				return trackWorkspaceInitialization(initializeWorkspace(client, startupTrust, backend.workspaceTrust, workspaceApi, { remoteHostLabel, onBindingQueued: finishWorkspaceScheduling }));
 			}
 			return workspaceInitialization.promise;
 		};
@@ -278,6 +294,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				if (!isCancellationError(error)) throw error;
 			});
 			void workspaceDirectoriesReady.catch(() => undefined);
+			void workspaceDirectoriesReady.then(finishWorkspaceScheduling, finishWorkspaceScheduling);
 			// The selected execution host needs its roots after a runtime replacement,
 			// including SSH and extension hosts; local device recovery is independent.
 			resources.add(connection.onDidReconnect(() => {
@@ -288,6 +305,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		} else {
 			// Desktop supports server features even when the UI development host starts disconnected.
 			backend = createDisconnectedRendererApi(true);
+			finishWorkspaceScheduling();
 		}
 
 		const agentHosts = hostCapabilities.agentHosts ? resources.add(connectionServices.createInstance(RemoteAgentHostService, {
@@ -340,6 +358,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			userDataHome,
 			localUserHome,
 			workspace: workspaceApi,
+			workspaceStartupScheduled: workspaceStartupScheduled.p,
 			workspaceDirectoriesReady,
 			startWorkspaceDirectories: () => { void workspaceWindowReady.complete(); },
 			reloadWorkspaceDirectories: async () => { if (enabled) await restoreWorkspace(false, true); },
