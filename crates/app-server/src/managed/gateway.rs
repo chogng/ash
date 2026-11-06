@@ -702,6 +702,7 @@ pub(super) fn serve<R: BufRead, W: Write + Send>(
                             let target = LocalTarget::start(
                                 scope,
                                 Arc::clone(&registry),
+                                Arc::clone(&profile.server),
                                 root.clone(),
                                 initialize.clone(),
                                 Arc::clone(&ide_attachment),
@@ -1351,7 +1352,10 @@ fn selected_execution_target(
     }
     if method == Some("session/request")
         && let Some(params) = params
-        && params["request"]["type"] == "changeDirectory"
+        && matches!(
+            params["request"]["type"].as_str(),
+            Some("changeDirectory" | "clearDirectory")
+        )
     {
         let session_id = SessionId::new(
             params["sessionId"]
@@ -1367,6 +1371,10 @@ fn selected_execution_target(
             Some(SessionExecutionTarget::Ssh { .. } | SessionExecutionTarget::Provider { .. })
         ) {
             return Err("Changing directories requires a local Session".into());
+        }
+        if params["request"]["type"] == "clearDirectory" {
+            // Let the current owner settle directory history before it releases the binding.
+            return Ok(session.execution_target);
         }
         let root = PathBuf::from(
             params["request"]["root"]

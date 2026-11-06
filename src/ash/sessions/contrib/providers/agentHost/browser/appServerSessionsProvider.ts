@@ -290,9 +290,16 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 		return this.sessionApi.canChangeDirectory?.() === true;
 	}
 
-	async changeDirectory(sessionId: SessionId, root: string, commandId: string): Promise<void> {
+	canClearDirectory(): boolean {
+		return this.sessionApi.canClearDirectory?.() === true;
+	}
+
+	async changeDirectory(sessionId: SessionId, root: string | null, commandId: string, signal?: AbortSignal): Promise<void> {
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
+		if (root !== null && !await this.authorizeWorkspace({ type: 'local', root }, signal ?? new AbortController().signal)) throw canceled();
+		if (signal?.aborted) throw canceled();
+		this.assertCurrentConnection(generation, epoch);
 		await this.sessionApi.changeDirectory!({ sessionId, root, commandId });
 		this.assertCurrentConnection(generation, epoch);
 	}

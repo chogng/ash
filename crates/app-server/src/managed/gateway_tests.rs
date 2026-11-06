@@ -207,6 +207,30 @@ fn saved_session_switches_directory_and_keeps_its_previous_working_copy() {
         std::fs::read_to_string(old_copy.join("from-old.txt")).unwrap(),
         "keep my changes"
     );
+    let clear = serde_json::json!({
+        "jsonrpc":"2.0","id":7,"method":"session/request","params":{
+            "sessionId":id,"commandId":"clear-directory","request":{"type":"clearDirectory"}
+        }
+    });
+    assert!(matches!(
+        selected_execution_target(&restarted, &remotes, &clear).unwrap(),
+        Some(SessionExecutionTarget::Local { .. })
+    ));
+    let cleared = crate::tests::call(&original, &mut connection, clear.clone());
+    assert_eq!(
+        cleared["result"]["value"]["session"]["sessionId"], id,
+        "{cleared}"
+    );
+    original.release_switched_session_directory(&session_id);
+    assert_eq!(
+        selected_execution_target(&restarted, &remotes, &clear).unwrap(),
+        None
+    );
+    let profile = restarted.server_for(options(None)).unwrap();
+    let mut profile_connection = initialize(&profile);
+    let retried = crate::tests::call(&profile, &mut profile_connection, clear);
+    assert_eq!(retried["result"]["value"], cleared["result"]["value"]);
+    profile.close_connection(profile_connection);
     original.close_connection(connection);
 }
 

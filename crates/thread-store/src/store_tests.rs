@@ -61,6 +61,7 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
                 forked_from_id: None,
                 status: ThreadStatus::Active,
             },
+            directory_configured: false,
             execution_target: None,
             sequence: event_sequence,
             manager: SessionManagerInfo::default(),

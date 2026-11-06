@@ -55,7 +55,8 @@ export interface ISessionsManagementService {
 	renameSession(sessionId: SessionId, title: string): Promise<void>;
 	getChatMoveDestinations?(sessionId: SessionId, threadId: ThreadId): readonly ISession[];
 	canChangeDirectory?(sessionId: SessionId): boolean;
-	changeDirectory?(sessionId: SessionId, root: string): Promise<void>;
+	canClearDirectory?(sessionId: SessionId): boolean;
+	changeDirectory?(sessionId: SessionId, root: string | null, signal?: AbortSignal): Promise<void>;
 	moveChat?(sessionId: SessionId, threadId: ThreadId, destination: SessionId): Promise<void>;
 	setModel(model: ModelRef): Promise<void>;
 }

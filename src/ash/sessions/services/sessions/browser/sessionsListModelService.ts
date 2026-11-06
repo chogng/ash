@@ -47,7 +47,7 @@ export interface ISessionsListModelService {
 	unpinSession(session: SessionListIdentity): void;
 	getRowIcon(rowId: string): string | undefined;
 	setRowIcon(rowId: string, iconId: string | undefined): void;
-	registerTree(mode: SessionsListMode, read: () => readonly ISessionsListTreeNode[]): IDisposable;
+	registerTree(mode: SessionsListMode | 'shared', read: () => readonly ISessionsListTreeNode[]): IDisposable;
 	readTree(mode: SessionsListMode): readonly ISessionsListTreeNode[] | undefined;
 }
 
@@ -67,9 +67,9 @@ const rowIconPrefix = 'sessions.list.rowIcon.';
 /** Owns profile-local list filters, pins, and manual row order. */
 export class SessionsListModelService implements ISessionsListModelService {
 	readonly onDidChange: Event<void>;
-	private readonly trees = new Map<SessionsListMode, () => readonly ISessionsListTreeNode[]>();
+	private readonly trees = new Map<SessionsListMode | 'shared', () => readonly ISessionsListTreeNode[]>();
 
-	registerTree(mode: SessionsListMode, read: () => readonly ISessionsListTreeNode[]): IDisposable {
+	registerTree(mode: SessionsListMode | 'shared', read: () => readonly ISessionsListTreeNode[]): IDisposable {
 		this.trees.set(mode, read);
 		return toDisposable(() => {
 			if (this.trees.get(mode) === read) this.trees.delete(mode);
@@ -77,7 +77,7 @@ export class SessionsListModelService implements ISessionsListModelService {
 	}
 
 	readTree(mode: SessionsListMode): readonly ISessionsListTreeNode[] | undefined {
-		return this.trees.get(mode)?.();
+		return (this.trees.get('shared') ?? this.trees.get(mode))?.();
 	}
 
 	constructor(@IStorageService private readonly storage: IStorageService) {
@@ -93,6 +93,7 @@ export class SessionsListModelService implements ISessionsListModelService {
 	}
 
 	getSort(mode: SessionsListMode): { readonly field: SessionSortMode; readonly direction: SessionSortDirection; } {
+		mode = this.trees.has('shared') ? 'code' : mode;
 		const value = this.storage.get(`${sortModeKey}.${mode}`, StorageScope.PROFILE);
 		const field = value === 'created' || value === 'name' ? value : 'updated';
 		const direction = this.storage.get(`${sortDirectionKey}.${mode}`, StorageScope.PROFILE);
@@ -103,10 +104,12 @@ export class SessionsListModelService implements ISessionsListModelService {
 	}
 
 	setSortMode(mode: SessionsListMode, field: SessionSortMode): void {
+		mode = this.trees.has('shared') ? 'code' : mode;
 		this.storage.store(`${sortModeKey}.${mode}`, field, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
 	setSortDirection(mode: SessionsListMode, direction: SessionSortDirection): void {
+		mode = this.trees.has('shared') ? 'code' : mode;
 		this.storage.store(`${sortDirectionKey}.${mode}`, direction, StorageScope.PROFILE, StorageTarget.USER);
 	}
 

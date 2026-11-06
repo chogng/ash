@@ -944,10 +944,10 @@ test('Fork and edit dispatch existing typed session operations and keep their re
 	await assert.rejects(service.rewrite({ ...base, beforeTurnId: 'turn', input: [{ type: 'text', text: 'Edited' }] }), /different conversation/);
 });
 
-test('A saved directory change uses the existing Session identity and typed request', async () => {
+test('Binding and clearing a directory use the same Session identity', async () => {
 	const requests: unknown[] = [];
 	const connection = {
-		capabilities: { contracts: { changeSessionDirectory: { version: 1 } } },
+		capabilities: { contracts: { changeSessionDirectory: { version: 1 }, clearSessionDirectory: { version: 1 } } },
 		async request(definition: { method: string; }, params: unknown) {
 			requests.push({ method: definition.method, params });
 			return { type: 'session', value: { session: { sessionId: 'saved' } } };
@@ -955,9 +955,16 @@ test('A saved directory change uses the existing Session identity and typed requ
 	} as unknown as AppServerProtocolClient;
 	const service = createAppServerAgentSessionService(connection);
 	assert.equal(service.canChangeDirectory?.(), true);
-	assert.equal(createAppServerAgentSessionService(connection, 'remote').canChangeDirectory?.(), false);
+	assert.equal(service.canClearDirectory?.(), true);
+	const remote = createAppServerAgentSessionService(connection, 'remote');
+	assert.equal(remote.canChangeDirectory?.(), false);
+	assert.equal(remote.canClearDirectory?.(), false);
 	await service.changeDirectory!({ sessionId: 'saved', commandId: 'change', root: '/new' });
-	assert.deepEqual(requests, [{ method: 'session/request', params: { sessionId: 'saved', commandId: 'change', request: { type: 'changeDirectory', root: '/new' } } }]);
+	await service.changeDirectory!({ sessionId: 'saved', commandId: 'clear', root: null });
+	assert.deepEqual(requests, [
+		{ method: 'session/request', params: { sessionId: 'saved', commandId: 'change', request: { type: 'changeDirectory', root: '/new' } } },
+		{ method: 'session/request', params: { sessionId: 'saved', commandId: 'clear', request: { type: 'clearDirectory' } } },
+	]);
 });
 
 test('Moving a conversation checks both the destination and the original Thread identity', async () => {

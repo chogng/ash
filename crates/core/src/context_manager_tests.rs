@@ -68,6 +68,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
         surface: None,
         voice_transcripts: Vec::new(),
         execution_target: None,
+        directory_configured: false,
         advisor: Default::default(),
         user_time_contexts: Default::default(),
         history_sources: Default::default(),

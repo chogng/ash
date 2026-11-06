@@ -9,14 +9,18 @@ import { SessionsViewRegistry } from '../../../../common/views.js';
 import { localize } from '../../../../../nls.js';
 import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
 import { SessionsList, type SessionsListPresentation } from './sessionsList.js';
-import { SessionsCatalogList, type SessionsCatalogAccessibility, type SessionsCatalogListInput } from './sessionsCatalogList.js';
+import type { SessionsCatalogAccessibility, SessionsCatalogListInput } from './sessionsCatalogList.js';
+import { CHAT_WORKSPACE_NAVIGATION_ID } from '../../../chat/common/constants.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 
 export const SESSIONS_NAVIGATION_CONTAINER_ID = 'sessions.navigation.chats';
 export const CODE_NAVIGATION_CONTAINER_ID = 'sessions.navigation.code';
 
 export function registerSessionsNavigation(): IDisposable {
+	if (SessionsViewRegistry.getViewContainers(ViewContainerLocation.Sidebar).some(container => container.id === CHAT_WORKSPACE_NAVIGATION_ID)) {
+		return Disposable.None;
+	}
 	const registrations = new DisposableStore();
 	for (const [id, title, key, ctorDescriptor] of [
 		[SESSIONS_NAVIGATION_CONTAINER_ID, localize('sessions.activity.chat', 'Chat'), 'sessions.activity.chat', new SyncDescriptor(SessionsView, ['chat'])],
@@ -39,7 +43,6 @@ interface SessionsCatalogPresentation {
 
 export class SessionsView extends ViewPane {
 	private list?: SessionsList;
-	private readonly catalogList?: SessionsCatalogList;
 	private hiddenListState: ReturnType<SessionsList['getViewState']> | undefined;
 	private readonly embedded: boolean;
 	private readonly restoreListState?: AnimationFrameScheduler;
@@ -51,10 +54,8 @@ export class SessionsView extends ViewPane {
 		this.contentElement.classList.toggle('embedded', embedded);
 		if (typeof presentation !== 'string' && 'input' in presentation) {
 			const input = this._register(instantiation.createInstance(presentation.input));
-			const list = this.catalogList = this._register(instantiation.createInstance(SessionsCatalogList, this.contentElement, input, presentation.accessibility));
-			this._register(this.onDidChangeBodyVisibility(visible => list.setVisible(visible)));
 			input.attach(getWindow(this.element), () => this.isBodyVisible());
-			return;
+			presentation = { catalog: input, accessibility: presentation.accessibility };
 		}
 		const title = localize({ bundle: 'ash.sessions', key: 'sessions.list.header' }, 'Sessions');
 		const lists = SessionsList.instantiateObservable(instantiation, this._store, h(this.contentElement.ownerDocument, 'div'), title, presentation);
@@ -127,5 +128,5 @@ export class SessionsView extends ViewPane {
 			this.restoreListState?.schedule();
 		}
 	}
-	public focus(): void { (this.list ?? this.catalogList)?.focus(); }
+	public focus(): void { this.list?.focus(); }
 }

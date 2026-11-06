@@ -55,7 +55,7 @@ export interface ReplyChatEditorOptions {
 	readonly persistentDraftScope?: string;
 	readonly useWorkbenchModelManagement?: true;
 	readonly advanceWelcomePhrase?: false;
-	readonly createDraftPicker?: (instantiation: IInstantiationService, footer: HTMLElement, visible: IObservable<boolean>) => IDisposable;
+	readonly createDraftPicker?: (instantiation: IInstantiationService, footer: HTMLElement, visible: IObservable<boolean>, model: IReplyChatEditorModel) => IDisposable;
 	readonly accessibility: {
 		readonly focusContext: string;
 		readonly verbositySetting: AccessibilityVerbositySettingId;
@@ -159,7 +159,7 @@ export class ReplyChatEditor extends EditorPane {
 						useWorkbenchModelManagement: this.options.useWorkbenchModelManagement === true,
 						chatModelSlider: true, configureModelInMenu: true,
 						renderSecondaryToolbar: false, draftStorage: 'host',
-						renderLeadingFooter: createDraftPicker && ((footer: HTMLElement) => createDraftPicker(instantiation, footer, this.shown)),
+						renderLeadingFooter: createDraftPicker && ((footer: HTMLElement) => createDraftPicker(instantiation, footer, this.shown, model)),
 						inputLabel: this.options.inputLabel(),
 					});
 					const draftScope = this.options.persistentDraftScope;

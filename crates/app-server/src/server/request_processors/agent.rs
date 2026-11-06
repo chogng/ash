@@ -166,7 +166,7 @@ pub(super) trait AgentRequestProcessorContext: Send + Sync {
     fn change_session_directory_request(
         &self,
         mutation: SessionMutation,
-        root: std::path::PathBuf,
+        root: Option<std::path::PathBuf>,
     ) -> Result<ash_app_server_protocol::protocol::session::SessionResult, RpcError>;
     fn archive_session_request(
         &self,
@@ -736,10 +736,15 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     thread_id,
                 }))
             }
-            SessionRequest::ChangeDirectory { root } => {
+            request @ (SessionRequest::ChangeDirectory { .. } | SessionRequest::ClearDirectory) => {
                 if !connection.allows_product_host_capabilities() {
                     return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
                 }
+                let root = if let SessionRequest::ChangeDirectory { root } = request {
+                    Some(root)
+                } else {
+                    None
+                };
                 result(&SessionRequestResult::Session(
                     self.context
                         .change_session_directory_request(mutation, root)?,

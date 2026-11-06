@@ -176,7 +176,12 @@ impl AppServer {
         };
         capabilities.advertise_contracts();
         if capabilities.threads {
-            for contract in ["sideChats", "moveThreadToSession", "changeSessionDirectory"] {
+            for contract in [
+                "sideChats",
+                "moveThreadToSession",
+                "changeSessionDirectory",
+                "clearSessionDirectory",
+            ] {
                 capabilities.contracts.insert(
                     contract.into(),
                     ash_app_server_protocol::protocol::initialize::CapabilityContract {

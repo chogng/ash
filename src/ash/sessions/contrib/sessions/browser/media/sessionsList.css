@@ -541,6 +541,12 @@
 	pointer-events: auto;
 }
 
+.ash-menu
+	.ash-action-view-item
+	> .ash-button.ash-chat-navigation-delete-action {
+	color: var(--ash-error-foreground);
+}
+
 @media (forced-colors: active) {
 	.ash-sessions-list[data-mode="code"]
 		.ash-sessions-list-row.selected

@@ -294,6 +294,7 @@ pub enum SessionRequest {
     ChangeDirectory {
         root: std::path::PathBuf,
     },
+    ClearDirectory,
     /// Copies the selected Thread history into an independent Session without subscribing to it.
     ForkSession {
         parent_thread_id: ThreadId,

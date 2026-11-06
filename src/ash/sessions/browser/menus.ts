@@ -2,7 +2,6 @@ import { MenuId } from '../../platform/actions/common/actions.js';
 
 export const Menus = {
 	ActivityBar: new MenuId('SessionsActivityBar'),
-	CodeActivityBar: new MenuId('SessionsCodeActivityBar'),
 	ActivityBarContext: new MenuId('SessionsActivityBarContext'),
 	CustomViewAutomations: new MenuId('CustomViewAutomations'),
 	CustomViewCanvas: new MenuId('CustomViewCanvas'),
@@ -10,8 +9,6 @@ export const Menus = {
 	SidebarSessionsHeader: new MenuId('SidebarSessionsHeader'),
 	SessionsViewFilter: new MenuId('SessionsViewPaneFilterSubMenu'),
 	NewSessionChatInputToolbar: new MenuId('NewSessionChatInputToolbar'),
-	ChatSidebarHeader: new MenuId('ChatSidebarHeader'),
-	SessionsViewSort: new MenuId('SessionsViewSort'),
 	MenubarMainMenu: new MenuId('SessionsMenubarMainMenu'),
 	MenubarFileMenu: new MenuId('SessionsMenubarFileMenu'),
 	TitleBarLeftLayout: new MenuId('SessionsTitleBarLeftLayout'),

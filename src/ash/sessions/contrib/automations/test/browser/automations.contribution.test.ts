@@ -585,7 +585,7 @@ test('Automations entry opens a Custom View and never registers a Panel in eithe
 		using commands = new CommandService(value.services);
 		value.services.registerInstance(ICommandService, commands);
 		const menus = new MenuService(commands, contexts);
-		const navigation = () => menus.getMenuActions(Menus.CodeActivityBar).flatMap(([, actions]) => actions).filter(action => action.id === 'sessionsView.manageAutomations');
+		const navigation = () => menus.getMenuActions(Menus.ActivityBar).find(([group]) => group === 'more')?.[1].filter(action => action.id === 'sessionsView.manageAutomations') ?? [];
 		const host = value.resources.add(WorkbenchContributionsRegistry.createHost(value.services, error => { throw error; }, ['sessions.contrib.automationsCustomView']));
 		host.advance(WorkbenchPhase.BlockStartup);
 		assert.equal(custom.activeCustomView.get(), undefined);

@@ -44,7 +44,7 @@ pub enum ThreadCommand {
         destination_session_id: crate::SessionId,
     },
     ChangeDirectory {
-        root: std::path::PathBuf,
+        root: Option<std::path::PathBuf>,
     },
     StartTurn {
         /// Frozen in the command receipt; older journals use the summary policy.

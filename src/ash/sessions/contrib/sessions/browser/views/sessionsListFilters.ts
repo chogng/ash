@@ -15,7 +15,7 @@ export function getSessionsListEntries(catalog: readonly ISession[], model: ISes
 		.map(entry => entry.session);
 }
 
-function sessionSortTime(session: ISession, mode: Exclude<SessionSortMode, 'name'>): number {
+export function sessionSortTime(session: ISession, mode: Exclude<SessionSortMode, 'name'>): number {
 	if (mode === 'created') {
 		return (session.chats.find(chat => chat.origin.type === 'root') ?? session.chats[0])?.createdAt?.getTime() ?? 0;
 	}

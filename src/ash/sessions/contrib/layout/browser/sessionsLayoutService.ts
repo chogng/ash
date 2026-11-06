@@ -23,6 +23,7 @@ import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js
 import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../services/layout/common/sessionsLayoutService.js';
 import { CODE_NAVIGATION_CONTAINER_ID, SESSIONS_NAVIGATION_CONTAINER_ID } from '../../sessions/browser/views/sessionsView.js';
+import { CHAT_WORKSPACE_NAVIGATION_ID } from '../../chat/common/constants.js';
 import { NewSessionDraftVisibleContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
@@ -206,10 +207,15 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 					entry = { ...entry, workspaceMode: retainedMode === 'code' ? 'code' : 'chat' };
 				}
 				const sameWorkspace = previousEntry && (previousEntry.workspaceMode ?? 'chat') === (entry.workspaceMode ?? 'chat');
-				const sidebarContainerId = entry.sidebarContainerId
+				const defaultNavigation = this.viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id;
+				const unifiedNavigation = defaultNavigation === CHAT_WORKSPACE_NAVIGATION_ID ? defaultNavigation : undefined;
+				const sidebarContainerId = (entry.sidebarContainerId === CODE_NAVIGATION_CONTAINER_ID || entry.sidebarContainerId === SESSIONS_NAVIGATION_CONTAINER_ID
+					? unifiedNavigation ?? entry.sidebarContainerId
+					: entry.sidebarContainerId)
+					?? (sharedWorkspace ? unifiedNavigation : undefined)
 					?? (sameWorkspace ? this.views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id : undefined)
 					?? (sharedWorkspace && entry.workspaceMode === 'code' ? CODE_NAVIGATION_CONTAINER_ID : undefined)
-					?? this.viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id
+					?? defaultNavigation
 					?? SESSIONS_NAVIGATION_CONTAINER_ID;
 				this.activeEntry.set(entry, undefined);
 				const productEditor = entry.content === 'editor';

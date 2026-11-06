@@ -39,7 +39,7 @@ CommandsRegistry.register('sessions.show.projects', (accessor, source) =>
 		.openEntry(
 			{
 				id: 'projects',
-				workspaceMode: 'chat',
+				workspaceMode: 'current',
 				activityContext: 'sessions.activity.projectsSelected',
 				content: 'editor',
 				sidebarContainerId: SessionsViewRegistry.getViewContainer(CHAT_WORKSPACE_NAVIGATION_ID)?.id,

@@ -73,7 +73,7 @@ suite('sessions browser component', () => {
 			else { await expect(item).toHaveCSS('width', `${itemWidth}px`); }
 			await expect(item).toHaveCSS('height', `${itemHeight}px`);
 		}
-		await expect(icons).toHaveCount(horizontal || labeled ? 5 : 6);
+		await expect(icons).toHaveCount(horizontal ? 7 : labeled ? 6 : 8);
 		const accounts = navigation.page().getByRole('button', { name: 'Accounts', exact: true });
 		await expect(accounts).toHaveCount(1);
 		const titlebarAccounts = navigation.page().locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });
@@ -304,7 +304,8 @@ suite('sessions browser component', () => {
 		await expect(conversation).toHaveCSS('background-color', transparent);
 		const rowBounds = (await row.boundingBox())!;
 		const treeBounds = (await tree.boundingBox())!;
-		expect(rowBounds.x + rowBounds.width).toBeCloseTo(treeBounds.x + treeBounds.width);
+		const trailingInset = await row.evaluate(element => parseFloat(getComputedStyle(element).marginInlineEnd));
+		expect(rowBounds.x + rowBounds.width + trailingInset).toBeCloseTo(treeBounds.x + treeBounds.width);
 		await row.click({ position: { x: 2, y: 16 } });
 		await expect(row).not.toHaveCSS('background-color', transparent);
 		await conversation.click();
@@ -335,7 +336,11 @@ suite('sessions browser component', () => {
 		await expect(activityNavigation.locator('.ash-sessions-navigation button .ash-icon').first()).toHaveAttribute('data-ash-icon-id', 'add');
 		const more = activityNavigation.getByRole('button', { name: 'More', exact: true });
 		const collaboration = page.getByRole('menuitemradio', { name: 'Collab', exact: true });
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		const codeMode = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
+		const buttons = activityNavigation.locator('.ash-sessions-navigation button');
+		const sharedNavigation = await buttons.allTextContents();
+		await codeMode.click();
+		await expect(buttons).toHaveText(sharedNavigation);
 		const projects = activityNavigation.getByRole('button', { name: 'Projects' });
 		const chat = activityNavigation.getByRole('button', { name: 'New' });
 		await more.press('Enter');
@@ -357,13 +362,16 @@ suite('sessions browser component', () => {
 		await expect(page.locator('.ash-sessions-list:visible')).toBeHidden();
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
+		await projects.click();
+		await expect(page.locator('.ash-projects')).toBeVisible();
+		await expect(codeMode).toHaveAttribute('aria-pressed', 'true');
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 		await expect(projects.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'projects');
 		await projects.click();
 		await expect(activityNavigation.locator('[data-action-id="sessions.open.projects"] button')).toHaveAttribute('aria-current', 'page');
 		await expect(activityNavigation).toBeVisible();
 		await expect(activityBar).toHaveCount(0);
-		await expect(more).toHaveCount(0);
+		await expect(more).toBeVisible();
 		await expect(page.locator('.ash-window-mode-control')).toBeVisible();
 		await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
 		await expect(activityNavigation).toBeHidden();
@@ -381,7 +389,7 @@ suite('sessions browser component', () => {
 		await page.keyboard.insertText('Navigation draft');
 		await expect(chat).not.toHaveAttribute('aria-current');
 		const selectedBackground = Color.Format.CSS.formatRGB(lightColorTheme.getColor(menuHoverBackground)!);
-		await expect(page.locator('.ash-sessions-list-item[aria-current="page"]').first()).toHaveCSS('background-color', selectedBackground);
+		await expect(page.locator('.ash-sessions-list-row.selected:has(> .ash-sessions-list-item[aria-current="page"])').first()).toHaveCSS('background-color', selectedBackground);
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 			await chat.click();

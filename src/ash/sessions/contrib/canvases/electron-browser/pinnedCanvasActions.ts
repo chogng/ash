@@ -91,9 +91,7 @@ export function registerPinnedCanvasSidebar(pins: IPinnedCanvasService, notifica
 				try { await operation(accessor); } catch (error) { notifications.error(String(error)); }
 			};
 			items.add(CommandsRegistry.register(id, invoke(() => pins.show(pin))));
-			for (const menuId of [Menus.ActivityBar, Menus.CodeActivityBar]) {
-				items.add(MenusRegistry.appendMenuItem(menuId, { command: { id, title: labels[index]!, icon: Lxicon.preview, toggled: selected === pin ? ContextKeyExpr.true() : ContextKeyExpr.false() }, group: 'navigation', order: 50 + index }));
-			}
+			items.add(MenusRegistry.appendMenuItem(Menus.ActivityBar, { command: { id, title: labels[index]!, icon: Lxicon.preview, toggled: selected === pin ? ContextKeyExpr.true() : ContextKeyExpr.false() }, group: 'navigation', order: 50 + index }));
 			for (const action of headerActions) {
 				const command = id + '.' + action.id.slice(action.id.lastIndexOf('.') + 1);
 				items.add(CommandsRegistry.register(command, invoke(accessor => runPinnedAction(accessor, action, pin))));

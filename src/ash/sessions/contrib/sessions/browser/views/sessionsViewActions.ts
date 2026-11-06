@@ -50,7 +50,7 @@ registerAction2(class ManageAutomationsAction extends Action2 {
 			icon: Lxicon.clockface,
 			precondition: ContextKeyExpr.has('sessions.automationsAvailable'),
 			toggled: ContextKeyExpr.has('sessions.activity.automationsSelected'),
-			menu: { id: Menus.CodeActivityBar, group: 'navigation', order: 20, when: ContextKeyExpr.has('sessions.automationsAvailable') },
+			menu: { id: Menus.ActivityBar, group: 'more', order: 20, when: ContextKeyExpr.has('sessions.automationsAvailable') },
 		});
 	}
 
@@ -99,14 +99,6 @@ MenusRegistry.appendMenuItems([
 			group: 'navigation', order: 10,
 		}
 	},
-	{
-		id: Menus.ChatSidebarHeader, item: {
-			submenu: Menus.SessionsViewSort,
-			title: localize2('sessions.list.sortBy', 'Sort By'),
-			icon: Lxicon.listFilter,
-			group: 'navigation', order: 10,
-		}
-	},
 ]);
 
 registerAction2(class CreateSessionGroupAction extends Action2 {
@@ -115,10 +107,7 @@ registerAction2(class CreateSessionGroupAction extends Action2 {
 			id: 'sessionsViewPane.createGroup',
 			title: localize2('sessions.list.addFolder', 'Add folder…'),
 			icon: Lxicon.newFolder,
-			menu: [
-				{ id: Menus.SidebarSessionsHeader, group: 'navigation', order: 20, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code') },
-				{ id: Menus.ChatSidebarHeader, group: 'navigation', order: 20 },
-			],
+			menu: { id: Menus.SidebarSessionsHeader, group: 'navigation', order: 20, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code') },
 		});
 	}
 

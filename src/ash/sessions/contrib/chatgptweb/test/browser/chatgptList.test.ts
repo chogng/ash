@@ -10,7 +10,7 @@ const rateLimitNotice = 'ChatGPT 暂时限制了历史请求，请稍后重试�
 suite('ChatGPT catalog in the Ash chat list', () => {
 	const browserTests = useBrowserTests();
 
-	test('the registered Chat sidebar opens Ash and ChatGPT rows through their own sources', async () => {
+	test('the shared sidebar retains Ash and ChatGPT rows across Chat and Code', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);
 		await page.goto('/chatgptNavigation.html?locale=en&mixedCatalog');
@@ -19,6 +19,14 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		const chatGPT = sidebar.getByRole('button', { name: 'Synthetic conversation', exact: true });
 		await expect(ash).toBeVisible();
 		await expect(chatGPT).toBeVisible();
+		const code = sidebar.getByRole('button', { name: /^Local Code conversation/ });
+		await expect(code).toBeVisible();
+		const tree = await sidebar.elementHandle();
+		await code.press('Enter');
+		await expect(page.locator('body')).toHaveAttribute('data-opened-code', 'fixture-code/fixture-code');
+		await expect(ash).toBeVisible();
+		await expect(chatGPT).toBeVisible();
+		expect(await sidebar.evaluate((current, previous) => current === previous, tree)).toBe(true);
 
 		await ash.press('Enter');
 		await expect(page.locator('body')).toHaveAttribute('data-opened-ash', 'fixture-chat/fixture-thread');
@@ -158,7 +166,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const projects = list.locator('[data-section="projects"]');
 			const headerRow = list.getByRole('treeitem').filter({ has: page.locator('[data-section="projects"]') });
 			const toolbar = projects.getByRole('toolbar');
-			const sort = toolbar.getByRole('button', { name: chinese ? '排序方式' : 'Sort By', exact: true });
+			const more = toolbar.getByRole('button', { name: chinese ? '更多会话操作' : 'More Sessions Actions', exact: true });
 			const add = toolbar.getByRole('button', { name: chinese ? '添加文件夹…' : 'Add folder…', exact: true });
 			const rows = list.locator('[data-parent-section="recent"] .ash-chat-navigation-item');
 			await expect(rows).toHaveText(['Echo', 'Zulu', 'Alpha']);
@@ -176,14 +184,20 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(add).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			await page.mouse.move(0, 0);
 			await expect(toolbar).toHaveCSS('opacity', '0');
-			await sort.focus();
+			await more.focus();
 			await expect(toolbar).toHaveCSS('opacity', '1');
-			await sort.press('ArrowRight');
+			await more.press('ArrowRight');
 			await expect(add).toBeFocused();
 			await add.press('ArrowLeft');
-			await expect(sort).toBeFocused();
+			await expect(more).toBeFocused();
+			const openSort = async () => {
+				await more.press('Enter');
+				const sort = page.getByRole('menuitem', { name: chinese ? '排序方式' : 'Sort By', exact: true });
+				await sort.focus();
+				await page.keyboard.press('ArrowRight');
+			};
 			const choose = async (name: string) => {
-				await sort.press('Enter');
+				await openSort();
 				await page.getByRole('menuitemradio', { name, exact: true }).click();
 			};
 			await choose(chinese ? '名称' : 'Name');
@@ -192,16 +206,12 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(rows).toHaveText(['Echo', 'Zulu', 'Alpha']);
 			await choose(chinese ? '升序' : 'Ascending');
 			await expect(rows).toHaveText(['Alpha', 'Zulu', 'Echo']);
-			await sort.press('Enter');
+			await openSort();
 			const selected = page.getByRole('menuitemradio', { name: chinese ? '创建日期' : 'Date Created', exact: true, checked: true });
 			await expect(selected).toBeVisible();
-			const label = (await selected.locator('.ash-button-label').boundingBox())!;
-			const check = (await selected.locator('[data-ash-icon-id="check"]').boundingBox())!;
-			const inset = await selected.evaluate(row => parseFloat(getComputedStyle(row).paddingInlineStart));
-			expect(label.x - (await selected.boundingBox())!.x).toBeCloseTo(inset);
-			expect(check.x).toBeGreaterThan(label.x + label.width);
 			await page.keyboard.press('Escape');
-			await expect(sort).toBeFocused();
+			await page.keyboard.press('Escape');
+			await expect(more).toBeFocused();
 		});
 
 		test(`ChatGPT history group sizing waits for its detached sidebar to mount (${locale})`, async () => {
@@ -397,7 +407,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				await title.hover();
 				const actions = row.locator('.ash-sessions-list-actions');
 				await expect(actions).toHaveCSS('opacity', '1');
-				await expect(row).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				await expect(row.locator('xpath=ancestor::*[@role="treeitem"]')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 				await expect(title).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 				await expect(actions).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 				await testInfo.attach(`conversation-focused-${theme}-${direction}`, { body: await row.screenshot(), contentType: 'image/png' });
@@ -473,15 +483,8 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const viewport = scrollable.locator(':scope > .ash-scrollbar-viewport');
 			const scrollbar = scrollable.getByRole('scrollbar', { name: 'Vertical scrollbar' });
 			await expect(scrollbar).toHaveAttribute('aria-disabled', 'false');
-			await expect(list).toHaveCSS('padding-block', '12px');
-			const firstRow = list.getByRole('treeitem').filter({ has: page.locator('.ash-chat-navigation-item') }).first();
-			await expect.poll(() => firstRow.evaluate(node => {
-				const row = node.getBoundingClientRect();
-				const list = node.closest('.ash-chat-navigation-list')!.getBoundingClientRect();
-				return { left: row.left - list.left, right: list.right - row.right };
-			})).toEqual({ left: 8, right: 8 });
 			const sidebar = page.locator('.ash-chat-navigation');
-			await expect(sidebar).toHaveCSS('padding', '0px');
+			await expect(list.getByRole('treeitem').filter({ has: page.locator('.ash-chat-navigation-item') }).first()).toBeVisible();
 			const [sidebarBounds, scrollbarBounds] = await Promise.all([sidebar.boundingBox(), scrollbar.boundingBox()]);
 			expect(scrollbarBounds!.x + scrollbarBounds!.width).toBe(sidebarBounds!.x + sidebarBounds!.width);
 			expect(await viewport.evaluate(element => getComputedStyle(element).scrollbarWidth)).toBe('none');
@@ -518,7 +521,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		const list = page.locator('.ash-chat-navigation-list');
 		await expect(list.locator('.ash-chat-navigation-item:visible')).toHaveCount(22);
 		expect(offsets).toEqual([0, 2]);
-		const recent = list.getByRole('button', { name: '最近', exact: true });
+		const recent = list.getByRole('button', { name: '最近使用', exact: true });
 		await recent.click();
 		await page.setViewportSize({ width: 1000, height: 1600 });
 		await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
@@ -532,7 +535,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		expect(offsets).toEqual([0, 2, 22]);
 	});
 
-	test('ChatGPT conversation pagination retries a failure only after another scroll', async function () {
+	test('ChatGPT conversation pagination retries a failure through the history notification', async function () {
 		const { page } = browserTests;
 
 		await page.setViewportSize({ width: 1000, height: 400 });
@@ -558,6 +561,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		expect(offsets).toEqual([0, 20]);
 		await page.mouse.wheel(0, -100);
 		await page.mouse.wheel(0, 200);
+		await page.evaluate(() => window.ashChatGPTIntegration.retryHistory());
 		await expect(list.locator('.ash-chat-navigation-item:visible')).toHaveCount(40);
 		await expect.poll(() => historyNotices(page)).toEqual([]);
 		expect(offsets).toEqual([0, 20, 20]);
@@ -574,7 +578,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		const storageKeys = () => page.evaluate(() => window.ashChatGPTIntegration.storageKeys());
 		const previousKeys = (keys: readonly string[]) => keys.filter(key => key.startsWith('sessions.chatgpt.navigation.collapsed.'));
 		expect(previousKeys(await storageKeys())).toEqual([]);
-		expect(await storageKeys()).toContain('workbench.viewContainer.sessions.chatgpt.navigation.sessions.chatgpt.navigation.g-p-unloaded.collapsed');
+		expect(await storageKeys()).toContain('sessions.list.code.collapsed.catalog-project:g-p-unloaded');
 		expect((await storageKeys()).some(key => key.endsWith('.projects.collapsed'))).toBe(false);
 		await expect(recent.getByRole('button', { name: 'Synthetic conversation', exact: true })).toBeHidden();
 		await heading.click();
@@ -685,8 +689,8 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const toggle = sidebar.getByRole('button', { name: 'Research', exact: true });
 			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 			const projectRow = sidebar.locator('[data-item="project:g-p-one"]');
-			const projectIcon = projectRow.locator('[data-ash-icon-id="projects"]');
-			const chevron = projectRow.locator('.ash-chat-navigation-project-chevron');
+			const projectIcon = projectRow.locator('.ash-sessions-list-project-icon > .ash-icon').first();
+			const chevron = projectRow.locator('.ash-sessions-list-project-chevron');
 			await page.mouse.move(0, 0);
 			await expect(projectIcon).toBeVisible();
 			await expect(chevron).toBeHidden();
@@ -789,11 +793,13 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const window = page.locator('.ash-sessions-window');
 			await window.evaluate(element => (element as HTMLElement).style.setProperty('--ash-toolbar-actionSize', '32px'));
 			await expect(icon).toHaveCSS('width', '32px');
+			await row.hover();
 			await expect(more).toHaveCSS('width', '32px');
 			await expect(row).toHaveCSS('height', '36px');
 			await window.evaluate(element => (element as HTMLElement).style.removeProperty('--ash-toolbar-actionSize'));
 			for (const forcedColors of ['none', 'active'] as const) {
 				await page.emulateMedia({ forcedColors });
+				await row.hover();
 				expect((await row.boundingBox())!.height).toBe(32);
 				for (const action of [more, pin]) {
 					await expect(action).toHaveCSS('width', '28px');

@@ -110,18 +110,27 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
     pub(super) fn change_directory(
         &self,
         mutation: SessionMutation,
-        root: std::path::PathBuf,
+        root: Option<std::path::PathBuf>,
     ) -> Result<SessionResult, RpcError> {
-        let runtime = self.context.git_turn_changes_runtime()?;
-        let dir = ash_file_access::Dir::open_local(&root)
-            .map_err(|error| core_error(core_api::CoreError::InvalidInput(error.to_string())))?;
-        let grant = self
-            .env_runtime
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .selected_grant
-            .clone();
+        let destination = root
+            .map(|root| {
+                let runtime = self.context.git_turn_changes_runtime()?;
+                let dir = ash_file_access::Dir::open_local(&root).map_err(|error| {
+                    core_error(core_api::CoreError::InvalidInput(error.to_string()))
+                })?;
+                let grant = self
+                    .env_runtime
+                    .read()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .selected_grant
+                    .clone();
+                Ok::<_, RpcError>((runtime, dir, grant))
+            })
+            .transpose()?;
         let authorize = || {
+            let Some((runtime, dir, grant)) = &destination else {
+                return Ok(());
+            };
             grant
                 .as_ref()
                 .filter(|grant| {
@@ -140,6 +149,10 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                 })
         };
         authorize().map_err(core_error)?;
+        let current_runtime = destination
+            .as_ref()
+            .map(|(runtime, _, _)| runtime)
+            .or(self.git_turn_changes.as_ref());
         let thread_id = ThreadId::new(mutation.session_id.as_str())
             .map_err(|error| core_error(core_api::CoreError::InvalidInput(error.to_string())))?;
         if let Some(queue) = self.queue.as_ref()
@@ -158,13 +171,17 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
         {
             return Err(RpcError::new(-32010, AppServerErrorName::QueueConflict));
         }
-        self.context
+        let changed = self
+            .context
             .agent_runtime()
             .change_session_directory(
                 &mutation.session_id,
-                dir.canonical_path(),
+                destination.as_ref().map(|(_, dir, _)| dir.canonical_path()),
                 mutation.command_id,
                 |thread| {
+                    let Some(runtime) = current_runtime else {
+                        return Ok(());
+                    };
                     let commits = git_turn_changes::TurnCommitStore::list_commits(
                         runtime.store.as_ref(),
                         thread,
@@ -186,16 +203,23 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                             "Wait for file history operations before changing directories".into(),
                         ));
                     }
-                    runtime.prepare_switched_directory(thread)?;
+                    if destination.is_some() {
+                        runtime.prepare_switched_directory(thread)?;
+                    }
                     authorize()
                 },
                 |thread| {
-                    authorize()?;
-                    runtime.activate_switched_directory(thread)?;
-                    self.context.bind_session_runtime(&mutation.session_id)
+                    if let Some((runtime, _, _)) = &destination {
+                        authorize()?;
+                        runtime.activate_switched_directory(thread)?;
+                        self.context.bind_session_runtime(&mutation.session_id)?;
+                    }
+                    Ok(())
                 },
             )
             .map_err(core_error)?;
+        self.context
+            .notify_thread_updates(&thread_id, changed.sequence.saturating_sub(1))?;
         self.updates
             .publish_session_details_changed(&mutation.session_id);
         self.context.session_result(&mutation.session_id)

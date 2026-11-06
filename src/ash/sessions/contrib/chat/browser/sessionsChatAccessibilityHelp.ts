@@ -1,3 +1,4 @@
+import { sessionWorkspaceButtonHelp } from './sessionWorkspaceButton.js';
 import { localize } from '../../../../nls.js';
 
 /** Product-specific help appended by the shared input's accessibility provider. */
@@ -16,6 +17,7 @@ export function getSessionsChatAccessibilityHelp(): string {
 		localize({ bundle: 'ash.sessions', key: 'sessions.list.inlineSearchHelp' }, 'With focus in the Sessions sidebar, press Control+F or Command+F to search. Use Down Arrow or Enter to focus the first result. Escape closes search and restores the previous sidebar view.'),
 		localize({ bundle: 'ash.sessions', key: 'sessions.list.moveChatHelp' }, 'On a conversation in the Sessions sidebar, press Shift+F10. If Move Conversation to Session is available, choose it, select a destination and press Enter. Escape cancels the picker.'),
 		localize({ bundle: 'ash.sessions', key: 'sessions.directory.changeHelp' }, 'On a saved session in the sidebar, press Shift+F10 and choose Change Session Folder when available. Select the folder for future turns. The previous working copy and conversation history are retained.'),
+		sessionWorkspaceButtonHelp(),
 		localize({ bundle: 'ash.sessions', key: 'sessions.code.workspaceRequiredHelp' }, 'In Code, choose a project before sending in a new conversation. You can edit the draft while choosing. The first message saves the conversation under that project in the sidebar. You can continue saved Ash conversations in Code or the IDE, including conversations without a folder.'),
 		localize({ bundle: 'ash.sessions', key: 'sessions.code.modelAvailabilityHelp' }, 'If the current model is unavailable, the input status explains why sending is paused. Keep editing the draft or use Tab to reach the model picker, then choose another model to continue.'),
 		localize('sessions.hover.help', 'Focus a session row or conversation link and use <keybinding:workbench.action.showHover> to open its summary. Use <keybinding:editor.action.accessibleView> to read the summary as text.'),

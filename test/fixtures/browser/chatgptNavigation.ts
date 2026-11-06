@@ -17,7 +17,7 @@ import { ChatTimelineStorage } from '../../../src/ash/sessions/browser/chatTimel
 import { ISessionPrimaryProviderServices, ISessionProviderScopeService, type SessionProviderServices } from '../../../src/ash/sessions/browser/agentHost/sessionProviderScopeService.js';
 import { IChatSpeechToTextService, ChatSpeechToTextService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../src/ash/base/common/lifecycle.js';
-import { autorun } from '../../../src/ash/base/common/observable.js';
+import { autorun, constObservable } from '../../../src/ash/base/common/observable.js';
 import { VSBuffer } from '../../../src/ash/base/common/buffer.js';
 import { Registry } from '../../../src/ash/platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../src/ash/platform/configuration/common/configurationRegistry.js';
@@ -77,6 +77,11 @@ import { AshChatNavigationSource } from '../../../src/ash/sessions/contrib/chat/
 import { AshChatSelectionService, IAshChatSelectionService } from '../../../src/ash/sessions/contrib/chat/browser/ashChatSelectionService.js';
 import { ISessionsSearchService } from '../../../src/ash/sessions/contrib/search/browser/searchService.js';
 import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
+import { IAshChatSessionService } from '../../../src/ash/sessions/contrib/chat/browser/ashChatSessionService.js';
+import { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
+import { ISessionSectionOrderService } from '../../../src/ash/sessions/services/sessions/browser/sessionSectionOrderService.js';
+import { IGitHubService } from '../../../src/ash/sessions/contrib/github/browser/githubService.js';
+import { SessionsWorkspaceModeContext } from '../../../src/ash/sessions/common/contextkeys.js';
 import { ISessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
@@ -198,7 +203,7 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 		document.body.dataset.nativeModelProvidersRead = 'true';
 		return [];
 	} } as unknown as ILanguageModelsService],
-	[ISessionProviderScopeService, { getProviderScope: () => { throw new Error('This fixture has no Ash model provider'); } } as unknown as ISessionProviderScopeService],
+	[ISessionProviderScopeService, { onDidChangeScopes: Event.None, getProviderScope: () => { throw new Error('This fixture has no Ash model provider'); } } as unknown as ISessionProviderScopeService],
 	[ISessionPrimaryProviderServices, { models: { onDidChangeModels: Event.None, listModelCatalog: async () => [] } } as unknown as SessionProviderServices],
 	[IThemeService, theme],
 	[IContextViewService, resources.add(new BrowserContextViewService(document.body))],
@@ -250,7 +255,15 @@ services.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as I
 const chat = resources.add(services.createInstance(ChatGPTService));
 services.registerInstance(IChatGPTService, chat);
 const ashChatSelected = services.get(IContextKeyService).createKey<boolean>(ASH_CHAT_SELECTED_CONTEXT, false);
-resources.add(CommandsRegistry.register('sessions.show.chatgpt', () => ashChatSelected.set(false)));
+const workspaceMode = SessionsWorkspaceModeContext.bindTo(services.get(IContextKeyService));
+resources.add(CommandsRegistry.register('sessions.show.chatgpt', () => {
+	ashChatSelected.set(false);
+	workspaceMode.set('chat');
+}));
+resources.add(CommandsRegistry.register('sessions.open.code', () => {
+	ashChatSelected.set(false);
+	workspaceMode.set('code');
+}));
 window.ashChatGPTIntegration = {
 	setConfiguration: (key, value) => configuration.updateValue(key, value),
 	setMathEnabled: enabled => services.get(IConfigurationService).updateValue('markdown.math.enabled', enabled),
@@ -272,17 +285,34 @@ window.ashChatGPTIntegration = {
 services.registerInstance(ISessionsListModelService, new SessionsListModelService(storage));
 services.registerInstance(IProjectService, { list: async () => [], onDidChange: Event.None } as unknown as IProjectService);
 services.registerInstance(IProjectsService, resources.add(services.createInstance(ProjectsService)));
+const groups = { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService;
+services.registerInstance(ISessionGroupsService, groups);
+services.registerInstance(ISessionSectionOrderService, { onDidChange: Event.None, getOrder: (_mode, ids) => ids } as ISessionSectionOrderService);
+
+services.registerInstance(IGitHubService, { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as IGitHubService);
+services.registerInstance(ISessionsManagementService, {
+	state: 'ready', onDidChange: Event.None, untitledSessions: [],
+	sessions: parameters.has('mixedCatalog') ? [{
+		sessionId: 'fixture-code', title: 'Local Code conversation', status: 'active', surface: 'code',
+		chats: [{ threadId: 'fixture-code', status: 'active', origin: { type: 'root' } }],
+	}] : [],
+} as unknown as ISessionsManagementService);
+services.registerInstance(ISessionsService, {
+	onDidChange: Event.None,
+	openSession: (sessionId, threadId) => { document.body.dataset.openedCode = `${sessionId}/${threadId}`; },
+} as ISessionsService);
 const sources: ChatListSource[] = [resources.add(services.createInstance(ChatGPTList))];
 if (parameters.has('mixedCatalog')) {
 	const ashServices = resources.add(services.createChild(new ServiceCollection(
 		[ICommandService, commands],
-		[ISessionsManagementService, {
-			onDidChange: Event.None,
-			sessions: [{ sessionId: 'fixture-chat', title: 'Local Ash conversation', status: 'active', surface: 'chat', chats: [
-				{ threadId: 'fixture-thread', status: 'active', origin: { type: 'root' } },
-			] }],
-		} as unknown as ISessionsManagementService],
-		[ISessionGroupsService, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService],
+		[IAshChatSessionService, {
+			initializeCatalog() {},
+			catalog: constObservable([{
+				sessionId: 'fixture-chat', title: 'Local Ash conversation', status: 'active', surface: 'chat',
+				manager: { status: 'idle' },
+				threads: [{ threadId: 'fixture-thread', status: 'active', createdAtUnixMs: 1 }],
+			}]),
+		} as unknown as IAshChatSessionService],
 	)));
 	ashServices.registerInstance(ISessionsSearchService, { registerSource: () => Disposable.None, show: async () => { }, focus: () => { } });
 	const selection = ashServices.createInstance(AshChatSelectionService);
@@ -291,7 +321,10 @@ if (parameters.has('mixedCatalog')) {
 		const current = selection.selection.read(reader);
 		if (current.kind === 'thread') document.body.dataset.openedAsh = `${current.sessionId}/${current.threadId}`;
 	}));
-	resources.add(CommandsRegistry.register(SHOW_ASH_CHAT_COMMAND, () => ashChatSelected.set(true)));
+	resources.add(CommandsRegistry.register(SHOW_ASH_CHAT_COMMAND, () => {
+		ashChatSelected.set(true);
+		workspaceMode.set('chat');
+	}));
 	sources.push(resources.add(ashServices.createInstance(AshChatNavigationSource)));
 }
 services.registerInstance(IChatListCatalog, { sources });
@@ -318,6 +351,7 @@ const descriptor = descriptors.getViewContainerById(CHAT_WORKSPACE_NAVIGATION_ID
 const view = resources.add(services.createInstance(PaneComposite, host, {
 	viewContainer: descriptor, model: descriptors.getViewContainerModel(descriptor.id)!,
 	paneLayout: 'fill', mergeViewWithContainerWhenSingleView: true,
+	onDidFailCreateView: (error: unknown) => { throw error; },
 }));
 view.setVisible(true);
 if (parameters.has('projects')) {

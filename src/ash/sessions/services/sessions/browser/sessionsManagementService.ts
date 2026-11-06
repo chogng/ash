@@ -568,10 +568,17 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		return !!provider?.changeDirectory && provider.canChangeDirectory?.() === true;
 	}
 
-	async changeDirectory(sessionId: SessionId, root: string): Promise<void> {
-		if (!this.canChangeDirectory(sessionId)) throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.directory.changeUnavailable' }, 'This session cannot change directories right now.'));
+	canClearDirectory(sessionId: SessionId): boolean {
+		const { providerId } = parseSessionIdentity(sessionId, this.defaultProviderId);
+		return this.providers.getProvider(providerId)?.canClearDirectory?.() === true;
+	}
+
+	async changeDirectory(sessionId: SessionId, root: string | null, signal?: AbortSignal): Promise<void> {
+		if (!this.canChangeDirectory(sessionId) || root === null && !this.canClearDirectory(sessionId)) {
+			throw new Error(localize({ bundle: 'ash.sessions', key: 'sessions.directory.changeUnavailable' }, 'This session cannot change directories right now.'));
+		}
 		const provider = this.owner(sessionId);
-		await provider.changeDirectory!(parseSessionIdentity(sessionId, this.defaultProviderId).backendSessionId, root, createUuid());
+		await provider.changeDirectory!(parseSessionIdentity(sessionId, this.defaultProviderId).backendSessionId, root, createUuid(), signal);
 		this.assertCurrentProvider(provider);
 		await this.refresh();
 	}

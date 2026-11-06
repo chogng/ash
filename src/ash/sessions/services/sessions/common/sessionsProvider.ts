@@ -58,7 +58,8 @@ export interface ISessionsProvider extends IDisposable {
 	forkChat?(sessionId: SessionId, threadId: ThreadId, title: string, creationId: string): Promise<IActiveSessionThread>;
 	canMoveChat?(): boolean;
 	canChangeDirectory?(): boolean;
-	changeDirectory?(sessionId: SessionId, root: string, commandId: string): Promise<void>;
+	canClearDirectory?(): boolean;
+	changeDirectory?(sessionId: SessionId, root: string | null, commandId: string, signal?: AbortSignal): Promise<void>;
 	moveChat?(sessionId: SessionId, threadId: ThreadId, destination: SessionId, commandId: string): Promise<void>;
 	setModel(model: ModelRef): Promise<void>;
 	archive(session: ISession): Promise<ISession>;

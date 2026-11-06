@@ -2933,10 +2933,20 @@ impl AppServer {
         let record = self.threads.thread_catalog_record(thread)?;
         let route = session_execution_router::SessionExecutionRouter::new(&self.threads)
             .resolve(&record.session_id)?;
-        if route.validate_turn_host(
+        if record.directory_configured
+            && record.execution_target.is_none()
+            && self.dir_services.is_some()
+        {
+            return Err(CoreError::InvalidInput(
+                "The Session execution directory has changed".into(),
+            ));
+        }
+        let directory_bound = route.validate_turn_host(
             record.execution_target.as_ref(),
             self.dir_services.as_deref(),
-        )? && request.expected_sequence == core_api::SequenceExpectation::Any
+        )?;
+        if (directory_bound || record.directory_configured)
+            && request.expected_sequence == core_api::SequenceExpectation::Any
         {
             // A queued admission must not race a directory change after the route check.
             request.expected_sequence = core_api::SequenceExpectation::Exact(record.sequence);

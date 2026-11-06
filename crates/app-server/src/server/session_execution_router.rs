@@ -32,6 +32,7 @@ pub(super) struct SessionExecutionRouter {
 pub(super) struct SessionExecutionRoute {
     surface: Option<SessionSurface>,
     target: Option<SessionExecutionTarget>,
+    directory_configured: bool,
 }
 
 impl SessionExecutionRoute {
@@ -39,7 +40,11 @@ impl SessionExecutionRoute {
         surface: Option<SessionSurface>,
         target: Option<SessionExecutionTarget>,
     ) -> Self {
-        Self { surface, target }
+        Self {
+            surface,
+            target,
+            directory_configured: false,
+        }
     }
 
     pub(super) fn admit_creation(
@@ -89,6 +94,9 @@ impl SessionExecutionRoute {
     }
 
     fn allows_workspace(&self) -> bool {
+        if self.directory_configured {
+            return self.target.is_some();
+        }
         match self.surface {
             Some(SessionSurface::Chat) => false,
             Some(SessionSurface::Code) => self.target.is_some(),
@@ -141,10 +149,20 @@ impl SessionExecutionRouter {
         let session = threads
             .read_session_catalog(session_id)?
             .ok_or_else(|| CoreError::NotFound(session_id.to_string()))?;
-        Ok(SessionExecutionRoute::new(
-            session.surface,
-            session.execution_target,
-        ))
+        let mut route = SessionExecutionRoute::new(session.surface, session.execution_target);
+        if route.surface.is_none()
+            || route.surface == Some(SessionSurface::Chat) && route.target.is_some()
+        {
+            let root = threads
+                .session_thread_catalog(session_id)?
+                .into_iter()
+                .find(|record| record.thread.thread_id.as_str() == session_id.as_str());
+            if let Some(root) = root {
+                route.target = root.execution_target;
+                route.directory_configured = root.directory_configured;
+            }
+        }
+        Ok(route)
     }
 
     pub(super) fn allows_workspace(&self, session_id: &SessionId) -> Result<bool, CoreError> {

@@ -8,7 +8,7 @@ import { autorun, derived, observableFromEvent, observableSignalFromEvent } from
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
-import { experimentalChatGPTSelected, SHOW_EXPERIMENTAL_CHATGPT } from '../common/chatGPTNative.js';
+import { SHOW_EXPERIMENTAL_CHATGPT } from '../common/chatGPTNative.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
@@ -17,7 +17,8 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
-import { ASH_CHAT_SELECTED_CONTEXT } from '../../chat/common/constants.js';
+import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY } from '../../chat/common/constants.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import type { ChatListEntry, ChatListProject, ChatListSnapshot, ChatListSource } from '../../chat/browser/chatListModel.js';
 import { shareChatGPTConversation } from './chatGPTShare.js';
 import type { ChatGPTConversation } from '../browser/chatGPTClient.js';
@@ -85,26 +86,28 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 			}
 			storage.remove(key, StorageScope.PROFILE);
 		}));
-		const context = new Set([ASH_CHAT_SELECTED_CONTEXT, experimentalChatGPTSelected]);
+		// The provider catalog stays visible when the user leaves its editor for Code.
 		this.nativeSelected = observableFromEvent(this,
-			listener => contextKeys.onDidChangeContext(event => {
-				if (event.affectsSome(context)) listener(event);
+			listener => storage.onDidChangeValue(event => {
+				if (event.scope === StorageScope.WORKSPACE && event.key === CHAT_WORKSPACE_LAST_BACKEND_KEY) listener(event);
 			}),
-			() => contextKeys.getValue(experimentalChatGPTSelected) === true);
+			() => storage.get(CHAT_WORKSPACE_LAST_BACKEND_KEY, StorageScope.WORKSPACE) === 'chatgpt-native');
 		this._register(autorun(reader => {
 			chat.setHistoryNotificationsVisible?.(this.nativeSelected.read(reader) === !!chat.native);
 		}));
-		const ashSelected = observableFromEvent(this,
+		const context = new Set([ASH_CHAT_SELECTED_CONTEXT, SessionsWorkspaceModeContext.key]);
+		const chatSelected = observableFromEvent(this,
 			listener => contextKeys.onDidChangeContext(event => {
 				if (event.affectsSome(context)) listener(event);
 			}),
-			() => contextKeys.getValue(ASH_CHAT_SELECTED_CONTEXT) === true);
+			() => contextKeys.getValue(ASH_CHAT_SELECTED_CONTEXT) !== true
+				&& contextKeys.getValue(SessionsWorkspaceModeContext.key) !== 'code');
 		this.snapshot = derived<ChatListSnapshot>(reader => {
 			if (this.nativeSelected.read(reader) !== !!chat.native) return { entries: [] };
 			const state = chat.state.read(reader);
 			preferencesChanged.read(reader);
 			const current = selectedChatConversationId(state);
-			const showSelection = !ashSelected.read(reader);
+			const showSelection = chatSelected.read(reader);
 			const coworkRunning = state.coworkTasks.some(task => {
 				const status = task.thread?.turns.at(-1)?.status;
 				return status === 'created' || status === 'running' || status === 'cancelling';
@@ -236,10 +239,10 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		return store;
 	}
 
-	loadMore(retry: boolean): void {
+	loadMore(): void {
 		if (this.nativeSelected.get() !== !!this.chat.native) return;
 		const state = this.chat.state.get();
-		if (state.connected && state.networkAvailable && !state.busy && !state.sending && !state.managing && state.hasMore && (retry || !state.error && !state.historyListFailed)) {
+		if (state.connected && state.networkAvailable && !state.busy && !state.sending && !state.managing && state.hasMore && !state.error && !state.historyListFailed) {
 			void this.chat.loadMore();
 		}
 	}
@@ -309,5 +312,5 @@ export class ChatGPTNativeList extends Disposable implements ChatListSource {
 		return this.delegate.attach(window, isVisible);
 	}
 
-	loadMore(retry: boolean): void { this.delegate.loadMore(retry); }
+	loadMore(): void { this.delegate.loadMore(); }
 }

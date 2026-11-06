@@ -2,8 +2,6 @@ import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProjectService } from '../../../../platform/projects/common/projectService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import { Menus } from '../../../browser/menus.js';
-import { ISessionsListModelService } from '../../../services/sessions/browser/sessionsListModelService.js';
 import { IProjectsService } from '../../projects/browser/projectsService.js';
 import type { SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
 import type { SessionsCatalogListModel } from '../../sessions/browser/views/sessionsView.js';
@@ -11,14 +9,14 @@ import { CHAT_WORKSPACE_NAVIGATION_ID } from '../common/constants.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import type { Icon } from '../../../../base/common/icon.js';
 import { Disposable, isDisposable, type IDisposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { derived, observableFromEvent, observableValue, type IObservable } from '../../../../base/common/observable.js';
+import { derived, observableValue, type IObservable } from '../../../../base/common/observable.js';
 import type { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { localize } from '../../../../nls.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 
 import type { SessionGroup } from '../../../services/sessions/browser/sessionGroupsService.js';
-import { sessionListProjectActions, sessionProjectOrganization, sessionSortActions, type SessionListOrganization } from '../../sessions/browser/views/sessionsListActions.js';
+import { sessionListProjectActions, sessionProjectOrganization, type SessionListOrganization } from '../../sessions/browser/views/sessionsListActions.js';
 
 export interface ChatListEntry extends SessionListOrganization {
 	/** Opaque identity, unique across the entire list. */
@@ -78,7 +76,7 @@ export interface ChatListSnapshot {
 export interface ChatListSource {
 	readonly snapshot: IObservable<ChatListSnapshot>;
 	attach?(window: Window & typeof globalThis, isVisible: () => boolean): IDisposable;
-	loadMore?(retry: boolean): void;
+	loadMore?(): void;
 }
 
 export interface IChatListCatalog {
@@ -147,31 +145,19 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 	private readonly membershipVersion = observableValue(this, 0);
 	private readonly opening = this._register(new MutableDisposable());
 	readonly snapshot;
-	readonly collapseStatePrefix = `workbench.viewContainer.${CHAT_WORKSPACE_NAVIGATION_ID}.${CHAT_WORKSPACE_NAVIGATION_ID}.`;
-	readonly headerActions = {
-		menu: Menus.ChatSidebarHeader,
-		submenu: Menus.SessionsViewSort,
-		getActions: (): readonly IAction[] => sessionSortActions(this.listModel, 'chat'),
-	};
 
 	constructor(
 		@IChatListCatalog private readonly catalog: IChatListCatalog,
 		@IProjectsService private readonly projects: IProjectsService,
 		@IProjectService private readonly projectService: IProjectService,
-		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IStorageService storage: IStorageService,
 	) {
 		super();
 		this.migrateCollapseState(storage);
-		const sort = observableFromEvent(this, listModel.onDidChange, () => {
-			const { field, direction } = listModel.getSort('chat');
-			return `${field}:${direction}`;
-		});
 		this.snapshot = derived(reader => {
 			const projects = this.projects.state.read(reader).projects.filter(project => !project.archived);
 			this.membershipVersion.read(reader);
-			sort.read(reader);
 			const snapshots = this.catalog.sources.map(source => source.snapshot.read(reader));
 			const projectIds = new Set(projects.map(project => project.id));
 			for (const id of this.membership.keys()) {
@@ -208,18 +194,12 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 
 			return {
 				loading: snapshots.some(snapshot => snapshot.loading),
-				sections: groups.flatMap(group => {
+				sections: groups.map(group => {
 					const { key } = group;
-					const groupDropTarget = key.startsWith('group:');
-					const rows = this.sortRows(group.rows.filter(entry => key !== 'recent' || !projectEntryIds.has(entry.id) && !grouped.has(entry.id)))
+					const rows = group.rows.filter(entry => key !== 'recent' || !projectEntryIds.has(entry.id) && !grouped.has(entry.id))
 						.map(entry => this.toRow(entry, projects));
 					const projectGroups = key === 'pinned' ? pinnedProjects : key === 'projects' ? otherProjects : [];
-					if (!rows.length && key !== 'projects' && key !== 'recent' && !groupDropTarget && !projectGroups.length) return [];
-					return [{
-						key, title: group.title, rows, groupDropTarget, showActions: key === 'projects',
-						collapsible: key !== 'projects' || projectGroups.length > 0,
-						projects: projectGroups.map(project => this.toProject(project, projects)),
-					}];
+					return { key, rows, projects: projectGroups.map(project => this.toProject(project, projects)) };
 				}),
 			} satisfies SessionsCatalogSnapshot;
 		});
@@ -232,23 +212,27 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		}
 	}
 
-	loadMore(retry: boolean): void {
-		for (const source of this.catalog.sources) source.loadMore?.(retry);
+	loadMore(): void {
+		for (const source of this.catalog.sources) source.loadMore?.();
 	}
 
 	private migrateCollapseState(storage: IStorageService): void {
-		const previousPrefix = 'sessions.chatgpt.navigation.collapsed.';
-		for (const previousKey of storage.keys(StorageScope.PROFILE, StorageTarget.MACHINE)) {
-			if (!previousKey.startsWith(previousPrefix)) continue;
-			const key = previousKey.slice(previousPrefix.length);
-			if (key && key !== 'projects') {
-				const nextKey = `${this.collapseStatePrefix}${key}.collapsed`;
-				const previous = storage.getBoolean(previousKey, StorageScope.PROFILE);
-				if (previous !== undefined && storage.getBoolean(nextKey, StorageScope.PROFILE) === undefined) {
-					storage.store(nextKey, previous, StorageScope.PROFILE, StorageTarget.MACHINE);
-				}
+		const prefix = 'sessions.list.code.collapsed.';
+		const previousPrefixes = [
+			`workbench.viewContainer.${CHAT_WORKSPACE_NAVIGATION_ID}.${CHAT_WORKSPACE_NAVIGATION_ID}.`,
+			'sessions.chatgpt.navigation.collapsed.',
+		];
+		for (const key of storage.keys(StorageScope.PROFILE, StorageTarget.MACHINE)) {
+			const previousPrefix = previousPrefixes.find(prefix => key.startsWith(prefix));
+			if (!previousPrefix) continue;
+			const section = key.slice(previousPrefix.length).replace(/\.collapsed$/, '');
+			const group = section === 'pinned' || section === 'recent' || section.startsWith('group:');
+			const next = prefix + (group ? section : `catalog-project:${section.replace(/^project:/, '')}`);
+			const previous = storage.getBoolean(key, StorageScope.PROFILE);
+			if (section && section !== 'projects' && previous !== undefined && storage.getBoolean(next, StorageScope.PROFILE) === undefined) {
+				storage.store(next, previous, StorageScope.PROFILE, StorageTarget.MACHINE);
 			}
-			storage.remove(previousKey, StorageScope.PROFILE);
+			storage.remove(key, StorageScope.PROFILE);
 		}
 	}
 
@@ -273,24 +257,8 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		return request;
 	}
 
-	private sortRows(rows: readonly ChatListEntry[]): readonly ChatListEntry[] {
-		const { field, direction } = this.listModel.getSort('chat');
-		const sign = direction === 'ascending' ? 1 : -1;
-		if (field === 'name') {
-			return [...rows].sort((left, right) => sign * left.title.localeCompare(right.title, undefined, { numeric: true }));
-		}
-		const time = (row: ChatListEntry) => field === 'created' ? row.createdAt : row.updatedAt ?? row.createdAt;
-		// Preserve catalog order for records that do not carry the requested date.
-		const dated = rows.flatMap(row => {
-			const timestamp = time(row);
-			return timestamp === undefined ? [] : [{ row, timestamp }];
-		}).sort((left, right) => sign * (left.timestamp - right.timestamp));
-		let index = 0;
-		return rows.map(row => time(row) === undefined ? row : dated[index++]!.row);
-	}
-
 	private toProject(project: ChatListGroup, destinations: readonly { readonly id: string; readonly name: string; }[]): SessionsCatalogProject {
-		const rows = this.sortRows(project.rows).map(entry => this.toRow(entry, destinations, project.key));
+		const rows = project.rows.map(entry => this.toRow(entry, destinations, project.key));
 		const current = this.membership.get(project.key);
 		const history = project.project?.history;
 		const loading = history?.state === 'loading' || (current !== undefined && current.failed === undefined);
@@ -322,6 +290,8 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		return {
 			id: entry.id,
 			title: entry.title,
+			createdAt: entry.createdAt,
+			updatedAt: entry.updatedAt,
 			selected: entry.selected,
 			status: entry.status,
 			disabled: entry.disabled,

@@ -218,7 +218,7 @@ export class ChatGPTExperimentalContribution extends Disposable implements IWork
 				},
 				restoreCommand: SHOW_EXPERIMENTAL_CHATGPT, newSessionCommand: 'sessions.open.new', newDraft, focus: 'editor',
 			}, undefined, source === 'restore' || source === 'startup' ? { source } : undefined);
-			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'chatgpt', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'chatgpt-native', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 			if (source === 'startup' || source === 'restore') {
 				void connect();
 				return;

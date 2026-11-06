@@ -854,7 +854,7 @@ impl AgentRuntime for Runtime<'_> {
     fn change_session_directory(
         &self,
         session_id: &SessionId,
-        root: &std::path::Path,
+        root: Option<&std::path::Path>,
         command_id: CommandId,
         prepare: impl FnOnce(&ThreadId) -> Result<(), CoreError>,
         activate: impl FnOnce(&ThreadId) -> Result<(), CoreError>,

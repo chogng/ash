@@ -108,3 +108,51 @@ fn creation_and_approval_share_session_defaults() {
         Err(CoreError::InvalidInput(_))
     ));
 }
+
+#[test]
+fn explicit_directory_binding_enables_and_clears_workspace_for_a_chat() {
+    let threads = Arc::new(ThreadController::with_store(Arc::new(
+        ash_core::InMemoryThreadStore::default(),
+    )));
+    let chat = threads
+        .start_thread(
+            &ash_core::NoThreadWorktreeBinder,
+            core_api::StartThreadRequest {
+                surface: Some(SessionSurface::Chat),
+                agent_id: None,
+                agent: None,
+                command_id: CommandId::new("chat-directory-toggle").unwrap(),
+                title: "Chat".into(),
+                branch_name: None,
+                worktree_start: None,
+                execution_target: None,
+            },
+        )
+        .unwrap();
+    let router = SessionExecutionRouter::new(&threads);
+    assert!(!router.allows_workspace(&chat.session_id).unwrap());
+    threads
+        .change_session_directory(
+            &chat.session_id,
+            Some(&std::env::temp_dir()),
+            CommandId::new("enable-workspace").unwrap(),
+            |_| Ok(()),
+            |_| Ok(()),
+        )
+        .unwrap();
+    assert!(router.allows_workspace(&chat.session_id).unwrap());
+    threads
+        .change_session_directory(
+            &chat.session_id,
+            None,
+            CommandId::new("disable-workspace").unwrap(),
+            |_| Ok(()),
+            |_| Ok(()),
+        )
+        .unwrap();
+    assert!(!router.allows_workspace(&chat.session_id).unwrap());
+    let saved = threads.read_thread(&chat.thread_id).unwrap();
+    assert_eq!(saved.session_id, chat.session_id);
+    assert_eq!(saved.surface, Some(SessionSurface::Chat));
+    assert_eq!(saved.title, chat.title);
+}

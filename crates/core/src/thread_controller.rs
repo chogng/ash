@@ -3160,7 +3160,7 @@ impl ThreadController {
     pub fn change_session_directory(
         &self,
         session_id: &SessionId,
-        root: &std::path::Path,
+        root: Option<&std::path::Path>,
         command_id: CommandId,
         prepare: impl FnOnce(&ThreadId) -> Result<(), CoreError>,
         activate: impl FnOnce(&ThreadId) -> Result<(), CoreError>,
@@ -3168,12 +3168,11 @@ impl ThreadController {
         let thread_id = ThreadId::new(session_id.as_str())
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
         self.mutate_thread(&thread_id, |snapshot| {
-            let command = ThreadCommand::ChangeDirectory {
-                root: root.to_path_buf(),
-            };
-            let target = Some(ash_protocol::SessionExecutionTarget::Local {
-                root: root.to_path_buf(),
-            });
+            let root = root.map(std::path::Path::to_path_buf);
+            let command = ThreadCommand::ChangeDirectory { root: root.clone() };
+            let target = root
+                .as_ref()
+                .map(|root| ash_protocol::SessionExecutionTarget::Local { root: root.clone() });
             if let Some(existing) = snapshot
                 .commands
                 .iter()
@@ -3204,7 +3203,7 @@ impl ThreadController {
                 &thread_id,
                 vec![ThreadEvent::ThreadDirectoryChanged {
                     thread_id: thread_id.clone(),
-                    root: root.to_path_buf(),
+                    root,
                 }],
                 BatchCommand::AtEvent {
                     index: 0,
@@ -4060,6 +4059,7 @@ fn thread_catalog_record(snapshot: &ThreadSnapshot) -> ThreadCatalogRecord {
             status: snapshot.status,
         },
         execution_target: snapshot.execution_target.clone(),
+        directory_configured: snapshot.directory_configured,
         model: snapshot.turns.last().and_then(|turn| turn.model.clone()),
         resumable_model_providers: Some(crate::thread_reducer::resumable_model_providers(snapshot)),
         sequence: snapshot.sequence,

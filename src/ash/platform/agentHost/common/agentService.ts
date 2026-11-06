@@ -164,7 +164,8 @@ export interface IAgentSessionService {
 	invokeRuntime?(providerId: string, request: Agent.SessionRuntimeRequest, signal: AbortSignal): Promise<Agent.SessionRuntimeResult>;
 	create(params: Agent.SessionCreateParams): Promise<Agent.SessionResult>;
 	canChangeDirectory?(): boolean;
-	changeDirectory?(params: Agent.SessionMutationParams & { readonly root: string; }): Promise<void>;
+	canClearDirectory?(): boolean;
+	changeDirectory?(params: Agent.SessionMutationParams & { readonly root: string | null; }): Promise<void>;
 	addWorkspaceFolder?(sessionId: string, path: string): Promise<void>;
 	saveEnvironmentProfile?(environmentId: string, variables: Readonly<Record<string, string>>): Promise<void>;
 	readEnvironmentProfile?(environmentId: string): Promise<Readonly<Record<string, string>> | undefined>;
