@@ -50,7 +50,7 @@ The foundational layer. It may import from the sessions **services** layer, but 
 - `ash/workbench/~`, `ash/workbench/browser/**`, `ash/workbench/services/*/~`
 - `ash/sessions/~` (self), `ash/sessions/services/*/~`
 
-> **Note:** The desktop bootstrap entry `src/ash/sessions/electron-browser/sessions.ts` initializes localization before loading `ash/sessions/sessions.desktop.main.js` and the renderer. It uses base/platform/core Sessions modules, the shared `ash/nls.js` catalog, and `ash/workbench/browser/startupError.js` for startup failures. It receives validated product metadata from the build; it must not import `ash/code/` or contributions directly.
+> **Note:** The desktop bootstrap entry `src/ash/sessions/electron-browser/sessions.ts` initializes localization before loading `ash/sessions/sessions.desktop.main.js` and the renderer. It uses base/platform/core Sessions modules and the shared `ash/nls.js` catalog, and logs startup failures to the renderer console. It receives validated product metadata from the build; it must not import `ash/code/` or contributions directly.
 
 **Cannot import from:**
 

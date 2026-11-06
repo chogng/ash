@@ -51,7 +51,6 @@ import { SecretStorageService } from '../services/secrets/electron-browser/secre
 import { ElectronIPCMainProcessService } from '../../platform/ipc/electron-browser/mainProcessService.js';
 import { createElectronRendererApi, ElectronRendererLocalApi, type ElectronRendererCapabilityContribution } from './rendererApi.js';
 import { getWorkspaceRemoteAuthority, parseWorkspace } from '../../platform/workspace/common/workspace.js';
-import { showStartupError } from '../browser/startupError.js';
 import { NativeHostColorSchemeService } from '../services/themes/electron-browser/nativeHostColorSchemeService.js';
 import type { IStartWorkbenchOptions, Workbench } from '../browser/workbench.js';
 import { ElectronContextMenuService } from '../services/contextmenu/electron-browser/contextMenuService.js';
@@ -368,7 +367,7 @@ export class DesktopMain extends Disposable {
 			} finally {
 				tracking?.[Symbol.dispose]();
 			}
-			showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text));
+			throw error;
 		}
 	}
 

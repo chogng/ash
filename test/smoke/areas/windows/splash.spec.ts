@@ -94,17 +94,19 @@ for (const scheme of ['light', 'dark'] as const) {
 	});
 }
 
-test('a failed startup hands the page to the error view and Retry can reopen the Workbench', { tag: '@browser-ui' }, async ({ workbench }) => {
+test('a failed Web module load shows the fallback until a successful reload', { tag: '@browser-ui' }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.route('**/assets/workbench.web.main-*.js', route => route.abort('failed'));
 	await page.reload();
-	await expect(page.getByRole('alert')).toHaveText('Unable to start Ash');
-	await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeFocused();
+	const fallback = page.getByRole('alert');
+	await expect(fallback.getByRole('heading', { name: 'Unable to start Ash' })).toBeVisible();
+	await expect(fallback.getByText('Check the browser developer tools console for details.')).toBeVisible();
 	await expect(page.locator('#ash-parts-splash')).toHaveCount(0);
 	await expect(page.locator('.ash-initial-shell-colors')).toHaveCount(0);
 	await page.unroute('**/assets/workbench.web.main-*.js');
-	await page.getByRole('button', { name: 'Retry', exact: true }).click();
+	await page.reload();
 	await workbench.waitForReady();
+	await expect(page.getByRole('heading', { name: 'Unable to start Ash' })).toHaveCount(0);
 });
 
 async function readSplash(page: Page): Promise<IPartsSplash | undefined> {

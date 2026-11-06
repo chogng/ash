@@ -1,7 +1,6 @@
 import { showPartsSplash } from '../../../workbench/contrib/splash/browser/splash.js';
 import { WINDOW_SPLASH_READ_CHANNEL, validatePartsSplash } from '../../../platform/theme/common/themeService.js';
 import { AshWorkbenchName } from '../../common/application.js';
-import { showStartupError } from '../../../workbench/browser/startupError.js';
 import { invoke } from '../../../platform/ipc/electron-browser/rendererIpc.js';
 import { NLS_CONFIGURATION_CHANNEL, NLS_ACTIVATE_CHANNEL } from '../../../platform/languagePacks/common/languagePackStore.js';
 import { resolveLanguagePackCatalog } from '../../../platform/languagePacks/common/languagePackCatalog.js';
@@ -35,5 +34,5 @@ try {
 	const { main } = await desktopMain;
 	await main({ productName: AshWorkbenchName, splashTheme: splash.baseTheme }, [createAppServerDebugAdapterCapability], contributionsReady);
 } catch (error) {
-	showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text));
+	console.error('Unable to start Ash', error);
 }

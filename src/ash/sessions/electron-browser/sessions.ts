@@ -1,6 +1,5 @@
 import { showSessionsSplash } from '../contrib/splash/browser/sessionsSplash.js';
 import { WINDOW_SPLASH_READ_CHANNEL, validatePartsSplash } from '../../platform/theme/common/themeService.js';
-import { showStartupError } from '../../workbench/browser/startupError.js';
 import { createSessionsProfile, type SessionsProfile } from '../common/sessionsProfile.js';
 import { invoke } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { NLS_CONFIGURATION_CHANNEL, NLS_ACTIVATE_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
@@ -19,5 +18,5 @@ try {
 	const { main } = await import('./sessions.main.js');
 	await main(createSessionsProfile(import.meta.env.ASH_SESSIONS_PROFILE as SessionsProfile));
 } catch (error) {
-	showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text));
+	console.error('Unable to start Ash Sessions', error);
 }

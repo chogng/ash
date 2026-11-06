@@ -358,14 +358,13 @@ suite('Workbench localization', () => {
 		assert.deepEqual(
 			[
 				localization.translate('ash', 'workbench.startupError.title', 'Unable to start Ash'),
-				localization.translate('ash', 'workbench.startupError.copy', 'Copy details'),
 				localization.translate(
 					'ash',
-					'workbench.startupError.copyFailed',
-					'Could not copy. Select the details above to copy them manually.',
+					'workbench.startupError.description',
+					'Check the browser developer tools console for details.',
 				),
 			],
-			['无法启动 Ash', '复制详情', '无法复制。请选中上方详情并手动复制。'],
+			['无法启动 Ash', '请查看浏览器开发者工具的控制台了解详情。'],
 		);
 		assert.deepEqual(
 			[

@@ -51,6 +51,7 @@ export default defineConfig(({ mode, command }) => {
 			import { showStartupError } from '${moduleUrl('workbench/browser/startupError.ts')}';
 			import { readBrowserPartsSplash } from '${moduleUrl('workbench/contrib/splash/browser/splash.ts')}';
 			import { showSessionsSplash } from '${moduleUrl('sessions/contrib/splash/browser/sessionsSplash.ts')}';
+			const container = document.getElementById('app');
 			try {
 				showSessionsSplash(document, readBrowserPartsSplash(window));
 				{
@@ -61,9 +62,9 @@ export default defineConfig(({ mode, command }) => {
 					await initializeBrowserLocalization(files, new BrowserLanguagePackStore());
 				}
 				const { create } = await import('${moduleUrl('sessions/sessions.web.main.internal.ts')}');
-				create(document.getElementById('app'), import.meta.env.ASH_SESSIONS_PROFILE);
+				create(container, import.meta.env.ASH_SESSIONS_PROFILE);
 			} catch (error) {
-				showStartupError(error, text => navigator.clipboard.writeText(text));
+				showStartupError(container, error);
 			}
 		</script>
 	</body>
