@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
+use tokio::sync::watch;
 
 const CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = 12;
 pub(crate) const OLDEST_SUPPORTED_CONFIG_DOCUMENT_SCHEMA_VERSION: u32 = 7;
@@ -36,7 +37,7 @@ pub struct ConfigStore {
     config_path: PathBuf,
     connection: Mutex<Connection>,
     subscribers: Arc<Mutex<Vec<Sender<ConfigChange>>>>,
-    committed: Arc<Mutex<ResolvedConfigSnapshot>>,
+    committed: Arc<watch::Sender<ResolvedConfigSnapshot>>,
     monitor_shutdown: Option<Sender<()>>,
     monitor_thread: Option<JoinHandle<()>>,
 }
@@ -121,7 +122,8 @@ impl ConfigStore {
 
         let (authority, _) = synchronize_authority(&mut connection, &config_path)?;
         let subscribers = Arc::new(Mutex::new(Vec::new()));
-        let committed = Arc::new(Mutex::new(authority.snapshot()));
+        let (committed, _) = watch::channel(authority.snapshot());
+        let committed = Arc::new(committed);
         let (monitor_shutdown, monitor_receiver) = mpsc::channel();
         let monitor_connection =
             ash_state::open_sqlite_database(&database_path, ash_state::SqliteDurability::Durable)
@@ -162,10 +164,14 @@ impl ConfigStore {
     /// Invalid TOML remains an error for strict reads and commands. It cannot replace this
     /// snapshot or prevent independent runtime authorities from applying their own changes.
     pub fn committed_snapshot(&self) -> ResolvedConfigSnapshot {
-        self.committed
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .clone()
+        self.committed.borrow().clone()
+    }
+
+    /// Observes the current committed snapshot and subsequent replacements. Intermediate
+    /// snapshots can coalesce. Release the receiver's borrow before awaiting or accessing
+    /// the store again.
+    pub fn subscribe_committed(&self) -> watch::Receiver<ResolvedConfigSnapshot> {
+        self.committed.subscribe()
     }
 
     /// Subscribes to committed API changes and valid external TOML edits.

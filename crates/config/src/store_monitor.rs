@@ -10,13 +10,14 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::Sender;
 use std::thread::JoinHandle;
 use std::time::Duration;
+use tokio::sync::watch;
 
 pub(crate) fn start(
     mut connection: Connection,
     config_path: PathBuf,
     shutdown: Receiver<()>,
     subscribers: Arc<Mutex<Vec<Sender<ConfigChange>>>>,
-    committed: Arc<Mutex<ResolvedConfigSnapshot>>,
+    committed: Arc<watch::Sender<ResolvedConfigSnapshot>>,
 ) -> Result<JoinHandle<()>, ConfigError> {
     std::thread::Builder::new()
         .name("ash-config-sqlite".into())
@@ -40,23 +41,23 @@ pub(crate) fn start(
 
 pub(crate) fn publish(
     subscribers: &Mutex<Vec<Sender<ConfigChange>>>,
-    committed: &Mutex<ResolvedConfigSnapshot>,
+    committed: &watch::Sender<ResolvedConfigSnapshot>,
     snapshot: ResolvedConfigSnapshot,
 ) {
-    let mut current = committed
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-    // A slower reader may publish after a newer transaction has already been observed.
-    if snapshot.generation <= current.generation {
-        return;
-    }
-    let change = ConfigChange {
-        revision: snapshot.revision,
-        generation: snapshot.generation,
-    };
-    *current = snapshot;
-    subscribers
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .retain(|subscriber| subscriber.send(change).is_ok());
+    committed.send_if_modified(|current| {
+        // A slower reader may publish after a newer transaction has already been observed.
+        if snapshot.generation <= current.generation {
+            return false;
+        }
+        let change = ConfigChange {
+            revision: snapshot.revision,
+            generation: snapshot.generation,
+        };
+        *current = snapshot;
+        subscribers
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .retain(|subscriber| subscriber.send(change).is_ok());
+        true
+    });
 }

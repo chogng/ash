@@ -768,7 +768,7 @@ fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
                 trace: Patch::Missing,
                 git: Patch::Value(GitConfig {
                     autofetch: GitAutoFetchMode::Default,
-                    autofetch_period: 1,
+                    autofetch_period: 60,
                     rebase_when_sync: false,
                 }),
                 gui: Patch::Missing,
@@ -802,7 +802,13 @@ fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
         );
         std::thread::sleep(Duration::from_millis(20));
     }
+    let stopping = Instant::now();
     drop(watcher);
+    assert!(
+        stopping.elapsed() < Duration::from_millis(750),
+        "stopping an idle automatic fetch worker took {:?}",
+        stopping.elapsed()
+    );
     assert!(
         notified,
         "completed automatic fetch must publish its status before stop"
