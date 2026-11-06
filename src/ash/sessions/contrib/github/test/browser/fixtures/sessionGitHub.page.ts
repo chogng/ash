@@ -209,14 +209,21 @@ resources.add(setARIAContainer(document.body));
 if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 }
-if (new URL(location.href).searchParams.has('artifactDetails')) {
+const showArtifactDetails = new URL(location.href).searchParams.has('artifactDetails');
+if (showArtifactDetails) {
 	sessionStorage.setItem('test-backend-pr-references', JSON.stringify([{
 		repository: { host: 'github.com', owner: 'team', name: 'one' },
 		number: 7, isArtifact: true, artifactId: 'a'.repeat(32),
-	} satisfies GitHubPullRequestReference]));
+	}, {
+		repository: { host: 'github.com', owner: 'team', name: 'two' },
+		number: 8, isArtifact: true, artifactId: 'b'.repeat(32),
+	}] satisfies GitHubPullRequestReference[]));
 }
 const transport = new Transport();
-if (new URL(location.href).searchParams.has('artifactDetails')) transport.mergeable = true;
+if (showArtifactDetails) {
+	transport.mergeable = true;
+	transport.states.set(8, 'open');
+}
 const client = new AppServerProtocolClient(transport);
 resources.add(toDisposable(() => client.dispose()));
 await client.connect();

@@ -146,12 +146,10 @@ export class SessionChatInputToolbar extends Disposable {
 						status(localize('sessions.github.detached', 'Pull request attachment removed.'));
 					}
 				};
-				const renderFollowUp = (container: HTMLElement, binding: IArtifactIntegrationBinding) =>
-					this.instantiation.createInstance(PullRequestFollowUpWidget, container, { sessionId: sessionId!, id: binding.artifact.id });
 				const invoke = async (request: IResolvedSessionPullRequest, select: (binding: IArtifactIntegrationBinding) => Promise<ArtifactAction | undefined>) => {
 					if (sessionId) { await this.github.invokePullRequestArtifact(sessionId, request, select); }
 				};
-				entry = this.entries.set(key, this.instantiation.createInstance(PullRequestEntry, this.element, request, detach, renderFollowUp, invoke));
+				entry = this.entries.set(key, this.instantiation.createInstance(PullRequestEntry, this.element, request, detach, sessionId, invoke));
 				this.element.insertBefore(entry.containerDomNode, this.issuesDomNode);
 			}
 			entry.update(request);
@@ -260,12 +258,12 @@ class PullRequestEntry extends Disposable {
 		container: HTMLElement,
 		request: IResolvedSessionPullRequest,
 		detach: (reference: NonNullable<IResolvedSessionPullRequest['recordedReference']>) => Promise<void>,
-		private readonly renderFollowUp: (container: HTMLElement, binding: IArtifactIntegrationBinding) => Disposable,
+		private readonly sessionId: string | undefined,
 		invoke: (request: IResolvedSessionPullRequest, select: (binding: IArtifactIntegrationBinding) => Promise<ArtifactAction | undefined>) => Promise<void>,
 		@IOpenerService opener: IOpenerService,
 		@INotificationService notifications: INotificationService,
 		@IEditorService editors: IEditorService,
-		@IInstantiationService instantiation: IInstantiationService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
 		super();
 		this.request = request;
@@ -322,8 +320,10 @@ class PullRequestEntry extends Disposable {
 	}
 
 	private async selectAction(binding: IArtifactIntegrationBinding): Promise<ArtifactAction | undefined> {
-		if (this.isDisposed || this.actionsDomNode.hidden || this.request.artifact?.id !== binding.artifact.id) return undefined;
-		return this.artifactDetails.choose(binding, container => this.renderFollowUp(container, binding));
+		const sessionId = this.sessionId;
+		if (!sessionId || this.isDisposed || this.actionsDomNode.hidden || this.request.artifact?.id !== binding.artifact.id) return undefined;
+		return this.artifactDetails.choose(binding, (container, cardState) =>
+			this.instantiation.createInstance(PullRequestFollowUpWidget, container, { sessionId, id: binding.artifact.id, cardState }));
 	}
 
 	public update(request: IResolvedSessionPullRequest): void {

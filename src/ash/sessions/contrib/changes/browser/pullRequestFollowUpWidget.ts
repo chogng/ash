@@ -1,6 +1,7 @@
 import { ArtifactActivities } from '../../chat/browser/artifactActivities.js';
+import { ArtifactButtons } from '../../chat/browser/artifactButtons.js';
+import { ArtifactDetailsCard, type ArtifactDetailsCardState } from '../../chat/browser/artifactDetailsCard.js';
 import { h } from '../../../../base/browser/dom.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
 import { getErrorMessage } from '../../../../base/common/errors.js';
 import { StringSHA1 } from '../../../../base/common/hash.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -8,7 +9,6 @@ import { observableValue, autorun } from '../../../../base/common/observable.js'
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { localize } from '../../../../nls.js';
 import type { Automation, IAutomationBackendService } from '../../../../platform/automations/common/automation.js';
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
@@ -32,13 +32,22 @@ interface FollowUpRow {
 	readonly plan?: Automation;
 }
 
+interface FollowUpControl {
+	readonly element: HTMLElement;
+	readonly actions: ArtifactButtons;
+	readonly activities?: ArtifactActivities;
+	readonly store: DisposableStore;
+	row: FollowUpRow;
+	busy: boolean;
+}
+
 /** Projects durable host plans into the existing Checks surface; owns no background work. */
 export class PullRequestFollowUpWidget extends Disposable {
 	readonly element: HTMLElement;
 	private readonly rows = observableValue<readonly FollowUpRow[]>(this, []);
 	private readonly controls = this._register(new DisposableStore());
 	private readonly subscriptions = this._register(new DisposableStore());
-	private readonly rendered = new Map<string, { element: HTMLElement; button: Button; row: FollowUpRow; busy: boolean; activities?: ArtifactActivities; store: DisposableStore; }>();
+	private readonly rendered = new Map<string, FollowUpControl>();
 	private epoch = 0;
 	private selectionKey: string | undefined;
 	private observedBackend: IAutomationBackendService | undefined;
@@ -47,7 +56,7 @@ export class PullRequestFollowUpWidget extends Disposable {
 
 	constructor(
 		container: HTMLElement,
-		private readonly artifact: { readonly sessionId: string; readonly id: string; } | undefined,
+		private readonly artifact: { readonly sessionId: string; readonly id: string; readonly cardState: ArtifactDetailsCardState; } | undefined,
 		@ISessionsService private readonly sessions: ISessionsService,
 		@IGitHubService private readonly associations: IGitHubService,
 		@ISessionProviderScopeService private readonly scopes: ISessionProviderScopeService,
@@ -161,31 +170,34 @@ export class PullRequestFollowUpWidget extends Disposable {
 				const explanation = h(element.ownerDocument, 'p');
 				explanation.textContent = localize('sessions.changes.followUpDescription', 'Check CI every minute and request one repair per commit in this conversation. Uses normal agent permissions and continues after this window closes.');
 				const actions = h(element.ownerDocument, 'div', { className: 'ash-sessions-check-actions' });
-				element.append(label, explanation, actions);
 				this.element.append(element);
 				const store = this.controls.add(new DisposableStore());
-				const button = store.add(new Button(actions, {
-					...defaultButtonStyles,
-					presentation: 'secondary', label: localize('sessions.changes.startFollowUp', 'Follow PR checks'), onClick: () => { void this.toggle(row.id); }
-				}));
-				store.add(new Button(actions, {
-					...defaultButtonStyles, presentation: 'secondary',
-					label: localize('sessions.changes.followUpHistory', 'Follow-up history'),
-					onClick: () => this.customViews.showCustomView(AUTOMATIONS_CUSTOM_VIEW_ID)
-				}));
-				const activities = this.artifact ? store.add(new ArtifactActivities(element, row.backend)) : undefined;
-				control = { element, button, row, busy: false, activities, store };
+				const cardState = this.artifact?.cardState;
+				const autopilot = cardState && store.add(new ArtifactDetailsCard(
+					element, localize('sessions.artifact.autopilot', 'Autopilot'), cardState.expansion(`${row.id}:autopilot`),
+				));
+				const body = autopilot?.content ?? element;
+				body.append(label, explanation, actions);
+				const activities = cardState && store.add(new ArtifactActivities(element, row.backend, cardState.expansion(`${row.id}:activities`)));
+				control = { element, actions: store.add(new ArtifactButtons(actions)), row, busy: false, activities, store };
 				this.rendered.set(row.id, control);
 			}
 			control.row = row;
 			control.activities?.setPlan(row.plan);
-			const enabled = row.plan?.status === 'enabled';
-			control.button.label = row.artifactId
-				? (enabled ? localize('sessions.changes.stopArtifactAutopilot', 'Stop PR Autopilot') : localize('sessions.changes.startArtifactAutopilot', 'Enable PR Autopilot'))
-				: (enabled ? localize('sessions.changes.stopFollowUp', 'Stop PR follow-up') : localize('sessions.changes.startFollowUp', 'Follow PR checks'));
-			control.button.enabled = !control.busy;
-			control.button.domNode.setAttribute('aria-pressed', String(row.plan?.status === 'enabled'));
+			this.renderActions(control);
 		}
+	}
+
+	private renderActions(control: FollowUpControl): void {
+		const { row, busy } = control;
+		const enabled = row.plan?.status === 'enabled';
+		const label = row.artifactId
+			? (enabled ? localize('sessions.changes.stopArtifactAutopilot', 'Stop PR Autopilot') : localize('sessions.changes.startArtifactAutopilot', 'Enable PR Autopilot'))
+			: (enabled ? localize('sessions.changes.stopFollowUp', 'Stop PR follow-up') : localize('sessions.changes.startFollowUp', 'Follow PR checks'));
+		control.actions.update([
+			{ id: 'toggle', label, enabled: !busy, pressed: enabled, run: () => { void this.toggle(row.id); } },
+			{ id: 'history', label: localize('sessions.changes.followUpHistory', 'Follow-up history'), run: () => this.customViews.showCustomView(AUTOMATIONS_CUSTOM_VIEW_ID) },
+		]);
 	}
 
 	private async toggle(id: string): Promise<void> {
@@ -193,7 +205,7 @@ export class PullRequestFollowUpWidget extends Disposable {
 		if (!control || control.busy) return;
 		const { row } = control;
 		control.busy = true;
-		control.button.enabled = false;
+		this.renderActions(control);
 		const epoch = this.epoch;
 		try {
 			row.scope.assertCurrent();

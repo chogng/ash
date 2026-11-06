@@ -1,10 +1,9 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import type { ArtifactAction, IArtifactIntegrationBinding } from '../../../../platform/artifactIntegrations/common/artifactIntegration.js';
-import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import { ArtifactButtons } from './artifactButtons.js';
 import './media/artifactIntegrations.css';
 
 /** Displays provider-supplied action effects and returns only an explicitly chosen action. */
@@ -36,17 +35,17 @@ export class ArtifactDetailsPanel extends Disposable {
 		}
 		element.append(title, consent);
 		if (renderFollowUp) this._register(renderFollowUp(element));
-		for (const action of binding.actions) {
-			const button = this._register(new Button(element, { ...defaultButtonStyles, label: action.label, presentation: 'secondary' }));
-			const effect = h(document, 'p');
-			effect.id = createUuid();
-			effect.textContent = action.description;
-			element.append(effect);
-			button.domNode.setAttribute('aria-describedby', effect.id);
-			this._register(button.onDidClick(() => onChoose(action)));
-		}
-		const close = this._register(new Button(element, { ...defaultButtonStyles, label: localize('sessions.github.artifactCloseDetails', 'Close artifact details'), presentation: 'secondary' }));
-		this._register(close.onDidClick(onDismiss));
+		const actions = h(document, 'div', { className: 'ash-session-artifact-details-actions' });
+		element.append(actions);
+		this._register(new ArtifactButtons(actions)).update([
+			...binding.actions.map(action => ({
+				id: `choice:${action.id}`,
+				label: action.label,
+				description: action.description,
+				run: () => onChoose(action),
+			})),
+			{ id: 'close', label: localize('sessions.github.artifactCloseDetails', 'Close artifact details'), run: onDismiss },
+		]);
 		this._register(addDisposableListener(element, 'keydown', event => {
 			if (event.key === 'Escape') {
 				event.stopPropagation();

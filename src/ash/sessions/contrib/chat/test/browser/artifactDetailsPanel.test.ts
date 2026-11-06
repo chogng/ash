@@ -28,6 +28,12 @@ test('Artifact details describes an action before returning its explicit selecti
 	assert.equal(await cancelled, undefined);
 	assert.equal(document.querySelector('[role=dialog]'), null);
 
+	const dismissed = panel.choose(binding);
+	const close = [...document.querySelectorAll<HTMLButtonElement>('[role=dialog] button')].find(button => button.textContent === 'Close artifact details')!;
+	close.click();
+	assert.equal(await dismissed, undefined);
+	assert.equal(document.querySelector('[role=dialog]'), null);
+
 	const selected = panel.choose(binding);
 	const merge = document.querySelector<HTMLButtonElement>('[role=dialog] button')!;
 	assert.equal(document.getElementById(merge.getAttribute('aria-describedby')!)?.textContent, action.description);

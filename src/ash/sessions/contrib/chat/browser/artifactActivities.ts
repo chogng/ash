@@ -1,6 +1,7 @@
-import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { autorun } from '../../../../base/common/observable.js';
+import { h } from '../../../../base/browser/dom.js';
+import { autorun, type ISettableObservable } from '../../../../base/common/observable.js';
 import { ArtifactActivitiesModel } from './artifactActivitiesModel.js';
+import { ArtifactDetailsCard } from './artifactDetailsCard.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import type { Automation, AutomationRunStatus, IAutomationBackendService } from '../../../../platform/automations/common/automation.js';
@@ -20,19 +21,16 @@ const statusLabels: Record<AutomationRunStatus, () => string> = {
 export class ArtifactActivities extends Disposable {
 	private readonly model: ArtifactActivitiesModel;
 
-	constructor(container: HTMLElement, backend: IAutomationBackendService) {
+	constructor(container: HTMLElement, backend: IAutomationBackendService, expanded: ISettableObservable<boolean>) {
 		super();
 		this.model = this._register(new ArtifactActivitiesModel(backend));
 		const document = container.ownerDocument;
-		const element = h(document, 'details');
-		const summary = h(document, 'summary');
-		summary.textContent = localize('sessions.artifact.activities', 'Activities');
+		const card = this._register(new ArtifactDetailsCard(container, localize('sessions.artifact.activities', 'Activities'), expanded));
 		const status = h(document, 'p');
 		status.setAttribute('role', 'status');
 		const list = h(document, 'ul');
-		element.append(summary, status, list);
-		container.append(element);
-		this._register(addDisposableListener(element, 'toggle', () => this.model.setExpanded(element.open)));
+		card.content.append(status, list);
+		this._register(autorun(reader => this.model.setExpanded(expanded.read(reader))));
 		this._register(autorun(reader => {
 			const state = this.model.state.read(reader);
 			status.textContent = state.kind === 'loading'
