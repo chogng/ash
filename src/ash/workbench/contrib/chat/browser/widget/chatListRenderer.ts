@@ -157,14 +157,17 @@ export class ChatListItemRenderer extends Disposable {
 		}
 	}
 
-	/** The list replaces the row only when its existing content cannot consume the new item. */
-	public update(item: IChatListItem): 'unchanged' | 'updated' | 'replace' {
+	/** Captures the scroll anchor before a synchronous row change, or queues a text-only update for the next frame. */
+	public update(item: IChatListItem, beforeLayout: () => void): 'unchanged' | 'queued' | 'updated' | 'replace' {
 		this.layoutTrace.trace('renderElement', () => `update type=${item.type} chars=${item.text.length} transient=${item.transient}`);
 		const contentPart: IChatContentPart | undefined = this.toolPart ?? this.markdownPart;
-		if (sameItem(this.item, item) && this.item.content === item.content && (!contentPart || contentPart.hasSameContent(item))) {
+		const same = sameItem(this.item, item);
+		if (same && this.item.content === item.content && (!contentPart || contentPart.hasSameContent(item))) {
 			this.item = item;
 			return 'unchanged';
 		}
+		if (this.tryQueuePlainResponse(item)) return 'queued';
+		beforeLayout();
 		if (this.context && (item.type === 'userContext' || item.type === 'toolCall') && (item.contextText !== undefined || item.contextEntries)
 			&& item.contextSourceUrl === this.item.contextSourceUrl && (!item.contextSourceUrl || item.text === this.item.text)) {
 			this.renderContext(item, this.item.transient && !item.transient);
@@ -183,16 +186,29 @@ export class ChatListItemRenderer extends Disposable {
 			this.thinkingPart.updateThinking(item);
 			this.item = item;
 			this.updateState();
-		} else if (this.markdownPart && !sameItem(this.item, item) && this.item.type === item.type && this.item.markdown?.supportHtml === item.markdown?.supportHtml && this.item.label === item.label && this.item.detail === item.detail && sameAction(this.item.action, item.action)
+		} else if (this.markdownPart && !same && this.item.type === item.type && this.item.markdown?.supportHtml === item.markdown?.supportHtml && this.item.label === item.label && this.item.detail === item.detail && sameAction(this.item.action, item.action)
 			&& (this.item.text === item.text && this.item.transient === item.transient
 				|| this.markdownPart.tryIncrementalUpdate({ value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true }, item.transient))) {
 			this.item = item;
 			this.updateState();
-		} else if (this.toolPart || !sameItem(this.item, item)) {
+		} else if (this.toolPart || !same) {
 			return 'replace';
 		}
 		this.refreshContent();
 		return 'updated';
+	}
+
+	private tryQueuePlainResponse(item: IChatListItem): boolean {
+		const previous = this.item;
+		// Keep controls and attachments on the synchronous path when their inputs change.
+		if (!this.markdownPart || item.type !== 'agentMessage' || !previous.transient || !item.transient || !previous.text || previous.text === item.text
+			|| previous.resources?.length || item.resources?.length || this.reading.value || this.options.getResponseActions
+			|| previous.content?.some(part => part.type !== 'text') || item.content?.some(part => part.type !== 'text')
+			|| this.options.onDidRequestMemoryReference && (this.memoryReferences.size || item.text.includes('memory:'))
+			|| !sameItemPresentation(previous, item)) return false;
+		if (!this.markdownPart.tryQueueIncrementalUpdate({ value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true }, item.transient)) return false;
+		this.item = item;
+		return true;
 	}
 
 	private updateState(): void {
@@ -960,7 +976,11 @@ export class ChatListItemRenderer extends Disposable {
 }
 
 function sameItem(left: IChatListItem, right: IChatListItem): boolean {
-	return left.id === right.id && left.type === right.type && left.text === right.text && left.contextText === right.contextText && left.contextSourceUrl === right.contextSourceUrl
+	return left.text === right.text && sameContent(left.content, right.content) && sameItemPresentation(left, right);
+}
+
+function sameItemPresentation(left: IChatListItem, right: IChatListItem): boolean {
+	return left.id === right.id && left.type === right.type && left.contextText === right.contextText && left.contextSourceUrl === right.contextSourceUrl
 		&& left.canGiveModelFeedback === right.canGiveModelFeedback && left.feedbackSource?.sessionId === right.feedbackSource?.sessionId
 		&& left.feedbackSource?.threadId === right.feedbackSource?.threadId && left.feedbackSource?.turnId === right.feedbackSource?.turnId
 		&& left.feedbackSource?.itemId === right.feedbackSource?.itemId
@@ -977,7 +997,7 @@ function sameItem(left: IChatListItem, right: IChatListItem): boolean {
 		&& left.conversationLink?.label === right.conversationLink?.label
 		&& left.transient === right.transient && left.isError === right.isError
 		&& left.label === right.label && left.detail === right.detail && left.errorCode === right.errorCode
-		&& sameContent(left.content, right.content) && left.attachmentSource?.sessionId === right.attachmentSource?.sessionId
+		&& left.attachmentSource?.sessionId === right.attachmentSource?.sessionId
 		&& left.attachmentSource?.threadId === right.attachmentSource?.threadId
 		&& left.attachmentSource?.itemId === right.attachmentSource?.itemId
 		&& left.attachmentSource?.kind === right.attachmentSource?.kind

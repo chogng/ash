@@ -41,6 +41,7 @@ interface MarkdownTailPatch {
 
 const markdownFrameThreshold = 1024;
 const markdownTailThreshold = 4096;
+const markdownSizeLimit = 4 * 1024 * 1024;
 
 // Pipe-led tables can start reusing rows as soon as rendering moves to the
 // frame queue. Other blocks keep the larger threshold for the extra setup.
@@ -133,6 +134,15 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		return true;
 	}
 
+	/** Queues a snapshot only when it can be accepted without touching the live DOM. */
+	public tryQueueIncrementalUpdate(markdown: IMarkdownString, incomplete: boolean): boolean {
+		if (this.isDisposed || !this.visible || markdown.value.length < markdownFrameThreshold || markdown.value.length > markdownSizeLimit) return false;
+		// Terminal updates and corrections share the same latest snapshot slot.
+		this.pending = { markdown, incomplete };
+		this.scheduleUpdate();
+		return true;
+	}
+
 	public get codeblocks(): readonly IChatCodeBlockInfo[] {
 		if (this.isDisposed) { return []; }
 		return [...this.codeBlocks].sort(([left], [right]) => left - right).map(([index, part]) => ({
@@ -177,22 +187,16 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 
 	private enqueue(markdown: IMarkdownString, incomplete: boolean): void {
 		// Preserve the complete renderer's synchronous admission/size error.
-		if (markdown.value.length > 4 * 1024 * 1024) { this.render(markdown, incomplete); return; }
+		if (markdown.value.length > markdownSizeLimit) { this.render(markdown, incomplete); return; }
 		if (!this.visible) {
 			this.update.clear();
 			this.pending = { markdown, incomplete };
 			return;
 		}
-		if (markdown.value.length < markdownFrameThreshold) {
-			this.update.clear();
-			this.pending = undefined;
-			this.render(markdown, incomplete);
-			return;
-		}
-		// The transcript owns every source snapshot. Rendering consumes only the
-		// latest one per frame; terminal updates and corrections use the same slot.
-		this.pending = { markdown, incomplete };
-		if (this.visible) this.scheduleUpdate();
+		if (this.tryQueueIncrementalUpdate(markdown, incomplete)) return;
+		this.update.clear();
+		this.pending = undefined;
+		this.render(markdown, incomplete);
 	}
 
 	private scheduleUpdate(): void {
@@ -236,7 +240,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		const previousTail = this.fragments.at(-1);
 		// An ordinary tail without a new blank line can go directly to the renderer.
 		// It still verifies the block shape and handles incomplete inline syntax.
-		if (sameOptions && canPatchTail(tail) && markdown.value.length <= 4 * 1024 * 1024
+		if (sameOptions && canPatchTail(tail) && markdown.value.length <= markdownSizeLimit
 			&& !markdown.supportHtml && !this.options.markedExtensions?.length
 			&& !/[$\\<>\r]|!\[|`{3}|~{3}|\]:/u.test(markdown.value) && !/\n[\t ]*\n/u.test(tail)
 			&& previousTail?.element.childElementCount === 1
@@ -246,7 +250,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		// share message-scoped macros. These inputs, reference definitions and
 		// normalized CRLF offsets use the complete renderer.
 		if (!sources && !markdown.supportHtml && !this.options.markedExtensions?.length && !tail.includes('\r')
-			&& !tail.includes('$$') && !tail.includes('\\[') && markdown.value.length <= 4 * 1024 * 1024) {
+			&& !tail.includes('$$') && !tail.includes('\\[') && markdown.value.length <= markdownSizeLimit) {
 			// With no possible math opener, no extension scan or recursive math-token
 			// walk is needed. A later delimiter still selects the full math path.
 			const lexer = /[$\\]|`{3}|~{3}/u.test(tail) ? this.lexer : this.plainLexer;
@@ -494,7 +498,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 
 	private extendFence(markdown: IMarkdownString, incomplete: boolean): boolean {
 		const fragment = this.fragments.at(-1);
-		if (!fragment?.fence || markdown.value.length > 4 * 1024 * 1024) return false;
+		if (!fragment?.fence || markdown.value.length > markdownSizeLimit) return false;
 		const appended = markdown.value.slice(this.markdown!.value.length);
 		if (appended.includes('\r')) return false;
 		// A closing marker can span chunks, or cease being a closing marker when its

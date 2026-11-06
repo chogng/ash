@@ -458,8 +458,16 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	private reconcile(items: readonly IChatListItem[]): void {
-		if (this.visible) this.captureFollowState();
-		const anchor = this.visible && !this.shouldFollow ? this.readingPosition : undefined;
+		let needsLayout = false;
+		let anchor: ReadingAnchor | undefined;
+		const beforeLayout = () => {
+			if (needsLayout) return;
+			needsLayout = true;
+			if (this.visible) {
+				this.captureFollowState();
+				anchor = this.shouldFollow ? undefined : this.readingPosition;
+			}
+		};
 		const active = this.element.ownerDocument.activeElement;
 		const focusedRow = this.lastFocusedItemId ? this.renderedItems.get(this.lastFocusedItemId) : undefined;
 		const focusedActionRowId = (focusedRow?.item.queueTarget || focusedRow?.item.historyRedoTarget || focusedRow?.item.turnChanges) && focusedRow.element.contains(active)
@@ -469,6 +477,7 @@ export class ChatListWidget extends DomWidget {
 		const ids = new Set(items.map(item => item.id));
 		for (const [id, row] of this.renderedItems) {
 			if (ids.has(id)) continue;
+			beforeLayout();
 			this.viewportObserver?.unobserve(row.element);
 			this.renderedItems.deleteAndDispose(id);
 			this.pendingViewportMeasurements.delete(id);
@@ -477,14 +486,19 @@ export class ChatListWidget extends DomWidget {
 		let next: ChildNode | null = this.transcript.firstChild;
 		for (const item of items) {
 			let row = this.renderedItems.get(item.id);
-			const update = row?.update(item);
+			const update = row?.update(item, beforeLayout);
 			if (row && update === 'unchanged') {
-				if (row.element !== next) { this.transcript.insertBefore(row.element, next); changed = true; }
+				if (row.element !== next) {
+					beforeLayout();
+					this.transcript.insertBefore(row.element, next);
+					changed = true;
+				}
 				next = row.element.nextSibling;
 				continue;
 			}
 			changed = true;
 			if (!row || update === 'replace') {
+				beforeLayout();
 				if (row?.element === next) next = row.element.nextSibling;
 				if (row) this.viewportObserver?.unobserve(row.element);
 				// Retire the previous row before its replacement starts attachment work.
@@ -528,11 +542,14 @@ export class ChatListWidget extends DomWidget {
 				this.viewportObserver?.observe(row.element);
 				if (this.viewportObserver) this.pendingViewportMeasurements.add(item.id);
 			}
-			if (this.viewportObserver && row.markdownPart) this.pendingViewportMeasurements.add(item.id);
-			if (row.element !== next) this.transcript.insertBefore(row.element, next);
+			if (this.viewportObserver && row.markdownPart && (update !== 'queued' || row.element !== next)) this.pendingViewportMeasurements.add(item.id);
+			if (row.element !== next) {
+				beforeLayout();
+				this.transcript.insertBefore(row.element, next);
+			}
 			next = row.element.nextSibling;
 		}
-		changed = this.renderImageBatches(items) || changed;
+		changed = this.renderImageBatches(items, beforeLayout) || changed;
 		this.promptModel = new PromptTimelineModel(items.filter(item => item.type === 'userMessage'), id => this.renderedItems.get(id)!.element);
 		// Reparenting a retained gallery can blur its button. Restore only that button,
 		// and never replace focus deliberately moved elsewhere by a render listener.
@@ -551,20 +568,24 @@ export class ChatListWidget extends DomWidget {
 		// Reconciliation can temporarily shorten the DOM scroll range. Keep the position
 		// captured before moving retained widgets instead of interpreting that clamp as user input.
 		if (changed) {
-			if (this.visible) this.layout(anchor, false);
-			if (this.pendingViewportMeasurements.size) this.refreshRowViewports();
+			// A queued Markdown snapshot reports its own geometry after committing DOM.
+			if (needsLayout) {
+				if (this.visible) this.layout(anchor, false);
+				if (this.pendingViewportMeasurements.size) this.refreshRowViewports();
+			}
 			this._onDidChangeContent.fire();
 		} else if (this.visible) {
 			this.renderPromptTimeline();
 		}
 	}
 
-	private renderImageBatches(items: readonly IChatListItem[]): boolean {
+	private renderImageBatches(items: readonly IChatListItem[], beforeLayout: () => void): boolean {
 		const used = new Set<string>();
 		let changed = false;
 		for (let index = 0; index < items.length; index++) {
 			const call = items[index].toolInvocation;
 			if (!call || !isImageGenerationToolInvocation(call)) { continue; }
+			beforeLayout();
 			const batch = getImageGenerationBatch(items, call.call.toolCallId, call.call.turnId);
 			index += batch.length - 1;
 			const members = new Set(batch.map(item => item.id));
@@ -592,7 +613,7 @@ export class ChatListWidget extends DomWidget {
 			entry.part.render(batch);
 		}
 		for (const key of this.imageBatches.keys()) {
-			if (!used.has(key)) { this.imageBatches.deleteAndDispose(key); changed = true; }
+			if (!used.has(key)) { beforeLayout(); this.imageBatches.deleteAndDispose(key); changed = true; }
 		}
 		return changed;
 	}

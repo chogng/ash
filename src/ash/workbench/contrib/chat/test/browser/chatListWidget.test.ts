@@ -852,6 +852,36 @@ suite('chatRenderer browser component', () => {
 		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount)).toBe(0);
 	});
 
+	test('queued Markdown keeps a scroll made before the next frame', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const text = 'An earlier paragraph with more reading content.\n\n'.repeat(80);
+		await page.evaluate(value => window.ashChatTranscriptIntegration.stream(value + 'Initial reply tail.', false), text);
+		await expect(page.locator('[data-item-id="stream"]')).toContainText('Initial reply tail.');
+		const viewport = page.locator('.ash-chat-list-widget .ash-scrollbar-viewport');
+		await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThanOrEqual(1);
+		const next = text + 'Additional streamed paragraph.\n\n'.repeat(20) + 'Committed reply tail.';
+		const queued = await viewport.evaluate((element, value) => {
+			const { get, set } = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop')!;
+			let reads = 0;
+			Object.defineProperty(element, 'scrollTop', { configurable: true, set, get() { reads++; return get!.call(this); } });
+			try {
+				window.ashChatTranscriptIntegration.stream(value.slice(0, -5), false);
+				window.ashChatTranscriptIntegration.stream(value, false);
+			} finally {
+				Reflect.deleteProperty(element, 'scrollTop');
+			}
+			const stillQueued = !element.textContent?.includes('Committed reply tail.');
+			element.scrollTop -= 150;
+			return { stillQueued, reads, top: element.scrollTop };
+		}, next);
+		assert.equal(queued.stillQueued, true);
+		assert.equal(queued.reads, 0);
+		await expect(page.locator('[data-item-id="stream"]')).toContainText('Committed reply tail.');
+		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(queued.top);
+		await expect(page.getByRole('button', { name: 'Scroll to Latest' })).toBeVisible();
+	});
+
 	test('provider corrections preserve the reading position while retaining a selected code editor and focused action', async function () {
 		const { page } = browserTests;
 
