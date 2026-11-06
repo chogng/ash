@@ -108,6 +108,28 @@ suite('Shared chat Markdown rendering', () => {
 		assert.equal((result.element.textContent!.match(/Incomplete/g) ?? []).length, 256);
 	});
 
+	test('streaming Markdown recognizes late math closers and retires formulas on correction', async () => {
+		using scope = services();
+		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document });
+		const prefix = '**Price** $5 and $10. '.repeat(64) + '\n\n';
+		const render = async (value: string, incomplete = true): Promise<void> => {
+			part.tryIncrementalUpdate({ value }, incomplete);
+			const frame = new DeferredPromise<void>();
+			using scheduled = scheduleAtNextAnimationFrame(getWindow(part.domNode), () => frame.complete());
+			await frame.p;
+		};
+		for (const [opener, closer] of [['$', '$'], ['$$', '$$'], ['\\(', '\\)'], ['\\[', '\\]']]) {
+			const open = `${prefix}${opener}x+1`;
+			await render(open);
+			assert.equal(part.domNode.querySelector('[data-latex]'), null, opener);
+			await render(open + closer);
+			assert.deepEqual([...part.domNode.querySelectorAll('[data-latex]')].map(node => node.getAttribute('data-latex')), ['x+1'], opener);
+			await render(`${prefix}Corrected $5.`, false);
+			assert.equal(part.domNode.querySelector('[data-latex]'), null, opener);
+			assert.ok(part.domNode.textContent?.includes('Corrected $5.'));
+		}
+	});
+
 	test('formula closing delimiters retain the existing scan limit', () => {
 		using scope = services();
 		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
