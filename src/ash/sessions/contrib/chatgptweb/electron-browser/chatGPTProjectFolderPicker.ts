@@ -32,7 +32,14 @@ export class ChatGPTProjectFolderPicker extends ChatInputPickerActionViewItem {
 	) {
 		const label = localize('sessions.chatgpt.projectOrFolder', 'Project or folder');
 		super({
-			id: 'sessions.chatgpt.projectOrFolder', icon: Lxicon.folder,
+			id: 'sessions.chatgpt.projectOrFolder',
+			get icon() {
+				const state = chat.state.get();
+				if (!state.draftTarget?.projectId && state.draftTarget?.folder) {
+					return Lxicon.folder;
+				}
+				return Lxicon.projects;
+			},
 			get label() {
 				const state = chat.state.get();
 				const project = state.projects.find(item => item.id === state.draftTarget?.projectId);

@@ -1,46 +1,67 @@
-.ash-new-environment-dialog {
-	inline-size: min(40rem, calc(100vw - 2rem));
-	max-block-size: calc(100dvh - 2rem);
+.ash-dialog.ash-new-environment-dialog {
+	max-block-size: calc(100dvh - var(--ash-spacing-size320));
 	overflow: auto;
-	border-radius: var(--ash-cornerRadius-large);
+	border-radius: var(--ash-cornerRadius-xLarge);
+	box-shadow: 0 8px 24px
+		color-mix(in srgb, var(--ash-dialog-shadow) 70%, transparent);
 }
 
-.ash-new-environment-dialog .ash-environment-fields,
-.ash-new-environment-dialog .ash-environment-field {
-	display: grid;
-	gap: var(--ash-spacing-size80);
+.ash-dialog.ash-new-environment-dialog::backdrop {
+	background: color-mix(
+		in srgb,
+		var(--ash-dialog-backdropBackground) 65%,
+		transparent
+	);
+}
+
+:is(.hc-black, .hc-light) .ash-dialog.ash-new-environment-dialog {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
+:is(.hc-black, .hc-light) .ash-new-environment-dialog::backdrop {
+	background: var(--ash-dialog-backdropBackground);
+}
+
+.ash-new-environment-dialog .ash-dialog-title {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .ash-new-environment-dialog .ash-environment-fields {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	gap: var(--ash-spacing-size160);
 }
 
-.ash-dialog.ash-new-environment-dialog
-	> :is(.ash-dialog-header, .ash-dialog-body) {
-	box-sizing: border-box;
-	padding-inline: var(--ash-spacing-size240);
-	inline-size: 100%;
+.ash-new-environment-dialog .ash-environment-field {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--ash-spacing-size60);
 }
 
-.ash-new-environment-dialog .ash-environment-fields {
-	grid-template-columns: minmax(0, 1fr);
+.ash-new-environment-dialog .ash-environment-row > .ash-environment-field {
+	flex: 1;
+	min-inline-size: 0;
+}
+
+.ash-new-environment-dialog .ash-environment-field + button {
+	align-self: end;
 }
 
 .ash-new-environment-dialog .ash-dialog-footer {
 	margin-block-start: var(--ash-spacing-size160);
-	padding-block-start: var(--ash-spacing-size120);
-	border-block-start: var(--ash-strokeThickness) solid
-		var(--ash-dialog-border);
 }
 
-.ash-new-environment-dialog .ash-environment-field :is(input, select, textarea),
-.ash-new-environment-dialog .ash-environment-row select,
-.ash-new-environment-dialog .ash-environment-recent input {
-	padding: var(--ash-spacing-size80);
+.ash-new-environment-dialog :is(input, textarea) {
+	box-sizing: border-box;
+	min-inline-size: 0;
+	padding: var(--ash-spacing-size60) var(--ash-spacing-size80);
 	color: var(--ash-input-foreground);
 	background: var(--ash-input-background);
-	border: 1px solid var(--ash-input-border, var(--ash-dialog-border));
-	border-radius: var(--ash-cornerRadius-small);
+	border: var(--ash-strokeThickness) solid var(--ash-input-border);
+	border-radius: var(--ash-cornerRadius-large);
 	font: inherit;
 }
 
@@ -49,9 +70,15 @@
 	font-family: var(--ash-font-family-monospace, monospace);
 }
 
-.ash-new-environment-dialog :is(input, select, textarea, button):focus-visible {
-	outline: 1px solid var(--ash-focusBorder);
-	outline-offset: 2px;
+.ash-new-environment-dialog :is(input, textarea):focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+:is(.hc-black, .hc-light)
+	.ash-new-environment-dialog
+	:is(input, textarea, button):focus-visible {
+	outline-offset: var(--ash-spacing-size20);
 }
 
 .ash-new-environment-dialog .ash-environment-row,
@@ -65,6 +92,18 @@
 	justify-content: space-between;
 }
 
+.ash-new-environment-dialog .ash-environment-folder-section {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-new-environment-dialog .ash-environment-folders {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--ash-spacing-size40);
+}
+
 .ash-new-environment-dialog .ash-environment-folder-name {
 	flex: 1;
 	min-inline-size: 0;
@@ -75,9 +114,11 @@
 
 .ash-new-environment-dialog .ash-environment-actions {
 	justify-content: flex-end;
+	flex-wrap: wrap;
 }
 
-.ash-new-environment-dialog [role="alert"] {
+.ash-new-environment-dialog [role="alert"]:not(:empty) {
+	margin-block-start: var(--ash-spacing-size80);
 	color: var(--ash-error-foreground);
 }
 
@@ -91,27 +132,15 @@
 
 .ash-new-environment-dialog .ash-environment-recent > div {
 	display: grid;
+	grid-template-columns: minmax(0, 1fr);
 	max-block-size: 12rem;
 	overflow: auto;
 }
 
-.ash-new-environment-dialog
-	:is(.ash-environment-recent, .ash-environment-folder)
-	button {
-	padding: var(--ash-spacing-size80);
+.ash-new-environment-dialog .ash-environment-recent button {
+	justify-content: flex-start;
 	text-align: start;
-	color: inherit;
-	background: transparent;
-	border: 0;
-	border-radius: var(--ash-cornerRadius-small);
-	font: inherit;
-	cursor: pointer;
-}
-
-.ash-new-environment-dialog
-	:is(.ash-environment-recent, .ash-environment-folder)
-	button:hover {
-	background: var(--ash-list-hoverBackground);
+	overflow-wrap: anywhere;
 }
 
 .ash-new-environment-dialog
@@ -121,30 +150,32 @@
 		.ash-environment-field,
 		.ash-environment-row,
 		.ash-environment-actions
-	)[hidden] {
+	)[hidden],
+.ash-new-environment-dialog .ash-environment-folders:empty {
 	display: none;
 }
 
-.ash-new-environment-dialog .ash-environment-folder {
-	padding: var(--ash-spacing-size80);
-	border: var(--ash-strokeThickness) solid var(--ash-dialog-border);
-	border-radius: var(--ash-cornerRadius-medium);
+.ash-new-environment-dialog .ash-environment-menu-field {
+	justify-content: space-between;
+	min-block-size: var(--ash-spacing-size320);
+	min-inline-size: 0;
+	text-align: start;
 }
 
-.ash-new-environment-dialog .ash-environment-folder select {
+.ash-new-environment-dialog .ash-environment-folder .ash-environment-menu-field {
 	max-inline-size: 48%;
+	border-radius: var(--ash-cornerRadius-medium);
 }
 
 .ash-new-environment-dialog .ash-environment-variables {
 	justify-content: space-between;
 	gap: var(--ash-spacing-size80);
-	padding: var(--ash-spacing-size120);
-	border-color: var(--ash-contrastBorder, var(--ash-dialog-border));
+	padding: var(--ash-spacing-size80);
 	text-align: start;
 }
 
 .ash-new-environment-dialog .ash-environment-variables-status {
 	display: block;
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label1);
+	font-size: var(--ash-fontSize-label2);
 }

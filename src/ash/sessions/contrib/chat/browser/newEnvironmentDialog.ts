@@ -1,12 +1,16 @@
 import { parseSessionEnvironment } from '../../../services/sessions/common/sessionEnvironment.js';
 import './media/newEnvironmentDialog.css';
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
+import { observeResize } from '../../../../base/browser/observer.js';
+import { Button, type ButtonPresentation } from '../../../../base/browser/ui/button/button.js';
 import { Dialog } from '../../../../base/browser/ui/dialog/dialog.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
+import { ActionListItemKind, type IActionListItem } from '../../../../platform/actionWidget/browser/actionList.js';
+import type { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
+import { ActionWidgetDropdown } from '../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import { defaultButtonStyles, defaultCheckboxStyles, defaultDialogStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import type { SessionExecutionTarget } from '../../../services/sessions/common/session.js';
 
@@ -37,7 +41,7 @@ export class NewEnvironmentDialog extends Disposable {
 	readonly appendHost: (host: EnvironmentHost) => void;
 	private readonly title = localize('sessions.environment.newEnvironment', 'New Environment');
 
-	constructor(container: HTMLElement, options: EnvironmentDialogOptions) {
+	constructor(container: HTMLElement, options: EnvironmentDialogOptions, menus: IActionWidgetService) {
 		super();
 		const doc = container.ownerDocument;
 		const folders: EnvironmentFolder[] = options.initialFolders.map(target => ({ target }));
@@ -50,7 +54,6 @@ export class NewEnvironmentDialog extends Disposable {
 		const error = doc.createElement('div');
 		error.setAttribute('role', 'alert');
 		main.className = editor.className = 'ash-environment-fields';
-		footer.className = 'ash-environment-actions';
 		editor.hidden = true;
 
 		const field = (parent: HTMLElement, text: string, input: HTMLElement) => {
@@ -59,15 +62,47 @@ export class NewEnvironmentDialog extends Disposable {
 			label.append(text, input);
 			parent.append(label);
 		};
-		const button = (parent: HTMLElement, label: string, run: () => void, primary = false) => this._register(new Button(parent, {
-			...defaultButtonStyles, label, presentation: primary ? 'primary' : 'secondary', onClick: run,
+		const button = (parent: HTMLElement, label: string, run: () => void, presentation: ButtonPresentation = 'secondary') => this._register(new Button(parent, {
+			...defaultButtonStyles, label, presentation, onClick: run,
 		}));
+		const menuField = <T>(parent: HTMLElement, lifetime: DisposableStore, ariaLabel: string, label: string,
+			load: () => readonly IActionListItem<T>[], select: (value: T) => void, popupWidth?: 'trigger',
+		) => {
+			const dropdown: ActionWidgetDropdown = lifetime.add(new ActionWidgetDropdown(parent, {
+				label, ariaLabel,
+				buttonOptions: { presentation: 'secondary', size: 'standard' },
+				labelRenderer: element => {
+					appendIcon(Lxicon.chevronDown, element);
+					return null;
+				},
+				onOpen: () => dropdown.showItems({ load, select, restoreFocusOnSelect: true }),
+				onShow: popupWidth === 'trigger' ? menu => {
+					const trigger = dropdown.element;
+					const syncWidth = () => {
+						const width = `${trigger.getBoundingClientRect().width}px`;
+						menu.style.minInlineSize = width;
+						menu.style.maxInlineSize = width;
+					};
+					syncWidth();
+					return observeResize(trigger, syncWidth, { box: 'border-box' });
+				} : undefined,
+				tabLeavesPopup: true,
+				listOptions: { ariaLabel },
+			}, menus));
+			dropdown.element.classList.add('ash-environment-menu-field');
+			dropdown.element.setAttribute('aria-description', label);
+			return dropdown;
+		};
+		const updateMenuLabel = (dropdown: ActionWidgetDropdown, label: string) => {
+			dropdown.setLabel(label);
+			dropdown.element.setAttribute('aria-description', label);
+		};
 		const run = async (action: () => Promise<void>) => {
 			if (busy) return;
 			busy = true;
 			error.textContent = '';
 			footer.setAttribute('aria-busy', 'true');
-			select.disabled = true;
+			hostMenu.setEnabled(false);
 			connectionWorkspace.disabled = true;
 			try { await action(); }
 			catch (failure) {
@@ -75,7 +110,7 @@ export class NewEnvironmentDialog extends Disposable {
 			} finally {
 				busy = false;
 				footer.removeAttribute('aria-busy');
-				select.disabled = false;
+				hostMenu.setEnabled(hosts.length > 0);
 				connectionWorkspace.disabled = false;
 			}
 		};
@@ -83,32 +118,59 @@ export class NewEnvironmentDialog extends Disposable {
 		const name = doc.createElement('input');
 		name.value = folders[0]?.target.root.split(/[\\/]/).filter(Boolean).at(-1) ?? '';
 		field(main, localize('sessions.environment.name', 'Name'), name);
-		const select = doc.createElement('select');
-		const localHosts = doc.createElement('optgroup');
-		localHosts.label = localize('sessions.environment.localGroup', 'Local');
-		const remoteHosts = doc.createElement('optgroup');
-		remoteHosts.label = localize('sessions.environment.remote', 'Remote');
-		const hosts: EnvironmentHost[] = [];
+		const hosts = [...options.hosts];
+		let selectedHost = options.selected;
+		const runIn = localize('sessions.environment.runIn', 'Run in');
+		const hostUnavailable = localize('sessions.environment.unavailable', 'Host unavailable');
+		const hostGroups = [
+			{ id: 'local', label: localize('sessions.environment.localGroup', 'Local') },
+			{ id: 'remote', label: localize('sessions.environment.remote', 'Remote') },
+		];
+		const cloudLabel = localize('sessions.environment.cloudUnavailable', 'Cloud (unavailable)');
+		const hostField = h(doc, 'div', { className: 'ash-environment-field' }, h(doc, 'span', runIn));
+		main.append(hostField);
+		const hostMenu = menuField<number>(hostField, this._store, runIn, hosts[selectedHost]?.label ?? hostUnavailable, () => {
+			const items: IActionListItem<number>[] = [];
+			for (const group of hostGroups) {
+				items.push({ kind: ActionListItemKind.Header, label: group.label });
+				hosts.forEach((candidate, index) => {
+					if (candidate.group === group.id) {
+						items.push({ kind: ActionListItemKind.Action, label: candidate.label, item: index, checked: index === selectedHost });
+					}
+				});
+			}
+			items.push({ kind: ActionListItemKind.Separator, label: '' }, { kind: ActionListItemKind.Action, label: cloudLabel, disabled: true });
+			return items;
+		}, index => {
+			if (index === selectedHost) return;
+			selectedHost = index;
+			const target = hosts[index];
+			updateMenuLabel(hostMenu, target.label);
+			host = undefined;
+			connectionWorkspace.value = '';
+			connectionField.hidden = !target.needsWorkspace;
+			folders.length = 0;
+			closeRecent();
+			remotePathRow.hidden = true;
+			renderFolders();
+		}, 'trigger');
 		this.appendHost = host => {
-			const group = host.group === 'local' ? localHosts : remoteHosts;
-			group.append(new Option(host.label, String(hosts.length)));
 			hosts.push(host);
+			if (hosts.length === 1) {
+				updateMenuLabel(hostMenu, host.label);
+				connectionField.hidden = !host.needsWorkspace;
+			}
+			hostMenu.setEnabled(!busy);
 		};
-		options.hosts.forEach(this.appendHost);
-		select.append(localHosts, remoteHosts);
-		const cloud = new Option(localize('sessions.environment.cloudUnavailable', 'Cloud (unavailable)'), '');
-		cloud.disabled = true;
-		select.add(cloud);
-		select.value = String(options.selected);
-		field(main, localize('sessions.environment.runIn', 'Run in'), select);
+		hostMenu.setEnabled(hosts.length > 0);
 		const connectionWorkspace = doc.createElement('input');
 		connectionWorkspace.placeholder = '/home/user/project';
 		field(main, localize('sessions.environment.workspacePath', 'Absolute workspace path'), connectionWorkspace);
 		const connectionField = connectionWorkspace.parentElement!;
-		connectionField.hidden = !hosts[options.selected]?.needsWorkspace;
+		connectionField.hidden = !hosts[selectedHost]?.needsWorkspace;
 		const resolveHost = async () => {
-			const target = hosts[Number(select.value)];
-			if (!target) throw new Error(localize('sessions.environment.unavailable', 'Host unavailable'));
+			const target = hosts[selectedHost];
+			if (!target) throw new Error(hostUnavailable);
 			const workspace = connectionWorkspace.value.trim();
 			if (target.needsWorkspace && (!workspace.startsWith('/') || workspace.includes('\0'))) {
 				connectionWorkspace.focus();
@@ -119,7 +181,7 @@ export class NewEnvironmentDialog extends Disposable {
 			return host;
 		};
 		const list = doc.createElement('div');
-		list.className = 'ash-environment-fields';
+		list.className = 'ash-environment-folders';
 		const folderHeader = doc.createElement('div');
 		folderHeader.className = 'ash-environment-row';
 		folderHeader.append(localize('sessions.environment.folders', 'Folders'));
@@ -168,7 +230,7 @@ export class NewEnvironmentDialog extends Disposable {
 			recent.hidden = false;
 			addButton.domNode.setAttribute('aria-expanded', 'true');
 			filter.focus();
-		}));
+		}), 'quiet');
 		addButton.domNode.setAttribute('aria-expanded', 'false');
 		const closeRecent = () => {
 			recent.hidden = true;
@@ -193,6 +255,7 @@ export class NewEnvironmentDialog extends Disposable {
 			const addChoice = (label: string, action: () => void, title?: string) => {
 				const choice = doc.createElement('button');
 				choice.type = 'button';
+				choice.className = 'ash-button ash-button-quiet ash-button-small';
 				choice.textContent = label;
 				if (title) choice.title = title;
 				choice.onclick = action;
@@ -215,8 +278,12 @@ export class NewEnvironmentDialog extends Disposable {
 			closeRecent();
 			addButton.focus();
 		}));
-		main.append(folderHeader, recent, remotePathRow, list);
+		main.append(h(doc, 'div', { className: 'ash-environment-folder-section' }, folderHeader, recent, remotePathRow, list));
+		const folderMenus = this._register(new DisposableStore());
+		const originalFolder = localize('sessions.environment.originalFolder', 'Original folder');
+		const chooseWorktree = localize('sessions.environment.chooseWorktree', 'Choose Worktree…');
 		const renderFolders = () => {
+			folderMenus.clear();
 			list.replaceChildren();
 			for (const folder of folders) {
 				const row = doc.createElement('div');
@@ -226,13 +293,32 @@ export class NewEnvironmentDialog extends Disposable {
 				path.textContent = folder.target.root.split(/[\\/]/).filter(Boolean).at(-1) ?? folder.target.root;
 				path.title = folder.target.root;
 				row.append(path);
-				const worktree = doc.createElement('select');
-				worktree.setAttribute('aria-label', localize('sessions.environment.folderWorktree', 'Worktree for {0}', folder.target.root));
-				worktree.add(new Option(folder.worktree?.root ?? localize('sessions.environment.originalFolder', 'Original folder'), 'original'));
-				worktree.add(new Option(localize('sessions.environment.chooseWorktree', 'Choose Worktree…'), 'choose'));
-				row.append(worktree);
+				let choices: Awaited<ReturnType<EnvironmentDialogOptions['worktrees']>> = [];
+				const worktreeLabel = () => choices.find(({ target }) => target.root === folder.worktree?.root)?.label ?? folder.worktree?.root ?? originalFolder;
+				const worktree = menuField<SessionExecutionTarget | 'original' | 'choose'>(row, folderMenus,
+					localize('sessions.environment.folderWorktree', 'Worktree for {0}', folder.target.root), worktreeLabel(), () => [
+						{ kind: ActionListItemKind.Action, label: originalFolder, item: 'original', checked: !folder.worktree },
+						...choices.map(({ label, target }) => ({ kind: ActionListItemKind.Action, label, item: target, checked: target.root === folder.worktree?.root } as const)),
+						...(!choices.length ? [{ kind: ActionListItemKind.Action, label: chooseWorktree, item: 'choose' } as const] : []),
+					], value => {
+						if (value !== 'choose') {
+							folder.worktree = value === 'original' ? undefined : value;
+							updateMenuLabel(worktree, worktreeLabel());
+							return;
+						}
+						void run(async () => {
+							const current = await resolveHost();
+							if (!current || this.isDisposed || !row.isConnected) return;
+							const available = await options.worktrees(current.providerId, folder.target);
+							if (this.isDisposed || !row.isConnected) return;
+							choices = available;
+							updateMenuLabel(worktree, worktreeLabel());
+							if (!choices.length) error.textContent = localize('sessions.environment.noWorktrees', 'No worktrees are available for this folder.');
+						});
+					});
 				const remove = doc.createElement('button');
 				remove.type = 'button';
+				remove.className = 'ash-button ash-button-quiet ash-button-small';
 				remove.textContent = localize('sessions.environment.removeFolder', 'Remove');
 				remove.setAttribute('aria-label', localize('sessions.environment.removeNamedFolder', 'Remove {0}', folder.target.root));
 				remove.onclick = () => {
@@ -241,29 +327,10 @@ export class NewEnvironmentDialog extends Disposable {
 					addButton.focus();
 				};
 				row.append(remove);
-				worktree.onchange = () => void run(async () => {
-					const current = await resolveHost();
-					if (!current || this.isDisposed || !row.isConnected) return;
-					const choices = await options.worktrees(current.providerId, folder.target);
-					if (this.isDisposed || !row.isConnected) return;
-					worktree.replaceChildren(new Option(localize('sessions.environment.originalFolder', 'Original folder'), 'original'));
-					choices.forEach(({ label, target }, index) => worktree.add(new Option(label, String(index), false, target.root === folder.worktree?.root)));
-					if (!choices.length) error.textContent = localize('sessions.environment.noWorktrees', 'No worktrees are available for this folder.');
-					worktree.onchange = () => { folder.worktree = choices[Number(worktree.value)]?.target; };
-				});
 				list.append(row);
 			}
 		};
 		renderFolders();
-		this._register(addDisposableListener(select, 'change', () => {
-			host = undefined;
-			connectionWorkspace.value = '';
-			connectionField.hidden = !hosts[Number(select.value)]?.needsWorkspace;
-			folders.length = 0;
-			closeRecent();
-			remotePathRow.hidden = true;
-			renderFolders();
-		}));
 
 		const variableTitle = localize('sessions.environment.variables', 'Environment variables');
 		const textarea = doc.createElement('textarea');
@@ -285,7 +352,7 @@ export class NewEnvironmentDialog extends Disposable {
 			else variableButton.focus();
 		};
 		const variableButton = h(doc, 'button', {
-			className: 'ash-button ash-button-secondary ash-environment-variables',
+			className: 'ash-button ash-button-quiet ash-environment-variables',
 			attributes: { type: 'button', 'aria-label': variableTitle },
 		});
 		const variableLabels = h(doc, 'span');
@@ -309,7 +376,7 @@ export class NewEnvironmentDialog extends Disposable {
 			if (!current || this.isDisposed) return;
 			await options.create(name.value.trim(), current.providerId, folders, variables);
 			close();
-		}), true);
+		}), 'primary');
 		button(editorActions, localize('sessions.environment.back', 'Back'), () => switchPage(false));
 		button(editorActions, localize('sessions.environment.done', 'Done'), () => {
 			const parsed = parseSessionEnvironment(textarea.value);
@@ -323,7 +390,7 @@ export class NewEnvironmentDialog extends Disposable {
 			const label = variables.trim() ? localize('sessions.environment.variablesConfigured', 'Configured') : noVariables;
 			variableStatus.textContent = label;
 			variableButton.setAttribute('aria-description', label);
-		}, true);
+		}, 'primary');
 		variableButton.setAttribute('aria-description', noVariables);
 		this.dialog = this._register(new Dialog(container, this.title, [], {
 			buttonStyles: defaultButtonStyles, checkboxStyles: defaultCheckboxStyles, inputBoxStyles: defaultInputBoxStyles,

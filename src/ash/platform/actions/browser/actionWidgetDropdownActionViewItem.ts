@@ -1,5 +1,4 @@
 import { ActionViewItem } from '../../../base/browser/ui/actionbar/actionViewItems.js';
-import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
 import type { IManagedHover } from '../../../base/browser/ui/hover/hoverDelegate.js';
 import type { IAction } from '../../../base/common/actions.js';
 import type { IDisposable } from '../../../base/common/lifecycle.js';
@@ -21,6 +20,10 @@ export class ActionWidgetDropdownActionViewItem extends ActionViewItem {
 			...this.actionWidgetOptions,
 			label: this.action.label,
 			ariaLabel: this.action.tooltip,
+			buttonOptions: {
+				icon: this.action.icon,
+				...this.actionWidgetOptions.buttonOptions,
+			},
 			labelRenderer: (element: HTMLElement) => this.renderLabel(element),
 		}));
 		this.element = this.dropdown.element;
@@ -29,8 +32,7 @@ export class ActionWidgetDropdownActionViewItem extends ActionViewItem {
 		this.updateEnabled();
 	}
 
-	protected renderLabel(element: HTMLElement): IDisposable | null {
-		if (this.action.icon) { appendIcon(this.action.icon, element.querySelector<HTMLElement>('.ash-icon-label-icon')!); }
+	protected renderLabel(_element: HTMLElement): IDisposable | null {
 		return null;
 	}
 
@@ -40,6 +42,7 @@ export class ActionWidgetDropdownActionViewItem extends ActionViewItem {
 	}
 
 	protected refreshActionLabel(): void {
+		this.dropdown.setIcon(this.action.icon);
 		this.dropdown.setLabel(this.action.label);
 		this.element.setAttribute('aria-label', this.action.tooltip);
 		this.hover?.update(this.action.tooltip);
