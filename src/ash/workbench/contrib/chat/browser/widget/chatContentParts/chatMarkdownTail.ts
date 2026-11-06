@@ -9,6 +9,7 @@ export type MarkdownTailCheckpoint = {
 const paragraphContext = '`x`';
 const paragraphCheckpointScanLimit = 4096;
 const listItem = /^([-+*]|\d{1,9}[.)]) [\p{L}\p{N}]/u;
+const emptyListItem = /^([-+*]|\d{1,9}[.)])[ \t]*$/u;
 const plainInline = /^[^*_`~[\]<>!\\$]*$/u;
 
 /** Discovers a new sibling block without lexing the source before a proven checkpoint. */
@@ -60,9 +61,18 @@ function rowCheckpoint(source: string, raw: Element, table: boolean, previous?: 
 	const rows = source.slice(headerLength).split('\n');
 	if (rows.at(-1) === '') rows.pop();
 	if (!rows.length || body?.children.length !== rows.length || body.childNodes.length !== 2 * rows.length + (table ? 0 : 1)) return undefined;
-	const marker = listMarker(rows[0]);
-	if (table ? rows.some(row => !row.startsWith('|')) : !marker || rows.some(row => listMarker(row) !== marker)) return undefined;
-	if (previous?.kind === 'list' && previous.marker !== marker) return undefined;
+	const marker = previous?.kind === 'list' ? previous.marker : listMarker(rows[0]);
+	if (table) {
+		if (rows.some(row => !row.startsWith('|'))) return undefined;
+	} else {
+		const last = rows.length - 1;
+		if (!marker || rows.some((row, index) => index < last && listMarker(row) !== marker)) return undefined;
+		// Marked already recognizes a bare marker as an empty item. Keep that
+		// item mutable until its text arrives.
+		const lastRow = rows[last];
+		if (listMarker(lastRow) !== marker
+			&& (emptyListItem.exec(lastRow)?.[1].slice(-1) !== marker || !body.lastElementChild?.matches('li:empty'))) return undefined;
+	}
 
 	// The last row is mutable. A later chunk can still grow it or turn the
 	// following line into a continuation, in which case we reparse the block.

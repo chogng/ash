@@ -11,6 +11,7 @@ import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { Lexer } from '../../../../../../base/common/marked/marked.js';
 import { constObservable } from '../../../../../../base/common/observable.js';
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../../platform/extensions/common/extensionHostApi.js';
 import { createDisconnectedExtensionHostApi } from '../../../../../../platform/extensions/browser/extensionHostApi.js';
@@ -171,6 +172,47 @@ suite('Shared chat Markdown rendering', () => {
 		assert.equal(part.domNode.querySelector('a'), link);
 		link.click();
 		assert.deepEqual(actions, [next]);
+	});
+
+	test('streaming Markdown list markers retain the checkpoint until the last item is filled', async () => {
+		using scope = services();
+		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+		for (const ordered of [false, true]) {
+			const marker = (index: number) => ordered ? `${index})` : '-';
+			const prefix = Array.from({ length: 128 }, (_, index) => `${marker(index + 1)} Item ${index + 1} with **bold** and \`code\`.`).join('\n');
+			let didRender: () => void = () => { };
+			using part = scope.createInstance(ChatMarkdownContentPart, {
+				ownerDocument: document,
+				asyncRenderCallback: () => didRender(),
+			});
+			const render = (value: string) => new Promise<void>(resolve => {
+				didRender = resolve;
+				part.tryIncrementalUpdate({ value }, true);
+			});
+			await render(prefix);
+			const stable = part.domNode.querySelector('li');
+			assert.ok(stable);
+			const lexer = mock.method(Lexer, 'lex');
+			try {
+				const tail = `${prefix}\n${marker(129)}`;
+				for (const value of [tail, `${tail} `, `${tail} Added item`]) {
+					const start = lexer.mock.callCount();
+					await render(value);
+					const lengths = lexer.mock.calls.slice(start).map(call => call.arguments[0].length);
+					assert.ok(lengths.length && lengths.every(length => length < 512), `Lexed source lengths: ${lengths.join(', ')}`);
+					using expected = renderer.render({ value }, { fillInIncompleteTokens: true });
+					assert.equal(fragmentContents(part.domNode), expected.element.innerHTML);
+					assert.equal(part.domNode.querySelector('li'), stable);
+				}
+				const loose = `${tail} Added item\n\n${marker(130)} Loose item`;
+				await render(loose);
+				using expected = renderer.render({ value: loose }, { fillInIncompleteTokens: true });
+				assert.equal(fragmentContents(part.domNode), expected.element.innerHTML);
+				assert.ok(part.domNode.querySelector('li > p'));
+			} finally {
+				lexer.mock.restore();
+			}
+		}
 	});
 
 	test('large tails coalesce terminal snapshots and cancel queued work on clear, hide and disposal', async () => {
