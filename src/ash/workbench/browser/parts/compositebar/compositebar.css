@@ -54,10 +54,6 @@
 	cursor: pointer;
 }
 
-.ash-composite-bar-item.ash-dnd-draggable:active {
-	cursor: grabbing;
-}
-
 .ash-composite-bar-icon > .ash-action-bar > .ash-composite-bar-item {
 	width: 24px;
 	min-width: 24px;
