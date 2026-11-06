@@ -122,7 +122,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "The legacy locked artifacts have stale bindings; source and release checks run this probe"]
     fn typed_array_inline_storage_matches_binding() {
         initialize_v8();
         let isolate = &mut v8::Isolate::new(Default::default());

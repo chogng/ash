@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -15,6 +16,7 @@ sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from build.lib.targets import TARGETS  # noqa: E402
 from build.lib.v8 import (  # noqa: E402
+    DEFAULT_CACHE,
     DEFAULT_LOCK,
     LockedFile,
     load_v8_lock,
@@ -74,6 +76,7 @@ class V8ArtifactTests(unittest.TestCase):
             for artifact in (pair.archive, pair.binding):
                 self.assertIn(artifact.name, module)
                 self.assertIn(artifact.sha256, module)
+                self.assertIn(artifact.url, module)
             repository_fragment = target.replace("-", "_")
             self.assertIn(repository_fragment, target_build)
         annotations = [
@@ -102,10 +105,15 @@ class V8ArtifactTests(unittest.TestCase):
         for target in features:
             self.assertEqual(["v8_enable_sandbox"], features[target], target)
 
-        cargo_config = (REPOSITORY_ROOT / ".cargo" / "config.toml").read_text()
-        self.assertIn(
-            'RUSTY_V8_MIRROR = { value = "third_party/.cache/v8", relative = true }',
-            cargo_config,
+        cargo_config = tomllib.loads(
+            (REPOSITORY_ROOT / ".cargo" / "config.toml").read_text()
+        )
+        self.assertEqual(
+            {
+                "value": DEFAULT_CACHE.relative_to(REPOSITORY_ROOT).as_posix(),
+                "relative": True,
+            },
+            cargo_config["env"]["RUSTY_V8_MIRROR"],
         )
 
     def test_materialize_replaces_a_corrupt_cached_file(self) -> None:

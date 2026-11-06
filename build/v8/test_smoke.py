@@ -42,7 +42,6 @@ class V8SmokeTests(unittest.TestCase):
         self.assertEqual("test", arguments[0])
         self.assertIn("//crates/v8-poc:v8-poc-unit-tests", arguments)
         self.assertIn("--test_arg=--test-threads=1", arguments)
-        self.assertIn("--test_arg=--include-ignored", arguments)
         self.assertIn("--//:rusty_v8_from_source=False", arguments)
         overrides = [
             item.split("=", 2)[2]

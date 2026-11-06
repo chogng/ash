@@ -271,11 +271,7 @@ def bazel_arguments(
         # Override the two downloaded files, preserving all real consumer rules.
         arguments.append(f"--override_repository={repository}={directory}")
     if run:
-        arguments += [
-            "--test_arg=--test-threads=1",
-            "--test_arg=--include-ignored",
-            "--test_output=errors",
-        ]
+        arguments += ["--test_arg=--test-threads=1", "--test_output=errors"]
         if target == "x86_64-unknown-linux-musl":
             arguments.append(
                 "--extra_toolchains=//third_party/v8:musl_x64_tests_on_linux_host"

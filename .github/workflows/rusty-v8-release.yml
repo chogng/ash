@@ -194,7 +194,7 @@ jobs:
         if: matrix.smoke == 'run'
         run: |
           # Concurrent first isolates can race V8's process-wide sandbox pool setup.
-          just test ash-v8-poc --locked --target "$TARGET" --features sandbox -- --test-threads=1 --include-ignored
+          just test ash-v8-poc --locked --target "$TARGET" --features sandbox -- --test-threads=1
       - name: Cross-link the staged pair with Ash
         if: matrix.smoke == 'link'
         run: python -B build/v8/smoke.py cargo-probe --target "$TARGET" --artifacts "dist/$TARGET" --output "probes/$TARGET"
@@ -233,10 +233,10 @@ jobs:
       - name: Execute the cross-linked Ash probe on ARM64
         run: |
           if [ "$RUNNER_OS" = Windows ]; then
-            probe/v8-probe.exe --test-threads=1 --include-ignored
+            probe/v8-probe.exe --test-threads=1
           else
             chmod +x probe/v8-probe
-            probe/v8-probe --test-threads=1 --include-ignored
+            probe/v8-probe --test-threads=1
           fi
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         if: matrix.target == 'aarch64-unknown-linux-gnu'

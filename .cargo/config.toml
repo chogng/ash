@@ -19,4 +19,4 @@ rustflags = ["-C", "link-arg=/arm64hazardfree"]
 rustflags = ["-C", "link-arg=-Wl,--stack,8388608"]
 
 [env]
-RUSTY_V8_MIRROR = { value = "third_party/.cache/v8", relative = true }
+RUSTY_V8_MIRROR = { value = "third_party/.cache/v8/ash-release", relative = true }

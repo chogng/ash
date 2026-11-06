@@ -53,10 +53,6 @@
 - [ ] **并行开发** · `/team develop` 已有持久化和冻结工作树绑定，仍缺专用运行时、调度、review/check 执行、RPC/UI 和 SCM 落地。实现前该入口返回不可用。范围见 [Workflows](crates/ext/workflows/README.md)。
 - [ ] **复核 · 浏览器集成中的 scrollbar 点击偶发失败** · 2026-10-08 完整集成 840 项通过、1 项失败，未修改的基线重复 10 次出现 5 次相同失败。调查时保留现有断言。见 [main 集成交接记录](docs/archive/ash-main-handoff-2026-10-08.md#本次实际验证)。
 
-## V8 发布产物配对
-
-- [ ] **验收与切锁** · Bazel 从 V8 静态库的编译配置生成 Rust binding。发布矩阵已接入八目标 TypedArray 探针，Apple Silicon 候选配对已通过本机 Cargo 和 Bazel 探针。当前默认锁仍指向旧 Codex release。待改动进入远端分支后，手动运行 `rusty-v8-release` 验证八目标。通过后按版本 tag 发布 Ash 产物，采用产出的 `runtime-lock.json`，同步 `MODULE.bazel` 的下载地址与摘要，再移除探针的忽略标记。本轮尚缺远端矩阵结果和新发布资产。
-
 ## Rust 函数级增量编译
 
 - [ ] **后端前置 · 跨 crate／非标量函数热更新**：先闭合准确的 artifact target／feature／cfg 与实例身份，再处理一般语义依赖／布局失效、泛型单态化、引用／堆对象、drop／unwind、间接调用和更多实际注册入口；完整检查上下文复用还缺 owner 自身 build script。当前源码明确拒绝跨 crate 调用，现有同 crate 标量链路不能视为通用 Rust JIT。已完成范围与测量见 [标量 MIR 边界](docs/rust-analysis.md#标量-mir-与本机代码边界) 和 [App Server 实测](docs/build.md#2026-10-21路径依赖检查复用与-app-server-真实热更新)。
