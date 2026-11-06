@@ -64,6 +64,12 @@ export interface ExtensionCustomEditorContribution {
 	readonly selector: readonly { readonly filenamePattern?: string; readonly mimeType?: string; }[];
 }
 
+export interface ExtensionImageEditorCommand {
+	readonly command: string;
+	readonly when?: string;
+	readonly group?: string;
+}
+
 export interface ExtensionManifest {
 	readonly name: string;
 	readonly publisher: string;
@@ -74,6 +80,7 @@ export interface ExtensionManifest {
 		readonly canvases: readonly { readonly id: string; readonly displayName: string; readonly description: string; readonly requiresInput: boolean; }[];
 		readonly keybindings: readonly IKeybindingRule[];
 		readonly imageEditors: readonly { readonly id: string; readonly displayName: string; readonly default?: boolean; readonly accessibilityHelp: string; }[];
+		readonly imageEditorContextCommands: readonly ExtensionImageEditorCommand[];
 		readonly breakpoints: readonly { readonly language: string; readonly when?: string; }[];
 		readonly debugVisualizers: readonly { readonly id: string; readonly title: string; readonly command: string; readonly type?: string; }[];
 		readonly speechProviders: readonly { readonly name: string; readonly description?: string; }[];
@@ -135,6 +142,7 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		? boundedText(manifest.displayName, 'displayName', 256)
 		: descriptor.displayName ?? name;
 	const contributes = manifest.contributes === undefined ? {} : record(manifest.contributes, 'Extension contributes');
+	const imageEditors = parseImageEditors(contributes.imageEditors);
 	let themes: readonly ExtensionThemeContribution[] = [];
 	if (manifest.themes !== undefined) { themes = parsePortableThemes(manifest); }
 	else if (contributes.themes !== undefined) { themes = parseThemes(contributes.themes, descriptor.id); }
@@ -146,7 +154,8 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 		contributes: Object.freeze({
 			chatContext: parseChatContext(contributes.chatContext),
 			canvases: parseCanvases(contributes.canvases),
-			imageEditors: parseImageEditors(contributes.imageEditors),
+			imageEditors,
+			imageEditorContextCommands: imageEditors.length ? parseImageEditorContextCommands(contributes.menus) : [],
 			speechProviders: parseSpeechProviders(contributes.speechProviders),
 			debugVisualizers: parseDebugVisualizers(contributes.debugVisualizers),
 			breakpoints: parseBreakpointContributions(contributes.breakpoints),
@@ -175,6 +184,21 @@ export function parseExtensionManifest(manifestJson: string, descriptor: Extensi
 			problemPatterns: parseProblemContributions(contributes.problemPatterns, 'problemPatterns'),
 			debuggers: Object.freeze(contributes.debuggers === undefined ? [] : parseDebuggers(contributes.debuggers, descriptor)),
 		}),
+	});
+}
+
+function parseImageEditorContextCommands(menus: unknown): readonly ExtensionImageEditorCommand[] {
+	if (menus === undefined) return [];
+	const placements = record(menus, 'Image editor menus')['editor/context'];
+	if (!Array.isArray(placements)) return [];
+	return placements.flatMap(value => {
+		const placement = record(value, 'Image editor context menu');
+		if (typeof placement.command !== 'string') return [];
+		return [{
+			command: boundedText(placement.command, 'Image editor command', 256),
+			when: typeof placement.when === 'string' ? boundedText(placement.when, 'Image editor menu condition', 4096) : undefined,
+			group: typeof placement.group === 'string' ? boundedText(placement.group, 'Image editor menu group', 256) : undefined
+		}];
 	});
 }
 

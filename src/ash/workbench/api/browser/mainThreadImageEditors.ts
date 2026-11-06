@@ -1,6 +1,7 @@
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import { EditorOption } from '../../../editor/common/config/editorOptions.js';
-import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { CancellationError } from '../../../base/common/errors.js';
 import { localize } from '../../../nls.js';
 import { IExtensionHostApi, type ExtensionClientSource, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../platform/extensions/common/extensionHostApi.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
@@ -15,7 +16,10 @@ import { basename } from '../../../base/common/resources.js';
 /** Adapts the public image capability to client-owned capture and sandbox services. No extension code runs here. */
 export class MainThreadImageEditors extends Disposable {
 	private readonly registrations = this._register(new DisposableMap<string, DisposableStore>());
+	private readonly dormant = this._register(new DisposableMap<string, IDisposable & { readonly identity: string; }>());
 	private readonly bindings = new Map<string, { readonly identity: string; readonly source: ExtensionClientSource; readonly signal: AbortSignal; }>();
+	private generation = 0;
+	private epoch = 0;
 	constructor(
 		private readonly timeout: number,
 		@IExtensionHostApi private readonly runtime: IExtensionHostApi,
@@ -28,7 +32,12 @@ export class MainThreadImageEditors extends Disposable {
 	) { super(); }
 
 	update(snapshot: ExtensionHostFleetSnapshot): void {
+		if (this.isDisposed || snapshot.generation < this.generation) return;
+		this.generation = snapshot.generation;
 		const declarations = this.extensions.getExtensionPointContributions<readonly { readonly id: string; readonly displayName: string; readonly default?: boolean; readonly accessibilityHelp: string; }[]>('imageEditors');
+		const dormant = new Map(snapshot.extensions.flatMap(owner => owner.lifecycle === 'dormant' && owner.activation?.events.includes('onCapability:image.editor.v1')
+			? (declarations.find(entry => entry.description.id === owner.id)?.value ?? []).map(declaration => [`${owner.id}:${declaration.id}` as string, { owner, declaration }] as const) : []));
+		for (const id of this.dormant.keys()) if (!dormant.has(id)) this.dormant.deleteAndDispose(id);
 		const active = new Set<string>();
 		for (const owner of snapshot.extensions) {
 			if (owner.lifecycle !== 'ready' || owner.incarnation === undefined) continue;
@@ -92,14 +101,44 @@ export class MainThreadImageEditors extends Disposable {
 			}
 		}
 		for (const id of this.registrations.keys()) if (!active.has(id)) { this.registrations.deleteAndDispose(id); this.bindings.delete(id); }
+		for (const [id, { owner, declaration }] of dormant) {
+			const identity = JSON.stringify([owner.packageDigest, owner.activationGeneration, declaration]);
+			if (this.dormant.get(id)?.identity === identity) continue;
+			this.dormant.deleteAndDispose(id);
+			const controller = new AbortController();
+			const registration = this.editors.register({
+				id, displayName: declaration.displayName, default: declaration.default === true, accessibilityHelp: declaration.accessibilityHelp, signal: controller.signal,
+				activate: async signal => {
+					signal.throwIfAborted();
+					controller.signal.throwIfAborted();
+					const epoch = this.epoch;
+					const snapshot = await this.runtime.activateByEvent({ extensionId: owner.id, activationGeneration: owner.activationGeneration, event: { type: 'capability', capability: 'image.editor.v1' } });
+					signal.throwIfAborted();
+					if (this.isDisposed || epoch !== this.epoch || snapshot.generation < this.generation) throw new CancellationError();
+					if (!snapshot.extensions.some(runtime => runtime.id === owner.id && runtime.packageDigest === owner.packageDigest && runtime.activationGeneration === owner.activationGeneration && runtime.lifecycle === 'ready')) {
+						throw new Error(localize('imageEditor.providerUnavailable', 'Enable one default image editor extension to edit images.'));
+					}
+					this.update(snapshot);
+				},
+			});
+			this.dormant.set(id, Object.assign(toDisposable(() => { controller.abort(); registration.dispose(); }), { identity }));
+		}
 	}
 
-	clear(): void { this.registrations.clearAndDisposeAll(); this.bindings.clear(); }
+	clear(): void { this.epoch++; this.generation = 0; this.dormant.clearAndDisposeAll(); this.registrations.clearAndDisposeAll(); this.bindings.clear(); }
 
 	async show(payload: JsonValue, signal: AbortSignal, source: ExtensionClientSource): Promise<void> {
 		const value = record(payload);
 		if (typeof value.viewType !== 'string' || !['screen', 'selection'].includes(value.source as string)) throw new TypeError('Invalid image editor request');
 		const id = `${source.extensionId}:${value.viewType}`;
+		// A dormant command may invoke the client before the fleet event is applied.
+		if (this.dormant.has(id)) {
+			const epoch = this.epoch;
+			const snapshot = await this.runtime.list();
+			signal.throwIfAborted();
+			if (this.isDisposed || epoch !== this.epoch) throw new CancellationError();
+			this.update(snapshot);
+		}
 		const binding = this.bindings.get(id);
 		if (!binding || binding.source.incarnation !== source.incarnation || binding.source.activationGeneration !== source.activationGeneration) throw new Error('Image editor registration has retired');
 		const code = value.source === 'selection' ? await this.selection(signal) : undefined;

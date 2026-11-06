@@ -27,7 +27,14 @@ export abstract class ImageEditorService extends Disposable implements IImageEdi
 		this.assertNotDisposed();
 		const candidates = id ? [this.providers.get(id)].filter(value => !!value) : [...this.providers.values()].filter(provider => provider.default);
 		if (candidates.length !== 1) throw new Error(localize('imageEditor.providerUnavailable', 'Enable one default image editor extension to edit images.'));
-		const provider = candidates[0];
+		let provider = candidates[0];
+		if ('activate' in provider) {
+			await provider.activate(signal);
+			signal.throwIfAborted();
+			const activated = this.providers.get(provider.id);
+			if (!activated || 'activate' in activated) throw new Error(localize('imageEditor.providerUnavailable', 'Enable one default image editor extension to edit images.'));
+			provider = activated;
+		}
 		const requestSignal = AbortSignal.any([signal, provider.signal]);
 		requestSignal.throwIfAborted();
 		const view = await provider.resolve(source, requestSignal);

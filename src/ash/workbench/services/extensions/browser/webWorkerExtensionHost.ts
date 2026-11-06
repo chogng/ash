@@ -11,6 +11,8 @@ import { getNLSLanguage, localize } from '../../../../nls.js';
 import type { ExtensionClientHandler, ExtensionClientOperation } from '../../../api/common/extHost.protocol.js';
 import type { BrowserExtensionHostRequest } from '../common/extensionHostProtocol.js';
 import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
+import { CancellationError } from '../../../../base/common/errors.js';
+import { ILifecycleService, LifecyclePhase } from '../../lifecycle/common/lifecycle.js';
 
 const BUILT_IN_SSH_EXTENSION_ID = 'ash.remote-ssh';
 
@@ -39,8 +41,14 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 
 	constructor(private readonly extensions: IExtensionApi, private readonly remote: IExtensionHostApi,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
-		@IWorkspaceTrustManagementService private readonly trust: IWorkspaceTrustManagementService) {
+		@IWorkspaceTrustManagementService private readonly trust: IWorkspaceTrustManagementService,
+		@ILifecycleService private readonly lifecycle: ILifecycleService) {
 		super();
+		if (lifecycle.phase < LifecyclePhase.Eventually) {
+			void lifecycle.when(LifecyclePhase.Eventually).then(() => {
+				if (!this.isDisposed && this.snapshot.extensions.some(isDeferredImageProvider)) this.changes.fire(++this.snapshotGeneration);
+			});
+		}
 		this._register(trust.onDidChangeTrustedFolders(() => {
 			// Invalidated permissions fail closed, including Workers still awaiting activation.
 			for (const id of this.trustRequiredPackages) {
@@ -88,7 +96,10 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 	public onDidChange(listener: (generation: number) => void): ReturnType<IExtensionHostApi['onDidChange']> { return this.changes.event(listener); }
 	public onConnectionState(): ReturnType<IExtensionHostApi['onConnectionState']> { return Disposable.None; }
 	public async list(): Promise<ExtensionHostFleetSnapshot> {
-		return { generation: this.snapshotGeneration, extensions: [...this.snapshot.extensions, ...this.remoteSnapshot.extensions] };
+		const local = this.lifecycle.phase < LifecyclePhase.Eventually
+			? this.snapshot.extensions.filter(runtime => !isDeferredImageProvider(runtime))
+			: this.snapshot.extensions;
+		return { generation: this.snapshotGeneration, extensions: [...local, ...this.remoteSnapshot.extensions] };
 	}
 
 	private async refreshRemote(mode?: ExtensionHostReconcileMode): Promise<void> {
@@ -144,8 +155,13 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 				throw new Error(localize('extensionHost.browser.retired', 'Browser extension invocation belongs to a retired activation'));
 			}
 			if (local.lifecycle !== 'dormant') return this.list();
+			if (this.lifecycle.phase < LifecyclePhase.Eventually && isDeferredImageProvider(local)) throw new CancellationError();
 			const event = request.event;
-			if (event.type !== 'language' || !local.activation!.events.some(declared => declared === 'onLanguage' || declared === `onLanguage:${event.languageId}`)) {
+			const activation = local.activation!;
+			const matches = event.type === 'language' ? activation.events.some(declared => declared === 'onLanguage' || declared === `onLanguage:${event.languageId}`)
+				: event.type === 'command' ? activation.commands.some(command => command.command === event.command) && activation.events.includes(`onCommand:${event.command}`)
+					: event.type === 'capability' && activation.events.includes(`onCapability:${event.capability}`);
+			if (!matches) {
 				throw new TypeError('Browser extension does not declare the requested activation');
 			}
 			if (!this.refreshing || this.requestedActivations.get(local.id) !== local.activationGeneration) {
@@ -224,18 +240,18 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 			const previous = this.snapshot.extensions.find(runtime => runtime.id === extension.id);
 			if (previous?.lifecycle === 'ready') { runtimes.push(previous); continue; }
 			const activationGeneration = previous?.activationGeneration ?? generation;
-			const events = languageActivationEvents(declaration);
-			if (!mode && (!events || previous?.lifecycle === 'failed')) {
+			const activation = browserActivation(declaration);
+			if (!mode && (!activation || previous?.lifecycle === 'failed')) {
 				if (previous) runtimes.push(previous);
 				continue;
 			}
-			if (events && this.requestedActivations.get(extension.id) !== activationGeneration) {
+			if (activation && this.requestedActivations.get(extension.id) !== activationGeneration) {
 				this.packageIdentities.set(extension.id, packages.get(extension.id)!);
 				if (!supportsUntrustedWorkspace(declaration)) this.trustRequiredPackages.add(extension.id);
 				runtimes.push(previous ?? normalizeExtensionHostSnapshot({
 					generation, extensions: [{
 						...runtimeIdentity(extension, generation), incarnation: null, lifecycle: 'dormant',
-						activation: { events, commands: [] }, failure: null, registrations: [],
+						activation, failure: null, registrations: [],
 					}],
 				}).extensions[0]!);
 				continue;
@@ -250,7 +266,7 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 				const source = await this.extensions.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: extension.id, path });
 				this.assertNotDisposed();
 				if (!this.canRun(manifest)) { continue; }
-				if (events && previous?.lifecycle === 'dormant' && this.pendingMode) {
+				if (activation && previous?.lifecycle === 'dormant' && this.pendingMode) {
 					// A package change arrived during the read. Revalidate the requested
 					// activation against the queued catalog before executing its bytes.
 					runtimes.push(previous);
@@ -358,12 +374,29 @@ export class WebWorkerExtensionHost extends Disposable implements IExtensionHost
 	}
 }
 
-function languageActivationEvents(manifest: { activationEvents?: unknown; contributes?: { commands?: unknown; }; }): readonly string[] | undefined {
+/** Publishing these declarations installs commands and menus. Language providers may serve restored editors. */
+function isDeferredImageProvider(runtime: ExtensionHostRuntime): boolean {
+	const events = runtime.lifecycle === 'dormant' ? runtime.activation?.events : undefined;
+	return !!events?.includes('onCapability:image.editor.v1')
+		&& events.every(event => event === 'onCapability:image.editor.v1' || event.startsWith('onCommand:'));
+}
+
+function browserActivation(manifest: { activationEvents?: unknown; contributes?: { commands?: unknown; }; }): ExtensionHostRuntime['activation'] {
 	const events = manifest.activationEvents;
-	// Command and capability providers still have eager consumers that discover
-	// live registrations. Language-only packages already have a first-use route.
-	if (manifest.contributes?.commands !== undefined || !Array.isArray(events) || events.length === 0) return undefined;
-	return events.every(event => typeof event === 'string' && (event === 'onLanguage' || /^onLanguage:[\w.-]+$/u.test(event))) ? events : undefined;
+	if (!Array.isArray(events) || !events.length) return undefined;
+	const declared: unknown = manifest.contributes?.commands;
+	const commands: { command: string; title: string; }[] = [];
+	if (declared !== undefined) {
+		if (!Array.isArray(declared) || !events.includes('onCapability:image.editor.v1')) return undefined;
+		for (const entry of declared) {
+			if (typeof entry?.command !== 'string' || typeof entry.title !== 'string' || !events.includes(`onCommand:${entry.command}`)) return undefined;
+			commands.push({ command: entry.command, title: entry.title });
+		}
+	}
+	// A browser provider can sleep only when all of its declared consumers can wake it.
+	if (!events.every(event => typeof event === 'string' && (event === 'onLanguage' || /^onLanguage:[\w.-]+$/u.test(event)
+		|| event === 'onCapability:image.editor.v1' || commands.some(command => event === `onCommand:${command.command}`)))) return undefined;
+	return { events, commands };
 }
 
 function supportsUntrustedWorkspace(manifest: { capabilities?: { untrustedWorkspaces?: { supported?: unknown; }; }; }): boolean {

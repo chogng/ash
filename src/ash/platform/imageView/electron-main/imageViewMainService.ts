@@ -1,5 +1,6 @@
 import { nativeImage, shell } from 'electron';
 import { basename, dirname, join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { localize2 } from '../../../nls.js';
 import { getDesktopScreenshots } from '../../native/electron-main/nativeHostMainService.js';
 import {
@@ -17,20 +18,15 @@ import { writeFile } from 'node:fs/promises';
 import { Disposable, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import {
 	normalizeEntryUrl,
-	type IpcRoute,
 	type TrustedIpcRouter
 } from '../../ipc/electron-main/trustedIpcRouter.js';
 import {
-	IMAGE_VIEW_OPEN_CHANNEL,
-	IMAGE_VIEW_CANCEL_CHANNEL,
 	IMAGE_VIEW_COMPLETE_CHANNEL,
 	IMAGE_VIEW_INITIALIZE_CHANNEL,
 	IMAGE_VIEW_READY_CHANNEL,
 	IMAGE_VIEW_PERMISSION_CHANNEL,
 	validateImageViewPermissionAction,
 	validateImageViewCompletion,
-	validateImageViewId,
-	validateImageViewRequest,
 	type ImageViewCompletion,
 	type ImageViewRequest
 } from '../common/imageView.js';
@@ -47,6 +43,7 @@ interface ImageViewWindowOptions {
 
 interface Capture {
 	readonly request: ImageViewRequest;
+	readonly desktopCapture: boolean;
 	readonly resolve: (image: Uint8Array | undefined) => void;
 	readonly reject: (error: unknown) => void;
 	readonly lifetime: DisposableStore;
@@ -91,30 +88,26 @@ export class ImageViewMainService extends Disposable {
 		);
 	}
 
-	routes(): readonly IpcRoute<unknown, unknown>[] {
-		return [
-			{
-				channel: IMAGE_VIEW_OPEN_CHANNEL,
-				validate: validateImageViewRequest,
-				invoke: (value) => this.start(value as ImageViewRequest)
-			},
-			{
-				channel: IMAGE_VIEW_CANCEL_CHANNEL,
-				validate: validateImageViewId,
-				invoke: (value) => {
-					if (this.capture?.request.id === value) this.finish();
-				}
-			}
-		];
+	show(request: ImageViewRequest): Promise<Uint8Array | undefined> {
+		return this.start(request);
 	}
 
-	private start(request: ImageViewRequest): Promise<Uint8Array | undefined> {
+	cancel(id: string): void {
+		if (this.capture?.request.id === id) this.finish();
+	}
+
+	captureDesktop(colorScheme: string, accessibilityHints: boolean): Promise<Uint8Array | undefined> {
+		return this.start({ id: randomUUID(), source: 'screen', title: '', html: '', input: { defaultAction: 'copy', colorScheme, accessibilityHints } }, true);
+	}
+
+	private start(request: ImageViewRequest, desktopCapture = false): Promise<Uint8Array | undefined> {
 		if (this.isDisposed || this.owner.isDestroyed()) return Promise.resolve(undefined);
 		activeCapture?.finish();
 		activeCapture = this;
 		return new Promise((resolve, reject) => {
 			const capture: Capture = {
 				request,
+				desktopCapture,
 				resolve,
 				reject,
 				lifetime: new DisposableStore(),
@@ -221,6 +214,7 @@ export class ImageViewMainService extends Disposable {
 							validate: noArguments,
 							invoke: () => ({
 								image: new Uint8Array(image),
+								...(capture.desktopCapture ? { desktopCapture: true } : {}),
 								presentation: capture.request,
 								locale: this.options.localization().locale,
 								bundles: this.options.localization().bundles
@@ -357,6 +351,7 @@ export class ImageViewMainService extends Disposable {
 				channel: IMAGE_VIEW_INITIALIZE_CHANNEL, validate: noArguments,
 				invoke: () => ({
 					permission: { applicationName: basename(bundlePath), icon: new Uint8Array(icon.toPNG()) },
+					...(capture.desktopCapture ? { desktopCapture: true } : {}),
 					image: new Uint8Array(), presentation: capture.request,
 					locale: this.options.localization().locale, bundles: this.options.localization().bundles
 				})
@@ -519,7 +514,7 @@ export class ImageViewMainService extends Disposable {
 		capture.closing = true;
 		capture.windows.dispose();
 		capture.lifetime.dispose();
-		if (!this.owner.isDestroyed() && !this.isDisposed) this.owner.focus();
+		if (!capture.desktopCapture && !this.owner.isDestroyed() && !this.isDisposed) this.owner.focus();
 		if (error) capture.reject(error);
 		else capture.resolve(image);
 	}

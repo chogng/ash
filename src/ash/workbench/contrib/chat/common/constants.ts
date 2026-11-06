@@ -60,6 +60,7 @@ export const agentsWindowGraphicConfiguration: IConfigurationKeyDefinition<Agent
 };
 
 export const ScreenshotCommandId = 'workbench.action.chat.attachScreenshot';
+export const ScreenshotShortcutId = 'chat.screenshot';
 export const ScreenshotGlobalShortcutSetting = 'screenshot.globalShortcut';
 
 /** Message input preferences are independent of the file and reply-code editors. */

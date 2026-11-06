@@ -13,6 +13,7 @@ import { webAppServerVitePlugin } from './webAppServerPlugin.ts';
 import { workbenchEntryPlugin } from './workbenchEntryPlugin.ts';
 import { webUpdatePlugin } from './webUpdatePlugin.ts';
 import { browserExtensionsPlugin } from './extensionsPlugin.ts';
+import { snapshotViewPlugin } from './snapshotViewPlugin.ts';
 import { CSSDevelopmentService } from '../../../src/ash/platform/cssDev/node/cssDevService.ts';
 import { installChatGPTVerification } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTVerification.ts';
 
@@ -142,6 +143,7 @@ export default defineConfig(({ mode, command }) => {
 			productIconsPlugin(),
 			// Extension preparation publishes localization first and owns the shared resource watcher.
 			browserExtensionsPlugin(),
+			...(webOnly ? [] : [snapshotViewPlugin(repositoryRoot)]),
 			{
 				name: 'ash-electron-file-html',
 				apply: 'build',

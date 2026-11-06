@@ -9,7 +9,8 @@ import { parseDefaultLogLevels } from '../../workbench/services/log/common/defau
 import { LogLevelToString } from '../../platform/log/common/log.js';
 import type { AppServerConnectionTarget } from '../../platform/agentHost/common/appServerTransport.js';
 import { RemoteAgentHostConnectionPool } from '../../platform/remote/electron-main/remoteConnectionIpc.js';
-import { ImageViewMainService } from '../../platform/imageView/electron-main/imageViewMainService.js';
+import type { ImageViewMainService } from '../../platform/imageView/electron-main/imageViewMainService.js';
+import { IMAGE_VIEW_ATTACH_CHANNEL, IMAGE_VIEW_CANCEL_CHANNEL, IMAGE_VIEW_OPEN_CHANNEL, validateImageViewId, validateImageViewRequest, type ImageViewRequest } from '../../platform/imageView/common/imageView.js';
 import { AshWorkbenchName } from '../common/application.js';
 import '../../platform/update/common/update.config.contribution.js';
 import { SystemPolicyService } from '../../platform/policy/node/systemPolicyService.js';
@@ -99,7 +100,7 @@ import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
 import { AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL, validateAgentsWindowHandoffComplete, validateAgentsWindowHandoffTake, type IAgentsWindowHandoffResult } from '../../platform/window/common/window.js';
 import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
-import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../workbench/contrib/chat/common/constants.js';
+import { OPEN_AGENTS_WINDOW_COMMAND_ID, ScreenshotCommandId, ScreenshotShortcutId } from '../../workbench/contrib/chat/common/constants.js';
 import { StateService } from '../../platform/state/node/stateService.js';
 import { IStateService } from '../../platform/state/node/state.js';
 import { WorkspacesHistoryMainService, workspacesHistoryChannel } from '../../platform/workspaces/electron-main/workspacesHistoryMainService.js';
@@ -1742,11 +1743,7 @@ export class AshApplication extends Disposable {
 			...(localSupervisor?.routes(window.webContents, () => ({ workspaceId: 'local-profile', workspaceRoot: this.profileRoot })) ?? []),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
 			...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService),
-			...this.globalKeybindings.createWindowRoutes(window, windowDisposables),
-			...windowDisposables.add(new ImageViewMainService(window, {
-				entry: this.resolveRendererEntry('imageView'), webPreferences: this.createSandboxWebPreferences(),
-				router: this.trustedIpcRouter, localization: () => this.activeLanguagePack,
-			})).routes(),
+			...this.windowImageRoutes(window, windowDisposables),
 			userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 			...remoteWindowContext.ipcRoutes,
 			windowOperationIpcRoute(this.windowsMainService, window),
@@ -1822,6 +1819,61 @@ export class AshApplication extends Disposable {
 				environment: { ...process.env, ASH_HOME: this.profileRoot },
 				scheduleConnect: connection => this.openRemoteConnection(connection, workspaces),
 			});
+	}
+
+	private windowImageRoutes(window: BrowserWindow, lifetime: DisposableStore): readonly IpcRoute<unknown, unknown>[] {
+		let imageView: Promise<ImageViewMainService | undefined> | undefined;
+		const loadImageView = () => {
+			if (imageView) return imageView;
+			const contents = window.webContents;
+			// Cover navigation during the import, before the service can own cancellation.
+			const invalidate = () => { imageView = undefined; };
+			const navigating = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean) => {
+				if (mainFrame && !inPlace) invalidate();
+			};
+			contents.on('did-start-navigation', navigating);
+			contents.on('render-process-gone', invalidate);
+			const loading = import('../../platform/imageView/electron-main/imageViewMainService.js').then(({ ImageViewMainService }) => {
+				if (imageView !== loading || lifetime.isDisposed || window.isDestroyed() || contents.isDestroyed()) return undefined;
+				return lifetime.add(new ImageViewMainService(window, {
+					entry: this.resolveRendererEntry('imageView'), webPreferences: this.createSandboxWebPreferences(),
+					router: this.trustedIpcRouter, localization: () => this.activeLanguagePack,
+				}));
+			}).catch(error => {
+				if (imageView === loading) imageView = undefined;
+				throw error;
+			}).finally(() => {
+				contents.off('did-start-navigation', navigating);
+				contents.off('render-process-gone', invalidate);
+			});
+			return imageView = loading;
+		};
+		return [
+			{
+				channel: IMAGE_VIEW_OPEN_CHANNEL,
+				validate: validateImageViewRequest,
+				invoke: async value => (await loadImageView())?.show(value as ImageViewRequest),
+			},
+			{
+				channel: IMAGE_VIEW_CANCEL_CHANNEL,
+				validate: validateImageViewId,
+				invoke: async value => (await imageView)?.cancel(value as string),
+			},
+			...this.globalKeybindings.createWindowRoutes(window, lifetime, (id, commandId) => {
+				if (id !== ScreenshotShortcutId || commandId !== ScreenshotCommandId) return false;
+				const colorScheme = nativeTheme.shouldUseHighContrastColors
+					? (nativeTheme.shouldUseDarkColors ? 'hcDark' : 'hcLight') : (nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
+				const hints = this.persistentServices?.configuration.getValue<boolean>('accessibility.verbosity.chatScreenshot') !== false;
+				void loadImageView().then(service => service?.captureDesktop(colorScheme, hints)).then(image => {
+					if (!image || window.isDestroyed() || window.webContents.isDestroyed()) return;
+					// Only the explicit attachment action returns the user to the owning window.
+					if (window.isMinimized()) window.restore();
+					window.show();
+					window.webContents.send(IMAGE_VIEW_ATTACH_CHANNEL, image);
+				}).catch(error => this.logService.error('screenshot', 'Could not capture the desktop', error));
+				return true;
+			}),
+		];
 	}
 
 	private windowHostOperations(window: BrowserWindow, windowDisposables: DisposableStore): Omit<INativeHostMainService, 'getTitleBarStyle' | 'openWorkspace' | 'openWindow' | 'openAgentsWindow' | 'syncSystemWideKeybindings'> {
@@ -2127,11 +2179,7 @@ export class AshApplication extends Disposable {
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),
 						...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService),
-						...this.globalKeybindings.createWindowRoutes(window, windowDisposables),
-						...windowDisposables.add(new ImageViewMainService(window, {
-							entry: this.resolveRendererEntry('imageView'), webPreferences: this.createSandboxWebPreferences(),
-							router: this.trustedIpcRouter, localization: () => this.activeLanguagePack,
-						})).routes(),
+						...this.windowImageRoutes(window, windowDisposables),
 						userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 						...remoteWindowContext.ipcRoutes,
 						windowOperationIpcRoute(this.windowsMainService, window),

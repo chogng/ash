@@ -35,6 +35,15 @@ open Chat or reserve a draft. Enter copies standalone images; a capture started
 from Chat's attachment picker attaches on Enter. Add to Chat remains an explicit
 action in both cases.
 
+After the Workbench or Agents window has restored and reached its background
+startup phase, the host publishes Snapshot's image and command declarations.
+Desktop then registers the global shortcut from the declared provider and the
+resolved keybinding. On the first request, Main loads the capture service. Each
+press freezes the desktop and loads the bundled Snapshot presentation in an
+isolated image window. Copy, save and cancel finish locally. Only Add to Chat
+returns an image to the owning Workbench window. The Browser provider and
+`snapshot.code` activate on first use.
+
 The default shortcuts remain Control+Command+A on macOS and Control+Alt+S on
 Windows/Linux. `screenshot.globalShortcut` keeps its existing key and default.
 Disabling the extension removes the global registration and closes active views;

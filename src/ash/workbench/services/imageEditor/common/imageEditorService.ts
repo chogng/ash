@@ -14,14 +14,17 @@ export interface CodeImageSnapshot {
 	readonly tabSize: number;
 }
 export interface ImageEditorView { readonly html: string; readonly state?: unknown; }
-export interface ImageEditorProvider {
+interface ImageEditorProviderIdentity {
 	readonly id: string;
 	readonly displayName: string;
 	readonly default: boolean;
 	readonly accessibilityHelp: string;
 	readonly signal: AbortSignal;
-	resolve(source: 'screen' | 'selection', signal: AbortSignal): Promise<ImageEditorView>;
 }
+export type ImageEditorProvider = ImageEditorProviderIdentity & (
+	{ resolve(source: 'screen' | 'selection', signal: AbortSignal): Promise<ImageEditorView>; }
+	| { activate(signal: AbortSignal): Promise<void>; }
+);
 export interface ImageEditorOptions {
 	readonly editorId?: string;
 	readonly code?: CodeImageSnapshot;

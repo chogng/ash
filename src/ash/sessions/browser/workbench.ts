@@ -641,7 +641,6 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IConnectorService, this._register(new AppServerConnectorService(options.api.connectors, options.api.events)));
 		services.registerInstance(IWorkspaceTrustApi, options.api.workspaceTrust);
 		services.registerInstance(IWorkspaceTrustManagementService, this._register(services.createInstance(WorkspaceTrustManagementService)));
-		services.registerInstance(IExtensionHostApi, options.extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, enabledExtensions, options.api.extensionHost)));
 		const checkWorkspaceTrust = !!options.nativeHostApi;
 		services.registerInstance(ILanguageServerService, options.api.languageServers);
 		services.registerSingleton(ILanguageServerLifecycleService, () => services.createInstance(AppServerLanguageLifecycleService));
@@ -699,6 +698,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IChatTipService, this._register(services.createInstance(ChatTipService)));
 		this.lifecycleService = this._register(options.createLifecycleService(services));
 		services.registerInstance(ILifecycleService, this.lifecycleService);
+		services.registerInstance(IExtensionHostApi, options.extensionHost ?? this._register(services.createInstance(WebWorkerExtensionHost, enabledExtensions, options.api.extensionHost)));
 		this._register(this.lifecycleService.onWillShutdown(event => {
 			event.join(storage.flush(WillSaveStateReason.SHUTDOWN).catch(error => logger.error('storage', 'Could not save Sessions state during shutdown', error)), 'Sessions storage flush');
 		}));

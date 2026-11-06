@@ -16,7 +16,7 @@ class TestImageEditorService extends ImageEditorService {
 	async capture() { return undefined; }
 }
 
-function fixture(payload: JsonValue) {
+function fixture(payload: JsonValue, lazy = false) {
 	const lifetime = new DisposableStore();
 	const dom = new JSDOM('<!doctype html><body></body>', { runScripts: 'dangerously' });
 	const previous = Object.getOwnPropertyDescriptor(globalThis, 'document');
@@ -26,21 +26,38 @@ function fixture(payload: JsonValue) {
 		dom.window.close();
 	}));
 	const editors = lifetime.add(new TestImageEditorService());
+	const owner = { id: 'test.image', packageDigest: 'digest', activationGeneration: 1 };
+	const ready = (enabled: boolean) => ({
+		generation: 2, extensions: [{
+			...owner, lifecycle: 'ready', incarnation: 1,
+			registrations: enabled ? [{ kind: 'dataChannel', registrationId: 'editor', channelId: 'image.editor.v1' }] : [],
+		}]
+	}) as unknown as ExtensionHostFleetSnapshot;
+	const activations: unknown[] = [];
 	const adapter = lifetime.add(new MainThreadImageEditors(30_000,
-		{ invoke: async () => payload } as unknown as IExtensionHostApi,
+		{ invoke: async () => payload, activateByEvent: async (request: unknown) => { activations.push(request); return ready(true); } } as unknown as IExtensionHostApi,
 		{ getExtensionPointContributions: () => [{ description: { id: 'test.image' }, value: [{ id: 'editor', displayName: 'Test image', default: true, accessibilityHelp: '' }] }] } as unknown as IExtensionService,
 		editors, {} as ICodeEditorService,
 		{} as IThemeService, {} as IConfigurationService, {} as INotificationService,
 	));
-	const update = (enabled: boolean) => adapter.update({
-		generation: 1, extensions: [{
-			id: 'test.image', packageDigest: 'digest', lifecycle: 'ready', incarnation: 1, activationGeneration: 1,
-			registrations: enabled ? [{ kind: 'dataChannel', registrationId: 'editor', channelId: 'image.editor.v1' }] : [],
-		}]
-	} as unknown as ExtensionHostFleetSnapshot);
-	update(true);
-	return { editors, update, document: dom.window.document, [Symbol.dispose]: () => lifetime.dispose() };
+	const update = (enabled: boolean) => adapter.update(ready(enabled));
+	if (lazy) adapter.update({ generation: 1, extensions: [{ ...owner, lifecycle: 'dormant', registrations: [], activation: { events: ['onCapability:image.editor.v1'], commands: [] } }] } as unknown as ExtensionHostFleetSnapshot);
+	else update(true);
+	return { editors, update, activations, document: dom.window.document, [Symbol.dispose]: () => lifetime.dispose() };
 }
+
+test('a declared image editor is available before activation and starts on first resolution', async () => {
+	using value = fixture({ html: '<main>Lazy image</main>', resources: [] }, true);
+	assert.equal(value.editors.available, true);
+	assert.deepEqual(value.activations, []);
+	const signal = new AbortController().signal;
+	const resolved = await value.editors.resolve('screen', signal);
+	assert.match(resolved.view.html, /Lazy image/);
+	await value.editors.resolve('selection', signal, 'test.image:editor');
+	assert.deepEqual(value.activations, [{ extensionId: 'test.image', activationGeneration: 1, event: { type: 'capability', capability: 'image.editor.v1' } }]);
+	value.update(false);
+	assert.equal(resolved.signal.aborted, true);
+});
 
 test('public image providers can supply standalone HTML without packaged script or stylesheet roles', async () => {
 	using value = fixture({ html: '<main>Standalone</main><style>main{color:red}</style><script>window.hostExecuted=true</script>', resources: [], state: { marker: true } });

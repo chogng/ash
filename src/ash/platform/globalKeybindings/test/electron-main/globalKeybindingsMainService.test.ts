@@ -39,19 +39,28 @@ function binding(accelerator: string): INativeSystemWideKeybinding {
 test('renderer shortcut leases preserve failed replacements and release on navigation, crash and disposal', () => {
 	const shortcuts = new TestShortcuts();
 	const messages: unknown[] = [];
+	const nativeCommands: string[] = [];
 	using service = new GlobalKeybindingsMainService({ shortcuts, activeWindowId: () => 1, runCommand: () => assert.fail('Renderer leases dispatch to their owning renderer'), onError: error => { throw error; } });
 	using lifetime = new DisposableStore();
 	const contents = Object.assign(new EventEmitter(), { isDestroyed: () => false, send: (...args: unknown[]) => messages.push(args) });
 	const window = { id: 1, webContents: contents, isDestroyed: () => false } as unknown as BrowserWindow;
-	const route = service.createWindowRoutes(window, lifetime)[0];
+	const route = service.createWindowRoutes(window, lifetime, (id, commandId) => {
+		if (id !== 'native.capture') return false;
+		nativeCommands.push(commandId);
+		return true;
+	})[0];
 	const update = (accelerator: string) => route.invoke(route.validate({ id: 'image.capture', commandId: 'test.image.capture', accelerator, label: accelerator, global: true }));
 	assert.deepEqual(update('Control+Shift+A'), { available: true, activeLabel: 'Control+Shift+A' });
 	shortcuts.unavailable.add('Control+Shift+B');
 	assert.deepEqual(update('Control+Shift+B'), { available: false, activeLabel: 'Control+Shift+A' });
 	shortcuts.callbacks.get('Control+Shift+A')!();
 	assert.deepEqual(messages, [[GLOBAL_KEYBINDING_TRIGGER_CHANNEL, { id: 'image.capture' }]]);
+	route.invoke(route.validate({ id: 'native.capture', commandId: 'test.native.capture', accelerator: 'Control+Shift+C', label: 'Control+Shift+C', global: true }));
+	shortcuts.callbacks.get('Control+Shift+C')!();
+	assert.deepEqual(nativeCommands, ['test.native.capture']);
+	assert.equal(messages.length, 1);
 	contents.emit('did-start-navigation', {}, 'file:///workbench.html#selection', true, true);
-	assert.equal(shortcuts.callbacks.size, 1);
+	assert.equal(shortcuts.callbacks.size, 2);
 	contents.emit('did-start-navigation', {}, 'file:///workbench.html', false, true);
 	assert.equal(shortcuts.callbacks.size, 0);
 	update('Control+Shift+A');

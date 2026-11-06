@@ -1,16 +1,18 @@
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
+import { VSBuffer } from '../../../../base/common/buffer.js';
 import { toElectronAccelerator } from '../../../../platform/keybinding/common/electronAccelerator.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
-import { GLOBAL_KEYBINDING_UPDATE_CHANNEL, GLOBAL_KEYBINDING_TRIGGER_CHANNEL, validateGlobalKeybindingResult } from '../../../../platform/globalKeybindings/common/globalKeybindings.js';
+import { GLOBAL_KEYBINDING_UPDATE_CHANNEL, validateGlobalKeybindingResult } from '../../../../platform/globalKeybindings/common/globalKeybindings.js';
+import { IMAGE_VIEW_ATTACH_CHANNEL, validateImageViewImage } from '../../../../platform/imageView/common/imageView.js';
 import { invoke, subscribe } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { IImageEditorService } from '../../../services/imageEditor/common/imageEditorService.js';
-import { ScreenshotCommandId, ScreenshotGlobalShortcutSetting } from '../common/constants.js';
+import { ScreenshotCommandId, ScreenshotGlobalShortcutSetting, ScreenshotShortcutId } from '../common/constants.js';
 import { localize } from '../../../../nls.js';
 
 interface ScreenshotShortcutStatus {
@@ -40,13 +42,13 @@ export class ChatScreenshotContribution extends Disposable {
 		this._register(editors.onDidChange(() => { void this.checkShortcut(); }));
 		this._register(keybindings.onDidUpdateKeybindings(() => { void this.checkShortcut(); }));
 		this._register(configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(ScreenshotGlobalShortcutSetting)) void this.checkShortcut(); }));
-		const trigger = subscribe<unknown>(GLOBAL_KEYBINDING_TRIGGER_CHANNEL, value => {
-			if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).join(',') !== 'id' || typeof (value as { id?: unknown; }).id !== 'string') throw new TypeError('Invalid global keybinding trigger');
-			if ((value as { id: string; }).id === 'chat.screenshot') void commands.executeCommand(ScreenshotCommandId).catch(error => log.error('Could not start screenshot from global shortcut', error));
+		const attach = subscribe<unknown>(IMAGE_VIEW_ATTACH_CHANNEL, value => {
+			const image = VSBuffer.wrap(new Uint8Array(validateImageViewImage(value)));
+			void commands.executeCommand(ScreenshotCommandId, async () => image).catch(error => log.error('Could not attach the screenshot', error));
 		});
 		this._register(toDisposable(() => {
-			trigger.dispose();
-			void invoke(GLOBAL_KEYBINDING_UPDATE_CHANNEL, { id: 'chat.screenshot', commandId: ScreenshotCommandId, accelerator: '', label: '', global: false }).catch(() => { });
+			attach.dispose();
+			void invoke(GLOBAL_KEYBINDING_UPDATE_CHANNEL, { id: ScreenshotShortcutId, commandId: ScreenshotCommandId, accelerator: '', label: '', global: false }).catch(() => { });
 		}));
 		void this.checkShortcut();
 	}
@@ -61,7 +63,7 @@ export class ChatScreenshotContribution extends Disposable {
 			try {
 				const result = validateGlobalKeybindingResult(
 					await invoke<unknown>(GLOBAL_KEYBINDING_UPDATE_CHANNEL, {
-						id: 'chat.screenshot', commandId: ScreenshotCommandId, accelerator: accelerator ?? '',
+						id: ScreenshotShortcutId, commandId: ScreenshotCommandId, accelerator: accelerator ?? '',
 						label: binding ? getKeybindingLabel(binding) : '',
 						global: global && !!binding
 					})
