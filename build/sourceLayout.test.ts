@@ -75,7 +75,10 @@ test('frontend Node tools and backend package builders have separate language ow
 		assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.py'), [], directory);
 	}
 	for (const [directory, entries] of [
-		['desktop', ['__init__.py', 'analyze.py', 'debug.py', 'develop.py', 'live.py', 'package_runtime.py', 'runtime_acceptance.py', 'test_analyze.py', 'test_debug.py', 'test_develop.py', 'test_live.py', 'test_package_runtime.py']],
+		['desktop', [
+			'__init__.py', 'analyze.py', 'debug.py', 'develop.py', 'host_logs.py', 'live.py', 'package_runtime.py', 'runtime_acceptance.py', 'subsecond.py',
+			'test_analyze.py', 'test_debug.py', 'test_develop.py', 'test_host_logs.py', 'test_live.py', 'test_package_runtime.py',
+		]],
 		['protocol', ['__init__.py', 'artifacts.py', 'generate.py', 'test_generate.py']],
 	] as const) {
 		assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.py').map(path => path.slice(join(import.meta.dirname, directory).length + 1)).sort(), [...entries].sort(), directory);
@@ -105,7 +108,9 @@ test('frontend Node tools and backend package builders have separate language ow
 test('Node build and repository command sources do not use runtime JavaScript', () => {
 	const javaScriptExtensions = new Set(['.cjs', '.js', '.mjs', '.mts']);
 	const files = [...walk(import.meta.dirname), ...walk(join(repositoryRoot, 'scripts'))];
-	assert.deepEqual(files.filter((path) => javaScriptExtensions.has(extname(path))), []);
+	// The deployment test runs this fixture under the shipped Electron runtime.
+	const deployedDependencyProbe = join(import.meta.dirname, 'desktop/fixtures/deployedDependencies.cjs');
+	assert.deepEqual(files.filter(path => javaScriptExtensions.has(extname(path)) && path !== deployedDependencyProbe), []);
 });
 
 test('build tools do not import repository command implementations', () => {
