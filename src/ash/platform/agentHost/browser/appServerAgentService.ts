@@ -1,4 +1,5 @@
 import { Disposable, DisposableStore } from '../../../base/common/lifecycle.js';
+import { TaskQueue } from '../../../base/common/async.js';
 import { URI } from '../../../base/common/uri.js';
 import { createSshRemoteAuthority, createSshRemoteWorkspaceUri, withRemoteWorkspacePath } from '../../remote/common/remote.js';
 import type { SessionCreateParams as SessionCreateParamsDto } from '../../../../../.build/protocol/typescript/index.js';
@@ -138,6 +139,13 @@ export function createDisconnectedAgentTurnService(unavailable: UnavailableOpera
 }
 
 export function createAppServerAgentSessionService(connection: AppServerProtocolClient, remoteHost?: string | { readonly authority: string; }): IAgentSessionService {
+	const catalogRequests = new TaskQueue();
+	const catalogOwners = new Set<object>();
+	let catalogGeneration: number | undefined;
+	const listCatalog = async (subscribe: boolean) => {
+		const result = await appServerRequest(connection, subscribe ? 'session/catalog/subscribe' : 'session/list', {});
+		return { sessions: result.sessions.map(session => toAgentSession(session, remoteHost)) };
+	};
 	return {
 		canChangeDirectory: () => !remoteHost && connection.capabilities?.contracts.changeSessionDirectory?.version === 1,
 		async changeDirectory(params) {
@@ -271,15 +279,26 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 			const result = await appServerRequest(connection, 'session/catalog/read', params);
 			return { session: result.session ? toAgentSession(result.session, remoteHost) : result.session };
 		},
-		list: () =>
-			appServerRequest(connection, 'session/list', {}).then((result) => ({
-				sessions: result.sessions.map(session => toAgentSession(session, remoteHost))
-			})),
-		subscribeCatalog: () =>
-			appServerRequest(connection, 'session/catalog/subscribe', {}).then((result) => ({
-				sessions: result.sessions.map(session => toAgentSession(session, remoteHost))
-			})),
-		unsubscribeCatalog: () => voidResult(appServerRequest(connection, 'session/catalog/unsubscribe', {})),
+		list: () => listCatalog(false),
+		subscribeCatalog: owner => catalogRequests.schedule(async () => {
+			const generation = connection.generation;
+			if (generation !== catalogGeneration) {
+				catalogOwners.clear();
+				catalogGeneration = generation;
+			}
+			const result = await listCatalog(catalogOwners.size === 0);
+			if (generation !== connection.generation) throw canceled();
+			catalogOwners.add(owner);
+			return result;
+		}),
+		unsubscribeCatalog: owner => {
+			const generation = connection.generation;
+			return catalogRequests.schedule(async () => {
+				if (generation !== connection.generation || generation !== catalogGeneration
+					|| !catalogOwners.delete(owner) || catalogOwners.size) return;
+				await appServerRequest(connection, 'session/catalog/unsubscribe', {});
+			});
+		},
 		subscribe: async (params) => {
 			const result = await appServerRequest(connection, 'session/subscribe', params);
 			return {

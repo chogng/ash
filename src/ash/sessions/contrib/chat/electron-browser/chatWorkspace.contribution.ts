@@ -1,13 +1,17 @@
 import { getActiveElement } from '../../../../base/browser/dom.js';
+import { canceled } from '../../../../base/common/errors.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
+import { OPEN_SESSION_LINK_SCHEME, parseOpenSessionLinkUri } from '../../../../platform/agentHost/common/openSessionLink.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
+import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { EditorInputCapabilities } from '../../../../workbench/common/editor.js';
 import { AshChatSelectionService, IAshChatSelectionService } from '../browser/ashChatSelectionService.js';
+import { AshChatSessionService, IAshChatSessionService } from '../browser/ashChatSessionService.js';
 import { AshChatWidgetModel, type ChatDraftModelSource } from '../browser/ashChatWidgetModel.js';
 import { registerReplyChatEditor, type ReplyChatEditorOptions } from '../browser/replyChatEditor.js';
 import { Disposable, DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -51,6 +55,7 @@ export function registerChatWorkspace(webChat: {
 	readonly openCommand: string;
 }): void {
 	registerSingleton(IAshChatSelectionService, AshChatSelectionService, InstantiationType.Delayed);
+	registerSingleton(IAshChatSessionService, AshChatSessionService, InstantiationType.Delayed);
 	registerReplyChatEditor({ ...ashChatEditor, model: new SyncDescriptor(AshChatWidgetModel, [webChat.draftModels]) });
 	registerAshChatAccessibility();
 	registerSingleton(IChatListCatalog, new SyncDescriptor(ChatListCatalog, [[
@@ -90,10 +95,12 @@ export class ChatWorkspaceContribution extends Disposable {
 		@ISessionsLayoutService layout: ISessionsLayoutService,
 		@IStorageService storage: IStorageService,
 		@IAshChatSelectionService selection: IAshChatSelectionService,
+		@IAshChatSessionService sessions: IAshChatSessionService,
+		@IOpenerService opener: IOpenerService,
 	) {
 		super();
 		const newDraft = selection.selection.map(current => current.kind === 'draft');
-		this._register(CommandsRegistry.register(SHOW_ASH_CHAT_COMMAND, async (_accessor, source) => {
+		const showAshChat = async (source?: unknown): Promise<void> => {
 			await layout.openEntry({
 				id: 'ashChat', workspaceMode: 'chat', activityContext: ASH_CHAT_SELECTED_CONTEXT,
 				content: 'editor', sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID,
@@ -105,10 +112,35 @@ export class ChatWorkspaceContribution extends Disposable {
 				restoreCommand: SHOW_ASH_CHAT_COMMAND, newSessionCommand: 'sessions.open.new', newDraft, focus: 'editor',
 			}, undefined, source === 'restore' ? { source } : undefined);
 			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'ash', StorageScope.WORKSPACE, StorageTarget.MACHINE);
-		}));
+		};
+		this._register(CommandsRegistry.register(SHOW_ASH_CHAT_COMMAND, (_accessor, source) => showAshChat(source)));
 		this._register(CommandsRegistry.register(SHOW_CHAT_WORKSPACE_COMMAND, accessor => {
 			const command = storage.get(CHAT_WORKSPACE_LAST_BACKEND_KEY, StorageScope.WORKSPACE) === 'ash' ? SHOW_ASH_CHAT_COMMAND : openWebChatCommand;
 			return accessor.get(ICommandService).executeCommand(command);
+		}));
+		// The desktop contribution registers after the shared opener, which handles Code and other hosts.
+		this._register(opener.registerOpener({
+			open: async target => {
+				const resource = typeof target === 'string' ? URI.parse(target) : target;
+				if (resource.scheme !== OPEN_SESSION_LINK_SCHEME || resource.authority !== 'local') return false;
+				let address;
+				try { address = parseOpenSessionLinkUri(resource); }
+				catch { return false; }
+				const previous = selection.selection.get();
+				const entryCommand = layout.newSessionCommand;
+				const session = await sessions.read(address.sessionId);
+				if (!session) return false;
+				if (this.isDisposed || previous !== selection.selection.get() || entryCommand !== layout.newSessionCommand) throw canceled();
+				if (session.status !== 'active' || !session.threads.some(thread => thread.threadId === address.threadId && thread.status === 'active')) {
+					throw new Error(localize('chat.sessionLink.missing', 'This conversation is unavailable on this connection.'));
+				}
+				await showAshChat();
+				if (!this.isDisposed && previous === selection.selection.get()
+					&& (previous.kind !== 'thread' || previous.sessionId !== address.sessionId || previous.threadId !== address.threadId)) {
+					selection.select({ kind: 'thread', sessionId: address.sessionId, threadId: address.threadId });
+				}
+				return true;
+			},
 		}));
 	}
 }

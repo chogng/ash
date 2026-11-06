@@ -8,6 +8,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/tes
 import { CommandsRegistry, ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { IAccountService } from '../../../../../platform/accounts/common/accountService.js';
 import type { IAppServerApi, IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
 import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
@@ -16,7 +17,7 @@ import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.j
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import type { AgentModelDefaults, IAgentModelsService } from '../../../../../platform/models/common/agentModels.js';
-import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import { IOpenerService, type IOpener } from '../../../../../platform/opener/common/opener.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
 import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../../../../workbench/contrib/chat/browser/languageModelsConfigurationService.js';
 import { LanguageModelsService } from '../../../../../workbench/contrib/chat/common/languageModels.js';
@@ -26,6 +27,7 @@ import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../../common/agentHostSessio
 import { ISessionsLayoutService, type ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
 import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, OPEN_ASH_CHAT_WITH_MODEL_COMMAND, SHOW_ASH_CHAT_COMMAND, SHOW_CHAT_WORKSPACE_COMMAND } from '../../../chat/common/constants.js';
 import { AshChatSelectionService, IAshChatSelectionService } from '../../../chat/browser/ashChatSelectionService.js';
+import { IAshChatSessionService } from '../../../chat/browser/ashChatSessionService.js';
 import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
 import { ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization } from '../../electron-browser/chatGPTWeb.js';
 import { IChatGPTService, coworkTaskStatus, type ChatGPTState } from '../../browser/chatGPTService.js';
@@ -147,14 +149,23 @@ suite('ChatGPT entry', () => {
 	});
 
 	test('Ash opens native conversations inside the Chat workspace and restores them from the mode toggle', async () => {
-		const values = new Map<string, string>();
+		const values = new Map([['sessions.chat.ashSelection', JSON.stringify({ kind: 'thread', sessionId: 'saved', threadId: 'old-root' })]]);
+		const storage = { get: (key: string) => values.get(key), store: (key: string, value: string) => { values.set(key, value); } } as unknown as IStorageService;
+		const selection = new AshChatSelectionService(storage);
+		let linkOpener: IOpener | undefined;
 		using contexts = new ContextKeyService();
 		const entries: ISessionsEntry[] = [];
 		using services = new InstantiationService(new ServiceCollection(
-			[IStorageService, { get: (key: string) => values.get(key), store: (key: string, value: string) => { values.set(key, value); } } as unknown as IStorageService],
+			[IStorageService, storage],
 			[ICommandService, { executeCommand: (id: string, ...args: unknown[]) => services.invokeFunction(CommandsRegistry.getCommand(id)!, ...args) } as ICommandService],
 			[IContextKeyService, contexts],
-			[IAshChatSelectionService, new AshChatSelectionService(testStorage)],
+			[IAshChatSelectionService, selection],
+			[IAshChatSessionService, {
+				read: async (sessionId: string) => sessionId === 'saved' ? {
+					sessionId, status: 'active', threads: [{ threadId: 'old-root', status: 'active' }],
+				} : undefined
+			} as IAshChatSessionService],
+			[IOpenerService, { registerOpener: (value: IOpener) => { linkOpener = value; return toDisposable(() => { linkOpener = undefined; }); } } as IOpenerService],
 			[IChatGPTService, { state: observableValue('chatgpt', newChatState), initialize() { } } as unknown as IChatGPTService],
 			[ISessionsSearchService, { registerSource: () => Disposable.None } as unknown as ISessionsSearchService],
 			[IEditorService, {} as IEditorService],
@@ -163,6 +174,7 @@ suite('ChatGPT entry', () => {
 		using contribution = services.createInstance(ChatWorkspaceContribution, chatGPTWorkspaceSource.openCommand);
 		await services.invokeFunction(CommandsRegistry.getCommand(SHOW_ASH_CHAT_COMMAND)!, 'restore');
 		await services.invokeFunction(CommandsRegistry.getCommand(SHOW_CHAT_WORKSPACE_COMMAND)!);
+		assert.deepEqual(selection.selection.get(), { kind: 'thread', sessionId: 'saved', threadId: 'old-root' });
 		assert.equal(entries.length, 2);
 		for (const entry of entries) {
 			assert.equal(entry.workspaceMode, 'chat');
@@ -173,6 +185,11 @@ suite('ChatGPT entry', () => {
 			assert.equal(entry.sidebarContainerId, CHAT_WORKSPACE_NAVIGATION_ID);
 			assert.equal(entry.restoreCommand, SHOW_ASH_CHAT_COMMAND);
 		}
+		selection.select({ kind: 'draft', id: 'another-draft' });
+		assert.equal(await linkOpener!.open(buildOpenSessionLinkUri('code', 'code', 'local')), false);
+		assert.equal(await linkOpener!.open(buildOpenSessionLinkUri('saved', 'old-root', 'sessions+remote')), false);
+		assert.equal(await linkOpener!.open(buildOpenSessionLinkUri('saved', 'old-root', 'local')), true);
+		assert.deepEqual(new AshChatSelectionService(storage).selection.get(), { kind: 'thread', sessionId: 'saved', threadId: 'old-root' });
 	});
 
 	test('a retained Chat draft applies Ash model visibility while default model reads are pending', async () => {

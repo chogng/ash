@@ -1,4 +1,3 @@
-import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { canceled, isCancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
@@ -17,9 +16,8 @@ import type { ResolvedChatContext } from '../../../../workbench/services/chat/co
 import { ChatRequestQueueKind, type AgentInteractionDecision, type ChatMode, type ChatSubmissionOptions, type Thread, type ThreadRead, type ThreadTranscriptEntry, type ThreadTranscriptUpdateEnvelope, type Turn } from '../../../../workbench/services/chat/common/chatService.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
-import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { IAshChatSelectionService } from './ashChatSelectionService.js';
+import { IAshChatSessionService } from './ashChatSessionService.js';
 import type { IReplyChatEditorModel } from './replyChatEditor.js';
 
 /** A second conversation source can offer its models for unsent drafts. */
@@ -63,7 +61,7 @@ export class AshChatWidgetModel extends Disposable implements IReplyChatEditorMo
 		draftModels: SyncDescriptor<ChatDraftModelSource>,
 		@IAshChatSelectionService private readonly selection: IAshChatSelectionService,
 		@ISessionPrimaryProviderServices private readonly primary: SessionProviderServices,
-		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
+		@IAshChatSessionService private readonly sessions: IAshChatSessionService,
 		@ICommandService private readonly commands: ICommandService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IInstantiationService instantiation: IInstantiationService,
@@ -215,14 +213,9 @@ export class AshChatWidgetModel extends Disposable implements IReplyChatEditorMo
 		try {
 			let thread = this.thread;
 			if (selected.kind === 'draft') {
-				const created = await this.sessions.startNewSession(undefined, {
-					workspace: { type: 'current' },
-					providerId: LOCAL_AGENT_HOST_PROVIDER_ID,
-					creationId: selected.id,
-					creation: { automaticTitle: true, surface: 'chat', token: CancellationToken.None },
-				});
+				const created = await this.sessions.create(selected.id);
 				assertCurrent();
-				thread = (await this.primary.chat.readThread(created.session.sessionId, created.threadId)).thread;
+				thread = (await this.primary.chat.readThread(created.sessionId, created.threadId)).thread;
 			}
 			assertCurrent();
 			if (!thread) throw new Error(localize('sessions.create.noActiveChat', 'The new session has no active chat.'));
@@ -297,10 +290,9 @@ export class AshChatWidgetModel extends Disposable implements IReplyChatEditorMo
 
 	private async subscribe(binding: ThreadBinding): Promise<void> {
 		try {
-			await this.sessions.initialize();
+			const session = await this.sessions.read(binding.sessionId);
 			if (this.binding !== binding) return;
-			const session = this.sessions.sessions.find(candidate => candidate.sessionId === binding.sessionId && candidate.surface === 'chat' && candidate.status === 'active');
-			if (!session?.chats.some(chat => chat.threadId === binding.threadId && chat.status === 'active')) {
+			if (session?.status !== 'active' || !session.threads.some(thread => thread.threadId === binding.threadId && thread.status === 'active')) {
 				throw new Error(localize('sessions.chat.ashHistoryUnavailable', 'This Ash Chat conversation is unavailable.'));
 			}
 			const result = await this.primary.chat.subscribeThread(binding.sessionId, binding.threadId, binding.thread?.sequence ?? 0, binding);

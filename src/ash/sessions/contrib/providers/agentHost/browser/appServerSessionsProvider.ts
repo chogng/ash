@@ -98,7 +98,7 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 			this._onDidChangeSession.fire({ sessionId, detailChanged: false });
 		}));
 		this._register(toDisposable(() => {
-			if (this.catalogSubscribed) { void this.releaseOnDispose(() => this.sessionApi.unsubscribeCatalog(), 'Failed to unsubscribe Session catalog'); }
+			if (this.catalogSubscribed) { void this.releaseOnDispose(() => this.sessionApi.unsubscribeCatalog(this), 'Failed to unsubscribe Session catalog'); }
 			for (const sessionId of this.subscribed) {
 				void this.releaseOnDispose(() => this.sessionApi.unsubscribe({ sessionId }), `Failed to unsubscribe Session '${sessionId}'`);
 			}
@@ -135,10 +135,10 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 	private async readList(subscribing: boolean): Promise<readonly ISession[]> {
 		const generation = this.appServer.connectionGeneration;
 		const epoch = this.connectionEpoch;
-		const result = await (subscribing ? this.sessionApi.subscribeCatalog() : this.sessionApi.list());
+		const result = await (subscribing ? this.sessionApi.subscribeCatalog(this) : this.sessionApi.list());
 		await this.initialConnectionState;
 		if (this.isDisposed && generation === this.appServer.connectionGeneration && epoch === this.connectionEpoch && subscribing) {
-			await this.sessionApi.unsubscribeCatalog();
+			await this.sessionApi.unsubscribeCatalog(this);
 		}
 		this.assertCurrentConnection(generation, epoch);
 		this.catalogSubscribed = true;
@@ -374,12 +374,6 @@ export class AppServerSessionsProvider extends Disposable implements IAgentHostS
 				if (token.isCancellationRequested) throw canceled();
 				this.assertCurrentConnection(generation, epoch);
 				await this.sessionApi.addWorkspaceFolder!(created.session.sessionId, folder.root);
-			}
-			if (options?.surface === 'chat') {
-				// The Chat editor owns its own Thread subscription and selection.
-				await this.unsubscribe(created.session.sessionId);
-				if (created.session.surface !== options.surface) throw new Error(localize('sessions.create.chatSurfaceUnavailable', 'This host cannot create an Ash Chat conversation.'));
-				return { session: toSession(created.session), threadId: root.threadId };
 			}
 			const session = await this.subscribe(toSession(created.session));
 			this.assertCurrentConnection(generation, epoch);

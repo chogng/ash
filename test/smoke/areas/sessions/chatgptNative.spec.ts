@@ -180,6 +180,55 @@ async function configureAshModel(catalog: ReturnType<typeof createAshModelServer
 test.describe('Unified Chat sidebar', () => {
 	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN' } });
 
+	test('opens and restores an existing native Ash conversation without sending a message', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
+		const application = browser as ElectronApplication;
+		await installService(application);
+		const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+		try {
+			const { client } = connection;
+			const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
+				commandId: 'desktop-session-pre-upgrade-chat', title: 'Existing Ash Chat', surface: 'chat',
+				executionTarget: null, agent: { type: 'default' },
+			});
+			await client.request(APP_SERVER_METHODS['thread/goal/set'], {
+				threadId: session.threads[0]!.threadId, objective: 'Saved native Chat goal', status: 'paused',
+			});
+			const { session: legacy } = await client.request(APP_SERVER_METHODS['session/create'], {
+				commandId: 'legacy-code-without-surface', title: 'Existing Code Session',
+				executionTarget: { type: 'local', root: testWorkspace.directory }, agent: { type: 'default' },
+			});
+			const page = await workbench.openAgentsWindow(target.kind);
+			const row = page.locator(`[data-item="ash:${session.sessionId}"] .ash-sessions-list-item`);
+			await expect(row).toHaveText(/Existing Ash Chat/u);
+			await client.request(APP_SERVER_METHODS['session/request'], {
+				sessionId: session.sessionId, commandId: 'rename-existing-native-chat',
+				request: { type: 'renameSession', title: 'Renamed Ash Chat' },
+			});
+			await expect(row).toHaveText(/Renamed Ash Chat/u);
+			await row.press('Enter');
+			await expect(row).toHaveAttribute('aria-current', 'page');
+			const chat = page.locator('.ash-native-chat-widget .ash-chat');
+			await expect(chat).toHaveAttribute('data-session-id', session.sessionId);
+			await expect(chat.locator('.ash-chat-goal-banner')).toContainText('Saved native Chat goal');
+			const mode = page.locator('.ash-window-mode-control');
+			await mode.getByRole('button', { name: '代码', exact: true }).click();
+			await expect(chat).toBeHidden();
+			const codeRow = page.locator(`[data-item="session:${legacy.sessionId}"] .ash-sessions-list-item`);
+			await expect(codeRow).toBeVisible();
+			await codeRow.press('Enter');
+			await expect(codeRow).toHaveAttribute('aria-current', 'page');
+			await mode.getByRole('button', { name: '聊天 / Agents', exact: true }).click();
+			await expect(chat).toHaveAttribute('data-session-id', session.sessionId);
+			const restored = await workbench.reopenAgentsWindow(application, page);
+			const restoredChat = restored.locator('.ash-native-chat-widget .ash-chat');
+			await expect(restoredChat).toHaveAttribute('data-session-id', session.sessionId);
+			await expect(restoredChat.locator('.ash-chat-goal-banner')).toContainText('Saved native Chat goal');
+			await expect(restored.locator(`[data-item="ash:${session.sessionId}"] .ash-sessions-list-item`)).toHaveAttribute('aria-current', 'page');
+		} finally {
+			await connection.close();
+		}
+	});
+
 	test('a restored Ash draft can find and send with a ChatGPT model when its Ash model is hidden', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
 		const application = browser as ElectronApplication;
 		await installService(application);

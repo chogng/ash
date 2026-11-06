@@ -174,8 +174,9 @@ export interface IAgentSessionService {
 	read(params: Agent.SessionReadParams): Promise<Agent.SessionResult>;
 	readCatalog(params: Agent.SessionReadParams): Promise<Agent.SessionCatalogReadResult>;
 	list(): Promise<Agent.SessionListResult>;
-	subscribeCatalog(): Promise<Agent.SessionListResult>;
-	unsubscribeCatalog(): Promise<void>;
+	/** Each consumer releases only its own interest in the connection's catalog. */
+	subscribeCatalog(owner: object): Promise<Agent.SessionListResult>;
+	unsubscribeCatalog(owner: object): Promise<void>;
 	subscribe(params: Agent.SessionReadParams): Promise<Agent.SessionSubscribeResult>;
 	unsubscribe(params: Agent.SessionReadParams): Promise<void>;
 	createThread(params: Agent.SessionOperationInput<'createThread'>): Promise<Agent.SessionThreadResult>;

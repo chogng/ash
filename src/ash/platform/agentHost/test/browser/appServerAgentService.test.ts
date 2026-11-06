@@ -422,9 +422,35 @@ test('Session catalog and subscriptions share the Agent domain snapshot boundary
 	assert.notEqual(read.session.manager, session.manager);
 	assert.notEqual(read.session.model, session.model);
 	assert.deepEqual(await service.list(), { sessions: [read.session] });
-	assert.deepEqual(await service.subscribeCatalog(), { sessions: [read.session] });
+	assert.deepEqual(await service.subscribeCatalog({}), { sessions: [read.session] });
 	assert.deepEqual(await service.subscribe({ sessionId: 'session' }), { ...read, threadSnapshots: [] });
 	assert.deepEqual(requests, ['session/read', 'session/list', 'session/catalog/subscribe', 'session/subscribe']);
+});
+
+test('Chat and Code release only their own Session catalog lease', async () => {
+	const methods: string[] = [];
+	let generation = 1;
+	const service = createAppServerAgentSessionService({
+		get generation() { return generation; },
+		async request({ method }: { method: string; }) {
+			methods.push(method);
+			return { sessions: [] };
+		},
+	} as unknown as AppServerProtocolClient);
+	const chat = {};
+	const code = {};
+	await Promise.all([service.subscribeCatalog(code), service.subscribeCatalog(chat)]);
+	await service.unsubscribeCatalog(code);
+	assert.deepEqual(methods, ['session/catalog/subscribe', 'session/list']);
+	await service.unsubscribeCatalog(chat);
+	assert.deepEqual(methods, ['session/catalog/subscribe', 'session/list', 'session/catalog/unsubscribe']);
+
+	await service.subscribeCatalog(code);
+	generation++;
+	await service.subscribeCatalog(chat);
+	await service.unsubscribeCatalog(code);
+	await service.unsubscribeCatalog(chat);
+	assert.deepEqual(methods.slice(3), ['session/catalog/subscribe', 'session/catalog/subscribe', 'session/catalog/unsubscribe']);
 });
 
 test('SSH-bound Session requests use server-local paths and retain host identity on every snapshot', async () => {
@@ -451,7 +477,7 @@ test('SSH-bound Session requests use server-local paths and retain host identity
 	assert.deepEqual((await service.read({ sessionId: 'session' })).session.executionTarget, remote);
 	assert.deepEqual((await service.readCatalog({ sessionId: 'session' })).session?.executionTarget, remote);
 	assert.deepEqual((await service.list()).sessions[0]?.executionTarget, remote);
-	assert.deepEqual((await service.subscribeCatalog()).sessions[0]?.executionTarget, remote);
+	assert.deepEqual((await service.subscribeCatalog({})).sessions[0]?.executionTarget, remote);
 	assert.deepEqual((await service.subscribe({ sessionId: 'session' })).session.executionTarget, remote);
 	for (const operation of ['archive', 'restore', 'stop'] as const) {
 		assert.deepEqual((await service[operation]({ sessionId: 'session', commandId: operation })).session.executionTarget, remote);

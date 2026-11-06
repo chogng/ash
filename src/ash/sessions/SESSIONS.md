@@ -24,12 +24,12 @@ surfaces restores the destination's selection and drafts. A user-initiated hando
 passes selected draft content or an owner-qualified reference. Mutations always
 go through the owner of the target record.
 
-On Desktop, the ChatGPT Web source owns its conversation records. The native Ash
-source creates its own root Threads through the shared App Server and persists
-its selection and drafts under the Chat workspace. The backend records the
-conversation surface at creation and projects it in the Session catalog. Chat
-and Code select from their respective records. Sessions without a recorded surface
-remain accessible through Code.
+On Desktop, the ChatGPT Web source owns its conversation records. Native Ash Chat
+creates its root Threads, reads its catalog and validates saved selections and
+links through the local App Server domain service. The shared connection retains
+its catalog subscription while either consumer needs it. Native Chat preserves
+its existing selection, draft and conversation identities. Sessions without a
+recorded surface remain accessible through Code.
 
 ## Architecture
 

@@ -7,6 +7,8 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 import { readStoredOrder, resolveSectionOrder, storeReorderedIds } from './sessionSectionOrderService.js';
 import type { ISession } from '../common/session.js';
 
+type SessionListIdentity = Pick<ISession, 'sessionId' | 'source'>;
+
 export type SessionSortMode = 'name' | 'created' | 'updated';
 export type SessionSortDirection = 'ascending' | 'descending';
 export type SessionGrouping = 'none' | 'projects' | 'repository' | 'status' | 'environment';
@@ -34,15 +36,15 @@ export interface ISessionsListModelService {
 	setShowComparisonGroups(show: boolean): void;
 	readonly automationSessionsMode: AutomationSessionsListMode;
 	setAutomationSessionsMode(mode: AutomationSessionsListMode): void;
-	getAutomationSessionOverride(session: ISession): 'show' | 'hide' | undefined;
+	getAutomationSessionOverride(session: SessionListIdentity): 'show' | 'hide' | undefined;
 	setAutomationSessionOverride(session: ISession, override: 'show' | 'hide' | undefined): void;
 	recordAutomationSessionReply(session: ISession): void;
-	isSessionListed(session: ISession): boolean;
+	isSessionListed(session: SessionListIdentity): boolean;
 	getSessionOrder(mode: SessionsListMode, section: string, visibleIds: readonly string[]): readonly string[];
 	moveSession(mode: SessionsListMode, section: string, visibleIds: readonly string[], id: string, targetId: string): void;
-	isSessionPinned(session: ISession): boolean;
-	pinSession(session: ISession): void;
-	unpinSession(session: ISession): void;
+	isSessionPinned(session: SessionListIdentity): boolean;
+	pinSession(session: SessionListIdentity): void;
+	unpinSession(session: SessionListIdentity): void;
 	getRowIcon(rowId: string): string | undefined;
 	setRowIcon(rowId: string, iconId: string | undefined): void;
 	registerTree(mode: SessionsListMode, read: () => readonly ISessionsListTreeNode[]): IDisposable;
@@ -169,7 +171,7 @@ export class SessionsListModelService implements ISessionsListModelService {
 		this.storage.store(automationVisibilityKey, mode, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
-	getAutomationSessionOverride(session: ISession): 'show' | 'hide' | undefined {
+	getAutomationSessionOverride(session: SessionListIdentity): 'show' | 'hide' | undefined {
 		const value = this.storage.get(automationOverridePrefix + session.sessionId, StorageScope.PROFILE);
 		return value === 'show' || value === 'hide' ? value : undefined;
 	}
@@ -184,7 +186,7 @@ export class SessionsListModelService implements ISessionsListModelService {
 		this.storage.store(automationReplyPrefix + session.sessionId, true, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
-	isSessionListed(session: ISession): boolean {
+	isSessionListed(session: SessionListIdentity): boolean {
 		if (session.source !== 'automation') return true;
 		const override = this.getAutomationSessionOverride(session);
 		if (override !== undefined) return override === 'show';
@@ -214,11 +216,11 @@ export class SessionsListModelService implements ISessionsListModelService {
 		return manualOrderPrefix + `${field}:${direction}:${scope}`;
 	}
 
-	isSessionPinned(session: ISession): boolean {
+	isSessionPinned(session: SessionListIdentity): boolean {
 		return this.storage.getBoolean(pinnedSessionPrefix + session.sessionId, StorageScope.PROFILE, false);
 	}
 
-	pinSession(session: ISession): void {
+	pinSession(session: SessionListIdentity): void {
 		this.storage.store(pinnedSessionPrefix + session.sessionId, true, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
@@ -231,7 +233,7 @@ export class SessionsListModelService implements ISessionsListModelService {
 		this.storage.store(rowIconPrefix + rowId, iconId, StorageScope.PROFILE, StorageTarget.MACHINE);
 	}
 
-	unpinSession(session: ISession): void {
+	unpinSession(session: SessionListIdentity): void {
 		this.storage.store(pinnedSessionPrefix + session.sessionId, false, StorageScope.PROFILE, StorageTarget.USER);
 	}
 }
