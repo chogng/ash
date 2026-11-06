@@ -79,6 +79,7 @@ import { IConfigurationService } from '../../../platform/configuration/common/co
 import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
 import { ISessionFolderAuthorizationService } from '../../common/sessionWorkspace.js';
+import { IBrowserViewWorkbenchService } from '../../../workbench/contrib/browserView/common/browserView.js';
 import { ILocalGitService } from '../../../platform/git/common/localGitService.js';
 import { BrowserLayoutService, ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
@@ -368,6 +369,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	using editorServices = createTestEditorServices(undefined, services, dom.window.document);
 	services.registerInstance(IFileDialogService, editorServices.createInstance(FileDialogService, { kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
 	const paneServices = registerTestComponentServices(editorServices);
+	paneServices.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 	paneServices.registerInstance(IRemoteConnectionService, resources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 	paneServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 	paneServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));

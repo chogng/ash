@@ -2,6 +2,7 @@ import { ISessionContext } from '../../services/sessions/browser/sessionContext.
 import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
 import { ISessionFolderAuthorizationService } from '../../common/sessionWorkspace.js';
+import { IBrowserViewWorkbenchService } from '../../../workbench/contrib/browserView/common/browserView.js';
 import { codeConversationDefaultsSetting, codeConversationWorkspaceKey, type CodeConversationDefaults } from '../../common/codeConversationDefaults.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ILocalGitService } from '../../../platform/git/common/localGitService.js';
@@ -190,6 +191,7 @@ function createInputServices(
 	if (!editorServices.has(IExtensionService)) registerTestExtensionService(inputResources, editorServices);
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), editorServices));
 	services.registerInstance(IChatService, chat);
+	services.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 	services.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
 	services.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 	services.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
@@ -1631,6 +1633,7 @@ test('sending from one session preserves a later draft during first-session crea
 	const editorRoot = createCodeEditorServices(editorResources);
 	registerTestExtensionService(editorResources, editorRoot);
 	const editorServices = editorResources.add(createTestEditorServices(undefined, editorRoot, dom.window.document, composerStorage));
+	editorServices.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 	editorServices.registerInstance(IFileDialogService, { showOpenDialog: async () => { throw new Error('Unexpected folder browser'); } } as unknown as IFileDialogService);
 	editorServices.registerInstance(IRemoteConnectionService, editorResources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 	editorServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);

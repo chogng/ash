@@ -49,6 +49,7 @@ import type { ISessionsManagementService } from '../../../../../services/session
 import type { ISession } from '../../../../../services/sessions/common/session.js';
 import { GitHubService } from '../../../browser/githubService.js';
 import { attachSessionGitHubReference, SessionChatInputToolbar } from '../../../../chat/browser/sessionChatInputToolbar.js';
+import { IBrowserViewWorkbenchService } from '../../../../../../workbench/contrib/browserView/common/browserView.js';
 import { SessionsList } from '../../../../sessions/browser/views/sessionsList.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import type { GitHubPullRequestReference, GitHubIssueReference } from '../../../../../../platform/github/common/githubService.js';
@@ -280,7 +281,8 @@ toolbarServices.registerInstance(ISessionContext, toolbarModel);
 toolbarServices.registerInstance(IOpenerService, opener);
 toolbarServices.registerInstance(IContextViewService, resources.add(new BrowserContextViewService(document.body)));
 toolbarServices.registerInstance(IEditorService, { openEditor: async input => { opened.push(input.resource.toString()); } } as IEditorService);
-const toolbar = resources.add(toolbarServices.createInstance(SessionChatInputToolbar, main, () => input.focus()));
+toolbarServices.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
+const toolbar = resources.add(toolbarServices.createInstance(SessionChatInputToolbar, main, () => input.focus(), undefined));
 if (inputStack) {
 	// Exercise the real PR producer against the same slot contract used by NewChatWidget.
 	main.classList.add('ash-chat-input-part', chatInputStackClass);

@@ -25,10 +25,14 @@ import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { IGitHubService } from '../../github/browser/githubService.js';
 import { getIssueLabel, getPullRequestLabel, type IResolvedSessionIssue, type IResolvedSessionPullRequest } from '../../github/common/types.js';
 import { chatInputStackSlotClass, ChatInputStackSlot, setChatInputStackSlot } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
+import { IBrowserViewWorkbenchService } from '../../../../workbench/contrib/browserView/common/browserView.js';
+import type { ChatWidgetModel } from '../../../browser/chatWidgetModel.js';
+import { SessionBrowsersControl } from './sessionBrowsersControl.js';
 
-/** Shows durable Issue associations and PRs resolved for the active Session. */
+/** Shows references and browser pages belonging to this conversation. */
 export class SessionChatInputToolbar extends Disposable {
 	public readonly element: HTMLDivElement;
+	private readonly browsersControl: SessionBrowsersControl | undefined;
 	private readonly entries = this._register(new DisposableMap<string, PullRequestEntry>());
 	private readonly issuesDomNode: HTMLDivElement;
 	private readonly issueSummaryDomNode: HTMLButtonElement;
@@ -41,18 +45,26 @@ export class SessionChatInputToolbar extends Disposable {
 	constructor(
 		container: HTMLElement,
 		private readonly focusFallback: () => void,
+		browserContext: Pick<ChatWidgetModel, 'session' | 'threadId' | 'onDidChange'> | undefined,
 		@ISessionContext private readonly sessionContext: ISessionContext,
 		@IGitHubService private readonly github: IGitHubService,
 		@IOpenerService private readonly opener: IOpenerService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
+		@IBrowserViewWorkbenchService browserViews: IBrowserViewWorkbenchService | undefined,
 	) {
 		super();
 		this.element = h(container.ownerDocument, 'div');
 		this.element.className = `ash-session-chat-input-prs ${chatInputStackSlotClass}`;
 		this.element.setAttribute('role', 'group');
-		this.element.setAttribute('aria-label', localize('sessions.github.references', 'Session GitHub references'));
+		this.element.setAttribute('aria-label', browserViews && browserContext
+			? localize('sessions.chat.references', 'Session references')
+			: localize('sessions.github.references', 'Session GitHub references'));
 		container.append(this.element);
+		if (browserViews && browserContext) {
+			this.browsersControl = this._register(instantiation.createInstance(SessionBrowsersControl, this.element, browserContext, focusFallback));
+			this._register(this.browsersControl.onDidChangeVisibility(() => this.updateVisibility()));
+		}
 		this.issuesDomNode = h(container.ownerDocument, 'div');
 		this.issuesDomNode.className = 'ash-session-chat-input-issues';
 		this.issuesDomNode.setAttribute('role', 'group');
@@ -105,6 +117,8 @@ export class SessionChatInputToolbar extends Disposable {
 		this._register(sessionContext.onDidChange(() => this.render()));
 		this.render();
 	}
+
+	setVisible(visible: boolean): void { this.browsersControl?.setVisible(visible); }
 
 	private render(): void {
 		const sessionId = this.sessionContext.sessionId;
@@ -195,7 +209,7 @@ export class SessionChatInputToolbar extends Disposable {
 	}
 
 	private updateVisibility(): void {
-		const visible = this.entries.size > 0 || !this.issuesDomNode.hidden;
+		const visible = this.entries.size > 0 || !this.issuesDomNode.hidden || this.browsersControl?.isShowing === true;
 		this.element.hidden = !visible;
 		setChatInputStackSlot(this.element, visible ? ChatInputStackSlot.Standalone : ChatInputStackSlot.Empty);
 	}

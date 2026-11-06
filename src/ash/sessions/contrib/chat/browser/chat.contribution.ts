@@ -1,6 +1,7 @@
 import { registerEditorPane } from '../../../../workbench/browser/editor.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { NewChatInSessionsWindowAction, NewSessionFromNavigationAction } from './newSessionAction.js';
+import { NewSessionFolderQuickPickAction } from './newSessionFolderQuickPickAction.js';
 import { OpenSessionLinkOpenerContribution } from './openSessionLinkOpener.contribution.js';
 import { EditorPaneMatch } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { SessionSideChatEditor } from './sessionSideChatEditor.js';
@@ -26,6 +27,7 @@ registerSingleton(ISessionsChatViewStateService, SessionsChatViewStateService, I
 
 registerAction2(NewChatInSessionsWindowAction);
 registerAction2(NewSessionFromNavigationAction);
+registerAction2(NewSessionFolderQuickPickAction);
 
 // The window's host-aware opener must take precedence over the ambient Workbench opener.
 registerWorkbenchContribution(OpenSessionLinkOpenerContribution.ID, WorkbenchPhase.BlockRestore,

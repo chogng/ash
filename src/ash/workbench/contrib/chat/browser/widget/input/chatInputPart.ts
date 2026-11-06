@@ -546,7 +546,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				getContext: () => this.state.conversation ?? {},
 				acceptSkill: skill => this.captureSkill(skill),
 				isEnabled: () => this.visible && !this.state.aiDisabled,
-				acceptResource: (resource, isDirectory, replacement, signal) => this.acceptResourceCompletion(resource, isDirectory, replacement, signal),
+				acceptResource: async (resource, isDirectory, replacement, signal) => {
+					await this.acceptContextCompletion(replacement, async draftSignal => [await this.attachmentResolver.resolveResourceAttachContext(resource, isDirectory, draftSignal)], signal);
+				},
 			} satisfies AgentHostInputCompletionHost));
 			completions.register();
 		}
@@ -969,23 +971,29 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		});
 	}
 
-	private async acceptResourceCompletion(resource: URI, isDirectory: boolean, replacement: { readonly start: number; readonly end: number; }, signal: AbortSignal): Promise<void> {
+	/** Replaces the completion query only after its context is ready and the input still owns the selection. */
+	async acceptContextCompletion(
+		replacement: { readonly start: number; readonly end: number; },
+		prepare: (signal: AbortSignal) => Promise<readonly ChatContextAttachment[]>,
+		signal: AbortSignal,
+	): Promise<readonly ChatContextAttachment[] | undefined> {
 		const model = this.input.getModel!();
 		const version = model.getVersionId();
 		const selection = this.input.getSelection();
 		const preparation = new AbortController();
 		using edits = this.input.onDidChange(() => preparation.abort());
 		using cursor = this.input.codeEditor?.onDidChangeCursorSelection(() => preparation.abort());
-		const lifetime = AbortSignal.any([signal, preparation.signal]);
+		const lifetime = AbortSignal.any([signal, preparation.signal, this.inputLifecycle.signal]);
 		try {
-			await this.attachmentModel.acquireContext(
-				async draftSignal => [await this.attachmentResolver.resolveResourceAttachContext(resource, isDirectory, draftSignal)],
+			return await this.attachmentModel.acquireContext(
+				prepare,
 				lifetime,
 				(attachments, acquisitionSignal) => {
 					const current = this.input.getSelection();
 					if (!this.visible || this.state.aiDisabled || model.getVersionId() !== version || current.anchor !== selection.anchor || current.active !== selection.active) {
 						throw new CancellationError();
 					}
+					if (!attachments.length) return [];
 					if (!this.supportsImages() && attachments.some(attachment => attachment.kind === 'image')) {
 						throw new Error(localize('chat.image.unsupported', 'The selected model does not support images'));
 					}
@@ -1002,7 +1010,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				},
 			);
 		} catch (error) {
-			if (!this.isDisposed && !signal.aborted && !isCancellationError(error)) {
+			if (!this.isDisposed && !lifetime.aborted && !isCancellationError(error)) {
 				this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error)));
 			}
 		}

@@ -1083,6 +1083,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IEditorGroupsService, editors);
 		// The browser host resolves Workbench browsing, which borrows the window's editor services.
 		if (options.createBrowserHost) { this._register(options.createBrowserHost(services)); }
+		else { services.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined); }
 		const workbenchPreferences = this._register(services.createInstance(PreferencesService));
 		services.registerInstance(IPreferencesService, {
 			openSettings: options => preferences.open(options),
