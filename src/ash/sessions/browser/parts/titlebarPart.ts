@@ -7,6 +7,7 @@ import './titlebar/media/menubarControl.css';
 import { sessionsConversationBackground } from '../../common/theme.js';
 import { h } from '../../../base/browser/dom.js';
 import { observeResize } from '../../../base/browser/observer.js';
+import { AnimationFrameScheduler } from '../../../base/browser/scheduler.js';
 import { Color } from '../../../base/common/color.js';
 import type { ActionViewItemProvider } from '../../../base/browser/ui/actionbar/actionbar.js';
 import type { IAction } from '../../../base/common/actions.js';
@@ -76,6 +77,8 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super(container, themeService, storageService, 0);
+		const ownerWindow = container.ownerDocument.defaultView!;
+		const pixels = (value: string): number => Number.parseFloat(value) || 0;
 		this.domNode.classList.add('ash-sessions-titlebar');
 		this.updateStyles();
 		const left = h(container.ownerDocument, 'div');
@@ -117,10 +120,8 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		const updateSidebarMinimumWidth = (): void => {
 			// Keep the expanded constraint while the mode control is hidden with navigation.
 			if (modeHost.hidden) return;
-			const ownerWindow = container.ownerDocument.defaultView!;
 			const children = Array.from(left.children).filter(child => ownerWindow.getComputedStyle(child).display !== 'none');
 			const style = ownerWindow.getComputedStyle(left);
-			const pixels = (value: string): number => Number.parseFloat(value) || 0;
 			const width = Math.ceil(children.reduce((sum, child) => sum + child.getBoundingClientRect().width, 0)
 				+ Math.max(0, children.length - 1) * pixels(style.columnGap)
 				+ pixels(style.paddingLeft) + pixels(style.paddingRight)
@@ -140,12 +141,30 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 		const right = h(container.ownerDocument, 'div');
 		right.className = 'ash-sessions-titlebar-right';
 		this.contentDomNode.append(right);
+		const horizontalPadding = (element: HTMLElement): number => {
+			const style = ownerWindow.getComputedStyle(element);
+			return pixels(style.paddingLeft) + pixels(style.paddingRight);
+		};
 		const layoutActions = this._register(
 			new MenuWorkbenchToolBar(right, menuService, contextMenus, Menus.TitleBarRightLayout, {
 				ariaLabel: localize({ bundle: 'ash', key: 'windowMode.layout' }, 'Code layout'),
 				presentation: 'inherit-foreground',
 				highlightToggledItems: true,
 				contextKeyService: contextKeys,
+				responsiveBehavior: {
+					enabled: true,
+					observedElement: this.contentDomNode,
+					getAvailableWidth: () => {
+						const center = this.pageContent.childElementCount ? this.pageContent : this.sessionContent;
+						const accounts = this.activityActions?.element;
+						const accountsWidth = accounts?.getBoundingClientRect().width ?? 0;
+						const accountsGap = accounts && accountsWidth ? pixels(ownerWindow.getComputedStyle(accounts).marginLeft) : 0;
+						// Use the remaining titlebar space so growing the window can restore overflowed actions.
+						const reservedWidth = horizontalPadding(this.contentDomNode) + left.getBoundingClientRect().width
+							+ horizontalPadding(center) + accountsWidth + accountsGap;
+						return Math.max(0, this.contentDomNode.clientWidth - reservedWidth);
+					},
+				},
 			}),
 		);
 		layoutActions.element.classList.add('ash-sessions-titlebar-actions');
@@ -154,6 +173,8 @@ export class TitlebarPart extends WebTitlebarPart implements ISessionsTitlebarSe
 			presentation: 'inherit-foreground',
 			actionViewItemProvider: (action, options) => this.activityActionViewItemProvider?.(action, options),
 		}));
+		const relayoutActions = this._register(new AnimationFrameScheduler(ownerWindow, () => layoutActions.relayout()));
+		this._register(observeResize([left, this.pageContent, this.sessionContent, this.activityActions.element], () => relayoutActions.schedule(), { box: 'border-box' }));
 	}
 
 	public override updateStyles(): void {
