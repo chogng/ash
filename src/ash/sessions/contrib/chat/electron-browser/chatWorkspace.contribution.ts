@@ -8,7 +8,7 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
 import { EditorInputCapabilities } from '../../../../workbench/common/editor.js';
 import { AshChatSelectionService, IAshChatSelectionService } from '../browser/ashChatSelectionService.js';
-import { AshChatWidgetModel } from '../browser/ashChatWidgetModel.js';
+import { AshChatWidgetModel, type ChatDraftModelSource } from '../browser/ashChatWidgetModel.js';
 import { registerReplyChatEditor, type ReplyChatEditorOptions } from '../browser/replyChatEditor.js';
 import { Disposable, DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -34,7 +34,6 @@ const ashChatEditor = {
 	rootClass: 'ash-native-chat-widget',
 	title: () => localize('sessions.chat.ashTitle', 'Ash Chat'),
 	inputLabel: () => localize('sessions.chat.inputPlaceholder', 'Describe a task or ask a question'),
-	model: new SyncDescriptor(AshChatWidgetModel),
 	persistentDraftScope: 'ash-chat',
 	advanceWelcomePhrase: false,
 	useWorkbenchModelManagement: true,
@@ -43,15 +42,16 @@ const ashChatEditor = {
 		verbositySetting: AccessibilityVerbositySettingId.Chat,
 		hint: () => localize('sessions.chat.ashAccessibilityHint', 'Press Alt+F1 for Ash Chat accessibility help.'),
 	},
-} satisfies ReplyChatEditorOptions;
+} satisfies Omit<ReplyChatEditorOptions, 'model'>;
 
 export function registerChatWorkspace(webChat: {
 	readonly catalog: SyncDescriptor<ChatListSource>;
+	readonly draftModels: SyncDescriptor<ChatDraftModelSource>;
 	readonly accessibility: Omit<SessionsCatalogAccessibility, 'focusContext'>;
 	readonly openCommand: string;
 }): void {
 	registerSingleton(IAshChatSelectionService, AshChatSelectionService, InstantiationType.Delayed);
-	registerReplyChatEditor(ashChatEditor);
+	registerReplyChatEditor({ ...ashChatEditor, model: new SyncDescriptor(AshChatWidgetModel, [webChat.draftModels]) });
 	registerAshChatAccessibility();
 	registerSingleton(IChatListCatalog, new SyncDescriptor(ChatListCatalog, [[
 		webChat.catalog,
@@ -124,7 +124,7 @@ function registerAshChatAccessibility(): void {
 				const model = widget.model;
 				return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type },
 					() => type === AccessibleViewType.Help
-						? localize('sessions.chat.ashAccessibilityHelp', 'Ash Chat has its own conversation history and drafts. Use Tab to reach the model picker and Enter to open it. Select a model for this conversation. Enter sends a message, Shift+Enter inserts a line break, and Stop interrupts a reply. Open Accessible View to read the transcript. The Chat sidebar opens saved conversations. New starts a new draft.')
+						? localize('sessions.chat.ashAccessibilityHelp', 'Ash Chat has its own conversation history and drafts. Use Tab to reach the model picker and Enter to open it. In an unsent draft, selecting a ChatGPT model opens the ChatGPT draft. Enter sends a message, Shift+Enter inserts a line break, and Stop interrupts a reply. Open Accessible View to read the transcript. The Chat sidebar opens saved conversations. New starts a new draft.')
 						: model.items.filter(item => !item.transient).map(item => item.text).filter(Boolean).join('\n\n'),
 					() => focused.isConnected ? focused.focus() : widget.focusInput(), AccessibilityVerbositySettingId.Chat);
 			},

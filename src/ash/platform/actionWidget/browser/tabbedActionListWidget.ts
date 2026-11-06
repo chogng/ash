@@ -57,6 +57,7 @@ interface IActionPanelContentOptions extends Pick<ContextViewOptions, 'anchorAli
 	readonly ariaLabel: string;
 	render(container: HTMLElement, layout: () => void): IDisposable;
 	focus(container: HTMLElement): void;
+	onClose?(): void;
 }
 
 /** Owns one anchored popup; changing pages retains the list's filter, scroll and pending action. */
@@ -324,6 +325,7 @@ export class TabbedActionListWidget extends Disposable {
 		this.hide();
 		const lifetime = new DisposableStore();
 		this.popup.value = lifetime;
+		if (options.onClose) { lifetime.add(toDisposable(options.onClose)); }
 		const document = options.anchor.ownerDocument;
 		const root = h(document, 'div', {
 			className: 'ash-action-widget ash-tabbed-action-list',

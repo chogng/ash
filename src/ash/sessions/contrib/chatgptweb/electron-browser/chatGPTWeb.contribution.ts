@@ -17,7 +17,7 @@ import { registerChatGPTAccessibility } from './chatGPTAccessibility.js';
 import { registerReplyChatEditor } from '../../chat/browser/replyChatEditor.js';
 import { IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { ElectronChatGPTTransport } from './electronChatGPTTransport.js';
-import { ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization, chatGPTSelectedContext, SHOW_CHATGPT_COMMAND } from './chatGPTWeb.js';
+import { ChatGPTDraftModelSource, ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization, chatGPTSelectedContext, SHOW_CHATGPT_COMMAND } from './chatGPTWeb.js';
 import { ChatGPTService, IChatGPTService } from '../browser/chatGPTService.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
@@ -32,6 +32,7 @@ import { openAshChatWithModel } from '../../chat/electron-browser/actions/newCha
 
 export const chatGPTWorkspaceSource = {
 	catalog: new SyncDescriptor(ChatGPTList),
+	draftModels: new SyncDescriptor(ChatGPTDraftModelSource),
 	accessibility: chatGPTReplyEditor.accessibility,
 	openCommand: SHOW_CHATGPT_COMMAND,
 };

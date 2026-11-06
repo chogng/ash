@@ -460,8 +460,12 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			});
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=light`);
 			const picker = page.locator('.ash-chat-input-model-action');
-			const choose = async (name: string): Promise<void> => {
-				const [modelTitle, presetLabel] = name.split(' · ') as [string, string];
+			const expectSelection = async (modelTitle: string, presetLabel: string): Promise<void> => {
+				await expect(picker).toHaveAccessibleName(`${modelTitle} ${presetLabel}`);
+				await expect(picker.locator('.ash-chat-input-picker-label').first()).toHaveText(modelTitle);
+				await expect(picker.locator('.ash-chat-input-model-effort')).toHaveText(presetLabel);
+			};
+			const choose = async (modelTitle: string, presetLabel: string): Promise<void> => {
 				await picker.click();
 				const dialog = page.getByRole('dialog', { name: locale === 'en' ? 'Choose a chat model' : '选择聊天模型' });
 				const modelButton = dialog.locator('.ash-chat-slider-model-button');
@@ -478,9 +482,9 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 					await expect(dialog.locator('.ash-chat-slider-effort-label')).toHaveText(presetLabel);
 				}
 				await page.keyboard.press('Escape');
-				await expect(picker).toHaveText(name);
+				await expectSelection(modelTitle, presetLabel);
 			};
-			await expect(picker).toHaveText(`GPT-6 · ${labels[0]}`);
+			await expectSelection('GPT-6', labels[0]!);
 			await picker.press('Enter');
 			const dialog = page.getByRole('dialog', { name: locale === 'en' ? 'Choose a chat model' : '选择聊天模型' });
 			const modelButton = dialog.locator('.ash-chat-slider-model-button');
@@ -501,6 +505,10 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 				expect(panel.y + panel.height).toBeLessThan(button.y);
 			};
 			await expect(dialog).toHaveClass(/\bash-tabbed-action-list\b/u);
+			const selectModelLabel = locale === 'en' ? 'Select model' : '选择模型';
+			await expect(picker).toHaveAccessibleName(selectModelLabel);
+			await expect(picker).toHaveText(selectModelLabel);
+			await expect(picker).toHaveAttribute('aria-expanded', 'true');
 			const cornerRadius = await dialog.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-cornerRadius-large').trim());
 			await expect(dialog).toHaveCSS('border-top-left-radius', cornerRadius);
 			await expect(modelButton).toHaveAccessibleName('GPT-6');
@@ -528,10 +536,18 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			await expect(modelButton).toBeFocused();
 			await page.keyboard.press('Tab');
 			await expect(slider).toBeFocused();
+			const initialPickerBounds = (await picker.boundingBox())!;
+			const initialPanelLeft = (await dialog.boundingBox())!.x;
 			await page.keyboard.press('ArrowRight');
 			await expect(slider).toHaveAttribute('aria-valuetext', labels[1]!);
 			await expect(modelButton).toHaveAccessibleDescription(labels[1]!);
 			await expect(effortLabel).toHaveText(labels[1]!);
+			await expect(picker).toHaveText(selectModelLabel);
+			await expectAnchored();
+			const pickerBounds = (await picker.boundingBox())!;
+			expect(Math.abs(pickerBounds.x - initialPickerBounds.x)).toBeLessThan(1);
+			expect(Math.abs(pickerBounds.width - initialPickerBounds.width)).toBeLessThan(1);
+			expect(Math.abs((await dialog.boundingBox())!.x - initialPanelLeft)).toBeLessThan(1);
 			await expect(slider).toBeFocused();
 			await expect(page.locator('.ash-chat-slider-tick')).toHaveCount(5);
 			await expect(dialog.getByRole('toolbar')).toHaveCount(0);
@@ -541,6 +557,8 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			await page.keyboard.press('Escape');
 			await expect(dialog).toBeHidden();
 			await expect(picker).toBeFocused();
+			await expect(picker).toHaveAttribute('aria-expanded', 'false');
+			await expectSelection('GPT-6', labels[1]!);
 			for (const width of [1280, 870, 869, 660]) {
 				await page.setViewportSize({ width, height: 720 });
 				await picker.press('Enter');
@@ -553,7 +571,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 				['gpt-6-thinking', 'max'], ['gpt-6-pro', undefined],
 			] as const;
 			for (let index = 0; index < labels.length; index++) {
-				await choose(`GPT-6 · ${labels[index]}`);
+				await choose('GPT-6', labels[index]!);
 				await fillMessage(page, `Use ${labels[index]}`);
 				await page.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
 				await expect.poll(() => submitted.length).toBe((index + 1) * 2);
@@ -561,7 +579,14 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 				if (expected[index]![1] === undefined) { expect(submitted.slice(-2).every(body => !('thinking_effort' in body))).toBe(true); }
 				await expect(picker).toBeEnabled();
 			}
-			await choose(`GPT-5.6 Sol · ${labels[3]}`);
+			await choose('GPT-5.6 Sol', labels[3]!);
+			await page.setViewportSize({ width: 1600, height: 900 });
+			const longestSelectionWidth = (await picker.boundingBox())!.width;
+			expect(initialPickerBounds.width).toBeGreaterThanOrEqual(longestSelectionWidth - 1);
+			await picker.press('Enter');
+			await expectAnchored();
+			expect(Math.abs((await picker.boundingBox())!.width - initialPickerBounds.width)).toBeLessThan(1);
+			await page.keyboard.press('Escape');
 			await fillMessage(page, 'Use GPT-5.6 Sol Extra High');
 			await page.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
 			await expect.poll(() => submitted.length).toBe(12);

@@ -177,6 +177,51 @@ async function configureAshModel(catalog: ReturnType<typeof createAshModelServer
 test.describe('Unified Chat sidebar', () => {
 	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN' } });
 
+	test('a restored Ash draft can find and send with a ChatGPT model when its Ash model is hidden', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
+		const application = browser as ElectronApplication;
+		await installService(application);
+		const ashRequests: string[] = [];
+		await using catalog = createAshModelServer(ashRequests);
+		await configureAshModel(catalog, application, workbench, testWorkspace.directory);
+		const page = await workbench.openAgentsWindow(target.kind);
+		const picker = page.getByRole('dialog', { name: '选择聊天模型', exact: true });
+		const webModelButton = page.locator('.ash-chatgpt-widget .ash-chat-input-model-action');
+		await expect(webModelButton).toHaveText('Fixture model');
+		await webModelButton.press('ArrowDown');
+		await picker.getByRole('menuitemradio', { name: ashFixtureModel.model, exact: true }).click();
+		const ash = page.locator('.ash-native-chat-widget .ash-chat');
+		const ashComposer = new Editor(ash);
+		const text = 'Continue this draft with ChatGPT';
+		await ashComposer.waitForEditorFocus();
+		await ashComposer.waitForTypeInEditor(text);
+		const id = await ash.getAttribute('data-untitled-session-id');
+		expect(id).toBeTruthy();
+		const settings = await readUserSettings(workbench.page);
+		await writeUserSettings(workbench.page, JSON.stringify({ ...JSON.parse(settings.content), 'models.hidden': [] }), settings.revision);
+
+		const restored = await workbench.reopenAgentsWindow(application, page);
+		const restoredAsh = restored.locator('.ash-native-chat-widget .ash-chat');
+		await expect(restoredAsh).toHaveAttribute('data-untitled-session-id', id!);
+		await new Editor(restoredAsh).waitForEditorContents(value => value === text);
+		await restoredAsh.locator('.ash-chat-input-model-action').press('ArrowDown');
+		const restoredPicker = restored.getByRole('dialog', { name: '选择聊天模型', exact: true });
+		const webChoice = restoredPicker.getByRole('menuitemradio', { name: 'Fixture model', exact: true });
+		await expect(webChoice).toHaveAttribute('aria-checked', 'false');
+		await expect(restoredPicker.getByRole('menuitemradio', { name: ashFixtureModel.model, exact: true })).toHaveCount(0);
+		await webChoice.press('Enter');
+		const web = restored.locator('.ash-chatgpt-widget');
+		await expect(web).toBeVisible();
+		const webComposer = new Editor(web);
+		await webComposer.waitForEditorFocus();
+		await webComposer.waitForEditorContents(value => value === text);
+		await web.getByRole('button', { name: '发送', exact: true }).click();
+		await expect.poll(() => application.evaluate(() => globalThis.ashNativeFixture.sends)).toBe(1);
+		await application.evaluate(() => globalThis.ashNativeFixture.advance());
+		await application.evaluate(() => globalThis.ashNativeFixture.advance());
+		await expect(web).toContainText('First chunk, second chunk, complete');
+		expect(ashRequests).toEqual([]);
+	});
+
 	test('a retained Chat picker follows Ash model settings', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }, testInfo) => {
 		const application = browser as ElectronApplication;
 		await installService(application);
@@ -226,7 +271,7 @@ test.describe('Unified Chat sidebar', () => {
 		const fast = picker.getByRole('button', { name: '快速模式', exact: true });
 		await expect(fast).toBeVisible();
 		await page.keyboard.press('Escape');
-		await expect(nativeModelButton).toHaveAccessibleName('GPT-6.1 Sol · 中');
+		await expect(nativeModelButton).toHaveAccessibleName('GPT-6.1 Sol 中');
 		await expect(nativeModelButton).toBeFocused();
 		await expect(ashDraft.locator('.ash-chat-input-configuration-action')).toBeHidden();
 		await ashDraft.locator('.ash-chat-input-part').screenshot({ path: testInfo.outputPath('ash-chat-combined-model-picker.png') });
@@ -345,6 +390,11 @@ test.describe('Unified Chat sidebar', () => {
 		await expect(chatGPTRow).not.toHaveAttribute('aria-current', 'page');
 		await expect(ash).toHaveAttribute('data-session-id', ashSessionId!);
 		await expect(ash).toContainText('First Ash message');
+		await ash.locator('.ash-chat-input-model-action').press('ArrowDown');
+		await expect(picker.getByRole('menuitemradio', { name: ashFixtureModel.model, exact: true })).toBeVisible();
+		await expect(picker.getByRole('menuitemradio', { name: 'Fixture model', exact: true })).toHaveCount(0);
+		await page.keyboard.press('Escape');
+		await ashComposer.input.focus();
 		await ashComposer.waitForEditorFocus();
 		await ashComposer.waitForTypeInEditor('Follow up with Ash');
 		await page.keyboard.press('Enter');

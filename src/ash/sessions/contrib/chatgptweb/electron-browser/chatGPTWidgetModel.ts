@@ -31,6 +31,15 @@ export function canUseAshModels(state: ChatGPTState): boolean {
 		&& state.loading?.kind !== 'conversation' && !state.messages.length && !state.coworkTasks.length && !state.attachments.length;
 }
 
+export function chatGPTModelEntries(backend: IChatGPTService): IObservable<readonly ModelCatalogEntry[]> {
+	return backend.state.map(state => state.models).map(families => families.map(family => ({
+		model: { provider: 'chatgpt', model: family.id },
+		displayName: family.title,
+		longContext: null,
+		presets: family.presets,
+	})));
+}
+
 /** Projects ChatGPT's data into the Ash composer and offers the host's Ash Chat draft handoff. */
 export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorModel {
 	private readonly changed = this._register(new Emitter<void>());
@@ -66,12 +75,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 	) {
 		super();
 		const ashModelsChanged = observableSignalFromEvent(this, primary.models.onDidChangeModels);
-		this.webEntries = backend.state.map(state => state.models).map(families => families.map(family => ({
-			model: { provider: 'chatgpt', model: family.id },
-			displayName: family.title,
-			longContext: null,
-			presets: family.presets,
-		})));
+		this.webEntries = chatGPTModelEntries(backend);
 		this.ashEntries = derived(reader => {
 			// Visibility is a local preference and can change while App Server reads are pending.
 			ashModelsChanged.read(reader);

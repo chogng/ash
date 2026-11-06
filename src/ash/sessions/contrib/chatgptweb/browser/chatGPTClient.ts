@@ -86,6 +86,7 @@ export class ChatGPTClient {
 				|| !Array.isArray(version.intelligence_presets) || models.some(model => model.id === version.id)) { continue; }
 			const title = [version.display_text_for_intelligence, version.display_text, version.display_text_full].find(text => typeof text === 'string' && text.trim());
 			if (typeof title !== 'string') { continue; }
+			const versionNumber = /^(?:GPT-)?(\d+(?:\.\d+)*)(?=\s|$)/iu.exec(title.trim())?.[1];
 			const presets: ChatGPTModel['presets'][number][] = [];
 			for (const preset of version.intelligence_presets) {
 				if (!isRecord(preset) || (preset.preset_type !== undefined && preset.preset_type !== 'available') || preset.disabled === true) { continue; }
@@ -94,8 +95,11 @@ export class ChatGPTClient {
 				if (id === undefined || typeof preset.model_slug !== 'string' || presets.some(option => option.id === id)) { continue; }
 				const requestModel = requestModels.get(preset.model_slug);
 				if (!requestModel) { continue; }
-				const label = [preset.selected_display_title, preset.title].find(text => typeof text === 'string' && text.trim());
-				if (typeof label !== 'string') { continue; }
+				const presetTitle = [preset.selected_display_title, preset.title].find(text => typeof text === 'string' && text.trim());
+				if (typeof presetTitle !== 'string') { continue; }
+				// The picker already displays the family above or beside its preset label.
+				const numberedTitle = /^(\d+(?:\.\d+)*)\s+(\S.*)$/u.exec(presetTitle.trim());
+				const label = numberedTitle && numberedTitle[1] === versionNumber ? numberedTitle[2]! : presetTitle;
 				let thinkingEffort: string | undefined;
 				if (preset.thinking_effort != null) {
 					if (typeof preset.thinking_effort !== 'string' || !/^[a-z][a-z0-9_-]{0,63}$/u.test(preset.thinking_effort)

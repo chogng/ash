@@ -32,6 +32,47 @@
 	gap: var(--ash-spacing-size80);
 }
 
+.ash-chat-input-model-action:has(> .ash-chat-input-model-width-samples) {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	justify-items: center;
+}
+
+.ash-chat-input-model-action:has(
+		> .ash-chat-input-model-width-samples
+	)[aria-expanded="true"] {
+	background: var(--ash-toolbar-hoverBackground);
+}
+
+.ash-chat-input-model-action
+	> :is(.ash-chat-input-model-label, .ash-chat-input-model-width-samples) {
+	grid-area: 1 / 1;
+	max-inline-size: 100%;
+}
+
+/* Overlay the width samples so only the widest model and effort pair sets the width. */
+.ash-chat-input-model-width-samples {
+	display: grid;
+	block-size: 0;
+	overflow: hidden;
+	visibility: hidden;
+}
+
+.ash-chat-input-model-width-samples > span {
+	display: flex;
+	grid-area: 1 / 1;
+	gap: var(--ash-spacing-size80);
+	white-space: nowrap;
+}
+
+.ash-chat-input-model-width-samples > span::before {
+	content: attr(data-model);
+}
+
+.ash-chat-input-model-width-samples > span[data-effort]::after {
+	content: attr(data-effort);
+}
+
 .ash-chat-input-model-effort {
 	color: var(--ash-muted-foreground);
 }

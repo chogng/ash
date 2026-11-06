@@ -1,7 +1,7 @@
 import { bindActionWidgetActivation } from '../../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import './media/modelPicker.css';
 import { addDisposableListener, h, stopEvent } from '../../../../../../../base/browser/dom.js';
-import { Disposable, MutableDisposable, toDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../../../../base/common/uuid.js';
 import { localize } from '../../../../../../../nls.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
@@ -10,7 +10,7 @@ import { getHoverDelegate, type IManagedHover } from '../../../../../../../base/
 import type { ModelRef } from '../../../../../../services/chat/common/chatService.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
 import { renderModelConfigurationButton } from './modelPickerConfiguration.js';
-import { getModelConfigEffortLabel } from './modelPickerModelConfig.js';
+import { getModelConfigEffortLabel, modelPickerEffortOptions } from './modelPickerModelConfig.js';
 import { TabbedModelPicker } from './modelPickerTabbedWidget.js';
 import { ChatModelSliderWidget } from './chatModelSliderWidget.js';
 import { renderChatInputPickerSplit, trackChatInputPickerFocus } from '../chatInputPickerActionItem.js';
@@ -43,7 +43,7 @@ export class ModelPickerWidget extends Disposable {
 		this.nameButton = name;
 		this.configurationButton = options;
 		name.classList.add('ash-chat-input-model-action');
-		if (this.delegate.configureInMenu) {
+		if (this.delegate.configureInMenu || this.delegate.chatModelSlider) {
 			const labelGroup = h(container.ownerDocument, 'span', { className: 'ash-chat-input-model-label' });
 			this.effortLabel = h(container.ownerDocument, 'span', {
 				className: 'ash-chat-input-picker-label ash-chat-input-model-effort',
@@ -103,7 +103,7 @@ export class ModelPickerWidget extends Disposable {
 		if (!enabled) { this.hide(); }
 	}
 
-	private updateButtons(): void {
+	private updateButtons(sliderOpen = this.sliderPicker?.isVisible === true): void {
 		if (this.delegate.chatModelSlider) this.picker?.hide();
 		else this.sliderPicker?.hide();
 		const selected = this.delegate.getSelectedModel();
@@ -112,22 +112,16 @@ export class ModelPickerWidget extends Disposable {
 		const selectedEffort = this.delegate.getSelectedReasoningEffort();
 		const selectedPresetId = this.delegate.getSelectedPreset?.();
 		const selectedPreset = model?.presets?.find(p => p.id === selectedPresetId);
-		let label = automatic
+		const label = sliderOpen ? localize('chat.modelPicker.selectModel', 'Select model') : automatic
 			? localize('chat.modelPicker.auto', 'Auto')
 			: model?.displayName ?? selected?.model ?? localize('chat.modelPicker.selectModel', 'Select model');
-		if (this.delegate.chatModelSlider && selectedPreset && (model?.presets?.length ?? 0) > 1) {
-			label = `${label} · ${selectedPreset.label}`;
-		}
+		const showPreset = this.delegate.chatModelSlider && selectedPreset && (model?.presets?.length ?? 0) > 1;
 		const displayedEffort = this.delegate.chatModelSlider && this.delegate.useWorkbenchModelManagement !== false
 			? model?.reasoningEffortOverride ?? selectedEffort
 			: selectedEffort;
-		let effort = this.effortLabel && !automatic && model
-			? getModelConfigEffortLabel(model, displayedEffort)
+		const effort = this.effortLabel && !sliderOpen && !automatic && model
+			? (showPreset ? selectedPreset.label : getModelConfigEffortLabel(model, displayedEffort))
 			: undefined;
-		if (this.delegate.chatModelSlider && effort) {
-			label = `${label} · ${effort}`;
-			effort = undefined;
-		}
 		this.nameButton!.querySelector('.ash-chat-input-picker-label')!.textContent = label;
 		if (this.effortLabel) {
 			this.effortLabel.textContent = effort ?? '';
@@ -154,11 +148,39 @@ export class ModelPickerWidget extends Disposable {
 		this.picker?.hide();
 	}
 
+	private reserveSliderWidth(): IDisposable {
+		const button = this.nameButton!;
+		const document = button.ownerDocument;
+		const samples = h(document, 'span', {
+			className: 'ash-chat-input-model-width-samples', attributes: { 'aria-hidden': 'true' },
+		});
+		for (const model of this.delegate.getModels()) {
+			const efforts = (model.presets?.length ?? 0) > 1
+				? model.presets!.map(preset => preset.label)
+				: modelPickerEffortOptions(model, undefined).map(option => option.label);
+			const defaultEffort = getModelConfigEffortLabel(model, undefined);
+			if (defaultEffort && !efforts.includes(defaultEffort)) { efforts.push(defaultEffort); }
+			for (const effort of efforts.length ? efforts : [undefined]) {
+				const sample = h(document, 'span', { attributes: { 'data-model': model.displayName } });
+				if (effort) { sample.setAttribute('data-effort', effort); }
+				samples.append(sample);
+			}
+		}
+		button.append(samples);
+		return toDisposable(() => samples.remove());
+	}
+
 	public show(anchor: HTMLElement = this.nameButton!, detailsModel?: ModelRef): void {
 		if (!this.enabled || this.visible) { return; }
 		if (this.delegate.chatModelSlider) {
 			this.sliderPicker ??= this._register(this.instantiationService.createInstance(ChatModelSliderWidget, this.delegate));
-			this.sliderPicker.show(anchor);
+			const width = this.reserveSliderWidth();
+			// Lay out the fixed trigger label before the popup reads its anchor bounds.
+			this.updateButtons(true);
+			this.sliderPicker.show(anchor, () => {
+				width.dispose();
+				if (!this.isDisposed) { this.updateButtons(); }
+			});
 		} else {
 			this.picker ??= this._register(this.instantiationService.createInstance(TabbedModelPicker, this.delegate));
 			this.picker.show(anchor, detailsModel, this.delegate.configureInMenu === true);

@@ -2,8 +2,8 @@
 export function chatGPTModelCatalog(locale = 'en') {
 	const labels = locale === 'en' ? ['Instant', 'Medium', 'High', 'Extra High', 'Pro'] : ['即时', '中', '高', '极高', 'Pro'];
 	const families = [
-		{ id: 'latest', title: 'GPT-6', slug: 'gpt-6' },
-		{ id: '5.6', title: 'GPT-5.6 Sol', slug: 'gpt-5-6' },
+		{ id: 'latest', title: 'GPT-6', slug: 'gpt-6', version: '6' },
+		{ id: '5.6', title: 'GPT-5.6 Sol', slug: 'gpt-5-6', version: '5.6' },
 	];
 	return {
 		default_model_slug: 'gpt-6',
@@ -21,11 +21,11 @@ export function chatGPTModelCatalog(locale = 'en') {
 			id: family.id, enabled: true, display_text_for_intelligence: family.title,
 			slugs: [family.slug, `${family.slug}-instant`, `${family.slug}-thinking`, `${family.slug}-pro`],
 			intelligence_presets: [
-				{ id: 0, title: labels[0]!, selected_display_title: labels[0]!, model_slug: `${family.slug}-instant`, lane: 'instant', preset_type: 'available' },
-				{ id: 1, title: labels[1]!, selected_display_title: labels[1]!, model_slug: `${family.slug}-thinking`, lane: 'thinking', thinking_effort: 'standard', preset_type: 'available' },
-				{ id: 2, title: labels[2]!, selected_display_title: labels[2]!, model_slug: `${family.slug}-thinking`, lane: 'thinking', thinking_effort: 'extended', preset_type: 'available' },
-				{ id: 6, title: labels[3]!, selected_display_title: labels[3]!, model_slug: `${family.slug}-thinking`, lane: 'thinking', thinking_effort: 'max', preset_type: 'available' },
-				{ id: 3, title: labels[4]!, selected_display_title: labels[4]!, model_slug: `${family.slug}-pro`, lane: 'pro', preset_type: 'available' },
+				{ id: 0, title: labels[0]!, selected_display_title: `${family.version} ${labels[0]}`, model_slug: `${family.slug}-instant`, lane: 'instant', preset_type: 'available' },
+				{ id: 1, title: labels[1]!, selected_display_title: `${family.version} ${labels[1]}`, model_slug: `${family.slug}-thinking`, lane: 'thinking', thinking_effort: 'standard', preset_type: 'available' },
+				{ id: 2, title: labels[2]!, selected_display_title: `${family.version} ${labels[2]}`, model_slug: `${family.slug}-thinking`, lane: 'thinking', thinking_effort: 'extended', preset_type: 'available' },
+				{ id: 6, title: labels[3]!, selected_display_title: `${family.version} ${labels[3]}`, model_slug: `${family.slug}-thinking`, lane: 'thinking', thinking_effort: 'max', preset_type: 'available' },
+				{ id: 3, title: labels[4]!, selected_display_title: `${family.version} ${labels[4]}`, model_slug: `${family.slug}-pro`, lane: 'pro', preset_type: 'available' },
 			],
 		})),
 	};

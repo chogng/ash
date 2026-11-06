@@ -2,11 +2,13 @@ import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { canceled, isCancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { autorun, type IReader } from '../../../../base/common/observable.js';
+import { autorun, derived, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import type { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import type { ModelReasoningEffort, ModelRef } from '../../../../platform/models/common/agentModels.js';
 import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { chatTranscriptListItems, type IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
@@ -19,6 +21,13 @@ import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsP
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { IAshChatSelectionService } from './ashChatSelectionService.js';
 import type { IReplyChatEditorModel } from './replyChatEditor.js';
+
+/** A second conversation source can offer its models for unsent drafts. */
+export interface ChatDraftModelSource {
+	readonly models: IObservable<readonly ModelCatalogEntry[]>;
+	initialize(): void;
+	selectModel(model: ModelRef, source: IReplyChatEditorModel): Promise<void>;
+}
 
 interface ThreadBinding {
 	readonly sessionId: string;
@@ -40,7 +49,9 @@ export class AshChatWidgetModel extends Disposable implements IReplyChatEditorMo
 	private identity: string | undefined;
 	private promoting = false;
 	private binding: ThreadBinding | undefined;
-	private catalog: readonly ModelCatalogEntry[] = [];
+	private readonly catalog = observableValue<readonly ModelCatalogEntry[]>(this, []);
+	private readonly draftModels: ChatDraftModelSource;
+	private readonly pickerModels: IObservable<readonly ModelCatalogEntry[]>;
 	private catalogRequest = 0;
 	private catalogError: string | undefined;
 	private error: string | undefined;
@@ -49,13 +60,20 @@ export class AshChatWidgetModel extends Disposable implements IReplyChatEditorMo
 	private renderedItems: readonly IChatListItem[] = [];
 
 	constructor(
+		draftModels: SyncDescriptor<ChatDraftModelSource>,
 		@IAshChatSelectionService private readonly selection: IAshChatSelectionService,
 		@ISessionPrimaryProviderServices private readonly primary: SessionProviderServices,
 		@ISessionsManagementService private readonly sessions: ISessionsManagementService,
 		@ICommandService private readonly commands: ICommandService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
+		this.draftModels = instantiation.createInstance(draftModels);
+		this.pickerModels = derived(reader => {
+			const native = this.catalog.read(reader);
+			return selection.selection.read(reader).kind === 'draft' ? [...native, ...this.draftModels.models.read(reader)] : native;
+		});
 		const chat = primary.chat;
 		this._register(chat.onDidUpdateThread(update => {
 			const binding = this.binding;
@@ -75,9 +93,11 @@ export class AshChatWidgetModel extends Disposable implements IReplyChatEditorMo
 		this._register(toDisposable(() => this.releaseThread()));
 		this._register(autorun(reader => {
 			const current = selection.selection.read(reader);
+			this.pickerModels.read(reader);
 			const identity = current.kind === 'draft' ? current.id : current.threadId;
 			if (identity !== this.identity) {
 				this.identity = identity;
+				if (current.kind === 'draft') this.draftModels.initialize();
 				this.releaseThread();
 				this.renderedItems = [];
 				this.error = undefined;
@@ -141,13 +161,13 @@ export class AshChatWidgetModel extends Disposable implements IReplyChatEditorMo
 			conversation: this.binding && { sessionId: this.binding.sessionId, threadId: this.binding.threadId },
 			mode: 'agent',
 			phase: this.submitting ? 'submitting' : loading ? 'loading' : this.error ? 'error' : 'ready',
-			inputBlocked: loading || !selected || !this.catalog.some(entry => modelRefIdentity(entry.model) === modelRefIdentity(selected)) || current.kind === 'thread' && !this.thread,
+			inputBlocked: loading || !selected || !this.catalog.get().some(entry => modelRefIdentity(entry.model) === modelRefIdentity(selected)) || current.kind === 'thread' && !this.thread,
 			aiDisabled: disabled,
 			error: this.error,
 			canInterrupt: this.sent || !!this.activeTurn,
 			approvalMode: 'manual',
 			queuedMessages: 0,
-			models: this.catalog,
+			models: this.pickerModels.get(),
 			modelsError: this.catalogError,
 			canSelectModel: !this.submitting,
 			selectedModel: selected,
@@ -161,8 +181,13 @@ export class AshChatWidgetModel extends Disposable implements IReplyChatEditorMo
 	}
 
 	async selectModel(model: ModelRef): Promise<void> {
+		const current = this.selection.selection.get();
+		if (current.kind === 'draft' && this.draftModels.models.get().some(entry => modelRefIdentity(entry.model) === modelRefIdentity(model))) {
+			await this.draftModels.selectModel(model, this);
+			return;
+		}
 		this.requireModel(model);
-		this.selection.select({ ...this.selection.selection.get(), model, effort: undefined });
+		this.selection.select({ ...current, model, effort: undefined });
 	}
 
 	async selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void> {
@@ -247,7 +272,7 @@ export class AshChatWidgetModel extends Disposable implements IReplyChatEditorMo
 	}
 
 	private requireModel(model: ModelRef | undefined): ModelCatalogEntry {
-		const entry = model && this.catalog.find(candidate => modelRefIdentity(candidate.model) === modelRefIdentity(model));
+		const entry = model && this.catalog.get().find(candidate => modelRefIdentity(candidate.model) === modelRefIdentity(model));
 		if (!entry) throw new Error(localize('sessions.newChatModel.unavailable', 'The selected model is no longer available.'));
 		return entry;
 	}
@@ -257,13 +282,13 @@ export class AshChatWidgetModel extends Disposable implements IReplyChatEditorMo
 		try {
 			const entries = await this.primary.models.listModelCatalog();
 			if (this.isDisposed || request !== this.catalogRequest) return;
-			this.catalog = entries.filter(entry => this.primary.models.isModelVisible(entry.model));
 			this.catalogError = undefined;
+			this.catalog.set(entries.filter(entry => this.primary.models.isModelVisible(entry.model)));
 		} catch (error) {
 			if (this.isDisposed || request !== this.catalogRequest) return;
 			this.catalogError = String(error);
+			this.changed.fire();
 		}
-		this.changed.fire();
 	}
 
 	private matches(binding: ThreadBinding, target: { readonly sessionId: string; readonly threadId: string; }): boolean {
