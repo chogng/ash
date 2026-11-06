@@ -518,7 +518,8 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 	if (value.content.content_type === 'reasoning_recap') { return undefined; }
 	const recipient = typeof value.recipient === 'string' && value.recipient !== 'all' ? value.recipient : undefined;
 	const result = value.author.role === 'tool';
-	const progress = value.author.role === 'assistant' && ['analysis', 'commentary'].includes(value.channel as string);
+	const progress = value.author.role === 'assistant'
+		&& (value.content.content_type === 'thoughts' || ['analysis', 'commentary'].includes(value.channel as string));
 	if (result || (value.author.role === 'assistant' && recipient) || progress) {
 		const text = typeof value.content.text === 'string' ? value.content.text : Array.isArray(value.content.parts)
 			? value.content.parts.map(part => typeof part === 'string' ? part : isRecord(part) && typeof part.text === 'string' ? part.text : JSON.stringify(part)).join('\n') : '';

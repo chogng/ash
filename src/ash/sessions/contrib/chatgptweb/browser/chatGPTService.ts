@@ -816,11 +816,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	}
 	public getAccessibleContent(): string {
 		const state = this.model.get();
-		const messages = state.messages.map(message => {
-			if (message.activity) {
-				const step = localize('sessions.chatgpt.activityAccessible', 'Execution step: {0}', message.activity.tool ?? localize('sessions.chatgpt.activityProgress', 'Progress'));
-				return `${message.activity.failed ? localize('sessions.chatgpt.activityStepFailed', '{0} · Failed', step) : step}\n${message.text}`;
-			}
+		const messages = state.messages.filter(message => !message.activity).map(message => {
 			return `${message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT'}\n${message.role === 'assistant' ? getChatGPTRichContentText(message.text, message.references) : message.text}\n${message.resources?.map(resource => resource.name).join('\n') ?? ''}`;
 		});
 		const cowork = state.coworkTasks.map(task => [task.prompt, coworkTaskStatus(task), task.error ?? task.readError,

@@ -8,6 +8,7 @@ import { autorun, derived, observableSignalFromEvent, observableValue, type IObs
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
+import { findLast } from '../../../../base/common/arraysFind.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -334,39 +335,25 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 				}
 			}
 		};
-		const groups = new Map<string, ChatReplyMessage[]>();
-		let group: ChatReplyMessage[] | undefined;
-		let latest: ChatReplyMessage | undefined;
-		for (const message of state.messages) {
-			if (message.activity || message.text.trim() || message.resources?.length) latest = message;
-			if (message.role === 'user') group = undefined;
-			if (!message.activity) continue;
-			if (!group) {
-				group = [];
-				groups.set(message.id, group);
-			}
-			group.push(message);
-		}
+		const latest = state.sending ? findLast(state.messages, message => !message.activity && (message.role === 'user' || message.text.trim() || message.resources?.length)) : undefined;
 		appendTasks(undefined);
 		for (const message of state.messages) {
-			const itemId = id('message', message.id);
-			if (message.activity) {
-				const entries = groups.get(message.id);
-				if (entries) result.push(activityItem(itemId, entries, state.sending && entries.at(-1) === latest));
-			} else {
+			if (!message.activity) {
+				const itemId = id('message', message.id);
 				const decoded = message.role === 'assistant' ? this.decodeReply(message, state.conversationId) : undefined;
 				const candidates = [...decoded?.resources ?? [], ...message.resources ?? []];
 				const resources = candidates.length ? candidates.filter((resource, index) =>
 					(!resource.uri.startsWith('sandbox:') || state.conversationId) && candidates.findIndex(candidate => candidate.uri === resource.uri) === index) : undefined;
 				sources.set(itemId, { messageId: message.id, conversationId: state.conversationId });
-				result.push({
+				const text = decoded?.text ?? message.text;
+				if (message.role === 'user' || text.trim() || resources?.length) result.push({
 					id: itemId,
 					type: message.role === 'user' ? 'userMessage' : 'agentMessage',
-					text: decoded?.text ?? message.text,
+					text,
 					markdown: decoded && { supportHtml: true },
 					label: message.role === 'user' ? localize('sessions.chatgpt.you', 'You') : 'ChatGPT',
 					resources,
-					transient: state.sending && message === state.messages.at(-1),
+					transient: message === latest,
 				});
 			}
 			appendTasks(message.id);
@@ -385,23 +372,4 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		this.decoded.set(message, { conversationId, reply });
 		return reply;
 	}
-}
-
-function activityItem(id: string, messages: readonly ChatReplyMessage[], transient: boolean): IChatListItem {
-	const tool = messages.at(-1)?.activity?.tool;
-	const failed = messages.some(message => message.activity?.failed);
-	const steps = messages.length === 1 ? localize('sessions.chatgpt.activityOneStep', '1 step') : localize('sessions.chatgpt.activitySteps', '{0} steps', messages.length);
-	const label = failed ? localize('sessions.chatgpt.activityFailed', 'Execution process · Some steps failed') : transient
-		? tool ? localize('sessions.chatgpt.activityUsing', 'Using {0}… · {1}', tool, steps) : localize('sessions.chatgpt.activityWorking', 'Working… · {0}', steps)
-		: localize('sessions.chatgpt.activityComplete', 'Execution process · {0}', steps);
-	return {
-		id, type: 'toolCall', text: label, label, transient, isError: failed,
-		contextEntries: messages.map(message => {
-			const activity = message.activity!;
-			const name = activity.kind === 'call' ? localize('sessions.chatgpt.activityCall', 'Tool call: {0}', activity.tool ?? '')
-				: activity.kind === 'result' ? localize('sessions.chatgpt.activityResult', 'Tool result: {0}', activity.tool ?? '')
-					: localize('sessions.chatgpt.activityProgress', 'Progress');
-			return { id: message.id, label: activity.failed ? localize('sessions.chatgpt.activityStepFailed', '{0} · Failed', name) : name, text: message.text };
-		}),
-	};
 }

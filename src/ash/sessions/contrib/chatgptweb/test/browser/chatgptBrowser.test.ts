@@ -835,107 +835,67 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await testInfo.attach('chatgpt-sidebar-and-editor', { body: await page.screenshot(), contentType: 'image/png' });
 	});
 
-	for (const locale of ['en', 'zh-CN']) {
-		test(`ChatGPT execution history groups each turn and keeps failures visible (${locale})`, async function () {
-			const { page } = browserTests;
+	test('ChatGPT history keeps only the replies and decodes source links in lists', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page);
+		const message = (id: string, role: string, text: string, extra = {}) => ({ id, author: { role }, content: { parts: [text] }, ...extra });
+		const messages = [
+			message('question', 'user', 'What is Alluvium?'),
+			message('call', 'assistant', '{"query":"Alluvium"}', { recipient: 'web.search' }),
+			message('result', 'tool', 'Private tool output', { status: 'failed' }),
+			message('thoughts', 'assistant', '', { content: { content_type: 'thoughts', thoughts: [{ content: 'Private thoughts' }] } }),
+			message('answer', 'assistant', '1. \uE200url\uE202Example / Alluvium\uE202https://example.test/alluvium\uE201：使用 Rust。\uE200cite\uE202turn1search1\uE201'),
+		];
+		await page.route('**/service/backend-api/conversation/fixture-chat', route => route.fulfill({
+			json: {
+				title: 'Synthetic conversation', current_node: 'answer',
+				mapping: Object.fromEntries(messages.map((message, index) => [message.id, { parent: messages[index - 1]?.id, message }])),
+			},
+		}));
+		await page.goto('/chatgptNavigation.html?locale=en');
+		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+		const replies = page.locator('.ash-chat-item-agentMessage');
+		await expect(replies).toHaveCount(1);
+		await expect(page.locator('.ash-chat-item-toolCall')).toHaveCount(0);
+		await expect(replies.locator('li')).toHaveText('Example / Alluvium：使用 Rust。');
+		await expect(replies.getByRole('link', { name: 'Example / Alluvium' })).toHaveAttribute('href', 'https://example.test/alluvium');
+		await expect(replies.getByRole('toolbar', { name: 'Response actions' }).getByRole('button', { name: 'Open conversation in ChatGPT' })).toBeVisible();
+	});
 
-			await mockChatGPTRequests(page);
-			const message = (id: string, role: string, text: string, extra = {}) => ({ id, author: { role, name: role === 'tool' ? 'GitHub.fetch_file' : undefined }, content: { parts: [text] }, ...extra });
-			const messages = [
-				message('user-one', 'user', 'First question'),
-				message('call-one', 'assistant', '{"path":"README.md"}', { recipient: 'GitHub.fetch_file' }),
-				message('result-one', 'tool', 'File unavailable', { status: 'failed' }),
-				message('answer-one', 'assistant', 'The file was unavailable'),
-				message('user-two', 'user', 'Second question'),
-				message('call-two', 'assistant', '{"path":"package.json"}', { recipient: 'GitHub.fetch_file' }),
-				message('answer-two', 'assistant', 'Package answer'),
-			];
-			await page.route('**/service/backend-api/conversation/fixture-chat', route => route.fulfill({
-				json: {
-					title: 'Synthetic conversation', current_node: 'answer-two',
-					mapping: Object.fromEntries(messages.map((message, index) => [message.id, { parent: messages[index - 1]?.id, message }])),
-				}
-			}));
-			await page.goto(`/chatgptNavigation.html?locale=${locale}`);
-			await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
-			const activities = page.locator('.ash-chat-item-toolCall > .ash-chat-context');
-			await expect(activities).toHaveCount(2);
-			await expect(activities.locator(':scope > summary').first()).toHaveText(locale === 'en' ? 'Execution process · Some steps failed' : '执行过程 · 部分步骤失败');
-			await expect(activities.locator(':scope > summary').last()).toHaveText(locale === 'en' ? 'Execution process · 1 step' : '执行过程 · 1 个步骤');
-			await expect(page.locator('.ash-chat-item-userMessage > pre, .ash-chat-item-agentMessage .ash-chat-markdown-part')).toHaveText(['First question', 'The file was unavailable', 'Second question', 'Package answer']);
-			await expect(page.locator('.ash-chat-item-toolCall > .ash-chat-context[open]')).toHaveCount(0);
-			await activities.first().locator(':scope > summary').click();
-			const result = activities.first().locator(':scope > div > details').last();
-			await result.locator('summary').click();
-			await expect(result.locator('pre')).toHaveText('File unavailable');
+	test('ChatGPT hides execution activity while waiting for a streamed answer', async () => {
+		const { page } = browserTests;
+		await page.addInitScript(() => {
+			const fetcher = globalThis.fetch.bind(globalThis);
+			globalThis.fetch = async (input, init) => {
+				if (String(input) !== '/service/backend-api/f/conversation') return fetcher(input, init);
+				return new Response(new ReadableStream({
+					start(controller) {
+						Reflect.set(globalThis, 'pushExecution', (message: unknown) => controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ conversation_id: 'fixture-chat', message })}\n\n`)));
+						Reflect.set(globalThis, 'endExecution', () => { controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n')); controller.close(); });
+					},
+				}), { headers: { 'Content-Type': 'text/event-stream' } });
+			};
 		});
-	}
-
-	for (const locale of ['en', 'zh-CN']) {
-		for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
-			test(`ChatGPT execution activity stays in one row and collapses when answering (${locale}, ${theme})`, async function () {
-				const { page } = browserTests;
-				const testInfo = browserTests.info;
-
-				await page.addInitScript(() => {
-					const fetcher = globalThis.fetch.bind(globalThis);
-					globalThis.fetch = async (input, init) => {
-						if (String(input) !== '/service/backend-api/f/conversation') { return fetcher(input, init); }
-						return new Response(new ReadableStream({
-							start(controller) {
-								Reflect.set(globalThis, 'pushExecution', (message: unknown) => controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ conversation_id: 'fixture-chat', message })}\n\n`)));
-								Reflect.set(globalThis, 'endExecution', () => { controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n')); controller.close(); });
-							}
-						}), { headers: { 'Content-Type': 'text/event-stream' } });
-					};
-				});
-				await mockChatGPTRequests(page);
-				await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${theme}`);
-				await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
-				await expect(page.locator('.ash-chat-item-userMessage > pre, .ash-chat-item-agentMessage .ash-chat-markdown-part').last()).toHaveText('Synthetic answer');
-				await fillMessage(page, 'Read the repository');
-				await page.getByRole('button', { name: /^(Send|发送)$/, exact: true }).click();
-				await expect.poll(() => page.evaluate(() => typeof Reflect.get(globalThis, 'pushExecution'))).toBe('function');
-				const push = (value: unknown) => page.evaluate(message => Reflect.get(globalThis, 'pushExecution')(message), value);
-				const call = (id: string, text: string) => ({ id, author: { role: 'assistant' }, recipient: 'GitHub.fetch_file', content: { content_type: 'code', text } });
-				const raw = '{"path":"README.md","args":{"text":"<img src=x onerror=alert(1)>"}}';
-				await push(call('call-one', raw));
-				const activity = page.locator('.ash-chat-item-toolCall > .ash-chat-context');
-				const summary = activity.locator(':scope > summary');
-				await expect(activity).toHaveCount(1);
-				await expect(summary).toContainText(locale === 'en' ? 'Using GitHub.fetch_file' : '正在使用 GitHub.fetch_file');
-				await expect(activity).not.toHaveAttribute('open');
-				await summary.evaluate(element => { Reflect.set(element, 'retainedExecutionSummary', true); });
-				await summary.focus();
-				await summary.press('Enter');
-				await expect(activity).toHaveAttribute('open');
-				const entry = activity.locator(':scope > div > details').first();
-				await entry.locator('summary').focus();
-				await entry.locator('summary').press('Space');
-				await expect(entry.locator('pre')).toHaveText(raw);
-				await expect(activity.locator('img')).toHaveCount(0);
-				await push(call('call-one', raw + ' '));
-				await expect(entry.locator('summary')).toBeFocused();
-				await push(call('call-two', '{"path":"src/index.ts"}'));
-				await expect(activity).toHaveCount(1);
-				await expect(summary).toContainText(locale === 'en' ? '2 steps' : '2 个步骤');
-				await expect.poll(() => summary.evaluate(element => Reflect.get(element, 'retainedExecutionSummary'))).toBe(true);
-				await push({ id: 'answer', author: { role: 'assistant' }, channel: 'final', recipient: 'all', content: { parts: ['Repository answer'] } });
-				await expect(activity).not.toHaveAttribute('open');
-				await expect(summary).toBeFocused();
-				await expect(summary).toHaveText(locale === 'en' ? 'Execution process · 2 steps' : '执行过程 · 2 个步骤');
-				await expect(page.locator('.ash-chat-item-userMessage > pre, .ash-chat-item-agentMessage .ash-chat-markdown-part').last()).toHaveText('Repository answer');
-				await summary.press('Enter');
-				await push({ id: 'answer', author: { role: 'assistant' }, channel: 'final', content: { parts: ['Repository answer continues'] } });
-				await expect(activity).toHaveAttribute('open');
-				await expect(summary).toBeFocused();
-				await expectVisibleFocusOutline(summary);
-				await testInfo.attach(`execution-${locale}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
-				await page.evaluate(() => Reflect.get(globalThis, 'endExecution')());
-				await expect(page.getByRole('button', { name: /^(Stop|停止)$/, exact: true })).toHaveCount(0);
-			});
-		}
-	}
+		await mockChatGPTRequests(page);
+		await page.goto('/chatgptNavigation.html?locale=en');
+		await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
+		await fillMessage(page, 'Read the repository');
+		await page.getByRole('button', { name: 'Send', exact: true }).click();
+		await expect.poll(() => page.evaluate(() => typeof Reflect.get(globalThis, 'pushExecution'))).toBe('function');
+		const push = (value: unknown) => page.evaluate(message => Reflect.get(globalThis, 'pushExecution')(message), value);
+		await push({ id: 'call', author: { role: 'assistant' }, recipient: 'GitHub.fetch_file', content: { content_type: 'code', text: '{"path":"README.md"}' } });
+		await push({ id: 'thoughts', author: { role: 'assistant' }, content: { content_type: 'thoughts', thoughts: [] } });
+		await expect(page.getByRole('button', { name: 'Stop', exact: true })).toBeVisible();
+		await expect(page.locator('.ash-chat-item-toolCall')).toHaveCount(0);
+		await expect(page.locator('.ash-chat-item-agentMessage')).toHaveCount(1);
+		await push({ id: 'answer', author: { role: 'assistant' }, channel: 'final', content: { parts: ['Repository answer'] } });
+		const answer = page.locator('.ash-chat-item-agentMessage').filter({ hasText: 'Repository answer' });
+		await expect(answer).toBeVisible();
+		await expect(answer.getByRole('button', { name: 'Open conversation in ChatGPT' })).toHaveCount(0);
+		await expect(page.locator('.ash-chat-item-agentMessage')).toHaveCount(2);
+		await page.evaluate(() => Reflect.get(globalThis, 'endExecution')());
+		await expect(page.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0);
+	});
 
 	test('ChatGPT Stop cancels an active stream immediately and fences a delayed remote stop', async function () {
 		const { page } = browserTests;
