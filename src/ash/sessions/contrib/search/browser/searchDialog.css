@@ -1,5 +1,6 @@
 .ash-sessions-search-dialog.ash-dialog {
 	width: min(800px, calc(100vw - 48px));
+	height: calc(600px + 2 * var(--ash-strokeThickness));
 	max-height: calc(100vh - 64px);
 	border-radius: var(--ash-cornerRadius-xxLarge);
 	background: var(--ash-editor-background);
@@ -17,14 +18,17 @@
 }
 
 .ash-sessions-search-dialog > .ash-dialog-body {
+	height: 100%;
 	padding: 0;
 }
 
 .ash-sessions-search {
+	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
-	height: min(600px, calc(100vh - 64px));
+	height: 100%;
 	min-height: 0;
+	padding: var(--ash-spacing-size100);
 	color: var(--ash-foreground);
 	font-size: var(--ash-fontSize-body1);
 }
@@ -33,8 +37,7 @@
 	display: flex;
 	align-items: center;
 	gap: var(--ash-spacing-size160);
-	padding: var(--ash-spacing-size200) var(--ash-spacing-size240)
-		var(--ash-spacing-size120);
+	padding-bottom: var(--ash-spacing-size120);
 }
 
 .ash-sessions-search-header input {
@@ -59,7 +62,7 @@
 
 .ash-sessions-search-categories {
 	flex: 0 0 auto;
-	padding: 0 var(--ash-spacing-size240) var(--ash-spacing-size160);
+	padding-bottom: var(--ash-spacing-size160);
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	font-size: var(--ash-fontSize-label1);
 	font-weight: var(--ash-fontWeight-regular);
@@ -70,8 +73,7 @@
 	flex: 1;
 	flex-direction: column;
 	min-height: 0;
-	padding: var(--ash-spacing-size200) var(--ash-spacing-size120)
-		var(--ash-spacing-size160);
+	padding: var(--ash-spacing-size160) 0;
 }
 
 .ash-sessions-search-heading {
@@ -86,11 +88,15 @@
 }
 
 .ash-sessions-search-results {
+	--ash-list-row-reserve-scrollbar: 1;
 	flex: 1;
 	min-height: 0;
+	margin: 0 calc(0px - var(--ash-spacing-size100));
 }
 
 .ash-sessions-search-results .ash-list-row {
+	/* Mirror the trailing scrollbar reservation on the leading side. */
+	--ash-list-row-inset-start: var(--ash-list-row-scrollbar-space);
 	border-radius: var(--ash-cornerRadius-small);
 }
 
@@ -160,7 +166,7 @@
 	flex: 0 0 auto;
 	align-items: center;
 	gap: var(--ash-spacing-size240);
-	padding: var(--ash-spacing-size120) var(--ash-spacing-size240);
+	padding: var(--ash-spacing-size120) var(--ash-spacing-size120) 0;
 	border-top: var(--ash-strokeThickness) solid var(--ash-widget-border);
 	color: var(--ash-description-foreground);
 	font-size: var(--ash-fontSize-label1);
