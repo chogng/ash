@@ -28,6 +28,7 @@ export interface ChatGPTResponse {
 }
 
 export interface IChatGPTTransport {
+	readonly native?: true;
 	readonly onDidChangeAuthentication?: Event<void>;
 	getCacheScope(): Promise<string | undefined>;
 	request(id: string, request: ChatGPTRequest): Promise<ChatGPTResponse>;
@@ -36,4 +37,14 @@ export interface IChatGPTTransport {
 	cancel(id: string): Promise<void>;
 }
 
+export const chatGPTNativeTransportChannel = 'sessions.chatgpt.nativeTransport';
+export const IChatGPTNativeTransport = createServiceIdentifier<IChatGPTTransport>('chatGPTNativeTransport');
 export const IChatGPTTransport = createServiceIdentifier<IChatGPTTransport>('chatGPTTransport');
+
+export const chatGPTHistoryCooldownMs = 60_000;
+
+export function readChatGPTRetryAfter(value: string | null | undefined, now: number): number | undefined {
+	const header = value?.trim() ?? '';
+	const deadline = /^\d+$/u.test(header) ? now + Number(header) * 1000 : Date.parse(header);
+	return Number.isSafeInteger(deadline) && deadline > now ? deadline : undefined;
+}

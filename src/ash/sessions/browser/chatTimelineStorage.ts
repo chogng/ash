@@ -16,7 +16,7 @@ export interface ChatTimeline {
 	readonly title?: string;
 	readonly pinned?: boolean;
 	readonly archived?: boolean;
-	readonly history?: { readonly title: string; readonly parentId: string; readonly messages: readonly ChatReplyMessage[]; };
+	readonly history?: { readonly title: string; readonly parentId: string; readonly olderCursor?: string; readonly messages: readonly ChatReplyMessage[]; };
 }
 
 function isMessage(value: unknown): value is ChatReplyMessage {
@@ -55,7 +55,8 @@ export class ChatTimelineStorage {
 			const history = value.history;
 			if (isRecord(history) && typeof history.title === 'string' && typeof history.parentId === 'string'
 				&& Array.isArray(history.messages) && history.messages.every(isMessage)) {
-				return { ...metadata, history: { title: history.title, parentId: history.parentId, messages: history.messages } };
+				const olderCursor = typeof history.olderCursor === 'string' && history.olderCursor.length <= 2048 ? history.olderCursor : undefined;
+				return { ...metadata, history: { title: history.title, parentId: history.parentId, messages: history.messages, ...(olderCursor ? { olderCursor } : {}) } };
 			}
 			return metadata;
 		} catch { return undefined; }

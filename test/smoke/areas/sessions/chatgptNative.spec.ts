@@ -13,7 +13,7 @@ import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index
 import { connectProfile } from './sessionProfileFixture.js';
 
 declare global {
-	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; };
+	var ashNativeFixture: { advance(): void; readonly sends: number; readonly pendingInitializations: number; readonly cancelledInitializations: number; releaseInitialization(): void; setOffline(value: boolean): void; setRecentHistoryRateLimited(value: boolean): void; readonly recentHistoryRequests: number; holdUploads(value: boolean): void; readonly heldUploads: number; readonly uploadedFiles: Record<string, string>; };
 }
 
 /** Keep production IPC, Rust authentication, transport, verification and UI; replace only service I/O. */
@@ -28,6 +28,7 @@ async function installService(application: ElectronApplication, holdInitializati
 		let cancelledInitializations = 0;
 		let offline = false;
 		let recentHistoryRateLimited = false;
+		let recentHistoryRequests = 0;
 		let uploadsHeld = false;
 		let heldUploads = 0;
 		const uploadedFiles: Record<string, string> = {};
@@ -47,6 +48,7 @@ async function installService(application: ElectronApplication, holdInitializati
 			get cancelledInitializations() { return cancelledInitializations; },
 			setOffline(value) { offline = value; },
 			setRecentHistoryRateLimited(value) { recentHistoryRateLimited = value; },
+			get recentHistoryRequests() { return recentHistoryRequests; },
 			holdUploads(value) { uploadsHeld = value; },
 			get heldUploads() { return heldUploads; },
 			get uploadedFiles() { return uploadedFiles; },
@@ -82,6 +84,7 @@ async function installService(application: ElectronApplication, holdInitializati
 					return new Response(null, { status: 204 });
 				}
 				if (url.hostname !== 'chatgpt.com') { throw new Error('Unexpected fixture origin'); }
+				if (url.pathname === '/backend-api/conversations') { recentHistoryRequests++; }
 				if (offline) { return new Response(null, { status: 503 }); }
 				if (url.pathname.endsWith('/files') && init?.method === 'POST') {
 					const { file_name: name } = JSON.parse(String(init.body));
@@ -113,6 +116,26 @@ async function installService(application: ElectronApplication, holdInitializati
 					if (recentHistoryRateLimited) return new Response(null, { status: 429 });
 					const items = [{ id: 'history-one', title: 'First native history' }, { id: 'history-two', title: 'Second native history' }, ...Array.from({ length: 30 }, (_, index) => ({ id: `history-extra-${index}`, title: `Additional history ${index}` }))];
 					return Response.json({ items, total: items.length });
+				}
+				if (url.pathname === '/backend-api/conversations/history-one') {
+					return Response.json({
+						title: 'First native history', current_node: 'native-answer',
+						messages: [message('native-answer', 'assistant', 'Experimental history answer')],
+						page_info: { has_previous_page: true, start_cursor: 'fixture-before' },
+					});
+				}
+				if (url.pathname === '/backend-api/conversations/history-one/messages' && url.searchParams.get('before') === 'fixture-before') {
+					return Response.json({
+						messages: [message('native-question', 'user', 'Experimental earlier question')],
+						page_info: { has_previous_page: false },
+					});
+				}
+				if (url.pathname === '/backend-api/conversations/fixture-live') {
+					return Response.json({
+						title: 'Live fixture', current_node: head,
+						messages: Object.values(live).map(node => node.message),
+						page_info: { has_previous_page: false },
+					});
 				}
 				if (url.pathname.endsWith('/conversation/fixture-live')) { return Response.json({ title: 'Live fixture', current_node: head, mapping: live }); }
 				if (url.pathname.includes('/conversation/history-')) {
@@ -177,8 +200,61 @@ async function configureAshModel(catalog: ReturnType<typeof createAshModelServer
 	await writeUserSettings(workbench.page, JSON.stringify({ ...JSON.parse(settings.content), 'models.hidden': [{ ...ashFixtureModel, visible: true }] }), settings.revision);
 }
 
+test.describe('Experimental ChatGPT desktop entry', () => {
+	test.use({ electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN' } });
+
+	test('opens native history, pages on demand, streams a reply, and switches the default entry in Settings', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
+		await installService(application as ElectronApplication);
+		const page = await workbench.openAgentsWindow('electron');
+		const commands = new QuickAccess(page);
+		const web = page.getByRole('region', { name: 'ChatGPT', exact: true });
+		const native = page.getByRole('region', { name: 'ChatGPT（实验性）', exact: true });
+		const newChat = page.locator('[data-action-id="sessions.newSession"]').getByRole('button', { name: '新建', exact: true });
+		await expect(native).toBeVisible();
+		await expect(web).toBeHidden();
+		await page.locator('[data-item="chatgpt-native:history-one"] .ash-sessions-list-item').click();
+		await expect(native).toContainText('Experimental history answer');
+		await expect(native.getByText('Experimental earlier question', { exact: true })).toHaveCount(0);
+		await native.locator('.ash-chat-history-pagination').getByRole('button').click();
+		await expect(native).toContainText('Experimental earlier question');
+		await newChat.click();
+		const nativeInput = new Editor(native);
+		await nativeInput.waitForEditorFocus();
+		await nativeInput.waitForTypeInEditor('Experimental draft');
+		await native.getByRole('button', { name: '发送', exact: true }).click();
+		await expect(native).toContainText('First chunk');
+		await (application as ElectronApplication).evaluate(() => { ashNativeFixture.advance(); ashNativeFixture.advance(); });
+		await expect(native).toContainText('First chunk, second chunk, complete');
+
+		await commands.runCommand('workbench.action.openSettings');
+		const settings = page.locator('.ash-sessions-settings-dialog');
+		await settings.getByRole('button', { name: '通用', exact: true }).click();
+		const backend = settings.getByRole('combobox', { name: '默认 ChatGPT 入口', exact: true });
+		await expect(backend).toHaveText('ChatGPT（实验性）');
+		await backend.press('Enter');
+		await page.getByRole('option', { name: 'ChatGPT 网页版', exact: true }).click();
+		await expect(backend).toHaveText('ChatGPT 网页版');
+		await expect.poll(async () => JSON.parse((await readUserSettings(page)).content)['sessions.chatgpt.defaultBackend']).toBe('chatgptweb');
+		await page.keyboard.press('Escape');
+		await expect(settings).toBeHidden();
+		await expect(native).toBeVisible();
+		await newChat.click();
+		await expect(web).toBeVisible();
+		await expect(native).toBeHidden();
+		await expect(page.locator('[data-item^="chatgpt-native:"]')).toHaveCount(0);
+		await expect(web.locator('.ash-chat-input-model-action')).toHaveText('Fixture model');
+		const webInput = new Editor(web);
+		await webInput.waitForEditorFocus();
+		await webInput.waitForTypeInEditor('Web draft');
+		await commands.runCommand('sessions.open.experimentalChatgpt');
+		await expect(native).toContainText('First chunk, second chunk, complete');
+		await commands.runCommand('sessions.open.chatgpt');
+		await webInput.waitForEditorContents(text => text.includes('Web draft'));
+	});
+});
+
 test.describe('Unified Chat sidebar', () => {
-	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN' } });
+	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
 
 	test('opens and restores an existing native Ash conversation without sending a message', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
 		const application = browser as ElectronApplication;
@@ -503,7 +579,7 @@ test.describe('Unified Chat sidebar', () => {
 
 for (const locale of ['en', 'zh-CN'] as const) {
 	test.describe(`ChatGPT initialization lifecycle in ${locale}`, () => {
-		test.use({ openWorkspace: false, useDefaultLanguageServer: false, electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': locale } });
+		test.use({ openWorkspace: false, useDefaultLanguageServer: false, electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': locale, 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
 		test('closing and reopening during pending initialization cancels the old window and restores a usable chat', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, driver }, testInfo) => {
 			const application = browser as ElectronApplication;
 			await installService(application, true);
@@ -563,7 +639,10 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			const reopened = await workbench.reopenAgentsWindow(application, page);
 			const history = reopened.locator('.ash-chat-navigation');
 			const editor = reopened.locator('.ash-chatgpt-widget');
-			await expect(editor.locator('.ash-chat-input-notification-message')).toContainText('503');
+			const notices = reopened.locator('.ash-notification-host .ash-notification-message');
+			const historyFailure = notices.filter({ hasText: locale === 'en' ? 'Could not sync ChatGPT history' : '无法同步 ChatGPT 历史' });
+			await expect(historyFailure).toHaveCount(1);
+			await expect(editor.locator('.ash-chat-input-notification-message')).toBeHidden();
 			await expect(history.getByRole('button', { name: 'First native history', exact: true })).toHaveAttribute('aria-current', 'page');
 			await expect(history.getByRole('button', { name: 'Second native history', exact: true })).toBeVisible();
 			await expect(history.getByRole('button', { name: 'Pinned native history', exact: true })).toBeVisible();
@@ -576,20 +655,33 @@ for (const locale of ['en', 'zh-CN'] as const) {
 			await expect(staged(reopened, ready)).toContainText(locale === 'en' ? 'Ready' : '就绪');
 			const retry = staged(reopened, pending).getByRole('button', { name: locale === 'en' ? 'Retry ' + pending : '重试 ' + pending, exact: true });
 			await expect(retry).toBeVisible();
+			await reopened.evaluate(() => window.dispatchEvent(new Event('offline')));
+			const offlineNotice = notices.filter({ hasText: locale === 'en' ? 'ChatGPT is offline' : 'ChatGPT 当前离线' });
+			await expect(offlineNotice).toHaveCount(1);
+			await expect(historyFailure).toHaveCount(0);
 			await application.evaluate(() => {
 				globalThis.ashNativeFixture.setOffline(false);
 				globalThis.ashNativeFixture.setRecentHistoryRateLimited(true);
 				globalThis.ashNativeFixture.holdUploads(false);
 			});
+			const historyStatus = notices.filter({ hasText: locale === 'en' ? 'ChatGPT is temporarily limiting history requests' : 'ChatGPT 暂时限制了历史请求' });
+			const recentRequests = () => application.evaluate(() => globalThis.ashNativeFixture.recentHistoryRequests);
+			const beforeReconnect = await recentRequests();
 			await reopened.evaluate(() => window.dispatchEvent(new Event('online')));
 			await expect(readAloud).toBeVisible();
-			const historyStatus = history.getByRole('status').filter({ hasText: locale === 'en' ? 'ChatGPT is limiting history requests' : 'ChatGPT 暂时限制了历史列表请求' });
-			await expect(historyStatus).toBeVisible();
+			await expect(historyStatus).toHaveCount(1);
+			await expect(offlineNotice).toHaveCount(0);
+			await expect(historyFailure).toHaveCount(0);
 			await expect(editor.locator('.ash-chat-input-notification-message')).toBeHidden();
+			expect(await recentRequests()).toBe(beforeReconnect + 1);
+			await new QuickAccess(reopened).runCommand('sessions.chatgpt.reload');
+			await expect(historyStatus).toHaveCount(1);
+			expect(await recentRequests()).toBe(beforeReconnect + 1);
 			await retry.click();
 			await expect(staged(reopened, pending)).toContainText(locale === 'en' ? 'Ready' : '就绪');
 			expect(await application.evaluate(() => globalThis.ashNativeFixture.uploadedFiles)).toEqual({ [ready]: 'Ready draft bytes', [pending]: 'Pending draft bytes' });
 			await application.evaluate(() => globalThis.ashNativeFixture.setRecentHistoryRateLimited(false));
+			await reopened.clock.setFixedTime(new Date(Date.now() + 65_000));
 			await reopened.evaluate(() => window.dispatchEvent(new Event('online')));
 			await expect(historyStatus).toHaveCount(0);
 
@@ -611,7 +703,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 	});
 
 	test.describe(`ChatGPT entry in ${locale}`, () => {
-		test.use({ electronWindowMode: 'active' });
+		test.use({ electronWindowMode: 'active', electronUserSettings: { 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
 		test('opens by default, retains the existing login, streams followups and restores history and drafts', { tag: ['@electron-app-server'] }, async ({ application: initialApplication, workbench: initialWorkbench, target, restartWorkbench, testWorkspace }, testInfo) => {
 			let application = initialApplication as ElectronApplication; let workbench = initialWorkbench;
 			if (locale === 'zh-CN') {

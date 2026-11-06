@@ -46,10 +46,10 @@ test('Sessions New opens ChatGPT and shares its retained EditorPane', { tag: ['@
 	await expect(sidebar.getByRole('searchbox')).toHaveCount(0);
 	const retained = await editor.elementHandle();
 	await expect(sidebar.locator('details')).toHaveCount(0);
-	const input = editor.getByRole('textbox', { name: 'Ask ChatGPT', exact: true });
+	const input = editor.getByRole('textbox', { name: 'Ask ChatGPT (Experimental)', exact: true });
 	await input.focus();
 	await input.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/ChatGPT conversations are in the window sidebar/);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/ChatGPT \(Experimental\) uses your existing Codex login/);
 	await page.keyboard.press('Escape');
 	await expect(input).toBeFocused();
 	await testInfo.attach('chatgpt-parts', { body: await page.screenshot(), contentType: 'image/png' });

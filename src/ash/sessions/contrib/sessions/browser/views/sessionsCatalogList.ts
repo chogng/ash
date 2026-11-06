@@ -78,7 +78,6 @@ interface SessionsCatalogSection {
 export interface SessionsCatalogSnapshot {
 	readonly sections: readonly SessionsCatalogSection[];
 	readonly loading: boolean;
-	readonly historyStatus?: string;
 }
 
 export interface SessionsCatalogListInput {
@@ -122,7 +121,6 @@ export class SessionsCatalogList extends Disposable {
 		}));
 		const scrollable = this.scrollable = this._register(new ScrollableElement(root, { direction: 'vertical', vertical: 'auto', tabIndex: -1 }));
 		scrollable.element.classList.add('ash-view-pane-scrollable', 'ash-chat-navigation-scrollable');
-		const historyStatus = h(document, 'div', { className: 'ash-chat-navigation-history-status', attributes: { role: 'status' } });
 		const list = h(document, 'div', { className: 'ash-chat-navigation-list' });
 		scrollable.contentElement.append(list);
 		const { menu, submenu } = input.headerActions;
@@ -152,7 +150,7 @@ export class SessionsCatalogList extends Disposable {
 			list.querySelector<HTMLButtonElement>('.ash-sessions-list-section-toggle')?.focus({ preventScroll });
 		};
 		const progressHost = h(document, 'div', { className: 'ash-view-pane-progress' });
-		scrollable.element.before(progressHost, historyStatus);
+		scrollable.element.before(progressHost);
 		const progress = this._register(new ProgressBar(progressHost, defaultProgressBarStyles));
 		progress.element.classList.add('thin');
 		progress.element.setAttribute('aria-label', conversationsLabel);
@@ -234,7 +232,7 @@ export class SessionsCatalogList extends Disposable {
 			if (menuRow !== row) menuRow?.closeTransientUI();
 			menuRow = row;
 		};
-		const render = ({ sections, loading, historyStatus: message = '' }: SessionsCatalogSnapshot): void => {
+		const render = ({ sections, loading }: SessionsCatalogSnapshot): void => {
 			const focused = getActiveElement(document) as HTMLElement | null;
 			const hadFocus = root.contains(focused);
 			const focusedRow = focused?.closest<HTMLElement>('[data-item]');
@@ -338,7 +336,6 @@ export class SessionsCatalogList extends Disposable {
 				});
 			}
 			list.setAttribute('aria-busy', String(loading));
-			if (historyStatus.textContent !== message) historyStatus.textContent = message;
 			if (loading && !pendingProgress.value && progress.element.hidden) {
 				pendingProgress.value = disposableWindowTimeout(getWindow(root), () => { progress.element.hidden = false; }, 150);
 			} else if (!loading) {

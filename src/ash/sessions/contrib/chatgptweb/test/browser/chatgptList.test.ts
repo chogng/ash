@@ -1,8 +1,11 @@
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { expectVisibleFocusOutline } from '../../../../../../../test/fixtures/browser/focusOutline.js';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import { mockChatGPTRequests } from './chatGPTBrowserTestUtils.js';
+
+const historyNotices = (page: Page) => page.evaluate(() => window.ashChatGPTIntegration.notifications().map(item => item.message));
+const rateLimitNotice = 'ChatGPT 暂时限制了历史请求，请稍后重试。';
 
 suite('ChatGPT catalog in the Ash chat list', () => {
 	const browserTests = useBrowserTests();
@@ -25,12 +28,14 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await expect(chatGPT).toHaveAttribute('aria-current', 'page');
 	});
 
-	test('ChatGPT refreshes the visible history when the window comes back online', async () => {
+	test('ChatGPT refreshes visible history after reconnect and honors the list cooldown', async () => {
 		const { page } = browserTests;
 		let rateLimited = false;
 		let changed = false;
+		let requests = 0;
 		await mockChatGPTRequests(page);
 		await page.route('**/service/backend-api/conversations?*', route => {
+			requests++;
 			if (rateLimited) return route.fulfill({ status: 429 });
 			if (changed) return route.fulfill({ json: { items: [{ id: 'remote-new', title: 'New on another device' }], total: 1 } });
 			return route.fallback();
@@ -43,21 +48,95 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await previous.click();
 		const chat = page.locator('.ash-chatgpt-widget');
 		await expect(chat).toContainText('Synthetic answer');
-		const historyStatus = page.locator('.ash-chat-navigation').getByRole('status').filter({ hasText: 'ChatGPT 暂时限制了历史列表请求' });
 		rateLimited = true;
 		await page.evaluate(() => window.dispatchEvent(new Event('online')));
-		await expect(historyStatus).toBeVisible();
+		await expect.poll(() => historyNotices(page)).toEqual([rateLimitNotice]);
+		await page.evaluate(() => window.ashChatGPTIntegration.retryHistory());
+		await expect.poll(() => historyNotices(page)).toEqual([rateLimitNotice]);
 		await expect(previous).toBeVisible();
 		await expect(chat.locator('.ash-chat-input-notification-message')).toBeHidden();
 		await expect(chat).toContainText('Synthetic answer');
+		expect(requests).toBe(2);
 
 		rateLimited = false;
 		changed = true;
+		await page.clock.setFixedTime(new Date(Date.now() + 65_000));
 		await page.evaluate(() => window.dispatchEvent(new Event('online')));
 		await expect(page.getByRole('button', { name: 'New on another device', exact: true })).toBeVisible();
 		await expect(previous).toHaveCount(0);
-		await expect(historyStatus).toHaveCount(0);
-		await expect(chat).not.toContainText('Synthetic answer');
+		await expect.poll(() => historyNotices(page)).toEqual([]);
+		expect(requests).toBe(3);
+	});
+
+	test('ChatGPT keeps cached history offline and coalesces flapping reconnects', async () => {
+		const { page } = browserTests;
+		let listReads = 0;
+		await page.clock.install();
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/conversations?*', route => {
+			listReads++;
+			return route.fallback();
+		});
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		const conversation = page.getByRole('button', { name: 'Synthetic conversation', exact: true });
+		const chat = page.locator('.ash-chatgpt-widget');
+		await conversation.click();
+		await expect(chat).toContainText('Synthetic answer');
+		const offline = () => page.evaluate(() => window.dispatchEvent(new Event('offline')));
+		const online = () => page.evaluate(() => window.dispatchEvent(new Event('online')));
+		await offline();
+		await expect.poll(() => historyNotices(page)).toEqual(['ChatGPT 当前离线，仍可查看已加载的会话。']);
+		await conversation.click();
+		await expect(chat).toContainText('Synthetic answer');
+		await online();
+		await page.clock.runFor(300);
+		await offline();
+		await online();
+		await online();
+		await page.clock.runFor(300);
+		expect(listReads).toBe(1);
+		await page.clock.runFor(1_100);
+		await expect.poll(() => listReads).toBe(2);
+		await expect.poll(() => historyNotices(page)).toEqual([]);
+		await expect(chat).toContainText('Synthetic answer');
+	});
+
+	test('ChatGPT keeps the loaded transcript during the conversation read cooldown', async () => {
+		const { page } = browserTests;
+		let rateLimited = false;
+		let detailReads = 0;
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/conversation/fixture-chat', route => {
+			detailReads++;
+			return rateLimited ? route.fulfill({ status: 429, headers: { 'Retry-After': '26' } }) : route.fallback();
+		});
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		const previous = page.getByRole('button', { name: 'Synthetic conversation', exact: true });
+		await previous.click();
+		const chat = page.locator('.ash-chatgpt-widget');
+		const notice = chat.locator('.ash-chat-input-notification-message');
+		await expect(chat).toContainText('Synthetic answer');
+		await expect(notice).toBeHidden();
+		expect(detailReads).toBe(1);
+		rateLimited = true;
+		const afterFreshness = Date.now() + 65_000;
+		await page.clock.setFixedTime(new Date(afterFreshness));
+		await previous.click();
+		await expect.poll(() => historyNotices(page)).toEqual([rateLimitNotice]);
+		await expect(notice).toBeHidden();
+		expect(detailReads).toBe(2);
+		await expect(previous).toBeVisible();
+		await expect(chat).toContainText('Synthetic answer');
+
+		rateLimited = false;
+		await previous.click();
+		await expect.poll(() => historyNotices(page)).toEqual([rateLimitNotice]);
+		expect(detailReads).toBe(2);
+		await page.clock.setFixedTime(new Date(afterFreshness + 26_000));
+		await previous.click();
+		await expect(notice).toBeHidden();
+		await expect.poll(() => historyNotices(page)).toEqual([]);
+		expect(detailReads).toBe(3);
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
@@ -473,15 +552,14 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await expect(list.locator('.ash-chat-navigation-item:visible')).toHaveCount(20);
 		await list.hover();
 		await page.mouse.wheel(0, 2000);
-		const historyStatus = page.locator('.ash-chat-navigation').getByRole('status').filter({ hasText: 'Could not load ChatGPT history' });
-		await expect(historyStatus).toBeInViewport();
+		await expect.poll(() => historyNotices(page)).toEqual(['Could not sync ChatGPT history. Previously loaded chats are still available.']);
 		await expect(page.locator('.ash-chat-input-notification-message')).toBeHidden();
 		await expect(list).toHaveAttribute('aria-busy', 'false');
 		expect(offsets).toEqual([0, 20]);
 		await page.mouse.wheel(0, -100);
 		await page.mouse.wheel(0, 200);
 		await expect(list.locator('.ash-chat-navigation-item:visible')).toHaveCount(40);
-		await expect(historyStatus).toHaveCount(0);
+		await expect.poll(() => historyNotices(page)).toEqual([]);
 		expect(offsets).toEqual([0, 20, 20]);
 	});
 
@@ -657,8 +735,11 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(page.locator('.ash-sessions-titlebar-page-content .ash-project-titlebar-name')).toHaveText('Research');
 			expect(emptyReads).toBe(0);
 			releaseNextPage();
-			await projects.getByRole('button', { name: zh ? '无法加载项目聊天，点击重试' : 'Could not load project chats. Retry', exact: true }).press('Enter');
+			await expect.poll(() => historyNotices(page)).toEqual([zh ? '无法同步 ChatGPT 历史，仍可查看已加载的会话。' : 'Could not sync ChatGPT history. Previously loaded chats are still available.']);
+			await expect(projects.getByRole('button', { name: zh ? '无法加载项目聊天，点击重试' : 'Could not load project chats. Retry', exact: true })).toHaveCount(0);
+			await page.evaluate(() => window.ashChatGPTIntegration.retryHistory());
 			await expect(rows).toHaveText([...firstPageTitles, 'Older research chat']);
+			await expect.poll(() => historyNotices(page)).toEqual([]);
 			expect(cursors).toEqual([null, 'page+two', 'page+two']);
 			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: zh ? '项目' : 'Projects', exact: true }).click();
 			await expect(research).toBeFocused();

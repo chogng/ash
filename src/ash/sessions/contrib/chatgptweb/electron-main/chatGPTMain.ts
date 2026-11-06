@@ -1,12 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { app, session } from 'electron/main';
-import { toDisposable, type DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IChannelServer, IServerChannel } from '../../../../base/parts/ipc/common/ipc.js';
 import { createAppServerDaemonLauncher } from '../../../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
 import type { DevelopmentAppServerReloader } from '../../../../platform/app-server-daemon/electron-main/developmentAppServerReloader.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { chatGPTTransportChannel } from '../common/chatGPTTransport.js';
+import { chatGPTNativeTransportChannel, chatGPTTransportChannel } from '../common/chatGPTTransport.js';
+import { ChatGPTRecentHistoryGate } from './chatGPTRecentHistoryGate.js';
 import { ChatGPTAuthentication } from './chatGPTAuthentication.js';
 import { ChatGPTTransport, type ChatGPTTransportOptions } from './chatGPTTransport.js';
 import { ChatGPTVerificationRuntime } from './chatGPTVerificationRuntime.js';
@@ -19,24 +20,37 @@ interface ChatGPTMainOptions {
 }
 
 /** Registers the desktop adapter and binds its transport to each Agents window's lifetime. */
-export class ChatGPTMain {
-	private readonly channels = new Map<string, IServerChannel<string>>();
+export class ChatGPTMain extends Disposable {
+	private recentHistoryGate: ChatGPTRecentHistoryGate | undefined;
+	private readonly channels = new Map<string, ReadonlyMap<string, IServerChannel<string>>>();
 
 	constructor(
 		ipc: IChannelServer<string>,
 		private readonly options: ChatGPTMainOptions,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
-		ipc.registerChannel(chatGPTTransportChannel, {
-			call: (context, command, arg) => this.getWindowChannel(context).call(context, command, arg),
-			listen: (context, event, arg) => this.getWindowChannel(context).listen(context, event, arg),
-		});
+		super();
+		for (const channel of [chatGPTTransportChannel, chatGPTNativeTransportChannel]) {
+			ipc.registerChannel(channel, {
+				call: (context, command, arg) => this.getWindowChannel(context, channel).call(context, command, arg),
+				listen: (context, event, arg) => this.getWindowChannel(context, channel).listen(context, event, arg),
+			});
+		}
 	}
 
 	attachWindow(windowId: number, resources: DisposableStore): void {
+		const context = `window:${windowId}`;
+		this.channels.set(context, new Map([
+			[chatGPTTransportChannel, this.createChannel(resources, 'credentials')],
+			[chatGPTNativeTransportChannel, this.createChannel(resources, 'credentials-codex')],
+		]));
+		resources.add(toDisposable(() => this.channels.delete(context)));
+	}
+
+	private createChannel(resources: DisposableStore, role: 'credentials' | 'credentials-codex'): IServerChannel<string> {
 		const connection = this.options.credentialsEnabled ? createAppServerDaemonLauncher({
 			packageLocation: { appPath: app.getAppPath(), expectedVersion: app.getVersion(), isPackaged: app.isPackaged, platform: process.platform, resourcesPath: process.resourcesPath },
-			sourceEnvironment: process.env, profileRoot: this.options.profileRoot, electronExecutable: process.execPath, role: 'credentials',
+			sourceEnvironment: process.env, profileRoot: this.options.profileRoot, electronExecutable: process.execPath, role,
 		}) : undefined;
 		if (connection) resources.add(connection.launcher);
 		const authentication = resources.add(new ChatGPTAuthentication(connection ? { enabled: true, launcher: connection.launcher } : { enabled: false }));
@@ -45,16 +59,18 @@ export class ChatGPTMain {
 		}
 		const transport = resources.add(this.instantiation.createInstance(ChatGPTTransport, {
 			authentication,
+			native: role === 'credentials-codex',
+			recentHistoryGate: role === 'credentials-codex'
+				? this.recentHistoryGate ??= this._register(this.instantiation.createInstance(ChatGPTRecentHistoryGate))
+				: undefined,
 			readVerificationScript: signal => this.readVerificationScript(signal),
 			createRuntime: authorize => new ChatGPTVerificationRuntime(authorize),
 		} satisfies ChatGPTTransportOptions));
-		const context = `window:${windowId}`;
-		this.channels.set(context, transport.getChannel());
-		resources.add(toDisposable(() => this.channels.delete(context)));
+		return transport.getChannel();
 	}
 
-	private getWindowChannel(context: string): IServerChannel<string> {
-		const channel = this.channels.get(context);
+	private getWindowChannel(context: string, name: string): IServerChannel<string> {
+		const channel = this.channels.get(context)?.get(name);
 		if (!channel) throw new Error('ChatGPT is unavailable in this window');
 		return channel;
 	}

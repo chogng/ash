@@ -59,7 +59,9 @@ impl ConnectionPrelude {
         Self {
             version: if matches!(
                 options.role(),
-                ConnectionRole::Execution { .. } | ConnectionRole::Credentials
+                ConnectionRole::Execution { .. }
+                    | ConnectionRole::Credentials
+                    | ConnectionRole::CredentialsCodex
             ) {
                 PRELUDE_VERSION
             } else if options.ssh().is_some() {
@@ -117,11 +119,13 @@ impl ConnectionPrelude {
             exec_server_protocol::validate_id(environment)
                 .map_err(|_| "invalid execution environment identity".to_owned())?;
         }
-        if self.role == ConnectionRole::Credentials
-            && (self.version != PRELUDE_VERSION
-                || self.dir_root.is_some()
-                || self.web.is_some()
-                || self.ssh.is_some())
+        if matches!(
+            self.role,
+            ConnectionRole::Credentials | ConnectionRole::CredentialsCodex
+        ) && (self.version != PRELUDE_VERSION
+            || self.dir_root.is_some()
+            || self.web.is_some()
+            || self.ssh.is_some())
         {
             return Err("invalid native credential consumer scope".into());
         }
@@ -231,7 +235,9 @@ impl ControlResponse {
         self.validate()?;
         let required_version = if matches!(
             options.role(),
-            ConnectionRole::Execution { .. } | ConnectionRole::Credentials
+            ConnectionRole::Execution { .. }
+                | ConnectionRole::Credentials
+                | ConnectionRole::CredentialsCodex
         ) {
             PRELUDE_VERSION
         } else if options.ssh().is_some() {

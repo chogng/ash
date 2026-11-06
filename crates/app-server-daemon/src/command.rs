@@ -63,10 +63,11 @@ pub fn run_command(
     let role = match std::env::var("ASH_APP_SERVER_CONNECTION_ROLE").as_deref() {
         Ok("agents") => crate::ConnectionRole::Agents,
         Ok("credentials") => crate::ConnectionRole::Credentials,
+        Ok("credentials-codex") => crate::ConnectionRole::CredentialsCodex,
         Err(std::env::VarError::NotPresent) => crate::ConnectionRole::Workbench,
         _ => {
             return Err(
-                "ASH_APP_SERVER_CONNECTION_ROLE must be agents or credentials when set".into(),
+                "ASH_APP_SERVER_CONNECTION_ROLE must be agents, credentials, or credentials-codex when set".into(),
             );
         }
     };

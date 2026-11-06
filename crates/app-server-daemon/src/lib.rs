@@ -46,6 +46,8 @@ pub enum ConnectionRole {
     Agents,
     /// Private native-host credentials carrier; never accepts renderer JSON-RPC.
     Credentials,
+    /// Private credentials carrier bound to the read-only Codex login.
+    CredentialsCodex,
     /// Authenticated execution protocol; no Agent requests are accepted on this connection.
     Execution {
         environment: String,

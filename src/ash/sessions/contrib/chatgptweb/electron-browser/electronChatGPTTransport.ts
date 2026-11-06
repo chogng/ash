@@ -1,7 +1,7 @@
 import { VSBuffer, encodeBase64 } from '../../../../base/common/buffer.js';
 import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
 import type { IChannel } from '../../../../base/parts/ipc/common/ipc.js';
-import { ChatGPTAuthenticationError, chatGPTTransportChannel, type ChatGPTAuthenticationContext, type ChatGPTRequest, type ChatGPTResponse, type IChatGPTTransport } from '../common/chatGPTTransport.js';
+import { ChatGPTAuthenticationError, chatGPTTransportChannel, chatGPTNativeTransportChannel, type ChatGPTAuthenticationContext, type ChatGPTRequest, type ChatGPTResponse, type IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { CancellationError } from '../../../../base/common/errors.js';
@@ -14,9 +14,9 @@ export class ElectronChatGPTTransport extends Disposable implements IChatGPTTran
 	public readonly onDidChangeAuthentication = this.authenticationChanges.event;
 	private context: Promise<ChatGPTAuthenticationContext> | undefined;
 	private readonly requests = new Set<string>();
-	constructor(@IMainProcessService mainProcess: IMainProcessService) {
+	constructor(@IMainProcessService mainProcess: IMainProcessService, readonly native?: true) {
 		super();
-		this.channel = mainProcess.getChannel(chatGPTTransportChannel);
+		this.channel = mainProcess.getChannel(native ? chatGPTNativeTransportChannel : chatGPTTransportChannel);
 		this._register(this.channel.listen<unknown>('authenticationChanged')(value => {
 			const context = readContext(value);
 			this.context = context ? Promise.resolve(context) : undefined;
@@ -57,6 +57,12 @@ export class ElectronChatGPTTransport extends Disposable implements IChatGPTTran
 		// send a duplicate cancellation through a connection that may have closed.
 		if (!this.requests.delete(id) || this.isDisposed) { return Promise.resolve(); }
 		return this.channel.call('cancel', [id]);
+	}
+}
+
+export class ElectronChatGPTNativeTransport extends ElectronChatGPTTransport {
+	constructor(@IMainProcessService mainProcess: IMainProcessService) {
+		super(mainProcess, true);
 	}
 }
 

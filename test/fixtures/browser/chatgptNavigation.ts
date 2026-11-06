@@ -103,7 +103,7 @@ import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/pl
 import '../../../src/ash/sessions/contrib/chat/browser/chat.contribution.js';
 
 declare global {
-	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setAshChatSelected(selected: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; }; }
+	interface Window { ashChatGPTIntegration: { newChat(): void; draft(): string; storageKeys(): readonly string[]; dictate(text: string, final: boolean): void; dictationStops(): number; setVisible(visible: boolean): void; setAshChatSelected(selected: boolean): void; setConfiguration(key: string, value: unknown): Promise<void>; setMathEnabled(enabled: boolean): Promise<void>; setMathMacros(macros: Record<string, string>): Promise<void>; notifications(): readonly { id: number; message: string }[]; retryHistory(): Promise<void>; }; }
 }
 
 const parameters = new URLSearchParams(location.search);
@@ -144,6 +144,7 @@ const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationE
 configurationRegistry.registerConfiguration({ key: 'markdown.math.enabled', defaultValue: true, parse: value => Boolean(value) });
 configurationRegistry.registerConfiguration({ key: 'markdown.math.macros', defaultValue: {}, parse: value => value });
 const configuration = resources.add(new InMemoryConfigurationService());
+const notifications = resources.add(new TestNotificationService());
 if (dictation) await configuration.updateValue('dictation.backend', 'cloud');
 const services = resources.add(new InstantiationService(new ServiceCollection(
 	...getSingletonServiceDescriptors().filter(([id]) =>
@@ -153,7 +154,7 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 	[IMessageHistoryService, undefined],
 	[IVoiceModeOnboardingService, { showIfNeeded() { }, registerHost: () => toDisposable(() => { }) } as unknown as IVoiceModeOnboardingService],
 	[IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService],
-	[INotificationService, resources.add(new TestNotificationService())],
+	[INotificationService, notifications],
 	[IImageEditorService, {} as IImageEditorService],
 	[IAgentHostInputCompletionService, createDisconnectedAgentHostInputCompletionService()],
 	[IChatGPTTransport, {
@@ -261,6 +262,12 @@ window.ashChatGPTIntegration = {
 	dictationStops: () => dictationStops,
 	setVisible: visible => widget.setVisible(visible),
 	setAshChatSelected: selected => ashChatSelected.set(selected),
+	notifications: () => notifications.model.getNotifications().map(({ id, message }) => ({ id, message })),
+	retryHistory: async () => {
+		const retry = notifications.model.getNotifications().flatMap(item => item.actions?.primary ?? []).find(action => action.id === 'sessions.chatgpt.retryHistory');
+		if (!retry) { throw new Error('Missing history retry action'); }
+		await retry.run();
+	},
 };
 services.registerInstance(ISessionsListModelService, new SessionsListModelService(storage));
 services.registerInstance(IProjectService, { list: async () => [], onDidChange: Event.None } as unknown as IProjectService);

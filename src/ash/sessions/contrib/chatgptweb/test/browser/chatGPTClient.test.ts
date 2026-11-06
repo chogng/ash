@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import { suite, test } from 'mocha';
 import { chatGPTModelCatalog } from '../../../../../../../test/fixtures/chatGPTModels.js';
 import { ChatGPTClient, ChatGPTRequestError, decodeChatGPTStream, readChatGPTVoiceUpdate } from '../../browser/chatGPTClient.js';
@@ -13,6 +14,60 @@ async function collect<T>(values: AsyncIterable<T>): Promise<T[]> {
 }
 
 suite('Bundled ChatGPT client', () => {
+	test('experimental history requests older pages only on demand through the native route', async () => {
+		const paths: string[] = [];
+		const client = new ChatGPTClient((async input => {
+			const path = String(input);
+			paths.push(path);
+			return path.includes('/messages?')
+				? json({ messages: [message('older', 'user', 'Earlier question')], page_info: { has_previous_page: false } })
+				: json({ current_node: 'reply', messages: [message('reply', 'assistant', 'Latest reply')], page_info: { has_previous_page: true, start_cursor: 'first/page' } });
+		}) as typeof fetch, true);
+		const head = await client.history('thread', signal());
+		assert.equal(head.parentId, 'reply');
+		assert.deepEqual(head.messages.map(message => message.text), ['Latest reply']);
+		assert.equal(head.olderCursor, 'first/page');
+		assert.deepEqual(paths, ['/service/backend-api/conversations/thread?num_turns=20&include_has_versions=true']);
+		const older = await client.olderHistory('thread', head.olderCursor!, signal());
+		assert.deepEqual(older.messages.map(message => message.text), ['Earlier question']);
+		assert.equal(older.olderCursor, undefined);
+		assert.equal(paths[1], '/service/backend-api/conversations/thread/messages?num_turns=20&include_has_versions=true&before=first%2Fpage');
+	});
+
+	test('rate-limited history reads respect independent deadlines without dispatching retries', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		try {
+			let listReads = 0;
+			let detailReads = 0;
+			const client = new ChatGPTClient((async input => {
+				if (String(input).includes('/conversations?')) {
+					if (++listReads === 1) { return new Response(null, { status: 429, headers: { 'Retry-After': '90' } }); }
+					return json({ items: [], total: 0 });
+				}
+				if (++detailReads === 1) {
+					return new Response(null, { status: 429, headers: { 'Retry-After': new Date(Date.now() + 26_000).toUTCString() } });
+				}
+				return json({ title: 'Conversation', current_node: 'answer', mapping: {} });
+			}) as typeof fetch);
+			await assert.rejects(client.conversations(0, signal()), { status: 429, retryAt: 1_090_000 });
+			await assert.rejects(client.history('one', signal()), { status: 429, retryAt: 1_026_000, message: /conversation sync is temporarily paused/u });
+			await assert.rejects(client.conversations(50, signal()), { status: 429 });
+			await assert.rejects(client.history('two', signal()), { status: 429 });
+			assert.deepEqual([listReads, detailReads], [1, 1]);
+
+			mock.timers.tick(26_000);
+			assert.equal((await client.history('two', signal())).id, 'two');
+			await assert.rejects(client.conversations(0, signal()), { status: 429 });
+			assert.deepEqual([listReads, detailReads], [1, 2]);
+
+			mock.timers.tick(64_000);
+			assert.deepEqual((await client.conversations(0, signal())).items, []);
+			assert.equal(listReads, 2);
+		} finally {
+			mock.timers.reset();
+		}
+	});
+
 	test('resumes an accepted background turn without sending another user message or exposing its token', async () => {
 		const paths: string[] = [];
 		const frame = (value: unknown) => `data: ${JSON.stringify(value)}\n\n`;

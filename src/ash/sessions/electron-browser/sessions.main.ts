@@ -326,6 +326,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.sessionBrowserViewController',
 					'workbench.contrib.sessionBrowserNetwork',
 					'sessions.chatgpt.web',
+					'sessions.chatgpt.experimental',
 					'sessions.chatWorkspace',
 					'workbench.contrib.browserView.restore',
 					'workbench.contrib.chatAccessibilitySignals',

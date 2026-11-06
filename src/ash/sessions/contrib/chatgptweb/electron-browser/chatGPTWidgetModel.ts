@@ -83,7 +83,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 			ashModelsChanged.read(reader);
 			return this.ashCatalog.read(reader).filter(entry => primary.models.isModelVisible(entry.model));
 		});
-		const ashEligible = backend.state.map(canUseAshModels);
+		const ashEligible = backend.state.map(state => !backend.native && canUseAshModels(state));
 		this.pickerEntries = derived(reader => {
 			const web = this.webEntries.read(reader);
 			return ashEligible.read(reader) ? [...web, ...this.ashEntries.read(reader)] : web;
@@ -108,11 +108,20 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 			if (switched) this.composerChanged.fire();
 			this.changed.fire();
 		}));
-		this._register(autorun(reader => {
-			ashModelsChanged.read(reader);
-			void this.loadAshModels();
-		}));
+		if (!backend.native) {
+			this._register(autorun(reader => {
+				ashModelsChanged.read(reader);
+				void this.loadAshModels();
+			}));
+		}
 	}
+
+	get olderHistory(): { readonly loading: boolean; } | undefined {
+		const state = this.backend.state.get();
+		return state.olderCursor ? { loading: state.readingOlderHistory === true } : undefined;
+	}
+
+	async loadOlderHistory(): Promise<void> { await this.backend.loadOlderHistory?.(); }
 
 	get composerGeneration(): number { return this.generation; }
 	get items(): readonly IChatListItem[] { return this.currentItems; }
@@ -214,7 +223,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 				}
 			}
 		}
-		if (canUseAshModels(state) && this.ashEntries.get().some(entry => modelRefIdentity(entry.model) === modelRefIdentity(model))) {
+		if (!this.backend.native && canUseAshModels(state) && this.ashEntries.get().some(entry => modelRefIdentity(entry.model) === modelRefIdentity(model))) {
 			await this.commands.executeCommand(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, model);
 			return;
 		}

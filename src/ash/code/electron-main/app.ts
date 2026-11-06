@@ -431,12 +431,12 @@ export class AshApplication extends Disposable {
 			? this._register(new NativeMenubarMainService(createElectronMenubarHost()))
 			: undefined;
 		this.profileRoot = resolveHome();
-		this.chatGPTMain = this.windowServices.createInstance(ChatGPTMain, this.mainProcessIpcServer, {
+		this.chatGPTMain = this._register(this.windowServices.createInstance(ChatGPTMain, this.mainProcessIpcServer, {
 			profileRoot: this.profileRoot,
 			rendererRoot: this.rendererRoot,
 			credentialsEnabled: this.appServerStartupMode !== 'disabled',
 			registerDevelopmentConnection: this.registerDevelopmentAppServerConnection.bind(this),
-		});
+		}));
 		// Development uses the stock Electron executable; a Windows package must embed this icon in its executable.
 		this.windowIconPath = process.platform === 'win32' && !app.isPackaged
 			? join(app.getAppPath(), 'resources', 'win32', 'ash.ico')

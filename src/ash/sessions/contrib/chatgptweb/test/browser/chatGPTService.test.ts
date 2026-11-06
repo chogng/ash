@@ -8,10 +8,14 @@ import { suite, suiteTeardown, test } from 'mocha';
 import { chatGPTModelCatalog, simpleChatGPTModelCatalog } from '../../../../../../../test/fixtures/chatGPTModels.js';
 import { getWindowById } from '../../../../../base/browser/window.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
+import { autorun } from '../../../../../base/common/observable.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
+import { INotificationService, type INotification, type INotificationHandle } from '../../../../../platform/notification/common/notification.js';
+import { NotificationsModel } from '../../../../../workbench/common/notifications.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
 import { SyncDescriptor } from '../../../../../platform/instantiation/common/descriptors.js';
@@ -23,9 +27,20 @@ import { ElectronChatGPTTransport } from '../../electron-browser/electronChatGPT
 
 const lifecycle = { onWillShutdown: Event.None } as ILifecycleService;
 
-function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>, options?: { values: Map<string, string>; instantiation?: IInstantiationService; cacheScope?: () => string | undefined; onDidChangeAuthentication?: Event<void>; }) {
+function notificationService(model?: NotificationsModel): INotificationService {
+	return {
+		notify: (notification: INotification): INotificationHandle => model?.addNotification(notification) ?? ({
+			onDidClose: Event.None, onDidChangeVisibility: Event.None,
+			progress: { infinite() { }, total() { }, worked() { }, done() { } },
+			close() { }, updateMessage() { }, updateSeverity() { }, updateActions() { },
+		}),
+	} as INotificationService;
+}
+
+function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRequest) => Promise<Response>, options?: { values?: Map<string, string>; instantiation?: IInstantiationService; cacheScope?: () => string | undefined; onDidChangeAuthentication?: Event<void>; notifications?: NotificationsModel; native?: true; }) {
 	const requests = new Map<string, { controller: AbortController; reader?: ReadableStreamDefaultReader<Uint8Array>; }>();
 	const transport: IChatGPTTransport = {
+		native: options?.native,
 		onDidChangeAuthentication: options?.onDidChangeAuthentication,
 		async getCacheScope() { return options?.cacheScope ? options.cacheScope() : 'a'.repeat(64); },
 		async request(id, request) {
@@ -39,7 +54,7 @@ function fixture(respond: (path: string, signal: AbortSignal, request: ChatGPTRe
 		async cancel(id) { const request = requests.get(id); requests.delete(id); request?.controller.abort(); await request?.reader?.cancel().catch(() => { }); },
 	};
 	const values = options?.values ?? new Map<string, string>();
-	return new ChatGPTService(transport, { get: (key: string) => values.get(key), keys: () => [...values.keys()], store: (key: string, value: string) => { values.set(key, value); }, remove: (key: string) => { values.delete(key); }, flush: async () => { } } as unknown as IStorageService, lifecycle, options?.instantiation);
+	return new ChatGPTService(transport, { get: (key: string) => values.get(key), keys: () => [...values.keys()], store: (key: string, value: string) => { values.set(key, value); }, remove: (key: string) => { values.delete(key); }, flush: async () => { } } as unknown as IStorageService, lifecycle, notificationService(options?.notifications), options?.instantiation);
 }
 function response(path: string): Response {
 	assert.ok(!path.endsWith('/me'), 'The chat must not request an account identity');
@@ -55,6 +70,40 @@ suite('ChatGPT shared service', () => {
 	const mainWindowDisposables = getWindowById(1)?.disposables;
 	suiteTeardown(() => mainWindowDisposables?.dispose());
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('native recent history stays fresh on focus and window restoration for five minutes', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		using clock = toDisposable(() => mock.timers.reset());
+		const values = new Map<string, string>();
+		let reads = 0;
+		const respond = async (path: string) => {
+			if (path.includes('/conversations?')) reads++;
+			return response(path);
+		};
+		{
+			using chat = fixture(respond, { values, native: true });
+			await chat.reload();
+			await chat.refresh();
+			assert.equal(reads, 1);
+		}
+		using reopened = fixture(respond, { values, native: true });
+		const connected = new DeferredPromise<void>();
+		using ready = autorun(reader => {
+			if (reopened.state.read(reader).connected) void connected.complete();
+		});
+		reopened.initialize();
+		await connected.p;
+		assert.equal(reopened.state.get().conversations.length, 2);
+		assert.equal(reads, 1);
+		mock.timers.tick(5 * 60_000 - 1);
+		await reopened.refresh();
+		assert.equal(reads, 1);
+		mock.timers.tick(1);
+		await reopened.refresh();
+		assert.equal(reads, 2);
+		await reopened.reload();
+		assert.equal(reads, 3, 'A manual reload can refresh a fresh list');
+	});
+
 	test('window restoration keeps the selected conversation and its unsent text, while fresh New stays blank', async () => {
 		const values = new Map<string, string>();
 		const respond = async (path: string) => response(path);
@@ -131,6 +180,7 @@ suite('ChatGPT shared service', () => {
 		};
 		using services = new InstantiationService(new ServiceCollection(
 			[ILifecycleService, lifecycle],
+			[INotificationService, notificationService()],
 			[IChatGPTTransport, new SyncDescriptor(ElectronChatGPTTransport, [], true)],
 			[IChatGPTService, new SyncDescriptor(ChatGPTService, [], true)],
 			[IStorageService, { get: () => undefined, keys: () => [], store() { }, remove() { } } as unknown as IStorageService],
@@ -300,7 +350,7 @@ suite('ChatGPT shared service', () => {
 		await chat.select('two');
 		assert.equal(chat.state.get().loading, undefined);
 		assert.equal(chat.state.get().conversationId, 'one');
-		assert.match(chat.state.get().error, /Synthetic read failure/);
+		assert.equal(chat.state.get().error, '');
 		chat.newChat();
 		assert.equal(chat.state.get().loading, undefined);
 	});
@@ -354,6 +404,8 @@ suite('ChatGPT shared service', () => {
 		});
 	}
 	test('pinned history merges once without advancing recent pagination, including after an archive', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		using clock = toDisposable(() => mock.timers.reset());
 		const offsets: number[] = [];
 		let failNextPage = true;
 		using chat = fixture(async (path, _signal, request) => {
@@ -378,20 +430,26 @@ suite('ChatGPT shared service', () => {
 		await chat.archive('two');
 		await chat.loadMore();
 		assert.equal(chat.state.get().error, '');
-		assert.match(chat.state.get().historyListError ?? '', /limiting history requests/u);
+		assert.equal(chat.state.get().historyListFailed, true);
+		await chat.loadMore();
+		assert.deepEqual(offsets, [0, 1]);
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ['one', 'old-pin']);
+		mock.timers.tick(60_000);
 		await chat.loadMore();
 		assert.deepEqual(offsets, [0, 1, 1]);
-		assert.equal(chat.state.get().historyListError, undefined);
+		assert.equal(chat.state.get().historyListFailed, false);
 		assert.equal(chat.state.get().conversations.filter(item => item.id === 'one').length, 1);
 		assert.equal(chat.state.get().conversations.find(item => item.id === 'three')?.projectId, 'g-p-project');
 	});
 
 	test('project and pin failures leave recent chats usable and report the error', async () => {
-		using chat = fixture(async path => path.includes('/pins?') || path.includes('/gizmos/snorlax/sidebar?') ? new Response(null, { status: 503 }) : response(path));
+		using notifications = new NotificationsModel();
+		using chat = fixture(async path => path.includes('/pins?') || path.includes('/gizmos/snorlax/sidebar?') ? new Response(null, { status: 503 }) : response(path), { notifications });
 		await chat.reload();
 		assert.equal(chat.state.get().connected, true);
 		assert.equal(chat.state.get().conversations.length, 2);
-		assert.match(chat.state.get().error, /503/);
+		assert.equal(chat.state.get().error, '');
+		assert.deepEqual(notifications.getNotifications().map(item => item.message), ['Could not sync ChatGPT history. Previously loaded chats are still available.']);
 		await chat.select('one');
 		assert.equal(chat.state.get().conversationId, 'one');
 	});
@@ -508,6 +566,8 @@ suite('ChatGPT shared service', () => {
 	});
 
 	test('cold restore and followup remain usable when only the recent list is rate-limited', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		using clock = toDisposable(() => mock.timers.reset());
 		let sends = 0;
 		let historyRateLimited = true;
 		const legacyTimeline = 'sessions.chat.timeline.v1:chatgpt-web:one';
@@ -534,13 +594,39 @@ suite('ChatGPT shared service', () => {
 		assert.equal(chat.state.get().messages[0]?.text, 'one reply');
 		assert.equal(chat.state.get().conversations[0]?.id, 'one');
 		assert.equal(chat.state.get().error, '');
-		assert.match(chat.state.get().historyListError ?? '', /limiting history requests/u);
+		assert.equal(chat.state.get().historyListFailed, true);
 		chat.setDraft('Continue after reopening'); await chat.send();
 		assert.equal(sends, 1); assert.equal(chat.state.get().error, '');
-		assert.match(chat.state.get().historyListError ?? '', /limiting history requests/u);
+		assert.equal(chat.state.get().historyListFailed, true);
 		historyRateLimited = false;
 		await chat.refresh();
-		assert.equal(chat.state.get().historyListError, undefined);
+		assert.equal(chat.state.get().historyListFailed, true);
+		mock.timers.tick(60_000);
+		await chat.refresh();
+		assert.equal(chat.state.get().historyListFailed, false);
+	});
+
+	test('a 429 on the post-reply read keeps the accepted reply and draft cleared', async () => {
+		let sent = false;
+		using chat = fixture(async path => {
+			if (path.includes('/.headers/')) { return Response.json({ 'OpenAI-Sentinel-Chat-Requirements-Token': 'proof' }); }
+			if (path.endsWith('/prepare')) { return Response.json({ conduit_token: 'fixture' }); }
+			if (path.endsWith('/f/conversation')) {
+				sent = true;
+				return new Response('data: {"conversation_id":"one","message":{"id":"next","author":{"role":"assistant"},"content":{"parts":["Accepted reply"]}}}\n\ndata: [DONE]\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+			}
+			if (sent && path.endsWith('/conversation/one')) { return new Response(null, { status: 429, headers: { 'Retry-After': '26' } }); }
+			return response(path);
+		});
+		await chat.reload();
+		await chat.select('one');
+		chat.setDraft('Question');
+		await chat.send();
+		assert.equal(sent, true);
+		assert.equal(chat.state.get().messages.at(-1)?.text, 'Accepted reply');
+		assert.equal(chat.state.get().error, '');
+		assert.equal(chat.state.get().draft, '');
+		assert.equal(chat.state.get().uncertain, false);
 	});
 
 	test('refresh synchronizes cloud additions, edits and confirmed deletions across loaded pages and disk', async () => {
@@ -1210,22 +1296,57 @@ suite('ChatGPT shared service', () => {
 	});
 	test('retains messages and drafts across web request failures and subsequent recovery', async () => {
 		let fail = false;
-		using chat = fixture(async path => fail ? new Response(null, { status: 401 }) : response(path));
+		using notifications = new NotificationsModel();
+		using chat = fixture(async path => fail ? new Response(null, { status: 401 }) : response(path), { notifications });
 		chat.setDraft('new draft');
 		await chat.reload();
 		assert.equal(chat.state.get().draft, 'new draft');
 		await chat.select('one'); chat.setDraft('conversation draft');
 		const messages = chat.state.get().messages;
 		fail = true; await chat.reload();
-		assert.match(chat.state.get().error, /401/u);
+		assert.equal(chat.state.get().error, '');
+		assert.equal(notifications.getNotifications().length, 1);
 		assert.equal(chat.state.get().connected, true);
 		assert.equal(chat.state.get().draft, 'conversation draft');
 		assert.equal(chat.state.get().conversationId, 'one');
 		assert.equal(chat.state.get().messages, messages);
 		fail = false; await chat.reload();
 		assert.equal(chat.state.get().error, '');
+		assert.equal(notifications.getNotifications().length, 0);
 		assert.equal(chat.state.get().draft, 'conversation draft');
 		assert.equal(chat.state.get().conversationId, 'one');
 		chat.newChat(); assert.equal(chat.state.get().draft, 'new draft');
+	});
+
+	test('shares one history notification across recent, project, and conversation rate limits', async () => {
+		const requests: string[] = [];
+		let rateLimited = false;
+		using notifications = new NotificationsModel();
+		using chat = fixture(async path => {
+			if (path.includes('/gizmos/snorlax/sidebar?')) {
+				return Response.json({ items: [{ gizmo: { id: 'g-p-one', display: { name: 'Project' } } }], cursor: null });
+			}
+			if (path.includes('/conversations?') || path.endsWith('/conversation/one')) {
+				requests.push(path);
+				if (rateLimited) { return new Response(null, { status: 429, headers: { 'Retry-After': '30' } }); }
+				if (path.includes('/gizmos/g-p-one/')) { return Response.json({ items: [], cursor: null }); }
+			}
+			return response(path);
+		}, { notifications });
+		await chat.reload();
+		await chat.select('one');
+		const cached = chat.state.get().messages;
+		requests.length = 0;
+		rateLimited = true;
+		await Promise.all([chat.reload(), chat.loadProjectConversations('g-p-one')]);
+		assert.equal(requests.length, 3);
+		const [notice] = notifications.getNotifications();
+		assert.equal(notifications.getNotifications().length, 1);
+		assert.match(String(notice?.message), /temporarily limiting history requests/u);
+		await notice?.actions?.primary?.[0]?.run();
+		assert.equal(requests.length, 3);
+		assert.deepEqual(notifications.getNotifications().map(item => item.id), [notice?.id]);
+		assert.equal(chat.state.get().messages, cached);
+		assert.equal(chat.state.get().error, '');
 	});
 });

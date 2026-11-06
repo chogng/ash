@@ -50,6 +50,7 @@ const ashChatEditor = {
 
 export function registerChatWorkspace(webChat: {
 	readonly catalog: SyncDescriptor<ChatListSource>;
+	readonly additionalCatalog?: SyncDescriptor<ChatListSource>;
 	readonly draftModels: SyncDescriptor<ChatDraftModelSource>;
 	readonly accessibility: Omit<SessionsCatalogAccessibility, 'focusContext'>;
 	readonly openCommand: string;
@@ -60,6 +61,7 @@ export function registerChatWorkspace(webChat: {
 	registerAshChatAccessibility();
 	registerSingleton(IChatListCatalog, new SyncDescriptor(ChatListCatalog, [[
 		webChat.catalog,
+		...(webChat.additionalCatalog ? [webChat.additionalCatalog] : []),
 		new SyncDescriptor(AshChatNavigationSource),
 	]], true));
 

@@ -81,7 +81,7 @@ async function installHistory(application: ElectronApplication): Promise<void> {
 
 for (const locale of ['en', 'zh-CN'] as const) {
 	test.describe(`Unified conversation search in ${locale}`, () => {
-		test.use({ electronWindowMode: 'active' });
+		test.use({ electronWindowMode: 'active', electronUserSettings: { 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
 		test(
 			'finds native conversations through Search and preserves sidebar groups',
 			{ tag: ['@electron-app-server'] },

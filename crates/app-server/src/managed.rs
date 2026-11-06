@@ -191,9 +191,9 @@ pub(crate) fn run(
                             return;
                         }
                     };
-                    if connection.options.role() == ConnectionRole::Credentials {
+                    if matches!(connection.options.role(), ConnectionRole::Credentials | ConnectionRole::CredentialsCodex) {
                         let shutdown = connection.writer.shutdown_handle();
-                        if let Err(error) = server.serve_host_credentials(connection.reader, connection.writer)
+                        if let Err(error) = server.serve_host_credentials_for(connection.reader, connection.writer, connection.options.role())
                             && !is_peer_disconnect(&error)
                         {
                             eprintln!("managed private credential connection failed: {error}");

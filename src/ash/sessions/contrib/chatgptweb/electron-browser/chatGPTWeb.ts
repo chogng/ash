@@ -1,8 +1,15 @@
+import { mainWindow } from '../../../../base/browser/window.js';
+import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IChatGPTNativeTransport, type IChatGPTTransport } from '../common/chatGPTTransport.js';
+import { experimentalChatGPTSelected, SHOW_EXPERIMENTAL_CHATGPT } from '../common/chatGPTNative.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { derived, type IObservable } from '../../../../base/common/observable.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
+import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { SESSIONS_CHATGPT_DEFAULT_BACKEND } from '../../../common/configuration.js';
 import { CommandsRegistry, ICommandService } from '../../../../platform/commands/common/commands.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
@@ -19,12 +26,13 @@ import type { ChatDraftModelSource } from '../../chat/browser/ashChatWidgetModel
 import type { IReplyChatEditorModel, ReplyChatEditorOptions } from '../../chat/browser/replyChatEditor.js';
 import { chatGPTModelEntries, ChatGPTWidgetModel } from './chatGPTWidgetModel.js';
 import { ChatGPTProjectFolderPicker } from './chatGPTProjectFolderPicker.js';
-import { IChatGPTService, isChatGPTNewDraft } from '../browser/chatGPTService.js';
+import { IChatGPTNativeService, IChatGPTService, isChatGPTNewDraft } from '../browser/chatGPTService.js';
 import { ISessionsSearchService } from '../../search/browser/searchService.js';
 import type { SearchResult } from '../../search/browser/searchModel.js';
 
 export const chatGPTScrollOptimization = 'sessions.chatgpt.optimizeScrolling';
 export const SHOW_CHATGPT_COMMAND = 'sessions.show.chatgpt';
+export const SHOW_PREFERRED_CHATGPT_COMMAND = 'sessions.show.preferredChatgpt';
 
 export const chatGPTReplyEditor = {
 	id: 'sessions.editor.chatgpt',
@@ -43,6 +51,18 @@ export const chatGPTReplyEditor = {
 	scrollOptimizationSetting: chatGPTScrollOptimization,
 } satisfies ReplyChatEditorOptions;
 export const chatGPTSelectedContext = 'sessions.activity.chatgptSelected';
+
+export const experimentalChatGPTEditor = {
+	...chatGPTReplyEditor,
+	id: 'sessions.editor.experimentalChatgpt',
+	scheme: 'ash-experimental-chatgpt',
+	name: 'ChatGPT (Experimental)',
+	title: () => localize('sessions.chatgpt.experimentalTitle', 'ChatGPT (Experimental)'),
+	inputLabel: () => localize('sessions.chatgpt.experimentalPrompt', 'Ask ChatGPT (Experimental)'),
+	scopedServices: accessor => new ServiceCollection([IChatGPTService, accessor.get(IChatGPTNativeService)]),
+	accessibility: { ...chatGPTReplyEditor.accessibility, focusContext: 'experimentalChatGPTFocused' },
+} satisfies ReplyChatEditorOptions;
+
 
 export class ChatGPTDraftModelSource implements ChatDraftModelSource {
 	readonly models: IObservable<readonly ModelCatalogEntry[]>;
@@ -104,7 +124,9 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 	) {
 		super();
 		const newDraft = chat.state.map(isChatGPTNewDraft);
-		const showChat = async (source?: unknown) => {
+		const showChat = async (source?: unknown, create?: unknown) => {
+			chat.setNetworkAvailable(mainWindow?.navigator.onLine ?? true);
+			if (create === true && source !== 'restore') { chat.newChat(source === 'startup' ? { clearDraft: true } : undefined); }
 			chat.initialize();
 			await layout.openEntry({
 				id: 'chatgpt', activityContext: chatGPTSelectedContext, content: 'editor',
@@ -113,7 +135,7 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 					resource: URI.from({ scheme: chatGPTReplyEditor.scheme, path: '/page' }), label: chatGPTReplyEditor.title(),
 					showBreadcrumbs: false, readOnly: true, capabilities: EditorInputCapabilities.CannotClose,
 				},
-				restoreCommand: SHOW_CHATGPT_COMMAND, newSessionCommand: 'sessions.chatgpt.newChat', newDraft, focus: 'editor',
+				restoreCommand: SHOW_CHATGPT_COMMAND, newSessionCommand: 'sessions.open.new', newDraft, focus: 'editor',
 			}, undefined, source === 'restore' || source === 'startup' ? { source } : undefined);
 			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'chatgpt', StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		};
@@ -138,15 +160,74 @@ export class ChatGPTWebContribution extends Disposable implements IWorkbenchCont
 			editors.focusActiveEditor();
 		};
 		this._register(CommandsRegistry.register('sessions.chatgpt.newChat', newChat));
-		this._register(CommandsRegistry.register(SHOW_CHATGPT_COMMAND, (_accessor, source) => showChat(source)));
-		this._register(CommandsRegistry.register('sessions.open.new', async (_accessor, source) => {
-			if (source !== 'restore') { chat.newChat(source === 'startup' ? { clearDraft: true } : undefined); }
-			await showChat(source);
+		this._register(CommandsRegistry.register(SHOW_CHATGPT_COMMAND, (_accessor, source, create) => showChat(source, create)));
+		this._register(CommandsRegistry.register(SHOW_PREFERRED_CHATGPT_COMMAND, (accessor, source, create) => {
+			const setting = accessor.get(IConfigurationService).getValue<string>(SESSIONS_CHATGPT_DEFAULT_BACKEND);
+			const command = setting === 'chatgptweb' ? SHOW_CHATGPT_COMMAND : SHOW_EXPERIMENTAL_CHATGPT;
+			return accessor.get(ICommandService).executeCommand(command, source, create === true);
 		}));
+		this._register(CommandsRegistry.register('sessions.open.new', (accessor, source) =>
+			accessor.get(ICommandService).executeCommand(SHOW_PREFERRED_CHATGPT_COMMAND, source, true)));
 		// Saved window entries and existing keybindings from the experiment retain the same chat owner.
 		this._register(CommandsRegistry.register('sessions.chatgptNative.newChat', newChat));
 		for (const command of ['sessions.show.chatgptNative', 'sessions.open.chatgptNative']) {
 			this._register(CommandsRegistry.register(command, (_accessor, source) => showChat(source)));
 		}
+	}
+}
+
+export class ChatGPTExperimentalContribution extends Disposable implements IWorkbenchContribution {
+	static readonly ID = 'sessions.chatgpt.experimental';
+
+	constructor(
+		@ISessionsLayoutService layout: ISessionsLayoutService,
+		@IChatGPTNativeService chat: IChatGPTService,
+		@IChatGPTNativeTransport transport: IChatGPTTransport,
+		@IEditorService editors: IEditorService,
+		@IStorageService storage: IStorageService,
+		@INotificationService notifications: INotificationService,
+	) {
+		super();
+		const newDraft = chat.state.map(isChatGPTNewDraft);
+		const newChatCommand = 'sessions.experimentalChatgpt.newChat';
+		const connect = async (): Promise<boolean> => {
+			try {
+				const signedIn = !!await transport.getCacheScope();
+				if (this.isDisposed) return false;
+				if (signedIn) {
+					chat.initialize();
+				} else {
+					notifications.info(localize('sessions.chatgpt.experimentalLoginRequired', 'Sign in to Codex, then open ChatGPT (Experimental) again.'));
+				}
+				return signedIn;
+			} catch {
+				if (!this.isDisposed) notifications.error(localize('sessions.chatgpt.experimentalLoginUnavailable', 'Could not check the Codex login for ChatGPT (Experimental). Try again.'));
+				return false;
+			}
+		};
+		this._register(CommandsRegistry.register(SHOW_EXPERIMENTAL_CHATGPT, async (_accessor, source, create) => {
+			chat.setNetworkAvailable(mainWindow?.navigator.onLine ?? true);
+			if (create === true && source !== 'restore') { chat.newChat(source === 'startup' ? { clearDraft: true } : undefined); }
+			await layout.openEntry({
+				id: 'chatgpt-experimental', activityContext: experimentalChatGPTSelected, content: 'editor',
+				sidebarContainerId: CHAT_WORKSPACE_NAVIGATION_ID, showEditorTabs: false,
+				editorInput: {
+					resource: URI.from({ scheme: experimentalChatGPTEditor.scheme, path: '/page' }),
+					label: experimentalChatGPTEditor.title(), showBreadcrumbs: false, readOnly: true,
+					capabilities: EditorInputCapabilities.CannotClose,
+				},
+				restoreCommand: SHOW_EXPERIMENTAL_CHATGPT, newSessionCommand: 'sessions.open.new', newDraft, focus: 'editor',
+			}, undefined, source === 'restore' || source === 'startup' ? { source } : undefined);
+			storage.store(CHAT_WORKSPACE_LAST_BACKEND_KEY, 'chatgpt', StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			if (source === 'startup' || source === 'restore') {
+				void connect();
+				return;
+			}
+			return connect();
+		}));
+		this._register(CommandsRegistry.register(newChatCommand, () => {
+			chat.newChat();
+			editors.focusActiveEditor();
+		}));
 	}
 }

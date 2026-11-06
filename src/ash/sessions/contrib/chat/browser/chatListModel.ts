@@ -42,8 +42,8 @@ export interface ChatListEntry extends SessionListOrganization {
 }
 
 type ProjectHistory =
-	| { readonly state: 'idle' | 'more' | 'error'; readonly load: () => void; }
-	| { readonly state: 'loading' | 'complete' | 'unavailable'; };
+	| { readonly state: 'idle' | 'more'; readonly load: () => void; }
+	| { readonly state: 'loading' | 'complete' | 'unavailable' | 'error'; };
 
 export interface ConversationProjectDetails {
 	readonly name: string;
@@ -72,7 +72,6 @@ export interface ChatListSnapshot {
 	readonly projects?: readonly ChatListProject[];
 	readonly groups?: readonly SessionGroup[];
 	readonly loading?: boolean;
-	readonly historyStatus?: string;
 }
 
 /** Catalog owners supply records and operations. The list owns their placement. */
@@ -209,7 +208,6 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 
 			return {
 				loading: snapshots.some(snapshot => snapshot.loading),
-				historyStatus: snapshots.map(snapshot => snapshot.historyStatus).filter(Boolean).join('\n'),
 				sections: groups.flatMap(group => {
 					const { key } = group;
 					const groupDropTarget = key.startsWith('group:');
@@ -300,17 +298,15 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			this.membership.delete(project.key);
 			this.membershipVersion.set(this.membershipVersion.get() + 1);
 		} : undefined;
-		const action = history?.state === 'error' ? history.load : retry;
-		const label = action ? localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry')
-			: history?.state === 'unavailable' ? localize('sessions.chatList.projectChatsOffline', 'Connect to load project chats.')
-				: !rows.length && !loading && (!history || history.state === 'complete')
-					? localize('sessions.chatList.emptyProject', 'No chats in this project') : undefined;
+		const label = retry ? localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry')
+			: !rows.length && !loading && (!history || history.state === 'complete')
+				? localize('sessions.chatList.emptyProject', 'No chats in this project') : undefined;
 		return {
 			key: project.key,
 			title: project.title,
 			rows,
 			loading,
-			history: label ? { label, action } : undefined,
+			history: label ? { label, action: retry } : undefined,
 			onExpand: history?.state === 'idle' ? history.load : undefined,
 			loadMore: history?.state === 'more' ? history.load : undefined,
 		};
