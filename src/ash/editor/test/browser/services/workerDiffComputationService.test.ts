@@ -18,13 +18,15 @@ const options: IDocumentDiffProviderOptions = { ignoreTrimWhitespace: false, max
 
 suite('Frontend diff Worker', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
-	test('first provider prepares one Worker and factory disposal releases an unused client', () => {
+	test('an explicit comparison prewarms the shared Worker after a dormant provider', () => {
 		const ports: DiffTestPort[] = [];
 		using factory = new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => {
 			const port = new DiffTestPort();
 			ports.push(port);
 			return port;
 		}));
+		assert.equal(ports.length, 0);
+		using background = factory.createDiffProvider({ prewarm: false });
 		assert.equal(ports.length, 0);
 		using first = factory.createDiffProvider();
 		using second = factory.createDiffProvider();

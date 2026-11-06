@@ -19,6 +19,12 @@ export class WorkerDiffComputationService extends Disposable implements IDocumen
 		super();
 	}
 
+	/** Overlap Worker loading with model resolution for an explicit comparison. */
+	public prewarm(): void {
+		this.assertNotDisposed();
+		if (!this.client.value) this.createClient();
+	}
+
 	public async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, cancellationToken: CancellationToken): Promise<IDocumentDiff> {
 		this.assertNotDisposed();
 		throwIfCancelled(cancellationToken);
