@@ -20,7 +20,7 @@ For file or API alignment, use the local VS Code checkout and the [vscode-api-al
 
 ## Reproduce the costly frames
 
-Use `runMarkdownBenchmark` in the [transcript fixture](../../../test/fixtures/browser/chatTranscript.page.ts) through the production `ChatListWidget`. Start with the shape that reproduces the issue. Long paragraphs, lists and tables expose repeated tail work. Fences and math candidates exercise different consumers. Preserve the exact baseline sources and fixture settings before editing, including any relevant uncommitted changes.
+Use `runMarkdownBenchmark` in the [transcript fixture](../../../test/fixtures/browser/chatTranscript.page.ts) through the production `ChatListWidget`. Start with the shape that reproduces the issue. Long paragraphs, lists and tables expose repeated tail work. Fences and math candidates exercise different consumers. When changing paragraph checkpoints, compare a long paragraph containing bold and links without inline code, a matched paragraph with inline code, a long plain-text paragraph, and a short reply. Preserve the exact baseline sources and fixture settings before editing, including any relevant uncommitted changes.
 
 Run the repository's existing comparison for large tails:
 
@@ -47,7 +47,12 @@ Record these phases separately:
 
 ## Verify the behavior at risk
 
-- Exercise append, completion and provider correction through the normal renderer entry. Select affected fallback cases such as setext conversion, a loose or indented list continuation, table shape changes, and a reference definition arriving after its use. Include the affected extension or trust policy when touching those paths.
+- Exercise append, completion and provider correction through the normal renderer entry. Keep successive snapshots cumulative through completion to exercise append reuse, then change the existing prefix to exercise correction. Select affected fallback cases such as setext conversion, a loose or indented list continuation, table shape changes, and a reference definition arriving after its use. Include the affected extension or trust policy when touching those paths.
 - Compare normalized DOM against a complete render and check live node identity separately. Limit normalization to known irrelevant output differences such as top-level whitespace between block elements. Check the interactions the change can affect, including table column widths and keyboard scroll, selection and focus, link binding disposal, and bottom-follow versus a user reading earlier content.
 - For scheduling changes, verify latest-snapshot wins, hide and resume, clear, and disposal. Check the cases in `chatContentMarkdownRenderer.test.ts`, `chatTranscript.test.ts`, and `chatListWidget.test.ts` under `src/ash/workbench/contrib/chat/test/browser/`.
 - Use [the streamed Chat response smoke spec](../../../test/smoke/areas/chat/chat-response-stream.spec.ts) when validating the real Electron and App Server path. Report this separately from the controlled Chromium timings. Include the workload, cadence, sample counts, affected metrics and any validation gaps in the result.
+
+## Learnings
+
+- In a long single-line paragraph, a simple `**bold**` or `[label](https://example.com)` surrounded by literal spaces can advance the checkpoint. Verify the closed token against the tag and text of the corresponding direct child in the detached DOM. Keep discovery bounded and retain the following space in the resumed input after the synthetic code span.
+- When Marked repeatedly scans a growing paragraph for math, measure extension `start` separately from tokenization. A suffix with no possible closer can skip opener probes, and `\)` and `\]` can be checked independently for their opener families. Leave escape handling and delimiter pairing to the tokenizer and compare token trees across streamed prefixes with currency, escaped delimiters, and late closers.
