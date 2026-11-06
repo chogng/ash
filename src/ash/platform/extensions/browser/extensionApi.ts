@@ -2,7 +2,7 @@ import { Event } from '../../../base/common/event.js';
 import { LRUCache } from '../../../base/common/map.js';
 import type { IExtensionManagementService } from '../../extensionManagement/common/extensionManagementService.js';
 import type { IGlobalExtensionEnablementService } from '../../extensionManagement/common/extensionManagement.js';
-import type { ExtensionCatalog, ExtensionCatalogReload, ExtensionDescriptor, ExtensionResourceRequest, IExtensionApi } from '../common/extensionApi.js';
+import type { ExtensionCatalog, ExtensionCatalogReload, ExtensionColorThemeSource, ExtensionDescriptor, ExtensionResourceRequest, IExtensionApi } from '../common/extensionApi.js';
 import { normalizeExtensionCatalog, MAX_EXTENSION_RESOURCE_BYTES } from '../common/extensionApi.js';
 import { readAppServerResource } from '../../agentHost/browser/appServerApi.js';
 import type { IResourceApi } from '../../agentHost/common/appServerApi.js';
@@ -69,6 +69,7 @@ export function withEnabledBuiltInExtensions(packages: IExtensionApi, enablement
 			const providers = languageExtensions.size ? await (providerRead ?? readProviders()) : undefined;
 			return { ...catalog, extensions: catalog.extensions.filter(extension => languageExtensions.has(extension.id) ? providers?.providers.some(provider => provider.id === extension.id && provider.enabled) : extension.sourceKind !== 'builtIn' || !disabled.has(extension.id.toLowerCase())) };
 		},
+		...(packages.readColorThemeSources ? { readColorThemeSources: packages.readColorThemeSources.bind(packages) } : {}),
 		resources: packages.resources,
 	};
 }
@@ -81,7 +82,17 @@ export function createAppServerExtensionApi(connection: AppServerProtocolClient,
 	// Small immutable resources are shared by theme, declaration and executable loaders.
 	// Bound retained bytes to 64 × 128 KiB; large browser bundles remain uncached.
 	const resources = new LRUCache<string, Promise<Uint8Array>>(64);
+	// The early color theme and the full contribution catalog share the same read.
+	const colorThemes = new LRUCache<string, Promise<readonly ExtensionColorThemeSource[] | undefined>>(8);
 	const retired = () => new Error(localize('extensions.resources.retired', 'Extension resource generation has retired.'));
+	const resourceSnapshot = (request: ExtensionResourceRequest) => {
+		const snapshot = published;
+		if (!snapshot || request.generation !== snapshot.catalog.generation || snapshot.connectionGeneration !== resourceApi.connectionGeneration) { throw retired(); }
+		return snapshot;
+	};
+	const assertCurrent = (snapshot: NonNullable<typeof published>) => {
+		if (published !== snapshot || snapshot.connectionGeneration !== resourceApi.connectionGeneration) { throw retired(); }
+	};
 	return {
 		// An interrupted activation must retry against the newly initialized catalog.
 		onDidChange: (listener, thisArgs) => connection.onStateChange(state => {
@@ -106,6 +117,7 @@ export function createAppServerExtensionApi(connection: AppServerProtocolClient,
 				if (published?.connectionGeneration === incarnation && published.backendGeneration === catalog.generation) { return published.catalog; }
 				const exposed = Object.freeze({ ...catalog, generation: ++generation });
 				resources.clear();
+				colorThemes.clear();
 				published = { connectionGeneration: incarnation, backendGeneration: catalog.generation, catalog: exposed };
 				return exposed;
 			};
@@ -119,9 +131,23 @@ export function createAppServerExtensionApi(connection: AppServerProtocolClient,
 			void next.then(settled, settled);
 			return next;
 		},
+		async readColorThemeSources(request) {
+			const snapshot = resourceSnapshot(request);
+			const key = `${request.extensionId}\0${request.path}`;
+			let operation = colorThemes.get(key);
+			if (!operation) {
+				const current = appServerRequest(connection, 'extensions/colorTheme/read', { ...request, generation: snapshot.backendGeneration })
+					.then(({ sources }) => sources === null ? undefined : Object.freeze(sources.map(source => Object.freeze(source))));
+				colorThemes.set(key, current);
+				void current.catch(() => { if (colorThemes.peek(key) === current) colorThemes.delete(key); });
+				operation = current;
+			}
+			const sources = await operation;
+			assertCurrent(snapshot);
+			return sources;
+		},
 		resources: new ExtensionResourceLoaderService(async request => {
-			const snapshot = published;
-			if (!snapshot || request.generation !== snapshot.catalog.generation || snapshot.connectionGeneration !== resourceApi.connectionGeneration) { throw retired(); }
+			const snapshot = resourceSnapshot(request);
 			const key = `${request.extensionId}\0${request.path}`;
 			let operation = resources.get(key);
 			if (!operation) {
@@ -132,7 +158,7 @@ export function createAppServerExtensionApi(connection: AppServerProtocolClient,
 				void operation.then(bytes => { if (bytes.byteLength > 128 * 1024) forget(); }, forget);
 			}
 			const bytes = await operation;
-			if (published !== snapshot || snapshot.connectionGeneration !== resourceApi.connectionGeneration) { throw retired(); }
+			assertCurrent(snapshot);
 			// Callers may edit their buffer; the verified cached bytes remain private.
 			return Uint8Array.from(bytes);
 		}),

@@ -44,7 +44,7 @@ import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { isResourceDiffEditorInput } from '../../../common/editor.js';
 import { ExtensionFileTemplateRegistry, type ExtensionFileTemplateDefinition, type ExtensionFileTemplateSource } from '../common/extensionFileTemplate.js';
 import { toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
-import { ExtensionThemeRegistry, loadExtensionTheme, type ExtensionThemeDefinition, type ExtensionThemeSource } from '../common/extensionTheme.js';
+import { ExtensionThemeRegistry, loadPackagedExtensionTheme, type ExtensionThemeDefinition, type ExtensionThemeSource } from '../common/extensionTheme.js';
 import type { ExtensionCatalog, ExtensionDescriptor, ExtensionServiceFailure, ExtensionSnippetActivation, ExtensionSnippetFile, IExtensionService } from '../common/extensionService.js';
 import { ExtensionDebugAdapterRegistry, validateExtensionDebugAdapterDefinitions, type ExtensionDebugAdapterDefinition, type ExtensionDebugAdapterSource } from '../common/extensionDebugAdapter.js';
 
@@ -422,7 +422,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 						const paths = new Set([
 							...(this.options.languageService ? manifest.contributes.languages.flatMap(language => language.configuration ? [language.configuration] : []) : []),
 							...(this.options.languageService ? manifest.contributes.snippets.map(snippet => snippet.path) : []),
-							...manifest.contributes.themes.map(theme => theme.path),
+							...(this.options.api.readColorThemeSources ? [] : manifest.contributes.themes.map(theme => theme.path)),
 							...manifest.contributes.iconThemes.map(theme => theme.path),
 							...manifest.contributes.productIconThemes.map(theme => theme.path),
 							...manifest.contributes.icons.flatMap(icon => typeof icon.defaults === 'string' ? [] : [icon.defaults.fontPath]),
@@ -450,7 +450,7 @@ export class AppServerExtensionService extends Disposable implements IExtensionS
 					const position = nextTheme++;
 					const { extension, theme, index } = themeLoads[position]!;
 					try {
-						const definition = await loadExtensionTheme(path => this.loadResource(resources, catalog.generation, extension.id, path), extension.id, theme, index);
+						const definition = await loadPackagedExtensionTheme(this.options.api, catalog.generation, extension.id, theme, index, path => this.loadResource(resources, catalog.generation, extension.id, path));
 						preparedThemes.set(`${extension.id}\0${index}`, definition);
 					} catch (error) {
 						preparationFailures.set(position, Object.freeze({ extension: projectExtensionDescriptor(extension), error }));

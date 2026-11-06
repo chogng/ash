@@ -247,24 +247,14 @@ impl ExtensionPackages {
         extension_id: &str,
         path: &str,
     ) -> Result<ExtensionResource, ExtensionPackagesError> {
-        if self.snapshot.is_none() {
-            let _ = self.list(ExtensionPackagesReload::Cached);
-        }
-        if generation != self.generation {
-            return Err(ExtensionPackagesError::GenerationConflict);
-        }
-        let extension = self
-            .discovered
-            .get(extension_id)
-            .ok_or(ExtensionPackagesError::NotFound)?;
+        let package = self.resource_package(generation, extension_id)?;
         let relative_path = validate_relative_path(path)?;
         let key = relative_path
             .iter()
             .map(|segment| segment.to_string_lossy())
             .collect::<Vec<_>>()
             .join("/");
-        let bytes = extension
-            .package
+        let bytes = package
             .file(&key)
             .ok_or(ExtensionPackagesError::ResourceNotFound)?
             .to_vec();
@@ -272,6 +262,36 @@ impl ExtensionPackages {
             mime_type: mime_type(&relative_path),
             bytes,
         })
+    }
+
+    /// Collects a small theme and its includes from the same frozen package.
+    /// The caller retains theme validation and can read resources individually
+    /// when the include chain cannot be bundled within the response budget.
+    pub fn color_theme_sources(
+        &mut self,
+        generation: u64,
+        extension_id: &str,
+        path: &str,
+    ) -> Result<Option<Vec<(String, String)>>, ExtensionPackagesError> {
+        let package = self.resource_package(generation, extension_id)?;
+        Ok(super::theme::color_theme_sources(package, path))
+    }
+
+    fn resource_package(
+        &mut self,
+        generation: u64,
+        extension_id: &str,
+    ) -> Result<&ExtensionPackageSnapshot, ExtensionPackagesError> {
+        if self.snapshot.is_none() {
+            let _ = self.list(ExtensionPackagesReload::Cached);
+        }
+        if generation != self.generation {
+            return Err(ExtensionPackagesError::GenerationConflict);
+        }
+        self.discovered
+            .get(extension_id)
+            .map(|extension| extension.package.as_ref())
+            .ok_or(ExtensionPackagesError::NotFound)
     }
 
     fn scan(

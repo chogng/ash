@@ -132,11 +132,14 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 
 	private async migrate(generation: number): Promise<void> {
 		const workspace = this.workspace();
+		const legacy = await this.legacy.list();
+		this.assertCurrentWorkspace(generation);
+		// The durable catalog is only needed to reconcile drafts that still need migration.
+		if (legacy.length === 0) return;
+
 		const records = await this.backups.list(workspace.id);
 		this.assertCurrentWorkspace(generation);
 		const existing = new Map(records.map(record => [record.content.resource.toString(), record]));
-		const legacy = await this.legacy.list();
-		this.assertCurrentWorkspace(generation);
 		for (const backup of legacy) {
 			const content = serialize(backup);
 			const stored = existing.get(backup.resource.toString());

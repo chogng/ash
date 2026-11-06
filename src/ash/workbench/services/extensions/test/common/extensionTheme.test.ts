@@ -49,6 +49,29 @@ test('loads extension publisher metadata and direct token styles through package
 	assert.deepEqual(definition.semanticTokenColors, { comment: { foreground: '#6272a4', fontStyle: '' }, variable: { fontStyle: '' } });
 });
 
+test('loads packaged theme and inherited token rules with one source request', async () => {
+	const { loadExtensionTheme, loadPackagedExtensionTheme } = await import('../../common/extensionTheme.js');
+	const sources = [
+		{ path: 'themes/child.json', source: '{ "include": "./base.json", "colors": { "editor.background": "#123456", }, }' },
+		{ path: 'themes/base.json', source: '// inherited\n{ "semanticTokenColors": { "variable": "#abcdef", "comment": "#012345" } }' },
+	];
+	const contribution = { id: 'Sample', label: 'Sample', uiTheme: 'vs-dark', path: 'themes/child.json' };
+	const requests: unknown[] = [];
+	const api: IExtensionApi = {
+		list: async () => ({ generation: 7, diagnostics: [], extensions: [] }),
+		resources: new ExtensionResourceLoaderService(async () => { throw new Error('Unexpected resource request'); }),
+		readColorThemeSources: async request => { requests.push(request); return sources; },
+	};
+	const read = async () => { throw new Error('Unexpected individual theme read'); };
+	const observed: string[] = [];
+	const bundled = await loadPackagedExtensionTheme(api, 7, 'ash.sample', contribution, 0, read, path => observed.push(path));
+	const individual = await loadExtensionTheme(async path => new TextEncoder().encode(sources.find(source => source.path === path)!.source), 'ash.sample', contribution, 0);
+	assert.deepEqual(bundled, individual);
+	assert.deepEqual(Object.keys(bundled.semanticTokenColors!), ['variable', 'comment']);
+	assert.deepEqual(observed, sources.map(source => source.path));
+	assert.deepEqual(requests, [{ generation: 7, extensionId: 'ash.sample', path: 'themes/child.json' }]);
+});
+
 test('rejects invalid token colors and font styles before a theme becomes active', () => {
 	assert.throws(
 		() => parseExtensionTheme({ semanticTokenColors: { comment: { foreground: 'green' } } }, 'extension-ash-demo-one', 'ash.demo', 'Demo', 'vs-dark', 'theme test'),

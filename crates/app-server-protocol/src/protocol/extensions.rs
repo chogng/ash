@@ -135,6 +135,20 @@ pub struct ExtensionResourceOpenResult {
     pub resource: ResourceMetadataResult,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtensionColorThemeSourceDto {
+    pub path: String,
+    pub source: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtensionColorThemeReadResult {
+    /// The bounded include chain, or null when it must be read through the resource API.
+    pub sources: Option<Vec<ExtensionColorThemeSourceDto>>,
+}
+
 #[cfg(test)]
 #[path = "extensions_tests.rs"]
 mod tests;

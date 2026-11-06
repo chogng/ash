@@ -103,7 +103,7 @@ test('Desktop reopens an authorized workspace after its backend stops', { tag: [
 		const file = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 		await expect(file).toHaveCount(1);
 		await file.dblclick();
-		await expect(page.locator('.stanza-editor-line-text').first()).toContainText('const value = 1;');
+		await expect(page.getByRole('tabpanel', { name: 'main.ts', exact: true })).toContainText('const value = 1;');
 	} finally {
 		try {
 			await desktop?.close();

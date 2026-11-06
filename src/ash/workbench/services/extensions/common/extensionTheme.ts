@@ -13,6 +13,7 @@ import { colorThemeSchema } from '../../themes/common/colorThemeSchema.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { URI } from '../../../../base/common/uri.js';
 import type { ExtensionSourceKind } from './extensionService.js';
+import type { IExtensionApi } from '../../../../platform/extensions/common/extensionApi.js';
 
 /** Only the development host publishes checkout locations, independently of installed packages. */
 export function getDevelopmentThemeLocation(
@@ -102,20 +103,38 @@ function themeFromDocument(document: ColorThemeDocument, id: string, extensionId
 
 /** Reads one manifest theme and its package-relative resources through the caller's extension resource owner. */
 export async function loadExtensionTheme(
-	read: (path: string) => Promise<Uint8Array>,
+	read: (path: string) => Promise<string | Uint8Array>,
 	extensionId: string,
 	contribution: ExtensionThemeContribution,
 	index: number,
 ): Promise<ExtensionThemeDefinition> {
 	const document = await loadColorThemeDocument(contribution.path, async resource => {
-		const bytes = await read(resource);
-		const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+		const source = await read(resource);
+		const text = typeof source === 'string' ? source : new TextDecoder('utf-8', { fatal: true }).decode(source);
 		return extensionThemeDocument(parseJsonc(text, `Extension '${extensionId}' theme '${resource}'`));
 	});
 	// Includes can compose individually valid documents beyond the single-theme
 	// budget. Check that aggregate bound without reparsing its validated fields.
 	if (JSON.stringify(document).length > 1_048_576) throw new Error(localize('theme.documentTooLarge', 'Theme exceeds the 1 MiB document limit'));
 	return themeFromDocument(document, extensionWorkbenchThemeId(extensionId, contribution.id, index), extensionId, contribution.label, contribution.uiTheme, `Extension '${extensionId}' theme '${contribution.path}'`);
+}
+
+/** Uses the package snapshot for I/O while sharing the editable theme's JSONC and merge rules. */
+export async function loadPackagedExtensionTheme(
+	api: IExtensionApi,
+	generation: number,
+	extensionId: string,
+	contribution: ExtensionThemeContribution,
+	index: number,
+	read: (path: string) => Promise<Uint8Array>,
+	onRead?: (path: string) => void,
+): Promise<ExtensionThemeDefinition> {
+	const sources = await api.readColorThemeSources?.({ generation, extensionId, path: contribution.path });
+	const byPath = sources && new Map(sources.map(({ path, source }) => [path, source]));
+	return loadExtensionTheme(async path => {
+		onRead?.(path);
+		return byPath?.get(path) ?? read(path);
+	}, extensionId, contribution, index);
 }
 
 /** Ignore publisher metadata before the resource owner validates the external document.

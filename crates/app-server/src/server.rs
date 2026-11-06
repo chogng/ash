@@ -4271,6 +4271,9 @@ impl AppServer {
             Some(ClientMethod::ExtensionResourceOpen) => self
                 .extension_processor()
                 .extension_resource_open(connection, &request.params),
+            Some(ClientMethod::ExtensionColorThemeRead) => self
+                .extension_processor()
+                .extension_color_theme_read(&request.params),
             Some(ClientMethod::ExtensionHostActivate) => self
                 .extension_host_processor()
                 .extension_host_activate(connection, &request.params),

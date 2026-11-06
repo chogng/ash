@@ -11,6 +11,7 @@ mod package;
 mod packages;
 mod resource;
 mod source;
+mod theme;
 
 pub use packages::ExtensionDescriptor;
 pub use packages::ExtensionDiagnostic;

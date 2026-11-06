@@ -1095,6 +1095,10 @@ use crate::protocol::extension_items::ExtensionItemsResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionCatalogReloadDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extensions::ExtensionColorThemeReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extensions::ExtensionColorThemeSourceDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionDiagnosticCodeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionDiagnosticDto;
@@ -4880,6 +4884,11 @@ client_methods! {
         response: ExtensionResourceOpenResult,
         serialization: ResourceExclusive("extensionId"),
     },
+    ExtensionColorThemeRead => "extensions/colorTheme/read" {
+        params: ExtensionResourceOpenParams,
+        response: ExtensionColorThemeReadResult,
+        serialization: ResourceExclusive("extensionId"),
+    },
     ExtensionHostStart => "extensionHost/start" {
         params: ExtensionHostStartParams,
         response: ExtensionHostSnapshotDto,
@@ -7044,6 +7053,8 @@ typescript_bindings! {
     ExtensionListResult,
     ExtensionResourceOpenParams,
     ExtensionResourceOpenResult,
+    ExtensionColorThemeReadResult,
+    ExtensionColorThemeSourceDto,
     ExtensionHostReconcileModeDto,
     ExtensionHostReconcileParams,
     ExtensionHostStartParams,

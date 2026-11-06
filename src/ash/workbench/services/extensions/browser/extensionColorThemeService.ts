@@ -13,6 +13,7 @@ import {
 	extensionWorkbenchThemeId,
 	getDevelopmentThemeLocation,
 	loadExtensionTheme,
+	loadPackagedExtensionTheme,
 } from '../common/extensionTheme.js';
 
 interface StartupColorThemes {
@@ -123,7 +124,6 @@ export class ExtensionColorThemeService extends Disposable {
 			const sourceResources = new Map<string, Promise<Uint8Array>>();
 			const readPackage = (path: string): Promise<Uint8Array> => {
 				this.assertNotDisposed();
-				if (packageRoot) sourceFiles.add(URI.joinPath(packageRoot, path).toString());
 				let bytes = resources.get(path);
 				if (!bytes) {
 					bytes = this.api.resources.readExtensionResourceBytes({ generation: catalog.generation, extensionId: extension.id, path });
@@ -157,7 +157,11 @@ export class ExtensionColorThemeService extends Disposable {
 								// Resolve the whole theme again so checkout files and package includes never mix.
 							}
 						}
-						return createExtensionWorkbenchColorTheme(await load(readPackage));
+						const definition = await loadPackagedExtensionTheme(this.api, catalog.generation, extension.id, contribution, index, readPackage, path => {
+							this.assertNotDisposed();
+							if (packageRoot) sourceFiles.add(URI.joinPath(packageRoot, path).toString());
+						});
+						return createExtensionWorkbenchColorTheme(definition);
 					}
 				});
 			}

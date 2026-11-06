@@ -5,6 +5,8 @@ use super::resources_processor::resource_rpc_error;
 use super::result;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::extensions::ExtensionCatalogReloadDto;
+use ash_app_server_protocol::protocol::extensions::ExtensionColorThemeReadResult;
+use ash_app_server_protocol::protocol::extensions::ExtensionColorThemeSourceDto;
 use ash_app_server_protocol::protocol::extensions::ExtensionDiagnosticCodeDto;
 use ash_app_server_protocol::protocol::extensions::ExtensionDiagnosticDto;
 use ash_app_server_protocol::protocol::extensions::ExtensionDto;
@@ -110,6 +112,24 @@ impl<'a> ExtensionRequestProcessor<'a> {
                 size: metadata.size,
                 sha256: metadata.sha256,
             },
+        })
+    }
+
+    pub(super) fn extension_color_theme_read(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ExtensionResourceOpenParams = decode(params)?;
+        let sources = self
+            .extensions
+            .lock()
+            .map_err(|_| RpcError::new(-32000, AppServerErrorName::ServerOverloaded))?
+            .color_theme_sources(params.generation, &params.extension_id, &params.path)
+            .map_err(extension_catalog_error)?;
+        result(&ExtensionColorThemeReadResult {
+            sources: sources.map(|sources| {
+                sources
+                    .into_iter()
+                    .map(|(path, source)| ExtensionColorThemeSourceDto { path, source })
+                    .collect()
+            }),
         })
     }
 }
