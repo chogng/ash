@@ -3,6 +3,7 @@
   "include": [
     "../../src/typings/css.d.ts",
     "../../src/typings/editContext.d.ts",
+    "../../src/typings/snapshotView.d.ts",
     "../../src/ash/**/common/**/*.ts",
     "../../src/ash/**/browser/**/*.ts",
     "../../src/ash/**/electron-browser/**/*.ts"
