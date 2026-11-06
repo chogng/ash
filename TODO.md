@@ -18,26 +18,7 @@
 - [ ] **扩展与工具运行时去 Node** · 逐项核对扩展、语言服务器及 Electron run-as-Node 的消费者，将已需能力迁到 Rust、Rust/V8、浏览器 Worker 或原生程序。保留作者契约、权限、调试和资源回收语义；无法等价支持的 Node API 依赖须明确迁移或支持范围，不能通过兼容层继续隐式启动 Node。
 - [ ] **Rust 产品宿主替换 Electron／Node 启动链** · 闭合窗口、浏览器嵌入、系统集成、原生 IPC、更新、打包和跨平台生命周期，再替换过渡宿主。日志等 Rust 基础模块由 Rust 宿主直接拥有；过渡期内部 helper 随之退出。验收默认产品启动与主要工作流不加载或启动 Node，不能以仍需 Electron Main 的实现宣称完成。
   - 内置浏览器按基础网页浏览验收：打开网页、站内跳转、前进／后退、刷新，以及常见网页的输入和登录。Agent 浏览器自动化和 Electron 专用调试集成不作为退场前置。外部网页使用独立的浏览视图和存储分区，与 Ash 工作台的认证及宿主 IPC 隔离。普通浏览器中的 Ash 继续走独立 Web 入口。
-  - Windows Rust 预览可选 `ASH_NATIVE_DESKTOP_VIEW=composition`，由 Rust 持有 DirectComposition 视觉树。125% 显示缩放下已验证真实工作台渲染、鼠标点击、顶栏拖动、右边缘缩放和文件保存；编辑器采样区域与子窗口版逐像素一致。三个窗口按钮已通过 Win32 命中与鼠标操作实测，Windows 11 23H2 悬停最大化按钮仍未弹出贴靠布局。切换默认宿主前须补齐贴靠、系统无障碍、输入与缩放矩阵验收。实机记录在 `.build/ash-native-gpu-probe/composition-comparison/validation.json` 和 `.build/ash-native-gpu-probe/native-caption/validation.json`。
-  - 独立 AppWindow 原型已在 Windows 11 23H2、125% 缩放下把系统按钮合入真实 Ash 工作台。系统贴靠浮层和三个按钮的 UI Automation 识别均已验证。移除旧自绘按钮的鼠标消息拦截后，系统按钮的最小化、最大化、还原和关闭也已通过实机测试。并入正式宿主前须接入标题栏布局对系统保留区和高度的动态更新，并闭合 Windows App Runtime 打包与缺失时的启动策略。本机 bootstrapper 返回 `0x80670016`，原型通过系统的动态包依赖加载已安装的 1.8 运行时。实机截图在 `.build/ash-native-gpu-probe/appwindow-caption/`，按钮操作记录在 `.build/ash-native-gpu-probe/appwindow-caption-actions/validation.json`。
 - [ ] **Rust 前端计算与渲染演进** · 沿真实 DOM 更新、布局、文本／差异计算和渲染调度热点选择 Rust／WASM 等切片，以匹配负载测量输入到可见更新、帧时间和内存。保持模型／编辑历史唯一 owner，覆盖 IME、选区、焦点、键盘和无障碍；现有 [WebGPU 渲染任务](#多文件审阅--webgpu) 按其独立范围验收，不把引擎 GPU 合成或 Rust 代码存在当作渲染优化完成。
-
-  - composition 开发模式复用 WebView2 工作台顶栏，并由 AppWindow 保留系统窗口按钮。125% 实测鼠标可打开搜索和应用菜单、隐藏和恢复主侧栏、拖动空白区并最大化，悬停最大化按钮可见贴靠布局。跨屏 DPI、键盘和系统无障碍仍待验收。记录在 `.build/ash-native-gpu-probe/workbench-system-titlebar/`。
-
-## 窗口缩放布局 · Windows 验收
-
-- [ ] **验收** · 在 Windows 显示缩放 100%、125%、150%、200% 下，分别检查 IDE 与 Agents：连续拖动四边和四角、往返缩放、最大化后恢复；标题栏左右图标应保持相对窗口边缘的位置，按钮不得抖动、重叠或被裁切。再切换应用界面缩放，检查底部状态栏和右边缘是否出现 1px 裁切。
-- [ ] **验收** · 将编辑器和会话分别弹出到辅助窗口，重复上述缩放与最大化恢复；检查编辑内容、状态栏与根容器边界对齐，切换紧凑模式后菜单、键盘操作和焦点恢复正常。记录 Windows 版本、显示缩放、应用缩放、窗口类型及复现步骤；验收通过后移除此节。
-
-同步 resize 已收至共享布局服务；辅助窗口已补齐布局前后阶段，根容器统一保留小数尺寸。macOS 已通过 268 项定向单测、2 项原生回归和 3 个真实窗口场景；Agents 106 帧采样无布局滞后，IDE 113 帧图标位置稳定。macOS 本地证据在 `.build/ash-playwright-mcp/titlebar-resize/foundation-fix/validation.json`。
-
-2026-11-03 Windows 11 23H2（22631）实机验收未通过。IDE 主窗在 100%、125%、150%、200% 连续拖动四边和四角时均测到右侧标题栏按钮短时偏移。最大化、恢复及应用缩放 0、+1、−1 的稳定状态下，主窗与原生客户区对齐。辅助编辑器在 125% 的右边和底边、150% 的右边、200% 的底边各出现 1 个物理像素的越界。紧凑模式键盘切换和焦点恢复通过，菜单和 Agents 会话弹窗仍待验收。复现步骤、采样日志和 IDE 录像索引见 [Windows 验收记录](.build/ash-playwright-mcp/windows-resize/validation.json)。
-
-主窗修复复测（GPU 开启）。旧原生尺寸对根容器的限制已收窄为一个物理像素。125% 完整自托管场景通过，1,782 帧未发现按钮偏移，松手后及应用缩放 0、+1、−1 均与 Win32 客户区对齐。150% 仍有右侧标题栏按钮距边缘的偏移，稳定状态通过。100% 和 200% 的界面隔离场景通过。继续验证 150% 标题栏边距、辅助窗物理边界及 Agents 会话弹窗。见 [125% 日志](.build/ash-playwright-mcp/windows-resize/ide-125-gpu-final.log) 和 [150% 日志](.build/ash-playwright-mcp/windows-resize/ide-150-gpu-final.log)。
-
-2026-11-05 在同一 Windows 11 23H2 x64 主机复测 125%。将测试窗口移出 Windows Shell 浮层覆盖区后，IDE 主窗与辅助编辑器共采样 2,876 帧原生拖拽，布局断言、最大化恢复和辅助编辑器的紧凑模式键盘切换均通过。场景退出清理报 `taskkill` 拒绝访问，复查时该 PID 已退出。复验范围和退出错误见 `.build/todo-local-acceptance-20261105/resize-ide-125-clear-shell.log`。
-
-同一主机在 150%、GPU 合成开启时再次复现 IDE 主窗标题栏右侧短时偏移。原生拖拽 1,187 帧中有 67 帧违反边距断言，样本中偏移约 1.5 个物理像素。松手后的客户区、最大化恢复和应用缩放断言通过。日志位于 `.build/todo-local-acceptance-20261105/resize-ide-150-gpu.log`。
 
 ## Connectors 面板 · 点击后窗口无响应
 
@@ -52,6 +33,7 @@
 
 - [ ] **并行开发** · `/team develop` 已有持久化和冻结工作树绑定，仍缺专用运行时、调度、review/check 执行、RPC/UI 和 SCM 落地。实现前该入口返回不可用。范围见 [Workflows](crates/ext/workflows/README.md)。
 - [ ] **复核 · 浏览器集成中的 scrollbar 点击偶发失败** · 2026-10-08 完整集成 840 项通过、1 项失败，未修改的基线重复 10 次出现 5 次相同失败。调查时保留现有断言。见 [main 集成交接记录](docs/archive/ash-main-handoff-2026-10-08.md#本次实际验证)。
+      2026-11-06 在 Windows 11 23H2 x64、`bd00f5e926` 使用 Chromium 复跑编辑器滚动条的显示尺寸、滚轮和轨道点击、箭头点击和长按三条用例各 10 轮，30/30 通过。历史 macOS 记录没有具体用例名，仍待复核原失败。日志位于 `.build/todo-local-acceptance-20261106/scrollbar-retry.log`。
 
 ## Rust 函数级增量编译
 
@@ -92,7 +74,7 @@
 
 - [ ] **Sessions contribution 对齐余项** · 多对话会话的目录切换还需跨 Thread 原子提交执行目标并保留各自的工作区。远程和 Provider 会话还需对接其拥有方的目录选择和授权契约。列表撤销通知需先由归档、分组和筛选各自提供可撤销操作。常驻列表提示和存储清理提示分别缺少对应的引导和清理建议生产方。
 
-- [ ] **New Environment · Cloud 与 WSL 环境变量** · Cloud 需要可路由的 Sessions provider 与目标发现和创建契约。Windows 实机的 WSL 首次连接已通过，仍需验证保存的环境变量到达 WSL 会话启动的命令。
+- [ ] **New Environment · Cloud** · 需要可路由的 Sessions provider 与目标发现和创建契约。
 
 ### Artifact Integrations
 
@@ -140,7 +122,6 @@
 
 ## Desktop 启动性能 · TODO
 
-- [ ] **带文件启动的首次编辑** · 全局截图移到主进程并移除 Snapshot 的启动激活后，同提交 Windows 打包对照的工作台恢复中位数从 1329 降至 1164 毫秒，首次编辑生效从 1530 升至 1660 毫秒。侧栏恢复等待从 351 降至 137 毫秒，同步窗格构建与输入重叠仍待定位。沿首文件绘制、首次输入和窗格构建的主线程时序拆分实际工作，复测首编辑、写盘和资源管理器可用。原始数据在 `.build/startup-memory-20261106/desktop-snapshot-native-timed-ab.json`。
 - [ ] **Windows 首启** · Setup 已预置后端包，本地 Code 工作台已拆分协议协商和服务就绪。冷启动复用安装时的 Electron 验证结果，扩展和语言服务在启动子进程时仍校验文件摘要。打包版已授权工作区各五轮，身份检查中位数从 647 降至 347 毫秒，目录准备从 1.11 降至 0.73 秒，端口到完整初始化从 1.54 降至 0.93 秒，启动到首次保存从 5.53 降至 4.78 秒。Windows 打包已预先合并主进程模块。原生安装对照各一次，主进程应用模块加载从 4.14 降至 1.46 秒。重新编译 Setup 后的原生新安装验证中，首个窗口在 2.95 秒创建，空工作台在 8.75 秒就绪，之后打开新工作区到首次保存为 6.34 秒。后续已并行启动渲染端连接和贡献注册，并将远程 Agent Host 实现和探测移出初始加载。同一路径的打包版对照使用预置配置并逐轮重启后端，各五轮首个命令中位数从 2.22 降至 2.12 秒。新配置对照各两轮，改动后首个命令为 4.07–4.27 秒，其中端口到完整初始化为 2.57–2.66 秒。本地 F1 和原生目录选择已从完整 `initialize` 中解耦。暂停初始化时验证了选择目录，恢复后在原窗口授权和保存。新版 Setup 原生首装一轮，首窗 2.88 秒、F1 搜到打开文件夹 5.53 秒、App Server 完整初始化 8.13 秒、工作台恢复 9.16 秒。剩余工作是缩短首次开窗后的本地贡献加载和后台冷初始化。该轮贡献导入耗时 1.92 秒，端口到完整初始化耗时 3.22 秒。原始数据在 `.build/startup-trace/windows-installed-20261105/` 的 `ready-{baseline,candidate,native-install}.json`、`empty-native-{modules,bundle}-probe.json`、`empty-final-native.json`、`renderer-progressive-matched{,-fresh}.json` 和 `local-startup-native.json`。
 - [ ] **评估** · 基于已采集的入口清单和四组 CPU 证据，验证选定语言资源的惰性加载生命周期；候选需比较静态 JS、首次功能成本及四组重复启动，不凭 87.6% 静态语言资源占比宣称启动收益。
 - [ ] **复核** · 旧启动诊断的部分 F1 失败仍未复现、未归因。当前 macOS 激活原生窗口的 F1／命令列表／Escape 焦点恢复回归已通过；名义 hidden 对照在观测时也实际可见且有焦点，不能据此认定隐藏窗口导致旧故障。保留历史失败产物及新的焦点／键盘到达记录，继续核对旧批次的条件；范围见[启动复核](docs/desktop-startup.md#2026-10-18-f1-本机复核)。
