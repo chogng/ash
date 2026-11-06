@@ -75,7 +75,7 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	const events = { subscribe: () => ({ dispose() { } }) } as IServerEventApi;
 	const configuration = resources.add(new TestConfigurationService());
 	const sessionApi = createDisconnectedAgentSessionService(async operation => { throw new Error(`Unexpected ${operation}`); });
-	const chat = resources.add(new ChatService(modelApi, sessionApi, threadApi, turnApi, changeApi, appServer, events, execution, configuration));
+	const chat = resources.add(new ChatService(modelApi, sessionApi, threadApi, turnApi, changeApi, appServer, events, configuration));
 	const scope = { services: { chat }, identity: (value: string) => value, backendIdentity: (value: string) => value, assertCurrent() { } } as unknown as ISessionProviderScope;
 	const routedChat = routed ? resources.add(new SessionsChatService({ onDidChangeScopes: Event.None, getScopes: () => [scope], getScope: () => scope } as unknown as ISessionProviderScopeService)) : chat;
 	const prompts = skillService ?? { onDidChangeSkills: Event.None, findAgentSkills: async () => [] } as unknown as IPromptsService;
@@ -576,11 +576,11 @@ for (const kind of ['Code', 'Cowork'] as const) {
 	});
 }
 
-test('queued submission cannot dispatch after cancellation during its permission read', async () => {
+test('queued submission cannot dispatch with an already cancelled owner', async () => {
 	const f = fixture('Code'); using resources = f.resources; await f.model.initialize();
-	const pending = new DeferredPromise<Awaited<ReturnType<IAgentExecutionSettingsService['read']>>>(); f.execution.read = () => pending.p;
-	const signal = new AbortController(); const submitting = f.chat.queueTurn({ sessionId: 'session', threadId: 'A', expectedSequence: 1, text: 'Old queue', mode: 'agent', signal: signal.signal });
-	const rejected = assert.rejects(submitting, isCancellationError); signal.abort(); await pending.complete({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }); await rejected; assert.equal(f.queues.length, 0);
+	const signal = new AbortController(); signal.abort();
+	await assert.rejects(f.chat.queueTurn({ sessionId: 'session', threadId: 'A', expectedSequence: 1, text: 'Old queue', mode: 'agent', signal: signal.signal }), isCancellationError);
+	assert.equal(f.queues.length, 0);
 });
 
 test('queue and steering preserve the source-owned idempotency key', async () => {

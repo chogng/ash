@@ -268,7 +268,7 @@ fn ide_desktop_handoff_rejects_invalid_identity_and_accepted_work_without_callin
             command_id: command_id.clone(),
             session_id: session_id.clone(),
             thread_id: thread_id.clone(),
-            directory: root.path().to_string_lossy().into_owned(),
+            directory: Some(root.path().to_string_lossy().into_owned()),
             input: vec![ash_protocol::UserInput::Text {
                 text: "queued task".into(),
             }],

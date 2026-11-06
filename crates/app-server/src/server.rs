@@ -269,6 +269,7 @@ mod terminal_operations;
 #[path = "server/request_processors/testing.rs"]
 mod testing_operations;
 
+mod session_execution_router;
 mod speech_instructions;
 #[cfg(test)]
 mod speech_instructions_tests;
@@ -2485,9 +2486,8 @@ impl AppServer {
             self.combined_dynamic_skill_sources(),
         )?;
         runtime.bind_metrics(self.diagnostics.metrics());
-        let session_sources: Arc<dyn ash_skills_extension::SessionSkillSourceProvider> =
-            Arc::clone(&self.env_runtime_mut().dir_grants)
-                as Arc<dyn ash_skills_extension::SessionSkillSourceProvider>;
+        let session_sources = session_execution_router::SessionExecutionRouter::new(&self.threads)
+            .skills(Arc::clone(&self.env_runtime_mut().dir_grants));
         runtime.bind_session_sources(session_sources)?;
         let mut builder =
             ash_extension_api::ExtensionRegistryBuilder::from_registry(&self.agent_extensions);
@@ -2931,21 +2931,15 @@ impl AppServer {
         expected_ide: Option<&str>,
     ) -> Result<ash_core::StartTurnResult, CoreError> {
         let record = self.threads.thread_catalog_record(thread)?;
-        if let Some(ash_protocol::SessionExecutionTarget::Local { root }) = record.execution_target
+        let route = session_execution_router::SessionExecutionRouter::new(&self.threads)
+            .resolve(&record.session_id)?;
+        if route.validate_turn_host(
+            record.execution_target.as_ref(),
+            self.dir_services.as_deref(),
+        )? && request.expected_sequence == core_api::SequenceExpectation::Any
         {
-            if self
-                .dir_services
-                .as_ref()
-                .is_none_or(|dirs| dirs.root != root)
-            {
-                return Err(CoreError::InvalidInput(
-                    "The session execution directory has changed".into(),
-                ));
-            }
             // A queued admission must not race a directory change after the route check.
-            if request.expected_sequence == core_api::SequenceExpectation::Any {
-                request.expected_sequence = core_api::SequenceExpectation::Exact(record.sequence);
-            }
+            request.expected_sequence = core_api::SequenceExpectation::Exact(record.sequence);
         }
         let mut started = None;
         self.client_host.submit_turn_with_ide(
@@ -2964,6 +2958,17 @@ impl AppServer {
             },
         )?;
         Ok(started.expect("successful admission retains its receipt"))
+    }
+
+    fn resolve_turn_approval_mode(
+        &self,
+        session_id: &SessionId,
+        requested: Option<ash_protocol::ApprovalMode>,
+    ) -> Result<ash_protocol::ApprovalMode, RpcError> {
+        session_execution_router::SessionExecutionRouter::new(&self.threads)
+            .resolve(session_id)
+            .map_err(core_error)?
+            .approval_mode(requested, || self.agent_processor().default_approval_mode())
     }
 
     pub(super) fn submit_workflow(

@@ -435,7 +435,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	async materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal): Promise<IActiveSessionThread> {
+	async materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal, surface?: ISessionCreateOptions['surface']): Promise<IActiveSessionThread> {
 		if (this.isDisposed || signal?.aborted) throw canceled();
 		const materialized = this.materializedSessions.get().get(untitledSessionId);
 		if (materialized) {
@@ -477,7 +477,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 					!('root' in workspace) || workspace.type !== folder.type || workspace.root !== folder.root);
 				const active = await this.createSession(session.title, workspace, session.agent, untitledSessionId, session.providerId, {
 					token: cancellation.token, devContainer: session.devContainer, branchName: session.branchName,
-					additionalFolders, environmentVariables, automaticTitle: session.automaticTitle,
+					additionalFolders, environmentVariables, automaticTitle: session.automaticTitle, surface,
 				}, session.forkSource);
 				if (project && !project.sessionIds.includes(active.session.sessionId)) {
 					// The same draft creation ID recovers this Session if linking needs a retry.

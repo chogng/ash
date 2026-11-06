@@ -180,7 +180,12 @@ fn check_ignore_dispatch_queries_authorized_paths_and_rejects_directory_escape()
         .request_scheduler
         .acquire(
             0,
-            RequestSerializationScope::Global {
+            RequestSerializationScope::Repository {
+                common_dir: server
+                    .git_runtime_service()
+                    .unwrap()
+                    .common_dir_for(None)
+                    .unwrap(),
                 access: SerializationAccess::Exclusive,
             },
         )

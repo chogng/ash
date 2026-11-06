@@ -348,7 +348,7 @@ impl AppServer {
                     expected_sequence: snapshot.sequence,
                 },
                 snapshot.thread_id.clone(),
-                approval_mode,
+                Some(approval_mode),
                 ash_protocol::CollaborationMode::Agent,
                 model_selection,
                 reasoning_effort,

@@ -1,5 +1,4 @@
 use super::call;
-use super::initialize;
 use super::server;
 use ash_async_utils::CancellationSource;
 use ash_http_client::HttpClient;
@@ -25,6 +24,7 @@ impl HttpClient for NoHttp {
 #[test]
 fn symphony_rpc_is_profile_shared_and_retry_uses_one_conversation_and_turn() {
     let root = tempfile::tempdir().unwrap();
+    let profile = tempfile::tempdir().unwrap();
     let path = root.path().join("WORKFLOW.md");
     std::fs::write(
         &path,
@@ -33,14 +33,12 @@ fn symphony_rpc_is_profile_shared_and_retry_uses_one_conversation_and_turn() {
     .unwrap();
     let workflow = Workflow::load(&path).unwrap();
     let store = Arc::new(Store::open(&root.path().join("state.db")).unwrap());
-    let config = Arc::new(ash_config::ConfigStore::open(&root.path().join("config.db")).unwrap());
-    let server = server()
-        .with_config_store(config)
+    let server = super::directory_test_server(profile.path(), root.path())
         .with_symphony_store(Arc::clone(&store), Arc::new(NoHttp));
     let mut first = server.connection();
     let mut second = server.connection();
-    initialize(&server, &mut first);
-    initialize(&server, &mut second);
+    super::initialize_directory_test_connection(&server, &mut first);
+    super::initialize_directory_test_connection(&server, &mut second);
     let configured = call(
         &server,
         &mut first,

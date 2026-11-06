@@ -266,7 +266,7 @@ export interface QueueEnqueueParams extends SessionMutationParams {
 	readonly mode: SessionMode;
 	readonly model?: ModelRef | null;
 	readonly reasoningEffort?: ModelReasoningEffort | null;
-	readonly approvalMode: ApprovalMode;
+	readonly approvalMode?: ApprovalMode;
 	readonly input: AgentInput[];
 }
 

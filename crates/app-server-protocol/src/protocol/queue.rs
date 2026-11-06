@@ -31,7 +31,10 @@ pub struct QueueEnqueueParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub tool_mode: Option<ToolMode>,
-    pub approval_mode: ApprovalMode,
+    /// Omission lets the execution host resolve the Session's default before enqueueing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub approval_mode: Option<ApprovalMode>,
 }
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

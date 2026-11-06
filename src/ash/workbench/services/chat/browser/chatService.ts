@@ -1,4 +1,3 @@
-import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import type { ChatContextUsage, IChatRequestSubmittedEvent, RewriteChatRequestOptions, StartReviewOptions } from '../common/chatService.js';
@@ -61,7 +60,6 @@ export class ChatService extends Disposable implements IChatService {
 		@ITurnChangesApi private readonly turnChangesApi: ITurnChangesApi,
 		@IAppServerApi private readonly appServerApi: IAppServerApi,
 		@IServerEventApi eventApi: IServerEventApi,
-		@IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
@@ -330,12 +328,9 @@ export class ChatService extends Disposable implements IChatService {
 		this.requireSubmissionOwner(options);
 		const epoch = this.connectionEpoch;
 		const generation = this.appServerApi.connectionGeneration;
-		const approvalMode = options.approvalMode ?? (await this.execution.read()).settings.approvalMode;
+		await this.turnApi.enqueue({ commandId: options.commandId ?? commandId('queued-turn'), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, commandInterpretation: options.commandInterpretation, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode: options.approvalMode }, options.signal);
 		if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServerApi.connectionGeneration) throw canceled();
-		this.assertAIEnabled();
-		this.requireSubmissionOwner(options);
-		await this.turnApi.enqueue({ commandId: options.commandId ?? commandId('queued-turn'), sessionId: options.sessionId, threadId: options.threadId, mode: options.mode, commandInterpretation: options.commandInterpretation, model: options.model, reasoningEffort: options.reasoningEffort, input: turnInput(options), approvalMode }, options.signal);
-		if (!this.isDisposed && epoch === this.connectionEpoch) this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: false, requestSequence: options.expectedSequence });
+		this.submitted.fire({ sessionId: options.sessionId, threadId: options.threadId, isNewSession: false, requestSequence: options.expectedSequence });
 	}
 
 	async readQueue(sessionId: SessionId, threadId: ThreadId): Promise<readonly QueuedMessage[]> {

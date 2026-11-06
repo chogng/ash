@@ -471,6 +471,29 @@ pub(crate) fn server() -> AppServer {
     ))))
 }
 
+fn directory_test_server(profile: &std::path::Path, directory: &std::path::Path) -> AppServer {
+    directory_test_server_with_model(
+        profile,
+        directory,
+        Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+    )
+}
+
+fn directory_test_server_with_model(
+    profile: &std::path::Path,
+    directory: &std::path::Path,
+    model: Arc<dyn ModelService>,
+) -> AppServer {
+    crate::open_app_server(
+        crate::AppServerOptions::new(profile)
+            .with_dir_root(directory)
+            .without_built_in_skills()
+            .with_agent_model_service(model),
+        ash_app_server_diff::compute,
+    )
+    .unwrap()
+}
+
 #[derive(Clone)]
 struct CapturingWriter {
     output: Arc<(Mutex<Vec<u8>>, Condvar)>,
@@ -935,6 +958,20 @@ fn initialize_with_capabilities(
     connection: &mut ConnectionState,
     capabilities: serde_json::Value,
 ) {
+    let capabilities = initialize_test_connection(server, connection, capabilities);
+    assert_eq!(capabilities["codebase"], false);
+}
+
+fn initialize_directory_test_connection(server: &AppServer, connection: &mut ConnectionState) {
+    let capabilities = initialize_test_connection(server, connection, serde_json::json!({}));
+    assert_eq!(capabilities["codebase"], true);
+}
+
+fn initialize_test_connection(
+    server: &AppServer,
+    connection: &mut ConnectionState,
+    capabilities: serde_json::Value,
+) -> serde_json::Value {
     let response = call(
         server,
         connection,
@@ -946,8 +983,8 @@ fn initialize_with_capabilities(
         }),
     );
     assert_eq!(response["result"]["capabilities"]["sessions"], true);
-    assert_eq!(response["result"]["capabilities"]["codebase"], false);
     assert_eq!(response["result"]["capabilities"]["updateReplay"], true);
+    response["result"]["capabilities"].clone()
 }
 
 #[test]

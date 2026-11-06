@@ -83,7 +83,7 @@ impl TurnInputContributor for SkillRuntime {
             .session_id()
             .map_or_else(
                 || self.list(crate::SkillCatalogReload::Cached),
-                |session_id| self.list_for_session(session_id),
+                |session_id| self.list_context_for_session(session_id),
             )
             .map_err(ExtensionError::new)?;
         let mut fragments = catalog_prompt(snapshot.as_ref())

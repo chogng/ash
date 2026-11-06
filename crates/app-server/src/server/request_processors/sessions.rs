@@ -7,6 +7,7 @@ use super::core_error;
 use super::decode;
 use super::operations::SessionMutation;
 use super::result;
+use super::session_execution_router::SessionExecutionRoute;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::session::SessionCatalogReadResult;
 use ash_app_server_protocol::protocol::session::SessionCreateParams;
@@ -19,7 +20,6 @@ use ash_app_server_protocol::protocol::session::SessionThreadProjection;
 use ash_app_server_protocol::protocol::session::SessionUnsubscribeParams;
 use ash_protocol::CommandId;
 use ash_protocol::HookEvent;
-use ash_protocol::SessionExecutionTarget;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use core_api::HookEventRequest;
@@ -464,34 +464,10 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                 .validate(&values.0)
                 .map_err(core_error)?;
         }
-        let execution_target = match &params.execution_target {
-            None => None,
-            Some(SessionExecutionTarget::Local { root }) => {
-                let selected = self.dir_services.as_ref().ok_or_else(|| {
-                    core_error(core_api::CoreError::InvalidInput(
-                        "Session execution directory is unavailable".into(),
-                    ))
-                })?;
-                let requested = ash_file_access::Dir::open_local(root).map_err(|error| {
-                    core_error(core_api::CoreError::InvalidInput(error.to_string()))
-                })?;
-                if requested.id() != selected.id {
-                    return Err(core_error(core_api::CoreError::InvalidInput(
-                        "Session execution directory belongs to a different directory runtime"
-                            .into(),
-                    )));
-                }
-                Some(SessionExecutionTarget::Local {
-                    root: selected.root.clone(),
-                })
-            }
-            Some(SessionExecutionTarget::Ssh { .. } | SessionExecutionTarget::Provider { .. }) => {
-                return Err(core_error(core_api::CoreError::InvalidInput(
-                    "Remote Session execution target must be routed through the profile host"
-                        .into(),
-                )));
-            }
-        };
+        let execution_target =
+            SessionExecutionRoute::new(params.surface, params.execution_target.clone())
+                .admit_creation(self.dir_services.as_deref())
+                .map_err(core_error)?;
         let has_worktree_start = params.worktree_start.is_some();
         if has_worktree_start && params.branch_name.is_none() {
             return Err(core_error(core_api::CoreError::InvalidInput(

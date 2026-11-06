@@ -267,7 +267,7 @@ impl QueueStore {
         let encoded = serde_json::to_string(input)?;
         if input.command_id.as_str().len() > 128
             || input.input.is_empty()
-            || input.directory.is_empty()
+            || input.directory.as_ref().is_some_and(String::is_empty)
             || encoded.len() > 1024 * 1024
         {
             return Err(QueueError::Invalid(

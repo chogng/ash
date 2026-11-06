@@ -12,6 +12,7 @@ use super::git_runtime::GitWatcher;
 use super::home_context::HomeContext;
 use super::semantic_index_job::AppServerSemanticIndexMetrics;
 use super::semantic_index_job::SemanticIndexJobController;
+use super::session_execution_router::SessionExecutionRouter;
 use super::switch_mode_tool::SwitchModeToolService;
 use super::symbol_index_runtime::SymbolIndexRuntime;
 use super::update_broker::UpdateBroker;
@@ -651,10 +652,10 @@ impl EnvRuntimeControl {
         let previous_watcher =
             std::mem::replace(&mut runtime.workspace._file_system_watcher, watcher);
         runtime.turn_executor = match context_source {
-            Some(source) => runtime
-                .turn_executor
-                .clone()
-                .with_context_source("codebase", source),
+            Some(source) => runtime.turn_executor.clone().with_context_source(
+                "codebase",
+                SessionExecutionRouter::new(&self.threads).workspace_evidence(source),
+            ),
             None => runtime
                 .turn_executor
                 .clone()
@@ -2726,7 +2727,10 @@ impl AppServer {
             turn_executor: current
                 .turn_executor
                 .clone()
-                .with_harness_context_provider(customizations)
+                .with_harness_context_provider(
+                    SessionExecutionRouter::new(&self.threads)
+                        .harness(customizations, self.home.clone()),
+                )
                 .without_context_source("codebase"),
             workspace: WorkspaceRuntime {
                 _file_system_watcher: file_system_watcher,
@@ -3001,12 +3005,14 @@ impl AppServer {
             _dir_contributions: Some(Arc::clone(&customizations)),
             dir_grants: Arc::clone(&current.dir_grants),
             turn_executor: {
-                let executor = current
-                    .turn_executor
-                    .clone()
-                    .with_harness_context_provider(customizations);
+                let router = SessionExecutionRouter::new(&self.threads);
+                let executor = current.turn_executor.clone().with_harness_context_provider(
+                    router.clone().harness(customizations, self.home.clone()),
+                );
                 match context_source {
-                    Some(source) => executor.with_context_source("codebase", source),
+                    Some(source) => {
+                        executor.with_context_source("codebase", router.workspace_evidence(source))
+                    }
                     None => executor.without_context_source("codebase"),
                 }
             },

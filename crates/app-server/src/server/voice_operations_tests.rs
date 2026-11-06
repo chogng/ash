@@ -413,7 +413,7 @@ fn exercise_voice_core(placement: VoiceCorePlacement) {
             command_id: CommandId::new(proposal["commandId"].as_str().unwrap()).unwrap(),
             session_id: params.session_id.clone(),
             thread_id: params.thread_id.clone(),
-            directory: home.path().to_string_lossy().into_owned(),
+            directory: Some(home.path().to_string_lossy().into_owned()),
             input: vec![
                 ash_protocol::UserInput::Context {
                     source_url: None,

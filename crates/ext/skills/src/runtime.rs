@@ -49,6 +49,15 @@ pub trait DynamicSkillSourceProvider: Send + Sync {
 /// Supplies Session-authorized session-dir Skill roots.
 pub trait SessionSkillSourceProvider: Send + Sync {
     fn snapshot(&self, session_id: &SessionId) -> Result<DynamicSkillSourceSnapshot, String>;
+
+    /// Resolves directory sources for automatic model context. Returning no snapshot also
+    /// omits the runtime's default directory; explicit skill selection uses `snapshot`.
+    fn automatic_snapshot(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Option<DynamicSkillSourceSnapshot>, String> {
+        self.snapshot(session_id).map(Some)
+    }
 }
 
 /// One immutable generation of host-authorized dynamic Skill sources.
@@ -138,6 +147,11 @@ enum SourceKind {
     BuiltIn,
     User,
     Directory,
+}
+
+enum SessionCatalogUse {
+    Explicit,
+    Automatic,
 }
 
 impl SkillRuntime {
@@ -239,6 +253,14 @@ impl SkillRuntime {
             .map(|(_, snapshot)| snapshot)
     }
 
+    pub(crate) fn list_context_for_session(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<Arc<SkillRuntimeSnapshot>, String> {
+        self.session_catalog_for(session_id, SessionCatalogUse::Automatic)
+            .map(|(_, snapshot)| snapshot)
+    }
+
     pub fn bind_session_sources(
         &self,
         provider: Arc<dyn SessionSkillSourceProvider>,
@@ -317,7 +339,8 @@ impl SkillRuntime {
         input: &[UserInput],
         excluded: &[SkillId],
     ) -> Result<Option<ActivatedSkill>, String> {
-        let (catalog, snapshot) = self.session_catalog(session_id)?;
+        let (catalog, snapshot) =
+            self.session_catalog_for(session_id, SessionCatalogUse::Automatic)?;
         let Some(selected) = crate::selector::select(snapshot.as_ref(), input, excluded) else {
             return Ok(None);
         };
@@ -495,17 +518,38 @@ impl SkillRuntime {
         &self,
         session_id: &SessionId,
     ) -> Result<(SkillCatalog, Arc<SkillRuntimeSnapshot>), String> {
+        self.session_catalog_for(session_id, SessionCatalogUse::Explicit)
+    }
+
+    fn session_catalog_for(
+        &self,
+        session_id: &SessionId,
+        purpose: SessionCatalogUse,
+    ) -> Result<(SkillCatalog, Arc<SkillRuntimeSnapshot>), String> {
         let provider = self
             .session_sources
             .lock()
             .map_err(|_| "Session Skill source lock poisoned".to_string())?
             .clone();
         let config = self.config.snapshot()?;
-        let dir_root = self
-            .dir_root
-            .lock()
-            .map_err(|_| "Directory Skill source lock poisoned".to_string())?
-            .clone();
+        let session = match (provider, purpose) {
+            (Some(provider), SessionCatalogUse::Explicit) => Some(provider.snapshot(session_id)?),
+            (Some(provider), SessionCatalogUse::Automatic) => {
+                provider.automatic_snapshot(session_id)?
+            }
+            (None, _) => Some(DynamicSkillSourceSnapshot {
+                generation: 1,
+                roots: Vec::new(),
+            }),
+        };
+        let dir_root = if session.is_some() {
+            self.dir_root
+                .lock()
+                .map_err(|_| "Directory Skill source lock poisoned".to_string())?
+                .clone()
+        } else {
+            None
+        };
         let mut composition = compose_sources(
             &self.built_in_source,
             &config,
@@ -517,13 +561,10 @@ impl SkillRuntime {
                 .map(|provider| provider.snapshot())
                 .transpose()?,
         )?;
-        let session = provider
-            .map(|provider| provider.snapshot(session_id))
-            .transpose()?
-            .unwrap_or(DynamicSkillSourceSnapshot {
-                generation: 1,
-                roots: Vec::new(),
-            });
+        let session = session.unwrap_or(DynamicSkillSourceSnapshot {
+            generation: 1,
+            roots: Vec::new(),
+        });
         for root in session.roots {
             composition.fingerprint.push(SourceFingerprint {
                 id: root.view().id().clone(),

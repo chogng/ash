@@ -126,6 +126,55 @@ fn enqueue(
 }
 
 #[test]
+fn queue_uses_session_approval_defaults_and_replays_the_accepted_mode() {
+    let root = tempfile::tempdir().unwrap();
+    let (server, _) = queued_server(root.path());
+    let config =
+        Arc::new(ash_config::ConfigStore::open(root.path().join("config.sqlite")).unwrap());
+    let server = server.with_config_store(config);
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let update = |id, expected_revision, mode| {
+        json!({"jsonrpc":"2.0","id":id,"method":"config/update","params":{
+            "commandId":format!("set-{mode}"),"expectedRevision":expected_revision,"features":{"queue":true},
+            "execution":{"approvalMode":mode,"commandFileAccess":"readOnly","commandNetworkAccess":"denied"}
+        }})
+    };
+    let response = call(&server, &mut connection, update(2, 0, "auto"));
+    assert!(response.get("error").is_none(), "{response}");
+    let mut accepted = Vec::new();
+    for (id, surface, expected) in [(3, Some("chat"), "manual"), (5, None, "auto")] {
+        let mut create = json!({"commandId":format!("create-{id}"),"title":"Queue route","executionTarget":null});
+        if let Some(surface) = surface {
+            create["surface"] = json!(surface);
+        }
+        let created = call(
+            &server,
+            &mut connection,
+            json!({"jsonrpc":"2.0","id":id,"method":"session/create","params":create}),
+        );
+        let session = &created["result"]["session"]["sessionId"];
+        assert!(session.is_string(), "{created}");
+        let request = json!({"jsonrpc":"2.0","id":id+1,"method":"queue/enqueue","params":{
+            "commandId":format!("enqueue-{id}"),"sessionId":session,"threadId":session,
+            "input":[{"type":"text","text":"queued route"}]
+        }});
+        let response = call(&server, &mut connection, request.clone());
+        let message: queue::QueuedMessage =
+            serde_json::from_value(response["result"].clone()).expect(&response.to_string());
+        assert_eq!(json!(message.request.approval_mode), json!(expected));
+        accepted.push((request, response["result"].clone()));
+    }
+    let response = call(&server, &mut connection, update(7, 1, "manual"));
+    assert!(response.get("error").is_none(), "{response}");
+    for (index, (mut request, result)) in accepted.into_iter().enumerate() {
+        request["id"] = json!(8 + index);
+        let replay = call(&server, &mut connection, request);
+        assert_eq!(replay["result"], result, "{replay}");
+    }
+}
+
+#[test]
 fn queue_is_shared_across_connections_and_uses_the_existing_turn_receipt() {
     let root = tempfile::tempdir().unwrap();
     let (server, _) = queued_server(root.path());
@@ -190,6 +239,95 @@ fn queue_dispatch_survives_connection_close() {
     }
     super::wait_for_latest_turn(&server, &thread, ash_protocol::TurnStatus::Completed);
     drop(runtime);
+}
+
+#[test]
+fn profile_chat_queue_delivers_without_a_directory() {
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("queue.sqlite");
+    let server = server()
+        .with_queue_store(Arc::new(queue::QueueStore::open(&path).unwrap()), None)
+        .unwrap();
+    let mut connection = server.connection();
+    initialize(&server, &mut connection);
+    let created = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{
+            "commandId":"create-chat","title":"Profile Chat","surface":"chat","executionTarget":null
+        }}),
+    );
+    let session = created["result"]["session"]["sessionId"]
+        .as_str()
+        .expect(&created.to_string());
+    let queued = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":3,"method":"queue/enqueue","params":{
+            "commandId":"profile-chat-message","sessionId":session,"threadId":session,
+            "input":[{"type":"text","text":"queued profile message"}]
+        }}),
+    );
+    let message: queue::QueuedMessage =
+        serde_json::from_value(queued["result"].clone()).expect(&queued.to_string());
+    assert_eq!(message.request.directory, None);
+    assert_eq!(
+        message.request.approval_mode,
+        ash_protocol::ApprovalMode::Manual
+    );
+    assert_eq!(message.status, queue::QueueStatus::Pending);
+    let bound = server
+        .threads()
+        .start_thread(
+            &ash_core::NoThreadWorktreeBinder,
+            core_api::StartThreadRequest {
+                command_id: ash_protocol::CommandId::new("bound-code").unwrap(),
+                title: "Directory-bound Code".into(),
+                surface: Some(ash_protocol::SessionSurface::Code),
+                execution_target: Some(ash_protocol::SessionExecutionTarget::Local {
+                    root: root.path().to_owned(),
+                }),
+                branch_name: None,
+                worktree_start: None,
+                agent_id: None,
+                agent: None,
+            },
+        )
+        .unwrap();
+    let wrong_host = call(
+        &server,
+        &mut connection,
+        json!({"jsonrpc":"2.0","id":4,"method":"queue/enqueue","params":{
+            "commandId":"wrong-host-message","sessionId":bound.session_id,"threadId":bound.thread_id,
+            "input":[{"type":"text","text":"must stay in the workspace"}]
+        }}),
+    );
+    assert_eq!(
+        wrong_host["error"]["message"], "InvalidParams",
+        "{wrong_host}"
+    );
+    server.close_connection(connection);
+
+    // Read through a separate database handle before starting the profile worker.
+    let persisted = queue::QueueStore::open(&path).unwrap();
+    assert_eq!(
+        persisted.get(&message.request.command_id).unwrap(),
+        Some(message.clone())
+    );
+    let (directory_server, _) = queued_server(root.path());
+    assert!(!queue::QueueExecutor::accepts(&directory_server, &message));
+    let server = Arc::new(server);
+    let _worker = server.start_queue().unwrap().unwrap();
+    super::wait_for_latest_turn(&server, session, ash_protocol::TurnStatus::Completed);
+    let thread = server
+        .threads()
+        .read_thread(&message.request.thread_id)
+        .unwrap();
+    assert_eq!(thread.turns.len(), 1);
+    assert_eq!(
+        thread.turns[0].approval_mode,
+        ash_protocol::ApprovalMode::Manual
+    );
 }
 
 #[test]

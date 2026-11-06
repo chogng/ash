@@ -74,16 +74,20 @@ fn automation_run_reads_return_current_state_and_reject_missing_or_invalid_ids()
 fn automation_session_deletion_stops_runs_even_before_first_observation() {
     for recorded in [false, true] {
         let dir = tempfile::tempdir().unwrap();
+        let profile = tempfile::tempdir().unwrap();
         let store = Arc::new(AutomationStore::open(&dir.path().join("state.db")).unwrap());
-        let server =
-            super::server_with_model(Arc::new(super::AppServerInteractiveModel::default()))
-                .with_tool_service(
-                    Arc::new(super::AppServerInteractiveTool),
-                    Arc::new(super::ShellTestPolicy),
-                )
-                .with_automation_store(Arc::clone(&store));
+        let server = super::directory_test_server_with_model(
+            profile.path(),
+            dir.path(),
+            Arc::new(super::AppServerInteractiveModel::default()),
+        )
+        .with_tool_service(
+            Arc::new(super::AppServerInteractiveTool),
+            Arc::new(super::ShellTestPolicy),
+        )
+        .with_automation_store(Arc::clone(&store));
         let mut connection = server.connection();
-        initialize(&server, &mut connection);
+        super::initialize_directory_test_connection(&server, &mut connection);
         let mut observed = create_run(&store, dir.path(), AutomationSession::New);
         let deadline = Instant::now() + Duration::from_secs(5);
         while observed.status != AutomationRunStatus::NeedsInput && Instant::now() < deadline {
@@ -293,10 +297,12 @@ fn automation_commands_are_shared_across_connections_and_reject_stale_edits() {
 #[test]
 fn automation_retry_reconciles_the_same_accepted_turn() {
     let dir = tempfile::tempdir().unwrap();
+    let profile = tempfile::tempdir().unwrap();
     let store = Arc::new(AutomationStore::open(&dir.path().join("state.db")).unwrap());
-    let server = server().with_automation_store(Arc::clone(&store));
+    let server = super::directory_test_server(profile.path(), dir.path())
+        .with_automation_store(Arc::clone(&store));
     let mut connection = server.connection();
-    initialize(&server, &mut connection);
+    super::initialize_directory_test_connection(&server, &mut connection);
     let created = call(
         &server,
         &mut connection,

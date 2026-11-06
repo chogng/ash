@@ -911,7 +911,7 @@ impl queue::QueueExecutor for ProfileAppServerRegistry {
     fn ready(&self, message: &queue::QueuedMessage) -> Result<bool, String> {
         let options = ConnectionOptions::new(
             self.host.profile_root(),
-            Some(PathBuf::from(&message.request.directory)),
+            message.request.directory.as_ref().map(PathBuf::from),
             GrantSource::UserConfig,
             self.host.product_services().map(Path::to_path_buf),
         );
@@ -924,7 +924,7 @@ impl queue::QueueExecutor for ProfileAppServerRegistry {
     fn deliver(&self, message: &queue::QueuedMessage) -> Result<queue::Delivery, String> {
         let options = ConnectionOptions::new(
             self.host.profile_root(),
-            Some(PathBuf::from(&message.request.directory)),
+            message.request.directory.as_ref().map(PathBuf::from),
             GrantSource::UserConfig,
             self.host.product_services().map(Path::to_path_buf),
         );
