@@ -96,6 +96,8 @@ pub(crate) struct BackendExecutable {
     pub(crate) path: PathBuf,
     pub(crate) identity: ExecutableIdentity,
     _package_lease: Option<PackageLease>,
+    #[cfg(target_os = "macos")]
+    verified_launch: Option<verified_launch::VerifiedExecutable>,
 }
 
 #[derive(Clone, Copy)]
@@ -146,9 +148,16 @@ impl ProcessRecord {
         if let Some(identity) = &process_start_identity {
             digest.update(identity.as_bytes());
         }
-        let mut executable_identity = binary_identity(
-            &dunce::canonicalize(std::env::current_exe().map_err(io_error)?).map_err(io_error)?,
-        )?;
+        let executable =
+            dunce::canonicalize(std::env::current_exe().map_err(io_error)?).map_err(io_error)?;
+        #[cfg(target_os = "macos")]
+        let verified_digest = verified_launch::receive(&executable)?;
+        #[cfg(not(target_os = "macos"))]
+        let verified_digest: Option<String> = None;
+        let mut executable_identity = match verified_digest {
+            Some(sha256) => identity_from_digest(&executable, sha256)?,
+            None => binary_identity(&executable)?,
+        };
         // The process owns the launch-time binding, even after another installation is selected.
         executable_identity.runtime_binding = crate::runtime::frozen_binding()?;
         executable_identity.runtime_availability = crate::runtime::frozen_availability()?;
@@ -162,9 +171,9 @@ impl ProcessRecord {
     }
 }
 
-pub(crate) fn executable_identity(path: &Path) -> Result<ExecutableIdentity, String> {
+fn executable_identity(path: &Path, file: &mut File) -> Result<ExecutableIdentity, String> {
     let Some(binding) = crate::runtime::binding_for_backend(path)? else {
-        return binary_identity(path);
+        return read_binary_identity(path, file);
     };
     // These checks read different executable images. Complete both before
     // returning the identity used to launch or reuse the daemon.
@@ -174,7 +183,7 @@ pub(crate) fn executable_identity(path: &Path) -> Result<ExecutableIdentity, Str
             let _trace = crate::startup_trace::StartupTrace::enter(trace);
             binding.availability()
         });
-        let identity = binary_identity(path);
+        let identity = read_binary_identity(path, file);
         let availability = match worker {
             Ok(worker) => worker
                 .join()
@@ -189,8 +198,12 @@ pub(crate) fn executable_identity(path: &Path) -> Result<ExecutableIdentity, Str
 }
 
 pub(crate) fn binary_identity(path: &Path) -> Result<ExecutableIdentity, String> {
-    let hash = crate::startup_trace::StartupTrace::span("executable-sha256");
     let mut file = File::open(path).map_err(io_error)?;
+    read_binary_identity(path, &mut file)
+}
+
+fn read_binary_identity(path: &Path, file: &mut File) -> Result<ExecutableIdentity, String> {
+    let hash = crate::startup_trace::StartupTrace::span("executable-sha256");
     let mut digest = Sha256::new();
     let mut buffer = [0; EXECUTABLE_HASH_BUFFER_BYTES];
     loop {
@@ -202,6 +215,10 @@ pub(crate) fn binary_identity(path: &Path) -> Result<ExecutableIdentity, String>
     }
     let sha256 = format!("{:x}", digest.finalize());
     drop(hash);
+    identity_from_digest(path, sha256)
+}
+
+fn identity_from_digest(path: &Path, sha256: String) -> Result<ExecutableIdentity, String> {
     Ok(ExecutableIdentity {
         sha256,
         package_build_id: package_build_id(path)?,
@@ -270,14 +287,25 @@ pub(crate) fn resolve_backend_executable(
     }
     let path = dunce::canonicalize(backend_executable).map_err(io_error)?;
     let package_lease = acquire_package_lease_for_executable(&path).map_err(io_error)?;
-    let identity = executable_identity(&path)?;
+    let mut file = File::open(&path).map_err(io_error)?;
+    #[cfg(target_os = "macos")]
+    let stamp = verified_launch::capture(&path, &file, package_lease.as_ref())?;
+    let identity = executable_identity(&path, &mut file)?;
     if let PackageDigest::Expected(expected) = package_digest {
         identity.verify_package_digest(expected)?;
+    }
+    #[cfg(target_os = "macos")]
+    let verified_launch = stamp.filter(|_| identity.package_build_id.is_some());
+    #[cfg(target_os = "macos")]
+    if let Some(verified) = &verified_launch {
+        verified.check(&path)?;
     }
     Ok(BackendExecutable {
         path,
         identity,
         _package_lease: package_lease,
+        #[cfg(target_os = "macos")]
+        verified_launch,
     })
 }
 
@@ -378,6 +406,9 @@ pub(crate) struct SpawnedBackend {
     child: Option<Child>,
     endpoint: EndpointPaths,
     start_identity: Option<String>,
+    // macOS can identify the proof's peer while the carrier still owns its socket.
+    #[cfg(target_os = "macos")]
+    launch_proof: Option<std::os::unix::net::UnixStream>,
 }
 
 impl SpawnedBackend {
@@ -510,6 +541,8 @@ pub(crate) fn spawn_backend(
             crate::runtime::clear_binding(&mut command);
         }
     }
+    #[cfg(target_os = "macos")]
+    let launch_proof = verified_launch::prepare(&mut command, backend)?;
     detach_command(&mut command)?;
     let spawn = crate::startup_trace::StartupTrace::span("daemon-spawn-command");
     let child = command.spawn().map_err(io_error)?;
@@ -518,8 +551,14 @@ pub(crate) fn spawn_backend(
         child: Some(child),
         endpoint: endpoint.clone(),
         start_identity: None,
+        #[cfg(target_os = "macos")]
+        launch_proof,
     };
     spawned.start_identity = process_start_identity(spawned.child.as_ref().unwrap().id())?;
+    #[cfg(target_os = "macos")]
+    if let Some(proof) = &mut spawned.launch_proof {
+        verified_launch::send(proof, backend)?;
+    }
     Ok(spawned)
 }
 
@@ -760,6 +799,11 @@ fn io_error(error: io::Error) -> String {
 #[cfg(test)]
 #[path = "process_tests.rs"]
 mod tests;
+
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+#[path = "process/verified_launch_macos.rs"]
+mod verified_launch;
 
 #[cfg(windows)]
 #[allow(unsafe_code)]
