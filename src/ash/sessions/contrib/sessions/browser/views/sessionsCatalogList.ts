@@ -2,6 +2,7 @@ import { addDisposableListener, getActiveElement, getWindow, h, scheduleAtNextAn
 import { observeResize } from '../../../../../base/browser/observer.js';
 import { disposableWindowTimeout } from '../../../../../base/browser/scheduler.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
+import { createLoadingSpinner } from '../../../../../base/browser/ui/loadingSpinner/loadingSpinner.js';
 import { appendIcon, getRegisteredIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { ProgressBar } from '../../../../../base/browser/ui/progressbar/progressbar.js';
 import { ScrollableElement } from '../../../../../base/browser/ui/scrollbar/scrollableElement.js';
@@ -58,8 +59,10 @@ export interface SessionsCatalogProject {
 	readonly key: string;
 	readonly title: string;
 	readonly rows: readonly SessionsCatalogRow[];
+	readonly loading: boolean;
 	readonly history?: { readonly label: string; readonly action?: () => void; };
 	readonly onExpand?: () => void;
+	readonly loadMore?: () => void;
 }
 
 interface SessionsCatalogSection {
@@ -175,9 +178,19 @@ export class SessionsCatalogList extends Disposable {
 				: header ? Math.max(0, Math.min(items.length - 1, step)) : (step + items.length) % items.length;
 			items[next]?.focus();
 		}, true));
+		let projectPages: readonly { anchor: HTMLElement; load: () => void; }[] = [];
 		const loadMoreIfNeeded = (retry: boolean): void => {
 			const viewport = scrollable.state;
 			if (!this.visible || !viewport.height) { return; }
+			if (projectPages.length) {
+				const { top, bottom } = scrollable.scrollableElement.getBoundingClientRect();
+				const visiblePages = projectPages.filter(({ anchor }) => {
+					if (!anchor.isConnected) return false;
+					const bounds = anchor.getBoundingClientRect();
+					return bounds.top < bottom && bounds.bottom > top;
+				});
+				for (const { load } of visiblePages) load();
+			}
 			const last = tree.getVisibleElements().at(-1);
 			if (last && tree.isCollapsed(SessionsListTree.id(last))) { return; }
 			if (viewport.maximumTop - viewport.top <= 96) {
@@ -231,6 +244,7 @@ export class SessionsCatalogList extends Disposable {
 			const usedRows = new Set<string>();
 			const usedSections = new Set<string>();
 			const idleProjects: { row: HTMLElement; load: () => void; }[] = [];
+			const nextProjectPages: { anchor: HTMLElement; load: () => void; }[] = [];
 			const chatNode = (entry: SessionsCatalogRow, group: string, groupDropTarget: boolean, parentProject?: string): ObjectTreeElement<HTMLElement> => {
 				// A conversation can be pinned independently and can belong to more than one local project.
 				const rowKey = parentProject ? JSON.stringify([`project:${parentProject}`, entry.id]) : entry.id;
@@ -268,9 +282,13 @@ export class SessionsCatalogList extends Disposable {
 				}
 				row.element.dataset.parentSection = group;
 				row.element.dataset.projectId = project.key;
-				row.update(project.title);
+				row.update(project.title, project.loading);
 				const nodes = project.rows.map(entry => chatNode(entry, group, false, project.key));
 				if (project.onExpand && !collapsed) idleProjects.push({ row: row.element, load: project.onExpand });
+				if (project.loadMore && !collapsed) {
+					// A page can have no visible chats and still have a continuation.
+					nextProjectPages.push({ anchor: nodes.at(-1)?.element ?? row.element, load: project.loadMore });
+				}
 				if (project.history) nodes.push({ element: row.updateHistory(project.history.label, project.history.action) });
 				return {
 					element: row.element, children: nodes, collapsible: true,
@@ -305,6 +323,7 @@ export class SessionsCatalogList extends Disposable {
 			for (const [key] of this.sections) {
 				if (!usedSections.has(key)) this.sections.deleteAndDispose(key);
 			}
+			projectPages = nextProjectPages;
 			tree.setChildren(children);
 			// A restored collapse state is applied during the splice, outside the user collapse event.
 			for (const element of previousVisible) {
@@ -355,6 +374,7 @@ export class SessionsCatalogList extends Disposable {
 class SessionsCatalogProjectRenderer extends SessionListRowRenderer {
 	private readonly label: HTMLElement;
 	private readonly chevron: HTMLElement;
+	private readonly spinner: HTMLSpanElement;
 	private readonly history: HTMLElement;
 	private readonly historyButton: HTMLButtonElement;
 	private readonly historyStatus: HTMLElement;
@@ -376,7 +396,9 @@ class SessionsCatalogProjectRenderer extends SessionListRowRenderer {
 			className: 'ash-chat-navigation-project-chevron',
 			attributes: { 'aria-hidden': 'true' },
 		});
-		leading.append(this.chevron);
+		this.spinner = createLoadingSpinner(document);
+		this.spinner.hidden = true;
+		leading.append(this.chevron, this.spinner);
 		this.setCollapseRenderer(collapsed => this.renderCollapse(collapsed));
 		this._register(addDisposableListener(this.button, 'click', () => toggle()));
 		this._register(addDisposableListener(this.element, 'keydown', event => {
@@ -400,8 +422,11 @@ class SessionsCatalogProjectRenderer extends SessionListRowRenderer {
 		}));
 	}
 
-	update(title: string): void {
+	update(title: string, loading: boolean): void {
 		this.button.title = this.label.textContent = title;
+		this.element.classList.toggle('loading', loading);
+		this.spinner.hidden = !loading;
+		this.button.setAttribute('aria-busy', String(loading));
 	}
 
 	private renderCollapse(collapsed: boolean): void {

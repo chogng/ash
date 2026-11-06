@@ -290,18 +290,25 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		const rows = this.sortRows(project.rows).map(entry => this.toRow(entry, destinations, project.key));
 		const current = this.membership.get(project.key);
 		const history = project.project?.history;
+		const loading = history?.state === 'loading' || (current !== undefined && current.failed === undefined);
 		const retry = current?.failed ? () => {
 			this.membership.delete(project.key);
 			this.membershipVersion.set(this.membershipVersion.get() + 1);
 		} : undefined;
-		const action = history?.state === 'error' || history?.state === 'more' ? history.load : retry;
-		const label = history?.state === 'more' ? localize('sessions.chatList.loadMoreProjectChats', 'Load more project chats')
-			: history?.state === 'error' || retry ? localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry')
-				: history?.state === 'unavailable' ? localize('sessions.chatList.projectChatsOffline', 'Connect to load project chats.')
-					: history?.state === 'idle' || history?.state === 'loading' || (current && !current.sessionIds)
-						? localize('sessions.chatList.loadingProjectChats', 'Loading project chats…')
-						: !rows.length ? localize('sessions.chatList.emptyProject', 'No chats in this project') : undefined;
-		return { key: project.key, title: project.title, rows, history: label ? { label, action } : undefined, onExpand: history?.state === 'idle' ? history.load : undefined };
+		const action = history?.state === 'error' ? history.load : retry;
+		const label = action ? localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry')
+			: history?.state === 'unavailable' ? localize('sessions.chatList.projectChatsOffline', 'Connect to load project chats.')
+				: !rows.length && !loading && (!history || history.state === 'complete')
+					? localize('sessions.chatList.emptyProject', 'No chats in this project') : undefined;
+		return {
+			key: project.key,
+			title: project.title,
+			rows,
+			loading,
+			history: label ? { label, action } : undefined,
+			onExpand: history?.state === 'idle' ? history.load : undefined,
+			loadMore: history?.state === 'more' ? history.load : undefined,
+		};
 	}
 
 	private toRow(entry: ChatListEntry, destinations: readonly { readonly id: string; readonly name: string; }[], parentProject?: string): SessionsCatalogRow {

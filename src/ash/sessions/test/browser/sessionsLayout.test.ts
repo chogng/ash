@@ -239,18 +239,20 @@ suite('sessions browser component', () => {
 		await page.goto('/sessions.html?update&locale=zh-CN');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		const download = page.locator('.ash-sessions-update-status');
+		const spinner = download.locator('.ash-loading-spinner');
 		const account = page.locator('.ash-sessions-activity-host.bottom');
 		await expect(download).toBeHidden();
 		await page.evaluate(() => window.ashSessionsIntegration.setUpdateState('downloading'));
 		await expect(download.locator('.ash-sessions-update-row')).toHaveText('正在下载更新...');
 		await expect(download).toHaveAttribute('role', 'status');
+		await expect(spinner).toHaveCSS('inline-size', '18px');
 		const statusBounds = (await download.boundingBox())!;
 		const accountBounds = (await account.boundingBox())!;
 		expect(Math.abs(statusBounds.y + statusBounds.height - accountBounds.y)).toBeLessThan(1);
 		expect(Math.abs(statusBounds.x - accountBounds.x)).toBeLessThan(1);
 		expect(Math.abs(statusBounds.width - accountBounds.width)).toBeLessThan(1);
 		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('workbench.reduceMotion', 'on'));
-		await expect(download.locator('.ash-sessions-update-spinner')).toHaveCSS('animation-name', 'none');
+		await expect(spinner).toHaveCSS('animation-name', 'none');
 		await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
 		await expect(download).toBeVisible();
 		await page.evaluate(() => window.ashSessionsIntegration.setUpdateState('ready'));
@@ -279,7 +281,7 @@ suite('sessions browser component', () => {
 		await page.goto('/sessions.html?update=ready');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await expect(page.getByRole('button', { name: 'Restart to Update', exact: true })).toBeEnabled();
-		await expect(page.locator('.ash-sessions-update-spinner')).toBeHidden();
+		await expect(page.locator('.ash-sessions-update-status .ash-loading-spinner')).toBeHidden();
 	});
 
 	test('Code New hides the draft title and hands off selection to an existing conversation in Chinese', async function () {

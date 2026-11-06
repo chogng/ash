@@ -496,6 +496,11 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				},
 			}));
 			const pinned = { id: 'pinned', title: 'Pinned project chat', gizmo_id: 'g-p-one' };
+			const firstPage = [pinned, { id: 'one', title: 'First research chat' },
+				...Array.from({ length: 18 }, (_, index) => ({ id: `project-chat-${index}`, title: `Research chat ${index + 2}` }))];
+			const firstPageTitles = firstPage.map(item => item.title);
+			let releaseNextPage!: () => void;
+			const nextPage = new Promise<void>(resolve => { releaseNextPage = resolve; });
 			await page.route('**/service/backend-api/pins?*', route => route.fulfill({ json: [{ item: pinned }] }));
 			const cursors: (string | null)[] = [];
 			let emptyReads = 0;
@@ -503,11 +508,14 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				emptyReads++;
 				return route.fulfill({ json: { items: [], cursor: null } });
 			});
-			await page.route('**/gizmos/g-p-one/conversations?*', route => {
+			await page.route('**/gizmos/g-p-one/conversations?*', async route => {
 				const cursor = new URL(route.request().url()).searchParams.get('cursor');
 				cursors.push(cursor);
-				if (!cursor) return route.fulfill({ json: { items: [pinned, { id: 'one', title: 'First research chat' }], cursor: 'page+two' } });
-				if (cursors.length === 2) return route.fulfill({ status: 503 });
+				if (!cursor) return route.fulfill({ json: { items: firstPage, cursor: 'page+two' } });
+				if (cursors.length === 2) {
+					await nextPage;
+					return route.fulfill({ status: 503 });
+				}
 				return route.fulfill({ json: { items: [{ id: 'one', title: 'First research chat' }, { id: 'two', title: 'Older research chat' }], cursor: null } });
 			});
 			await page.goto(`/chatgptNavigation.html?projects&locale=${locale}&theme=${zh ? 'hcDark' : 'light'}`);
@@ -538,38 +546,44 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(chevron).toBeVisible();
 			await expect(projectIcon).toBeHidden();
 			expect(await toggle.boundingBox()).toEqual(restingBounds);
+			const recentChat = sidebar.getByRole('button', { name: 'Synthetic conversation', exact: true });
+			const recentBounds = (await recentChat.boundingBox())!;
+			await recentChat.hover();
+			const hoverBackground = await recentChat.evaluate(row => getComputedStyle(row).backgroundColor);
 			await toggle.getByText('Research', { exact: true }).click();
 			await expect(research).toBeVisible();
 			const children = sidebar.locator('[data-parent-project="project:g-p-one"] > .ash-chat-navigation-item');
-			await expect(children).toHaveText([pinned.title, 'First research chat', zh ? '加载更多项目聊天' : 'Load more project chats']);
+			await expect(children).toHaveText(firstPageTitles);
 			expect(cursors).toEqual([null]);
-			const recentChat = sidebar.getByRole('button', { name: 'Synthetic conversation', exact: true });
 			const projectChat = children.first();
-			const recentBounds = (await recentChat.boundingBox())!;
 			const projectBounds = (await projectChat.boundingBox())!;
 			expect(projectBounds.x).toBe(recentBounds.x);
 			expect(projectBounds.width).toBe(recentBounds.width);
-			await recentChat.hover();
-			const hoverBackground = await recentChat.evaluate(row => getComputedStyle(row).backgroundColor);
 			await projectChat.hover();
 			await expect(projectChat).toHaveCSS('background-color', hoverBackground);
-			await toggle.hover();
-			const arrow = (await chevron.boundingBox())!;
-			await page.mouse.click(arrow.x + arrow.width / 2, arrow.y + arrow.height / 2);
+			await children.last().scrollIntoViewIfNeeded();
+			await expect(toggle).toHaveAttribute('aria-busy', 'true');
+			await expect(projectIcon).toBeHidden();
+			const ring = projectRow.locator('.ash-loading-spinner');
+			await expect(ring).toBeVisible();
+			await expect(ring).toHaveCSS('inline-size', '16px');
+			await expect(ring).toHaveAttribute('aria-hidden', 'true');
+			await expect(sidebar.locator('.ash-chat-navigation-project-history')).toHaveCount(0);
+			expect(cursors).toEqual([null, 'page+two']);
+			await toggle.press('ArrowLeft');
 			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 			await expect(children).toHaveCount(0);
 			await research.press('Enter');
 			const rows = projects.getByRole('list', { name: zh ? '项目对话' : 'Project conversations' }).getByRole('button');
-			await expect(rows).toHaveText([pinned.title, 'First research chat']);
+			await expect(rows).toHaveText(firstPageTitles);
 			await expect(projects).toHaveAccessibleName('Research');
 			await expect(projects).toBeFocused();
 			await expect(projects.getByRole('heading', { level: 1 })).toHaveCount(0);
 			await expect(page.locator('.ash-sessions-titlebar-page-content .ash-project-titlebar-name')).toHaveText('Research');
-			expect(cursors).toEqual([null]);
 			expect(emptyReads).toBe(0);
-			await projects.getByRole('button', { name: zh ? '加载更多项目聊天' : 'Load more project chats', exact: true }).click();
+			releaseNextPage();
 			await projects.getByRole('button', { name: zh ? '无法加载项目聊天，点击重试' : 'Could not load project chats. Retry', exact: true }).press('Enter');
-			await expect(rows).toHaveText([pinned.title, 'First research chat', 'Older research chat']);
+			await expect(rows).toHaveText([...firstPageTitles, 'Older research chat']);
 			expect(cursors).toEqual([null, 'page+two', 'page+two']);
 			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: zh ? '项目' : 'Projects', exact: true }).click();
 			await expect(research).toBeFocused();

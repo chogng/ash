@@ -16,6 +16,7 @@ import { isWeb } from '../../../base/common/platform.js';
 import { IUpdateService } from '../../../platform/update/common/updateService.js';
 import { IHoverService } from '../../../platform/hover/browser/hoverService.js';
 import { Button } from '../../../base/browser/ui/button/button.js';
+import { createLoadingSpinner } from '../../../base/browser/ui/loadingSpinner/loadingSpinner.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
 import { defaultButtonStyles } from '../../../platform/theme/browser/defaultStyles.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
@@ -63,9 +64,7 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		this._register(contextKeys.createScoped(this.updateStatus)).createKey('sessionsActivityBarFocused', true);
 		const row = h(container.ownerDocument, 'div');
 		row.className = 'ash-sessions-update-row';
-		const spinner = h(container.ownerDocument, 'span');
-		spinner.className = 'ash-sessions-update-spinner';
-		spinner.setAttribute('aria-hidden', 'true');
+		const spinner = createLoadingSpinner(container.ownerDocument, 'large');
 		const label = h(container.ownerDocument, 'span');
 		label.className = 'ash-sessions-update-label';
 		const message = localize('sessions.update.downloading', 'Downloading update...');

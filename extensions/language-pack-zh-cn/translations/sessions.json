@@ -361,7 +361,7 @@
     "sessions.chatgpt.voiceMicrophoneMissing": "没有可用的麦克风音轨。",
     "sessions.chatgpt.voiceHistoryPending": "语音会话尚未保存完成，请刷新后再发送消息。",
     "sessions.chatgpt.historyListFailed": "历史列表刷新失败，当前会话仍可继续。{0}",
-    "sessions.chatgpt.projectHistoryHelp": "从“项目”页面打开项目即可加载其中的对话。按 Tab 移至项目末尾的“加载更多项目聊天”，若加载失败可选择重试。",
+    "sessions.chatgpt.projectHistoryHelp": "在侧栏中，滚动或将焦点移到项目中最后一条已加载的聊天，即可加载更多。若加载失败，请选择重试。在“项目”页面，打开项目即可加载其中的聊天，再按 Tab 移至“加载更多项目聊天”。",
     "sessions.chatList.projectChatsOffline": "恢复连接后即可加载项目聊天。",
     "sessions.chatList.retryProjectChats": "无法加载项目聊天，点击重试",
     "sessions.chatList.loadMoreProjectChats": "加载更多项目聊天",
