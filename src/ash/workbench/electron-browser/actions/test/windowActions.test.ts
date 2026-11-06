@@ -35,7 +35,6 @@ test('desktop dialog and window routes reject malformed requests', async () => {
 		markAgentsWindowInvitationShown: () => { throw new Error('Unused invitation capability'); },
 		releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
 		getTitleBarStyle: () => 'custom',
-		getWindowClientSize: () => undefined,
 		isAdmin: async () => false,
 		performDialogOperation: operation => { operations.push(operation); },
 		pickFolder: async () => undefined, showOpenDialog: async () => ({ canceled: true, filePaths: [] }), openWorkspace: async () => { },

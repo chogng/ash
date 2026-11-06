@@ -18,6 +18,7 @@ import { CodeWindow, type ICodeWindowHandle, type IWindowCreationOptions, type I
 import { createUuid } from '../../../base/common/uuid.js';
 import type { IOpenAgentsWindowOptions } from '../../native/common/nativeHost.js';
 import type { IAgentsWindowHandoffResult } from '../../window/common/window.js';
+import { WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, type IWindowClientSize } from '../../window/common/window.js';
 import type { IOpenConfiguration, IWindowsMainService } from './windows.js';
 import { WINDOW_OPEN_FILES_CHANNEL, WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validateWindowFilesResponse, type IWindowFilesRequest, type WindowFilesResponse } from '../../window/common/window.js';
 import type { ICodeWindow, IWindowBounds, IWindowState } from '../../window/electron-main/window.js';
@@ -298,6 +299,9 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 			if (!parent || parent.isDestroyed()) return;
 			this.getWindowById(parent.id)?.send(AUXILIARY_WINDOW_STATE_CHANGED_CHANNEL, event);
 			this.getWindowById(parent.id)?.send(WINDOW_ALWAYS_ON_TOP_CHANGED_CHANNEL, { windowName: event.windowName, alwaysOnTop: event.state.alwaysOnTop });
+		}));
+		this._register(auxiliaryWindowsMainService.onDidChangeWindowClientSize(({ parentId, event }) => {
+			this.getWindowById(parentId)?.send(WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, event);
 		}));
 	}
 
@@ -608,7 +612,7 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 		for (const [, host] of this.managedWindows) host.failClose(window, message);
 	}
 
-	public perform(source: TWindow, operation: WindowOperation): void | number | boolean | readonly IWorkbenchWindowInfo[] | IAuxiliaryWindowState | Promise<void> {
+	public perform(source: TWindow, operation: WindowOperation): void | number | boolean | readonly IWorkbenchWindowInfo[] | IAuxiliaryWindowState | IWindowClientSize | Promise<void> {
 		const windows = [...this.getWindows(), ...this.managedWindowValues(), ...this.auxiliaryWindowsMainService.getWindows().map(window => window.win)].filter(window => !window.isDestroyed());
 		if (!windows.includes(source)) throw new Error('Workbench window is closed');
 		// Same-renderer editor windows share their owner's IPC route. Resolve only its descendants.
@@ -649,6 +653,10 @@ export class WindowsMainService<TWindow extends IWorkbenchWindow<TWindow>> exten
 				return;
 			case 'getAuxiliaryState':
 				return this.auxiliaryWindowsMainService.getWindowByWebContents(target.webContents as unknown as import('electron').WebContents)!.getState();
+			case 'getClientSize':
+				return operation.windowName === undefined
+					? this.getWindowById(source.id)?.getClientSize()
+					: this.auxiliaryWindowsMainService.getWindowByWebContents(target.webContents as unknown as import('electron').WebContents)?.getClientSize();
 			case 'getZoom':
 				return target.webContents.getZoomLevel();
 			case 'getZoomFactor':

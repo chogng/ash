@@ -1,7 +1,7 @@
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import type { INativeHostApi } from '../../platform/native/common/nativeHost.js';
-import { WINDOW_ZOOM_LEVEL_SETTING, WINDOW_ZOOM_PER_WINDOW_SETTING, type IWindowClientSize } from '../../platform/window/common/window.js';
+import { WINDOW_ZOOM_LEVEL_SETTING, WINDOW_ZOOM_PER_WINDOW_SETTING } from '../../platform/window/common/window.js';
 import { IOpenerService } from '../../platform/opener/common/opener.js';
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import { URI } from '../../base/common/uri.js';
@@ -17,7 +17,7 @@ import { ITitleService } from '../services/title/browser/titleService.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
 import { ILogService } from '../../platform/log/common/log.js';
 import { localize } from '../../nls.js';
-import { addDisposableListener } from '../../base/browser/dom.js';
+import { NativeWindowClientArea } from '../../platform/window/electron-browser/window.js';
 
 /** The renderer owns file completion because it owns every editor group, including moved tabs. */
 export class ElectronWindow extends Disposable {
@@ -142,45 +142,9 @@ export class NativeWindow extends Disposable {
 	}
 
 	/** Constrains the whole Workbench to the native drawable area, including fractional CSS pixels. */
-	public async initialize(container: HTMLElement): Promise<void> {
+	public initialize(container: HTMLElement): Promise<void> {
 		this.assertNotDisposed();
-		const target = container.ownerDocument.defaultView!;
-		const originalWidth = container.style.maxWidth;
-		const originalHeight = container.style.maxHeight;
-		let size: IWindowClientSize | undefined;
-		let revision = 0;
-		let frame: number | undefined;
-		const update = (): void => {
-			if (frame !== undefined || this.isDisposed) return;
-			frame = target.requestAnimationFrame(() => {
-				frame = undefined;
-				const scale = target.devicePixelRatio;
-				// A native sample can lag the viewport. The percentage floor tracks
-				// the containing block immediately and limits rounding correction to
-				// one physical pixel while the next sample is in flight.
-				const floor = `calc(100% - ${1 / scale}px)`;
-				container.style.maxWidth = size ? `max(${size.width / scale}px, ${floor})` : originalWidth;
-				container.style.maxHeight = size ? `max(${size.height / scale}px, ${floor})` : originalHeight;
-			});
-		};
-		const subscription = this.host.onDidChangeWindowClientSize(value => {
-			revision++;
-			size = value;
-			update();
-		});
-		this._register(toDisposable(() => {
-			subscription.dispose();
-			if (frame !== undefined) target.cancelAnimationFrame(frame);
-			container.style.maxWidth = originalWidth;
-			container.style.maxHeight = originalHeight;
-		}));
-		this._register(addDisposableListener(target, 'resize', update));
-		// Subscribe before reading so a late initial reply cannot replace a newer resize.
-		const currentRevision = revision;
-		const initial = await this.host.getWindowClientSize();
-		if (this.isDisposed || revision !== currentRevision) return;
-		size = initial;
-		update();
+		return this._register(new NativeWindowClientArea(container, this.host)).ready;
 	}
 
 	private async applyConfiguredZoom(): Promise<void> {

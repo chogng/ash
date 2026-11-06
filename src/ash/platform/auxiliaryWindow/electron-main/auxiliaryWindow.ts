@@ -1,7 +1,8 @@
 import type { EventEmitter as NodeEventEmitter } from 'node:events';
 import type { BrowserWindow } from 'electron';
-import { Emitter } from '../../../base/common/event.js';
-import type { IAuxiliaryWindowState } from '../../window/common/window.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import type { IAuxiliaryWindowState, IWindowClientSize } from '../../window/common/window.js';
+import { WindowClientArea } from '../../window/electron-main/window.js';
 import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
 
 export interface IAuxiliaryWindow {
@@ -10,6 +11,7 @@ export interface IAuxiliaryWindow {
 	readonly win: BrowserWindow;
 	readonly lastFocusTime: number;
 	getState(): IAuxiliaryWindowState;
+	getClientSize(): IWindowClientSize | undefined;
 }
 
 /** The renderer owns the document; Main owns the lifetime of its Electron window. */
@@ -17,6 +19,8 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 	public readonly id: number;
 	private readonly stateChanged = this._register(new Emitter<void>());
 	readonly onDidChangeState = this.stateChanged.event;
+	private readonly clientArea: WindowClientArea;
+	readonly onDidChangeClientSize: Event<IWindowClientSize>;
 	// Main and auxiliary windows compare focus times on the same process clock.
 	private _lastFocusTime = performance.now();
 
@@ -27,6 +31,11 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 	constructor(public readonly win: BrowserWindow, public readonly parentId: number) {
 		super();
 		this.id = win.id;
+		this._register(toDisposable(() => {
+			if (!win.isDestroyed()) win.destroy();
+		}));
+		this.clientArea = this._register(new WindowClientArea(win));
+		this.onDidChangeClientSize = this.clientArea.onDidChange;
 		const handleFocus = (): void => { this._lastFocusTime = performance.now(); };
 		win.on('focus', handleFocus);
 		const events: NodeEventEmitter = win;
@@ -40,12 +49,12 @@ export class AuxiliaryWindow extends Disposable implements IAuxiliaryWindow {
 		webContents.on('zoom-changed', zoomChanged);
 		this._register(toDisposable(() => { if (!webContents.isDestroyed()) webContents.off('zoom-changed', zoomChanged); }));
 		this._register(toDisposable(() => win.off('focus', handleFocus)));
-		this._register(toDisposable(() => {
-			if (!win.isDestroyed()) {
-				win.destroy();
-			}
-		}));
 	}
+
+	getClientSize(): IWindowClientSize | undefined {
+		return this.clientArea.getSize();
+	}
+
 	getState(): IAuxiliaryWindowState {
 		const bounds = this.win.getNormalBounds();
 		return {

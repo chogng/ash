@@ -44,7 +44,7 @@ import { isMacintosh } from '../../base/common/platform.js';
 import { NativeMenubarControl } from '../../workbench/electron-browser/parts/titlebar/menubarControl.js';
 import { Menus } from '../browser/menus.js';
 import { getSessionsTitlebarBackground, TitlebarPart } from '../browser/parts/titlebarPart.js';
-import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
+import { bindWindowControlTheme, bindWindowsTitlebarInsets } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
 import { AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL } from '../../platform/window/common/window.js';
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
@@ -401,6 +401,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 						isMacintosh ? 'actions-only' : 'application-menu',
 					);
 					titlebar.domNode.classList.add('ash-electron-titlebar');
+					sessions.add(bindWindowsTitlebarInsets(titlebar.domNode));
 					return titlebar;
 				},
 				container,

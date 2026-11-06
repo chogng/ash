@@ -6,6 +6,7 @@ import type { INativeHostApi } from '../../../../platform/native/common/nativeHo
 import type { IAuxiliaryWindowState } from '../../../../platform/window/common/window.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { NativeWindowClientArea } from '../../../../platform/window/electron-browser/window.js';
 
 /** Uses host state for editor-window restoration while the shared browser service owns its document. */
 export class ElectronAuxiliaryWindowService extends BrowserAuxiliaryWindowService {
@@ -66,7 +67,8 @@ class ElectronAuxiliaryWindow extends AuxiliaryWindow {
 			throw new Error('Auxiliary window closed before initialization');
 		}
 		const revision = this.revision;
-		const state = await this.host.getAuxiliaryWindowState(this.window.name);
+		const clientArea = this._register(new NativeWindowClientArea(this.container, this.host, this.window.name, () => this.layout()));
+		const [state] = await Promise.all([this.host.getAuxiliaryWindowState(this.window.name), clientArea.ready]);
 		if (this.isDisposed) {
 			throw new Error('Auxiliary window closed during initialization');
 		}

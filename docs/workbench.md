@@ -45,6 +45,10 @@ Workbench、独立编辑器窗口和 Code Sessions 使用共享应用身份及�
 
 2026-10-30 在 Windows x64、`a174f34dfd` 上完成窗口缩放布局的代码验收：平台 LayoutService 同步发布 resize，主窗口与 Sessions Grid 保留小数尺寸，辅助窗口先完成 hosted Part 布局再发布容器通知；紧凑模式、菜单焦点恢复和关闭释放均有生产调用与回归。布局、EditorPart、标题栏及 Sessions Preferences 的 6 个测试文件共 268 项通过，窗口控件策略另通过 6 项；日志在 `.build/todo-code-audit-layout-preferences.log` 与 `.build/todo-code-audit-workflows.log`。原 macOS 的 268 项单测、2 项原生回归和 3 个真实窗口场景记录仍保留于 `.build/ash-playwright-mcp/titlebar-resize/foundation-fix/validation.json`，含 Agents 106 帧和 IDE 113 帧采样。本轮按源码与定向测试收口，未新增 Windows 100%／125%／150%／200% 的实机拖动矩阵证据。
 
+Windows 标题栏按所属容器计算系统按钮保留区，显示或应用缩放变化后重新取样，普通拖拽期间保持边距稳定。主窗与辅助窗由 Electron Main 按 HWND 读取 `GetClientRect` 初值和 `WM_SIZE` 更新，渲染器按各窗口的缩放倍率换算并修正视口的 1 像素取整误差。150% 下最小 Electron 的视口曾比 Win32 客户区多 1 个物理像素，复现数据见 `.build/ash-playwright-mcp/windows-resize/attribution/`。
+
+2026-11-06 在 Windows 11 23H2 x64（22631.6199）、Electron 44.4.5 上，用自托管 Ash 完成 100%、125%、150%、200% 显示缩放验收。IDE、Agents 及各自的辅助窗均完成四边四角拖拽、最大化还原和应用缩放 0、+1、−1。23,135 帧拖拽采样的标题栏和布局断言全部通过。辅助编辑器的紧凑模式、应用菜单与键盘焦点，以及会话弹窗的键盘置顶、返回主窗与输入焦点恢复均通过。场景、日志、截图、录像及 Playwright trace 见 [验收索引](../.build/ash-playwright-mcp/windows-resize/fix-20261106/validation.json)。
+
 Code Sessions 保持独立页面。Workbench 通过 Titlebar action 请求打开 Agents 窗口；Main 持有窗口创建、复用与关闭，Sessions 使用自己的会话状态。`sessions` 可以复用 `workbench` 能力，`workbench` 不反向导入 `sessions`。详情见 [Sessions 说明](../src/ash/sessions/README.md)。
 
 ## 构建与验证

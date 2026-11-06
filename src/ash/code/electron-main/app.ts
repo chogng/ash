@@ -1892,7 +1892,6 @@ export class AshApplication extends Disposable {
 		}));
 		return {
 			moveTerminalToWindow: (transfer, targetWindowId) => this.terminalWindowTransfers.move(window.id, transfer, targetWindowId),
-			getWindowClientSize: () => this.windowsMainService.getWindowById(window.id)!.getClientSize(),
 			takeTerminalTransfer: () => this.terminalWindowTransfers.take(window.id),
 			completeTerminalTransfer: result => this.terminalWindowTransfers.complete(window.id, result),
 			getAgentHostEditorState: () => this.agentsWindowInvitations.getState(),

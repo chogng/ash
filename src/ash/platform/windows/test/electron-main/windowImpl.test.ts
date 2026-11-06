@@ -64,6 +64,7 @@ ensureNoDisposablesAreLeakedInTestSuite();
 
 class TestWindow extends EventEmitter implements ICodeWindowHandle<TestWindow> {
 	public readonly messageHooks = new Map<number, (wParam: Buffer, lParam: Buffer) => void>();
+	public getNativeWindowHandle(): Buffer { return Buffer.alloc(8); }
 	public hookWindowMessage(message: number, callback: (wParam: Buffer, lParam: Buffer) => void): void { this.messageHooks.set(message, callback); }
 	public unhookWindowMessage(message: number): void { this.messageHooks.delete(message); }
 	public readonly id = 1;
@@ -267,7 +268,7 @@ test('CodeWindow preserves native client pixels, coalesces resize and releases i
 	resize(0, 0, 1);
 	resize(1501, 1001);
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual(window.messages, [{ channel: 'ash:window:client-size-changed', token: { width: 1501, height: 1001 } }]);
+	assert.deepEqual(window.messages, [{ channel: 'ash:window:client-size-changed', token: { size: { width: 1501, height: 1001 } } }]);
 	resize(1500, 997);
 	host.dispose();
 	assert.equal(window.messageHooks.size, 0);

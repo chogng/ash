@@ -68,6 +68,7 @@ function auxiliaryWindow(window: TestAuxiliaryWindow): IAuxiliaryWindow {
 	return {
 		id: 2, parentId: 1, win: window as unknown as BrowserWindow, lastFocusTime: 0,
 		getState: () => ({ width: 800, height: 600, left: 0, top: 0, zoomLevel: 0, alwaysOnTop: false, mode: 'normal' }),
+		getClientSize: () => undefined,
 	};
 }
 

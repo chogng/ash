@@ -20,6 +20,15 @@ export interface IWindowClientSize {
 
 export const WINDOW_CLIENT_SIZE_CHANGED_CHANNEL = 'ash:window:client-size-changed';
 
+export interface IWindowClientSizeEvent {
+	readonly windowName?: string;
+	readonly size: IWindowClientSize;
+}
+
+function isAuxiliaryWindowName(value: unknown): value is string {
+	return typeof value === 'string' && /^ash-auxiliary-[0-9a-f-]{36}$/.test(value);
+}
+
 export function validateWindowClientSize(value: unknown): IWindowClientSize | undefined {
 	if (value === undefined) return undefined;
 	if (!isRecord(value) || Object.keys(value).sort().join(',') !== 'height,width'
@@ -28,6 +37,17 @@ export function validateWindowClientSize(value: unknown): IWindowClientSize | un
 		throw new TypeError('Invalid window client size');
 	}
 	return value as unknown as IWindowClientSize;
+}
+
+export function validateWindowClientSizeEvent(value: unknown): IWindowClientSizeEvent {
+	if (!isRecord(value)) throw new TypeError('Invalid window client size event');
+	const keys = Object.keys(value).sort().join(',');
+	if (keys !== 'size' && (keys !== 'size,windowName' || !isAuxiliaryWindowName(value.windowName))) {
+		throw new TypeError('Invalid window client size event');
+	}
+	const size = validateWindowClientSize(value.size);
+	if (!size) throw new TypeError('Invalid window client size event');
+	return { size, windowName: typeof value.windowName === 'string' ? value.windowName : undefined };
 }
 
 export const WORKSPACE_RECOVERY_CHANNEL = 'ash:window:restoreWorkspaces';
@@ -349,6 +369,7 @@ export type WindowOperation =
 	| { readonly kind: 'getZoomFactor'; }
 	| { readonly kind: 'setZoom'; readonly level: number; readonly windowName?: string; readonly allWindows?: true; }
 	| { readonly kind: 'getFullscreen'; }
+	| { readonly kind: 'getClientSize'; readonly windowName?: string; }
 	| { readonly kind: 'getAuxiliaryState'; readonly windowName: string; }
 	| { readonly kind: 'getAlwaysOnTop'; readonly windowName?: string; }
 	| { readonly kind: 'setAlwaysOnTop'; readonly enabled: boolean; readonly windowName?: string; }
@@ -359,7 +380,7 @@ export function validateWindowOperation(value: unknown): WindowOperation {
 	if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('Invalid window operation');
 	const operation = value as Record<string, unknown>;
 	const keys = Object.keys(operation).sort().join(',');
-	const hasAuxiliaryWindowName = typeof operation.windowName === 'string' && /^ash-auxiliary-[0-9a-f-]{36}$/.test(operation.windowName);
+	const hasAuxiliaryWindowName = isAuxiliaryWindowName(operation.windowName);
 	switch (operation.kind) {
 		case 'newTab':
 		case 'closeOthers':
@@ -371,6 +392,7 @@ export function validateWindowOperation(value: unknown): WindowOperation {
 		case 'focusSelf':
 		case 'close':
 		case 'getZoom':
+		case 'getClientSize':
 		case 'getAlwaysOnTop':
 			if (keys === 'kind' || keys === 'kind,windowName' && hasAuxiliaryWindowName) return operation as WindowOperation;
 			break;
