@@ -1,6 +1,7 @@
 import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { EditorInputCapabilities, type IResourceEditorInput, type IEditorPane, type IEditorIdentifier } from '../../../common/editor.js';
 import { EditorInput } from '../../../common/editor/editorInput.js';
+import { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
 import { addDisposableListener, getWindow } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
@@ -49,7 +50,7 @@ export interface IEditorPartsService extends IEditorPart {
 	replaceEditorResource(source: IEditorGroupView, input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void>;
 	savePartsState(): EditorPartsState;
 	restorePartsState(state: EditorPartsState): Promise<void>;
-	restoreSavedState(shouldRestore: boolean): Promise<void>;
+	restoreSavedState(shouldRestore: boolean, otherEditorsReady?: Promise<void>): Promise<void>;
 	pauseStatePersistence(): IDisposable;
 }
 
@@ -140,13 +141,18 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return part.groups.filter(group => group.inputs.length === 0 && (hasEditors || group !== part.activeGroup));
 	}
 
-	async restoreSavedState(shouldRestore: boolean): Promise<void> {
+	async restoreSavedState(shouldRestore: boolean, otherEditorsReady?: Promise<void>): Promise<void> {
 		try {
 			if (!shouldRestore) return;
 			const saved = this.storage.get(EditorParts.stateStorageKey, StorageScope.WORKSPACE);
 			if (saved !== undefined) {
 				try {
-					await this.restorePartsState(JSON.parse(saved));
+					const state: EditorPartsState = JSON.parse(saved);
+					if (otherEditorsReady && state.parts.some(part => part.groups.some(group => group.editors.some(editor => editor.paneId !== CODE_EDITOR_ID)))) {
+						await otherEditorsReady;
+						if (this.isDisposed) return;
+					}
+					await this.restorePartsState(state);
 				} catch (error) {
 					this.storage.remove(EditorParts.stateStorageKey, StorageScope.WORKSPACE);
 					throw error;

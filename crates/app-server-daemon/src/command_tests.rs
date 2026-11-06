@@ -44,8 +44,9 @@ fn packaged_backend_digest_rejects_a_changed_executable_before_launch() {
     let executable = root.path().join("backend");
     std::fs::write(&executable, b"signed backend").unwrap();
     let expected = format!("{:x}", sha2::Sha256::digest(b"signed backend"));
-    super::validate_backend_digest(&executable, &expected).unwrap();
+    let digest = crate::process::PackageDigest::parse(&expected).unwrap();
+    digest.verify(&executable).unwrap();
     std::fs::write(&executable, b"changed backend").unwrap();
-    assert!(super::validate_backend_digest(&executable, &expected).is_err());
-    assert!(super::validate_backend_digest(&executable, "invalid").is_err());
+    assert!(digest.verify(&executable).is_err());
+    assert!(crate::process::PackageDigest::parse("invalid").is_err());
 }

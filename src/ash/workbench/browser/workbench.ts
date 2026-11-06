@@ -34,6 +34,11 @@ import { AppServerAvailableContext } from '../common/contextkeys.js';
 import { IWorkbenchEnvironmentService } from '../services/environment/common/environmentService.js';
 import { localize } from '../../nls.js';
 import { Schemas } from '../../base/common/network.js';
+import { getMediaMime, getMediaOrTextMime } from '../../base/common/mime.js';
+import { extname } from '../../base/common/path.js';
+import { CODE_EDITOR_ID } from '../common/editor/codeEditorId.js';
+import { isResourceDiffEditorInput } from '../common/editor.js';
+import { associatedEditorId, EditorAssociationsConfiguration } from './parts/editor/editorConfiguration.js';
 import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import { IUserDataProfileService } from '../services/userDataProfile/common/userDataProfile.js';
 import { UserDataProfileService } from '../services/userDataProfile/browser/userDataProfileService.js';
@@ -74,7 +79,7 @@ import { IMemoriesService } from '../../platform/memories/common/memoriesService
 import { IMemoryDiagnosticsService } from '../../platform/memory/common/memoryDiagnosticsService.js';
 import './style.js';
 import { disposableWindowTimeout } from '../../base/browser/scheduler.js';
-import { getWindow } from '../../base/browser/dom.js';
+import { getWindow, runWhenWindowIdle } from '../../base/browser/dom.js';
 import { TextFileSaveErrorHandler } from '../contrib/files/browser/editors/textFileSaveErrorHandler.js';
 import { mainWindow } from '../../base/browser/window.js';
 import { PixelRatio } from '../../base/browser/pixelRatio.js';
@@ -85,7 +90,7 @@ import {
 	toDisposable,
 } from '../../base/common/lifecycle.js';
 import { CancellationError, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
-import { DeferredPromise } from '../../base/common/async.js';
+import { DeferredPromise, raceCancellationError } from '../../base/common/async.js';
 import { assertDefined } from '../../base/common/types.js';
 import { URI } from '../../base/common/uri.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
@@ -421,14 +426,16 @@ export async function startWorkbench({
 	const themes = new ExtensionColorThemeService(api.extensions, api.events);
 	const editorRestoration = new DeferredPromise<void>();
 	const startupThemePreferences = new DeferredPromise<readonly string[]>();
+	const startupThemeApplied = new DeferredPromise<void>();
 	const logger = createLogService();
 	const wasInert = container.inert;
 	container.inert = true;
 	performance.mark('ash.workbench.themes-start');
-	const themesReady = themes.start({ preferences: startupThemePreferences.p, loadRemainingAfter: editorRestoration.p }).then(() => { performance.mark('ash.workbench.themes-ready'); });
-	// Startup owns the eventual failure; storage awaits must not leave an early
-	// theme rejection unobserved before the Workbench can take ownership.
-	void themesReady.catch(() => undefined);
+	const themesReady = themes.start({
+		preferences: startupThemePreferences.p,
+		loadRemainingAfter: Promise.all([editorRestoration.p, startupThemeApplied.p]).then(() => undefined),
+	}).then(() => { performance.mark('ash.workbench.themes-ready'); });
+	void themesReady.catch(error => logger.error('startup', 'Extension color theme startup failed', error));
 	let workbench: Workbench | undefined;
 	let storage: Awaited<ReturnType<IStartWorkbenchOptions['createStorageService']>> | undefined;
 	let userDataFiles: IFileSystemProvider & IDisposable | undefined;
@@ -477,6 +484,7 @@ export async function startWorkbench({
 			themes,
 			themesReady,
 			startupThemePreferences,
+			startupThemeApplied,
 			editorRestoration,
 			storage,
 			logger,
@@ -491,10 +499,10 @@ export async function startWorkbench({
 			viewConstructors,
 			workspaceDirectoriesReady,
 		);
-		await themesReady;
 		return workbench;
 	} catch (error) {
 		void startupThemePreferences.complete([]);
+		void startupThemeApplied.complete();
 		void editorRestoration.complete();
 		userDataFiles?.dispose();
 		logger.error('startup', 'Workbench startup failed', error);
@@ -559,6 +567,7 @@ export class Workbench extends Disposable {
 		themes: ExtensionColorThemeService,
 		themesReady: Promise<void>,
 		startupThemePreferences: DeferredPromise<readonly string[]>,
+		startupThemeApplied: DeferredPromise<void>,
 		editorRestoration: DeferredPromise<void>,
 		storageService: IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void>; },
 		logger: LogService,
@@ -578,6 +587,7 @@ export class Workbench extends Disposable {
 		this._register(themes);
 		this._register(toDisposable(() => {
 			void startupThemePreferences.complete([]);
+			void startupThemeApplied.complete();
 			void editorRestoration.complete();
 		}));
 		if (clipboardService) {
@@ -1043,10 +1053,16 @@ export class Workbench extends Disposable {
 			languageProviders?.start();
 			languageDiagnosticsService?.start();
 		}).catch(error => logService.error('startup', 'Language service startup failed', error));
-		const editorThemeReady = Promise.allSettled([workspaceConfigurationReady, editorDeclarationsReady]).then(async () => {
-			await themesReady;
+		void Promise.all([workspaceConfigurationReady, themesReady]).then(async () => {
 			if (!this.isDisposed) await themes.ensureStartupTheme(themeService.getColorThemePreferences());
-		});
+		}).catch(error => logService.error('startup', 'Workspace color theme startup failed', error))
+			.finally(() => startupThemeApplied.complete());
+		// Language-specific defaults can affect save participants even for models
+		// opened before their language declaration arrives.
+		const saveConfigurationReady = Promise.allSettled([workspaceConfigurationReady, editorDeclarationsReady]);
+		this._register(textModelService.addSaveParticipant({
+			participate: async (_model, _reason, signal) => { await raceCancellationError(saveConfigurationReady, signal); },
+		}));
 		const accessibilityService = this._register(nativeHostApi
 			? services.createInstance(NativeAccessibilityService, workbenchRoot)
 			: new AccessibilityService({
@@ -1232,7 +1248,26 @@ export class Workbench extends Disposable {
 		services.registerInstance(IEditorPart, editorParts);
 		const historyService = this._register(instantiationService.createInstance(HistoryService));
 		services.registerInstance(IHistoryService, historyService);
-		const editorService = this._register(new BrowserEditorService(editorParts, editorRestoration.p));
+		let editorProvidersPending = true;
+		const editorProvidersReady = editorDeclarationsReady.then(async () => {
+			if (extensionService.hasExecutableEditorDeclarations) await Promise.allSettled(serviceContributionReady);
+		}).catch(() => { /* Declarative startup already reports the failure. */ })
+			.finally(() => { editorProvidersPending = false; });
+		const editorService = this._register(new BrowserEditorService(editorParts, editorRestoration.p, (input, options) => {
+			if (!editorProvidersPending) return undefined;
+			const preferred = options.preferredEditorId ?? input.editorId;
+			if (preferred === CODE_EDITOR_ID) return undefined;
+			const path = input.resource.path;
+			// Keep the early path conservative. Other formats and explicit associations
+			// use the existing editor registry once their contributions are available.
+			if (!preferred && input.resource.scheme === Schemas.file && input.contentType === undefined && !isResourceDiffEditorInput(input)
+				&& !associatedEditorId(path, configuration.getValue(EditorAssociationsConfiguration))
+				&& !getMediaMime(path)
+				&& (getMediaOrTextMime(path) !== undefined || /^\.(?:[cm]?[jt]s|[jt]sx|rs|py|go|java|kt|swift|c|cc|cpp|h|hpp|sh|ps1|rb|php|toml|ya?ml)$/u.test(extname(path).toLowerCase()))) {
+				return CODE_EDITOR_ID;
+			}
+			return editorProvidersReady;
+		}));
 		services.registerInstance(IEditorService, editorService);
 		services.registerInstance(IEditorGroupsService, editorService);
 		// Document hosts resolve Chat editing signals and IDE context from the window's accessibility and editor services.
@@ -1352,6 +1387,8 @@ export class Workbench extends Disposable {
 					deferredPaneLocations.set(partId, location);
 					continue;
 				}
+				// Navigation from the live shell takes precedence over saved view state.
+				if (isStartup && panes.getActivePaneComposite(location)) continue;
 				const container = requiredViewContainerToRestore(viewDescriptors, location, part.getCompositeIdToRestore());
 				// Restore retained content without changing the saved visibility of its region.
 				if (isStartup) {
@@ -1366,26 +1403,39 @@ export class Workbench extends Disposable {
 			finally { if (auxiliaryBarMaximized) layout.setAuxiliaryBarMaximized(true); }
 			if (isStartup) { performance.mark('ash.workbench.views-restored'); }
 		};
-		// Construct services and Parts while theme resources are in flight. Keep
-		// view creation and the splash's first layout behind the verified theme,
-		// so overlapping startup does not expose a temporary fallback appearance.
-		const shellReady = themesReady.then(() => {
+		// The shell can use its bootstrap colors while extension themes load.
+		const shellReady = Promise.resolve().then(() => {
 			if (this.isDisposed) return;
 			contributions.advance(WorkbenchPhase.BlockStartup);
 			performance.mark('ash.workbench.shell-ready');
 			const restoresMaximizedLayout = layout.isAuxiliaryBarMaximized();
-			const viewsReady = this.restoreActiveViewContainers!();
 			lifecycleService.phase = LifecyclePhase.Ready;
 			contributions.advance(WorkbenchPhase.BlockRestore);
 			layoutService.layout();
-			return { viewsReady, restoresMaximizedLayout };
+			return restoresMaximizedLayout;
 		});
-		const paneRestoration = shellReady.then(shell => shell?.viewsReady);
-		// The initial layout is required. Ordinary view restoration can finish
-		// alongside editors, while a maximized view still owns editor visibility.
-		const editorLayoutReady = shellReady.then(shell => shell?.restoresMaximizedLayout ? shell.viewsReady : undefined);
-		const editorProvidersReady = editorDeclarationsReady.then(() => extensionService.hasExecutableEditorDeclarations ? Promise.allSettled(serviceContributionReady).then(() => undefined) : undefined);
-		this.whenRestored = this.completeStartupRestoration([keybindingsReady, editorThemeReady, editorLayoutReady, editorProvidersReady], paneRestoration, workingCopyBackups, editor, editorParts, editorRestoration, contributions, saveFontInfo);
+		const paneRestoration = shellReady.then(async restoresMaximizedLayout => {
+			if (!restoresMaximizedLayout) {
+				await editorRestoration.p;
+				if (this.isDisposed || !isStartupRestoration) return;
+				// A pane can do synchronous construction while a file read is in flight.
+				// Let queued opens finish, with a bound for slow or unavailable editors.
+				using idle = new DisposableStore();
+				await new Promise<void>(resolve => {
+					this._register(idle);
+					idle.add(disposableWindowTimeout(this.ownerWindow, resolve, 350));
+					idle.add(toDisposable(resolve));
+					void editorService.whenPendingOpensFinish().then(() => {
+						if (!idle.isDisposed) idle.add(runWhenWindowIdle(this.ownerWindow, () => resolve()));
+					});
+				});
+				this._store.delete(idle);
+			}
+			if (!this.isDisposed && isStartupRestoration) await this.restoreActiveViewContainers!();
+		});
+		// A maximized view owns editor visibility and must finish its layout first.
+		const editorLayoutReady = shellReady.then(restoresMaximizedLayout => restoresMaximizedLayout ? paneRestoration : undefined);
+		this.whenRestored = this.completeStartupRestoration([keybindingsReady, workspaceConfigurationReady, editorLayoutReady], paneRestoration, workingCopyBackups, editor, editorParts, editorProvidersReady, editorRestoration, contributions, saveFontInfo);
 		if (createWindow) {
 			this._register(createWindow(services));
 		}
@@ -1421,14 +1471,14 @@ export class Workbench extends Disposable {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async completeStartupRestoration(editorPrerequisites: readonly Promise<void>[], paneRestoration: Promise<void>, backups: IWorkingCopyBackupService, editor: IEditorPart, editorParts: IEditorPartsService, editorRestoration: DeferredPromise<void>, contributions: WorkbenchContributionHost, saveFontInfo: () => void): Promise<void> {
+	private async completeStartupRestoration(editorPrerequisites: readonly Promise<void>[], paneRestoration: Promise<void>, backups: IWorkingCopyBackupService, editor: IEditorPart, editorParts: IEditorPartsService, otherEditorsReady: Promise<void>, editorRestoration: DeferredPromise<void>, contributions: WorkbenchContributionHost, saveFontInfo: () => void): Promise<void> {
 		const panesSettled = Promise.allSettled([paneRestoration]);
 		try {
 			await Promise.allSettled(editorPrerequisites);
 			if (this.isDisposed) return;
-			await this.restoreEditorParts(editorParts);
+			await this.restoreEditorParts(editorParts, otherEditorsReady);
 			if (this.isDisposed) return;
-			await this.restoreWorkingCopyBackups(backups, editor);
+			await this.restoreWorkingCopyBackups(backups, editor, otherEditorsReady);
 			performance.mark('ash.workbench.editor-ready');
 		} finally {
 			// A click in the already-visible Explorer must survive both editor and backup recovery.
@@ -1444,18 +1494,22 @@ export class Workbench extends Disposable {
 		this.logService.trace('lifecycle', 'Workbench restored');
 	}
 
-	private async restoreEditorParts(editorParts: IEditorPartsService): Promise<void> {
+	private async restoreEditorParts(editorParts: IEditorPartsService, otherEditorsReady?: Promise<void>): Promise<void> {
 		try {
-			await editorParts.restoreSavedState(this.workbenchLayout.shouldRestoreEditors());
+			await editorParts.restoreSavedState(this.workbenchLayout.shouldRestoreEditors(), otherEditorsReady);
 		} catch (error) {
 			this.logService.error('editor', 'Failed to restore saved editor parts', error);
 		}
 	}
 
-	private async restoreWorkingCopyBackups(backups: IWorkingCopyBackupService, editor: IEditorPart): Promise<void> {
+	private async restoreWorkingCopyBackups(backups: IWorkingCopyBackupService, editor: IEditorPart, otherEditorsReady?: Promise<void>): Promise<void> {
 		let pending: readonly WorkingCopyBackup[];
 		try { pending = await backups.list(); }
 		catch (error) { this.logService.error('workingCopy', 'Failed to list working-copy backups', error); return; }
+		if (otherEditorsReady && pending.some(backup => !this.untitledTextEditorService.isUntitled(backup.resource))) {
+			await otherEditorsReady;
+			if (this.isDisposed) return;
+		}
 		for (const backup of pending) {
 			if (backup.kind === 'text' && this.untitledTextEditorService.isUntitled(backup.resource) && !this.workingCopies.get(backup.resource).some(copy => copy.backupKind === backup.kind)) {
 				this.untitledTextEditorService.create({ untitledResource: backup.resource, initialValue: backup.content, languageId: backup.languageId, label: backup.label });

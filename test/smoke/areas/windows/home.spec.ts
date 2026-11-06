@@ -152,7 +152,7 @@ test('startup marks record shell readiness and completed restoration in the runn
 	const page = workbench.page;
 	await expect.poll(() => page.evaluate(() => performance.getEntriesByName('ash.workbench.restored').length)).toBe(1);
 	const timings = await page.evaluate(() => Object.fromEntries(performance.getEntriesByType('mark').filter(mark => mark.name.startsWith('ash.')).map(mark => [mark.name, mark.startTime])));
-	// The theme-gated shell callback runs after synchronous construction completes.
+	// The shell callback runs after synchronous construction completes.
 	const workbenchStages = ['constructor-start', 'services-ready', 'constructor-done', 'shell-ready', 'views-restored', 'restored'];
 	for (const stage of workbenchStages) {
 		expect(timings[`ash.workbench.${stage}`], stage).toBeDefined();

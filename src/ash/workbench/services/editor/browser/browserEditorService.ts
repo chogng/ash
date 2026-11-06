@@ -3,7 +3,8 @@ import type { IEditorIdentifier, IEditorPane, IResourceEditorInput } from '../..
 import { Schemas } from '../../../../base/common/network.js';
 import { EditorOpenSource } from '../../../../platform/editor/common/editor.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { DeferredPromise } from '../../../../base/common/async.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import type { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import type { EditorOpenOptions, EditorOpenTarget, IEditorService, ISaveAllEditorsOptions, ISaveEditorsOptions, ISaveEditorsResult } from '../common/editorService.js';
@@ -22,6 +23,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 	private visibleEditorSignature: string;
 	private lastVisiblePanes: readonly IEditorPane[];
 	private pendingOpens = 0;
+	private pendingOpensFinished: DeferredPromise<void> | undefined;
 
 	readonly onDidActiveEditorChange = this.activeEditorChangeEmitter.event;
 	readonly onDidVisibleEditorsChange = this.visibleEditorsChangeEmitter.event;
@@ -31,12 +33,17 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 	readonly onDidActivateGroup = this.groupActivateEmitter.event;
 	readonly whenReady = Promise.resolve();
 
-	constructor(private readonly editorPart: IEditorPart, private readonly startupRestoration?: Promise<void>) {
+	constructor(
+		private readonly editorPart: IEditorPart,
+		private readonly startupRestoration?: Promise<void>,
+		private readonly prepareUserOpen?: (input: IResourceEditorInput, options: EditorOpenOptions) => string | Promise<void> | undefined,
+	) {
 		super();
 		this.activeEditorSignature = this.getActiveEditorSignature();
 		this.visibleEditorSignature = this.getVisibleEditorSignature();
 		this.lastVisiblePanes = this.visibleEditorPanes;
 		this._register(editorPart.onDidChangeEditors(event => this.publishState(event)));
+		this._register(toDisposable(() => { void this.pendingOpensFinished?.complete(); }));
 	}
 
 	get onDidChangeEditors(): Event<EditorPartChangeEvent> {
@@ -98,6 +105,12 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 		return this.groups.length;
 	}
 
+	/** Lets background Workbench work yield to editor opens already in flight. */
+	whenPendingOpensFinish(): Promise<void> {
+		if (this.isDisposed || this.pendingOpens === 0) return Promise.resolve();
+		return (this.pendingOpensFinished ??= new DeferredPromise<void>()).p;
+	}
+
 	async openEditor(input: IResourceEditorInput, options?: EditorOpenOptions, target?: EditorOpenTarget): Promise<void> {
 		if (options?.onlyWhenEmpty && (this.pendingOpens > 0 || this.visibleEditors.length > 0)) return;
 		this.pendingOpens++;
@@ -105,6 +118,12 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 			if (options?.source === EditorOpenSource.USER && this.startupRestoration) {
 				await this.startupRestoration;
 				if (this.isDisposed) return;
+				const editor = this.prepareUserOpen?.(input, options);
+				if (typeof editor === 'string') options = { ...options, preferredEditorId: editor };
+				else if (editor) {
+					await editor;
+					if (this.isDisposed) return;
+				}
 			}
 			await this.editorPart.openEditor(input, options, target);
 		} catch (error) {
@@ -114,6 +133,10 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 			throw error;
 		} finally {
 			this.pendingOpens--;
+			if (this.pendingOpens === 0) {
+				void this.pendingOpensFinished?.complete();
+				this.pendingOpensFinished = undefined;
+			}
 		}
 		if (options?.preserveFocus !== true) this.editorPart.focus();
 	}

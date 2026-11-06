@@ -75,15 +75,7 @@ pub(crate) struct ExecutableIdentity {
 
 impl ExecutableIdentity {
     pub(crate) fn verify_package_digest(&self, expected: &str) -> Result<(), String> {
-        if expected.len() != 64
-            || !expected
-                .bytes()
-                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        {
-            return Err(
-                "ASH_APP_SERVER_SHA256 must contain 64 lowercase hexadecimal digits".into(),
-            );
-        }
+        PackageDigest::parse(expected)?;
         if self.sha256 != expected {
             return Err("App Server executable does not match its signed package digest".into());
         }
@@ -110,6 +102,30 @@ pub(crate) struct BackendExecutable {
 pub(crate) enum PackageDigest<'a> {
     NotProvided,
     Expected(&'a str),
+}
+
+impl<'a> PackageDigest<'a> {
+    pub(crate) fn parse(expected: &'a str) -> Result<Self, String> {
+        if expected.len() != 64
+            || !expected
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err(
+                "ASH_APP_SERVER_SHA256 must contain 64 lowercase hexadecimal digits".into(),
+            );
+        }
+        Ok(Self::Expected(expected))
+    }
+
+    pub(crate) fn verify(self, executable: &Path) -> Result<(), String> {
+        match self {
+            Self::NotProvided => Ok(()),
+            Self::Expected(expected) => {
+                binary_identity(executable)?.verify_package_digest(expected)
+            }
+        }
+    }
 }
 
 impl ProcessRecord {
@@ -147,12 +163,28 @@ impl ProcessRecord {
 }
 
 pub(crate) fn executable_identity(path: &Path) -> Result<ExecutableIdentity, String> {
-    let mut identity = binary_identity(path)?;
-    identity.runtime_binding = crate::runtime::binding_for_backend(path)?;
-    identity.runtime_availability = identity
-        .runtime_binding
-        .as_ref()
-        .map(|binding| binding.availability());
+    let Some(binding) = crate::runtime::binding_for_backend(path)? else {
+        return binary_identity(path);
+    };
+    // These checks read different executable images. Complete both before
+    // returning the identity used to launch or reuse the daemon.
+    let (mut identity, availability) = std::thread::scope(|scope| {
+        let trace = crate::startup_trace::StartupTrace::current();
+        let worker = std::thread::Builder::new().spawn_scoped(scope, || {
+            let _trace = crate::startup_trace::StartupTrace::enter(trace);
+            binding.availability()
+        });
+        let identity = binary_identity(path);
+        let availability = match worker {
+            Ok(worker) => worker
+                .join()
+                .map_err(|_| "Electron runtime verification failed")?,
+            Err(_) => binding.availability(),
+        };
+        Ok::<_, String>((identity?, availability))
+    })?;
+    identity.runtime_binding = Some(binding);
+    identity.runtime_availability = Some(availability);
     Ok(identity)
 }
 

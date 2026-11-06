@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use crate::ConnectionOptions;
 use crate::GrantSource;
 use crate::LifecycleCommand;
+use crate::process::PackageDigest;
 use ash_install_context::discovered_product_services_path;
 
 /// Runs daemon connection and lifecycle commands using the explicit host environment.
@@ -43,11 +44,14 @@ pub fn run_command(
         Err(std::env::VarError::NotPresent) => None,
         Err(_) => return Err("ASH_APP_SERVER_SHA256 must contain a SHA-256 digest".into()),
     };
-    // connect-selected checks the signed digest with the generation identity in one file read.
-    if command != Command::ConnectSelected
-        && let Some(expected) = &expected_digest
-    {
-        validate_backend_digest(backend_executable, expected)?;
+    // Connection commands verify the package at the point where they select its executable.
+    let package_digest = expected_digest
+        .as_deref()
+        .map(PackageDigest::parse)
+        .transpose()?
+        .unwrap_or(PackageDigest::NotProvided);
+    if !matches!(command, Command::Connect | Command::ConnectSelected) {
+        package_digest.verify(backend_executable)?;
     }
     let grant_source = match std::env::var("ASH_DIR_GRANT_SOURCE").as_deref() {
         Ok("userConfig") => GrantSource::UserConfig,
@@ -88,16 +92,14 @@ pub fn run_command(
         _ => return Err("SSH connection requires ASH_REMOTE_HOST and ASH_REMOTE_RUNTIME".into()),
     }
     match command {
-        Command::Connect => crate::connect(options, backend_executable).map_err(Into::into),
-        Command::ConnectSelected => crate::client::connect_selected_with_digest(
-            options,
-            backend_executable,
-            expected_digest
-                .as_deref()
-                .map(crate::process::PackageDigest::Expected)
-                .unwrap_or(crate::process::PackageDigest::NotProvided),
-        )
-        .map_err(Into::into),
+        Command::Connect => {
+            crate::client::connect_with_digest(options, backend_executable, package_digest)
+                .map_err(Into::into)
+        }
+        Command::ConnectSelected => {
+            crate::client::connect_selected_with_digest(options, backend_executable, package_digest)
+                .map_err(Into::into)
+        }
         Command::Update => {
             let output = crate::update::install_stable(options.profile_root(), backend_executable)?;
             println!(
@@ -205,7 +207,3 @@ fn bundled_backend_executable_path() -> Result<PathBuf, String> {
 #[cfg(test)]
 #[path = "command_tests.rs"]
 mod tests;
-
-fn validate_backend_digest(executable: &Path, expected: &str) -> Result<(), String> {
-    crate::process::binary_identity(executable)?.verify_package_digest(expected)
-}

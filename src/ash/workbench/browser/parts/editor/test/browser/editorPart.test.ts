@@ -3184,12 +3184,16 @@ test('a file requested during startup opens after recovery and takes precedence 
 	const saved = editor.saveWorkingSet('startup');
 	await editor.closeAllEditors();
 	const opening = editors.openEditor(requested, { source: EditorOpenSource.USER, pinned: true }, 'activeGroup');
+	let opensFinished = false;
+	const background = editors.whenPendingOpensFinish().then(() => { opensFinished = true; });
 	await editors.openEditor(input('C:/project/fallback.ts'), { onlyWhenEmpty: true });
+	assert.equal(opensFinished, false);
 	assert.equal(editor.activeGroup.inputs.length, 0);
 	await editor.applyWorkingSet(saved);
 	assert.equal(editor.activeInput?.resource.toString(), restored.resource.toString());
 	await recovery.complete();
 	await opening;
+	await background;
 	assert.equal(editor.activeInput, requested);
 	assert.deepEqual(editor.activeGroup.inputs.map(input => input.resource.toString()), [restored.resource.toString(), requested.resource.toString()]);
 	dom.window.close();
