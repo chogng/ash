@@ -3,6 +3,7 @@ use super::core_error;
 use super::decode;
 use super::result;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use ash_app_server_protocol::protocol::model::ModelAvailabilityParams;
 use ash_app_server_protocol::protocol::model::ModelListParams;
 use ash_app_server_protocol::protocol::model::ModelPreferencesUpdateParams;
 use ash_app_server_protocol::protocol::provider::ProviderModelsListFailureCodeDto;
@@ -32,6 +33,16 @@ impl<'a> ModelRequestProcessor<'a> {
         // failure before that domain resolution turns it into a general model error.
         self.secret_processor.check_availability()?;
         result(&self.model_catalog.catalog_snapshot().map_err(core_error)?)
+    }
+    pub(super) fn model_availability(&self, params: &Value) -> Result<Value, RpcError> {
+        let params: ModelAvailabilityParams = decode(params)?;
+        self.secret_processor.check_availability()?;
+        result(
+            &self
+                .model_catalog
+                .execution_availability(params.model.as_ref())
+                .map_err(core_error)?,
+        )
     }
     pub(super) fn model_preferences_update(&self, params: &Value) -> Result<Value, RpcError> {
         use crate::model_catalog::ModelPreferencesCommand;

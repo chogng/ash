@@ -24,7 +24,7 @@ import { ChatHistoryRedoModel } from '../../workbench/contrib/chat/common/model/
 import type { ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../workbench/services/chat/common/modelCatalog.js';
 import type { ApprovalMode } from '../../workbench/services/chat/common/chatService.js';
-import type { AgentModelDefaults } from '../../platform/models/common/agentModels.js';
+import type { AgentModelDefaults, ModelExecutionAvailability, ModelSelectionAvailability } from '../../platform/models/common/agentModels.js';
 import { observableValue } from '../../base/common/observable.js';
 import type { IChatSessionHistoryStatus } from '../../platform/chat/common/chatSessionHistory.js';
 import { ChatAIDisabledSettingId } from '../../platform/chat/common/chatSettings.js';
@@ -87,9 +87,13 @@ export class ChatWidgetModel extends Disposable {
 	private initializePromise: Promise<void> | undefined;
 	private subscriptionThreadId: ThreadId | undefined;
 	private subscriptionPromise: Promise<void> | undefined;
+	private modelCatalog: readonly ModelCatalogEntry[] = [];
 	private _models: readonly ModelCatalogEntry[] = [];
 	private modelsError: string | undefined;
 	private modelsGeneration = 0;
+	private modelAvailability: { readonly model: ModelRef; readonly status: ModelExecutionAvailability; } | undefined;
+	private modelAvailabilityRequest: { readonly model: ModelRef; readonly promise: Promise<void>; } | undefined;
+	private modelAvailabilityGeneration = 0;
 	private defaults: AgentModelDefaults | undefined;
 	private readonly selectedModes = new Map<string, ChatMode>();
 	private queue: Awaited<ReturnType<IChatService['readQueue']>> = [];
@@ -158,7 +162,10 @@ export class ChatWidgetModel extends Disposable {
 			void this.reconnect();
 		}));
 		this._register(execution.onDidChange(() => void this.loadDefaultApprovalMode()));
-		this._register(this.languageModels.onDidChangeModels(() => void this.loadModels()));
+		this._register(this.languageModels.onDidChangeModels(() => {
+			void this.refreshModelAvailability(true);
+			void this.loadModels();
+		}));
 		this._register(chatService.onDidChangeQueue(() => void this.loadQueue()));
 		this._register(this.skills.onDidChangeSkills(() => void this.loadSkillSelectors()));
 		this._register(chatService.onDidUpdateTurnChanges((update) => {
@@ -190,15 +197,15 @@ export class ChatWidgetModel extends Disposable {
 		const agentSession = forkSource ? this.sessionService.sessions.find(session => session.sessionId === forkSource.sessionId) : active?.session;
 		const agentThreadId = forkSource?.threadId ?? active?.threadId;
 		const agentTree = agentSession?.agentTree;
-		const workspaceRequired = this.workspaceRequiredMessage;
+		const blockedMessage = this.modelUnavailableMessage ?? this.workspaceRequiredMessage;
 		return {
 			draftIdentity: { id: this.composerIdentity, generation: this.composerGeneration },
 			mode: this.mode,
 			activeMode: activeTurn(this._thread)?.mode,
 			queuedMessages: this.queue.filter(message => message.status !== 'rejected').length,
 			phase: this._state,
-			inputBlocked: workspaceRequired !== undefined || this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
-			status: workspaceRequired,
+			inputBlocked: blockedMessage !== undefined || this.historyStatus !== undefined || this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
+			status: blockedMessage,
 			aiDisabled: this.configuration.getValue<boolean>(ChatAIDisabledSettingId),
 			error: this.historyStatus ? undefined : this._error,
 			canInterrupt: this.canInterrupt,
@@ -214,6 +221,7 @@ export class ChatWidgetModel extends Disposable {
 			skillSelectors: this._skillSelectors,
 			skillSelectorsLoading: this.skillSelectorsLoading.get(),
 			selectedModel: this.selectedModel,
+			selectedModelEntry: this.selectedModelEntry,
 			selectedReasoningEffort: this.selectedReasoningEffort,
 			isAutomaticModel: this.isAutomaticModel,
 			selectedAgent: this.selection.kind === 'untitled' && !forkSource ? this.selection.session.agent : undefined,
@@ -357,13 +365,33 @@ export class ChatWidgetModel extends Disposable {
 			: this.threadModelSelection.isAutomatic(this.selection.active.threadId);
 	}
 
+	private get selectedModelEntry(): ModelCatalogEntry | undefined {
+		const selected = this.selectedModel;
+		// Picker visibility applies to new choices. An active model still needs its metadata.
+		return selected && this.modelCatalog.find(entry => sameModel(entry.model, selected));
+	}
+
+	private get modelUnavailableMessage(): string | undefined {
+		const availability = this.modelAvailability;
+		if (!availability || this.isAutomaticModel || !sameModel(availability.model, this.selectedModel)) return undefined;
+		const name = this.selectedModelEntry?.displayName ?? availability.model.model;
+		switch (availability.status) {
+			case 'retired':
+				return localize({ bundle: 'ash.sessions', key: 'sessions.code.modelRetired' }, '{0} has been retired. Choose another model to send.', name);
+			case 'modelUnavailable':
+				return localize({ bundle: 'ash.sessions', key: 'sessions.code.modelUnavailable' }, '{0} is unavailable. Choose another model to send.', name);
+			case 'connectionUnavailable':
+				return localize({ bundle: 'ash.sessions', key: 'sessions.code.modelConnectionUnavailable' }, 'The connection for {0} is unavailable. Reconnect or choose another model to send.', name);
+			case 'ready':
+			case 'unknown':
+				return undefined;
+		}
+	}
+
 	get selectedReasoningEffort(): ModelReasoningEffort | undefined {
-		const model = this.selectedModel;
-		if (this.isAutomaticModel || !model) return undefined;
-		const identity = modelRefIdentity(model);
+		if (this.isAutomaticModel) return undefined;
 		const effort = this.preferredReasoningEffort();
-		const entry = this._models.find(candidate => modelRefIdentity(candidate.model) === identity);
-		return effort && entry?.supportedReasoningEfforts?.some(option => option.effort === effort) ? effort : undefined;
+		return effort && this.selectedModelEntry?.supportedReasoningEfforts?.some(option => option.effort === effort) ? effort : undefined;
 	}
 
 	private preferredReasoningEffort(): ModelReasoningEffort | undefined {
@@ -513,13 +541,14 @@ export class ChatWidgetModel extends Disposable {
 		} else {
 			this.threadModelSelection.select(this.selection.active.threadId, model);
 		}
+		void this.refreshModelAvailability();
 		this._onDidChange.fire();
 	}
 
 	async selectReasoningEffort(effort: ModelReasoningEffort | undefined): Promise<void> {
 		const model = this.selectedModel;
 		if (!model || this.isAutomaticModel) throw new Error('Select a model before setting its thinking effort');
-		const entry = this._models.find(candidate => modelRefIdentity(candidate.model) === modelRefIdentity(model));
+		const entry = this.selectedModelEntry;
 		if (!entry || (effort !== undefined && !entry.supportedReasoningEfforts?.some(option => option.effort === effort))) {
 			throw new Error('The selected model does not support this thinking effort');
 		}
@@ -554,14 +583,22 @@ export class ChatWidgetModel extends Disposable {
 		this.assertWorkspaceSelected();
 		const operation = this.captureOperation(options);
 		const stateRequest = ++this.stateRequest;
+		let modelBlock: Error | undefined;
 		try {
 			this.requireCurrentOperation(operation);
 			await this.initialize();
 			this.requireCurrentOperation(operation);
 			if (this.historyStatus) throw new Error(this.historyStatus.message);
 			this.assertAIEnabled();
-			// Once accepted, this request keeps its model even if the picker changes during preparation.
 			const model = this.isAutomaticModel ? undefined : this.selectedModel;
+			await this.awaitOperationPreparation(this.refreshModelAvailability(true), operation);
+			if (!sameModel(model, this.isAutomaticModel ? undefined : this.selectedModel)) throw canceled();
+			const unavailable = this.modelUnavailableMessage;
+			if (unavailable) {
+				modelBlock = new Error(unavailable);
+				throw modelBlock;
+			}
+			// Once accepted, this request keeps its model even if the picker changes during preparation.
 			const reasoningEffort = this.selectedReasoningEffort;
 			this.setState('submitting');
 			this.requireCurrentOperation(operation);
@@ -616,6 +653,7 @@ export class ChatWidgetModel extends Disposable {
 			await this.refreshThread();
 
 		} catch (error) {
+			if (modelBlock && error === modelBlock) throw error;
 			if (!this.isCurrentTarget(operation) || stateRequest !== this.stateRequest) throw error;
 			if (operation.signal?.aborted || isCancellationError(error)) {
 				if (this._state === 'submitting') this.setState('ready');
@@ -850,33 +888,31 @@ export class ChatWidgetModel extends Disposable {
 
 	private async loadCatalogs(): Promise<void> {
 		const generation = ++this.modelsGeneration;
-		const [models, slashCommands] = await Promise.allSettled([this.modelEntries(), this.chatService.listSlashCommands(), this.loadSkillSelectors(), this.loadDefaultApprovalMode(), this.loadModelDefaults()]);
+		const [models, slashCommands] = await Promise.allSettled([this.languageModels.listModelCatalog(), this.chatService.listSlashCommands(), this.loadSkillSelectors(), this.loadDefaultApprovalMode(), this.loadModelDefaults()]);
 		if (this.isDisposed) return;
 		if (generation === this.modelsGeneration && models.status === 'fulfilled') {
-			this._models = models.value;
-			this.modelsError = undefined;
-			this.applyDefaultNewChatModel();
+			this.acceptModelCatalog(models.value);
 		} else if (generation === this.modelsGeneration && models.status === 'rejected') {
 			this.modelsError = String(models.reason);
 		}
 		if (slashCommands.status === 'fulfilled') this._slashCommands = slashCommands.value;
 		this._onDidChange.fire();
+		await this.refreshModelAvailability();
 	}
 
 	private async loadModels(): Promise<void> {
 		const generation = ++this.modelsGeneration;
 		try {
-			const [models] = await Promise.all([this.modelEntries(), this.loadModelDefaults()]);
+			const [models] = await Promise.all([this.languageModels.listModelCatalog(), this.loadModelDefaults()]);
 			if (this.isDisposed || generation !== this.modelsGeneration) return;
-			this._models = models;
-			this.modelsError = undefined;
-			this.applyDefaultNewChatModel();
+			this.acceptModelCatalog(models);
 			this._onDidChange.fire();
 		} catch (error) {
 			if (this.isDisposed || generation !== this.modelsGeneration) return;
 			this.modelsError = String(error);
 			this._onDidChange.fire();
 		}
+		await this.refreshModelAvailability();
 	}
 
 	private async loadModelDefaults(): Promise<void> {
@@ -886,12 +922,60 @@ export class ChatWidgetModel extends Disposable {
 		} catch { /* Keep the last backend snapshot until the connection recovers. */ }
 	}
 
-	private async modelEntries(): Promise<readonly ModelCatalogEntry[]> {
-		return this.languageModels.listModels();
+	private acceptModelCatalog(catalog: readonly ModelCatalogEntry[]): void {
+		this.modelCatalog = catalog;
+		this._models = catalog.filter(entry => this.languageModels.isModelVisible(entry.model));
+		this.modelsError = undefined;
+		this.applyDefaultNewChatModel();
+	}
+
+	private refreshModelAvailability(force = false): Promise<void> {
+		const model = this.isAutomaticModel ? undefined : this.selectedModel;
+		if (!model || this.isDisposed) {
+			this.modelAvailabilityGeneration++;
+			this.modelAvailabilityRequest = undefined;
+			this.modelAvailability = undefined;
+			return Promise.resolve();
+		}
+		const pending = this.modelAvailabilityRequest;
+		if (!force && pending && sameModel(pending.model, model)) return pending.promise;
+		if (!force && this.modelAvailability && sameModel(this.modelAvailability.model, model)) return Promise.resolve();
+		if (!sameModel(this.modelAvailability?.model, model)) this.modelAvailability = undefined;
+		const generation = ++this.modelAvailabilityGeneration;
+		const promise = this.checkModelAvailability(model, generation).finally(() => {
+			if (generation === this.modelAvailabilityGeneration) this.modelAvailabilityRequest = undefined;
+		});
+		this.modelAvailabilityRequest = { model, promise };
+		return promise;
+	}
+
+	private async checkModelAvailability(model: ModelRef, generation: number): Promise<void> {
+		let availability: ModelSelectionAvailability;
+		try {
+			availability = await this.languageModels.readModelAvailability(model);
+		} catch {
+			// A failed check does not prove that a model is unavailable.
+			return;
+		}
+		if (this.isDisposed || generation !== this.modelAvailabilityGeneration
+			|| this.isAutomaticModel || !sameModel(model, this.selectedModel)) return;
+		const previous = this.modelAvailability?.status;
+		const status = availability.selected;
+		if (status === 'unknown' && previous) return;
+		this.modelAvailability = { model, status };
+		if (status !== 'unknown' && status !== 'ready' && availability.defaultAvailability === 'ready'
+			&& availability.configuredDefault && !sameModel(model, availability.configuredDefault) && this.selection.kind === 'untitled') {
+			const draft = this.selection.session;
+			if (draft.modelDefaults && draft.modelSelectionKind !== 'manual' && !draft.forkSource) {
+				this.sessionService.setUntitledSessionDefaultModel(draft.untitledSessionId, availability.configuredDefault, { workspace: draft.modelDefaults.workspace }, model);
+				this.refreshUntitledSelection();
+			}
+		}
+		if (previous !== status) this._onDidChange.fire();
 	}
 
 	private applyDefaultNewChatModel(): void {
-		if (this.selection.kind !== 'untitled' || !this._models.length) return;
+		if (this.selection.kind !== 'untitled' || !this.modelCatalog.length) return;
 		const draft = this.selection.session;
 		const workspace = codeConversationWorkspaceKey(draft.workspace) ?? null;
 		if (draft.modelDefaults?.workspace === workspace) return;
@@ -1333,6 +1417,7 @@ export class ChatWidgetModel extends Disposable {
 		const prefix = result.history && overlap > 0 ? this._thread!.turns.slice(0, overlap) : [];
 		if (thread) {
 			this._thread = { ...result.thread, turns: [...prefix, ...result.thread.turns] };
+			void this.refreshModelAvailability();
 			if (!prefix.length) this.historyBoundary = result.history;
 			this.durableSequence = Math.max(this.durableSequence, result.thread.sequence);
 			this.snapshotRequest = Math.max(this.snapshotRequest, request);

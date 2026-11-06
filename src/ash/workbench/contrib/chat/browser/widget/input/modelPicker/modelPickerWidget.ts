@@ -107,7 +107,7 @@ export class ModelPickerWidget extends Disposable {
 		if (this.delegate.chatModelSlider) this.picker?.hide();
 		else this.sliderPicker?.hide();
 		const selected = this.delegate.getSelectedModel();
-		const model = this.delegate.getModels().find(entry => entry.model.provider === selected?.provider && entry.model.model === selected.model);
+		const model = this.delegate.getSelectedModelEntry();
 		const automatic = this.delegate.isAutomaticModel();
 		const selectedEffort = this.delegate.getSelectedReasoningEffort();
 		const selectedPresetId = this.delegate.getSelectedPreset?.();

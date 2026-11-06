@@ -15,6 +15,7 @@ export interface IModelPickerDelegate {
 	getInputLifecycle?(): AbortSignal;
 	getModels(): readonly ModelCatalogEntry[];
 	getSelectedModel(): ModelRef | undefined;
+	getSelectedModelEntry(): ModelCatalogEntry | undefined;
 	getSelectedReasoningEffort(): ModelReasoningEffort | undefined;
 	getSelectedPreset?(): string | undefined;
 	isAutomaticModel(): boolean;

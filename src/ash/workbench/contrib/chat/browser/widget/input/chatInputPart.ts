@@ -148,6 +148,7 @@ interface ChatInputToolbarState {
 	readonly models: readonly ModelCatalogEntry[];
 	readonly canSelectModel?: boolean;
 	readonly selectedModel?: ModelRef;
+	readonly selectedModelEntry?: ModelCatalogEntry;
 	readonly selectedReasoningEffort?: ModelReasoningEffort;
 	readonly selectedPreset?: string;
 	readonly isAutomaticModel: boolean;
@@ -1632,6 +1633,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			models: this.state.models,
 			canSelectModel: this.state.canSelectModel,
 			selectedModel: this.state.selectedModel,
+			selectedModelEntry: this.state.selectedModelEntry,
 			selectedReasoningEffort: this.state.selectedReasoningEffort,
 			selectedPreset: this.state.selectedPreset,
 			isAutomaticModel: this.state.isAutomaticModel,
@@ -1651,6 +1653,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			state.models === this.toolbarState.models &&
 			state.canSelectModel === this.toolbarState.canSelectModel &&
 			sameModel(state.selectedModel, this.toolbarState.selectedModel) &&
+			state.selectedModelEntry === this.toolbarState.selectedModelEntry &&
 			state.selectedReasoningEffort === this.toolbarState.selectedReasoningEffort &&
 			state.selectedPreset === this.toolbarState.selectedPreset &&
 			state.isAutomaticModel === this.toolbarState.isAutomaticModel &&
@@ -2055,6 +2058,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				getModels: () => this.state.models,
 				canSelectModel: () => this.state.canSelectModel !== false,
 				getSelectedModel: () => this.state.selectedModel,
+				getSelectedModelEntry: () => this.state.selectedModelEntry ?? this.state.models.find(entry => sameModel(entry.model, this.state.selectedModel)),
 				getSelectedReasoningEffort: () => this.state.selectedReasoningEffort,
 				getSelectedPreset: () => this.state.selectedPreset,
 				isAutomaticModel: () => this.state.isAutomaticModel,

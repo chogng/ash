@@ -3272,6 +3272,70 @@ impl ModelCatalog for ConfigBackedModelService {
     fn configured_default(&self) -> Result<Option<ash_protocol::ModelRef>, CoreError> {
         Ok(self.resolved_config()?.model)
     }
+
+    fn execution_availability(
+        &self,
+        model: Option<&ash_protocol::ModelRef>,
+    ) -> Result<ash_app_server_protocol::protocol::model::ModelAvailabilityResult, CoreError> {
+        use ash_app_server_protocol::protocol::model::ModelAvailabilityResult;
+        use ash_app_server_protocol::protocol::model::ModelExecutionAvailability;
+        use ash_models_manager::ModelsManagerError;
+        let (mut config, preferred) = self.resolve_config_connections(&self.config_snapshot()?)?;
+        let ready: BTreeSet<_> = preferred.keys().cloned().collect();
+        config.providers.extend(preferred);
+        let contexts = self.context_catalog(&config)?;
+        let availability = |model: &ash_protocol::ModelRef| {
+            let Some(provider) = config.providers.get(&model.provider) else {
+                return ModelExecutionAvailability::ConnectionUnavailable;
+            };
+            let entry = match contexts.resolve_entry(model) {
+                Ok(entry) => entry,
+                Err(ModelsManagerError::ModelRetired { .. }) => {
+                    return ModelExecutionAvailability::Retired;
+                }
+                Err(ModelsManagerError::ModelUnavailable { .. }) => {
+                    return ModelExecutionAvailability::ModelUnavailable;
+                }
+                // A discovery-backed catalog can be incomplete while loading or reconnecting.
+                Err(ModelsManagerError::ModelNotListed { .. })
+                    if contexts
+                        .registry()
+                        .get(&model.provider)
+                        .is_some_and(|definition| {
+                            definition.model_catalog_policy
+                                == model_provider_info::ModelCatalogPolicy::ListedOnly
+                        }) =>
+                {
+                    return ModelExecutionAvailability::ModelUnavailable;
+                }
+                Err(_) => return ModelExecutionAvailability::Unknown,
+            };
+            if entry.lifecycle() == ash_protocol::ModelLifecycle::Retired {
+                return ModelExecutionAvailability::Retired;
+            }
+            if entry.availability() == ash_protocol::ModelAvailability::Unavailable {
+                return ModelExecutionAvailability::ModelUnavailable;
+            }
+            if !ready.contains(&model.provider) {
+                return ModelExecutionAvailability::ConnectionUnavailable;
+            }
+            if model_context::ModelContext::resolve(&entry, provider, contexts.registry())
+                .and_then(|context| context.require_budget())
+                .is_err()
+            {
+                return ModelExecutionAvailability::Unknown;
+            }
+            ModelExecutionAvailability::Ready
+        };
+        Ok(ModelAvailabilityResult {
+            selected: model.map_or(ModelExecutionAvailability::Unknown, availability),
+            default_availability: config
+                .model
+                .as_ref()
+                .map_or(ModelExecutionAvailability::Unknown, availability),
+            configured_default: config.model,
+        })
+    }
 }
 
 impl ConfigBackedModelService {
@@ -3288,10 +3352,7 @@ impl ConfigBackedModelService {
         &self,
         selection: ModelSelection<'_>,
     ) -> Result<ResolvedConfig, CoreError> {
-        let user = self.config.read_snapshot().map_err(|error| {
-            CoreError::Model(format!("failed to read model config: {}", error.0))
-        })?;
-        let mut config = self.resolve_config(&user)?;
+        let mut config = self.resolved_config()?;
         if let ModelSelection::Session(model) = selection {
             config.model = Some(model.clone());
         }
@@ -3299,25 +3360,41 @@ impl ConfigBackedModelService {
     }
 
     fn resolved_config(&self) -> Result<ResolvedConfig, CoreError> {
-        let user = self.config.read_snapshot().map_err(|error| {
-            CoreError::Model(format!("failed to read model config: {}", error.0))
-        })?;
-        self.resolve_config(&user)
+        self.resolve_config(&self.config_snapshot()?)
+    }
+
+    fn config_snapshot(&self) -> Result<ResolvedConfigSnapshot, CoreError> {
+        self.config
+            .read_snapshot()
+            .map_err(|error| CoreError::Model(format!("failed to read model config: {}", error.0)))
     }
 
     fn resolve_config(&self, user: &ResolvedConfigSnapshot) -> Result<ResolvedConfig, CoreError> {
-        let mut config =
-            resolve_local_config(user, self.dir_config.as_deref()).map_err(|error| {
-                CoreError::Model(format!("failed to resolve directory config: {}", error.0))
-            })?;
+        let (mut config, preferred) = self.resolve_config_connections(user)?;
+        config.providers.extend(preferred);
+        Ok(config)
+    }
+
+    fn resolve_config_connections(
+        &self,
+        user: &ResolvedConfigSnapshot,
+    ) -> Result<
+        (
+            ResolvedConfig,
+            BTreeMap<ash_protocol::ProviderId, ModelProviderConfig>,
+        ),
+        CoreError,
+    > {
+        let config = resolve_local_config(user, self.dir_config.as_deref()).map_err(|error| {
+            CoreError::Model(format!("failed to resolve directory config: {}", error.0))
+        })?;
         // Account readiness chooses the request path, but an unready connection still
         // owns saved preferences. Keep that configuration until a ready path replaces it.
-        config.providers.extend(
-            self.catalog_provider
-                .preferred_connections(&config.connections)
-                .map_err(|error| CoreError::Model(error.to_string()))?,
-        );
-        Ok(config)
+        let preferred = self
+            .catalog_provider
+            .preferred_connections(&config.connections)
+            .map_err(|error| CoreError::Model(error.to_string()))?;
+        Ok((config, preferred))
     }
 }
 

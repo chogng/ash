@@ -179,6 +179,33 @@ impl ModelCatalogEntry {
 pub struct ModelListParams {}
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(deny_unknown_fields)]
+pub struct ModelAvailabilityParams {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub model: Option<ModelRef>,
+}
+
+/// Local admission evidence. Ready does not promise that a remote invocation will succeed.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelExecutionAvailability {
+    Ready,
+    Unknown,
+    Retired,
+    ModelUnavailable,
+    ConnectionUnavailable,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub struct ModelAvailabilityResult {
+    pub selected: ModelExecutionAvailability,
+    pub configured_default: Option<ModelRef>,
+    pub default_availability: ModelExecutionAvailability,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct ModelPreferencesUpdateParams {
     pub command_id: ash_protocol::CommandId,

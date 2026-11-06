@@ -79,7 +79,11 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	const scope = { services: { chat }, identity: (value: string) => value, backendIdentity: (value: string) => value, assertCurrent() { } } as unknown as ISessionProviderScope;
 	const routedChat = routed ? resources.add(new SessionsChatService({ onDidChangeScopes: Event.None, getScopes: () => [scope], getScope: () => scope } as unknown as ISessionProviderScopeService)) : chat;
 	const prompts = skillService ?? { onDidChangeSkills: Event.None, findAgentSkills: async () => [] } as unknown as IPromptsService;
-	const models = { onDidChangeModels: Event.None, listModels: async () => [], readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }) } as unknown as ILanguageModelsService;
+	const models = {
+		onDidChangeModels: Event.None, listModels: async () => [], listModelCatalog: async () => [], isModelVisible: () => true,
+		readModelAvailability: async () => ({ selected: 'unknown', configuredDefault: null, defaultAvailability: 'unknown' }),
+		readModelDefaults: async () => ({ revision: 1, model: null, reasoningEffort: null }),
+	} as unknown as ILanguageModelsService;
 	const preferences = { onDidChangeModels: Event.None } as ILanguageModelsConfigurationService;
 	const session: ISession = { sessionId: 'session', title: 'Session', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, nextApprovalMode: 'manual', chats: [{ threadId: 'A', origin: { type: 'root' }, status: 'active' }, { threadId: 'B', origin: { type: 'fork', parentThreadId: 'A', parentSequence: 1 }, status: 'active' }] };
 	const sessions = {} as ISessionsManagementService;
@@ -775,7 +779,7 @@ test('Ash Chat can continue a directoryless conversation using the shared compos
 test('voice source preparation materializes the model selected immediately beforehand', async () => {
 	const f = fixture('Code'); using resources = f.resources; await f.model.initialize();
 	const selected = { provider: 'provider', model: 'chosen' };
-	f.models.listModels = async () => [{ model: selected, displayName: 'Chosen model', longContext: false }];
+	f.models.listModelCatalog = async () => [{ model: selected, displayName: 'Chosen model', longContext: false }];
 	const workspace = { type: 'local' as const, root: '/workspace' };
 	let draft = { untitledSessionId: 'voice-draft', title: 'New Chat', model: undefined as typeof selected | undefined, modelSelectionKind: 'manual' as const, modelDefaults: { workspace: codeConversationWorkspaceKey(workspace) ?? null }, agent: undefined, workspace, projectId: 'project' };
 	const materializedModels: (typeof selected | undefined)[] = [];

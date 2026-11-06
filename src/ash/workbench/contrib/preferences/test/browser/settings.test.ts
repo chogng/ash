@@ -2680,6 +2680,7 @@ test('Models Settings sorts enabled models on entry and keeps their order until 
 		listModels: async () => catalog.filter(entry => enabled.has(entry.displayName)),
 		getDefaultNewChatModel: () => undefined,
 		rememberSelectedModel: async () => { },
+		readModelAvailability: async () => ({ selected: 'unknown', configuredDefault: null, defaultAvailability: 'unknown' }),
 		readModelDefaults: async () => ({ codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null, reasoningEffort: null }),
 		saveReasoningEffort: async () => { },
 		listModelCatalog: async () => catalog,

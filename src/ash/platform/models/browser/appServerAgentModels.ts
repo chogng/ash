@@ -15,6 +15,7 @@ import { withSecretStorageErrors } from '../../secrets/browser/appServerSecretSt
 
 export function createDisconnectedAgentModelsService(unavailable: UnavailableOperation): IAgentModelsService {
 	return {
+		readModelAvailability: () => unavailable('model.readModelAvailability'),
 		readDefaults: () => unavailable('model.readDefaults'),
 		configureDefaults: () => unavailable('model.configureDefaults'),
 		readApprovalReviewModel: () => unavailable('model.readApprovalReviewModel'),
@@ -38,6 +39,14 @@ export function createDisconnectedAgentModelsService(unavailable: UnavailableOpe
 
 export function createAppServerAgentModelsService(connection: AppServerProtocolClient): IAgentModelsService {
 	return {
+		readModelAvailability: async model => {
+			const result = await withSecretStorageErrors(appServerRequest(connection, 'model/availability', { model }));
+			return {
+				selected: result.selected,
+				configuredDefault: result.configured_default,
+				defaultAvailability: result.default_availability,
+			};
+		},
 		readDefaults: async () => {
 			const config = await appServerRequest(connection, 'config/read', {});
 			return {

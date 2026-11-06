@@ -81,9 +81,7 @@ export class ChatModelSliderWidget extends Disposable {
 
 	private getSelectedBuiltInModel(): ModelCatalogEntry | undefined {
 		if (this.delegate.useWorkbenchModelManagement === false || this.delegate.isAutomaticModel()) { return undefined; }
-		const selected = this.delegate.getSelectedModel();
-		const entry = selected && this.delegate.getModels().find(candidate =>
-			candidate.model.provider === selected.provider && candidate.model.model === selected.model);
+		const entry = this.delegate.getSelectedModelEntry();
 		const provider = entry?.source?.providerId;
 		// The native catalog also includes custom endpoints and discovered external models.
 		if (!provider || provider.startsWith('custom-') || provider === 'openai-compatible' || entry?.discovered) { return undefined; }
@@ -176,7 +174,7 @@ export class ChatModelSliderWidget extends Disposable {
 			displayedModels = currentModels;
 			const activeSelectedRef = this.delegate.getSelectedModel();
 			const automatic = this.delegate.isAutomaticModel();
-			const activeModel = automatic ? undefined : currentModels.find(m => m.model.provider === activeSelectedRef?.provider && m.model.model === activeSelectedRef.model);
+			const activeModel = automatic ? undefined : this.delegate.getSelectedModelEntry();
 			const builtInModel = this.getSelectedBuiltInModel();
 			let effortOverride = builtInModel?.reasoningEffortOverride;
 			const presets = this.effortChoices(activeModel, effortOverride);

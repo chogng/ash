@@ -386,9 +386,12 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined, defaults: NonNullable<IUntitledChatSession['modelDefaults']>): void {
+	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined, defaults: NonNullable<IUntitledChatSession['modelDefaults']>, unavailableModel?: ModelRef): void {
 		const current = this._untitledSessions.find(session => session.untitledSessionId === untitledSessionId);
-		if (!current || current.modelDefaults?.workspace === defaults.workspace) return;
+		if (!current) return;
+		if (unavailableModel) {
+			if (current.modelSelectionKind === 'manual' || !sameModel(current.model, unavailableModel) || current.modelDefaults?.workspace !== defaults.workspace) return;
+		} else if (current.modelDefaults?.workspace === defaults.workspace) return;
 		this._untitledSessions = this._untitledSessions.map(session => session === current
 			? { ...session, model: session.modelSelectionKind === 'manual' ? session.model : model, modelDefaults: defaults }
 			: session);

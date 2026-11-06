@@ -4118,6 +4118,9 @@ impl AppServer {
                 self.plugin_processor().plugin_uninstall(&request.params)
             }
             Some(ClientMethod::ModelList) => self.models_processor().model_list(&request.params),
+            Some(ClientMethod::ModelAvailability) => {
+                self.models_processor().model_availability(&request.params)
+            }
             Some(ClientMethod::ModelPreferencesUpdate) => self
                 .models_processor()
                 .model_preferences_update(&request.params),

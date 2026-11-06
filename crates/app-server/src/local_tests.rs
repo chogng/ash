@@ -5234,6 +5234,19 @@ fn xai_subscription_catalog_drives_model_selection_context_and_invocation() {
             .any(|entry| entry.model.model.as_str() == "grok-4.7")
     );
     assert_eq!(service.list().unwrap(), entries);
+    let availability = service
+        .execution_availability(Some(&ModelRef::new(
+            ProviderId::new("xai").unwrap(),
+            ModelId::new("grok-test").unwrap(),
+        )))
+        .unwrap();
+    use ash_app_server_protocol::protocol::model::ModelExecutionAvailability;
+    assert_eq!(availability.selected, ModelExecutionAvailability::Ready);
+    // The execution path can still use the configured model that discovery omitted.
+    assert_eq!(
+        availability.default_availability,
+        ModelExecutionAvailability::Ready
+    );
     assert_eq!(
         service
             .billing_scope(ModelSelection::ConfiguredDefault)

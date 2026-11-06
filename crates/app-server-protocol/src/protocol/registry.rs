@@ -2074,6 +2074,10 @@ use crate::protocol::model::ContextReadScope;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ContextToolDefinition;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelAvailabilityParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelAvailabilityResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelCatalogEntry;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelCatalogIssue;
@@ -2083,6 +2087,8 @@ use crate::protocol::model::ModelCatalogScope;
 use crate::protocol::model::ModelCatalogSource;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelCatalogStatus;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelExecutionAvailability;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelListParams;
 #[cfg(any(test, feature = "export"))]
@@ -4635,6 +4641,11 @@ client_methods! {
     ModelList => "model/list" {
         params: ModelListParams,
         response: ModelListResult,
+        serialization: GlobalSharedRead,
+    },
+    ModelAvailability => "model/availability" {
+        params: ModelAvailabilityParams,
+        response: ModelAvailabilityResult,
         serialization: GlobalSharedRead,
     },
     ModelPreferencesUpdate => "model/preferences/update" {
@@ -7228,6 +7239,9 @@ typescript_bindings! {
     ModelCatalogIssue,
     ModelCatalogFreshness,
     ModelListParams,
+    ModelAvailabilityParams,
+    ModelAvailabilityResult,
+    ModelExecutionAvailability,
     ModelCatalogScope,
     ModelListResult,
     ModelPreferencesUpdateParams,

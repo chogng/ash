@@ -5,6 +5,15 @@ export interface ModelRef {
 	readonly model: string;
 }
 
+/** Backend admission evidence for the next request on this host. */
+export type ModelExecutionAvailability = 'ready' | 'unknown' | 'retired' | 'modelUnavailable' | 'connectionUnavailable';
+
+export interface ModelSelectionAvailability {
+	readonly selected: ModelExecutionAvailability;
+	readonly configuredDefault: ModelRef | null;
+	readonly defaultAvailability: ModelExecutionAvailability;
+}
+
 /** Curated picker uses, independent of model capabilities and connection access. */
 export enum ModelPurpose {
 	Advisor = 'advisor',
@@ -200,6 +209,7 @@ export interface AgentModelDefaultsUpdate {
 }
 
 export interface IAgentModelsService {
+	readModelAvailability(model: ModelRef | undefined): Promise<ModelSelectionAvailability>;
 	readDefaults(): Promise<AgentModelDefaults>;
 	configureDefaults(update: AgentModelDefaultsUpdate, expectedRevision: number): Promise<void>;
 	readApprovalReviewModel(): Promise<ApprovalReviewModelSelection>;

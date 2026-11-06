@@ -2908,6 +2908,7 @@ interface FakeOptions {
 	}[];
 	readonly configuredProviders?: readonly string[];
 	readonly providers?: readonly ModelProviderCredentialStatus[];
+	readonly readModelAvailability?: IWorkbenchHost['model']['readModelAvailability'];
 	readonly providerModels?: Readonly<Record<string, readonly { readonly model: ModelRef; readonly displayName: string; }[]>>;
 	readonly advisorDefault?: { readonly model: ModelRef; readonly enabled: boolean; readonly maxCalls: number; readonly maxOutputTokens: number; };
 }
@@ -3640,13 +3641,17 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	assert.equal(pickerEntry.supportedReasoningEfforts[0].description, 'Quick tasks');
 });
 
-test('Chat picker excludes a hidden selected model', async () => {
+test('Code keeps the selected model and its effort when the picker hides it', async () => {
 	const entry = {
 		model: { provider: 'openai', model: 'gpt-5.6-sol' },
 		displayName: 'GPT-5.6 Sol',
-	};
+		supportedReasoningEfforts: [{ effort: 'high' }],
+	} as const;
 	const activeSession = { ...session('session-1', 'thread-1'), model: entry.model };
-	const fake = fakeApi({ sessions: [activeSession], models: [entry] });
+	const fake = fakeApi({
+		sessions: [activeSession], models: [entry],
+		readModelAvailability: async () => ({ selected: 'ready', configuredDefault: null, defaultAvailability: 'unknown' }),
+	});
 	using configuration = new WorkbenchConfigurationService();
 	await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [entry.model]);
 	using chat = createChatService(fake.api, configuration);
@@ -3658,6 +3663,59 @@ test('Chat picker excludes a hidden selected model', async () => {
 	assert.deepEqual(await modelsFor(chat).listModels(), []);
 	assert.deepEqual(model.models, []);
 	assert.deepEqual(model.selectedModel, entry.model);
+	assert.equal(model.inputState.selectedModelEntry?.displayName, entry.displayName);
+	assert.equal(model.inputState.inputBlocked, false);
+	await model.selectReasoningEffort('high');
+	assert.equal(model.selectedReasoningEffort, 'high');
+
+	using draft = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await draft.initialize();
+	assert.deepEqual(draft.models, []);
+	assert.deepEqual(draft.selectedModel, entry.model);
+	assert.equal(draft.selectedReasoningEffort, 'high');
+});
+
+test('Code falls back for inherited drafts and waits for a replacement in existing conversations', async () => {
+	const selected = { provider: 'openai', model: 'gpt-6.1-sol' };
+	const fallback = { provider: 'openai', model: 'gpt-6-luna' };
+	const activeSession = { ...session('session-1', 'thread-1'), model: selected };
+	let status: Awaited<ReturnType<IWorkbenchHost['model']['readModelAvailability']>>['selected'] = 'unknown';
+	const fake = fakeApi({
+		sessions: [activeSession],
+		models: [{ model: selected, displayName: 'Original' }, { model: fallback, displayName: 'Fallback' }],
+		readModelAvailability: async model => ({
+			selected: model?.model === selected.model ? status : 'ready',
+			configuredDefault: fallback,
+			defaultAvailability: 'ready',
+		}),
+	});
+	using configuration = new WorkbenchConfigurationService();
+	await configuration.updateValue(codeConversationDefaultsSetting, { profile: { model: selected, effort: 'high' }, workspaces: {} });
+	using chat = createChatService(fake.api, configuration);
+	using sessions = new SessionsManagementService(fake.api);
+	using existing = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await existing.initialize();
+	await existing.selectModel(selected);
+	assert.equal(existing.inputState.inputBlocked, false);
+
+	status = 'retired';
+	fake.emit({ method: 'config/changed', params: { revision: 2, generation: 2 } });
+	await waitFor(() => existing.inputState.inputBlocked === true);
+	assert.deepEqual(existing.selectedModel, selected);
+	assert.match(existing.inputState.status ?? '', /GPT-6\.1 Sol has been retired/);
+	await assert.rejects(existing.send('Keep the draft'), /GPT-6\.1 Sol has been retired/);
+	assert.equal(fake.turnStartRequests.length, 0);
+
+	using draft = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await draft.initialize();
+	assert.deepEqual(draft.selectedModel, fallback);
+	assert.equal(draft.selectedReasoningEffort, undefined);
+	assert.deepEqual(configuration.getValue<CodeConversationDefaults>(codeConversationDefaultsSetting).profile?.model, selected);
+	assert.deepEqual(existing.selectedModel, selected);
+
+	await existing.selectModel(fallback);
+	await existing.send('Send the retained draft');
+	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, fallback);
 });
 
 for (const kind of ['Code', 'Cowork'] as const) {
@@ -4334,6 +4392,7 @@ function fakeApi(options: FakeOptions = {}): {
 			},
 		},
 		model: {
+			readModelAvailability: options.readModelAvailability ?? (async () => ({ selected: 'unknown', configuredDefault: null, defaultAvailability: 'unknown' })),
 			readDefaults: async () => modelDefaults,
 			configureDefaults: async (update: import('../../../platform/models/common/agentModels.js').AgentModelDefaultsUpdate, expectedRevision: number) => {
 				assert.equal(expectedRevision, modelDefaults.revision);

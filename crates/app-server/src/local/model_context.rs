@@ -121,6 +121,14 @@ impl ModelContextCatalog {
     }
 
     pub(super) fn entry(&self, model: &ModelRef) -> Result<ModelCatalogEntry, CoreError> {
+        self.resolve_entry(model)
+            .map_err(|error| CoreError::Model(error.to_string()))
+    }
+
+    pub(super) fn resolve_entry(
+        &self,
+        model: &ModelRef,
+    ) -> Result<ModelCatalogEntry, ash_models_manager::ModelsManagerError> {
         if let Some(entry) = self.entries.get(model) {
             return Ok(entry.clone());
         }
@@ -129,7 +137,6 @@ impl ModelContextCatalog {
         self.manager
             .resolve_static(model, &ModelRequirements::agent())
             .map(|resolved| resolved.entry().clone())
-            .map_err(|error| CoreError::Model(error.to_string()))
     }
 
     pub(super) fn budget(&self, config: &ResolvedConfig) -> Result<ContextBudget, CoreError> {
