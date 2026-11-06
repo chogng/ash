@@ -8,11 +8,12 @@ The explicit product selection in `localization/preinstalled.json` currently kee
 All other language packs are installed on demand through the Rust Extensions Manager. Adding a
 translation source under `extensions/` does not add it to host imports or browser package snapshots.
 
-English and preinstalled extension catalogs are generated into `.build/desktop/localization/` and are not tracked by Git.
-The source `localizationCatalogs.ts` is a stable loading entrypoint. Build and test preparation
-generate the data before compilation; Vite emits one shared chunk per language, and TypeScript
-includes the data modules in the host and test outputs. `pnpm localization:check` validates the
-source declarations and translations without requiring or writing generated catalogs.
+Build and test preparation generate English and preinstalled extension catalogs in
+`.build/desktop/localization/`. The generated loader lists languages using metadata and loads
+message modules for the selected language. Vite shares these modules across renderer entry points.
+Tests that need synchronous access to multiple catalogs use the `localizationCatalogs.ts` fixture
+entry point. `pnpm localization:check` validates source declarations and translations without
+requiring or writing generated catalogs.
 
 ## Ownership
 

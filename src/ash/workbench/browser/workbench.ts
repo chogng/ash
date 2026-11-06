@@ -277,7 +277,7 @@ import { ILocaleService } from '../services/localization/common/locale.js';
 import { WorkbenchLocaleService } from '../services/localization/browser/localeService.js';
 import { ILocalizationService } from '../services/localization/common/localizationService.js';
 import { WorkbenchLocalizationService } from '../services/localization/browser/workbenchLocalizationService.js';
-import { builtinLanguagePackCatalogs, preinstalledLanguagePacks } from '../services/localization/common/localizationCatalogs.js';
+import { builtinLanguagePackSources, preinstalledLanguagePacks } from '../../../../.build/desktop/localization/localizationCatalogLoader.js';
 import { AppServerToolSearchService } from '../services/toolSearch/browser/appServerToolSearchService.js';
 import { ICodebaseSymbolsApi } from '../../platform/codebaseSymbols/common/codebaseSymbolsApi.js';
 import { AccessibleViewInformationService, IAccessibleViewInformationService } from '../services/accessibility/common/accessibleViewInformationService.js';
@@ -772,7 +772,7 @@ export class Workbench extends Disposable {
 		const agentHostFiles = this._register(services.createInstance(AgentHostFileSystemService, workspaceFileService, workspaceFileSystemProvider ?? browserFileSystemProvider));
 		services.registerInstance(IAgentHostFileSystemService, agentHostFiles);
 		services.registerInstance(ISystemFileTransferService, workspaceFileService);
-		const languagePackService = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
+		const languagePackService = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackSources, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePackService);
 		const textFileService = this._register(services.createInstance(TextFileService));
 		themes.watchSourceSaves(textFileService);

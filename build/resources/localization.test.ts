@@ -175,7 +175,7 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		'src/ash/ignored.test.ts': `import { localize } from './nls.js'; localize('hello', 'Ignored test');`,
 		'src/ash/test/ignored.ts': `import { localize } from '../nls.js'; localize('hello', 'Ignored test directory');`,
 		'src/ash/generated/ignored.ts': `import { localize } from '../nls.js'; localize('hello', 'Ignored generated directory');`,
-		'src/ash/platform/languagePacks/common/languagePackContract.ts': `export const ASH_LOCALIZATION_CATALOG_VERSION = 'ash-1'; export interface LanguagePackCatalog { readonly schemaVersion: 1; readonly locale: string; readonly languageName: string; readonly localizedLanguageName: string; readonly catalogVersion: string; readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>; } export interface PreinstalledLanguagePack { readonly id: string; readonly version: string; readonly displayName: string; readonly description: string; readonly catalog: LanguagePackCatalog; }`,
+		'src/ash/platform/languagePacks/common/languagePackContract.ts': await readFile(join(repository, 'src/ash/platform/languagePacks/common/languagePackContract.ts'), 'utf8'),
 		'.build/protocol/typescript/ApprovalModes.ts': `export const APPROVAL_MODE_DEFINITIONS = [];`,
 		'.build/protocol/typescript/ProductSlashCommands.ts': `export const PRODUCT_SLASH_COMMANDS = { permission: { description: 'Choose permissions' }, guardian: { description: 'Prepare project background' } };`,
 		'localization/languages.json': JSON.stringify(['en'].map(locale => ({ locale, languageName: locale, localizedLanguageName: locale }))),
@@ -267,7 +267,11 @@ test('clean checkout validates sources and generates catalogs consumed by host a
 		assert.deepEqual(selected, { eager: [], afterChinese: ['zh-CN'], loaded: ['zh-CN', 'en'], fallbackMessages: {}, chinese: '你好', fallback: 'Hello', reused: true });
 		const catalogs = JSON.parse(run(['--input-type=module', '--eval', `import { productLanguagePackCatalogs } from './${output}/${entry.replace(/\.ts$/u, '.js')}'; console.log(JSON.stringify(productLanguagePackCatalogs.map(catalog => [catalog.locale, catalog.bundles.ash.hello])));`]));
 		assert.deepEqual(catalogs, [['en', 'Hello'], ['zh-CN', '你好']]);
-		const provenance = JSON.parse(run(['--input-type=module', '--eval', `import { builtinLanguagePackCatalogs, preinstalledLanguagePacks } from './${output}/${entry.replace(/\.ts$/u, '.js')}'; console.log(JSON.stringify({ core: builtinLanguagePackCatalogs.map(catalog => catalog.locale), extensions: preinstalledLanguagePacks.map(pack => ({ id: pack.id, catalog: pack.catalog })) }));`]));
+		const provenance = JSON.parse(run(['--input-type=module', '--eval', `
+			import { builtinLanguagePackSources, preinstalledLanguagePacks } from './${output}/.build/desktop/localization/localizationCatalogLoader.js';
+			const extensions = await Promise.all(preinstalledLanguagePacks.map(async pack => ({ id: pack.id, catalog: await pack.catalog.load() })));
+			console.log(JSON.stringify({ core: builtinLanguagePackSources.map(source => source.locale), extensions }));
+		`]));
 		assert.deepEqual(provenance, { core: ['en'], extensions: [{ id: 'ash/language-pack-zh-cn', catalog: packedCatalog }] });
 	}
 	await writeFile(join(root, 'src/ash/feature.ts'), `import { localize } from './nls.js'; localize('hello', 'Hello again');`);

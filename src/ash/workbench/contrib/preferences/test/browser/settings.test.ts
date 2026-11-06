@@ -2921,6 +2921,7 @@ test('SettingsEditor opens directly and updates registry-backed settings', async
 		getBuiltInExtensionTranslationsUri: async () => undefined,
 		whenReady: Promise.resolve(),
 		catalogs,
+		getCatalog: async locale => catalogs.find(catalog => catalog.locale === locale),
 		getInstalledLanguages: async () => catalogs.map(catalog => ({ id: catalog.locale, label: catalog.localizedLanguageName })),
 		refresh: async () => { },
 	};

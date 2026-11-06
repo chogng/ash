@@ -16,20 +16,29 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/c
 import { IExtensionManagementService } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { WebLanguagePacksService } from '../../browser/languagePacks.js';
 import { parseLanguagePackCatalog, parseLanguagePackIndexEntry, resolveLanguagePackCatalog } from '../../common/languagePackCatalog.js';
-import type { LanguagePackCatalog } from '../../common/languagePackContract.js';
-import { builtinLanguagePackCatalogs, preinstalledLanguagePacks, productLanguagePackCatalogs } from '../../../../workbench/services/localization/common/localizationCatalogs.js';
+import type { LanguagePackCatalog, PreinstalledLanguagePack } from '../../common/languagePackContract.js';
+import { builtinLanguagePackSources, preinstalledLanguagePacks, productLanguagePackSources } from '../../../../../../.build/desktop/localization/localizationCatalogLoader.js';
+import { productLanguagePackCatalogs } from '../../../../workbench/services/localization/common/localizationCatalogs.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
 test('English and preinstalled language packs remain available without Extensions', async () => {
 	const extensionManagement = createExtensions([]);
 	extensionManagement.listInstalled = async () => { throw new Error('Extensions is offline'); };
-	using service = createService(extensionManagement);
+	let loads = 0;
+	const preinstalled = preinstalledLanguagePacks.map(pack => ({
+		...pack,
+		catalog: { ...pack.catalog, load: () => { loads++; return pack.catalog.load(); } },
+	}));
+	using service = createService(extensionManagement, {}, undefined, preinstalled);
 
 	assert.deepEqual(await service.getInstalledLanguages(), [
 		{ id: 'en', label: 'English', description: 'English' },
 		{ id: 'zh-CN', label: '简体中文', description: 'Chinese (Simplified)', extensionId: 'ash/language-pack-zh-cn' },
 	]);
+	assert.equal(loads, 0);
+	assert.equal((await service.getCatalog('ZH_cn'))?.locale, 'zh-CN');
+	assert.equal(loads, 1);
 });
 
 test('language pack catalogs are validated before projection', () => {
@@ -111,12 +120,12 @@ function createExtensions(catalogs: readonly LanguagePackCatalog[]): IExtensionM
 	};
 }
 
-function createService(extensionManagement: IExtensionManagementService, store: Partial<ILanguagePackStore> = {}, meteredConnection: IMeteredConnectionService = { _serviceBrand: undefined, isConnectionMetered: false, onDidChangeIsConnectionMetered: Event.None }): WebLanguagePacksService {
+function createService(extensionManagement: IExtensionManagementService, store: Partial<ILanguagePackStore> = {}, meteredConnection: IMeteredConnectionService = { _serviceBrand: undefined, isConnectionMetered: false, onDidChangeIsConnectionMetered: Event.None }, preinstalled: readonly PreinstalledLanguagePack[] = preinstalledLanguagePacks): WebLanguagePacksService {
 	using services = new InstantiationService();
 	services.registerInstance(IMeteredConnectionService, meteredConnection);
 	services.registerInstance(IExtensionManagementService, extensionManagement);
 	services.registerInstance(ILanguagePackStore, createTestLanguagePackStore(store));
-	return services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks);
+	return services.createInstance(WebLanguagePacksService, builtinLanguagePackSources, preinstalled);
 }
 
 test('metered startup retains cached language resources and resumes one catalog synchronization', async () => {
@@ -139,7 +148,7 @@ test('metered startup retains cached language resources and resumes one catalog 
 		replace: async () => { void synchronized.complete(); },
 	}, policy);
 	await service.whenReady;
-	assert.equal(service.catalogs.some(catalog => catalog.locale === 'fr'), true);
+	assert.equal((await service.getCatalog('fr'))?.locale, 'fr');
 	const translations = await service.getBuiltInExtensionTranslationsUri('example', 'fr');
 	assert.ok(translations?.path.includes('Bonjour'));
 	assert.deepEqual({ listCalls, resourceCalls }, { listCalls: 0, resourceCalls: 0 });
@@ -216,7 +225,7 @@ test('installed pack updates are saved for the next startup before they are adve
 	catalogs[0] = { ...catalogs[0], bundles: { ash: { hello: 'Salut' } } };
 	await service.refresh();
 	assert.deepEqual(saved.map(catalog => catalog.bundles.ash.hello), ['Bonjour', 'Salut']);
-	assert.deepEqual(service.catalogs.find(catalog => catalog.locale === 'fr'), catalogs[0]);
+	assert.deepEqual(await service.getCatalog('fr'), catalogs[0]);
 });
 
 test('a failed resource save preserves the published installed language catalog', async () => {
@@ -224,11 +233,11 @@ test('a failed resource save preserves the published installed language catalog'
 	let failWrite = false;
 	using service = createService(createExtensions(catalogs), { read: async () => undefined, write: async () => { if (failWrite) throw new Error('storage full'); } });
 	await service.whenReady;
-	const published = service.catalogs.find(catalog => catalog.locale === 'fr');
+	const published = await service.getCatalog('fr');
 	catalogs[0] = { ...catalogs[0], bundles: { ash: { hello: 'Salut' } } };
 	failWrite = true;
 	await assert.rejects(service.refresh(), /storage full/);
-	assert.equal(service.catalogs.find(catalog => catalog.locale === 'fr'), published);
+	assert.equal(await service.getCatalog('fr'), published);
 });
 
 test('the Ash French example package loads through the localization capability', async () => {
@@ -237,7 +246,7 @@ test('the Ash French example package loads through the localization capability',
 	const saved: LanguagePackCatalog[] = [];
 	using service = createService(createExtensions([catalog]), { read: async () => undefined, write: async value => { saved.push(value); } });
 	await service.whenReady;
-	assert.deepEqual(service.catalogs.find(value => value.locale === 'fr'), catalog);
+	assert.deepEqual(await service.getCatalog('fr'), catalog);
 	assert.deepEqual(saved, [catalog]);
 });
 
@@ -258,7 +267,7 @@ test('preinstalled catalogs cannot be replaced by an installed provider', async 
 	const catalog = { ...productLanguagePackCatalogs.find(value => value.locale === 'zh-CN')!, bundles: { ash: { hello: 'replacement' } } };
 	using service = createService(createExtensions([catalog]), { read: async () => undefined, write: async () => { assert.fail('Foreign providers must not replace a preinstalled language'); } });
 	await service.whenReady;
-	assert.deepEqual(service.catalogs.find(value => value.locale === 'zh-CN'), productLanguagePackCatalogs.find(value => value.locale === 'zh-CN'));
+	assert.deepEqual(await service.getCatalog('zh-CN'), productLanguagePackCatalogs.find(value => value.locale === 'zh-CN'));
 });
 
 test('an unreadable provider releases its lease and does not hide another locale', async () => {
@@ -288,12 +297,12 @@ test('the preinstalled Chinese extension can update independently and uninstall 
 	using service = createService(extensions, store);
 	await service.whenReady;
 	assert.equal((await service.getInstalledLanguages()).find(pack => pack.id === 'zh-CN')?.extensionId, 'ash.language-pack-zh-cn@official');
-	assert.equal((await resolveLanguagePackCatalog('zh-CN', productLanguagePackCatalogs, store)).bundles.ash.greeting, '更新后的语言包');
+	assert.equal((await resolveLanguagePackCatalog('zh-CN', productLanguagePackSources, store)).bundles.ash.greeting, '更新后的语言包');
 	assert.deepEqual((await store.readIndex()).map(({ extensionId, version, locale }) => ({ extensionId, version, locale })), [{ extensionId: 'ash.language-pack-zh-cn@official', version: '1.1.0', locale: 'zh-CN' }]);
 	current = [];
 	await service.refresh();
 	assert.deepEqual(await store.readIndex(), []);
-	assert.deepEqual(await resolveLanguagePackCatalog('zh-CN', productLanguagePackCatalogs, store), original);
+	assert.deepEqual(await resolveLanguagePackCatalog('zh-CN', productLanguagePackSources, store), original);
 });
 
 test('development reloads prefer current source translations while installed locales remain available', async () => {
@@ -302,9 +311,9 @@ test('development reloads prefer current source translations while installed loc
 	const french: LanguagePackCatalog = { schemaVersion: 1, locale: 'fr', languageName: 'French', localizedLanguageName: 'Français', catalogVersion: 'ash-1', bundles: { ash: { hello: 'Bonjour' } } };
 	const catalogs = new Map([['zh-CN', savedChinese], ['fr', french]]);
 	const store = { read: async (locale: string) => catalogs.get(locale) };
-	assert.equal((await resolveLanguagePackCatalog('zh-CN', productLanguagePackCatalogs, store)).bundles['ash.settings']['categories.editor-fonts.label'], '字体与排版');
-	assert.equal((await resolveLanguagePackCatalog('ZH_cn', productLanguagePackCatalogs, store, { preferStartupCatalogs: true })).bundles['ash.settings']['categories.editor-fonts.label'], '字体');
-	assert.equal(await resolveLanguagePackCatalog('fr-CA', productLanguagePackCatalogs, store, { preferStartupCatalogs: true }), french);
+	assert.equal((await resolveLanguagePackCatalog('zh-CN', productLanguagePackSources, store)).bundles['ash.settings']['categories.editor-fonts.label'], '字体与排版');
+	assert.equal((await resolveLanguagePackCatalog('ZH_cn', productLanguagePackSources, store, { preferStartupCatalogs: true })).bundles['ash.settings']['categories.editor-fonts.label'], '字体');
+	assert.equal(await resolveLanguagePackCatalog('fr-CA', productLanguagePackSources, store, { preferStartupCatalogs: true }), french);
 });
 
 test('uninstall removes a language provider from startup resources and falls back to English', async () => {
@@ -315,20 +324,21 @@ test('uninstall removes a language provider from startup resources and falls bac
 	const store = createTestLanguagePackStore();
 	using service = createService(extensions, store);
 	await service.whenReady;
-	assert.equal((await resolveLanguagePackCatalog('fr-CA', productLanguagePackCatalogs, store)).locale, 'fr');
+	assert.equal((await resolveLanguagePackCatalog('fr-CA', productLanguagePackSources, store)).locale, 'fr');
 	installed = [];
 	await service.refresh();
-	assert.equal((await resolveLanguagePackCatalog('fr-CA', productLanguagePackCatalogs, store)).locale, 'en');
+	assert.equal((await resolveLanguagePackCatalog('fr-CA', productLanguagePackSources, store)).locale, 'en');
 	assert.equal((await service.getInstalledLanguages()).some(pack => pack.id === 'fr'), false);
 });
 
 test('English remains the fallback even when an installed provider declares English', async () => {
-	const catalog = { ...builtinLanguagePackCatalogs[0], bundles: { ash: { hello: 'replacement' } } };
+	const english = productLanguagePackCatalogs.find(value => value.locale === 'en')!;
+	const catalog = { ...english, bundles: { ash: { hello: 'replacement' } } };
 	const store = createTestLanguagePackStore();
 	using service = createService(createExtensions([catalog]), store);
 	await service.whenReady;
 	assert.deepEqual(await store.readIndex(), []);
-	assert.deepEqual(await resolveLanguagePackCatalog('en', productLanguagePackCatalogs, store), builtinLanguagePackCatalogs[0]);
+	assert.deepEqual(await resolveLanguagePackCatalog('en', productLanguagePackSources, store), english);
 });
 
 test('extension translation resources stay pinned to the startup version until restart', async () => {

@@ -11,12 +11,19 @@ export interface LanguagePackCatalog {
 	readonly extensionTranslations?: Readonly<Record<string, { readonly package: Readonly<Record<string, string>>; readonly bundle: Readonly<Record<string, string>>; }>>;
 }
 
+export type LanguagePackMetadata = Pick<LanguagePackCatalog, 'locale' | 'languageName' | 'localizedLanguageName'>;
+
+/** Bundled language metadata can be used without loading its message tables. */
+export interface LanguagePackCatalogSource extends LanguagePackMetadata {
+	load(): Promise<LanguagePackCatalog>;
+}
+
 export interface PreinstalledLanguagePack {
 	readonly id: string;
 	readonly version: string;
 	readonly displayName: string;
 	readonly description: string;
-	readonly catalog: LanguagePackCatalog;
+	readonly catalog: LanguagePackCatalogSource;
 }
 
 /** A derived startup resource tied to the installed package that supplied it. */

@@ -131,7 +131,7 @@ import { ILocaleService } from '../../workbench/services/localization/common/loc
 import { WorkbenchLocaleService } from '../../workbench/services/localization/browser/localeService.js';
 import { ILocalizationService } from '../../workbench/services/localization/common/localizationService.js';
 import { WorkbenchLocalizationService } from '../../workbench/services/localization/browser/workbenchLocalizationService.js';
-import { builtinLanguagePackCatalogs, preinstalledLanguagePacks } from '../../workbench/services/localization/common/localizationCatalogs.js';
+import { builtinLanguagePackSources, preinstalledLanguagePacks } from '../../../../.build/desktop/localization/localizationCatalogLoader.js';
 import { IAppServerHookApi, IAppServerSkillApi } from '../../platform/agentHost/common/appServerApi.js';
 import { IExtensionManagementService, OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID, type ExtensionsOpenOptions } from '../../platform/extensionManagement/common/extensionManagementService.js';
 import { registerExtensionManagementActions } from '../../workbench/contrib/extensions/browser/extensionsActions.js';
@@ -471,7 +471,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(ILocalTranscriptionService, localTranscription);
 		services.registerInstance(ILocalTranscriptionModelService, options.api.localTranscriptionModels ?? (localTranscription instanceof NullLocalTranscriptionService ? localTranscription : this._register(new NullLocalTranscriptionService())));
 		services.registerInstance(IConfigurationService, configurationService);
-		const languagePacks = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
+		const languagePacks = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackSources, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePacks);
 		if (options.nativeHostApi) services.registerInstance(INativeHostService, options.nativeHostApi);
 		const languageService = this._register(new LanguageService());

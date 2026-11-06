@@ -13,7 +13,7 @@ import {
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { ILocaleService } from '../../../services/localization/common/locale.js';
-import { preinstalledLanguagePacks } from '../../../services/localization/common/localizationCatalogs.js';
+import { preinstalledLanguagePacks } from '../../../../../../.build/desktop/localization/localizationCatalogLoader.js';
 
 interface InstalledLanguageItem extends IQuickPickItem {
 	readonly kind: 'locale';

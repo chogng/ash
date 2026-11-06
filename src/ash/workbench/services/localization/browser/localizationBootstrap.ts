@@ -5,7 +5,7 @@ import { Schemas } from '../../../../base/common/network.js';
 import { FileSystemProviderErrorCode, toFileSystemProviderErrorCode, type IFileService } from '../../../../platform/files/common/files.js';
 import type { ILanguagePackStore } from '../../../../platform/languagePacks/common/languagePackStore.js';
 import { resolveLanguagePackCatalog } from '../../../../platform/languagePacks/common/languagePackCatalog.js';
-import { productLanguagePackCatalogs } from '../common/localizationCatalogs.js';
+import { productLanguagePackSources } from '../../../../../../.build/desktop/localization/localizationCatalogLoader.js';
 
 /** This module must not import contributions or the settings registry before NLS is ready. */
 export async function initializeBrowserLocalization(files: Pick<IFileService, 'readFile'>, store: Pick<ILanguagePackStore, 'read' | 'write'>): Promise<void> {
@@ -15,6 +15,6 @@ export async function initializeBrowserLocalization(files: Pick<IFileService, 'r
 	const values = parseJsonc(source) as Record<string, unknown>;
 	if (!values || typeof values !== 'object' || Array.isArray(values)) throw new TypeError('Settings must be an object');
 	const preference = values['workbench.locale'];
-	const catalog = await resolveLanguagePackCatalog(typeof preference === 'string' ? preference : 'en', productLanguagePackCatalogs, store, { preferStartupCatalogs: import.meta.env?.DEV === true });
+	const catalog = await resolveLanguagePackCatalog(typeof preference === 'string' ? preference : 'en', productLanguagePackSources, store, { preferStartupCatalogs: import.meta.env?.DEV === true });
 	setNlsMessages(catalog.locale, catalog.bundles);
 }
