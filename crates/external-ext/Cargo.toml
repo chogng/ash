@@ -17,7 +17,10 @@ ash-file-identity = { workspace = true }
 sha2 = { workspace = true }
 ash-sandboxing.workspace = true
 external-ext-protocol = { workspace = true }
+flate2.workspace = true
 getrandom = { workspace = true }
+jsonc-parser = { workspace = true, features = ["serde"] }
+serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 

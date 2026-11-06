@@ -72,7 +72,7 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		this.domNode = h(document, 'section', {
 			className: 'ash-projects',
 			properties: { tabIndex: -1 },
-			attributes: { 'aria-label': localize('projects.title', 'Projects'), 'data-splash-grid': '' },
+			attributes: { 'aria-label': localize('projects.title', 'Projects') },
 		});
 		parent.append(this.domNode);
 		super.create(this.domNode);

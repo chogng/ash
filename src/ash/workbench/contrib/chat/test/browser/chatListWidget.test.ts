@@ -709,6 +709,43 @@ suite('chatRenderer browser component', () => {
 		})).toBe(true);
 	});
 
+	test('streaming Markdown tables preserve the focused cell through appends and corrections', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const header = '| Name | Details |\n| :--- | ---: |\n';
+		const rows = '| Earlier | A stable row with **formatted content** |\n'.repeat(24);
+		const lastRow = '| [Keep focus](https://example.com) | ';
+		const render = async (source: string, complete = false) => {
+			const result = await page.evaluate(({ source, complete }) => window.ashChatTranscriptIntegration.compareStreamingMarkdown(source, complete, true), { source, complete });
+			assert.equal(result.actual, result.expected);
+			assert.ok(result.layoutError <= 1);
+		};
+		const prefix = header + rows + lastRow;
+		await render(prefix + 'Initial');
+		const table = page.getByRole('table');
+		const link = table.getByRole('link', { name: 'Keep focus' });
+		await link.focus();
+		const retained = (await link.elementHandle())!;
+		const originalTable = (await table.elementHandle())!;
+		try {
+			const appended = prefix + 'Initial **extension** |\n| Appended | New row |';
+			await render(appended);
+			assert.ok(await retained.evaluate(element => element === document.activeElement));
+			await expect(table.getByRole('row').last()).toContainText('Appended');
+
+			const corrected = prefix + '[Blocked](javascript:alert(1)) |\n| Appended | New row |';
+			await render(corrected);
+			assert.ok(await retained.evaluate(element => element === document.activeElement));
+			await expect(table.locator('a[href^="javascript:"]')).toHaveCount(0);
+
+			await render(corrected.replace('| :--- | ---: |', '| ---: | :--- |'), true);
+			assert.equal(await originalTable.evaluate(element => element.isConnected), false);
+		} finally {
+			await retained.dispose();
+			await originalTable.dispose();
+		}
+	});
+
 	test('accessible transcript follows streamed model text and restores the focused response', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html');
@@ -813,6 +850,36 @@ suite('chatRenderer browser component', () => {
 		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().selection)).toEqual(selection);
 		await page.evaluate(() => window.ashChatTranscriptIntegration.renderItems([]));
 		expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().codeModelCount)).toBe(0);
+	});
+
+	test('queued Markdown keeps a scroll made before the next frame', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const text = 'An earlier paragraph with more reading content.\n\n'.repeat(80);
+		await page.evaluate(value => window.ashChatTranscriptIntegration.stream(value + 'Initial reply tail.', false), text);
+		await expect(page.locator('[data-item-id="stream"]')).toContainText('Initial reply tail.');
+		const viewport = page.locator('.ash-chat-list-widget .ash-scrollbar-viewport');
+		await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThanOrEqual(1);
+		const next = text + 'Additional streamed paragraph.\n\n'.repeat(20) + 'Committed reply tail.';
+		const queued = await viewport.evaluate((element, value) => {
+			const { get, set } = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollTop')!;
+			let reads = 0;
+			Object.defineProperty(element, 'scrollTop', { configurable: true, set, get() { reads++; return get!.call(this); } });
+			try {
+				window.ashChatTranscriptIntegration.stream(value.slice(0, -5), false);
+				window.ashChatTranscriptIntegration.stream(value, false);
+			} finally {
+				Reflect.deleteProperty(element, 'scrollTop');
+			}
+			const stillQueued = !element.textContent?.includes('Committed reply tail.');
+			element.scrollTop -= 150;
+			return { stillQueued, reads, top: element.scrollTop };
+		}, next);
+		assert.equal(queued.stillQueued, true);
+		assert.equal(queued.reads, 0);
+		await expect(page.locator('[data-item-id="stream"]')).toContainText('Committed reply tail.');
+		await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBe(queued.top);
+		await expect(page.getByRole('button', { name: 'Scroll to Latest' })).toBeVisible();
 	});
 
 	test('provider corrections preserve the reading position while retaining a selected code editor and focused action', async function () {

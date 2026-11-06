@@ -8,6 +8,8 @@ use ash_core::HarnessContextProvider;
 use ash_core::HarnessContextRequest;
 use ash_core::HarnessContextScope;
 use ash_file_access::Dir;
+use ash_file_access::Grant;
+use ash_file_access::GrantSource;
 use ash_file_access::Permission;
 use ash_file_access::Permissions;
 use ash_protocol::CommandId;
@@ -177,7 +179,8 @@ fn environment_capture_preserves_unborn_detached_and_plain_directories() {
     let capture = || {
         AgentEnvironmentSource::capture(root.path(), RepositoryInspection::Allowed)
             .unwrap()
-            .repository
+            .repository()
+            .unwrap()
     };
     assert_eq!(capture(), RepositoryEnvironment::NotDetected);
     git(
@@ -215,9 +218,57 @@ fn environment_capture_preserves_unborn_detached_and_plain_directories() {
     assert_eq!(
         AgentEnvironmentSource::capture(root.path(), RepositoryInspection::Omit)
             .unwrap()
-            .repository,
+            .repository()
+            .unwrap(),
         RepositoryEnvironment::NotDetected
     );
+}
+
+#[test]
+fn workspace_repository_context_is_captured_on_first_use_and_revoked_with_its_grant() {
+    let root = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(root.path()).unwrap();
+    let grant = Grant::for_environment(
+        dir.clone(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::InspectRepository]),
+    );
+    let mut source = AgentEnvironmentSource::capture(
+        dir.canonical_path(),
+        RepositoryInspection::OnSnapshot(grant.authorize(Permission::InspectRepository).unwrap()),
+    )
+    .unwrap();
+
+    git(
+        root.path(),
+        &["init", "--quiet", "--initial-branch=on-demand"],
+    );
+    let repository = source.repository().unwrap();
+    assert!(matches!(
+        &repository,
+        RepositoryEnvironment::Git { branch, .. } if branch.as_deref() == Some("on-demand")
+    ));
+    assert_eq!(source.clone().repository().unwrap(), repository);
+
+    grant.revoke();
+    assert_eq!(
+        source.repository().unwrap(),
+        RepositoryEnvironment::NotDetected
+    );
+    git(
+        root.path(),
+        &["symbolic-ref", "HEAD", "refs/heads/new-grant"],
+    );
+    let replacement = Grant::for_environment(
+        dir,
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::InspectRepository]),
+    );
+    source.replace_repository_grant(&replacement);
+    assert!(matches!(
+        source.repository().unwrap(),
+        RepositoryEnvironment::Git { branch, .. } if branch.as_deref() == Some("new-grant")
+    ));
 }
 
 #[test]
@@ -249,7 +300,8 @@ fn environment_capture_omits_content_queries_that_can_start_repository_programs(
     let capture = || {
         AgentEnvironmentSource::capture(root.path(), RepositoryInspection::Allowed)
             .unwrap()
-            .repository
+            .repository()
+            .unwrap()
     };
     let RepositoryEnvironment::Git {
         branch,

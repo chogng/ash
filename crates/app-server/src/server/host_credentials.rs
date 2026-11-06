@@ -18,17 +18,22 @@ const MAX_FRAME: u64 = 64 * 1024;
 impl AppServer {
     /// Consumes a native-only connection admitted by the profile daemon. This is
     /// deliberately absent from JSON-RPC dispatch and all renderer method maps.
-    pub(crate) fn serve_host_credentials(
+    pub(crate) fn serve_host_credentials_for(
         &self,
         mut reader: impl BufRead + Send + 'static,
         mut writer: impl Write,
+        role: ash_app_server_daemon::ConnectionRole,
     ) -> io::Result<()> {
-        let mut session = self
+        let owner = self
             .chatgpt_web
             .as_ref()
-            .ok_or_else(|| io::Error::other("authentication owner is unavailable"))?
-            .session()
-            .map_err(|_| io::Error::other("authentication owner is unavailable"))?;
+            .ok_or_else(|| io::Error::other("authentication owner is unavailable"))?;
+        let mut session = match role {
+            ash_app_server_daemon::ConnectionRole::Credentials => owner.session(),
+            ash_app_server_daemon::ConnectionRole::CredentialsCodex => owner.codex_session(),
+            _ => return Err(io::Error::other("invalid private credential connection")),
+        }
+        .map_err(|_| io::Error::other("authentication owner is unavailable"))?;
         send(
             &mut writer,
             &HostCredentialResponse::Ready {

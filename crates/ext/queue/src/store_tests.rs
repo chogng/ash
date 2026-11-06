@@ -191,7 +191,7 @@ fn input(id: &str) -> QueueInput {
         command_id: CommandId::new(id).unwrap(),
         session_id: SessionId::new("session").unwrap(),
         thread_id: ThreadId::new("thread").unwrap(),
-        directory: "/work".into(),
+        directory: Some("/work".into()),
         input: vec![UserInput::Text {
             text: "hello".into(),
         }],

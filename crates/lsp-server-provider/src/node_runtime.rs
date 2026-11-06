@@ -81,12 +81,35 @@ impl ManagedNodeRuntime {
         context: &InstallContext,
     ) -> Result<Self, LanguageServerProviderError> {
         if let Some(executable) = env::var_os(ELECTRON_RUN_AS_NODE_PATH) {
-            match env::var("ASH_ELECTRON_RUNTIME_AVAILABLE").as_deref() {
-                Ok("1") | Err(env::VarError::NotPresent) => {}
+            let verified = match env::var("ASH_ELECTRON_RUNTIME_AVAILABLE").as_deref() {
+                Ok("1") => true,
+                Err(env::VarError::NotPresent) => false,
                 Ok(_) | Err(_) => return Err(LanguageServerProviderError::ManagedNodeUnavailable),
+            };
+            let expected = env::var_os("ASH_ELECTRON_RUN_AS_NODE_SHA256");
+            if verified && let Some(expected) = &expected {
+                let digest = expected
+                    .to_str()
+                    .filter(|digest| {
+                        digest.len() == 64
+                            && digest
+                                .bytes()
+                                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+                    })
+                    .ok_or(LanguageServerProviderError::ManagedNodeUnavailable)?;
+                // The daemon verified this installation before launching the backend.
+                // Each child launch still checks the executable against the frozen digest.
+                return Ok(Self {
+                    executable: canonical_executable(
+                        Path::new(&executable),
+                        "managed Electron Node runtime",
+                    )?,
+                    source: ManagedNodeRuntimeSource::ElectronRunAsNode,
+                    electron_digest: Some(digest.into()),
+                });
             }
             let runtime = Self::from_electron_path(executable)?;
-            if let Some(expected) = env::var_os("ASH_ELECTRON_RUN_AS_NODE_SHA256")
+            if let Some(expected) = expected
                 && expected.to_str() != runtime.electron_digest.as_deref()
             {
                 return Err(LanguageServerProviderError::ManagedNodeUnavailable);
@@ -110,6 +133,11 @@ impl ManagedNodeRuntime {
     /// Returns how the frozen executable enters a Node-compatible runtime.
     pub const fn source(&self) -> ManagedNodeRuntimeSource {
         self.source
+    }
+
+    /// Returns the digest that every Electron Node child must verify before launch.
+    pub fn electron_digest(&self) -> Option<&str> {
+        self.electron_digest.as_deref()
     }
 
     pub(crate) fn command_for_script(

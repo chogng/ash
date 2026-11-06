@@ -1,5 +1,5 @@
 import { Emitter } from '../../../base/common/event.js';
-import type { IAuxiliaryWindowStateEvent } from '../../window/common/window.js';
+import type { IAuxiliaryWindowStateEvent, IWindowClientSizeEvent } from '../../window/common/window.js';
 import type { BrowserWindow, BrowserWindowConstructorOptions, HandlerDetails, WebContents } from 'electron';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { AuxiliaryWindow, type IAuxiliaryWindow } from './auxiliaryWindow.js';
@@ -10,6 +10,8 @@ import { resolveWindowTitleBarOptions, restoreWindowBounds } from '../../windows
 export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliaryWindowsMainService {
 	private readonly stateChanged = this._register(new Emitter<{ readonly parentId: number; readonly event: IAuxiliaryWindowStateEvent; }>());
 	readonly onDidChangeWindowState = this.stateChanged.event;
+	private readonly clientSizeChanged = this._register(new Emitter<{ readonly parentId: number; readonly event: IWindowClientSizeEvent; }>());
+	readonly onDidChangeWindowClientSize = this.clientSizeChanged.event;
 	private readonly windows = this._register(new DisposableMap<number, AuxiliaryWindow>());
 	private readonly listeners = this._register(new DisposableMap<number, DisposableStore>());
 
@@ -71,6 +73,11 @@ export class AuxiliaryWindowsMainService extends Disposable implements IAuxiliar
 		const resources = this.listeners.set(window.id, new DisposableStore());
 		resources.add(auxiliary.onDidChangeState(() => {
 			if (!window.isDestroyed()) this.stateChanged.fire({ parentId: auxiliary.parentId, event: { windowName: webContents.mainFrame.name, state: auxiliary.getState() } });
+		}));
+		resources.add(auxiliary.onDidChangeClientSize(size => {
+			if (!webContents.isDestroyed()) this.clientSizeChanged.fire({
+				parentId: auxiliary.parentId, event: { windowName: webContents.mainFrame.name, size },
+			});
 		}));
 		// Only restored maximized popups are created with show:false by createWindow.
 		if (options.show === false) {

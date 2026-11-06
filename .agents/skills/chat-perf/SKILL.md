@@ -13,7 +13,8 @@ Use [auto-perf-optimize](../auto-perf-optimize/SKILL.md) for application prepara
 
 | Question | Existing Ash starting point | Evidence boundary |
 | --- | --- | --- |
-| Markdown, code blocks, tool rows, focus or disclosure rendering | `test/integration/browser/chatTranscript.integration.spec.ts` and `chatTranscript.integration.ts` | Controlled browser component; does not cover backend streaming or Desktop footprint. |
+| Streaming Markdown parsing, frame commits or correction fallback | [chat-markdown-perf](../chat-markdown-perf/SKILL.md) | Controlled renderer measurements and Markdown-specific behavior checks. |
+| Tool rows, focus or disclosure rendering | `test/integration/browser/chatTranscript.integration.spec.ts` | Controlled browser component. |
 | Provider stream through durable Thread state into live widgets | `test/smoke/areas/chat/chat-response-stream.spec.ts` | Local synthetic SSE responses through the real App Server and Chat pipeline. |
 | Desktop session switching, hidden views, or resources after closing Chat | `test/scenario/src/runScenario.ts` with a focused `.cjs` scenario | Real Desktop workflow with isolated workspace and profile. |
 

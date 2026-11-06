@@ -6,7 +6,6 @@ import { readDefaultLogLevels, DefaultLogLevelsService, IDefaultLogLevelsService
 import '../services/configuration/common/jsonEditingService.js';
 import { IWorkspaceEditingService, WorkspaceTransitionCommittedError } from '../services/workspaces/common/workspaceEditing.js';
 import { IBrowserPasswordService, UnavailableBrowserPasswordService } from '../../platform/browserView/common/browserPasswordService.js';
-import { IWorkspacesService } from '../../platform/workspaces/common/workspaces.js';
 import { IChannelService } from '../../platform/collab/common/channelService.js';
 import { TreeSitterLibraryService, TreeSitterSyntaxProviders, createTreeSitterSyntaxSession } from '../services/treeSitter/browser/treeSitterLibraryService.js';
 import { ITreeSitterLibraryService } from '../../editor/common/services/treeSitter/treeSitterLibraryService.js';
@@ -35,6 +34,11 @@ import { AppServerAvailableContext } from '../common/contextkeys.js';
 import { IWorkbenchEnvironmentService } from '../services/environment/common/environmentService.js';
 import { localize } from '../../nls.js';
 import { Schemas } from '../../base/common/network.js';
+import { getMediaMime, getMediaOrTextMime } from '../../base/common/mime.js';
+import { extname } from '../../base/common/path.js';
+import { CODE_EDITOR_ID } from '../common/editor/codeEditorId.js';
+import { isEditorPaneWithSelection, isResourceDiffEditorInput, type IResourceEditorInput } from '../common/editor.js';
+import { associatedEditorId, EditorAssociationsConfiguration } from './parts/editor/editorConfiguration.js';
 import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import { IUserDataProfileService } from '../services/userDataProfile/common/userDataProfile.js';
 import { UserDataProfileService } from '../services/userDataProfile/browser/userDataProfileService.js';
@@ -75,7 +79,7 @@ import { IMemoriesService } from '../../platform/memories/common/memoriesService
 import { IMemoryDiagnosticsService } from '../../platform/memory/common/memoryDiagnosticsService.js';
 import './style.js';
 import { disposableWindowTimeout } from '../../base/browser/scheduler.js';
-import { getWindow } from '../../base/browser/dom.js';
+import { getWindow, runWhenWindowIdle } from '../../base/browser/dom.js';
 import { TextFileSaveErrorHandler } from '../contrib/files/browser/editors/textFileSaveErrorHandler.js';
 import { mainWindow } from '../../base/browser/window.js';
 import { PixelRatio } from '../../base/browser/pixelRatio.js';
@@ -83,9 +87,11 @@ import {
 	type IDisposable,
 	Disposable,
 	DisposableStore,
+	MutableDisposable,
 	toDisposable,
 } from '../../base/common/lifecycle.js';
-import { CancellationError, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
+import { CancellationError, getErrorMessage, isCancellationError, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
+import { DeferredPromise, raceCancellationError } from '../../base/common/async.js';
 import { assertDefined } from '../../base/common/types.js';
 import { URI } from '../../base/common/uri.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
@@ -154,6 +160,7 @@ import { IQuickInputService } from '../../platform/quickinput/common/quickInput.
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { ISystemFileTransferService } from '../../platform/files/common/systemFileTransferService.js';
 import {
+	FileNotFoundError,
 	IFileService,
 } from '../../platform/files/common/files.js';
 import { DecorationsService } from '../services/decorations/browser/decorationsService.js';
@@ -208,7 +215,7 @@ import { BrowserContentSearchService, FileContentSearchService } from '../../pla
 import type { Part } from './part.js';
 import { AuxiliaryBarPart } from './parts/auxiliarybar/auxiliaryBarPart.js';
 import { EditorContextKeyController } from './parts/editor/editorContextKeys.js';
-import { EditorPart, IEditorPart, type IEditorPartOptions } from './parts/editor/editorPart.js';
+import { EditorOpenSupersededError, EditorPart, IEditorPart, type IEditorPartOptions } from './parts/editor/editorPart.js';
 import { BreadcrumbsFilePicker, BreadcrumbsSymbolPicker } from './parts/editor/breadcrumbsPicker.js';
 import { BreadcrumbsService, IBreadcrumbsService } from './parts/editor/breadcrumbs.js';
 import { EditorParts, IEditorPartsService } from './parts/editor/editorParts.js';
@@ -272,7 +279,7 @@ import { ILocaleService } from '../services/localization/common/locale.js';
 import { WorkbenchLocaleService } from '../services/localization/browser/localeService.js';
 import { ILocalizationService } from '../services/localization/common/localizationService.js';
 import { WorkbenchLocalizationService } from '../services/localization/browser/workbenchLocalizationService.js';
-import { builtinLanguagePackCatalogs, preinstalledLanguagePacks } from '../services/localization/common/localizationCatalogs.js';
+import { builtinLanguagePackSources, preinstalledLanguagePacks } from '../../../../.build/desktop/localization/localizationCatalogLoader.js';
 import { AppServerToolSearchService } from '../services/toolSearch/browser/appServerToolSearchService.js';
 import { ICodebaseSymbolsApi } from '../../platform/codebaseSymbols/common/codebaseSymbolsApi.js';
 import { AccessibleViewInformationService, IAccessibleViewInformationService } from '../services/accessibility/common/accessibleViewInformationService.js';
@@ -308,7 +315,10 @@ import { LanguageDiagnosticsMarkerBridge } from '../services/language/browser/la
 import { IOutputService } from '../services/output/common/output.js';
 import { IWorkbenchHostService } from '../services/host/common/workbenchHostService.js';
 import { BrowserEditorService } from '../services/editor/browser/browserEditorService.js';
-import { IEditorService } from '../services/editor/common/editorService.js';
+import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from '../services/editor/common/editorService.js';
+import type { StartupEditorRestoration, StartupEditorViewState } from '../services/editor/common/editorWorkingSet.js';
+import { IUriIdentityService } from '../../platform/uriIdentity/common/uriIdentity.js';
+import { TextEditorSelectionSource } from '../../platform/editor/common/editor.js';
 import { IEditorGroupsService, type IEditorGroupsContainer } from '../services/editor/common/editorGroupsService.js';
 import { installWorkbenchServiceContributions } from './workbenchServiceContributions.js';
 import { setHoverDelegate } from '../../base/browser/ui/hover/hoverDelegate.js';
@@ -337,6 +347,16 @@ import type { IUserKeyboardLayoutApi } from '../../platform/keyboardLayout/commo
 import { BrowserClipboardService } from '../services/clipboard/browser/clipboardService.js';
 import { IClipboardService } from '../../platform/clipboard/common/clipboardService.js';
 
+/** Capabilities that are attached when the host connection has been initialized. */
+export interface IWorkbenchStartupHost {
+	readonly api: IWorkbenchHost;
+	readonly workspace?: IWorkspace;
+	readonly workspaceDirectoriesReady?: Promise<void>;
+	readonly createWorkingCopyBackupService: (services: IInstantiationService, workspaceId: string) => IWorkingCopyBackupService;
+	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
+	readonly createBrowserHost?: (services: IInstantiationService) => IDisposable;
+}
+
 /** Host-specific inputs required to construct a workbench. */
 export interface IStartWorkbenchOptions {
 	/** Host-owned services are borrowed by this window's container before consumers are created. */
@@ -348,7 +368,7 @@ export interface IStartWorkbenchOptions {
 	readonly contributionIds?: readonly string[];
 	/** Host-specific presentations share the registered views' identity, commands and layout. */
 	readonly viewConstructors?: ReadonlyMap<string, SyncDescriptor<IView>>;
-	readonly api: IWorkbenchHost;
+	readonly host: IWorkbenchStartupHost | Promise<IWorkbenchStartupHost>;
 	/** Optional host-owned execution boundary; declarative extension assets remain available. */
 	readonly extensionHost?: IExtensionHostApi;
 	readonly browserFileSystemProvider?: HTMLFileSystemProvider;
@@ -357,15 +377,13 @@ export interface IStartWorkbenchOptions {
 	readonly webWorkspaceClient?: IWebWorkspaceClient;
 	readonly container: HTMLElement;
 	readonly workspace: IWorkspace;
-	readonly workspaceDirectoriesReady?: Promise<void>;
 	/** The host selects its implementation; the Workbench supplies initialized window services. */
 	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
 	readonly createURLService: (services: InstantiationService) => IURLService & IDisposable;
-	readonly createTextDocumentHost?: (services: IInstantiationService) => IDisposable;
-	readonly createBrowserHost?: (services: IInstantiationService) => IDisposable;
 	readonly createWindow?: (services: IInstantiationService) => IDisposable;
+	/** Settles once the host has delivered its queued launch requests. */
+	readonly startupFileRequestsReady?: Promise<void>;
 	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void>; }>;
-	readonly createWorkingCopyBackupService: (services: IInstantiationService, workspaceId: string) => IWorkingCopyBackupService;
 	readonly createLogService: () => LogService;
 	readonly initialConfiguration?: IConfigurationModel;
 	readonly createUserDataFileSystemProvider: () => Promise<IFileSystemProvider & IDisposable>;
@@ -381,6 +399,18 @@ export interface IStartWorkbenchOptions {
 	readonly createTitleService: (container: HTMLElement, productName: string, editorGroupsContainer: IEditorGroupsContainer, services: IInstantiationService) => BrowserTitleService;
 }
 
+interface WorkbenchFoundation {
+	readonly lifetime: DisposableStore;
+	readonly storage: Awaited<ReturnType<IStartWorkbenchOptions['createStorageService']>>;
+	readonly logger: LogService;
+	readonly files: FileService;
+	readonly userProfile: UserDataProfileService;
+	readonly workspace: WorkspaceService;
+	readonly language: LanguageService;
+	readonly colors: HostColorSchemeService;
+	readonly theme: WorkbenchThemeService;
+}
+
 /** Starts the browser workbench and binds its commands to the initial UI. */
 export async function startWorkbench({
 	serviceCollection,
@@ -389,21 +419,18 @@ export async function startWorkbench({
 	defaultLayout,
 	contributionIds,
 	viewConstructors,
-	api,
+	host,
 	extensionHost,
 	browserFileSystemProvider,
 	workspaceFileSystemProvider,
 	webWorkspaceClient,
 	container,
 	workspace,
-	workspaceDirectoriesReady,
 	createLifecycleService,
 	createURLService,
 	createWindow,
-	createTextDocumentHost,
-	createBrowserHost,
+	startupFileRequestsReady,
 	createStorageService,
-	createWorkingCopyBackupService,
 	createLogService,
 	initialConfiguration,
 	createUserDataFileSystemProvider,
@@ -418,51 +445,83 @@ export async function startWorkbench({
 	createTitleService,
 	createAuxiliaryWindowService,
 }: IStartWorkbenchOptions): Promise<Workbench> {
-	const themes = new ExtensionColorThemeService(api.extensions, api.events);
-	const logger = createLogService();
-	const wasInert = container.inert;
-	container.inert = true;
-	performance.mark('ash.workbench.themes-start');
-	const themesReady = themes.start().then(() => { performance.mark('ash.workbench.themes-ready'); });
-	// Startup owns the eventual failure; storage awaits must not leave an early
-	// theme rejection unobserved before the Workbench can take ownership.
-	void themesReady.catch(() => undefined);
-	let workbench: Workbench | undefined;
-	let storage: Awaited<ReturnType<IStartWorkbenchOptions['createStorageService']>> | undefined;
-	let userDataFiles: IFileSystemProvider & IDisposable | undefined;
+	const lifetime = new DisposableStore();
+	const logger = lifetime.add(createLogService());
+	// Dispose the local theme listeners before retiring the extension theme registrations.
+	const extensionThemes = lifetime.add(new MutableDisposable<ExtensionColorThemeService>());
+	const editorRestoration = new DeferredPromise<void>();
+	const startupThemePreferences = new DeferredPromise<readonly string[]>();
+	const startupThemeApplied = new DeferredPromise<void>();
+	const hostReady = Promise.resolve(host).then(connection => {
+		if (lifetime.isDisposed) throw new CancellationError();
+		const { api } = connection;
+		const themes = extensionThemes.value = new ExtensionColorThemeService(api.extensions, api.events);
+		performance.mark('ash.workbench.themes-start');
+		const themesReady = themes.start({
+			preferences: startupThemePreferences.p,
+			loadRemainingAfter: Promise.all([editorRestoration.p, startupThemeApplied.p]).then(() => undefined),
+		}).then(() => { performance.mark('ash.workbench.themes-ready'); });
+		void themesReady.catch(error => logger.error('startup', 'Extension color theme startup failed', error));
+		return { connection, themes, themesReady };
+	});
+	void hostReady.catch(() => undefined);
+	let wasInert: boolean | undefined;
 	try {
 		const ownerWindow = container.ownerDocument.defaultView;
 		if (!ownerWindow) { throw new Error('Workbench requires an owner window'); }
-		storage = await createStorageService({ ownerWindow, workspaceId: workspace.id });
-		userDataFiles = await createUserDataFileSystemProvider();
-		{
-			using startupFiles = new FileService();
-			using registration = startupFiles.registerProvider(Schemas.vscodeUserData, userDataFiles);
-			const levels = await readDefaultLogLevels(startupFiles, environmentService, logger);
-			logger.setLevel(levels.default);
-			serviceCollection ??= new ServiceCollection();
-			serviceCollection.set(IDefaultLogLevelsService, new SyncDescriptor(DefaultLogLevelsService, [levels]));
+		performance.mark('ash.workbench.profile-start');
+		const storage = lifetime.add(await createStorageService({ ownerWindow, workspaceId: workspace.id }));
+		const userDataFiles = lifetime.add(await createUserDataFileSystemProvider());
+		const files = lifetime.add(new FileService());
+		lifetime.add(files.registerProvider(Schemas.vscodeUserData, userDataFiles));
+		const userProfile = new UserDataProfileService();
+		const settingsReady = initialConfiguration ? Promise.resolve(initialConfiguration) : readInitialUserConfiguration(files, userProfile);
+		const [settings, levels] = await Promise.all([settingsReady, readDefaultLogLevels(files, environmentService, logger)]);
+		logger.setLevel(levels.default);
+		serviceCollection ??= new ServiceCollection();
+		serviceCollection.set(IDefaultLogLevelsService, new SyncDescriptor(DefaultLogLevelsService, [levels]));
+		// These instances keep the same ownership when workspace capabilities are attached.
+		using profileServices = new InstantiationService(new ServiceCollection(
+			[IFileService, files],
+			[ILogService, logger],
+			[IUserDataProfileService, userProfile],
+			[ITelemetryService, NullTelemetryService],
+		));
+		const workspaceContext = lifetime.add(profileServices.createInstance(WorkspaceService, { workspace, initialConfiguration: settings }));
+		profileServices.registerInstance(IConfigurationService, workspaceContext);
+		const language = lifetime.add(new LanguageService());
+		profileServices.registerInstance(ILanguageService, language);
+		if (nativeHostApi) {
+			if (!createHostColorSchemeService) throw new Error('Desktop Workbench requires its system appearance service');
+			profileServices.registerInstance(INativeHostService, nativeHostApi);
 		}
-		if (!initialConfiguration) {
-			using profileFiles = new FileService();
-			using registration = profileFiles.registerProvider(Schemas.vscodeUserData, userDataFiles);
-			using settings = new UserSettings(URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }), {}, extUriBiasedIgnorePathCase, profileFiles, new NullLoggerService());
-			initialConfiguration = (await settings.loadConfiguration()).toJSON();
+		const colors = lifetime.add(createHostColorSchemeService ? createHostColorSchemeService(profileServices) : new BrowserHostColorSchemeService(ownerWindow));
+		profileServices.registerInstance(IHostColorSchemeService, colors);
+		const theme = lifetime.add(profileServices.createInstance(WorkbenchThemeService, container));
+		theme.initialize();
+		void startupThemePreferences.complete(theme.getColorThemePreferences());
+		restoreWorkbenchFontInfo(ownerWindow, storage, workspaceContext, logger);
+		const foundation: WorkbenchFoundation = { lifetime, storage, logger, files, userProfile, workspace: workspaceContext, language, colors, theme };
+		performance.mark('ash.workbench.profile-ready');
+
+		const { connection, themes, themesReady } = await hostReady;
+		if (connection.workspace) {
+			if (connection.workspace.id !== workspace.id) await storage.switchWorkspace(connection.workspace.id);
+			workspaceContext.updateWorkspace(connection.workspace);
 		}
-		workbench = new Workbench(
+		wasInert = container.inert;
+		container.inert = true;
+		return new Workbench(
 			productName,
 			defaultLayout,
-			api,
+			connection.api,
 			extensionHost,
 			container,
-			workspace,
+			foundation,
 			createLifecycleService,
-			initialConfiguration,
-			userDataFiles,
 			keyboardLayoutProvider,
 			userKeyboardLayoutApi,
 			nativeHostApi,
-			createHostColorSchemeService,
 			clipboardService,
 			dialogHandler,
 			userThemeService,
@@ -474,32 +533,52 @@ export async function startWorkbench({
 			webWorkspaceClient,
 			themes,
 			themesReady,
-			storage,
-			logger,
-			createWorkingCopyBackupService,
+			startupThemeApplied,
+			editorRestoration,
+			connection.createWorkingCopyBackupService,
 			createWindow,
-			createTextDocumentHost,
-			createBrowserHost,
+			connection.createTextDocumentHost,
+			connection.createBrowserHost,
 			createURLService,
 			environmentService,
 			serviceCollection,
 			contributionIds,
 			viewConstructors,
-			workspaceDirectoriesReady,
+			connection.workspaceDirectoriesReady,
+			startupFileRequestsReady,
 		);
-		await themesReady;
-		return workbench;
 	} catch (error) {
-		userDataFiles?.dispose();
+		void startupThemePreferences.complete([]);
+		void startupThemeApplied.complete();
+		void editorRestoration.complete();
 		logger.error('startup', 'Workbench startup failed', error);
-		workbench?.dispose();
-		logger.dispose();
-		storage?.dispose();
-		themes.dispose();
+		lifetime.dispose();
 		throw error;
 	} finally {
-		container.inert = wasInert;
+		if (wasInert !== undefined) container.inert = wasInert;
 	}
+}
+
+async function readInitialUserConfiguration(files: IFileService, profile: UserDataProfileService): Promise<IConfigurationModel> {
+	using settings = new UserSettings(profile.currentProfile.settingsResource, {}, extUriBiasedIgnorePathCase, files, new NullLoggerService());
+	return (await settings.loadConfiguration()).toJSON();
+}
+
+function restoreWorkbenchFontInfo(ownerWindow: Window, storage: IStorageService, configuration: IConfigurationService, logger: ILogService): void {
+	const saved = storage.get('editorFontInfo', StorageScope.APPLICATION);
+	if (saved !== undefined) {
+		try {
+			const entries: unknown = JSON.parse(saved);
+			if (!Array.isArray(entries)) throw new TypeError('Saved editor font information must be an array');
+			FontMeasurements.restoreFontInfo(ownerWindow, entries);
+		} catch (error) {
+			storage.remove('editorFontInfo', StorageScope.APPLICATION);
+			logger.warn('editor', 'Discarded invalid saved font information', error);
+		}
+	}
+	FontMeasurements.readFontInfo(ownerWindow, createBareFontInfoFromRawSettings(
+		configuration.getValue<IEditorOptions>('editor'), PixelRatio.getInstance(ownerWindow).value,
+	));
 }
 
 /** Owns the renderer workbench, its parts, commands, and runtime layout. */
@@ -533,14 +612,11 @@ export class Workbench extends Disposable {
 		api: IWorkbenchHost,
 		extensionHost: IExtensionHostApi | undefined,
 		workbenchRoot: HTMLElement,
-		workspace: IWorkspace,
+		foundation: WorkbenchFoundation,
 		createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable,
-		initialConfiguration: IConfigurationModel | undefined,
-		userDataFileSystemProvider: IFileSystemProvider & IDisposable,
 		keyboardLayoutProvider: IKeyboardLayoutProvider | undefined,
 		userKeyboardLayoutApi: IUserKeyboardLayoutApi | undefined,
 		nativeHostApi: INativeHostApi | undefined,
-		createHostColorSchemeService: ((services: IInstantiationService) => HostColorSchemeService & IDisposable) | undefined,
 		clipboardService: IClipboardService | undefined,
 		dialogHandler: IDialogHandler | undefined,
 		userThemeService: IUserThemeServiceContract | undefined,
@@ -552,22 +628,29 @@ export class Workbench extends Disposable {
 		webWorkspaceClient: IWebWorkspaceClient | undefined,
 		themes: ExtensionColorThemeService,
 		themesReady: Promise<void>,
-		storageService: IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void>; },
-		logger: LogService,
-		createWorkingCopyBackupService: IStartWorkbenchOptions['createWorkingCopyBackupService'],
+		startupThemeApplied: DeferredPromise<void>,
+		editorRestoration: DeferredPromise<void>,
+		createWorkingCopyBackupService: IWorkbenchStartupHost['createWorkingCopyBackupService'],
 		createWindow: ((services: IInstantiationService) => IDisposable) | undefined,
-		createTextDocumentHost: ((services: IInstantiationService) => IDisposable) | undefined,
-		createBrowserHost: IStartWorkbenchOptions['createBrowserHost'],
+		createTextDocumentHost: IWorkbenchStartupHost['createTextDocumentHost'],
+		createBrowserHost: IWorkbenchStartupHost['createBrowserHost'],
 		createURLService: IStartWorkbenchOptions['createURLService'],
 		environmentService: IWorkbenchEnvironmentService,
 		serviceCollection = new ServiceCollection(),
 		contributionIds?: readonly string[],
 		viewConstructors?: IStartWorkbenchOptions['viewConstructors'],
 		workspaceDirectoriesReady = Promise.resolve(),
+		startupFileRequestsReady = Promise.resolve(),
 	) {
 		super();
 		performance.mark('ash.workbench.constructor-start');
-		this._register(themes);
+		const { lifetime, storage, logger: logService, files: fileService, userProfile, workspace: workspaceContext, language: languageService, colors: hostColors, theme: themeService } = foundation;
+		this._register(lifetime);
+		const workspace = workspaceContext.getWorkspace();
+		this._register(toDisposable(() => {
+			void startupThemeApplied.complete();
+			void editorRestoration.complete();
+		}));
 		if (clipboardService) {
 			serviceCollection.set(IClipboardService, clipboardService);
 		}
@@ -611,7 +694,7 @@ export class Workbench extends Disposable {
 		const windowServices = new ServiceCollection(...[...serviceCollection.entries()].filter(([id]) => id !== IPolicyService));
 		const hostServices = this._register(new InstantiationService(hostPolicies));
 		const services = this._register(hostServices.createChild(windowServices));
-		services.registerInstance(IStorageService, storageService);
+		services.registerInstance(IStorageService, storage);
 		if (!services.has(ISecretStorageService)) services.registerInstance(ISecretStorageService, this._register(new BaseSecretStorageService()));
 		const extensionManagementService = this._register(new AppServerExtensionManagementService(api.extensionManagement, api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
@@ -631,7 +714,6 @@ export class Workbench extends Disposable {
 		const contextKeys = this._register(new ContextKeyService());
 		services.registerInstance(IContextKeyService, contextKeys);
 		const instantiationService = services;
-		const logService = this._register(logger);
 		this.logService = logService;
 		this.registerErrorHandler(logService);
 		services.registerInstance(ILogService, logService);
@@ -645,12 +727,8 @@ export class Workbench extends Disposable {
 		services.registerInstance(IExtensionResourceLoaderService, enabledExtensions.resources);
 		services.registerInstance(IExtensionApi, enabledExtensions);
 		services.registerInstance(IExtensionBackendApi, api.extensionBackend);
-		const fileService = this._register(services.createInstance(FileService));
-		this._register(userDataFileSystemProvider);
-		this._register(fileService.registerProvider(Schemas.vscodeUserData, userDataFileSystemProvider));
-		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
+		services.registerInstance(IUserDataProfileService, userProfile);
 		services.registerInstance(IFileService, fileService);
-		const workspaceContext = this._register(services.createInstance(WorkspaceService, { workspace, initialConfiguration }));
 		const configuration = workspaceContext;
 		this.configurationService = configuration;
 		services.registerInstance(IConfigurationService, configuration);
@@ -750,7 +828,7 @@ export class Workbench extends Disposable {
 		const agentHostFiles = this._register(services.createInstance(AgentHostFileSystemService, workspaceFileService, workspaceFileSystemProvider ?? browserFileSystemProvider));
 		services.registerInstance(IAgentHostFileSystemService, agentHostFiles);
 		services.registerInstance(ISystemFileTransferService, workspaceFileService);
-		const languagePackService = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks));
+		const languagePackService = this._register(services.createInstance(WebLanguagePacksService, builtinLanguagePackSources, preinstalledLanguagePacks));
 		services.registerInstance(ILanguagePackService, languagePackService);
 		const textFileService = this._register(services.createInstance(TextFileService));
 		themes.watchSourceSaves(textFileService);
@@ -766,7 +844,6 @@ export class Workbench extends Disposable {
 		const workingCopyBackups = this._register(createWorkingCopyBackupService(services, workspace.id));
 		this.workingCopyBackups = workingCopyBackups;
 		services.registerInstance(IWorkingCopyBackupService, workingCopyBackups);
-		const languageService = this._register(new LanguageService());
 		services.registerInstance(ILanguageService, languageService);
 		const languageConfigurationService = services.get(ILanguageConfigurationService);
 		const languageFeaturesService = this._register(new LanguageFeaturesService());
@@ -820,10 +897,11 @@ export class Workbench extends Disposable {
 		services.registerInstance(IMarkerService, markerService);
 		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
 		if (languageDiagnosticsService) this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
-		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: api.events, languageService, languageConfigurationService }));
+		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: api.events, languageService, languageConfigurationService, loadStartupAssetsAfter: editorRestoration.p }));
 		services.registerInstance(IExtensionService, extensionService);
 		services.get(ISnippetsService);
 		const extensionReady = extensionService.start();
+		const editorDeclarationsReady = extensionService.whenEditorContributionsReady();
 		void extensionReady.catch(error => logService.error('extensions', 'Declarative extension activation failed', error));
 		services.registerInstance(IFileSearchService, api.appServer.isAvailable ? api.fileSearch : services.createInstance(BrowserFileSearchService));
 		services.registerInstance(
@@ -884,17 +962,12 @@ export class Workbench extends Disposable {
 			ownerWindow.addEventListener('beforeunload', onBeforeUnload);
 			this._register(toDisposable(() => ownerWindow.removeEventListener('beforeunload', onBeforeUnload)));
 		}
-		const storage = this._register(storageService);
 		this.workbenchWindow = workbenchWindow;
 		this.storage = storage;
 		services.registerInstance(ILocaleService, this._register(services.createInstance(WorkbenchLocaleService)));
-		if (nativeHostApi && !createHostColorSchemeService) { throw new Error('Desktop Workbench requires its system appearance service'); }
-		const hostColors = this._register(createHostColorSchemeService ? createHostColorSchemeService(services) : new BrowserHostColorSchemeService(this.ownerWindow));
 		services.registerInstance(IHostColorSchemeService, hostColors);
-		const themeService = this._register(services.createInstance(WorkbenchThemeService, workbenchRoot));
 		services.registerInstance(IThemeService, themeService);
 		services.registerInstance(IWorkbenchThemeService, themeService);
-		themeService.initialize();
 		const auxiliaryWindows = this._register(createAuxiliaryWindowService ? createAuxiliaryWindowService(ownerWindow, workbenchRoot, services) : services.createInstance(BrowserAuxiliaryWindowService, ownerWindow, workbenchRoot));
 		services.registerInstance(IAuxiliaryWindowService, auxiliaryWindows);
 		const layoutService = this._register(services.createInstance(WorkbenchLayout, workbenchRoot, {
@@ -914,20 +987,6 @@ export class Workbench extends Disposable {
 		if (!services.has(IChatService)) services.registerSingleton(IChatService, () => services.createInstance(ChatService));
 		services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, ChatModelPreferences)));
 		services.registerInstance(ILanguageModelsService, this._register(services.createInstance(LanguageModelsService)));
-		const savedFontInfo = storage.get('editorFontInfo', StorageScope.APPLICATION);
-		if (savedFontInfo !== undefined) {
-			try {
-				const entries: unknown = JSON.parse(savedFontInfo);
-				if (!Array.isArray(entries)) throw new TypeError('Saved editor font information must be an array');
-				FontMeasurements.restoreFontInfo(ownerWindow, entries);
-			} catch (error) {
-				storage.remove('editorFontInfo', StorageScope.APPLICATION);
-				logService.warn('editor', 'Discarded invalid saved font information', error);
-			}
-		}
-		FontMeasurements.readFontInfo(ownerWindow, createBareFontInfoFromRawSettings(
-			configuration.getValue<IEditorOptions>('editor'), PixelRatio.getInstance(ownerWindow).value,
-		));
 		const saveFontInfo = (): void => {
 			const entries = FontMeasurements.serializeFontInfo(ownerWindow);
 			if (entries !== undefined) {
@@ -1019,12 +1078,24 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPolicyService, policies);
 		// Language-server initialization consumes extension-contributed defaults too.
 		// Starting earlier can launch expensive server work with upstream defaults.
-		serviceContributionReady.push(Promise.all([workspaceDirectoriesReady.then(() => {
+		const workspaceConfigurationReady = workspaceDirectoriesReady.then(() => {
 			if (!this.isDisposed) return configuration.initialize(fileService, policies, workingCopyService);
-		}), extensionReady]).then(() => {
+		});
+		void Promise.all([workspaceConfigurationReady, extensionReady]).then(() => {
+			if (this.isDisposed) return;
 			languageLifecycle?.start();
 			languageProviders?.start();
 			languageDiagnosticsService?.start();
+		}).catch(error => logService.error('startup', 'Language service startup failed', error));
+		void Promise.all([workspaceConfigurationReady, themesReady]).then(async () => {
+			if (!this.isDisposed) await themes.ensureStartupTheme(themeService.getColorThemePreferences());
+		}).catch(error => logService.error('startup', 'Workspace color theme startup failed', error))
+			.finally(() => startupThemeApplied.complete());
+		// Language-specific defaults can affect save participants even for models
+		// opened before their language declaration arrives.
+		const saveConfigurationReady = Promise.allSettled([workspaceConfigurationReady, editorDeclarationsReady]);
+		this._register(textModelService.addSaveParticipant({
+			participate: async (_model, _reason, signal) => { await raceCancellationError(saveConfigurationReady, signal); },
 		}));
 		const accessibilityService = this._register(nativeHostApi
 			? services.createInstance(NativeAccessibilityService, workbenchRoot)
@@ -1211,7 +1282,129 @@ export class Workbench extends Disposable {
 		services.registerInstance(IEditorPart, editorParts);
 		const historyService = this._register(instantiationService.createInstance(HistoryService));
 		services.registerInstance(IHistoryService, historyService);
-		const editorService = this._register(new BrowserEditorService(editorParts));
+		let editorProvidersPending = true;
+		const editorProvidersReady = editorDeclarationsReady.then(async () => {
+			if (extensionService.hasExecutableEditorDeclarations) await Promise.allSettled(serviceContributionReady);
+		}).catch(() => { /* Declarative startup already reports the failure. */ })
+			.finally(() => { editorProvidersPending = false; });
+		const prepareUserOpen = (input: IResourceEditorInput, options: EditorOpenOptions): string | Promise<void> | undefined => {
+			if (!editorProvidersPending) return undefined;
+			const preferred = options.preferredEditorId ?? input.editorId;
+			if (preferred === CODE_EDITOR_ID) return undefined;
+			const path = input.resource.path;
+			// Keep the early path conservative. Other formats and explicit associations
+			// use the existing editor registry once their contributions are available.
+			if (!preferred && input.resource.scheme === Schemas.file && input.contentType === undefined && !isResourceDiffEditorInput(input)
+				&& !associatedEditorId(path, configuration.getValue(EditorAssociationsConfiguration))
+				&& !getMediaMime(path)
+				&& (getMediaOrTextMime(path) !== undefined || /^\.(?:[cm]?[jt]s|[jt]sx|rs|py|go|java|kt|swift|c|cc|cpp|h|hpp|sh|ps1|rb|php|toml|ya?ml)$/u.test(extname(path).toLowerCase()))) {
+				return CODE_EDITOR_ID;
+			}
+			return editorProvidersReady;
+		};
+		const targetLayoutReady = new DeferredPromise<void>();
+		this._register(toDisposable(() => { void targetLayoutReady.complete(); }));
+		const ownedStartupResources = new Set<string>();
+		let openedStartupEditor = false;
+		let startupOpen = Promise.resolve();
+		let restoreTargetState: StartupEditorViewState | undefined;
+		const uriIdentity = services.get(IUriIdentityService);
+		const openStartupEditor = (input: IResourceEditorInput, options: EditorOpenOptions, target?: EditorOpenTarget): Promise<boolean> => {
+			if (editorRestoration.isSettled || options.inactive || target === 'modalGroup' || isResourceDiffEditorInput(input)
+				|| (input.resource.scheme !== Schemas.file && input.resource.scheme !== Schemas.ashRemote)) {
+				return Promise.resolve(false);
+			}
+			const opening = startupOpen.then(async () => {
+				await targetLayoutReady.p;
+				if (this.isDisposed || workspaceContext.getWorkspace().id !== workspace.id) throw new CancellationError();
+				if (editorRestoration.isSettled) return false;
+				const openingWorkspace = workspaceContext.getWorkspace();
+				const resource = await uriIdentity.resolveCanonicalUri(input.resource);
+				const key = resource.toString();
+				const owned = ownedStartupResources.has(key);
+				let backup: WorkingCopyBackup | undefined;
+				ownedStartupResources.add(key);
+				try {
+					if (!owned) backup = await workingCopyBackups.resolve(resource);
+				} catch (error) {
+					if (!owned) ownedStartupResources.delete(key);
+					if (isCancellationError(error)) throw error;
+					logService.error('workingCopy', 'Could not resolve the startup file backup', error);
+					return false;
+				}
+				try {
+					const request = backup ? {
+						...(input.toUntyped?.() ?? input),
+						languageId: input.languageId ?? backup.languageId,
+						contentType: input.contentType ?? backup.contentType,
+					} : input;
+					const preferred = prepareUserOpen(request, options);
+					if (typeof preferred === 'string') options = { ...options, preferredEditorId: preferred };
+					else if (preferred) await preferred;
+					if (this.isDisposed || workspaceContext.getWorkspace() !== openingWorkspace) throw new CancellationError();
+					const openOptions = backup ? { ...options, ignoreError: true } : options;
+					let pane;
+					try {
+						pane = await editorParts.openEditor(request, openOptions, target);
+					} catch (error) {
+						if (!backup || !(error instanceof FileNotFoundError)) throw error;
+						pane = await editorParts.openEditor({ ...request, initialText: '' }, openOptions, target);
+					}
+					if (backup) {
+						const copy = pane.workingCopy;
+						if (!copy || copy.backupKind !== backup.kind) {
+							if (!owned) ownedStartupResources.delete(key);
+							return false;
+						}
+						if (!copy.isDirty) copy.restoreBackup(backup.content);
+					}
+					if (!owned) restoreTargetState?.(pane, pane.group?.activeInput ?? request);
+					if (options.selection) {
+						if (isEditorPaneWithSelection(pane)) pane.restoreSelection(options.selection, options.selectionSource ?? TextEditorSelectionSource.NAVIGATION);
+						else pane.revealRange?.(options.selection);
+					}
+					openedStartupEditor = true;
+					performance.mark('ash.workbench.startup-target-ready');
+					return true;
+				} catch (error) {
+					if (!owned) ownedStartupResources.delete(key);
+					throw error;
+				}
+			});
+			startupOpen = opening.then(() => undefined, () => undefined);
+			return opening;
+		};
+		let backgroundStart: Promise<void> | undefined;
+		const startupEditors: StartupEditorRestoration = {
+			waitForOpen: async () => {
+				for (; ;) {
+					const pending = startupOpen;
+					await pending;
+					if (pending === startupOpen) return;
+				}
+			},
+			beforeEditors: restore => backgroundStart ??= (async () => {
+				restoreTargetState = restore;
+				void targetLayoutReady.complete();
+				await Promise.allSettled([startupFileRequestsReady]);
+				await startupEditors.waitForOpen();
+				if (!openedStartupEditor || this.isDisposed) return;
+				using idle = new DisposableStore();
+				this._register(idle);
+				await new Promise<void>(resolve => {
+					idle.add(toDisposable(resolve));
+					idle.add(runWhenWindowIdle(this.ownerWindow, () => resolve(), 100));
+				});
+				this._store.delete(idle);
+			})(),
+			hasOpened: () => openedStartupEditor,
+			ownsResource: key => ownedStartupResources.has(key),
+		};
+		const editorService = this._register(new BrowserEditorService(editorParts, editorRestoration.p, prepareUserOpen, openStartupEditor));
+		void editorRestoration.p.then(() => {
+			ownedStartupResources.clear();
+			restoreTargetState = undefined;
+		});
 		services.registerInstance(IEditorService, editorService);
 		services.registerInstance(IEditorGroupsService, editorService);
 		// Document hosts resolve Chat editing signals and IDE context from the window's accessibility and editor services.
@@ -1298,23 +1491,41 @@ export class Workbench extends Disposable {
 		// Extension adapters require the completed editor and view service graph.
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		performance.mark('ash.workbench.services-ready');
+		const deferredPaneLocations = new Map<WorkbenchPartId, ViewContainerLocation>();
+		this._register(layout.onDidChangePartVisibility(({ partId, visible }) => {
+			const location = deferredPaneLocations.get(partId);
+			if (!visible || location === undefined) return;
+			deferredPaneLocations.delete(partId);
+			// Layout commands can reveal a Part directly. Explicit view commands already opened it.
+			if (!panes.getActivePaneComposite(location)) {
+				void panes.openPaneComposite(undefined, location).catch(onUnexpectedError);
+			}
+		}));
 		// Workspace switches reuse this operation; startup marks describe only its first run.
 		let isStartupRestoration = true;
 		this.restoreActiveViewContainers = async () => {
 			const isStartup = isStartupRestoration;
 			isStartupRestoration = false;
+			deferredPaneLocations.clear();
 			// Restore retained containers against ordinary visibility. Revealing a
 			// hidden container during restoration must not discard a maximized startup.
 			const auxiliaryBarMaximized = layout.isAuxiliaryBarMaximized();
 			if (auxiliaryBarMaximized) layout.setAuxiliaryBarMaximized(false);
 			const openings: Promise<unknown>[] = [];
 			for (const [location, part] of paneParts) {
-				if (location === ViewContainerLocation.AgentSidebar && !layout.isPartVisible('agentSidebar')) { continue; }
+				const partId = panes.getPartId(location);
+				const visible = layout.isPartVisible(partId);
+				if (location === ViewContainerLocation.AgentSidebar && !visible) { continue; }
 				if (viewDescriptors.getViewContainers(location).length === 0) {
-					layout.hidePart(panes.getPartId(location));
+					layout.hidePart(partId);
 					continue;
 				}
-				const visible = layout.isPartVisible(panes.getPartId(location));
+				if (isStartup && !visible) {
+					deferredPaneLocations.set(partId, location);
+					continue;
+				}
+				// Navigation from the live shell takes precedence over saved view state.
+				if (isStartup && panes.getActivePaneComposite(location)) continue;
 				const container = requiredViewContainerToRestore(viewDescriptors, location, part.getCompositeIdToRestore());
 				// Restore retained content without changing the saved visibility of its region.
 				if (isStartup) {
@@ -1329,20 +1540,39 @@ export class Workbench extends Disposable {
 			finally { if (auxiliaryBarMaximized) layout.setAuxiliaryBarMaximized(true); }
 			if (isStartup) { performance.mark('ash.workbench.views-restored'); }
 		};
-		// Construct services and Parts while theme resources are in flight. Keep
-		// view creation and the splash's first layout behind the verified theme,
-		// so overlapping startup does not expose a temporary fallback appearance.
-		const paneRestoration = themesReady.then(async () => {
+		// The shell can use its bootstrap colors while extension themes load.
+		const shellReady = Promise.resolve().then(() => {
 			if (this.isDisposed) return;
 			contributions.advance(WorkbenchPhase.BlockStartup);
 			performance.mark('ash.workbench.shell-ready');
-			const viewsReady = this.restoreActiveViewContainers!();
+			const restoresMaximizedLayout = layout.isAuxiliaryBarMaximized();
 			lifecycleService.phase = LifecyclePhase.Ready;
 			contributions.advance(WorkbenchPhase.BlockRestore);
 			layoutService.layout();
-			await viewsReady;
+			return restoresMaximizedLayout;
 		});
-		this.whenRestored = this.completeStartupRestoration([keybindingsReady, extensionReady, paneRestoration, services.get(IWorkspacesService).getRecentlyOpened().then(() => { }), ...serviceContributionReady], workingCopyBackups, editor, editorParts, contributions, saveFontInfo);
+		const paneRestoration = shellReady.then(async restoresMaximizedLayout => {
+			if (!restoresMaximizedLayout) {
+				await editorRestoration.p;
+				if (this.isDisposed || !isStartupRestoration) return;
+				// A pane can do synchronous construction while a file read is in flight.
+				// Let queued opens finish, with a bound for slow or unavailable editors.
+				using idle = new DisposableStore();
+				await new Promise<void>(resolve => {
+					this._register(idle);
+					idle.add(disposableWindowTimeout(this.ownerWindow, resolve, 350));
+					idle.add(toDisposable(resolve));
+					void editorService.whenPendingOpensFinish().then(() => {
+						if (!idle.isDisposed) idle.add(runWhenWindowIdle(this.ownerWindow, () => resolve()));
+					});
+				});
+				this._store.delete(idle);
+			}
+			if (!this.isDisposed && isStartupRestoration) await this.restoreActiveViewContainers!();
+		});
+		// A maximized view owns editor visibility and must finish its layout first.
+		const editorLayoutReady = shellReady.then(restoresMaximizedLayout => restoresMaximizedLayout ? paneRestoration : undefined);
+		this.whenRestored = this.completeStartupRestoration([keybindingsReady, workspaceConfigurationReady, editorLayoutReady], paneRestoration, workingCopyBackups, editor, editorParts, editorProvidersReady, editorRestoration, contributions, saveFontInfo, startupEditors, ownedStartupResources);
 		if (createWindow) {
 			this._register(createWindow(services));
 		}
@@ -1378,12 +1608,21 @@ export class Workbench extends Disposable {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async completeStartupRestoration(extensionReady: readonly Promise<void>[], backups: IWorkingCopyBackupService, editor: IEditorPart, editorParts: IEditorPartsService, contributions: WorkbenchContributionHost, saveFontInfo: () => void): Promise<void> {
-		await Promise.allSettled(extensionReady);
-		if (this.isDisposed) return;
-		await this.restoreEditorParts(editorParts);
-		if (this.isDisposed) return;
-		await this.restoreWorkingCopyBackups(backups, editor);
+	private async completeStartupRestoration(editorPrerequisites: readonly Promise<void>[], paneRestoration: Promise<void>, backups: IWorkingCopyBackupService, editor: IEditorPart, editorParts: IEditorPartsService, otherEditorsReady: Promise<void>, editorRestoration: DeferredPromise<void>, contributions: WorkbenchContributionHost, saveFontInfo: () => void, startup: StartupEditorRestoration, ownedResources: ReadonlySet<string>): Promise<void> {
+		const panesSettled = Promise.allSettled([paneRestoration]);
+		try {
+			await Promise.allSettled(editorPrerequisites);
+			if (this.isDisposed) return;
+			await this.restoreEditorParts(editorParts, otherEditorsReady, startup);
+			if (this.isDisposed) return;
+			await startup.beforeEditors();
+			await this.restoreWorkingCopyBackups(backups, editor, otherEditorsReady, startup, ownedResources);
+			await startup.waitForOpen();
+			performance.mark('ash.workbench.editor-ready');
+		} finally {
+			void editorRestoration.complete();
+		}
+		await panesSettled;
 		if (this.isDisposed) return;
 		// Persist the fonts used by restored editors before navigation can disconnect this document.
 		saveFontInfo();
@@ -1393,48 +1632,64 @@ export class Workbench extends Disposable {
 		this.logService.trace('lifecycle', 'Workbench restored');
 	}
 
-	private async restoreEditorParts(editorParts: IEditorPartsService): Promise<void> {
+	private async restoreEditorParts(editorParts: IEditorPartsService, otherEditorsReady?: Promise<void>, startup?: StartupEditorRestoration): Promise<void> {
 		try {
-			await editorParts.restoreSavedState(this.workbenchLayout.shouldRestoreEditors());
+			await editorParts.restoreSavedState(this.workbenchLayout.shouldRestoreEditors(), otherEditorsReady, startup);
 		} catch (error) {
 			this.logService.error('editor', 'Failed to restore saved editor parts', error);
 		}
 	}
 
-	private async restoreWorkingCopyBackups(backups: IWorkingCopyBackupService, editor: IEditorPart): Promise<void> {
+	private async restoreWorkingCopyBackups(backups: IWorkingCopyBackupService, editor: IEditorPart, otherEditorsReady?: Promise<void>, startup?: StartupEditorRestoration, ownedResources?: ReadonlySet<string>): Promise<void> {
 		let pending: readonly WorkingCopyBackup[];
-		try { pending = await backups.list(); }
+		try { pending = await backups.list(ownedResources); }
 		catch (error) { this.logService.error('workingCopy', 'Failed to list working-copy backups', error); return; }
+		if (otherEditorsReady && pending.some(backup => !this.untitledTextEditorService.isUntitled(backup.resource))) {
+			await otherEditorsReady;
+			if (this.isDisposed) return;
+		}
 		for (const backup of pending) {
 			if (backup.kind === 'text' && this.untitledTextEditorService.isUntitled(backup.resource) && !this.workingCopies.get(backup.resource).some(copy => copy.backupKind === backup.kind)) {
 				this.untitledTextEditorService.create({ untitledResource: backup.resource, initialValue: backup.content, languageId: backup.languageId, label: backup.label });
 			}
 		}
 		for (const backup of pending) {
-			try {
-				// Session restoration already chose the editor and window. Recover its
-				// document in place instead of opening another default text view.
-				const restored = this.workingCopies.get(backup.resource).find(copy => copy.backupKind === backup.kind);
-				if (restored) {
-					restored.restoreBackup(backup.content);
-					continue;
-				}
-				let pane;
-				const untitled = backup.kind === 'text' ? this.untitledTextEditorService.get(backup.resource) : undefined;
-				if (untitled) {
-					pane = await editor.openEditor(new UntitledTextEditorInput(untitled));
-				} else {
-					try {
-						pane = await editor.openEditor({ resource: backup.resource, ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });
-					} catch {
-						pane = await editor.openEditor({ resource: backup.resource, initialText: '', ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });
+			if (startup) await startup.waitForOpen();
+			if (this.isDisposed || ownedResources?.has(backup.resource.toString())) continue;
+			for (; ;) {
+				try {
+					// Session restoration already chose the editor and window. Recover its
+					// document in place instead of opening another default text view.
+					const restored = this.workingCopies.get(backup.resource).find(copy => copy.backupKind === backup.kind);
+					if (restored) {
+						if (!restored.isDirty) restored.restoreBackup(backup.content);
+						break;
 					}
+					const options: EditorOpenOptions = startup?.hasOpened() ? { inactive: true, preserveFocus: true, pinned: true } : {};
+					let pane;
+					const untitled = backup.kind === 'text' ? this.untitledTextEditorService.get(backup.resource) : undefined;
+					if (untitled) {
+						pane = await editor.openEditor(new UntitledTextEditorInput(untitled), options);
+					} else {
+						try {
+							pane = await editor.openEditor({ resource: backup.resource, ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) }, options);
+						} catch (error) {
+							if (isCancellationError(error)) throw error;
+							pane = await editor.openEditor({ resource: backup.resource, initialText: '', ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) }, options);
+						}
+					}
+					const workingCopy = pane.workingCopy;
+					if (!workingCopy || workingCopy.backupKind !== backup.kind) throw new Error(`Restored editor does not support ${backup.kind} backups`);
+					if (!workingCopy.isDirty && !ownedResources?.has(backup.resource.toString())) workingCopy.restoreBackup(backup.content);
+				} catch (error) {
+					if (startup && error instanceof EditorOpenSupersededError) {
+						await startup.waitForOpen();
+						if (!this.isDisposed && !ownedResources?.has(backup.resource.toString())) continue;
+						break;
+					}
+					this.logService.error('workingCopy', `Failed to restore working-copy backup '${backup.resource.toString()}'`, error);
 				}
-				const workingCopy = pane.workingCopy;
-				if (!workingCopy || workingCopy.backupKind !== backup.kind) throw new Error(`Restored editor does not support ${backup.kind} backups`);
-				workingCopy.restoreBackup(backup.content);
-			} catch (error) {
-				this.logService.error('workingCopy', `Failed to restore working-copy backup '${backup.resource.toString()}'`, error);
+				break;
 			}
 		}
 	}

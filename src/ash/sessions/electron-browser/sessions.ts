@@ -1,23 +1,29 @@
 import { showSessionsSplash } from '../contrib/splash/browser/sessionsSplash.js';
 import { WINDOW_SPLASH_READ_CHANNEL, validatePartsSplash } from '../../platform/theme/common/themeService.js';
-import { showStartupError } from '../../workbench/browser/startupError.js';
 import { createSessionsProfile, type SessionsProfile } from '../common/sessionsProfile.js';
 import { invoke } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { NLS_CONFIGURATION_CHANNEL, NLS_ACTIVATE_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
 import { resolveLanguagePackCatalog } from '../../platform/languagePacks/common/languagePackCatalog.js';
 import { setNlsMessages } from '../../nls.js';
 import { BrowserLanguagePackStore } from '../../platform/languagePacks/browser/languagePackStore.js';
-import { productLanguagePackCatalogs } from '../../workbench/services/localization/common/localizationCatalogs.js';
+import { productLanguagePackSources } from '../../../../.build/desktop/localization/localizationCatalogLoader.js';
 
+let canShowSplash = true;
 try {
-	showSessionsSplash(document, validatePartsSplash(await invoke<unknown>(WINDOW_SPLASH_READ_CHANNEL)));
-	const preference = await invoke<unknown>(NLS_CONFIGURATION_CHANNEL);
-	const catalog = await resolveLanguagePackCatalog(typeof preference === 'string' ? preference : 'en', productLanguagePackCatalogs, new BrowserLanguagePackStore());
+	const preferenceRequest = invoke<unknown>(NLS_CONFIGURATION_CHANNEL);
+	// Main already supplied the window background. Cached paint is only useful before the workbench starts.
+	void Promise.resolve().then(() => invoke<unknown>(WINDOW_SPLASH_READ_CHANNEL)).then(splash => {
+		if (canShowSplash) showSessionsSplash(document, validatePartsSplash(splash));
+	}).catch(error => console.warn('Could not read Ash Sessions startup appearance', error));
+	const preference = await preferenceRequest;
+	const catalog = await resolveLanguagePackCatalog(typeof preference === 'string' ? preference : 'en', productLanguagePackSources, new BrowserLanguagePackStore());
 	setNlsMessages(catalog.locale, catalog.bundles);
 	await invoke<void>(NLS_ACTIVATE_CHANNEL, catalog);
+	canShowSplash = false;
 	await import('../sessions.desktop.main.js');
 	const { main } = await import('./sessions.main.js');
 	await main(createSessionsProfile(import.meta.env.ASH_SESSIONS_PROFILE as SessionsProfile));
 } catch (error) {
-	showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text));
+	canShowSplash = false;
+	console.error('Unable to start Ash Sessions', error);
 }

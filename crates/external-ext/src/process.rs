@@ -382,6 +382,17 @@ impl ProductNodeLauncher {
         bootstrap: PathBuf,
         environment: BTreeMap<OsString, OsString>,
     ) -> Result<Self, ExtensionHostError> {
+        Self::with_runtime_digest(executable, bootstrap, environment, None)
+    }
+
+    /// Uses an already verified runtime digest when supplied. Every spawn still
+    /// checks the executable against that digest before launching the child.
+    pub fn with_runtime_digest(
+        executable: PathBuf,
+        bootstrap: PathBuf,
+        environment: BTreeMap<OsString, OsString>,
+        expected_digest: Option<&str>,
+    ) -> Result<Self, ExtensionHostError> {
         if !executable.is_absolute()
             || !executable.is_file()
             || !bootstrap.is_absolute()
@@ -391,7 +402,10 @@ impl ProductNodeLauncher {
         }
         Ok(Self {
             node: Some(NodeHost {
-                executable_digest: executable_digest(&executable)?,
+                executable_digest: match expected_digest {
+                    Some(digest) => digest.to_owned(),
+                    None => executable_digest(&executable)?,
+                },
                 executable,
                 bootstrap,
                 environment,

@@ -27,9 +27,38 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
         ash_state::SqliteProjectStore::open(&path).unwrap(),
     )));
     let dirs = Arc::new(DirGrants::default());
-    let session = SessionId::new("session").unwrap();
-    let other_session = SessionId::new("other-session").unwrap();
-    let thread = ThreadId::new("thread").unwrap();
+    let threads = Arc::new(ash_core::ThreadController::with_store(Arc::new(
+        ash_core::InMemoryThreadStore::default(),
+    )));
+    let work = tempfile::tempdir().unwrap();
+    let dir = Dir::open_local(work.path()).unwrap();
+    let create = |title: &str, surface, execution_target| {
+        threads
+            .start_thread(
+                &ash_core::NoThreadWorktreeBinder,
+                core_api::StartThreadRequest {
+                    surface: Some(surface),
+                    agent_id: None,
+                    agent: None,
+                    command_id: CommandId::new(title).unwrap(),
+                    title: title.into(),
+                    branch_name: None,
+                    worktree_start: None,
+                    execution_target,
+                },
+            )
+            .unwrap()
+    };
+    let chat = create("memory-chat", ash_protocol::SessionSurface::Chat, None);
+    let code = create(
+        "memory-code",
+        ash_protocol::SessionSurface::Code,
+        Some(ash_protocol::SessionExecutionTarget::Local {
+            root: work.path().to_str().unwrap().into(),
+        }),
+    );
+    let separate = create("memory-other", ash_protocol::SessionSurface::Code, None);
+    let (session, thread) = (code.session_id, code.thread_id);
     let turn = TurnId::new("turn").unwrap();
     let project = ProjectId::new("project").unwrap();
     for (id, expected_revision, command) in [
@@ -60,9 +89,8 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
             })
             .unwrap();
     }
-    let work = tempfile::tempdir().unwrap();
-    let dir = Dir::open_local(work.path()).unwrap();
     dirs.bind_thread_dir(thread.clone(), dir.clone());
+    dirs.bind_thread_dir(chat.thread_id.clone(), dir.clone());
     for (id, scope) in [
         ("profile", MemoryScope::Profile),
         (
@@ -96,15 +124,17 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
             .unwrap();
     }
     let mut builder = ExtensionRegistryBuilder::new();
+    let scopes = Arc::new(MemoryScopes {
+        context_router: SessionExecutionRouter::new(&threads),
+        config: Some(enabled_memories(root.path())),
+        projects: Some(projects.clone()),
+        teams: None,
+        dirs: dirs.clone(),
+    });
     memories_extension::install(
         &mut builder,
         memories,
-        Arc::new(MemoryScopes {
-            config: Some(enabled_memories(root.path())),
-            projects: Some(projects.clone()),
-            teams: None,
-            dirs: dirs.clone(),
-        }),
+        scopes.clone(),
         Arc::new(super::super::update_broker::UpdateBroker::default()),
     );
     let source = builder.build();
@@ -131,10 +161,21 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
         ids
     };
     assert_eq!(read_ids(&request), ["dir", "profile", "project"]);
-    let other_thread = ThreadId::new("other-thread").unwrap();
+    assert_eq!(
+        scopes.scopes(&chat.session_id, &chat.thread_id).unwrap(),
+        [MemoryScope::Profile, MemoryScope::Dir { dir_id: dir.id() }]
+    );
+    assert_eq!(
+        read_ids(&ContextSourceRequest {
+            session_id: &chat.session_id,
+            thread_id: &chat.thread_id,
+            ..request
+        }),
+        ["profile"]
+    );
     let other = ContextSourceRequest {
-        session_id: &other_session,
-        thread_id: &other_thread,
+        session_id: &separate.session_id,
+        thread_id: &separate.thread_id,
         turn_id: &turn,
         query: "Rust",
     };
@@ -334,6 +375,7 @@ fn memories_are_recollected_after_preflight_compaction_and_revocation() {
         &mut builder,
         memories.clone(),
         Arc::new(MemoryScopes {
+            context_router: SessionExecutionRouter::new(&threads),
             config: Some(enabled_memories(root.path())),
             projects: None,
             teams: None,
@@ -422,7 +464,11 @@ fn enabled_memories(path: &std::path::Path) -> Arc<ash_config::ConfigStore> {
 fn config_master_switch_stops_model_access_and_keeps_scope_permissions() {
     let root = tempfile::tempdir().unwrap();
     let config = enabled_memories(root.path());
+    let threads = Arc::new(ash_core::ThreadController::with_store(Arc::new(
+        ash_core::InMemoryThreadStore::default(),
+    )));
     let scopes = MemoryScopes {
+        context_router: SessionExecutionRouter::new(&threads),
         config: Some(config.clone()),
         projects: None,
         teams: None,

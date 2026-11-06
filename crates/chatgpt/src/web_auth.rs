@@ -49,6 +49,11 @@ impl ChatGptWebAuthentication {
         ChatGptWebAuthSession::with_authority(Authority::Web(self.clone()))
     }
 
+    /// Uses Codex directly without consulting or changing the Web credential source.
+    pub fn codex_session(self: &Arc<Self>) -> Result<ChatGptWebAuthSession, ChatGptWebAuthError> {
+        ChatGptWebAuthSession::with_authority(Authority::Codex(self.codex.clone()))
+    }
+
     /// Each LoginService owns its completion route; all adapters share the same
     /// profile authority rather than overwriting a global callback destination.
     pub fn login_driver(self: &Arc<Self>) -> Arc<ChatGptWebLogin> {
@@ -195,6 +200,7 @@ enum Authority {
     #[cfg(test)]
     Single(Arc<ChatGptOAuth>),
     Web(Arc<ChatGptWebAuthentication>),
+    Codex(Arc<ChatGptOAuth>),
 }
 
 impl Authority {
@@ -203,6 +209,7 @@ impl Authority {
             #[cfg(test)]
             Self::Single(auth) => Ok((auth.clone(), 0)),
             Self::Web(auth) => auth.selected(),
+            Self::Codex(auth) => Ok((auth.clone(), 0)),
         }
     }
 }
@@ -269,10 +276,11 @@ impl ChatGptWebAuthSession {
         let Principal::Account { identity, .. } = &self.principal else {
             return None;
         };
-        let key = format!(
-            "ash-chatgpt-web\0{}\0{}",
-            identity.user_id, identity.account_id
-        );
+        let surface = match self.auth {
+            Authority::Codex(_) => "ash-chatgpt-native",
+            _ => "ash-chatgpt-web",
+        };
+        let key = format!("{surface}\0{}\0{}", identity.user_id, identity.account_id);
         Some(format!("{:x}", sha2::Sha256::digest(key.as_bytes())))
     }
 

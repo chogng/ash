@@ -1,0 +1,27 @@
+.ash-loading-spinner:not([hidden]) {
+	display: inline-block;
+	flex-shrink: 0;
+	box-sizing: border-box;
+	inline-size: 1em;
+	block-size: 1em;
+	font-size: var(--ash-lxiconFontSize);
+	border: var(--ash-strokeThickness) solid currentColor;
+	border-right-color: transparent;
+	border-radius: var(--ash-cornerRadius-circle);
+}
+
+.ash-loading-spinner.large {
+	font-size: var(--ash-lxiconFontSize-large);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.ash-loading-spinner:not([hidden], .ash-reduce-motion *) {
+		animation: ash-loading-spinner-spin 1s linear infinite;
+	}
+}
+
+@keyframes ash-loading-spinner-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}

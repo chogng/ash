@@ -337,8 +337,8 @@ const management = {
 		return draft;
 	},
 } as unknown as ISessionsManagementService;
-const sessions = resources.add(new SessionsService(management, services.get(IStorageService), custom));
 services.registerInstance(ISessionsManagementService, management);
+const sessions = resources.add(services.createInstance(SessionsService));
 services.registerInstance(ISessionsListModelService, services.createInstance(SessionsListModelService));
 services.registerInstance(ISessionsService, sessions);
 await sessions.initialize();
@@ -373,7 +373,7 @@ if (parameters.has('hosts')) {
 		connect: async () => { throw new Error('The Agents host picker must retain this window'); },
 	});
 	services.registerInstance(IRemoteConnectionService, resources.add(services.createInstance(RemoteConnectionService)));
-	const { RemoteAgentHostContribution } = await import('../../../../providers/remoteAgentHost/browser/remoteAgentHost.contribution.js');
+	const { RemoteAgentHostContribution } = await import('../../../../providers/remoteAgentHost/browser/remoteAgentHostContribution.js');
 	resources.add(services.createInstance(RemoteAgentHostContribution));
 	const { SSHAgentHostContribution } = await import('../../../../providers/remoteAgentHost/browser/sshAgentHost.contribution.js');
 	resources.add(services.createInstance(SSHAgentHostContribution));

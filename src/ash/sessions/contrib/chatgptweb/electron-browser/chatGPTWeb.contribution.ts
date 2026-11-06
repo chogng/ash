@@ -12,33 +12,40 @@ import { IInstantiationService, type ServicesAccessor } from '../../../../platfo
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import { Menus } from '../../../browser/menus.js';
+import { SESSIONS_CHATGPT_DEFAULT_BACKEND } from '../../../common/configuration.js';
 import { ActivityBarItemContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { registerChatGPTAccessibility } from './chatGPTAccessibility.js';
 import { registerReplyChatEditor } from '../../chat/browser/replyChatEditor.js';
-import { IChatGPTTransport } from '../common/chatGPTTransport.js';
-import { ElectronChatGPTTransport } from './electronChatGPTTransport.js';
-import { ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization, chatGPTSelectedContext, SHOW_CHATGPT_COMMAND } from './chatGPTWeb.js';
-import { ChatGPTService, IChatGPTService } from '../browser/chatGPTService.js';
+import { IChatGPTNativeTransport, IChatGPTTransport } from '../common/chatGPTTransport.js';
+import { ElectronChatGPTNativeTransport, ElectronChatGPTTransport } from './electronChatGPTTransport.js';
+import { ChatGPTDraftModelSource, ChatGPTExperimentalContribution, experimentalChatGPTEditor, ChatGPTWebContribution, chatGPTReplyEditor, chatGPTScrollOptimization, chatGPTSelectedContext, SHOW_CHATGPT_COMMAND, SHOW_PREFERRED_CHATGPT_COMMAND } from './chatGPTWeb.js';
+import { ChatGPTNativeService, ChatGPTService, IChatGPTNativeService, IChatGPTService } from '../browser/chatGPTService.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IAccountService } from '../../../../platform/accounts/common/accountService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IProgressService } from '../../../../platform/progress/common/progress.js';
 import { signInChatGPT } from '../browser/chatGPTLogin.js';
-import { ChatGPTList } from './chatGPTList.js';
+import { ChatGPTList, ChatGPTNativeList } from './chatGPTList.js';
+import { experimentalChatGPTSelected, SHOW_EXPERIMENTAL_CHATGPT } from '../common/chatGPTNative.js';
 import { canUseAshModels } from './chatGPTWidgetModel.js';
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
 import { openAshChatWithModel } from '../../chat/electron-browser/actions/newChatModelAction.js';
 
 export const chatGPTWorkspaceSource = {
 	catalog: new SyncDescriptor(ChatGPTList),
+	additionalCatalog: new SyncDescriptor(ChatGPTNativeList),
+	draftModels: new SyncDescriptor(ChatGPTDraftModelSource),
 	accessibility: chatGPTReplyEditor.accessibility,
-	openCommand: SHOW_CHATGPT_COMMAND,
+	openCommand: SHOW_PREFERRED_CHATGPT_COMMAND,
 };
 
 registerSingleton(IChatGPTService, ChatGPTService, InstantiationType.Delayed);
 registerSingleton(IChatGPTTransport, ElectronChatGPTTransport, InstantiationType.Delayed);
+registerSingleton(IChatGPTNativeService, ChatGPTNativeService, InstantiationType.Delayed);
+registerSingleton(IChatGPTNativeTransport, ElectronChatGPTNativeTransport, InstantiationType.Delayed);
 registerReplyChatEditor(chatGPTReplyEditor);
+registerReplyChatEditor(experimentalChatGPTEditor);
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ChatGPT, defaultValue: true,
 	parse(value: unknown): boolean {
@@ -52,6 +59,7 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 });
 
 registerChatGPTAccessibility(chatGPTReplyEditor.accessibility.focusContext, IChatGPTService);
+registerChatGPTAccessibility(experimentalChatGPTEditor.accessibility.focusContext, IChatGPTNativeService, true);
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: chatGPTScrollOptimization, defaultValue: true, scope: ConfigurationScope.APPLICATION,
@@ -65,6 +73,30 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 		get description() { return localize('sessions.chatgpt.optimizeDescription', 'Experimentally skip offscreen rendering of completed ChatGPT replies. Turn off if scrolling or page content behaves unexpectedly.'); },
 	},
 });
+
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration<'chatgpt' | 'chatgptweb'>({
+	key: SESSIONS_CHATGPT_DEFAULT_BACKEND,
+	defaultValue: 'chatgpt',
+	scope: ConfigurationScope.APPLICATION,
+	parse(value: unknown) {
+		if (value === 'chatgpt' || value === 'chatgptweb') return value;
+		throw new TypeError('Expected chatgpt or chatgptweb for the default ChatGPT backend');
+	},
+	setting: {
+		valueType: 'select',
+		get title() { return localize('sessions.chatgpt.defaultBackend', 'Default ChatGPT entry'); },
+		get description() { return localize('sessions.chatgpt.defaultBackendDescription', 'Choose which ChatGPT entry opens when you start a new chat. ChatGPT (Experimental) uses your existing Codex login.'); },
+		get options() {
+			return [
+				{ value: 'chatgpt', label: localize('sessions.chatgpt.experimentalTitle', 'ChatGPT (Experimental)') },
+				{ value: 'chatgptweb', label: localize('sessions.chatgpt.webTitle', 'ChatGPT Web') },
+			] as const;
+		},
+	},
+});
+
+registerWorkbenchContribution(ChatGPTExperimentalContribution.ID, WorkbenchPhase.BlockRestore,
+	services => services.get(IInstantiationService).createInstance(ChatGPTExperimentalContribution));
 
 registerWorkbenchContribution(ChatGPTWebContribution.ID, WorkbenchPhase.BlockRestore,
 	services => services.get(IInstantiationService).createInstance(ChatGPTWebContribution));
@@ -93,12 +125,33 @@ CommandsRegistry.register(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, async (accessor, mod
 registerAction2(class OpenChatGPT extends Action2 {
 	constructor() {
 		super({
-			id: 'sessions.open.chatgpt', title: localize2('sessions.chatgpt.title', 'ChatGPT'), icon: Lxicon.openai,
+			id: 'sessions.open.chatgpt', title: localize2('sessions.chatgpt.webTitle', 'ChatGPT Web'), icon: Lxicon.openai,
 			toggled: ContextKeyExpr.has(chatGPTSelectedContext),
+			menu: { id: Menus.ActivityBarContext, when: ContextKeyExpr.and(ActivityBarItemContext.isEqualTo('sessions.newSession'), ContextKeyExpr.has(experimentalChatGPTSelected)), group: 'navigation' },
 			f1: true,
 		});
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(ICommandService).executeCommand(SHOW_CHATGPT_COMMAND); }
+});
+
+registerAction2(class OpenExperimentalChatGPT extends Action2 {
+	constructor() {
+		super({
+			id: 'sessions.open.experimentalChatgpt',
+			title: localize2('sessions.chatgpt.experimentalTitle', 'ChatGPT (Experimental)'),
+			icon: Lxicon.openai,
+			precondition: ContextKeyExpr.not('config.chat.disableAIFeatures'),
+			menu: {
+				id: Menus.ActivityBarContext,
+				when: ContextKeyExpr.and(ActivityBarItemContext.isEqualTo('sessions.newSession'), ContextKeyExpr.not(experimentalChatGPTSelected)),
+				group: 'navigation',
+			},
+			f1: true,
+		});
+	}
+	public override async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(ICommandService).executeCommand(SHOW_EXPERIMENTAL_CHATGPT);
+	}
 });
 
 registerAction2(class ToggleChatGPTScrolling extends Action2 {
@@ -117,12 +170,17 @@ registerAction2(class ReloadChatGPT extends Action2 {
 			id: 'sessions.chatgpt.reload',
 			title: localize2('sessions.chatgpt.reload', 'ChatGPT: Reload'),
 			shortTitle: localize2('sessions.chatgpt.reloadShort', 'Reload'),
-			menu: { id: Menus.ActivityBarContext, when: ContextKeyExpr.and(ActivityBarItemContext.isEqualTo('sessions.newSession'), ContextKeyExpr.has(chatGPTSelectedContext)), group: 'navigation' },
+			menu: {
+				id: Menus.ActivityBarContext,
+				when: ContextKeyExpr.and(ActivityBarItemContext.isEqualTo('sessions.newSession'), ContextKeyExpr.or(ContextKeyExpr.has(chatGPTSelectedContext), ContextKeyExpr.has(experimentalChatGPTSelected))),
+				group: 'navigation',
+			},
 			f1: true,
 		});
 	}
 	public override async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(IChatGPTService).reload();
+		const experimental = accessor.get(IContextKeyService).getValue(experimentalChatGPTSelected) === true;
+		await accessor.get(experimental ? IChatGPTNativeService : IChatGPTService).reload();
 	}
 });
 

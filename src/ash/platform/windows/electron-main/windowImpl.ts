@@ -14,6 +14,7 @@ import { ILifecycleMainService } from '../../lifecycle/electron-main/lifecycleMa
 import { Disposable, toDisposable, type DisposableStore, type IDisposable } from '../../../base/common/lifecycle.js';
 import {
 	WindowMode,
+	WindowClientArea,
 	LoadReason,
 	type ILoadEvent,
 	type ICodeWindow,
@@ -134,6 +135,7 @@ export interface ICodeWindowHandle<TWindow = Electron.BrowserWindow> {
 	setBounds(bounds: IWindowBounds): void;
 	hookWindowMessage(message: number, callback: (wParam: Buffer, lParam: Buffer) => void): void;
 	unhookWindowMessage(message: number): void;
+	getNativeWindowHandle(): Buffer;
 	setTitleBarOverlay(colors: { color: string; symbolColor: string; height: number; }): void;
 	maximize(): void;
 	setFullScreen(fullscreen: boolean): void;
@@ -183,7 +185,7 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 	private readonly controls: WindowControlsOverlay;
 	private readonly titleBarStyle: TitleBarStyleConfiguration;
 	private readonly reopen: () => Promise<void>;
-	private clientSize: IWindowClientSize | undefined;
+	private readonly clientArea: WindowClientArea;
 
 	constructor(
 		createWindow: (
@@ -223,31 +225,8 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 			throw error;
 		}
 		const window = this.win;
-		if (process.platform === 'win32') {
-			// getContentBounds() has already rounded through integer DIPs. WM_SIZE
-			// retains the actual drawable pixel boundary at fractional display scales.
-			let pending: ReturnType<typeof setImmediate> | undefined;
-			window.hookWindowMessage(0x0005, (wParam, lParam) => {
-				if (wParam.byteLength < 4 || lParam.byteLength < 4 || wParam.readUInt32LE() === 1) return;
-				const width = lParam.readUInt16LE(0);
-				const height = lParam.readUInt16LE(2);
-				if (!width || !height || (this.clientSize?.width === width && this.clientSize.height === height))
-					return;
-				this.clientSize = { width, height };
-				pending ??= setImmediate(() => {
-					pending = undefined;
-					if (!this.isDisposed && !window.isDestroyed() && !window.webContents.isDestroyed()) {
-						this.send(WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, this.clientSize);
-					}
-				});
-			});
-			this._register(
-				toDisposable(() => {
-					if (pending !== undefined) clearImmediate(pending);
-					if (!window.isDestroyed()) window.unhookWindowMessage(0x0005);
-				}),
-			);
-		}
+		this.clientArea = this._register(new WindowClientArea(window));
+		this._register(this.clientArea.onDidChange(size => this.send(WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, { size })));
 		this.controls = new WindowControlsOverlay(colors => {
 			if (
 				(options.titleBarStyle ?? 'custom') === 'custom' &&
@@ -421,7 +400,7 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 		return this.win.getBounds();
 	}
 	public getClientSize(): IWindowClientSize | undefined {
-		return this.clientSize;
+		return this.clientArea.getSize();
 	}
 	public isFullScreen(): boolean {
 		return this.win.isFullScreen();

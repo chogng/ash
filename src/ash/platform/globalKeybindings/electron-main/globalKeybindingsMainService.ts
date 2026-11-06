@@ -42,7 +42,7 @@ export class GlobalKeybindingsMainService extends AbstractDisposable {
 	}
 
 	/** Renderer leases share the existing registry and end on navigation, crash or window teardown. */
-	createWindowRoutes(window: BrowserWindow, lifetime: DisposableStore): readonly IpcRoute<unknown, unknown>[] {
+	createWindowRoutes(window: BrowserWindow, lifetime: DisposableStore, triggerInMain?: (id: string, commandId: string) => boolean): readonly IpcRoute<unknown, unknown>[] {
 		const leases = new Map<string, IGlobalKeybindingOwner>();
 		let disposed = false;
 		const clear = () => { for (const lease of leases.values()) lease.dispose(); leases.clear(); };
@@ -64,7 +64,10 @@ export class GlobalKeybindingsMainService extends AbstractDisposable {
 				}
 				if (!lease) {
 					if (leases.size >= 64) throw new RangeError('Too many global keybinding leases');
-					lease = this.createOwner(window.id, () => { if (!window.isDestroyed() && !contents.isDestroyed()) contents.send(GLOBAL_KEYBINDING_TRIGGER_CHANNEL, { id: request.id }); });
+					lease = this.createOwner(window.id, binding => {
+						if (window.isDestroyed() || contents.isDestroyed()) return;
+						if (!triggerInMain?.(request.id, binding.commandId)) contents.send(GLOBAL_KEYBINDING_TRIGGER_CHANNEL, { id: request.id });
+					});
 					leases.set(request.id, lease);
 				}
 				const available = !!request.accelerator && lease.update({ accelerator: request.accelerator, commandId: request.commandId, userSettingsLabel: request.label });

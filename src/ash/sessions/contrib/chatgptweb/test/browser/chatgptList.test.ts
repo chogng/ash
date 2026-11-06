@@ -1,13 +1,16 @@
-import { expect } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { expectVisibleFocusOutline } from '../../../../../../../test/fixtures/browser/focusOutline.js';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import { mockChatGPTRequests } from './chatGPTBrowserTestUtils.js';
 
+const historyNotices = (page: Page) => page.evaluate(() => window.ashChatGPTIntegration.notifications().map(item => item.message));
+const rateLimitNotice = 'ChatGPT 暂时限制了历史请求，请稍后重试。';
+
 suite('ChatGPT catalog in the Ash chat list', () => {
 	const browserTests = useBrowserTests();
 
-	test('the registered Chat sidebar opens Ash and ChatGPT rows through their own sources', async () => {
+	test('the shared sidebar retains Ash and ChatGPT rows across Chat and Code', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);
 		await page.goto('/chatgptNavigation.html?locale=en&mixedCatalog');
@@ -16,33 +19,132 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		const chatGPT = sidebar.getByRole('button', { name: 'Synthetic conversation', exact: true });
 		await expect(ash).toBeVisible();
 		await expect(chatGPT).toBeVisible();
+		const code = sidebar.getByRole('button', { name: /^Local Code conversation/ });
+		await expect(code).toBeVisible();
+		const tree = await sidebar.elementHandle();
+		await code.press('Enter');
+		await expect(page.locator('body')).toHaveAttribute('data-opened-code', 'fixture-code/fixture-code');
+		await expect(ash).toBeVisible();
+		await expect(chatGPT).toBeVisible();
+		expect(await sidebar.evaluate((current, previous) => current === previous, tree)).toBe(true);
 
 		await ash.press('Enter');
 		await expect(page.locator('body')).toHaveAttribute('data-opened-ash', 'fixture-chat/fixture-thread');
+		await expect(ash).toHaveAttribute('aria-current', 'page');
 		await chatGPT.press('Enter');
 		await expect(page.locator('.ash-chatgpt-widget')).toContainText('Synthetic answer');
+		await expect(chatGPT).toHaveAttribute('aria-current', 'page');
 	});
 
-	test('ChatGPT refreshes the visible history when the window comes back online', async () => {
+	test('ChatGPT refreshes visible history after reconnect and honors the list cooldown', async () => {
 		const { page } = browserTests;
+		let rateLimited = false;
 		let changed = false;
+		let requests = 0;
 		await mockChatGPTRequests(page);
-		await page.route('**/service/backend-api/conversations?*', route => changed
-			? route.fulfill({ json: { items: [{ id: 'remote-new', title: 'New on another device' }], total: 1 } })
-			: route.fallback());
+		await page.route('**/service/backend-api/conversations?*', route => {
+			requests++;
+			if (rateLimited) return route.fulfill({ status: 429 });
+			if (changed) return route.fulfill({ json: { items: [{ id: 'remote-new', title: 'New on another device' }], total: 1 } });
+			return route.fallback();
+		});
 		await page.route('**/service/backend-api/conversation/fixture-chat', route => changed
 			? route.fulfill({ status: 404 })
 			: route.fallback());
 		await page.goto('/chatgptNavigation.html?locale=zh-CN');
 		const previous = page.getByRole('button', { name: 'Synthetic conversation', exact: true });
 		await previous.click();
-		await expect(page.locator('.ash-chatgpt-widget')).toContainText('Synthetic answer');
+		const chat = page.locator('.ash-chatgpt-widget');
+		await expect(chat).toContainText('Synthetic answer');
+		rateLimited = true;
+		await page.evaluate(() => window.dispatchEvent(new Event('online')));
+		await expect.poll(() => historyNotices(page)).toEqual([rateLimitNotice]);
+		await page.evaluate(() => window.ashChatGPTIntegration.retryHistory());
+		await expect.poll(() => historyNotices(page)).toEqual([rateLimitNotice]);
+		await expect(previous).toBeVisible();
+		await expect(chat.locator('.ash-chat-input-notification-message')).toBeHidden();
+		await expect(chat).toContainText('Synthetic answer');
+		expect(requests).toBe(2);
 
+		rateLimited = false;
 		changed = true;
+		await page.clock.setFixedTime(new Date(Date.now() + 65_000));
 		await page.evaluate(() => window.dispatchEvent(new Event('online')));
 		await expect(page.getByRole('button', { name: 'New on another device', exact: true })).toBeVisible();
 		await expect(previous).toHaveCount(0);
-		await expect(page.locator('.ash-chatgpt-widget')).not.toContainText('Synthetic answer');
+		await expect.poll(() => historyNotices(page)).toEqual([]);
+		expect(requests).toBe(3);
+	});
+
+	test('ChatGPT keeps cached history offline and coalesces flapping reconnects', async () => {
+		const { page } = browserTests;
+		let listReads = 0;
+		await page.clock.install();
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/conversations?*', route => {
+			listReads++;
+			return route.fallback();
+		});
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		const conversation = page.getByRole('button', { name: 'Synthetic conversation', exact: true });
+		const chat = page.locator('.ash-chatgpt-widget');
+		await conversation.click();
+		await expect(chat).toContainText('Synthetic answer');
+		const offline = () => page.evaluate(() => window.dispatchEvent(new Event('offline')));
+		const online = () => page.evaluate(() => window.dispatchEvent(new Event('online')));
+		await offline();
+		await expect.poll(() => historyNotices(page)).toEqual(['ChatGPT 当前离线，仍可查看已加载的会话。']);
+		await conversation.click();
+		await expect(chat).toContainText('Synthetic answer');
+		await online();
+		await page.clock.runFor(300);
+		await offline();
+		await online();
+		await online();
+		await page.clock.runFor(300);
+		expect(listReads).toBe(1);
+		await page.clock.runFor(1_100);
+		await expect.poll(() => listReads).toBe(2);
+		await expect.poll(() => historyNotices(page)).toEqual([]);
+		await expect(chat).toContainText('Synthetic answer');
+	});
+
+	test('ChatGPT keeps the loaded transcript during the conversation read cooldown', async () => {
+		const { page } = browserTests;
+		let rateLimited = false;
+		let detailReads = 0;
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/conversation/fixture-chat', route => {
+			detailReads++;
+			return rateLimited ? route.fulfill({ status: 429, headers: { 'Retry-After': '26' } }) : route.fallback();
+		});
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		const previous = page.getByRole('button', { name: 'Synthetic conversation', exact: true });
+		await previous.click();
+		const chat = page.locator('.ash-chatgpt-widget');
+		const notice = chat.locator('.ash-chat-input-notification-message');
+		await expect(chat).toContainText('Synthetic answer');
+		await expect(notice).toBeHidden();
+		expect(detailReads).toBe(1);
+		rateLimited = true;
+		const afterFreshness = Date.now() + 65_000;
+		await page.clock.setFixedTime(new Date(afterFreshness));
+		await previous.click();
+		await expect.poll(() => historyNotices(page)).toEqual([rateLimitNotice]);
+		await expect(notice).toBeHidden();
+		expect(detailReads).toBe(2);
+		await expect(previous).toBeVisible();
+		await expect(chat).toContainText('Synthetic answer');
+
+		rateLimited = false;
+		await previous.click();
+		await expect.poll(() => historyNotices(page)).toEqual([rateLimitNotice]);
+		expect(detailReads).toBe(2);
+		await page.clock.setFixedTime(new Date(afterFreshness + 26_000));
+		await previous.click();
+		await expect(notice).toBeHidden();
+		await expect.poll(() => historyNotices(page)).toEqual([]);
+		expect(detailReads).toBe(3);
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
@@ -64,7 +166,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const projects = list.locator('[data-section="projects"]');
 			const headerRow = list.getByRole('treeitem').filter({ has: page.locator('[data-section="projects"]') });
 			const toolbar = projects.getByRole('toolbar');
-			const sort = toolbar.getByRole('button', { name: chinese ? '排序方式' : 'Sort By', exact: true });
+			const more = toolbar.getByRole('button', { name: chinese ? '更多会话操作' : 'More Sessions Actions', exact: true });
 			const add = toolbar.getByRole('button', { name: chinese ? '添加文件夹…' : 'Add folder…', exact: true });
 			const rows = list.locator('[data-parent-section="recent"] .ash-chat-navigation-item');
 			await expect(rows).toHaveText(['Echo', 'Zulu', 'Alpha']);
@@ -82,14 +184,20 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(add).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			await page.mouse.move(0, 0);
 			await expect(toolbar).toHaveCSS('opacity', '0');
-			await sort.focus();
+			await more.focus();
 			await expect(toolbar).toHaveCSS('opacity', '1');
-			await sort.press('ArrowRight');
+			await more.press('ArrowRight');
 			await expect(add).toBeFocused();
 			await add.press('ArrowLeft');
-			await expect(sort).toBeFocused();
+			await expect(more).toBeFocused();
+			const openSort = async () => {
+				await more.press('Enter');
+				const sort = page.getByRole('menuitem', { name: chinese ? '排序方式' : 'Sort By', exact: true });
+				await sort.focus();
+				await page.keyboard.press('ArrowRight');
+			};
 			const choose = async (name: string) => {
-				await sort.press('Enter');
+				await openSort();
 				await page.getByRole('menuitemradio', { name, exact: true }).click();
 			};
 			await choose(chinese ? '名称' : 'Name');
@@ -98,9 +206,12 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(rows).toHaveText(['Echo', 'Zulu', 'Alpha']);
 			await choose(chinese ? '升序' : 'Ascending');
 			await expect(rows).toHaveText(['Alpha', 'Zulu', 'Echo']);
-			await sort.press('Enter');
+			await openSort();
+			const selected = page.getByRole('menuitemradio', { name: chinese ? '创建日期' : 'Date Created', exact: true, checked: true });
+			await expect(selected).toBeVisible();
 			await page.keyboard.press('Escape');
-			await expect(sort).toBeFocused();
+			await page.keyboard.press('Escape');
+			await expect(more).toBeFocused();
 		});
 
 		test(`ChatGPT history group sizing waits for its detached sidebar to mount (${locale})`, async () => {
@@ -288,12 +399,17 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const row = page.locator('.ash-chat-navigation-row[data-item="chatgpt:fixture-chat"]');
 			const title = row.locator('.ash-chat-navigation-item');
 			await expect(title).toBeVisible();
+			await expect(row.locator('.ash-session-leading-icon [data-ash-icon-id="chat-session"]')).toBeVisible();
 			for (const direction of ['ltr', 'rtl']) {
 				await page.locator('#navigation').evaluate((element, dir) => { element.setAttribute('dir', dir); }, direction);
 				await page.keyboard.press('Tab');
 				await title.focus();
 				await title.hover();
-				await expect(row.locator('.ash-sessions-list-actions')).toHaveCSS('opacity', '1');
+				const actions = row.locator('.ash-sessions-list-actions');
+				await expect(actions).toHaveCSS('opacity', '1');
+				await expect(row.locator('xpath=ancestor::*[@role="treeitem"]')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				await expect(title).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				await expect(actions).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 				await testInfo.attach(`conversation-focused-${theme}-${direction}`, { body: await row.screenshot(), contentType: 'image/png' });
 				await expectVisibleFocusOutline(title);
 				await row.locator('.ash-sessions-list-actions').getByRole('button').first().click({ trial: true });
@@ -301,6 +417,51 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				await expect(row.locator('.ash-sessions-list-actions').getByRole('button').first()).toBeFocused();
 			}
 		}
+	});
+
+	test('an overflowing chat title scrolls to its end on hover and resets on exit', async () => {
+		const { page } = browserTests;
+		const longTitle = '用于测试悬停滚动的长会话标题，最后几个字必须完整显示';
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/conversations?*', route => route.fulfill({
+			json: { items: [{ id: 'long', title: longTitle }, { id: 'short', title: '短标题' }], total: 2 },
+		}));
+		await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=light');
+		const button = page.getByRole('button', { name: longTitle, exact: true });
+		const label = button.locator('.ash-sessions-list-label');
+		const text = label.locator('span');
+		const short = page.getByRole('button', { name: '短标题', exact: true });
+		await expect(label).toHaveCSS('text-overflow', 'ellipsis');
+		for (const direction of ['ltr', 'rtl']) {
+			await page.locator('#navigation').evaluate((element, dir) => { element.setAttribute('dir', dir); }, direction);
+			await button.hover();
+			await expect(label).not.toHaveCSS('mask-image', 'none');
+			await expect(text).toHaveCSS('animation-name', 'ash-sessions-row-title-scroll');
+			expect(await text.evaluate((element, dir) => {
+				element.getAnimations()[0]!.finish();
+				const viewport = element.parentElement!.getBoundingClientRect();
+				const content = element.getBoundingClientRect();
+				return dir === 'rtl' ? content.left - viewport.left : viewport.right - content.right;
+			}, direction)).toBeGreaterThanOrEqual(15);
+			await expect(label).toHaveCSS('mask-size', '100% 100%');
+
+			await short.hover();
+			await expect(text).toHaveCSS('transform', 'none');
+			await expect(short.locator('.ash-sessions-list-label')).toHaveCSS('mask-image', 'none');
+		}
+		await page.emulateMedia({ reducedMotion: 'reduce' });
+		await button.hover();
+		await expect(text).toHaveCSS('animation-name', 'none');
+		await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'no-preference' });
+		await expect(label).toHaveCSS('mask-image', 'none');
+		await expect(label).toHaveCSS('text-overflow', 'ellipsis');
+		await expect(text).toHaveCSS('animation-name', 'none');
+		await page.emulateMedia({ forcedColors: 'none' });
+		await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=hcDark');
+		await button.hover();
+		await expect(label).toHaveCSS('mask-image', 'none');
+		await expect(label).toHaveCSS('text-overflow', 'ellipsis');
+		await expect(text).toHaveCSS('animation-name', 'none');
 	});
 
 	for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
@@ -322,15 +483,8 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const viewport = scrollable.locator(':scope > .ash-scrollbar-viewport');
 			const scrollbar = scrollable.getByRole('scrollbar', { name: 'Vertical scrollbar' });
 			await expect(scrollbar).toHaveAttribute('aria-disabled', 'false');
-			await expect(list).toHaveCSS('padding-block', '12px');
-			const firstRow = list.getByRole('treeitem').filter({ has: page.locator('.ash-chat-navigation-item') }).first();
-			await expect.poll(() => firstRow.evaluate(node => {
-				const row = node.getBoundingClientRect();
-				const list = node.closest('.ash-chat-navigation-list')!.getBoundingClientRect();
-				return { left: row.left - list.left, right: list.right - row.right };
-			})).toEqual({ left: 8, right: 8 });
 			const sidebar = page.locator('.ash-chat-navigation');
-			await expect(sidebar).toHaveCSS('padding', '0px');
+			await expect(list.getByRole('treeitem').filter({ has: page.locator('.ash-chat-navigation-item') }).first()).toBeVisible();
 			const [sidebarBounds, scrollbarBounds] = await Promise.all([sidebar.boundingBox(), scrollbar.boundingBox()]);
 			expect(scrollbarBounds!.x + scrollbarBounds!.width).toBe(sidebarBounds!.x + sidebarBounds!.width);
 			expect(await viewport.evaluate(element => getComputedStyle(element).scrollbarWidth)).toBe('none');
@@ -367,7 +521,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		const list = page.locator('.ash-chat-navigation-list');
 		await expect(list.locator('.ash-chat-navigation-item:visible')).toHaveCount(22);
 		expect(offsets).toEqual([0, 2]);
-		const recent = list.getByRole('button', { name: '最近', exact: true });
+		const recent = list.getByRole('button', { name: '最近使用', exact: true });
 		await recent.click();
 		await page.setViewportSize({ width: 1000, height: 1600 });
 		await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
@@ -381,7 +535,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		expect(offsets).toEqual([0, 2, 22]);
 	});
 
-	test('ChatGPT conversation pagination retries a failure only after another scroll', async function () {
+	test('ChatGPT conversation pagination retries a failure through the history notification', async function () {
 		const { page } = browserTests;
 
 		await page.setViewportSize({ width: 1000, height: 400 });
@@ -401,12 +555,15 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await expect(list.locator('.ash-chat-navigation-item:visible')).toHaveCount(20);
 		await list.hover();
 		await page.mouse.wheel(0, 2000);
-		await expect(page.locator('.ash-chat-input-notification-message')).toBeVisible();
+		await expect.poll(() => historyNotices(page)).toEqual(['Could not sync ChatGPT history. Previously loaded chats are still available.']);
+		await expect(page.locator('.ash-chat-input-notification-message')).toBeHidden();
 		await expect(list).toHaveAttribute('aria-busy', 'false');
 		expect(offsets).toEqual([0, 20]);
 		await page.mouse.wheel(0, -100);
 		await page.mouse.wheel(0, 200);
+		await page.evaluate(() => window.ashChatGPTIntegration.retryHistory());
 		await expect(list.locator('.ash-chat-navigation-item:visible')).toHaveCount(40);
+		await expect.poll(() => historyNotices(page)).toEqual([]);
 		expect(offsets).toEqual([0, 20, 20]);
 	});
 
@@ -421,7 +578,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		const storageKeys = () => page.evaluate(() => window.ashChatGPTIntegration.storageKeys());
 		const previousKeys = (keys: readonly string[]) => keys.filter(key => key.startsWith('sessions.chatgpt.navigation.collapsed.'));
 		expect(previousKeys(await storageKeys())).toEqual([]);
-		expect(await storageKeys()).toContain('workbench.viewContainer.sessions.chatgpt.navigation.sessions.chatgpt.navigation.g-p-unloaded.collapsed');
+		expect(await storageKeys()).toContain('sessions.list.code.collapsed.catalog-project:g-p-unloaded');
 		expect((await storageKeys()).some(key => key.endsWith('.projects.collapsed'))).toBe(false);
 		await expect(recent.getByRole('button', { name: 'Synthetic conversation', exact: true })).toBeHidden();
 		await heading.click();
@@ -496,6 +653,11 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				},
 			}));
 			const pinned = { id: 'pinned', title: 'Pinned project chat', gizmo_id: 'g-p-one' };
+			const firstPage = [pinned, { id: 'one', title: 'First research chat' },
+				...Array.from({ length: 18 }, (_, index) => ({ id: `project-chat-${index}`, title: `Research chat ${index + 2}` }))];
+			const firstPageTitles = firstPage.map(item => item.title);
+			let releaseNextPage!: () => void;
+			const nextPage = new Promise<void>(resolve => { releaseNextPage = resolve; });
 			await page.route('**/service/backend-api/pins?*', route => route.fulfill({ json: [{ item: pinned }] }));
 			const cursors: (string | null)[] = [];
 			let emptyReads = 0;
@@ -503,11 +665,14 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				emptyReads++;
 				return route.fulfill({ json: { items: [], cursor: null } });
 			});
-			await page.route('**/gizmos/g-p-one/conversations?*', route => {
+			await page.route('**/gizmos/g-p-one/conversations?*', async route => {
 				const cursor = new URL(route.request().url()).searchParams.get('cursor');
 				cursors.push(cursor);
-				if (!cursor) return route.fulfill({ json: { items: [pinned, { id: 'one', title: 'First research chat' }], cursor: 'page+two' } });
-				if (cursors.length === 2) return route.fulfill({ status: 503 });
+				if (!cursor) return route.fulfill({ json: { items: firstPage, cursor: 'page+two' } });
+				if (cursors.length === 2) {
+					await nextPage;
+					return route.fulfill({ status: 503 });
+				}
 				return route.fulfill({ json: { items: [{ id: 'one', title: 'First research chat' }, { id: 'two', title: 'Older research chat' }], cursor: null } });
 			});
 			await page.goto(`/chatgptNavigation.html?projects&locale=${locale}&theme=${zh ? 'hcDark' : 'light'}`);
@@ -524,8 +689,8 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const toggle = sidebar.getByRole('button', { name: 'Research', exact: true });
 			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 			const projectRow = sidebar.locator('[data-item="project:g-p-one"]');
-			const projectIcon = projectRow.locator('[data-ash-icon-id="projects"]');
-			const chevron = projectRow.locator('.ash-chat-navigation-project-chevron');
+			const projectIcon = projectRow.locator('.ash-sessions-list-project-icon > .ash-icon').first();
+			const chevron = projectRow.locator('.ash-sessions-list-project-chevron');
 			await page.mouse.move(0, 0);
 			await expect(projectIcon).toBeVisible();
 			await expect(chevron).toBeHidden();
@@ -538,38 +703,47 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(chevron).toBeVisible();
 			await expect(projectIcon).toBeHidden();
 			expect(await toggle.boundingBox()).toEqual(restingBounds);
+			const recentChat = sidebar.getByRole('button', { name: 'Synthetic conversation', exact: true });
+			const recentBounds = (await recentChat.boundingBox())!;
+			await recentChat.hover();
+			const hoverBackground = await recentChat.evaluate(row => getComputedStyle(row).backgroundColor);
 			await toggle.getByText('Research', { exact: true }).click();
 			await expect(research).toBeVisible();
 			const children = sidebar.locator('[data-parent-project="project:g-p-one"] > .ash-chat-navigation-item');
-			await expect(children).toHaveText([pinned.title, 'First research chat', zh ? '加载更多项目聊天' : 'Load more project chats']);
+			await expect(children).toHaveText(firstPageTitles);
 			expect(cursors).toEqual([null]);
-			const recentChat = sidebar.getByRole('button', { name: 'Synthetic conversation', exact: true });
 			const projectChat = children.first();
-			const recentBounds = (await recentChat.boundingBox())!;
 			const projectBounds = (await projectChat.boundingBox())!;
 			expect(projectBounds.x).toBe(recentBounds.x);
 			expect(projectBounds.width).toBe(recentBounds.width);
-			await recentChat.hover();
-			const hoverBackground = await recentChat.evaluate(row => getComputedStyle(row).backgroundColor);
 			await projectChat.hover();
 			await expect(projectChat).toHaveCSS('background-color', hoverBackground);
-			await toggle.hover();
-			const arrow = (await chevron.boundingBox())!;
-			await page.mouse.click(arrow.x + arrow.width / 2, arrow.y + arrow.height / 2);
+			await children.last().scrollIntoViewIfNeeded();
+			await expect(toggle).toHaveAttribute('aria-busy', 'true');
+			await expect(projectIcon).toBeHidden();
+			const ring = projectRow.locator('.ash-loading-spinner');
+			await expect(ring).toBeVisible();
+			await expect(ring).toHaveCSS('inline-size', '16px');
+			await expect(ring).toHaveAttribute('aria-hidden', 'true');
+			await expect(sidebar.locator('.ash-chat-navigation-project-history')).toHaveCount(0);
+			expect(cursors).toEqual([null, 'page+two']);
+			await toggle.press('ArrowLeft');
 			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 			await expect(children).toHaveCount(0);
 			await research.press('Enter');
 			const rows = projects.getByRole('list', { name: zh ? '项目对话' : 'Project conversations' }).getByRole('button');
-			await expect(rows).toHaveText([pinned.title, 'First research chat']);
+			await expect(rows).toHaveText(firstPageTitles);
 			await expect(projects).toHaveAccessibleName('Research');
 			await expect(projects).toBeFocused();
 			await expect(projects.getByRole('heading', { level: 1 })).toHaveCount(0);
 			await expect(page.locator('.ash-sessions-titlebar-page-content .ash-project-titlebar-name')).toHaveText('Research');
-			expect(cursors).toEqual([null]);
 			expect(emptyReads).toBe(0);
-			await projects.getByRole('button', { name: zh ? '加载更多项目聊天' : 'Load more project chats', exact: true }).click();
-			await projects.getByRole('button', { name: zh ? '无法加载项目聊天，点击重试' : 'Could not load project chats. Retry', exact: true }).press('Enter');
-			await expect(rows).toHaveText([pinned.title, 'First research chat', 'Older research chat']);
+			releaseNextPage();
+			await expect.poll(() => historyNotices(page)).toEqual([zh ? '无法同步 ChatGPT 历史，仍可查看已加载的会话。' : 'Could not sync ChatGPT history. Previously loaded chats are still available.']);
+			await expect(projects.getByRole('button', { name: zh ? '无法加载项目聊天，点击重试' : 'Could not load project chats. Retry', exact: true })).toHaveCount(0);
+			await page.evaluate(() => window.ashChatGPTIntegration.retryHistory());
+			await expect(rows).toHaveText([...firstPageTitles, 'Older research chat']);
+			await expect.poll(() => historyNotices(page)).toEqual([]);
 			expect(cursors).toEqual([null, 'page+two', 'page+two']);
 			await page.locator('.ash-projects-breadcrumb').getByRole('button', { name: zh ? '项目' : 'Projects', exact: true }).click();
 			await expect(research).toBeFocused();
@@ -619,11 +793,13 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			const window = page.locator('.ash-sessions-window');
 			await window.evaluate(element => (element as HTMLElement).style.setProperty('--ash-toolbar-actionSize', '32px'));
 			await expect(icon).toHaveCSS('width', '32px');
+			await row.hover();
 			await expect(more).toHaveCSS('width', '32px');
 			await expect(row).toHaveCSS('height', '36px');
 			await window.evaluate(element => (element as HTMLElement).style.removeProperty('--ash-toolbar-actionSize'));
 			for (const forcedColors of ['none', 'active'] as const) {
 				await page.emulateMedia({ forcedColors });
+				await row.hover();
 				expect((await row.boundingBox())!.height).toBe(32);
 				for (const action of [more, pin]) {
 					await expect(action).toHaveCSS('width', '28px');

@@ -6,11 +6,102 @@ import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/wo
 import { URI } from '../../../../src/ash/base/common/uri.js';
 import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
 import { Workbench } from '../../../automation/workbench.js';
+import type { Page } from '@playwright/test';
 
 const focusTest = test.extend({ electronWindowMode: 'active' });
 const persistedZoomTest = test.extend({ electronWindowMode: 'active', electronUserSettings: { 'window.zoomPerWindow': false } });
+const chineseStartupTest = test.extend({ electronUserSettings: { 'workbench.locale': 'zh-CN' } });
 
 test.use({ openWorkspace: false });
+
+/** Leaves transport negotiation live while withholding only the full initialize request. */
+async function holdFullInitialization(page: Page): Promise<() => Promise<void>> {
+	await page.addInitScript(() => {
+		const send = MessagePort.prototype.postMessage;
+		MessagePort.prototype.postMessage = function (this: MessagePort, ...args: unknown[]): void {
+			const payload = args[0] as { data?: unknown; } | undefined;
+			if (payload?.data instanceof Uint8Array) {
+				let request: { method?: string; } | undefined;
+				try { request = JSON.parse(new TextDecoder().decode(payload.data)); } catch { /* Non-RPC port data is left alone. */ }
+				if (request?.method === 'initialize') {
+					Object.assign(window, {
+						ashReleaseFullInitialize: () => {
+							MessagePort.prototype.postMessage = send;
+							Reflect.apply(send, this, args);
+						}
+					});
+					return;
+				}
+			}
+			Reflect.apply(send, this, args);
+		};
+	});
+	await page.reload({ waitUntil: 'commit' });
+	await expect.poll(() => page.evaluate(() => ({
+		requestHeld: 'ashReleaseFullInitialize' in window,
+		transportReady: performance.getEntriesByName('ash.appServer.protocol-negotiated').length > 0,
+		startupCommandsReady: performance.getEntriesByName('ash.desktop.startup-commands-ready').length > 0,
+		profileReady: performance.getEntriesByName('ash.workbench.profile-ready').length > 0,
+		workbenchAttached: performance.getEntriesByName('ash.workbench.constructor-start').length > 0,
+	})), { timeout: 15_000 }).toEqual({ requestHeld: true, transportReady: true, startupCommandsReady: true, profileReady: true, workbenchAttached: false });
+	return () => page.evaluate(() => (window as unknown as { ashReleaseFullInitialize(): void; }).ashReleaseFullInitialize());
+}
+
+test('F1 opens the native Windows folder chooser while App Server initialization is held', { tag: ['@electron-app-server', '@win32'] }, async ({ application, workbench }) => {
+	if (!('windows' in application)) throw new Error('Expected Electron');
+	await holdFullInitialization(workbench.page);
+	await workbench.quickaccess.runCommand('workbench.action.files.openFolder');
+	await expect.poll(() => application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some(window => !window.isEnabled()))).toBe(true);
+	// Fixture teardown closes the real system chooser and the initializing carrier.
+});
+
+chineseStartupTest('the localized startup command query survives the Workbench handoff', { tag: ['@electron-app-server'] }, async ({ workbench }) => {
+	const release = await holdFullInitialization(workbench.page);
+	await workbench.quickaccess.open('>打开文件夹');
+	await expect(workbench.quickaccess.items.first()).toContainText('打开文件夹');
+	await release();
+	await workbench.waitForReady();
+	await expect(workbench.quickaccess.input).toHaveValue('>打开文件夹');
+	await expect(workbench.quickaccess.input).toBeFocused();
+	await workbench.quickaccess.close();
+});
+
+test('a folder selected from F1 before App Server readiness opens in the same window after authorization', { tag: ['@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
+	if (!('windows' in application)) throw new Error('Expected Electron');
+	const page = workbench.page;
+	const release = await holdFullInitialization(page);
+	const original = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
+	try {
+		await application.evaluate(({ dialog }, directory) => {
+			dialog.showOpenDialog = (async (_window, options) => {
+				if (!options?.properties?.includes('openDirectory')) throw new Error('Expected the native folder chooser');
+				return { canceled: false, filePaths: [directory] };
+			}) as typeof dialog.showOpenDialog;
+		}, testWorkspace.directory);
+		await workbench.quickaccess.open('>Open Folder');
+		await expect(workbench.quickaccess.items.first()).toContainText('Open Folder');
+		await workbench.quickaccess.close();
+		await workbench.quickaccess.runCommand('workbench.action.files.openFolder');
+		await expect.poll(() => page.evaluate(() => performance.getEntriesByName('ash.desktop.startup-folder-selected').length)).toBe(1);
+		expect(await page.evaluate(() => performance.getEntriesByName('ash.rendererApi.initialized').length)).toBe(0);
+		await expect(directoryPermissionPrompt(page)).toHaveCount(0);
+		await release();
+		await directoryPermissionPrompt(page).getByRole('button', { name: 'Trust Folder', exact: true }).click();
+		const sidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+		if (await sidebar.isVisible()) await sidebar.click();
+		await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' }).dblclick();
+		await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text.includes('const value = 1;'));
+		const input = workbench.editors.groupAt(0).editor.input;
+		await input.press('ControlOrMeta+A');
+		await workbench.editors.groupAt(0).editor.waitForTypeInEditor('const value = 2;');
+		await input.press('ControlOrMeta+S');
+		await expect.poll(() => readFile(testWorkspace.file, 'utf8')).toContain('const value = 2;');
+		expect(application.windows()).toHaveLength(1);
+	} finally {
+		await application.evaluate(({ dialog }, method) => { dialog.showOpenDialog = method; }, original);
+		await original.dispose();
+	}
+});
 
 for (const entry of ['welcome', 'explorer'] as const) {
 	test(`desktop ${entry} folder entry opens the Windows folder chooser`, { tag: ['@electron-ui', '@electron-app-server', '@win32'] }, async ({ application, target, workbench }) => {

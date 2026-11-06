@@ -37,6 +37,7 @@ pub struct ExtensionRoot {
     pub kind: ExtensionRootKind,
     /// Root path supplied by the host composition root.
     pub path: PathBuf,
+    pub(super) package_metadata: Option<PathBuf>,
 }
 
 impl ExtensionRoot {
@@ -45,7 +46,14 @@ impl ExtensionRoot {
         Self {
             kind: ExtensionRootKind::BuiltIn,
             path: path.into(),
+            package_metadata: None,
         }
+    }
+
+    /// Uses the distribution's verified resource index when available.
+    pub fn with_package_metadata(mut self, metadata: PathBuf) -> Self {
+        self.package_metadata = Some(metadata);
+        self
     }
 
     /// Creates a user extension root.
@@ -53,6 +61,7 @@ impl ExtensionRoot {
         Self {
             kind: ExtensionRootKind::User,
             path: path.into(),
+            package_metadata: None,
         }
     }
 }

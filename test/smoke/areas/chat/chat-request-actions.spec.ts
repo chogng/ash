@@ -263,6 +263,11 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) for (con
 				? await application.evaluate(({ clipboard }) => clipboard.readText())
 				: await page.evaluate(() => navigator.clipboard.readText());
 			try {
+				const responseActions = transcript.getByRole('toolbar', { name: 'Response actions', exact: true });
+				await responseActions.getByRole('button', { name: 'Copy message', exact: true }).press('Enter');
+				await expect.poll(async () => 'windows' in application
+					? application.evaluate(({ clipboard }) => clipboard.readText())
+					: page.evaluate(() => navigator.clipboard.readText())).toBe('Request action answer 1\n\nSee **`source.ts`** and [Docs](https://example.com).');
 				await window.quickaccess.runCommand('workbench.action.chat.copyAll');
 				const copied = 'windows' in application
 					? await application.evaluate(({ clipboard }) => clipboard.readText())

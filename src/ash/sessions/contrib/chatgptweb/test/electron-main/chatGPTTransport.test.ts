@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { mock } from 'node:test';
 import { suite, test } from 'mocha';
@@ -12,6 +15,8 @@ import { ILogService, NullLoggerService } from '../../../../../platform/log/comm
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ElectronChatGPTTransport } from '../../electron-browser/electronChatGPTTransport.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { StorageMainService } from '../../../../../platform/storage/electron-main/storageMainService.js';
+import { ChatGPTRecentHistoryGate } from '../../electron-main/chatGPTRecentHistoryGate.js';
 import { ChatGPTTransport } from '../../electron-main/chatGPTTransport.js';
 import { createChatGPTFetch } from '../../browser/chatGPTFetch.js';
 import { ChatGPTClient } from '../../browser/chatGPTClient.js';
@@ -77,6 +82,93 @@ function runtime(fetcher: typeof fetch, prepareHeaders: IChatGPTVerificationRunt
 
 suite('ChatGPT transport', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
+	test('native recent history shares the original 429 deadline across windows and desktop restarts', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		const directory = await mkdtemp(join(tmpdir(), 'ash-chatgpt-cooldown-'));
+		try {
+			const statePath = join(directory, 'workbench-state.json');
+			const account = 'a'.repeat(64);
+			const signal = new AbortController().signal;
+			let upstreamCalls = 0;
+			const fetch = async () => {
+				upstreamCalls++;
+				return Response.json({});
+			};
+			{
+				using storage = new StorageMainService(statePath);
+				await storage.initialize();
+				using gate = new ChatGPTRecentHistoryGate(storage, new NullLoggerService());
+				const upstream = new DeferredPromise<Response>();
+				const first = gate.request(account, signal, async () => { upstreamCalls++; return upstream.p; });
+				const fromAnotherWindow = gate.request(account, signal, fetch);
+				await upstream.complete(new Response(null, { status: 429, headers: { 'Retry-After': '120' } }));
+				assert.equal((await first).headers.get('Retry-After'), '120');
+				assert.equal((await fromAnotherWindow).status, 429);
+				assert.equal(upstreamCalls, 1);
+				await storage.close();
+			}
+			{
+				using storage = new StorageMainService(statePath);
+				await storage.initialize();
+				using gate = new ChatGPTRecentHistoryGate(storage, new NullLoggerService());
+				mock.timers.tick(61_000);
+				const blocked = await gate.request(account, signal, fetch);
+				assert.equal(blocked.status, 429);
+				assert.equal(blocked.headers.get('Retry-After'), '59');
+				assert.equal(upstreamCalls, 1);
+				assert.equal((await gate.request('b'.repeat(64), signal, fetch)).status, 200);
+				mock.timers.tick(59_000);
+				assert.equal((await gate.request(account, signal, fetch)).status, 200);
+				assert.equal(upstreamCalls, 3);
+				await storage.close();
+			}
+		} finally {
+			mock.timers.reset();
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
+	test('admits native history only on the experimental channel', async () => fixture(async auth => {
+		const path = '/service/backend-api/conversations/thread/messages?num_turns=20&include_has_versions=true&before=cursor';
+		for (const native of [false, true]) {
+			let fetched = false;
+			using transport = new ChatGPTTransport({
+				native, authentication: auth, readVerificationScript: async () => '',
+				createRuntime: authorize => runtime(async url => {
+					assert.equal((await authorize(new URL(String(url)))).get('Authorization'), 'Bearer fixture-one');
+					fetched = true;
+					return Response.json({});
+				}),
+			}, new NullLoggerService());
+			const channel = transport.getChannel();
+			const id = randomUUID();
+			const args = [id, { path, method: 'GET', headers: {} }, auth.context];
+			if (native) {
+				assert.equal((await channel.call<ChatGPTResponse>('window', 'request', args)).status, 200);
+				await channel.call('window', 'cancel', [id]);
+			} else {
+				await assert.rejects(channel.call('window', 'request', args), /Invalid ChatGPT endpoint/u);
+			}
+			assert.equal(fetched, native);
+		}
+	}));
+
+	for (const contentType of ['application/json', 'text/html']) {
+		test(`preserves Retry-After on a ${contentType} 429 through the transport`, async () => fixture(async auth => {
+			using transport = new ChatGPTTransport({
+				authentication: auth, readVerificationScript: async () => '',
+				createRuntime: () => runtime(async () => new Response('throttled', {
+					status: 429, headers: { 'Content-Type': contentType, 'Retry-After': '26', 'Set-Cookie': 'private' },
+				})),
+			}, new NullLoggerService());
+			const fetcher = createChatGPTFetch(adapt(transport, auth));
+			const response = await fetcher('/service/backend-api/conversations?offset=0');
+			assert.equal(response.status, 429);
+			assert.equal(response.headers.get('Retry-After'), '26');
+			assert.equal(response.headers.has('Set-Cookie'), false);
+			await response.text();
+		}));
+	}
 	test('the first HTTP request waits for its authentication owner', async () => fixture(async auth => {
 		const ready = new DeferredPromise<void>();
 		const authorize = auth.authorize.bind(auth);

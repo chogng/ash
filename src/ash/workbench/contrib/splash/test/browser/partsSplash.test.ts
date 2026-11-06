@@ -89,28 +89,30 @@ test('the production capture receives layout and theme events and releases all l
 	} finally { dom.window.close(); }
 });
 
-test('startup error removes the decorative splash before focusing its retry action', () => {
+test('browser startup failure replaces the decorative splash with a themed fallback', () => {
 	const dom = createDom();
-	const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document');
-	const previousWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
 	const originalError = console.error;
+	const error = new Error('Deliberate startup failure');
+	const messages: unknown[][] = [];
 	try {
-		Object.defineProperty(globalThis, 'document', { configurable: true, value: dom.window.document });
-		Object.defineProperty(globalThis, 'window', { configurable: true, value: dom.window });
-		console.error = () => undefined;
-		showPartsSplash(dom.window.document, cached);
-		using errorView = showStartupError(new Error('Deliberate startup failure'), async () => undefined);
-		assert.equal(dom.window.document.getElementById('ash-parts-splash'), null);
-		assert.equal(dom.window.document.querySelector('.ash-initial-shell-colors'), null);
-		assert.equal(dom.window.document.activeElement?.textContent, 'Retry');
-		assert.equal(dom.window.document.querySelector('section')!.style.backgroundColor, 'rgb(30, 30, 30)');
-		assert.equal(dom.window.document.querySelector('section')!.style.colorScheme, 'dark');
+		console.error = (...args: unknown[]) => { messages.push(args); };
+		const document = dom.window.document;
+		const container = document.getElementById('app')!;
+		showPartsSplash(document, cached);
+		{
+			using errorView = showStartupError(container, error);
+			assert.equal(document.getElementById('ash-parts-splash'), null);
+			assert.equal(document.querySelector('.ash-initial-shell-colors'), null);
+			const message = container.querySelector<HTMLElement>('section[role="alert"]')!;
+			assert.equal(message.querySelector('h1')?.textContent, 'Unable to start Ash');
+			assert.equal(message.querySelector('p')?.textContent, 'Check the browser developer tools console for details.');
+			assert.equal(message.style.backgroundColor, 'rgb(30, 30, 30)');
+			assert.equal(message.style.colorScheme, 'dark');
+			assert.deepEqual(messages, [['Unable to start Ash', error]]);
+		}
+		assert.equal(container.childElementCount, 0);
 	} finally {
 		console.error = originalError;
-		if (previousDocument) Object.defineProperty(globalThis, 'document', previousDocument);
-		else Reflect.deleteProperty(globalThis, 'document');
-		if (previousWindow) Object.defineProperty(globalThis, 'window', previousWindow);
-		else Reflect.deleteProperty(globalThis, 'window');
 		dom.window.close();
 	}
 });

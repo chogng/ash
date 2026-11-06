@@ -10,7 +10,7 @@ import { localize } from '../../../../nls.js';
 import { IAccessibleViewService, type AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import type { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
@@ -51,10 +51,11 @@ export interface ReplyChatEditorOptions {
 	readonly title: () => string;
 	readonly inputLabel: () => string;
 	readonly model: SyncDescriptor<IReplyChatEditorModel>;
+	readonly scopedServices?: (accessor: ServicesAccessor) => ServiceCollection;
 	readonly persistentDraftScope?: string;
 	readonly useWorkbenchModelManagement?: true;
 	readonly advanceWelcomePhrase?: false;
-	readonly createDraftPicker?: (instantiation: IInstantiationService, footer: HTMLElement, visible: IObservable<boolean>) => IDisposable;
+	readonly createDraftPicker?: (instantiation: IInstantiationService, footer: HTMLElement, visible: IObservable<boolean>, model: IReplyChatEditorModel) => IDisposable;
 	readonly accessibility: {
 		readonly focusContext: string;
 		readonly verbositySetting: AccessibilityVerbositySettingId;
@@ -108,7 +109,11 @@ export class ReplyChatEditor extends EditorPane {
 		const contextKeys = this._register(this.contextKeys.createScoped(root));
 		contextKeys.createKey(this.options.accessibility.focusContext, true);
 		// Nested input editors must inherit this page's accessibility context.
-		const instantiation = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, contextKeys])));
+		const services = this.options.scopedServices
+			? this.instantiation.invokeFunction(this.options.scopedServices)
+			: new ServiceCollection();
+		services.set(IContextKeyService, contextKeys);
+		const instantiation = this._register(this.instantiation.createChild(services));
 		const model = instantiation.createInstance(this.options.model);
 		let projectId: string | undefined;
 		const projectTitlebar = this._register(instantiation.createInstance(ProjectTitleBarWidget, h(parent.ownerDocument, 'div'), {
@@ -154,7 +159,7 @@ export class ReplyChatEditor extends EditorPane {
 						useWorkbenchModelManagement: this.options.useWorkbenchModelManagement === true,
 						chatModelSlider: true, configureModelInMenu: true,
 						renderSecondaryToolbar: false, draftStorage: 'host',
-						renderLeadingFooter: createDraftPicker && ((footer: HTMLElement) => createDraftPicker(instantiation, footer, this.shown)),
+						renderLeadingFooter: createDraftPicker && ((footer: HTMLElement) => createDraftPicker(instantiation, footer, this.shown, model)),
 						inputLabel: this.options.inputLabel(),
 					});
 					const draftScope = this.options.persistentDraftScope;

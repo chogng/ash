@@ -1,10 +1,10 @@
 import './media/chatMarkdownPart.css';
 import { chatMarkdownTableScrollClass, wrapTablesWithScrollable } from './chatMarkdownTableScrolling.js';
 import { Emitter } from '../../../../../../base/common/event.js';
-import { addDisposableListener, getWindow, h, scheduleAtNextAnimationFrame } from '../../../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { renderWorkbenchMarkdown, sanitizeMarkdownHtmlToFragment, type MarkdownRenderOptions } from '../../../../../../base/browser/markdownRenderer.js';
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
-import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { Marked } from '../../../../../../base/common/marked/marked.js';
 import { htmlAttributeEncodeValue } from '../../../../../../base/common/strings.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
@@ -12,7 +12,9 @@ import { openLinkFromMarkdown } from '../../../../../../platform/markdown/browse
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { MarkedKatexExtension } from '../../../../markdown/common/markedKatexExtension.js';
 import { ChatContentMarkdownRenderer, getChatMarkdownRenderOptions } from '../chatContentMarkdownRenderer.js';
+import { IncrementalDOMMorpher, markdownFrameThreshold } from './chatIncrementalRendering/chatIncrementalRendering.js';
 import { ChatMarkdownDecorationsRenderer } from './chatMarkdownDecorationsRenderer.js';
+import { canStartListCheckpoint, lexMarkdownTail, markdownTailCheckpoint, type MarkdownTailCheckpoint } from './chatMarkdownTail.js';
 import { CodeBlockPart } from './codeBlockPart.js';
 import type { ICodeBlockActionContext } from './codeBlockPart.js';
 import { LocalChatSessionUri } from '../../../common/model/chatUri.js';
@@ -30,6 +32,22 @@ interface RenderedBlock {
 interface MarkdownTail {
 	readonly raw: Element;
 	readonly policy: string;
+	readonly checkpoint?: MarkdownTailCheckpoint;
+}
+
+interface MarkdownTailPatch {
+	readonly removed: readonly ChildNode[];
+	readonly added: readonly ChildNode[];
+}
+
+const markdownTailThreshold = 4096;
+const markdownSizeLimit = 4 * 1024 * 1024;
+
+// Streaming lists and pipe-led tables can start reusing rows as soon as
+// rendering moves to the frame queue. Paragraphs keep the larger threshold.
+function canPatchTail(source: string, allowEarlyList: boolean): boolean {
+	return source.length >= markdownTailThreshold || source.length >= markdownFrameThreshold
+		&& (source.startsWith('|') || allowEarlyList && canStartListCheckpoint(source));
 }
 
 interface MarkdownFragment {
@@ -62,6 +80,8 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	public readonly onDidChangeHeight = this.changedHeight.event;
 	public readonly codeblocksPartId = `ash-chat-markdown-${createUuid()}`;
 	private readonly markdownRenderer: ChatContentMarkdownRenderer;
+	private readonly decorations: ChatMarkdownDecorationsRenderer;
+	private readonly incrementalRendering: IncrementalDOMMorpher;
 	private readonly renders = this._register(new DisposableMap<HTMLElement, DisposableStore>());
 	private readonly lexer = new Marked(MarkedKatexExtension.extension());
 	private readonly plainLexer = new Marked();
@@ -76,12 +96,9 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		const source = item?.feedbackSource;
 		return { element: item ?? this.codeElement, chatSessionResource: source ? LocalChatSessionUri.forSession(source.sessionId, source.threadId) : undefined };
 	};
-	private visible: boolean;
 	private viewportVisible = true;
 	private hasDeferredCodeBlocks = false;
 	private readonly deferredCodeBlocks = new WeakSet<CodeBlockPart>();
-	private pending: { readonly markdown: IMarkdownString; readonly incomplete: boolean; } | undefined;
-	private readonly update = this._register(new MutableDisposable());
 
 	constructor(
 		private readonly options: ChatMarkdownContentPartOptions,
@@ -89,10 +106,17 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		@IOpenerService private readonly opener: IOpenerService,
 	) {
 		super();
-		this.visible = options.visible ?? true;
 		this.markdownRenderer = this._register(instantiation.createInstance(ChatContentMarkdownRenderer));
 		this.domNode = h(options.ownerDocument, 'div');
 		this.domNode.className = 'ash-chat-markdown-part ash-markdown';
+		this.decorations = this._register(instantiation.createInstance(ChatMarkdownDecorationsRenderer, this.domNode));
+		this.incrementalRendering = this._register(new IncrementalDOMMorpher(this.domNode, options.visible ?? true, markdownSizeLimit, (markdown, incomplete, fromFrame) => {
+			this.render(markdown, incomplete);
+			if (fromFrame) {
+				this.options.asyncRenderCallback?.();
+				this.changedHeight.fire();
+			}
+		}));
 		const part = this;
 		this.codeElement = {
 			get value() { return part.markdown?.value ?? ''; },
@@ -103,16 +127,25 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			get baseUri() { return part.markdown?.baseUri; },
 		};
 		this._register(addDisposableListener(this.domNode, 'load', event => { if ((event.target as Element).tagName === 'IMG') this.changedHeight.fire(); }, true));
-		this._register(toDisposable(() => { this.images.clear(); this.fragments = []; this.markdown = undefined; this.pending = undefined; this.domNode.remove(); }));
+		this._register(toDisposable(() => { this.images.clear(); this.fragments = []; this.markdown = undefined; this.domNode.remove(); }));
 		const markdown = typeof options.markdown === 'string' ? { value: options.markdown } : options.markdown ?? { value: '' };
-		this.enqueue(markdown, options.fillInIncompleteTokens ?? false);
+		this.incrementalRendering.update(markdown, options.fillInIncompleteTokens ?? false);
 	}
 
 	/** Reconciles appended text and provider corrections within this response's existing lifetime. */
 	public tryIncrementalUpdate(newMarkdown: IMarkdownString, fillInIncompleteTokens = false): boolean {
 		if (this.isDisposed) return false;
-		this.enqueue(newMarkdown, fillInIncompleteTokens);
+		this.incrementalRendering.update(newMarkdown, fillInIncompleteTokens);
 		return true;
+	}
+
+	/** Queues a snapshot only when it can be accepted without touching the live DOM. */
+	public tryQueueIncrementalUpdate(markdown: IMarkdownString, incomplete: boolean): boolean {
+		// Keep short corrections synchronous. Compare with the newest queued text
+		// so a correction can replace an append that has not been painted yet.
+		const previous = this.incrementalRendering.pending?.markdown ?? this.markdown;
+		if (markdown.value.length < markdownFrameThreshold && (!previous?.value || !markdown.value.startsWith(previous.value))) return false;
+		return !this.isDisposed && this.incrementalRendering.tryMorph(markdown, incomplete);
 	}
 
 	public get codeblocks(): readonly IChatCodeBlockInfo[] {
@@ -123,26 +156,19 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			elementId: part.element.id,
 			uri: part.editor.getModel()?.uri,
 			languageId: part.editor.getModel()?.getLanguageId(),
-			focus: () => { if (!this.isDisposed && this.visible) { part.focus(); } },
+			focus: () => { if (!this.isDisposed && this.incrementalRendering.isVisible) { part.focus(); } },
 		}));
 	}
 
 	public hasSameContent(other: IChatListItem): boolean {
-		const markdown = this.pending?.markdown ?? this.markdown;
-		const incomplete = this.pending?.incomplete ?? this.fragments.at(-1)?.incomplete ?? false;
+		const pending = this.incrementalRendering.pending;
+		const markdown = pending?.markdown ?? this.markdown;
+		const incomplete = pending?.incomplete ?? this.fragments.at(-1)?.incomplete ?? false;
 		return !!markdown && markdown.value === other.text && incomplete === other.transient;
 	}
 
 	public setVisible(visible: boolean): void {
-		this.visible = visible;
-		if (!visible) this.update.clear();
-		else if (this.pending) {
-			const pending = this.pending;
-			this.pending = undefined;
-			// Preserve synchronous first-show for small responses; large snapshots
-			// still share the ordinary frame-coalesced rendering path.
-			this.enqueue(pending.markdown, pending.incomplete);
-		}
+		this.incrementalRendering.setVisible(visible);
 		for (const [, block] of this.codeBlocks) if (!this.deferredCodeBlocks.has(block)) block.setVisible(visible && this.viewportVisible);
 	}
 
@@ -153,41 +179,8 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		this.hasDeferredCodeBlocks = false;
 		for (const [, block] of this.codeBlocks) {
 			this.deferredCodeBlocks.delete(block);
-			block.setVisible(this.visible && visible);
+			block.setVisible(this.incrementalRendering.isVisible && visible);
 		}
-	}
-
-	private enqueue(markdown: IMarkdownString, incomplete: boolean): void {
-		// Preserve the complete renderer's synchronous admission/size error.
-		if (markdown.value.length > 4 * 1024 * 1024) { this.render(markdown, incomplete); return; }
-		if (!this.visible) {
-			this.update.clear();
-			this.pending = { markdown, incomplete };
-			return;
-		}
-		if (markdown.value.length < 1024) {
-			this.update.clear();
-			this.pending = undefined;
-			this.render(markdown, incomplete);
-			return;
-		}
-		// The transcript owns every source snapshot. Rendering consumes only the
-		// latest one per frame; terminal updates and corrections use the same slot.
-		this.pending = { markdown, incomplete };
-		if (this.visible) this.scheduleUpdate();
-	}
-
-	private scheduleUpdate(): void {
-		if (this.update.value) return;
-		this.update.value = scheduleAtNextAnimationFrame(getWindow(this.domNode), () => {
-			this.update.clear();
-			const pending = this.pending;
-			this.pending = undefined;
-			if (!pending) return;
-			this.render(pending.markdown, pending.incomplete);
-			this.options.asyncRenderCallback?.();
-			this.changedHeight.fire();
-		});
 	}
 
 	private render(markdown: IMarkdownString, fillInIncompleteTokens: boolean): void {
@@ -215,37 +208,48 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		}
 		const tail = markdown.value.slice(offset);
 		let sources: string[] | undefined;
+		let firstBlockEnd: number | undefined;
 		const previousTail = this.fragments.at(-1);
-		// A single ordinary block without a new blank line has no block boundary
-		// to discover. Its canonical renderer still parses the complete current
-		// source, including incomplete inline syntax; avoid a second full lexer pass.
-		if (sameOptions && tail.length >= 4096 && markdown.value.length <= 4 * 1024 * 1024
+		// Keep an established list checkpoint through completion. A one-shot
+		// reply below the tail threshold has no future row updates to amortize it.
+		const allowEarlyList = fillInIncompleteTokens || previousTail?.tail?.checkpoint?.kind === 'list';
+		const ordinaryTail = sameOptions && canPatchTail(tail, allowEarlyList) && markdown.value.length <= markdownSizeLimit
 			&& !markdown.supportHtml && !this.options.markedExtensions?.length
-			&& !/[$\\<>\r]|!\[|`{3}|~{3}|\]:/u.test(markdown.value) && !/\n[\t ]*\n/u.test(tail)
+			&& !/[$\\<>\r]|!\[|`{3}|~{3}|\]:/u.test(markdown.value)
 			&& previousTail?.element.childElementCount === 1
-			&& previousTail.element.firstElementChild!.matches(`p, ul, ol, .${chatMarkdownTableScrollClass}`)) sources = [tail];
+			&& previousTail.element.firstElementChild!.matches(`p, ul, ol, .${chatMarkdownTableScrollClass}`);
+		// An ordinary tail without a new blank line can go directly to the renderer.
+		// It still verifies the block shape and handles incomplete inline syntax.
+		if (ordinaryTail && !/\n[\t ]*\n/u.test(tail)) sources = [tail];
 		// HTML and arbitrary extensions can carry state across blocks. Display math
 		// may acquire a closing delimiter several paragraphs later; formulas also
 		// share message-scoped macros. These inputs, reference definitions and
 		// normalized CRLF offsets use the complete renderer.
 		if (!sources && !markdown.supportHtml && !this.options.markedExtensions?.length && !tail.includes('\r')
-			&& !tail.includes('$$') && !tail.includes('\\[') && markdown.value.length <= 4 * 1024 * 1024) {
+			&& !tail.includes('$$') && !tail.includes('\\[') && markdown.value.length <= markdownSizeLimit) {
 			// With no possible math opener, no extension scan or recursive math-token
 			// walk is needed. A later delimiter still selects the full math path.
 			const lexer = /[$\\]|`{3}|~{3}/u.test(tail) ? this.lexer : this.plainLexer;
-			const tokens = lexer.lexer(tail, { ...lexer.defaults, gfm: true, breaks: true, ...this.options.markedOptions });
+			const options = { ...lexer.defaults, gfm: true, breaks: true, ...this.options.markedOptions };
+			const checkpoint = ordinaryTail && append ? previousTail?.tail?.checkpoint : undefined;
+			const resumed = checkpoint?.children && previousTail && tail.startsWith(previousTail.source)
+				? lexMarkdownTail(tail, checkpoint, lexer, options) : undefined;
+			const tokens = resumed?.tokens ?? lexer.lexer(tail, options);
 			let hasMath = false;
 			if (lexer === this.lexer) lexer.walkTokens(tokens, token => { if (token.type.startsWith('ashMath')) hasMath = true; });
-			if (!hasMath && Object.keys(tokens.links).length === 0 && tokens.map(token => token.raw).join('') === tail) {
+			if (resumed || !hasMath && Object.keys(tokens.links).length === 0 && tokens.map(token => token.raw).join('') === tail) {
+				firstBlockEnd = resumed?.firstBlockEnd;
 				sources = [];
-				let leading = '';
+				let leading = resumed?.prefix ?? '';
+				let contextLength = resumed?.contextLength ?? 0;
 				for (const token of tokens) {
 					if (token.type === 'space') {
 						if (sources.length) sources[sources.length - 1] += token.raw;
 						else leading += token.raw;
 					} else {
-						sources.push(leading + token.raw);
+						sources.push(leading + token.raw.slice(contextLength));
 						leading = '';
+						contextLength = 0;
 					}
 				}
 				if (!sources.length) sources.push(leading);
@@ -263,6 +267,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		const created: MarkdownFragment[] = [];
 		const available = sameOptions ? [...retired] : [];
 		let codeStart = retained.reduce((count, fragment) => count + fragment.codeCount, 0);
+		let tailPatch: MarkdownTailPatch | undefined;
 		try {
 			for (const [index, source] of sources.entries()) {
 				const incomplete = fillInIncompleteTokens && index === sources.length - 1;
@@ -271,9 +276,11 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 				let fragment: MarkdownFragment;
 				if (match >= 0) fragment = available.splice(match, 1)[0];
 				else {
-					const replace = source.length >= 4096 ? available.findIndex(fragment => !fragment.codeCount && !fragment.images.size) : -1;
+					const patchable = canPatchTail(source, allowEarlyList);
+					const replace = patchable ? available.findIndex(fragment => !fragment.codeCount && !fragment.images.size) : -1;
 					const previous = replace >= 0 ? available.splice(replace, 1)[0] : undefined;
-					fragment = this.renderFragment({ ...markdown, value: source }, incomplete, codeStart, previous);
+					const resumeEnd = append && previous === previousTail ? (index === 0 ? firstBlockEnd : undefined) ?? source.length : undefined;
+					({ fragment, patch: tailPatch } = this.renderFragment({ ...markdown, value: source }, incomplete, codeStart, previous, resumeEnd, patchable));
 					created.push(fragment);
 				}
 				next.push(fragment);
@@ -302,7 +309,6 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 				const node = block.reusable ? reusable.get(block.source)?.shift() : undefined;
 				if (node) { block.node.replaceWith(node); block.node = node; }
 			}
-			fragment.lifetime.add(this.instantiation.createInstance(ChatMarkdownDecorationsRenderer, fragment.element));
 			this.renders.set(fragment.element, fragment.lifetime);
 		}
 		let node = this.domNode.firstChild;
@@ -313,6 +319,13 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		for (const [index] of this.codeBlocks) if (index >= codeStart) this.codeBlocks.deleteAndDispose(index);
 		this.fragments = next;
 		this.markdown = markdown;
+		// The usual append changes one tail in place. Structural updates can
+		// also move stable blocks, so reconcile their bindings after insertion.
+		if (tailPatch && created.length === 1 && retired.length === 1 && created[0].element === retired[0].element) {
+			this.decorations.applyPatch(tailPatch.removed, tailPatch.added);
+		} else {
+			this.decorations.reconcile();
+		}
 		const imageKeys = new Set(next.flatMap(fragment => [...fragment.images]));
 		for (const key of this.images.keys()) if (!imageKeys.has(key)) this.images.delete(key);
 		if (selected?.anchor.isConnected && selected.focus.isConnected) selection?.setBaseAndExtent(selected.anchor, selected.anchorOffset, selected.focus, selected.focusOffset);
@@ -320,7 +333,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		if (focused?.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
 	}
 
-	private renderFragment(markdown: IMarkdownString, incomplete: boolean, codeStart: number, previous?: MarkdownFragment): MarkdownFragment {
+	private renderFragment(markdown: IMarkdownString, incomplete: boolean, codeStart: number, previous: MarkdownFragment | undefined, resumeEnd: number | undefined, patchable: boolean): { fragment: MarkdownFragment; patch?: MarkdownTailPatch; } {
 		const document = this.options.ownerDocument;
 		// The content part owns the fragment root, which can outlive an individual render.
 		const element = previous?.element ?? h(document, 'div');
@@ -346,7 +359,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 					return placeholder;
 				},
 			};
-			const tail = this.renderTail(markdown, options, element, previous?.tail);
+			const { tail, patch } = (patchable ? this.renderTail(markdown, options, element, previous, resumeEnd) : undefined) ?? {};
 			if (tail) {
 				lifetime.add(addDisposableListener<MouseEvent>(element, 'click', event => {
 					const anchor = (event.target as Element | null)?.closest?.('a[href]');
@@ -360,14 +373,16 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			} else {
 				lifetime.add(this.markdownRenderer.render(markdown, options, element));
 			}
-			wrapTablesWithScrollable(element);
-			for (const rich of element.querySelectorAll<HTMLElement>('.ash-chat-rich')) {
-				for (const variant of rich.classList) {
-					const color = /^(background|border)-rgba-(\d{1,3})-(\d{1,3})-(\d{1,3})-([01](?:p\d+)?)$/u.exec(variant);
-					if (!color) continue;
-					const value = `rgba(${color[2]}, ${color[3]}, ${color[4]}, ${color[5].replace('p', '.')})`;
-					if (color[1] === 'background') rich.style.backgroundColor = value;
-					else rich.style.borderColor = value;
+			if (!patch) {
+				wrapTablesWithScrollable(element);
+				for (const rich of element.querySelectorAll<HTMLElement>('.ash-chat-rich')) {
+					for (const variant of rich.classList) {
+						const color = /^(background|border)-rgba-(\d{1,3})-(\d{1,3})-(\d{1,3})-([01](?:p\d+)?)$/u.exec(variant);
+						if (!color) continue;
+						const value = `rgba(${color[2]}, ${color[3]}, ${color[4]}, ${color[5].replace('p', '.')})`;
+						if (color[1] === 'background') rich.style.backgroundColor = value;
+						else rich.style.borderColor = value;
+					}
 				}
 			}
 			// Fingerprints belong to sanitized source before editor widgets or provider labels decorate it.
@@ -390,7 +405,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 						this.hasDeferredCodeBlocks = true;
 					}
 				}
-				part.setVisible(this.visible && this.viewportVisible && !this.deferredCodeBlocks.has(part));
+				part.setVisible(this.incrementalRendering.isVisible && this.viewportVisible && !this.deferredCodeBlocks.has(part));
 				part.render({ text: data.text, languageId: data.languageId, codeBlockIndex: index, element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 } }, this.domNode.clientWidth);
 				const parent = data.placeholder.parentElement;
 				if (parent?.tagName === 'PRE') parent.replaceWith(part.element);
@@ -406,7 +421,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 				&& code[0].languageId !== 'math' && blocks.every(block => block.node === this.codeBlocks.get(codeStart)?.element
 					|| block.node.nodeType === 3 && !block.node.textContent?.trim())
 				? { headerLength: header[0].length, closing, languageId: code[0].languageId } : undefined;
-			return { source: markdown.value, element, lifetime, blocks, images, codeStart, codeCount: code.length, incomplete, fence, tail };
+			return { fragment: { source: markdown.value, element, lifetime, blocks, images, codeStart, codeCount: code.length, incomplete, fence, tail }, patch };
 		} catch (error) {
 			lifetime.dispose();
 			throw error;
@@ -414,8 +429,8 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	}
 
 	/** Reuse sanitized children only within a fragment rendered with the same Markdown metadata and options. */
-	private renderTail(markdown: IMarkdownString, options: MarkdownRenderOptions, element: HTMLElement, previous?: MarkdownTail): MarkdownTail | undefined {
-		if (markdown.value.length < 4096 || markdown.supportHtml || /[$\\<>]|!\[|`{3}|~{3}/u.test(markdown.value)
+	private renderTail(markdown: IMarkdownString, options: MarkdownRenderOptions, element: HTMLElement, previous: MarkdownFragment | undefined, resumeEnd: number | undefined): { tail: MarkdownTail; patch?: MarkdownTailPatch; } | undefined {
+		if (markdown.supportHtml || /[$\\<>]|!\[|`{3}|~{3}/u.test(markdown.value)
 			|| options.transformUri || options.markedExtensions?.length
 			|| options.sanitizerConfig?.allowedTags || options.sanitizerConfig?.allowedAttributes) {
 			return undefined;
@@ -423,54 +438,53 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		const document = element.ownerDocument;
 		const renderOptions = getChatMarkdownRenderOptions(options);
 		const template = document.createElement('template');
-		template.innerHTML = renderWorkbenchMarkdown(markdown, false, renderOptions);
-		const raw = template.content.firstElementChild;
-		if (!raw || !['P', 'UL', 'OL', 'TABLE'].includes(raw.tagName)
-			|| [...template.content.childNodes].some(node => node !== raw && (node.nodeType !== 3 || node.textContent?.trim()))
-			|| [...raw.querySelectorAll('*')].some(node => !['P', 'LI', 'THEAD', 'TBODY', 'TR', 'TH', 'TD', 'A', 'STRONG', 'EM', 'DEL', 'CODE', 'BR'].includes(node.tagName))) {
-			return undefined;
-		}
 		const sanitizer = { ownerDocument: document, markdown, sanitizerConfig: renderOptions.sanitizerConfig };
 		const policy = JSON.stringify([markdown.isTrusted, markdown.baseUri?.toString(), renderOptions.markedOptions, renderOptions.sanitizerConfig]);
-		const table = raw.tagName === 'TABLE';
-		const block = element.firstElementChild;
-		if (previous?.policy === policy && previous.raw.tagName === raw.tagName && previous.raw.attributes.length === raw.attributes.length
-			&& previous.raw.getAttributeNames().every(name => previous.raw.getAttribute(name) === raw.getAttribute(name))
-			&& (!table || previous.raw.querySelector('thead')?.outerHTML === raw.querySelector('thead')?.outerHTML)) {
-			const oldBody = table ? previous.raw.querySelector('tbody') : previous.raw;
-			const newBody = table ? raw.querySelector('tbody') : raw;
-			const body = table ? block?.querySelector('tbody') : block;
-			if (oldBody && newBody && body && oldBody.childNodes.length === body.childNodes.length) {
-				const source = (node: ChildNode): string => node.nodeType === 1 ? (node as Element).outerHTML : htmlAttributeEncodeValue(node.textContent ?? '');
-				const before = [...oldBody.childNodes];
-				const after = [...newBody.childNodes];
-				const sharedLength = Math.min(before.length, after.length);
-				let prefix = 0;
-				while (prefix < sharedLength && source(before[prefix]) === source(after[prefix])) { prefix++; }
-				let suffix = 0;
-				while (suffix < sharedLength - prefix
-					&& source(before[before.length - suffix - 1]) === source(after[after.length - suffix - 1])) { suffix++; }
-
-				const changed = after.slice(prefix, after.length - suffix).map(source).join('');
-				const tag = newBody.tagName.toLowerCase();
-				const wrapped = table ? `<table><tbody>${changed}</tbody></table>` : `<${tag}>${changed}</${tag}>`;
-				const sanitized = sanitizeMarkdownHtmlToFragment(sanitizer, wrapped);
-				const replacement = table ? sanitized.querySelector('tbody')! : sanitized.firstElementChild!;
-				const nodes = [...body.childNodes];
-				const anchor = nodes[nodes.length - suffix] ?? null;
-				for (const node of nodes.slice(prefix, nodes.length - suffix)) { node.remove(); }
-				for (const node of [...replacement.childNodes]) { body.insertBefore(node, anchor); }
-				return { raw, policy };
+		const parse = (value: string): Element | undefined => {
+			template.innerHTML = renderWorkbenchMarkdown({ ...markdown, value }, false, renderOptions);
+			const raw = template.content.firstElementChild;
+			if (!raw || !['P', 'UL', 'OL', 'TABLE'].includes(raw.tagName) || markdown.value.length < markdownTailThreshold && raw.tagName === 'P'
+				|| [...template.content.childNodes].some(node => node !== raw && (node.nodeType !== 3 || node.textContent?.trim()))
+				|| [...raw.querySelectorAll('*')].some(node => !['P', 'LI', 'THEAD', 'TBODY', 'TR', 'TH', 'TD', 'A', 'STRONG', 'EM', 'DEL', 'CODE', 'BR'].includes(node.tagName))) return undefined;
+			return raw;
+		};
+		const oldTail = previous?.tail;
+		const boundary = resumeEnd === undefined ? undefined : oldTail?.checkpoint;
+		const lexerOptions = renderOptions.markedOptions ?? {};
+		// The detached tree and the live DOM have the same checkpoint. Reparse
+		// only the mutable suffix, and retain the preceding children in both.
+		if (previous && oldTail?.policy === policy && boundary?.children && markdown.value.startsWith(previous.source)
+			&& !/\]:|\r/u.test(markdown.value)) {
+			// A proven sibling separator stays in the fragment's source for offset
+			// tracking, but is outside the block that the checkpoint describes.
+			const input = boundary.context + markdown.value.slice(boundary.offset, resumeEnd);
+			const suffix = parse(input);
+			if (suffix?.tagName === oldTail.raw.tagName) {
+				const checkpoint = markdownTailCheckpoint(input, suffix, this.plainLexer, lexerOptions, boundary);
+				if (checkpoint) {
+					if (boundary.kind === 'paragraph') suffix.firstChild!.remove();
+					const patch = patchTailChildren(element, oldTail.raw, suffix, sanitizer, boundary.children);
+					if (patch) return { tail: { raw: oldTail.raw, policy, checkpoint }, patch };
+				}
 			}
 		}
 
+		const raw = parse(markdown.value);
+		if (!raw) return undefined;
+		const checkpoint = /\]:|\r/u.test(markdown.value) ? undefined : markdownTailCheckpoint(markdown.value, raw, this.plainLexer, lexerOptions);
+		const tail = { raw, policy, checkpoint };
+		if (oldTail?.policy === policy && oldTail.raw.tagName === raw.tagName && oldTail.raw.attributes.length === raw.attributes.length
+			&& oldTail.raw.getAttributeNames().every(name => oldTail.raw.getAttribute(name) === raw.getAttribute(name))) {
+			const patch = patchTailChildren(element, oldTail.raw, raw, sanitizer);
+			if (patch) return { tail, patch };
+		}
 		element.replaceChildren(sanitizeMarkdownHtmlToFragment(sanitizer, template.innerHTML));
-		return { raw, policy };
+		return { tail };
 	}
 
 	private extendFence(markdown: IMarkdownString, incomplete: boolean): boolean {
 		const fragment = this.fragments.at(-1);
-		if (!fragment?.fence || markdown.value.length > 4 * 1024 * 1024) return false;
+		if (!fragment?.fence || markdown.value.length > markdownSizeLimit) return false;
 		const appended = markdown.value.slice(this.markdown!.value.length);
 		if (appended.includes('\r')) return false;
 		// A closing marker can span chunks, or cease being a closing marker when its
@@ -486,4 +500,79 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		}, this.domNode.clientWidth);
 		return true;
 	}
+}
+
+function tailChildren(body: Element, start: number): ChildNode[] {
+	const nodes: ChildNode[] = [];
+	for (let node: ChildNode | null = body.childNodes.item(start); node; node = node.nextSibling) nodes.push(node);
+	return nodes;
+}
+
+function changedTableCells(before: ChildNode | undefined, after: ChildNode | undefined, live: ChildNode | undefined): { before: HTMLTableCellElement; after: HTMLTableCellElement; }[] | undefined {
+	if (before?.nodeName !== 'TR' || after?.nodeName !== 'TR' || live?.nodeName !== 'TR') return undefined;
+	const oldRow = before as HTMLTableRowElement;
+	const newRow = after as HTMLTableRowElement;
+	const liveRow = live as HTMLTableRowElement;
+	if (oldRow.attributes.length || newRow.attributes.length || oldRow.cells.length !== newRow.cells.length || oldRow.cells.length !== liveRow.cells.length) return undefined;
+	const changed: { before: HTMLTableCellElement; after: HTMLTableCellElement; }[] = [];
+	for (const [index, cell] of [...newRow.cells].entries()) {
+		if (!cell.isEqualNode(oldRow.cells[index])) changed.push({ before: liveRow.cells[index], after: cell });
+	}
+	return changed.length ? changed : undefined;
+}
+
+function patchTailChildren(
+	element: HTMLElement,
+	old: Element,
+	next: Element,
+	sanitizer: Parameters<typeof sanitizeMarkdownHtmlToFragment>[0],
+	committed = 0,
+): MarkdownTailPatch | undefined {
+	const table = next.tagName === 'TABLE';
+	if (table && !old.firstElementChild?.isEqualNode(next.firstElementChild)) return undefined;
+	const oldBody = table ? old.querySelector('tbody') : old;
+	const newBody = table ? next.querySelector('tbody') : next;
+	const block = element.firstElementChild;
+	const body = table ? block?.querySelector('tbody') : block;
+	if (!oldBody || !newBody || !body || oldBody.childNodes.length !== body.childNodes.length) return undefined;
+
+	const source = (node: ChildNode): string => node.nodeType === 1 ? (node as Element).outerHTML : htmlAttributeEncodeValue(node.textContent ?? '');
+	const before = tailChildren(oldBody, committed);
+	const after = [...newBody.childNodes];
+	const sharedLength = Math.min(before.length, after.length);
+	let prefix = 0;
+	while (prefix < sharedLength && before[prefix].isEqualNode(after[prefix])) { prefix++; }
+	if (prefix === before.length && prefix === after.length) return { removed: [], added: [] };
+	let suffix = 0;
+	while (suffix < sharedLength - prefix
+		&& before[before.length - suffix - 1].isEqualNode(after[after.length - suffix - 1])) { suffix++; }
+
+	const nodes = tailChildren(body, committed);
+	const changed = after.slice(prefix, after.length - suffix);
+	const cells = table && prefix < before.length - suffix ? changedTableCells(before[prefix], changed[0], nodes[prefix]) : undefined;
+	// Keep the mutable row in place when its columns still match. Sanitize
+	// changed cells and new rows together in the usual table context.
+	const html = cells ? `<tr>${cells.map(cell => cell.after.outerHTML).join('')}</tr>` + changed.slice(1).map(source).join('') : changed.map(source).join('');
+	const tag = newBody.tagName.toLowerCase();
+	const wrapped = table ? `<table><tbody>${html}</tbody></table>` : `<${tag}>${html}</${tag}>`;
+	const sanitized = sanitizeMarkdownHtmlToFragment(sanitizer, wrapped);
+	const replacement = table ? sanitized.querySelector('tbody')! : sanitized.firstElementChild!;
+	const added = [...replacement.childNodes];
+	const anchor = nodes[nodes.length - suffix] ?? null;
+	const removed = nodes.slice(prefix + (cells ? 1 : 0), nodes.length - suffix);
+	let replacedCells: HTMLTableCellElement[] = [];
+	if (cells) {
+		const row = added.shift() as HTMLTableRowElement | undefined;
+		if (row?.nodeName !== 'TR' || row.cells.length !== cells.length) return undefined;
+		replacedCells = [...row.cells];
+		for (const [index, cell] of cells.entries()) cell.before.replaceWith(replacedCells[index]);
+	}
+	for (const node of removed) { node.remove(); }
+	for (const node of added) { body.insertBefore(node, anchor); }
+	if (committed) {
+		const rawAnchor = before[before.length - suffix] ?? null;
+		for (const node of before.slice(prefix, before.length - suffix)) { node.remove(); }
+		for (const node of changed) { oldBody.insertBefore(node, rawAnchor); }
+	}
+	return cells ? { removed: [...cells.map(cell => cell.before), ...removed], added: [...replacedCells, ...added] } : { removed, added };
 }

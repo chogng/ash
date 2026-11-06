@@ -11,18 +11,7 @@ export abstract class AbstractFileDialogService {
 
 	async pickFolderAndOpen(options: IPickAndOpenOptions = {}): Promise<void> {
 		const resources = await this.showOpenDialog({ canSelectFiles: false, canSelectFolders: true, defaultUri: options.defaultUri });
-		if (!resources?.[0]) return;
-		try {
-			await this.hostService.openWindow([{ folderUri: resources[0] }], { forceNewWindow: options.forceNewWindow });
-		} catch (error) {
-			if (error instanceof Error && error.message.includes('Directory permissions were not selected')) return;
-			if (!(error instanceof Error) || !error.message.includes('Finish the active request')) throw error;
-			await this.dialogs().showMessage({
-				severity: DialogSeverity.Info,
-				message: localize({ bundle: 'ash', key: 'workbench.folderOpenBlocked' }, 'Finish the active request before opening another folder.'),
-				detail: localize({ bundle: 'ash', key: 'workbench.folderOpenBlockedDetail' }, 'The current Workspace was kept unchanged.'),
-			});
-		}
+		if (resources?.[0]) await openPickedFolder(resources[0], this.hostService, this.dialogs, options.forceNewWindow);
 	}
 
 	async pickWorkspaceAndOpen(options: IPickAndOpenOptions = {}): Promise<void> {
@@ -53,5 +42,20 @@ export abstract class AbstractFileDialogService {
 			cancelButton: { label: localize('dialog.cancel', 'Cancel'), run: () => ConfirmResult.CANCEL },
 		});
 		return result ?? ConfirmResult.CANCEL;
+	}
+}
+
+/** Opens the selected folder through the host's regular workspace transition. */
+export async function openPickedFolder(folder: URI, host: IHostService, dialogs: () => IDialogService, forceNewWindow?: boolean): Promise<void> {
+	try {
+		await host.openWindow([{ folderUri: folder }], { forceNewWindow });
+	} catch (error) {
+		if (error instanceof Error && error.message.includes('Directory permissions were not selected')) return;
+		if (!(error instanceof Error) || !error.message.includes('Finish the active request')) throw error;
+		await dialogs().showMessage({
+			severity: DialogSeverity.Info,
+			message: localize({ bundle: 'ash', key: 'workbench.folderOpenBlocked' }, 'Finish the active request before opening another folder.'),
+			detail: localize({ bundle: 'ash', key: 'workbench.folderOpenBlockedDetail' }, 'The current Workspace was kept unchanged.'),
+		});
 	}
 }

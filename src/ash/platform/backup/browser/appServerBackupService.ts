@@ -36,6 +36,16 @@ export class AppServerBackupService implements IBackupService {
 		return backups;
 	}
 
+	async read(workspaceId: string, resource: URI): Promise<IBackupRecord | undefined> {
+		await this.client.whenReady();
+		const key = resource.toString();
+		const { backup } = await this.client.request(APP_SERVER_METHODS['backup/read'], { clientId: this.clientId, workspaceId, resource: key }).catch(explain);
+		if (backup && backup.content.resource !== key) {
+			throw new BackupError('failed');
+		}
+		return backup ? revive(backup) : undefined;
+	}
+
 	async store(workspace: IBackupWorkspace, content: IBackupContent, expectedRevision?: string): Promise<IBackupRecord> {
 		// Development replacement can overlap window shutdown. Wait before sending;
 		// a write whose reply was lost must still fail rather than be replayed.

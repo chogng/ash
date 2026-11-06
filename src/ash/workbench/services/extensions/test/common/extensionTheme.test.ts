@@ -49,6 +49,29 @@ test('loads extension publisher metadata and direct token styles through package
 	assert.deepEqual(definition.semanticTokenColors, { comment: { foreground: '#6272a4', fontStyle: '' }, variable: { fontStyle: '' } });
 });
 
+test('loads packaged theme and inherited token rules with one source request', async () => {
+	const { loadExtensionTheme, loadPackagedExtensionTheme } = await import('../../common/extensionTheme.js');
+	const sources = [
+		{ path: 'themes/child.json', source: '{ "include": "./base.json", "colors": { "editor.background": "#123456", }, }' },
+		{ path: 'themes/base.json', source: '// inherited\n{ "semanticTokenColors": { "variable": "#abcdef", "comment": "#012345" } }' },
+	];
+	const contribution = { id: 'Sample', label: 'Sample', uiTheme: 'vs-dark', path: 'themes/child.json' };
+	const requests: unknown[] = [];
+	const api: IExtensionApi = {
+		list: async () => ({ generation: 7, diagnostics: [], extensions: [] }),
+		resources: new ExtensionResourceLoaderService(async () => { throw new Error('Unexpected resource request'); }),
+		readColorThemeSources: async request => { requests.push(request); return sources; },
+	};
+	const read = async () => { throw new Error('Unexpected individual theme read'); };
+	const observed: string[] = [];
+	const bundled = await loadPackagedExtensionTheme(api, 7, 'ash.sample', contribution, 0, read, path => observed.push(path));
+	const individual = await loadExtensionTheme(async path => new TextEncoder().encode(sources.find(source => source.path === path)!.source), 'ash.sample', contribution, 0);
+	assert.deepEqual(bundled, individual);
+	assert.deepEqual(Object.keys(bundled.semanticTokenColors!), ['variable', 'comment']);
+	assert.deepEqual(observed, sources.map(source => source.path));
+	assert.deepEqual(requests, [{ generation: 7, extensionId: 'ash.sample', path: 'themes/child.json' }]);
+});
+
 test('rejects invalid token colors and font styles before a theme becomes active', () => {
 	assert.throws(
 		() => parseExtensionTheme({ semanticTokenColors: { comment: { foreground: 'green' } } }, 'extension-ash-demo-one', 'ash.demo', 'Demo', 'vs-dark', 'theme test'),
@@ -204,6 +227,41 @@ test('a missing or denied checkout theme resource falls back to one complete pac
 	await assert.rejects(service.reload());
 	assert.equal(WorkbenchThemesRegistry.getColorTheme(themeId)?.getColorCss(editorBackground), '#654321');
 	assert.deepEqual(packageReads, []);
+});
+
+test('only reads the profile and workspace themes before background themes are released', async () => {
+	const themeNames = ['profile', 'workspace', 'other'];
+	const ids = themeNames.map(name => `extension-ash-startup-theme-${name}`);
+	const manifestJson = JSON.stringify({
+		name: 'startup-theme', publisher: 'ash', version: '1.0.0', contributes: {
+			themes: themeNames.map(id => ({ id, label: id, uiTheme: 'vs-dark', path: `themes/${id}.json` })),
+		}
+	});
+	const reads: string[] = [];
+	const release = new DeferredPromise<void>();
+	const api: IExtensionApi = {
+		list: async () => ({
+			generation: 1, diagnostics: [], extensions: [{
+				id: 'ash.startup-theme', name: 'startup-theme', publisher: 'ash', version: '1.0.0', displayName: 'Startup themes', sourceKind: 'user',
+				manifestJson, manifestSha256: `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`, packageSha256: `sha256:${'a'.repeat(64)}`,
+			}]
+		}),
+		resources: new ExtensionResourceLoaderService(async ({ path }) => {
+			reads.push(path);
+			return new TextEncoder().encode('{"colors":{"editor.background":"#123456"}}');
+		}),
+	};
+	using service = new ExtensionColorThemeService(api, { subscribe: () => ({ dispose() { } }) });
+	await service.start({ preferences: Promise.resolve([ids[0]]), loadRemainingAfter: release.p });
+	assert.ok(WorkbenchThemesRegistry.getColorTheme(ids[0]));
+	assert.equal(WorkbenchThemesRegistry.getColorTheme(ids[1]), undefined);
+	await service.ensureStartupTheme([ids[1]]);
+	assert.ok(WorkbenchThemesRegistry.getColorTheme(ids[1]));
+	assert.equal(WorkbenchThemesRegistry.getColorTheme(ids[2]), undefined);
+	assert.deepEqual(reads, ['themes/profile.json', 'themes/workspace.json']);
+	await release.complete();
+	await service.reload();
+	assert.ok(WorkbenchThemesRegistry.getColorTheme(ids[2]));
 });
 
 test('independent themes load concurrently with includes and publish once in manifest order', async () => {

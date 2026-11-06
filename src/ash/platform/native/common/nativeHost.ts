@@ -34,7 +34,6 @@ export const AGENTS_WINDOW_INVITATION_SHOWN_CHANNEL = 'ash:native-host:invitatio
 export const AGENTS_WINDOW_INVITATION_RELEASE_CHANNEL = 'ash:native-host:invitation-release';
 
 export const NATIVE_HOST_GET_TITLE_BAR_STYLE_CHANNEL = 'ash:native-host:get-title-bar-style';
-export const NATIVE_HOST_GET_WINDOW_CLIENT_SIZE_CHANNEL = 'ash:native-host:get-window-client-size';
 
 export const NATIVE_HOST_IS_ADMIN_CHANNEL = 'ash:native-host:is-admin';
 
@@ -218,8 +217,8 @@ export interface INativeHostApi extends ICommonNativeHostService {
 	/** The frame style used to create this window, independently of saved settings. */
 	getTitleBarStyle(): Promise<TitleBarStyleConfiguration>;
 	/** Physical client pixels are unavailable on hosts without a native measurement. */
-	getWindowClientSize(): Promise<IWindowClientSize | undefined>;
-	onDidChangeWindowClientSize(listener: (size: IWindowClientSize | undefined) => void): DisposableHandle;
+	getWindowClientSize(windowName?: string): Promise<IWindowClientSize | undefined>;
+	onDidChangeWindowClientSize(listener: (size: IWindowClientSize | undefined) => void, windowName?: string): DisposableHandle;
 	isAdmin(): Promise<boolean>;
 	getOSColorScheme(): Promise<IColorScheme>;
 	onDidChangeColorScheme(listener: (scheme: IColorScheme) => void): DisposableHandle;

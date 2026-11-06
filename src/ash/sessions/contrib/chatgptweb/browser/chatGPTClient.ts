@@ -5,6 +5,7 @@ import { isRecord } from '../../../../base/common/types.js';
 import { escapeMarkdownSyntaxTokens } from '../../../../base/common/htmlContent.js';
 import { getMediaOrTextMime } from '../../../../base/common/mime.js';
 import { SSEParser } from '../../../../base/common/sseParser.js';
+import { chatGPTHistoryCooldownMs, readChatGPTRetryAfter } from '../common/chatGPTTransport.js';
 export interface ChatGPTConversation {
 	readonly id: string;
 	readonly title: string;
@@ -60,18 +61,28 @@ export interface ChatGPTHistory {
 	readonly model?: string;
 	readonly thinkingEffort?: string;
 	readonly archived?: boolean;
+	readonly olderCursor?: string;
 	readonly messages: readonly ChatGPTMessage[];
 }
 interface ChatGPTStreamFrame extends ChatGPTStreamUpdate { readonly resumeToken?: string; readonly handoff?: boolean; readonly finished?: boolean; }
 
 /** An explicit HTTP rejection is different from an interrupted, possibly accepted message. */
 export class ChatGPTRequestError extends Error {
-	constructor(readonly status: number, message: string) { super(message); }
+	constructor(readonly status: number, message: string, readonly retryAt?: number) { super(message); }
 }
+
+export function isChatGPTRateLimit(error: unknown): error is ChatGPTRequestError {
+	return error instanceof ChatGPTRequestError && error.status === 429;
+}
+
+type HistoryRead = 'recent' | 'project' | 'conversation';
 
 /** ChatGPT web conversation client. Authentication is supplied by the host per request. */
 export class ChatGPTClient {
-	constructor(private readonly fetcher: typeof fetch = globalThis.fetch.bind(globalThis)) { }
+	private readonly historyLimits = new Map<HistoryRead, ChatGPTRequestError>();
+	constructor(private readonly fetcher: typeof fetch = globalThis.fetch.bind(globalThis), private readonly native = false) { }
+
+	clearHistoryLimits(): void { this.historyLimits.clear(); }
 
 	async models(signal: AbortSignal): Promise<{ models: readonly ChatGPTModel[]; defaultModel: string; }> {
 		const value = await this.json('/models?iim=false&include_icons=false&is_gizmo=false', signal);
@@ -86,6 +97,7 @@ export class ChatGPTClient {
 				|| !Array.isArray(version.intelligence_presets) || models.some(model => model.id === version.id)) { continue; }
 			const title = [version.display_text_for_intelligence, version.display_text, version.display_text_full].find(text => typeof text === 'string' && text.trim());
 			if (typeof title !== 'string') { continue; }
+			const versionNumber = /^(?:GPT-)?(\d+(?:\.\d+)*)(?=\s|$)/iu.exec(title.trim())?.[1];
 			const presets: ChatGPTModel['presets'][number][] = [];
 			for (const preset of version.intelligence_presets) {
 				if (!isRecord(preset) || (preset.preset_type !== undefined && preset.preset_type !== 'available') || preset.disabled === true) { continue; }
@@ -94,8 +106,11 @@ export class ChatGPTClient {
 				if (id === undefined || typeof preset.model_slug !== 'string' || presets.some(option => option.id === id)) { continue; }
 				const requestModel = requestModels.get(preset.model_slug);
 				if (!requestModel) { continue; }
-				const label = [preset.selected_display_title, preset.title].find(text => typeof text === 'string' && text.trim());
-				if (typeof label !== 'string') { continue; }
+				const presetTitle = [preset.selected_display_title, preset.title].find(text => typeof text === 'string' && text.trim());
+				if (typeof presetTitle !== 'string') { continue; }
+				// The picker already displays the family above or beside its preset label.
+				const numberedTitle = /^(\d+(?:\.\d+)*)\s+(\S.*)$/u.exec(presetTitle.trim());
+				const label = numberedTitle && numberedTitle[1] === versionNumber ? numberedTitle[2]! : presetTitle;
 				let thinkingEffort: string | undefined;
 				if (preset.thinking_effort != null) {
 					if (typeof preset.thinking_effort !== 'string' || !/^[a-z][a-z0-9_-]{0,63}$/u.test(preset.thinking_effort)
@@ -120,11 +135,15 @@ export class ChatGPTClient {
 	}
 
 	async conversations(offset: number, signal: AbortSignal): Promise<{ items: readonly ChatGPTConversation[]; hasMore: boolean; nextOffset: number; }> {
-		const value = await this.json(`/conversations?offset=${offset}&limit=50&order=updated&hide_snorlax=false`, signal);
+		const limit = this.native ? 20 : 50;
+		const query = this.native
+			? `exclude_conversation_origin=tpp&expand=false&is_archived=false&is_starred=false&limit=${limit}&order=updated&offset=${offset}`
+			: `offset=${offset}&limit=${limit}&order=updated&hide_snorlax=false`;
+		const value = await this.json(`/conversations?${query}`, signal, this.native ? undefined : 'recent');
 		if (!isRecord(value) || !Array.isArray(value.items)) { throw this.invalidResponse(); }
 		const items = value.items.flatMap(item => isRecord(item) && typeof item.id === 'string' && typeof item.title === 'string'
 			? [{ id: item.id, title: item.title, ...conversationTimestamps(item), pinned: item.is_starred === true, projectId: typeof item.gizmo_id === 'string' ? item.gizmo_id : undefined }] : []);
-		return { items, nextOffset: offset + value.items.length, hasMore: value.items.length > 0 && (typeof value.total === 'number' ? offset + value.items.length < value.total : value.items.length === 50) };
+		return { items, nextOffset: offset + value.items.length, hasMore: value.items.length > 0 && (typeof value.total === 'number' ? offset + value.items.length < value.total : value.items.length === limit) };
 	}
 
 	async pinnedConversations(signal: AbortSignal): Promise<readonly ChatGPTConversation[]> {
@@ -214,7 +233,7 @@ export class ChatGPTClient {
 
 	private async readProjectConversations(projectId: string, cursor: string | undefined, signal: AbortSignal): Promise<{ items: readonly ChatGPTConversation[]; cursor?: string; }> {
 		const query = new URLSearchParams({ limit: '20', owned_only: 'false', ...(cursor ? { cursor } : {}) });
-		const value = await this.json(`/gizmos/${encodeURIComponent(projectId)}/conversations?${query}`, signal);
+		const value = await this.json(`/gizmos/${encodeURIComponent(projectId)}/conversations?${query}`, signal, 'project');
 		if (!isRecord(value) || !Array.isArray(value.items) || (value.cursor != null && typeof value.cursor !== 'string') || (cursor && value.cursor === cursor)) {
 			throw this.invalidResponse();
 		}
@@ -276,7 +295,8 @@ export class ChatGPTClient {
 	}
 
 	async history(id: string, signal: AbortSignal): Promise<ChatGPTHistory> {
-		const value = await this.json(`/conversation/${encodeURIComponent(id)}`, signal);
+		if (this.native) { return this.nativeHistory(id, signal); }
+		const value = await this.json(`/conversation/${encodeURIComponent(id)}`, signal, 'conversation');
 		if (!isRecord(value) || !isRecord(value.mapping) || typeof value.current_node !== 'string') { throw this.invalidResponse(); }
 		const messages: ChatGPTMessage[] = [];
 		const visited = new Set<string>();
@@ -299,6 +319,45 @@ export class ChatGPTClient {
 			...(value.is_archived === true ? { archived: true } : {}),
 			model: typeof value.default_model_slug === 'string' ? value.default_model_slug : undefined, thinkingEffort, messages: messages.reverse(),
 		};
+	}
+
+	private async nativeHistory(id: string, signal: AbortSignal): Promise<ChatGPTHistory> {
+		const head = await this.json(`/conversations/${encodeURIComponent(id)}?num_turns=20&include_has_versions=true`, signal, 'conversation');
+		if (!isRecord(head) || typeof head.current_node !== 'string') { throw this.invalidResponse(); }
+		const { thinkingEffort, ...page } = this.readNativePage(head, id);
+		return {
+			id, title: typeof head.title === 'string' ? head.title : 'ChatGPT', parentId: head.current_node,
+			...(head.is_archived === true ? { archived: true } : {}),
+			model: typeof head.default_model_slug === 'string' ? head.default_model_slug : undefined,
+			thinkingEffort, ...page,
+		};
+	}
+
+	async olderHistory(id: string, before: string, signal: AbortSignal): Promise<Pick<ChatGPTHistory, 'messages' | 'olderCursor'>> {
+		const value = await this.json(`/conversations/${encodeURIComponent(id)}/messages?num_turns=20&include_has_versions=true&before=${encodeURIComponent(before)}`, signal, 'conversation');
+		const page = this.readNativePage(value, id);
+		if (page.olderCursor === before) { throw this.invalidResponse(); }
+		return page;
+	}
+
+	private readNativePage(value: unknown, id: string): Pick<ChatGPTHistory, 'messages' | 'olderCursor' | 'thinkingEffort'> {
+		if (!isRecord(value) || !Array.isArray(value.messages) || !isRecord(value.page_info)) { throw this.invalidResponse(); }
+		const before = value.page_info.start_cursor;
+		const hasPrevious = value.page_info.has_previous_page;
+		if (hasPrevious !== false && (hasPrevious !== true || typeof before !== 'string' || !before || before.length > 2048)) {
+			throw this.invalidResponse();
+		}
+		const messages: ChatGPTMessage[] = [];
+		let thinkingEffort: string | undefined;
+		for (const item of value.messages) {
+			if (isRecord(item) && isRecord(item.author) && item.author.role === 'assistant'
+				&& isRecord(item.metadata) && typeof item.metadata.thinking_effort === 'string') {
+				thinkingEffort = item.metadata.thinking_effort;
+			}
+			const message = readMessage(item, id);
+			if (message && (message.activity || message.text.trim() || message.resources?.length)) messages.push(message);
+		}
+		return { messages, olderCursor: hasPrevious === true && typeof before === 'string' ? before : undefined, thinkingEffort };
 	}
 
 	async upload(file: File, signal: AbortSignal): Promise<ChatGPTFile> {
@@ -458,10 +517,28 @@ export class ChatGPTClient {
 		throw this.invalidResponse();
 	}
 
-	private async json(path: string, signal: AbortSignal): Promise<unknown> {
-		const value: unknown = await (await this.request(path, signal)).json();
+	private async json(path: string, signal: AbortSignal, history?: HistoryRead): Promise<unknown> {
 		signal.throwIfAborted();
-		return value;
+		const limited = history && this.historyLimits.get(history);
+		if (limited && (limited.retryAt ?? 0) > Date.now()) { throw limited; }
+		try {
+			const value: unknown = await (await this.request(path, signal)).json();
+			signal.throwIfAborted();
+			return value;
+		} catch (error) {
+			if (!history || !isChatGPTRateLimit(error) || signal.aborted) { throw error; }
+			// The recent list uses a minimum cooldown. Detail reads can resume sooner
+			// when the server gives a deadline. A local rejection never extends it.
+			const now = Date.now();
+			const fallback = history === 'recent' || error.retryAt === undefined ? now + chatGPTHistoryCooldownMs : now;
+			const retryAt = Math.max(fallback, error.retryAt ?? 0, this.historyLimits.get(history)?.retryAt ?? 0);
+			const message = history === 'conversation'
+				? localize('sessions.chatgpt.conversationRateLimited', 'ChatGPT conversation sync is temporarily paused. Try again later.')
+				: error.message;
+			const rateLimit = new ChatGPTRequestError(429, message, retryAt);
+			this.historyLimits.set(history, rateLimit);
+			throw rateLimit;
+		}
 	}
 
 	private async request(path: string, signal: AbortSignal, init: RequestInit = {}, headersOnly = false): Promise<Response> {
@@ -470,17 +547,20 @@ export class ChatGPTClient {
 		if (signal.aborted) { await response.body?.cancel(); signal.throwIfAborted(); }
 		if (response.ok) { return response; }
 		await response.body?.cancel();
-		throw this.requestError(response.status);
+		throw this.requestError(response.status, response.headers.get('Retry-After'));
 	}
 
-	private requestError(status: number): ChatGPTRequestError {
+	private requestError(status: number, retryAfter?: string | null): ChatGPTRequestError {
 		if (status === 428) {
 			return new ChatGPTRequestError(status, localize('sessions.chatgpt.sendVerificationUnavailable', 'ChatGPT send verification could not finish. Your message was not sent. Try again later.'));
 		}
 		if (status === 403) {
 			return new ChatGPTRequestError(status, localize('sessions.chatgpt.verificationRequired', 'ChatGPT rejected this request with a verification or access restriction (403). An existing login does not remove this restriction.'));
 		}
-		if (status === 429) { return new ChatGPTRequestError(status, localize('sessions.chatgpt.rateLimited', 'ChatGPT usage limit reached. Try again later.')); }
+		if (status === 429) {
+			const retryAt = readChatGPTRetryAfter(retryAfter, Date.now());
+			return new ChatGPTRequestError(status, localize('sessions.chatgpt.rateLimited', 'ChatGPT is limiting requests. Try again later.'), retryAt);
+		}
 		return new ChatGPTRequestError(status, localize('sessions.chatgpt.requestFailed', 'ChatGPT request failed ({0}).', status));
 	}
 
@@ -514,7 +594,8 @@ function readMessage(value: unknown, conversationId: string | undefined): ChatGP
 	if (value.content.content_type === 'reasoning_recap') { return undefined; }
 	const recipient = typeof value.recipient === 'string' && value.recipient !== 'all' ? value.recipient : undefined;
 	const result = value.author.role === 'tool';
-	const progress = value.author.role === 'assistant' && ['analysis', 'commentary'].includes(value.channel as string);
+	const progress = value.author.role === 'assistant'
+		&& (value.content.content_type === 'thoughts' || ['analysis', 'commentary'].includes(value.channel as string));
 	if (result || (value.author.role === 'assistant' && recipient) || progress) {
 		const text = typeof value.content.text === 'string' ? value.content.text : Array.isArray(value.content.parts)
 			? value.content.parts.map(part => typeof part === 'string' ? part : isRecord(part) && typeof part.text === 'string' ? part.text : JSON.stringify(part)).join('\n') : '';

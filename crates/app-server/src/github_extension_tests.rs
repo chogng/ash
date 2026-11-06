@@ -31,8 +31,9 @@ fn invocation_services_deny_other_grants_secrets_and_foreign_endpoints() {
     let policy = Arc::new(
         ash_core_plugins::EditorExtensionPolicy::open(profile.path().join("policy.json")).unwrap(),
     );
-    // These checks do not start a process; admission only needs a real executable file.
     let runtime = GitHubExtensionRuntime::open(std::env::current_exe().unwrap(), policy).unwrap();
+    assert!(runtime.supervisor.get().is_none());
+    assert!(!runtime.is_running());
     let credentials = Arc::new(Credentials);
     let grant = credentials.authorization().unwrap();
     let provider = Provider {

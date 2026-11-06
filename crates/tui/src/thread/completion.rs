@@ -444,7 +444,7 @@ fn queue_request(
                 thread_id: scope.thread_id().clone(),
                 input,
                 tool_mode: Some(tool_mode),
-                approval_mode,
+                approval_mode: Some(approval_mode),
             })?;
         }
         Command::EditQueue { target, action } => {

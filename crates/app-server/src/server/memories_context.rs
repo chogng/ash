@@ -1,4 +1,5 @@
 use super::AppServer;
+use super::session_execution_router::SessionExecutionRouter;
 use crate::dir_grants::DirGrants;
 use ash_file_access::Permission;
 use ash_projects::ProjectCoordinator;
@@ -12,6 +13,7 @@ use std::sync::Arc;
 
 /// Adapts task identity and current directory authority to the Memory domain.
 struct MemoryScopes {
+    context_router: SessionExecutionRouter,
     config: Option<Arc<ash_config::ConfigStore>>,
     projects: Option<Arc<ProjectCoordinator>>,
     teams: Option<Arc<TeamCoordinator>>,
@@ -37,6 +39,7 @@ impl AppServer {
             .dir_grants
             .clone();
         let scopes = MemoryScopes {
+            context_router: SessionExecutionRouter::new(&self.threads),
             config: self.config.clone(),
             projects: self.projects.clone(),
             teams: self.teams.clone(),
@@ -100,6 +103,7 @@ impl AppServer {
             return Ok(self);
         };
         let scopes = Arc::new(MemoryScopes {
+            context_router: SessionExecutionRouter::new(&self.threads),
             config: self.config.clone(),
             projects: self.projects.clone(),
             teams: self.teams.clone(),
@@ -134,8 +138,35 @@ impl MemoryScopeProvider for MemoryScopes {
         session_id: &SessionId,
         thread_id: &ThreadId,
     ) -> Result<Vec<MemoryScope>, MemoryError> {
-        let enabled = self
-            .config
+        if !self.enabled()? {
+            return Ok(Vec::new());
+        }
+        self.available_scopes(session_id, thread_id)
+    }
+
+    fn automatic_scopes(
+        &self,
+        session_id: &SessionId,
+        thread_id: &ThreadId,
+    ) -> Result<Vec<MemoryScope>, MemoryError> {
+        if !self.enabled()? {
+            return Ok(Vec::new());
+        }
+        if self
+            .context_router
+            .allows_workspace(session_id)
+            .map_err(|error| MemoryError::Storage(error.to_string()))?
+        {
+            self.available_scopes(session_id, thread_id)
+        } else {
+            Ok(vec![MemoryScope::Profile])
+        }
+    }
+}
+
+impl MemoryScopes {
+    fn enabled(&self) -> Result<bool, MemoryError> {
+        self.config
             .as_ref()
             .map(|config| {
                 config
@@ -143,16 +174,10 @@ impl MemoryScopeProvider for MemoryScopes {
                     .map(|snapshot| features::Feature::Memories.enabled(&snapshot.values.features))
             })
             .transpose()
-            .map_err(|error| MemoryError::Storage(error.to_string()))?
-            .unwrap_or(false);
-        if !enabled {
-            return Ok(Vec::new());
-        }
-        self.available_scopes(session_id, thread_id)
+            .map(|enabled| enabled.unwrap_or(false))
+            .map_err(|error| MemoryError::Storage(error.to_string()))
     }
-}
 
-impl MemoryScopes {
     fn available_scopes(
         &self,
         session_id: &SessionId,

@@ -83,6 +83,7 @@ pub struct ThreadSnapshot {
     pub(crate) creation_title: String,
     pub(crate) recap: Option<crate::thread_recap::SavedThreadRecap>,
     pub execution_target: Option<ash_protocol::SessionExecutionTarget>,
+    pub(crate) directory_configured: bool,
     pub status: ThreadStatus,
     pub archived_at_unix_ms: Option<u64>,
     pub archive_reason: Option<ThreadArchiveReason>,
@@ -494,6 +495,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     title: title.clone(),
                     creation_title: title.clone(),
                     execution_target: execution_target.clone(),
+                    directory_configured: false,
                     status: ThreadStatus::Active,
                     archived_at_unix_ms: None,
                     archive_reason: None,
@@ -744,10 +746,11 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 CoreError::Journal("directory change requires a command receipt".into())
             })?;
             if envelope.schema_version < 30
+                || (root.is_none() && envelope.schema_version < 32)
                 || snapshot.thread_id.as_str() != snapshot.session_id.as_str()
                 || snapshot.status != ThreadStatus::Active
                 || !snapshot.origin.is_root()
-                || !root.is_absolute()
+                || root.as_ref().is_some_and(|root| !root.is_absolute())
                 || matches!(
                     snapshot.execution_target,
                     Some(
@@ -771,8 +774,10 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     "Thread cannot change directories".into(),
                 ));
             }
-            snapshot.execution_target =
-                Some(ash_protocol::SessionExecutionTarget::Local { root: root.clone() });
+            snapshot.execution_target = root
+                .as_ref()
+                .map(|root| ash_protocol::SessionExecutionTarget::Local { root: root.clone() });
+            snapshot.directory_configured = envelope.schema_version >= 32;
             snapshot.history_workspace = None;
             snapshot.commands.push(ThreadCommandSnapshot {
                 receipt,

@@ -150,6 +150,10 @@ class TestLanguagePacks extends Disposable implements ILanguagePackService {
 		return this.installedCatalogs;
 	}
 
+	public async getCatalog(locale: string): Promise<LanguagePackCatalog | undefined> {
+		return this.installedCatalogs.find(catalog => catalog.locale === locale);
+	}
+
 	public async getInstalledLanguages(): Promise<ILanguagePackItem[]> {
 		return this.installedCatalogs.map(catalog => ({ id: catalog.locale, label: catalog.localizedLanguageName }));
 	}

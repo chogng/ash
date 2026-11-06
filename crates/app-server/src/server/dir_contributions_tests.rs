@@ -548,7 +548,7 @@ fn thread_environment_matches_execution_authority_without_changing_session_roots
             .contains("Source-owned instructions.")
     );
     assert_eq!(
-        contributions.environment.cwd(),
+        contributions.workspace_environment().cwd(),
         Dir::open_local(source.path()).unwrap().canonical_path()
     );
     let thread_snapshot = HarnessContextProvider::snapshot(

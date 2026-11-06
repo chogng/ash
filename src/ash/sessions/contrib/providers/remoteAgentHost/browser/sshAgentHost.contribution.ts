@@ -34,7 +34,6 @@ const manageHostsCommand = 'sessions.action.manageAgentHosts';
 
 /** Connects saved SSH targets and manages this window's connected hosts. */
 export class SSHAgentHostContribution extends Disposable {
-	static readonly ID = 'sessions.contrib.sshAgentHostContribution';
 	private readonly pendingConnections = this._register(new DisposableStore());
 	private readonly newEnvironment = this._register(new MutableDisposable<Dialog>());
 	private readonly manager = this._register(new MutableDisposable<RemotesWidget>());

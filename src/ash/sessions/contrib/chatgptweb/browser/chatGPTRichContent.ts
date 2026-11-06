@@ -2,7 +2,7 @@ import { Marked, type MarkedExtension, type Token, type TokenizerThis, type Toke
 import { basicMarkupHtmlTags, sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
 import { getDocument } from '../../../../base/browser/dom.js';
 import { renderAsPlaintext, renderWorkbenchMarkdown } from '../../../../base/browser/markdownRenderer.js';
-import { htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
+import { escapeRegExpCharacters, htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
 import { localize } from '../../../../nls.js';
 import type { ChatReplyReference, ChatReplyResource } from '../../../common/chatReplyBackend.js';
 import { isRecord } from '../../../../base/common/types.js';
@@ -325,18 +325,31 @@ function createRichContentExtension(references: readonly ChatReplyReference[] = 
 			name: 'chatgptWebReference', level: 'inline',
 			start: source => source.indexOf('\uE200'),
 			tokenizer(source) {
-				const match = /^\uE200(cite|url)\uE202([^\uE201]+)\uE201/u.exec(source);
+				if (this.lexer.state.inRawBlock) return undefined;
+				const match = /^\uE200(cite|url|entity)\uE202([^\uE200\uE201\r\n]*)\uE201/u.exec(source);
 				if (!match) return undefined;
-				const parts = match[2]!.split('\uE202');
-				return { type: 'chatgptWebReference', raw: match[0], label: match[1] === 'url' ? parts.shift() : undefined, ids: parts };
+				return { type: 'chatgptWebReference', raw: match[0], kind: match[1], payload: match[2], inLink: this.lexer.state.inLink };
 			},
 			renderer(token) {
-				const ids = token.ids as string[];
-				if (typeof token.label === 'string') {
-					const reference = references.find(reference => ids.includes(reference.id));
-					return reference ? `<a href="${escapeHTML(reference.url)}">${escapeHTML(token.label)}</a>` : escapeHTML(token.label);
+				const payload = token.payload as string;
+				if (token.kind === 'entity') {
+					try {
+						const entity: unknown = JSON.parse(payload);
+						return Array.isArray(entity) && typeof entity[1] === 'string' ? escapeHTML(entity[1]) : '';
+					} catch { return ''; }
 				}
-				return referenceMarkup(ids, references);
+				const parts = payload.split('\uE202');
+				if (token.kind === 'cite') return referenceMarkup(parts, references);
+				const [label = '', ...targets] = parts;
+				let href = references.find(reference => targets.includes(reference.id))?.url;
+				const direct = targets.find(target => /^https?:\/\//iu.test(target));
+				if (!href && direct) {
+					try {
+						const url = new URL(direct);
+						if (!url.username && !url.password) href = url.href;
+					} catch { /* Keep the readable label when the destination is invalid. */ }
+				}
+				return href && !token.inLink ? `<a href="${escapeHTML(href)}">${escapeHTML(label)}</a>` : escapeHTML(label);
 			},
 		}, {
 			name: 'chatgptWriting', level: 'block',
@@ -366,7 +379,16 @@ export function decodeChatGPTReply(text: string, references?: readonly ChatReply
 		let cursor = 0;
 		let result = '';
 		for (const token of tokens) {
-			const start = source.indexOf(token.raw, cursor);
+			let start = source.indexOf(token.raw, cursor);
+			let raw = token.raw;
+			if (start < 0 && raw.includes('\n') && raw.includes('\uE200')) {
+				// The lexer strips indentation and quote prefixes from child tokens.
+				// Locate their original span so the second Markdown pass keeps the container.
+				const pattern = new RegExp(escapeRegExpCharacters(raw).replaceAll('\n', '\n[ \t>]*?'), 'gu');
+				pattern.lastIndex = cursor;
+				const match = pattern.exec(source);
+				if (match) { start = match.index; raw = match[0]; }
+			}
 			if (start < 0) continue;
 			result += source.slice(cursor, start);
 			if (token.type === 'chatgptRichContent' || token.type === 'chatgptWebReference' || token.type === 'chatgptWriting'
@@ -374,12 +396,16 @@ export function decodeChatGPTReply(text: string, references?: readonly ChatReply
 				|| token.type === 'image' || token.type === 'link' && /^(?:sandbox:|file-service:|sediment:)/u.test(token.href)) {
 				const html = inline ? parser.parseInline([token]) : parser.parse([token]);
 				result += inline ? html : html + '\n';
+			} else if (token.type === 'list') {
+				result += decode(raw, token.items, false);
+			} else if (token.type === 'table') {
+				result += decode(raw, [token.header, ...token.rows].flatMap(row => row.flatMap((cell: Tokens.TableCell) => cell.tokens)), true);
 			} else if ('tokens' in token && Array.isArray(token.tokens) && token.tokens.length) {
-				result += decode(token.raw, token.tokens, true);
+				result += decode(raw, token.tokens, true);
 			} else {
-				result += token.raw;
+				result += raw;
 			}
-			cursor = start + token.raw.length;
+			cursor = start + raw.length;
 		}
 		return result + source.slice(cursor);
 	};

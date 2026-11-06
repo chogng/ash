@@ -73,7 +73,7 @@ suite('sessions browser component', () => {
 			else { await expect(item).toHaveCSS('width', `${itemWidth}px`); }
 			await expect(item).toHaveCSS('height', `${itemHeight}px`);
 		}
-		await expect(icons).toHaveCount(horizontal || labeled ? 5 : 6);
+		await expect(icons).toHaveCount(horizontal ? 7 : labeled ? 6 : 8);
 		const accounts = navigation.page().getByRole('button', { name: 'Accounts', exact: true });
 		await expect(accounts).toHaveCount(1);
 		const titlebarAccounts = navigation.page().locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });
@@ -239,18 +239,20 @@ suite('sessions browser component', () => {
 		await page.goto('/sessions.html?update&locale=zh-CN');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		const download = page.locator('.ash-sessions-update-status');
+		const spinner = download.locator('.ash-loading-spinner');
 		const account = page.locator('.ash-sessions-activity-host.bottom');
 		await expect(download).toBeHidden();
 		await page.evaluate(() => window.ashSessionsIntegration.setUpdateState('downloading'));
 		await expect(download.locator('.ash-sessions-update-row')).toHaveText('正在下载更新...');
 		await expect(download).toHaveAttribute('role', 'status');
+		await expect(spinner).toHaveCSS('inline-size', '18px');
 		const statusBounds = (await download.boundingBox())!;
 		const accountBounds = (await account.boundingBox())!;
 		expect(Math.abs(statusBounds.y + statusBounds.height - accountBounds.y)).toBeLessThan(1);
 		expect(Math.abs(statusBounds.x - accountBounds.x)).toBeLessThan(1);
 		expect(Math.abs(statusBounds.width - accountBounds.width)).toBeLessThan(1);
 		await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('workbench.reduceMotion', 'on'));
-		await expect(download.locator('.ash-sessions-update-spinner')).toHaveCSS('animation-name', 'none');
+		await expect(spinner).toHaveCSS('animation-name', 'none');
 		await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-high-contrast-dark'));
 		await expect(download).toBeVisible();
 		await page.evaluate(() => window.ashSessionsIntegration.setUpdateState('ready'));
@@ -279,7 +281,7 @@ suite('sessions browser component', () => {
 		await page.goto('/sessions.html?update=ready');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await expect(page.getByRole('button', { name: 'Restart to Update', exact: true })).toBeEnabled();
-		await expect(page.locator('.ash-sessions-update-spinner')).toBeHidden();
+		await expect(page.locator('.ash-sessions-update-status .ash-loading-spinner')).toBeHidden();
 	});
 
 	test('Code New hides the draft title and hands off selection to an existing conversation in Chinese', async function () {
@@ -302,7 +304,8 @@ suite('sessions browser component', () => {
 		await expect(conversation).toHaveCSS('background-color', transparent);
 		const rowBounds = (await row.boundingBox())!;
 		const treeBounds = (await tree.boundingBox())!;
-		expect(rowBounds.x + rowBounds.width).toBeCloseTo(treeBounds.x + treeBounds.width);
+		const trailingInset = await row.evaluate(element => parseFloat(getComputedStyle(element).marginInlineEnd));
+		expect(rowBounds.x + rowBounds.width + trailingInset).toBeCloseTo(treeBounds.x + treeBounds.width);
 		await row.click({ position: { x: 2, y: 16 } });
 		await expect(row).not.toHaveCSS('background-color', transparent);
 		await conversation.click();
@@ -333,7 +336,11 @@ suite('sessions browser component', () => {
 		await expect(activityNavigation.locator('.ash-sessions-navigation button .ash-icon').first()).toHaveAttribute('data-ash-icon-id', 'add');
 		const more = activityNavigation.getByRole('button', { name: 'More', exact: true });
 		const collaboration = page.getByRole('menuitemradio', { name: 'Collab', exact: true });
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		const codeMode = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
+		const buttons = activityNavigation.locator('.ash-sessions-navigation button');
+		const sharedNavigation = await buttons.allTextContents();
+		await codeMode.click();
+		await expect(buttons).toHaveText(sharedNavigation);
 		const projects = activityNavigation.getByRole('button', { name: 'Projects' });
 		const chat = activityNavigation.getByRole('button', { name: 'New' });
 		await more.press('Enter');
@@ -355,13 +362,16 @@ suite('sessions browser component', () => {
 		await expect(page.locator('.ash-sessions-list:visible')).toBeHidden();
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
+		await projects.click();
+		await expect(page.locator('.ash-projects')).toBeVisible();
+		await expect(codeMode).toHaveAttribute('aria-pressed', 'true');
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
 		await expect(projects.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'projects');
 		await projects.click();
 		await expect(activityNavigation.locator('[data-action-id="sessions.open.projects"] button')).toHaveAttribute('aria-current', 'page');
 		await expect(activityNavigation).toBeVisible();
 		await expect(activityBar).toHaveCount(0);
-		await expect(more).toHaveCount(0);
+		await expect(more).toBeVisible();
 		await expect(page.locator('.ash-window-mode-control')).toBeVisible();
 		await page.getByRole('button', { name: 'Hide sidebar', exact: true }).click();
 		await expect(activityNavigation).toBeHidden();
@@ -379,7 +389,7 @@ suite('sessions browser component', () => {
 		await page.keyboard.insertText('Navigation draft');
 		await expect(chat).not.toHaveAttribute('aria-current');
 		const selectedBackground = Color.Format.CSS.formatRGB(lightColorTheme.getColor(menuHoverBackground)!);
-		await expect(page.locator('.ash-sessions-list-item[aria-current="page"]').first()).toHaveCSS('background-color', selectedBackground);
+		await expect(page.locator('.ash-sessions-list-row.selected:has(> .ash-sessions-list-item[aria-current="page"])').first()).toHaveCSS('background-color', selectedBackground);
 		for (const theme of ['ash-light', 'ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
 			await chat.click();
@@ -1265,6 +1275,13 @@ suite('sessions browser component', () => {
 			await expect(group).toBeFocused();
 			await group.press('ArrowRight');
 			await expect(page.getByRole('menuitemradio', { name: chinese ? '状态' : 'Status', exact: true })).toBeVisible();
+			const selected = page.getByRole('menuitemradio', { checked: true });
+			await expect(selected).toBeVisible();
+			const label = (await selected.locator('.ash-button-label').boundingBox())!;
+			const check = (await selected.locator('[data-ash-icon-id="check"]').boundingBox())!;
+			const inset = await selected.evaluate(row => parseFloat(getComputedStyle(row).paddingInlineStart));
+			expect(label.x - (await selected.boundingBox())!.x).toBeCloseTo(inset);
+			expect(check.x).toBeGreaterThan(label.x + label.width);
 			await page.keyboard.press('ArrowLeft');
 			await expect(group).toBeFocused();
 			await page.keyboard.press('Escape');
@@ -1322,11 +1339,44 @@ suite('sessions browser component', () => {
 		await expect(dialog).toHaveAttribute('aria-modal', 'true');
 		await expect(name).toBeFocused();
 		await expect(name).toHaveValue('host-a');
-		const runIn = dialog.getByRole('combobox', { name: chinese ? '运行位置' : 'Run in', exact: true });
+		const runInLabel = chinese ? '运行位置' : 'Run in';
+		const runIn = dialog.getByRole('button', { name: runInLabel, exact: true });
+		const hosts = dialog.getByRole('menu', { name: runInLabel, exact: true });
+		const thisComputer = hosts.getByRole('menuitemradio', { name: chinese ? '此电脑' : 'This Computer', exact: true });
 		await expect(runIn).toBeVisible();
-		await expect(dialog.getByRole('combobox', { name: chinese ? '/workspace/host-a 的工作树' : 'Worktree for /workspace/host-a' })).toBeVisible();
+		const worktreeLabel = chinese ? '/workspace/host-a 的工作树' : 'Worktree for /workspace/host-a';
+		const worktree = dialog.getByRole('button', { name: worktreeLabel, exact: true });
+		await expect(worktree).toBeVisible();
 		await expect(dialog.getByRole('button', { name: chinese ? '环境变量' : 'Environment variables', exact: true })).toBeVisible();
 		await page.screenshot({ path: testInfo.outputPath(`new-environment-dialog-${locale}.png`) });
+		await runIn.press('ArrowDown');
+		await expect(hosts).toBeVisible();
+		await expect(thisComputer).toHaveAttribute('aria-checked', 'true');
+		await expect(hosts.getByRole('menuitem', { name: chinese ? '云端（不可用）' : 'Cloud (unavailable)', exact: true })).toBeDisabled();
+		const hostPopup = dialog.locator('.ash-action-widget').filter({ has: page.getByRole('menu', { name: runInLabel, exact: true }) });
+		const expectHostMenuAligned = () => expect.poll(async () => {
+			const triggerBounds = (await runIn.boundingBox())!;
+			const popupBounds = (await hostPopup.boundingBox())!;
+			return Math.max(Math.abs(popupBounds.x - triggerBounds.x), Math.abs(popupBounds.x + popupBounds.width - triggerBounds.x - triggerBounds.width));
+		}).toBeLessThan(0.5);
+		await expectHostMenuAligned();
+		await page.screenshot({ path: testInfo.outputPath(`new-environment-host-menu-${locale}.png`) });
+		const viewport = page.viewportSize()!;
+		const initialTriggerWidth = (await runIn.boundingBox())!.width;
+		await page.setViewportSize({ width: 450, height: viewport.height });
+		await expect.poll(async () => (await runIn.boundingBox())!.width).toBeLessThan(initialTriggerWidth);
+		await expectHostMenuAligned();
+		await page.setViewportSize(viewport);
+		await expectHostMenuAligned();
+		await page.keyboard.press('Escape');
+		await expect(hosts).toHaveCount(0);
+		await expect(runIn).toBeFocused();
+		await worktree.press('Enter');
+		const worktrees = dialog.getByRole('menu', { name: worktreeLabel, exact: true });
+		await expect(worktrees.getByRole('menuitemradio', { name: chinese ? '原始文件夹' : 'Original folder', exact: true })).toHaveAttribute('aria-checked', 'true');
+		await page.keyboard.press('Escape');
+		await expect(worktrees).toHaveCount(0);
+		await expect(worktree).toBeFocused();
 		await page.keyboard.press('Escape');
 		await expect(dialog).toHaveCount(0);
 		await expect(trigger).toBeFocused();
@@ -1341,7 +1391,13 @@ suite('sessions browser component', () => {
 		await expect(trigger).toHaveCount(0);
 		await page.locator('[data-action-id="sessions.newSession"] button').click();
 		await trigger.press('Enter');
-		await runIn.selectOption({ label: chinese ? '此电脑' : 'This Computer' });
+		await runIn.click();
+		await hosts.getByRole('menuitemradio', { name: 'Host A', exact: true }).click();
+		await expect(runIn).toHaveText('Host A');
+		await expect(runIn).toBeFocused();
+		await runIn.click();
+		await thisComputer.click();
+		await expect(runIn).toHaveText(chinese ? '此电脑' : 'This Computer');
 		await dialog.getByRole('button', { name: chinese ? '+ 添加' : '+ Add', exact: true }).click();
 		await dialog.getByRole('button', { name: 'host-a', exact: true }).click();
 		await name.fill('Local folder environment');

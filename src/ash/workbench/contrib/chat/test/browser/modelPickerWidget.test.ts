@@ -15,16 +15,20 @@ import { ModelPickerWidget } from '../../browser/widget/input/modelPicker/modelP
 import { setIconResolver } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { getIconDefinition } from '../../../../../platform/theme/common/iconRegistry.js';
 
-test('An unavailable selection keeps its exact ID and disabled controls remain disabled through first render', () => {
+test('The model trigger uses catalog metadata even when the selected model is hidden', () => {
 	const dom = new JSDOM('<body></body>');
 	setIconResolver(dom.window.document, icon => getIconDefinition(icon));
 	try {
 		using resources = new DisposableStore();
 		const changes = resources.add(new Emitter<void>());
 		let automatic = false;
-		let models: ModelCatalogEntry[] = [];
+		let selectedEntry: ModelCatalogEntry | undefined;
 		const selected = { provider: 'custom-endpoint', model: 'vendor/retired' };
-		const delegate = { onDidChangePresentation: changes.event, getModels: () => models, getSelectedModel: () => selected, getSelectedReasoningEffort: () => undefined, isAutomaticModel: () => automatic } as unknown as IModelPickerDelegate;
+		const delegate = {
+			configureInMenu: true, onDidChangePresentation: changes.event, getModels: () => [],
+			getSelectedModel: () => selected, getSelectedModelEntry: () => selectedEntry,
+			getSelectedReasoningEffort: () => undefined, isAutomaticModel: () => automatic,
+		} as unknown as IModelPickerDelegate;
 		const picker = resources.add(new ModelPickerWidget(delegate,
 			{ createInstance: () => ({ dispose() { }, [Symbol.dispose]() { }, show() { }, hide() { } }) } as unknown as IInstantiationService,
 			{ getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService));
@@ -35,10 +39,14 @@ test('An unavailable selection keeps its exact ID and disabled controls remain d
 		assert.equal(button.getAttribute('aria-label'), 'vendor/retired');
 		assert.equal(button.getAttribute('aria-disabled'), 'true');
 		assert.equal(button.tabIndex, -1);
-		models = [{ model: selected, displayName: 'Retired Model', longContext: null }];
+		selectedEntry = {
+			model: selected, displayName: 'Retired Model', longContext: null,
+			defaultReasoningEffort: 'high', supportedReasoningEfforts: [{ effort: 'high' }],
+		};
 		changes.fire();
-		assert.equal(button.textContent, 'Retired Model');
-		assert.equal(button.getAttribute('aria-label'), 'Retired Model');
+		assert.equal(button.querySelector('.ash-chat-input-picker-label')?.textContent, 'Retired Model');
+		assert.equal(button.querySelector('.ash-chat-input-model-effort')?.textContent, 'High');
+		assert.equal(button.getAttribute('aria-label'), 'Retired Model High');
 		automatic = true; changes.fire();
 		assert.equal(button.textContent, 'Auto');
 		assert.equal(button.getAttribute('aria-disabled'), 'true');
@@ -60,6 +68,7 @@ test('The Chat slider displays effective native reasoning effort and adjusts it 
 		const delegate: IModelPickerDelegate = {
 			onDidChangePresentation: Event.None,
 			getModels: () => [model], getSelectedModel: () => model.model, isAutomaticModel: () => false,
+			getSelectedModelEntry: () => model,
 			getSelectedReasoningEffort: () => selected, getModelsError: () => undefined,
 			selectModel: async () => { }, openSettings: async () => { },
 			selectReasoningEffort: async effort => { selected = effort; },

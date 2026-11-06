@@ -51,6 +51,33 @@ test('Quick Diff resolves registered window services and rejects a missing diff 
 	assert.equal(requests, 1);
 });
 
+test('Quick Diff only starts a Worker once a file differs from its baseline', async () => {
+	using quickDiffService = new QuickDiffService();
+	using configuration = new InMemoryConfigurationService();
+	let workerStarts = 0;
+	using factory = new WorkerBasedDiffProviderFactoryService(new TestWebWorkerService(() => {
+		workerStarts++;
+		return new DiffTestPort();
+	}));
+	using models = new QuickDiffModelService(quickDiffService, new DiffService(factory), configuration);
+	using model = new TextModel('before', { resource: URI.file('/workspace/clean.ts') });
+	using reference = models.createModelReference(model.uri, model);
+	await waitFor(() => !reference.object.state.loading);
+	assert.equal(workerStarts, 0);
+
+	using registration = quickDiffService.addProvider({
+		id: 'test', label: 'Index',
+		async provideOriginalResource(resource) {
+			return { providerId: 'test', providerLabel: 'Index', label: 'Index', originalResource: resource, revision: 1, text: 'before' };
+		},
+	});
+	await waitFor(() => reference.object.state.comparisons[0]?.model.state.kind === 'ready');
+	assert.equal(workerStarts, 0);
+	model.setValue('after');
+	await waitFor(() => reference.object.state.changes.length === 1);
+	assert.equal(workerStarts, 1);
+});
+
 test('Quick Diff shares one resource model and projects configurable editor targets', async () => {
 	const fixture = baselineFixture();
 	const provider = fixture.provider;

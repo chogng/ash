@@ -15,7 +15,7 @@ export class SessionsListTools implements ISessionsListTools {
 	readTree(): ReturnType<ISessionsListTools['readTree']> {
 		const mode = this.contexts.getValue(SessionsWorkspaceModeContext.key) === 'code' ? 'code' : 'chat';
 		const sections = this.list.readTree(mode);
-		if (sections) return { mode, sort: this.list.sortMode, automationSessions: this.list.automationSessionsMode, sections };
+		if (sections) return { mode, sort: this.list.getSort(mode).field, automationSessions: this.list.automationSessionsMode, sections };
 		return undefined;
 	}
 

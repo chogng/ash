@@ -1,5 +1,5 @@
 import { URI } from '../../../base/common/uri.js';
-import type { LanguagePackCatalog, LanguagePackIndexEntry, PreinstalledLanguagePack } from '../common/languagePackContract.js';
+import type { LanguagePackCatalog, LanguagePackCatalogSource, LanguagePackIndexEntry, LanguagePackMetadata, PreinstalledLanguagePack } from '../common/languagePackContract.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { IExtensionManagementService, type ExtensionsInstalledPackage } from '../../extensionManagement/common/extensionManagementService.js';
@@ -12,11 +12,11 @@ import { IMeteredConnectionService } from '../../meteredConnection/common/metere
 export class WebLanguagePacksService extends Disposable implements ILanguagePackService {
 	private readonly _onDidChange = this._register(new Emitter<void>());
 	private readonly builtinLocales: ReadonlySet<string>;
-	private readonly startupCatalogs = new Map<string, LanguagePackCatalog>();
+	private readonly startupCatalogs = new Map<string, LanguagePackCatalog | LanguagePackCatalogSource>();
 	private cacheInitialization: Promise<void> | undefined;
 	private automaticRefreshNeeded = true;
 	private refreshQueued = false;
-	private readonly catalogsByLocale = new Map<string, LanguagePackCatalog>();
+	private readonly catalogsByLocale = new Map<string, LanguagePackCatalog | LanguagePackCatalogSource>();
 	private readonly installedProviders = new Map<string, string>();
 	private refreshPromise: Promise<void> | undefined;
 
@@ -24,7 +24,7 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 	readonly whenReady: Promise<void>;
 
 	constructor(
-		builtinCatalogs: readonly LanguagePackCatalog[],
+		builtinCatalogs: readonly LanguagePackCatalogSource[],
 		private readonly preinstalled: readonly PreinstalledLanguagePack[],
 		@IExtensionManagementService private readonly extensionManagement: IExtensionManagementService,
 		@ILanguagePackStore private readonly store: ILanguagePackStore,
@@ -34,8 +34,9 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 		this.builtinLocales = new Set(builtinCatalogs.map(catalog => normalizeLocale(catalog.locale)));
 		for (const catalog of [...builtinCatalogs, ...preinstalled.map(extension => extension.catalog)]) {
 			const locale = normalizeLocale(catalog.locale);
-			if (locale) this.catalogsByLocale.set(locale, { ...catalog, locale });
-			this.startupCatalogs.set(locale, { ...catalog, locale });
+			if (!locale) continue;
+			this.catalogsByLocale.set(locale, catalog);
+			this.startupCatalogs.set(locale, catalog);
 		}
 		this.whenReady = this.refreshAutomatically().catch(() => undefined);
 		this._register(meteredConnection.onDidChangeIsConnectionMetered(isMetered => {
@@ -46,8 +47,13 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 		}));
 	}
 
-	get catalogs(): readonly LanguagePackCatalog[] {
+	get catalogs(): readonly LanguagePackMetadata[] {
 		return [...this.catalogsByLocale.values()];
+	}
+
+	public async getCatalog(locale: string): Promise<LanguagePackCatalog | undefined> {
+		const requested = normalizeLocale(locale).toLowerCase();
+		return readCatalog([...this.catalogsByLocale.values()].find(catalog => catalog.locale.toLowerCase() === requested));
 	}
 
 	public async getInstalledLanguages(): Promise<ILanguagePackItem[]> {
@@ -74,7 +80,8 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 		// packs updates the next startup, so it must not block these local lookups.
 		await this.initializeCache();
 		while (locale && locale !== 'en') {
-			const translations = this.startupCatalogs.get(locale)?.extensionTranslations?.[id.toLowerCase()];
+			const catalog = await readCatalog(this.startupCatalogs.get(locale));
+			const translations = catalog?.extensionTranslations?.[id.toLowerCase()];
 			if (translations) {
 				return URI.from({ scheme: 'data', path: 'application/json,' + JSON.stringify({ contents: translations }) });
 			}
@@ -150,6 +157,10 @@ export class WebLanguagePacksService extends Disposable implements ILanguagePack
 		}
 		this._onDidChange.fire();
 	}
+}
+
+async function readCatalog(catalog: LanguagePackCatalog | LanguagePackCatalogSource | undefined): Promise<LanguagePackCatalog | undefined> {
+	return catalog && 'load' in catalog ? catalog.load() : catalog;
 }
 
 async function loadInstalledCatalogs(

@@ -2,8 +2,10 @@ import { IStorageService } from '../../../../platform/storage/common/storage.js'
 import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { ILocalizationService } from '../../../services/localization/common/localizationService.js';
-import { isMacintosh } from '../../../../base/common/platform.js';
-import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { isMacintosh, isWindows } from '../../../../base/common/platform.js';
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
+import { getVisibleWCOTitlebarAreaRect } from '../../../../base/browser/browser.js';
 import {
 	BrowserMenubarControl,
 	type IMenubarControl,
@@ -56,6 +58,7 @@ export class NativeTitlebarPart extends BrowserTitlebarPart {
 			localizationService, themeService, storageService, contextKeyService
 		);
 		this.domNode.classList.add('ash-electron-titlebar');
+		this._register(bindWindowsTitlebarInsets(this.domNode));
 		this._register(bindWindowControlTheme(themeService, hostService));
 	}
 }
@@ -87,6 +90,7 @@ class AuxiliaryElectronTitlebarPart extends AuxiliaryBrowserTitlebarPart {
 		super(container, productName, editorGroupsContainer, onDispose, isMacintosh ? 'actions-only' : 'application-menu',
 			instantiationService, menuService, contextMenuService, localizationService, themeService, storageService, contextKeyService);
 		const targetWindow = getWindow(container);
+		this._register(bindWindowsTitlebarInsets(this.domNode));
 		const alwaysOnTop = IsWindowAlwaysOnTopContext.bindTo(this.contextKeyService);
 		let revision = 0;
 		const refresh = async (): Promise<void> => {
@@ -110,6 +114,51 @@ class AuxiliaryElectronTitlebarPart extends AuxiliaryBrowserTitlebarPart {
 		this._register(bindWindowControlTheme(themeService, hostService));
 	}
 
+}
+
+/** Keep the caption reservation stable while Windows delivers viewport and overlay geometry separately. */
+export function bindWindowsTitlebarInsets(titlebar: HTMLElement): IDisposable {
+	if (!isWindows) return Disposable.None;
+	const target = getWindow(titlebar);
+	const overlay = (target.navigator as Navigator & { windowControlsOverlay?: EventTarget & { readonly visible: boolean; }; }).windowControlsOverlay;
+	if (!overlay) return Disposable.None;
+
+	const resources = new DisposableStore();
+	const left = '--ash-titlebar-controls-leftInset';
+	const right = '--ash-titlebar-controls-rightInset';
+	let measured = false;
+	const clear = () => {
+		measured = false;
+		titlebar.style.removeProperty(left);
+		titlebar.style.removeProperty(right);
+	};
+	resources.add(toDisposable(clear));
+	const settled = resources.add(new RunOnceScheduler(() => {
+		const area = getVisibleWCOTitlebarAreaRect(target);
+		const bounds = titlebar.getBoundingClientRect();
+		if (!area?.width || !bounds.width) {
+			clear();
+			return;
+		}
+		titlebar.style.setProperty(left, `${Math.max(0, area.left - bounds.left)}px`);
+		titlebar.style.setProperty(right, `${Math.max(0, bounds.right - area.right)}px`);
+		measured = true;
+	}, 100));
+	let scale = target.devicePixelRatio;
+	const changed = () => {
+		if (scale !== target.devicePixelRatio) {
+			scale = target.devicePixelRatio;
+			clear();
+		}
+		// The caption buttons keep their widths during ordinary resize. Sampling
+		// again would combine viewport and overlay updates from different frames.
+		if (measured !== overlay.visible) settled.schedule();
+		else settled.cancel();
+	};
+	resources.add(addDisposableListener(target, 'resize', changed));
+	resources.add(addDisposableListener(overlay, 'geometrychange', changed));
+	settled.schedule();
+	return resources;
 }
 
 /** Applies titlebar colors to the operating-system window controls for one renderer. */

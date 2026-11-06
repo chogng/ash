@@ -314,21 +314,17 @@ export class ProjectsList extends Disposable {
 			list.append(row);
 		}
 		if (entries.length) section.append(list);
-		if (history?.state === 'more' || history?.state === 'error') {
+		if (history?.state === 'more') {
 			const button = content.add(new Button(section, {
 				...defaultButtonStyles,
-				label: history.state === 'more' ? localize('sessions.chatList.loadMoreProjectChats', 'Load more project chats')
-					: localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry'),
+				label: localize('sessions.chatList.loadMoreProjectChats', 'Load more project chats'),
 				onClick: history.load,
 			}));
 			button.domNode.dataset.projectControl = 'project-history';
 		} else if (history?.state === 'loading' || history?.state === 'idle') {
 			section.append(h(document, 'p', { attributes: { role: 'status' } },
 				localize('sessions.chatList.loadingProjectChats', 'Loading project chats…')));
-		} else if (history?.state === 'unavailable') {
-			section.append(h(document, 'p', { attributes: { role: 'status' } },
-				localize('sessions.chatList.projectChatsOffline', 'Connect to load project chats.')));
-		} else if (!entries.length) {
+		} else if (!entries.length && (!history || history.state === 'complete')) {
 			section.append(h(document, 'p', { attributes: { role: 'status' } },
 				localize('sessions.chatList.emptyProject', 'No chats in this project')));
 		}

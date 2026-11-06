@@ -14,6 +14,22 @@
 	flex: 0 0 auto;
 }
 
+/* Let any contributed icon take space without reserving a column for text-only actions. */
+.ash-sessions-list-menu
+	> .ash-action-view-item
+	> .ash-button
+	> .ash-menu-leading-slot:not(.ash-menu-leading-check) {
+	display: contents;
+}
+
+.ash-sessions-list-menu
+	> .ash-action-view-item
+	> .ash-button
+	> .ash-menu-leading-check {
+	order: 1;
+	margin-inline-start: auto;
+}
+
 .ash-sessions-list-search {
 	min-width: 0;
 	min-height: var(--ash-spacing-size320);
@@ -118,7 +134,7 @@
 	background: transparent;
 	cursor: pointer;
 	font-size: var(--ash-fontSize-body1);
-	text-align: left;
+	text-align: start;
 }
 
 .ash-sessions-list-label {
@@ -129,13 +145,95 @@
 	white-space: nowrap;
 }
 
-.ash-sessions-list-row:is(:hover, :focus-within, .menu-visible)
-	> .ash-sessions-list-item {
-	background: var(--sessions-row-background);
+[dir="rtl"] .ash-sessions-list-row {
+	--sessions-row-title-fade-direction: to left;
+	--sessions-row-title-scroll-direction: 1;
 }
 
-.ash-sessions-list-row.selected > .ash-sessions-list-item {
-	color: var(--ash-foreground);
+.ash-sessions-list-row:hover .ash-sessions-list-label.title-overflows {
+	text-overflow: var(--sessions-row-title-overflow, clip);
+	/* Fade the glyphs over the single row background. */
+	mask-image: var(
+		--sessions-row-title-mask,
+		linear-gradient(
+			var(--sessions-row-title-fade-direction, to right),
+			transparent,
+			#000 var(--ash-spacing-size120),
+			#000 calc(100% - var(--ash-spacing-size160)),
+			transparent
+		)
+	);
+	/* Keep the leading fade outside the viewport until the text moves. */
+	mask-size: calc(100% + var(--ash-spacing-size120)) 100%;
+	mask-repeat: no-repeat;
+	mask-position: right;
+}
+
+[dir="rtl"]
+	.ash-sessions-list-row:hover
+	.ash-sessions-list-label.title-overflows {
+	mask-position: left;
+}
+
+@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+	.ash-sessions-list-row:hover:not(
+			.menu-visible,
+			.ash-reduce-motion *,
+			.ash-high-contrast *
+		)
+		.title-overflows {
+		animation: ash-sessions-row-title-leading-fade
+			var(--ash-animation-durationNormal) ease-out 450ms forwards;
+
+		> span {
+			display: inline-block;
+			animation: ash-sessions-row-title-scroll
+				var(--sessions-row-title-duration) linear forwards;
+			animation-delay: inherit;
+		}
+	}
+}
+
+@keyframes ash-sessions-row-title-leading-fade {
+	to {
+		mask-size: 100% 100%;
+	}
+}
+
+@keyframes ash-sessions-row-title-scroll {
+	to {
+		/* Move the last character past the fade so the whole ending is readable. */
+		transform: translateX(
+			calc(
+				var(--sessions-row-title-scroll-direction, -1) *
+					(
+						var(--sessions-row-title-distance) +
+							var(--ash-spacing-size160)
+					)
+			)
+		);
+	}
+}
+
+.ash-high-contrast .ash-sessions-list-row {
+	--sessions-row-title-mask: none;
+	--sessions-row-title-overflow: ellipsis;
+}
+
+@media (forced-colors: active) {
+	.ash-sessions-list-row {
+		--sessions-row-title-mask: none;
+		--sessions-row-title-overflow: ellipsis;
+	}
+}
+
+.ash-sessions-list[data-mode="chat"]
+	.ash-sessions-list-row:where(
+		:hover,
+		:focus-within,
+		.menu-visible,
+		.selected
+	) {
 	background: var(--sessions-row-background);
 }
 
@@ -333,39 +431,9 @@
 }
 
 .ash-sessions-list-row .ash-sessions-list-actions {
-	position: absolute;
-	inset-inline-end: var(--ash-strokeThickness);
-	top: 50%;
-	transform: translateY(-50%);
-	padding-inline-end: var(--ash-spacing-size40);
-	border-radius: 0 var(--ash-cornerRadius-large) var(--ash-cornerRadius-large)
-		0;
-	background: var(--sessions-row-background);
 	opacity: 0;
 	pointer-events: none;
 	transition: opacity var(--ash-animation-durationFast) ease-out;
-}
-
-.ash-sessions-list-actions::before {
-	content: "";
-	position: absolute;
-	inset-inline-end: 100%;
-	top: 0;
-	bottom: 0;
-	width: var(--ash-spacing-size320);
-	pointer-events: none;
-	background: linear-gradient(
-		to right,
-		transparent,
-		color-mix(in srgb, var(--sessions-row-background) 16%, transparent) 25%,
-		color-mix(in srgb, var(--sessions-row-background) 50%, transparent) 50%,
-		color-mix(in srgb, var(--sessions-row-background) 84%, transparent) 75%,
-		var(--sessions-row-background)
-	);
-}
-
-[dir="rtl"] .ash-sessions-list-actions::before {
-	transform: scaleX(-1);
 }
 
 .ash-sessions-list-row:hover .ash-sessions-list-actions,
@@ -384,10 +452,6 @@
 	display: none;
 }
 
-:is(.hc-black, .hc-light) .ash-sessions-list-actions::before {
-	display: none;
-}
-
 .ash-sessions-list[data-mode="code"]
 	.ash-tree-row:not(
 		.ash-sessions-list-section-row,
@@ -399,20 +463,21 @@
 	);
 }
 
-.ash-sessions-list[data-mode="code"]
-	.ash-tree-row
-	:is(.ash-sessions-list-item, .ash-sessions-list-actions) {
-	background: transparent;
+.ash-sessions-list .ash-sessions-list-row {
+	display: flex;
+	align-items: center;
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-sessions-list .ash-sessions-list-item {
+	flex: 1 1 0;
 }
 
 .ash-sessions-list[data-mode="code"] .ash-sessions-list-row {
-	display: flex;
-	align-items: center;
 	column-gap: var(--ash-sessions-sidebar-item-inset);
 }
 
 .ash-sessions-list[data-mode="code"] .ash-sessions-list-item {
-	flex: 1 1 0;
 	/* The tree row reserves the trailing inset, even when the toolbar is hidden. */
 	padding-block: var(--ash-sessions-sidebar-item-inset);
 	padding-inline: var(--ash-sessions-sidebar-item-inset) 0;
@@ -457,27 +522,29 @@
 	);
 }
 
-.ash-sessions-list[data-mode="code"] .ash-sessions-list-actions {
+.ash-sessions-list .ash-sessions-list-actions {
 	display: none;
-	position: static;
 	flex: 0 0 auto;
-	transform: none;
+	padding-inline-end: var(--ash-sessions-sidebar-item-inset);
+}
+
+.ash-sessions-list[data-mode="code"] .ash-sessions-list-actions {
 	padding-inline-end: 0;
 }
 
-.ash-sessions-list[data-mode="code"] .ash-sessions-list-actions::before {
-	content: none;
-}
-
-.ash-sessions-list[data-mode="code"]
-	.ash-tree-row:hover
-	.ash-sessions-list-actions:not([hidden]),
-.ash-sessions-list[data-mode="code"]
+.ash-sessions-list .ash-tree-row:hover .ash-sessions-list-actions:not([hidden]),
+.ash-sessions-list
 	.ash-sessions-list-row:is(:focus-within, .menu-visible)
 	.ash-sessions-list-actions:not([hidden]) {
 	display: flex;
 	opacity: 1;
 	pointer-events: auto;
+}
+
+.ash-menu
+	.ash-action-view-item
+	> .ash-button.ash-chat-navigation-delete-action {
+	color: var(--ash-error-foreground);
 }
 
 @media (forced-colors: active) {

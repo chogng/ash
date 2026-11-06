@@ -86,8 +86,8 @@ test('Sessions owns its New Session command and routes explicit provider choices
 		canNavigateBack: false,
 		canNavigateForward: false, recentSessions: [],
 		async initialize() { },
-		openSession() { },
-		openUntitledSession() { },
+		async openSession() { },
+		async openUntitledSession() { },
 		openNewSession(_title, options) {
 			created.push(options?.providerId);
 			return { untitledSessionId: `untitled-${created.length}`, title: 'New code session', model: undefined, agent: undefined, workspace: { type: 'current' } };
@@ -180,7 +180,10 @@ test('shared Chat commands coexist with Sessions actions and delegate to the win
 	services.registerInstance(ISessionsService, {
 		openNewSession: (_title: string, options?: { providerId?: string; }) => { created.push(options?.providerId); return { untitledSessionId: 'draft' }; },
 		recentSessions: [],
-		openSession: (sessionId: string, threadId: string) => opened.push(`${sessionId}/${threadId}`),
+		openSession: async (sessionId: string, threadId: string, options: { reveal: 'code'; }) => {
+			assert.equal(options.reveal, 'code');
+			opened.push(`${sessionId}/${threadId}`);
+		},
 	} as unknown as ISessionsService);
 	services.registerInstance(ISessionsManagementService, {
 		resolveNewSessionTarget: async () => ({ providerId: 'test', workspace: { type: 'current' } }),
@@ -246,7 +249,7 @@ test('Sessions History ranks recent active chats ahead of unvisited chats', asyn
 			{ sessionId: 'session-2', threadId: 'thread-3' },
 			{ sessionId: 'recent', threadId: 'root' },
 		],
-		openSession: (sessionId: string, threadId: string) => opened.push({ sessionId, threadId }),
+		openSession: async (sessionId: string, threadId: string) => { opened.push({ sessionId, threadId }); },
 	} as unknown as ISessionsService);
 	services.registerInstance(IQuickInputService, quickInput);
 	using commands = new CommandService(services);
@@ -274,7 +277,7 @@ test('Session History shows each branch management state in Chinese before openi
 			],
 		}], onDidChange: Event.None
 	} as unknown as ISessionsManagementService);
-	services.registerInstance(ISessionsService, { recentSessions: [], openSession: (_sessionId: string, threadId: string) => opened.push(threadId) } as unknown as ISessionsService);
+	services.registerInstance(ISessionsService, { recentSessions: [], openSession: async (_sessionId: string, threadId: string) => { opened.push(threadId); } } as unknown as ISessionsService);
 	services.registerInstance(IQuickInputService, quickInput);
 	using commands = new CommandService(services);
 	try {

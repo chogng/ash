@@ -4,7 +4,7 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 
 /** Workbench-owned factory for editor diff computations. */
 export interface IDiffService {
-	createComputationService(): IDocumentDiffProvider & IDisposable;
+	createComputationService(options?: { readonly prewarm?: boolean; }): IDocumentDiffProvider & IDisposable;
 }
 
 export const IDiffService = createServiceIdentifier<IDiffService>('diffService');

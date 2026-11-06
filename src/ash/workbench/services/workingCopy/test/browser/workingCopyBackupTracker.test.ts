@@ -811,6 +811,7 @@ class TestWorkingCopy extends Disposable implements IWorkingCopy {
 class MemoryBackups extends Disposable implements IWorkingCopyBackupService {
 	private readonly values = new Map<string, WorkingCopyBackup>();
 	async list(): Promise<readonly WorkingCopyBackup[]> { return [...this.values.values()]; }
+	async resolve(resource: URI): Promise<WorkingCopyBackup | undefined> { return this.values.get(resource.toString()); }
 	async store(backup: WorkingCopyBackup): Promise<void> { this.values.set(backup.resource.toString(), backup); }
 	async delete(resource: URI): Promise<void> { this.values.delete(resource.toString()); }
 	switchWorkspace(): void { this.values.clear(); }

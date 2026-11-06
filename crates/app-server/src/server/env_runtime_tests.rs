@@ -1830,7 +1830,7 @@ fn sandbox_settings_save_reconciles_command_policy_and_preserves_selected_profil
 }
 
 #[test]
-fn sandbox_policy_installation_invalidates_diagnostics_with_an_unchanged_catalog() {
+fn sandbox_policy_installation_updates_shell_descriptions_and_invalidates_diagnostics() {
     let directory = TestDir::new("policy-invalidation", "file.txt");
     let server = server().with_local_env_host(None, host_policy()).unwrap();
     server
@@ -1840,7 +1840,19 @@ fn sandbox_policy_installation_invalidates_diagnostics_with_an_unchanged_catalog
         )
         .unwrap();
     let tools = &server.local_env_host.as_ref().unwrap().tools;
-    let catalog = tools.capabilities_snapshot().0;
+    let mut catalog = tools.capabilities_snapshot().0;
+    for tool in &mut catalog {
+        if matches!(tool.name.as_str(), "shell-command" | "shell-session") {
+            assert!(
+                tool.description
+                    .contains("Writes are limited to authorized directories and paths.")
+            );
+            tool.description = tool.description.replace(
+                "Writes are limited to authorized directories and paths.",
+                "Filesystem access is read-only.",
+            );
+        }
+    }
     let queue = crate::server::notification_queue::NotificationQueue::default();
     server.updates.register(1, false, &queue);
     let mut config = ash_config::ResolvedConfig::default();

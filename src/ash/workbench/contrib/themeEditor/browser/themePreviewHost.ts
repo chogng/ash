@@ -22,7 +22,7 @@ import { IHostService } from '../../../services/host/browser/host.js';
 import { BrowserLifecycleService } from '../../../services/lifecycle/browser/lifecycleService.js';
 import { BrowserStorageService } from '../../../services/storage/browser/storageService.js';
 import type { IWorkbenchThemeService } from '../../../services/themes/common/workbenchThemeService.js';
-import { productLanguagePackCatalogs } from '../../../services/localization/common/localizationCatalogs.js';
+import { productLanguagePackSources } from '../../../../../../.build/desktop/localization/localizationCatalogLoader.js';
 import { parseUserColorTheme } from '../../../services/themes/common/colorThemeData.js';
 import { getThemeColorReferences, themePreviewConfigurationKeys } from './themePreview.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
@@ -45,7 +45,7 @@ class PreviewFileSystemProvider extends InMemoryFileSystemProvider {
 /** Both product previews borrow the same memory-only host; no platform bridge is installed. */
 export async function createThemePreviewHost() {
 	const locale = new URLSearchParams(location.search).get('locale') ?? 'en';
-	const catalog = productLanguagePackCatalogs.find(item => item.locale === locale);
+	const catalog = await productLanguagePackSources.find(item => item.locale === locale)?.load();
 	if (catalog) setNlsMessages(locale, catalog.bundles);
 	document.documentElement.lang = locale;
 	document.title = localize('themeEditor.interactivePreview', 'Interactive theme preview');

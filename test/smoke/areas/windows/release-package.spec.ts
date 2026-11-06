@@ -46,7 +46,11 @@ test('release installation runs its bundled backend, upgrades with retained data
 		await mkdir(workspace);
 		await install(resolve(previousArchive ?? archive), installation, userData);
 		installed = true;
-		assert(!(await exists(userData)), 'Installation must record ownership without creating application data');
+		if (process.platform === 'win32' && (!previousArchive || previousVersion === '0.0.0')) {
+			await assertPreparedBackend(installation, userData);
+		} else {
+			assert(!(await exists(userData)), 'Installation must record ownership before creating application data');
+		}
 		await mkdir(join(userData, 'profile'), { recursive: true });
 		await writeFile(settingsPath, JSON.stringify({ 'update.policy': 'never', 'editor.fontSize': 17 }));
 		await writeFile(keybindingsPath, '[]');
@@ -165,6 +169,19 @@ async function exists(path: string): Promise<boolean> {
 		if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
 		throw error;
 	}
+}
+
+async function assertPreparedBackend(installation: string, userData: string): Promise<void> {
+	const profile = join(userData, 'profile');
+	const resources = join(installation, 'resources');
+	const metadata = JSON.parse(await readFile(join(resources, 'ash-package.json'), 'utf8'));
+	const store = join(profile, 'app-server-packages');
+	const manifest = JSON.parse(await readFile(join(store, 'manifests', '00000000000000000001.json'), 'utf8'));
+	assert.equal(manifest.package.buildId, metadata.buildId);
+	assert.equal(manifest.installation.executable, await realpath(join(installation, 'Ash.exe')));
+	assert(await exists(join(store, manifest.directory, metadata.entrypoint)));
+	assert(!(await exists(join(profile, 'state.sqlite3'))), 'Setup prepares the package without starting App Server');
+	assert(!(await exists(join(userData, 'state.json'))), 'Setup does not start Electron');
 }
 
 async function install(archive: string, installation: string, userData: string): Promise<void> {
@@ -317,7 +334,7 @@ test('Windows upgrade and purge protect worktrees, junctions and another product
 					],
 					{ windowsHide: true, env: installationEnvironment(userData) },
 				);
-			assert(!(await exists(userData)), 'The native installer must register the fresh profile before launch');
+			await assertPreparedBackend(installation, userData);
 			if (shared) {
 				const other = join(directory, 'other-cli');
 				await mkdir(other);

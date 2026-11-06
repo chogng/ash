@@ -2,6 +2,7 @@ import type { MarkedExtension } from '../../../../base/common/marked/marked.js';
 import { htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
 
 const wordCharacter = /[\p{Alphabetic}\p{N}]/u;
+const possibleMathCloser = new RegExp(String.raw`\$(?!${wordCharacter.source})|\\[)\]]`, 'u');
 
 const katexContainerClassName = 'ash-katex-container';
 export const katexContainerLatexAttributeName = 'data-latex';
@@ -64,17 +65,30 @@ export namespace MarkedKatexExtension {
 			extensions: (['block', 'inline'] as const).map(level => ({
 				name: `ashMath${level}`, level,
 				start(source) {
-					// Marked asks for the next extension before each ordinary inline token.
-					// Scan plain prose natively; slicing and checking every character here
-					// repeatedly walks the remaining paragraph as links/emphasis are consumed.
+					// Marked repeatedly asks for the next extension on the remaining
+					// text. A suffix with no possible closer needs no opener probes.
+					// Leave escape handling and delimiter pairing to readMath.
+					if (!possibleMathCloser.test(source)) return -1;
 					const candidates = /[$\\]/gu;
+					let parenthesisCloser: boolean | undefined;
+					let bracketCloser: boolean | undefined;
 					let candidate: RegExpExecArray | null;
 					while ((candidate = candidates.exec(source))) {
 						const index = candidate.index;
 						if (level === 'block' && source[index - 1] !== '\n') { continue; }
-						// An ordinary escape consumes its next character, including a dollar
-						// or another backslash that would otherwise look like a delimiter.
-						if (source[index] === '\\' && !['(', '['].includes(source[index + 1])) { candidates.lastIndex++; continue; }
+						if (source[index] === '\\') {
+							const opener = source[index + 1];
+							if (opener !== '(' && opener !== '[') {
+								// An ordinary escape consumes the next character.
+								candidates.lastIndex++;
+								continue;
+							}
+							// Check each backslash form once, from its first opener onward.
+							const canClose = opener === '('
+								? (parenthesisCloser ??= source.includes('\\)', index + 2))
+								: (bracketCloser ??= source.includes('\\]', index + 2));
+							if (!canClose) continue;
+						}
 						if (readMath(source.slice(index), source.slice(Math.max(0, index - 2), index))) { return index; }
 					}
 					return -1;

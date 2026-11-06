@@ -269,6 +269,7 @@ mod terminal_operations;
 #[path = "server/request_processors/testing.rs"]
 mod testing_operations;
 
+mod session_execution_router;
 mod speech_instructions;
 #[cfg(test)]
 mod speech_instructions_tests;
@@ -1710,13 +1711,20 @@ impl AppServer {
         if let Some(policy) = &self.editor_extension_policy {
             runtime.set_editor_extension_policy(Arc::clone(policy));
         }
+        // Subscribe before the first snapshot so changes during discovery are delivered
+        // after the initial providers have been installed.
+        let changes = extension_packages_runtime::LanguageExtensionChanges::subscribe(
+            self.editor_extension_policy.as_deref(),
+            &runtime,
+        );
         let providers = runtime.providers()?;
         self.language
             .lock()
             .map_err(|_| "new App Server language runtime mutex is poisoned".to_string())?
             .set_server_providers(providers);
+        self._language_extension_watcher =
+            changes.and_then(|changes| changes.start(runtime.clone(), Arc::clone(&self.language)));
         self.extension_packages_language_runtime = Some(runtime);
-        self.rebind_language_extension_watcher();
         Ok(self)
     }
 
@@ -2358,11 +2366,11 @@ impl AppServer {
             .extension_packages_language_runtime
             .as_ref()
             .and_then(|runtime| {
-                extension_packages_runtime::ExtensionsChangeWatcher::start_language_runtime(
+                extension_packages_runtime::LanguageExtensionChanges::subscribe(
                     self.editor_extension_policy.as_deref(),
-                    runtime.clone(),
-                    Arc::clone(&self.language),
+                    runtime,
                 )
+                .and_then(|changes| changes.start(runtime.clone(), Arc::clone(&self.language)))
             });
     }
 
@@ -2478,9 +2486,8 @@ impl AppServer {
             self.combined_dynamic_skill_sources(),
         )?;
         runtime.bind_metrics(self.diagnostics.metrics());
-        let session_sources: Arc<dyn ash_skills_extension::SessionSkillSourceProvider> =
-            Arc::clone(&self.env_runtime_mut().dir_grants)
-                as Arc<dyn ash_skills_extension::SessionSkillSourceProvider>;
+        let session_sources = session_execution_router::SessionExecutionRouter::new(&self.threads)
+            .skills(Arc::clone(&self.env_runtime_mut().dir_grants));
         runtime.bind_session_sources(session_sources)?;
         let mut builder =
             ash_extension_api::ExtensionRegistryBuilder::from_registry(&self.agent_extensions);
@@ -2924,21 +2931,25 @@ impl AppServer {
         expected_ide: Option<&str>,
     ) -> Result<ash_core::StartTurnResult, CoreError> {
         let record = self.threads.thread_catalog_record(thread)?;
-        if let Some(ash_protocol::SessionExecutionTarget::Local { root }) = record.execution_target
+        let route = session_execution_router::SessionExecutionRouter::new(&self.threads)
+            .resolve(&record.session_id)?;
+        if record.directory_configured
+            && record.execution_target.is_none()
+            && self.dir_services.is_some()
         {
-            if self
-                .dir_services
-                .as_ref()
-                .is_none_or(|dirs| dirs.root != root)
-            {
-                return Err(CoreError::InvalidInput(
-                    "The session execution directory has changed".into(),
-                ));
-            }
+            return Err(CoreError::InvalidInput(
+                "The Session execution directory has changed".into(),
+            ));
+        }
+        let directory_bound = route.validate_turn_host(
+            record.execution_target.as_ref(),
+            self.dir_services.as_deref(),
+        )?;
+        if (directory_bound || record.directory_configured)
+            && request.expected_sequence == core_api::SequenceExpectation::Any
+        {
             // A queued admission must not race a directory change after the route check.
-            if request.expected_sequence == core_api::SequenceExpectation::Any {
-                request.expected_sequence = core_api::SequenceExpectation::Exact(record.sequence);
-            }
+            request.expected_sequence = core_api::SequenceExpectation::Exact(record.sequence);
         }
         let mut started = None;
         self.client_host.submit_turn_with_ide(
@@ -2957,6 +2968,17 @@ impl AppServer {
             },
         )?;
         Ok(started.expect("successful admission retains its receipt"))
+    }
+
+    fn resolve_turn_approval_mode(
+        &self,
+        session_id: &SessionId,
+        requested: Option<ash_protocol::ApprovalMode>,
+    ) -> Result<ash_protocol::ApprovalMode, RpcError> {
+        session_execution_router::SessionExecutionRouter::new(&self.threads)
+            .resolve(session_id)
+            .map_err(core_error)?
+            .approval_mode(requested, || self.agent_processor().default_approval_mode())
     }
 
     pub(super) fn submit_workflow(
@@ -3109,6 +3131,18 @@ impl AppServer {
             self.product_host_connection(),
             InputEnd::Disconnect,
         )
+    }
+
+    /// Continues a managed connection that already answered its first protocol request.
+    pub(crate) fn serve_product_host_stream_after_hello<R: BufRead, W: Write + Send>(
+        &self,
+        reader: R,
+        writer: W,
+        hello_id: u64,
+    ) -> Result<(), std::io::Error> {
+        let connection = self.product_host_connection();
+        connection.record_request_id(hello_id);
+        self.serve_jsonl_connection(reader, writer, connection, InputEnd::Disconnect)
     }
 
     /// Remote workspaces retain editor/Agent host services, while devices stay on the client.
@@ -3312,14 +3346,23 @@ impl AppServer {
         request: &mut JsonRpcRequest<Value>,
         cancellation: &CancellationToken,
     ) -> Result<Value, RpcError> {
-        if client_method(&request.method) == Some(ClientMethod::Initialize) {
-            return self.initialize(connection, &request.params);
+        match client_method(&request.method) {
+            Some(ClientMethod::TransportHello) => {
+                decode::<()>(&request.params)?;
+                return result(
+                    &ash_app_server_protocol::protocol::initialize::TransportHelloResult::current(),
+                );
+            }
+            Some(ClientMethod::Initialize) => return self.initialize(connection, &request.params),
+            _ => {}
         }
         if !connection.is_initialized() {
             return Err(RpcError::new(-32001, AppServerErrorName::NotInitialized));
         }
         match client_method(&request.method) {
-            Some(ClientMethod::Initialize) => unreachable!("initialize handled before gate"),
+            Some(ClientMethod::Initialize | ClientMethod::TransportHello) => {
+                unreachable!("startup requests are handled before the initialization gate")
+            }
             Some(ClientMethod::BrowserConfigure) => self
                 .browser_processor()
                 .configure(connection, &request.params),
@@ -4090,6 +4133,9 @@ impl AppServer {
                 self.plugin_processor().plugin_uninstall(&request.params)
             }
             Some(ClientMethod::ModelList) => self.models_processor().model_list(&request.params),
+            Some(ClientMethod::ModelAvailability) => {
+                self.models_processor().model_availability(&request.params)
+            }
             Some(ClientMethod::ModelPreferencesUpdate) => self
                 .models_processor()
                 .model_preferences_update(&request.params),
@@ -4235,6 +4281,9 @@ impl AppServer {
             Some(ClientMethod::ExtensionResourceOpen) => self
                 .extension_processor()
                 .extension_resource_open(connection, &request.params),
+            Some(ClientMethod::ExtensionColorThemeRead) => self
+                .extension_processor()
+                .extension_color_theme_read(&request.params),
             Some(ClientMethod::ExtensionHostActivate) => self
                 .extension_host_processor()
                 .extension_host_activate(connection, &request.params),
@@ -4401,6 +4450,9 @@ impl AppServer {
             Some(ClientMethod::BackupListPage) => self
                 .backup_processor
                 .list_page(connection.authority, &request.params),
+            Some(ClientMethod::BackupRead) => self
+                .backup_processor
+                .read(connection.authority, &request.params),
             Some(ClientMethod::BackupWrite) => self
                 .backup_processor
                 .write(connection.authority, &request.params),

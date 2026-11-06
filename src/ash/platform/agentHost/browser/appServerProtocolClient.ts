@@ -7,7 +7,7 @@ import type { AppServerConnectionState, IAppServerConnectionRecovery } from '../
 import { computeReconnectDelay, hasExhaustedReconnectAttempts, type IRemoteAgentHostReconnectPolicy } from '../common/reconnectPolicy.js';
 import { AppServerConnectionStoppedError, AppServerRemoteError } from '../common/appServerError.js';
 import type { DisposableHandle } from '../../ipc/common/ipc.js';
-import { AppServerProtocolIncompatibleError, checkAppServerInitializeCompatibility } from '../common/appServerProtocolCompatibility.js';
+import { AppServerProtocolIncompatibleError, checkAppServerInitializeCompatibility, checkAppServerTransportCompatibility } from '../common/appServerProtocolCompatibility.js';
 import type { AppServerServerRequestDefinition, AppServerServerRequestMethod, ClientCapabilities, JsonRpcId, ServerRequestParams, ServerRequestResult } from '../../../../../.build/protocol/typescript/index.js';
 import { AppServerProtocolDecodeError, decodeAppServerServerRequestResult } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { WebWorkerRemoteError } from '../../../base/common/worker/webWorker.js';
@@ -36,6 +36,7 @@ export interface AppServerProtocolClientOptions {
 	readonly initializeTimeoutMs?: number;
 	readonly requestTimeoutMs?: number;
 	readonly capabilities?: ClientCapabilities;
+	readonly transportHandshake?: boolean;
 }
 
 export interface AppServerRequestContext {
@@ -106,6 +107,7 @@ export class AppServerProtocolClient {
 			initializeTimeoutMs: positiveInteger(options.initializeTimeoutMs, DEFAULT_CONNECT_TIMEOUT, 'initializeTimeoutMs'),
 			requestTimeoutMs: positiveInteger(options.requestTimeoutMs, DEFAULT_REQUEST_TIMEOUT, 'requestTimeoutMs'),
 			capabilities: { ...options.capabilities, notifications: true },
+			transportHandshake: options.transportHandshake ?? false,
 		};
 		// Ownership transfers after options have been validated; reconnect resets
 		// the Worker, while disposing the client releases the decoder itself.
@@ -181,10 +183,21 @@ export class AppServerProtocolClient {
 		this.setState('initializing');
 		try {
 			if (!this.isCurrentConnection(generation, 'initializing')) { throw canceled(); }
-			const initialized = await this.requestRaw(APP_SERVER_METHODS.initialize, {
+			// Pipeline both messages. A ready directory never waits an extra round trip,
+			// and a cold one can confirm compatibility before reporting its capabilities.
+			const handshake = this.options.transportHandshake ? this.requestRaw(APP_SERVER_METHODS['transport/hello'], null, this.options.initializeTimeoutMs).then(hello => {
+				if (!this.isCurrentConnection(generation, 'initializing')) throw canceled();
+				checkAppServerTransportCompatibility(hello);
+				performance.mark('ash.appServer.protocol-negotiated');
+			}, error => {
+				// A peer that only supports full initialize still gets checked by its response.
+				if (!(error instanceof AppServerRemoteError) || error.code !== -32601 && error.code !== -32001) throw error;
+			}) : undefined;
+			const initializing = this.requestRaw(APP_SERVER_METHODS.initialize, {
 				clientInfo: { name: this.options.clientName, version: this.options.clientVersion },
 				capabilities: this.options.capabilities,
 			}, this.options.initializeTimeoutMs);
+			const initialized = handshake ? (await Promise.all([initializing, handshake]))[0] : await initializing;
 			if (!this.isCurrentConnection(generation, 'initializing')) { throw canceled(); }
 			const initialization = validateInitializeResult(initialized);
 			this._slashCommands = initialization.slashCommands;

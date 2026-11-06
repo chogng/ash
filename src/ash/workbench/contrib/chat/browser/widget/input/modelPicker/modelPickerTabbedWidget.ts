@@ -233,8 +233,7 @@ export class TabbedModelPicker extends Disposable {
 				let fast: Switch | undefined;
 				const refreshConfiguration = (selecting: boolean): void => {
 					if (!configureInMenu) { return; }
-					const selected = this.delegate.getSelectedModel();
-					const entry = this.delegate.isAutomaticModel() ? undefined : selected && this.findModel(selected);
+					const entry = this.delegate.isAutomaticModel() ? undefined : this.delegate.getSelectedModelEntry();
 					const efforts = entry?.supportedReasoningEfforts?.length
 						? modelPickerEffortOptions(entry, this.delegate.getSelectedReasoningEffort()) : [];
 					const acceleration = useWorkbenchModelManagement ? entry?.accelerationOptions?.find(option => option.name === 'Fast') : undefined;
@@ -354,6 +353,8 @@ export class TabbedModelPicker extends Disposable {
 	}
 
 	private findModel(model: ModelRef): ModelCatalogEntry | undefined {
+		const selected = this.delegate.getSelectedModelEntry();
+		if (selected?.model.provider === model.provider && selected.model.model === model.model) { return selected; }
 		return this.delegate.getModels().find(entry => entry.model.provider === model.provider && entry.model.model === model.model);
 	}
 

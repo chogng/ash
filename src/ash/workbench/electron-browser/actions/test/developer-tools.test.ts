@@ -71,7 +71,6 @@ test('native host routes validate folder picking and developer tools', async () 
 		markAgentsWindowInvitationShown: () => { throw new Error('Unused invitation capability'); },
 		releaseAgentsWindowInvitation: () => { throw new Error('Unused invitation capability'); },
 		getTitleBarStyle: () => 'custom',
-		getWindowClientSize: () => undefined,
 		isAdmin: async () => false,
 		performDialogOperation: () => undefined,
 		pickFolder: async () => {

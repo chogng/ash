@@ -206,7 +206,7 @@ pub(crate) fn queued_message(command: crate::app::AppCommand) -> ::queue::Queued
             command_id,
             session_id: ash_protocol::SessionId::new("session").unwrap(),
             thread_id: ash_protocol::ThreadId::new("thread").unwrap(),
-            directory: "/work".into(),
+            directory: Some("/work".into()),
             input,
             tool_mode: Default::default(),
             approval_mode: Default::default(),

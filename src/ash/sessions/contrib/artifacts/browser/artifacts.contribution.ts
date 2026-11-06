@@ -36,7 +36,7 @@ registerEditorPane({ id: 'sessions.editor.creator', name: 'Artifacts', canOpen: 
 function openArtifacts(accessor: ServicesAccessor, workspace?: CreatorMode | 'home', source?: 'restore'): Promise<void> {
 	const editor = accessor.get(IEditorPart);
 	const entry: ISessionsEntry = {
-		id: 'creator.home', activityContext: 'sessions.activity.creatorSelected', content: 'editor',
+		id: 'creator.home', workspaceMode: 'current', activityContext: 'sessions.activity.creatorSelected', content: 'editor',
 		showEditorTabs: false, restoreCommand: 'sessions.restore.creator', focus: 'editor',
 		editorInput: {
 			resource: URI.from({ scheme: 'ash-creator', path: '/page' }), label: localize('sessions.creator.title', 'Artifacts'),
@@ -76,7 +76,7 @@ function createDocumentOpener(accessor: ServicesAccessor): (resource: URI, sourc
 		};
 		storage.store('sessions.creator.activeDocument', resource.toString(), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		return layout.openEntry({
-			id: 'creator.docs', activityContext: 'sessions.activity.creatorSelected', content: 'editor',
+			id: 'creator.docs', workspaceMode: 'current', activityContext: 'sessions.activity.creatorSelected', content: 'editor',
 			editorInput: input, restoreCommand: 'sessions.restore.creatorDocs', focus: 'editor',
 		}, undefined, source ? { source } : undefined);
 	};

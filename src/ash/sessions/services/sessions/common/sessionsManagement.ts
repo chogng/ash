@@ -37,12 +37,12 @@ export interface ISessionsManagementService {
 	selectUntitledSession(untitledSessionId: string): void;
 	discardUntitledSession(untitledSessionId: string): void;
 	setUntitledSessionModel(untitledSessionId: string, model: ModelRef | undefined): void;
-	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined, defaults: NonNullable<IUntitledChatSession['modelDefaults']>): void;
+	setUntitledSessionDefaultModel(untitledSessionId: string, model: ModelRef | undefined, defaults: NonNullable<IUntitledChatSession['modelDefaults']>, unavailableModel?: ModelRef): void;
 	setUntitledSessionReasoningEffort(untitledSessionId: string, effort: NonNullable<IUntitledChatSession['reasoningEffortSelection']> | null): void;
 	setUntitledSessionAgent(untitledSessionId: string, agent: ChatAgent | undefined): void;
 	setUntitledSessionWorkspace(untitledSessionId: string, workspace: SessionWorkspaceSelection | undefined, options?: { readonly devContainer?: boolean; readonly branchName?: string; readonly providerId?: string; readonly environment?: SessionEnvironmentSelection; readonly clearEnvironment?: boolean; readonly projectId?: string; }): void;
 	/** Organization and first send share one creation; creating a durable identity does not submit a request. */
-	materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal): Promise<IActiveSessionThread>;
+	materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal, surface?: ISessionCreateOptions['surface']): Promise<IActiveSessionThread>;
 	cancelUntitledSessionPreparation(untitledSessionId: string): void;
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void;
 	ensureActiveThread(): Promise<IActiveSessionThread>;
@@ -55,7 +55,8 @@ export interface ISessionsManagementService {
 	renameSession(sessionId: SessionId, title: string): Promise<void>;
 	getChatMoveDestinations?(sessionId: SessionId, threadId: ThreadId): readonly ISession[];
 	canChangeDirectory?(sessionId: SessionId): boolean;
-	changeDirectory?(sessionId: SessionId, root: string): Promise<void>;
+	canClearDirectory?(sessionId: SessionId): boolean;
+	changeDirectory?(sessionId: SessionId, root: string | null, signal?: AbortSignal): Promise<void>;
 	moveChat?(sessionId: SessionId, threadId: ThreadId, destination: SessionId): Promise<void>;
 	setModel(model: ModelRef): Promise<void>;
 }

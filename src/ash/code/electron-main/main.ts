@@ -1,4 +1,4 @@
-import { AshApplication, type AppServerStartupMode } from './app.js';
+import type { AshApplication, AppServerStartupMode } from './app.js';
 import { isCancellationError } from '../../base/common/errors.js';
 import { app, protocol } from 'electron/main';
 import { Schemas } from '../../base/common/network.js';
@@ -64,6 +64,10 @@ export async function startElectronApplication(): Promise<void> {
 		}
 		const profileRoot = resolveHome();
 		configureApplicationDataPaths();
+		// Load the application graph while the installation lease and profile are prepared.
+		// Join it before taking the instance lock, which enables forwarded launches.
+		const applicationModule = import('./app.js');
+		void applicationModule.catch(() => undefined);
 		if (app.isPackaged) {
 			// Record the actual paths before profile migration creates them.
 			// The shared maintenance host protects profiles used by another product.
@@ -162,6 +166,7 @@ export async function startElectronApplication(): Promise<void> {
 				'Open the Agents window with --agents-window and an optional --folder or --workspace target. File, window, and wait options cannot be combined with it.',
 			).original,
 		);
+		const { AshApplication } = await applicationModule;
 		if (args.wait && !args.waitMarkerFilePath && !developmentLauncher) await addWaitMarker();
 
 		const launchArguments = parseMainProcessArgv({

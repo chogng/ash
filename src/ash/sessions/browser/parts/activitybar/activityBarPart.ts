@@ -25,14 +25,16 @@ import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { Menus } from '../../menus.js';
-import { ActivityBarItemContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
+import { ActivityBarItemContext } from '../../../common/contextkeys.js';
 
 interface ActivityBarDelegate {
 	showAccountMenu(anchor: HTMLElement, selectFirst: boolean): void;
 }
 
-const pinnedCodeActionsKey = 'sessions.activityBar.pinnedCodeActions';
-const primaryCodeActionIds = new Set(['sessions.newSession', 'sessionsView.manageAutomations', 'sessions.open.customize']);
+const pinnedActionsKey = 'sessions.activityBar.pinnedCodeActions';
+const actionOrderKey = 'sessions.activityBar.actionOrder';
+const previousCodeOrderKey = 'sessions.activityBar.codeActionOrder';
+const previousPageOrderKey = 'sessions.activityBar.pageOrder';
 
 /** Owns navigation actions and Accounts; SidebarPart supplies their visible hosts. */
 export class ActivityBar extends Disposable {
@@ -51,7 +53,8 @@ export class ActivityBar extends Disposable {
 	};
 	private readonly actions = new Map<string, ActivityAction>();
 	private order: string[];
-	private readonly pinnedCodeActions = observableValue<ReadonlySet<string>>(this, new Set());
+	private readonly pinnedActions = observableValue<ReadonlySet<string>>(this, new Set());
+	private moreActionIds = new Set<string>();
 	private orderedActions: ActivityAction[] = [];
 	private draggedActionId: string | undefined;
 	private labeled = true;
@@ -74,15 +77,14 @@ export class ActivityBar extends Disposable {
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this.order = this.readOrder();
-		this.pinnedCodeActions.set(this.readPinnedCodeActions());
+		this.pinnedActions.set(this.readPinnedActions());
 		const menu = this._register(menus.createMenu(Menus.ActivityBar, contextKeys));
-		const codeMenu = this._register(menus.createMenu(Menus.CodeActivityBar, contextKeys));
 		this.navigation = this._register(new ActionBar(this.domNode, {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: localize('sessions.activity.navigation', 'Navigation'),
 			orientation: 'vertical',
 			actionViewItemProvider: action => action === this.moreAction
-				? new MoreActionViewItem(action, contextMenuService, () => this.moreActions, this.pinnedCodeActions, (id, pinned) => this.setCodeActionPinned(id, pinned))
+				? new MoreActionViewItem(action, contextMenuService, () => this.moreActions, this.pinnedActions, (id, pinned) => this.setActionPinned(id, pinned))
 				: new CompositeActionViewItem(action, {
 					presentation: 'navigation',
 					navigationClassName: 'ash-sessions-activity-item',
@@ -107,10 +109,10 @@ export class ActivityBar extends Disposable {
 		}));
 		this.navigation.domNode.classList.add('ash-sessions-navigation');
 		const updateActions = (): void => {
-			const code = this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code';
-			this.domNode.dataset.workspaceMode = code ? 'code' : 'chat';
-			this.order = this.readOrder();
-			const entries = (code ? codeMenu : menu).getActions().flatMap(([, actions]) => actions);
+			const groups = menu.getActions();
+			const more = groups.find(([group]) => group === 'more')?.[1] ?? [];
+			this.moreActionIds = new Set(more.map(action => action.id));
+			const entries = [...groups.flatMap(([group, actions]) => group === 'more' ? [] : actions), ...more];
 			for (const id of this.actions.keys()) {
 				if (!entries.some(action => action.id === id)) { this.actions.delete(id); }
 			}
@@ -127,17 +129,13 @@ export class ActivityBar extends Disposable {
 			this.renderNavigation();
 		};
 		this._register(menu.onDidChange(updateActions));
-		this._register(codeMenu.onDidChange(updateActions));
-		const workspaceModeKeys = new Set([SessionsWorkspaceModeContext.key]);
-		this._register(contextKeys.onDidChangeContext(event => {
-			if (event.affectsSome(workspaceModeKeys)) updateActions();
-		}));
 		this._register(storage.onDidChangeValue(event => {
 			if (event.scope !== StorageScope.PROFILE) return;
-			if (event.key === pinnedCodeActionsKey) {
-				this.pinnedCodeActions.set(this.readPinnedCodeActions());
+			if (event.key === pinnedActionsKey) {
+				this.pinnedActions.set(this.readPinnedActions());
 				this.renderNavigation({ retainOpenDropdowns: true });
-			} else if (event.external && event.key === this.orderStorageKey) {
+			} else if (event.external && event.key === actionOrderKey) {
+				this.order = this.readOrder();
 				updateActions();
 			}
 		}));
@@ -238,7 +236,7 @@ export class ActivityBar extends Disposable {
 
 	private getUnpinActions(target: Element): readonly IAction[] {
 		const id = target.closest<HTMLElement>('[data-action-id]')?.dataset.actionId;
-		if (this.domNode.dataset.workspaceMode !== 'code' || !id || !this.pinnedCodeActions.get().has(id)) return [];
+		if (!id || !this.moreActionIds.has(id) || !this.pinnedActions.get().has(id)) return [];
 		return [{
 			id: 'sessions.activity.unpin',
 			label: localize('sessions.activity.unpin', 'Unpin from Sidebar'),
@@ -246,25 +244,25 @@ export class ActivityBar extends Disposable {
 			tooltip: '',
 			enabled: true,
 			run: () => {
-				this.setCodeActionPinned(id, false);
+				this.setActionPinned(id, false);
 				this.navigation.setTabStop(this.labeled ? this.moreAction.id : id);
 				this.navigation.focus();
 			},
 		}];
 	}
 
-	private readPinnedCodeActions(): Set<string> {
-		const saved = parse(this.storage.get(pinnedCodeActionsKey, StorageScope.PROFILE, '[]'));
-		return new Set(Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string' && !primaryCodeActionIds.has(id)) : []);
+	private readPinnedActions(): Set<string> {
+		const saved = parse(this.storage.get(pinnedActionsKey, StorageScope.PROFILE, '[]'));
+		return new Set(Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string') : []);
 	}
 
-	private setCodeActionPinned(id: string, pinned: boolean): void {
+	private setActionPinned(id: string, pinned: boolean): void {
 		const action = this.actions.get(id);
-		if (!action || primaryCodeActionIds.has(id) || this.domNode.dataset.workspaceMode !== 'code') return;
-		const pins = this.readPinnedCodeActions();
+		if (!action || !this.moreActionIds.has(id)) return;
+		const pins = this.readPinnedActions();
 		if (pinned) pins.add(id);
 		else pins.delete(id);
-		this.storage.store(pinnedCodeActionsKey, JSON.stringify([...pins]), StorageScope.PROFILE, StorageTarget.USER);
+		this.storage.store(pinnedActionsKey, JSON.stringify([...pins]), StorageScope.PROFILE, StorageTarget.USER);
 		status(pinned
 			? localize('sessions.activity.pinned', '{0} pinned to the sidebar.', action.label)
 			: localize('sessions.activity.unpinned', '{0} unpinned from the sidebar.', action.label));
@@ -287,8 +285,8 @@ export class ActivityBar extends Disposable {
 		const index = targetId === undefined ? actions.length : actions.findIndex(action => action.id === targetId) + (position === 'after' ? 1 : 0);
 		actions.splice(index, 0, this.actions.get(id)!);
 		this.orderedActions = actions;
-		this.order = actions.map(action => action.id);
-		this.storage.store(this.orderStorageKey, JSON.stringify(this.order), StorageScope.PROFILE, StorageTarget.USER);
+		this.order = [...actions.map(action => action.id), ...this.order.filter(action => !this.actions.has(action))];
+		this.storage.store(actionOrderKey, JSON.stringify(this.order), StorageScope.PROFILE, StorageTarget.USER);
 		this.renderNavigation();
 		this.navigation.setTabStop(id);
 		this.navigation.focus();
@@ -296,61 +294,49 @@ export class ActivityBar extends Disposable {
 		status(localize('sessions.activity.moved', '{0}, position {1} of {2}', this.actions.get(id)!.label, visible.findIndex(action => action.id === id) + 1, visible.length));
 	}
 
-	private isPrimaryCodeAction(id: string): boolean {
-		return primaryCodeActionIds.has(id) || this.pinnedCodeActions.get().has(id);
-	}
-
 	private get primaryActions(): readonly ActivityAction[] {
-		return this.labeled && this.domNode.dataset.workspaceMode === 'code'
-			? this.orderedActions.filter(action => this.isPrimaryCodeAction(action.id))
+		return this.labeled
+			? this.orderedActions.filter(action => !this.moreActionIds.has(action.id) || this.pinnedActions.get().has(action.id))
 			: this.orderedActions;
 	}
 
 	private get moreActions(): readonly ActivityAction[] {
-		return this.orderedActions.filter(action => !primaryCodeActionIds.has(action.id));
+		return this.orderedActions.filter(action => this.moreActionIds.has(action.id));
 	}
 
 	private renderNavigation(options?: { readonly retainOpenDropdowns?: boolean; }): void {
 		const actions = this.primaryActions;
-		const showMore = this.labeled && this.domNode.dataset.workspaceMode === 'code' && this.moreActions.length > 0;
+		const showMore = this.labeled && this.moreActionIds.size > 0;
 		this.navigation.setActions(showMore ? [...actions, this.moreAction] : actions, options);
 	}
 
-	private get orderStorageKey(): string {
-		return this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code' ? 'sessions.activityBar.codeActionOrder' : 'sessions.activityBar.actionOrder';
-	}
-
 	private readOrder(): string[] {
-		const saved = this.storage.get(this.orderStorageKey, StorageScope.PROFILE);
-		const legacy = saved === undefined && this.orderStorageKey === 'sessions.activityBar.actionOrder' ? this.storage.get('sessions.activityBar.pageOrder', StorageScope.PROFILE) : undefined;
-		if (saved === undefined && legacy === undefined) { return []; }
-		const order: unknown = JSON.parse((saved ?? legacy)!);
-		if (!Array.isArray(order) || !order.every(id => typeof id === 'string') || new Set(order).size !== order.length) {
-			throw new TypeError(localize('sessions.activity.invalidOrder', 'Saved navigation order is invalid.'));
-		}
-		const includeSearch = (actions: string[]): string[] => {
-			const index = actions.indexOf('sessions.newSession');
-			// Introduce Search beside New once; later user reordering keeps its saved position.
-			if (this.orderStorageKey === 'sessions.activityBar.actionOrder' && index >= 0 && !actions.includes('sessions.search')) { actions.splice(index + 1, 0, 'sessions.search'); }
-			return actions;
+		const read = (saved: string | undefined): string[] => {
+			if (saved === undefined) return [];
+			const order: unknown = parse(saved);
+			if (!Array.isArray(order) || !order.every(id => typeof id === 'string') || new Set(order).size !== order.length) {
+				throw new TypeError(localize('sessions.activity.invalidOrder', 'Saved navigation order is invalid.'));
+			}
+			return order;
 		};
-		if (legacy !== undefined) {
-			const migrated = includeSearch(order.map(id => {
-				if (id === 'chat') { return 'sessions.newSession'; }
-				if (id === 'colab') { return 'sessions.open.teams'; }
-				if (id === 'design') { return 'sessions.open.creator'; }
-				return `sessions.open.${id}`;
-			}));
-			this.storage.store(this.orderStorageKey, JSON.stringify(migrated), StorageScope.PROFILE, StorageTarget.USER);
-			this.storage.remove('sessions.activityBar.pageOrder', StorageScope.PROFILE);
-			return migrated;
-		}
-		const moved = new Set(['sessions.open.code', 'sessions.open.collaboration', 'sessions.open.teams', 'sessions.open.symphony', 'sessionsView.manageAutomations']);
-		const migrated = includeSearch([...new Set(order.map(id => {
-			if (id === 'sessions.open.chat') { return 'sessions.newSession'; }
+		const saved = this.storage.get(actionOrderKey, StorageScope.PROFILE);
+		const oldPages = this.storage.get(previousPageOrderKey, StorageScope.PROFILE);
+		const oldCode = this.storage.get(previousCodeOrderKey, StorageScope.PROFILE);
+		if (saved === undefined && oldPages === undefined && oldCode === undefined) return [];
+		const chatOrder = saved === undefined
+			? read(oldPages).map(id => id === 'colab' ? 'sessions.open.collaboration' : `sessions.open.${id}`)
+			: read(saved);
+		// Keep the established Chat order and append entries that were saved only in Code.
+		const migrated = [...new Set([...chatOrder, ...read(oldCode)].map(id => {
+			if (id === 'sessions.open.chat') return 'sessions.newSession';
 			return id === 'sessions.open.design' ? 'sessions.open.creator' : id;
-		}).filter(id => this.orderStorageKey !== 'sessions.activityBar.actionOrder' || !moved.has(id)))]);
-		if (migrated.length !== order.length || migrated.some((id, index) => id !== order[index])) { this.storage.store(this.orderStorageKey, JSON.stringify(migrated), StorageScope.PROFILE, StorageTarget.USER); }
+		}).filter(id => id !== 'sessions.open.code' && id !== 'sessions.open.teams'))];
+		const newIndex = migrated.indexOf('sessions.newSession');
+		if (newIndex >= 0 && !migrated.includes('sessions.search')) migrated.splice(newIndex + 1, 0, 'sessions.search');
+		const serialized = JSON.stringify(migrated);
+		if (serialized !== saved) this.storage.store(actionOrderKey, serialized, StorageScope.PROFILE, StorageTarget.USER);
+		if (oldPages !== undefined) this.storage.remove(previousPageOrderKey, StorageScope.PROFILE);
+		if (oldCode !== undefined) this.storage.remove(previousCodeOrderKey, StorageScope.PROFILE);
 		return migrated;
 	}
 

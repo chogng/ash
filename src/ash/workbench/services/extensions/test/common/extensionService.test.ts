@@ -752,6 +752,49 @@ function emptyCatalog(generation: number): ExtensionCatalog {
 	return Object.freeze({ generation, extensions: Object.freeze([]), diagnostics: Object.freeze([]) });
 }
 
+test('publishes editor declarations while optional package assets are blocked', async () => {
+	const startAssets = deferred<void>();
+	const readingAsset = deferred<void>();
+	const finishAsset = deferred<void>();
+	const key = 'startupDeclaration.trim';
+	const entry = descriptorWithManifest({
+		name: 'demo', publisher: 'ash', version: '1.0.0', contributes: {
+			configuration: { title: 'Startup declarations', properties: { [key]: { type: 'boolean', default: true } } },
+			languages: [{ id: 'startup-test', extensions: ['.startup-test'], configuration: 'language.json' }],
+		}
+	});
+	using configuration = new WorkbenchConfigurationService();
+	using languageService = new LanguageService();
+	using languages = new LanguageFeaturesService();
+	const reads: string[] = [];
+	using service = new AppServerExtensionService({
+		api: {
+			list: async () => ({ generation: 1, extensions: [entry], diagnostics: [] }),
+			resources: new ExtensionResourceLoaderService(async ({ path }) => {
+				reads.push(path);
+				readingAsset.resolve();
+				await finishAsset.promise;
+				return new TextEncoder().encode('{"comments":{"lineComment":"#"}}');
+			}),
+		},
+		languageService, languageConfigurationService: languages.languageConfigurationService, loadStartupAssetsAfter: startAssets.promise,
+	}, createEmptyTestLanguagePacks(), adapters);
+	const loading = service.start();
+	await service.whenEditorContributionsReady();
+	assert.equal(service.currentCatalog.generation, 1);
+	assert.equal(languageService.guessLanguageIdByFilepathOrFirstLine(URI.file('/notes/test.startup-test')), 'startup-test');
+	assert.equal(configuration.getValue(key), true);
+	assert.deepEqual(reads, []);
+	startAssets.resolve();
+	await readingAsset.promise;
+	assert.equal(configuration.getValue(key), true);
+	assert.equal(languages.languageConfigurationService.getLanguageConfiguration('startup-test').comments, null);
+	finishAsset.resolve();
+	await loading;
+	assert.deepEqual(reads, ['language.json']);
+	assert.equal(languages.languageConfigurationService.getLanguageConfiguration('startup-test').comments?.lineCommentToken, '#');
+});
+
 test('prepares extension resources with bounded concurrency and commits in catalog order', async () => {
 	const entries = Array.from({ length: 24 }, (_, index) => {
 		const name = `parallel-${index}`;

@@ -11,7 +11,6 @@ import { IRemoteAgentHostService, type RemoteAgentHostConnection } from '../../.
 
 /** Selects a real WSL distribution; connection and provider lifetimes remain with their existing owners. */
 export class WSLAgentHostContribution extends Disposable {
-	public static readonly ID = 'sessions.contrib.wslAgentHostContribution';
 	private readonly pending = this._register(new DisposableStore());
 	constructor(
 		@IRemoteAgentHostService private readonly remoteHosts: IRemoteAgentHostService,

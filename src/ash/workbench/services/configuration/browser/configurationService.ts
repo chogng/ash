@@ -14,7 +14,7 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, typ
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { ILogService, NullLoggerService } from '../../../../platform/log/common/log.js';
 import { WorkbenchState, workbenchStateFromWorkspace, workspaceFromIdentifier, type IAnyWorkspaceIdentifier, type IWorkspace, type IWorkspaceChangeEvent, type IWorkspaceFoldersChangeEvent, type IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
-import { IFileService, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
+import { IFileService, FileSystemProviderErrorCode, toFileSystemProviderErrorCode, type IFileContent } from '../../../../platform/files/common/files.js';
 import { IUserDataProfileService } from '../../userDataProfile/common/userDataProfile.js';
 import { dirname } from '../../../../base/common/resources.js';
 import { NullPolicyService, type IPolicyService } from '../../../../platform/policy/common/policy.js';
@@ -87,7 +87,9 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		this.workspace = resolveWorkspace(options.workspace ?? { id: 'empty-window' });
 		this.workspaceFolders = indexWorkspaceFolders(this.workspace);
 		this.settingsResource = profile.currentProfile.settingsResource;
-		this.userSettings = this._register(new UserSettings(this.settingsResource, {}, extUriBiasedIgnorePathCase, userFiles, log));
+		this.userSettings = this._register(new UserSettings(
+			this.settingsResource, {}, extUriBiasedIgnorePathCase, userFiles, log, file => this.migrateUserSettings(file),
+		));
 		this.registry = options.registry ?? Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 		this.defaults = options.defaults ?? new Map();
 		this.readOnlyKeys = options.readOnlyKeys ?? new Set();
@@ -103,7 +105,13 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 			this.changeEmitter.fire(configurationChangeEvent({ keys: [...event.properties], overrides: [] }, previous, this.state(), ConfigurationTarget.DEFAULT));
 		}));
 		this._register(this.userSettings.onDidChange(() => {
-			void this.reloadUserConfiguration().catch(error => { if (!this.stopped) this.onError(error); });
+			try {
+				this.applyConfiguration(this.userSettings.reparse());
+			} catch (error) {
+				if (!this.stopped) {
+					this.onError(error);
+				}
+			}
 		}));
 	}
 
@@ -342,21 +350,22 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	}
 
 	private async reloadUserConfiguration(): Promise<void> {
-		if (this.stopped) return;
-		try {
-			const file = await this.userFiles.readFile(this.settingsResource);
-			const output = await migrateSettings(file.content, this.onError);
-			if (this.stopped) return;
-			if (output !== file.content) {
-				if (this.workingCopies?.get(this.settingsResource).some(copy => copy.isDirty)) throw new Error(localize('configuration.dirtyResource', 'Save or revert unsaved changes in {0} before updating settings.', this.settingsResource.toString()));
-				this.parseResourceSource(output);
-				await this.userFiles.writeFile({ resource: this.settingsResource, content: output, expectedRevision: file.revision }, { create: true, overwrite: true });
-			}
-		} catch (error) {
-			if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound) throw error;
+		if (!this.stopped) {
+			this.applyConfiguration(await this.userSettings.loadConfiguration());
 		}
-		if (this.stopped) return;
-		this.applyConfiguration(await this.userSettings.loadConfiguration());
+	}
+
+	private async migrateUserSettings(file: IFileContent): Promise<string> {
+		const output = await migrateSettings(file.content, this.onError);
+		if (this.stopped || output === file.content) {
+			return file.content;
+		}
+		if (this.workingCopies?.get(this.settingsResource).some(copy => copy.isDirty)) {
+			throw new Error(localize('configuration.dirtyResource', 'Save or revert unsaved changes in {0} before updating settings.', this.settingsResource.toString()));
+		}
+		this.parseResourceSource(output);
+		await this.userFiles.writeFile({ resource: this.settingsResource, content: output, expectedRevision: file.revision }, { create: true, overwrite: true });
+		return output;
 	}
 
 	private async waitForWorkspace(): Promise<void> {
@@ -524,10 +533,13 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		const models = [previous.base, previous.workspace, previous.policy, ...previous.folders.map(folder => folder.model), current.base, current.workspace, current.policy, ...current.folders.map(folder => folder.model)];
 		const resources = [undefined, ...previous.folders.map(folder => folder.root), ...current.folders.map(folder => folder.root)];
 		const identifiers = [...new Set(models.flatMap(model => model.overrides.flatMap(block => block.identifiers)))];
+		// Each scope uses the same merged models for every key in this comparison.
+		const before = configurationModelsByScope(previous);
+		const after = configurationModelsByScope(current);
 		// Policy changes also affect editability when every resource resolves to the same value.
 		const changed = (key: string, identifier?: string): boolean =>
 			!equals(previous.policy.getValue(key), current.policy.getValue(key)) ||
-			resources.some(resource => !equals(resolveConfiguration(previous, key, { resource, overrideIdentifier: identifier }), resolveConfiguration(current, key, { resource, overrideIdentifier: identifier })));
+			resources.some(resource => !equals(before(resource, identifier).getValue(key), after(resource, identifier).getValue(key)));
 		const keys = [...new Set(models.flatMap(model => model.keys))].filter(key => changed(key) || identifiers.some(identifier => changed(key, identifier)));
 		const overrides: [string, string[]][] = identifiers.map(identifier => [identifier, keys.filter(key => changed(key, identifier))]);
 		if (keys.length) this.changeEmitter.fire(configurationChangeEvent({ keys, overrides: overrides.filter(([, keys]) => keys.length) }, previous, current, target));
@@ -637,11 +649,36 @@ function matchingFolder(state: ConfigurationState, resource: URI | null | undefi
 }
 
 function resolveConfiguration(state: ConfigurationState, section: string, overrides?: IConfigurationOverrides): unknown {
+	const model = configurationForResource(state, overrides?.resource);
+	return applyConfigurationOverride(model, state.policy, overrides?.overrideIdentifier).getValue(section);
+}
+
+function configurationForResource(state: ConfigurationState, resource: URI | null | undefined): ConfigurationModel {
 	let model = state.base.merge(state.workspace);
-	const folder = matchingFolder(state, overrides?.resource);
+	const folder = matchingFolder(state, resource);
 	if (folder) model = model.merge(folder.model);
-	if (overrides?.overrideIdentifier) model = model.override(overrides.overrideIdentifier);
-	return model.merge(state.policy).getValue(section);
+	return model;
+}
+
+function applyConfigurationOverride(model: ConfigurationModel, policy: ConfigurationModel, identifier?: string | null): ConfigurationModel {
+	return (identifier ? model.override(identifier) : model).merge(policy);
+}
+
+function configurationModelsByScope(state: ConfigurationState): (resource: URI | undefined, identifier?: string) => ConfigurationModel {
+	const resources = new Map<URI | undefined, { base: ConfigurationModel; overrides: Map<string | undefined, ConfigurationModel>; }>();
+	return (resource, identifier) => {
+		let scope = resources.get(resource);
+		if (!scope) {
+			scope = { base: configurationForResource(state, resource), overrides: new Map() };
+			resources.set(resource, scope);
+		}
+		let model = scope.overrides.get(identifier);
+		if (!model) {
+			model = applyConfigurationOverride(scope.base, state.policy, identifier);
+			scope.overrides.set(identifier, model);
+		}
+		return model;
+	};
 }
 
 function supportsTarget(setting: IRegisteredConfiguration, target: ConfigurationTarget): boolean {

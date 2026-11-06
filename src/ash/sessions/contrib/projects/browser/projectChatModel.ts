@@ -40,8 +40,9 @@ export class ProjectChatModel extends CoworkWidgetModel {
 		// Finish the input's successful-send bookkeeping before navigation hides its host.
 		this.reveal = this._register(
 			new RunOnceScheduler(() => {
-				view.openSession(this.sessionId!, this.threadId!);
-				void commands.executeCommand('sessions.open.chat').catch((error) => notifications.error(error));
+				void view.openSession(this.sessionId!, this.threadId!)
+					.then(() => commands.executeCommand('sessions.open.chat'))
+					.catch(error => notifications.error(error));
 			}, 0),
 		);
 	}

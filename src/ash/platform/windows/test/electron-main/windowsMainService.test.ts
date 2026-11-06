@@ -16,6 +16,7 @@ import { createEmptyWorkspaceIdentifier, getSingleFolderWorkspaceIdentifier } fr
 import { WindowsMainService, windowOperationIpcRoute, workspaceRecoveryIpcRoute, type IWorkbenchWindow } from '../../electron-main/windowsMainService.js';
 import type { IOpenConfiguration } from '../../electron-main/windows.js';
 import { WINDOW_OPEN_FILES_CHANNEL, validateWorkbenchWindowInfo, validateWindowFilesRequest, validateWindowFilesResponse, validateAgentsWindowHandoffComplete } from '../../../window/common/window.js';
+import { WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, validateWindowClientSizeEvent } from '../../../window/common/window.js';
 import { WindowsStateHandler } from '../../electron-main/windowsStateHandler.js';
 import { Event } from '../../../../base/common/event.js';
 import { DialogMainService, IDialogMainService } from '../../../dialogs/electron-main/dialogMainService.js';
@@ -105,8 +106,10 @@ type RendererListener = (() => void)
 	| ((event: unknown, code: number, description: string, url: string, mainFrame: boolean) => void);
 
 class TestWindow implements IWorkbenchWindow<TestWindow> {
-	public hookWindowMessage(_message: number, _callback: (wParam: Buffer, lParam: Buffer) => void): void { }
-	public unhookWindowMessage(_message: number): void { }
+	public readonly messageHooks = new Map<number, (wParam: Buffer, lParam: Buffer) => void>();
+	public getNativeWindowHandle(): Buffer { return Buffer.alloc(8); }
+	public hookWindowMessage(message: number, callback: (wParam: Buffer, lParam: Buffer) => void): void { this.messageHooks.set(message, callback); }
+	public unhookWindowMessage(message: number): void { this.messageHooks.delete(message); }
 	public readonly calls: string[] = [];
 	public readonly messages: { readonly channel: string; readonly level: unknown; }[] = [];
 	private readonly zoomListeners = new Set<() => void>();
@@ -1027,6 +1030,34 @@ test('auxiliary state events report host bounds fullscreen and pin state only to
 	assert.throws(() => service.perform(other, { kind: 'getAuxiliaryState', windowName: name }), /belongs to another/);
 	assert.throws(() => validateAuxiliaryWindowStateEvent({ windowName: name, state: { ...states[1]!.state, width: NaN } }), /Invalid auxiliary window state/);
 	assert.throws(() => validateAuxiliaryWindowStateEvent({ ...states[1], windowName: 'foreign' }), /Invalid auxiliary window state event/);
+});
+
+test('auxiliary client pixels are readable and published only by their owner', async function () {
+	if (process.platform !== 'win32') this.skip();
+	const parent = new TestWindow(501, 'Workbench');
+	const child = new TestWindow(502, 'Editor');
+	const other = new TestWindow(503, 'Other');
+	const windowName = 'ash-auxiliary-12345678-1234-1234-1234-123456789abc';
+	child.webContents.mainFrame.name = windowName;
+	using service = createWindowsService(() => [parent, other], async () => undefined);
+	using registration = windowServices.get(IAuxiliaryWindowsMainService).registerWindow(child.webContents as unknown as WebContents, parent.id);
+
+	const bounds = Buffer.alloc(4);
+	bounds.writeUInt16LE(1501, 0);
+	bounds.writeUInt16LE(999, 2);
+	child.messageHooks.get(0x0005)!(Buffer.alloc(4), bounds);
+	const route = windowOperationIpcRoute(service, parent);
+	const request = route.validate({ kind: 'getClientSize', windowName });
+	const size = { width: 1501, height: 999 };
+	assert.deepEqual(route.invoke(request), size);
+	assert.throws(() => route.validate({ kind: 'getClientSize', windowId: child.id }), /Invalid window operation/);
+	assert.throws(() => windowOperationIpcRoute(service, other).invoke(request), /belongs to another/);
+	await new Promise<void>(resolve => setImmediate(resolve));
+	const events = parent.messages.filter(message => message.channel === WINDOW_CLIENT_SIZE_CHANGED_CHANNEL);
+	assert.deepEqual(events.map(message => validateWindowClientSizeEvent(message.level)), [{ windowName, size }]);
+	assert.deepEqual(other.messages, []);
+	registration.dispose();
+	assert.equal(child.messageHooks.size, 0);
 });
 
 

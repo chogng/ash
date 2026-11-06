@@ -25,7 +25,7 @@ registerAction2(class OpenCustomize extends Action2 {
 		super({
 			id: 'sessions.open.customize', title: localize2('customize.title', 'Customize'), icon: Lxicon.briefcase, f1: true,
 			toggled: ContextKeyExpr.has('sessions.activity.customizeSelected'),
-			menu: [Menus.ActivityBar, Menus.CodeActivityBar].map(id => ({ id, group: 'navigation', order: 50 })),
+			menu: { id: Menus.ActivityBar, group: 'navigation', order: 50 },
 		});
 	}
 	public override async run(accessor: ServicesAccessor, source?: unknown): Promise<void> {

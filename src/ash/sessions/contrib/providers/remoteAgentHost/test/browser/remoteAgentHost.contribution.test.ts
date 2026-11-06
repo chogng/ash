@@ -15,7 +15,7 @@ import { projectSession } from '../../../../../services/sessions/common/sessionI
 import { sessionWorkspaceUri } from '../../../../../common/sessionWorkspace.js';
 import { WSLAgentHostContribution } from '../../browser/wslAgentHost.contribution.js';
 import { TunnelAgentHostContribution } from '../../browser/tunnelAgentHost.contribution.js';
-import { RemoteAgentHostContribution } from '../../browser/remoteAgentHost.contribution.js';
+import { RemoteAgentHostContribution } from '../../browser/remoteAgentHostContribution.js';
 import { ISessionsManagementService } from '../../../../../services/sessions/common/sessionsManagement.js';
 import type { ISession } from '../../../../../services/sessions/common/session.js';
 import { ICommandService } from '../../../../../../platform/commands/common/commands.js';

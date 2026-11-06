@@ -659,6 +659,7 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         surface: None,
         voice_transcripts: Vec::new(),
         execution_target: None,
+        directory_configured: false,
         advisor: Default::default(),
         user_time_contexts: Default::default(),
         history_sources: Default::default(),

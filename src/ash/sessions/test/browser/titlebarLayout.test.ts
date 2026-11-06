@@ -6,6 +6,30 @@ import type { } from '../../../../../test/fixtures/browser/sessions.page.js';
 suite('Sessions native titlebar layout', () => {
 	const browser = useBrowserTests();
 
+	test('Code tools move into More Actions when narrow and return when widened', async () => {
+		const { page } = browser;
+		await page.goto('/sessions.html');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.getByRole('button', { name: 'Code', exact: true }).click();
+		const tools = page.getByRole('toolbar', { name: 'Code layout', exact: true });
+		const files = tools.getByRole('button', { name: 'Toggle files', exact: true });
+		const more = tools.getByRole('button', { name: 'More Actions', exact: true });
+		await expect(files).toBeInViewport({ ratio: 1 });
+		await files.focus();
+		const viewport = page.viewportSize()!;
+		await page.setViewportSize({ width: 320, height: viewport.height });
+		await expect(files).toHaveCount(0);
+		await expect(more).toBeInViewport({ ratio: 1 });
+		await expect(more).toBeFocused();
+		await more.press('Enter');
+		await expect(page.getByRole('menuitemcheckbox', { name: 'Toggle files', exact: true })).toBeVisible();
+		await expect(page.getByRole('menuitem', { name: 'Side Chat', exact: true })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(more).toBeFocused();
+		await page.setViewportSize(viewport);
+		await expect(files).toBeInViewport({ ratio: 1 });
+	});
+
 	test('mouse side buttons traverse the Sessions navigation history', async () => {
 		const { page } = browser;
 		await page.goto('/sessions.html?multiHost');

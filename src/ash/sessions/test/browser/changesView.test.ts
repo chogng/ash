@@ -92,7 +92,7 @@ for (const locale of ['en', 'zh-CN']) test(`Changes preserves file selection and
 			onDidChange: changed.event, get activeSelection() { return selection; }, get visibleSelections() { return [selection]; },
 			canNavigateBack: false, canNavigateForward: false, recentSessions: [],
 			getSelection() { return { activeSelection: selection, visibleSelections: [selection] }; },
-			async initialize() { }, async openThread() { }, openSession() { }, openUntitledSession() { },
+			async initialize() { }, async openThread() { }, async openSession() { }, async openUntitledSession() { },
 			openNewSession(): never { throw new Error('This test selects durable conversations'); },
 			activateSelection() { }, closeVisibleSelection() { }, async reopenLastClosedItem() { }, async openPreviousSession() { }, async openNextSession() { },
 		};

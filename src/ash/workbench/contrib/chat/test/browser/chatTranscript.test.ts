@@ -735,6 +735,52 @@ suite('chatTranscript browser component', () => {
 	}
 
 
+	test('streaming Markdown coalesces short active-row appends and supersedes them on correction or removal', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const result = await page.evaluate(async () => {
+			const fixture = window.ashChatTranscriptIntegration;
+			const frame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+			const history = { id: 'history', type: 'agentMessage', text: 'Earlier reply.', transient: false } as const;
+			const reply = { id: 'stream', type: 'agentMessage', text: 'Read [this](https://example.com).\n\nFirst.', transient: true } as const;
+			const row = () => document.querySelector('[data-item-id="stream"]');
+			const render = (text: string, transient: boolean) => fixture.renderItems([history, { ...reply, text, transient }]);
+			const append = (previousText: string, text: string) => fixture.queueStreamingResponse({ previousText, item: { ...reply, text } });
+			render(reply.text, true);
+			const firstWasSynchronous = row()?.textContent?.includes('First.') === true;
+			const earlier = document.querySelector('[data-item-id="history"]');
+			const link = row()!.querySelector('a')!;
+			link.focus();
+			const selection = window.getSelection()!;
+			selection.setBaseAndExtent(link.firstChild!, 4, link.firstChild!, 0);
+			const next = reply.text + ' Next.';
+			const latest = next + ' Latest.';
+			const queued = [append(reply.text, next), append(next, latest), append(reply.text, latest + ' Stale.')];
+			const stayedQueued = !row()?.textContent?.includes('Next.');
+			await frame();
+			const displayed = row()?.textContent?.includes('Latest.') && !row()?.textContent?.includes('Stale.');
+			const retained = earlier === document.querySelector('[data-item-id="history"]') && link === row()?.querySelector('a');
+			const interaction = { focused: document.activeElement === link, selection: selection.toString() };
+			append(latest, latest + ' Discarded.');
+			render(reply.text + ' Corrected.', false);
+			await frame();
+			const corrected = row()?.textContent?.includes('Corrected.') && !row()?.textContent?.includes('Discarded.');
+			render(reply.text, true);
+			append(reply.text, next);
+			fixture.setTranscriptVisible(false);
+			await frame();
+			const stayedHidden = !row()?.textContent?.includes('Next.');
+			fixture.setTranscriptVisible(true);
+			await frame();
+			const shown = row()?.textContent?.includes('Next.') === true;
+			append(next, latest);
+			fixture.remove();
+			await frame();
+			return { firstWasSynchronous, queued, stayedQueued, displayed, retained, interaction, corrected, stayedHidden, shown, removed: row() === null };
+		});
+		expect(result).toEqual({ firstWasSynchronous: true, queued: [true, true, false], stayedQueued: true, displayed: true, retained: true, interaction: { focused: true, selection: 'this' }, corrected: true, stayedHidden: true, shown: true, removed: true });
+	});
+
 	test('streaming Markdown retains completed text, one code model, selection and focus through completion', async function () {
 		const { page } = browserTests;
 
@@ -853,6 +899,59 @@ suite('chatTranscript browser component', () => {
 		}
 	});
 
+	test('streaming Markdown checkpoints retain stable children and reparse changed structure', async function () {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		for (const [kind, rows] of [['hugeParagraph'], ['largeList', 32], ['largeList'], ['largeTable']] as const) {
+			const label = rows ? `${kind} at ${rows} items` : kind;
+			const result = await page.evaluate(async ({ kind, rows }) => {
+				const fixture = window.ashChatTranscriptIntegration;
+				const root = () => document.querySelector('[data-item-id="stream"] .ash-chat-markdown-part')!;
+				const body = fixture.markdownWorkload(kind).split('\n\n')[0];
+				const prefix = rows ? body.split('\n', rows).join('\n') : body;
+				const [selector, addition, structuralChange] = {
+					hugeParagraph: ['strong', ' New **tail**.', '\n---'],
+					largeList: ['li', '\n- New item.', '\n\n- Loose item.'],
+					largeTable: ['tbody tr', '\n| New | **cell** | Tail |', '\nA row | without | a leading pipe'],
+				}[kind];
+				fixture.remove();
+				await fixture.compareStreamingMarkdown(prefix, false);
+				const stable = root().querySelector(selector);
+				const appended = prefix + addition;
+				const afterAppend = await fixture.compareStreamingMarkdown(appended, false);
+				const retained = stable !== null && root().querySelector(selector) === stable;
+				const afterCompletion = await fixture.compareStreamingMarkdown(appended + '\n \t\nA new final paragraph.', true);
+				const retainedOnCompletion = stable !== null && root().querySelector(selector) === stable;
+				fixture.remove();
+				await fixture.compareStreamingMarkdown(appended, false);
+				const afterStructure = await fixture.compareStreamingMarkdown(appended + structuralChange, false);
+				const corrected = appended.replace(kind === 'hugeParagraph' ? 'Markdown' : kind === 'largeList' ? 'Item 0' : 'Row 0', 'Corrected');
+				const afterCorrection = await fixture.compareStreamingMarkdown(corrected, true);
+				return { retained, retainedOnCompletion, afterAppend, afterCompletion, afterStructure, afterCorrection };
+			}, { kind, rows });
+			expect(result.retained, label).toBe(true);
+			expect(result.retainedOnCompletion, `${label} completion`).toBe(true);
+			expect(result.afterAppend.actual, `${label} append`).toBe(result.afterAppend.expected);
+			expect(result.afterCompletion.actual, `${label} completion`).toBe(result.afterCompletion.expected);
+			expect(result.afterStructure.actual, `${label} structure change`).toBe(result.afterStructure.expected);
+			expect(result.afterCorrection.actual, `${label} correction`).toBe(result.afterCorrection.expected);
+			expect(result.afterCorrection.actual).toContain('Corrected');
+		}
+	});
+
+	test('streaming Markdown resolves a final reference definition in committed list items', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const result = await page.evaluate(async () => {
+			const fixture = window.ashChatTranscriptIntegration;
+			const source = fixture.markdownWorkload('largeList').split('\n\n')[0].replace('Item 0:', 'Item 0: [reference][target]');
+			await fixture.compareStreamingMarkdown(source, false);
+			return fixture.compareStreamingMarkdown(source + '\n\n[target]: https://example.org/target\n\nDone.', true);
+		});
+		expect(result.actual).toBe(result.expected);
+		expect(result.actual).toContain('href="https://example.org/target"');
+	});
+
 	test('streaming Markdown fences, lists and corrections match a complete render at every boundary', async function () {
 		const { page } = browserTests;
 
@@ -901,7 +1000,11 @@ suite('chatTranscript browser component', () => {
 			await strong.evaluate(element => window.getSelection()!.setBaseAndExtent(element.firstChild!, 6, element.firstChild!, 1));
 			await link.focus();
 			await page.evaluate(prefix => {
-				for (let index = 0; index < 8; index++) window.ashChatTranscriptIntegration.stream(prefix + `terminal ${index}`, index === 7);
+				let appended = prefix + 'initial';
+				for (let index = 0; index < 8; index++) {
+					appended += ` terminal ${index}`;
+					window.ashChatTranscriptIntegration.stream(appended, index === 7);
+				}
 			}, prefix);
 			await expect(article).toContainText('terminal 7');
 			expect(await strong.evaluate((element, old) => element === old, retained)).toBe(true);
@@ -1158,7 +1261,9 @@ suite('chatTranscript browser component', () => {
 				const row = page.locator('[data-item-id="copy-response"]');
 				await expect(row).toHaveAccessibleName('Ash');
 				await expect(row.getByText('Ash', { exact: true })).toHaveCount(0);
-				const button = row.getByRole('button', { name: locale === 'zh-CN' ? '复制消息' : 'Copy message', exact: true });
+				const footer = row.getByRole('toolbar', { name: locale === 'zh-CN' ? '回复操作' : 'Response actions', exact: true });
+				const button = footer.getByRole('button', { name: locale === 'zh-CN' ? '复制消息' : 'Copy message', exact: true });
+				await expect(button).toHaveText('', { useInnerText: true });
 				await expect(row.getByRole('button', { name: locale === 'zh-CN' ? '朗读' : 'Read aloud', exact: true })).toHaveCount(0);
 				for (const theme of ['dark', 'light', 'hc'] as const) {
 					await page.evaluate(theme => { window.ashChatTranscriptIntegration.setTheme(theme); document.querySelector<HTMLElement>('[data-item-id="copy-response"]')!.closest('main')!.style.width = '220px'; }, theme);
@@ -1195,12 +1300,17 @@ suite('chatTranscript browser component', () => {
 				await page.goto(`/chatTranscript.html?locale=${locale}`);
 				await page.evaluate(({ cowork }) => window.ashChatTranscriptIntegration.showReadAloudMessage('**Hello** 世界', cowork), { cowork });
 				const row = page.locator('[data-item-id="copy-response"]');
-				const read = () => row.getByRole('button', { name: locale === 'zh-CN' ? '朗读' : 'Read aloud', exact: true });
-				const stop = () => row.getByRole('button', { name: locale === 'zh-CN' ? '停止朗读' : 'Stop reading aloud', exact: true });
+				const footer = row.getByRole('toolbar', { name: locale === 'zh-CN' ? '回复操作' : 'Response actions', exact: true });
+				const copy = footer.getByRole('button', { name: locale === 'zh-CN' ? '复制消息' : 'Copy message', exact: true });
+				const read = () => footer.getByRole('button', { name: locale === 'zh-CN' ? '朗读' : 'Read aloud', exact: true });
+				const stop = () => footer.getByRole('button', { name: locale === 'zh-CN' ? '停止朗读' : 'Stop reading aloud', exact: true });
 				let count = 0;
 				for (const theme of ['dark', 'light', 'hc'] as const) {
 					await page.evaluate(theme => { window.ashChatTranscriptIntegration.setTheme(theme); document.querySelector<HTMLElement>('[data-item-id="copy-response"]')!.closest('main')!.style.width = '220px'; }, theme);
-					await read().focus(); await page.keyboard.press('Enter'); await expect(stop()).toBeFocused();
+					await copy.focus();
+					await page.keyboard.press('ArrowRight');
+					await expect(read()).toBeFocused();
+					await page.keyboard.press('Enter'); await expect(stop()).toBeFocused();
 					await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.readAloudState().text.length)).toBe(++count);
 					expect(await page.evaluate(() => window.ashChatTranscriptIntegration.readAloudState().text.at(-1))).toBe('Hello 世界');
 					expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);

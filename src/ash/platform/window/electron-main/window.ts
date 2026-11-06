@@ -1,6 +1,8 @@
+import { join } from 'node:path';
+import koffi from 'koffi';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import { Emitter, type Event } from '../../../base/common/event.js';
-import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { type IAnyWorkspaceIdentifier, type IWorkspace, type IWorkspaceIdentifier, type ISingleFolderWorkspaceIdentifier, workspaceFromIdentifier } from '../../workspace/common/workspace.js';
 import {
 	DEFAULT_EMPTY_WINDOW_SIZE,
@@ -67,6 +69,59 @@ export interface ICodeWindow<TWindow = Electron.BrowserWindow> extends IDisposab
 	reload(): Promise<void>;
 	reportWindowError(gone: boolean, shutdownSignal?: AbortSignal): Promise<void>;
 	updateWindowControls(options: { backgroundColor?: string; foregroundColor?: string; backdropColor?: string; dimmed?: boolean; }): void;
+}
+
+type Win32ClientWindow = Pick<Electron.BrowserWindow, 'getNativeWindowHandle' | 'hookWindowMessage' | 'unhookWindowMessage' | 'isDestroyed'>;
+
+let getClientRect: ((handle: number | bigint, rect: { left: number; top: number; right: number; bottom: number; }) => number) | undefined;
+
+/** Owns the physical client size of one HWND, independently of Electron's rounded DIP bounds. */
+export class WindowClientArea extends Disposable {
+	private current: IWindowClientSize | undefined;
+	private readonly changed = this._register(new Emitter<IWindowClientSize>());
+	readonly onDidChange = this.changed.event;
+
+	constructor(private readonly window: Win32ClientWindow) {
+		super();
+		if (process.platform !== 'win32') return;
+		const wmSize = 0x0005;
+		const sizeMinimized = 1;
+		let pending: ReturnType<typeof setImmediate> | undefined;
+		window.hookWindowMessage(wmSize, (wParam, lParam) => {
+			if (wParam.byteLength < 4 || lParam.byteLength < 4 || wParam.readUInt32LE(0) === sizeMinimized) return;
+			const width = lParam.readUInt16LE(0);
+			const height = lParam.readUInt16LE(2);
+			if (!width || !height || (this.current?.width === width && this.current.height === height)) return;
+			this.current = { width, height };
+			pending ??= setImmediate(() => {
+				pending = undefined;
+				if (!this.isDisposed && !window.isDestroyed()) this.changed.fire(this.current!);
+			});
+		});
+		this._register(toDisposable(() => {
+			if (pending !== undefined) clearImmediate(pending);
+			if (!window.isDestroyed()) window.unhookWindowMessage(wmSize);
+		}));
+	}
+
+	getSize(): IWindowClientSize | undefined {
+		if (process.platform !== 'win32' || this.isDisposed || this.window.isDestroyed()) return undefined;
+		if (this.current) return this.current;
+		// A newly registered popup may have received its first WM_SIZE before the hook.
+		const handle = this.window.getNativeWindowHandle();
+		const address = handle.byteLength === 8 ? handle.readBigUInt64LE(0) : handle.readUInt32LE(0);
+		if (!address) return undefined;
+		if (!getClientRect) {
+			const user32 = koffi.load(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'user32.dll'));
+			const rect = koffi.struct({ left: 'int32_t', top: 'int32_t', right: 'int32_t', bottom: 'int32_t' });
+			getClientRect = user32.func('__stdcall', 'GetClientRect', 'int32_t', ['uintptr_t', koffi.out(koffi.pointer(rect))]);
+		}
+		const rect = { left: 0, top: 0, right: 0, bottom: 0 };
+		if (getClientRect(address, rect) && rect.right > 0 && rect.bottom > 0) {
+			this.current = { width: rect.right, height: rect.bottom };
+		}
+		return this.current;
+	}
 }
 
 /**

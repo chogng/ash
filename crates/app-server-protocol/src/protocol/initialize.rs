@@ -37,6 +37,24 @@ pub struct InitializeResult {
     pub slash_commands: Vec<SlashCommandDefinition>,
 }
 
+/// Protocol identity is available as soon as the local connection is admitted.
+/// `initialize` reports the capabilities of the prepared workspace separately.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TransportHelloResult {
+    pub protocol_version: ProtocolVersion,
+    pub schema_hash: SchemaHash,
+}
+
+impl TransportHelloResult {
+    pub fn current() -> Self {
+        Self {
+            protocol_version: ProtocolVersion::current(),
+            schema_hash: SchemaHash(crate::schema_hash()),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ProtocolVersion {

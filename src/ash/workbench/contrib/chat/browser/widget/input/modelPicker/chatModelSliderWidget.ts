@@ -1,6 +1,7 @@
 import { Disposable, DisposableStore, type IDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { AnchorAlignment, AnchorPosition } from '../../../../../../../base/common/layout.js';
 import { createUuid } from '../../../../../../../base/common/uuid.js';
+import { toErrorMessage } from '../../../../../../../base/common/errorMessage.js';
 import { addDisposableListener, h, stopEvent } from '../../../../../../../base/browser/dom.js';
 import { ActionBar } from '../../../../../../../base/browser/ui/actionbar/actionbar.js';
 import type { Icon } from '../../../../../../../base/common/icon.js';
@@ -57,7 +58,7 @@ export class ChatModelSliderWidget extends Disposable {
 		}));
 	}
 
-	public show(anchor: HTMLElement): void {
+	public show(anchor: HTMLElement, onClose?: () => void): void {
 		this.panel.showContent({
 			anchor,
 			anchorAlignment: AnchorAlignment.Center,
@@ -66,6 +67,7 @@ export class ChatModelSliderWidget extends Disposable {
 			ariaLabel: localize('chat.modelPicker.aria', 'Choose a chat model'),
 			render: (container, layout) => this.renderContent(container, layout),
 			focus: container => this.focusModelPicker(container),
+			onClose,
 		});
 	}
 
@@ -79,9 +81,7 @@ export class ChatModelSliderWidget extends Disposable {
 
 	private getSelectedBuiltInModel(): ModelCatalogEntry | undefined {
 		if (this.delegate.useWorkbenchModelManagement === false || this.delegate.isAutomaticModel()) { return undefined; }
-		const selected = this.delegate.getSelectedModel();
-		const entry = selected && this.delegate.getModels().find(candidate =>
-			candidate.model.provider === selected.provider && candidate.model.model === selected.model);
+		const entry = this.delegate.getSelectedModelEntry();
 		const provider = entry?.source?.providerId;
 		// The native catalog also includes custom endpoints and discovered external models.
 		if (!provider || provider.startsWith('custom-') || provider === 'openai-compatible' || entry?.discovered) { return undefined; }
@@ -158,7 +158,7 @@ export class ChatModelSliderWidget extends Disposable {
 		const models = this.delegate.getModels();
 		let displayedModels = models;
 		const selectedModelRef = this.delegate.getSelectedModel();
-		const currentModel = models.find(m => m.model.provider === selectedModelRef?.provider && m.model.model === selectedModelRef.model) ?? models[0];
+		const currentModel = models.find(m => m.model.provider === selectedModelRef?.provider && m.model.model === selectedModelRef.model);
 		const hasMultiplePresets = !this.delegate.isAutomaticModel() && this.effortChoices(currentModel).length > 1;
 
 		// Expand drawer by default only if there are no effort presets to adjust
@@ -174,7 +174,7 @@ export class ChatModelSliderWidget extends Disposable {
 			displayedModels = currentModels;
 			const activeSelectedRef = this.delegate.getSelectedModel();
 			const automatic = this.delegate.isAutomaticModel();
-			const activeModel = automatic ? undefined : currentModels.find(m => m.model.provider === activeSelectedRef?.provider && m.model.model === activeSelectedRef.model) ?? currentModels[0];
+			const activeModel = automatic ? undefined : this.delegate.getSelectedModelEntry();
 			const builtInModel = this.getSelectedBuiltInModel();
 			let effortOverride = builtInModel?.reasoningEffortOverride;
 			const presets = this.effortChoices(activeModel, effortOverride);
@@ -213,8 +213,13 @@ export class ChatModelSliderWidget extends Disposable {
 				}
 
 				const selectModel = async () => {
-					if (entry) await this.delegate.selectModel(entry.model);
-					else await this.delegate.selectAutomaticModel?.();
+					try {
+						if (entry) await this.delegate.selectModel(entry.model);
+						else await this.delegate.selectAutomaticModel?.();
+					} catch (error) {
+						if (!lifetime.isDisposed) this.notifications.error(toErrorMessage(error));
+						return;
+					}
 					if (lifetime.isDisposed) {
 						return;
 					}
@@ -239,7 +244,7 @@ export class ChatModelSliderWidget extends Disposable {
 			drawer.append(modelListContainer);
 			root.append(drawer);
 
-			const modelTitle = automatic ? localize('chat.modelPicker.auto', 'Auto') : activeModel?.displayName ?? localize('chat.modelPicker.selectModel', 'Select model');
+			const modelTitle = automatic ? localize('chat.modelPicker.auto', 'Auto') : activeModel?.displayName ?? activeSelectedRef?.model ?? localize('chat.modelPicker.selectModel', 'Select model');
 			const modelButton = h(document, 'button', {
 				className: 'ash-chat-slider-model-button',
 				attributes: {

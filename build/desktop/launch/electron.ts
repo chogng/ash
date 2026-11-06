@@ -19,8 +19,8 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		windowsHide: true,
 	});
 	// A detached supervisor must write through the launcher that owns the debug terminal.
-	child.stdout.pipe(process.stdout, { end: false });
-	child.stderr.pipe(process.stderr, { end: false });
+	child.stdout?.pipe(process.stdout, { end: false });
+	child.stderr?.pipe(process.stderr, { end: false });
 	const interrupt = (): void => { child.kill('SIGINT'); };
 	const terminate = (): void => { child.kill('SIGTERM'); };
 	process.on('SIGINT', interrupt);

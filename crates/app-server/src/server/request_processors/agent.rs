@@ -157,11 +157,16 @@ pub(super) trait AgentRequestProcessorContext: Send + Sync {
         document_mode: crate::client_host::TextDocumentMode,
         expected_ide: Option<&str>,
     ) -> Result<core_api::TurnReceipt, core_api::CoreError>;
+    fn resolve_turn_approval_mode(
+        &self,
+        session_id: &ash_protocol::SessionId,
+        requested: Option<ash_protocol::ApprovalMode>,
+    ) -> Result<ash_protocol::ApprovalMode, RpcError>;
     fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_;
     fn change_session_directory_request(
         &self,
         mutation: SessionMutation,
-        root: std::path::PathBuf,
+        root: Option<std::path::PathBuf>,
     ) -> Result<ash_app_server_protocol::protocol::session::SessionResult, RpcError>;
     fn archive_session_request(
         &self,
@@ -331,6 +336,13 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 core_api::ContextInspectionScope::Thread(thread_id)
             }
         };
+        let approval_mode = match (latest, thread.as_ref()) {
+            (Some(turn), _) => turn.approval_mode,
+            (None, Some(thread)) => self
+                .context
+                .resolve_turn_approval_mode(&thread.session_id, None)?,
+            (None, None) => self.default_approval_mode()?,
+        };
         let inspection = self
             .context
             .agent_runtime()
@@ -346,7 +358,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                 scope,
                 model,
                 instructions,
-                approval_mode: latest.map(|turn| turn.approval_mode).unwrap_or_default(),
+                approval_mode,
                 tool_mode: latest.map(|turn| turn.tool_mode).unwrap_or_default(),
             })
             .map_err(core_error)?;
@@ -724,10 +736,15 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     thread_id,
                 }))
             }
-            SessionRequest::ChangeDirectory { root } => {
+            request @ (SessionRequest::ChangeDirectory { .. } | SessionRequest::ClearDirectory) => {
                 if !connection.allows_product_host_capabilities() {
                     return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
                 }
+                let root = if let SessionRequest::ChangeDirectory { root } = request {
+                    Some(root)
+                } else {
+                    None
+                };
                 result(&SessionRequestResult::Session(
                     self.context
                         .change_session_directory_request(mutation, root)?,
@@ -867,10 +884,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                     ..thread_mutation(mutation, expected_sequence, connection.connection_id)
                 },
                 thread_id,
-                match approval_mode {
-                    Some(mode) => mode,
-                    None => self.default_approval_mode()?,
-                },
+                approval_mode,
                 mode,
                 model.map_or(TurnModelSelection::Current, TurnModelSelection::Explicit),
                 reasoning_effort,
@@ -1614,7 +1628,7 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
         &self,
         mutation: ThreadMutation,
         thread_id: ash_protocol::ThreadId,
-        approval_mode: ash_protocol::ApprovalMode,
+        approval_mode: Option<ash_protocol::ApprovalMode>,
         mode: ash_protocol::CollaborationMode,
         model_selection: TurnModelSelection,
         reasoning_effort: Option<ash_protocol::ReasoningEffort>,
@@ -1626,6 +1640,9 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             Some(tool_mode) => TurnToolModeSelection::Explicit(tool_mode),
             None => TurnToolModeSelection::ConfiguredDefault,
         };
+        let approval_mode = self
+            .context
+            .resolve_turn_approval_mode(&mutation.session_id, approval_mode)?;
         let mut input =
             self.normalize_input(mutation.connection_id, &mutation.session_id, input)?;
         let selection =

@@ -43,6 +43,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -64,7 +65,7 @@ impl ActivationAuthority for Authority {
 /// or API caches are mirrored in this adapter, and startup remains capability-driven.
 pub(crate) struct GitHubExtensionRuntime {
     executable: PathBuf,
-    supervisor: ExtensionHostSupervisor,
+    supervisor: OnceLock<ExtensionHostSupervisor>,
     policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
     lifecycle: Mutex<CancellationSource>,
 }
@@ -73,8 +74,17 @@ impl GitHubExtensionRuntime {
         executable: PathBuf,
         policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
     ) -> github::Result<Arc<Self>> {
-        use sha2::Digest;
         let executable = std::fs::canonicalize(executable).map_err(|_| unavailable())?;
+        Ok(Arc::new(Self {
+            executable,
+            supervisor: OnceLock::new(),
+            policy,
+            lifecycle: Mutex::new(CancellationSource::new()),
+        }))
+    }
+    fn create_supervisor(&self) -> github::Result<ExtensionHostSupervisor> {
+        use sha2::Digest;
+        let executable = &self.executable;
         let launcher = Arc::new(
             ProductExecutableLauncher::new(executable.clone()).map_err(|_| unavailable())?,
         );
@@ -87,7 +97,7 @@ impl GitHubExtensionRuntime {
         .map_err(|_| unavailable())?;
         let digest = format!(
             "sha256:{:x}",
-            sha2::Sha256::digest(std::fs::read(&executable).map_err(|_| unavailable())?)
+            sha2::Sha256::digest(std::fs::read(executable).map_err(|_| unavailable())?)
         );
         let activation = ExtensionActivationSpec::new(
             ActivateParams {
@@ -103,7 +113,7 @@ impl GitHubExtensionRuntime {
                 capabilities: vec![ExtensionCapability::DataChannel],
             },
             NonZeroU64::new(1).expect("activation generation"),
-            Arc::new(Authority(policy.clone())),
+            Arc::new(Authority(self.policy.clone())),
         );
         let mut limits = ExtensionHostLimits {
             isolation: ProcessIsolationPolicy::AuthorizedProduct,
@@ -112,20 +122,14 @@ impl GitHubExtensionRuntime {
         limits.request_timeout = Duration::from_secs(600);
         limits.maximum_frame_bytes = 32 * 1024 * 1024;
         limits.maximum_payload_bytes = 24 * 1024 * 1024;
-        let supervisor = ExtensionHostSupervisor::new(
+        ExtensionHostSupervisor::new(
             launcher,
             command,
             activation,
             limits,
             RestartPolicy::default(),
         )
-        .map_err(|_| unavailable())?;
-        Ok(Arc::new(Self {
-            executable,
-            supervisor,
-            policy,
-            lifecycle: Mutex::new(CancellationSource::new()),
-        }))
+        .map_err(|_| unavailable())
     }
     pub(crate) fn matches(&self, executable: &Path) -> bool {
         std::fs::canonicalize(executable).is_ok_and(|path| path == self.executable)
@@ -141,7 +145,7 @@ impl GitHubExtensionRuntime {
             http,
         })
     }
-    fn start(&self) -> github::Result<CancellationToken> {
+    fn start(&self) -> github::Result<(&ExtensionHostSupervisor, CancellationToken)> {
         let mut lifecycle = self.lifecycle.lock().map_err(|_| unavailable())?;
         if !self.policy.is_extension_enabled(ID) {
             return Err(unavailable());
@@ -149,8 +153,16 @@ impl GitHubExtensionRuntime {
         if lifecycle.token().is_cancelled() {
             *lifecycle = CancellationSource::new();
         }
-        self.supervisor.start().map_err(|_| unavailable())?;
-        Ok(lifecycle.token())
+        // Serialize construction with enablement changes. Failed admission can be retried.
+        let supervisor = match self.supervisor.get() {
+            Some(supervisor) => supervisor,
+            None => {
+                let supervisor = self.create_supervisor()?;
+                self.supervisor.get_or_init(|| supervisor)
+            }
+        };
+        supervisor.start().map_err(|_| unavailable())?;
+        Ok((supervisor, lifecycle.token()))
     }
 }
 impl BuiltInExtensionRuntime for GitHubExtensionRuntime {
@@ -158,7 +170,9 @@ impl BuiltInExtensionRuntime for GitHubExtensionRuntime {
         ID
     }
     fn is_running(&self) -> bool {
-        self.supervisor.is_running()
+        self.supervisor
+            .get()
+            .is_some_and(ExtensionHostSupervisor::is_running)
     }
     fn reconcile_enablement(&self) -> Result<(), ExtensionHostError> {
         let _lifecycle = self
@@ -167,14 +181,18 @@ impl BuiltInExtensionRuntime for GitHubExtensionRuntime {
             .map_err(|_| ExtensionHostError::HostExited)?;
         if !self.policy.is_extension_enabled(ID) {
             _lifecycle.cancel();
-            self.supervisor.shutdown()?;
+            if let Some(supervisor) = self.supervisor.get() {
+                supervisor.shutdown()?;
+            }
         }
         Ok(())
     }
 }
 impl Drop for GitHubExtensionRuntime {
     fn drop(&mut self) {
-        let _ = self.supervisor.shutdown();
+        if let Some(supervisor) = self.supervisor.get() {
+            let _ = supervisor.shutdown();
+        }
     }
 }
 struct Provider {
@@ -213,7 +231,7 @@ impl GitHubProvider for Provider {
             return Err(Error::AuthenticationRequired);
         }
         let write = request.is_write();
-        let runtime_cancellation = self.runtime.start()?;
+        let (supervisor, runtime_cancellation) = self.runtime.start()?;
         let payload = serde_json::to_value(GitHubInvocation {
             authorization: authorization.clone(),
             request,
@@ -224,9 +242,7 @@ impl GitHubProvider for Provider {
             .map_err(|_| unavailable())?
             .as_millis() as u64
             + 600_000;
-        let handle = self
-            .runtime
-            .supervisor
+        let handle = supervisor
             .begin_invoke(ExtensionInvocation {
                 registration_id: "github.api.v2".into(),
                 operation: "receiveData".into(),

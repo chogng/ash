@@ -1,6 +1,7 @@
 import { IndexedDbWorkingCopyBackupService } from '../../browser/indexedDbWorkingCopyBackupService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import { test } from 'mocha';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
@@ -21,6 +22,60 @@ function assemble(services: InstantiationService, backend: IBackupService, conte
 	services.registerInstance(ILogService, new NullLoggerService());
 	return services.createInstance(WorkingCopyBackupService);
 }
+
+test('startup reads durable backups once when there are no legacy drafts', async () => {
+	using services = new InstantiationService();
+	using context = new TestWorkspaceService({ id: 'startup' });
+	const backend = new VersionedBackups();
+	const resource = URI.file('/workspace/startup.txt');
+	await backend.store({ id: 'startup', folders: [] }, { resource, format: 'ash.working-copy.v1', content: JSON.stringify({ kind: 'text', content: 'recover this' }) });
+	const list = mock.method(backend, 'list');
+	using backups = assemble(services, backend, context);
+
+	assert.equal((await backups.list())[0]?.content, 'recover this');
+	assert.deepEqual(list.mock.calls.map(call => call.arguments), [['startup']]);
+});
+
+test('startup resolves one resource and bulk recovery cannot adopt a newer revision for it', async () => {
+	using services = new InstantiationService();
+	using context = new TestWorkspaceService({ id: 'startup' });
+	const backend = new VersionedBackups();
+	const workspace = { id: 'startup', folders: [] };
+	const target = URI.file('/workspace/target.txt');
+	const other = URI.file('/workspace/other.txt');
+	const content = (resource: URI, text: string) => ({ resource, format: 'ash.working-copy.v1', content: JSON.stringify({ kind: 'text', content: text }) });
+	const old = await backend.store(workspace, content(target, 'first draft'));
+	await backend.store(workspace, content(other, 'other draft'));
+	const list = mock.method(backend, 'list');
+	using backups = assemble(services, backend, context);
+	assert.equal((await backups.resolve(target))?.content, 'first draft');
+	assert.equal(list.mock.callCount(), 0);
+	await backend.store(workspace, content(target, 'other window draft'), old.revision);
+	assert.deepEqual((await backups.list(new Set([target.toString()]))).map(backup => backup.content), ['other draft']);
+	await assert.rejects(backups.store({ resource: target, kind: 'text', content: 'my input', updatedAt: 1 }), error => error instanceof BackupError && error.code === 'conflict');
+	assert.equal((await backend.read('startup', target))?.content.content, content(target, 'other window draft').content);
+});
+
+test('startup migrates legacy drafts and keeps a conflicting durable draft', async () => {
+	using services = new InstantiationService();
+	using context = new TestWorkspaceService({ id: 'startup-migration' });
+	const backend = new VersionedBackups();
+	const conflict = URI.file('/workspace/conflict.txt');
+	await backend.store({ id: 'startup-migration', folders: [] }, { resource: conflict, format: 'ash.working-copy.v1', content: JSON.stringify({ kind: 'text', content: 'durable draft' }) });
+	const legacy: WorkingCopyBackup = { resource: URI.file('/workspace/legacy.txt'), kind: 'text', content: 'legacy draft', updatedAt: 1 };
+	const list = mock.method(IndexedDbWorkingCopyBackupService.prototype, 'list', async () => [legacy, { ...legacy, resource: conflict }]);
+	const remove = mock.method(IndexedDbWorkingCopyBackupService.prototype, 'deleteIfUnchanged', async () => { });
+	try {
+		using backups = assemble(services, backend, context);
+		const restored = await backups.list();
+		assert.equal(restored.find(backup => backup.resource.toString() === conflict.toString())?.content, 'durable draft');
+		assert.equal(restored.find(backup => backup.resource.toString() === legacy.resource.toString())?.content, 'legacy draft');
+		assert.deepEqual(remove.mock.calls.map(call => call.arguments), [[legacy]]);
+	} finally {
+		remove.mock.restore();
+		list.mock.restore();
+	}
+});
 
 test('working-copy backups preserve text and structured metadata using the backend timestamp', async () => {
 	using services = new InstantiationService();
@@ -118,10 +173,10 @@ for (const operation of ['list', 'store', 'delete'] as const) {
 	test(`workspace replacement cancels ${operation} waiting for backup preparation`, async () => {
 		using services = new InstantiationService();
 		using context = new TestWorkspaceService({ id: 'one' });
-		const backend = new ControlledBackups();
+		const backend = new VersionedBackups();
 		using backups = assemble(services, backend, context);
 		const resource = URI.parse('untitled:/draft');
-		const held = backend.holdNext('list');
+		using held = holdLegacyList();
 		const operations = {
 			list: () => backups.list(),
 			store: () => backups.store({ resource, kind: 'text', content: 'old workspace', updatedAt: 1 }),
@@ -177,9 +232,9 @@ for (const operation of ['list', 'store', 'discard'] as const) {
 test('disposing the backup service stops a write still waiting for preparation', async () => {
 	using services = new InstantiationService();
 	using context = new TestWorkspaceService({ id: 'one' });
-	const backend = new ControlledBackups();
+	const backend = new VersionedBackups();
 	using backups = assemble(services, backend, context);
-	const held = backend.holdNext('list');
+	using held = holdLegacyList();
 	const cancelled = assert.rejects(backups.store({ resource: URI.parse('untitled:/draft'), kind: 'text', content: 'disposed', updatedAt: 1 }), CancellationError);
 	try {
 		await held.entered.p;
@@ -190,6 +245,17 @@ test('disposing the backup service stops a write still waiting for preparation',
 	await cancelled;
 	assert.deepEqual(await backend.getWorkspaces(), []);
 });
+
+function holdLegacyList() {
+	const entered = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	const list = mock.method(IndexedDbWorkingCopyBackupService.prototype, 'list', async () => {
+		await entered.complete();
+		await release.p;
+		return [];
+	}, { times: 1 });
+	return { entered, release, [Symbol.dispose]: () => list.mock.restore() };
+}
 
 test('invalid workspace replacement retains the current backup scope', async () => {
 	using services = new InstantiationService();
@@ -209,6 +275,7 @@ class VersionedBackups implements IBackupService {
 	private readonly workspaces = new Map<string, IBackupWorkspace>();
 	async getWorkspaces(): Promise<readonly IBackupWorkspace[]> { return [...this.workspaces.values()]; }
 	async list(id: string): Promise<readonly IBackupRecord[]> { return [...this.records.entries()].filter(([key]) => key.startsWith(`${id}\0`)).map(([, record]) => record); }
+	async read(id: string, resource: URI): Promise<IBackupRecord | undefined> { return this.records.get(`${id}\0${resource.toString()}`); }
 	async store(workspace: IBackupWorkspace, content: IBackupContent, expectedRevision?: string): Promise<IBackupRecord> {
 		const key = `${workspace.id}\0${content.resource.toString()}`;
 		const current = this.records.get(key);

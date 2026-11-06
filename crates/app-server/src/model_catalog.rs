@@ -1,4 +1,6 @@
+use ash_app_server_protocol::protocol::model::ModelAvailabilityResult;
 use ash_app_server_protocol::protocol::model::ModelCatalogEntry;
+use ash_app_server_protocol::protocol::model::ModelExecutionAvailability;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelRef;
 use core_api::CoreError;
@@ -78,6 +80,17 @@ pub(crate) trait ModelCatalog: Send + Sync {
         Err(ModelCatalogRefreshError::Unsupported)
     }
     fn list(&self) -> Result<Vec<ModelCatalogEntry>, CoreError>;
+
+    fn execution_availability(
+        &self,
+        _model: Option<&ModelRef>,
+    ) -> Result<ModelAvailabilityResult, CoreError> {
+        Ok(ModelAvailabilityResult {
+            selected: ModelExecutionAvailability::Unknown,
+            configured_default: None,
+            default_availability: ModelExecutionAvailability::Unknown,
+        })
+    }
 
     /// Captures current credential scopes with their cached rows, without network discovery.
     fn catalog_snapshot(

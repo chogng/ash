@@ -71,6 +71,10 @@ ArtifactsPage 拥有工作空间实例，文档内容和工作副本仍由各模
 
 同一主机使用当前 checkout 构建的 Linux Remote runtime 和仓库固定的搜索工具，在独立 profile 通过首次连接。Code 草稿从 Run on 选择 `AshBuild`，为合成目录确认 Trust and Open，随后草稿切换到 `AshBuild` provider。日志位于 `.build/todo-local-acceptance-20261105/wsl-remote-first-connect-approved.log`。
 
+2026-11-06 在 Windows 11 23H2 x64、`bd00f5e926` 和 `AshBuild` WSL2（Ubuntu 24.04.5、Bubblewrap 0.9.0）上验证了变量注入。使用预先授权的合成目录、独立后端 profile 和 WSL 回环模拟模型，从 Code 的 New Environment 保存单行与多行变量。真实 Linux `shell-command` 进程在网络拒绝的沙箱内返回两项原值，同一发行版的另一条会话返回两项均未设置。三步通过，测试后停止独立 daemon 并移除远端临时目录。
+
+允许入站的尝试在进程启动前被 Bubblewrap 拒绝。Windows 本地对照 smoke 在选择项目时超时。通过日志和两组命令输出位于 `.build/todo-local-acceptance-20261106/` 的 `wsl-environment-acceptance.log`、`configured-wsl.json` 和 `plain-wsl.json`，首败日志同目录保留。
+
 ## Docker Provider
 
 新增 `extensions/dev-containers` 独立 Rust executable，使用现有 Rust SDK、

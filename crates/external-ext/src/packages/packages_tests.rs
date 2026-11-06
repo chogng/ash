@@ -66,6 +66,52 @@ fn discovers_manifest_and_reads_a_grammar_resource() {
 }
 
 #[test]
+fn bundles_color_theme_includes_from_one_catalog_generation() {
+    let root = tempfile::tempdir().expect("extension root");
+    let package = write_package(root.path(), "1.0.0");
+    fs::create_dir(package.join("themes")).unwrap();
+    let child = r#"{ // child
+        "include": "../base.json",
+        "colors": {},
+    }"#;
+    let base = r##"{"colors":{"editor.background":"#123456"}}"##;
+    fs::write(package.join("themes/child.json"), child).unwrap();
+    fs::write(package.join("base.json"), base).unwrap();
+    fs::write(package.join("escape.json"), r#"{"include":"../base.json"}"#).unwrap();
+    fs::write(package.join("large.json"), " ".repeat(256 * 1024)).unwrap();
+
+    let mut catalog = ExtensionPackages::new(vec![ExtensionRoot::user(root.path())]);
+    let generation = catalog.list(ExtensionPackagesReload::Refresh).generation;
+    fs::write(
+        package.join("base.json"),
+        r#"{"include":"./themes/child.json"}"#,
+    )
+    .unwrap();
+    assert_eq!(
+        catalog.color_theme_sources(generation, "ash.demo", "./themes/child.json"),
+        Ok(Some(vec![
+            ("themes/child.json".into(), child.into()),
+            ("base.json".into(), base.into()),
+        ]))
+    );
+    for path in ["escape.json", "large.json"] {
+        assert_eq!(
+            catalog.color_theme_sources(generation, "ash.demo", path),
+            Ok(None)
+        );
+    }
+    let refreshed = catalog.list(ExtensionPackagesReload::Refresh).generation;
+    assert_eq!(
+        catalog.color_theme_sources(generation, "ash.demo", "themes/child.json"),
+        Err(ExtensionPackagesError::GenerationConflict)
+    );
+    assert_eq!(
+        catalog.color_theme_sources(refreshed, "ash.demo", "themes/child.json"),
+        Ok(None)
+    );
+}
+
+#[test]
 fn reports_invalid_manifests_without_registering_them() {
     let root = tempfile::tempdir().expect("extension root");
     let package = root.path().join("broken");

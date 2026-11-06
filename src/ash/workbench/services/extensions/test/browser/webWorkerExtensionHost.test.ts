@@ -23,6 +23,10 @@ import { type ExtensionHostFleetSnapshot, type ExtensionHostInvocationRequest, t
 
 import { createExtensionBackendApi } from '../../../../../platform/extensions/browser/extensionBackendApi.js';
 import type { AppServerProtocolClient } from '../../../../../platform/agentHost/browser/appServerProtocolClient.js';
+import { NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { ILifecycleService, LifecyclePhase } from '../../../lifecycle/common/lifecycle.js';
+import { AbstractLifecycleService } from '../../../lifecycle/common/lifecycleService.js';
+import { BrowserStorageService } from '../../../storage/browser/storageService.js';
 
 test('extension backend routes decode parameters before using the protocol connection', async () => {
 	const requests: unknown[] = [];
@@ -45,15 +49,21 @@ class WorkspaceTrust extends TestWorkspaceTrustManagementService {
 	override readonly onDidChangeTrustedFolders = this.invalidations.event;
 }
 
+class TestLifecycleService extends AbstractLifecycleService { }
+
 class RemoteHost extends Disposable implements IExtensionHostApi {
-	constructor() {
+	constructor(phase = LifecyclePhase.Eventually) {
 		super();
+		this.lifecycle.phase = phase;
+		this.instantiation.registerInstance(ILifecycleService, this.lifecycle);
 		this.instantiation.registerInstance(IWorkspaceTrustManagementService, this.trust);
 		this.instantiation.registerInstance(ILanguagePackService, createEmptyTestLanguagePacks());
 		this.instantiation.registerInstance(IExtensionApi, { list: async () => ({ generation: 1, extensions: [], diagnostics: [] }), resources: new ExtensionResourceLoaderService(async () => new Uint8Array()) });
 	}
 	readonly trust = this._register(new WorkspaceTrust());
 	readonly instantiation = this._register(new InstantiationService());
+	private readonly storage = this._register(new BrowserStorageService({ ownerWindow: new EventTarget() as Window, workspaceId: 'extensions', flushInterval: 0 }));
+	readonly lifecycle = this._register(new TestLifecycleService(undefined, new NullLoggerService(), this.storage));
 	private readonly changes = this._register(new Emitter<number>());
 	private readonly connection = this._register(new Emitter<AppServerConnectionState>());
 	readonly activation = new DeferredPromise<ExtensionHostFleetSnapshot>();
@@ -89,7 +99,7 @@ function browser(remote: RemoteHost): WebWorkerExtensionHost {
 	return new WebWorkerExtensionHost({
 		list: async () => ({ generation: 1, extensions: [], diagnostics: [] }),
 		resources: new ExtensionResourceLoaderService(async () => { throw new Error('Bundled resources are outside this fixture'); }),
-	}, remote, remote.instantiation, remote.trust);
+	}, remote, remote.instantiation, remote.trust, remote.lifecycle);
 }
 
 const request = { extensionId: 'lazy', activationGeneration: 7, event: { type: 'command' as const, command: 'lazy.run' } };
@@ -172,7 +182,7 @@ test('invalid client results reject the Worker call instead of stranding its pen
 		using api = new WebWorkerExtensionHost({
 			list: async () => ({ generation: 1, diagnostics: [], extensions: [{ id: 'browser', name: 'browser', publisher: 'test', version: '1', displayName: 'Browser', sourceKind: 'builtIn', manifestJson: '{"browser":"./browser.js"}', manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'a'.repeat(64)}` }] }),
 			resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
-		}, remote, remote.instantiation, remote.trust);
+		}, remote, remote.instantiation, remote.trust, remote.lifecycle);
 		const handler = api.registerClientHandler(async operation => (operation as { operation: string; }).operation === 'readInitialization'
 			? { result: 'initialization', initialization: { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: null } }
 			: { result: 'command', hasValue: true, value: NaN });
@@ -201,7 +211,7 @@ test('readable user and registry browser packages do not gain client execution a
 			}))
 		}),
 		resources: new ExtensionResourceLoaderService(async () => { reads++; throw new Error('Unauthorized browser entry'); }),
-	}, remote, remote.instantiation, remote.trust);
+	}, remote, remote.instantiation, remote.trust, remote.lifecycle);
 	assert.deepEqual((await api.reconcile('refresh')).extensions, []);
 	assert.equal(reads, 0);
 });
@@ -222,10 +232,128 @@ test('declarative packages do not delay executable host startup with translation
 		resources: new ExtensionResourceLoaderService(async () => { resourceReads++; return new Uint8Array(); }),
 	};
 	using catalogServices = remote.instantiation.createChild(new ServiceCollection([IExtensionApi, extensions]));
-	using api = new WebWorkerExtensionHost(extensions, remote, catalogServices, remote.trust);
+	using api = new WebWorkerExtensionHost(extensions, remote, catalogServices, remote.trust, remote.lifecycle);
 	assert.deepEqual((await api.reconcile('refresh')).extensions, []);
 	assert.equal(reconciled, true);
 	assert.equal(resourceReads, 0);
+});
+
+test('image provider declarations wait for background startup while their Worker stays dormant', async () => {
+	using remote = new RemoteHost(LifecyclePhase.Ready);
+	remote.reconcile = remote.list = async () => ({ generation: 1, extensions: [] });
+	let resourceReads = 0;
+	const extensions: IExtensionApi = {
+		list: async () => ({
+			generation: 1, diagnostics: [], extensions: [{
+				id: 'snapshot', name: 'snapshot', publisher: 'test', version: '1', displayName: 'Snapshot', sourceKind: 'builtIn',
+				manifestJson: JSON.stringify({
+					browser: 'main.js',
+					activationEvents: ['onCapability:image.editor.v1', 'onCommand:snapshot.code'],
+					contributes: { commands: [{ command: 'snapshot.code', title: 'Create Code Image' }] },
+				}),
+				manifestSha256: `sha256:${'a'.repeat(64)}`, packageSha256: `sha256:${'b'.repeat(64)}`,
+			}],
+		}),
+		resources: new ExtensionResourceLoaderService(async () => { resourceReads++; return new Uint8Array(); }),
+	};
+	using api = remote.instantiation.createInstance(WebWorkerExtensionHost, extensions, remote);
+	assert.deepEqual((await api.reconcile('refresh')).extensions, []);
+	remote.lifecycle.phase = LifecyclePhase.Restored;
+	assert.deepEqual((await api.list()).extensions, []);
+	await assert.rejects(api.activateByEvent({
+		extensionId: 'snapshot', activationGeneration: 1, event: { type: 'command', command: 'snapshot.code' },
+	}), { name: 'CancellationError' });
+	const changed = new DeferredPromise<number>();
+	const subscription = api.onDidChange(generation => { void changed.complete(generation); });
+	using listener = toDisposable(() => subscription.dispose());
+	remote.lifecycle.phase = LifecyclePhase.Eventually;
+	const generation = await changed.p;
+	const published = await api.list();
+	assert.equal(published.generation, generation);
+	assert.equal(published.extensions[0]?.lifecycle, 'dormant');
+	assert.equal(published.extensions[0]?.activation?.commands[0]?.command, 'snapshot.code');
+	assert.equal(resourceReads, 0);
+});
+
+test('a bundled language Worker reads its entry only on matching first use and retires on package change', async () => {
+	const originalWorker = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
+	const activated: string[] = [];
+	let terminated = 0;
+	class WorkerFixture extends EventTarget {
+		postMessage(message: BrowserExtensionHostRequest): void {
+			if (message.type === 'activate') activated.push(message.extensionId);
+			queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', {
+				data: { id: message.id, success: true, result: message.type === 'activate' ? [] : null },
+			})));
+		}
+		terminate(): void { terminated++; }
+	}
+	Object.defineProperty(globalThis, 'Worker', { configurable: true, value: WorkerFixture });
+	try {
+		using remote = new RemoteHost();
+		remote.reconcile = async () => ({ generation: 1, extensions: [] });
+		remote.registerClientHandler = () => Disposable.None;
+		remote.activateByEvent = async () => assert.fail('Browser language activation belongs to this window');
+		using changed = new Emitter<void>();
+		let digest = 'a';
+		const reads: string[] = [];
+		let entryRead: DeferredPromise<void> | undefined;
+		const entryReadStarted = new DeferredPromise<void>();
+		const extensions: IExtensionApi = {
+			onDidChange: changed.event,
+			list: async () => ({
+				generation: 1, diagnostics: [], extensions: [{
+					id: 'ash.json', name: 'json', publisher: 'ash', version: '1', displayName: 'JSON', sourceKind: 'builtIn',
+					manifestJson: '{"browser":"./main.js","activationEvents":["onLanguage:json"],"capabilities":{"untrustedWorkspaces":{"supported":true}}}',
+					manifestSha256: `sha256:${'b'.repeat(64)}`, packageSha256: `sha256:${digest.repeat(64)}`,
+				}],
+			}),
+			resources: new ExtensionResourceLoaderService(async ({ path }) => {
+				reads.push(path);
+				if (entryRead) {
+					void entryReadStarted.complete();
+					await entryRead.p;
+				}
+				return new Uint8Array();
+			}),
+		};
+		using api = remote.instantiation.createInstance(WebWorkerExtensionHost, extensions, remote);
+		const subscription = api.registerClientHandler(async () => ({ result: 'initialization', initialization: { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: null } }));
+		using handler = toDisposable(() => subscription.dispose());
+		const [dormant] = (await api.reconcile('refresh')).extensions;
+		assert.equal(dormant!.lifecycle, 'dormant');
+		assert.equal(dormant!.incarnation, undefined);
+		assert.deepEqual(reads, []);
+		const request = { extensionId: dormant!.id, activationGeneration: dormant!.activationGeneration, event: { type: 'language' as const, languageId: 'json' } };
+		await assert.rejects(api.activateByEvent({ ...request, event: { type: 'language', languageId: 'plaintext' } }), /does not declare/);
+		const [first, second] = await Promise.all([api.activateByEvent(request), api.activateByEvent(request)]);
+		assert.equal(first.extensions[0]!.lifecycle, 'ready');
+		assert.strictEqual(first.extensions[0], second.extensions[0]);
+		assert.equal(first.extensions[0]!.activationGeneration, request.activationGeneration);
+		assert.deepEqual(activated, ['ash.json']);
+		assert.deepEqual(reads, ['main.js']);
+		assert.strictEqual((await api.reconcile('refresh')).extensions[0], first.extensions[0]);
+		digest = 'c';
+		const [replacement] = (await api.reconcile('refresh')).extensions;
+		assert.equal(replacement!.lifecycle, 'dormant');
+		assert.notEqual(replacement!.activationGeneration, request.activationGeneration);
+		await assert.rejects(api.activateByEvent(request), /retired activation/);
+		assert.equal(terminated, 1);
+		assert.deepEqual(reads, ['main.js']);
+		entryRead = new DeferredPromise<void>();
+		const retiring = api.activateByEvent({ ...request, activationGeneration: replacement!.activationGeneration });
+		await entryReadStarted.p;
+		digest = 'd';
+		changed.fire();
+		await entryRead.complete();
+		const [updated] = (await retiring).extensions;
+		assert.equal(updated!.lifecycle, 'dormant');
+		assert.notEqual(updated!.activationGeneration, replacement!.activationGeneration);
+		assert.deepEqual(activated, ['ash.json'], 'The retired in-flight entry must not execute');
+	} finally {
+		if (originalWorker) Object.defineProperty(globalThis, 'Worker', originalWorker);
+		else Reflect.deleteProperty(globalThis, 'Worker');
+	}
 });
 
 test('browser refresh preserves unchanged Workers and pending calls, and cleans up changed packages before replacement', async () => {
@@ -285,7 +413,7 @@ test('browser refresh preserves unchanged Workers and pending calls, and cleans 
 				};
 			},
 			resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
-		}, remote, remote.instantiation, remote.trust);
+		}, remote, remote.instantiation, remote.trust, remote.lifecycle);
 		const registration = api.registerClientHandler(async operation => {
 			if ((operation as { operation: string; }).operation === 'setStatusBarEntries') return { result: 'done' };
 			assert.deepEqual(operation, { operation: 'readInitialization' });
@@ -376,7 +504,7 @@ for (const revocation of ['disablement', 'workspace trust']) {
 					};
 				},
 				resources: new ExtensionResourceLoaderService(async () => new Uint8Array()),
-			}, remote, remote.instantiation, remote.trust);
+			}, remote, remote.instantiation, remote.trust, remote.lifecycle);
 			const registration = api.registerClientHandler(async () => ({ result: 'initialization', initialization: { workspaceFolders: [], workspaceName: null, workspaceFile: null, configurationValues: {}, configurationData: null } }));
 			using handler = toDisposable(() => registration.dispose());
 			const published: Promise<ExtensionHostFleetSnapshot>[] = [];

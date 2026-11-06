@@ -13,6 +13,8 @@ use ash_package_store::PackageStore;
 use ash_package_store::validate_package_identity;
 use serde::Deserialize;
 
+use crate::process::PackageDigest;
+
 const STORE_DIRECTORY: &str = "app-server-packages";
 const METADATA_FILE: &str = "ash-package.json";
 const PIN_FILE: &str = "pinned-build-id";
@@ -45,13 +47,56 @@ struct JavaScriptRuntime {
 pub(crate) fn selected_backend(
     profile_root: &Path,
     caller_backend: &Path,
+    package_digest: PackageDigest<'_>,
+) -> Result<PathBuf, String> {
+    let electron = std::env::var_os(crate::runtime::ELECTRON_PATH_ENV).map(PathBuf::from);
+    selected_backend_with_electron(
+        profile_root,
+        caller_backend,
+        electron.as_deref(),
+        package_digest,
+    )
+}
+
+pub(crate) fn prepare_desktop_backend(
+    profile_root: &Path,
+    caller_backend: &Path,
+    electron: &Path,
+) -> Result<(), String> {
+    let profile_root =
+        ash_utils_home_dir::resolve_path(profile_root).map_err(|error| error.to_string())?;
+    let endpoint = crate::endpoint::EndpointPaths::prepare(&profile_root)?;
+    // A concurrent client can select the profile's first generation too.
+    let _operation_lock = endpoint.acquire_operation_lock()?;
+    selected_backend_with_electron(
+        &profile_root,
+        caller_backend,
+        Some(electron),
+        PackageDigest::NotProvided,
+    )
+    .map(drop)
+}
+
+fn selected_backend_with_electron(
+    profile_root: &Path,
+    caller_backend: &Path,
+    electron: Option<&Path>,
+    package_digest: PackageDigest<'_>,
 ) -> Result<PathBuf, String> {
     let store_root = profile_root.join(STORE_DIRECTORY);
     let store = PackageStore::open(&store_root).map_err(|error| error.to_string())?;
     if let Some(selected) = store.current().map_err(|error| error.to_string())? {
         return Ok(backend_in(&selected.package_root));
     }
-    install_from_client(profile_root, caller_backend, ClientSelection::Initial)
+    // The adjacent copy is an installation source. A profile with an installed
+    // generation runs and verifies that generation instead.
+    package_digest.verify(caller_backend)?;
+    install_from_client_with_electron(
+        profile_root,
+        caller_backend,
+        ClientSelection::Initial,
+        electron,
+    )
 }
 
 pub(crate) fn installed_version(profile_root: &Path) -> Result<Option<String>, String> {

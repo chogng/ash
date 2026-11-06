@@ -26,7 +26,7 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 	}
 
 	async showSaveDialog(options: ISaveDialogOptions): Promise<URI | undefined> {
-		this.validateFileSystem(options.availableFileSystems, options.defaultUri);
+		validateFileSystem(options.availableFileSystems, options.defaultUri);
 		// Untitled editors carry only a suggested name in a root-level URI.
 		// Pass that name to the system dialog without opening the filesystem root.
 		const result = await this.host.showSaveDialog({
@@ -46,26 +46,31 @@ export class FileDialogService extends AbstractFileDialogService implements IFil
 		if (options.canSelectFolders && options.canSelectFiles === false && getWorkspaceRemoteAuthority(this.workspace.getWorkspace())) {
 			return this.instantiation.createInstance(SimpleFileDialog).showOpenDialog(options);
 		}
-		this.validateFileSystem(options.availableFileSystems, options.defaultUri);
-		if (options.canSelectFiles === false && options.canSelectFolders !== true) {
-			throw new TypeError('Open dialog must allow files or folders');
-		}
-		const properties: NonNullable<OpenDialogOptions['properties']> = [];
-		if (options.canSelectFiles !== false) { properties.push('openFile'); }
-		if (options.canSelectFolders === true) { properties.push('openDirectory'); }
-		if (options.canSelectMany) { properties.push('multiSelections'); }
-		const result = await this.host.showOpenDialog({
-			properties,
-			...(options.defaultUri ? { defaultPath: options.defaultUri.fsPath } : {}),
-			title: options.title ?? localize('dialog.openFileTitle', 'Open File'),
-			...(options.openLabel ? { buttonLabel: options.openLabel } : {}),
-			...(options.filters ? { filters: options.filters.map(filter => ({ name: filter.name, extensions: [...filter.extensions] })) } : {}),
-		});
-		return !result.canceled && result.filePaths.length > 0 ? result.filePaths.map(path => URI.file(path)) : undefined;
+		return showLocalOpenDialog(this.host, options);
 	}
+}
 
-	private validateFileSystem(availableFileSystems: readonly string[] | undefined, defaultUri: URI | undefined): void {
-		if (availableFileSystems && !availableFileSystems.includes('file')) throw new Error('This file dialog supports the file scheme only');
-		if (defaultUri && defaultUri.scheme !== 'file') throw new Error('This file dialog supports the file scheme only');
+/** The native chooser can run before the workspace's file providers are ready. */
+export async function showLocalOpenDialog(host: INativeHostApi, options: IOpenDialogOptions): Promise<readonly URI[] | undefined> {
+	validateFileSystem(options.availableFileSystems, options.defaultUri);
+	if (options.canSelectFiles === false && options.canSelectFolders !== true) {
+		throw new TypeError('Open dialog must allow files or folders');
 	}
+	const properties: NonNullable<OpenDialogOptions['properties']> = [];
+	if (options.canSelectFiles !== false) { properties.push('openFile'); }
+	if (options.canSelectFolders === true) { properties.push('openDirectory'); }
+	if (options.canSelectMany) { properties.push('multiSelections'); }
+	const result = await host.showOpenDialog({
+		properties,
+		...(options.defaultUri ? { defaultPath: options.defaultUri.fsPath } : {}),
+		title: options.title ?? localize('dialog.openFileTitle', 'Open File'),
+		...(options.openLabel ? { buttonLabel: options.openLabel } : {}),
+		...(options.filters ? { filters: options.filters.map(filter => ({ name: filter.name, extensions: [...filter.extensions] })) } : {}),
+	});
+	return !result.canceled && result.filePaths.length > 0 ? result.filePaths.map(path => URI.file(path)) : undefined;
+}
+
+function validateFileSystem(availableFileSystems: readonly string[] | undefined, defaultUri: URI | undefined): void {
+	if (availableFileSystems && !availableFileSystems.includes('file')) throw new Error('This file dialog supports the file scheme only');
+	if (defaultUri && defaultUri.scheme !== 'file') throw new Error('This file dialog supports the file scheme only');
 }

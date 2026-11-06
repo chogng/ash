@@ -153,13 +153,21 @@ for (const mode of ['chat', 'code'] as const) {
 					openUntitledSession(id: string) { opened.push(id); },
 				} as unknown as ISessionsService;
 				using list = new SessionsList(dom.window.document.body, 'Sessions', mode, management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, listCommands, listContextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage));
-				const rowIds = (): string[] => [...list.domNode.querySelectorAll<HTMLElement>('[data-item]')].map(row => row.dataset.item!);
-				assert.deepEqual(rowIds(), ['session:saved']);
+				const assertRows = (...draftIds: string[]): void => {
+					const rows = [...list.domNode.querySelectorAll<HTMLElement>('[data-item]')].map(row => row.dataset.item);
+					const draftRows = draftIds.map(id => `untitled:${id}`);
+					// Code shows the saved workspace under Projects, above unassigned drafts in Recents.
+					assert.deepEqual(rows, mode === 'code' ? ['session:saved', ...draftRows] : [...draftRows, 'session:saved']);
+				};
+				assertRows();
+				if (mode === 'code') {
+					assert.match(list.domNode.querySelector('[data-item="session:saved"]')?.getAttribute('data-parent-section') ?? '', /^workspace:/u);
+				}
 				writeNewChatDraftState(storage, { mode: 'agent', text: ' \n\t', contexts: [] }, 'untitled:blank', chatInputStatePersistence);
-				assert.deepEqual(rowIds(), ['session:saved']);
+				assertRows();
 
 				writeNewChatDraftState(storage, { mode: 'agent', text: 'Keep this draft', contexts: [] }, 'untitled:blank', chatInputStatePersistence);
-				assert.deepEqual(rowIds(), ['untitled:blank', 'session:saved']);
+				assertRows('blank');
 				const button = list.domNode.querySelector<HTMLButtonElement>('[data-item="untitled:blank"] .ash-sessions-list-item')!;
 				const label = locale === 'zh-CN' ? '新建会话（草稿）' : 'New Session (draft)';
 				assert.equal(button.textContent, label);
@@ -172,17 +180,17 @@ for (const mode of ['chat', 'code'] as const) {
 
 				// The attachment-only draft is parked outside the visible arrangement.
 				writeNewChatDraftState(storage, { mode: 'agent', text: '', contexts: [{ id: 'source', kind: 'file', name: 'source.txt', content: 'Synthetic attachment' }] }, 'untitled:attachment', chatInputStatePersistence);
-				assert.deepEqual(rowIds(), ['untitled:blank', 'untitled:attachment', 'session:saved']);
+				assertRows('blank', 'attachment');
 				list.domNode.querySelector<HTMLButtonElement>('[data-item="untitled:attachment"] .ash-sessions-list-item')!.click();
 				assert.deepEqual(opened, ['attachment']);
 				storage.store('sessions.inputDraft:untitled:corrupt', 'invalid JSON', StorageScope.WORKSPACE, StorageTarget.MACHINE);
-				assert.deepEqual(rowIds(), ['untitled:blank', 'untitled:attachment', 'session:saved']);
+				assertRows('blank', 'attachment');
 
 				writeNewChatDraftState(storage, undefined, 'untitled:blank', chatInputStatePersistence);
-				assert.deepEqual(rowIds(), ['untitled:attachment', 'session:saved']);
+				assertRows('attachment');
 				drafts = [blank, corrupt];
 				changes.fire();
-				assert.deepEqual(rowIds(), ['session:saved']);
+				assertRows();
 				assert.equal(readNewChatDraftState(storage, 'untitled:attachment', chatInputStatePersistence)?.contexts[0]?.name, 'source.txt');
 			} finally { resetNlsResolver(); }
 		});
@@ -486,13 +494,13 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	assert.deepEqual(rows(chat), ['one', 'two']);
 
 	const listModel = new SessionsListModelService(storage);
-	listModel.setSortMode('created');
+	listModel.setSortMode('code', 'created');
 	assert.deepEqual(rows(restored), ['one', 'two']);
 	await moveUp(restored.domNode.querySelector<HTMLButtonElement>('[data-item="session:two"] button')!);
 	assert.deepEqual(rows(restored), ['two', 'one']);
-	listModel.moveSession('code:group:quality', ['two', 'one'], 'one', 'two');
+	listModel.moveSession('code', 'group:quality', ['two', 'one'], 'one', 'two');
 	assert.deepEqual(rows(restored), ['one', 'two']);
-	listModel.setSortMode('updated');
+	listModel.setSortMode('code', 'updated');
 	assert.deepEqual(rows(restored), ['two', 'one']);
 	const source = restored.domNode.querySelector<HTMLElement>('[data-row-order-id="two"]')!;
 	const destination = restored.domNode.querySelector<HTMLElement>('[data-section="group:release"] > h3 button')!;
@@ -618,6 +626,10 @@ test('The sidebar filters durable automation metadata and preserves the active s
 
 	await submenuAction(code, 'sessions.list.sortBy', 'sessions.list.sortBy.name').run();
 	await submenuAction(code, 'sessions.list.sortBy', 'sessions.list.sortDirection.descending').run();
+	assert.deepEqual(rows(chat), ['manual', 'run', remoteId]);
+	assert.equal(submenuAction(chat, 'sessions.list.sortBy', 'sessions.list.sortBy.updated').checked, true);
+	await submenuAction(chat, 'sessions.list.sortBy', 'sessions.list.sortBy.name').run();
+	await submenuAction(chat, 'sessions.list.sortBy', 'sessions.list.sortDirection.descending').run();
 	assert.deepEqual(rows(chat), [...catalog].sort((left, right) => right.title.localeCompare(left.title)).map(session => session.sessionId));
 
 	await submenuAction(code, 'sessions.list.groupBy', 'sessions.list.groupBy.status').run();
@@ -636,4 +648,24 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	assert.ok([...chat.domNode.querySelectorAll('[data-section^="grouping:repository:"] > h3 button')].some(button => button.textContent === 'team/repo'));
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.none').run();
 	assert.equal(chat.domNode.querySelector('[data-section^="grouping:"]'), null);
+});
+
+test('The previous shared sidebar sort seeds both modes once', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using domLifetime = toDisposable(() => dom.window.close());
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'list', flushInterval: 0 });
+	storage.store('sessions.list.sortMode', 'created', StorageScope.PROFILE, StorageTarget.USER);
+	storage.store('sessions.list.sortDirection', 'ascending', StorageScope.PROFILE, StorageTarget.USER);
+	const model = new SessionsListModelService(storage);
+	assert.deepEqual(model.getSort('chat'), { field: 'created', direction: 'ascending' });
+	assert.deepEqual(model.getSort('code'), { field: 'created', direction: 'ascending' });
+	await storage.flush();
+	assert.equal(storage.get('sessions.list.sortMode', StorageScope.PROFILE), undefined);
+	assert.equal(storage.get('sessions.list.sortDirection', StorageScope.PROFILE), undefined);
+
+	model.setSortMode('chat', 'name');
+	model.setSortDirection('code', 'descending');
+	const reopened = new SessionsListModelService(storage);
+	assert.deepEqual(reopened.getSort('chat'), { field: 'name', direction: 'ascending' });
+	assert.deepEqual(reopened.getSort('code'), { field: 'created', direction: 'descending' });
 });

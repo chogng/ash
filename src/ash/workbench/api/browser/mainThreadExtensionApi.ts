@@ -1,4 +1,6 @@
 import { MainThreadImageEditors } from './mainThreadImageEditors.js';
+import { IExtensionService } from '../../services/extensions/common/extensionService.js';
+import type { ExtensionImageEditorCommand } from '../../services/extensions/common/extensionManifest.js';
 import { MainThreadChatContext } from './mainThreadChatContext.js';
 import { MainThreadCanvases } from './mainThreadCanvases.js';
 import { IAgentHostCanvasCollection } from '../../contrib/canvases/common/agentHostCanvas.js';
@@ -175,6 +177,7 @@ export class MainThreadExtensionApi extends Disposable {
 		@IHostService private readonly host: IHostService,
 		@IAdapterManager adapters: IAdapterManager,
 		@IViewsService private readonly views: IViewsService,
+		@IExtensionService private readonly extensions: IExtensionService,
 	) {
 		super();
 		this.messages = this._register(instantiation.createInstance(MainThreadMessageService));
@@ -422,7 +425,7 @@ export class MainThreadExtensionApi extends Disposable {
 			(this.canvases ??= this._register(this.instantiation.createInstance(MainThreadCanvases, this.invocationTimeoutMillis))).update(snapshot);
 		}
 		this.customEditors.update(snapshot);
-		if (this.imageEditors || snapshot.extensions.some(owner => owner.registrations.some(registration => registration.kind === 'dataChannel' && registration.channelId === 'image.editor.v1'))) (this.imageEditors ??= this._register(this.instantiation.createInstance(MainThreadImageEditors, this.invocationTimeoutMillis))).update(snapshot);
+		if (this.imageEditors || snapshot.extensions.some(owner => owner.activation?.events.includes('onCapability:image.editor.v1') || owner.registrations.some(registration => registration.kind === 'dataChannel' && registration.channelId === 'image.editor.v1'))) (this.imageEditors ??= this._register(this.instantiation.createInstance(MainThreadImageEditors, this.invocationTimeoutMillis))).update(snapshot);
 		this.diagnostics.update(snapshot);
 		this.documents.update(snapshot);
 		this.configurationApi.update(snapshot);
@@ -615,6 +618,9 @@ export class MainThreadExtensionApi extends Disposable {
 
 			if (runtime.lifecycle === 'dormant') {
 				const signal = this.activationController.signal;
+				const editorPlacements = runtime.activation!.events.includes('onCapability:image.editor.v1')
+					? this.extensions.getExtensionPointContributions<readonly ExtensionImageEditorCommand[]>('imageEditorContextCommands')
+						.find(owner => owner.description.id === extensionId && owner.description.packageSha256 === runtime.packageDigest)?.value : undefined;
 				for (const command of runtime.activation!.commands) {
 					commands.push({
 						id: command.command, metadata: { description: command.title }, handler: async (accessor, ...args) => {
@@ -634,6 +640,13 @@ export class MainThreadExtensionApi extends Disposable {
 							return this.registrationInvoker(current, registration, signal)('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(extensionId, args), ...(registration.kind === 'command' && registration.menus?.some(placement => placement.menu.startsWith('editor/')) ? { activeEditor } : {}) }), signal);
 						}
 					});
+					for (const placement of editorPlacements ?? []) {
+						if (placement.command !== command.command) continue;
+						const [group, orderText] = (placement.group ?? '').split('@');
+						const order = orderText === undefined ? undefined : Number(orderText);
+						if (order !== undefined && !Number.isFinite(order)) continue;
+						menus.push({ id: extensionMenuId('editor/context'), item: { command: { id: command.command, title: command.title }, when: placement.when ? ContextKeyExpr.deserialize(placement.when) : undefined, group, order } });
+					}
 				}
 			}
 			if (runtime.lifecycle !== 'ready' || runtime.incarnation === undefined) continue;

@@ -28,7 +28,7 @@ import type { ChatInputDelegate } from '../../../../../workbench/contrib/chat/br
 import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
 import type { IChatInputPart } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import type { ChatInputEditorOptions } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
-import type { ChatTurnErrorAction } from '../../../../../workbench/contrib/chat/common/model/chatViewModel.js';
+import type { ChatStreamingResponseUpdate, ChatTurnErrorAction } from '../../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ChatListWidget } from '../../../../../workbench/contrib/chat/browser/widget/chatListWidget.js';
 import type { ChatInputState } from '../../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import type { ModelReasoningEffort } from '../../../../../workbench/services/chat/common/modelCatalog.js';
@@ -50,6 +50,7 @@ import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/co
 export interface ICoworkWidgetModel extends IDisposable {
 	readonly thread?: import('../../../../../workbench/services/chat/common/chatService.js').Thread;
 	readonly onDidChange: Event<void>;
+	readonly onDidChangePresentation?: Event<ChatStreamingResponseUpdate | void>;
 	readonly onDidChangeComposer: Event<void>;
 	readonly composerGeneration: number;
 	readonly sessionId: SessionId | undefined;
@@ -224,9 +225,9 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 			this.listWidget = widget;
 			widget.restoreViewState(state, this.model.items);
 		}));
-		this._register(this.model.onDidChange(() => {
+		this._register((this.model.onDidChangePresentation ?? this.model.onDidChange)(update => {
 			if (this.model.inputState.aiDisabled && this.voiceSessionController.isActive) void this.runVoice(() => this.voiceSessionController.disconnect());
-			this.render();
+			if (!update || !this.listWidget.tryQueueStreamingResponse(update)) this.render();
 		}));
 		this._register(this.model.onDidChangeComposer(() => { this.input.invalidatePendingInput(); this.listWidget.resetFind(); }));
 		this._register(this.voiceSessionController.onDidChange(() => { if (!this.isDisposed) this.render(); }));

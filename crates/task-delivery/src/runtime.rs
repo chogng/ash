@@ -279,7 +279,7 @@ impl Runtime {
                 command_id,
                 session_id: session_id.clone(),
                 thread_id: thread_id.clone(),
-                directory: directory.clone(),
+                directory: Some(directory.clone()),
                 input: vec![
                     UserInput::Context {
                         source_url: None,

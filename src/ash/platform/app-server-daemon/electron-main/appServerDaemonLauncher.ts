@@ -17,7 +17,7 @@ interface AppServerDaemonConnectionOptions {
 	readonly profileRoot: string;
 	readonly electronExecutable: string;
 	readonly workspaceRoot?: string;
-	readonly role: 'workbench' | 'agents' | 'credentials';
+	readonly role: 'workbench' | 'agents' | 'credentials' | 'credentials-codex';
 }
 
 /** Creates a connection carrier; stopping it leaves the profile's shared backend running. */
@@ -64,7 +64,7 @@ export function createAppServerDaemonLauncher(options: AppServerDaemonConnection
 		default: throw new Error(`Unsupported App Server host platform: ${packageLocation.platform}`);
 	}
 	const environment = { ...buildAppServerEnvironment(sourceEnvironment, hostPlatform, productEnvironment, 'desktop') };
-	if (options.role === 'credentials') {
+	if (options.role === 'credentials' || options.role === 'credentials-codex') {
 		for (const key of ['ASH_WORKSPACE_ROOT', 'ASH_DIR_GRANT_SOURCE', 'ASH_REMOTE_HOST', 'ASH_REMOTE_ROOT', 'ASH_REMOTE_RUNTIME']) { delete environment[key]; }
 	}
 	return {

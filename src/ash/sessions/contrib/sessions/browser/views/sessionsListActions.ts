@@ -2,7 +2,7 @@ import { Separator, SubmenuAction, type IAction } from '../../../../../base/comm
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
 import type { IProjectService } from '../../../../../platform/projects/common/projectService.js';
-import type { ISessionsListModelService, SessionSortDirection, SessionSortMode } from '../../../../services/sessions/browser/sessionsListModelService.js';
+import type { ISessionsListModelService, SessionSortDirection, SessionSortMode, SessionsListMode } from '../../../../services/sessions/browser/sessionsListModelService.js';
 
 export interface SessionListProjectOrganization {
 	readonly current?: string;
@@ -48,14 +48,15 @@ export function sessionListProjectActions(
 	}] : [move];
 }
 
-export function sessionSortActions(model: ISessionsListModelService): IAction[] {
+export function sessionSortActions(model: ISessionsListModelService, mode: SessionsListMode): IAction[] {
+	const current = model.getSort(mode);
 	const sort = (value: SessionSortMode, label: string): IAction => ({
 		id: `sessions.list.sortBy.${value}`, label, tooltip: '', enabled: true,
-		checked: model.sortMode === value, run: () => model.setSortMode(value),
+		checked: current.field === value, run: () => model.setSortMode(mode, value),
 	});
 	const direction = (value: SessionSortDirection, label: string): IAction => ({
 		id: `sessions.list.sortDirection.${value}`, label, tooltip: '', enabled: true,
-		checked: model.sortDirection === value, run: () => model.setSortDirection(value),
+		checked: current.direction === value, run: () => model.setSortDirection(mode, value),
 	});
 	return [
 		sort('name', localize('sessions.list.sortName', 'Name')),

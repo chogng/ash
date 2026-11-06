@@ -1,4 +1,5 @@
 import { SessionModelSelection } from '../../../browser/sessionModelSelection.js';
+import { findLastIdx } from '../../../../base/common/arraysFind.js';
 import { ChatRequestQueueKind } from '../../../../workbench/services/chat/common/chatService.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import { IAgentExecutionSettingsService } from '../../../../platform/agentHost/common/agentExecutionSettingsService.js';
@@ -7,7 +8,7 @@ import { IPromptsService } from '../../../../workbench/contrib/chat/common/promp
 import { toSkillSelectors } from '../../../../workbench/contrib/chat/common/skillSelectors.js';
 import { ILanguageModelsService } from '../common/languageModels.js';
 import { ILanguageModelsConfigurationService } from '../common/languageModelsConfiguration.js';
-import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Emitter, Event } from '../../../../base/common/event.js';
 import { canceled, isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { AgentInteractionDecision, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, ThreadChangesSummary, TurnChangeSetSummary, TurnInteraction } from '../../../../workbench/services/chat/common/chatService.js';
@@ -16,7 +17,7 @@ import type { SkillReference } from '../../../../platform/agentHost/common/appSe
 import type { ResolvedChatContext } from '../../../../workbench/services/chat/common/chatContextService.js';
 import type { IActiveSessionThread, ISession, IUntitledChatSession, ModelRef, SessionId, ThreadId } from '../../../services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { chatQueuedMessageListItems, chatTranscriptListItems, type IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
+import { chatQueuedMessageListItems, chatStreamingResponseUpdate, chatTranscriptListItems, type ChatStreamingResponseUpdate, type IChatListItem } from '../../../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ChatHistoryRedoModel } from '../../../../workbench/contrib/chat/common/model/chatHistoryRedoModel.js';
 import type { ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../../../workbench/services/chat/common/modelCatalog.js';
@@ -45,7 +46,7 @@ export type ChatWidgetSelection =
 export class CoworkWidgetModel extends Disposable {
 	private readonly chatService: IChatService;
 	private readonly sessionService: ISessionsManagementService;
-	private readonly _onDidChange = this._register(new Emitter<void>());
+	private readonly _onDidChange = this._register(new Emitter<ChatStreamingResponseUpdate | void>());
 	private readonly _onDidChangeComposer = this._register(new Emitter<void>());
 	private transcriptEntries: ThreadTranscriptEntry[] = [];
 	private transcriptRevision = 0;
@@ -88,7 +89,8 @@ export class CoworkWidgetModel extends Disposable {
 	private threadChangesError: string | undefined;
 	private summaryRequest = 0;
 
-	readonly onDidChange: Event<void> = this._onDidChange.event;
+	readonly onDidChangePresentation = this._onDidChange.event;
+	readonly onDidChange = Event.map(this.onDidChangePresentation, () => undefined);
 	readonly onDidChangeComposer: Event<void> = this._onDidChangeComposer.event;
 
 	constructor(chatService: IChatService, selection: ChatWidgetSelection, sessionService: ISessionsManagementService, @IPromptsService private readonly skills: IPromptsService, @ILanguageModelsService private readonly languageModels: ILanguageModelsService, @ILanguageModelsConfigurationService private readonly modelPreferences: ILanguageModelsConfigurationService, @IAgentExecutionSettingsService private readonly execution: IAgentExecutionSettingsService, @IConfigurationService private readonly configuration: IConfigurationService) {
@@ -839,13 +841,17 @@ export class CoworkWidgetModel extends Disposable {
 			this.scheduleRefresh();
 			return;
 		}
+		let streamingResponse: ChatStreamingResponseUpdate | undefined;
 		for (const change of update.changes) {
 			switch (change.type) {
 				case 'upsert': {
-					const index = this.transcriptEntries.findIndex((entry) => entry.entryId === change.entry.entryId);
+					const index = findLastIdx(this.transcriptEntries, entry => entry.entryId === change.entry.entryId);
 					const entry = cloneTranscriptEntry(change.entry);
 					if (index < 0) this.transcriptEntries.push(entry);
-					else this.transcriptEntries[index] = entry;
+					else {
+						if (update.changes.length === 1) streamingResponse = chatStreamingResponseUpdate(this.transcriptEntries[index], entry);
+						this.transcriptEntries[index] = entry;
+					}
 					break;
 				}
 				case 'remove': {
@@ -859,7 +865,7 @@ export class CoworkWidgetModel extends Disposable {
 			}
 		}
 		this.transcriptRevision = update.revision;
-		this._onDidChange.fire();
+		this._onDidChange.fire(streamingResponse);
 	}
 
 	private scheduleRefresh(): void {

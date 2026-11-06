@@ -1,8 +1,12 @@
 """Repository-owned builtin extension selection, staging and validation."""
 
+import gzip
+import hashlib
 import json
+import os
 import re
 import stat
+import struct
 from pathlib import Path
 
 from build.lib.tree import copy_regular_tree
@@ -68,3 +72,139 @@ def validate_builtin_extensions(extensions_directory: Path) -> None:
                     extension_directory
                 )
             )
+
+
+def write_builtin_extension_index(extensions: Path, output: Path) -> None:
+    """Freeze declarative resources and index the TypeScript package for verified reads."""
+    validate_builtin_extensions(extensions)
+    typescript = extensions / "typescript-basics"
+    deferred = typescript.is_dir() and _is_typescript_package(typescript)
+    packages = sorted(
+        (
+            path
+            for path in extensions.iterdir()
+            if path == typescript and deferred or _is_declarative(path)
+        ),
+        key=lambda path: path.name,
+    )
+    if not packages:
+        return
+    if len(packages) > 4096:
+        raise RuntimeError("Too many built-in extensions for the package index")
+    with (
+        output.open("wb") as raw,
+        gzip.GzipFile(
+            filename="", mode="wb", compresslevel=3, fileobj=raw, mtime=0
+        ) as index,
+    ):
+
+        def number(value: int) -> None:
+            index.write(struct.pack(">I", value))
+
+        def name(value: str) -> None:
+            encoded = value.encode("utf-8")
+            if not 0 < len(encoded) <= 1024 or any(
+                segment in ("", ".", "..") or any(char in segment for char in "\\:\0")
+                for segment in value.split("/")
+            ):
+                raise RuntimeError("Invalid path in the built-in extension index")
+            number(len(encoded))
+            index.write(encoded)
+
+        index.write(b"ASH-EXTENSIONS\0\x02" if deferred else b"ASH-EXTENSIONS\0\x01")
+        number(len(packages))
+        total_bytes = 0
+        for package in packages:
+            if re.fullmatch(r"[A-Za-z0-9_-]+", package.name) is None:
+                raise RuntimeError("Invalid built-in package directory name")
+            files = []
+            entry_count = 0
+            for directory, subdirs, entries in os.walk(
+                package, onerror=_raise_walk_error
+            ):
+                base = Path(directory)
+                entry_count += len(subdirs) + len(entries)
+                if entry_count > 8192:
+                    raise RuntimeError("Too many entries in a built-in extension")
+                for subdir in subdirs:
+                    if not stat.S_ISDIR((base / subdir).lstat().st_mode):
+                        raise RuntimeError("Invalid directory in a built-in extension")
+                files.extend(base / entry for entry in entries)
+            files.sort(key=lambda path: path.relative_to(package).as_posix())
+            if not 0 < len(files) <= 4096:
+                raise RuntimeError("Invalid built-in extension file count")
+            name(package.name)
+            defer_package = deferred and package == typescript
+            # Version 2 uses a zero count to distinguish the digest record
+            # from the existing frozen resource records.
+            number(0 if defer_package else len(files))
+            if defer_package:
+                number(len(files))
+                package_hash = hashlib.sha256(b"ash-extension-package-v1\0")
+            package_bytes = 0
+            for path in files:
+                info = path.lstat()
+                if (
+                    not stat.S_ISREG(info.st_mode)
+                    or info.st_nlink != 1
+                    or info.st_size > 16 * 1024 * 1024
+                ):
+                    raise RuntimeError("Invalid file in a built-in extension")
+                package_bytes += info.st_size
+                total_bytes += info.st_size
+                if package_bytes > 64 * 1024 * 1024 or total_bytes > 256 * 1024 * 1024:
+                    raise RuntimeError(
+                        "Built-in extensions exceed the catalog byte limit"
+                    )
+                relative = path.relative_to(package).as_posix()
+                name(relative)
+                number(info.st_size)
+                content = path.read_bytes()
+                if len(content) != info.st_size:
+                    raise RuntimeError(
+                        "Built-in extension changed during package assembly"
+                    )
+                if defer_package:
+                    index.write(hashlib.sha256(content).digest())
+                    encoded = relative.encode("utf-8")
+                    package_hash.update(struct.pack(">Q", len(encoded)))
+                    package_hash.update(encoded)
+                    package_hash.update(struct.pack(">Q", len(content)))
+                    package_hash.update(content)
+                    if relative == "package.json":
+                        index.write(content)
+                else:
+                    index.write(content)
+            if defer_package:
+                index.write(package_hash.digest())
+        if index.tell() > 272 * 1024 * 1024:
+            raise RuntimeError("Built-in extension index exceeds its size limit")
+
+
+def _raise_walk_error(error: OSError) -> None:
+    raise error
+
+
+def _is_declarative(package: Path) -> bool:
+    try:
+        manifest = json.loads((package / "package.json").read_bytes())
+    except (ValueError, OSError):
+        return False
+    if not isinstance(manifest, dict) or any(
+        key in manifest
+        for key in ("main", "browser", "ashRuntime", "ashLanguageServers")
+    ):
+        return False
+    contributions = manifest.get("contributes")
+    return not isinstance(contributions, dict) or "debuggers" not in contributions
+
+
+def _is_typescript_package(package: Path) -> bool:
+    manifest = json.loads((package / "package.json").read_bytes())
+    return (
+        isinstance(manifest, dict)
+        and manifest.get("name") == "typescript"
+        and manifest.get("publisher") == "vscode"
+        and "ashLanguageServers" in manifest
+        and not any(key in manifest for key in ("main", "browser", "ashRuntime"))
+    )

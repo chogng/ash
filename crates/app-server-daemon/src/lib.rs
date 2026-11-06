@@ -46,6 +46,8 @@ pub enum ConnectionRole {
     Agents,
     /// Private native-host credentials carrier; never accepts renderer JSON-RPC.
     Credentials,
+    /// Private credentials carrier bound to the read-only Codex login.
+    CredentialsCodex,
     /// Authenticated execution protocol; no Agent requests are accepted on this connection.
     Execution {
         environment: String,
@@ -336,6 +338,7 @@ mod tests;
 mod command;
 pub use command::backend_executable_path;
 pub use command::run_command;
+pub use command::run_installed_command;
 pub use update::AutomaticUpdater;
 pub use update::start_automatic_updates;
 

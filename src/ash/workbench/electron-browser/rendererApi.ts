@@ -1,4 +1,4 @@
-import { DeferredPromise } from '../../base/common/async.js';
+import { DeferredPromise, raceCancellationError } from '../../base/common/async.js';
 import type {
 	IRuntimeEnvironment,
 } from '../../base/common/environment.js';
@@ -41,27 +41,19 @@ import { AppServerMemoryDiagnosticsService } from '../../platform/memory/browser
 import type { MemoryObservation } from '../../platform/memory/common/memoryDiagnosticsService.js';
 import { LocalAgentHostServiceClient } from '../../platform/agentHost/electron-browser/localAgentHostService.js';
 import { WorkbenchAgentHostService } from '../services/agentHost/electron-browser/agentHostService.js';
-import { createRendererHost, type RendererCapabilityContribution } from '../browser/webRendererApi.js';
+import type { RendererCapabilityContribution } from '../browser/webRendererApi.js';
 import { ElectronRendererClipboardService } from '../../platform/clipboard/electron-browser/electronRendererClipboardService.js';
 import { createDisconnectedRendererApi } from '../browser/rendererApi.js';
 import { AppServerAutomationService } from '../../platform/automations/browser/appServerAutomationService.js';
 import { registerAppServerWorkspaceHost, initializeWorkspace, initializeWorkspaceDirectories } from '../../platform/workspaces/electron-browser/appServerWorkspaceHost.js';
-import { DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
 import type { IWorkbenchHost } from '../browser/rendererApi.js';
 import { invoke } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { ReconnectableTerminalProcessService } from '../../platform/terminal/browser/reconnectableTerminalProcessService.js';
 import { operatingSystemFromNodePlatform } from '../../base/common/environment.js';
 import { sandboxProcess } from '../../base/parts/sandbox/electron-browser/globals.js';
-import { ConfigurationService } from '../../platform/configuration/common/configurationService.js';
-import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
-import { IPolicyService } from '../../platform/policy/common/policy.js';
-import { PolicyChannelClient } from '../../platform/policy/common/policyIpc.js';
-import { FileService } from '../../platform/files/common/fileService.js';
-import { IFileService } from '../../platform/files/common/files.js';
-import { FileUserDataProvider } from '../../platform/userData/common/fileUserDataProvider.js';
-import { ILogService, NullLoggerService } from '../../platform/log/common/log.js';
-import { Schemas } from '../../base/common/network.js';
+import { ILogService } from '../../platform/log/common/log.js';
 import { popup as popupContextMenu, close as closeContextMenu } from '../../base/parts/contextmenu/electron-browser/contextmenu.js';
 import { createNativeKeyboardLayoutApi } from '../../platform/keyboardLayout/electron-browser/nativeKeyboardLayoutApi.js';
 import { createUserKeyboardLayoutApi } from '../../platform/keyboardLayout/electron-browser/userKeyboardLayoutApi.js';
@@ -91,6 +83,8 @@ export interface AshElectronRendererApi extends IWorkbenchHost {
 	readonly localFiles: IFileSystemProvider;
 	readonly userDataHome: URI;
 	readonly workspace: IWorkspaceContextApi;
+	/** Settles once the initial binding is queued, needs a visible prompt, or has ended. */
+	readonly workspaceStartupScheduled: Promise<void>;
 	/** Settles after the first directory binding, including a declined startup prompt. */
 	readonly workspaceDirectoriesReady: Promise<void>;
 	readonly startWorkspaceDirectories: () => void;
@@ -99,51 +93,90 @@ export interface AshElectronRendererApi extends IWorkbenchHost {
 
 export type ElectronRendererCapabilityContribution = (client: AppServerProtocolClient, appServer: Parameters<RendererCapabilityContribution>[1], localClient: AppServerProtocolClient) => ReturnType<RendererCapabilityContribution>;
 
+/** Main-owned resources used by the renderer before and after App Server initialization. */
+export class ElectronRendererLocalApi extends Disposable {
+	readonly workspace = createWorkspaceContextApi();
+	readonly nativeHost: INativeHostApi;
+	readonly localFiles: DiskFileSystemProviderClient;
+	readonly keyboardLayout: INativeKeyboardLayoutApi;
+	readonly userKeyboardLayout: IUserKeyboardLayoutApi;
+	readonly paths: Promise<readonly [userDataHome: URI, localUserHome: URI]>;
+	readonly nativeContextMenu = { popup: popupContextMenu, close: closeContextMenu };
+
+	constructor(@IMainProcessService main: IMainProcessService) {
+		super();
+		this.nativeHost = createNativeHostApi(main);
+		this.keyboardLayout = createNativeKeyboardLayoutApi(main);
+		this.userKeyboardLayout = createUserKeyboardLayoutApi(main);
+		const channel = main.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME);
+		this.localFiles = this._register(new DiskFileSystemProviderClient(channel));
+		this.paths = Promise.all([
+			channel.call<string>('userDataHome').then(URI.parse),
+			channel.call<string>('userHome').then(URI.parse),
+		]);
+		void this.paths.catch(() => undefined);
+	}
+}
+
 /** Composes Electron renderer capabilities from domain-owned IPC adapters. */
-export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; readonly agentHosts?: boolean; }, workspaceTrust: IDirectoryPermissionRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>): Promise<AshElectronRendererApi & IDisposable> {
+export async function createElectronRendererApi(contributions: readonly ElectronRendererCapabilityContribution[], hostCapabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; readonly agentHosts?: boolean; readonly transportHandshake?: boolean; }, workspaceTrust: IDirectoryPermissionRequestService, mainProcessService: IMainProcessService, resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>, initializeRemoteExtensions?: (api: IExtensionHostApi, authority: string) => Promise<IExtensionHostApi>, localApi?: ElectronRendererLocalApi): Promise<AshElectronRendererApi & IDisposable> {
 	performance.mark('ash.rendererApi.start');
 	const resources = new DisposableStore();
-	const workspaceApi = createWorkspaceContextApi();
-	const nativeHost = createNativeHostApi(mainProcessService);
-	const remoteConnection = await createRemoteAgentApi().getConnection();
-	const connectionServices = resources.add(new InstantiationService());
-	// Connections are created before the Workbench window and own an independent service scope.
-	connectionServices.registerSingleton(IWebWorkerService, () => connectionServices.createInstance(WebWorkerService), { instantiation: InstantiationType.Delayed });
-	connectionServices.registerInstance(IMainProcessService, mainProcessService);
-	const connectionLogger = resources.add(new LoggerChannelClient(mainProcessService.getChannel('logger'))).createLogger('app-server', { hidden: true });
-	connectionServices.registerInstance(ILogService, connectionLogger);
-	connectionServices.registerSingleton(IRemoteSocketFactoryService, () => connectionServices.createInstance(RemoteSocketFactoryService));
-	const agentHost = resources.add(connectionServices.createInstance(WorkbenchAgentHostService, {
-		connection: remoteConnection,
-		capabilities: hostCapabilities,
-		onDidSuspendOS: listener => nativeHost.onDidSuspendOS(listener),
-		onDidResumeOS: listener => nativeHost.onDidResumeOS(listener),
-		resolveRemoteAuthority,
-		initializeRemoteExtensions,
-	} satisfies ConstructorParameters<typeof WorkbenchAgentHostService>[0]));
-	const localConnection = agentHost.localConnection;
-	const localClient = localConnection.client;
-
+	const local = localApi ?? resources.add(new ElectronRendererLocalApi(mainProcessService));
+	const { workspace: workspaceApi, nativeHost, localFiles } = local;
 	try {
-		const localFiles = resources.add(new DiskFileSystemProviderClient(mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME)));
-		const userDataHome = URI.parse(await mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call<string>('userDataHome'));
-		const profileFiles = resources.add(new FileService());
-		const profileProvider = resources.add(new FileUserDataProvider(localFiles, userDataHome));
-		resources.add(profileFiles.registerProvider(Schemas.vscodeUserData, profileProvider));
-		const configurationServices = resources.add(new InstantiationService());
-		configurationServices.registerInstance(IFileService, profileFiles);
-		configurationServices.registerInstance(ILogService, new NullLoggerService());
-		configurationServices.registerInstance(IPolicyService, resources.add(new PolicyChannelClient(mainProcessService.getChannel('policy'))));
-		const configuration = resources.add(configurationServices.createInstance(ConfigurationService, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' })));
-		await configuration.initialize();
+		const remoteConnection = await createRemoteAgentApi().getConnection();
+		const connectionServices = resources.add(new InstantiationService());
+		// Connections are created before the Workbench window and own an independent service scope.
+		connectionServices.registerSingleton(IWebWorkerService, () => connectionServices.createInstance(WebWorkerService), { instantiation: InstantiationType.Delayed });
+		connectionServices.registerInstance(IMainProcessService, mainProcessService);
+		const connectionLogger = resources.add(new LoggerChannelClient(mainProcessService.getChannel('logger'))).createLogger('app-server', { hidden: true });
+		connectionServices.registerInstance(ILogService, connectionLogger);
+		connectionServices.registerSingleton(IRemoteSocketFactoryService, () => connectionServices.createInstance(RemoteSocketFactoryService));
+		const agentHost = resources.add(connectionServices.createInstance(WorkbenchAgentHostService, {
+			connection: remoteConnection,
+			capabilities: hostCapabilities,
+			transportHandshake: hostCapabilities.transportHandshake,
+			onDidSuspendOS: listener => nativeHost.onDidSuspendOS(listener),
+			onDidResumeOS: listener => nativeHost.onDidResumeOS(listener),
+			resolveRemoteAuthority,
+			initializeRemoteExtensions,
+		} satisfies ConstructorParameters<typeof WorkbenchAgentHostService>[0]));
+		const localConnection = agentHost.localConnection;
+		const localClient = localConnection.client;
+
 		performance.mark('ash.rendererApi.connect-start');
-		const enabled = await agentHost.connect();
+		// Connect while the Workbench domain adapters load. The wire handshake only
+		// needs the connection services above.
+		const [enabled, [userDataHome, localUserHome], { createRendererHost }] = await Promise.all([
+			agentHost.connect(), local.paths, import('../browser/webRendererApi.js'),
+		]);
 		const connection = agentHost.connection;
 		const client = agentHost.client;
 		let backend: IWorkbenchHost;
 		const workspaceChanges = resources.add(new Emitter<void>());
 		const workspaceWindowReady = new DeferredPromise<void>();
-		resources.add(toDisposable(() => { void workspaceWindowReady.complete(); }));
+		const workspaceStartupScheduled = new DeferredPromise<void>();
+		const finishWorkspaceScheduling = (): void => {
+			if (workspaceStartupScheduled.isSettled) return;
+			performance.mark('ash.rendererApi.workspace-startup-scheduled');
+			void workspaceStartupScheduled.complete();
+		};
+		resources.add(toDisposable(() => {
+			void workspaceWindowReady.complete();
+			void workspaceStartupScheduled.complete();
+		}));
+		// Previously authorized folders can bind while the Workbench is being
+		// restored. Only a new permission prompt needs the window to be ready.
+		const startupTrust: IDirectoryPermissionRequestService = {
+			requiresDevelopmentTrust: workspaceTrust.requiresDevelopmentTrust,
+			async requestDirectoryPermissions(request, signal) {
+				finishWorkspaceScheduling();
+				await (signal ? raceCancellationError(workspaceWindowReady.p, signal) : workspaceWindowReady.p);
+				if (resources.isDisposed) throw new CancellationError();
+				return workspaceTrust.requestDirectoryPermissions(request, signal);
+			},
+		};
 		let workspaceDirectoriesReady = Promise.resolve();
 		let workspaceInitialization: { readonly generation: number; readonly promise: Promise<void>; state: 'restoring' | 'ready' | 'failed'; error?: unknown; } | undefined;
 		const trackWorkspaceInitialization = (promise: Promise<void>): Promise<void> => {
@@ -173,10 +206,8 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				} else if (remoteConnection.kind === 'remote') {
 					remoteHostLabel = remoteConnection.authority;
 				}
-				return trackWorkspaceInitialization(workspaceWindowReady.p.then(() => {
-					if (resources.isDisposed) throw new CancellationError();
-					return initializeWorkspace(client, workspaceTrust, backend.workspaceTrust, workspaceApi, { remoteHostLabel });
-				}));
+				if (resources.isDisposed) throw new CancellationError();
+				return trackWorkspaceInitialization(initializeWorkspace(client, startupTrust, backend.workspaceTrust, workspaceApi, { remoteHostLabel, onBindingQueued: finishWorkspaceScheduling }));
 			}
 			return workspaceInitialization.promise;
 		};
@@ -263,6 +294,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 				if (!isCancellationError(error)) throw error;
 			});
 			void workspaceDirectoriesReady.catch(() => undefined);
+			void workspaceDirectoriesReady.then(finishWorkspaceScheduling, finishWorkspaceScheduling);
 			// The selected execution host needs its roots after a runtime replacement,
 			// including SSH and extension hosts; local device recovery is independent.
 			resources.add(connection.onDidReconnect(() => {
@@ -273,6 +305,7 @@ export async function createElectronRendererApi(contributions: readonly Electron
 		} else {
 			// Desktop supports server features even when the UI development host starts disconnected.
 			backend = createDisconnectedRendererApi(true);
+			finishWorkspaceScheduling();
 		}
 
 		const agentHosts = hostCapabilities.agentHosts ? resources.add(connectionServices.createInstance(RemoteAgentHostService, {
@@ -316,15 +349,16 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			remote: createRemoteAgentApi(),
 			remoteConnections: createRemoteConnectionApi(),
 			agentHosts,
-			keyboardLayout: createNativeKeyboardLayoutApi(mainProcessService),
-			userKeyboardLayout: createUserKeyboardLayoutApi(mainProcessService),
-			nativeContextMenu: { popup: popupContextMenu, close: closeContextMenu },
+			keyboardLayout: local.keyboardLayout,
+			userKeyboardLayout: local.userKeyboardLayout,
+			nativeContextMenu: local.nativeContextMenu,
 			nativeHost,
 			editUserConfiguration: () => invoke<void>(EDIT_USER_CONFIGURATION_CHANNEL),
 			localFiles,
 			userDataHome,
-			localUserHome: URI.parse(await mainProcessService.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME).call<string>('userHome')),
+			localUserHome,
 			workspace: workspaceApi,
+			workspaceStartupScheduled: workspaceStartupScheduled.p,
 			workspaceDirectoriesReady,
 			startWorkspaceDirectories: () => { void workspaceWindowReady.complete(); },
 			reloadWorkspaceDirectories: async () => { if (enabled) await restoreWorkspace(false, true); },

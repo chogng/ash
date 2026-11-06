@@ -46,6 +46,8 @@ export const SESSIONS_EDITOR_WORD_WRAP = registerEditorPreference('sessions.edit
 	() => localize({ bundle: 'ash.workbench', key: 'sessions.editor.wordWrap' }, 'Editor Word Wrap'),
 	() => localize({ bundle: 'ash.workbench', key: 'sessions.editor.wordWrap.description' }, 'Control line wrapping in Agents Window file editors.'), wordWrapLabels);
 
+export const SESSIONS_CHATGPT_DEFAULT_BACKEND = 'sessions.chatgpt.defaultBackend';
+
 /** Appearance preferences owned by the dedicated Sessions window. */
 export const SessionsConfiguration = Object.freeze({
 	activityBarLocation: configurationRegistry.registerConfiguration<ActivityBarPosition>({

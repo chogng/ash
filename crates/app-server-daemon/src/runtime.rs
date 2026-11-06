@@ -81,9 +81,15 @@ impl ElectronRuntimeBinding {
     }
 
     pub(crate) fn availability(&self) -> RuntimeAvailability {
-        match Self::capture(&self.executable, &self.electron_version) {
-            Ok(current) if &current == self => RuntimeAvailability::Available,
-            Ok(_) | Err(_) => RuntimeAvailability::Unavailable,
+        // Installation already probed Node mode for these exact bytes. Check
+        // the binding without launching another copy of Electron at startup.
+        if self.executable.is_file()
+            && dunce::canonicalize(&self.executable).is_ok_and(|path| path == self.executable)
+            && file_digest(&self.executable).is_ok_and(|digest| digest == self.sha256)
+        {
+            RuntimeAvailability::Available
+        } else {
+            RuntimeAvailability::Unavailable
         }
     }
 
@@ -212,6 +218,7 @@ pub(crate) fn clear_binding(command: &mut Command) {
 }
 
 fn file_digest(path: &Path) -> Result<String, String> {
+    let _span = crate::startup_trace::StartupTrace::span("electron-sha256");
     let mut file = fs::File::open(path).map_err(|error| error.to_string())?;
     let mut digest = Sha256::new();
     let mut buffer = [0; 64 * 1024];
@@ -226,6 +233,7 @@ fn file_digest(path: &Path) -> Result<String, String> {
 }
 
 fn probe(executable: &Path) -> Result<Versions, String> {
+    let _span = crate::startup_trace::StartupTrace::span("electron-node-probe");
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| error.to_string())?
@@ -289,3 +297,7 @@ impl Drop for ProbeChild {
         let _ = self.0.wait();
     }
 }
+
+#[cfg(test)]
+#[path = "runtime_tests.rs"]
+mod tests;

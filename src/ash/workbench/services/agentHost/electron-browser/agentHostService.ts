@@ -17,6 +17,7 @@ import { IRemoteSocketFactoryService } from '../../../../platform/remote/common/
 interface WorkbenchAgentHostOptions {
 	readonly connection: RemoteAgentConnection;
 	readonly capabilities: { readonly browser: boolean; readonly textDocuments?: boolean; readonly appTools?: boolean; };
+	readonly transportHandshake?: boolean;
 	readonly onDidSuspendOS: INativeHostApi['onDidSuspendOS'];
 	readonly onDidResumeOS: INativeHostApi['onDidResumeOS'];
 	readonly resolveRemoteAuthority?: (api: IExtensionHostApi, factories: IRemoteSocketFactoryService, authority: string, attempt: number) => Promise<IAddress>;
@@ -39,6 +40,7 @@ export class WorkbenchAgentHostService extends Disposable {
 		this.localConnection = this._register(instantiationService.createInstance(LocalAgentHostServiceClient, {
 			clientName: 'ash-desktop',
 			connection: options.connection.kind === 'ssh' ? 'local' : 'workspace',
+			transportHandshake: options.transportHandshake === true && options.connection.kind === 'local',
 			initializeTimeoutMs: LOCAL_APP_SERVER_INITIALIZE_TIMEOUT_MS,
 			capabilities: { ...this.executionCapabilities(), directoryGrantsHost: { version: 1 } },
 		}));

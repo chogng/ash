@@ -1,9 +1,26 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { URI } from '../../../../../base/common/uri.js';
+import { Schemas } from '../../../../../base/common/network.js';
 import { extUriBiasedIgnorePathCase, extUriIgnorePathCase } from '../../../../../base/common/resources.js';
 import { TestConfigurationFiles, TestConfigurationService, TestWorkspaceService } from '../common/testServices.js';
 import { InMemoryFileSystemProvider } from '../../../../../platform/files/common/inMemoryFilesystemProvider.js';
+
+test('Workspace initialization reads user settings once for migration and parsing', async () => {
+	let reads = 0;
+	using files = new class extends TestConfigurationFiles {
+		override readFile(...args: Parameters<TestConfigurationFiles['readFile']>): ReturnType<TestConfigurationFiles['readFile']> {
+			reads++;
+			return super.readFile(...args);
+		}
+	}('{ "test.value": 42 }');
+	await files.readFile(URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }));
+	reads = 0;
+	using configuration = new TestConfigurationService({ files });
+	await configuration.initialize(files);
+	assert.equal(configuration.getValue('test.value'), 42);
+	assert.equal(reads, 1);
+});
 
 test('Workspace membership preserves URI boundaries, root ranking and casing', () => {
 	const rootUris = [

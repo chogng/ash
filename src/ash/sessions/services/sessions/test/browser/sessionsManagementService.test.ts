@@ -730,8 +730,8 @@ test('a catalog result from an old connection cannot replace the restored catalo
 	let release!: (result: { sessions: SessionDto[]; }) => void;
 	const original = fake.host.session.subscribeCatalog;
 	let first = true;
-	fake.host.session.subscribeCatalog = () => {
-		if (!first) return original();
+	fake.host.session.subscribeCatalog = owner => {
+		if (!first) return original(owner);
 		first = false;
 		return new Promise(resolve => { release = resolve; });
 	};

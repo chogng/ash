@@ -30,6 +30,26 @@ export async function copyHostOutput(source: string, destination: string): Promi
 	});
 }
 
+/** Reduces the installed Windows startup graph while retaining lazy imports and native dependencies. */
+export async function bundleWindowsMain(mainOutput: string): Promise<void> {
+	const { build } = await import('esbuild');
+	const outdir = join(mainOutput, 'src');
+	const result = await build({
+		absWorkingDir: mainOutput,
+		entryPoints: [join(outdir, 'main.js')],
+		outdir,
+		platform: 'node',
+		format: 'esm',
+		target: 'node24',
+		packages: 'external',
+		bundle: true,
+		splitting: true,
+		sourcemap: 'linked',
+		write: false,
+	});
+	await Promise.all(result.outputFiles.map(file => writeFile(file.path, file.contents)));
+}
+
 /** Publish hashes after copying the final desktop assets; package.json cannot hash itself. */
 export async function writeApplicationChecksums(applicationRoot: string): Promise<void> {
 	const checksums: Record<string, string> = {};

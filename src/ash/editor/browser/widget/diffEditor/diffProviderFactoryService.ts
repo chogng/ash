@@ -1,5 +1,5 @@
 import { CancellationTokenSource, type CancellationToken } from '../../../../base/common/cancellation.js';
-import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import type { IWebWorkerClient } from '../../../../base/common/worker/webWorker.js';
 import { IWebWorkerService } from '../../../../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerDescriptor } from '../../../../platform/webWorker/browser/webWorkerDescriptor.js';
@@ -12,8 +12,8 @@ import { WorkerDiffComputationService } from '../../services/workerDiffComputati
 
 export interface IDiffProviderFactoryService {
 	readonly _serviceBrand: undefined;
-	/** Each caller owns its cancellation lifetime; the first provider starts the shared worker. */
-	createDiffProvider(): IDocumentDiffProvider & IDisposable;
+	/** Each caller owns its cancellation lifetime. Background providers can defer Worker loading until computation. */
+	createDiffProvider(options?: { readonly prewarm?: boolean; }): IDocumentDiffProvider & IDisposable;
 }
 
 export const IDiffProviderFactoryService = createServiceIdentifier<IDiffProviderFactoryService>('diffProviderFactoryService');
@@ -21,8 +21,7 @@ export const IDiffProviderFactoryService = createServiceIdentifier<IDiffProvider
 /** Creates independently cancellable editor providers over the host's Worker transport. */
 export class WorkerBasedDiffProviderFactoryService extends Disposable implements IDiffProviderFactoryService {
 	declare readonly _serviceBrand: undefined;
-	private readonly computation = this._register(new MutableDisposable<WorkerDiffComputationService>());
-	private readonly preparedClient = this._register(new MutableDisposable<IWebWorkerClient<object>>());
+	private readonly computation = this._register(new WorkerDiffComputationService(() => this.createClient()));
 
 	constructor(@IWebWorkerService private readonly workers: IWebWorkerService) {
 		super();
@@ -35,24 +34,10 @@ export class WorkerBasedDiffProviderFactoryService extends Disposable implements
 		}));
 	}
 
-	private takeClient(): IWebWorkerClient<object> {
-		const prepared = this.preparedClient.clearAndLeak();
-		if (prepared) {
-			try { prepared.ensureAvailable(); return prepared; }
-			catch { prepared.dispose(); }
-		}
-		return this.createClient();
-	}
-
-	public createDiffProvider(): IDocumentDiffProvider & IDisposable {
+	public createDiffProvider(options?: { readonly prewarm?: boolean; }): IDocumentDiffProvider & IDisposable {
 		this.assertNotDisposed();
-		if (!this.computation.value) {
-			// Start loading when a comparison is requested, while its models resolve.
-			// Until the first non-empty computation takes it, this factory owns the client.
-			this.preparedClient.value = this.createClient();
-			this.computation.value = new WorkerDiffComputationService(() => this.takeClient());
-		}
-		return new WorkerBasedDocumentDiffProvider(this.computation.value);
+		if (options?.prewarm !== false) this.computation.prewarm();
+		return new WorkerBasedDocumentDiffProvider(this.computation);
 	}
 }
 

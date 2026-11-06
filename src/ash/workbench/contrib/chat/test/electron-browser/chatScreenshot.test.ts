@@ -9,7 +9,8 @@ import type { IConfigurationService } from '../../../../../platform/configuratio
 import type { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import type { ILogService } from '../../../../../platform/log/common/log.js';
-import { GLOBAL_KEYBINDING_UPDATE_CHANNEL, GLOBAL_KEYBINDING_TRIGGER_CHANNEL, type GlobalKeybindingResult } from '../../../../../platform/globalKeybindings/common/globalKeybindings.js';
+import { GLOBAL_KEYBINDING_UPDATE_CHANNEL, type GlobalKeybindingResult } from '../../../../../platform/globalKeybindings/common/globalKeybindings.js';
+import { IMAGE_VIEW_ATTACH_CHANNEL } from '../../../../../platform/imageView/common/imageView.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { ImageEditorService } from '../../../../services/imageEditor/browser/imageEditorService.js';
 import type { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
@@ -37,7 +38,7 @@ suite('Chat screenshot shortcut policy', () => {
 						return response;
 					},
 					on: (channel: string, listener: (value: unknown) => void) => {
-						assert.equal(channel, GLOBAL_KEYBINDING_TRIGGER_CHANNEL); listeners.add(listener);
+						assert.equal(channel, IMAGE_VIEW_ATTACH_CHANNEL); listeners.add(listener);
 						return { dispose: () => { listeners.delete(listener); } };
 					},
 				}
@@ -68,7 +69,7 @@ suite('Chat screenshot shortcut policy', () => {
 		return { notifications, contribution, editors, queries, commands, retireProvider: () => provider.dispose(), check: () => contribution.checkShortcut(), set global(value: boolean) { global = value; }, set binding(value: ResolvedKeybinding | undefined) { binding = value; }, [Symbol.dispose]: () => resources.dispose() };
 	}
 
-	test('conflicts notify once, preserve the active shortcut and route only this Chat lease', async () => {
+	test('conflicts retain the active shortcut and Chat receives only a completed screenshot', async () => {
 		using value = fixture();
 		await value.check();
 		assert.deepEqual(value.notifications.model.getNotifications(), []);
@@ -86,7 +87,9 @@ suite('Chat screenshot shortcut policy', () => {
 		response = { available: false, activeLabel: 'Control+Command+B' };
 		await value.check();
 		assert.match(value.notifications.model.getNotifications()[0]!.message, /Control\+Command\+B/);
-		for (const listener of listeners) { listener({ id: 'another.lease' }); listener({ id: 'chat.screenshot' }); }
+		const png = new Uint8Array(33);
+		png.set([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1]);
+		for (const listener of listeners) { assert.throws(() => listener({ id: 'chat.screenshot' }), /Invalid image PNG/); listener(png); }
 		assert.deepEqual(value.commands, [ScreenshotCommandId]);
 		response = { available: true, activeLabel: 'Control+Command+B' };
 		await value.check();

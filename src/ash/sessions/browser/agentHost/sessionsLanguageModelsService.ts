@@ -42,6 +42,10 @@ export class SessionsLanguageModelsService extends Disposable implements ILangua
 		const scope = this.scopes.getScope(); scope.assertCurrent();
 		return scope.services.models.readModelDefaults(...args);
 	}
+	readModelAvailability(...args: Parameters<ILanguageModelsService['readModelAvailability']>): ReturnType<ILanguageModelsService['readModelAvailability']> {
+		const scope = this.scopes.getScope(); scope.assertCurrent();
+		return scope.services.models.readModelAvailability(...args);
+	}
 	rememberSelectedModel(...args: Parameters<ILanguageModelsService['rememberSelectedModel']>): ReturnType<ILanguageModelsService['rememberSelectedModel']> {
 		const scope = this.scopes.getScope(); scope.assertCurrent();
 		return scope.services.models.rememberSelectedModel(...args);

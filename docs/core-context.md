@@ -51,6 +51,8 @@ ContextAssembler
 checkpoint 和 ContextManager。父子 Agent、fork Thread 或 side conversation 都不能共享可变
 ContextManager。
 
+App Server 在执行目标所属宿主解析 Session 的目录绑定、审批默认值和自动取材范围。Chat 默认无工作区，省略审批模式时使用 Manual，自动取材限于个人指令、获准自动读取的个人记忆和个人配置的技能。Code 创建时需要选定执行目录，省略审批模式时使用后端配置，还可使用获准的工作区指令、环境、技能目录、代码检索及工作区记忆。未记录归属的旧会话沿用现有默认值。自动注入的权限说明遵循同一范围，并保留当前 Session 和 Thread 明确获得的授权。显式输入和工具操作按各自的授权契约处理。Core 共用预算、压缩和组装逻辑，压缩只读取当前 Thread 的持久上下文。
+
 ContextManager 也不能成为第二份 canonical history。它允许保存 cache、baseline、token estimate
 和当前 window revision，但所有影响未来 prompt 的事实必须能够从 durable Thread history、
 checkpoint、context seed 与 policy snapshot 重建。

@@ -3,7 +3,7 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 import type { URI } from '../../../base/common/uri.js';
 import type { IQuickPickItem } from '../../quickinput/common/quickInput.js';
 
-import type { LanguagePackCatalog } from './languagePackContract.js';
+import type { LanguagePackCatalog, LanguagePackMetadata } from './languagePackContract.js';
 
 export interface ILanguagePackItem extends IQuickPickItem {
 	readonly id: string;
@@ -20,7 +20,8 @@ export interface ILanguagePackItem extends IQuickPickItem {
 export interface ILanguagePackService {
 	readonly onDidChange: Event<void>;
 	readonly whenReady: Promise<void>;
-	readonly catalogs: readonly LanguagePackCatalog[];
+	readonly catalogs: readonly LanguagePackMetadata[];
+	getCatalog(locale: string): Promise<LanguagePackCatalog | undefined>;
 	getInstalledLanguages(): Promise<ILanguagePackItem[]>;
 	getBuiltInExtensionTranslationsUri(id: string, language: string): Promise<URI | undefined>;
 

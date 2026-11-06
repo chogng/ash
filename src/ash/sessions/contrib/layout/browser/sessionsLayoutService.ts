@@ -21,15 +21,16 @@ import { ILifecycleService, StartupKind } from '../../../../workbench/services/l
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
-import { ISessionsLayoutService, type ISessionsEntry } from '../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsLayoutService, type ISessionsEntry, type ISessionsEntryOpenOptions } from '../../../services/layout/common/sessionsLayoutService.js';
 import { CODE_NAVIGATION_CONTAINER_ID, SESSIONS_NAVIGATION_CONTAINER_ID } from '../../sessions/browser/views/sessionsView.js';
-import { NewSessionDraftVisibleContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
+import { CHAT_WORKSPACE_NAVIGATION_ID } from '../../chat/common/constants.js';
+import { CodeConversationPageContext, NewSessionDraftVisibleContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 
 export const documentEntry: ISessionsEntry = {
-	id: 'code', workspaceMode: 'code', activityContext: 'sessions.activity.codeSelected', content: 'documents',
+	id: 'code', workspaceMode: 'code', activityContext: CodeConversationPageContext.key, content: 'documents',
 	sidebarContainerId: CODE_NAVIGATION_CONTAINER_ID, restoreCommand: 'sessions.open.code', newDraft: 'conversation', focus: 'editor',
 };
 
@@ -60,7 +61,6 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 	private readonly activityKeys = new Map<string, IContextKey<boolean>>();
 	private readonly pageGroupId: number;
 	private navigationQueue = Promise.resolve();
-	private onWillRestoreEntry: ((entry: ISessionsEntry) => void) | undefined;
 	public isChangingContent = false;
 	public get isSessionContent(): boolean { return !this.customViews.activeCustomView.get() && this.activeEntry.get()?.content !== 'editor'; }
 	public get isDocumentContent(): boolean { return this.documentContent.get(); }
@@ -180,10 +180,14 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		return pending;
 	}
 
-	public openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: { readonly source: 'restore' | 'startup'; }): Promise<void> {
+	public openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: ISessionsEntryOpenOptions): Promise<void> {
 		if (options?.source !== 'restore' && this.customViews.activeCustomView.get()) this.customViews.hideCustomView();
 		return this.runOperation(async () => {
-			if (options && !this.customViews.activeCustomView.get()) this.onWillRestoreEntry?.(entry);
+			// A conversation open can reuse the active entry without reapplying its document layout.
+			if (options?.focus === 'conversation' && !initialize && this.activeEntry.get() === entry) {
+				if (!this.customViews.activeCustomView.get()) { this.layout.focus(); }
+				return;
+			}
 			await this.controller.prepareContentChange();
 			if (this.isDisposed) { return; }
 			const previousEntry = this.activeEntry.get();
@@ -208,10 +212,15 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 					entry = { ...entry, workspaceMode: retainedMode === 'code' ? 'code' : 'chat' };
 				}
 				const sameWorkspace = previousEntry && (previousEntry.workspaceMode ?? 'chat') === (entry.workspaceMode ?? 'chat');
-				const sidebarContainerId = entry.sidebarContainerId
+				const defaultNavigation = this.viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id;
+				const unifiedNavigation = defaultNavigation === CHAT_WORKSPACE_NAVIGATION_ID ? defaultNavigation : undefined;
+				const sidebarContainerId = (entry.sidebarContainerId === CODE_NAVIGATION_CONTAINER_ID || entry.sidebarContainerId === SESSIONS_NAVIGATION_CONTAINER_ID
+					? unifiedNavigation ?? entry.sidebarContainerId
+					: entry.sidebarContainerId)
+					?? (sharedWorkspace ? unifiedNavigation : undefined)
 					?? (sameWorkspace ? this.views.getVisibleViewContainer(ViewContainerLocation.Sidebar)?.id : undefined)
 					?? (sharedWorkspace && entry.workspaceMode === 'code' ? CODE_NAVIGATION_CONTAINER_ID : undefined)
-					?? this.viewDescriptors.getDefaultViewContainer(ViewContainerLocation.Sidebar)?.id
+					?? defaultNavigation
 					?? SESSIONS_NAVIGATION_CONTAINER_ID;
 				this.activeEntry.set(entry, undefined);
 				const productEditor = entry.content === 'editor';
@@ -258,7 +267,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				this.storage.store(activeEntryKey, entry.restoreCommand, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				this.storage.store(activeEntryModeKey, sharedWorkspace ? entry.workspaceMode : undefined, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				if (this.customViews.activeCustomView.get()) { return; }
-				if (entry.focus === 'conversation') { this.layout.focus(); }
+				if ((options?.focus ?? entry.focus) === 'conversation') { this.layout.focus(); }
 				else if (entry.focus === 'editor') { documents ? this.controller.focus() : this.editors.focusActiveEditor(); }
 				else if (!sidebarVisible) { this.layout.focus(); }
 			} finally { this.isChangingContent = false; if (!this.isDisposed) { this.conversationChanged.fire(); } }
@@ -292,20 +301,15 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		this.storage.store(visibilityKey, JSON.stringify(Object.fromEntries(this.visibility)), StorageScope.PROFILE, StorageTarget.MACHINE);
 	}
 
-	public async restore(onWillRestoreEntry?: (entry: ISessionsEntry) => void): Promise<void> {
+	public async restore(): Promise<void> {
 		await this.controller.whenSettled();
 		if (this.isDisposed) { return; }
 		const desktopNew = CommandsRegistry.hasCommand('sessions.open.new');
-		this.onWillRestoreEntry = onWillRestoreEntry;
-		try {
-			if (desktopNew && this.lifecycle.startupKind === StartupKind.NewWindow) {
-				this.customViews.hideCustomView();
-				await this.commands.executeCommand('sessions.open.new', 'startup');
-			} else {
-				await this.restoreSavedEntry(desktopNew ? 'sessions.open.new' : 'sessions.open.chat');
-			}
-		} finally {
-			this.onWillRestoreEntry = undefined;
+		if (desktopNew && this.lifecycle.startupKind === StartupKind.NewWindow) {
+			this.customViews.hideCustomView();
+			await this.commands.executeCommand('sessions.open.new', 'startup');
+		} else {
+			await this.restoreSavedEntry(desktopNew ? 'sessions.open.new' : 'sessions.open.chat');
 		}
 		if (this.isDisposed) { return; }
 		for (const key of ['sessions.layout.activeMode', 'sessions.layout.primaryPage', 'sessions.activityBar.activePage', 'sessions.layout.primaryEditor']) {

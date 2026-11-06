@@ -207,6 +207,67 @@ fn saved_session_switches_directory_and_keeps_its_previous_working_copy() {
         std::fs::read_to_string(old_copy.join("from-old.txt")).unwrap(),
         "keep my changes"
     );
+    let clear = serde_json::json!({
+        "jsonrpc":"2.0","id":7,"method":"session/request","params":{
+            "sessionId":id,"commandId":"clear-directory","request":{"type":"clearDirectory"}
+        }
+    });
+    assert!(matches!(
+        selected_execution_target(&restarted, &remotes, &clear).unwrap(),
+        Some(SessionExecutionTarget::Local { .. })
+    ));
+    let cleared = crate::tests::call(&original, &mut connection, clear.clone());
+    assert_eq!(
+        cleared["result"]["value"]["session"]["sessionId"], id,
+        "{cleared}"
+    );
+    original.release_switched_session_directory(&session_id);
+    assert_eq!(
+        selected_execution_target(&restarted, &remotes, &clear).unwrap(),
+        None
+    );
+    let profile = restarted.server_for(options(None)).unwrap();
+    let mut profile_connection = initialize(&profile);
+    let retried = crate::tests::call(&profile, &mut profile_connection, clear);
+    assert_eq!(retried["result"]["value"], cleared["result"]["value"]);
+
+    // The gateway can select the profile host before a concurrent bind takes effect.
+    let stale_clear = serde_json::json!({
+        "jsonrpc":"2.0","id":8,"method":"session/request","params":{
+            "sessionId":id,"commandId":"clear-after-rebind","request":{"type":"clearDirectory"}
+        }
+    });
+    assert_eq!(
+        selected_execution_target(&restarted, &remotes, &stale_clear).unwrap(),
+        None
+    );
+    let rebound = crate::tests::call(
+        &original,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":9,"method":"session/request","params":{
+                "sessionId":id,"commandId":"rebind","request":{"type":"changeDirectory","root":old.path()}
+            }
+        }),
+    );
+    assert!(rebound.get("error").is_none(), "{rebound}");
+    let rebound_route = selected_execution_target(&restarted, &remotes, &stale_clear).unwrap();
+    assert!(matches!(
+        rebound_route,
+        Some(SessionExecutionTarget::Local { .. })
+    ));
+    let stale = crate::tests::call(&profile, &mut profile_connection, stale_clear.clone());
+    assert!(stale.get("error").is_some(), "{stale}");
+    assert_eq!(
+        selected_execution_target(&restarted, &remotes, &stale_clear).unwrap(),
+        rebound_route
+    );
+    let cleared_after_rebind = crate::tests::call(&original, &mut connection, stale_clear);
+    assert_eq!(
+        cleared_after_rebind["result"]["value"]["session"],
+        cleared["result"]["value"]["session"]
+    );
+    profile.close_connection(profile_connection);
     original.close_connection(connection);
 }
 
@@ -741,7 +802,14 @@ fn stalled_ssh_initialize_leaves_local_requests_available_and_eof_reaps_the_chil
 #[cfg(unix)]
 #[test]
 fn ssh_initialize_timeout_completes_the_catalog_and_preserves_the_gateway() {
-    let mut gateway = stalled_gateway(std::time::Duration::from_secs(1));
+    // Let the fixture read initialize under load, and let the client outwait the gateway deadline.
+    let timeout = std::time::Duration::from_secs(5);
+    let mut gateway = stalled_gateway(timeout);
+    gateway
+        .client
+        .writer
+        .set_read_timeout(Some(timeout * 2))
+        .unwrap();
     gateway
         .client
         .send(2, "session/list", serde_json::json!({}));

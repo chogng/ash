@@ -26,6 +26,33 @@ use std::io;
 use super::is_peer_disconnect;
 
 #[test]
+fn workbench_hello_responds_before_consuming_the_directory_initialize() {
+    let hello = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"transport/hello\",\"params\":null}\n";
+    let initialize = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"initialize\",\"params\":{}}\n";
+    let mut input = io::Cursor::new(format!("{hello}{initialize}").into_bytes());
+    let mut output = Vec::new();
+    let first = super::read_workbench_hello(&mut input, &mut output).unwrap();
+    assert!(matches!(first, super::WorkbenchFirstFrame::Hello(1)));
+    let reply: serde_json::Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(reply["id"], 1);
+    assert_eq!(
+        reply["result"]["schemaHash"],
+        ash_app_server_protocol::schema_hash()
+    );
+    assert_eq!(
+        &input.get_ref()[input.position() as usize..],
+        initialize.as_bytes()
+    );
+
+    output.clear();
+    let first = super::read_workbench_hello(io::Cursor::new(initialize), &mut output).unwrap();
+    assert!(
+        matches!(first, super::WorkbenchFirstFrame::Replay(bytes) if bytes == initialize.as_bytes())
+    );
+    assert!(output.is_empty());
+}
+
+#[test]
 fn peer_disconnects_are_normal_transport_shutdowns() {
     for kind in [
         io::ErrorKind::BrokenPipe,
@@ -43,30 +70,38 @@ fn peer_disconnects_are_normal_transport_shutdowns() {
 #[cfg(any(unix, windows))]
 fn connection_workers_close_sockets_and_release_services_before_returning() {
     use ash_app_server_transport::LocalConnections;
+    use ash_app_server_transport::LocalStream;
     use ash_uds::IpcStream;
     use std::io::Read;
     use std::sync::Arc;
 
-    let (mut stream, _peer) = IpcStream::pair().unwrap();
-    stream
-        .set_read_timeout(Some(std::time::Duration::from_secs(2)))
-        .unwrap();
+    let (stream, peer) = IpcStream::pair().unwrap();
+    let (mut reader, writer) = LocalStream::pair(stream).unwrap();
     let connections = Arc::new(LocalConnections::new());
-    let registration = connections.register(stream.try_clone().unwrap()).unwrap();
+    let registration = connections.register(writer.shutdown_handle()).unwrap();
     let service = Arc::new(());
     let released = Arc::downgrade(&service);
     let (ended, completion) = std::sync::mpsc::channel();
     let worker = std::thread::spawn(move || {
         let _service = service;
         let _registration = registration;
-        ended.send(stream.read(&mut [0])).unwrap();
+        ended.send(reader.read(&mut [0])).unwrap();
     });
     let workers = super::ConnectionWorkers {
         connections: Arc::clone(&connections),
         workers: vec![worker],
     };
 
-    drop(workers);
+    // Keep the peer open and silent. If shutdown fails, closing it here also unblocks the join.
+    let (joined, shutdown) = std::sync::mpsc::channel();
+    let owner = std::thread::spawn(move || {
+        drop(workers);
+        joined.send(()).unwrap();
+    });
+    let result = shutdown.recv_timeout(std::time::Duration::from_secs(5));
+    drop(peer);
+    owner.join().unwrap();
+    result.expect("managed connection owner did not finish shutdown");
 
     let closed = completion.recv().unwrap();
     assert!(

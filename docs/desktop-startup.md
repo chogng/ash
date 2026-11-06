@@ -373,3 +373,11 @@ pnpm run test:smoke:desktop:no-compile test/smoke/areas/windows/font-cache.spec.
 单窗口与自动恢复 Agents 各 5 轮，10/10 通过（2.2 分钟）；每轮三次启动均完成正常退出，迁移、原文归档、字体和布局恢复断言通过，保留的窗口日志没有 error 记录或旧 `IPC connection closed`。
 自动恢复变体第二次启动的退出请求分别晚于 `Agents restored` 5、6、4、11、5 ms，因此这组没有再次命中恢复尚未完成时退出的时序，也没有复现 10 月 21 日的退出停留，不能据此关闭根因待办。
 准备日志、逐次窗口日志和独立时序汇总在 `.build/macos-todo-20261029/{prepare.log,startup-quit.log,startup-quit-results/,startup-quit-analysis.json}`；随后另一批格式变更导致构建身份变化，已另存第二次准备日志，不混写本批来源。
+
+## 2026-11-06 Windows 首文件编辑验收
+
+此前移除 Snapshot 启动激活的 Windows 打包对照中，工作台恢复中位数从 1329 降至 1164 毫秒，首次编辑生效从 1530 升至 1660 毫秒，侧栏恢复等待从 351 降至 137 毫秒。原始数据位于 `.build/startup-memory-20261106/desktop-snapshot-native-timed-ab.json`。
+
+`bd00f5e926` 将启动请求指定的文件和该文件的草稿恢复提前到批量恢复之前。Windows 11 23H2 x64 上重新准备后端和 Desktop 后，真实窗口的首文件定位、草稿恢复、再次编辑及落盘测试各通过 3 轮，共 6/6 通过。另一个隔离场景用 `--goto` 启动，在渲染端同一时钟上记录目标编辑器就绪为 2031.5 毫秒、侧栏开始恢复为 2130.0 毫秒、窗格恢复完成为 2234.4 毫秒。场景验证了启动文件焦点、键盘输入、保存后的磁盘内容，以及从 Explorer 打开第二个文件。上述时间用于验证当前启动顺序；Windows 打包版的同机性能对照仍归入首文件与首次保存尾段测量。
+
+测试日志位于 `.build/todo-local-acceptance-20261106/{startup-smoke,startup-file-scenario}.log`。场景报告、截图、录像和 trace 位于 `.build/ash-playwright-mcp/evidence/todo-local-windows-startup-file-2026-11-06T12-57-40-764Z/`。

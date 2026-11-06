@@ -11,6 +11,8 @@ import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { Lexer } from '../../../../../../base/common/marked/marked.js';
+import { constObservable } from '../../../../../../base/common/observable.js';
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../../platform/extensions/common/extensionHostApi.js';
 import { createDisconnectedExtensionHostApi } from '../../../../../../platform/extensions/browser/extensionHostApi.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
@@ -22,8 +24,9 @@ import { IOpenerService } from '../../../../../../platform/opener/common/opener.
 import { IMarkdownRendererService, MarkdownRendererService } from '../../../../../../platform/markdown/browser/markdownRenderer.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { IHoverService } from '../../../../../../platform/hover/browser/hoverService.js';
-import { ILinkPresentationService } from '../../../../../../platform/dataChannel/common/dataChannel.js';
+import { ILinkPresentationService, type ILinkPresentationRule } from '../../../../../../platform/dataChannel/common/dataChannel.js';
 import { ChatMarkdownContentPart } from '../../../browser/widget/chatContentParts/chatMarkdownContentPart.js';
+import { IncrementalDOMMorpher } from '../../../browser/widget/chatContentParts/chatIncrementalRendering/chatIncrementalRendering.js';
 import { ChatContentMarkdownRenderer } from '../../../browser/widget/chatContentMarkdownRenderer.js';
 
 let math: Awaited<ReturnType<typeof startMarkdownMathExtension>>;
@@ -35,7 +38,11 @@ const snapshot = (): ExtensionHostFleetSnapshot => ({
 	}]
 });
 
-function services(overrides: Partial<IExtensionHostApi> = {}, opener: IOpenerService = { open: async () => true } as unknown as IOpenerService): InstantiationService {
+function services(
+	overrides: Partial<IExtensionHostApi> = {},
+	opener: IOpenerService = { open: async () => true } as unknown as IOpenerService,
+	linkPresentation?: { service: ILinkPresentationService; hover: Pick<IHoverService, 'setupHover'>; },
+): InstantiationService {
 	const instance = new InstantiationService(new ServiceCollection([IOpenerService, opener]));
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({ key: 'markdown.math.enabled', defaultValue: true, parse: value => Boolean(value) });
@@ -48,8 +55,8 @@ function services(overrides: Partial<IExtensionHostApi> = {}, opener: IOpenerSer
 		...overrides,
 	});
 	instance.registerInstance(IMarkdownRendererService, instance.createInstance(MarkdownRendererService));
-	instance.registerInstance(ILinkPresentationService, { onDidChangeLinkPresentationRules: Event.None, getLinkPresentationRule: () => undefined } as unknown as ILinkPresentationService);
-	instance.registerInstance(IHoverService, {} as IHoverService);
+	instance.registerInstance(ILinkPresentationService, linkPresentation?.service ?? { onDidChangeLinkPresentationRules: Event.None, linkPresentationRules: [] } as unknown as ILinkPresentationService);
+	instance.registerInstance(IHoverService, (linkPresentation?.hover ?? {}) as IHoverService);
 	return instance;
 }
 
@@ -99,6 +106,28 @@ suite('Shared chat Markdown rendering', () => {
 		]);
 		assert.equal(result.element.querySelectorAll('strong').length, 256);
 		assert.equal((result.element.textContent!.match(/Incomplete/g) ?? []).length, 256);
+	});
+
+	test('streaming Markdown recognizes late math closers and retires formulas on correction', async () => {
+		using scope = services();
+		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document });
+		const prefix = '**Price** $5 and $10. '.repeat(64) + '\n\n';
+		const render = async (value: string, incomplete = true): Promise<void> => {
+			part.tryIncrementalUpdate({ value }, incomplete);
+			const frame = new DeferredPromise<void>();
+			using scheduled = scheduleAtNextAnimationFrame(getWindow(part.domNode), () => frame.complete());
+			await frame.p;
+		};
+		for (const [opener, closer] of [['$', '$'], ['$$', '$$'], ['\\(', '\\)'], ['\\[', '\\]']]) {
+			const open = `${prefix}${opener}x+1`;
+			await render(open);
+			assert.equal(part.domNode.querySelector('[data-latex]'), null, opener);
+			await render(open + closer);
+			assert.deepEqual([...part.domNode.querySelectorAll('[data-latex]')].map(node => node.getAttribute('data-latex')), ['x+1'], opener);
+			await render(`${prefix}Corrected $5.`, false);
+			assert.equal(part.domNode.querySelector('[data-latex]'), null, opener);
+			assert.ok(part.domNode.textContent?.includes('Corrected $5.'));
+		}
 	});
 
 	test('formula closing delimiters retain the existing scan limit', () => {
@@ -168,6 +197,103 @@ suite('Shared chat Markdown rendering', () => {
 		assert.deepEqual(actions, [next]);
 	});
 
+	for (const [inline, selector] of [['**bold**', 'strong'], ['[Open](https://example.com)', 'a']] as const) {
+		test(`streaming Markdown resumes after closed ${selector} without inline code`, async () => {
+			using scope = services();
+			using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+			const prefix = `Read ${inline} for context. `.repeat(224);
+			let didRender: () => void = () => { };
+			using part = scope.createInstance(ChatMarkdownContentPart, {
+				ownerDocument: document,
+				asyncRenderCallback: () => didRender(),
+			});
+			const render = (value: string, incomplete: boolean) => new Promise<void>(resolve => {
+				didRender = resolve;
+				part.tryIncrementalUpdate({ value }, incomplete);
+			});
+			await render(prefix, true);
+			const stable = part.domNode.querySelector(selector);
+			assert.ok(stable);
+			const lexer = mock.method(Lexer, 'lex');
+			const appended = `${prefix}More **text** and [a link](https://example.org).`;
+			try {
+				await render(appended, true);
+				const lengths = lexer.mock.calls.map(call => call.arguments[0].length);
+				assert.ok(lengths.length && lengths.every(length => length < prefix.length), `Lexed source lengths: ${lengths.join(', ')}`);
+			} finally {
+				lexer.mock.restore();
+			}
+			assert.equal(part.domNode.querySelector(selector), stable);
+			using expected = renderer.render({ value: appended }, { fillInIncompleteTokens: true });
+			assert.equal(fragmentContents(part.domNode), expected.element.innerHTML);
+
+			const heading = `${appended}\n---`;
+			await render(heading, true);
+			using expectedHeading = renderer.render({ value: heading }, { fillInIncompleteTokens: true });
+			assert.equal(fragmentContents(part.domNode), expectedHeading.element.innerHTML);
+			assert.ok(part.domNode.querySelector('h2'));
+
+			const corrected = appended.replace('Read', 'Corrected');
+			await render(corrected, false);
+			using expectedCorrection = renderer.render({ value: corrected });
+			assert.equal(fragmentContents(part.domNode), expectedCorrection.element.innerHTML);
+		});
+	}
+
+	test('streaming Markdown list markers retain the checkpoint until the last item is filled', async () => {
+		using scope = services();
+		using renderer = scope.createInstance(ChatContentMarkdownRenderer);
+		for (const ordered of [false, true]) {
+			const marker = (index: number) => ordered ? `${index})` : '-';
+			const prefix = Array.from({ length: 128 }, (_, index) => `${marker(index + 1)} Item ${index + 1} with **bold** and \`code\`.`).join('\n');
+			let didRender: () => void = () => { };
+			using part = scope.createInstance(ChatMarkdownContentPart, {
+				ownerDocument: document,
+				asyncRenderCallback: () => didRender(),
+			});
+			const render = (value: string) => new Promise<void>(resolve => {
+				didRender = resolve;
+				part.tryIncrementalUpdate({ value }, true);
+			});
+			await render(prefix);
+			const stable = part.domNode.querySelector('li');
+			assert.ok(stable);
+			const lexer = mock.method(Lexer, 'lex');
+			try {
+				const tail = `${prefix}\n${marker(129)}`;
+				for (const value of [tail, `${tail} `, `${tail} Added item`]) {
+					const start = lexer.mock.callCount();
+					await render(value);
+					const lengths = lexer.mock.calls.slice(start).map(call => call.arguments[0].length);
+					assert.ok(lengths.length && lengths.every(length => length < 512), `Lexed source lengths: ${lengths.join(', ')}`);
+					using expected = renderer.render({ value }, { fillInIncompleteTokens: true });
+					assert.equal(fragmentContents(part.domNode), expected.element.innerHTML);
+					assert.equal(part.domNode.querySelector('li'), stable);
+				}
+				const loose = `${tail} Added item\n\n${marker(130)} Loose item`;
+				await render(loose);
+				using expected = renderer.render({ value: loose }, { fillInIncompleteTokens: true });
+				assert.equal(fragmentContents(part.domNode), expected.element.innerHTML);
+				assert.ok(part.domNode.querySelector('li > p'));
+			} finally {
+				lexer.mock.restore();
+			}
+		}
+	});
+
+	test('streaming Markdown discards a queued append when a replacement exceeds the size limit', async () => {
+		const committed: string[] = [];
+		using morpher = new IncrementalDOMMorpher(document.body, true, 16, markdown => committed.push(markdown.value));
+		assert.equal(morpher.tryMorph({ value: 'Queued append' }, true), true);
+		const replacement = 'An oversized replacement';
+		morpher.update({ value: replacement }, false);
+		assert.deepEqual(committed, [replacement]);
+		const frame = new DeferredPromise<void>();
+		using scheduled = scheduleAtNextAnimationFrame(getWindow(document.body), () => frame.complete());
+		await frame.p;
+		assert.deepEqual(committed, [replacement]);
+	});
+
 	test('large tails coalesce terminal snapshots and cancel queued work on clear, hide and disposal', async () => {
 		using scope = services();
 		const actions: string[] = [];
@@ -196,8 +322,12 @@ suite('Shared chat Markdown rendering', () => {
 		part.tryIncrementalUpdate({ value: '' }, false);
 		await frame();
 		assert.equal(part.domNode.textContent, '');
-		part.setVisible(false);
 		const before = updates;
+		assert.equal(part.tryQueueIncrementalUpdate({ value: prefix + 'queued before hiding' }, true), true);
+		part.setVisible(false);
+		await frame();
+		assert.equal(part.domNode.textContent, '');
+		assert.equal(updates, before);
 		part.tryIncrementalUpdate({ value: prefix + 'hidden' }, true);
 		await frame();
 		assert.equal(updates, before);
@@ -209,6 +339,56 @@ suite('Shared chat Markdown rendering', () => {
 		part.dispose();
 		await frame();
 		assert.equal(updates, completed);
+	});
+
+	test('Markdown tail patches retain link watchers and retire removed anchors', async () => {
+		using rulesChanged = new Emitter<void>();
+		const rule: ILinkPresentationRule = { id: 'example', uriPattern: /^https:\/\/example\.com\//u, kind: 'resource' };
+		let enabled = true;
+		let opened = 0;
+		let closed = 0;
+		using scope = services({}, undefined, {
+			service: {
+				_serviceBrand: undefined,
+				onDidChangeLinkPresentationRules: rulesChanged.event,
+				get linkPresentationRules() { return enabled ? [rule] : []; },
+				registerLinkPresentationProvider: () => { throw new Error('Unexpected registration'); },
+				getLinkPresentationRule: resource => enabled && rule.uriPattern.test(resource.toString()) ? rule : undefined,
+				createLinkPresentationWatcher: (_providerId, resource) => {
+					opened++;
+					return Object.assign(toDisposable(() => closed++), { presentation: constObservable({ kind: 'resource' as const, title: resource.path }) });
+				},
+			},
+			hover: {
+				setupHover: () => Object.assign(toDisposable(() => { }), { visible: false, show() { }, hide() { }, update() { } }),
+			},
+		});
+		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document });
+		const prefix = 'Read [first](https://example.com/stable) `code`. ' + 'Ordinary `code`. '.repeat(320);
+		const render = async (value: string, label: string) => {
+			part.tryIncrementalUpdate({ value }, true);
+			await changedUntil(part.domNode, () => part.domNode.querySelector('a:last-child')?.textContent === label);
+		};
+		const first = prefix + '[tail](https://example.com/tail)';
+		await render(first, '/tail');
+		const stable = part.domNode.querySelector('a');
+		assert.deepEqual([opened, closed], [2, 0]);
+		await render(first + ' [added](https://example.com/added)', '/added');
+		assert.equal(part.domNode.querySelector('a'), stable);
+		assert.deepEqual([opened, closed], [3, 0]);
+		await render(prefix + '[replaced](https://example.com/replaced)', '/replaced');
+		assert.equal(part.domNode.querySelector('a'), stable);
+		assert.deepEqual([opened, closed], [4, 2]);
+
+		enabled = false;
+		rulesChanged.fire();
+		assert.equal(stable?.textContent, 'first');
+		assert.equal(closed, opened);
+		enabled = true;
+		rulesChanged.fire();
+		assert.equal(stable?.textContent, '/stable');
+		part.dispose();
+		assert.equal(closed, opened);
 	});
 
 	test('large-tail reuse preserves canonical sanitization, escaped text and current link handlers', async () => {

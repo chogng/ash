@@ -66,6 +66,42 @@ suite('ChatGPT rich content', () => {
 		assert.equal((root.textContent?.match(/cite/gu) ?? []).length, 1);
 		assert.match(getChatGPTRichContentText(source, references), /CSV documentation[\s\S]*Read and write tabular data/u);
 	});
+
+	test('decodes direct web links, citations and entity labels inside Markdown containers', () => {
+		const link = '\uE200url\uE202Example / Repo\uE202https://example.test/repo?a=1&b=2\uE201';
+		const citation = '\uE200cite\uE202turn2search1\uE201';
+		const entity = '\uE200entity\uE202["software","GPUI Kit","UI library"]\uE201';
+		const invalid = '\uE200url\uE202Blocked link\uE202javascript:alert(1)\uE201';
+		const source = [
+			'1. ' + link + '：使用 Rust。',
+			'   另见 ' + citation,
+			'   - ' + entity,
+			'   - ' + invalid,
+			'   - `' + link + '`',
+			'',
+			'> 另一个示例',
+			'> ' + entity,
+			'',
+			'| Name |',
+			'| --- |',
+			'| ' + entity + ' |',
+		].join('\n');
+		const references = [{ id: 'turn2search1', title: 'Source', url: 'https://example.test/source', snippet: 'Details' }];
+		const root = document.createElement('div');
+		root.innerHTML = render(source, references);
+		assert.equal(root.querySelector('ol > li > a')?.getAttribute('href'), 'https://example.test/repo?a=1&b=2');
+		assert.equal(root.querySelector('ol > li > a')?.textContent, 'Example / Repo');
+		assert.match(root.querySelector('ol > li')?.textContent ?? '', /Repo：使用 Rust。/u);
+		assert.equal(root.querySelector('ol details.ash-chat-citation a')?.textContent, 'Source');
+		assert.deepEqual([...root.querySelectorAll('ol ul > li')].map(item => item.textContent), ['GPUI Kit', 'Blocked link', link]);
+		assert.equal(root.querySelector('code')?.textContent, link);
+		assert.match(root.querySelector('blockquote')?.textContent ?? '', /GPUI Kit/u);
+		assert.equal(root.querySelector('td')?.textContent, 'GPUI Kit');
+		root.querySelector('code')?.remove();
+		assert.doesNotMatch(root.textContent ?? '', /[\uE200-\uE202]|UI library/u);
+		assert.match(getChatGPTRichContentText(source, references), /使用 Rust。[\s\S]*Source[\s\S]*GPUI Kit/u);
+	});
+
 	test('keeps Markdown and nested component text in their original order', () => {
 		const source = 'Before\n\n<box gap={2}><box>**First**</box><row><icon name="arrow-down"/></row><text>Second</text></box>\n\nAfter';
 		const html = render(source);

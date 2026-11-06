@@ -3156,24 +3156,26 @@ impl ThreadController {
         })
     }
 
-    /// Prepares the destination under the Thread writer lease before publishing its new route.
+    /// Gives the host the current route while it prepares a directory change under the writer lease.
     pub fn change_session_directory(
         &self,
         session_id: &SessionId,
-        root: &std::path::Path,
+        root: Option<&std::path::Path>,
         command_id: CommandId,
-        prepare: impl FnOnce(&ThreadId) -> Result<(), CoreError>,
+        prepare: impl FnOnce(
+            &ThreadId,
+            Option<&ash_protocol::SessionExecutionTarget>,
+        ) -> Result<(), CoreError>,
         activate: impl FnOnce(&ThreadId) -> Result<(), CoreError>,
     ) -> Result<ThreadSnapshot, CoreError> {
         let thread_id = ThreadId::new(session_id.as_str())
             .map_err(|error| CoreError::InvalidInput(error.to_string()))?;
         self.mutate_thread(&thread_id, |snapshot| {
-            let command = ThreadCommand::ChangeDirectory {
-                root: root.to_path_buf(),
-            };
-            let target = Some(ash_protocol::SessionExecutionTarget::Local {
-                root: root.to_path_buf(),
-            });
+            let root = root.map(std::path::Path::to_path_buf);
+            let command = ThreadCommand::ChangeDirectory { root: root.clone() };
+            let target = root
+                .as_ref()
+                .map(|root| ash_protocol::SessionExecutionTarget::Local { root: root.clone() });
             if let Some(existing) = snapshot
                 .commands
                 .iter()
@@ -3204,7 +3206,7 @@ impl ThreadController {
                 &thread_id,
                 vec![ThreadEvent::ThreadDirectoryChanged {
                     thread_id: thread_id.clone(),
-                    root: root.to_path_buf(),
+                    root,
                 }],
                 BatchCommand::AtEvent {
                     index: 0,
@@ -3214,7 +3216,7 @@ impl ThreadController {
                     },
                 },
             )?;
-            prepare(&thread_id)?;
+            prepare(&thread_id, snapshot.execution_target.as_ref())?;
             self.commit_batch(&batch)?;
             *snapshot = next;
             activate(&thread_id)?;
@@ -4060,6 +4062,7 @@ fn thread_catalog_record(snapshot: &ThreadSnapshot) -> ThreadCatalogRecord {
             status: snapshot.status,
         },
         execution_target: snapshot.execution_target.clone(),
+        directory_configured: snapshot.directory_configured,
         model: snapshot.turns.last().and_then(|turn| turn.model.clone()),
         resumable_model_providers: Some(crate::thread_reducer::resumable_model_providers(snapshot)),
         sequence: snapshot.sequence,

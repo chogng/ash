@@ -2,7 +2,6 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { getNLSLanguage, localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { normalizeLocale } from '../../../../platform/languagePacks/common/languagePackCatalog.js';
 import { ILanguagePackStore } from '../../../../platform/languagePacks/common/languagePackStore.js';
 import { ILanguagePackService, type ILanguagePackItem } from '../../../../platform/languagePacks/common/languagePacks.js';
 import { IHostService } from '../../host/browser/host.js';
@@ -27,8 +26,7 @@ export class WorkbenchLocaleService extends Disposable implements ILocaleService
 
 	public async setLocale(item: ILanguagePackItem): Promise<void> {
 		await this.whenReady;
-		const requested = normalizeLocale(item.id);
-		const catalog = this.languagePacks.catalogs.find(catalog => catalog.locale.toLowerCase() === requested.toLowerCase());
+		const catalog = await this.languagePacks.getCatalog(item.id);
 		if (!catalog) { throw new RangeError(`Locale '${item.id}' is not installed`); }
 		// The resource must be durable before settings can select it at the next startup.
 		await this.store.write(catalog);

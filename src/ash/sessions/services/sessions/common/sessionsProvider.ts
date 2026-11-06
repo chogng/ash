@@ -5,10 +5,10 @@ import type { IActiveSessionThread, ISession, ModelRef, SessionExecutionTarget, 
 import type { ChatAgent } from '../../../../workbench/services/chat/common/chatService.js';
 import type { IAutomationStore } from '../../../../workbench/contrib/chat/common/automations/automationService.js';
 import type { CancellationToken } from '../../../../base/common/cancellation.js';
-import type { SessionSurface, SessionWorktreeStart } from '../../../../platform/agentHost/common/agent.js';
+import type { SessionWorktreeStart } from '../../../../platform/agentHost/common/agent.js';
 
 export interface ISessionCreateOptions {
-	readonly surface?: SessionSurface;
+	readonly surface?: 'code';
 	readonly automaticTitle?: true;
 	readonly devContainer?: boolean;
 	readonly branchName?: string;
@@ -58,7 +58,8 @@ export interface ISessionsProvider extends IDisposable {
 	forkChat?(sessionId: SessionId, threadId: ThreadId, title: string, creationId: string): Promise<IActiveSessionThread>;
 	canMoveChat?(): boolean;
 	canChangeDirectory?(): boolean;
-	changeDirectory?(sessionId: SessionId, root: string, commandId: string): Promise<void>;
+	canClearDirectory?(): boolean;
+	changeDirectory?(sessionId: SessionId, root: string | null, commandId: string, signal?: AbortSignal): Promise<void>;
 	moveChat?(sessionId: SessionId, threadId: ThreadId, destination: SessionId, commandId: string): Promise<void>;
 	setModel(model: ModelRef): Promise<void>;
 	archive(session: ISession): Promise<ISession>;

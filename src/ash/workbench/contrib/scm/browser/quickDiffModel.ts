@@ -88,7 +88,8 @@ export class QuickDiffModel extends Disposable implements IQuickDiffModel {
 
 	constructor(private readonly resource: URI, private readonly modified: TextModel, diffService: IDiffService, private readonly quickDiffService: IQuickDiffService, private readonly configuration: IConfigurationService) {
 		super();
-		this.diffProvider = this._register(diffService.createComputationService());
+		// Editors can attach before Git resolves a baseline, and clean files compare equal locally.
+		this.diffProvider = this._register(diffService.createComputationService({ prewarm: false }));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (!event.affectsConfiguration('scm.diffDecorationsIgnoreTrimWhitespace')
 				&& !event.affectsConfiguration(

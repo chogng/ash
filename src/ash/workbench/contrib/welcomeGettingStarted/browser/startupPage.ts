@@ -27,8 +27,7 @@ export class StartupPageRunnerContribution extends Disposable {
 		const startupEditor = this.configurationService.getValue<StartupEditor>(StartupEditorConfigurationKey);
 		if (startupEditor === 'none') return;
 		if (startupEditor === 'welcomePageInEmptyWorkbench' && this.workspaceContext.getWorkbenchState() !== WorkbenchState.EMPTY) return;
-		if (this.editorService.visibleEditors.length > 0) return;
 		await this.editorService.openEditor(startupEditor === 'agentSessionsWelcomePage' && !this.configurationService.getValue<boolean>(ChatAIDisabledSettingId)
-			? new AgentSessionsWelcomeInput() : createGettingStartedInput());
+			? new AgentSessionsWelcomeInput() : createGettingStartedInput(), { onlyWhenEmpty: true });
 	}
 }

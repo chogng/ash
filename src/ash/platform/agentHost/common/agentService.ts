@@ -164,7 +164,8 @@ export interface IAgentSessionService {
 	invokeRuntime?(providerId: string, request: Agent.SessionRuntimeRequest, signal: AbortSignal): Promise<Agent.SessionRuntimeResult>;
 	create(params: Agent.SessionCreateParams): Promise<Agent.SessionResult>;
 	canChangeDirectory?(): boolean;
-	changeDirectory?(params: Agent.SessionMutationParams & { readonly root: string; }): Promise<void>;
+	canClearDirectory?(): boolean;
+	changeDirectory?(params: Agent.SessionMutationParams & { readonly root: string | null; }): Promise<void>;
 	addWorkspaceFolder?(sessionId: string, path: string): Promise<void>;
 	saveEnvironmentProfile?(environmentId: string, variables: Readonly<Record<string, string>>): Promise<void>;
 	readEnvironmentProfile?(environmentId: string): Promise<Readonly<Record<string, string>> | undefined>;
@@ -174,8 +175,9 @@ export interface IAgentSessionService {
 	read(params: Agent.SessionReadParams): Promise<Agent.SessionResult>;
 	readCatalog(params: Agent.SessionReadParams): Promise<Agent.SessionCatalogReadResult>;
 	list(): Promise<Agent.SessionListResult>;
-	subscribeCatalog(): Promise<Agent.SessionListResult>;
-	unsubscribeCatalog(): Promise<void>;
+	/** Each consumer releases only its own interest in the connection's catalog. */
+	subscribeCatalog(owner: object): Promise<Agent.SessionListResult>;
+	unsubscribeCatalog(owner: object): Promise<void>;
 	subscribe(params: Agent.SessionReadParams): Promise<Agent.SessionSubscribeResult>;
 	unsubscribe(params: Agent.SessionReadParams): Promise<void>;
 	createThread(params: Agent.SessionOperationInput<'createThread'>): Promise<Agent.SessionThreadResult>;

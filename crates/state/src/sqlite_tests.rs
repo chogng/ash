@@ -186,6 +186,7 @@ fn catalog(session_id: &SessionId, thread_id: &ThreadId, sequence: u64) -> Threa
         surface: None,
         model: None,
         resumable_model_providers: Some(Default::default()),
+        directory_configured: false,
         execution_target: None,
         binding: agent_graph_store::ThreadBinding {
             agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
@@ -1217,9 +1218,9 @@ fn sqlite_replays_a_saved_session_directory_change_and_preserves_history() {
         threads
             .change_session_directory(
                 &id,
-                &destination,
+                Some(&destination),
                 command.clone(),
-                |_| {
+                |_, _| {
                     Err(core_api::CoreError::InvalidInput(
                         "destination unavailable".into(),
                     ))
@@ -1230,10 +1231,22 @@ fn sqlite_replays_a_saved_session_directory_change_and_preserves_history() {
     );
     assert_eq!(store.load(&thread_id).unwrap(), original);
     let changed = threads
-        .change_session_directory(&id, &destination, command.clone(), |_| Ok(()), |_| Ok(()))
+        .change_session_directory(
+            &id,
+            Some(&destination),
+            command.clone(),
+            |_, _| Ok(()),
+            |_| Ok(()),
+        )
         .unwrap();
     let retried = threads
-        .change_session_directory(&id, &destination, command, |_| unreachable!(), |_| Ok(()))
+        .change_session_directory(
+            &id,
+            Some(&destination),
+            command,
+            |_, _| unreachable!(),
+            |_| Ok(()),
+        )
         .unwrap();
     assert_eq!(changed.sequence, retried.sequence);
     drop(threads);
@@ -1244,11 +1257,35 @@ fn sqlite_replays_a_saved_session_directory_change_and_preserves_history() {
         store.read_session(&id).unwrap().unwrap().execution_target,
         target
     );
-    let replayed = ThreadController::with_store(store.clone())
-        .read_thread(&thread_id)
-        .unwrap();
+    let threads = ThreadController::with_store(store.clone());
+    let replayed = threads.read_thread(&thread_id).unwrap();
     assert_eq!(replayed.execution_target, target);
     assert_eq!(replayed.title, "Existing conversation");
+    assert_eq!(
+        &store.load(&thread_id).unwrap()[..original.len()],
+        original.as_slice()
+    );
+    threads
+        .change_session_directory(
+            &id,
+            None,
+            ash_protocol::CommandId::new("clear-directory").unwrap(),
+            |_, _| Ok(()),
+            |_| Ok(()),
+        )
+        .unwrap();
+    drop(threads);
+    drop(store);
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    assert_eq!(
+        store.read_session(&id).unwrap().unwrap().execution_target,
+        None
+    );
+    let cleared = ThreadController::with_store(store.clone())
+        .read_thread(&thread_id)
+        .unwrap();
+    assert_eq!(cleared.execution_target, None);
+    assert_eq!(cleared.title, "Existing conversation");
     assert_eq!(
         &store.load(&thread_id).unwrap()[..original.len()],
         original.as_slice()

@@ -1,11 +1,14 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
-import { disposableWindowInterval } from '../../../../base/browser/scheduler.js';
+import { disposableWindowInterval, disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
-import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
-import { derived, observableFromEvent, observableSignalFromEvent } from '../../../../base/common/observable.js';
+import { autorun, derived, observableFromEvent, observableSignalFromEvent } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
+import { SHOW_EXPERIMENTAL_CHATGPT } from '../common/chatGPTNative.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
@@ -14,11 +17,12 @@ import { IQuickInputService } from '../../../../platform/quickinput/common/quick
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
-import { ASH_CHAT_SELECTED_CONTEXT } from '../../chat/common/constants.js';
+import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_LAST_BACKEND_KEY } from '../../chat/common/constants.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import type { ChatListEntry, ChatListProject, ChatListSnapshot, ChatListSource } from '../../chat/browser/chatListModel.js';
 import { shareChatGPTConversation } from './chatGPTShare.js';
 import type { ChatGPTConversation } from '../browser/chatGPTClient.js';
-import { IChatGPTService, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
+import { IChatGPTNativeService, IChatGPTService, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
 
 const conversationIconPrefix = 'sessions.chatgpt.icon:';
 const projectArchivePrefix = 'sessions.chatgpt.projectArchived:';
@@ -36,6 +40,7 @@ function projectArchiveKey(id: string, scope: string | undefined): string | unde
 /** Projects ChatGPT's data into Ash's sidebar, including window selection and local row preferences. */
 export class ChatGPTList extends Disposable implements ChatListSource {
 	readonly snapshot;
+	private readonly nativeSelected;
 	private readonly loadingStatus: ISessionStatusIcon = {
 		label: localize('sessions.loadingConversation', 'Loading conversation…'),
 		kind: 'inProgress',
@@ -81,17 +86,28 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 			}
 			storage.remove(key, StorageScope.PROFILE);
 		}));
-		const context = new Set([ASH_CHAT_SELECTED_CONTEXT]);
-		const ashSelected = observableFromEvent(this,
+		// The provider catalog stays visible when the user leaves its editor for Code.
+		this.nativeSelected = observableFromEvent(this,
+			listener => storage.onDidChangeValue(event => {
+				if (event.scope === StorageScope.WORKSPACE && event.key === CHAT_WORKSPACE_LAST_BACKEND_KEY) listener(event);
+			}),
+			() => storage.get(CHAT_WORKSPACE_LAST_BACKEND_KEY, StorageScope.WORKSPACE) === 'chatgpt-native');
+		this._register(autorun(reader => {
+			chat.setHistoryNotificationsVisible?.(this.nativeSelected.read(reader) === !!chat.native);
+		}));
+		const context = new Set([ASH_CHAT_SELECTED_CONTEXT, SessionsWorkspaceModeContext.key]);
+		const chatSelected = observableFromEvent(this,
 			listener => contextKeys.onDidChangeContext(event => {
 				if (event.affectsSome(context)) listener(event);
 			}),
-			() => contextKeys.getValue(ASH_CHAT_SELECTED_CONTEXT) === true);
+			() => contextKeys.getValue(ASH_CHAT_SELECTED_CONTEXT) !== true
+				&& contextKeys.getValue(SessionsWorkspaceModeContext.key) !== 'code');
 		this.snapshot = derived<ChatListSnapshot>(reader => {
+			if (this.nativeSelected.read(reader) !== !!chat.native) return { entries: [] };
 			const state = chat.state.read(reader);
 			preferencesChanged.read(reader);
 			const current = selectedChatConversationId(state);
-			const showSelection = !ashSelected.read(reader);
+			const showSelection = chatSelected.read(reader);
 			const coworkRunning = state.coworkTasks.some(task => {
 				const status = task.thread?.turns.at(-1)?.status;
 				return status === 'created' || status === 'running' || status === 'cancelling';
@@ -109,7 +125,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 				// Custom GPT conversations also have gizmo IDs, but are not project members.
 				const currentProject = projectId && (projectId.startsWith('g-p-') || projects.has(projectId)) ? projectId : undefined;
 				return {
-					id: `chatgpt:${id}`,
+					id: `${chat.native ? 'chatgpt-native' : 'chatgpt'}:${id}`,
 					title, pinned,
 					createdAt: conversation.createdAt,
 					updatedAt: conversation.updatedAt,
@@ -177,18 +193,19 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		if (!state.connected || !state.networkAvailable) return { state: 'unavailable' };
 		if (!page) return { state: 'idle', load: () => this.chat.loadProjectConversations(projectId) };
 		if (page.status === 'loading') return { state: 'loading' };
-		return {
-			state: page.status === 'error' ? 'error' : 'more',
-			load: () => this.chat.loadProjectConversations(projectId, true),
-		};
+		if (page.status === 'error') return { state: 'error' };
+		return { state: 'more', load: () => this.chat.loadProjectConversations(projectId, true) };
 	}
 
 	attach(window: Window & typeof globalThis, isVisible: () => boolean): DisposableStore {
 		const store = new DisposableStore();
-		this.chat.setNetworkAvailable(window.navigator.onLine);
-		this.chat.initialize();
+		const reconnect = store.add(new MutableDisposable());
+		const active = () => this.nativeSelected.get() === !!this.chat.native;
+		if (!this.chat.native) {
+			this.chat.setNetworkAvailable(window.navigator.onLine);
+		}
 		const refresh = (): void => {
-			if (this.chat.state.get().pendingSync || window.document.visibilityState === 'visible' && isVisible()) {
+			if (this.chat.state.get().pendingSync || active() && window.document.visibilityState === 'visible' && isVisible()) {
 				void this.chat.refresh();
 			}
 		};
@@ -199,23 +216,40 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 			blurred = false;
 			refresh();
 		}));
-		store.add(addDisposableListener(window, 'offline', () => this.chat.setNetworkAvailable(false)));
-		store.add(addDisposableListener(window, 'online', () => { this.chat.setNetworkAvailable(true); refresh(); }));
+		store.add(addDisposableListener(window, 'offline', () => {
+			reconnect.clear();
+			if (!this.chat.native || active() || this.chat.state.get().pendingSync) this.chat.setNetworkAvailable(false);
+		}));
+		store.add(addDisposableListener(window, 'online', () => {
+			if (!active() && !this.chat.state.get().pendingSync) return;
+			if (this.chat.state.get().networkAvailable) { refresh(); return; }
+			if (reconnect.value) { return; }
+			// Wait for a stable reconnect before enabling history reads across the window.
+			reconnect.value = disposableWindowTimeout(window, () => {
+				reconnect.clear();
+				if (!active() && !this.chat.state.get().pendingSync) return;
+				const { connected, catalogScope } = this.chat.state.get();
+				this.chat.setNetworkAvailable(true);
+				if (!connected && !catalogScope) { this.chat.initialize(); }
+				else { refresh(); }
+			}, 1000);
+		}));
 		store.add(addDisposableListener(window.document, 'visibilitychange', refresh));
-		store.add(disposableWindowInterval(window, refresh, 60_000));
+		if (!this.chat.native) { store.add(disposableWindowInterval(window, refresh, 60_000)); }
 		return store;
 	}
 
-	loadMore(retry: boolean): void {
+	loadMore(): void {
+		if (this.nativeSelected.get() !== !!this.chat.native) return;
 		const state = this.chat.state.get();
-		if (state.connected && !state.busy && !state.sending && !state.managing && state.hasMore && (retry || !state.error)) {
+		if (state.connected && state.networkAvailable && !state.busy && !state.sending && !state.managing && state.hasMore && !state.error && !state.historyListFailed) {
 			void this.chat.loadMore();
 		}
 	}
 
 	private async open(id: string, signal: AbortSignal): Promise<void> {
-		await this.commands.executeCommand('sessions.show.chatgpt');
-		if (signal.aborted) return;
+		const opened = await this.commands.executeCommand(this.chat.native ? SHOW_EXPERIMENTAL_CHATGPT : 'sessions.show.chatgpt');
+		if (opened === false || signal.aborted) return;
 		await this.chat.select(id);
 		if (!signal.aborted) this.editors.focusActiveEditor();
 	}
@@ -258,4 +292,25 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		if (result.confirmed) { await this.chat.deleteConversation(conversation.id); }
 	}
 
+}
+
+export class ChatGPTNativeList extends Disposable implements ChatListSource {
+	private readonly delegate: ChatGPTList;
+	readonly snapshot;
+
+	constructor(
+		@IChatGPTNativeService chat: IChatGPTService,
+		@IInstantiationService instantiation: IInstantiationService,
+	) {
+		super();
+		const scope = this._register(instantiation.createChild(new ServiceCollection([IChatGPTService, chat])));
+		this.delegate = this._register(scope.createInstance(ChatGPTList));
+		this.snapshot = this.delegate.snapshot;
+	}
+
+	attach(window: Window & typeof globalThis, isVisible: () => boolean): DisposableStore {
+		return this.delegate.attach(window, isVisible);
+	}
+
+	loadMore(): void { this.delegate.loadMore(); }
 }

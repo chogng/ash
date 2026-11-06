@@ -8,6 +8,7 @@ export const IMAGE_VIEW_INITIALIZE_CHANNEL = 'ash:image-view:initialize';
 export const IMAGE_VIEW_COMPLETE_CHANNEL = 'ash:image-view:complete';
 export const IMAGE_VIEW_READY_CHANNEL = 'ash:image-view:ready';
 export const IMAGE_VIEW_PERMISSION_CHANNEL = 'ash:image-view:permission';
+export const IMAGE_VIEW_ATTACH_CHANNEL = 'ash:image-view:attach';
 
 /** Native presentation carries opaque client data, never editor models or feature settings. */
 export interface ImageViewRequest {
@@ -20,6 +21,8 @@ export interface ImageViewRequest {
 
 export interface ImageViewInitialization {
 	readonly image: Uint8Array;
+	/** The desktop host requested its bundled screenshot presentation. */
+	readonly desktopCapture?: true;
 	/** Host-owned metadata for a consent guide, instead of screen pixels. */
 	readonly permission?: { readonly applicationName: string; readonly icon: Uint8Array; };
 	readonly presentation: ImageViewRequest;
@@ -91,10 +94,12 @@ export function validateImageViewCompletion(value: unknown): ImageViewCompletion
 }
 
 export function validateImageViewInitialization(value: unknown): ImageViewInitialization {
-	if (!isRecord(value) || !['bundles,image,locale,presentation', 'bundles,image,locale,permission,presentation'].includes(Object.keys(value).sort().join(','))) {
+	if (!isRecord(value) || !['bundles,image,locale,presentation', 'bundles,image,locale,permission,presentation',
+		'bundles,desktopCapture,image,locale,presentation', 'bundles,desktopCapture,image,locale,permission,presentation'].includes(Object.keys(value).sort().join(','))) {
 		throw new TypeError('Invalid image view initialization');
 	}
 	const presentation = validateImageViewRequest(value.presentation);
+	if ('desktopCapture' in value && (value.desktopCapture !== true || presentation.source !== 'screen' || presentation.html !== '')) throw new TypeError('Invalid desktop screenshot initialization');
 	if (value.permission !== undefined) {
 		if (presentation.source !== 'screen' || !isRecord(value.permission)
 			|| Object.keys(value.permission).sort().join(',') !== 'applicationName,icon'

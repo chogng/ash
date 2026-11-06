@@ -7,12 +7,14 @@ import { isRecord } from '../../../../base/common/types.js';
 import type { IServerChannel } from '../../../../base/parts/ipc/common/ipc.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { ChatGPTAuthenticationError, type ChatGPTRequest, type ChatGPTResponse } from '../common/chatGPTTransport.js';
+import type { ChatGPTRecentHistoryGate } from './chatGPTRecentHistoryGate.js';
 import type { IChatGPTVerificationRuntime } from './chatGPTVerificationRuntime.js';
 import type { IChatGPTAuthentication, IChatGPTAuthorization } from './chatGPTAuthentication.js';
 
 const readPaths = new Set(['/backend-api/models', '/backend-api/conversations', '/backend-api/pins', '/backend-api/gizmos/snorlax/sidebar']);
 const writePaths = new Set(['/backend-api/f/conversation/prepare', '/backend-api/f/conversation', '/backend-api/f/conversation/resume', '/backend-api/stop_conversation', '/backend-api/files', '/backend-api/share/v2/create', '/realtime/vp']);
 const uploadedPath = (path: string): boolean => /^\/backend-api\/files\/[^/]+\/uploaded$/u.test(path);
+const nativeHistoryPath = (path: string): boolean => /^\/backend-api\/conversations\/[A-Za-z0-9_-]{1,240}(?:\/messages)?$/u.test(path);
 const conversationPath = (path: string): boolean => /^\/backend-api\/conversation\/[^/]+$/u.test(path);
 const projectDetailsPath = (path: string): boolean => /^\/backend-api\/gizmos\/g-p-[A-Za-z0-9_-]{1,240}$/u.test(path);
 const projectUpdatePath = (path: string): boolean => /^\/backend-api\/projects\/g-p-[A-Za-z0-9_-]{1,240}$/u.test(path);
@@ -33,6 +35,8 @@ interface PendingRequest {
 }
 
 export interface ChatGPTTransportOptions {
+	readonly native?: boolean;
+	readonly recentHistoryGate?: ChatGPTRecentHistoryGate;
 	readonly authentication: IChatGPTAuthentication;
 	readonly readVerificationScript: (signal: AbortSignal) => Promise<string>;
 	readonly createRuntime: (authorize: (url: URL) => Promise<Headers>) => IChatGPTVerificationRuntime;
@@ -62,7 +66,7 @@ export class ChatGPTTransport extends Disposable {
 			call: async <T>(_context: string, command: string, args: unknown): Promise<T> => {
 				if (command === 'authenticationContext' && args === undefined) { return await this.options.authentication.getContext() as T; }
 				if (!Array.isArray(args) || typeof args[0] !== 'string' || !/^[a-f0-9-]{36}$/u.test(args[0])) { throw new TypeError('Invalid ChatGPT request ID'); }
-				if (command === 'request' && args.length === 3 && typeof args[2] === 'string' && /^[a-f0-9]{32}$/u.test(args[2])) { return await this.request(args[0], readRequest(args[1]), args[2]) as T; }
+				if (command === 'request' && args.length === 3 && typeof args[2] === 'string' && /^[a-f0-9]{32}$/u.test(args[2])) { return await this.request(args[0], readRequest(args[1], this.options.native === true), args[2]) as T; }
 				if (command === 'read' && args.length === 1) { return await this.read(args[0]) as T; }
 				if (command === 'cancel' && args.length === 1) { return await this.cancel(args[0]) as T; }
 				throw new TypeError('Invalid ChatGPT transport operation');
@@ -139,29 +143,34 @@ export class ChatGPTTransport extends Disposable {
 		if (headersOnly) {
 			return this.prepareVerification(context, signal);
 		}
-		const runtime = this.getRuntime(context);
-		signal.throwIfAborted();
 		try {
-			const response = await this.fetchAuthorized(runtime, url, { method: request.method, headers: request.headers, body: request.body instanceof VSBuffer ? request.body.buffer : request.body, credentials: 'include', redirect: 'error', signal }, authorization);
-			if (!response.ok) {
-				this.logService.warn('chatgpt', 'ChatGPT rejected an HTTP request', {
-					status: response.status, method: request.method,
-					// Keep conversation and file identifiers out of diagnostic logs.
-					path: readPaths.has(url.pathname) ? url.pathname : undefined,
-				});
-			}
+			const send = async () => {
+				signal.throwIfAborted();
+				const runtime = this.getRuntime(context);
+				const response = await this.fetchAuthorized(runtime, url, { method: request.method, headers: request.headers, body: request.body instanceof VSBuffer ? request.body.buffer : request.body, credentials: 'include', redirect: 'error', signal }, authorization);
+				if (!response.ok) {
+					this.logService.warn('chatgpt', 'ChatGPT rejected an HTTP request', {
+						status: response.status, method: request.method,
+						// Keep conversation and file identifiers out of diagnostic logs.
+						path: readPaths.has(url.pathname) ? url.pathname : undefined,
+					});
+				}
+				return response;
+			};
+			const gate = request.method === 'GET' && url.pathname === '/backend-api/conversations' ? this.options.recentHistoryGate : undefined;
+			const response = gate && authorization.cacheScope ? await gate.request(authorization.cacheScope, signal, send) : await send();
 			const contentType = response.headers.get('content-type') ?? '';
+			const headers = new Headers();
+			const retryAfter = response.status === 429 ? response.headers.get('Retry-After') : null;
+			if (retryAfter !== null) { headers.set('Retry-After', retryAfter); }
 			const sdp = url.pathname === '/realtime/vp' && /^text\/plain(?:;|$)/iu.test(contentType);
 			const audio = url.pathname === synthesisPath && /^audio\/(?:mpeg|mp3)(?:;|$)/iu.test(contentType);
 			if (response.status !== 204 && !sdp && !audio && !/^(?:application\/(?:[\w.-]+\+)?json|text\/event-stream)(?:;|$)/iu.test(contentType)) {
 				await response.body?.cancel();
-				return new Response(null, { status: response.ok ? 502 : response.status });
+				return new Response(null, { status: response.ok ? 502 : response.status, headers });
 			}
-			return new Response(response.body, {
-				status: response.status, headers: {
-					'Content-Type': contentType,
-				}
-			});
+			headers.set('Content-Type', contentType);
+			return new Response(response.body, { status: response.status, headers });
 		} catch (error) { signal.throwIfAborted(); if (error instanceof ChatGPTAuthenticationError) { throw error; } return new Response(null, { status: 502 }); }
 	}
 
@@ -258,7 +267,7 @@ export class ChatGPTTransport extends Disposable {
 			// Empty values remove stale account routing and credentials from Chromium
 			// subrequests before the current owner's headers are applied.
 			const headers = new Headers({ Authorization: '', 'ChatGPT-Account-Id': '', 'X-OpenAI-Fedramp': '' });
-			if (url.origin !== 'https://chatgpt.com' || /%(?:2f|5c|00|25)/iu.test(url.pathname) || !(readPaths.has(url.pathname) || writePaths.has(url.pathname) || uploadedPath(url.pathname) || conversationPath(url.pathname) || renamePath(url.pathname) || deletePath(url.pathname) || filePath(url.pathname) || url.pathname.startsWith('/backend-api/sentinel/'))) { return headers; }
+			if (url.origin !== 'https://chatgpt.com' || /%(?:2f|5c|00|25)/iu.test(url.pathname) || !(readPaths.has(url.pathname) || writePaths.has(url.pathname) || uploadedPath(url.pathname) || conversationPath(url.pathname) || this.options.native && nativeHistoryPath(url.pathname) || renamePath(url.pathname) || deletePath(url.pathname) || filePath(url.pathname) || url.pathname.startsWith('/backend-api/sentinel/'))) { return headers; }
 			using authorization = await this.options.authentication.authorize(randomUUID(), context, new AbortController().signal);
 			for (const [name, value] of authorization.headers) { headers.set(name, value); }
 			return headers;
@@ -266,7 +275,7 @@ export class ChatGPTTransport extends Disposable {
 	}
 }
 
-function readRequest(value: unknown): ChatGPTRequest {
+function readRequest(value: unknown, native: boolean): ChatGPTRequest {
 	if (isRecord(value) && isRecord(value.body) && !(value.body instanceof VSBuffer)) {
 		const encoded = value.body.base64;
 		if (Object.keys(value.body).length !== 1 || typeof encoded !== 'string' || encoded.length > Math.ceil(20 * 1024 * 1024 / 3) * 4 || /[^A-Za-z0-9+/=]/u.test(encoded)) { throw new TypeError('Invalid ChatGPT upload bytes'); }
@@ -303,12 +312,18 @@ function readRequest(value: unknown): ChatGPTRequest {
 	const synthesis = url.pathname === synthesisPath && query.size === 4
 		&& validIdentifier(query.get('conversation_id')) && validIdentifier(query.get('message_id'))
 		&& query.get('voice') === 'juniper' && query.get('format') === 'mp3';
+	const before = query.get('before');
+	const nativeHistory = native && nativeHistoryPath(url.pathname)
+		&& query.get('num_turns') === '20' && query.get('include_has_versions') === 'true'
+		&& (url.pathname.endsWith('/messages')
+			? query.size === 3 && before !== null && before.length > 0 && before.length <= 2048
+			: query.size === 2);
 	const projectConversations = projectConversationsPath(url.pathname) && query.get('limit') === '20' && query.get('owned_only') === 'false'
 		&& query.size === (query.has('cursor') ? 3 : 2) && (!query.has('cursor') || (query.get('cursor')?.length ?? 0) > 0);
 	const allowed = url.origin === 'https://chatgpt.com' && !/%(?:2f|5c|00|25)/iu.test(url.pathname) && (headersOnly
 		? value.method === 'POST' && url.pathname === '/backend-api/f/conversation' && !url.search && value.body === undefined
 		: value.method === 'GET'
-			? readPaths.has(url.pathname) || conversationPath(url.pathname) || projectConversations || (!url.search && projectDetailsPath(url.pathname)) || synthesis
+			? readPaths.has(url.pathname) || conversationPath(url.pathname) || nativeHistory || projectConversations || (!url.search && projectDetailsPath(url.pathname)) || synthesis
 			: !url.search && (value.method === 'POST'
 				? writePaths.has(url.pathname) || uploadedPath(url.pathname) || renamePath(url.pathname)
 				: value.method === 'PATCH' ? conversationPath(url.pathname) || projectUpdatePath(url.pathname)

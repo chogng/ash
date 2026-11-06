@@ -38,9 +38,9 @@ test('keeps generated App Server schema modules separate from the decoder and sh
 	assert.ok(chunks.every(chunk => Buffer.byteLength(chunk.code) <= 500_000));
 });
 
-test('shares each language catalog between renderers without combining languages into an oversized chunk', async () => {
+test('shares language catalogs between renderers and keeps them out of the startup import graph', async () => {
 	const catalogs = ['en', 'zh-CN'].map(locale => `fixture/.build/desktop/localization/localizationCatalog.${locale}.ts`);
-	const index = 'fixture/.build/desktop/localization/localizationCatalogs.ts';
+	const index = 'fixture/.build/desktop/localization/localizationCatalogLoader.ts';
 	const result = await build({
 		configFile: false,
 		logLevel: 'silent',
@@ -48,8 +48,8 @@ test('shares each language catalog between renderers without combining languages
 			name: 'fixture',
 			resolveId(id) { return ['browser-entry', 'desktop-entry', index, ...catalogs].includes(id) ? `\0/${id}` : undefined; },
 			load(id) {
-				if (id === '\0/browser-entry' || id === '\0/desktop-entry') return `import { builtinLanguagePackCatalogs } from '${index}'; globalThis.fixture = builtinLanguagePackCatalogs;`;
-				if (id === `\0/${index}`) return catalogs.map((catalog, i) => `import { catalog as catalog${i} } from '${catalog}';`).join('\n') + '\nexport const builtinLanguagePackCatalogs = [catalog0, catalog1];';
+				if (id === '\0/browser-entry' || id === '\0/desktop-entry') return `import { loadCatalogs } from '${index}'; globalThis.fixture = loadCatalogs;`;
+				if (id === `\0/${index}`) return `export const loadCatalogs = [${catalogs.map(catalog => `() => import('${catalog}')`).join(', ')}];`;
 				const i = catalogs.findIndex(catalog => id === `\0/${catalog}`);
 				return i >= 0 ? `export const catalog = ${JSON.stringify(String(i).repeat(300_000))};` : undefined;
 			},
@@ -62,6 +62,9 @@ test('shares each language catalog between renderers without combining languages
 	assert.equal(languages.length, 2);
 	assert.deepEqual(languages.flatMap(chunk => Object.keys(chunk.modules)).sort(), catalogs.map(catalog => `\0/${catalog}`).sort());
 	assert.ok(languages.every(chunk => Object.keys(chunk.modules).length === 1));
+	const languageFiles = new Set(languages.map(chunk => chunk.fileName));
+	assert.ok(chunks.every(chunk => chunk.imports.every(file => !languageFiles.has(file))));
+	assert.deepEqual(new Set(chunks.flatMap(chunk => chunk.dynamicImports)), languageFiles);
 	assert.ok(chunks.every(chunk => Buffer.byteLength(chunk.code) <= 500_000));
 });
 

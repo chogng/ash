@@ -100,7 +100,10 @@ suite('Desktop Workbench Agent Host selection', () => {
 					if (!(message.data instanceof Uint8Array)) return;
 					pair.port2.postMessage({ ack: true });
 					const frame = JSON.parse(new TextDecoder().decode(message.data));
-					if (frame.method === 'initialize') {
+					if (frame.method === 'transport/hello') {
+						const { protocolVersion, schemaHash } = createTestInitializeResult();
+						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: { protocolVersion, schemaHash } }) + '\n') });
+					} else if (frame.method === 'initialize') {
 						handshakes.push({ channel, params: frame.params });
 						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: createTestInitializeResult() }) + '\n') });
 					} else if (frame.method === 'config/directoryGrants/read') {
@@ -184,8 +187,6 @@ suite('Desktop Workbench Agent Host selection', () => {
 			call: async <T>(command: string, argument?: unknown): Promise<T> => {
 				let result: unknown;
 				if (name === 'localFilesystem' && ['userDataHome', 'userHome'].includes(command)) result = URI.file('/profile').toString();
-				else if (name === 'localFilesystem' && command === 'readFile') result = { bytes: 'e30=', revision: 'settings-1' };
-				else if (name === 'policy' && command === 'updatePolicyDefinitions') result = {};
 				else if (name === 'logger' && command === 'log') { onLog?.(argument as LogEntry); }
 				else throw new Error(`Unexpected renderer channel call: ${name}/${command}`);
 				return result as T;
@@ -301,6 +302,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		using renderer = await createRendererApi([], { browser: false }, {
 			requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); }
 		}, mainProcess);
+		await renderer.workspaceDirectoriesReady;
 		assert.deepEqual(directoryBindings, [{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }] }]);
 		const localReconnected = new DeferredPromise<void>();
 		onInitialized = channel => { if (channel === 'ash:app-server:local:initialized') void localReconnected.complete(); };
@@ -325,6 +327,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 			using renderer = await createRendererApi([], { browser: false }, {
 				requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); }
 			}, mainProcess);
+			await renderer.workspaceDirectoriesReady;
 			const readStarted = new DeferredPromise<void>();
 			const releaseRead = new DeferredPromise<void>();
 			const preparing = new DeferredPromise<void>();
@@ -368,6 +371,8 @@ suite('Desktop Workbench Agent Host selection', () => {
 		using renderer = await createRendererApi([], { browser: false }, {
 			requestDirectoryPermissions: async () => 'cancel'
 		}, mainProcess);
+		renderer.startWorkspaceDirectories();
+		await renderer.workspaceDirectoriesReady;
 		assert.equal(renderer.appServer.recovery!.status, 'failed');
 		directoryAuthorized = true;
 		const completed = new DeferredPromise<unknown>();
@@ -388,6 +393,9 @@ suite('Desktop Workbench Agent Host selection', () => {
 		}, mainProcess);
 		const recovery = renderer.appServer.recovery!;
 		assert.equal(await renderer.appServer.getConnectionState(), 'ready');
+		assert.equal(prompts, 0, 'startup permission waits for the workbench to accept a prompt');
+		renderer.startWorkspaceDirectories();
+		await renderer.workspaceDirectoriesReady;
 		assert.equal(recovery.status, 'failed');
 		assert.equal(prompts, 1);
 		assert.deepEqual(directoryBindings, []);
@@ -406,17 +414,20 @@ suite('Desktop Workbench Agent Host selection', () => {
 		assert.deepEqual(directoryBindings, [{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }] }]);
 	});
 
-	test('startup directory failures still reject renderer creation', async () => {
+	test('startup directory failures reject workspace readiness while the renderer stays connected', async () => {
 		failDirectoryBinding = true;
-		await assert.rejects(createRendererApi([], { browser: false }, {
+		using renderer = await createRendererApi([], { browser: false }, {
 			requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); },
-		}, mainProcess), /restore rejected/);
+		}, mainProcess);
+		await assert.rejects(renderer.workspaceDirectoriesReady, /restore rejected/);
+		assert.equal(await renderer.appServer.getConnectionState(), 'ready');
 	});
 
 	test('workspace rebind failure remains failed and concurrent retries restore directories without reconnecting the ready carrier', async () => {
 		using renderer = await createRendererApi([], { browser: false }, {
 			requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); }
 		}, mainProcess);
+		await renderer.workspaceDirectoriesReady;
 		const recovery = renderer.appServer.recovery!;
 		const states: string[] = [];
 		const failedState = new DeferredPromise<void>();
@@ -459,6 +470,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		using renderer = await createRendererApi([], { browser: false }, {
 			requestDirectoryPermissions: async () => { throw new Error('Saved grants need no prompt'); }
 		}, mainProcess);
+		await renderer.workspaceDirectoriesReady;
 		const recovery = renderer.appServer.recovery!;
 		const entered = new DeferredPromise<void>();
 		const carrierSettled = new DeferredPromise<void>();
@@ -466,7 +478,10 @@ suite('Desktop Workbench Agent Host selection', () => {
 		const restored = new DeferredPromise<void>();
 		const staleFailure = new DeferredPromise<void>();
 		using deadline = new TimeoutTimer(() => {
-			for (const pending of [entered, carrierSettled, restored, staleFailure]) void pending.error(new Error('Workspace restoration did not settle'));
+			void entered.error(new Error('First workspace restoration did not start'));
+			void carrierSettled.error(new Error('First carrier replacement did not finish'));
+			void restored.error(new Error('Replacement workspace restoration did not finish'));
+			void staleFailure.error(new Error('Retired workspace restoration did not report its error'));
 		}, 5_000);
 		let first = true;
 		beforeWorkspaceRead = async () => {
@@ -476,13 +491,14 @@ suite('Desktop Workbench Agent Host selection', () => {
 			await barrier.p;
 		};
 		using changes = recovery.onDidChange(() => {
-			if (entered.isSettled && recovery.status === 'recovering') void carrierSettled.complete();
+			if (recovery.phase === 'workspace') void carrierSettled.complete();
 			if (directoryBindings.length === 2 && recovery.status === 'idle') void restored.complete();
 		});
 		try {
 			restart('ash:app-server:restart');
 			await entered.p;
 			await carrierSettled.p;
+			assert.equal(await renderer.appServer.getConnectionState(), 'ready');
 			assert.equal(recovery.status, 'recovering');
 			restart('ash:app-server:restart');
 			await restored.p;

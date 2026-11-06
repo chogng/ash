@@ -5,12 +5,15 @@
 //! descriptors and bounded resource bytes to their own transport and presentation layers.
 
 mod budget;
+mod bundled_index;
 mod diagnostic;
 mod package;
 mod packages;
 mod resource;
 mod source;
+mod theme;
 
+pub use package::DeferredExtensionPackage;
 pub use packages::ExtensionDescriptor;
 pub use packages::ExtensionDiagnostic;
 pub use packages::ExtensionDiagnosticCode;

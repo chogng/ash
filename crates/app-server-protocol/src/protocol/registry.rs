@@ -135,6 +135,10 @@ use crate::protocol::backup::BackupMoveParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::backup::BackupMoveResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupReadResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::backup::BackupRecordDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::backup::BackupRevisionDto;
@@ -1095,6 +1099,10 @@ use crate::protocol::extension_items::ExtensionItemsResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionCatalogReloadDto;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::extensions::ExtensionColorThemeReadResult;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::extensions::ExtensionColorThemeSourceDto;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionDiagnosticCodeDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::extensions::ExtensionDiagnosticDto;
@@ -1441,6 +1449,8 @@ use crate::protocol::initialize::InitializeResult;
 use crate::protocol::initialize::ProtocolVersion;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::initialize::ServerCapabilities;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::initialize::TransportHelloResult;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::instructions::InstructionDiagnosticDto;
 #[cfg(any(test, feature = "export"))]
@@ -2072,6 +2082,10 @@ use crate::protocol::model::ContextReadScope;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ContextToolDefinition;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelAvailabilityParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelAvailabilityResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelCatalogEntry;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelCatalogIssue;
@@ -2081,6 +2095,8 @@ use crate::protocol::model::ModelCatalogScope;
 use crate::protocol::model::ModelCatalogSource;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelCatalogStatus;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::model::ModelExecutionAvailability;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::model::ModelListParams;
 #[cfg(any(test, feature = "export"))]
@@ -3849,6 +3865,9 @@ client_methods! {
     AutomationStop => "automation/stop" {
         params: AutomationStopParams, response: AutomationRun, serialization: None,
     },
+    TransportHello => "transport/hello" {
+        params: (), response: TransportHelloResult, serialization: None,
+    },
     Initialize => "initialize" {
         params: InitializeParams,
         response: InitializeResult,
@@ -4632,6 +4651,11 @@ client_methods! {
         response: ModelListResult,
         serialization: GlobalSharedRead,
     },
+    ModelAvailability => "model/availability" {
+        params: ModelAvailabilityParams,
+        response: ModelAvailabilityResult,
+        serialization: GlobalSharedRead,
+    },
     ModelPreferencesUpdate => "model/preferences/update" {
         params: ModelPreferencesUpdateParams,
         response: ConfigCommandResult,
@@ -4855,11 +4879,18 @@ client_methods! {
     ExtensionList => "extensions/list" {
         params: ExtensionListParams,
         response: ExtensionListResult,
-        serialization: GlobalSharedRead,
+        // The extension catalog owns its snapshot lock. A cold scan must not delay
+        // independent operations such as binding the window's authorized file routes.
+        serialization: None,
     },
     ExtensionResourceOpen => "extensions/resource/open" {
         params: ExtensionResourceOpenParams,
         response: ExtensionResourceOpenResult,
+        serialization: ResourceExclusive("extensionId"),
+    },
+    ExtensionColorThemeRead => "extensions/colorTheme/read" {
+        params: ExtensionResourceOpenParams,
+        response: ExtensionColorThemeReadResult,
         serialization: ResourceExclusive("extensionId"),
     },
     ExtensionHostStart => "extensionHost/start" {
@@ -5082,6 +5113,7 @@ client_methods! {
     BackupWorkspaces => "backup/workspaces" { params: BackupWorkspacesParams, response: BackupWorkspacesResult, serialization: None, },
     BackupList => "backup/list" { params: BackupListParams, response: BackupListResult, serialization: None, },
     BackupListPage => "backup/listPage" { params: BackupListPageParams, response: BackupListPageResult, serialization: None, },
+    BackupRead => "backup/read" { params: BackupReadParams, response: BackupReadResult, serialization: None, },
     BackupWrite => "backup/write" { params: BackupWriteParams, response: BackupRecordDto, serialization: None, },
     BackupMove => "backup/move" { params: BackupMoveParams, response: BackupMoveResult, serialization: None, },
     BackupDiscard => "backup/discard" { params: BackupDiscardParams, response: (), serialization: None, },
@@ -6491,6 +6523,8 @@ typescript_bindings! {
     BackupListParams,
     BackupListPageParams,
     BackupListPageResult,
+    BackupReadParams,
+    BackupReadResult,
     BackupListResult,
     BackupRecordDto,
     BackupWorkspaceDto,
@@ -7026,6 +7060,8 @@ typescript_bindings! {
     ExtensionListResult,
     ExtensionResourceOpenParams,
     ExtensionResourceOpenResult,
+    ExtensionColorThemeReadResult,
+    ExtensionColorThemeSourceDto,
     ExtensionHostReconcileModeDto,
     ExtensionHostReconcileParams,
     ExtensionHostStartParams,
@@ -7069,6 +7105,7 @@ typescript_bindings! {
     crate::protocol::input_completions::InputCompletionItem,
     InitializeParams,
     InitializeResult,
+    TransportHelloResult,
     DirGrantDto,
     EnvDirDto,
     EnvDirReadParams,
@@ -7222,6 +7259,9 @@ typescript_bindings! {
     ModelCatalogIssue,
     ModelCatalogFreshness,
     ModelListParams,
+    ModelAvailabilityParams,
+    ModelAvailabilityResult,
+    ModelExecutionAvailability,
     ModelCatalogScope,
     ModelListResult,
     ModelPreferencesUpdateParams,

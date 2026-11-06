@@ -55,6 +55,11 @@ export interface ExtensionResourceRequest {
 	readonly path: string;
 }
 
+export interface ExtensionColorThemeSource {
+	readonly path: string;
+	readonly source: string;
+}
+
 export const MAX_EXTENSION_RESOURCE_BYTES = 16 * 1024 * 1024;
 
 /** Client package metadata and resources, with host validation for installed external packages. */
@@ -62,6 +67,8 @@ export interface IExtensionApi {
 	readonly onDidChange?: Event<void>;
 	/** Management may include disabled packages; activation consumers use the default enabled view. */
 	list(reload: ExtensionCatalogReload, options?: { readonly includeDisabled?: boolean; }): Promise<ExtensionCatalog>;
+	/** Reads a bounded include chain from one package snapshot when available. */
+	readColorThemeSources?(request: ExtensionResourceRequest): Promise<readonly ExtensionColorThemeSource[] | undefined>;
 	readonly resources: IExtensionResourceLoaderService;
 }
 

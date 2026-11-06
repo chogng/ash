@@ -114,17 +114,10 @@ MenusRegistry.appendMenuItem(Menus.ActivityBar, {
 	group: 'navigation', order: 10,
 });
 
-MenusRegistry.appendMenuItems([
-	{
-		id: Menus.CodeActivityBar,
-		item: { command: { id: 'sessions.newSession', title: localize2({ bundle: 'ash', key: 'sessions.activity.new' }, 'New'), icon: Lxicon.add, toggled: NewSessionDraftVisibleContext.isEqualTo(true) }, group: 'navigation', order: 10 },
-	},
-	{
-		id: Menus.CodeActivityBar,
-		item: { command: { id: 'sessions.open.collaboration', title: localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collab'), icon: Lxicon.collab, toggled: ContextKeyExpr.has('sessions.activity.collaborationSelected') }, group: 'navigation', order: 30 },
-	},
-
-]);
+MenusRegistry.appendMenuItem(Menus.ActivityBar, {
+	command: { id: 'sessions.open.collaboration', title: localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collab'), icon: Lxicon.collab, toggled: ContextKeyExpr.has('sessions.activity.collaborationSelected') },
+	group: 'more', order: 30,
+});
 
 registerTerminalView(SessionsViewRegistry);
 registerOutputView(SessionsViewRegistry);

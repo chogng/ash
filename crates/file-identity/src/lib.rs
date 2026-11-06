@@ -5,6 +5,7 @@
 use std::fs::File;
 use std::io;
 use std::path::Path;
+use std::path::PathBuf;
 
 #[cfg(unix)]
 #[path = "unix.rs"]
@@ -39,21 +40,25 @@ impl FileInformation {
     /// that make a trust decision about later reads must inspect the handle used for that read
     /// with [`Self::from_file`] and compare the two observations.
     pub fn from_path(path: impl AsRef<Path>) -> io::Result<Self> {
-        #[cfg(windows)]
-        let file = {
-            use std::os::windows::fs::OpenOptionsExt;
-            use windows_sys::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS;
-            use windows_sys::Win32::Storage::FileSystem::FILE_READ_ATTRIBUTES;
-            // Identity checks need attributes rather than file contents, and
-            // prepared directory grants must use the same handle-based check.
-            std::fs::OpenOptions::new()
-                .access_mode(FILE_READ_ATTRIBUTES)
-                .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
-                .open(path)?
-        };
         #[cfg(unix)]
         let file = File::open(path)?;
+        #[cfg(windows)]
+        let file = platform::open_for_inspection(path.as_ref())?;
         Self::from_file(&file)
+    }
+
+    /// Observes a path's identity and canonical location for callers that validate both.
+    ///
+    /// On Windows both values come from one handle. Callers must still verify the
+    /// handle used to read bytes, and recheck the path if it can change during the read.
+    pub fn from_path_with_canonical(path: &Path) -> io::Result<(Self, PathBuf)> {
+        #[cfg(windows)]
+        {
+            let file = platform::open_for_inspection(path)?;
+            Ok((Self::from_file(&file)?, platform::canonical_path(&file)?))
+        }
+        #[cfg(unix)]
+        Ok((Self::from_path(path)?, path.canonicalize()?))
     }
 
     /// Returns whether both contemporaneous observations identify the same filesystem object.

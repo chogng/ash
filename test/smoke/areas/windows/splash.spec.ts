@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import type { IPartsSplash } from '../../../../src/ash/platform/theme/common/themeService.js';
+import { WINDOW_SPLASH_READ_CHANNEL, type IPartsSplash } from '../../../../src/ash/platform/theme/common/themeService.js';
 import { test, expect } from '../../../automation/test.js';
 
 for (const scheme of ['light', 'dark'] as const) {
@@ -94,17 +94,19 @@ for (const scheme of ['light', 'dark'] as const) {
 	});
 }
 
-test('a failed startup hands the page to the error view and Retry can reopen the Workbench', { tag: '@browser-ui' }, async ({ workbench }) => {
+test('a failed Web module load shows the fallback until a successful reload', { tag: '@browser-ui' }, async ({ workbench }) => {
 	const page = workbench.page;
 	await page.route('**/assets/workbench.web.main-*.js', route => route.abort('failed'));
 	await page.reload();
-	await expect(page.getByRole('alert')).toHaveText('Unable to start Ash');
-	await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeFocused();
+	const fallback = page.getByRole('alert');
+	await expect(fallback.getByRole('heading', { name: 'Unable to start Ash' })).toBeVisible();
+	await expect(fallback.getByText('Check the browser developer tools console for details.')).toBeVisible();
 	await expect(page.locator('#ash-parts-splash')).toHaveCount(0);
 	await expect(page.locator('.ash-initial-shell-colors')).toHaveCount(0);
 	await page.unroute('**/assets/workbench.web.main-*.js');
-	await page.getByRole('button', { name: 'Retry', exact: true }).click();
+	await page.reload();
 	await workbench.waitForReady();
+	await expect(page.getByRole('heading', { name: 'Unable to start Ash' })).toHaveCount(0);
 });
 
 async function readSplash(page: Page): Promise<IPartsSplash | undefined> {
@@ -136,6 +138,31 @@ test('a cache from a different viewport renders colors until the current layout 
 	await workbench.waitForReady();
 	await expect(page.locator('#ash-parts-splash')).toHaveCount(0);
 	await expect.poll(async () => (await readSplash(page))?.layoutInfo?.width).toBe(await page.evaluate(() => innerWidth));
+});
+
+test('Agent Window becomes ready while its startup paint cache is pending', { tag: '@electron-app-server' }, async ({ application, workbench }) => {
+	if (!('windows' in application)) throw new Error('An Electron application is required');
+	const page = await workbench.openAgentsWindow('electron');
+	await expect.poll(async () => (await readSplash(page))?.layoutInfo?.partBounds.length ?? 0).toBeGreaterThan(0);
+	const snapshot = (await readSplash(page))!;
+	const releaseEvent = 'ash:test:releaseStartupPaint';
+	await application.evaluate(({ ipcMain }, { channel, releaseEvent, snapshot }) => {
+		let pending: Promise<typeof snapshot> | undefined;
+		ipcMain.removeHandler(channel);
+		ipcMain.handle(channel, () => pending ??= new Promise(resolve => {
+			ipcMain.once(releaseEvent, () => resolve(snapshot));
+		}));
+	}, { channel: WINDOW_SPLASH_READ_CHANNEL, releaseEvent, snapshot });
+
+	try {
+		await workbench.reloadWindow(page);
+		expect(await application.evaluate(({ ipcMain }, event) => ipcMain.listenerCount(event), releaseEvent)).toBe(1);
+		await expect(page.locator('#ash-parts-splash')).toHaveCount(0);
+	} finally {
+		await application.evaluate(({ ipcMain }, event) => { ipcMain.emit(event); }, releaseEvent);
+	}
+	expect(await readSplash(page)).toEqual(snapshot);
+	expect(await page.evaluate(() => performance.getEntriesByName('ash.splash.shown'))).toHaveLength(0);
 });
 
 for (const [scheme, themeId] of [
@@ -188,11 +215,13 @@ for (const [scheme, themeId] of [
 			await sessionPage.addInitScript(() => {
 				const paints: string[][] = [];
 				const frames: { left: number; top: number; width: number; height: number; }[][] = [];
-				Object.assign(window, { ashSplashPaints: paints, ashSplashFrames: frames });
+				const contentCounts: number[] = [];
+				Object.assign(window, { ashSplashPaints: paints, ashSplashFrames: frames, ashSplashContentCounts: contentCounts });
 				const observer = new MutationObserver(records => {
 					for (const record of records) {
 						for (const node of record.addedNodes) {
 							if (node instanceof HTMLElement && node.id === 'ash-parts-splash') {
+								contentCounts.push(node.querySelectorAll(':scope > [data-part] > :not(.ash-sessions-splash-titlebar-separator)').length);
 								paints.push(Array.from(node.children, child => getComputedStyle(child).backgroundImage));
 								frames.push(Array.from(node.children, child => {
 									const style = (child as HTMLElement).style;
@@ -211,6 +240,7 @@ for (const [scheme, themeId] of [
 			await expect(sessionPage.locator('.ash-initial-shell-colors')).toHaveCount(0);
 			expect(await sessionPage.evaluate(() => (window as unknown as { ashSplashPaints: string[][]; }).ashSplashPaints.flat())).toContain(livePaint);
 			expect(await sessionPage.evaluate(() => (window as unknown as { ashSplashFrames: object[][]; }).ashSplashFrames)).toEqual([snapshot.layoutInfo!.partBounds.map(({ left, top, width, height }) => ({ left, top, width, height }))]);
+			expect(await sessionPage.evaluate(() => (window as unknown as { ashSplashContentCounts: number[]; }).ashSplashContentCounts)).toEqual([0]);
 			await expect.poll(async () => Math.abs((await sidebar.boundingBox())!.width - sidebarWidth)).toBeLessThan(1);
 			const marks = await sessionPage.evaluate(() => ({ shown: performance.getEntriesByName('ash.splash.shown')[0]?.startTime, removed: performance.getEntriesByName('ash.splash.removed')[0]?.startTime }));
 			expect(marks.shown).toBeDefined();

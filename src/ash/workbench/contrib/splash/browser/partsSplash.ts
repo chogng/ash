@@ -1,19 +1,16 @@
-import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { Color } from '../../../../base/common/color.js';
-import { IThemeService, type IPartsSplash, type IPartsSplashPartBounds, type IPartsSplashSkeleton } from '../../../../platform/theme/common/themeService.js';
+import { IThemeService, type IPartsSplash } from '../../../../platform/theme/common/themeService.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { ILifecycleService, LifecyclePhase } from '../../../services/lifecycle/common/lifecycle.js';
 import { ISplashStorageService, removePartsSplash } from './splash.js';
 
 export interface IPartsSplashOptions {
-	readonly retireAfterRestore?: boolean;
 	shouldCapture?(): boolean;
-	captureSkeleton?(element: HTMLElement, bounds: IPartsSplashPartBounds): IPartsSplashSkeleton | undefined;
-	watchContent?(root: HTMLElement, onChange: () => void): IDisposable;
 }
 
-/** Captures the live owners' rendering state after restoration, and retires the startup DOM. */
+/** Hands off to the first live layout and caches shell paint after restoration. */
 export class PartsSplash extends Disposable {
 	static readonly ID = 'workbench.contrib.partsSplash';
 	private readonly saveSoon = this._register(new RunOnceScheduler(() => { void this.save(); }, 100));
@@ -28,7 +25,7 @@ export class PartsSplash extends Disposable {
 		super();
 		this._register(layoutService.onDidLayoutMainContainer(dimension => {
 			if (dimension.width > 0 && dimension.height > 0) {
-				if (!options.retireAfterRestore) removePartsSplash(layoutService.mainContainer.ownerDocument);
+				removePartsSplash(layoutService.mainContainer.ownerDocument);
 				if (lifecycleService.phase >= LifecyclePhase.Restored) this.saveSoon.schedule();
 			}
 		}));
@@ -44,9 +41,6 @@ export class PartsSplash extends Disposable {
 		}));
 		void lifecycleService.when(LifecyclePhase.Restored).then(() => {
 			if (this.isDisposed) return;
-			const root = layoutService.mainContainer;
-			if (options.retireAfterRestore) removePartsSplash(root.ownerDocument);
-			if (options.watchContent) this._register(options.watchContent(root, () => this.saveSoon.schedule()));
 			void this.save();
 		});
 	}
@@ -99,7 +93,6 @@ export class PartsSplash extends Disposable {
 			partBounds.push({
 				left, top, width, height,
 				id: element.dataset.part,
-				skeleton: this.options.captureSkeleton?.(element, { left, top, width, height }),
 				background: Color.Format.CSS.formatHex(fill),
 				...captureBackgroundGradient(style.backgroundImage, rect.width, rect.height, fill),
 				borderRadii, borders,

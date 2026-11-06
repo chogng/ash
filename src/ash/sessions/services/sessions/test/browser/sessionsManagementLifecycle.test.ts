@@ -5,6 +5,8 @@ import { StorageScope, StorageTarget } from '../../../../../platform/storage/com
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import { SessionsService } from '../../browser/sessionsService.js';
 import { CustomViewService } from '../../../customView/browser/customViewService.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
 import { NullLoggerService } from '../../../../../platform/log/common/log.js';
 import { DeferredPromise } from '../../../../../base/common/async.js';
 import { Emitter, Event } from '../../../../../base/common/event.js';
@@ -218,7 +220,9 @@ test('closing a sibling while it opens preserves both visible and management sel
 		const visible = provider.items.map(value => ({ kind: 'session', sessionId: value.sessionId, threadId: value.chats[0]!.threadId }));
 		storage.store('sessions.viewState', JSON.stringify({ version: 2, drafts: [], visible, active: 0 }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		using customViews = new CustomViewService(new NullLoggerService(), storage);
-		using view = new SessionsService(management, storage, customViews);
+		using services = new InstantiationService();
+		using commands = new CommandService(services);
+		using view = new SessionsService(management, storage, customViews, commands);
 		await view.initialize();
 		const opening = view.openThread('second', 'second-thread');
 		await subscribed.p;

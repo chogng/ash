@@ -1,13 +1,13 @@
 import { execFile, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { writeFile, mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
+import { writeFile, readFile, mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
-import { launchElectron } from '../../../automation/playwrightElectron.js';
+import { launchElectron, launchElectronApplication } from '../../../automation/playwrightElectron.js';
 import { toDisposable } from '../../../../src/ash/base/common/lifecycle.js';
 import type { ConsoleMessage, Page } from '@playwright/test';
 
@@ -55,7 +55,7 @@ for (const launchKind of ['executable', 'bundle'] as const) test(`ash app hands 
 	}).toContain(pathToFileURL(await realpath(folder)).href);
 });
 
-test('the first process opens its requested file after restoring the Workbench and positions its caret', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace }) => {
+test('the first process opens its requested file and positions its caret', { tag: ['@electron-app-server'] }, async ({ target, testWorkspace }) => {
 	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-launch-'));
 	try {
 		const file = join(testWorkspace.directory, 'startup file.txt');
@@ -75,6 +75,47 @@ test('the first process opens its requested file after restoring the Workbench a
 			await expect(workbench.page.getByText('Ln 2, Col 4', { exact: true })).toBeVisible();
 		} finally {
 			await launched.close();
+		}
+	} finally {
+		await rm(userDataDirectory, { recursive: true, force: true });
+	}
+});
+
+test('a launch file keeps edits to its recovered draft while other tabs restore', { tag: ['@electron-app-server'] }, async ({ testWorkspace }) => {
+	test.setTimeout(90_000);
+	const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-launch-draft-'));
+	const file = join(testWorkspace.directory, 'startup draft.txt');
+	const other = join(testWorkspace.directory, 'other tab.txt');
+	const options = { appServerMode: 'required' as const, userDataDirectory, workspaceDirectory: testWorkspace.directory };
+	try {
+		await writeFile(file, 'disk contents\n');
+		await writeFile(other, 'other tab contents\n');
+		const first = await launchElectron({ ...options, workspacePermissions: 'development', extraArgs: [other, file] });
+		try {
+			const group = first.driver.workbench.editors.groupAt(0);
+			await expect(group.tabs.filter({ hasText: 'other tab.txt' })).toHaveCount(1);
+			await expect(first.driver.workbench.page.locator('.stanza-editor-input[aria-label="startup draft.txt"]')).toBeFocused();
+			await first.driver.workbench.page.keyboard.insertText('recovered draft ');
+			await group.editor.waitForEditorContents(text => text.includes('recovered draft disk contents'));
+		} finally {
+			await first.quit();
+		}
+		expect(await readFile(file, 'utf8')).toBe('disk contents\n');
+		const reopened = await launchElectronApplication({ ...options, extraArgs: ['--goto', `${file}:1:1`] });
+		try {
+			const page = reopened.application.windows()[0] ?? await reopened.application.waitForEvent('window');
+			const target = page.locator('.stanza-editor-input[aria-label="startup draft.txt"]');
+			const contents = page.locator('.stanza-editor-line-text:visible');
+			await expect(contents.filter({ hasText: 'recovered draft disk contents' })).toHaveCount(1);
+			await expect(target).toBeFocused();
+			await page.keyboard.insertText('new input ');
+			await page.keyboard.press('ControlOrMeta+s');
+			await expect.poll(() => readFile(file, 'utf8')).toBe('new input recovered draft disk contents\n');
+			await expect(page.getByRole('tab', { name: 'other tab.txt', exact: true })).toHaveCount(1);
+			await expect(target).toBeFocused();
+			await expect(page.getByRole('tab', { name: 'startup draft.txt', exact: true })).toHaveCount(1);
+		} finally {
+			await reopened.close();
 		}
 	} finally {
 		await rm(userDataDirectory, { recursive: true, force: true });

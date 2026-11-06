@@ -10,7 +10,8 @@ import { IHostService } from '../../../host/browser/host.js';
 import { WorkbenchLocaleService } from '../../browser/localeService.js';
 import type { LanguagePackCatalog } from '../../../../../platform/languagePacks/common/languagePackContract.js';
 import { setNlsMessages } from '../../../../../nls.js';
-import { builtinLanguagePackCatalogs, preinstalledLanguagePacks, productLanguagePackCatalogs } from '../../common/localizationCatalogs.js';
+import { builtinLanguagePackSources, preinstalledLanguagePacks } from '../../../../../../../.build/desktop/localization/localizationCatalogLoader.js';
+import { productLanguagePackCatalogs } from '../../common/localizationCatalogs.js';
 import type { LanguagePackIndexEntry } from '../../../../../platform/languagePacks/common/languagePackContract.js';
 import { IMeteredConnectionService } from '../../../../../platform/meteredConnection/common/meteredConnection.js';
 
@@ -34,6 +35,7 @@ export function createTestLanguagePackStore(overrides: Partial<ILanguagePackStor
 export function createEmptyTestLanguagePacks(): ILanguagePackService {
 	return {
 		onDidChange: Event.None, whenReady: Promise.resolve(), catalogs: productLanguagePackCatalogs,
+		getCatalog: async locale => productLanguagePackCatalogs.find(catalog => catalog.locale.toLowerCase() === locale.toLowerCase()),
 		getInstalledLanguages: async () => [], refresh: async () => { },
 		getBuiltInExtensionTranslationsUri: async () => undefined,
 	};
@@ -62,5 +64,5 @@ export function createTestLanguagePacks(extensionManagement: IExtensionManagemen
 	services.registerInstance(IMeteredConnectionService, { _serviceBrand: undefined, isConnectionMetered: false, onDidChangeIsConnectionMetered: Event.None });
 	services.registerInstance(IExtensionManagementService, extensionManagement);
 	services.registerInstance(ILanguagePackStore, createTestLanguagePackStore());
-	return services.createInstance(WebLanguagePacksService, builtinLanguagePackCatalogs, preinstalledLanguagePacks);
+	return services.createInstance(WebLanguagePacksService, builtinLanguagePackSources, preinstalledLanguagePacks);
 }

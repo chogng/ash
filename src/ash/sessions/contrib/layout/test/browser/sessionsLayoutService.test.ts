@@ -90,15 +90,16 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 			using fixture = new EntryFixture();
 			if (saved) { fixture.storage.store('sessions.layout.activeEntry', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE); }
 			const calls: (readonly unknown[])[] = [];
-			const freshEntry: ISessionsEntry = { ...chatEntry, id: 'reply', content: 'editor', splash: 'chat' };
+			const freshEntry: ISessionsEntry = { ...chatEntry, id: 'reply', content: 'editor', restoreCommand: 'sessions.open.new' };
 			using entry = CommandsRegistry.register('sessions.open.new', (_accessor, source) => {
 				calls.push([source]);
 				assert.equal(source, 'startup');
 				return fixture.service.openEntry(freshEntry, undefined, { source });
 			});
 			using code = CommandsRegistry.register('sessions.open.code', () => assert.fail('Ordinary launch restored Code'));
-			await fixture.service.restore(entry => { calls.push([entry.content, entry.splash]); });
-			assert.deepEqual(calls, [['startup'], ['editor', 'chat']]);
+			await fixture.service.restore();
+			assert.deepEqual(calls, [['startup']]);
+			assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), freshEntry.restoreCommand);
 		});
 	}
 
@@ -137,17 +138,15 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		const command = 'test.sessions.restoreEntry';
 		fixture.storage.store('sessions.layout.activeEntry', command, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const calls: (readonly unknown[])[] = [];
-		const savedEntry: ISessionsEntry = { ...chatEntry, content: 'editor', splash: 'grid', restoreCommand: command };
+		const savedEntry: ISessionsEntry = { ...chatEntry, content: 'editor', restoreCommand: command };
 		using entry = CommandsRegistry.register(command, (_accessor, source) => {
 			calls.push([source]);
 			assert.equal(source, 'restore');
+			assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
 			return fixture.service.openEntry(savedEntry, undefined, { source });
 		});
-		await fixture.service.restore(entry => {
-			assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
-			calls.push([entry.content, entry.splash]);
-		});
-		assert.deepEqual(calls, [['restore'], ['editor', 'grid']]);
+		await fixture.service.restore();
+		assert.deepEqual(calls, [['restore']]);
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
 	});
 
@@ -391,7 +390,7 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		using command = CommandsRegistry.register('sessions.open.code', async () => fixture.service.openEntry(documentEntry, undefined, { source: 'restore' }));
 		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView), entryCommand: 'sessions.open.code' });
 		fixture.customViews.showCustomView('automations');
-		await fixture.service.restore(() => assert.fail('The underlying entry is covered by the custom view'));
+		await fixture.service.restore();
 		assert.equal(fixture.customViews.activeCustomView.get()?.id, 'automations');
 		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'code');
 		assert.equal(fixture.contextKeys.getValue('sessions.activity.codeSelected'), false);

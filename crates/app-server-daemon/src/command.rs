@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use crate::ConnectionOptions;
 use crate::GrantSource;
 use crate::LifecycleCommand;
+use crate::process::PackageDigest;
 use ash_install_context::discovered_product_services_path;
 
 /// Runs daemon connection and lifecycle commands using the explicit host environment.
@@ -20,6 +21,20 @@ pub fn run_command(
     {
         return crate::development::hold_runtime_lease(Path::new(generation_file));
     }
+    if let [command, profile_flag, profile, electron_flag, electron] = arguments.as_slice()
+        && command == "prepare-desktop"
+        && profile_flag == "--profile"
+        && electron_flag == "--electron"
+    {
+        if !Path::new(electron).is_absolute() {
+            return Err("Desktop must provide an absolute Electron executable".into());
+        }
+        return crate::installation::prepare_desktop_backend(
+            Path::new(profile),
+            backend_executable,
+            Path::new(electron),
+        );
+    }
     let (command, product_services) = parse(&arguments)?;
     let _trace = crate::startup_trace::StartupTrace::enter(
         crate::startup_trace::StartupTrace::from_environment(),
@@ -29,11 +44,14 @@ pub fn run_command(
         Err(std::env::VarError::NotPresent) => None,
         Err(_) => return Err("ASH_APP_SERVER_SHA256 must contain a SHA-256 digest".into()),
     };
-    // connect-selected checks the signed digest with the generation identity in one file read.
-    if command != Command::ConnectSelected
-        && let Some(expected) = &expected_digest
-    {
-        validate_backend_digest(backend_executable, expected)?;
+    // Connection commands verify the package at the point where they select its executable.
+    let package_digest = expected_digest
+        .as_deref()
+        .map(PackageDigest::parse)
+        .transpose()?
+        .unwrap_or(PackageDigest::NotProvided);
+    if !matches!(command, Command::Connect | Command::ConnectSelected) {
+        package_digest.verify(backend_executable)?;
     }
     let grant_source = match std::env::var("ASH_DIR_GRANT_SOURCE").as_deref() {
         Ok("userConfig") => GrantSource::UserConfig,
@@ -45,10 +63,11 @@ pub fn run_command(
     let role = match std::env::var("ASH_APP_SERVER_CONNECTION_ROLE").as_deref() {
         Ok("agents") => crate::ConnectionRole::Agents,
         Ok("credentials") => crate::ConnectionRole::Credentials,
+        Ok("credentials-codex") => crate::ConnectionRole::CredentialsCodex,
         Err(std::env::VarError::NotPresent) => crate::ConnectionRole::Workbench,
         _ => {
             return Err(
-                "ASH_APP_SERVER_CONNECTION_ROLE must be agents or credentials when set".into(),
+                "ASH_APP_SERVER_CONNECTION_ROLE must be agents, credentials, or credentials-codex when set".into(),
             );
         }
     };
@@ -74,16 +93,14 @@ pub fn run_command(
         _ => return Err("SSH connection requires ASH_REMOTE_HOST and ASH_REMOTE_RUNTIME".into()),
     }
     match command {
-        Command::Connect => crate::connect(options, backend_executable).map_err(Into::into),
-        Command::ConnectSelected => crate::client::connect_selected_with_digest(
-            options,
-            backend_executable,
-            expected_digest
-                .as_deref()
-                .map(crate::process::PackageDigest::Expected)
-                .unwrap_or(crate::process::PackageDigest::NotProvided),
-        )
-        .map_err(Into::into),
+        Command::Connect => {
+            crate::client::connect_with_digest(options, backend_executable, package_digest)
+                .map_err(Into::into)
+        }
+        Command::ConnectSelected => {
+            crate::client::connect_selected_with_digest(options, backend_executable, package_digest)
+                .map_err(Into::into)
+        }
         Command::Update => {
             let output = crate::update::install_stable(options.profile_root(), backend_executable)?;
             println!(
@@ -146,6 +163,21 @@ fn usage() -> &'static str {
     "usage: ash-app-server-daemon <connect|connect-selected|update|start|ensure-selected|restart|stop|version> [--product-services PATH]"
 }
 
+/// Runs the daemon executable's command, selecting the bundled backend for Setup.
+pub fn run_installed_command(arguments: Vec<String>) -> Result<(), String> {
+    // Setup owns the adjacent package. A development override inherited from
+    // the launching shell must not select a different profile backend.
+    let executable = if arguments
+        .first()
+        .is_some_and(|command| command == "prepare-desktop")
+    {
+        bundled_backend_executable_path()?
+    } else {
+        backend_executable_path()?
+    };
+    run_command(arguments, &executable)
+}
+
 /// Resolves the App Server executable managed by this command adapter.
 pub fn backend_executable_path() -> Result<PathBuf, String> {
     if let Some(path) = std::env::var_os(crate::APP_SERVER_PATH_ENV) {
@@ -158,6 +190,10 @@ pub fn backend_executable_path() -> Result<PathBuf, String> {
         }
         return Ok(path);
     }
+    bundled_backend_executable_path()
+}
+
+fn bundled_backend_executable_path() -> Result<PathBuf, String> {
     let executable = std::env::current_exe().map_err(|error| error.to_string())?;
     let directory = executable
         .parent()
@@ -172,7 +208,3 @@ pub fn backend_executable_path() -> Result<PathBuf, String> {
 #[cfg(test)]
 #[path = "command_tests.rs"]
 mod tests;
-
-fn validate_backend_digest(executable: &Path, expected: &str) -> Result<(), String> {
-    crate::process::binary_identity(executable)?.verify_package_digest(expected)
-}

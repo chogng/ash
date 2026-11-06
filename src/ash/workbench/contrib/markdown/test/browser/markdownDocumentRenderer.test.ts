@@ -106,6 +106,18 @@ test('Markdown completes an incomplete streaming tail without changing closed co
 	assert.match(table, /<th>Name<\/th>/);
 });
 
+test('Markdown keeps extension preprocessing when completing a streaming tail', () => {
+	const html = renderWorkbenchMarkdown('%% note **bo', false, {
+		fillInIncompleteTokens: true,
+		markedExtensions: [{
+			hooks: {
+				preprocess: source => source.replace(/^%% /u, '> '),
+			},
+		}],
+	});
+	assert.equal(html, '<blockquote>\n<p>note <strong>bo</strong></p>\n</blockquote>\n');
+});
+
 test('Markdown alerts and theme icons become accessible Ash presentation', () => {
 	const dom = createDom();
 	const markdown = renderMarkdown({

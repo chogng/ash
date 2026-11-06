@@ -1,12 +1,13 @@
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
 import type { INativeHostApi } from '../../platform/native/common/nativeHost.js';
-import { WINDOW_ZOOM_LEVEL_SETTING, WINDOW_ZOOM_PER_WINDOW_SETTING, type IWindowClientSize } from '../../platform/window/common/window.js';
+import { WINDOW_ZOOM_LEVEL_SETTING, WINDOW_ZOOM_PER_WINDOW_SETTING } from '../../platform/window/common/window.js';
 import { IOpenerService } from '../../platform/opener/common/opener.js';
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import { URI } from '../../base/common/uri.js';
 import { extUriBiasedIgnorePathCase } from '../../base/common/resources.js';
 import { Range } from '../../editor/common/core/range.js';
+import { EditorOpenSource } from '../../platform/editor/common/editor.js';
 import { WINDOW_OPEN_FILES_CHANNEL, WINDOW_OPEN_FILES_RESPONSE_CHANNEL, validateWindowFilesRequest, type IWindowFilesRequest } from '../../platform/window/common/window.js';
 import { IEditorService } from '../services/editor/common/editorService.js';
 import { IEditorGroupsService } from '../services/editor/common/editorGroupsService.js';
@@ -16,7 +17,7 @@ import { ITitleService } from '../services/title/browser/titleService.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
 import { ILogService } from '../../platform/log/common/log.js';
 import { localize } from '../../nls.js';
-import { addDisposableListener } from '../../base/browser/dom.js';
+import { NativeWindowClientArea } from '../../platform/window/electron-browser/window.js';
 
 /** The renderer owns file completion because it owns every editor group, including moved tabs. */
 export class ElectronWindow extends Disposable {
@@ -36,7 +37,7 @@ export class ElectronWindow extends Disposable {
 		super();
 	}
 
-	public async initialize(): Promise<void> {
+	public async initialize(whenRestored: Promise<void>): Promise<void> {
 		this.assertNotDisposed();
 		const subscription = this.ipc.subscribe<unknown>(WINDOW_OPEN_FILES_CHANNEL, value => {
 			const request = validateWindowFilesRequest(value);
@@ -46,12 +47,15 @@ export class ElectronWindow extends Disposable {
 		this._register(toDisposable(() => subscription.dispose()));
 		this._register(this.groups.onDidChangeGroups(() => this.completeClosedFiles()));
 		await this.ipc.invoke<void>(WINDOW_OPEN_FILES_RESPONSE_CHANNEL, { kind: 'ready' });
-		// The shell and launch-file handshake remain available while installation files are scanned.
-		void this.updateTitleProperties().catch(error => {
-			if (this.isDisposed) { return; }
-			this.log.error('integrity', 'Desktop environment detection failed', error);
-			this.notifications.warn(localize('integrity.failed', 'Ash could not verify its desktop environment. See the logs for details.'));
-		});
+		// Do not compete with editor restoration for disk reads on a cold start.
+		void whenRestored.then(() => {
+			if (this.isDisposed) return;
+			void this.updateTitleProperties().catch(error => {
+				if (this.isDisposed) { return; }
+				this.log.error('integrity', 'Desktop environment detection failed', error);
+				this.notifications.warn(localize('integrity.failed', 'Ash could not verify its desktop environment. See the logs for details.'));
+			});
+		}, () => undefined);
 	}
 
 	private async updateTitleProperties(): Promise<void> {
@@ -71,7 +75,8 @@ export class ElectronWindow extends Disposable {
 		try {
 			for (const file of request.files) {
 				const selection = file.line === undefined ? undefined : new Range(file.line, file.column ?? 1, file.line, file.column ?? 1);
-				await this.editors.openEditor({ resource: URI.parse(file.uri) }, { pinned: true, selection, ignoreError: true });
+				// Explicit launch files and Explorer opens share the target recovery path.
+				await this.editors.openEditor({ resource: URI.parse(file.uri) }, { pinned: true, selection, ignoreError: true, source: EditorOpenSource.USER });
 			}
 			if (request.wait) {
 				this.waiting.set(request.id, request);
@@ -137,45 +142,9 @@ export class NativeWindow extends Disposable {
 	}
 
 	/** Constrains the whole Workbench to the native drawable area, including fractional CSS pixels. */
-	public async initialize(container: HTMLElement): Promise<void> {
+	public initialize(container: HTMLElement): Promise<void> {
 		this.assertNotDisposed();
-		const target = container.ownerDocument.defaultView!;
-		const originalWidth = container.style.maxWidth;
-		const originalHeight = container.style.maxHeight;
-		let size: IWindowClientSize | undefined;
-		let revision = 0;
-		let frame: number | undefined;
-		const update = (): void => {
-			if (frame !== undefined || this.isDisposed) return;
-			frame = target.requestAnimationFrame(() => {
-				frame = undefined;
-				const scale = target.devicePixelRatio;
-				// A native sample can lag the viewport. The percentage floor tracks
-				// the containing block immediately and limits rounding correction to
-				// one physical pixel while the next sample is in flight.
-				const floor = `calc(100% - ${1 / scale}px)`;
-				container.style.maxWidth = size ? `max(${size.width / scale}px, ${floor})` : originalWidth;
-				container.style.maxHeight = size ? `max(${size.height / scale}px, ${floor})` : originalHeight;
-			});
-		};
-		const subscription = this.host.onDidChangeWindowClientSize(value => {
-			revision++;
-			size = value;
-			update();
-		});
-		this._register(toDisposable(() => {
-			subscription.dispose();
-			if (frame !== undefined) target.cancelAnimationFrame(frame);
-			container.style.maxWidth = originalWidth;
-			container.style.maxHeight = originalHeight;
-		}));
-		this._register(addDisposableListener(target, 'resize', update));
-		// Subscribe before reading so a late initial reply cannot replace a newer resize.
-		const currentRevision = revision;
-		const initial = await this.host.getWindowClientSize();
-		if (this.isDisposed || revision !== currentRevision) return;
-		size = initial;
-		update();
+		return this._register(new NativeWindowClientArea(container, this.host)).ready;
 	}
 
 	private async applyConfiguredZoom(): Promise<void> {

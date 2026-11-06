@@ -9,7 +9,8 @@ import { parseDefaultLogLevels } from '../../workbench/services/log/common/defau
 import { LogLevelToString } from '../../platform/log/common/log.js';
 import type { AppServerConnectionTarget } from '../../platform/agentHost/common/appServerTransport.js';
 import { RemoteAgentHostConnectionPool } from '../../platform/remote/electron-main/remoteConnectionIpc.js';
-import { ImageViewMainService } from '../../platform/imageView/electron-main/imageViewMainService.js';
+import type { ImageViewMainService } from '../../platform/imageView/electron-main/imageViewMainService.js';
+import { IMAGE_VIEW_ATTACH_CHANNEL, IMAGE_VIEW_CANCEL_CHANNEL, IMAGE_VIEW_OPEN_CHANNEL, validateImageViewId, validateImageViewRequest, type ImageViewRequest } from '../../platform/imageView/common/imageView.js';
 import { AshWorkbenchName } from '../common/application.js';
 import '../../platform/update/common/update.config.contribution.js';
 import { SystemPolicyService } from '../../platform/policy/node/systemPolicyService.js';
@@ -99,7 +100,7 @@ import type { DialogRequest } from '../../platform/dialogs/common/dialogs.js';
 import { AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL, validateReturnToWorkbench } from '../../sessions/common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL, validateAgentsWindowHandoffComplete, validateAgentsWindowHandoffTake, type IAgentsWindowHandoffResult } from '../../platform/window/common/window.js';
 import { GlobalKeybindingsMainService } from '../../platform/globalKeybindings/electron-main/globalKeybindingsMainService.js';
-import { OPEN_AGENTS_WINDOW_COMMAND_ID } from '../../workbench/contrib/chat/common/constants.js';
+import { OPEN_AGENTS_WINDOW_COMMAND_ID, ScreenshotCommandId, ScreenshotShortcutId } from '../../workbench/contrib/chat/common/constants.js';
 import { StateService } from '../../platform/state/node/stateService.js';
 import { IStateService } from '../../platform/state/node/state.js';
 import { WorkspacesHistoryMainService, workspacesHistoryChannel } from '../../platform/workspaces/electron-main/workspacesHistoryMainService.js';
@@ -172,6 +173,13 @@ import { parseLanguagePackCatalog } from '../../platform/languagePacks/common/la
 import type { LanguagePackCatalog } from '../../platform/languagePacks/common/languagePackContract.js';
 import { NLS_CONFIGURATION_CHANNEL, NLS_ACTIVATE_CHANNEL } from '../../platform/languagePacks/common/languagePackStore.js';
 import { HOST_RESTART_CHANNEL, WINDOW_OPEN_EXTERNAL_URI_CHANNEL, WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL } from '../../platform/window/common/window.js';
+
+// Packaged Main can be bundled independently of the native helpers and utility entries.
+const mainOutput = app.isPackaged
+	? join(app.getAppPath(), 'dist', 'main')
+	: fileURLToPath(new URL('../../../../', import.meta.url));
+const utilityOutput = join(mainOutput, 'src', 'ash', 'code', 'electron-utility');
+
 export type AppServerStartupMode = 'required' | 'disabled';
 
 export interface AshApplicationOptions {
@@ -250,7 +258,7 @@ export class AshApplication extends Disposable {
 	private readonly secretChannels = new Map<string, IServerChannel<string>>();
 	private readonly sharedProcess = this._register(new UtilityProcess({
 		name: 'Ash Browser Automation',
-		entryPoint: fileURLToPath(new URL('../electron-utility/sharedProcess/sharedProcessMain.js', import.meta.url)),
+		entryPoint: join(utilityOutput, 'sharedProcess', 'sharedProcessMain.js'),
 	}));
 	private updateMainService!: UpdateMainService;
 	private readonly nativeKeyboardLayout: NativeKeyboardLayoutMainService;
@@ -356,7 +364,7 @@ export class AshApplication extends Disposable {
 	private invitationPersistence: Promise<void> = Promise.resolve();
 	private readonly loggerService = this._register(new LoggerService({
 		logsHome: app.getPath('logs'),
-		start: () => spawn(fileURLToPath(new URL(`../../../../${hostLogExecutable}`, import.meta.url)), [], { stdio: 'pipe', windowsHide: true }),
+		start: () => spawn(join(mainOutput, hostLogExecutable), [], { stdio: 'pipe', windowsHide: true }),
 		appServerLog: async () => {
 			if (this.appServerStartupMode === 'disabled') return undefined;
 			const connection = createAppServerDaemonLauncher({
@@ -423,12 +431,12 @@ export class AshApplication extends Disposable {
 			? this._register(new NativeMenubarMainService(createElectronMenubarHost()))
 			: undefined;
 		this.profileRoot = resolveHome();
-		this.chatGPTMain = this.windowServices.createInstance(ChatGPTMain, this.mainProcessIpcServer, {
+		this.chatGPTMain = this._register(this.windowServices.createInstance(ChatGPTMain, this.mainProcessIpcServer, {
 			profileRoot: this.profileRoot,
 			rendererRoot: this.rendererRoot,
 			credentialsEnabled: this.appServerStartupMode !== 'disabled',
 			registerDevelopmentConnection: this.registerDevelopmentAppServerConnection.bind(this),
-		});
+		}));
 		// Development uses the stock Electron executable; a Windows package must embed this icon in its executable.
 		this.windowIconPath = process.platform === 'win32' && !app.isPackaged
 			? join(app.getAppPath(), 'resources', 'win32', 'ash.ico')
@@ -501,13 +509,7 @@ export class AshApplication extends Disposable {
 			throw new Error('Ash application startup requires Electron to be ready');
 		}
 		this._register(new WebviewProtocolProvider(this.rendererRoot, process.env.ASH_RENDERER_URL));
-		if (process.platform === 'darwin') {
-			assertDefined(app.dock, 'macOS Dock API is unavailable');
-			// Dock customization must not gate creation of the first Workbench window.
-			if (!app.isPackaged) {
-				app.dock.setIcon(join(app.getAppPath(), 'resources', 'darwin', 'ash.png'));
-			}
-		} else {
+		if (process.platform !== 'darwin') {
 			clearElectronApplicationMenu();
 		}
 
@@ -679,16 +681,11 @@ export class AshApplication extends Disposable {
 		this.windowServices.registerInstance(IThemeMainService, this.themeMainService);
 		this.mainProcessIpcServer.registerChannel('colorScheme', colorSchemeChannel(this.themeMainService));
 		this.mainProcessIpcServer.registerChannel('powerMonitor', powerMonitorChannel(powerMonitor));
-		this.mainProcessIpcServer.registerChannel('checksum', checksumChannel(app.getAppPath(), app.isPackaged, this._register(new ChecksumService(fileURLToPath(new URL(`../../../../${hostIntegrityExecutable}`, import.meta.url))))));
+		this.mainProcessIpcServer.registerChannel('checksum', checksumChannel(app.getAppPath(), app.isPackaged, this._register(new ChecksumService(join(mainOutput, hostIntegrityExecutable)))));
 		const wasUpdated = this.lifecycleMainService.wasRestarted;
 		const workspaces = new WorkspacesManagementMainService();
 		this.workspaces = workspaces;
 		this.remoteConnections = this.createRemoteConnections(workspaces);
-		if (this.remoteConnections) {
-			// Warm the local catalog independently of the window's initial mode.
-			void this.remoteConnections.list().catch(error => this.logService.debug('Remote catalog warmup failed', error));
-			void this.wslHosts.listDistros().catch(error => this.logService.debug('WSL catalog warmup failed', error));
-		}
 		launchServices.registerInstance(IWindowsMainService, this.windowsMainService);
 		launchServices.registerInstance(ILogService, this.logService);
 		this.launchMainService = this._register(launchServices.createInstance(LaunchMainService));
@@ -710,6 +707,11 @@ export class AshApplication extends Disposable {
 		if (this.windowsMainService.getWindowCount() === 0 && this.windowsMainService.managedWindowValues().length === 0) {
 			if (!this.quitRequested) app.quit();
 			return;
+		}
+		if (process.platform === 'darwin' && !app.isPackaged) {
+			// The development icon can decode once the first window is underway.
+			assertDefined(app.dock, 'macOS Dock API is unavailable');
+			app.dock.setIcon(join(app.getAppPath(), 'resources', 'darwin', 'ash.png'));
 		}
 		await this.windowSessionStateHandler.saveSession();
 		this.maintenance.value = disposableTimeout(() => {
@@ -1113,7 +1115,7 @@ export class AshApplication extends Disposable {
 			if (process.platform !== 'win32') {
 				const watcherProcess = this._register(new UtilityProcess({
 					name: 'Ash File Watcher',
-					entryPoint: fileURLToPath(new URL('../electron-utility/fileWatcher/fileWatcherMain.js', import.meta.url)),
+					entryPoint: join(utilityOutput, 'fileWatcher', 'fileWatcherMain.js'),
 					args: [this.profileRoot],
 				}));
 				const watcherPort = watcherProcess.connect('profile');
@@ -1740,11 +1742,7 @@ export class AshApplication extends Disposable {
 			...(localSupervisor?.routes(window.webContents, () => ({ workspaceId: 'local-profile', workspaceRoot: this.profileRoot })) ?? []),
 			...windowDisposables.add(new OAuthCallbackHost()).routes(),
 			...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService),
-			...this.globalKeybindings.createWindowRoutes(window, windowDisposables),
-			...windowDisposables.add(new ImageViewMainService(window, {
-				entry: this.resolveRendererEntry('imageView'), webPreferences: this.createSandboxWebPreferences(),
-				router: this.trustedIpcRouter, localization: () => this.activeLanguagePack,
-			})).routes(),
+			...this.windowImageRoutes(window, windowDisposables),
 			userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 			...remoteWindowContext.ipcRoutes,
 			windowOperationIpcRoute(this.windowsMainService, window),
@@ -1822,6 +1820,61 @@ export class AshApplication extends Disposable {
 			});
 	}
 
+	private windowImageRoutes(window: BrowserWindow, lifetime: DisposableStore): readonly IpcRoute<unknown, unknown>[] {
+		let imageView: Promise<ImageViewMainService | undefined> | undefined;
+		const loadImageView = () => {
+			if (imageView) return imageView;
+			const contents = window.webContents;
+			// Cover navigation during the import, before the service can own cancellation.
+			const invalidate = () => { imageView = undefined; };
+			const navigating = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean) => {
+				if (mainFrame && !inPlace) invalidate();
+			};
+			contents.on('did-start-navigation', navigating);
+			contents.on('render-process-gone', invalidate);
+			const loading = import('../../platform/imageView/electron-main/imageViewMainService.js').then(({ ImageViewMainService }) => {
+				if (imageView !== loading || lifetime.isDisposed || window.isDestroyed() || contents.isDestroyed()) return undefined;
+				return lifetime.add(new ImageViewMainService(window, {
+					entry: this.resolveRendererEntry('imageView'), webPreferences: this.createSandboxWebPreferences(),
+					router: this.trustedIpcRouter, localization: () => this.activeLanguagePack,
+				}));
+			}).catch(error => {
+				if (imageView === loading) imageView = undefined;
+				throw error;
+			}).finally(() => {
+				contents.off('did-start-navigation', navigating);
+				contents.off('render-process-gone', invalidate);
+			});
+			return imageView = loading;
+		};
+		return [
+			{
+				channel: IMAGE_VIEW_OPEN_CHANNEL,
+				validate: validateImageViewRequest,
+				invoke: async value => (await loadImageView())?.show(value as ImageViewRequest),
+			},
+			{
+				channel: IMAGE_VIEW_CANCEL_CHANNEL,
+				validate: validateImageViewId,
+				invoke: async value => (await imageView)?.cancel(value as string),
+			},
+			...this.globalKeybindings.createWindowRoutes(window, lifetime, (id, commandId) => {
+				if (id !== ScreenshotShortcutId || commandId !== ScreenshotCommandId) return false;
+				const colorScheme = nativeTheme.shouldUseHighContrastColors
+					? (nativeTheme.shouldUseDarkColors ? 'hcDark' : 'hcLight') : (nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
+				const hints = this.persistentServices?.configuration.getValue<boolean>('accessibility.verbosity.chatScreenshot') !== false;
+				void loadImageView().then(service => service?.captureDesktop(colorScheme, hints)).then(image => {
+					if (!image || window.isDestroyed() || window.webContents.isDestroyed()) return;
+					// Only the explicit attachment action returns the user to the owning window.
+					if (window.isMinimized()) window.restore();
+					window.show();
+					window.webContents.send(IMAGE_VIEW_ATTACH_CHANNEL, image);
+				}).catch(error => this.logService.error('screenshot', 'Could not capture the desktop', error));
+				return true;
+			}),
+		];
+	}
+
 	private windowHostOperations(window: BrowserWindow, windowDisposables: DisposableStore): Omit<INativeHostMainService, 'getTitleBarStyle' | 'openWorkspace' | 'openWindow' | 'openAgentsWindow' | 'syncSystemWideKeybindings'> {
 		const invitationContents = window.webContents;
 		const resetRendererState = (): void => {
@@ -1839,7 +1892,6 @@ export class AshApplication extends Disposable {
 		}));
 		return {
 			moveTerminalToWindow: (transfer, targetWindowId) => this.terminalWindowTransfers.move(window.id, transfer, targetWindowId),
-			getWindowClientSize: () => this.windowsMainService.getWindowById(window.id)!.getClientSize(),
 			takeTerminalTransfer: () => this.terminalWindowTransfers.take(window.id),
 			completeTerminalTransfer: result => this.terminalWindowTransfers.complete(window.id, result),
 			getAgentHostEditorState: () => this.agentsWindowInvitations.getState(),
@@ -2125,11 +2177,7 @@ export class AshApplication extends Disposable {
 						...sessionsRelay.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })),
 						...(localSessionsRelay?.routes(window.webContents, () => ({ workspaceId: AGENTS_WINDOW_KEY, workspaceRoot: this.profileRoot })) ?? []),
 						...rendererSystemHostRoutes(window, request => this.directoryPermissionPrompt(request), this.auxiliaryWindowsMainService),
-						...this.globalKeybindings.createWindowRoutes(window, windowDisposables),
-						...windowDisposables.add(new ImageViewMainService(window, {
-							entry: this.resolveRendererEntry('imageView'), webPreferences: this.createSandboxWebPreferences(),
-							router: this.trustedIpcRouter, localization: () => this.activeLanguagePack,
-						})).routes(),
+						...this.windowImageRoutes(window, windowDisposables),
 						userConfigurationIpcRoute(this.profileRoot, () => !getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()), openUserConfigurationTextFile),
 						...remoteWindowContext.ipcRoutes,
 						windowOperationIpcRoute(this.windowsMainService, window),

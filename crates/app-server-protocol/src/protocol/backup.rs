@@ -74,6 +74,20 @@ pub struct BackupListResult {
     pub backups: Vec<BackupRecordDto>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BackupReadParams {
+    pub client_id: String,
+    pub workspace_id: String,
+    pub resource: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupReadResult {
+    pub backup: Option<BackupRecordDto>,
+}
+
 /// Null creates a record; updates require the observed revision. Identical retries are safe.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

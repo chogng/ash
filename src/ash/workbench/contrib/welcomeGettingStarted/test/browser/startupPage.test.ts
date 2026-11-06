@@ -9,7 +9,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
-import type { IEditorService } from '../../../../services/editor/common/editorService.js';
+import type { EditorOpenOptions, IEditorService } from '../../../../services/editor/common/editorService.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { isGettingStartedInput } from '../../browser/gettingStartedInput.js';
 import { StartupEditorConfigurationKey, StartupPageRunnerContribution } from '../../browser/startupPage.js';
@@ -36,7 +36,10 @@ test('Startup editor setting opens Welcome only when the selected workspace perm
 		onDidVisibleEditorsChange: Event.None,
 		get activeEditor() { return opened.at(-1); },
 		get visibleEditors() { return opened; },
-		async openEditor(input: IResourceEditorInput) { opened.push(input); },
+		async openEditor(input: IResourceEditorInput, options?: EditorOpenOptions) {
+			assert.equal(options?.onlyWhenEmpty, true);
+			if (opened.length === 0) opened.push(input);
+		},
 		focusActiveEditor() { },
 	} satisfies IEditorService;
 	using workspace = new TestWorkspaceService({ id: 'empty', folders: [] });
@@ -82,7 +85,10 @@ test('Welcome waits for restored editors and accepts only implemented startup mo
 		onDidVisibleEditorsChange: Event.None,
 		get activeEditor() { return opened.at(-1); },
 		get visibleEditors() { return opened; },
-		async openEditor(input: IResourceEditorInput) { opened.push(input); },
+		async openEditor(input: IResourceEditorInput, options?: EditorOpenOptions) {
+			assert.equal(options?.onlyWhenEmpty, true);
+			if (opened.length === 0) opened.push(input);
+		},
 		focusActiveEditor() { },
 	} satisfies IEditorService;
 	using workspace = new TestWorkspaceService({ id: 'folder', folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }] });

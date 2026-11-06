@@ -16,6 +16,7 @@ import { BrowserLayoutService, ILayoutService } from '../../../../../../platform
 import { AppServerGitHubService } from '../../../../../../platform/github/browser/appServerGitHubService.js';
 import { IGitHubService } from '../../../../../../platform/github/common/githubService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
+import { ILoggerService, NullLoggerService } from '../../../../../../platform/log/common/log.js';
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { IThemeService } from '../../../../../../platform/theme/common/themeService.js';
 import { IStorageService } from '../../../../../../platform/storage/common/storage.js';
@@ -93,6 +94,7 @@ if (new URL(location.href).searchParams.get('locale') === 'zh-CN') {
 	setNlsMessages('zh-CN', productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!.bundles);
 }
 const services = resources.add(new InstantiationService());
+services.registerInstance(ILoggerService, resources.add(new NullLoggerService()));
 services.registerInstance(IStorageService, resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'github-fixture', flushInterval: 0 })));
 const theme = resources.add(new TestThemeService(darkColorTheme));
 services.registerInstance(IThemeService, theme);

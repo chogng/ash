@@ -147,9 +147,10 @@ fn independent_web_cold_profile_uses_one_owner_before_native_authorization() {
             let (stream, _) = listener.accept().unwrap();
             let worker = std::thread::spawn(move || {
                 server
-                    .serve_host_credentials(
+                    .serve_host_credentials_for(
                         std::io::BufReader::new(stream.try_clone().unwrap()),
                         stream,
+                        ash_app_server_daemon::ConnectionRole::Credentials,
                     )
                     .unwrap()
             });

@@ -10,6 +10,7 @@ import type { AppServerConnectionState } from '../../../../platform/agentHost/co
 import { ChatGPTAuthenticationError, type ChatGPTAuthenticationContext } from '../common/chatGPTTransport.js';
 
 export interface IChatGPTAuthorization extends IDisposable {
+	readonly cacheScope?: string;
 	readonly headers: Headers;
 	readonly signal: AbortSignal;
 	recoverUnauthorized(): Promise<Headers | undefined>;
@@ -148,7 +149,7 @@ export class ChatGPTAuthentication extends Disposable implements IChatGPTAuthent
 				combined.throwIfAborted();
 				if (response.kind !== 'authorized' || context !== this.context?.id) { throw unavailable(); }
 				return {
-					headers: readHeaders(response.headers), signal: combined,
+					headers: readHeaders(response.headers), signal: combined, cacheScope: this.context.cacheScope,
 					recoverUnauthorized: async () => {
 						combined.throwIfAborted();
 						const recovered = await this.call({ kind: 'recover', requestId: id });

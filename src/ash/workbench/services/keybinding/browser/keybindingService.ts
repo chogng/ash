@@ -88,6 +88,8 @@ export interface WorkbenchKeybindingServiceOptions {
 	readonly registry?: KeybindingRegistry;
 	readonly commandRegistry?: CommandRegistry;
 	readonly chordTimeoutMs?: number;
+	/** A startup host dispatches only commands whose services it has assembled. */
+	readonly canDispatchCommand?: (id: string) => boolean;
 }
 
 /**
@@ -102,6 +104,7 @@ export class WorkbenchKeybindingService
 	private readonly userRegistration = this._register(new MutableDisposable<IDisposable>());
 	private readonly registry: KeybindingRegistry;
 	private readonly commandRegistry: CommandRegistry;
+	private readonly canDispatchCommand: WorkbenchKeybindingServiceOptions['canDispatchCommand'];
 	private loadQueue: Promise<void> = Promise.resolve();
 	private readonly schemaContributions = new Map<KeybindingsSchemaContribution, IDisposable | undefined>();
 	private readonly schemaRegistration = this._register(new MutableDisposable<DisposableStore>());
@@ -147,6 +150,7 @@ export class WorkbenchKeybindingService
 		this.statusbarService = options.statusbarService;
 		this.registry = options.registry ?? KeybindingsRegistry;
 		this.commandRegistry = options.commandRegistry ?? CommandsRegistry;
+		this.canDispatchCommand = options.canDispatchCommand;
 		this.resolver = new KeybindingResolver({
 			registry: this.registry,
 			resolveKeybinding: (keybinding) => this.keyboardLayoutService
@@ -173,9 +177,11 @@ export class WorkbenchKeybindingService
 			this.leaveChordMode();
 			this._onDidUpdateKeybindings.fire();
 		}));
-		this._register(this.commandRegistry.onDidChangeCommands(() => this.updateKeybindingsSchema()));
-		this.updateKeybindingsSchema();
-		this._register(jsonRegistry.registerSchemaAssociation('ash://schemas/keybindings', profiles.currentProfile.keybindingsResource.toString()));
+		if (!this.canDispatchCommand) {
+			this._register(this.commandRegistry.onDidChangeCommands(() => this.updateKeybindingsSchema()));
+			this.updateKeybindingsSchema();
+			this._register(jsonRegistry.registerSchemaAssociation('ash://schemas/keybindings', profiles.currentProfile.keybindingsResource.toString()));
+		}
 		this._register(files.watch(profiles.currentProfile.keybindingsResource));
 		this._register(files.onDidChangeFiles(event => {
 			if (!event.resources || event.resources.some(resource => extUri.isEqual(resource, profiles.currentProfile.keybindingsResource))) {
@@ -536,6 +542,7 @@ export class WorkbenchKeybindingService
 
 			case KeybindingResolveKind.Command:
 				this.leaveChordMode();
+				if (this.canDispatchCommand && !this.canDispatchCommand(result.command)) return false;
 				event.stop();
 				const previousDispatch = this.currentDispatch;
 				this.currentDispatch = { command: result.command, event: browserEvent };

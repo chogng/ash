@@ -2,10 +2,8 @@ import { AppServerProtocolClient } from '../../platform/agentHost/browser/appSer
 import { AppServerTextDocumentHost } from '../services/textfile/browser/appServerTextDocumentHost.js';
 import { IChatEditingService } from '../contrib/chat/common/editing/chatEditingService.js';
 import type { RendererCapabilityContribution } from './webRendererApi.js';
-import { BrowserClipboardService } from '../../platform/clipboard/browser/clipboardService.js';
 import type { IStartWorkbenchOptions } from './workbench.js';
 import { startWebWorkbench } from './web.factory.js';
-import { showStartupError } from './startupError.js';
 import type { IDisposable } from '../../base/common/lifecycle.js';
 import { connectBrowserWorkbenchHost } from './web.host.js';
 
@@ -21,6 +19,6 @@ export async function startBrowserWorkbench(options: Pick<IStartWorkbenchOptions
 		} : undefined);
 	} catch (error) {
 		connectedHost?.dispose();
-		showStartupError(error, text => new BrowserClipboardService(window.navigator.clipboard).writeText(text));
+		throw error;
 	}
 }

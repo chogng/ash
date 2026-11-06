@@ -76,6 +76,8 @@ export interface IExtensionService extends IDisposable {
 	readonly onDidChange: Event<ExtensionCatalog>;
 	readonly onDidFail: Event<ExtensionServiceFailure>;
 	start(): Promise<void>;
+	/** Verified editor selectors, languages and configuration defaults are usable before optional assets finish. */
+	whenEditorContributionsReady(): Promise<void>;
 	reload(): Promise<void>;
 	getExtension(id: string): Promise<ExtensionDescriptor | undefined>;
 	activateByEvent(event: string, signal?: AbortSignal): Promise<void>;

@@ -18,38 +18,19 @@
 - [ ] **扩展与工具运行时去 Node** · 逐项核对扩展、语言服务器及 Electron run-as-Node 的消费者，将已需能力迁到 Rust、Rust/V8、浏览器 Worker 或原生程序。保留作者契约、权限、调试和资源回收语义；无法等价支持的 Node API 依赖须明确迁移或支持范围，不能通过兼容层继续隐式启动 Node。
 - [ ] **Rust 产品宿主替换 Electron／Node 启动链** · 闭合窗口、浏览器嵌入、系统集成、原生 IPC、更新、打包和跨平台生命周期，再替换过渡宿主。日志等 Rust 基础模块由 Rust 宿主直接拥有；过渡期内部 helper 随之退出。验收默认产品启动与主要工作流不加载或启动 Node，不能以仍需 Electron Main 的实现宣称完成。
   - 内置浏览器按基础网页浏览验收：打开网页、站内跳转、前进／后退、刷新，以及常见网页的输入和登录。Agent 浏览器自动化和 Electron 专用调试集成不作为退场前置。外部网页使用独立的浏览视图和存储分区，与 Ash 工作台的认证及宿主 IPC 隔离。普通浏览器中的 Ash 继续走独立 Web 入口。
-  - Windows Rust 预览可选 `ASH_NATIVE_DESKTOP_VIEW=composition`，由 Rust 持有 DirectComposition 视觉树。125% 显示缩放下已验证真实工作台渲染、鼠标点击、顶栏拖动、右边缘缩放和文件保存；编辑器采样区域与子窗口版逐像素一致。三个窗口按钮已通过 Win32 命中与鼠标操作实测，Windows 11 23H2 悬停最大化按钮仍未弹出贴靠布局。切换默认宿主前须补齐贴靠、系统无障碍、输入与缩放矩阵验收。实机记录在 `.build/ash-native-gpu-probe/composition-comparison/validation.json` 和 `.build/ash-native-gpu-probe/native-caption/validation.json`。
-  - 独立 AppWindow 原型已在 Windows 11 23H2、125% 缩放下把系统按钮合入真实 Ash 工作台。系统贴靠浮层和三个按钮的 UI Automation 识别均已验证。移除旧自绘按钮的鼠标消息拦截后，系统按钮的最小化、最大化、还原和关闭也已通过实机测试。并入正式宿主前须接入标题栏布局对系统保留区和高度的动态更新，并闭合 Windows App Runtime 打包与缺失时的启动策略。本机 bootstrapper 返回 `0x80670016`，原型通过系统的动态包依赖加载已安装的 1.8 运行时。实机截图在 `.build/ash-native-gpu-probe/appwindow-caption/`，按钮操作记录在 `.build/ash-native-gpu-probe/appwindow-caption-actions/validation.json`。
 - [ ] **Rust 前端计算与渲染演进** · 沿真实 DOM 更新、布局、文本／差异计算和渲染调度热点选择 Rust／WASM 等切片，以匹配负载测量输入到可见更新、帧时间和内存。保持模型／编辑历史唯一 owner，覆盖 IME、选区、焦点、键盘和无障碍；现有 [WebGPU 渲染任务](#多文件审阅--webgpu) 按其独立范围验收，不把引擎 GPU 合成或 Rust 代码存在当作渲染优化完成。
-
-  - composition 开发模式复用 WebView2 工作台顶栏，并由 AppWindow 保留系统窗口按钮。125% 实测鼠标可打开搜索和应用菜单、隐藏和恢复主侧栏、拖动空白区并最大化，悬停最大化按钮可见贴靠布局。跨屏 DPI、键盘和系统无障碍仍待验收。记录在 `.build/ash-native-gpu-probe/workbench-system-titlebar/`。
-
-## 窗口缩放布局 · Windows 验收
-
-- [ ] **验收** · 在 Windows 显示缩放 100%、125%、150%、200% 下，分别检查 IDE 与 Agents：连续拖动四边和四角、往返缩放、最大化后恢复；标题栏左右图标应保持相对窗口边缘的位置，按钮不得抖动、重叠或被裁切。再切换应用界面缩放，检查底部状态栏和右边缘是否出现 1px 裁切。
-- [ ] **验收** · 将编辑器和会话分别弹出到辅助窗口，重复上述缩放与最大化恢复；检查编辑内容、状态栏与根容器边界对齐，切换紧凑模式后菜单、键盘操作和焦点恢复正常。记录 Windows 版本、显示缩放、应用缩放、窗口类型及复现步骤；验收通过后移除此节。
-
-同步 resize 已收至共享布局服务；辅助窗口已补齐布局前后阶段，根容器统一保留小数尺寸。macOS 已通过 268 项定向单测、2 项原生回归和 3 个真实窗口场景；Agents 106 帧采样无布局滞后，IDE 113 帧图标位置稳定。macOS 本地证据在 `.build/ash-playwright-mcp/titlebar-resize/foundation-fix/validation.json`。
-
-2026-11-03 Windows 11 23H2（22631）实机验收未通过。IDE 主窗在 100%、125%、150%、200% 连续拖动四边和四角时均测到右侧标题栏按钮短时偏移。最大化、恢复及应用缩放 0、+1、−1 的稳定状态下，主窗与原生客户区对齐。辅助编辑器在 125% 的右边和底边、150% 的右边、200% 的底边各出现 1 个物理像素的越界。紧凑模式键盘切换和焦点恢复通过，菜单和 Agents 会话弹窗仍待验收。复现步骤、采样日志和 IDE 录像索引见 [Windows 验收记录](.build/ash-playwright-mcp/windows-resize/validation.json)。
-
-主窗修复复测（GPU 开启）。旧原生尺寸对根容器的限制已收窄为一个物理像素。125% 完整自托管场景通过，1,782 帧未发现按钮偏移，松手后及应用缩放 0、+1、−1 均与 Win32 客户区对齐。150% 仍有右侧标题栏按钮距边缘的偏移，稳定状态通过。100% 和 200% 的界面隔离场景通过。继续验证 150% 标题栏边距、辅助窗物理边界及 Agents 会话弹窗。见 [125% 日志](.build/ash-playwright-mcp/windows-resize/ide-125-gpu-final.log) 和 [150% 日志](.build/ash-playwright-mcp/windows-resize/ide-150-gpu-final.log)。
-
-2026-11-05 在同一 Windows 11 23H2 x64 主机复测 125%。将测试窗口移出 Windows Shell 浮层覆盖区后，IDE 主窗与辅助编辑器共采样 2,876 帧原生拖拽，布局断言、最大化恢复和辅助编辑器的紧凑模式键盘切换均通过。场景退出清理报 `taskkill` 拒绝访问，复查时该 PID 已退出。复验范围和退出错误见 `.build/todo-local-acceptance-20261105/resize-ide-125-clear-shell.log`。
-
-同一主机在 150%、GPU 合成开启时再次复现 IDE 主窗标题栏右侧短时偏移。原生拖拽 1,187 帧中有 67 帧违反边距断言，样本中偏移约 1.5 个物理像素。松手后的客户区、最大化恢复和应用缩放断言通过。日志位于 `.build/todo-local-acceptance-20261105/resize-ide-150-gpu.log`。
 
 ## Terminal · 滚动命令的渲染就绪边界
 
-- [ ] **修复候选 · 终端冷加载期间的滚动命令**：`src/ash/workbench/contrib/terminal/browser/terminalActions.ts` 的六个滚动命令在 active instance 已有 screen 且未 disposed 时直接读取 `screen.raw.buffer`；但 `terminalInstance.ts` 在异步 `initialize` 前就暴露 screen，而 `xterm/xtermTerminal.ts` 的 `raw` 在模块加载完成前会抛错。参考 [VS Code 在 renderer 附着前保护终端滚动](https://github.com/microsoft/vscode/pull/339330)（2026-11-04 已合并，稳定 1.145.0 尚不包含），沿现有终端 owner 补安全的就绪检查，避免冷加载时由命令面板／命令调用触发异常。此处是静态调用链确认，尚未运行 Ash 时序复现，不宣称全部终端命令受影响。
+- [ ] **修复候选 · 终端冷加载期间的滚动命令**：`src/ash/workbench/contrib/terminal/browser/terminalActions.ts` 的六个滚动命令在 active instance 已有 screen 且未 disposed 时直接读取 `screen.raw.buffer`；但 `terminalInstance.ts` 在异步 `initialize` 前就暴露 screen，而 `xterm/xtermTerminal.ts` 的 `raw` 在模块加载完成前会抛错。参考 [VS Code 在 renderer 附着前保护终端滚动](https://github.com/microsoft/vscode/pull/339330)（2026-11-04 已合并，稳定 1.145.2 尚不包含），沿现有终端 owner 补安全的就绪检查，避免冷加载时由命令面板／命令调用触发异常。此处是静态调用链确认，尚未运行 Ash 时序复现，不宣称全部终端命令受影响。
   - 范围与前提：区分 screen 对象存在、底层 Terminal 已初始化和 renderer 已 open；恢复终端可先有缓冲而未打开 DOM，滚动命令不为就绪而强制 reveal／open。未就绪时安全返回，若选择等待则绑定原实例并重查释放／活动身份，不在异步完成后滚动另一个终端。不改 PTY、输出恢复或持久化，不额外排队；已退出和只读终端的可见历史仍可滚动，alternate buffer 保持现有边界。
   - 验收：在 `src/ash/workbench/contrib/terminal/test/browser/terminalActions.test.ts` 补 screen 已存在但 raw 尚不可用、初始化完成但恢复 renderer 未 open、等待中关闭／切换 active instance，以及正常就绪、已退出／只读和 alternate buffer 六组边界；使用受控延迟的真实初始化路径复核冷开终端时触发六个滚动命令无异常、无意外打开面板、不修改输入，原终端可见后滚动正常。不要把现有完整 fake raw 或 undefined screen 测试算作该竞态通过。
 
 ## 上下文菜单 · 原生窗口按钮避让
 
-- [ ] **验收剩余 · 原生窗口按钮与浮动菜单**：[共享浮动菜单避让](https://github.com/chogng/ash/commit/d25ce1a8a0fd7458cef050b4c361b772d9a467e3) 已在 `src/ash/base/browser/ui/contextview/contextview.ts` 接入目标窗口可见 WCO 几何及 `geometrychange`，由 `windowControlsOverlay.ts` 先向下、再横移、最后按视口回退；子菜单沿既有 ContextView 复用。原“只按完整 viewport 定位、未消费按钮区域”的实现缺口已消除，保留原生 Windows 主／辅助窗口的实际遮挡与点击验收。参考 [VS Code 菜单避让窗口按钮](https://github.com/microsoft/vscode/pull/345326)（2026-11-02 已合并，稳定 1.145.0 尚不包含），不重复建立另一套定位器。
-  - 已有证据与边界：`windowControlsOverlay.test.ts` 覆盖左右按钮区、高菜单、偏移 viewport 与无效几何；`contextview.test.ts` 覆盖 owner window、可见性更新和隐藏后释放监听；`menu.browser.test.ts` 覆盖多级菜单、主题和键盘。浏览器 fixture 注入 WCO 几何，不能等同原生按钮命中验收；提交记录的 Electron IPC smoke／构建通过也不替代该场景。当前窗口配置证据来自 Electron `windowImpl.ts`，不据此宣称 Rust 原生宿主／DirectComposition 的按钮区域已覆盖。
-  - 剩余验收：在实际 Windows 自定义标题栏，以 Activity Bar 顶部账户／管理入口右键菜单及键盘子菜单核对主窗口和弹出窗口，包含缩放、窄窗口、高菜单、全屏／system 标题栏及 WCO 隐藏或不可用；菜单不被按钮遮住且可点击，焦点、Escape 和取消保持可用。分别记录真实宿主、API 可用性和几何来源；Rust 原生宿主按其现有按钮／命中契约另记覆盖，不为此新增跨宿主模拟层。本项不替代已有窗口缩放布局或原生宿主切换验收。
+- [ ] **验收剩余 · 原生窗口按钮与浮动菜单**：[共享浮动菜单避让](https://github.com/chogng/ash/commit/d25ce1a8a0fd7458cef050b4c361b772d9a467e3) 已在 `src/ash/base/browser/ui/contextview/contextview.ts` 接入目标窗口可见 WCO 几何及 `geometrychange`，由 `windowControlsOverlay.ts` 先向下、再横移、最后按视口回退；子菜单沿既有 ContextView 复用。原“只按完整 viewport 定位、未消费按钮区域”的实现缺口已消除，保留原生 Windows 主／辅助窗口的实际遮挡与点击验收。参考 [VS Code 菜单避让窗口按钮](https://github.com/microsoft/vscode/pull/345326)（2026-11-02 已合并，稳定 1.145.2 尚不包含），不重复建立另一套定位器。
+  - 已有证据与边界：`windowControlsOverlay.test.ts` 覆盖左右按钮区、高菜单、偏移 viewport 与无效几何；`contextview.test.ts` 覆盖 owner window、可见性更新和隐藏后释放监听；`menu.browser.test.ts` 覆盖多级菜单、主题和键盘。浏览器 fixture 注入 WCO 几何，不能等同原生按钮命中验收；提交记录的 Electron IPC smoke／构建通过也不替代该场景。当前窗口配置证据来自 Electron `windowImpl.ts`；[Windows Rust 预览宿主已移除](https://github.com/chogng/ash/commit/34dec548b372cb61795c3d3183b30c935deb4cf1)，不再将已删除的 AppWindow／DirectComposition 实现列为本项验收目标。
+  - 剩余验收：在实际 Windows 自定义标题栏，以 Activity Bar 顶部账户／管理入口右键菜单及键盘子菜单核对主窗口和弹出窗口，包含缩放、窄窗口、高菜单、全屏／system 标题栏及 WCO 隐藏或不可用；菜单不被按钮遮住且可点击，焦点、Escape 和取消保持可用。记录当前 Electron 主／辅助窗口的 API 可用性和几何来源，不新增跨宿主模拟层。[已完成的 Windows 缩放验收](https://github.com/chogng/ash/commit/0953132eeb23cef0001eeebe38dfb217df62c945) 不等同于本项菜单遮挡与按钮命中验收；未来宿主切换按其届时契约另行验证。
 
 ## Connectors 面板 · 点击后窗口无响应
 
@@ -74,6 +55,7 @@
 
 - [ ] **并行开发** · `/team develop` 已有持久化和冻结工作树绑定，仍缺专用运行时、调度、review/check 执行、RPC/UI 和 SCM 落地。实现前该入口返回不可用。范围见 [Workflows](crates/ext/workflows/README.md)。
 - [ ] **复核 · 浏览器集成中的 scrollbar 点击偶发失败** · 2026-10-08 完整集成 840 项通过、1 项失败，未修改的基线重复 10 次出现 5 次相同失败。调查时保留现有断言。见 [main 集成交接记录](docs/archive/ash-main-handoff-2026-10-08.md#本次实际验证)。
+      2026-11-06 在 Windows 11 23H2 x64、`bd00f5e926` 使用 Chromium 复跑编辑器滚动条的显示尺寸、滚轮和轨道点击、箭头点击和长按三条用例各 10 轮，30/30 通过。历史 macOS 记录没有具体用例名，仍待复核原失败。日志位于 `.build/todo-local-acceptance-20261106/scrollbar-retry.log`。
 
 ## Rust 函数级增量编译
 
@@ -97,7 +79,7 @@
 
 ## Ash Code · `/fork` 拒绝时保留草稿
 
-- [ ] **修复候选 · `/fork` 本地校验拒绝不消耗草稿**：`crates/tui/src/thread/composer/input/state.rs` 的普通提交和活动任务队列入口，对本地命令先清空输入及附件，再交给 `crates/tui/src/app/state.rs` 校验；运行中拒绝 `/fork` 或 `text_arguments()` 拒绝图片等非文本参数时，当前草稿已不再可编辑。纯文本虽进入输入历史，带附件的提交不会记录到该历史，不能以历史恢复替代保留完整草稿。参考 [Codex 在消耗草稿前校验 fork](https://github.com/openai/codex/pull/58767)（2026-11-01 已合并；尚未包含于当前稳定版 [0.166.0](https://github.com/openai/codex/releases/tag/rust-v0.166.0)），先闭合本地校验与草稿消耗的顺序。本项为静态调用链确认，未运行端到端复现，不将其描述为持久文件或历史会话丢失。
+- [ ] **修复候选 · `/fork` 本地校验拒绝不消耗草稿**：`crates/tui/src/thread/composer/input/state.rs` 的普通提交和活动任务队列入口，对本地命令先清空输入及附件，再交给 `crates/tui/src/app/state.rs` 校验；运行中拒绝 `/fork` 或 `text_arguments()` 拒绝图片等非文本参数时，当前草稿已不再可编辑。纯文本虽进入输入历史，带附件的提交不会记录到该历史，不能以历史恢复替代保留完整草稿。参考 [Codex 在消耗草稿前校验 fork](https://github.com/openai/codex/pull/58767)（2026-11-01 已合并；尚未包含于当前稳定版 [0.167.0](https://github.com/openai/codex/releases/tag/rust-v0.167.0)），先闭合本地校验与草稿消耗的顺序。本项为静态调用链确认，未运行端到端复现，不将其描述为持久文件或历史会话丢失。
   - 范围与风险：仅修现有 `/fork` 提交链，复用 composer 的完整 draft／附件绑定；本地拒绝后保留文本、光标、附件占位及后续编辑能力，校验通过后仅消耗一次。保持运行中禁止 fork 和只接受文本参数的现有规则，不顺带允许图片／Skill、放宽状态门禁或移植 Codex 的 MCP／side-conversation 产品语义。不要把已发出的 RPC 失败自动恢复为可重试 fork，避免结果未知时重复创建会话；其他 slash 命令及普通 queue／steer 行为保持回归。
   - 验收：扩展 `crates/tui/src/app/state_tests.rs` 的 `fork_rejects_image_arguments_before_session_creation`，并在 composer submission 测试覆盖空闲非法附件、运行中纯文本／带附件拒绝、修正后再次提交和成功清空；断言拒绝不产生 SessionCommand、不调用 fork RPC、草稿和附件绑定保持且可继续编辑，纯文本历史不重复。覆盖 Inline／Fullscreen 与取消任务后再次提交；保留 `crates/tui/src/sessions/completion_tests.rs` 中成功 fork 不切换当前会话、无 prompt 不启动任务、有 prompt 仅启动一次的既有语义。
 
@@ -118,7 +100,7 @@
 - [ ] **修复候选 · 保留 Provider 流错误的稳定分类**：沿 `crates/ash-api/src/requests.rs`、endpoint decoder、`crates/app-server/src/model_provider_error.rs` 到 `crates/core/src/turn/executor.rs` 核对以下独立缺口，避免将可诊断的失败降为通用无效响应。既有配置／认证／限流提示已存在，不重复建设错误展示层；以下依据静态调用链，尚未运行真实端点验收，各出处的合并与发布状态分别标注。
   - **Chat Completions 错误帧**：`crates/ash-api/src/sse/openai_chat_completions.rs` 未识别 `error` envelope，无 `choices` 时直接忽略；若随后结束或只有 `[DONE]`，错误会变为缺少终态的 `InvalidResponse`。参考 [流错误分类保留](https://github.com/zed-industries/zed/pull/66038)（2026-10-23 已合并 main，已包含于 [Zed v1.27.0](https://github.com/zed-industries/zed/releases/tag/v1.27.0) 稳定版），在普通 chunk／usage 处理前识别经确认的错误帧并接回已有分类入口，不照搬上游类型装箱修复。Core 对无效响应只立即重试一次，而 transient 有等待及独立重试预算；须让额度／认证错误终止并给出正确恢复方向、过载沿原 transient 策略处理，而非一概关闭重试。
   - **Responses 模型不可用代码**：`requests.rs` 仍按正文子串识别，裸 `model_not_found` 从 `error`／`response.failed` 落为 `InvalidResponse`，同样可能多发一次请求；HTTP 403 则在读取该代码前归为认证错误。参考 [模型不可用终态错误](https://github.com/openai/codex/pull/56445)（2026-10-23 已合并，已包含于 [Codex 0.165.0](https://github.com/openai/codex/releases/tag/rust-v0.165.0)），优先识别可信协议结构中的精确 code，并沿现有稳定错误契约给出更换模型／检查模型访问的恢复方向，不凭自然语言子串推断、不自动切换模型。HTTP 400／404 与含 `invalid_request_error` 的现有路径本已不可重试，不能把所有模型不存在都描述为重试缺陷；未知 403 仍保留原认证语义。
-  - **Responses 预算耗尽代码**：当已配置的 Responses 端点实际返回精确 `budget_reached` 流错误且未同时命中现有额度／无效请求正文分类，也会沿 `error`／`response.failed` 落为 `InvalidResponse` 并立即重试一次。参考 [预算耗尽终态分类](https://github.com/openai/codex/pull/59228)（2026-11-03 已合并；尚未包含于 [Codex 0.166.0](https://github.com/openai/codex/releases/tag/rust-v0.166.0)），在同一精确 code 分类入口保留不可重试结果与有界提示，不新增错误架构、不自动换模型或推断额度恢复时间。HTTP 400 的现有路径本已不可重试；含 `usage_limit`／`insufficient_quota`／`invalid_request_error` 等已命中分类的正文不算本缺口。此项为静态协议与调用链核对，未断言真实端点已发生故障。
+  - **Responses 预算耗尽代码**：当已配置的 Responses 端点实际返回精确 `budget_reached` 流错误且未同时命中现有额度／无效请求正文分类，也会沿 `error`／`response.failed` 落为 `InvalidResponse` 并立即重试一次。参考 [预算耗尽终态分类](https://github.com/openai/codex/pull/59228)（2026-11-03 已合并；尚未包含于 [Codex 0.167.0](https://github.com/openai/codex/releases/tag/rust-v0.167.0)），在同一精确 code 分类入口保留不可重试结果与有界提示，不新增错误架构、不自动换模型或推断额度恢复时间。HTTP 400 的现有路径本已不可重试；含 `usage_limit`／`insufficient_quota`／`invalid_request_error` 等已命中分类的正文不算本缺口。此项为静态协议与调用链核对，未断言真实端点已发生故障。
   - **范围与验收**：在 `crates/ash-api/src/sse/openai_chat_completions_tests.rs`、`crates/ash-api/src/endpoint/responses/events_tests.rs` 和 `crates/app-server/src/model_provider_error_tests.rs` 补受控错误帧与完整 Core 调用次数断言；覆盖错误出现在首帧／部分输出之后、缺少／附带 `[DONE]`、普通 usage-only 帧、嵌套 `response.failed`、SSE／WebSocket 共用解码、400／403／404、取消、未知或畸形错误。额度／认证／已确认模型不可用不额外调用，过载仍按预算等待，终态与历史恢复提示一致；保留既有上下文溢出处理、错误正文截断和脱敏，不把原始 provider 正文直传 UI 或新增账号／provider 抽象。补精确 `budget_reached` 的顶层／嵌套错误帧、部分输出后失败、携带 retry-after 后跟 completed、已有额度／无效请求正文命中及 HTTP 400 场景，断言终态不多调用模型；未知 code 与正常 transient 的原重试策略不变。
 
 - [ ] **修复候选 · 兼容 Chat Completions 的结构化流内容**：`crates/ash-api/src/sse/openai_chat_completions.rs` 仍把 `delta.content` 限定为字符串，已启用 native streaming 的 OpenAI-compatible 端点遇到 text/thinking 数组会报错；参考 [Zed 混合流适配](https://github.com/zed-industries/zed/pull/65915)（已合并 main，已包含于 [Zed v1.26.2](https://github.com/zed-industries/zed/releases/tag/v1.26.2) 稳定版），沿现有 decoder 与 terminal assembly 支持经确认的结构化内容，保持思考与正文分离。不新增 provider 抽象或账号接线。
@@ -144,7 +126,7 @@
 
 - [ ] **Sessions contribution 对齐余项** · 多对话会话的目录切换还需跨 Thread 原子提交执行目标并保留各自的工作区。远程和 Provider 会话还需对接其拥有方的目录选择和授权契约。列表撤销通知需先由归档、分组和筛选各自提供可撤销操作。常驻列表提示和存储清理提示分别缺少对应的引导和清理建议生产方。
 
-- [ ] **New Environment · Cloud 与 WSL 环境变量** · Cloud 需要可路由的 Sessions provider 与目标发现和创建契约。Windows 实机的 WSL 首次连接已通过，仍需验证保存的环境变量到达 WSL 会话启动的命令。
+- [ ] **New Environment · Cloud** · 需要可路由的 Sessions provider 与目标发现和创建契约。
 
 ### Artifact Integrations
 
@@ -199,8 +181,56 @@
 
 ## Desktop 启动性能 · TODO
 
+- [ ] **Windows 首启** · Setup 已预置后端包，本地 Code 工作台已拆分协议协商和服务就绪。冷启动复用安装时的 Electron 验证结果，扩展和语言服务在启动子进程时仍校验文件摘要。打包版已授权工作区各五轮，身份检查中位数从 647 降至 347 毫秒，目录准备从 1.11 降至 0.73 秒，端口到完整初始化从 1.54 降至 0.93 秒，启动到首次保存从 5.53 降至 4.78 秒。Windows 打包已预先合并主进程模块。原生安装对照各一次，主进程应用模块加载从 4.14 降至 1.46 秒。重新编译 Setup 后的原生新安装验证中，首个窗口在 2.95 秒创建，空工作台在 8.75 秒就绪，之后打开新工作区到首次保存为 6.34 秒。后续已并行启动渲染端连接和贡献注册，并将远程 Agent Host 实现和探测移出初始加载。同一路径的打包版对照使用预置配置并逐轮重启后端，各五轮首个命令中位数从 2.22 降至 2.12 秒。新配置对照各两轮，改动后首个命令为 4.07–4.27 秒，其中端口到完整初始化为 2.57–2.66 秒。本地 F1 和原生目录选择已从完整 `initialize` 中解耦。暂停初始化时验证了选择目录，恢复后在原窗口授权和保存。新版 Setup 原生首装一轮，首窗 2.88 秒、F1 搜到打开文件夹 5.53 秒、App Server 完整初始化 8.13 秒、工作台恢复 9.16 秒。剩余工作是缩短首次开窗后的本地贡献加载和后台冷初始化。该轮贡献导入耗时 1.92 秒，端口到完整初始化耗时 3.22 秒。原始数据在 `.build/startup-trace/windows-installed-20261105/` 的 `ready-{baseline,candidate,native-install}.json`、`empty-native-{modules,bundle}-probe.json`、`empty-final-native.json`、`renderer-progressive-matched{,-fresh}.json` 和 `local-startup-native.json`。
 - [ ] **评估** · 基于已采集的入口清单和四组 CPU 证据，验证选定语言资源的惰性加载生命周期；候选需比较静态 JS、首次功能成本及四组重复启动，不凭 87.6% 静态语言资源占比宣称启动收益。
 - [ ] **复核** · 旧启动诊断的部分 F1 失败仍未复现、未归因。当前 macOS 激活原生窗口的 F1／命令列表／Escape 焦点恢复回归已通过；名义 hidden 对照在观测时也实际可见且有焦点，不能据此认定隐藏窗口导致旧故障。保留历史失败产物及新的焦点／键盘到达记录，继续核对旧批次的条件；范围见[启动复核](docs/desktop-startup.md#2026-10-18-f1-本机复核)。
+
+### Windows 首用基线与 Zed 对照
+
+Windows 11 22631、i5-12600KF。Ash 使用打包 `dev-small` 和隔离配置。已授权组保留操作系统文件缓存，表中为五轮中位数，单轮和两轮另行标明。Ash 用 Playwright 观察正文和编辑焦点，再输入并核对落盘字节。Zed 1.26.2 用原生窗口输入探针，以实际保存的内容回溯首次接受输入。两种探针的开销和判定点不同，目标是达到同机 Zed 的约 0.4 秒可编辑、0.8 秒落盘量级，验收前先统一探针。
+
+| 场景                                                                             | 发起操作到可用                                                                                                                               | 证据                                                   |
+| -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Ash 已授权本地 `.txt`，每轮停后端，编辑器与窗格解耦前 → 后                       | 首窗观察 0.442 → 0.474 秒，正文 2.518 → 2.601 秒，可编辑 2.533 → 2.655 秒，首次保存 2.759 → 2.871 秒                                         | `startup-deep-editor-gate-ab-preauthorized.json`       |
+| Ash 已授权本地 `.txt`，同一目录索引构建，停后端 → 复用后端                       | 可编辑 2.705 → 2.355 秒，首次保存 2.929 → 2.581 秒                                                                                           | `startup-deep-ed-mix{,-warm-daemon}.json`              |
+| Ash 已授权，普通文件夹／含 Git 工作区，同一轮目录优化后的构建                    | 首正文 2.572／4.312 秒，首次保存 2.851／4.567 秒                                                                                             | `startup-deep-directory-summary.json`                  |
+| Ash 已授权普通目录，停后端，Git 同步发现 → 按需发现                              | 首正文 2.779 → 2.627 秒，可编辑 2.846 → 2.681 秒，首次保存 3.132 → 2.930 秒                                                                  | `startup-deep-git-first-use-current-ab-retry.json`     |
+| Ash 已授权 Git 仓库，停后端，Git 同步发现 → 按需发现                             | 首正文 3.779 → 3.573 秒，可编辑 3.794 → 3.588 秒，首次保存 4.015 → 3.805 秒                                                                  | `startup-deep-git-first-use-current-git-ab.json`       |
+| Ash 已授权本地 `.txt`，停后端，关闭编辑器恢复，完整目录等待 → 优先交付编辑器声明 | 首窗观察 0.447 → 0.442 秒，首正文 2.510 → 2.511 秒，可编辑 2.534 → 2.555 秒，首次保存 2.772 → 2.786 秒                                       | `editor-declarations-ab-summary.json`                  |
+| Ash 已授权本地 `.txt`，停后端，开启编辑器恢复，完整目录等待 → 优先交付编辑器声明 | 首窗观察 0.445 → 0.436 秒，首正文 2.510 → 2.469 秒，可编辑 2.552 → 2.492 秒，首次保存 2.784 → 2.792 秒                                       | `editor-declarations-restore-ab-summary.json`          |
+| Ash F1 搜到打开文件夹，打包版预置配置／新配置                                    | 预置配置 2.119 秒，新配置 4.067–4.268 秒（两轮）                                                                                             | `renderer-progressive-matched{,-fresh}.json`           |
+| Ash 原生 Setup 首装空窗，两次独立单轮                                            | 首窗 2.881 秒、F1 5.531 秒、完整初始化 8.127 秒、工作台恢复 9.156 秒。另一轮空工作台 8.749 秒就绪，从已开的空窗选新工作区到首次保存 6.337 秒 | `local-startup-native.json`、`empty-final-native.json` |
+| Zed 已授权本地文本，每轮退出 Zed                                                 | 首窗 0.378 秒，可编辑 0.378 秒（0.355–0.451），首次保存 0.818 秒（0.797–0.940）                                                              | `zed-native-reference.json`                            |
+
+从源码看，Zed 的本地 `BufferStore` 直接向本地 `Worktree` 读文件，在应用后台执行器创建文本缓冲。扩展宿主启动时读已有索引，过期后在后台重建。Ash 首文件经过 Electron、carrier、managed App Server 和 Workbench 恢复。Zed 各内部阶段的实测耗时仍待采集。[Zed 本地文件路径](https://github.com/zed-industries/zed/blob/fda552edce4ab52373ebaaff168bd7417bd8010b/crates/project/src/buffer_store.rs#L690-L727) · [Zed 扩展索引](https://github.com/zed-industries/zed/blob/fda552edce4ab52373ebaaff168bd7417bd8010b/crates/extension_host/src/extension_host.rs#L410-L455)
+
+### 首文件在等什么
+
+以下阶段以编辑器与窗格解耦后的 `.txt` 冷后端五轮为基线，另标不同批次。端到端由测试进程计时，阶段由各自进程计时。carrier 可在 Renderer 请求端口前启动，目录及校验也有父子跨度，各行和子项分别读，不能累加成总耗时。
+
+| 路径与归属                              | 已测到的等待                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Electron Main 和 Renderer 入口          | 首窗观察 474 毫秒（435–539），首窗到可编辑 2181 毫秒。Renderer 从 splash 到开始取端口 315 毫秒。历史原生首装单轮 Main 模块合并前后为 4.135 → 1.464 秒，另一轮首装 Renderer 本地贡献导入 1.921 秒。当前首窗前的 Windows 映像加载与 Main 执行占比待拆。                                                                                                                                                                                             |
+| Renderer／Main 连接                     | 取端口 23 毫秒，有一轮 176 毫秒。端口交付到协议协商完成 261 毫秒，协商完成到初始化确认 188 毫秒，端口交付到初始化确认共 449 毫秒。原生首装单轮同一后半段为 3.225 秒。                                                                                                                                                                                                                                                                             |
+| Rust carrier 与 managed App Server 启动 | 打包版 carrier 的 `connect` 入口先按安装摘要验证后端，141 毫秒。选定进程身份的 `executable-identity` 349 毫秒，包含后端 SHA-256 170 毫秒和 Electron SHA-256 171 毫秒。启动并等待 managed App Server 229 毫秒，创建进程 8 毫秒、操作锁 1.4 毫秒、daemon probe 约 0.1 毫秒。后端自己的 `managed-bind` 131 毫秒，其中发布身份前自校验约 119 毫秒。                                                                                                   |
+| Rust 工作区准备和协议处理               | `directory-open` 185 毫秒，其中服务构造 36 毫秒、工作区装配 107 毫秒。Git 发现占该装配 80 毫秒，初始目录打开及授权检查约 0.7 毫秒。历史 Git 工作区对照目录打开 553 毫秒，其中 Git 发现 393 毫秒。复用后端时目录打开约 1.3 毫秒，冷后端的 `initialize` 处理约 2.5 毫秒。                                                                                                                                                                           |
+| 扩展目录与 Renderer Workbench           | 初始化确认到 shell 就绪 303 毫秒，shell 到工作台完全恢复 622 毫秒。Rust 内置目录 173 毫秒。拆窗格前的配套打点显示，窗格完成后到声明目录提交仍有 350 毫秒（332–386），从工作区配置就绪算起为 255 毫秒，之后到服务贡献就绪约 43 毫秒。历史 54 包扫描中，枚举 45、文件身份与元数据校验 167、读取 55、哈希 20 毫秒，目录锁最大约 0.2 毫秒。可校验的小型索引把 Rust 目录从 311 降至 162 毫秒，同组可编辑 2.850 → 2.705 秒，首次保存 3.102 → 2.929 秒。 |
+| 编辑器输入和保存                        | 拆窗格前的空草稿样本中，开始恢复编辑器到草稿恢复结束约 2 毫秒。暂停窗格的单轮仍在 2.527 秒可编辑、2.738 秒落盘，普通窗格已不再是首文件的必要等待。最新五轮可编辑到确认落盘为 223 毫秒，包含测试输入及读盘轮询，文件读写、保存前检查点和 UI 焦点尚缺各自的端到端配对。                                                                                                                                                                             |
+
+Git 首次发现已由 watcher 或首个 Git 查询接手。使用同一 Electron、前端、carrier、协议和授权条件的打包对照，普通目录的同步 Git 发现从 91 毫秒降到约 0.06 毫秒，`directory-open` 从 204 降到 109 毫秒。小型 Git 仓库对应为 342 → 0.06、451 → 111 毫秒。Git 组从保存后打开 SCM 到看到已修改文件为 979 → 975 毫秒。两个场景每个变体各五轮，正式样本均通过。SCM 观察在首文件保存后进行。
+
+扩展声明目录先交付已校验的编辑器关联、语言识别、配置和键位。当前配色与编辑器恢复同步，其他配色、图标、snippet 和语言配置资源在后台加载。打包版暂停扩展资源读入时，普通文本使用了工作区配色，保存时按工作区配置移除尾部空格并补齐换行。Markdown 自定义预览在完整重启后恢复未保存草稿，并在资源仍暂停时成功落盘。证据为 `editor-declarations-held-save.json`、`editor-declarations-held-draft.json`。
+
+拆分前后使用相同的 Electron 和 Rust 二进制、授权目录、配置及硬件 GPU。每组各五轮，交替启动。关闭编辑器恢复的普通文本组中，Renderer 等扩展目录快照为 578 毫秒，之后校验、本地化与声明注册为 206 毫秒。主题启动 284 → 262 毫秒，shell 到编辑器就绪 610 → 538 毫秒。后台扩展资源耗时 436 毫秒。候选包的 carrier 可执行文件身份确认 337 毫秒，等待 managed App Server 启动 230 毫秒，工作区打开 115 毫秒，协议 `initialize` 处理 3.2 毫秒。这些计时有重叠。两组的首文件可编辑和首次落盘区间均重叠。逐轮数据为 `startup-deep-git-first-use-editor-declarations-{plain,final}-ab.json`，其中 `final` 为开启编辑器恢复组。
+
+对照已跑过硬件／软件合成（可编辑 2701／2656 毫秒，保存 2924／2884 毫秒）、编辑器 WebGPU 开／关（2674／2730、2891／2912 毫秒），样本范围重叠。主题校验复用和小资源内联原型已撤回。小资源内联将首文件前的资源打开、读取和释放请求从 434 降到 158，可编辑却从 2632 到 2701 毫秒，首次保存从 2879 到 2908 毫秒。原始证据根目录为 `.build/startup-trace/windows-installed-20261105/`，阶段与实验汇总为 `declarative-catalog-and-zed-summary.json`、`startup-deep-directory-summary.json`、`startup-rust-gpu-ab-summary.json` 和上表的同批样本。
+
+### 专项优化
+
+- [ ] **首文件声明目录剩余开销** · 分开测量前台清单验证、本地化、声明注册和当前配色资源。验证可校验索引能否直接提供首文件所需的编辑器关联与保存配置，以及切换工作区时目录代次与配置能否一致更新。随包 JSON Worker 已按语言激活。
+- [ ] **Windows 首窗与 Rust 冷启动** · 分别记录系统加载、Main 入口、Renderer 首批脚本、carrier 选包与摘要、端点发布和首个业务响应。验证能否在同一已验证安装代次复用身份结果，覆盖更新、替换和校验失败。Git 首次发现已完成普通目录与单仓对照，多仓工作区和开窗后立即进入 SCM 的成本待测。
+- [ ] **首文件与首次保存尾段** · 配对记录启动文件交付、首读 RPC、编辑器构造、焦点到首个输入、备份检查点、首写 RPC 和落盘确认。分开队列等待、后端处理和测试轮询。保留曾拒绝草稿写入的 `ServerOverloaded` 样本，记录请求阶段和并发负载后复现。
+- [ ] **统一基准探针** · 两个应用用同一个 Windows 输入与磁盘观察器跑同一份本地文本，记录首窗、首个被接受的键盘输入、首次落盘。Ash 另测首个 F1 命令和授权后打开目录。原生新装、新配置首次授权、已授权停后端、复用后端、Git 工作区分组，基线和候选各至少五轮，保留每轮数据和失败。
 
 复测命令与基线见[启动测量](docs/desktop-startup.md)；新优化先证明收益，再决定是否保留。
 
@@ -238,9 +268,14 @@
 
 ### Minimap 相邻区段标题可读性
 
-- [ ] **修复候选 · Minimap 相邻区段标题重叠**：`src/ash/editor/contrib/sectionHeaders/browser/sectionHeadersController.ts` 已将 region／MARK 标题交给现有 Minimap；`src/ash/editor/browser/viewParts/minimap/minimap.ts` 仍逐条按源行位置绘制完整字号的标题与背景，没有处理相邻标题的占用区域。行距小于标题高度时，后绘制的标题会覆盖前一条。参考 [VS Code 区段标题防重叠](https://github.com/microsoft/vscode/pull/346190)（2026-11-05 已合并 main，稳定版 [1.145.0](https://github.com/microsoft/vscode/releases/tag/1.145.0) 尚不包含），在现有绘制 owner 内按源行顺序处理标题碰撞，保留每个标题的可读性；这是静态绘制链确认的修复候选，尚未完成 Ash 实机复现。
+- [ ] **修复候选 · Minimap 相邻区段标题重叠**：`src/ash/editor/contrib/sectionHeaders/browser/sectionHeadersController.ts` 已将 region／MARK 标题交给现有 Minimap；`src/ash/editor/browser/viewParts/minimap/minimap.ts` 仍逐条按源行位置绘制完整字号的标题与背景，没有处理相邻标题的占用区域。行距小于标题高度时，后绘制的标题会覆盖前一条。参考 [VS Code 区段标题防重叠](https://github.com/microsoft/vscode/pull/346190)（2026-11-05 已合并 main，稳定版 [1.145.2](https://github.com/microsoft/vscode/releases/tag/1.145.2) 尚不包含），在现有绘制 owner 内按源行顺序处理标题碰撞，保留每个标题的可读性；这是静态绘制链确认的修复候选，尚未完成 Ash 实机复现。
   - 范围与风险：只调整标题标签的布局，不新增扫描器或第二份文档模型，不隐藏冲突标题；非冲突标题、分隔线、标记及点击／拖动导航保持既有源行语义。密集标题堆叠可能占用更多缩略图区，须明确视口底部裁切与滚动时的稳定行为；不顺带导入上游 fill 模式缩放或编辑器边框改动。
   - 验收：扩展 `src/ash/editor/test/browser/editorDecorationViewport.test.ts` 的 Canvas 绘制记录及 Minimap 定向测试，覆盖相邻／嵌套 region、长标题后紧邻另一标题、分散标题、空标签与分隔线，并在真实编辑器核对字体大小、DPI、滚动、折叠、换行与紧凑采样场景。断言每个应显示标签均保留且绘制区域不互相覆盖，原有导航与非标题装饰不退化；不得把上游截图或测试数量当作 Ash 验收。
+
+### Minimap MARK 区段标题的注释结束符
+
+- [ ] **修复候选 · MARK 标题排除块注释结束符**：`src/ash/editor/contrib/sectionHeaders/browser/sectionHeaders.contribution.ts` 将默认 MARK 正则交给 `SectionHeadersController`；`src/ash/editor/common/services/findSectionHeaders.ts` 直接使用 label 捕获，控制器虽检查注释 token，却未传入语言的块注释起止符。因此 `/* MARK: Section */`／`<!-- MARK: Section -->` 的结束符仍随标题进入现有 Minimap。参考 [VS Code MARK 标题清理](https://github.com/microsoft/vscode/pull/346189)（2026-11-05 已合并 main，稳定版 [1.145.2](https://github.com/microsoft/vscode/releases/tag/1.145.2) 尚不包含），在现有语言配置与标题提取链内，只去除已确认属于当前块注释的尾部结束符；保留原文、装饰 owner、导航和用户自定义正则，不以全局字符串替换清理标签。静态调用链已确认，尚无 Ash 真实编辑器复现。
+  - 验收：扩展 `src/ash/editor/test/common/services/findSectionHeaders.test.ts` 与 `src/ash/editor/test/browser/sectionHeadersController.test.ts`，覆盖 HTML／C 风格、同形起止符、空标签／仅分隔线、结束符跨 separator 与 label 捕获、正则自行消费注释符，以及行注释或已闭合注释后标签中的字面 `*/`；保持自定义／多行匹配范围与缓存失效正确。在真实编辑器核对语言切换后的标签及 Minimap 显示；不把相邻标题防重叠候选或上游测试当作本项通过。
 
 ### 网络目录上的状态数据库策略
 

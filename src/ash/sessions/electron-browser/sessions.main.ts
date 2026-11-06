@@ -44,14 +44,13 @@ import { isMacintosh } from '../../base/common/platform.js';
 import { NativeMenubarControl } from '../../workbench/electron-browser/parts/titlebar/menubarControl.js';
 import { Menus } from '../browser/menus.js';
 import { getSessionsTitlebarBackground, TitlebarPart } from '../browser/parts/titlebarPart.js';
-import { bindWindowControlTheme } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
+import { bindWindowControlTheme, bindWindowsTitlebarInsets } from '../../workbench/electron-browser/parts/titlebar/titlebarPart.js';
 import { AGENTS_WINDOW_RESTORE_ENTRY_CHANNEL, RETURN_TO_WORKBENCH_CHANNEL } from '../common/windowNavigation.js';
 import { AGENTS_WINDOW_HANDOFF_AVAILABLE_CHANNEL, AGENTS_WINDOW_HANDOFF_COMPLETE_CHANNEL, AGENTS_WINDOW_HANDOFF_TAKE_CHANNEL } from '../../platform/window/common/window.js';
 import type { IOpenAgentsWindowOptions } from '../../platform/native/common/nativeHost.js';
 import { ElectronLifecycleService } from '../../workbench/services/lifecycle/electron-browser/lifecycleService.js';
 import { StartupKind } from '../../workbench/services/lifecycle/common/lifecycle.js';
 import { NativeHostColorSchemeService } from '../../workbench/services/themes/electron-browser/nativeHostColorSchemeService.js';
-import { showStartupError } from '../../workbench/browser/startupError.js';
 import { invoke, subscribe } from '../../platform/ipc/electron-browser/rendererIpc.js';
 import { ProxyChannel } from '../../base/parts/ipc/common/ipc.js';
 import { IBrowserPasswordService } from '../../platform/browserView/common/browserPasswordService.js';
@@ -167,9 +166,6 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 			});
 			return registerLocalTranscriptionService(transcriptionServices, localClient);
 		}], { browser: true, textDocuments: true, appTools: true, agentHosts: true }, workspaceTrust, mainProcessService);
-	}
-	catch (error) { sessions.dispose(); return showStartupError(error, text => invoke<void>('ash:host:writeClipboard', text)); }
-	try {
 		sessions.add(api);
 		const profileFiles = sessions.add(profileServices.createInstance(FileService));
 		sessions.add(profileFiles.registerProvider(api.userDataHome.scheme, api.localFiles));
@@ -330,6 +326,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'workbench.contrib.sessionBrowserViewController',
 					'workbench.contrib.sessionBrowserNetwork',
 					'sessions.chatgpt.web',
+					'sessions.chatgpt.experimental',
 					'sessions.chatWorkspace',
 					'workbench.contrib.browserView.restore',
 					'workbench.contrib.chatAccessibilitySignals',
@@ -405,6 +402,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 						isMacintosh ? 'actions-only' : 'application-menu',
 					);
 					titlebar.domNode.classList.add('ash-electron-titlebar');
+					sessions.add(bindWindowsTitlebarInsets(titlebar.domNode));
 					return titlebar;
 				},
 				container,

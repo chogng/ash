@@ -21,7 +21,7 @@ export interface ChatGPTAttachment {
 export class ChatGPTDraftAttachmentStorage extends Disposable {
 	private database: Promise<IndexedDB> | undefined;
 
-	constructor(private readonly storage: IStorageService) {
+	constructor(private readonly storage: IStorageService, private readonly storagePrefix = 'sessions.chatgpt') {
 		super();
 		this._register(toDisposable(() => { void this.database?.then(db => db.close(), () => undefined); }));
 	}
@@ -84,7 +84,7 @@ export class ChatGPTDraftAttachmentStorage extends Disposable {
 		await db.runInTransaction(fileStore, 'readwrite', store => ids.map(id => store.delete([scope, id])));
 	}
 
-	private key(localId: string): string { return `sessions.chatgpt.draftAttachments:${localId}`; }
+	private key(localId: string): string { return `${this.storagePrefix}.draftAttachments:${localId}`; }
 
 	private open(): Promise<IndexedDB> {
 		this.assertNotDisposed();

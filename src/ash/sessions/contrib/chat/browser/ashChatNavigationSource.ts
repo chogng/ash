@@ -6,23 +6,21 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
-import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsProvider.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsListModelService } from '../../../services/sessions/browser/sessionsListModelService.js';
-import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { getSessionsListEntries } from '../../sessions/browser/views/sessionsListFilters.js';
 import type { ChatListEntry, ChatListSnapshot, ChatListSource } from './chatListModel.js';
 import { ASH_CHAT_SELECTED_CONTEXT, SHOW_ASH_CHAT_COMMAND } from '../common/constants.js';
 import { IAshChatSelectionService } from './ashChatSelectionService.js';
+import { IAshChatSessionService } from './ashChatSessionService.js';
 import { ISessionsSearchService } from '../../search/browser/searchService.js';
 import type { SearchResult } from '../../search/browser/searchModel.js';
 
-/** Projects the local Ash catalog and routes actions to its Session owner. */
+/** Projects native Chat conversations into the shared sidebar. */
 export class AshChatNavigationSource extends Disposable implements ChatListSource {
 	readonly snapshot;
 
 	constructor(
-		@ISessionsManagementService management: ISessionsManagementService,
+		@IAshChatSessionService sessions: IAshChatSessionService,
 		@IAshChatSelectionService selection: IAshChatSelectionService,
 		@ISessionsListModelService list: ISessionsListModelService,
 		@ISessionGroupsService groups: ISessionGroupsService,
@@ -35,7 +33,7 @@ export class AshChatNavigationSource extends Disposable implements ChatListSourc
 		const visible = observableFromEvent(this, listener => contextKeys.onDidChangeContext(event => {
 			if (event.affectsSome(context)) listener(event);
 		}), () => contextKeys.getValue(ASH_CHAT_SELECTED_CONTEXT) === true);
-		const catalog = observableFromEvent(this, management.onDidChange, () => management.sessions);
+		sessions.initializeCatalog();
 		const listChanged = observableSignalFromEvent(this, list.onDidChange);
 		const groupsChanged = observableSignalFromEvent(this, groups.onDidChange);
 		const working: ISessionStatusIcon = {
@@ -47,13 +45,11 @@ export class AshChatNavigationSource extends Disposable implements ChatListSourc
 			const active = selection.selection.read(reader);
 			const selectedId = visible.read(reader) && active.kind === 'thread' ? active.sessionId : undefined;
 			const rows: ChatListEntry[] = [];
-			const entries = getSessionsListEntries(catalog.read(reader), list, selectedId);
-			for (const session of entries) {
-				// The ambient local provider keeps its raw catalog IDs and omits providerId.
-				if (session.surface !== 'chat' || session.providerId && session.providerId !== LOCAL_AGENT_HOST_PROVIDER_ID) continue;
-				const chats = session.chats.filter(chat => chat.status === 'active');
+			for (const session of sessions.catalog.read(reader)) {
+				if (session.status !== 'active' || session.sessionId !== selectedId && !list.isSessionListed(session)) continue;
+				const chats = session.threads.filter(chat => chat.status === 'active');
 				const thread = chats.find(chat => chat.threadId === session.sessionId)
-					?? chats.find(chat => chat.origin.type === 'root') ?? chats[0];
+					?? chats.find(chat => !chat.parentThreadId && !chat.forkedFromId) ?? chats[0];
 				if (!thread) continue;
 				const id = session.sessionId;
 				const isPinned = list.isSessionPinned(session);
@@ -65,10 +61,10 @@ export class AshChatNavigationSource extends Disposable implements ChatListSourc
 					id: `ash:${id}`,
 					title: session.title || localize('sessions.list.untitled', 'Untitled Session'),
 					sessionId: id,
-					createdAt: thread.createdAt?.getTime(),
-					updatedAt: (thread.updatedAt ?? thread.createdAt)?.getTime(),
+					createdAt: thread.createdAtUnixMs,
+					updatedAt: thread.lastActivityAtUnixMs ?? thread.createdAtUnixMs,
 					selected: selectedId === id,
-					status: session.management?.status === 'working' ? working : undefined,
+					status: session.manager.status === 'working' ? working : undefined,
 					defaultIcon: Lxicon.chatSession,
 					iconId: list.getRowIcon(`session:${id}`),
 					setIcon: icon => list.setRowIcon(`session:${id}`, icon?.id),

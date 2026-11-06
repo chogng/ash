@@ -2,6 +2,7 @@ import { ISessionContext } from '../../services/sessions/browser/sessionContext.
 import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
 import { ISessionFolderAuthorizationService } from '../../common/sessionWorkspace.js';
+import { IBrowserViewWorkbenchService } from '../../../workbench/contrib/browserView/common/browserView.js';
 import { codeConversationDefaultsSetting, codeConversationWorkspaceKey, type CodeConversationDefaults } from '../../common/codeConversationDefaults.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ILocalGitService } from '../../../platform/git/common/localGitService.js';
@@ -190,6 +191,7 @@ function createInputServices(
 	if (!editorServices.has(IExtensionService)) registerTestExtensionService(inputResources, editorServices);
 	const services = inputResources.add(createTestEditorServices(configurationServices.get(chat), editorServices));
 	services.registerInstance(IChatService, chat);
+	services.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 	services.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));
 	services.registerInstance(ISessionFolderAuthorizationService, { isTrusted: async () => true, authorize: async () => true });
 	services.registerInstance(IWorkspacesService, { onDidChangeRecentlyOpened: Event.None, getRecentlyOpened: async () => ({ workspaces: [] }) } as unknown as IWorkspacesService);
@@ -1631,6 +1633,7 @@ test('sending from one session preserves a later draft during first-session crea
 	const editorRoot = createCodeEditorServices(editorResources);
 	registerTestExtensionService(editorResources, editorRoot);
 	const editorServices = editorResources.add(createTestEditorServices(undefined, editorRoot, dom.window.document, composerStorage));
+	editorServices.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 	editorServices.registerInstance(IFileDialogService, { showOpenDialog: async () => { throw new Error('Unexpected folder browser'); } } as unknown as IFileDialogService);
 	editorServices.registerInstance(IRemoteConnectionService, editorResources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 	editorServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
@@ -1683,13 +1686,13 @@ test('sending from one session preserves a later draft during first-session crea
 	editorServices.registerInstance(ISessionsChatViewStateService, new SessionsChatViewStateService());
 	using customViews = editorServices.createInstance(CustomViewService);
 	editorServices.registerInstance(ICustomViewService, customViews);
+	using commands = new CommandService(editorServices);
+	editorServices.registerInstance(ICommandService, commands);
 	using view = editorServices.createInstance(SessionsService);
 	await view.initialize();
 	view.openNewSession();
 	const draft = view.activeSelection;
 	if (draft?.kind !== 'untitled') throw new Error('Expected Code draft');
-	using commands = new CommandService(editorServices);
-	editorServices.registerInstance(ICommandService, commands);
 	editorServices.registerInstance(IContextViewService, contextViewService);
 	using chat = createChatService(fake.api);
 	editorServices.registerInstance(ILanguageModelsService, modelsFor(chat));
@@ -2908,6 +2911,7 @@ interface FakeOptions {
 	}[];
 	readonly configuredProviders?: readonly string[];
 	readonly providers?: readonly ModelProviderCredentialStatus[];
+	readonly readModelAvailability?: IWorkbenchHost['model']['readModelAvailability'];
 	readonly providerModels?: Readonly<Record<string, readonly { readonly model: ModelRef; readonly displayName: string; }[]>>;
 	readonly advisorDefault?: { readonly model: ModelRef; readonly enabled: boolean; readonly maxCalls: number; readonly maxOutputTokens: number; };
 }
@@ -2971,7 +2975,7 @@ function registerChatBackend(services: InstantiationService, api: IWorkbenchHost
 	if (omitted !== IAgentExecutionSettingsService) { services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, read: async () => ({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'directoryWrite', commandNetworkAccess: 'denied' } }), configure: async () => { } }); }
 }
 
-for (const dependency of [IAgentModelsService, IAgentSessionService, IAgentThreadService, IAgentTurnService, ITurnChangesApi, IAppServerApi, IServerEventApi, IAgentExecutionSettingsService, IConfigurationService]) {
+for (const dependency of [IAgentModelsService, IAgentSessionService, IAgentThreadService, IAgentTurnService, ITurnChangesApi, IAppServerApi, IServerEventApi, IConfigurationService]) {
 	test(`Chat rejects missing ${dependency.description} before allocating listeners`, () => {
 		using services = new InstantiationService();
 		services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
@@ -3640,13 +3644,17 @@ test('Model discovery refreshes the picker after an older catalog request comple
 	assert.equal(pickerEntry.supportedReasoningEfforts[0].description, 'Quick tasks');
 });
 
-test('Chat picker excludes a hidden selected model', async () => {
+test('Code keeps the selected model and its effort when the picker hides it', async () => {
 	const entry = {
 		model: { provider: 'openai', model: 'gpt-5.6-sol' },
 		displayName: 'GPT-5.6 Sol',
-	};
+		supportedReasoningEfforts: [{ effort: 'high' }],
+	} as const;
 	const activeSession = { ...session('session-1', 'thread-1'), model: entry.model };
-	const fake = fakeApi({ sessions: [activeSession], models: [entry] });
+	const fake = fakeApi({
+		sessions: [activeSession], models: [entry],
+		readModelAvailability: async () => ({ selected: 'ready', configuredDefault: null, defaultAvailability: 'unknown' }),
+	});
 	using configuration = new WorkbenchConfigurationService();
 	await configuration.updateValue(ModelCatalogConfiguration.hiddenModels, [entry.model]);
 	using chat = createChatService(fake.api, configuration);
@@ -3658,6 +3666,59 @@ test('Chat picker excludes a hidden selected model', async () => {
 	assert.deepEqual(await modelsFor(chat).listModels(), []);
 	assert.deepEqual(model.models, []);
 	assert.deepEqual(model.selectedModel, entry.model);
+	assert.equal(model.inputState.selectedModelEntry?.displayName, entry.displayName);
+	assert.equal(model.inputState.inputBlocked, false);
+	await model.selectReasoningEffort('high');
+	assert.equal(model.selectedReasoningEffort, 'high');
+
+	using draft = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await draft.initialize();
+	assert.deepEqual(draft.models, []);
+	assert.deepEqual(draft.selectedModel, entry.model);
+	assert.equal(draft.selectedReasoningEffort, 'high');
+});
+
+test('Code falls back for inherited drafts and waits for a replacement in existing conversations', async () => {
+	const selected = { provider: 'openai', model: 'gpt-6.1-sol' };
+	const fallback = { provider: 'openai', model: 'gpt-6-luna' };
+	const activeSession = { ...session('session-1', 'thread-1'), model: selected };
+	let status: Awaited<ReturnType<IWorkbenchHost['model']['readModelAvailability']>>['selected'] = 'unknown';
+	const fake = fakeApi({
+		sessions: [activeSession],
+		models: [{ model: selected, displayName: 'Original' }, { model: fallback, displayName: 'Fallback' }],
+		readModelAvailability: async model => ({
+			selected: model?.model === selected.model ? status : 'ready',
+			configuredDefault: fallback,
+			defaultAvailability: 'ready',
+		}),
+	});
+	using configuration = new WorkbenchConfigurationService();
+	await configuration.updateValue(codeConversationDefaultsSetting, { profile: { model: selected, effort: 'high' }, workspaces: {} });
+	using chat = createChatService(fake.api, configuration);
+	using sessions = new SessionsManagementService(fake.api);
+	using existing = createWidgetModel(chat, { kind: 'session', active: { session: activeSession, threadId: 'thread-1' } }, sessions);
+	await existing.initialize();
+	await existing.selectModel(selected);
+	assert.equal(existing.inputState.inputBlocked, false);
+
+	status = 'retired';
+	fake.emit({ method: 'config/changed', params: { revision: 2, generation: 2 } });
+	await waitFor(() => existing.inputState.inputBlocked === true);
+	assert.deepEqual(existing.selectedModel, selected);
+	assert.match(existing.inputState.status ?? '', /GPT-6\.1 Sol has been retired/);
+	await assert.rejects(existing.send('Keep the draft'), /GPT-6\.1 Sol has been retired/);
+	assert.equal(fake.turnStartRequests.length, 0);
+
+	using draft = createWidgetModel(chat, { kind: 'untitled', session: sessions.createUntitledSession() }, sessions);
+	await draft.initialize();
+	assert.deepEqual(draft.selectedModel, fallback);
+	assert.equal(draft.selectedReasoningEffort, undefined);
+	assert.deepEqual(configuration.getValue<CodeConversationDefaults>(codeConversationDefaultsSetting).profile?.model, selected);
+	assert.deepEqual(existing.selectedModel, selected);
+
+	await existing.selectModel(fallback);
+	await existing.send('Send the retained draft');
+	assert.deepEqual(fake.turnStartRequests.at(-1)?.model, fallback);
 });
 
 for (const kind of ['Code', 'Cowork'] as const) {
@@ -4334,6 +4395,7 @@ function fakeApi(options: FakeOptions = {}): {
 			},
 		},
 		model: {
+			readModelAvailability: options.readModelAvailability ?? (async () => ({ selected: 'unknown', configuredDefault: null, defaultAvailability: 'unknown' })),
 			readDefaults: async () => modelDefaults,
 			configureDefaults: async (update: import('../../../platform/models/common/agentModels.js').AgentModelDefaultsUpdate, expectedRevision: number) => {
 				assert.equal(expectedRevision, modelDefaults.revision);
@@ -5095,13 +5157,18 @@ test('stream updates preserve message order and survive an older refresh snapsho
 	const emit = (revision: number, itemId: string, text: string, transient = true): void => fake.emit({
 		method: 'session/thread/transcript/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 1, revision, changes: [{ type: 'upsert', entry: { type: 'item', entryId: `item:${itemId}`, turnId: 'turn-1', transient, item: { type: 'agentMessage', itemId, turnId: 'turn-1', text } } }] },
 	});
+	const changes: unknown[] = [];
+	using presentation = model.onDidChangePresentation(update => changes.push(update));
 	emit(2, 'first', 'Partial');
 	emit(3, 'second', 'Later message');
+	emit(4, 'first', 'Partial reply');
+	emit(5, 'first', 'Corrected');
 	// A revision gap triggers a snapshot read while the first message keeps streaming.
-	emit(5, 'gap', 'Not applied');
+	emit(7, 'gap', 'Not applied');
 	await waitFor(() => reads === 1);
-	emit(4, 'first', 'Completed', false);
-	emit(3, 'first', 'Stale duplicate');
+	emit(6, 'first', 'Completed', false);
+	emit(5, 'first', 'Stale duplicate');
+	assert.deepEqual(changes, [undefined, undefined, { previousText: 'Partial', item: { id: 'item:first', type: 'agentMessage', text: 'Partial reply', transient: true } }, undefined, undefined]);
 	assert.deepEqual(model.items.map(item => [item.id, item.text, item.transient]), [['item:first', 'Completed', false], ['item:second', 'Later message', true]]);
 	await read.complete(await fake.api.thread.read({ sessionId: 'session-1', threadId: 'thread-1' }));
 	await nextTask();
@@ -5402,24 +5469,14 @@ test('Chat sends a newly selected effort independently of backend defaults', asy
 	assert.deepEqual(await fake.api.model.readDefaults(), defaults);
 });
 
-test('Queued chat Turns inherit the backend permission default and reject a late connection read', async () => {
+test('Queued chat Turns delegate omitted approvals to the backend and preserve explicit choices', async () => {
 	const fake = fakeApi();
-	using services = new InstantiationService();
-	registerChatBackend(services, fake.api, IAgentExecutionSettingsService);
-	const pending = new DeferredPromise<Awaited<ReturnType<IAgentExecutionSettingsService['read']>>>();
-	let delayed = false;
-	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, configure: async () => { }, read: async () => delayed ? pending.p : { revision: 2, settings: { approvalMode: 'auto', commandFileAccess: 'readOnly', commandNetworkAccess: 'denied' } } });
-	using chat = services.createInstance(ChatService);
+	using chat = createChatService(fake.api);
 	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Queue', mode: 'agent' as const };
 	await chat.queueTurn(options);
-	assert.equal(fake.queuedRequests[0]?.approvalMode, 'auto');
+	assert.equal(fake.queuedRequests[0]?.approvalMode, undefined);
 	await chat.queueTurn({ ...options, approvalMode: 'manual' });
 	assert.equal(fake.queuedRequests[1]?.approvalMode, 'manual');
-	delayed = true;
-	const queuing = chat.queueTurn(options);
-	fake.emitReady();
-	await pending.complete({ revision: 2, settings: { approvalMode: 'auto', commandFileAccess: 'readOnly', commandNetworkAccess: 'denied' } });
-	await assert.rejects(queuing, error => isCancellationError(error));
 	assert.equal(fake.queuedRequests.length, 2);
 });
 
@@ -5436,20 +5493,24 @@ test('New chat Turns let the backend inherit permission when the default read fa
 });
 
 
-test('A queued permission read cannot enqueue after a same-generation crash', async () => {
+test('A late enqueue receipt cannot emit a submission after a same-generation crash', async () => {
 	const fake = fakeApi();
 	using connection = new Emitter<AppServerConnectionState>();
-	using services = new InstantiationService();
-	registerChatBackend(services, { ...fake.api, appServer: { ...fake.api.appServer, onConnectionState: listener => connection.event(listener) } }, IAgentExecutionSettingsService);
-	const pending = new DeferredPromise<Awaited<ReturnType<IAgentExecutionSettingsService['read']>>>();
-	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, configure: async () => { }, read: () => pending.p });
-	using chat = services.createInstance(ChatService);
+	const pending = new DeferredPromise<void>();
+	using chat = createChatService({
+		...fake.api,
+		appServer: { ...fake.api.appServer, onConnectionState: listener => connection.event(listener) },
+		turn: { ...fake.api.turn, enqueue: async params => { const accepted = await fake.api.turn.enqueue(params); await pending.p; return accepted; } },
+	});
+	let submitted = false;
+	using submission = chat.onDidSubmitRequest(() => { submitted = true; });
 	const queuing = chat.queueTurn({ sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Queue', mode: 'agent' });
 	const rejected = assert.rejects(queuing, error => isCancellationError(error));
 	connection.fire('crashed');
-	await pending.complete({ revision: 2, settings: { approvalMode: 'auto', commandFileAccess: 'readOnly', commandNetworkAccess: 'denied' } });
+	await pending.complete();
 	await rejected;
-	assert.equal(fake.queuedRequests.length, 0);
+	assert.equal(fake.queuedRequests.length, 1);
+	assert.equal(submitted, false);
 });
 
 
@@ -7081,20 +7142,14 @@ for (const locale of ['en', 'zh-CN']) {
 	});
 }
 
-test('AI preference blocks direct dispatch, including a pending permission read, while history and interrupt remain usable', async () => {
+test('AI preference blocks direct dispatch while history and interrupt remain usable', async () => {
 	const fake = fakeApi();
 	using configuration = new WorkbenchConfigurationService();
 	using services = new InstantiationService();
-	registerChatBackend(services, fake.api, IAgentExecutionSettingsService, configuration);
-	const permission = new DeferredPromise<Awaited<ReturnType<IAgentExecutionSettingsService['read']>>>();
-	services.registerInstance(IAgentExecutionSettingsService, { onDidChange: Event.None, configure: async () => { }, read: () => permission.p });
+	registerChatBackend(services, fake.api, undefined, configuration);
 	using chat = services.createInstance(ChatService);
 	const options = { sessionId: 'session-1', threadId: 'thread-1', expectedSequence: 1, text: 'Synthetic request', mode: 'agent' as const };
-	const pending = chat.queueTurn(options);
-	const rejected = assert.rejects(pending, /AI features are disabled/);
 	await configuration.updateValue(ChatAIDisabledSettingId, true);
-	await permission.complete({ revision: 1, settings: { approvalMode: 'manual', commandFileAccess: 'readOnly', commandNetworkAccess: 'denied' } });
-	await rejected;
 	for (const request of [
 		() => chat.startTurn(options), () => chat.queueTurn(options), () => chat.steerTurn({ ...options, turnId: 'turn-1' }),
 		() => chat.consultAdvisor({ ...options, question: 'Synthetic question' }), () => chat.compactContext(options),

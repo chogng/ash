@@ -16,7 +16,7 @@ impl AppServer {
 }
 impl queue::QueueExecutor for AppServer {
     fn accepts(&self, message: &QueuedMessage) -> bool {
-        self.queue_directory.as_deref() == Some(message.request.directory.as_str())
+        self.queue_directory == message.request.directory
     }
     fn ready(&self, message: &QueuedMessage) -> Result<bool, String> {
         self.queue_processor().queued_message_ready(message)

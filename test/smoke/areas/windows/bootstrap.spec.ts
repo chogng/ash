@@ -82,7 +82,7 @@ for (const scenario of [
 for (const theme of ['ash-dark', 'ash-high-contrast-light']) {
 	ashTest.describe(`Startup theme ${theme}`, () => {
 		ashTest.use({ electronUserSettings: { 'workbench.colorTheme': theme, 'window.autoDetectColorScheme': false, 'window.autoDetectHighContrast': false } });
-		ashTest(`Desktop waits for the selected ${theme} theme before exposing the restored shell`, { tag: ['@electron-app-server'] }, async ({ workbench }) => {
+		ashTest(`Desktop applies the selected ${theme} theme during startup`, { tag: ['@electron-app-server'] }, async ({ workbench }) => {
 			const source = JSON.parse(await readFile(join(desktop, 'extensions/theme-defaults/themes', `${theme}.json`), 'utf8'));
 			const page = workbench.page;
 			const errors: string[] = [];
@@ -92,13 +92,8 @@ for (const theme of ['ash-dark', 'ash-high-contrast-light']) {
 				await workbench.waitForReady();
 				await expect(page.locator('.ash-workbench')).not.toHaveAttribute('inert');
 				await expect(page.locator('#ash-parts-splash')).toHaveCount(0);
-				const state = await page.evaluate(() => {
-					const marks = Object.fromEntries(performance.getEntriesByType('mark').map(mark => [mark.name, mark.startTime]));
-					return { marks, background: getComputedStyle(document.querySelector('.ash-workbench')!).getPropertyValue('--ash-workbench-background').trim() };
-				});
-				expect(state.background).toBe(source.colors['workbench.background'].toLowerCase());
-				expect(state.marks['ash.workbench.shell-ready']).toBeGreaterThanOrEqual(state.marks['ash.workbench.themes-ready']);
-				expect(state.marks['ash.splash.removed']).toBeGreaterThanOrEqual(state.marks['ash.workbench.themes-ready']);
+				await expect.poll(() => page.locator('.ash-workbench').evaluate(element => getComputedStyle(element)
+					.getPropertyValue('--ash-workbench-background').trim())).toBe(source.colors['workbench.background'].toLowerCase());
 			}
 			expect(errors).toEqual([]);
 		});

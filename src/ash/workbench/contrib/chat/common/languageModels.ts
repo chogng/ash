@@ -1,4 +1,4 @@
-import type { AgentModelCatalog, AgentModelProviders, AgentModelDefaults, ModelReasoningEffort, ModelCatalogStatus } from '../../../../platform/models/common/agentModels.js';
+import type { AgentModelCatalog, AgentModelProviders, AgentModelDefaults, ModelReasoningEffort, ModelCatalogStatus, ModelSelectionAvailability } from '../../../../platform/models/common/agentModels.js';
 import { TaskQueue } from '../../../../base/common/async.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { canceled } from '../../../../base/common/errors.js';
@@ -15,6 +15,7 @@ import { ModelPurpose, modelsRecommendedFor, modelRefIdentity, type ModelCatalog
 
 /** Model catalog, provider credentials and picker preferences shared by both windows. */
 export interface ILanguageModelsService {
+	readModelAvailability(model: ModelRef | undefined): Promise<ModelSelectionAvailability>;
 	readApprovalReviewModel(): Promise<ApprovalReviewModelSelection>;
 	setApprovalReviewModel(selection: ApprovalReviewModelSelection): Promise<void>;
 	setModelPreferences(model: ModelRef, update: ModelPreferencesUpdate): Promise<void>;
@@ -119,6 +120,13 @@ export class LanguageModelsService extends Disposable implements ILanguageModels
 	}
 	public getDefaultNewChatModel(models: readonly ModelCatalogEntry[]): ModelRef | undefined {
 		return this.preferences.getDefaultNewChatModel(models, this.modelDefaults?.model);
+	}
+	public async readModelAvailability(model: ModelRef | undefined): Promise<ModelSelectionAvailability> {
+		const epoch = this.connectionEpoch;
+		const generation = this.appServer.connectionGeneration;
+		const availability = await this.modelApi.readModelAvailability(model);
+		if (this.isDisposed || epoch !== this.connectionEpoch || generation !== this.appServer.connectionGeneration) throw canceled();
+		return availability;
 	}
 	public async readModelDefaults(): Promise<AgentModelDefaults> {
 		const epoch = this.connectionEpoch;

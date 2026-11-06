@@ -10,6 +10,7 @@ use std::time::Instant;
 use ash_async_utils::CancellationToken;
 use ash_config::LanguageServerModeConfig;
 use ash_config::LanguageServersConfig;
+use ash_external_ext::packages::DeferredExtensionPackage;
 use ash_install_context::InstallContext;
 use ash_lsp_manager::LanguageRequestId;
 use ash_lsp_manager::LanguageRequestMetric;
@@ -451,11 +452,23 @@ impl Default for AppServerLanguageDirState {
 #[derive(Default)]
 struct LanguageRuntimeSources {
     providers: LspServerProviders,
-    acquisitions: BTreeMap<String, LanguageServerAcquisition>,
+    acquisitions: BTreeMap<String, CatalogLanguageServer>,
     configuration: Option<LanguageServersConfig>,
     versions: BTreeMap<String, u64>,
     sessions: Vec<std::sync::Weak<LanguageSession>>,
     retained_roots: Option<std::collections::BTreeSet<PathBuf>>,
+}
+
+#[derive(Clone)]
+struct CatalogLanguageServer {
+    acquisition: LanguageServerAcquisition,
+    package: Option<Arc<DeferredExtensionPackage>>,
+}
+
+impl CatalogLanguageServer {
+    fn same_policy(&self, other: &Self) -> bool {
+        self.acquisition.same_policy(&other.acquisition) && self.package == other.package
+    }
 }
 
 impl LanguageRuntimeSources {
@@ -700,7 +713,7 @@ pub(super) struct AppServerLanguageRuntime {
     extension_generation: Option<(u64, u64)>,
     connections: BTreeMap<u64, Arc<LanguageConnection>>,
     connection_id: Option<u64>,
-    acquisitions: BTreeMap<String, LanguageServerAcquisition>,
+    acquisitions: BTreeMap<String, CatalogLanguageServer>,
     acquired: AcquiredLanguageServers,
     sources: Arc<Mutex<LanguageRuntimeSources>>,
     source_versions: BTreeMap<String, u64>,
@@ -913,17 +926,28 @@ impl AppServerLanguageRuntime {
         let acquisitions = contributions
             .into_iter()
             .filter(|(id, _)| policy.is_none_or(|policy| policy.is_extension_enabled(id)))
-            .flat_map(|(_, servers)| {
-                servers
-                    .into_iter()
-                    .map(|server| (server.id.clone(), server))
+            .flat_map(|(id, servers)| {
+                let package = snapshot
+                    .extensions
+                    .iter()
+                    .find(|extension| extension.id == id)
+                    .and_then(|extension| extension.deferred_package.as_ref());
+                servers.into_iter().map(move |acquisition| {
+                    (
+                        acquisition.id.clone(),
+                        CatalogLanguageServer {
+                            acquisition,
+                            package: package.cloned(),
+                        },
+                    )
+                })
             })
             .collect();
         let mut sources = self
             .sources
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let acquisitions: BTreeMap<String, LanguageServerAcquisition> = acquisitions;
+        let acquisitions: BTreeMap<String, CatalogLanguageServer> = acquisitions;
         let ids = sources
             .acquisitions
             .keys()
@@ -952,14 +976,17 @@ impl AppServerLanguageRuntime {
         &'a self,
         configuration: &'a LanguageServersConfig,
     ) -> impl Iterator<Item = &'a LanguageServerAcquisition> {
-        self.acquisitions.values().filter(move |server| {
-            !self.providers.contains(&server.id)
-                && configuration
-                    .servers
-                    .iter()
-                    .find(|(id, _)| id.as_str() == server.id)
-                    .is_none_or(|(_, config)| config.mode == LanguageServerModeConfig::Enabled)
-        })
+        self.acquisitions
+            .values()
+            .map(|server| &server.acquisition)
+            .filter(move |server| {
+                !self.providers.contains(&server.id)
+                    && configuration
+                        .servers
+                        .iter()
+                        .find(|(id, _)| id.as_str() == server.id)
+                        .is_none_or(|(_, config)| config.mode == LanguageServerModeConfig::Enabled)
+            })
     }
 
     /// Drains the supervisor's existing lifecycle projection without starting a process.
@@ -1674,6 +1701,20 @@ impl AppServerLanguageRuntime {
                 result
             },
             || {
+                if explicit.is_none()
+                    && let Some(package) = self
+                        .acquisitions
+                        .get(&server.id)
+                        .and_then(|server| server.package.as_ref())
+                {
+                    package.verify().map_err(|_| {
+                        log::warn!(
+                            "bundled language server {} failed package verification",
+                            server.id
+                        );
+                        ManagedLanguageServerError::Unavailable(package.root().to_path_buf())
+                    })?;
+                }
                 ash_lsp_server_provider::ManagedNodeRuntime::from_install_context(
                     &InstallContext::current(),
                 )

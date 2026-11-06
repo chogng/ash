@@ -763,6 +763,14 @@ impl super::team_operations::TeamRequestProcessorContext for AppServer {
 }
 
 impl super::operations::AgentRequestProcessorContext for AppServer {
+    fn resolve_turn_approval_mode(
+        &self,
+        session_id: &ash_protocol::SessionId,
+        requested: Option<ash_protocol::ApprovalMode>,
+    ) -> Result<ash_protocol::ApprovalMode, super::RpcError> {
+        AppServer::resolve_turn_approval_mode(self, session_id, requested)
+    }
+
     fn set_recap_presence(
         &self,
         connection: u64,
@@ -789,7 +797,7 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
     fn change_session_directory_request(
         &self,
         mutation: super::operations::SessionMutation,
-        root: std::path::PathBuf,
+        root: Option<std::path::PathBuf>,
     ) -> Result<ash_app_server_protocol::protocol::session::SessionResult, super::RpcError> {
         self.session_processor().change_directory(mutation, root)
     }
@@ -1008,6 +1016,25 @@ impl super::app_tools_operations::AppToolsRequestProcessorContext for AppServer 
 }
 
 impl super::queue_operations::QueueRequestProcessorContext for AppServer {
+    fn queue_uses_profile_host(
+        &self,
+        session_id: &ash_protocol::SessionId,
+        thread_id: &ash_protocol::ThreadId,
+    ) -> Result<bool, core_api::CoreError> {
+        let thread = self.threads.thread_catalog_record(thread_id)?;
+        let route = super::session_execution_router::SessionExecutionRouter::new(&self.threads)
+            .resolve(session_id)?;
+        Ok(route.uses_profile_host(thread.execution_target.as_ref()))
+    }
+
+    fn resolve_turn_approval_mode(
+        &self,
+        session_id: &ash_protocol::SessionId,
+        requested: Option<ash_protocol::ApprovalMode>,
+    ) -> Result<ash_protocol::ApprovalMode, super::RpcError> {
+        AppServer::resolve_turn_approval_mode(self, session_id, requested)
+    }
+
     fn agent_runtime(&self) -> impl core_api::AgentRuntime + '_ {
         AppServer::agent_runtime(self)
     }

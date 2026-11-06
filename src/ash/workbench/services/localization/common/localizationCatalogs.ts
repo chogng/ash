@@ -1,2 +1,2 @@
-// Build preparation generates the data modules; tsc carries them into each host or test output.
-export { builtinLanguagePackCatalogs, preinstalledLanguagePacks, productLanguagePackCatalogs } from '../../../../../../.build/desktop/localization/localizationCatalogs.js';
+// Synchronous catalog fixtures for tests. Product entry points use the generated loader.
+export { productLanguagePackCatalogs } from '../../../../../../.build/desktop/localization/localizationCatalogs.js';

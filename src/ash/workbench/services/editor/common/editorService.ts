@@ -9,6 +9,8 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
 export interface EditorOpenOptions extends IMultiDiffEditorOptions {
 	/** Add or update the tab without selecting it when the group already has an active editor. */
 	readonly inactive?: boolean;
+	/** A startup fallback opens only if there are no visible editors or pending opens. */
+	readonly onlyWhenEmpty?: boolean;
 	readonly preferredEditorId?: string;
 	readonly index?: number;
 	readonly selection?: Range;

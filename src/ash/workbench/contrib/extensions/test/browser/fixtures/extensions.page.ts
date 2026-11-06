@@ -469,7 +469,7 @@ services.registerInstance(ILocalGitService, {
 });
 services.registerInstance(ILogService, new NullLoggerService());
 services.registerSingleton(IPluginManagementService, () => disposables.add(services.createInstance(AppServerPluginManagementService, pluginApi, { subscribe: (listener: (event: ServerNotification) => void) => pluginEvents.event(listener) })));
-services.registerInstance(ILanguagePackService, { onDidChange: Event.None, whenReady: Promise.resolve(), catalogs: [], getInstalledLanguages: async () => [], refresh: async () => { }, getBuiltInExtensionTranslationsUri: async () => undefined });
+services.registerInstance(ILanguagePackService, { onDidChange: Event.None, whenReady: Promise.resolve(), catalogs: [], getCatalog: async () => undefined, getInstalledLanguages: async () => [], refresh: async () => { }, getBuiltInExtensionTranslationsUri: async () => undefined });
 services.registerInstance(ILocalizationService, { whenReady: Promise.resolve(), translate: (bundle, key, text, parameters) => localize({ bundle, key }, text, ...Object.keys(parameters ?? {}).sort().map(key => parameters![key]!)) });
 services.registerInstance(IAppServerRemoteAgentService, { onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None } as IAppServerRemoteAgentService);
 services.registerInstance(IAccessibleViewService, { show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, dispose() { }, [Symbol.dispose]() { } });

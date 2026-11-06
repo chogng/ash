@@ -1248,6 +1248,9 @@ pub fn open_app_server_with_codebase_providers(
     providers: CodebaseProviders,
     diff_handler: crate::DiffRequestHandler,
 ) -> Result<AppServer, OpenAppServerError> {
+    use ash_app_server_daemon::startup_trace::StartupTrace;
+
+    let profile_services = StartupTrace::span("directory-profile-services");
     let product_services = options.product_services.take();
     let mut github_browser_configurations = product_services
         .as_ref()
@@ -1456,7 +1459,11 @@ pub fn open_app_server_with_codebase_providers(
     if let (Some(runtime), Some(manager)) = (&mut connector_runtime, &plugins_manager) {
         runtime.bind_plugins_manager(Arc::clone(manager))?;
     }
+    drop(profile_services);
+    let node_runtime = StartupTrace::span("directory-node-runtime");
     let managed_node = ManagedNodeRuntime::from_install_context(&InstallContext::current()).ok();
+    drop(node_runtime);
+    let provider_services = StartupTrace::span("directory-providers");
     let extension_packages_language_runtime = plugins_manager.as_ref().map(|manager| {
         crate::server::extension_packages_language_runtime::ExtensionsLanguageRuntime::new(
             Arc::clone(manager),
@@ -1770,12 +1777,21 @@ pub fn open_app_server_with_codebase_providers(
     });
     let built_in_skill_root = resolve_built_in_skill_root(options.built_in_skills);
     let installation = InstallContext::current();
-    let (extension_roots, prepared_extension_root) = resolve_extension_sources(
+    let (mut extension_roots, prepared_extension_root) = resolve_extension_sources(
         &options.profile_root,
         installation.method(),
         installation.bundled_resource_directory("extensions"),
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.build/builtin"),
     );
+    if installation.method() == InstallMethod::Package
+        && let Some(layout) = installation.package_layout()
+        && let Some(root) = extension_roots.first_mut()
+        && root.kind == ash_external_ext::packages::ExtensionRootKind::BuiltIn
+    {
+        *root = root
+            .clone()
+            .with_package_metadata(layout.metadata_file().to_path_buf());
+    }
     if let Some(config) = github_account {
         github_browser_configurations.push(github::GitHubBrowserConfig {
             host: "github.com".into(),
@@ -1856,6 +1872,8 @@ pub fn open_app_server_with_codebase_providers(
             application_http.clone(),
         )
     });
+    drop(provider_services);
+    let server_services = StartupTrace::span("directory-server-services");
     let mut login_drivers: Vec<Arc<dyn InteractiveLoginDriver>> = vec![
         chatgpt_web_login.clone(),
         chatgpt_plan.clone(),
@@ -1934,6 +1952,7 @@ pub fn open_app_server_with_codebase_providers(
             .map_err(open_error)?,
     ));
     let state_runtime = Arc::clone(&state_runtime);
+    let server_construct = StartupTrace::span("directory-server-construct");
     let server = match &profile_runtime {
         Some(runtime) => AppServer::new_with_updates(
             threads,
@@ -1973,6 +1992,7 @@ pub fn open_app_server_with_codebase_providers(
     ))
     .with_approval_review_model(Some(approval_review_model))
     .with_capability_network_policy(network_policy.clone());
+    drop(server_construct);
     let mut server = if let Some(profile) = &profile_runtime {
         server.with_profile_config_store(
             Arc::clone(&config),
@@ -1982,9 +2002,10 @@ pub fn open_app_server_with_codebase_providers(
         server.with_config_store(Arc::clone(&config))
     }
     .with_extension_state_store(extension_state)
-    .with_backup_store(Arc::new(
-        ash_state::SqliteBackupStore::open(&database_path).map_err(open_error)?,
-    ))
+    .with_backup_store({
+        let _backup = StartupTrace::span("directory-server-backup");
+        Arc::new(ash_state::SqliteBackupStore::open(&database_path).map_err(open_error)?)
+    })
     .with_login_service(login_service)
     .with_chatgpt_account(Arc::new(ash_chatgpt::ChatGptAccount::new(chatgpt_oauth)))
     .with_chatgpt_web_authentication(chatgpt_web)
@@ -2021,6 +2042,7 @@ pub fn open_app_server_with_codebase_providers(
             github::GitHubIssueReporter::new(&target, provider).map_err(open_error)?,
         );
     }
+    let queue = StartupTrace::span("directory-server-queue");
     if options.session_state_mode == SessionStateMode::Durable {
         let directory = options
             .dir_root
@@ -2066,6 +2088,8 @@ pub fn open_app_server_with_codebase_providers(
             ));
         }
     }
+    drop(queue);
+    let agent = StartupTrace::span("directory-server-agent");
     server = server
         .with_skill_runtime(
             built_in_skill_root,
@@ -2122,6 +2146,8 @@ pub fn open_app_server_with_codebase_providers(
                 .unwrap_or_else(|| Arc::new(git_attribution::GitAttributionPolicy::Disabled)),
         )
         .map_err(OpenAppServerError)?;
+    drop(agent);
+    let local_state = StartupTrace::span("directory-server-local-state");
     server = server
         .with_debug_workspace_store(&database_path)
         .map_err(OpenAppServerError)?;
@@ -2140,6 +2166,7 @@ pub fn open_app_server_with_codebase_providers(
     server = server
         .with_local_memories(&database_path)
         .map_err(OpenAppServerError)?;
+    drop(local_state);
     if let Some(profile) = &profile_runtime {
         server = server.with_message_history_store(profile.message_history.clone());
         server.session_runtimes = Some(profile.session_runtimes.clone());
@@ -2160,11 +2187,17 @@ pub fn open_app_server_with_codebase_providers(
     if let Some(models) = providers.models {
         server = server.with_codebase_models(models);
     }
+    // Install the policy before package sources so discovery uses it on the first pass.
+    // Applying it afterward replaces the live watcher and refreshes every catalog again.
+    server = server.with_editor_extension_policy(editor_extension_policy);
+    let language = StartupTrace::span("directory-server-language");
     if let Some(runtime) = extension_packages_language_runtime {
         server = server
             .with_extension_packages_language_runtime(runtime)
             .map_err(OpenAppServerError)?;
     }
+    drop(language);
+    let extension_sources = StartupTrace::span("directory-server-extension-sources");
     if let Some(manager) = plugins_manager {
         server = if profile_runtime.is_some() {
             server.with_profile_plugins_manager(manager)
@@ -2174,7 +2207,9 @@ pub fn open_app_server_with_codebase_providers(
     } else if let Some(client) = plugin_package_service {
         server = server.with_plugin_package_service(client);
     }
-    server = server.with_editor_extension_policy(editor_extension_policy);
+    drop(extension_sources);
+    drop(server_services);
+    let extension_host = StartupTrace::span("directory-extension-host");
     let mcp_updates = McpCatalogUpdates::default().with_metrics(diagnostics.metrics());
     mcp_updates.bind_extensions(server.agent_extension_registry());
     let mcp_changes = mcp_updates.subscribe();
@@ -2278,10 +2313,11 @@ pub fn open_app_server_with_codebase_providers(
             {
                 environment.insert("ELECTRON_RUN_AS_NODE".into(), "1".into());
             }
-            launcher = ash_external_ext::ProductNodeLauncher::new(
+            launcher = ash_external_ext::ProductNodeLauncher::with_runtime_digest(
                 node.executable().to_path_buf(),
                 bootstrap,
                 environment,
+                node.electron_digest(),
             )
             .map_err(|error| OpenAppServerError(error.to_string()))?;
         }
@@ -2297,6 +2333,9 @@ pub fn open_app_server_with_codebase_providers(
     server = server
         .with_execution_environments(options.execution_environments)
         .map_err(OpenAppServerError)?;
+    drop(extension_host);
+    let directory_services = StartupTrace::span("directory-workspace-services");
+    let environment = StartupTrace::span("directory-workspace-environment");
     // Install the background provider before the local host shares the environment runtime.
     // Later tool-service composition retains it in the executor's immutable dependencies.
     server = server
@@ -2315,6 +2354,8 @@ pub fn open_app_server_with_codebase_providers(
     if let Some(hooks) = server.local_hook_runtime() {
         mcp_updates.bind_hooks(hooks);
     }
+    drop(environment);
+    let workspace_grant = StartupTrace::span("directory-workspace-grant");
     let local_dir_root = options.dir_root.clone();
     let workflow_store = Arc::new(
         match options.session_state_mode {
@@ -2328,6 +2369,8 @@ pub fn open_app_server_with_codebase_providers(
             .initialize_local_dir_root(dir_root, options.initial_dir_grant_policy)
             .map_err(|error| OpenAppServerError(error.to_string()))?;
     }
+    drop(workspace_grant);
+    let integrations = StartupTrace::span("directory-workspace-integrations");
     if let Some(dir_root) = local_dir_root {
         server = server
             .with_local_dir_services(
@@ -2338,7 +2381,10 @@ pub fn open_app_server_with_codebase_providers(
             )
             .map_err(OpenAppServerError)?;
     }
+    drop(integrations);
     server = server.with_workflow_store(workflow_store);
+    drop(directory_services);
+    let recovery = StartupTrace::span("directory-recovery");
     server.bind_session_extensions().map_err(open_error)?;
     server
         .resume_recovered_agent_coordinations()
@@ -2349,6 +2395,7 @@ pub fn open_app_server_with_codebase_providers(
     server
         .resume_recovered_extension_turns()
         .map_err(open_error)?;
+    drop(recovery);
     let env_tools = server
         .local_env_tool_ports()
         .ok_or_else(|| OpenAppServerError("local Directory tools are unavailable".into()))?;
@@ -3225,6 +3272,70 @@ impl ModelCatalog for ConfigBackedModelService {
     fn configured_default(&self) -> Result<Option<ash_protocol::ModelRef>, CoreError> {
         Ok(self.resolved_config()?.model)
     }
+
+    fn execution_availability(
+        &self,
+        model: Option<&ash_protocol::ModelRef>,
+    ) -> Result<ash_app_server_protocol::protocol::model::ModelAvailabilityResult, CoreError> {
+        use ash_app_server_protocol::protocol::model::ModelAvailabilityResult;
+        use ash_app_server_protocol::protocol::model::ModelExecutionAvailability;
+        use ash_models_manager::ModelsManagerError;
+        let (mut config, preferred) = self.resolve_config_connections(&self.config_snapshot()?)?;
+        let ready: BTreeSet<_> = preferred.keys().cloned().collect();
+        config.providers.extend(preferred);
+        let contexts = self.context_catalog(&config)?;
+        let availability = |model: &ash_protocol::ModelRef| {
+            let Some(provider) = config.providers.get(&model.provider) else {
+                return ModelExecutionAvailability::ConnectionUnavailable;
+            };
+            let entry = match contexts.resolve_entry(model) {
+                Ok(entry) => entry,
+                Err(ModelsManagerError::ModelRetired { .. }) => {
+                    return ModelExecutionAvailability::Retired;
+                }
+                Err(ModelsManagerError::ModelUnavailable { .. }) => {
+                    return ModelExecutionAvailability::ModelUnavailable;
+                }
+                // A discovery-backed catalog can be incomplete while loading or reconnecting.
+                Err(ModelsManagerError::ModelNotListed { .. })
+                    if contexts
+                        .registry()
+                        .get(&model.provider)
+                        .is_some_and(|definition| {
+                            definition.model_catalog_policy
+                                == model_provider_info::ModelCatalogPolicy::ListedOnly
+                        }) =>
+                {
+                    return ModelExecutionAvailability::ModelUnavailable;
+                }
+                Err(_) => return ModelExecutionAvailability::Unknown,
+            };
+            if entry.lifecycle() == ash_protocol::ModelLifecycle::Retired {
+                return ModelExecutionAvailability::Retired;
+            }
+            if entry.availability() == ash_protocol::ModelAvailability::Unavailable {
+                return ModelExecutionAvailability::ModelUnavailable;
+            }
+            if !ready.contains(&model.provider) {
+                return ModelExecutionAvailability::ConnectionUnavailable;
+            }
+            if model_context::ModelContext::resolve(&entry, provider, contexts.registry())
+                .and_then(|context| context.require_budget())
+                .is_err()
+            {
+                return ModelExecutionAvailability::Unknown;
+            }
+            ModelExecutionAvailability::Ready
+        };
+        Ok(ModelAvailabilityResult {
+            selected: model.map_or(ModelExecutionAvailability::Unknown, availability),
+            default_availability: config
+                .model
+                .as_ref()
+                .map_or(ModelExecutionAvailability::Unknown, availability),
+            configured_default: config.model,
+        })
+    }
 }
 
 impl ConfigBackedModelService {
@@ -3241,10 +3352,7 @@ impl ConfigBackedModelService {
         &self,
         selection: ModelSelection<'_>,
     ) -> Result<ResolvedConfig, CoreError> {
-        let user = self.config.read_snapshot().map_err(|error| {
-            CoreError::Model(format!("failed to read model config: {}", error.0))
-        })?;
-        let mut config = self.resolve_config(&user)?;
+        let mut config = self.resolved_config()?;
         if let ModelSelection::Session(model) = selection {
             config.model = Some(model.clone());
         }
@@ -3252,25 +3360,41 @@ impl ConfigBackedModelService {
     }
 
     fn resolved_config(&self) -> Result<ResolvedConfig, CoreError> {
-        let user = self.config.read_snapshot().map_err(|error| {
-            CoreError::Model(format!("failed to read model config: {}", error.0))
-        })?;
-        self.resolve_config(&user)
+        self.resolve_config(&self.config_snapshot()?)
+    }
+
+    fn config_snapshot(&self) -> Result<ResolvedConfigSnapshot, CoreError> {
+        self.config
+            .read_snapshot()
+            .map_err(|error| CoreError::Model(format!("failed to read model config: {}", error.0)))
     }
 
     fn resolve_config(&self, user: &ResolvedConfigSnapshot) -> Result<ResolvedConfig, CoreError> {
-        let mut config =
-            resolve_local_config(user, self.dir_config.as_deref()).map_err(|error| {
-                CoreError::Model(format!("failed to resolve directory config: {}", error.0))
-            })?;
+        let (mut config, preferred) = self.resolve_config_connections(user)?;
+        config.providers.extend(preferred);
+        Ok(config)
+    }
+
+    fn resolve_config_connections(
+        &self,
+        user: &ResolvedConfigSnapshot,
+    ) -> Result<
+        (
+            ResolvedConfig,
+            BTreeMap<ash_protocol::ProviderId, ModelProviderConfig>,
+        ),
+        CoreError,
+    > {
+        let config = resolve_local_config(user, self.dir_config.as_deref()).map_err(|error| {
+            CoreError::Model(format!("failed to resolve directory config: {}", error.0))
+        })?;
         // Account readiness chooses the request path, but an unready connection still
         // owns saved preferences. Keep that configuration until a ready path replaces it.
-        config.providers.extend(
-            self.catalog_provider
-                .preferred_connections(&config.connections)
-                .map_err(|error| CoreError::Model(error.to_string()))?,
-        );
-        Ok(config)
+        let preferred = self
+            .catalog_provider
+            .preferred_connections(&config.connections)
+            .map_err(|error| CoreError::Model(error.to_string()))?;
+        Ok((config, preferred))
     }
 }
 

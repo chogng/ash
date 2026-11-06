@@ -7,5 +7,6 @@ applyTo: "**/*.css"
 
 ## Selectors
 
+- When a state-specific declaration conflicts with the component's default, check which consumers depend on it before changing selector scope or specificity. Remove the declaration if the default already gives all affected consumers the intended behavior.
 - Avoid `:has()` selectors. Because their result depends on descendant state, DOM mutations can invalidate styles on ancestors and cause expensive style recalculation, especially when selectors are broadly scoped. Instead, represent the state explicitly with a class or data attribute on the smallest container you own, and scope selectors to that marker. Add and remove the marker together with the state it represents.
 - Never add a new match on the `class` attribute by substring (`[class*="…"]`, `[class^="…"]`, `[class$="…"]`). A single such selector anywhere in the workbench stylesheet defeats Blink's per-class invalidation: every `classList` change then forces a style recalculation for that element, even when no rule references the class that changed.

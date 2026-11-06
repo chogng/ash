@@ -336,6 +336,42 @@ fn assert_token(headers: &[HttpHeader], token: &str) {
 }
 
 #[test]
+fn experimental_codex_consumer_preserves_web_login_and_uses_an_independent_cache_scope() {
+    let profile = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let codex_token = access("existing-codex", 4_000_000_000);
+    let web_token = access("independent-web", 4_000_000_000);
+    write(home.path(), "codex-user", &codex_token);
+    let secrets = Arc::new(ash_secrets::MemorySecretStore::default());
+    seed_private(secrets.as_ref(), &web_token);
+    let owner = web_owner(
+        profile.path(),
+        home.path(),
+        secrets,
+        Arc::new(Client::default()),
+    );
+
+    let mut experimental = owner.codex_session().unwrap();
+    assert_token(
+        &experimental
+            .authorize("aaaa", &experimental.context().to_owned())
+            .unwrap(),
+        &codex_token,
+    );
+    let mut web = owner.session().unwrap();
+    assert_token(
+        &web.authorize("bbbb", &web.context().to_owned()).unwrap(),
+        &web_token,
+    );
+    owner.managed.use_codex_web_source().unwrap();
+    assert!(web.synchronize().unwrap());
+    assert!(!experimental.synchronize().unwrap());
+    assert!(experimental.cache_scope().is_some());
+    assert!(web.cache_scope().is_some());
+    assert_ne!(web.cache_scope(), experimental.cache_scope());
+}
+
+#[test]
 fn independent_web_expired_cold_owner_refreshes_once_and_reopened_store_reuses_commit() {
     let profile = tempfile::tempdir().unwrap();
     let home = tempfile::tempdir().unwrap();

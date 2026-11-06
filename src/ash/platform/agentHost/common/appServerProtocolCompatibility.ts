@@ -36,22 +36,26 @@ export interface ValidateAppServerInitializeOptions {
  * negotiated contract here, so a large initialization is not walked twice.
  */
 export function checkAppServerInitializeCompatibility(initialized: InitializeResult, options: ValidateAppServerInitializeOptions = {}): InitializeResult {
-	const { serverInfo, protocolVersion, capabilities } = initialized;
+	const { serverInfo, capabilities } = initialized;
 	if (options.expectedServerName && serverInfo.name !== options.expectedServerName) {
 		throw new Error(`Unexpected App Server identity: ${serverInfo.name}`);
 	}
-	if (protocolVersion.major !== APP_SERVER_PROTOCOL_MAJOR) {
-		throw new AppServerProtocolIncompatibleError({ kind: 'majorVersion', expected: APP_SERVER_PROTOCOL_MAJOR, received: protocolVersion.major });
-	}
-	if (initialized.schemaHash !== APP_SERVER_SCHEMA_HASH) {
-		throw new AppServerProtocolIncompatibleError({ kind: 'schemaHash', expected: APP_SERVER_SCHEMA_HASH, received: initialized.schemaHash });
-	}
+	checkAppServerTransportCompatibility(initialized);
 	for (const name of options.requiredCapabilities ?? requiredSessionCapabilities) {
 		if (capabilities[name] !== true) {
 			throw new AppServerProtocolIncompatibleError({ kind: 'missingCapability', name });
 		}
 	}
 	return initialized;
+}
+
+export function checkAppServerTransportCompatibility({ protocolVersion, schemaHash }: Pick<InitializeResult, 'protocolVersion' | 'schemaHash'>): void {
+	if (protocolVersion.major !== APP_SERVER_PROTOCOL_MAJOR) {
+		throw new AppServerProtocolIncompatibleError({ kind: 'majorVersion', expected: APP_SERVER_PROTOCOL_MAJOR, received: protocolVersion.major });
+	}
+	if (schemaHash !== APP_SERVER_SCHEMA_HASH) {
+		throw new AppServerProtocolIncompatibleError({ kind: 'schemaHash', expected: APP_SERVER_SCHEMA_HASH, received: schemaHash });
+	}
 }
 
 export function appServerProtocolDiagnostics(initialized: InitializeResult): AppServerProtocolDiagnostics {

@@ -70,6 +70,7 @@ impl StartupCheck {
             crate::ConnectionRole::Workbench
             | crate::ConnectionRole::Agents
             | crate::ConnectionRole::Credentials
+            | crate::ConnectionRole::CredentialsCodex
             | crate::ConnectionRole::Remote => Self::ClientInitialize,
         }
     }
@@ -89,6 +90,7 @@ pub(crate) fn run_lifecycle(
             &endpoint,
             &options,
             backend_executable,
+            PackageDigest::NotProvided,
             StartupCheck::Initialize,
         ),
         LifecycleCommand::EnsureSelected => ensure_selected_unlocked(
@@ -104,6 +106,7 @@ pub(crate) fn run_lifecycle(
                 &endpoint,
                 &options,
                 backend_executable,
+                PackageDigest::NotProvided,
                 StartupCheck::Initialize,
             )?;
             output.status = LifecycleStatus::Restarted;
@@ -118,6 +121,14 @@ pub(crate) fn connect(
     options: ConnectionOptions,
     backend_executable: &Path,
 ) -> Result<(), LifecycleError> {
+    connect_with_digest(options, backend_executable, PackageDigest::NotProvided)
+}
+
+pub(crate) fn connect_with_digest(
+    options: ConnectionOptions,
+    backend_executable: &Path,
+    package_digest: PackageDigest<'_>,
+) -> Result<(), LifecycleError> {
     let result = (|| {
         let endpoint = EndpointPaths::prepare(options.profile_root())?;
         {
@@ -128,6 +139,7 @@ pub(crate) fn connect(
                 &endpoint,
                 &options,
                 backend_executable,
+                package_digest,
                 StartupCheck::for_connection(&options),
             )?;
         }
@@ -174,7 +186,9 @@ fn connection_result(
     if result == Err(LifecycleError::ServerShuttingDown)
         && !matches!(
             options.role(),
-            crate::ConnectionRole::Execution { .. } | crate::ConnectionRole::Credentials
+            crate::ConnectionRole::Execution { .. }
+                | crate::ConnectionRole::Credentials
+                | crate::ConnectionRole::CredentialsCodex
         )
     {
         // The carrier is also the initialization peer. Reply with the caller's ID
@@ -343,6 +357,7 @@ fn start_unlocked(
     endpoint: &EndpointPaths,
     options: &ConnectionOptions,
     backend_executable: &Path,
+    package_digest: PackageDigest<'_>,
     startup_check: StartupCheck,
 ) -> Result<LifecycleOutput, LifecycleError> {
     if let Some(control) = request_control(endpoint, ControlCommand::Status)? {
@@ -360,8 +375,11 @@ fn start_unlocked(
         ));
     }
 
-    let selected =
-        crate::installation::selected_backend(options.profile_root(), backend_executable)?;
+    let selected = crate::installation::selected_backend(
+        options.profile_root(),
+        backend_executable,
+        package_digest,
+    )?;
     let daemon = resolve_backend_executable(&selected, PackageDigest::NotProvided)?;
     start_new_unlocked(endpoint, options, &daemon, startup_check).map_err(Into::into)
 }
@@ -374,7 +392,9 @@ fn start_new_unlocked(
 ) -> Result<LifecycleOutput, String> {
     let _startup = crate::startup_trace::StartupTrace::span("daemon-start");
     remove_stale_process_record(&endpoint.pid)?;
+    let spawn = crate::startup_trace::StartupTrace::span("daemon-spawn");
     let mut spawned = spawn_backend(endpoint, options, daemon)?;
+    drop(spawn);
     let result = (|| {
         let deadline = Instant::now() + START_TIMEOUT;
         let mut last_error = None;

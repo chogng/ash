@@ -27,6 +27,8 @@ Main 对转发的页面方法使用审查清单，拒绝直接文件系统、磁
 
 `model/list.catalog_scopes` 随缓存行返回当前外部连接的无秘密身份；`identity: null` 表示当前凭证不可用。读取不发起网络发现。`provider/models/updated` 的 authority 必须是订阅的 `accountId` / `organization` / `plan`，或外部连接的 `catalogScope`；外部来源不创建账户，缺少这两类身份的通知解码失败。外部身份变化先发出 `empty` 退役通知，远程刷新结果仅在同一身份仍有效时发布。消费者注册通知后再读取快照，并以请求代次拒绝被通知取代的迟到结果。
 
+`model/availability` 读取指定模型和当前配置默认模型的本地执行可用性。Code 用确认的模型或连接错误暂停发送，并用 `ready` 的默认模型恢复继承的草稿选择。目录展示、未知结果和读取错误不构成禁发依据。该读取不发送推理请求，远端调用结果仍由实际执行决定。
+
 `fs/writeBinaryFile` 接收原始字节的 base64，最多 50 MiB。可选 `options.mode` 明确选择
 `create`（已有文件包括空文件时拒绝）、`replace`（文件不存在时拒绝）或 `createOrReplace`。
 `options.expectedRevision` 对原始字节执行版本校验；校验和发布由文件系统在同一目录锁内完成，
@@ -107,7 +109,7 @@ ignore override 语义。对应的 `/cancel` 响应只确认取消请求，原�
 | `mcp/server/status`                                               | 空参数 → `McpServerStatusResult`                                                                | 每个服务器的 `httpOrigin` 仅包含 HTTP(S) 协议、主机与端口；stdio 为 `null`，不返回用户信息、路径或查询参数 |
 | `feedback/prepare`                                                | HTTPS endpoint → `PreparedFeedback`                                                             | 返回待审阅内容和同时绑定内容/地址的摘要；15 分钟有效                                                       |
 | `feedback/upload`                                                 | operationId、digest → 空结果                                                                    | 用户明确确认后调用；仅原 connection 可上传，不自动重试；支持 request cancellation                          |
-| `queue/enqueue`                                                   | commandId、Session/Thread、输入、mode、可选模型/推理等级/toolMode、approvalMode → QueuedMessage | 持久接收与相同请求去重；目录和省略时的工具模式由后端选择                                                   |
+| `queue/enqueue`                                                   | commandId、Session/Thread、输入、mode、可选模型/推理等级/toolMode、approvalMode → QueuedMessage | 持久接收与相同请求去重；后端保存执行目录及解析后的工具和审批模式。无工作区的会话由 profile 宿主投递        |
 | `queue/list`                                                      | Session/Thread → messages                                                                       | 返回队列状态和输入；窗口关闭不删除队列                                                                     |
 | `queue/cancel`                                                    | Session/Thread、commandId → QueuedMessage                                                       | 取消未交付消息；交付中或已开始使用 Turn 中断                                                               |
 | `queue/edit`                                                      | Session/Thread、commandId、expectedRevision、action → QueuedMessage                             | pause、replace、move、send；冲突直接报错                                                                   |
@@ -123,12 +125,13 @@ ignore override 语义。对应的 `/cancel` 响应只确认取消请求，原�
 
 ## 未保存内容备份
 
-`backup/workspaces`、`backup/listPage`、`backup/list`、`backup/write`、`backup/move` 和 `backup/discard` 仅接受产品 host 连接。
+`backup/workspaces`、`backup/read`、`backup/listPage`、`backup/list`、`backup/write`、`backup/move` 和 `backup/discard` 仅接受产品 host 连接。
 Rust 在 profile 的 SQLite 中原子保存工作区重开信息和正文，连接关闭不删除记录。
 `clientId` 是稳定的客户端恢复命名空间，与 connection/window ID 无关；它用于隔离内容格式，并非权限凭证。
 资源使用完整 URI，`format` 和 UTF-8 `content` 由客户端解释。正文最多 8 MiB，工作区最多 256 个目录。
 
-恢复客户端使用 `backup/listPage`，首个请求的 `afterResource` 为 `null`，后续使用返回的
+恢复单个资源时，`backup/read` 按客户端、工作区和完整 URI 查找，找不到时返回 `backup: null`。
+枚举恢复记录使用 `backup/listPage`，首个请求的 `afterResource` 为 `null`，后续使用返回的
 `nextResource`，直到其为 `null`。页面按资源 URI 排序，原始内容与记录开销总量最多 8 MiB，
 单份达到上限的备份仍完整返回；JSON 转义后的页面也能通过传输限制。查询读取当前记录，
 并发新增且排在已读取游标之前的资源要在下一次恢复查询中读取。旧 `backup/list` 保留原结果格式与排序；

@@ -16,20 +16,20 @@ and reusable navigation and conversation UI. Each surface supplies its own data
 and actions through the UI contracts. Both surfaces can use the same model catalog
 or execution service through requests scoped to the owning conversation.
 
-Chat owns its conversation catalog, history, drafts, and replies through its
-conversation sources. Code owns its Session and Thread catalog, turns, execution
-context, approvals, and workspace changes. Each surface scopes conversation
-identity, selection, pins, recents, and restoration to its own catalog. Switching
-surfaces restores the destination's selection and drafts. A user-initiated handoff
-passes selected draft content or an owner-qualified reference. Mutations always
-go through the owner of the target record.
+Chat owns history, drafts, and replies through its conversation sources. Code owns its Session and Thread catalog, turns, execution context, approvals, and workspace changes. Desktop navigation aggregates the catalogs in one sidebar and dispatches row actions to the owner of the target record. Each conversation keeps its original identity when the shell or execution directory changes. A user-initiated handoff passes selected draft content or an owner-qualified reference.
 
-On Desktop, the ChatGPT Web source owns its conversation records. The native Ash
-source creates its own root Threads through the shared App Server and persists
-its selection and drafts under the Chat workspace. The backend records the
-conversation surface at creation and projects it in the Session catalog. Chat
-and Code select from their respective records. Sessions without a recorded surface
-remain accessible through Code.
+On Desktop, the ChatGPT Web source owns its conversation records. Native Ash Chat
+creates its root Threads, reads its catalog and validates saved selections and
+links through the local App Server domain service. The shared connection retains
+its catalog subscription while either consumer needs it. Native Chat preserves
+its existing selection, draft and conversation identities. Sessions without a
+recorded surface remain accessible through Code.
+
+A saved local root conversation can bind or clear its execution directory while
+idle. The directory command preserves its Session and Thread identities and
+history, and uses the existing directory admission and grant checks. Clearing
+retires the directory runtime and sends subsequent turns to the profile host.
+The backend continues to own execution policy and approval defaults.
 
 ## Architecture
 

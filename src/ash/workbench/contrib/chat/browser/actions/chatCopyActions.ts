@@ -1,4 +1,5 @@
 import { localize, localize2 } from '../../../../../nls.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
@@ -13,6 +14,7 @@ import { toPortableMarkdown } from '../widget/chatClipboard.js';
 
 // Single-host owners retain the established local address namespace.
 const connectionAuthority = 'local';
+export const CopyItemActionId = 'workbench.action.chat.copyItem';
 
 export class CopyChatSessionLinkAction extends Action2 {
 	constructor() {
@@ -118,7 +120,15 @@ export function registerChatCopyActions(): void {
 	}
 
 	registerAction2(class CopyItemAction extends Action2 {
-		constructor() { super({ id: 'workbench.action.chat.copyItem', title: localize2('chat.message.copy', 'Copy message') }); }
+		constructor() {
+			super({
+				id: CopyItemActionId,
+				title: localize2('chat.message.copy', 'Copy message'),
+				icon: Lxicon.copy,
+				precondition: ChatContextKeys.responseHasText.isEqualTo(true),
+				menu: { id: MenuId.ChatMessageFooter, group: 'navigation', order: 1 },
+			});
+		}
 		public override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
 			if (!context || typeof context !== 'object' || !('text' in context) || typeof context.text !== 'string' || !('type' in context) || context.type !== 'agentMessage' && context.type !== 'userMessage') return;
 			await accessor.get(IClipboardService).writeText(toPortableMarkdown(context.text));

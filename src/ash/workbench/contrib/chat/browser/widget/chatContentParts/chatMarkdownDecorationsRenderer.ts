@@ -1,7 +1,7 @@
 import { addDisposableListener } from '../../../../../../base/browser/dom.js';
 import { appendLabelIcon } from '../../../../../../base/browser/ui/iconlabel/iconLabels.js';
 import { createPixelSpinner, type IPixelSpinner } from '../../../../../../base/browser/ui/pixelSpinner/pixelSpinner.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { autorun, observableFromEvent, type IObservable } from '../../../../../../base/common/observable.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { ILinkPresentationService } from '../../../../../../platform/dataChannel/common/dataChannel.js';
@@ -12,30 +12,40 @@ import { localize } from '../../../../../../nls.js';
 import { colorCssVariable } from '../../../../../../platform/theme/common/colorUtils.js';
 import { GitHubResourcePresentation, type IGitHubResourceHover } from '../../../../github/browser/githubResourceHover.js';
 
-/** Owns provider decorations for the sanitized anchors in one rendered Markdown block. */
+/** Owns provider decorations for the live, sanitized anchors of one response. */
 export class ChatMarkdownDecorationsRenderer extends Disposable {
-	private readonly bindings = this._register(new DisposableStore());
+	private readonly bindings = this._register(new DisposableMap<HTMLAnchorElement, DisposableStore>());
 	private readonly verbosity: IObservable<boolean>;
-	private readonly anchors: readonly { readonly anchor: HTMLAnchorElement; readonly contents: readonly ChildNode[]; readonly title: string | null; readonly ariaLabel: string | null; readonly ariaDescription: string | null; }[];
 
-	constructor(root: HTMLElement, @ILinkPresentationService private readonly links: ILinkPresentationService, @IHoverService private readonly hoverService: IHoverService, @IConfigurationService configuration: IConfigurationService) {
+	constructor(private readonly root: HTMLElement, @ILinkPresentationService private readonly links: ILinkPresentationService, @IHoverService private readonly hoverService: IHoverService, @IConfigurationService configuration: IConfigurationService) {
 		super();
 		this.verbosity = observableFromEvent(this, configuration.onDidChangeConfiguration, () => configuration.getValue<boolean>(AccessibilityVerbositySettingId.GitHub));
-		this.anchors = [...root.querySelectorAll<HTMLAnchorElement>('a[href]')].map(anchor => ({
-			anchor,
-			contents: [...anchor.childNodes],
-			title: anchor.getAttribute('title'),
-			ariaLabel: anchor.getAttribute('aria-label'),
-			ariaDescription: anchor.getAttribute('aria-description'),
+		this._register(links.onDidChangeLinkPresentationRules(() => {
+			this.bindings.clearAndDisposeAll();
+			this.reconcile();
 		}));
-		this._register(links.onDidChangeLinkPresentationRules(() => this.render()));
-		this.render();
+		this.reconcile();
 	}
 
-	private render(): void {
-		this.bindings.clear();
-		for (const { anchor, contents, title, ariaLabel, ariaDescription } of this.anchors) {
-			const resource = URI.parse(anchor.getAttribute('href')!);
+	reconcile(): void {
+		for (const anchor of this.bindings.keys()) {
+			if (!this.root.contains(anchor)) this.bindings.deleteAndDispose(anchor);
+		}
+		if (this.links.linkPresentationRules.length) this.bind(this.root.querySelectorAll<HTMLAnchorElement>('a[href]'));
+	}
+
+	applyPatch(removed: readonly ChildNode[], added: readonly ChildNode[]): void {
+		if (this.bindings.size) {
+			for (const anchor of anchorsIn(removed)) this.bindings.deleteAndDispose(anchor);
+		}
+		if (this.links.linkPresentationRules.length) this.bind(anchorsIn(added));
+	}
+
+	private bind(anchors: Iterable<HTMLAnchorElement>): void {
+		for (const anchor of anchors) {
+			const href = anchor.getAttribute('href');
+			if (!href || this.bindings.has(anchor)) continue;
+			const resource = URI.parse(href);
 			const rule = this.links.getLinkPresentationRule(resource);
 			if (!rule) {
 				continue;
@@ -44,8 +54,13 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 			if (!watcher) {
 				continue;
 			}
-			this.bindings.add(watcher);
-			const spinner = this.bindings.add(new MutableDisposable<IPixelSpinner>());
+			const binding = this.bindings.set(anchor, new DisposableStore());
+			const contents = [...anchor.childNodes];
+			const title = anchor.getAttribute('title');
+			const ariaLabel = anchor.getAttribute('aria-label');
+			const ariaDescription = anchor.getAttribute('aria-description');
+			binding.add(watcher);
+			const spinner = binding.add(new MutableDisposable<IPixelSpinner>());
 			const restore = (): void => {
 				spinner.clear();
 				anchor.replaceChildren(...contents);
@@ -56,22 +71,22 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 				anchor.classList.remove('ash-chat-rich-link', 'loading');
 				delete anchor.dataset.githubContent;
 			};
-			this.bindings.add(toDisposable(restore));
-			const card = this.bindings.add(new MutableDisposable<IGitHubResourceHover>());
-			const hover = this.bindings.add(this.hoverService.setupHover({
+			binding.add(toDisposable(restore));
+			const card = binding.add(new MutableDisposable<IGitHubResourceHover>());
+			const hover = binding.add(this.hoverService.setupHover({
 				target: anchor,
 				content: undefined,
 				trapFocus: true,
 				onDidHide: () => card.clear(),
 			}));
-			this.bindings.add(addDisposableListener(anchor, 'keydown', event => {
+			binding.add(addDisposableListener(anchor, 'keydown', event => {
 				if (event.key !== 'F2' || !(watcher.presentation.get() instanceof GitHubResourcePresentation)) { return; }
 				event.preventDefault();
 				event.stopPropagation();
 				hover.show();
 				card.value?.tabbableElements[0]?.focus();
 			}));
-			this.bindings.add(autorun(reader => {
+			binding.add(autorun(reader => {
 				const presentation = watcher.presentation.read(reader);
 				if (!presentation) {
 					hover.update(undefined);
@@ -127,5 +142,14 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 				anchor.classList.toggle('loading', presentation.isLoading === true);
 			}));
 		}
+	}
+}
+
+function* anchorsIn(nodes: readonly ChildNode[]): IterableIterator<HTMLAnchorElement> {
+	for (const node of nodes) {
+		if (node.nodeType !== 1) continue;
+		const element = node as Element;
+		if (element.tagName === 'A') yield element as HTMLAnchorElement;
+		yield* element.querySelectorAll<HTMLAnchorElement>('a');
 	}
 }

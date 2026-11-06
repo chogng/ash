@@ -13,6 +13,7 @@ import { webAppServerVitePlugin } from './webAppServerPlugin.ts';
 import { workbenchEntryPlugin } from './workbenchEntryPlugin.ts';
 import { webUpdatePlugin } from './webUpdatePlugin.ts';
 import { browserExtensionsPlugin } from './extensionsPlugin.ts';
+import { snapshotViewPlugin } from './snapshotViewPlugin.ts';
 import { CSSDevelopmentService } from '../../../src/ash/platform/cssDev/node/cssDevService.ts';
 import { installChatGPTVerification } from '../../../src/ash/sessions/contrib/chatgptweb/browser/chatGPTVerification.ts';
 
@@ -51,6 +52,7 @@ export default defineConfig(({ mode, command }) => {
 			import { showStartupError } from '${moduleUrl('workbench/browser/startupError.ts')}';
 			import { readBrowserPartsSplash } from '${moduleUrl('workbench/contrib/splash/browser/splash.ts')}';
 			import { showSessionsSplash } from '${moduleUrl('sessions/contrib/splash/browser/sessionsSplash.ts')}';
+			const container = document.getElementById('app');
 			try {
 				showSessionsSplash(document, readBrowserPartsSplash(window));
 				{
@@ -61,9 +63,9 @@ export default defineConfig(({ mode, command }) => {
 					await initializeBrowserLocalization(files, new BrowserLanguagePackStore());
 				}
 				const { create } = await import('${moduleUrl('sessions/sessions.web.main.internal.ts')}');
-				create(document.getElementById('app'), import.meta.env.ASH_SESSIONS_PROFILE);
+				create(container, import.meta.env.ASH_SESSIONS_PROFILE);
 			} catch (error) {
-				showStartupError(error, text => navigator.clipboard.writeText(text));
+				showStartupError(container, error);
 			}
 		</script>
 	</body>
@@ -141,6 +143,7 @@ export default defineConfig(({ mode, command }) => {
 			productIconsPlugin(),
 			// Extension preparation publishes localization first and owns the shared resource watcher.
 			browserExtensionsPlugin(),
+			...(webOnly ? [] : [snapshotViewPlugin(repositoryRoot)]),
 			{
 				name: 'ash-electron-file-html',
 				apply: 'build',

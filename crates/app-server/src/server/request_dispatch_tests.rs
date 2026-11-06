@@ -6,6 +6,8 @@ use ash_app_server_protocol::protocol::registry::SerializationAccess;
 use ash_async_utils::CancellationSource;
 use ash_core::InMemoryThreadStore;
 use ash_core::ThreadController;
+use ash_external_ext::packages::DynamicExtensionSourceProvider;
+use ash_external_ext::packages::DynamicExtensionSourceSnapshot;
 use ash_protocol::ModelAccess;
 use ash_protocol::ModelRef;
 use ash_uds::IpcStream;
@@ -180,7 +182,12 @@ fn check_ignore_dispatch_queries_authorized_paths_and_rejects_directory_escape()
         .request_scheduler
         .acquire(
             0,
-            RequestSerializationScope::Global {
+            RequestSerializationScope::Repository {
+                common_dir: server
+                    .git_runtime_service()
+                    .unwrap()
+                    .common_dir_for(None)
+                    .unwrap(),
                 access: SerializationAccess::Exclusive,
             },
         )
@@ -490,6 +497,64 @@ impl Drop for ReleaseCatalog {
         *self.0.0.lock().unwrap() = true;
         self.0.1.notify_all();
     }
+}
+
+struct BlockingExtensionSource {
+    started: mpsc::Sender<()>,
+    release: Arc<(Mutex<bool>, Condvar)>,
+}
+
+impl DynamicExtensionSourceProvider for BlockingExtensionSource {
+    fn snapshot(&self) -> Result<DynamicExtensionSourceSnapshot, String> {
+        self.started.send(()).unwrap();
+        let (released, wake) = &*self.release;
+        let released = released.lock().unwrap();
+        let _released = wake.wait_while(released, |ready| !*ready).unwrap();
+        Ok(DynamicExtensionSourceSnapshot {
+            generation: 1,
+            packages: Vec::new(),
+            diagnostics: Vec::new(),
+        })
+    }
+}
+
+#[test]
+fn jsonl_binds_workspace_directories_while_extension_inventory_is_blocked() {
+    let server = server()
+        .with_local_env_host(None, crate::server::DirGrantPolicy::InspectOnly)
+        .unwrap();
+    let (started, entered) = mpsc::channel();
+    let release = Arc::new((Mutex::new(false), Condvar::new()));
+    let unblock = ReleaseCatalog(Arc::clone(&release));
+    server
+        .extensions
+        .lock()
+        .unwrap()
+        .bind_dynamic_sources(Arc::new(BlockingExtensionSource { started, release }));
+    let (mut client, host) = Client::pair();
+    let served =
+        thread::spawn(move || server.serve_jsonl(BufReader::new(host.try_clone().unwrap()), host));
+    client.initialize();
+
+    client.send(2, "extensions/list", json!({}));
+    entered.recv_timeout(Duration::from_secs(3)).unwrap();
+    client.send(3, "env/dirs/set", json!({"dirs":[]}));
+    let read_response = |client: &mut Client| loop {
+        let message = client.read();
+        if message["id"].is_number() {
+            break message;
+        }
+    };
+    let bound = read_response(&mut client);
+    assert_eq!(bound["id"], 3);
+    assert_eq!(bound["result"]["dirs"], json!([]));
+
+    drop(unblock);
+    let inventory = read_response(&mut client);
+    assert_eq!(inventory["id"], 2);
+    assert!(inventory["result"].is_object(), "{inventory}");
+    client.close();
+    served.join().unwrap().unwrap();
 }
 
 pub(crate) fn blocking_catalog_server() -> (Arc<AppServer>, mpsc::Receiver<()>, ReleaseCatalog) {

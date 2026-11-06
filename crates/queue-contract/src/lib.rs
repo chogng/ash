@@ -19,8 +19,10 @@ pub struct QueueInput {
     pub command_id: CommandId,
     pub session_id: SessionId,
     pub thread_id: ThreadId,
-    /// Execution directory selected by the host when accepting the message.
-    pub directory: String,
+    /// Local execution directory selected at admission. Profile-hosted messages have no directory.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub directory: Option<String>,
     #[serde(default, skip_serializing_if = "CommandInterpretation::is_product")]
     pub command_interpretation: CommandInterpretation,
     pub input: Vec<UserInput>,

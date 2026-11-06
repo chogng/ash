@@ -422,9 +422,35 @@ test('Session catalog and subscriptions share the Agent domain snapshot boundary
 	assert.notEqual(read.session.manager, session.manager);
 	assert.notEqual(read.session.model, session.model);
 	assert.deepEqual(await service.list(), { sessions: [read.session] });
-	assert.deepEqual(await service.subscribeCatalog(), { sessions: [read.session] });
+	assert.deepEqual(await service.subscribeCatalog({}), { sessions: [read.session] });
 	assert.deepEqual(await service.subscribe({ sessionId: 'session' }), { ...read, threadSnapshots: [] });
 	assert.deepEqual(requests, ['session/read', 'session/list', 'session/catalog/subscribe', 'session/subscribe']);
+});
+
+test('Chat and Code release only their own Session catalog lease', async () => {
+	const methods: string[] = [];
+	let generation = 1;
+	const service = createAppServerAgentSessionService({
+		get generation() { return generation; },
+		async request({ method }: { method: string; }) {
+			methods.push(method);
+			return { sessions: [] };
+		},
+	} as unknown as AppServerProtocolClient);
+	const chat = {};
+	const code = {};
+	await Promise.all([service.subscribeCatalog(code), service.subscribeCatalog(chat)]);
+	await service.unsubscribeCatalog(code);
+	assert.deepEqual(methods, ['session/catalog/subscribe', 'session/list']);
+	await service.unsubscribeCatalog(chat);
+	assert.deepEqual(methods, ['session/catalog/subscribe', 'session/list', 'session/catalog/unsubscribe']);
+
+	await service.subscribeCatalog(code);
+	generation++;
+	await service.subscribeCatalog(chat);
+	await service.unsubscribeCatalog(code);
+	await service.unsubscribeCatalog(chat);
+	assert.deepEqual(methods.slice(3), ['session/catalog/subscribe', 'session/catalog/subscribe', 'session/catalog/unsubscribe']);
 });
 
 test('SSH-bound Session requests use server-local paths and retain host identity on every snapshot', async () => {
@@ -451,7 +477,7 @@ test('SSH-bound Session requests use server-local paths and retain host identity
 	assert.deepEqual((await service.read({ sessionId: 'session' })).session.executionTarget, remote);
 	assert.deepEqual((await service.readCatalog({ sessionId: 'session' })).session?.executionTarget, remote);
 	assert.deepEqual((await service.list()).sessions[0]?.executionTarget, remote);
-	assert.deepEqual((await service.subscribeCatalog()).sessions[0]?.executionTarget, remote);
+	assert.deepEqual((await service.subscribeCatalog({})).sessions[0]?.executionTarget, remote);
 	assert.deepEqual((await service.subscribe({ sessionId: 'session' })).session.executionTarget, remote);
 	for (const operation of ['archive', 'restore', 'stop'] as const) {
 		assert.deepEqual((await service[operation]({ sessionId: 'session', commandId: operation })).session.executionTarget, remote);
@@ -918,10 +944,10 @@ test('Fork and edit dispatch existing typed session operations and keep their re
 	await assert.rejects(service.rewrite({ ...base, beforeTurnId: 'turn', input: [{ type: 'text', text: 'Edited' }] }), /different conversation/);
 });
 
-test('A saved directory change uses the existing Session identity and typed request', async () => {
+test('Binding and clearing a directory use the same Session identity', async () => {
 	const requests: unknown[] = [];
 	const connection = {
-		capabilities: { contracts: { changeSessionDirectory: { version: 1 } } },
+		capabilities: { contracts: { changeSessionDirectory: { version: 1 }, clearSessionDirectory: { version: 1 } } },
 		async request(definition: { method: string; }, params: unknown) {
 			requests.push({ method: definition.method, params });
 			return { type: 'session', value: { session: { sessionId: 'saved' } } };
@@ -929,9 +955,16 @@ test('A saved directory change uses the existing Session identity and typed requ
 	} as unknown as AppServerProtocolClient;
 	const service = createAppServerAgentSessionService(connection);
 	assert.equal(service.canChangeDirectory?.(), true);
-	assert.equal(createAppServerAgentSessionService(connection, 'remote').canChangeDirectory?.(), false);
+	assert.equal(service.canClearDirectory?.(), true);
+	const remote = createAppServerAgentSessionService(connection, 'remote');
+	assert.equal(remote.canChangeDirectory?.(), false);
+	assert.equal(remote.canClearDirectory?.(), false);
 	await service.changeDirectory!({ sessionId: 'saved', commandId: 'change', root: '/new' });
-	assert.deepEqual(requests, [{ method: 'session/request', params: { sessionId: 'saved', commandId: 'change', request: { type: 'changeDirectory', root: '/new' } } }]);
+	await service.changeDirectory!({ sessionId: 'saved', commandId: 'clear', root: null });
+	assert.deepEqual(requests, [
+		{ method: 'session/request', params: { sessionId: 'saved', commandId: 'change', request: { type: 'changeDirectory', root: '/new' } } },
+		{ method: 'session/request', params: { sessionId: 'saved', commandId: 'clear', request: { type: 'clearDirectory' } } },
+	]);
 });
 
 test('Moving a conversation checks both the destination and the original Thread identity', async () => {

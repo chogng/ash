@@ -26,6 +26,9 @@ pub struct ThreadCatalogRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[serde(alias = "workspace")]
     pub execution_target: Option<ash_protocol::SessionExecutionTarget>,
+    /// An explicit directory command opts a Chat Session into directory execution.
+    #[serde(default)]
+    pub directory_configured: bool,
     /// Retained in the catalog so listing Sessions never replays histories to find a model.
     pub model: Option<ash_protocol::ModelRef>,
     /// Providers in future or resumable model selections, excluding completed invocation facts.

@@ -118,7 +118,10 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
 			await writeFile(join(desktop, 'command.tmp'), value);
 			await rename(join(desktop, 'command.tmp'), join(desktop, 'command'));
 		}
-		for (const directory of ['build/desktop/launch', 'node_modules/@ash/typescript-compiler/bin', 'node_modules/electron', '.build/protocol/typescript', '.build/desktop/localization']) {
+		for (const directory of [
+			'build/desktop/launch', 'crates/host-logs', 'crates/host-integrity',
+			'node_modules/@ash/typescript-compiler/bin', 'node_modules/electron', '.build/protocol/typescript', '.build/desktop/localization',
+		]) {
 			await mkdir(join(root, directory), { recursive: true });
 		}
 		for (const name of launchSources) {
@@ -184,7 +187,8 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
 		const userData = join(root, custom ? 'custom-user-data' : '.build/desktop/dev/user-data');
 		const userDataArgs = profile === 'separated' ? ['--user-data-dir', userData] : [`--user-data-dir=${userData}`];
 		const child = spawn(process.execPath, [join(root, 'build/desktop/launch/electron.ts'), '--watch', '--fixture', ...(custom ? userDataArgs : [])], {
-			cwd: tmpdir(), windowsHide: true, stdio: 'pipe', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', ASH_DESKTOP_UI_ONLY: '1', ASH_HOME: custom ? home : undefined },
+			cwd: tmpdir(), windowsHide: true, stdio: 'pipe',
+			env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', ASH_DESKTOP_UI_ONLY: '1', ASH_HOME: custom ? home : undefined, PYTHON: pythonCommand([]).command },
 		});
 		let output = '';
 		child.stdout.on('data', chunk => { output += chunk; });

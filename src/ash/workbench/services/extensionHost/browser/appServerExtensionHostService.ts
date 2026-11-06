@@ -161,7 +161,7 @@ export class AppServerExtensionHostService extends Disposable implements IExtens
 			// Provider callbacks inspect registered configuration and package identities.
 			// A service instance alone does not mean its declarative catalog has committed.
 			// Await that owner explicitly instead of failing and retrying a partial fleet.
-			if (available) await this.extensions.start();
+			if (available) await this.extensions.whenEditorContributionsReady();
 			if (this.isDisposed || !this.started || revision !== this.connectionRevision) return;
 			this.connectionReady = available;
 			if (!available) {

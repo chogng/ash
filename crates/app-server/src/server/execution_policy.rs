@@ -2,7 +2,9 @@
 //! Configuration remains authoritative in ConfigStore and the resolved environment snapshot.
 
 use super::AppServer;
+use super::environment_runtime::EnvRuntime;
 use super::environment_runtime::EnvRuntimeConfig;
+use super::session_execution_router::SessionExecutionRouter;
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::ExecutionDecision;
 use ash_async_utils::CancellationToken;
@@ -12,6 +14,7 @@ use core_api::ActionPolicyService;
 use core_api::CoreError;
 use std::sync::Arc;
 use std::sync::RwLock;
+use std::sync::Weak;
 
 impl AppServer {
     pub(super) fn shared_action_policy(
@@ -22,7 +25,10 @@ impl AppServer {
             owner,
             config: self.config.clone(),
             environment: Arc::clone(&self.env_config),
-            runtime: Some(Arc::downgrade(&self.env_runtime)),
+            runtime: Some(PermissionContext {
+                runtime: Arc::downgrade(&self.env_runtime),
+                router: SessionExecutionRouter::new(&self.threads),
+            }),
         })
     }
 }
@@ -31,8 +37,13 @@ struct SharedExecutionPolicy {
     owner: Arc<dyn ActionPolicyService>,
     config: Option<Arc<ConfigStore>>,
     environment: Arc<RwLock<EnvRuntimeConfig>>,
+    runtime: Option<PermissionContext>,
+}
+
+struct PermissionContext {
     // EnvRuntime owns its executor policy; a strong reference here would retain the entire host.
-    runtime: Option<std::sync::Weak<RwLock<super::environment_runtime::EnvRuntime>>>,
+    runtime: Weak<RwLock<EnvRuntime>>,
+    router: SessionExecutionRouter,
 }
 
 impl SharedExecutionPolicy {
@@ -127,20 +138,26 @@ impl ActionPolicyService for SharedExecutionPolicy {
             .map_err(|error| CoreError::Policy(error.to_string()))?;
         let mut roots = Vec::new();
         let mut requested = Vec::new();
-        if let Some(runtime) = self.runtime.as_ref().and_then(std::sync::Weak::upgrade) {
+        if let Some((context, runtime)) = self
+            .runtime
+            .as_ref()
+            .and_then(|context| Some((context, context.runtime.upgrade()?)))
+        {
+            let allows_workspace = context.router.allows_workspace(session)?;
             let runtime = runtime
                 .read()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
             requested = runtime.dir_grants.requested_context(session, thread);
-            for grant in runtime
-                .selected_grant
-                .iter()
-                .chain(runtime.dirs.values().map(|dir| &dir.grant))
-            {
-                if grant.is_active() {
+            if allows_workspace {
+                for grant in runtime
+                    .selected_grant
+                    .iter()
+                    .chain(runtime.dirs.values().map(|dir| &dir.grant))
+                    .filter(|grant| grant.is_active())
+                {
                     roots.push(serde_json::json!({
-                    "environment": grant.dir().env().as_str(), "path": grant.dir().canonical_path(),
-                    "permissions": grant.permissions(), "source": format!("{:?}", grant.source()) }));
+                        "environment": grant.dir().env().as_str(), "path": grant.dir().canonical_path(),
+                        "permissions": grant.permissions(), "source": format!("{:?}", grant.source()) }));
                 }
             }
             for entry in runtime.dir_grants.list(session).into_iter().take(32) {
@@ -239,7 +256,7 @@ impl ActionPolicyService for SharedExecutionPolicy {
                 approval.policy_revision = self.revision();
                 self.runtime
                     .as_ref()
-                    .and_then(std::sync::Weak::upgrade)
+                    .and_then(|context| context.runtime.upgrade())
                     .ok_or_else(|| CoreError::Policy("session permissions are unavailable".into()))?
                     .read()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -380,7 +397,11 @@ impl ActionPolicyService for SharedExecutionPolicy {
         {
             return Ok(decision);
         }
-        if let Some(runtime) = self.runtime.as_ref().and_then(std::sync::Weak::upgrade) {
+        if let Some(runtime) = self
+            .runtime
+            .as_ref()
+            .and_then(|context| context.runtime.upgrade())
+        {
             let mut approval = ash_core::durable_approval_request(
                 request,
                 &ash_action_policy::ApprovalRequest::new(
@@ -407,7 +428,10 @@ impl ActionPolicyService for SharedExecutionPolicy {
                 request.provenance().source_id(),
                 "shell-command" | "shell-session"
             )
-            && let Some(runtime) = self.runtime.as_ref().and_then(std::sync::Weak::upgrade)
+            && let Some(runtime) = self
+                .runtime
+                .as_ref()
+                .and_then(|context| context.runtime.upgrade())
         {
             let environment = self
                 .environment

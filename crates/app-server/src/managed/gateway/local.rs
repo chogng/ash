@@ -1,6 +1,7 @@
 use super::ProfileAppServerRegistry;
 use super::Target;
 use super::tag_host_request;
+use crate::AppServer;
 use crate::server::message_queue::OutboundSender;
 use crate::server::request_dispatch::IncomingRequest;
 use crate::server::request_dispatch::RequestDispatchHandle;
@@ -62,6 +63,7 @@ impl<'scope> LocalTarget<'scope> {
     pub(super) fn start<'env: 'scope>(
         scope: &'scope thread::Scope<'scope, 'env>,
         registry: Arc<ProfileAppServerRegistry>,
+        profile: Arc<AppServer>,
         root: PathBuf,
         initialize: IncomingRequest,
         ide_attachment: Arc<crate::client_host::IdeAttachment>,
@@ -151,18 +153,40 @@ impl<'scope> LocalTarget<'scope> {
                     admission,
                     switched_session,
                 } = request;
-                let retirement = switched_session
-                    .map(|session| (Arc::clone(&registry), Arc::clone(&target.server), session));
+                let retirement = switched_session.map(|session| {
+                    (
+                        Arc::clone(&registry),
+                        Arc::clone(&target.server),
+                        Arc::clone(&profile),
+                        session,
+                    )
+                });
                 requests.dispatch(
                     Arc::clone(&target.server),
                     &target.connection,
                     raw,
                     move |response| {
-                        if let Some((registry, server, session)) = retirement
+                        if let Some((registry, server, profile, session)) = retirement
                             && serde_json::from_str::<Value>(&response)
                                 .is_ok_and(|value| value.get("result").is_some())
                         {
+                            if let Ok(thread) = ash_protocol::ThreadId::new(session.as_str()) {
+                                let _ =
+                                    profile.threads().with_execution_target(&thread, |target| {
+                                        if target.is_none()
+                                            && let Err(error) =
+                                                profile.bind_session_runtime(&session)
+                                        {
+                                            log::warn!(
+                                                "Cannot bind the workspace-free Session: {error}"
+                                            );
+                                        }
+                                    });
+                            }
                             registry.release_previous_session_directories(&session, &server);
+                            // Clearing is sent to the outgoing directory. The runtime checks
+                            // the committed route before releasing anything.
+                            server.release_switched_session_directory(&session);
                         }
                         let result = output
                             .send(super::tag_resource_response(response, route_id).into())
@@ -220,8 +244,10 @@ impl<'scope> LocalTarget<'scope> {
         })?;
         *count += 1;
         let switched_session = if request["method"] == "session/request"
-            && request["params"]["request"]["type"] == "changeDirectory"
-        {
+            && matches!(
+                request["params"]["request"]["type"].as_str(),
+                Some("changeDirectory" | "clearDirectory")
+            ) {
             request["params"]["sessionId"]
                 .as_str()
                 .and_then(|id| ash_protocol::SessionId::new(id).ok())

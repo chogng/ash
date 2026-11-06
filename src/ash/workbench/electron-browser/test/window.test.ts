@@ -4,6 +4,7 @@ import { initializeTestLocalization } from '../../services/localization/test/com
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter } from '../../../base/common/event.js';
+import { DeferredPromise } from '../../../base/common/async.js';
 import { InMemoryConfigurationService } from '../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { IOpenerService } from '../../../platform/opener/common/opener.js';
@@ -59,13 +60,18 @@ test('desktop initialization reads privileges and installation proofs through in
 	const properties: ITitleProperties[] = [];
 	let updated!: () => void;
 	services.registerInstance(ITitleService, { updateProperties: (value: ITitleProperties) => { properties.push(value); if ('isPure' in value) { updated(); } } } as unknown as import('../../services/title/browser/titleService.js').ITitleService);
+	const responses: unknown[] = [];
 	const ipc = {
-		invoke: async <T>() => undefined as T,
+		invoke: async <T>(_channel: string, response?: unknown) => { responses.push(response); return undefined as T; },
 		subscribe: () => ({ dispose() { } }),
 	};
 	const development = new Promise<void>(resolve => { updated = resolve; });
 	using desktop = services.createInstance(ElectronWindow, ipc);
-	await desktop.initialize();
+	const restored = new DeferredPromise<void>();
+	await desktop.initialize(restored.p);
+	assert.deepEqual(responses, [{ kind: 'ready' }]);
+	assert.deepEqual(properties, []);
+	await restored.complete();
 	await development;
 	assert.deepEqual({ properties, warnings: notifications.model.getNotifications().length }, { properties: [{ isAdmin: true }, { isPure: undefined }], warnings: 0 });
 
@@ -74,7 +80,7 @@ test('desktop initialization reads privileges and installation proofs through in
 		const subscription = notifications.model.onDidAdd(item => { subscription.dispose(); resolve(item.message); });
 	});
 	using packaged = services.createInstance(ElectronWindow, ipc);
-	await packaged.initialize();
+	await packaged.initialize(Promise.resolve());
 	assert.match(await warning, /installation files have changed or are missing/);
 	assert.deepEqual(properties.slice(-2), [{ isAdmin: true }, { isPure: false }]);
 	assert.deepEqual(requests, ['getApplicationChecksums', 'getApplicationChecksums']);
@@ -86,14 +92,14 @@ test('desktop initialization reads privileges and installation proofs through in
 			const subscription = notifications.model.onDidAdd(item => { subscription.dispose(); resolve(item.message); });
 		});
 		using chinese = services.createInstance(ElectronWindow, ipc);
-		await chinese.initialize();
+		await chinese.initialize(Promise.resolve());
 		assert.equal(await translated, 'Ash 的安装文件已被修改或缺失，请重新安装 Ash 以恢复发布时的文件。');
 		reply = { isBuilt: true, proof: [] };
 		const failed = new Promise<string>(resolve => {
 			const subscription = notifications.model.onDidAdd(item => { subscription.dispose(); resolve(item.message); });
 		});
 		using invalid = services.createInstance(ElectronWindow, ipc);
-		await invalid.initialize();
+		await invalid.initialize(Promise.resolve());
 		assert.equal(await failed, 'Ash 无法验证桌面运行环境，请查看日志了解详情。');
 		assert.equal(errors.length, 1);
 	} finally {
@@ -117,7 +123,7 @@ test('desktop disposal prevents pending environment reads from updating titles',
 	services.registerInstance(IEditorService, {} as import('../../services/editor/common/editorService.js').IEditorService);
 	services.registerInstance(IEditorGroupsService, { onDidChangeGroups: Event.None } as import('../../services/editor/common/editorGroupsService.js').IEditorGroupsService);
 	using desktop = services.createInstance(ElectronWindow, { invoke: async () => undefined, subscribe: () => ({ dispose() { } }) });
-	await desktop.initialize();
+	await desktop.initialize(Promise.resolve());
 	desktop.dispose();
 	finish(true);
 	await new Promise<void>(resolve => setImmediate(resolve));

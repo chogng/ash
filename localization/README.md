@@ -15,7 +15,7 @@ Electron 的 Workbench 和 Sessions 在加载贡献注册模块前读取语言�
 - 枚举和动态 key 的数据表在所属模块通过静态 `localize2` 声明文案。需要保留英文供指定窗口的本地化服务使用时，取其 `.original`，避免在模块初始化时固定为当前语言。英文 JSON 字典已退出生成链；新增英文词条必须回到所属源码，校验会拒绝 `en/*.json` 中的非空声明。
 - 主题颜色说明由主题注册代码声明。审批模式的英中说明和产品 Slash Command 的英文说明来自生成的协议元数据，不在客户端另存副本。
 
-`build/resources/localization.ts` 提取英文、合并领域资源，生成 `.build/desktop/localization/` 中的语言目录。生成文件不提交到 Git，也不要手工修改。源码中的 `src/ash/workbench/services/localization/common/localizationCatalogs.ts` 是固定加载入口，不随词条变化。
+`build/resources/localization.ts` 提取英文、合并领域资源，生成 `.build/desktop/localization/` 中的语言目录和加载器。产品用元数据列出语言，并按需加载所选语言的消息。需要同步读取多份目录的测试使用 `localizationCatalogs.ts`。生成文件不提交到 Git，也不要手工修改。
 
 ## 生成与校验
 

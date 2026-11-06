@@ -182,6 +182,46 @@ fn run_directory_binding(kind: DirectoryKind, creation: CreationRuntime) {
             }
         }),
     );
+    if let CreationRuntime::ForeignDirectory = creation {
+        assert_eq!(
+            started["error"]["message"], "CoreOperationFailed",
+            "{started}"
+        );
+        assert!(
+            executing
+                .threads()
+                .read_thread(&thread_id)
+                .unwrap()
+                .turns
+                .is_empty()
+        );
+        assert_eq!(model.0.load(Ordering::Relaxed), 0);
+        assert!(
+            executing
+                .git_turn_changes
+                .as_ref()
+                .unwrap()
+                .binding(&thread_id)
+                .is_none()
+        );
+        assert!(
+            executing
+                .env_runtime
+                .read()
+                .unwrap()
+                .dir_grants
+                .thread_scope(&thread_id, ash_file_access::Permission::ReadFiles)
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            std::fs::read_to_string(directory.dir().join("main.ts")).unwrap(),
+            "const value = 1;\n"
+        );
+        executing.close_connection(browser);
+        creator.close_connection(seed);
+        return;
+    }
     assert!(started.get("result").is_some(), "{started}");
     let deadline = Instant::now() + Duration::from_secs(10);
     let snapshot = loop {
@@ -209,57 +249,27 @@ fn run_directory_binding(kind: DirectoryKind, creation: CreationRuntime) {
         "status":turn.status, "error":turn.failure,
     });
     eprintln!("DIRECTORY_BINDING_EVIDENCE {evidence}");
-    match creation {
-        CreationRuntime::Executing | CreationRuntime::TrustedNode => {
-            assert_eq!(turn.status, TurnStatus::Completed, "{evidence}");
-            assert_eq!(model.0.load(Ordering::Relaxed), 1, "{evidence}");
-            let recovered = executing
-                .git_turn_changes
-                .as_ref()
-                .unwrap()
-                .binding(&thread_id)
-                .unwrap();
-            assert_eq!(recovered.dir(), directory.dir());
-            assert_eq!(recovered.baseline_tree(), directory.baseline_tree());
-            assert_eq!(recovered.source_dir_id(), directory.source_dir_id());
-            assert!(
-                executing
-                    .env_runtime
-                    .read()
-                    .unwrap()
-                    .dir_grants
-                    .thread_scope(&thread_id, ash_file_access::Permission::InspectRepository)
-                    .unwrap()
-                    .is_some()
-            );
-        }
-        CreationRuntime::ForeignDirectory => {
-            assert_eq!(turn.status, TurnStatus::Failed, "{evidence}");
-            assert_eq!(model.0.load(Ordering::Relaxed), 0, "{evidence}");
-            assert_eq!(
-                turn.failure.as_ref().unwrap().code,
-                ash_protocol::StableTurnErrorCode::WorktreeCaptureFailed
-            );
-            assert!(
-                executing
-                    .git_turn_changes
-                    .as_ref()
-                    .unwrap()
-                    .binding(&thread_id)
-                    .is_none()
-            );
-            assert!(
-                executing
-                    .env_runtime
-                    .read()
-                    .unwrap()
-                    .dir_grants
-                    .thread_scope(&thread_id, ash_file_access::Permission::ReadFiles)
-                    .unwrap()
-                    .is_none()
-            );
-        }
-    }
+    assert_eq!(turn.status, TurnStatus::Completed, "{evidence}");
+    assert_eq!(model.0.load(Ordering::Relaxed), 1, "{evidence}");
+    let recovered = executing
+        .git_turn_changes
+        .as_ref()
+        .unwrap()
+        .binding(&thread_id)
+        .unwrap();
+    assert_eq!(recovered.dir(), directory.dir());
+    assert_eq!(recovered.baseline_tree(), directory.baseline_tree());
+    assert_eq!(recovered.source_dir_id(), directory.source_dir_id());
+    assert!(
+        executing
+            .env_runtime
+            .read()
+            .unwrap()
+            .dir_grants
+            .thread_scope(&thread_id, ash_file_access::Permission::InspectRepository)
+            .unwrap()
+            .is_some()
+    );
     assert_eq!(
         std::fs::read_to_string(directory.dir().join("main.ts")).unwrap(),
         "const value = 1;\n"

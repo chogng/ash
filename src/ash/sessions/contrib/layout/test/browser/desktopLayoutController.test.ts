@@ -1,4 +1,6 @@
 import { URI } from '../../../../../base/common/uri.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../../../workbench/services/commands/common/commandService.js';
 import { IPaneCompositePartService } from '../../../../../workbench/services/panecomposite/browser/panecomposite.js';
 import { ViewContainerLocation } from '../../../../../workbench/common/views.js';
 import assert from 'node:assert/strict';
@@ -500,6 +502,7 @@ class LayoutFixture extends Disposable {
 		this.services.registerInstance(ILifecycleService, this.lifecycle);
 		this.services.registerInstance(ISessionsManagementService, this.catalog as unknown as ISessionsManagementService);
 		this.services.registerInstance(ICustomViewService, this._register(new CustomViewService(new NullLoggerService(), this.storage)));
+		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
 		this.sessions = this._register(this.services.createInstance(SessionsService));
 		this.services.registerInstance(ISessionsService, this.sessions);
 		this.services.registerInstance(IEditorPart, this.editor as unknown as import('../../../../../workbench/browser/parts/editor/editorPart.js').IEditorPart);

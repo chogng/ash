@@ -221,6 +221,34 @@ test('Rust catalog reconnection retires old resource references even when the ba
 	assert.deepEqual(await api.resources.readExtensionResourceBytes({ ...request, generation: second.generation }), Uint8Array.from(bytes));
 });
 
+test('packaged color theme reads share one request and retire with the catalog', async () => {
+	const firstReply = new DeferredPromise<{ sources: { path: string; source: string; }[]; }>();
+	let generation = 17;
+	const requests: unknown[] = [];
+	const connection = {
+		request: async ({ method }: { method: string; }, params: unknown) => {
+			if (method === 'extensions/list') return { generation, diagnostics: [], extensions: [] };
+			assert.equal(method, 'extensions/colorTheme/read');
+			requests.push(params);
+			return generation === 17 ? firstReply.p : { sources: null };
+		},
+	} as unknown as AppServerProtocolClient;
+	const api = createAppServerExtensionApi(connection, resourceApi({}));
+	const first = await api.list('cached');
+	const request = { generation: first.generation, extensionId: 'ash.theme', path: 'theme.json' };
+	const retired = Promise.all([
+		assert.rejects(api.readColorThemeSources!(request), /generation/),
+		assert.rejects(api.readColorThemeSources!(request), /generation/),
+	]);
+	assert.deepEqual(requests, [{ ...request, generation: 17 }]);
+	generation++;
+	const second = await api.list('refresh');
+	await firstReply.complete({ sources: [{ path: request.path, source: '{}' }] });
+	await retired;
+	assert.equal(await api.readColorThemeSources!({ ...request, generation: second.generation }), undefined);
+	assert.deepEqual(requests, [{ ...request, generation: 17 }, { ...request, generation: 18 }]);
+});
+
 test('an in-flight resource read cannot publish bytes after the Rust catalog has changed', async () => {
 	const bytes = Buffer.from('old data');
 	const deferred = new DeferredPromise<Awaited<ReturnType<IResourceApi['read']>>>();

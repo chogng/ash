@@ -5,7 +5,7 @@ import { type IDiffService } from '../common/diffService.js';
 export class DiffService implements IDiffService {
 	constructor(@IDiffProviderFactoryService private readonly factory: IDiffProviderFactoryService) { }
 
-	public createComputationService(): ReturnType<IDiffService['createComputationService']> {
-		return this.factory.createDiffProvider();
+	public createComputationService(options?: { readonly prewarm?: boolean; }): ReturnType<IDiffService['createComputationService']> {
+		return this.factory.createDiffProvider(options);
 	}
 }

@@ -2,6 +2,7 @@ import { isNonEmptyArray } from '../../../../base/common/arrays.js';
 import type { EditorGroupId } from './editorState.js';
 import { isSerializedEditorInput, type SerializedEditorInput } from './editorInputSerializer.js';
 import { validateJsonValue, type JsonValue } from '../../../../base/common/jsonValue.js';
+import type { IEditorPane, IResourceEditorInput } from '../../../common/editor.js';
 
 /** Pane-owned, JSON-safe state scoped to one concrete editor instance. */
 export interface SerializedEditorViewState {
@@ -85,12 +86,23 @@ export interface EditorWorkingSet {
 
 export type EditorWorkingSetTarget = EditorWorkingSet | 'empty';
 
+/** Coordinates saved-tab loading with explicit opens during Workbench startup. */
+export interface StartupEditorRestoration {
+	readonly beforeEditors: (restoreTargetState?: StartupEditorViewState) => Promise<void>;
+	readonly waitForOpen: () => Promise<void>;
+	readonly hasOpened: () => boolean;
+	readonly ownsResource: (resource: string) => boolean;
+}
+
+export type StartupEditorViewState = (pane: IEditorPane, input: IResourceEditorInput) => void;
+
 export interface ApplyEditorWorkingSetOptions {
 	readonly preserveFocus?: boolean;
 	/** Session restoration omits empty groups before creating their Grid views. */
 	readonly excludeEmptyGroups?: boolean;
 	/** Retained groups stay alive while the remaining groups restore their document working set. */
 	readonly preserveGroups?: readonly number[];
+	readonly startup?: StartupEditorRestoration;
 }
 
 /** Normalize persisted group identities and validate every document before a host mutates live groups. */

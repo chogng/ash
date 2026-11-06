@@ -145,7 +145,7 @@ pub enum ThreadEvent {
     },
     ThreadDirectoryChanged {
         thread_id: ThreadId,
-        root: std::path::PathBuf,
+        root: Option<std::path::PathBuf>,
     },
     /// Imports model-visible history from a retained original event prefix without copying it.
     HistoryPrefixBound {

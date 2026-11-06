@@ -464,7 +464,7 @@ export class SessionEnvironmentPicker extends Disposable {
 				this.storage.store(key, JSON.stringify({ providerId, environment }), StorageScope.PROFILE, StorageTarget.MACHINE);
 				await this.applyEnvironment(draft, providerId, environment, folders[0]?.target, controller.signal);
 			},
-		});
+		}, this.menus);
 		this.newEnvironment.value = dialog;
 		const canUpdate = () => this.newEnvironment.value === dialog && this.isCurrent(draft);
 		void catalog.distros.then(distros => {

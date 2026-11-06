@@ -23,6 +23,27 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+#[test]
+fn deferred_directory_git_is_discovered_by_the_first_query() {
+    let repository = TestRepository::init();
+    let runtime = GitRuntime::new_deferred(
+        inspection_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    );
+    assert!(!runtime.has_discovered().unwrap());
+    assert!(runtime.repositories().repositories.is_empty());
+
+    // Status and discovery can arrive in either order on the first connection.
+    let (discovered, status) = std::thread::scope(|scope| {
+        let discover = scope.spawn(|| runtime.discover_for(1, None).unwrap());
+        let status = scope.spawn(|| runtime.status_for(None).unwrap());
+        (discover.join().unwrap(), status.join().unwrap())
+    });
+    assert_eq!(discovered.repositories.len(), 1);
+    assert_eq!(discovered.repositories[0].id, status.repository_id);
+    assert!(runtime.has_discovered().unwrap());
+}
+
 #[cfg(unix)]
 #[test]
 fn discovery_reuses_equal_scans_within_one_request_but_observes_new_repositories_next_time() {
@@ -747,7 +768,7 @@ fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
                 trace: Patch::Missing,
                 git: Patch::Value(GitConfig {
                     autofetch: GitAutoFetchMode::Default,
-                    autofetch_period: 1,
+                    autofetch_period: 60,
                     rebase_when_sync: false,
                 }),
                 gui: Patch::Missing,
@@ -781,7 +802,13 @@ fn automatic_fetch_runs_from_shared_config_without_a_frontend() {
         );
         std::thread::sleep(Duration::from_millis(20));
     }
+    let stopping = Instant::now();
     drop(watcher);
+    assert!(
+        stopping.elapsed() < Duration::from_millis(750),
+        "stopping an idle automatic fetch worker took {:?}",
+        stopping.elapsed()
+    );
     assert!(
         notified,
         "completed automatic fetch must publish its status before stop"
@@ -3564,8 +3591,8 @@ fn capability_scoped_git_watch_paths_exclude_other_roots_and_revoked_proofs() {
             ("second".into(), inspection_authorization(second.root())),
         ],
         Arc::new(UpdateBroker::default()),
-    )
-    .unwrap();
+    );
+    assert!(!runtime.has_discovered().unwrap());
     let grant = Grant::for_environment(
         Dir::open_local(second.root()).unwrap(),
         GrantSource::HostConfiguration,
@@ -3575,12 +3602,10 @@ fn capability_scoped_git_watch_paths_exclude_other_roots_and_revoked_proofs() {
     let paths = runtime.discovery_paths(&proofs);
     assert!(paths.iter().any(|path| path.path == second.root()));
     assert!(!paths.iter().any(|path| path.path.starts_with(first.root())));
-    assert!(
-        runtime
-            .watched_repositories(&proofs)
-            .iter()
-            .all(|repository| repository.service.dir().id() == grant.dir().id())
-    );
+    runtime.ensure_discovered().unwrap();
+    let watched = runtime.watched_repositories(&proofs);
+    assert_eq!(watched.len(), 1);
+    assert_eq!(watched[0].service.dir().id(), grant.dir().id());
     grant.revoke();
     assert!(runtime.discovery_paths(&proofs).is_empty());
     assert!(runtime.watched_repositories(&proofs).is_empty());

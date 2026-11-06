@@ -57,7 +57,7 @@ import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { DisposableStore, toDisposable, Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
-import type { ICommandEvent, ICommandService } from '../../../platform/commands/common/commands.js';
+import { type ICommandEvent, ICommandService } from '../../../platform/commands/common/commands.js';
 import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
@@ -79,6 +79,7 @@ import { IConfigurationService } from '../../../platform/configuration/common/co
 import { unavailableOperation } from '../../../platform/agentHost/browser/disconnectedAppServer.js';
 import { createDisconnectedLocalGitService } from '../../../platform/git/browser/appServerLocalGitService.js';
 import { ISessionFolderAuthorizationService } from '../../common/sessionWorkspace.js';
+import { IBrowserViewWorkbenchService } from '../../../workbench/contrib/browserView/common/browserView.js';
 import { ILocalGitService } from '../../../platform/git/common/localGitService.js';
 import { BrowserLayoutService, ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/common/utils.js';
@@ -222,6 +223,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		async listModels() { return []; },
 		getDefaultNewChatModel() { return undefined; },
 		async rememberSelectedModel() { },
+		readModelAvailability: async () => ({ selected: 'unknown', configuredDefault: null, defaultAvailability: 'unknown' }),
 		readModelDefaults: async () => ({ codeReviewModel: null, commitMessageModel: null, commitMessageEnabled: false, revision: 1, model: null, reasoningEffort: null }),
 		saveReasoningEffort: async () => { },
 		async listModelCatalog() { return []; },
@@ -358,6 +360,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	const customViews = resources.add(services.createInstance(CustomViewService));
 	services.registerInstance(ICustomViewService, customViews);
+	services.registerInstance(ICommandService, commandService);
 	using viewService = services.createInstance(SessionsService);
 	await viewService.initialize();
 	services.registerInstance(IChatTipService, resources.add(services.createInstance(ChatTipService)));
@@ -367,6 +370,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	using editorServices = createTestEditorServices(undefined, services, dom.window.document);
 	services.registerInstance(IFileDialogService, editorServices.createInstance(FileDialogService, { kind: 'server', client: {} as IWebWorkspaceClient, quickInput: () => { throw new Error('Unexpected picker'); }, fileService: () => { throw new Error('Unexpected files'); }, workspaceRoot: () => undefined }, () => dialogs));
 	const paneServices = registerTestComponentServices(editorServices);
+	paneServices.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
 	paneServices.registerInstance(IRemoteConnectionService, resources.add(new RemoteConnectionService(UnavailableRemoteConnectionApi)));
 	paneServices.registerInstance(ISessionChangesService, {} as ISessionChangesService);
 	paneServices.registerInstance(ILocalGitService, createDisconnectedLocalGitService(unavailableOperation));

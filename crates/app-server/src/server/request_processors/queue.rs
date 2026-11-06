@@ -36,6 +36,16 @@ pub(super) trait QueueRequestProcessorContext: Send + Sync {
         thread_id: &ash_protocol::ThreadId,
     ) -> Result<ash_protocol::Thread, super::RpcError>;
     fn refresh_analytics(&self) -> Result<(), super::RpcError>;
+    fn resolve_turn_approval_mode(
+        &self,
+        session_id: &ash_protocol::SessionId,
+        requested: Option<ash_protocol::ApprovalMode>,
+    ) -> Result<ash_protocol::ApprovalMode, RpcError>;
+    fn queue_uses_profile_host(
+        &self,
+        session_id: &ash_protocol::SessionId,
+        thread_id: &ash_protocol::ThreadId,
+    ) -> Result<bool, core_api::CoreError>;
     fn start_agent_turn_request(
         &self,
         mutation: super::operations::ThreadMutation,
@@ -216,6 +226,14 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         if snapshot.status != ash_protocol::ThreadStatus::Active {
             return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
         }
+        if self.queue_directory.is_none()
+            && !self
+                .context
+                .queue_uses_profile_host(&params.session_id, &params.thread_id)
+                .map_err(super::core_error)?
+        {
+            return Err(RpcError::new(-32602, AppServerErrorName::InvalidParams));
+        }
         let mut input =
             self.context
                 .normalize_input(Some(owner), &params.session_id, params.input)?;
@@ -238,24 +256,26 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
                 None => ash_protocol::ToolMode::Direct,
             },
         };
-        let directory = self
-            .queue_directory
-            .clone()
-            .ok_or_else(|| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let approval_mode = match (params.approval_mode, existing.as_ref()) {
+            (None, Some(message)) => message.request.approval_mode,
+            (requested, _) => self
+                .context
+                .resolve_turn_approval_mode(&params.session_id, requested)?,
+        };
         self.context.refresh_analytics()?;
         let queued = store
             .enqueue(&queue::QueueInput {
                 command_id: params.command_id,
                 session_id: params.session_id,
                 thread_id: params.thread_id,
-                directory,
+                directory: self.queue_directory.clone(),
                 input,
                 mode: params.mode,
                 command_interpretation: params.command_interpretation.unwrap_or_default(),
                 model: params.model,
                 reasoning_effort: params.reasoning_effort,
                 tool_mode,
-                approval_mode: params.approval_mode,
+                approval_mode,
                 steer_turn: None,
             })
             .map_err(error)?;
@@ -304,7 +324,7 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
     /// Delivers one durable queue identity through the ordinary Agent Turn entrypoint.
     pub fn deliver_queued_message(&self, message: &QueuedMessage) -> Result<Delivery, String> {
         let request = &message.request;
-        if self.queue_directory.as_deref() != Some(request.directory.as_str()) {
+        if self.queue_directory != &request.directory {
             return Err("queue execution directory does not match the selected environment".into());
         }
         let snapshot = self
@@ -334,6 +354,14 @@ impl<'ctx, C: QueueRequestProcessorContext + ?Sized> QueueRequestProcessor<'ctx,
         }
         if snapshot.status != ash_protocol::ThreadStatus::Active {
             return Ok(Delivery::Rejected("threadInactive".into()));
+        }
+        if request.directory.is_none()
+            && !self
+                .context
+                .queue_uses_profile_host(&request.session_id, &request.thread_id)
+                .map_err(|error| error.to_string())?
+        {
+            return Ok(Delivery::Rejected("executionTargetChanged".into()));
         }
         if let Some(turn_id) = &request.steer_turn {
             let current_turn = snapshot.turns.iter().find(|turn| &turn.turn_id == turn_id);

@@ -51,5 +51,5 @@ try {
 	const { startBrowserWorkbench } = await import('../../../workbench/browser/web.bootstrap.js');
 	await startBrowserWorkbench({ productName: AshWorkbenchName }, [createAppServerDebugAdapterCapability]);
 } catch (error) {
-	showStartupError(error, text => navigator.clipboard.writeText(text));
+	showStartupError(document.getElementById('app') ?? document.body, error);
 }

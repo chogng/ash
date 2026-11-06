@@ -67,6 +67,8 @@ export interface ChatInputState {
 	/** Skill discovery can still be pending after model selection is ready. */
 	readonly skillSelectorsLoading?: boolean;
 	readonly selectedModel?: ModelRef;
+	/** Catalog metadata for the current model, including one hidden from the picker list. */
+	readonly selectedModelEntry?: ModelCatalogEntry;
 	readonly selectedReasoningEffort?: ModelReasoningEffort;
 	readonly selectedPreset?: string;
 	readonly isAutomaticModel: boolean;

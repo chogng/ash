@@ -1,4 +1,8 @@
 import { TestWorkspaceTrustManagementService } from '../../../src/ash/workbench/test/common/workbenchTestServices.js';
+import { BrowserLifecycleService } from '../../../src/ash/workbench/services/lifecycle/browser/lifecycleService.js';
+import { LifecyclePhase } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
+import { BrowserStorageService } from '../../../src/ash/workbench/services/storage/browser/storageService.js';
+import { NullLoggerService } from '../../../src/ash/platform/log/common/log.js';
 import { migrateLegacyBrowserSettings } from '../../../src/ash/workbench/services/userData/browser/userDataInit.js';
 import { AsyncDataTree } from '../../../src/ash/base/browser/ui/tree/asyncDataTree.js';
 import { ExtensionResourceLoaderService } from '../../../src/ash/platform/extensionResourceLoader/browser/extensionResourceLoaderService.js';
@@ -372,6 +376,9 @@ const integration = {
 		services.registerInstance(IWorkspaceContextService, lifetime.add(new TestWorkspaceService({
 			id: 'offline-folders', folders: [browserRoot, backendRoot, unknownRoot].map((uri, index) => ({ uri, index, id: String(index), name: `Root ${index}` })),
 		})));
+		const storage = lifetime.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'offline-folders', flushInterval: 0 }));
+		const lifecycle = lifetime.add(new BrowserLifecycleService({ ownerWindow: window, onError: error => console.error(error) }, new NullLoggerService(), storage));
+		lifecycle.phase = LifecyclePhase.Eventually;
 		const host = lifetime.add(new WebWorkerExtensionHost({
 			list: async () => ({
 				generation: 1, diagnostics: [], extensions: [{
@@ -383,7 +390,7 @@ const integration = {
 				export function activate() { return [{ kind: 'command', registrationId: 'folders', command: 'folders', title: 'Folders' }]; }
 				export function invoke() { return globalThis.__ashInitialization.workspaceFolders.map(folder => folder.uri); }
 			`)),
-		}, createDisconnectedExtensionHostApi(operation => { throw new Error(`Unexpected remote operation ${operation}`); }), services, lifetime.add(new TestWorkspaceTrustManagementService())));
+		}, createDisconnectedExtensionHostApi(operation => { throw new Error(`Unexpected remote operation ${operation}`); }), services, lifetime.add(new TestWorkspaceTrustManagementService()), lifecycle));
 		using configuration = new InMemoryConfigurationService();
 		const handler = host.registerClientHandler(async operation => {
 			if (!operation || typeof operation !== 'object' || !('operation' in operation) || operation.operation !== 'readInitialization') throw new Error('Unexpected offline client operation');
