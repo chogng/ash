@@ -141,6 +141,10 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 
 	/** Queues a snapshot only when it can be accepted without touching the live DOM. */
 	public tryQueueIncrementalUpdate(markdown: IMarkdownString, incomplete: boolean): boolean {
+		// Keep short corrections synchronous. Compare with the newest queued text
+		// so a correction can replace an append that has not been painted yet.
+		const previous = this.incrementalRendering.pending?.markdown ?? this.markdown;
+		if (markdown.value.length < markdownFrameThreshold && (!previous?.value || !markdown.value.startsWith(previous.value))) return false;
 		return !this.isDisposed && this.incrementalRendering.tryMorph(markdown, incomplete);
 	}
 

@@ -23,7 +23,7 @@ export class IncrementalDOMMorpher extends Disposable {
 
 	/** Accepts a snapshot that can be queued without touching the live DOM. */
 	tryMorph(markdown: IMarkdownString, incomplete: boolean): boolean {
-		if (this.isDisposed || !this.visible || markdown.value.length < markdownFrameThreshold || markdown.value.length > this.sizeLimit) return false;
+		if (this.isDisposed || !this.visible || markdown.value.length > this.sizeLimit) return false;
 		// Corrections and completion can supersede any snapshot in this frame.
 		this.snapshot = { markdown, incomplete };
 		if (!this.frame.value) {
@@ -39,15 +39,13 @@ export class IncrementalDOMMorpher extends Disposable {
 
 	update(markdown: IMarkdownString, incomplete: boolean): void {
 		// Keep size admission synchronous, including while the response is hidden.
-		if (markdown.value.length > this.sizeLimit) {
-			this.commit(markdown, incomplete, false);
-			return;
+		if (markdown.value.length <= this.sizeLimit) {
+			if (!this.visible) {
+				this.snapshot = { markdown, incomplete };
+				return;
+			}
+			if (markdown.value.length >= markdownFrameThreshold && this.tryMorph(markdown, incomplete)) return;
 		}
-		if (!this.visible) {
-			this.snapshot = { markdown, incomplete };
-			return;
-		}
-		if (this.tryMorph(markdown, incomplete)) return;
 		this.frame.clear();
 		this.snapshot = undefined;
 		this.commit(markdown, incomplete, false);

@@ -24,6 +24,7 @@ import type { ChatTurnErrorAction, IChatListItem } from '../../common/model/chat
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { ChatMarkdownContentPart } from './chatContentParts/chatMarkdownContentPart.js';
+import { markdownFrameThreshold } from './chatContentParts/chatIncrementalRendering/chatIncrementalRendering.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { ChatToolInvocationPart } from './chatContentParts/toolInvocationParts/chatToolInvocationPart.js';
 import type { IChatContentPart } from './chatContentParts/chatContentParts.js';
@@ -166,7 +167,7 @@ export class ChatListItemRenderer extends Disposable {
 			this.item = item;
 			return 'unchanged';
 		}
-		if (this.tryQueuePlainResponse(item)) return 'queued';
+		if (item.text.length >= markdownFrameThreshold && this.tryQueuePlainResponse(item)) return 'queued';
 		beforeLayout();
 		if (this.context && (item.type === 'userContext' || item.type === 'toolCall') && (item.contextText !== undefined || item.contextEntries)
 			&& item.contextSourceUrl === this.item.contextSourceUrl && (!item.contextSourceUrl || item.text === this.item.text)) {
@@ -198,7 +199,8 @@ export class ChatListItemRenderer extends Disposable {
 		return 'updated';
 	}
 
-	private tryQueuePlainResponse(item: IChatListItem): boolean {
+	/** Queues an ongoing response whose row controls and attachments are stable. */
+	public tryQueuePlainResponse(item: IChatListItem): boolean {
 		const previous = this.item;
 		// Keep controls and attachments on the synchronous path when their inputs change.
 		if (!this.markdownPart || item.type !== 'agentMessage' || !previous.transient || !item.transient || !previous.text || previous.text === item.text

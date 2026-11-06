@@ -1,4 +1,5 @@
 import { SessionModelSelection } from './sessionModelSelection.js';
+import { findLastIdx } from '../../base/common/arraysFind.js';
 import { ChatRequestQueueKind } from '../../workbench/services/chat/common/chatService.js';
 import { updateAdvisorConfig } from '../../workbench/services/chat/common/advisor.js';
 import { raceCancellationError } from '../../base/common/async.js';
@@ -9,7 +10,7 @@ import { CancellationToken } from '../../base/common/cancellation.js';
 import { IPromptsService } from '../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { toSkillSelectors } from '../../workbench/contrib/chat/common/skillSelectors.js';
 import { ILanguageModelsService } from '../../workbench/contrib/chat/common/languageModels.js';
-import { Emitter, type Event } from '../../base/common/event.js';
+import { Emitter, Event } from '../../base/common/event.js';
 import { canceled, isCancellationError } from '../../base/common/errors.js';
 import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import type { AgentInteractionDecision, ChatAgent, ChatMode, ChatSubmissionOptions, IChatService, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, Thread, ThreadGoal, ThreadTranscriptEntry, ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope, Turn, TurnChangeDetails, ThreadChangesSummary, TurnChangeSetSummary, TurnInteraction } from '../../workbench/services/chat/common/chatService.js';
@@ -19,7 +20,7 @@ import type { ResolvedChatContext } from '../../workbench/services/chat/common/c
 import type { SessionHistoryBindingDiagnostic } from '../services/sessions/browser/sessionOpenTelemetryService.js';
 import { chatExecutionWorkspace, findAgentNode, type IActiveSessionThread, type ISession, type IUntitledChatSession, type ModelRef, type SessionId, type ThreadId } from '../services/sessions/common/session.js';
 import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
-import { chatQueuedMessageListItems, chatTranscriptListItems, type IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
+import { chatQueuedMessageListItems, chatStreamingResponseUpdate, chatTranscriptListItems, type ChatStreamingResponseUpdate, type IChatListItem } from '../../workbench/contrib/chat/common/model/chatViewModel.js';
 import { ChatHistoryRedoModel } from '../../workbench/contrib/chat/common/model/chatHistoryRedoModel.js';
 import type { ChatInputState } from '../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { modelRefIdentity, type ModelReasoningEffort } from '../../workbench/services/chat/common/modelCatalog.js';
@@ -58,7 +59,7 @@ export type ChatWidgetSelection =
 export class ChatWidgetModel extends Disposable {
 	private readonly chatService: IChatService;
 	private readonly sessionService: ISessionsManagementService;
-	private readonly _onDidChange = this._register(new Emitter<void>());
+	private readonly _onDidChange = this._register(new Emitter<ChatStreamingResponseUpdate | void>());
 	private readonly historyBindingFinished = this._register(new Emitter<SessionHistoryBindingDiagnostic>());
 	readonly onDidFinishHistoryBinding = this.historyBindingFinished.event;
 	private readonly _onDidChangeComposer = this._register(new Emitter<void>());
@@ -118,7 +119,8 @@ export class ChatWidgetModel extends Disposable {
 	private summaryRequest = 0;
 	private summaryRead: { readonly generation: number; sequence: number; promise: Promise<void>; invalidated: boolean; } | undefined;
 
-	readonly onDidChange: Event<void> = this._onDidChange.event;
+	readonly onDidChangePresentation = this._onDidChange.event;
+	readonly onDidChange = Event.map(this.onDidChangePresentation, () => undefined);
 	/** Navigation retires input synchronously, including A-B-A. First materialization keeps its composer. */
 	readonly onDidChangeComposer: Event<void> = this._onDidChangeComposer.event;
 
@@ -1291,13 +1293,17 @@ export class ChatWidgetModel extends Disposable {
 			this.scheduleRefresh();
 			return;
 		}
+		let streamingResponse: ChatStreamingResponseUpdate | undefined;
 		for (const change of update.changes) {
 			switch (change.type) {
 				case 'upsert': {
-					const index = this.transcriptEntries.findIndex((entry) => entry.entryId === change.entry.entryId);
+					const index = findLastIdx(this.transcriptEntries, entry => entry.entryId === change.entry.entryId);
 					const entry = cloneTranscriptEntry(change.entry);
 					if (index < 0) this.transcriptEntries.push(entry);
-					else this.transcriptEntries[index] = entry;
+					else {
+						if (update.changes.length === 1) streamingResponse = chatStreamingResponseUpdate(this.transcriptEntries[index], entry);
+						this.transcriptEntries[index] = entry;
+					}
 					break;
 				}
 				case 'remove': {
@@ -1311,7 +1317,7 @@ export class ChatWidgetModel extends Disposable {
 			}
 		}
 		this.transcriptRevision = update.revision;
-		this._onDidChange.fire();
+		this._onDidChange.fire(streamingResponse);
 	}
 
 	private scheduleRefresh(): void {

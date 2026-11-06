@@ -69,6 +69,20 @@ export interface IChatListItem {
 	readonly action?: ChatTurnErrorAction;
 }
 
+export interface ChatStreamingResponseUpdate {
+	readonly previousText: string;
+	readonly item: IChatListItem;
+}
+
+/** Projects an existing transient text append independently of the rest of its turn. */
+export function chatStreamingResponseUpdate(previous: ThreadTranscriptEntry | undefined, next: ThreadTranscriptEntry): ChatStreamingResponseUpdate | undefined {
+	if (previous?.type !== 'item' || next.type !== 'item' || previous.entryId !== next.entryId || previous.turnId !== next.turnId
+		|| !previous.transient || !next.transient || previous.item.type !== 'agentMessage' || next.item.type !== 'agentMessage'
+		|| previous.item.itemId !== next.item.itemId || !/\S/u.test(previous.item.text) || next.item.text.length <= previous.item.text.length
+		|| !next.item.text.startsWith(previous.item.text)) return undefined;
+	return { previousText: previous.item.text, item: chatTranscriptListItem(next) };
+}
+
 /** Delivering messages belong to the running turn once accepted by Core. */
 export function chatQueuedMessageListItems(queue: readonly QueuedMessage[]): readonly IChatListItem[] {
 	return queue.filter(message => message.status !== 'delivering').map(message => {

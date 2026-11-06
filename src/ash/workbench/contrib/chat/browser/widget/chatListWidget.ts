@@ -11,7 +11,7 @@ import { ChatLayoutTrace } from './chatLayoutTrace.js';
 import { ILoggerService } from '../../../../../platform/log/common/log.js';
 import { autorun } from '../../../../../base/common/observable.js';
 import { IChatLayoutService } from '../../common/widget/chatLayoutService.js';
-import { findLast } from '../../../../../base/common/arraysFind.js';
+import { findLast, findLastIdx } from '../../../../../base/common/arraysFind.js';
 import { PromptTimelineStickyHeader } from '../promptTimeline/promptTimelineStickyHeader.js';
 import './media/chatListWidget.css';
 import { addDisposableListener, h, isHTMLElement } from '../../../../../base/browser/dom.js';
@@ -24,7 +24,7 @@ import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import type { URI } from '../../../../../base/common/uri.js';
-import type { ChatTurnErrorAction, IChatListItem } from '../../common/model/chatViewModel.js';
+import type { ChatStreamingResponseUpdate, ChatTurnErrorAction, IChatListItem } from '../../common/model/chatViewModel.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { BareFontInfo, EDITOR_FONT_DEFAULTS } from '../../../../../editor/common/config/fontInfo.js';
@@ -99,7 +99,7 @@ export class ChatListWidget extends DomWidget {
 	// Disposed after the row collection so the final batch includes every row release.
 	private readonly layoutTraceStore = this._register(new DisposableStore());
 	private readonly findWidget = this._register(new MutableDisposable<ChatFindWidget>());
-	private items: readonly IChatListItem[] = [];
+	private items: IChatListItem[] = [];
 	private lastFocusedItemId: string | undefined;
 	private readonly domNode: HTMLElement;
 	private readonly scrollable: ScrollableElement;
@@ -442,14 +442,25 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	render(items: readonly IChatListItem[]): void {
-		this.items = items;
+		this.items = [...items];
 		if (!this.visible) {
 			// The model continues receiving events. Hidden presentation consumes its
 			// latest projection once on show instead of parsing every intermediate one.
-			this.pendingItems = items;
+			this.pendingItems = this.items;
 			return;
 		}
 		this.reconcile(items);
+	}
+
+	/** Updates the one existing row identified by a text-only model notification. */
+	public tryQueueStreamingResponse({ item, previousText }: ChatStreamingResponseUpdate): boolean {
+		if (!this.visible) return false;
+		const row = this.renderedItems.get(item.id);
+		if (row?.item.text !== previousText) return false;
+		const index = findLastIdx(this.items, candidate => candidate.id === item.id);
+		if (index < 0 || !row.tryQueuePlainResponse(item)) return false;
+		this.items[index] = item;
+		return true;
 	}
 
 	setBusy(busy: boolean): void {

@@ -26,6 +26,7 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/
 import { IHoverService } from '../../../../../../platform/hover/browser/hoverService.js';
 import { ILinkPresentationService, type ILinkPresentationRule } from '../../../../../../platform/dataChannel/common/dataChannel.js';
 import { ChatMarkdownContentPart } from '../../../browser/widget/chatContentParts/chatMarkdownContentPart.js';
+import { IncrementalDOMMorpher } from '../../../browser/widget/chatContentParts/chatIncrementalRendering/chatIncrementalRendering.js';
 import { ChatContentMarkdownRenderer } from '../../../browser/widget/chatContentMarkdownRenderer.js';
 
 let math: Awaited<ReturnType<typeof startMarkdownMathExtension>>;
@@ -213,6 +214,19 @@ suite('Shared chat Markdown rendering', () => {
 				lexer.mock.restore();
 			}
 		}
+	});
+
+	test('streaming Markdown discards a queued append when a replacement exceeds the size limit', async () => {
+		const committed: string[] = [];
+		using morpher = new IncrementalDOMMorpher(document.body, true, 16, markdown => committed.push(markdown.value));
+		assert.equal(morpher.tryMorph({ value: 'Queued append' }, true), true);
+		const replacement = 'An oversized replacement';
+		morpher.update({ value: replacement }, false);
+		assert.deepEqual(committed, [replacement]);
+		const frame = new DeferredPromise<void>();
+		using scheduled = scheduleAtNextAnimationFrame(getWindow(document.body), () => frame.complete());
+		await frame.p;
+		assert.deepEqual(committed, [replacement]);
 	});
 
 	test('large tails coalesce terminal snapshots and cancel queued work on clear, hide and disposal', async () => {

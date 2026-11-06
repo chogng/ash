@@ -27,7 +27,7 @@ import type { AgentInteractionDecision, ApprovalMode, ChatAgent, ChatMode, Model
 import type { ChatInputDelegate } from './input/chatInput.js';
 import type { SkillReference } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { ChatInputPart, type IChatInputPart, type IChatDraftStorage } from './input/chatInputPart.js';
-import type { ChatTurnErrorAction } from '../../common/model/chatViewModel.js';
+import type { ChatStreamingResponseUpdate, ChatTurnErrorAction } from '../../common/model/chatViewModel.js';
 import { ChatListWidget } from './chatListWidget.js';
 import type { ChatInputState } from './input/chatInput.js';
 import type { ModelReasoningEffort } from '../../../../services/chat/common/modelCatalog.js';
@@ -66,6 +66,8 @@ import { ChatViewWelcomePart } from '../viewsWelcome/chatViewWelcomeController.j
 export interface IChatWidgetModel extends IDisposable {
 	readonly thread?: import('../../../../services/chat/common/chatService.js').Thread;
 	readonly onDidChange: Event<void>;
+	/** The same notification can identify an isolated text append for the transcript. */
+	readonly onDidChangePresentation?: Event<ChatStreamingResponseUpdate | void>;
 	readonly onDidChangeComposer: Event<void>;
 	readonly composerGeneration: number;
 	readonly sessionId: SessionId | undefined;
@@ -408,9 +410,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			widget.restoreViewState(state, this.model.items);
 		}));
 		this._register(this.model.onDidChangeComposer(() => { this.input.invalidatePendingInput(); this.listWidget.resetFind(); }));
-		this._register(this.model.onDidChange(() => {
+		this._register((this.model.onDidChangePresentation ?? this.model.onDidChange)(update => {
 			if (this.model.inputState.aiDisabled && voiceClient?.isActive) void this.runVoice(() => voiceClient.disconnect());
-			this.render();
+			if (!update || !this.listWidget.tryQueueStreamingResponse(update)) this.render();
 		}));
 		if (voiceClient) this._register(voiceClient.onDidChange(() => { if (!this.isDisposed) this.render(); }));
 		this._register(toDisposable(() => this.element.remove()));

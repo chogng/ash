@@ -735,6 +735,52 @@ suite('chatTranscript browser component', () => {
 	}
 
 
+	test('streaming Markdown coalesces short active-row appends and supersedes them on correction or removal', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const result = await page.evaluate(async () => {
+			const fixture = window.ashChatTranscriptIntegration;
+			const frame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+			const history = { id: 'history', type: 'agentMessage', text: 'Earlier reply.', transient: false } as const;
+			const reply = { id: 'stream', type: 'agentMessage', text: 'Read [this](https://example.com).\n\nFirst.', transient: true } as const;
+			const row = () => document.querySelector('[data-item-id="stream"]');
+			const render = (text: string, transient: boolean) => fixture.renderItems([history, { ...reply, text, transient }]);
+			const append = (previousText: string, text: string) => fixture.queueStreamingResponse({ previousText, item: { ...reply, text } });
+			render(reply.text, true);
+			const firstWasSynchronous = row()?.textContent?.includes('First.') === true;
+			const earlier = document.querySelector('[data-item-id="history"]');
+			const link = row()!.querySelector('a')!;
+			link.focus();
+			const selection = window.getSelection()!;
+			selection.setBaseAndExtent(link.firstChild!, 4, link.firstChild!, 0);
+			const next = reply.text + ' Next.';
+			const latest = next + ' Latest.';
+			const queued = [append(reply.text, next), append(next, latest), append(reply.text, latest + ' Stale.')];
+			const stayedQueued = !row()?.textContent?.includes('Next.');
+			await frame();
+			const displayed = row()?.textContent?.includes('Latest.') && !row()?.textContent?.includes('Stale.');
+			const retained = earlier === document.querySelector('[data-item-id="history"]') && link === row()?.querySelector('a');
+			const interaction = { focused: document.activeElement === link, selection: selection.toString() };
+			append(latest, latest + ' Discarded.');
+			render(reply.text + ' Corrected.', false);
+			await frame();
+			const corrected = row()?.textContent?.includes('Corrected.') && !row()?.textContent?.includes('Discarded.');
+			render(reply.text, true);
+			append(reply.text, next);
+			fixture.setTranscriptVisible(false);
+			await frame();
+			const stayedHidden = !row()?.textContent?.includes('Next.');
+			fixture.setTranscriptVisible(true);
+			await frame();
+			const shown = row()?.textContent?.includes('Next.') === true;
+			append(next, latest);
+			fixture.remove();
+			await frame();
+			return { firstWasSynchronous, queued, stayedQueued, displayed, retained, interaction, corrected, stayedHidden, shown, removed: row() === null };
+		});
+		expect(result).toEqual({ firstWasSynchronous: true, queued: [true, true, false], stayedQueued: true, displayed: true, retained: true, interaction: { focused: true, selection: 'this' }, corrected: true, stayedHidden: true, shown: true, removed: true });
+	});
+
 	test('streaming Markdown retains completed text, one code model, selection and focus through completion', async function () {
 		const { page } = browserTests;
 

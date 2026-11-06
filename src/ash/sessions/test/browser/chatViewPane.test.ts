@@ -5154,13 +5154,18 @@ test('stream updates preserve message order and survive an older refresh snapsho
 	const emit = (revision: number, itemId: string, text: string, transient = true): void => fake.emit({
 		method: 'session/thread/transcript/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 1, revision, changes: [{ type: 'upsert', entry: { type: 'item', entryId: `item:${itemId}`, turnId: 'turn-1', transient, item: { type: 'agentMessage', itemId, turnId: 'turn-1', text } } }] },
 	});
+	const changes: unknown[] = [];
+	using presentation = model.onDidChangePresentation(update => changes.push(update));
 	emit(2, 'first', 'Partial');
 	emit(3, 'second', 'Later message');
+	emit(4, 'first', 'Partial reply');
+	emit(5, 'first', 'Corrected');
 	// A revision gap triggers a snapshot read while the first message keeps streaming.
-	emit(5, 'gap', 'Not applied');
+	emit(7, 'gap', 'Not applied');
 	await waitFor(() => reads === 1);
-	emit(4, 'first', 'Completed', false);
-	emit(3, 'first', 'Stale duplicate');
+	emit(6, 'first', 'Completed', false);
+	emit(5, 'first', 'Stale duplicate');
+	assert.deepEqual(changes, [undefined, undefined, { previousText: 'Partial', item: { id: 'item:first', type: 'agentMessage', text: 'Partial reply', transient: true } }, undefined, undefined]);
 	assert.deepEqual(model.items.map(item => [item.id, item.text, item.transient]), [['item:first', 'Completed', false], ['item:second', 'Later message', true]]);
 	await read.complete(await fake.api.thread.read({ sessionId: 'session-1', threadId: 'thread-1' }));
 	await nextTask();

@@ -97,7 +97,7 @@ import { ICodeEditorService } from '../../../src/ash/editor/browser/services/cod
 import { registerCodeEditorServices } from '../../../src/ash/editor/test/browser/testCodeEditor.js';
 import { StandaloneCommandService } from '../../../src/ash/editor/standalone/browser/standaloneServices.js';
 import { createTestEditorServices } from '../../../src/ash/workbench/test/common/testEditorServices.js';
-import { chatTranscriptListItems, type IChatListItem } from '../../../src/ash/workbench/contrib/chat/common/model/chatViewModel.js';
+import { chatTranscriptListItems, type ChatStreamingResponseUpdate, type IChatListItem } from '../../../src/ash/workbench/contrib/chat/common/model/chatViewModel.js';
 import { createAppServerAgentThreadService, createDisconnectedAgentHostInputCompletionService } from '../../../src/ash/platform/agentHost/browser/appServerAgentService.js';
 import { ChatWidget, type IChatWidgetModel } from '../../../src/ash/workbench/contrib/chat/browser/widget/chatWidget.js';
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
@@ -697,6 +697,7 @@ declare global {
 			setTranscriptVisible(value: boolean): void;
 			recreateTranscript(): void;
 			stream(value: string, complete: boolean): void;
+			queueStreamingResponse(update: ChatStreamingResponseUpdate): boolean;
 			runMarkdownBenchmark(kind: MarkdownWorkload): Promise<MarkdownBenchmarkResult>;
 			markdownWorkload(kind: MarkdownWorkload): string;
 			inspectRawCodeUpdates(values: readonly string[]): Promise<{ readonly snapshots: readonly { readonly text: string; readonly eol: string; readonly copied: string; }[]; readonly released: boolean; }>;
@@ -975,6 +976,7 @@ window.ashChatTranscriptIntegration = {
 		previous.dispose();
 	},
 	stream: (value, complete) => list.render([{ id: 'stream', type: 'agentMessage', text: value, transient: !complete }]),
+	queueStreamingResponse: update => list.tryQueueStreamingResponse(update),
 	compareStreamingMarkdown: async (value, complete, measureLayout = false) => {
 		list.render([{ id: 'stream', type: 'agentMessage', text: value, transient: !complete }]);
 		// Large snapshots are consumed by the owning response in the next frame.
