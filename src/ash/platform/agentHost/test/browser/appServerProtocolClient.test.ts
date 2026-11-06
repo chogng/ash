@@ -203,7 +203,8 @@ test('File domain invalidations reach only their filesystem connection and relea
 	assert.equal(receiver.changes.length, 1);
 	await client.connect();
 	transport.frame({ method: 'fs/changed', params: { type: 'rescanRequired', dirId: 'same' } });
-	assert.deepEqual(observed, [[root.joinPathSegment('main.ts').toString()], undefined]);
+	assert.deepEqual(observed, [[root.joinPathSegment('main.ts').toString()], [root.toString()]]);
+	assert.deepEqual(otherObserved, []);
 	subscriptions.dispose();
 	transport.frame(changed);
 	assert.equal(receiver.changes.length, 2);
