@@ -1220,7 +1220,7 @@ fn sqlite_replays_a_saved_session_directory_change_and_preserves_history() {
                 &id,
                 Some(&destination),
                 command.clone(),
-                |_| {
+                |_, _| {
                     Err(core_api::CoreError::InvalidInput(
                         "destination unavailable".into(),
                     ))
@@ -1235,7 +1235,7 @@ fn sqlite_replays_a_saved_session_directory_change_and_preserves_history() {
             &id,
             Some(&destination),
             command.clone(),
-            |_| Ok(()),
+            |_, _| Ok(()),
             |_| Ok(()),
         )
         .unwrap();
@@ -1244,7 +1244,7 @@ fn sqlite_replays_a_saved_session_directory_change_and_preserves_history() {
             &id,
             Some(&destination),
             command,
-            |_| unreachable!(),
+            |_, _| unreachable!(),
             |_| Ok(()),
         )
         .unwrap();
@@ -1270,7 +1270,7 @@ fn sqlite_replays_a_saved_session_directory_change_and_preserves_history() {
             &id,
             None,
             ash_protocol::CommandId::new("clear-directory").unwrap(),
-            |_| Ok(()),
+            |_, _| Ok(()),
             |_| Ok(()),
         )
         .unwrap();

@@ -24,6 +24,7 @@ use ash_protocol::MessageCheckpoint;
 use ash_protocol::ModelContextInspection;
 use ash_protocol::ModelRef;
 use ash_protocol::RequestId;
+use ash_protocol::SessionExecutionTarget;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadArchiveReason;
 use ash_protocol::ThreadId;
@@ -193,7 +194,7 @@ pub trait AgentRuntime {
         session_id: &SessionId,
         root: Option<&std::path::Path>,
         command_id: CommandId,
-        prepare: impl FnOnce(&ThreadId) -> Result<(), CoreError>,
+        prepare: impl FnOnce(&ThreadId, Option<&SessionExecutionTarget>) -> Result<(), CoreError>,
         activate: impl FnOnce(&ThreadId) -> Result<(), CoreError>,
     ) -> Result<ThreadView, CoreError>;
     fn fork_comparison(

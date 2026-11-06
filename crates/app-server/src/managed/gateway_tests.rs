@@ -230,6 +230,43 @@ fn saved_session_switches_directory_and_keeps_its_previous_working_copy() {
     let mut profile_connection = initialize(&profile);
     let retried = crate::tests::call(&profile, &mut profile_connection, clear);
     assert_eq!(retried["result"]["value"], cleared["result"]["value"]);
+
+    // The gateway can select the profile host before a concurrent bind takes effect.
+    let stale_clear = serde_json::json!({
+        "jsonrpc":"2.0","id":8,"method":"session/request","params":{
+            "sessionId":id,"commandId":"clear-after-rebind","request":{"type":"clearDirectory"}
+        }
+    });
+    assert_eq!(
+        selected_execution_target(&restarted, &remotes, &stale_clear).unwrap(),
+        None
+    );
+    let rebound = crate::tests::call(
+        &original,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":9,"method":"session/request","params":{
+                "sessionId":id,"commandId":"rebind","request":{"type":"changeDirectory","root":old.path()}
+            }
+        }),
+    );
+    assert!(rebound.get("error").is_none(), "{rebound}");
+    let rebound_route = selected_execution_target(&restarted, &remotes, &stale_clear).unwrap();
+    assert!(matches!(
+        rebound_route,
+        Some(SessionExecutionTarget::Local { .. })
+    ));
+    let stale = crate::tests::call(&profile, &mut profile_connection, stale_clear.clone());
+    assert!(stale.get("error").is_some(), "{stale}");
+    assert_eq!(
+        selected_execution_target(&restarted, &remotes, &stale_clear).unwrap(),
+        rebound_route
+    );
+    let cleared_after_rebind = crate::tests::call(&original, &mut connection, stale_clear);
+    assert_eq!(
+        cleared_after_rebind["result"]["value"]["session"],
+        cleared["result"]["value"]["session"]
+    );
     profile.close_connection(profile_connection);
     original.close_connection(connection);
 }

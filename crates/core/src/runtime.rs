@@ -9,6 +9,7 @@ use ash_protocol::CommandId;
 use ash_protocol::InteractionCancelReason;
 use ash_protocol::MessageCheckpoint;
 use ash_protocol::RequestId;
+use ash_protocol::SessionExecutionTarget;
 use ash_protocol::SessionId;
 use ash_protocol::StableTurnError;
 use ash_protocol::ThreadArchiveReason;
@@ -856,7 +857,7 @@ impl AgentRuntime for Runtime<'_> {
         session_id: &SessionId,
         root: Option<&std::path::Path>,
         command_id: CommandId,
-        prepare: impl FnOnce(&ThreadId) -> Result<(), CoreError>,
+        prepare: impl FnOnce(&ThreadId, Option<&SessionExecutionTarget>) -> Result<(), CoreError>,
         activate: impl FnOnce(&ThreadId) -> Result<(), CoreError>,
     ) -> Result<ThreadView, CoreError> {
         self.threads

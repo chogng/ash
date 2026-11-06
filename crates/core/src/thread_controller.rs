@@ -3156,13 +3156,16 @@ impl ThreadController {
         })
     }
 
-    /// Prepares the destination under the Thread writer lease before publishing its new route.
+    /// Gives the host the current route while it prepares a directory change under the writer lease.
     pub fn change_session_directory(
         &self,
         session_id: &SessionId,
         root: Option<&std::path::Path>,
         command_id: CommandId,
-        prepare: impl FnOnce(&ThreadId) -> Result<(), CoreError>,
+        prepare: impl FnOnce(
+            &ThreadId,
+            Option<&ash_protocol::SessionExecutionTarget>,
+        ) -> Result<(), CoreError>,
         activate: impl FnOnce(&ThreadId) -> Result<(), CoreError>,
     ) -> Result<ThreadSnapshot, CoreError> {
         let thread_id = ThreadId::new(session_id.as_str())
@@ -3213,7 +3216,7 @@ impl ThreadController {
                     },
                 },
             )?;
-            prepare(&thread_id)?;
+            prepare(&thread_id, snapshot.execution_target.as_ref())?;
             self.commit_batch(&batch)?;
             *snapshot = next;
             activate(&thread_id)?;

@@ -20,6 +20,7 @@ use ash_app_server_protocol::protocol::session::SessionThreadProjection;
 use ash_app_server_protocol::protocol::session::SessionUnsubscribeParams;
 use ash_protocol::CommandId;
 use ash_protocol::HookEvent;
+use ash_protocol::SessionExecutionTarget;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
 use core_api::HookEventRequest;
@@ -178,7 +179,23 @@ impl<'ctx, C: SessionRequestProcessorContext + ?Sized> SessionRequestProcessor<'
                 &mutation.session_id,
                 destination.as_ref().map(|(_, dir, _)| dir.canonical_path()),
                 mutation.command_id,
-                |thread| {
+                |thread, current_target| {
+                    if destination.is_none() {
+                        // The gateway selects a runtime before dispatch. Check ownership under
+                        // the Thread writer lease in case another window changed the directory.
+                        match (current_target, current_runtime) {
+                            (None, None) => return Ok(()),
+                            (Some(SessionExecutionTarget::Local { root }), Some(runtime))
+                                if root == &runtime.dirs.root
+                                    || ash_file_access::Dir::open_local(root)
+                                        .is_ok_and(|dir| dir.id() == runtime.dirs.id) => {}
+                            _ => {
+                                return Err(core_api::CoreError::InvalidInput(
+                                    "The Session execution directory has changed".into(),
+                                ));
+                            }
+                        }
+                    }
                     let Some(runtime) = current_runtime else {
                         return Ok(());
                     };

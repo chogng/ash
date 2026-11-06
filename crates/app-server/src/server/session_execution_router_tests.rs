@@ -136,7 +136,7 @@ fn explicit_directory_binding_enables_and_clears_workspace_for_a_chat() {
             &chat.session_id,
             Some(&std::env::temp_dir()),
             CommandId::new("enable-workspace").unwrap(),
-            |_| Ok(()),
+            |_, _| Ok(()),
             |_| Ok(()),
         )
         .unwrap();
@@ -146,7 +146,7 @@ fn explicit_directory_binding_enables_and_clears_workspace_for_a_chat() {
             &chat.session_id,
             None,
             CommandId::new("disable-workspace").unwrap(),
-            |_| Ok(()),
+            |_, _| Ok(()),
             |_| Ok(()),
         )
         .unwrap();
