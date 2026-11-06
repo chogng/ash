@@ -14,7 +14,7 @@ import { MarkedKatexExtension } from '../../../../markdown/common/markedKatexExt
 import { ChatContentMarkdownRenderer, getChatMarkdownRenderOptions } from '../chatContentMarkdownRenderer.js';
 import { IncrementalDOMMorpher, markdownFrameThreshold } from './chatIncrementalRendering/chatIncrementalRendering.js';
 import { ChatMarkdownDecorationsRenderer } from './chatMarkdownDecorationsRenderer.js';
-import { lexMarkdownTail, markdownTailCheckpoint, type MarkdownTailCheckpoint } from './chatMarkdownTail.js';
+import { canStartListCheckpoint, lexMarkdownTail, markdownTailCheckpoint, type MarkdownTailCheckpoint } from './chatMarkdownTail.js';
 import { CodeBlockPart } from './codeBlockPart.js';
 import type { ICodeBlockActionContext } from './codeBlockPart.js';
 import { LocalChatSessionUri } from '../../../common/model/chatUri.js';
@@ -43,10 +43,11 @@ interface MarkdownTailPatch {
 const markdownTailThreshold = 4096;
 const markdownSizeLimit = 4 * 1024 * 1024;
 
-// Pipe-led tables can start reusing rows as soon as rendering moves to the
-// frame queue. Other blocks keep the larger threshold for the extra setup.
-function canPatchTail(source: string): boolean {
-	return source.length >= markdownTailThreshold || source.length >= markdownFrameThreshold && source.startsWith('|');
+// Streaming lists and pipe-led tables can start reusing rows as soon as
+// rendering moves to the frame queue. Paragraphs keep the larger threshold.
+function canPatchTail(source: string, allowEarlyList: boolean): boolean {
+	return source.length >= markdownTailThreshold || source.length >= markdownFrameThreshold
+		&& (source.startsWith('|') || allowEarlyList && canStartListCheckpoint(source));
 }
 
 interface MarkdownFragment {
@@ -205,7 +206,10 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		let sources: string[] | undefined;
 		let firstBlockEnd: number | undefined;
 		const previousTail = this.fragments.at(-1);
-		const ordinaryTail = sameOptions && canPatchTail(tail) && markdown.value.length <= markdownSizeLimit
+		// Keep an established list checkpoint through completion. A one-shot
+		// reply below the tail threshold has no future row updates to amortize it.
+		const allowEarlyList = fillInIncompleteTokens || previousTail?.tail?.checkpoint?.kind === 'list';
+		const ordinaryTail = sameOptions && canPatchTail(tail, allowEarlyList) && markdown.value.length <= markdownSizeLimit
 			&& !markdown.supportHtml && !this.options.markedExtensions?.length
 			&& !/[$\\<>\r]|!\[|`{3}|~{3}|\]:/u.test(markdown.value)
 			&& previousTail?.element.childElementCount === 1
@@ -268,10 +272,11 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 				let fragment: MarkdownFragment;
 				if (match >= 0) fragment = available.splice(match, 1)[0];
 				else {
-					const replace = canPatchTail(source) ? available.findIndex(fragment => !fragment.codeCount && !fragment.images.size) : -1;
+					const patchable = canPatchTail(source, allowEarlyList);
+					const replace = patchable ? available.findIndex(fragment => !fragment.codeCount && !fragment.images.size) : -1;
 					const previous = replace >= 0 ? available.splice(replace, 1)[0] : undefined;
 					const resumeEnd = append && previous === previousTail ? (index === 0 ? firstBlockEnd : undefined) ?? source.length : undefined;
-					({ fragment, patch: tailPatch } = this.renderFragment({ ...markdown, value: source }, incomplete, codeStart, previous, resumeEnd));
+					({ fragment, patch: tailPatch } = this.renderFragment({ ...markdown, value: source }, incomplete, codeStart, previous, resumeEnd, patchable));
 					created.push(fragment);
 				}
 				next.push(fragment);
@@ -324,7 +329,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		if (focused?.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
 	}
 
-	private renderFragment(markdown: IMarkdownString, incomplete: boolean, codeStart: number, previous: MarkdownFragment | undefined, resumeEnd: number | undefined): { fragment: MarkdownFragment; patch?: MarkdownTailPatch; } {
+	private renderFragment(markdown: IMarkdownString, incomplete: boolean, codeStart: number, previous: MarkdownFragment | undefined, resumeEnd: number | undefined, patchable: boolean): { fragment: MarkdownFragment; patch?: MarkdownTailPatch; } {
 		const document = this.options.ownerDocument;
 		// The content part owns the fragment root, which can outlive an individual render.
 		const element = previous?.element ?? h(document, 'div');
@@ -350,7 +355,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 					return placeholder;
 				},
 			};
-			const { tail, patch } = this.renderTail(markdown, options, element, previous, resumeEnd) ?? {};
+			const { tail, patch } = (patchable ? this.renderTail(markdown, options, element, previous, resumeEnd) : undefined) ?? {};
 			if (tail) {
 				lifetime.add(addDisposableListener<MouseEvent>(element, 'click', event => {
 					const anchor = (event.target as Element | null)?.closest?.('a[href]');
@@ -421,7 +426,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 
 	/** Reuse sanitized children only within a fragment rendered with the same Markdown metadata and options. */
 	private renderTail(markdown: IMarkdownString, options: MarkdownRenderOptions, element: HTMLElement, previous: MarkdownFragment | undefined, resumeEnd: number | undefined): { tail: MarkdownTail; patch?: MarkdownTailPatch; } | undefined {
-		if (!canPatchTail(markdown.value) || markdown.supportHtml || /[$\\<>]|!\[|`{3}|~{3}/u.test(markdown.value)
+		if (markdown.supportHtml || /[$\\<>]|!\[|`{3}|~{3}/u.test(markdown.value)
 			|| options.transformUri || options.markedExtensions?.length
 			|| options.sanitizerConfig?.allowedTags || options.sanitizerConfig?.allowedAttributes) {
 			return undefined;
@@ -434,7 +439,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		const parse = (value: string): Element | undefined => {
 			template.innerHTML = renderWorkbenchMarkdown({ ...markdown, value }, false, renderOptions);
 			const raw = template.content.firstElementChild;
-			if (!raw || (markdown.value.length < markdownTailThreshold ? raw.tagName !== 'TABLE' : !['P', 'UL', 'OL', 'TABLE'].includes(raw.tagName))
+			if (!raw || !['P', 'UL', 'OL', 'TABLE'].includes(raw.tagName) || markdown.value.length < markdownTailThreshold && raw.tagName === 'P'
 				|| [...template.content.childNodes].some(node => node !== raw && (node.nodeType !== 3 || node.textContent?.trim()))
 				|| [...raw.querySelectorAll('*')].some(node => !['P', 'LI', 'THEAD', 'TBODY', 'TR', 'TH', 'TD', 'A', 'STRONG', 'EM', 'DEL', 'CODE', 'BR'].includes(node.tagName))) return undefined;
 			return raw;

@@ -10,7 +10,13 @@ const paragraphContext = '`x`';
 const paragraphCheckpointScanLimit = 4096;
 const listItem = /^([-+*]|\d{1,9}[.)]) [\p{L}\p{N}]/u;
 const emptyListItem = /^([-+*]|\d{1,9}[.)])[ \t]*$/u;
+const nonFlatListLine = /\n(?:[ \t]+\S|(?:[-+*]|\d{1,9}[.)])[ \t]+\[[ xX]\](?:\s|$))/u;
 const plainInline = /^[^*_`~[\]<>!\\$]*$/u;
+
+/** Avoid an extra parse for short lists with indented content or task items. */
+export function canStartListCheckpoint(source: string): boolean {
+	return listItem.test(source) && !nonFlatListLine.test(source);
+}
 
 /** Discovers a new sibling block without lexing the source before a proven checkpoint. */
 export function lexMarkdownTail(

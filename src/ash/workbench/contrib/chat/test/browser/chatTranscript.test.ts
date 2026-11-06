@@ -856,11 +856,13 @@ suite('chatTranscript browser component', () => {
 	test('streaming Markdown checkpoints retain stable children and reparse changed structure', async function () {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html');
-		for (const kind of ['hugeParagraph', 'largeList', 'largeTable'] as const) {
-			const result = await page.evaluate(async kind => {
+		for (const [kind, rows] of [['hugeParagraph'], ['largeList', 32], ['largeList'], ['largeTable']] as const) {
+			const label = rows ? `${kind} at ${rows} items` : kind;
+			const result = await page.evaluate(async ({ kind, rows }) => {
 				const fixture = window.ashChatTranscriptIntegration;
 				const root = () => document.querySelector('[data-item-id="stream"] .ash-chat-markdown-part')!;
-				const prefix = fixture.markdownWorkload(kind).split('\n\n')[0];
+				const body = fixture.markdownWorkload(kind).split('\n\n')[0];
+				const prefix = rows ? body.split('\n', rows).join('\n') : body;
 				const [selector, addition, structuralChange] = {
 					hugeParagraph: ['strong', ' New **tail**.', '\n---'],
 					largeList: ['li', '\n- New item.', '\n\n- Loose item.'],
@@ -880,13 +882,13 @@ suite('chatTranscript browser component', () => {
 				const corrected = appended.replace(kind === 'hugeParagraph' ? 'Markdown' : kind === 'largeList' ? 'Item 0' : 'Row 0', 'Corrected');
 				const afterCorrection = await fixture.compareStreamingMarkdown(corrected, true);
 				return { retained, retainedOnCompletion, afterAppend, afterCompletion, afterStructure, afterCorrection };
-			}, kind);
-			expect(result.retained, kind).toBe(true);
-			expect(result.retainedOnCompletion, `${kind} completion`).toBe(true);
-			expect(result.afterAppend.actual, `${kind} append`).toBe(result.afterAppend.expected);
-			expect(result.afterCompletion.actual, `${kind} completion`).toBe(result.afterCompletion.expected);
-			expect(result.afterStructure.actual, `${kind} structure change`).toBe(result.afterStructure.expected);
-			expect(result.afterCorrection.actual, `${kind} correction`).toBe(result.afterCorrection.expected);
+			}, { kind, rows });
+			expect(result.retained, label).toBe(true);
+			expect(result.retainedOnCompletion, `${label} completion`).toBe(true);
+			expect(result.afterAppend.actual, `${label} append`).toBe(result.afterAppend.expected);
+			expect(result.afterCompletion.actual, `${label} completion`).toBe(result.afterCompletion.expected);
+			expect(result.afterStructure.actual, `${label} structure change`).toBe(result.afterStructure.expected);
+			expect(result.afterCorrection.actual, `${label} correction`).toBe(result.afterCorrection.expected);
 			expect(result.afterCorrection.actual).toContain('Corrected');
 		}
 	});
