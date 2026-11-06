@@ -8,7 +8,7 @@ import { Disposable } from '../../../base/common/lifecycle.js';
 import { toValuesTree } from './configuration.js';
 import { Extensions, ConfigurationScope, overrideIdentifiersFromKey, type IConfigurationRegistry } from './configurationRegistry.js';
 import { Registry } from '../../registry/common/platform.js';
-import { FileSystemProviderErrorCode, toFileSystemProviderErrorCode, type IFileService } from '../../files/common/files.js';
+import { FileSystemProviderErrorCode, toFileSystemProviderErrorCode, type IFileContent, type IFileService } from '../../files/common/files.js';
 import type { IExtUri } from '../../../base/common/resources.js';
 import type { URI } from '../../../base/common/uri.js';
 
@@ -111,6 +111,7 @@ export class UserSettings extends Disposable {
 		extUri: IExtUri,
 		private readonly fileService: IFileService,
 		private readonly logService: ILogService,
+		private readonly prepareContent?: (file: IFileContent) => Promise<string>,
 	) {
 		super();
 		this.parser = new ConfigurationModelParser(resource.toString(), logService);
@@ -142,15 +143,26 @@ export class UserSettings extends Disposable {
 	private async load(): Promise<ConfigurationModel> {
 		for (; ;) {
 			const generation = this.generation;
-			let content: string;
-			try { content = (await this.fileService.readFile(this.resource)).content; }
-			catch (error) {
-				if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound) throw error;
-				content = '{}';
+			let content = '{}';
+			try {
+				const file = await this.fileService.readFile(this.resource);
+				if (generation !== this.generation) {
+					continue;
+				}
+				content = this.prepareContent ? await this.prepareContent(file) : file.content;
+			} catch (error) {
+				if (generation !== this.generation) {
+					continue;
+				}
+				if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound) {
+					throw error;
+				}
+			}
+			if (generation !== this.generation) {
+				continue;
 			}
 			const parser = new ConfigurationModelParser(this.resource.toString(), this.logService);
 			parser.parse(content, this.parseOptions);
-			if (generation !== this.generation) continue;
 			if (parser.errors.length) throw new TypeError(`Settings JSONC is invalid: ${parser.errors[0]!.message}`);
 			this.assertNotDisposed();
 			this.parser = parser;

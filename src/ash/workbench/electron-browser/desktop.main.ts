@@ -37,7 +37,7 @@ import { IChatEditingService } from '../contrib/chat/common/editing/chatEditingS
 import { addDisposableListener } from '../../base/browser/dom.js';
 import { installBaseUiStyles } from '../../base/browser/ui/styles.js';
 import { Disposable, DisposableTracker, installDisposableTracker, toDisposable } from '../../base/common/lifecycle.js';
-import { timeout } from '../../base/common/async.js';
+import { DeferredPromise, timeout } from '../../base/common/async.js';
 import { CancellationError, onUnexpectedError } from '../../base/common/errors.js';
 import { URI } from '../../base/common/uri.js';
 import { Schemas } from '../../base/common/network.js';
@@ -224,6 +224,8 @@ export class DesktopMain extends Disposable {
 			const playwrightService = profileServices.get(IPlaywrightService);
 			let lifecycleService!: ElectronLifecycleService;
 			let desktopWindow!: ElectronWindow;
+			const startupFileRequestsReady = new DeferredPromise<void>();
+			this._register(toDisposable(() => { void startupFileRequestsReady.complete(); }));
 			let restorePalette: ((query: string) => void) | undefined;
 			let applyFolder!: (folder: URI) => Promise<void>;
 			let query: string | undefined;
@@ -325,6 +327,7 @@ export class DesktopMain extends Disposable {
 					this._register(toDisposable(() => errors.dispose()));
 					return desktopWindow = services.createInstance(ElectronWindow, { invoke, subscribe });
 				},
+				startupFileRequestsReady: startupFileRequestsReady.p,
 				createUserDataFileSystemProvider: async () => new FileUserDataProvider(local.localFiles, (await local.paths)[0]),
 				keyboardLayoutProvider: local.keyboardLayout,
 				userKeyboardLayoutApi: local.userKeyboardLayout,
@@ -361,7 +364,7 @@ export class DesktopMain extends Disposable {
 			await lifecycleService.initialize();
 			api.startWorkspaceDirectories();
 			performance.mark('ash.desktop.lifecycle-ready');
-			await desktopWindow.initialize(workbench.whenRestored);
+			await desktopWindow.initialize(workbench.whenRestored).finally(() => startupFileRequestsReady.complete());
 			await workbench.whenRestored;
 			// Directory permissions and editor backups are owned by the connected Workbench.
 			openFolder = applyFolder;

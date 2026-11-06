@@ -55,6 +55,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::sync::Weak;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -89,7 +90,7 @@ enum AttemptState {
 pub(crate) struct GitHubAuthenticationRuntime {
     executable: PathBuf,
     configurations: Vec<GitHubBrowserConfig>,
-    supervisor: ExtensionHostSupervisor,
+    supervisor: OnceLock<ExtensionHostSupervisor>,
     policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
     lifecycle: Mutex<()>,
     allowed_http: Arc<Mutex<BTreeSet<String>>>,
@@ -109,6 +110,33 @@ impl GitHubAuthenticationRuntime {
         policy: Arc<ash_core_plugins::EditorExtensionPolicy>,
     ) -> Result<Arc<Self>, LoginError> {
         let executable = std::fs::canonicalize(executable).map_err(|_| unavailable())?;
+        let mut urls = BTreeSet::from(["https://api.github.com/user".into()]);
+        for config in &configurations {
+            urls.insert(format!("https://{}/api/v3/user", config.host));
+            urls.insert(
+                config
+                    .broker_base_url
+                    .join("v1/oauth/github/token")
+                    .map_err(|_| unavailable())?
+                    .to_string(),
+            );
+        }
+        Ok(Arc::new(Self {
+            executable,
+            configurations,
+            supervisor: OnceLock::new(),
+            policy,
+            lifecycle: Mutex::new(()),
+            allowed_http: Arc::new(Mutex::new(urls)),
+            http,
+            secrets,
+            subscribers: Mutex::new(Vec::new()),
+            next_login: AtomicU64::new(1),
+            attempts: Arc::new(Mutex::new(BTreeMap::new())),
+        }))
+    }
+    fn create_supervisor(&self) -> Result<ExtensionHostSupervisor, LoginError> {
+        let executable = &self.executable;
         let launcher = Arc::new(
             ProductExecutableLauncher::new(executable.clone()).map_err(|_| unavailable())?,
         );
@@ -121,13 +149,13 @@ impl GitHubAuthenticationRuntime {
         .map_err(|_| unavailable())?
         .with_extension_environment(BTreeMap::from([(
             "ASH_GITHUB_BROWSER_CONFIG".into(),
-            Some(serde_json::to_string(&configurations).map_err(|_| unavailable())?),
+            Some(serde_json::to_string(&self.configurations).map_err(|_| unavailable())?),
         )]))
         .map_err(|_| unavailable())?;
         let binding = PackageBinding {
             package_id: EXTENSION_ID.into(),
             // Product executables are admitted by their installation, never by a profile manifest.
-            package_digest: executable_digest(&executable).map_err(|_| unavailable())?,
+            package_digest: executable_digest(executable).map_err(|_| unavailable())?,
             entrypoint: "ash-github-authentication".into(),
         };
         let activation = ExtensionActivationSpec::new(
@@ -140,9 +168,9 @@ impl GitHubAuthenticationRuntime {
                 capabilities: vec![ExtensionCapability::DataChannel],
             },
             NonZeroU64::new(1).expect("activation generation"),
-            Arc::new(ProductAuthority(Arc::clone(&policy))),
+            Arc::new(ProductAuthority(Arc::clone(&self.policy))),
         );
-        let supervisor = ExtensionHostSupervisor::new(
+        ExtensionHostSupervisor::new(
             launcher,
             command,
             activation,
@@ -152,61 +180,43 @@ impl GitHubAuthenticationRuntime {
             },
             RestartPolicy::default(),
         )
-        .map_err(|_| unavailable())?;
-        let mut urls = BTreeSet::from(["https://api.github.com/user".into()]);
-        for config in &configurations {
-            urls.insert(format!("https://{}/api/v3/user", config.host));
-            urls.insert(
-                config
-                    .broker_base_url
-                    .join("v1/oauth/github/token")
-                    .map_err(|_| unavailable())?
-                    .to_string(),
-            );
-        }
-        let allowed_http = Arc::new(Mutex::new(urls));
-        let runtime = Arc::new(Self {
-            executable,
-            configurations,
-            supervisor,
-            policy,
-            lifecycle: Mutex::new(()),
-            allowed_http,
-            http,
-            secrets,
-            subscribers: Mutex::new(Vec::new()),
-            next_login: AtomicU64::new(1),
-            attempts: Arc::new(Mutex::new(BTreeMap::new())),
-        });
-        // Composition registers the shared profile owner; the first account or credential
-        // request starts it through call(), including account restoration at startup.
-        Ok(runtime)
+        .map_err(|_| unavailable())
     }
-    fn start(&self) -> Result<(), ash_external_ext::ExtensionHostError> {
-        let _lifecycle = self
-            .lifecycle
-            .lock()
-            .map_err(|_| ash_external_ext::ExtensionHostError::HostExited)?;
+    fn start(&self) -> Result<&ExtensionHostSupervisor, LoginError> {
+        let _lifecycle = self.lifecycle.lock().map_err(|_| unavailable())?;
+        if !self.policy.is_extension_enabled(EXTENSION_ID) {
+            return Err(unavailable());
+        }
+        // Account and credential requests share one supervisor, including across directories.
+        let supervisor = match self.supervisor.get() {
+            Some(supervisor) => supervisor,
+            None => {
+                let supervisor = self.create_supervisor()?;
+                self.supervisor.get_or_init(|| supervisor)
+            }
+        };
         let allowed = self.allowed_http.clone();
         let background_http = self.http.clone();
         let background_secrets = self.secrets.clone();
-        self.supervisor.start_with_client(
-            None,
-            Some(Arc::new(move |_, operation, cancellation, _| {
-                let ExtensionClientOperation::CoreService { request } = operation else {
-                    return Err(denied());
-                };
-                let response = service(
-                    request,
-                    &allowed,
-                    background_http.as_ref(),
-                    background_secrets.as_ref(),
-                    cancellation,
-                )?;
-                Ok(ExtensionClientResult::CoreService { response })
-            })),
-        )?;
-        Ok(())
+        supervisor
+            .start_with_client(
+                None,
+                Some(Arc::new(move |_, operation, cancellation, _| {
+                    let ExtensionClientOperation::CoreService { request } = operation else {
+                        return Err(denied());
+                    };
+                    let response = service(
+                        request,
+                        &allowed,
+                        background_http.as_ref(),
+                        background_secrets.as_ref(),
+                        cancellation,
+                    )?;
+                    Ok(ExtensionClientResult::CoreService { response })
+                })),
+            )
+            .map_err(|_| unavailable())?;
+        Ok(supervisor)
     }
     pub(crate) fn matches(
         &self,
@@ -221,17 +231,13 @@ impl GitHubAuthenticationRuntime {
         request: GitHubAuthenticationRequest,
         cancellation: Option<&CancellationToken>,
     ) -> Result<GitHubAuthenticationResponse, LoginError> {
-        if !self.policy.is_extension_enabled(EXTENSION_ID) {
-            return Err(unavailable());
-        }
-        self.start().map_err(|_| unavailable())?;
+        let supervisor = self.start()?;
         let deadline = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| unavailable())?
             .as_millis() as u64
             + 30_000;
-        let handle = self
-            .supervisor
+        let handle = supervisor
             .begin_invoke(ExtensionInvocation {
                 registration_id: CHANNEL_ID.into(),
                 operation: "receiveData".into(),
@@ -318,7 +324,9 @@ impl ash_external_ext::BuiltInExtensionRuntime for GitHubAuthenticationRuntime {
         EXTENSION_ID
     }
     fn is_running(&self) -> bool {
-        self.supervisor.is_running()
+        self.supervisor
+            .get()
+            .is_some_and(ExtensionHostSupervisor::is_running)
     }
     fn reconcile_enablement(&self) -> Result<(), ash_external_ext::ExtensionHostError> {
         if !self.policy.is_extension_enabled(EXTENSION_ID) {
@@ -334,7 +342,9 @@ impl ash_external_ext::BuiltInExtensionRuntime for GitHubAuthenticationRuntime {
             {
                 *state = AttemptState::Disabled;
             }
-            self.supervisor.shutdown()?;
+            if let Some(supervisor) = self.supervisor.get() {
+                supervisor.shutdown()?;
+            }
         }
         self.publish_accounts();
         Ok(())
@@ -342,7 +352,9 @@ impl ash_external_ext::BuiltInExtensionRuntime for GitHubAuthenticationRuntime {
 }
 impl Drop for GitHubAuthenticationRuntime {
     fn drop(&mut self) {
-        let _ = self.supervisor.shutdown();
+        if let Some(supervisor) = self.supervisor.get() {
+            let _ = supervisor.shutdown();
+        }
     }
 }
 
@@ -421,7 +433,13 @@ impl InteractiveLoginDriver for GitHubAuthenticationProvider {
             .insert(remote_id.clone(), AttemptState::Active);
         let attempts = self.runtime.attempts.clone();
         let active = self.active.clone();
-        let expected_incarnation = self.runtime.supervisor.snapshot().incarnation;
+        let supervisor = self
+            .runtime
+            .supervisor
+            .get()
+            .expect("successful login started a supervisor")
+            .clone();
+        let expected_incarnation = supervisor.snapshot().incarnation;
         let runtime = Arc::downgrade(&self.runtime);
         let service = self
             .service
@@ -476,7 +494,7 @@ impl InteractiveLoginDriver for GitHubAuthenticationProvider {
                     };
                     let completion = runtime
                         .authentication(AuthenticationRequest::PollCompletion(remote_id.clone()));
-                    if runtime.supervisor.snapshot().incarnation != expected_incarnation {
+                    if supervisor.snapshot().incarnation != expected_incarnation {
                         fail_login(
                             &service,
                             completion_id.clone(),

@@ -60,7 +60,7 @@ import { EditorPanes, type IEditorPaneDescriptor, type IEditorPaneRegistry } fro
 import type { IBulkEditService } from '../../../../editor/browser/services/bulkEditService.js';
 import type { ILanguageDiagnosticsService } from '../../../services/language/common/languageDiagnosticsService.js';
 import { EditorInputSerializers, type EditorInputSerializerRegistry, UnknownEditorInputSerializerError } from '../../../services/editor/common/editorInputSerializer.js';
-import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetLayout, EditorWorkingSetTarget } from '../../../services/editor/common/editorWorkingSet.js';
+import type { ApplyEditorWorkingSetOptions, EditorGroupWorkingSet, EditorWorkingSet, EditorWorkingSetLayout, EditorWorkingSetTarget } from '../../../services/editor/common/editorWorkingSet.js';
 import { parseEditorWorkingSet, isEditorGroupId } from '../../../services/editor/common/editorWorkingSet.js';
 import { ModalEditorPart, type ModalEditorPartOptions } from './modalEditorPart.js';
 import type { EditorGroupChangeEvent, EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState, IEditorStateSource } from '../../../services/editor/common/editorState.js';
@@ -1286,23 +1286,17 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 	async applyWorkingSet(workingSet: EditorWorkingSetTarget, options: ApplyEditorWorkingSetOptions = {}): Promise<void> {
 		const target = workingSet === 'empty' ? emptyWorkingSet() : parseEditorWorkingSet(workingSet, Math.max(...this._groups.map(host => host.group.id)));
 		this.restoreMaximizedGroup();
-		const restoredGroups = target.groups.map(group => {
-			const restored = group.editors.flatMap((editor, index) => {
-				try { return [{ editor, index, input: this._activeGroup.resolveEditorInput(this.inputSerializers.deserialize(editor.input), { preferredEditorId: editor.paneId }) }]; }
-				catch (error) {
-					if (error instanceof UnknownEditorInputSerializerError) { return []; }
-					throw error;
-				}
-			});
-			return {
-				...group,
-				editors: restored.map(entry => entry.editor),
-				inputs: restored.map(entry => entry.input),
-				activeEditorIndex: restored.length === 0 ? -1 : Math.max(0, restored.findIndex(entry => entry.index === group.activeEditorIndex)),
-			};
+		const startup = options.startup;
+		const resolveEditors = (group: EditorGroupWorkingSet) => group.editors.flatMap((editor, index) => {
+			try { return [{ editor, index, input: this._activeGroup.resolveEditorInput(this.inputSerializers.deserialize(editor.input), { preferredEditorId: editor.paneId }) }]; }
+			catch (error) {
+				if (error instanceof UnknownEditorInputSerializerError) { return []; }
+				throw error;
+			}
 		});
+		const restoredGroups = target.groups.map(group => ({ ...group, resolved: startup ? undefined : resolveEditors(group) }));
 		const savedActiveGroup = restoredGroups[target.activeGroupIndex]!;
-		const groups = options.excludeEmptyGroups ? restoredGroups.filter(group => group.inputs.length > 0) : restoredGroups;
+		const groups = options.excludeEmptyGroups ? restoredGroups.filter(group => (group.resolved?.length ?? group.editors.length) > 0) : restoredGroups;
 		if (groups.length === 0) {
 			groups.push(savedActiveGroup);
 		}
@@ -1325,26 +1319,71 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 			for (const input of [...group.inputs]) await group.closeEditor(input, { reason: 'reset', skipConfirmation: true });
 		}
 		this.changeGrid(() => this.rebuildGroups(groups, layout, activeGroupIndex, retained, retainedLayout));
-		for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
-			const state = groups[groupIndex]!;
-			const group = this._groups[retained.length + groupIndex]!.group;
-			for (let inputIndex = 0; inputIndex < state.inputs.length; inputIndex += 1) {
-				const input = state.inputs[inputIndex]!;
-				await group.openEditor(input, {
-					index: inputIndex,
-					pinned: !state.editors[inputIndex]!.preview,
-					preferredEditorId: state.editors[inputIndex]!.paneId,
-					preserveFocus: true,
-				});
-				group.restoreEditorViewState(input, state.editors[inputIndex]!.viewState);
-				if (state.editors[inputIndex]!.sticky) group.stickEditor(input);
+		const destinations = groups.map((state, index) => ({ state, group: this._groups[retained.length + index]!.group }));
+		if (startup) {
+			for (const { state, group } of destinations) {
+				group.setLocked(state.locked === true);
 			}
-			const activeInput = state.inputs[state.activeEditorIndex];
-			if (activeInput) group.activateEditor(activeInput);
-			group.setLocked(state.locked === true);
+			await startup.beforeEditors((pane, input) => {
+				const destination = destinations.find(({ group }) => group === pane.group);
+				if (!destination || !isEditorPaneWithViewState(pane)) return;
+				for (const saved of destination.state.editors) {
+					if (saved.paneId !== pane.id || saved.viewState?.typeId !== pane.viewStateTypeId) continue;
+					try {
+						const savedInput = this.inputSerializers.deserialize(saved.input);
+						if (this.isSameEditor(savedInput, input)) {
+							pane.restoreViewState(saved.viewState.value);
+							break;
+						}
+					} catch (error) {
+						if (!(error instanceof UnknownEditorInputSerializerError)) throw error;
+					}
+				}
+			});
+			if (this.isDisposed) return;
 		}
-		const activeGroup = this._groups[retained.length + activeGroupIndex]!;
-		this.setActiveGroup(activeGroup.group);
+		for (const { state, group } of destinations) {
+			const entries = state.resolved ?? resolveEditors(state);
+			for (const [index, { editor, input }] of entries.entries()) {
+				for (; ;) {
+					if (startup) {
+						await startup.waitForOpen();
+						if (this.groupHosts.get(group.id)?.group !== group) break;
+						const resource = this.uriIdentity.asCanonicalUri(input.resource).toString();
+						const opened = startup.ownsResource(resource) && group.inputs.find(candidate => this.uriIdentity.extUri.isEqual(candidate.resource, input.resource));
+						if (opened) {
+							if (editor.sticky && this.isSameEditor(input, opened)) group.stickEditor(opened);
+							break;
+						}
+					}
+					try {
+						await group.openEditor(input, {
+							index,
+							pinned: !editor.preview || (startup?.hasOpened() === true && group === this._activeGroup),
+							preferredEditorId: editor.paneId,
+							preserveFocus: true,
+							inactive: startup !== undefined,
+						});
+					} catch (error) {
+						if (startup && error instanceof EditorOpenSupersededError) continue;
+						throw error;
+					}
+					if (!startup?.ownsResource(this.uriIdentity.asCanonicalUri(input.resource).toString())) {
+						group.restoreEditorViewState(input, editor.viewState);
+					}
+					if (editor.sticky) group.stickEditor(input);
+					break;
+				}
+			}
+			if (this.groupHosts.get(group.id)?.group !== group) continue;
+			const activeInput = (entries.find(entry => entry.index === state.activeEditorIndex) ?? entries[0])?.input;
+			if (activeInput && !(startup?.hasOpened() && group === this._activeGroup) && group.inputs.some(input => this.isSameEditor(input, activeInput))) {
+				group.activateEditor(activeInput);
+			}
+			if (!startup) group.setLocked(state.locked === true);
+		}
+		const activeGroup = destinations[activeGroupIndex]!.group;
+		if (!startup?.hasOpened() && this.groupHosts.get(activeGroup.id)?.group === activeGroup) this.setActiveGroup(activeGroup);
 		this.layoutEditorContent();
 		if (!options.preserveFocus && hadEditorFocus) this._activeGroup.focus();
 	}

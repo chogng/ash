@@ -37,7 +37,7 @@ import { Schemas } from '../../base/common/network.js';
 import { getMediaMime, getMediaOrTextMime } from '../../base/common/mime.js';
 import { extname } from '../../base/common/path.js';
 import { CODE_EDITOR_ID } from '../common/editor/codeEditorId.js';
-import { isResourceDiffEditorInput } from '../common/editor.js';
+import { isEditorPaneWithSelection, isResourceDiffEditorInput, type IResourceEditorInput } from '../common/editor.js';
 import { associatedEditorId, EditorAssociationsConfiguration } from './parts/editor/editorConfiguration.js';
 import type { IFileSystemProvider } from '../../platform/files/common/files.js';
 import { IUserDataProfileService } from '../services/userDataProfile/common/userDataProfile.js';
@@ -90,7 +90,7 @@ import {
 	MutableDisposable,
 	toDisposable,
 } from '../../base/common/lifecycle.js';
-import { CancellationError, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
+import { CancellationError, getErrorMessage, isCancellationError, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
 import { DeferredPromise, raceCancellationError } from '../../base/common/async.js';
 import { assertDefined } from '../../base/common/types.js';
 import { URI } from '../../base/common/uri.js';
@@ -160,6 +160,7 @@ import { IQuickInputService } from '../../platform/quickinput/common/quickInput.
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import { ISystemFileTransferService } from '../../platform/files/common/systemFileTransferService.js';
 import {
+	FileNotFoundError,
 	IFileService,
 } from '../../platform/files/common/files.js';
 import { DecorationsService } from '../services/decorations/browser/decorationsService.js';
@@ -214,7 +215,7 @@ import { BrowserContentSearchService, FileContentSearchService } from '../../pla
 import type { Part } from './part.js';
 import { AuxiliaryBarPart } from './parts/auxiliarybar/auxiliaryBarPart.js';
 import { EditorContextKeyController } from './parts/editor/editorContextKeys.js';
-import { EditorPart, IEditorPart, type IEditorPartOptions } from './parts/editor/editorPart.js';
+import { EditorOpenSupersededError, EditorPart, IEditorPart, type IEditorPartOptions } from './parts/editor/editorPart.js';
 import { BreadcrumbsFilePicker, BreadcrumbsSymbolPicker } from './parts/editor/breadcrumbsPicker.js';
 import { BreadcrumbsService, IBreadcrumbsService } from './parts/editor/breadcrumbs.js';
 import { EditorParts, IEditorPartsService } from './parts/editor/editorParts.js';
@@ -314,7 +315,10 @@ import { LanguageDiagnosticsMarkerBridge } from '../services/language/browser/la
 import { IOutputService } from '../services/output/common/output.js';
 import { IWorkbenchHostService } from '../services/host/common/workbenchHostService.js';
 import { BrowserEditorService } from '../services/editor/browser/browserEditorService.js';
-import { IEditorService } from '../services/editor/common/editorService.js';
+import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from '../services/editor/common/editorService.js';
+import type { StartupEditorRestoration, StartupEditorViewState } from '../services/editor/common/editorWorkingSet.js';
+import { IUriIdentityService } from '../../platform/uriIdentity/common/uriIdentity.js';
+import { TextEditorSelectionSource } from '../../platform/editor/common/editor.js';
 import { IEditorGroupsService, type IEditorGroupsContainer } from '../services/editor/common/editorGroupsService.js';
 import { installWorkbenchServiceContributions } from './workbenchServiceContributions.js';
 import { setHoverDelegate } from '../../base/browser/ui/hover/hoverDelegate.js';
@@ -377,6 +381,8 @@ export interface IStartWorkbenchOptions {
 	readonly createLifecycleService: (services: IInstantiationService) => ILifecycleService & IDisposable;
 	readonly createURLService: (services: InstantiationService) => IURLService & IDisposable;
 	readonly createWindow?: (services: IInstantiationService) => IDisposable;
+	/** Settles once the host has delivered its queued launch requests. */
+	readonly startupFileRequestsReady?: Promise<void>;
 	readonly createStorageService: (options: BrowserStorageServiceOptions) => Promise<IStorageService & IDisposable & { switchWorkspace(workspaceId: string): void | Promise<void>; }>;
 	readonly createLogService: () => LogService;
 	readonly initialConfiguration?: IConfigurationModel;
@@ -423,6 +429,7 @@ export async function startWorkbench({
 	createLifecycleService,
 	createURLService,
 	createWindow,
+	startupFileRequestsReady,
 	createStorageService,
 	createLogService,
 	initialConfiguration,
@@ -538,6 +545,7 @@ export async function startWorkbench({
 			contributionIds,
 			viewConstructors,
 			connection.workspaceDirectoriesReady,
+			startupFileRequestsReady,
 		);
 	} catch (error) {
 		void startupThemePreferences.complete([]);
@@ -632,6 +640,7 @@ export class Workbench extends Disposable {
 		contributionIds?: readonly string[],
 		viewConstructors?: IStartWorkbenchOptions['viewConstructors'],
 		workspaceDirectoriesReady = Promise.resolve(),
+		startupFileRequestsReady = Promise.resolve(),
 	) {
 		super();
 		performance.mark('ash.workbench.constructor-start');
@@ -1278,7 +1287,7 @@ export class Workbench extends Disposable {
 			if (extensionService.hasExecutableEditorDeclarations) await Promise.allSettled(serviceContributionReady);
 		}).catch(() => { /* Declarative startup already reports the failure. */ })
 			.finally(() => { editorProvidersPending = false; });
-		const editorService = this._register(new BrowserEditorService(editorParts, editorRestoration.p, (input, options) => {
+		const prepareUserOpen = (input: IResourceEditorInput, options: EditorOpenOptions): string | Promise<void> | undefined => {
 			if (!editorProvidersPending) return undefined;
 			const preferred = options.preferredEditorId ?? input.editorId;
 			if (preferred === CODE_EDITOR_ID) return undefined;
@@ -1292,7 +1301,110 @@ export class Workbench extends Disposable {
 				return CODE_EDITOR_ID;
 			}
 			return editorProvidersReady;
-		}));
+		};
+		const targetLayoutReady = new DeferredPromise<void>();
+		this._register(toDisposable(() => { void targetLayoutReady.complete(); }));
+		const ownedStartupResources = new Set<string>();
+		let openedStartupEditor = false;
+		let startupOpen = Promise.resolve();
+		let restoreTargetState: StartupEditorViewState | undefined;
+		const uriIdentity = services.get(IUriIdentityService);
+		const openStartupEditor = (input: IResourceEditorInput, options: EditorOpenOptions, target?: EditorOpenTarget): Promise<boolean> => {
+			if (editorRestoration.isSettled || options.inactive || target === 'modalGroup' || isResourceDiffEditorInput(input)
+				|| (input.resource.scheme !== Schemas.file && input.resource.scheme !== Schemas.ashRemote)) {
+				return Promise.resolve(false);
+			}
+			const opening = startupOpen.then(async () => {
+				await targetLayoutReady.p;
+				if (this.isDisposed || workspaceContext.getWorkspace().id !== workspace.id) throw new CancellationError();
+				if (editorRestoration.isSettled) return false;
+				const openingWorkspace = workspaceContext.getWorkspace();
+				const resource = await uriIdentity.resolveCanonicalUri(input.resource);
+				const key = resource.toString();
+				const owned = ownedStartupResources.has(key);
+				let backup: WorkingCopyBackup | undefined;
+				ownedStartupResources.add(key);
+				try {
+					if (!owned) backup = await workingCopyBackups.resolve(resource);
+				} catch (error) {
+					if (!owned) ownedStartupResources.delete(key);
+					if (isCancellationError(error)) throw error;
+					logService.error('workingCopy', 'Could not resolve the startup file backup', error);
+					return false;
+				}
+				try {
+					const request = backup ? {
+						...(input.toUntyped?.() ?? input),
+						languageId: input.languageId ?? backup.languageId,
+						contentType: input.contentType ?? backup.contentType,
+					} : input;
+					const preferred = prepareUserOpen(request, options);
+					if (typeof preferred === 'string') options = { ...options, preferredEditorId: preferred };
+					else if (preferred) await preferred;
+					if (this.isDisposed || workspaceContext.getWorkspace() !== openingWorkspace) throw new CancellationError();
+					const openOptions = backup ? { ...options, ignoreError: true } : options;
+					let pane;
+					try {
+						pane = await editorParts.openEditor(request, openOptions, target);
+					} catch (error) {
+						if (!backup || !(error instanceof FileNotFoundError)) throw error;
+						pane = await editorParts.openEditor({ ...request, initialText: '' }, openOptions, target);
+					}
+					if (backup) {
+						const copy = pane.workingCopy;
+						if (!copy || copy.backupKind !== backup.kind) {
+							if (!owned) ownedStartupResources.delete(key);
+							return false;
+						}
+						if (!copy.isDirty) copy.restoreBackup(backup.content);
+					}
+					if (!owned) restoreTargetState?.(pane, pane.group?.activeInput ?? request);
+					if (options.selection) {
+						if (isEditorPaneWithSelection(pane)) pane.restoreSelection(options.selection, options.selectionSource ?? TextEditorSelectionSource.NAVIGATION);
+						else pane.revealRange?.(options.selection);
+					}
+					openedStartupEditor = true;
+					performance.mark('ash.workbench.startup-target-ready');
+					return true;
+				} catch (error) {
+					if (!owned) ownedStartupResources.delete(key);
+					throw error;
+				}
+			});
+			startupOpen = opening.then(() => undefined, () => undefined);
+			return opening;
+		};
+		let backgroundStart: Promise<void> | undefined;
+		const startupEditors: StartupEditorRestoration = {
+			waitForOpen: async () => {
+				for (; ;) {
+					const pending = startupOpen;
+					await pending;
+					if (pending === startupOpen) return;
+				}
+			},
+			beforeEditors: restore => backgroundStart ??= (async () => {
+				restoreTargetState = restore;
+				void targetLayoutReady.complete();
+				await Promise.allSettled([startupFileRequestsReady]);
+				await startupEditors.waitForOpen();
+				if (!openedStartupEditor || this.isDisposed) return;
+				using idle = new DisposableStore();
+				this._register(idle);
+				await new Promise<void>(resolve => {
+					idle.add(toDisposable(resolve));
+					idle.add(runWhenWindowIdle(this.ownerWindow, () => resolve(), 100));
+				});
+				this._store.delete(idle);
+			})(),
+			hasOpened: () => openedStartupEditor,
+			ownsResource: key => ownedStartupResources.has(key),
+		};
+		const editorService = this._register(new BrowserEditorService(editorParts, editorRestoration.p, prepareUserOpen, openStartupEditor));
+		void editorRestoration.p.then(() => {
+			ownedStartupResources.clear();
+			restoreTargetState = undefined;
+		});
 		services.registerInstance(IEditorService, editorService);
 		services.registerInstance(IEditorGroupsService, editorService);
 		// Document hosts resolve Chat editing signals and IDE context from the window's accessibility and editor services.
@@ -1460,7 +1572,7 @@ export class Workbench extends Disposable {
 		});
 		// A maximized view owns editor visibility and must finish its layout first.
 		const editorLayoutReady = shellReady.then(restoresMaximizedLayout => restoresMaximizedLayout ? paneRestoration : undefined);
-		this.whenRestored = this.completeStartupRestoration([keybindingsReady, workspaceConfigurationReady, editorLayoutReady], paneRestoration, workingCopyBackups, editor, editorParts, editorProvidersReady, editorRestoration, contributions, saveFontInfo);
+		this.whenRestored = this.completeStartupRestoration([keybindingsReady, workspaceConfigurationReady, editorLayoutReady], paneRestoration, workingCopyBackups, editor, editorParts, editorProvidersReady, editorRestoration, contributions, saveFontInfo, startupEditors, ownedStartupResources);
 		if (createWindow) {
 			this._register(createWindow(services));
 		}
@@ -1496,17 +1608,18 @@ export class Workbench extends Disposable {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async completeStartupRestoration(editorPrerequisites: readonly Promise<void>[], paneRestoration: Promise<void>, backups: IWorkingCopyBackupService, editor: IEditorPart, editorParts: IEditorPartsService, otherEditorsReady: Promise<void>, editorRestoration: DeferredPromise<void>, contributions: WorkbenchContributionHost, saveFontInfo: () => void): Promise<void> {
+	private async completeStartupRestoration(editorPrerequisites: readonly Promise<void>[], paneRestoration: Promise<void>, backups: IWorkingCopyBackupService, editor: IEditorPart, editorParts: IEditorPartsService, otherEditorsReady: Promise<void>, editorRestoration: DeferredPromise<void>, contributions: WorkbenchContributionHost, saveFontInfo: () => void, startup: StartupEditorRestoration, ownedResources: ReadonlySet<string>): Promise<void> {
 		const panesSettled = Promise.allSettled([paneRestoration]);
 		try {
 			await Promise.allSettled(editorPrerequisites);
 			if (this.isDisposed) return;
-			await this.restoreEditorParts(editorParts, otherEditorsReady);
+			await this.restoreEditorParts(editorParts, otherEditorsReady, startup);
 			if (this.isDisposed) return;
-			await this.restoreWorkingCopyBackups(backups, editor, otherEditorsReady);
+			await startup.beforeEditors();
+			await this.restoreWorkingCopyBackups(backups, editor, otherEditorsReady, startup, ownedResources);
+			await startup.waitForOpen();
 			performance.mark('ash.workbench.editor-ready');
 		} finally {
-			// A click in the already-visible Explorer must survive both editor and backup recovery.
 			void editorRestoration.complete();
 		}
 		await panesSettled;
@@ -1519,17 +1632,17 @@ export class Workbench extends Disposable {
 		this.logService.trace('lifecycle', 'Workbench restored');
 	}
 
-	private async restoreEditorParts(editorParts: IEditorPartsService, otherEditorsReady?: Promise<void>): Promise<void> {
+	private async restoreEditorParts(editorParts: IEditorPartsService, otherEditorsReady?: Promise<void>, startup?: StartupEditorRestoration): Promise<void> {
 		try {
-			await editorParts.restoreSavedState(this.workbenchLayout.shouldRestoreEditors(), otherEditorsReady);
+			await editorParts.restoreSavedState(this.workbenchLayout.shouldRestoreEditors(), otherEditorsReady, startup);
 		} catch (error) {
 			this.logService.error('editor', 'Failed to restore saved editor parts', error);
 		}
 	}
 
-	private async restoreWorkingCopyBackups(backups: IWorkingCopyBackupService, editor: IEditorPart, otherEditorsReady?: Promise<void>): Promise<void> {
+	private async restoreWorkingCopyBackups(backups: IWorkingCopyBackupService, editor: IEditorPart, otherEditorsReady?: Promise<void>, startup?: StartupEditorRestoration, ownedResources?: ReadonlySet<string>): Promise<void> {
 		let pending: readonly WorkingCopyBackup[];
-		try { pending = await backups.list(); }
+		try { pending = await backups.list(ownedResources); }
 		catch (error) { this.logService.error('workingCopy', 'Failed to list working-copy backups', error); return; }
 		if (otherEditorsReady && pending.some(backup => !this.untitledTextEditorService.isUntitled(backup.resource))) {
 			await otherEditorsReady;
@@ -1541,30 +1654,42 @@ export class Workbench extends Disposable {
 			}
 		}
 		for (const backup of pending) {
-			try {
-				// Session restoration already chose the editor and window. Recover its
-				// document in place instead of opening another default text view.
-				const restored = this.workingCopies.get(backup.resource).find(copy => copy.backupKind === backup.kind);
-				if (restored) {
-					restored.restoreBackup(backup.content);
-					continue;
-				}
-				let pane;
-				const untitled = backup.kind === 'text' ? this.untitledTextEditorService.get(backup.resource) : undefined;
-				if (untitled) {
-					pane = await editor.openEditor(new UntitledTextEditorInput(untitled));
-				} else {
-					try {
-						pane = await editor.openEditor({ resource: backup.resource, ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });
-					} catch {
-						pane = await editor.openEditor({ resource: backup.resource, initialText: '', ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) });
+			if (startup) await startup.waitForOpen();
+			if (this.isDisposed || ownedResources?.has(backup.resource.toString())) continue;
+			for (; ;) {
+				try {
+					// Session restoration already chose the editor and window. Recover its
+					// document in place instead of opening another default text view.
+					const restored = this.workingCopies.get(backup.resource).find(copy => copy.backupKind === backup.kind);
+					if (restored) {
+						if (!restored.isDirty) restored.restoreBackup(backup.content);
+						break;
 					}
+					const options: EditorOpenOptions = startup?.hasOpened() ? { inactive: true, preserveFocus: true, pinned: true } : {};
+					let pane;
+					const untitled = backup.kind === 'text' ? this.untitledTextEditorService.get(backup.resource) : undefined;
+					if (untitled) {
+						pane = await editor.openEditor(new UntitledTextEditorInput(untitled), options);
+					} else {
+						try {
+							pane = await editor.openEditor({ resource: backup.resource, ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) }, options);
+						} catch (error) {
+							if (isCancellationError(error)) throw error;
+							pane = await editor.openEditor({ resource: backup.resource, initialText: '', ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) }, options);
+						}
+					}
+					const workingCopy = pane.workingCopy;
+					if (!workingCopy || workingCopy.backupKind !== backup.kind) throw new Error(`Restored editor does not support ${backup.kind} backups`);
+					if (!workingCopy.isDirty && !ownedResources?.has(backup.resource.toString())) workingCopy.restoreBackup(backup.content);
+				} catch (error) {
+					if (startup && error instanceof EditorOpenSupersededError) {
+						await startup.waitForOpen();
+						if (!this.isDisposed && !ownedResources?.has(backup.resource.toString())) continue;
+						break;
+					}
+					this.logService.error('workingCopy', `Failed to restore working-copy backup '${backup.resource.toString()}'`, error);
 				}
-				const workingCopy = pane.workingCopy;
-				if (!workingCopy || workingCopy.backupKind !== backup.kind) throw new Error(`Restored editor does not support ${backup.kind} backups`);
-				workingCopy.restoreBackup(backup.content);
-			} catch (error) {
-				this.logService.error('workingCopy', `Failed to restore working-copy backup '${backup.resource.toString()}'`, error);
+				break;
 			}
 		}
 	}

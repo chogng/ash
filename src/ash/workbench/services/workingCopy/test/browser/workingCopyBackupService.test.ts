@@ -36,6 +36,26 @@ test('startup reads durable backups once when there are no legacy drafts', async
 	assert.deepEqual(list.mock.calls.map(call => call.arguments), [['startup']]);
 });
 
+test('startup resolves one resource and bulk recovery cannot adopt a newer revision for it', async () => {
+	using services = new InstantiationService();
+	using context = new TestWorkspaceService({ id: 'startup' });
+	const backend = new VersionedBackups();
+	const workspace = { id: 'startup', folders: [] };
+	const target = URI.file('/workspace/target.txt');
+	const other = URI.file('/workspace/other.txt');
+	const content = (resource: URI, text: string) => ({ resource, format: 'ash.working-copy.v1', content: JSON.stringify({ kind: 'text', content: text }) });
+	const old = await backend.store(workspace, content(target, 'first draft'));
+	await backend.store(workspace, content(other, 'other draft'));
+	const list = mock.method(backend, 'list');
+	using backups = assemble(services, backend, context);
+	assert.equal((await backups.resolve(target))?.content, 'first draft');
+	assert.equal(list.mock.callCount(), 0);
+	await backend.store(workspace, content(target, 'other window draft'), old.revision);
+	assert.deepEqual((await backups.list(new Set([target.toString()]))).map(backup => backup.content), ['other draft']);
+	await assert.rejects(backups.store({ resource: target, kind: 'text', content: 'my input', updatedAt: 1 }), error => error instanceof BackupError && error.code === 'conflict');
+	assert.equal((await backend.read('startup', target))?.content.content, content(target, 'other window draft').content);
+});
+
 test('startup migrates legacy drafts and keeps a conflicting durable draft', async () => {
 	using services = new InstantiationService();
 	using context = new TestWorkspaceService({ id: 'startup-migration' });
@@ -255,6 +275,7 @@ class VersionedBackups implements IBackupService {
 	private readonly workspaces = new Map<string, IBackupWorkspace>();
 	async getWorkspaces(): Promise<readonly IBackupWorkspace[]> { return [...this.workspaces.values()]; }
 	async list(id: string): Promise<readonly IBackupRecord[]> { return [...this.records.entries()].filter(([key]) => key.startsWith(`${id}\0`)).map(([, record]) => record); }
+	async read(id: string, resource: URI): Promise<IBackupRecord | undefined> { return this.records.get(`${id}\0${resource.toString()}`); }
 	async store(workspace: IBackupWorkspace, content: IBackupContent, expectedRevision?: string): Promise<IBackupRecord> {
 		const key = `${workspace.id}\0${content.resource.toString()}`;
 		const current = this.records.get(key);

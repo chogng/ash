@@ -216,7 +216,7 @@ impl<M: Clone + Eq, E: Clone + Eq + std::fmt::Debug> Observed<M, E> {
         cancellation: &CancellationToken,
     ) {
         self.check_external(sources, remote_due);
-        let Ok(state) = sources.login.refresh() else {
+        let Ok(state) = sources.login.refresh_providers(&sources.connections) else {
             log::warn!("Subscription account observation failed");
             return;
         };

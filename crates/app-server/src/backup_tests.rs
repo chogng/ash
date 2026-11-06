@@ -42,6 +42,20 @@ fn backup_rpc_preserves_content_across_connections_and_profile_restart() {
         json!({"jsonrpc":"2.0", "id":3, "method":"backup/list", "params":{"clientId":"editor", "workspaceId":"empty"}}),
     );
     assert_eq!(list["result"]["backups"], json!([write["result"]]));
+    for (resource, workspace, expected) in [
+        ("untitled:/note", "empty", write["result"].clone()),
+        ("untitled:/other", "empty", serde_json::Value::Null),
+        ("untitled:/note", "other", serde_json::Value::Null),
+    ] {
+        let response = call(
+            &restarted,
+            &mut connection,
+            json!({"jsonrpc":"2.0", "id":8, "method":"backup/read", "params":{
+                "clientId":"editor", "workspaceId":workspace, "resource":resource,
+            }}),
+        );
+        assert_eq!(response["result"]["backup"], expected, "{response}");
+    }
     let workspaces = call(
         &restarted,
         &mut connection,
@@ -66,6 +80,14 @@ fn backup_rpc_rejects_untrusted_readers_invalid_uris_and_stale_deletes() {
         &server,
         &mut untrusted,
         json!({"jsonrpc":"2.0", "id":2, "method":"backup/list", "params":{"clientId":"editor", "workspaceId":"empty"}}),
+    );
+    assert_eq!(denied["error"]["data"]["kind"], "PermissionRequired");
+    let denied = call(
+        &server,
+        &mut untrusted,
+        json!({"jsonrpc":"2.0", "id":8, "method":"backup/read", "params":{
+            "clientId":"editor", "workspaceId":"empty", "resource":"untitled:/note",
+        }}),
     );
     assert_eq!(denied["error"]["data"]["kind"], "PermissionRequired");
     let mut trusted = server.product_host_connection();

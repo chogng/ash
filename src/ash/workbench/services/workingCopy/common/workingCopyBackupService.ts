@@ -15,7 +15,9 @@ export interface WorkingCopyBackup {
 
 /** Durable, workspace-scoped crash backups for dirty working copies. */
 export interface IWorkingCopyBackupService extends IDisposable {
-	list(): Promise<readonly WorkingCopyBackup[]>;
+	/** The caller can exclude resources already being recovered by an editor. */
+	list(exclude?: ReadonlySet<string>): Promise<readonly WorkingCopyBackup[]>;
+	resolve(resource: URI): Promise<WorkingCopyBackup | undefined>;
 	store(backup: WorkingCopyBackup): Promise<void>;
 	delete(resource: URI): Promise<void>;
 	/** Desktop entry copies recovery durably before retiring the old scope. Producers must be paused. */
@@ -36,7 +38,13 @@ export class InMemoryWorkingCopyBackupService extends Disposable implements IWor
 		if (!backups) this.workspaces.set(this.workspaceId, backups = new Map());
 		return backups;
 	}
-	async list(): Promise<readonly WorkingCopyBackup[]> { return [...this.backups.values()].map(backup => ({ ...backup })); }
+	async list(exclude?: ReadonlySet<string>): Promise<readonly WorkingCopyBackup[]> {
+		return [...this.backups.values()].filter(backup => !exclude?.has(backup.resource.toString())).map(backup => ({ ...backup }));
+	}
+	async resolve(resource: URI): Promise<WorkingCopyBackup | undefined> {
+		const backup = this.backups.get(resource.toString());
+		return backup && { ...backup };
+	}
 	async store(backup: WorkingCopyBackup): Promise<void> { this.backups.set(backup.resource.toString(), { ...backup }); }
 	async delete(resource: URI): Promise<void> { this.backups.delete(resource.toString()); }
 	switchWorkspace(workspaceId: string): void { this.assertNotDisposed(); this.workspaceId = workspaceId; }

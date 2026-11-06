@@ -10,6 +10,8 @@ use ash_app_server_protocol::protocol::backup::BackupListParams;
 use ash_app_server_protocol::protocol::backup::BackupListResult;
 use ash_app_server_protocol::protocol::backup::BackupMoveParams;
 use ash_app_server_protocol::protocol::backup::BackupMoveResult;
+use ash_app_server_protocol::protocol::backup::BackupReadParams;
+use ash_app_server_protocol::protocol::backup::BackupReadResult;
 use ash_app_server_protocol::protocol::backup::BackupRecordDto;
 use ash_app_server_protocol::protocol::backup::BackupRevisionDto;
 use ash_app_server_protocol::protocol::backup::BackupWorkspaceDto;
@@ -105,6 +107,23 @@ impl BackupRequestProcessor {
         result(&BackupListPageResult {
             backups: page.backups.into_iter().map(record).collect(),
             next_resource: page.next_resource,
+        })
+    }
+
+    pub(super) fn read(
+        &self,
+        authority: ConnectionAuthority,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: BackupReadParams = decode(params)?;
+        let store = self.store(authority)?;
+        url::Url::parse(&params.resource)
+            .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+        let backup = store
+            .read(&params.client_id, &params.workspace_id, &params.resource)
+            .map_err(backup_error)?;
+        result(&BackupReadResult {
+            backup: backup.map(record),
         })
     }
 

@@ -3199,6 +3199,58 @@ test('a file requested during startup opens after recovery and takes precedence 
 	dom.window.close();
 });
 
+test('startup restores saved tabs around an explicit open without replacing its pane or stealing focus', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const registry = new EditorPaneRegistry();
+	const delayedTab = input('C:/project/delayed.ts');
+	const requested = input('C:/project/requested.ts');
+	const savedTabStarted = new DeferredPromise<void>();
+	const releaseSavedTab = new DeferredPromise<void>();
+	let delaySavedTab = false;
+	using registration = registry.registerEditorPane(descriptor('ash.test.startup', '.ts', ({ input: candidate }) => {
+		const pane = new TestViewStateEditorPane('ash.test.startup');
+		if (delaySavedTab && candidate?.resource.toString() === delayedTab.resource.toString()) {
+			delaySavedTab = false;
+			pane.inputPromise = releaseSavedTab.p;
+			void savedTabStarted.complete();
+		}
+		return pane;
+	}));
+	using editor = createEditorPart(dom.window.document.body, { registry });
+	try {
+		await editor.openEditor(delayedTab);
+		const oldTarget = await editor.openEditor(requested) as TestViewStateEditorPane;
+		oldTarget.viewState = { caret: 7 };
+		const saved = editor.saveWorkingSet('startup');
+		await editor.closeAllEditors();
+		delaySavedTab = true;
+		let opened = false;
+		const restoration = editor.applyWorkingSet(saved, {
+			preserveFocus: true,
+			startup: {
+				beforeEditors: async () => { },
+				waitForOpen: async () => { },
+				hasOpened: () => opened,
+				ownsResource: resource => opened && resource === requested.resource.toString(),
+			},
+		});
+		await savedTabStarted.p;
+		const target = await editor.openEditor(requested);
+		editor.focus();
+		opened = true;
+		await releaseSavedTab.complete();
+		await restoration;
+		assert.equal(editor.activePane, target);
+		assert.deepEqual(editor.activeGroup.inputs.map(input => input.resource.toString()), [delayedTab.resource.toString(), requested.resource.toString()]);
+		assert.equal((target as TestViewStateEditorPane).focusCount, 1);
+		assert.equal((target as TestViewStateEditorPane).restoredViewState, undefined);
+	} finally {
+		void releaseSavedTab.complete();
+		editor.dispose();
+		dom.window.close();
+	}
+});
+
 test('working-set restoration retains excluded live groups and hidden pane state', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const panes: TestEditorPane[] = [];

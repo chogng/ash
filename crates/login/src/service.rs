@@ -172,7 +172,17 @@ impl LoginService {
                 format!("metadata refresher for '{provider}' is unavailable"),
             )
         })?;
-        let state = self.read_or_refresh()?;
+        let initialized = self
+            .state
+            .lock()
+            .map_err(lock_error)?
+            .initialized_providers
+            .contains(provider);
+        let state = if initialized {
+            self.read()?
+        } else {
+            self.refresh_providers(&[provider])?
+        };
         if !state.accounts.iter().any(|account| {
             account.account.provider == provider
                 && account.account.account_id == account_id
@@ -184,7 +194,7 @@ impl LoginService {
             ));
         }
         refresher.refresh_account(account_id, cancellation)?;
-        self.refresh()
+        self.refresh_providers(&[provider])
     }
 
     pub fn install_events(&self, events: Arc<dyn LoginEvents>) -> Result<(), LoginError> {
@@ -359,6 +369,18 @@ impl LoginService {
     }
 
     pub fn refresh(&self) -> Result<AccountState, LoginError> {
+        self.refresh_matching(|_| true)
+    }
+
+    /// Updates the canonical projection for the requested providers only.
+    pub fn refresh_providers(&self, providers: &[&str]) -> Result<AccountState, LoginError> {
+        self.refresh_matching(|provider| providers.contains(&provider))
+    }
+
+    fn refresh_matching(
+        &self,
+        includes: impl Fn(&str) -> bool,
+    ) -> Result<AccountState, LoginError> {
         let revisions = self
             .state
             .lock()
@@ -367,6 +389,9 @@ impl LoginService {
             .clone();
         let mut observed = Vec::with_capacity(self.drivers.len());
         for (provider, driver) in &self.drivers {
+            if !includes(provider) {
+                continue;
+            }
             let account = driver.read_accounts().and_then(|accounts| {
                 validate_catalog(provider, &accounts)?;
                 Ok(accounts)

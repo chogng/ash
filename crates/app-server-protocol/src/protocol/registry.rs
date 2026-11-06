@@ -135,6 +135,10 @@ use crate::protocol::backup::BackupMoveParams;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::backup::BackupMoveResult;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupReadParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::backup::BackupReadResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::backup::BackupRecordDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::backup::BackupRevisionDto;
@@ -5109,6 +5113,7 @@ client_methods! {
     BackupWorkspaces => "backup/workspaces" { params: BackupWorkspacesParams, response: BackupWorkspacesResult, serialization: None, },
     BackupList => "backup/list" { params: BackupListParams, response: BackupListResult, serialization: None, },
     BackupListPage => "backup/listPage" { params: BackupListPageParams, response: BackupListPageResult, serialization: None, },
+    BackupRead => "backup/read" { params: BackupReadParams, response: BackupReadResult, serialization: None, },
     BackupWrite => "backup/write" { params: BackupWriteParams, response: BackupRecordDto, serialization: None, },
     BackupMove => "backup/move" { params: BackupMoveParams, response: BackupMoveResult, serialization: None, },
     BackupDiscard => "backup/discard" { params: BackupDiscardParams, response: (), serialization: None, },
@@ -6518,6 +6523,8 @@ typescript_bindings! {
     BackupListParams,
     BackupListPageParams,
     BackupListPageResult,
+    BackupReadParams,
+    BackupReadResult,
     BackupListResult,
     BackupRecordDto,
     BackupWorkspaceDto,

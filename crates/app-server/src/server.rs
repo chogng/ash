@@ -4440,6 +4440,9 @@ impl AppServer {
             Some(ClientMethod::BackupListPage) => self
                 .backup_processor
                 .list_page(connection.authority, &request.params),
+            Some(ClientMethod::BackupRead) => self
+                .backup_processor
+                .read(connection.authority, &request.params),
             Some(ClientMethod::BackupWrite) => self
                 .backup_processor
                 .write(connection.authority, &request.params),

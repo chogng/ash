@@ -125,12 +125,13 @@ ignore override 语义。对应的 `/cancel` 响应只确认取消请求，原�
 
 ## 未保存内容备份
 
-`backup/workspaces`、`backup/listPage`、`backup/list`、`backup/write`、`backup/move` 和 `backup/discard` 仅接受产品 host 连接。
+`backup/workspaces`、`backup/read`、`backup/listPage`、`backup/list`、`backup/write`、`backup/move` 和 `backup/discard` 仅接受产品 host 连接。
 Rust 在 profile 的 SQLite 中原子保存工作区重开信息和正文，连接关闭不删除记录。
 `clientId` 是稳定的客户端恢复命名空间，与 connection/window ID 无关；它用于隔离内容格式，并非权限凭证。
 资源使用完整 URI，`format` 和 UTF-8 `content` 由客户端解释。正文最多 8 MiB，工作区最多 256 个目录。
 
-恢复客户端使用 `backup/listPage`，首个请求的 `afterResource` 为 `null`，后续使用返回的
+恢复单个资源时，`backup/read` 按客户端、工作区和完整 URI 查找，找不到时返回 `backup: null`。
+枚举恢复记录使用 `backup/listPage`，首个请求的 `afterResource` 为 `null`，后续使用返回的
 `nextResource`，直到其为 `null`。页面按资源 URI 排序，原始内容与记录开销总量最多 8 MiB，
 单份达到上限的备份仍完整返回；JSON 转义后的页面也能通过传输限制。查询读取当前记录，
 并发新增且排在已读取游标之前的资源要在下一次恢复查询中读取。旧 `backup/list` 保留原结果格式与排序；

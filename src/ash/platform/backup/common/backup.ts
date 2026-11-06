@@ -39,6 +39,7 @@ export interface IBackupService {
 	/** Atomically moves observed records; either scope conflicting aborts the whole transaction. */
 	move(sourceWorkspaceId: string, target: IBackupWorkspace, backups: readonly IBackupRevision[]): Promise<readonly IBackupRevision[]>;
 	list(workspaceId: string): Promise<readonly IBackupRecord[]>;
+	read(workspaceId: string, resource: URI): Promise<IBackupRecord | undefined>;
 	/** Resolves after durable commit. Undefined creates a record; updates require the last observed revision. */
 	store(workspace: IBackupWorkspace, content: IBackupContent, expectedRevision?: string): Promise<IBackupRecord>;
 	discard(workspaceId: string, resource: URI, expectedRevision: string): Promise<void>;

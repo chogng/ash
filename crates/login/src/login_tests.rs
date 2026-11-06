@@ -218,17 +218,31 @@ fn browser_login_completion_updates_redacted_state_and_emits_events() {
 fn remote_metadata_refresh_updates_only_the_current_account() {
     let driver = Arc::new(FakeDriver::default());
     *driver.account.lock().unwrap() = Some(account());
+    let kimi = Arc::new(FakeKimiDriver::default());
+    let mut kimi_account = account();
+    kimi_account.account.provider = "kimi-subscription".into();
+    *kimi.account.lock().unwrap() = Some(kimi_account);
     let refresher = Arc::new(FakeMetadataRefresher {
         driver: driver.clone(),
         calls: AtomicUsize::new(0),
     });
-    let service = LoginService::new(driver)
-        .unwrap()
-        .with_account_metadata_refreshers([refresher.clone() as Arc<dyn AccountMetadataRefresher>])
-        .unwrap();
+    let service = LoginService::deferred_with_drivers([
+        driver as Arc<dyn InteractiveLoginDriver>,
+        kimi as Arc<dyn InteractiveLoginDriver>,
+    ])
+    .unwrap()
+    .with_account_metadata_refreshers([refresher.clone() as Arc<dyn AccountMetadataRefresher>])
+    .unwrap();
     assert!(service.has_account_metadata_refresher("chatgpt-subscription"));
     assert!(!service.has_account_metadata_refresher("kimi-subscription"));
     let events = Arc::new(RecordedEvents::default());
+    assert_eq!(
+        service
+            .refresh_providers(&["chatgpt-subscription"])
+            .unwrap()
+            .accounts,
+        vec![account()]
+    );
     service.install_events(events.clone()).unwrap();
     let cancellation = ash_async_utils::CancellationSource::new();
 
@@ -250,8 +264,10 @@ fn remote_metadata_refresh_updates_only_the_current_account() {
         )
         .unwrap();
     assert_eq!(refresher.calls.load(Ordering::Relaxed), 1);
+    assert_eq!(state.accounts.len(), 1);
     assert_eq!(state.accounts[0].plan.as_deref(), Some("pro"));
     assert_eq!(events.accounts.lock().unwrap().as_slice(), &[state]);
+    assert_eq!(service.refresh().unwrap().accounts.len(), 2);
 }
 
 #[test]

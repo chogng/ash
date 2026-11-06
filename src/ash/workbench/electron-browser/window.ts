@@ -75,7 +75,7 @@ export class ElectronWindow extends Disposable {
 		try {
 			for (const file of request.files) {
 				const selection = file.line === undefined ? undefined : new Range(file.line, file.column ?? 1, file.line, file.column ?? 1);
-				// Explicit launch files use the same backup-restoration barrier as Explorer opens.
+				// Explicit launch files and Explorer opens share the target recovery path.
 				await this.editors.openEditor({ resource: URI.parse(file.uri) }, { pinned: true, selection, ignoreError: true, source: EditorOpenSource.USER });
 			}
 			if (request.wait) {

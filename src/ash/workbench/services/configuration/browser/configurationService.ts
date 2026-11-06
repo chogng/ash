@@ -14,7 +14,7 @@ import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, typ
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { ILogService, NullLoggerService } from '../../../../platform/log/common/log.js';
 import { WorkbenchState, workbenchStateFromWorkspace, workspaceFromIdentifier, type IAnyWorkspaceIdentifier, type IWorkspace, type IWorkspaceChangeEvent, type IWorkspaceFoldersChangeEvent, type IWorkspaceContextService, type IWorkspaceFolder } from '../../../../platform/workspace/common/workspace.js';
-import { IFileService, FileSystemProviderErrorCode, toFileSystemProviderErrorCode } from '../../../../platform/files/common/files.js';
+import { IFileService, FileSystemProviderErrorCode, toFileSystemProviderErrorCode, type IFileContent } from '../../../../platform/files/common/files.js';
 import { IUserDataProfileService } from '../../userDataProfile/common/userDataProfile.js';
 import { dirname } from '../../../../base/common/resources.js';
 import { NullPolicyService, type IPolicyService } from '../../../../platform/policy/common/policy.js';
@@ -87,7 +87,9 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 		this.workspace = resolveWorkspace(options.workspace ?? { id: 'empty-window' });
 		this.workspaceFolders = indexWorkspaceFolders(this.workspace);
 		this.settingsResource = profile.currentProfile.settingsResource;
-		this.userSettings = this._register(new UserSettings(this.settingsResource, {}, extUriBiasedIgnorePathCase, userFiles, log));
+		this.userSettings = this._register(new UserSettings(
+			this.settingsResource, {}, extUriBiasedIgnorePathCase, userFiles, log, file => this.migrateUserSettings(file),
+		));
 		this.registry = options.registry ?? Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 		this.defaults = options.defaults ?? new Map();
 		this.readOnlyKeys = options.readOnlyKeys ?? new Set();
@@ -103,7 +105,13 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 			this.changeEmitter.fire(configurationChangeEvent({ keys: [...event.properties], overrides: [] }, previous, this.state(), ConfigurationTarget.DEFAULT));
 		}));
 		this._register(this.userSettings.onDidChange(() => {
-			void this.reloadUserConfiguration().catch(error => { if (!this.stopped) this.onError(error); });
+			try {
+				this.applyConfiguration(this.userSettings.reparse());
+			} catch (error) {
+				if (!this.stopped) {
+					this.onError(error);
+				}
+			}
 		}));
 	}
 
@@ -342,21 +350,22 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	}
 
 	private async reloadUserConfiguration(): Promise<void> {
-		if (this.stopped) return;
-		try {
-			const file = await this.userFiles.readFile(this.settingsResource);
-			const output = await migrateSettings(file.content, this.onError);
-			if (this.stopped) return;
-			if (output !== file.content) {
-				if (this.workingCopies?.get(this.settingsResource).some(copy => copy.isDirty)) throw new Error(localize('configuration.dirtyResource', 'Save or revert unsaved changes in {0} before updating settings.', this.settingsResource.toString()));
-				this.parseResourceSource(output);
-				await this.userFiles.writeFile({ resource: this.settingsResource, content: output, expectedRevision: file.revision }, { create: true, overwrite: true });
-			}
-		} catch (error) {
-			if (toFileSystemProviderErrorCode(error as Error) !== FileSystemProviderErrorCode.FileNotFound) throw error;
+		if (!this.stopped) {
+			this.applyConfiguration(await this.userSettings.loadConfiguration());
 		}
-		if (this.stopped) return;
-		this.applyConfiguration(await this.userSettings.loadConfiguration());
+	}
+
+	private async migrateUserSettings(file: IFileContent): Promise<string> {
+		const output = await migrateSettings(file.content, this.onError);
+		if (this.stopped || output === file.content) {
+			return file.content;
+		}
+		if (this.workingCopies?.get(this.settingsResource).some(copy => copy.isDirty)) {
+			throw new Error(localize('configuration.dirtyResource', 'Save or revert unsaved changes in {0} before updating settings.', this.settingsResource.toString()));
+		}
+		this.parseResourceSource(output);
+		await this.userFiles.writeFile({ resource: this.settingsResource, content: output, expectedRevision: file.revision }, { create: true, overwrite: true });
+		return output;
 	}
 
 	private async waitForWorkspace(): Promise<void> {

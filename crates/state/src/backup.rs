@@ -143,6 +143,20 @@ impl SqliteBackupStore {
         Ok(backups)
     }
 
+    /// Reads one resource within the caller's recovery namespace.
+    pub fn read(
+        &self,
+        client_id: &str,
+        workspace_id: &str,
+        resource: &str,
+    ) -> Result<Option<BackupRecord>, BackupError> {
+        validate_id(client_id)?;
+        validate_id(workspace_id)?;
+        validate_id(resource)?;
+        let connection = self.connection.lock().map_err(storage_error)?;
+        lookup_record(&connection, client_id, workspace_id, resource)
+    }
+
     pub fn list_page(
         &self,
         client_id: &str,
@@ -225,15 +239,7 @@ impl SqliteBackupStore {
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .map_err(storage_error)?;
-        let current = transaction
-            .query_row(
-                "SELECT resource, format, content, revision, updated_at FROM backup_contents
-            WHERE client_id = ?1 AND workspace_id = ?2 AND resource = ?3",
-                params![client_id, workspace.id, content.resource],
-                read_record,
-            )
-            .optional()
-            .map_err(storage_error)?;
+        let current = lookup_record(&transaction, client_id, &workspace.id, &content.resource)?;
         // A lost write response can be reconciled without overwriting different recovery content.
         if let Some(current) = &current
             && current.content == *content
@@ -413,6 +419,23 @@ fn validate_id(value: &str) -> Result<(), BackupError> {
         return Err(BackupError::Invalid);
     }
     Ok(())
+}
+
+fn lookup_record(
+    connection: &Connection,
+    client_id: &str,
+    workspace_id: &str,
+    resource: &str,
+) -> Result<Option<BackupRecord>, BackupError> {
+    connection
+        .query_row(
+            "SELECT resource, format, content, revision, updated_at FROM backup_contents
+            WHERE client_id = ?1 AND workspace_id = ?2 AND resource = ?3",
+            params![client_id, workspace_id, resource],
+            read_record,
+        )
+        .optional()
+        .map_err(storage_error)
 }
 
 fn read_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<BackupRecord> {

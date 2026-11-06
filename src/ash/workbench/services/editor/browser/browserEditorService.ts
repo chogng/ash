@@ -37,6 +37,7 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 		private readonly editorPart: IEditorPart,
 		private readonly startupRestoration?: Promise<void>,
 		private readonly prepareUserOpen?: (input: IResourceEditorInput, options: EditorOpenOptions) => string | Promise<void> | undefined,
+		private readonly openStartupEditor?: (input: IResourceEditorInput, options: EditorOpenOptions, target?: EditorOpenTarget) => Promise<boolean>,
 	) {
 		super();
 		this.activeEditorSignature = this.getActiveEditorSignature();
@@ -116,6 +117,10 @@ export class BrowserEditorService extends Disposable implements IEditorService, 
 		this.pendingOpens++;
 		try {
 			if (options?.source === EditorOpenSource.USER && this.startupRestoration) {
+				if (await this.openStartupEditor?.(input, options, target)) {
+					if (!this.isDisposed && options.preserveFocus !== true) this.editorPart.focus();
+					return;
+				}
 				await this.startupRestoration;
 				if (this.isDisposed) return;
 				const editor = this.prepareUserOpen?.(input, options);

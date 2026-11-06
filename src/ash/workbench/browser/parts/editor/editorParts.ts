@@ -14,7 +14,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { type IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import type { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import type { EditorOpenOptions, EditorOpenTarget } from '../../../services/editor/common/editorService.js';
-import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget } from '../../../services/editor/common/editorWorkingSet.js';
+import type { ApplyEditorWorkingSetOptions, EditorWorkingSet, EditorWorkingSetTarget, StartupEditorRestoration } from '../../../services/editor/common/editorWorkingSet.js';
 import type { EditorGroupId, EditorIdentifier, EditorPartChangeEvent, EditorPartState } from '../../../services/editor/common/editorState.js';
 import { localize } from '../../../../nls.js';
 import { EditorCloseEmptyGroupsConfiguration } from '../../../services/editor/common/editorConfiguration.js';
@@ -50,7 +50,7 @@ export interface IEditorPartsService extends IEditorPart {
 	replaceEditorResource(source: IEditorGroupView, input: IResourceEditorInput, replacement: IResourceEditorInput): Promise<void>;
 	savePartsState(): EditorPartsState;
 	restorePartsState(state: EditorPartsState): Promise<void>;
-	restoreSavedState(shouldRestore: boolean, otherEditorsReady?: Promise<void>): Promise<void>;
+	restoreSavedState(shouldRestore: boolean, otherEditorsReady?: Promise<void>, startup?: StartupEditorRestoration): Promise<void>;
 	pauseStatePersistence(): IDisposable;
 }
 
@@ -141,7 +141,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return part.groups.filter(group => group.inputs.length === 0 && (hasEditors || group !== part.activeGroup));
 	}
 
-	async restoreSavedState(shouldRestore: boolean, otherEditorsReady?: Promise<void>): Promise<void> {
+	async restoreSavedState(shouldRestore: boolean, otherEditorsReady?: Promise<void>, startup?: StartupEditorRestoration): Promise<void> {
 		try {
 			if (!shouldRestore) return;
 			const saved = this.storage.get(EditorParts.stateStorageKey, StorageScope.WORKSPACE);
@@ -149,10 +149,15 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 				try {
 					const state: EditorPartsState = JSON.parse(saved);
 					if (otherEditorsReady && state.parts.some(part => part.groups.some(group => group.editors.some(editor => editor.paneId !== CODE_EDITOR_ID)))) {
-						await otherEditorsReady;
-						if (this.isDisposed) return;
+						if (startup) {
+							const beforeEditors = startup.beforeEditors;
+							startup = { ...startup, beforeEditors: async restoreTargetState => { await beforeEditors(restoreTargetState); await otherEditorsReady; } };
+						} else {
+							await otherEditorsReady;
+							if (this.isDisposed) return;
+						}
 					}
-					await this.restorePartsState(state);
+					await this.restorePartsState(state, startup);
 				} catch (error) {
 					this.storage.remove(EditorParts.stateStorageKey, StorageScope.WORKSPACE);
 					throw error;
@@ -168,21 +173,34 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		return toDisposable(() => { this.statePersistencePauses--; });
 	}
 
-	async restorePartsState(state: EditorPartsState): Promise<void> {
+	async restorePartsState(state: EditorPartsState, startup?: StartupEditorRestoration): Promise<void> {
 		if (state?.version !== 1 || !Array.isArray(state.parts) || state.parts.length === 0 || !Number.isInteger(state.active) || state.active < 0 || state.active >= state.parts.length) {
 			throw new TypeError('Invalid saved editor parts state');
 		}
 		if (state.windows !== undefined && (!Array.isArray(state.windows) || state.windows.length !== state.parts.length || state.windows.some(window => window !== null && !parseAuxiliaryWindowState(JSON.stringify(window))))) throw new TypeError('Invalid saved auxiliary windows');
 		const options: ApplyEditorWorkingSetOptions = { preserveFocus: true, excludeEmptyGroups: this.configurationService.getValue<boolean>(EditorCloseEmptyGroupsConfiguration) !== false };
-		await this.mainPart.applyWorkingSet(state.parts[0]!, options);
+		if (!startup) await this.mainPart.applyWorkingSet(state.parts[0]!, options);
+		const restoredParts = [this.mainPart];
 		for (const [index, workingSet] of state.parts.slice(1).entries()) {
 			const savedWindow = state.windows?.[index + 1];
 			const windowOptions = savedWindow == null ? undefined : parseAuxiliaryWindowState(JSON.stringify(savedWindow));
 			if (savedWindow != null && !windowOptions) throw new TypeError('Invalid saved auxiliary window state');
 			const part = await this.createAuxiliaryEditorPart(windowOptions);
-			await part.applyWorkingSet(workingSet, options);
+			restoredParts.push(part);
+			if (!startup) await part.applyWorkingSet(workingSet, options);
 		}
-		this.setActivePart([this.mainPart, ...this.auxiliary.keys()][state.active]!);
+		if (startup) {
+			// Native windows can activate when created. Finish creating them before
+			// the primary editor accepts input, then load their saved tabs later.
+			this.setActivePart(this.mainPart);
+			await this.mainPart.applyWorkingSet(state.parts[0]!, { ...options, startup });
+			for (const [index, part] of restoredParts.slice(1).entries()) {
+				if (this.isDisposed) return;
+				if (this.auxiliary.has(part)) await part.applyWorkingSet(state.parts[index + 1]!, options);
+			}
+		}
+		const savedPart = restoredParts[state.active]!;
+		if (!startup?.hasOpened() && this.parts.includes(savedPart)) this.setActivePart(savedPart);
 	}
 
 	async createAuxiliaryEditorPart(options?: AuxiliaryWindowOpenOptions): Promise<IEditorPart> {

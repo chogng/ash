@@ -36,13 +36,13 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 		this._register(toDisposable(() => { void this.database.then(database => database?.close()).catch(() => undefined); }));
 	}
 
-	async list(): Promise<readonly WorkingCopyBackup[]> {
+	async list(exclude?: ReadonlySet<string>): Promise<readonly WorkingCopyBackup[]> {
 		const workspaceId = this.workspaceId;
 		const database = await this.database;
 		const records = database
 			? await request<StoredBackup[]>(database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).index('workspaceId').getAll(workspaceId))
 			: [...this.fallback.values()].filter(record => record.workspaceId === workspaceId);
-		const result = deserialize(records);
+		const result = deserialize(records.filter(record => !exclude?.has(record.resource)));
 		const byResource = new Map(records.map(record => [record.resource, record]));
 		for (const backup of result) {
 			const record = byResource.get(backup.resource.toString())!;
@@ -50,6 +50,24 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 			this.snapshots.set(backup, record);
 		}
 		return result;
+	}
+
+	async resolve(resource: URI): Promise<WorkingCopyBackup | undefined> {
+		const workspaceId = this.workspaceId;
+		const key = backupKey(workspaceId, resource);
+		const database = await this.database;
+		const record = database
+			? await request<StoredBackup | undefined>(database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(key))
+			: this.fallback.get(key);
+		if (!record) {
+			return undefined;
+		}
+		const [backup] = deserialize([record]);
+		if (backup && workspaceId === this.workspaceId && !this.isDisposed) {
+			this.observed.set(key, record);
+			this.snapshots.set(backup, record);
+		}
+		return backup;
 	}
 
 	async store(backup: WorkingCopyBackup): Promise<void> {
