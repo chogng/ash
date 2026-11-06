@@ -11,6 +11,7 @@ import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { constObservable } from '../../../../../../base/common/observable.js';
 import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../../platform/extensions/common/extensionHostApi.js';
 import { createDisconnectedExtensionHostApi } from '../../../../../../platform/extensions/browser/extensionHostApi.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
@@ -22,7 +23,7 @@ import { IOpenerService } from '../../../../../../platform/opener/common/opener.
 import { IMarkdownRendererService, MarkdownRendererService } from '../../../../../../platform/markdown/browser/markdownRenderer.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { IHoverService } from '../../../../../../platform/hover/browser/hoverService.js';
-import { ILinkPresentationService } from '../../../../../../platform/dataChannel/common/dataChannel.js';
+import { ILinkPresentationService, type ILinkPresentationRule } from '../../../../../../platform/dataChannel/common/dataChannel.js';
 import { ChatMarkdownContentPart } from '../../../browser/widget/chatContentParts/chatMarkdownContentPart.js';
 import { ChatContentMarkdownRenderer } from '../../../browser/widget/chatContentMarkdownRenderer.js';
 
@@ -35,7 +36,11 @@ const snapshot = (): ExtensionHostFleetSnapshot => ({
 	}]
 });
 
-function services(overrides: Partial<IExtensionHostApi> = {}, opener: IOpenerService = { open: async () => true } as unknown as IOpenerService): InstantiationService {
+function services(
+	overrides: Partial<IExtensionHostApi> = {},
+	opener: IOpenerService = { open: async () => true } as unknown as IOpenerService,
+	linkPresentation?: { service: ILinkPresentationService; hover: Pick<IHoverService, 'setupHover'>; },
+): InstantiationService {
 	const instance = new InstantiationService(new ServiceCollection([IOpenerService, opener]));
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({ key: 'markdown.math.enabled', defaultValue: true, parse: value => Boolean(value) });
@@ -48,8 +53,8 @@ function services(overrides: Partial<IExtensionHostApi> = {}, opener: IOpenerSer
 		...overrides,
 	});
 	instance.registerInstance(IMarkdownRendererService, instance.createInstance(MarkdownRendererService));
-	instance.registerInstance(ILinkPresentationService, { onDidChangeLinkPresentationRules: Event.None, getLinkPresentationRule: () => undefined } as unknown as ILinkPresentationService);
-	instance.registerInstance(IHoverService, {} as IHoverService);
+	instance.registerInstance(ILinkPresentationService, linkPresentation?.service ?? { onDidChangeLinkPresentationRules: Event.None, linkPresentationRules: [] } as unknown as ILinkPresentationService);
+	instance.registerInstance(IHoverService, (linkPresentation?.hover ?? {}) as IHoverService);
 	return instance;
 }
 
@@ -209,6 +214,56 @@ suite('Shared chat Markdown rendering', () => {
 		part.dispose();
 		await frame();
 		assert.equal(updates, completed);
+	});
+
+	test('Markdown tail patches retain link watchers and retire removed anchors', async () => {
+		using rulesChanged = new Emitter<void>();
+		const rule: ILinkPresentationRule = { id: 'example', uriPattern: /^https:\/\/example\.com\//u, kind: 'resource' };
+		let enabled = true;
+		let opened = 0;
+		let closed = 0;
+		using scope = services({}, undefined, {
+			service: {
+				_serviceBrand: undefined,
+				onDidChangeLinkPresentationRules: rulesChanged.event,
+				get linkPresentationRules() { return enabled ? [rule] : []; },
+				registerLinkPresentationProvider: () => { throw new Error('Unexpected registration'); },
+				getLinkPresentationRule: resource => enabled && rule.uriPattern.test(resource.toString()) ? rule : undefined,
+				createLinkPresentationWatcher: (_providerId, resource) => {
+					opened++;
+					return Object.assign(toDisposable(() => closed++), { presentation: constObservable({ kind: 'resource' as const, title: resource.path }) });
+				},
+			},
+			hover: {
+				setupHover: () => Object.assign(toDisposable(() => { }), { visible: false, show() { }, hide() { }, update() { } }),
+			},
+		});
+		using part = scope.createInstance(ChatMarkdownContentPart, { ownerDocument: document });
+		const prefix = 'Read [first](https://example.com/stable) `code`. ' + 'Ordinary `code`. '.repeat(320);
+		const render = async (value: string, label: string) => {
+			part.tryIncrementalUpdate({ value }, true);
+			await changedUntil(part.domNode, () => part.domNode.querySelector('a:last-child')?.textContent === label);
+		};
+		const first = prefix + '[tail](https://example.com/tail)';
+		await render(first, '/tail');
+		const stable = part.domNode.querySelector('a');
+		assert.deepEqual([opened, closed], [2, 0]);
+		await render(first + ' [added](https://example.com/added)', '/added');
+		assert.equal(part.domNode.querySelector('a'), stable);
+		assert.deepEqual([opened, closed], [3, 0]);
+		await render(prefix + '[replaced](https://example.com/replaced)', '/replaced');
+		assert.equal(part.domNode.querySelector('a'), stable);
+		assert.deepEqual([opened, closed], [4, 2]);
+
+		enabled = false;
+		rulesChanged.fire();
+		assert.equal(stable?.textContent, 'first');
+		assert.equal(closed, opened);
+		enabled = true;
+		rulesChanged.fire();
+		assert.equal(stable?.textContent, '/stable');
+		part.dispose();
+		assert.equal(closed, opened);
 	});
 
 	test('large-tail reuse preserves canonical sanitization, escaped text and current link handlers', async () => {

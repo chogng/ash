@@ -709,6 +709,43 @@ suite('chatRenderer browser component', () => {
 		})).toBe(true);
 	});
 
+	test('streaming Markdown tables preserve the focused cell through appends and corrections', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const header = '| Name | Details |\n| :--- | ---: |\n';
+		const rows = '| Earlier | A stable row with **formatted content** |\n'.repeat(24);
+		const lastRow = '| [Keep focus](https://example.com) | ';
+		const render = async (source: string, complete = false) => {
+			const result = await page.evaluate(({ source, complete }) => window.ashChatTranscriptIntegration.compareStreamingMarkdown(source, complete, true), { source, complete });
+			assert.equal(result.actual, result.expected);
+			assert.ok(result.layoutError <= 1);
+		};
+		const prefix = header + rows + lastRow;
+		await render(prefix + 'Initial');
+		const table = page.getByRole('table');
+		const link = table.getByRole('link', { name: 'Keep focus' });
+		await link.focus();
+		const retained = (await link.elementHandle())!;
+		const originalTable = (await table.elementHandle())!;
+		try {
+			const appended = prefix + 'Initial **extension** |\n| Appended | New row |';
+			await render(appended);
+			assert.ok(await retained.evaluate(element => element === document.activeElement));
+			await expect(table.getByRole('row').last()).toContainText('Appended');
+
+			const corrected = prefix + '[Blocked](javascript:alert(1)) |\n| Appended | New row |';
+			await render(corrected);
+			assert.ok(await retained.evaluate(element => element === document.activeElement));
+			await expect(table.locator('a[href^="javascript:"]')).toHaveCount(0);
+
+			await render(corrected.replace('| :--- | ---: |', '| ---: | :--- |'), true);
+			assert.equal(await originalTable.evaluate(element => element.isConnected), false);
+		} finally {
+			await retained.dispose();
+			await originalTable.dispose();
+		}
+	});
+
 	test('accessible transcript follows streamed model text and restores the focused response', async () => {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html');

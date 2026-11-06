@@ -853,6 +853,38 @@ suite('chatTranscript browser component', () => {
 		}
 	});
 
+	test('streaming Markdown checkpoints retain stable children and reparse changed structure', async function () {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		for (const kind of ['hugeParagraph', 'largeList', 'largeTable'] as const) {
+			const result = await page.evaluate(async kind => {
+				const fixture = window.ashChatTranscriptIntegration;
+				const root = () => document.querySelector('[data-item-id="stream"] .ash-chat-markdown-part')!;
+				const prefix = fixture.markdownWorkload(kind).split('\n\n')[0];
+				const [selector, addition, structuralChange] = {
+					hugeParagraph: ['strong', ' New **tail**.', '\n---'],
+					largeList: ['li', '\n- New item.', '\n\n- Loose item.'],
+					largeTable: ['tbody tr', '\n| New | **cell** | Tail |', '\nA row | without | a leading pipe'],
+				}[kind];
+				fixture.remove();
+				await fixture.compareStreamingMarkdown(prefix, false);
+				const stable = root().querySelector(selector);
+				const appended = prefix + addition;
+				const afterAppend = await fixture.compareStreamingMarkdown(appended, false);
+				const retained = stable !== null && root().querySelector(selector) === stable;
+				const afterStructure = await fixture.compareStreamingMarkdown(appended + structuralChange, false);
+				const corrected = appended.replace(kind === 'hugeParagraph' ? 'Markdown' : kind === 'largeList' ? 'Item 0' : 'Row 0', 'Corrected');
+				const afterCorrection = await fixture.compareStreamingMarkdown(corrected, true);
+				return { retained, afterAppend, afterStructure, afterCorrection };
+			}, kind);
+			expect(result.retained, kind).toBe(true);
+			expect(result.afterAppend.actual, `${kind} append`).toBe(result.afterAppend.expected);
+			expect(result.afterStructure.actual, `${kind} structure change`).toBe(result.afterStructure.expected);
+			expect(result.afterCorrection.actual, `${kind} correction`).toBe(result.afterCorrection.expected);
+			expect(result.afterCorrection.actual).toContain('Corrected');
+		}
+	});
+
 	test('streaming Markdown fences, lists and corrections match a complete render at every boundary', async function () {
 		const { page } = browserTests;
 

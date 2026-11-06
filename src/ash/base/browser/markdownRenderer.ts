@@ -1,4 +1,4 @@
-import { Marked, type MarkedExtension, type MarkedOptions, type Token, type Tokens } from '../common/marked/marked.js';
+import { Marked, type MarkedExtension, type MarkedOptions, type Token, type Tokens, type TokensList } from '../common/marked/marked.js';
 import { addDisposableListener, getDocument, reset, h } from './dom.js';
 import {
 	basicMarkupHtmlTags,
@@ -427,10 +427,19 @@ function renderMarkdownWithParser(
 	const markdownValue = markdown.supportThemeIcons
 		? markdownEscapeEscapedIcons(markdown.value)
 		: markdown.value;
-	const value = fillIncompleteTokens
-		? completeIncompleteMarkdown(markdownValue, parserInstance.parser, parserOptions)
-		: markdownValue;
-	const result = parserInstance.parser.parse(value, parserOptions);
+	const parser = parserInstance.parser;
+	const completion = fillIncompleteTokens ? completeIncompleteMarkdown(markdownValue, parser, parserOptions) : undefined;
+	const tokens = completion?.tokens;
+	const defaults = parser.defaults;
+	let options: MarkedOptions = parserOptions;
+	// The completion lexer only sees the standard syntax and options. Reuse its
+	// tokens when the full parser would lex the same input with the same rules.
+	if (tokens && !defaults.hooks && !defaults.extensions && !defaults.tokenizer && !defaults.pedantic && !defaults.async) {
+		const hooks = new parser.Hooks();
+		hooks.provideLexer = () => () => tokens;
+		options = { ...parserOptions, hooks };
+	}
+	const result = parser.parse(completion?.value ?? markdownValue, options);
 	if (typeof result !== 'string') {
 		throw new Error('synchronous Markdown rendering returned a promise');
 	}
@@ -748,7 +757,7 @@ function alertHeading(severity: keyof typeof ALERT_ICON_IDS): string {
 	}
 }
 
-function completeIncompleteMarkdown(markdown: string, parser: Marked, parserOptions: Pick<MarkedOptions, 'breaks' | 'gfm'>): string {
+function completeIncompleteMarkdown(markdown: string, parser: Marked, parserOptions: Pick<MarkedOptions, 'breaks' | 'gfm'>): { value: string; tokens?: TokensList; } {
 	let value = markdown;
 	for (let attempt = 0; attempt < 3; attempt++) {
 		const tokens = parser.lexer(value, parserOptions);
@@ -759,14 +768,13 @@ function completeIncompleteMarkdown(markdown: string, parser: Marked, parserOpti
 		}
 		const token = lastContentToken(tokens);
 		const textToken = token ? trailingTextToken(token) : undefined;
-		if (!textToken) break;
-		const completion = completeInlineTail(textToken.raw);
-		if (!completion) break;
+		const completion = textToken && completeInlineTail(textToken.raw);
+		if (!textToken || !completion) return { value, tokens };
 		const offset = value.lastIndexOf(textToken.raw);
-		if (offset < 0 || value.slice(offset + textToken.raw.length).trim().length > 0) break;
+		if (offset < 0 || value.slice(offset + textToken.raw.length).trim().length > 0) return { value, tokens };
 		value = value.slice(0, offset + textToken.raw.length) + completion + value.slice(offset + textToken.raw.length);
 	}
-	return value;
+	return { value };
 }
 
 function completeTrailingTable(markdown: string, tokens: Token[]): string | undefined {

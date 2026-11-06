@@ -799,18 +799,19 @@ export class ChatListWidget extends DomWidget {
 		// position, otherwise an async size measurement can mistake reading for following.
 		const state = this.scrollable.state;
 		const viewport = this.scrollable.scrollableElement;
-		const scrolled = viewport.scrollTop !== state.top;
-		if (scrolled) {
-			// A shrinking composer or transcript can clamp the native viewport before
-			// the scrollbar has measured the new range. That clamp is still at bottom.
-			const maximumTop = Math.min(state.maximumTop, viewport.scrollHeight - viewport.clientHeight);
-			this.updateReplyFollowing(viewport.scrollTop, maximumTop);
-		}
+		const top = viewport.scrollTop;
+		// If the native position agrees with our state, the layout that commits the
+		// change (or the resize observer) owns the next scrollbar measurement.
+		if (top === state.top) return false;
+		// A shrinking composer or transcript can clamp the native viewport before
+		// the scrollbar has measured the new range. That clamp is still at bottom.
+		const maximumTop = Math.min(state.maximumTop, viewport.scrollHeight - viewport.clientHeight);
+		this.updateReplyFollowing(top, maximumTop);
 		this.layingOut = true;
 		try { this.scrollable.layout(); }
 		finally { this.layingOut = false; }
 		this.updateScrollToLatestVisibility();
-		return scrolled;
+		return true;
 	}
 
 	private layout(anchor?: ReadingAnchor, captureScroll = true): void {

@@ -692,11 +692,15 @@ export class ChatListItemRenderer extends Disposable {
 		const update = () => {
 			if (this.isDisposed) return;
 			const context = this.contextKeys.getContext();
-			button.domNode.hidden = !CommandsRegistry.hasCommand('workbench.action.chat.readChatResponseAloud') || context.getValue(HasSpeechProvider.key) !== true;
+			const hidden = !CommandsRegistry.hasCommand('workbench.action.chat.readChatResponseAloud') || context.getValue(HasSpeechProvider.key) !== true;
+			if (button.domNode.hidden !== hidden) button.domNode.hidden = hidden;
 			const reading = !!this.reading.value;
-			button.label = reading ? localize('chat.message.stopReadAloud', 'Stop reading aloud') : localize('chat.message.readAloud', 'Read aloud');
-			button.enabled = reading || !this.item.transient && !!this.item.text && context.getValue(TextToSpeechInProgress.key) !== true;
-			button.domNode.setAttribute('aria-pressed', String(reading));
+			const label = reading ? localize('chat.message.stopReadAloud', 'Stop reading aloud') : localize('chat.message.readAloud', 'Read aloud');
+			if (button.label !== label) button.label = label;
+			const enabled = reading || !this.item.transient && !!this.item.text && context.getValue(TextToSpeechInProgress.key) !== true;
+			if (button.enabled !== enabled) button.enabled = enabled;
+			const pressed = String(reading);
+			if (button.domNode.getAttribute('aria-pressed') !== pressed) button.domNode.setAttribute('aria-pressed', pressed);
 		};
 		this.updateReadAloud = update;
 		lifetime.add(this.contextKeys.onDidChangeContext(event => { if (event.affectsSome(speechContextKeys)) update(); }));
