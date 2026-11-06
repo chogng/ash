@@ -38,6 +38,8 @@ export interface IContextMenuDelegate {
 	getKeyBinding?(action: IAction): ResolvedKeybinding | undefined;
 	/** Applies caller-owned styling and selects browser rendering on Desktop. */
 	getMenuClassName?(): string;
+	/** Caller-owned styling applied to every submenu of this popup. */
+	readonly submenuClassName?: string;
 	readonly onHide?: (didCancel: boolean) => void;
 	/** Cancels only this presentation; an action that has already started still completes. */
 	readonly cancellationToken?: CancellationToken;

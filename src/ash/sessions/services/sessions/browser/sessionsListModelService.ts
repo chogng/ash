@@ -1,4 +1,5 @@
 import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
 import type { Event } from '../../../../base/common/event.js';
 import { toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
@@ -10,7 +11,8 @@ export type SessionSortMode = 'name' | 'created' | 'updated';
 export type SessionSortDirection = 'ascending' | 'descending';
 export type SessionGrouping = 'none' | 'projects' | 'repository' | 'status' | 'environment';
 export type AutomationSessionsListMode = 'always' | 'afterReply' | 'never';
-export type SessionsListMode = 'chat' | 'code';
+const listModes = ['chat', 'code'] as const;
+export type SessionsListMode = typeof listModes[number];
 export interface ISessionsListTreeNode {
 	readonly id: string;
 	readonly label: string;
@@ -23,10 +25,9 @@ export interface ISessionsListTreeNode {
 
 export interface ISessionsListModelService {
 	readonly onDidChange: Event<void>;
-	readonly sortMode: SessionSortMode;
-	setSortMode(mode: SessionSortMode): void;
-	readonly sortDirection: SessionSortDirection;
-	setSortDirection(direction: SessionSortDirection): void;
+	getSort(mode: SessionsListMode): { readonly field: SessionSortMode; readonly direction: SessionSortDirection; };
+	setSortMode(mode: SessionsListMode, field: SessionSortMode): void;
+	setSortDirection(mode: SessionsListMode, direction: SessionSortDirection): void;
 	readonly grouping: SessionGrouping;
 	setGrouping(grouping: SessionGrouping): void;
 	readonly showComparisonGroups: boolean;
@@ -37,8 +38,8 @@ export interface ISessionsListModelService {
 	setAutomationSessionOverride(session: ISession, override: 'show' | 'hide' | undefined): void;
 	recordAutomationSessionReply(session: ISession): void;
 	isSessionListed(session: ISession): boolean;
-	getSessionOrder(scope: string, visibleIds: readonly string[]): readonly string[];
-	moveSession(scope: string, visibleIds: readonly string[], id: string, targetId: string): void;
+	getSessionOrder(mode: SessionsListMode, section: string, visibleIds: readonly string[]): readonly string[];
+	moveSession(mode: SessionsListMode, section: string, visibleIds: readonly string[], id: string, targetId: string): void;
 	isSessionPinned(session: ISession): boolean;
 	pinSession(session: ISession): void;
 	unpinSession(session: ISession): void;
@@ -78,9 +79,10 @@ export class SessionsListModelService implements ISessionsListModelService {
 	}
 
 	constructor(@IStorageService private readonly storage: IStorageService) {
+		this.migrateSortPreferences();
 		this.onDidChange = (listener, thisArgs, disposables) => storage.onDidChangeValue(event => {
-			if (event.scope === StorageScope.PROFILE && (event.key === automationVisibilityKey || event.key === sortModeKey
-				|| event.key === sortDirectionKey || event.key === groupingKey || event.key === comparisonGroupsKey
+			if (event.scope === StorageScope.PROFILE && (event.key === automationVisibilityKey || event.key.startsWith(`${sortModeKey}.`)
+				|| event.key.startsWith(`${sortDirectionKey}.`) || event.key === groupingKey || event.key === comparisonGroupsKey
 				|| event.key.startsWith(automationOverridePrefix) || event.key.startsWith(automationReplyPrefix)
 				|| event.key.startsWith(pinnedSessionPrefix) || event.key.startsWith(manualOrderPrefix) || event.key.startsWith(rowIconPrefix))) {
 				listener.call(thisArgs);
@@ -88,25 +90,53 @@ export class SessionsListModelService implements ISessionsListModelService {
 		}, undefined, disposables);
 	}
 
-	get sortMode(): SessionSortMode {
-		const value = this.storage.get(sortModeKey, StorageScope.PROFILE);
-		return value === 'created' || value === 'name' ? value : 'updated';
+	getSort(mode: SessionsListMode): { readonly field: SessionSortMode; readonly direction: SessionSortDirection; } {
+		const value = this.storage.get(`${sortModeKey}.${mode}`, StorageScope.PROFILE);
+		const field = value === 'created' || value === 'name' ? value : 'updated';
+		const direction = this.storage.get(`${sortDirectionKey}.${mode}`, StorageScope.PROFILE);
+		return {
+			field,
+			direction: direction === 'ascending' || direction === 'descending' ? direction : field === 'name' ? 'ascending' : 'descending',
+		};
 	}
 
-	setSortMode(mode: SessionSortMode): void {
-		this.storage.store(sortModeKey, mode, StorageScope.PROFILE, StorageTarget.USER);
+	setSortMode(mode: SessionsListMode, field: SessionSortMode): void {
+		this.storage.store(`${sortModeKey}.${mode}`, field, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
-	get sortDirection(): SessionSortDirection {
-		const value = this.storage.get(sortDirectionKey, StorageScope.PROFILE);
-		if (value === 'ascending' || value === 'descending') {
-			return value;
+	setSortDirection(mode: SessionsListMode, direction: SessionSortDirection): void {
+		this.storage.store(`${sortDirectionKey}.${mode}`, direction, StorageScope.PROFILE, StorageTarget.USER);
+	}
+
+	private migrateSortPreferences(): void {
+		const preferences = [
+			[sortModeKey, ['name', 'created', 'updated']],
+			[sortDirectionKey, ['ascending', 'descending']],
+		] as const;
+		const migrated = new Map<string, string>();
+		for (const [key, valid] of preferences) {
+			const legacy = this.storage.get(key, StorageScope.PROFILE);
+			if (legacy === undefined || !valid.some(value => value === legacy)) continue;
+			const targets = listModes.map(mode => {
+				const keyForMode = `${key}.${mode}`;
+				return { key: keyForMode, value: this.storage.get(keyForMode, StorageScope.PROFILE) };
+			});
+			if (targets.some(target => target.value !== undefined && target.value !== legacy)) {
+				console.warn(`Cannot migrate ${key}: a mode already has a different preference.`);
+				continue;
+			}
+			for (const target of targets) {
+				if (target.value === undefined) this.storage.store(target.key, legacy, StorageScope.PROFILE, StorageTarget.USER);
+			}
+			migrated.set(key, legacy);
 		}
-		return this.sortMode === 'name' ? 'ascending' : 'descending';
-	}
-
-	setSortDirection(direction: SessionSortDirection): void {
-		this.storage.store(sortDirectionKey, direction, StorageScope.PROFILE, StorageTarget.USER);
+		if (!migrated.size) return;
+		// Keep the legacy values until both copies have reached durable storage.
+		void this.storage.flush().then(() => {
+			for (const [key, value] of migrated) {
+				if (this.storage.get(key, StorageScope.PROFILE) === value) this.storage.remove(key, StorageScope.PROFILE);
+			}
+		}).catch(onUnexpectedError);
 	}
 
 	get grouping(): SessionGrouping {
@@ -163,24 +193,25 @@ export class SessionsListModelService implements ISessionsListModelService {
 			&& this.storage.getBoolean(automationReplyPrefix + session.sessionId, StorageScope.PROFILE, false);
 	}
 
-	getSessionOrder(scope: string, visibleIds: readonly string[]): readonly string[] {
-		return resolveSectionOrder(readStoredOrder(this.storage, this.manualOrderKey(scope)), visibleIds);
+	getSessionOrder(mode: SessionsListMode, section: string, visibleIds: readonly string[]): readonly string[] {
+		return resolveSectionOrder(readStoredOrder(this.storage, this.manualOrderKey(mode, section)), visibleIds);
 	}
 
-	moveSession(scope: string, visibleIds: readonly string[], id: string, targetId: string): void {
-		storeReorderedIds(this.storage, this.manualOrderKey(scope), visibleIds, id, targetId);
+	moveSession(mode: SessionsListMode, section: string, visibleIds: readonly string[], id: string, targetId: string): void {
+		storeReorderedIds(this.storage, this.manualOrderKey(mode, section), visibleIds, id, targetId);
 	}
 
-	private manualOrderKey(scope: string): string {
+	private manualOrderKey(mode: SessionsListMode, section: string): string {
 		// Existing orders were saved while using the catalog's updated-time order.
-		const mode = this.sortMode;
-		if (mode === 'updated' && this.sortDirection === 'descending') {
+		const { field, direction } = this.getSort(mode);
+		const scope = `${mode}:${section}`;
+		if (field === 'updated' && direction === 'descending') {
 			return manualOrderPrefix + scope;
 		}
-		if (mode === 'created' && this.sortDirection === 'descending') {
+		if (field === 'created' && direction === 'descending') {
 			return manualOrderPrefix + `created:${scope}`;
 		}
-		return manualOrderPrefix + `${mode}:${this.sortDirection}:${scope}`;
+		return manualOrderPrefix + `${field}:${direction}:${scope}`;
 	}
 
 	isSessionPinned(session: ISession): boolean {

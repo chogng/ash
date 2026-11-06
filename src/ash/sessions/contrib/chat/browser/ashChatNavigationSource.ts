@@ -47,7 +47,7 @@ export class AshChatNavigationSource extends Disposable implements ChatListSourc
 			const active = selection.selection.read(reader);
 			const selectedId = visible.read(reader) && active.kind === 'thread' ? active.sessionId : undefined;
 			const rows: ChatListEntry[] = [];
-			const entries = getSessionsListEntries(catalog.read(reader), list, selectedId);
+			const entries = getSessionsListEntries(catalog.read(reader), list, 'chat', selectedId);
 			for (const session of entries) {
 				// The ambient local provider keeps its raw catalog IDs and omits providerId.
 				if (session.surface !== 'chat' || session.providerId && session.providerId !== LOCAL_AGENT_HOST_PROVIDER_ID) continue;

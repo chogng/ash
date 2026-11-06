@@ -365,7 +365,7 @@ export class SessionsList extends DomWidget {
 				new Separator(),
 				group('none', localize('sessions.list.groupNone', 'None')),
 			]),
-			new SubmenuAction('sessions.list.sortBy', localize('sessions.list.sortBy', 'Sort By'), sessionSortActions(model)),
+			new SubmenuAction('sessions.list.sortBy', localize('sessions.list.sortBy', 'Sort By'), sessionSortActions(model, this.mode)),
 			new SubmenuAction('sessions.list.show', localize('sessions.list.show', 'Show'), [
 				choice('sessions.list.showComparisonGroups', localize('sessions.list.showComparisonGroups', 'Comparison Groups'),
 					model.showComparisonGroups, () => model.setShowComparisonGroups(!model.showComparisonGroups)),
@@ -449,7 +449,7 @@ export class SessionsList extends DomWidget {
 		const ids = this.orderedSiblingIds(parent, attribute);
 		if (attribute === 'rowOrderId') {
 			const section = parent?.element.dataset.section ?? '';
-			this.listModel.moveSession(`${this.mode}:${section}`, ids, id, targetId);
+			this.listModel.moveSession(this.mode, section, ids, id, targetId);
 		} else {
 			this.sectionOrder.reorder(this.mode, ids, id, targetId);
 		}
@@ -725,7 +725,7 @@ export class SessionsList extends DomWidget {
 			activeSections.add(key);
 			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, kind,
 				collapsed => this.tree.setSectionCollapsed(key, collapsed), key === 'projects' ? this.createListToolbar : undefined));
-			childrenByRow.set(section.domNode, reorderChildren(children, ids => this.listModel.getSessionOrder(`${this.mode}:${key}`, ids), 'rowOrderId'));
+			childrenByRow.set(section.domNode, reorderChildren(children, ids => this.listModel.getSessionOrder(this.mode, key, ids), 'rowOrderId'));
 			section.update(title, {
 				open,
 				actionLabel: open ? localize('sessions.list.openComparison', 'Open comparison {0}', title) : undefined,
@@ -766,7 +766,7 @@ export class SessionsList extends DomWidget {
 				recent.push(item.domNode);
 			}
 		}
-		const catalog = getSessionsListEntries(this.sessionService.sessions.filter(session => session.surface !== 'chat'), this.listModel,
+		const catalog = getSessionsListEntries(this.sessionService.sessions.filter(session => session.surface !== 'chat'), this.listModel, this.mode,
 			activeSelection?.kind === 'session' ? activeSelection.active.session.sessionId : undefined);
 		const groupNames = new Map(this.groups.groups.flatMap(group => group.sessionIds.map(id => [id, group.name] as const)));
 		const projectNames = new Map(this.projects.flatMap(project => project.sessionIds.map(id => [id, project.name] as const)));
@@ -1008,7 +1008,9 @@ export function createSessionsListToolbar(container: HTMLElement, disposables: D
 				() => getActions(action.actions),
 				{
 					showContextMenu: delegate => contextMenus.showContextMenu({
-						...delegate, getMenuClassName: () => 'ash-sessions-list-menu',
+						...delegate,
+						getMenuClassName: () => 'ash-sessions-list-menu',
+						submenuClassName: 'ash-sessions-list-menu',
 						getCheckedActionsRepresentation: item => item.id.startsWith('sessions.list.groupBy.') || item.id.startsWith('sessions.list.sort') ? 'radio' : 'checkbox',
 					}),
 				},

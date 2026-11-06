@@ -114,6 +114,13 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await choose(chinese ? '升序' : 'Ascending');
 			await expect(rows).toHaveText(['Alpha', 'Zulu', 'Echo']);
 			await sort.press('Enter');
+			const selected = page.getByRole('menuitemradio', { name: chinese ? '创建日期' : 'Date Created', exact: true, checked: true });
+			await expect(selected).toBeVisible();
+			const label = (await selected.locator('.ash-button-label').boundingBox())!;
+			const check = (await selected.locator('[data-ash-icon-id="check"]').boundingBox())!;
+			const inset = await selected.evaluate(row => parseFloat(getComputedStyle(row).paddingInlineStart));
+			expect(label.x - (await selected.boundingBox())!.x).toBeCloseTo(inset);
+			expect(check.x).toBeGreaterThan(label.x + label.width);
 			await page.keyboard.press('Escape');
 			await expect(sort).toBeFocused();
 		});

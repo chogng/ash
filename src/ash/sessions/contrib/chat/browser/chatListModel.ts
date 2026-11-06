@@ -152,7 +152,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 	readonly headerActions = {
 		menu: Menus.ChatSidebarHeader,
 		submenu: Menus.SessionsViewSort,
-		getActions: (): readonly IAction[] => sessionSortActions(this.listModel),
+		getActions: (): readonly IAction[] => sessionSortActions(this.listModel, 'chat'),
 	};
 
 	constructor(
@@ -165,7 +165,10 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 	) {
 		super();
 		this.migrateCollapseState(storage);
-		const sort = observableFromEvent(this, listModel.onDidChange, () => `${listModel.sortMode}:${listModel.sortDirection}`);
+		const sort = observableFromEvent(this, listModel.onDidChange, () => {
+			const { field, direction } = listModel.getSort('chat');
+			return `${field}:${direction}`;
+		});
 		this.snapshot = derived(reader => {
 			const projects = this.projects.state.read(reader).projects.filter(project => !project.archived);
 			this.membershipVersion.read(reader);
@@ -273,12 +276,12 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 	}
 
 	private sortRows(rows: readonly ChatListEntry[]): readonly ChatListEntry[] {
-		const { sortMode, sortDirection } = this.listModel;
-		const sign = sortDirection === 'ascending' ? 1 : -1;
-		if (sortMode === 'name') {
+		const { field, direction } = this.listModel.getSort('chat');
+		const sign = direction === 'ascending' ? 1 : -1;
+		if (field === 'name') {
 			return [...rows].sort((left, right) => sign * left.title.localeCompare(right.title, undefined, { numeric: true }));
 		}
-		const time = (row: ChatListEntry) => sortMode === 'created' ? row.createdAt : row.updatedAt ?? row.createdAt;
+		const time = (row: ChatListEntry) => field === 'created' ? row.createdAt : row.updatedAt ?? row.createdAt;
 		// Preserve catalog order for records that do not carry the requested date.
 		const dated = rows.flatMap(row => {
 			const timestamp = time(row);

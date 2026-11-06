@@ -104,7 +104,7 @@ Stale entries that match no current session are inert and may be compacted by th
 
 ## Sorting and filtering
 
-Manual row order is scoped to the sidebar mode, section, and timestamp sort mode. It applies to durable session rows and leaves nested chats in provider order. Unordered rows follow their default list order. Custom section order is scoped to the sidebar mode and preserves fixed sections.
+Chat and Code remember the sort field and direction separately in the profile. Manual row order is scoped to the sidebar mode, section, and sort selection. It applies to durable session rows and leaves nested chats in provider order. Unordered rows follow their default list order. Custom section order is scoped to the sidebar mode and preserves fixed sections.
 
 Filters compose across session type, status, archive/read state, and provider. The archived filter governs both archived sessions and archived nested chats; there is no per-session archive-visibility override. The agent host filter scopes to every provider the selected host entry covers, which is more than one when that entry groups several hosts and none while such a group is empty. The find widget matches session and section labels and bypasses presentation capping while a search is active.
 
