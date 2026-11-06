@@ -1,5 +1,5 @@
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { SessionsMenuActiveConversationContext, SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
+import { CodeConversationPageContext, SessionsMenuActiveConversationContext } from '../../../../common/contextkeys.js';
 import { ISessionsListModelService, type ISessionsListTreeNode, type SessionGrouping } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
@@ -383,7 +383,7 @@ export class SessionsList extends DomWidget {
 			this._register(addDisposableListener(this.list, 'focusin', () => this.catalogPaging.schedule()));
 			this._register(observeResize(this.domNode, () => this.catalogPaging.schedule()));
 			if (contextKeys) {
-				const keys = new Set([SessionsWorkspaceModeContext.key]);
+				const keys = new Set([CodeConversationPageContext.key]);
 				this._register(contextKeys.onDidChangeContext(event => {
 					if (event.affectsSome(keys)) this.render();
 				}));
@@ -402,13 +402,15 @@ export class SessionsList extends DomWidget {
 		void this.loadProjects();
 	}
 
-	private openRow(open: () => void): void {
-		const command = this.entry && !this.contextKeys?.getValue(this.entry.activeContext) ? this.entry.openCommand
-			: this.catalog && this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) !== 'code' ? 'sessions.open.code' : undefined;
-		if (!command) { open(); return; }
-		void this.commands.executeCommand(command).then(() => {
-			if (!this.isDisposed) open();
-		}).catch(error => this.notifications.error(String(error)));
+	private async openRow(open: (options: Parameters<ISessionsService['openSession']>[2]) => Promise<void>): Promise<void> {
+		try {
+			if (this.entry && !this.contextKeys?.getValue(this.entry.activeContext)) {
+				await this.commands.executeCommand(this.entry.openCommand);
+			}
+			if (!this.isDisposed) await open(this.catalog ? { reveal: 'code' } : undefined);
+		} catch (error) {
+			if (!this.isDisposed) this.notifications.error(String(error));
+		}
 	}
 
 	private getFilterActions(contributed: readonly IAction[]): readonly IAction[] {
@@ -803,7 +805,7 @@ export class SessionsList extends DomWidget {
 		this.catalogRows.clear();
 		this.catalogProjects.clear();
 		const activeSelection = this.customViews.activeCustomView.get() || this.entry && !this.contextKeys?.getValue(this.entry.activeContext)
-			|| this.catalog && this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) !== 'code'
+			|| this.catalog && !this.contextKeys?.getValue(CodeConversationPageContext.key)
 			? undefined : this.viewService.activeSelection;
 		const restingIcon = this.mode === 'code' ? quietSessionIcon : undefined;
 		const statusIcons = this.mode === 'code' ? codeManagementIcons : managementIcons;
@@ -899,7 +901,7 @@ export class SessionsList extends DomWidget {
 			if (!this.search.matches(session.title)) continue;
 			const selected = activeSelection?.kind === 'untitled' && activeSelection.session.untitledSessionId === session.untitledSessionId;
 			const item = itemFor(`untitled:${session.untitledSessionId}`, 'draft');
-			item.update(localize('sessions.list.draft', '{0} (draft)', session.title || localize('chat.sessions.new', 'New Session')), selected, () => this.openRow(() => this.viewService.openUntitledSession(session.untitledSessionId)));
+			item.update(localize('sessions.list.draft', '{0} (draft)', session.title || localize('chat.sessions.new', 'New Session')), selected, () => this.openRow(options => this.viewService.openUntitledSession(session.untitledSessionId, options)));
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'untitled', session }, item, anchor));
 			if (session.forkSource) {
 				const id = session.forkSource.sessionId;
@@ -934,7 +936,7 @@ export class SessionsList extends DomWidget {
 			const item = itemFor(`session:${session.sessionId}`, 'conversation', restingIcon ?? Lxicon.cowork);
 			if (sort) sortKeys.set(item.domNode, sort.field === 'name' ? session.title : sessionSortTime(session, sort.field));
 			item.target = { sessionId: session.sessionId, threadId: thread.threadId };
-			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, () => this.openRow(() => this.viewService.openSession(session.sessionId, thread.threadId)), session.management);
+			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, () => this.openRow(options => this.viewService.openSession(session.sessionId, thread.threadId, options)), session.management);
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor));
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
 			item.updateSummary(this.hoverService, getSessionSummaryHoverData(session, thread));
@@ -942,7 +944,7 @@ export class SessionsList extends DomWidget {
 				const child = itemFor(`chat:${JSON.stringify([session.sessionId, chat.threadId])}`, 'conversation', restingIcon ?? Lxicon.chatSession);
 				child.target = { sessionId: session.sessionId, threadId: chat.threadId };
 				child.update(chat.title || localize('sessions.list.untitledChat', 'Untitled Chat'), current?.threadId === chat.threadId,
-					() => this.openRow(() => this.viewService.openSession(session.sessionId, chat.threadId)), chat.management);
+					() => this.openRow(options => this.viewService.openSession(session.sessionId, chat.threadId, options)), chat.management);
 				child.updateSummary(this.hoverService, getSessionSummaryHoverData(session, chat));
 				child.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: chat.threadId } }, child, anchor));
 				return child.domNode;

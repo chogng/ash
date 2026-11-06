@@ -337,8 +337,8 @@ const management = {
 		return draft;
 	},
 } as unknown as ISessionsManagementService;
-const sessions = resources.add(new SessionsService(management, services.get(IStorageService), custom));
 services.registerInstance(ISessionsManagementService, management);
+const sessions = resources.add(services.createInstance(SessionsService));
 services.registerInstance(ISessionsListModelService, services.createInstance(SessionsListModelService));
 services.registerInstance(ISessionsService, sessions);
 await sessions.initialize();

@@ -18,6 +18,7 @@ import { CustomViewService, ICustomViewService } from '../../services/customView
 import { NullLoggerService } from '../../../platform/log/common/log.js';
 import { SyncDescriptor } from '../../../platform/instantiation/common/descriptors.js';
 import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
+import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { KeybindingRuleKind, KeybindingWeight, KeybindingsRegistry } from '../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IsSessionsWindowContext } from '../../../workbench/common/contextkeys.js';
 import '../../contrib/sessions/browser/sessionsActions.js';
@@ -36,12 +37,34 @@ function createTestStorage(): BrowserStorageService {
 }
 
 function createView(sessions: ISessionsManagementService, storage: IStorageService, customViews = storageResources.add(new CustomViewService(new NullLoggerService(), storage))): SessionsService {
-	using services = new InstantiationService();
+	const services = storageResources.add(new InstantiationService());
 	services.registerInstance(ISessionsManagementService, sessions);
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(ICustomViewService, customViews);
+	services.registerInstance(ICommandService, storageResources.add(new CommandService(services)));
 	return services.createInstance(SessionsService);
 }
+
+test('Explicit Code opens reveal the selected conversation only when the target is available', async () => {
+	using sessions = new FakeSessionService([session('first', 'root'), session('second', 'other')]);
+	using storage = createTestStorage();
+	using view = createView(sessions, storage);
+	const reveals: string[] = [];
+	using command = CommandsRegistry.register('sessions.open.code', (_accessor, reason) => {
+		assert.equal(reason, 'conversation');
+		reveals.push(selectionId(view.activeSelection));
+	});
+	await view.initialize();
+	const draft = view.openNewSession('Parked draft');
+	await view.openSession('first', 'root');
+	await view.openSession('missing', 'root', { reveal: 'code' });
+	assert.equal(selectionId(view.activeSelection), 'session:first:root');
+	assert.deepEqual(reveals, []);
+
+	await view.openSession('second', 'other', { reveal: 'code' });
+	await view.openUntitledSession(draft.untitledSessionId, { reveal: 'code' });
+	assert.deepEqual(reveals, ['session:second:other', `untitled:${draft.untitledSessionId}`]);
+});
 
 class TestCustomView extends AbstractCustomView {
 	readonly title = constObservable('Automations');

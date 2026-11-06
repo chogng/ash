@@ -1686,13 +1686,13 @@ test('sending from one session preserves a later draft during first-session crea
 	editorServices.registerInstance(ISessionsChatViewStateService, new SessionsChatViewStateService());
 	using customViews = editorServices.createInstance(CustomViewService);
 	editorServices.registerInstance(ICustomViewService, customViews);
+	using commands = new CommandService(editorServices);
+	editorServices.registerInstance(ICommandService, commands);
 	using view = editorServices.createInstance(SessionsService);
 	await view.initialize();
 	view.openNewSession();
 	const draft = view.activeSelection;
 	if (draft?.kind !== 'untitled') throw new Error('Expected Code draft');
-	using commands = new CommandService(editorServices);
-	editorServices.registerInstance(ICommandService, commands);
 	editorServices.registerInstance(IContextViewService, contextViewService);
 	using chat = createChatService(fake.api);
 	editorServices.registerInstance(ILanguageModelsService, modelsFor(chat));

@@ -77,19 +77,50 @@ test('Sessions New opens ChatGPT and shares its retained EditorPane', { tag: ['@
 	await expect(page.locator('.ash-projects')).toBeVisible();
 });
 
-test('ChatGPT sidebar keeps Code sessions in Code mode', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
-	const page = await workbench.openAgentsWindow(target.kind);
-	await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'New', exact: true }).click();
-	const sidebar = page.locator('[data-part="sidebar"] [data-view-container-id="sessions.chatgpt.navigation"]');
-	await expect(sidebar).toBeVisible();
-	await expect(sidebar.locator('.ash-sessions-list')).toHaveCount(0);
-	const modes = page.locator('.ash-window-mode-control');
-	await modes.getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(page.locator('[data-part="sidebar"] .ash-sessions-list[data-mode="code"]')).toBeVisible();
-	await expect(sidebar).toBeHidden();
-	await modes.getByRole('button', { name: 'Chat / Agents', exact: true }).click();
-	await expect(sidebar).toBeVisible();
-	await expect(sidebar.locator('.ash-sessions-list')).toHaveCount(0);
+test.describe('Code conversation navigation', () => {
+	test.use({ electronWindowMode: 'active' });
+
+	test('Shared sidebar and Search open and focus the same Code draft from Projects', { tag: ['@electron-app-server'] }, async ({ target, workbench }) => {
+		const page = await workbench.openAgentsWindow(target.kind);
+		const sidebar = page.locator('[data-part="sidebar"] .ash-sessions-list');
+		await expect(sidebar).toBeVisible();
+		const modes = page.locator('.ash-window-mode-control');
+		const code = modes.getByRole('button', { name: 'Code', exact: true });
+		await code.click();
+		await expect(sidebar).toBeVisible();
+		const navigation = page.locator('.ash-sessions-activity-content');
+		await navigation.getByRole('button', { name: 'New', exact: true }).click();
+		const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
+		await editor.waitForEditorFocus();
+		const draft = 'Retain the Code draft from Projects';
+		await editor.waitForTypeInEditor(draft);
+		const row = sidebar.locator('[data-item^="untitled:"] .ash-sessions-list-item');
+		await expect(row).toHaveAttribute('aria-current', 'page');
+
+		await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
+		const projects = page.locator('.ash-projects');
+		await expect(projects).toBeVisible();
+		await expect(code).toHaveAttribute('aria-pressed', 'true');
+		await expect(row).not.toHaveAttribute('aria-current', 'page');
+		await row.press('Enter');
+		await expect(projects).toBeHidden();
+		await expect(row).toHaveAttribute('aria-current', 'page');
+		await expect(editor.input).toBeFocused();
+		await editor.waitForEditorContents(text => text === draft);
+
+		const draftId = await page.locator('.ash-sessions-chat-slot.active:visible [data-untitled-session-id]').getAttribute('data-untitled-session-id');
+		await navigation.getByRole('button', { name: 'Projects', exact: true }).click();
+		await expect(projects).toBeVisible();
+		await expect(row).not.toHaveAttribute('aria-current', 'page');
+		await page.locator('[data-action-id="sessions.search"] button').click();
+		const search = page.getByRole('dialog', { name: 'Search', exact: true });
+		await search.locator(`[role="option"][data-list-id="draft:${draftId}"]`).click();
+		await expect(search).toBeHidden();
+		await expect(projects).toBeHidden();
+		await expect(row).toHaveAttribute('aria-current', 'page');
+		await expect(editor.input).toBeFocused();
+		await editor.waitForEditorContents(text => text === draft);
+	});
 });
 
 test('Sessions restores the Projects entry and its pane visibility through entry startup', async ({ application, target, workbench }) => {

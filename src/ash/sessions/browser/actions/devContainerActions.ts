@@ -48,7 +48,7 @@ registerAction2(class NewDevContainerSession extends Action2 {
 			const draft = sessions.createUntitledSession(localize('sessions.devContainer.draft', 'Dev Container Chat'), source, LOCAL_AGENT_HOST_PROVIDER_ID);
 			sessions.setUntitledSessionWorkspace(draft.untitledSessionId, source, { devContainer: true });
 			await commands.executeCommand('sessions.open.code');
-			sessionViews.openUntitledSession(draft.untitledSessionId);
+			await sessionViews.openUntitledSession(draft.untitledSessionId);
 			await views.focusView(CHAT_VIEW_ID);
 		});
 	}

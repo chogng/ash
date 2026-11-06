@@ -50,14 +50,8 @@ export class SessionsSearchService extends Disposable implements ISessionsSearch
 		// Close the modal and release its model before handing focus to a domain page.
 		switch (target?.kind) {
 			case 'contributed': await target.open(); break;
-			case 'draft':
-				await this.commands.executeCommand('sessions.open.code');
-				this.sessions.openUntitledSession(target.id);
-				break;
-			case 'session':
-				await this.commands.executeCommand('sessions.open.code');
-				this.sessions.openSession(target.sessionId, target.threadId);
-				break;
+			case 'draft': await this.sessions.openUntitledSession(target.id, { reveal: 'code' }); break;
+			case 'session': await this.sessions.openSession(target.sessionId, target.threadId, { reveal: 'code' }); break;
 			case 'project':
 				await this.projects.openProject(target.id);
 				await this.commands.executeCommand('sessions.open.projects');

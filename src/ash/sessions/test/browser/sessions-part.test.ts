@@ -57,7 +57,7 @@ import { JSDOM } from 'jsdom';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { DisposableStore, toDisposable, Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { IChatSessionNavigationService } from '../../../workbench/services/chat/common/chatSessionNavigationService.js';
-import type { ICommandEvent, ICommandService } from '../../../platform/commands/common/commands.js';
+import { type ICommandEvent, ICommandService } from '../../../platform/commands/common/commands.js';
 import { IContextMenuService, IContextViewService } from '../../../platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
@@ -360,6 +360,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	const customViews = resources.add(services.createInstance(CustomViewService));
 	services.registerInstance(ICustomViewService, customViews);
+	services.registerInstance(ICommandService, commandService);
 	using viewService = services.createInstance(SessionsService);
 	await viewService.initialize();
 	services.registerInstance(IChatTipService, resources.add(services.createInstance(ChatTipService)));

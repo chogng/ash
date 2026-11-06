@@ -193,7 +193,7 @@ class ProjectChatFixture extends Disposable {
 			},
 		} as unknown as IProjectService);
 		this.services.registerInstance(ISessionsService, {
-			openSession: (session: string, thread: string) => this.calls.push(`open:${session}/${thread}`),
+			openSession: async (session: string, thread: string) => { this.calls.push(`open:${session}/${thread}`); },
 		} as unknown as ISessionsService);
 		this.services.registerInstance(ICommandService, {
 			executeCommand: async (command: string) => {

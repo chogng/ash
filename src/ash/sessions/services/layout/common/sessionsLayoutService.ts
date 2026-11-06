@@ -36,6 +36,11 @@ export interface ISessionsEntry {
 	readonly focus: 'conversation' | 'sidebar' | 'editor';
 }
 
+export interface ISessionsEntryOpenOptions {
+	readonly source?: 'restore' | 'startup';
+	readonly focus?: 'conversation';
+}
+
 export interface ISessionsLayoutService extends IDisposable {
 	readonly editorWorkingSetState: IObservable<ISessionEditorWorkingSetState>;
 	retainEditor(input: IResourceEditorInput): IDisposable;
@@ -46,7 +51,7 @@ export interface ISessionsLayoutService extends IDisposable {
 	readonly onDidChangeConversationVisibility: Event<void>;
 	setConversationVisible(visible: boolean): Promise<void>;
 	/** Initialize retained content after its editor is created. Restoration preserves any covering Custom View and its focus. */
-	openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: { readonly source: 'restore' | 'startup'; }): Promise<void>;
+	openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: ISessionsEntryOpenOptions): Promise<void>;
 	restore(): Promise<void>;
 }
 

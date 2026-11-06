@@ -1,4 +1,5 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { isRecord } from '../../../../base/common/types.js';
 import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
@@ -40,7 +41,7 @@ function showSessionsPicker(accessor: ServicesAccessor): void {
 		const item = picker.selectedItems[0];
 		if (!item) return;
 		picker.hide();
-		sessions.openSession(item.sessionId, item.threadId);
+		void sessions.openSession(item.sessionId, item.threadId, { reveal: 'code' }).catch(onUnexpectedError);
 	}));
 	lifetime.add(picker.onDidHide(() => lifetime.dispose()));
 	picker.show();

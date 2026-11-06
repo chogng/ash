@@ -29,6 +29,8 @@ import { WorkspaceFolderManagementContribution } from '../../contrib/workspace/b
 import { SessionFileService } from '../../contrib/providers/agentHost/browser/sessionFileService.js';
 import { CustomViewService, ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { NullLoggerService } from '../../../platform/log/common/log.js';
+import { ICommandService } from '../../../platform/commands/common/commands.js';
+import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
 
 test('Session files preserve their original directory through selection, directory moves and archive', async () => {
 	const browser = new JSDOM('<!doctype html>', { url: 'https://sessions.test' });
@@ -41,6 +43,8 @@ test('Session files preserve their original directory through selection, directo
 		services.registerInstance(IStorageService, storage);
 		using customViews = new CustomViewService(new NullLoggerService(), storage);
 		services.registerInstance(ICustomViewService, customViews);
+		using commands = new CommandService(services);
+		services.registerInstance(ICommandService, commands);
 		using sessions = services.createInstance(SessionsService);
 		services.registerInstance(ISessionsService, sessions);
 		await sessions.initialize();
@@ -205,6 +209,8 @@ test('restored file identity waits for backend routing independently of Session 
 		services.registerInstance(IStorageService, storage);
 		using customViews = new CustomViewService(new NullLoggerService(), storage);
 		services.registerInstance(ICustomViewService, customViews);
+		using commands = new CommandService(services);
+		services.registerInstance(ICommandService, commands);
 		using sessions = services.createInstance(SessionsService);
 		services.registerInstance(ISessionsService, sessions);
 		using workspace = new TestWorkspaceService({ id: 'host', folders: [] });

@@ -106,7 +106,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				const sidebar = page.locator('.ash-chat-navigation');
 				await expect(sidebar.getByRole('button', { name: 'First native history', exact: true })).toBeVisible();
 				await expect(sidebar.getByRole('searchbox')).toHaveCount(0);
-				const recent = sidebar.getByRole('button', { name: locale === 'en' ? 'Recent' : '最近', exact: true });
+				const recent = sidebar.locator('[data-section="recent"]').getByRole('button');
 				await recent.click();
 				await expect(recent).toHaveAttribute('aria-expanded', 'false');
 				const search = page.locator('[data-action-id="sessions.search"]').getByRole('button');

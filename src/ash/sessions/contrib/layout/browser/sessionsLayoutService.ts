@@ -21,16 +21,16 @@ import { ILifecycleService, StartupKind } from '../../../../workbench/services/l
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
 import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
-import { ISessionsLayoutService, type ISessionsEntry } from '../../../services/layout/common/sessionsLayoutService.js';
+import { ISessionsLayoutService, type ISessionsEntry, type ISessionsEntryOpenOptions } from '../../../services/layout/common/sessionsLayoutService.js';
 import { CODE_NAVIGATION_CONTAINER_ID, SESSIONS_NAVIGATION_CONTAINER_ID } from '../../sessions/browser/views/sessionsView.js';
 import { CHAT_WORKSPACE_NAVIGATION_ID } from '../../chat/common/constants.js';
-import { NewSessionDraftVisibleContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
+import { CodeConversationPageContext, NewSessionDraftVisibleContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { DesktopLayoutController, type IDesktopLayoutContext } from './desktopLayoutController.js';
 import { EditorTitleMenuBridgeContribution } from '../../editor/browser/editor.contribution.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 
 export const documentEntry: ISessionsEntry = {
-	id: 'code', workspaceMode: 'code', activityContext: 'sessions.activity.codeSelected', content: 'documents',
+	id: 'code', workspaceMode: 'code', activityContext: CodeConversationPageContext.key, content: 'documents',
 	sidebarContainerId: CODE_NAVIGATION_CONTAINER_ID, restoreCommand: 'sessions.open.code', newDraft: 'conversation', focus: 'editor',
 };
 
@@ -180,9 +180,14 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 		return pending;
 	}
 
-	public openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: { readonly source: 'restore' | 'startup'; }): Promise<void> {
+	public openEntry(entry: ISessionsEntry, initialize?: () => ISessionsEntry, options?: ISessionsEntryOpenOptions): Promise<void> {
 		if (options?.source !== 'restore' && this.customViews.activeCustomView.get()) this.customViews.hideCustomView();
 		return this.runOperation(async () => {
+			// A conversation open can reuse the active entry without reapplying its document layout.
+			if (options?.focus === 'conversation' && !initialize && this.activeEntry.get() === entry) {
+				if (!this.customViews.activeCustomView.get()) { this.layout.focus(); }
+				return;
+			}
 			await this.controller.prepareContentChange();
 			if (this.isDisposed) { return; }
 			const previousEntry = this.activeEntry.get();
@@ -262,7 +267,7 @@ export class SessionsLayoutService extends Disposable implements ISessionsLayout
 				this.storage.store(activeEntryKey, entry.restoreCommand, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				this.storage.store(activeEntryModeKey, sharedWorkspace ? entry.workspaceMode : undefined, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 				if (this.customViews.activeCustomView.get()) { return; }
-				if (entry.focus === 'conversation') { this.layout.focus(); }
+				if ((options?.focus ?? entry.focus) === 'conversation') { this.layout.focus(); }
 				else if (entry.focus === 'editor') { documents ? this.controller.focus() : this.editors.focusActiveEditor(); }
 				else if (!sidebarVisible) { this.layout.focus(); }
 			} finally { this.isChangingContent = false; if (!this.isDisposed) { this.conversationChanged.fire(); } }
