@@ -1,10 +1,10 @@
 import './media/chatMarkdownPart.css';
 import { chatMarkdownTableScrollClass, wrapTablesWithScrollable } from './chatMarkdownTableScrolling.js';
 import { Emitter } from '../../../../../../base/common/event.js';
-import { addDisposableListener, getWindow, h, scheduleAtNextAnimationFrame } from '../../../../../../base/browser/dom.js';
+import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 import { renderWorkbenchMarkdown, sanitizeMarkdownHtmlToFragment, type MarkdownRenderOptions } from '../../../../../../base/browser/markdownRenderer.js';
 import type { IMarkdownString } from '../../../../../../base/common/htmlContent.js';
-import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { Marked } from '../../../../../../base/common/marked/marked.js';
 import { htmlAttributeEncodeValue } from '../../../../../../base/common/strings.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
@@ -12,8 +12,9 @@ import { openLinkFromMarkdown } from '../../../../../../platform/markdown/browse
 import { IOpenerService } from '../../../../../../platform/opener/common/opener.js';
 import { MarkedKatexExtension } from '../../../../markdown/common/markedKatexExtension.js';
 import { ChatContentMarkdownRenderer, getChatMarkdownRenderOptions } from '../chatContentMarkdownRenderer.js';
+import { IncrementalDOMMorpher, markdownFrameThreshold } from './chatIncrementalRendering/chatIncrementalRendering.js';
 import { ChatMarkdownDecorationsRenderer } from './chatMarkdownDecorationsRenderer.js';
-import { markdownTailCheckpoint, type MarkdownTailCheckpoint } from './chatMarkdownTail.js';
+import { lexMarkdownTail, markdownTailCheckpoint, type MarkdownTailCheckpoint } from './chatMarkdownTail.js';
 import { CodeBlockPart } from './codeBlockPart.js';
 import type { ICodeBlockActionContext } from './codeBlockPart.js';
 import { LocalChatSessionUri } from '../../../common/model/chatUri.js';
@@ -39,7 +40,6 @@ interface MarkdownTailPatch {
 	readonly added: readonly ChildNode[];
 }
 
-const markdownFrameThreshold = 1024;
 const markdownTailThreshold = 4096;
 const markdownSizeLimit = 4 * 1024 * 1024;
 
@@ -80,6 +80,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	public readonly codeblocksPartId = `ash-chat-markdown-${createUuid()}`;
 	private readonly markdownRenderer: ChatContentMarkdownRenderer;
 	private readonly decorations: ChatMarkdownDecorationsRenderer;
+	private readonly incrementalRendering: IncrementalDOMMorpher;
 	private readonly renders = this._register(new DisposableMap<HTMLElement, DisposableStore>());
 	private readonly lexer = new Marked(MarkedKatexExtension.extension());
 	private readonly plainLexer = new Marked();
@@ -94,12 +95,9 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		const source = item?.feedbackSource;
 		return { element: item ?? this.codeElement, chatSessionResource: source ? LocalChatSessionUri.forSession(source.sessionId, source.threadId) : undefined };
 	};
-	private visible: boolean;
 	private viewportVisible = true;
 	private hasDeferredCodeBlocks = false;
 	private readonly deferredCodeBlocks = new WeakSet<CodeBlockPart>();
-	private pending: { readonly markdown: IMarkdownString; readonly incomplete: boolean; } | undefined;
-	private readonly update = this._register(new MutableDisposable());
 
 	constructor(
 		private readonly options: ChatMarkdownContentPartOptions,
@@ -107,11 +105,17 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		@IOpenerService private readonly opener: IOpenerService,
 	) {
 		super();
-		this.visible = options.visible ?? true;
 		this.markdownRenderer = this._register(instantiation.createInstance(ChatContentMarkdownRenderer));
 		this.domNode = h(options.ownerDocument, 'div');
 		this.domNode.className = 'ash-chat-markdown-part ash-markdown';
 		this.decorations = this._register(instantiation.createInstance(ChatMarkdownDecorationsRenderer, this.domNode));
+		this.incrementalRendering = this._register(new IncrementalDOMMorpher(this.domNode, options.visible ?? true, markdownSizeLimit, (markdown, incomplete, fromFrame) => {
+			this.render(markdown, incomplete);
+			if (fromFrame) {
+				this.options.asyncRenderCallback?.();
+				this.changedHeight.fire();
+			}
+		}));
 		const part = this;
 		this.codeElement = {
 			get value() { return part.markdown?.value ?? ''; },
@@ -122,25 +126,21 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			get baseUri() { return part.markdown?.baseUri; },
 		};
 		this._register(addDisposableListener(this.domNode, 'load', event => { if ((event.target as Element).tagName === 'IMG') this.changedHeight.fire(); }, true));
-		this._register(toDisposable(() => { this.images.clear(); this.fragments = []; this.markdown = undefined; this.pending = undefined; this.domNode.remove(); }));
+		this._register(toDisposable(() => { this.images.clear(); this.fragments = []; this.markdown = undefined; this.domNode.remove(); }));
 		const markdown = typeof options.markdown === 'string' ? { value: options.markdown } : options.markdown ?? { value: '' };
-		this.enqueue(markdown, options.fillInIncompleteTokens ?? false);
+		this.incrementalRendering.update(markdown, options.fillInIncompleteTokens ?? false);
 	}
 
 	/** Reconciles appended text and provider corrections within this response's existing lifetime. */
 	public tryIncrementalUpdate(newMarkdown: IMarkdownString, fillInIncompleteTokens = false): boolean {
 		if (this.isDisposed) return false;
-		this.enqueue(newMarkdown, fillInIncompleteTokens);
+		this.incrementalRendering.update(newMarkdown, fillInIncompleteTokens);
 		return true;
 	}
 
 	/** Queues a snapshot only when it can be accepted without touching the live DOM. */
 	public tryQueueIncrementalUpdate(markdown: IMarkdownString, incomplete: boolean): boolean {
-		if (this.isDisposed || !this.visible || markdown.value.length < markdownFrameThreshold || markdown.value.length > markdownSizeLimit) return false;
-		// Terminal updates and corrections share the same latest snapshot slot.
-		this.pending = { markdown, incomplete };
-		this.scheduleUpdate();
-		return true;
+		return !this.isDisposed && this.incrementalRendering.tryMorph(markdown, incomplete);
 	}
 
 	public get codeblocks(): readonly IChatCodeBlockInfo[] {
@@ -151,26 +151,19 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			elementId: part.element.id,
 			uri: part.editor.getModel()?.uri,
 			languageId: part.editor.getModel()?.getLanguageId(),
-			focus: () => { if (!this.isDisposed && this.visible) { part.focus(); } },
+			focus: () => { if (!this.isDisposed && this.incrementalRendering.isVisible) { part.focus(); } },
 		}));
 	}
 
 	public hasSameContent(other: IChatListItem): boolean {
-		const markdown = this.pending?.markdown ?? this.markdown;
-		const incomplete = this.pending?.incomplete ?? this.fragments.at(-1)?.incomplete ?? false;
+		const pending = this.incrementalRendering.pending;
+		const markdown = pending?.markdown ?? this.markdown;
+		const incomplete = pending?.incomplete ?? this.fragments.at(-1)?.incomplete ?? false;
 		return !!markdown && markdown.value === other.text && incomplete === other.transient;
 	}
 
 	public setVisible(visible: boolean): void {
-		this.visible = visible;
-		if (!visible) this.update.clear();
-		else if (this.pending) {
-			const pending = this.pending;
-			this.pending = undefined;
-			// Preserve synchronous first-show for small responses; large snapshots
-			// still share the ordinary frame-coalesced rendering path.
-			this.enqueue(pending.markdown, pending.incomplete);
-		}
+		this.incrementalRendering.setVisible(visible);
 		for (const [, block] of this.codeBlocks) if (!this.deferredCodeBlocks.has(block)) block.setVisible(visible && this.viewportVisible);
 	}
 
@@ -181,35 +174,8 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		this.hasDeferredCodeBlocks = false;
 		for (const [, block] of this.codeBlocks) {
 			this.deferredCodeBlocks.delete(block);
-			block.setVisible(this.visible && visible);
+			block.setVisible(this.incrementalRendering.isVisible && visible);
 		}
-	}
-
-	private enqueue(markdown: IMarkdownString, incomplete: boolean): void {
-		// Preserve the complete renderer's synchronous admission/size error.
-		if (markdown.value.length > markdownSizeLimit) { this.render(markdown, incomplete); return; }
-		if (!this.visible) {
-			this.update.clear();
-			this.pending = { markdown, incomplete };
-			return;
-		}
-		if (this.tryQueueIncrementalUpdate(markdown, incomplete)) return;
-		this.update.clear();
-		this.pending = undefined;
-		this.render(markdown, incomplete);
-	}
-
-	private scheduleUpdate(): void {
-		if (this.update.value) return;
-		this.update.value = scheduleAtNextAnimationFrame(getWindow(this.domNode), () => {
-			this.update.clear();
-			const pending = this.pending;
-			this.pending = undefined;
-			if (!pending) return;
-			this.render(pending.markdown, pending.incomplete);
-			this.options.asyncRenderCallback?.();
-			this.changedHeight.fire();
-		});
 	}
 
 	private render(markdown: IMarkdownString, fillInIncompleteTokens: boolean): void {
@@ -237,14 +203,16 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		}
 		const tail = markdown.value.slice(offset);
 		let sources: string[] | undefined;
+		let firstBlockEnd: number | undefined;
 		const previousTail = this.fragments.at(-1);
+		const ordinaryTail = sameOptions && canPatchTail(tail) && markdown.value.length <= markdownSizeLimit
+			&& !markdown.supportHtml && !this.options.markedExtensions?.length
+			&& !/[$\\<>\r]|!\[|`{3}|~{3}|\]:/u.test(markdown.value)
+			&& previousTail?.element.childElementCount === 1
+			&& previousTail.element.firstElementChild!.matches(`p, ul, ol, .${chatMarkdownTableScrollClass}`);
 		// An ordinary tail without a new blank line can go directly to the renderer.
 		// It still verifies the block shape and handles incomplete inline syntax.
-		if (sameOptions && canPatchTail(tail) && markdown.value.length <= markdownSizeLimit
-			&& !markdown.supportHtml && !this.options.markedExtensions?.length
-			&& !/[$\\<>\r]|!\[|`{3}|~{3}|\]:/u.test(markdown.value) && !/\n[\t ]*\n/u.test(tail)
-			&& previousTail?.element.childElementCount === 1
-			&& previousTail.element.firstElementChild!.matches(`p, ul, ol, .${chatMarkdownTableScrollClass}`)) sources = [tail];
+		if (ordinaryTail && !/\n[\t ]*\n/u.test(tail)) sources = [tail];
 		// HTML and arbitrary extensions can carry state across blocks. Display math
 		// may acquire a closing delimiter several paragraphs later; formulas also
 		// share message-scoped macros. These inputs, reference definitions and
@@ -254,19 +222,26 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			// With no possible math opener, no extension scan or recursive math-token
 			// walk is needed. A later delimiter still selects the full math path.
 			const lexer = /[$\\]|`{3}|~{3}/u.test(tail) ? this.lexer : this.plainLexer;
-			const tokens = lexer.lexer(tail, { ...lexer.defaults, gfm: true, breaks: true, ...this.options.markedOptions });
+			const options = { ...lexer.defaults, gfm: true, breaks: true, ...this.options.markedOptions };
+			const checkpoint = ordinaryTail && append ? previousTail?.tail?.checkpoint : undefined;
+			const resumed = checkpoint?.children && previousTail && tail.startsWith(previousTail.source)
+				? lexMarkdownTail(tail, checkpoint, lexer, options) : undefined;
+			const tokens = resumed?.tokens ?? lexer.lexer(tail, options);
 			let hasMath = false;
 			if (lexer === this.lexer) lexer.walkTokens(tokens, token => { if (token.type.startsWith('ashMath')) hasMath = true; });
-			if (!hasMath && Object.keys(tokens.links).length === 0 && tokens.map(token => token.raw).join('') === tail) {
+			if (resumed || !hasMath && Object.keys(tokens.links).length === 0 && tokens.map(token => token.raw).join('') === tail) {
+				firstBlockEnd = resumed?.firstBlockEnd;
 				sources = [];
-				let leading = '';
+				let leading = resumed?.prefix ?? '';
+				let contextLength = resumed?.contextLength ?? 0;
 				for (const token of tokens) {
 					if (token.type === 'space') {
 						if (sources.length) sources[sources.length - 1] += token.raw;
 						else leading += token.raw;
 					} else {
-						sources.push(leading + token.raw);
+						sources.push(leading + token.raw.slice(contextLength));
 						leading = '';
+						contextLength = 0;
 					}
 				}
 				if (!sources.length) sources.push(leading);
@@ -295,8 +270,8 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 				else {
 					const replace = canPatchTail(source) ? available.findIndex(fragment => !fragment.codeCount && !fragment.images.size) : -1;
 					const previous = replace >= 0 ? available.splice(replace, 1)[0] : undefined;
-					const resume = append === true && previous === previousTail;
-					({ fragment, patch: tailPatch } = this.renderFragment({ ...markdown, value: source }, incomplete, codeStart, previous, resume));
+					const resumeEnd = append && previous === previousTail ? (index === 0 ? firstBlockEnd : undefined) ?? source.length : undefined;
+					({ fragment, patch: tailPatch } = this.renderFragment({ ...markdown, value: source }, incomplete, codeStart, previous, resumeEnd));
 					created.push(fragment);
 				}
 				next.push(fragment);
@@ -349,7 +324,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		if (focused?.isConnected && document.activeElement !== focused) focused.focus({ preventScroll: true });
 	}
 
-	private renderFragment(markdown: IMarkdownString, incomplete: boolean, codeStart: number, previous: MarkdownFragment | undefined, resume: boolean): { fragment: MarkdownFragment; patch?: MarkdownTailPatch; } {
+	private renderFragment(markdown: IMarkdownString, incomplete: boolean, codeStart: number, previous: MarkdownFragment | undefined, resumeEnd: number | undefined): { fragment: MarkdownFragment; patch?: MarkdownTailPatch; } {
 		const document = this.options.ownerDocument;
 		// The content part owns the fragment root, which can outlive an individual render.
 		const element = previous?.element ?? h(document, 'div');
@@ -375,7 +350,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 					return placeholder;
 				},
 			};
-			const { tail, patch } = this.renderTail(markdown, options, element, previous, resume) ?? {};
+			const { tail, patch } = this.renderTail(markdown, options, element, previous, resumeEnd) ?? {};
 			if (tail) {
 				lifetime.add(addDisposableListener<MouseEvent>(element, 'click', event => {
 					const anchor = (event.target as Element | null)?.closest?.('a[href]');
@@ -421,7 +396,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 						this.hasDeferredCodeBlocks = true;
 					}
 				}
-				part.setVisible(this.visible && this.viewportVisible && !this.deferredCodeBlocks.has(part));
+				part.setVisible(this.incrementalRendering.isVisible && this.viewportVisible && !this.deferredCodeBlocks.has(part));
 				part.render({ text: data.text, languageId: data.languageId, codeBlockIndex: index, element: this.codeElement, chatSessionResource: undefined, getActionContext: this.getCodeActionContext, renderOptions: { maxHeightInLines: 20 } }, this.domNode.clientWidth);
 				const parent = data.placeholder.parentElement;
 				if (parent?.tagName === 'PRE') parent.replaceWith(part.element);
@@ -445,7 +420,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	}
 
 	/** Reuse sanitized children only within a fragment rendered with the same Markdown metadata and options. */
-	private renderTail(markdown: IMarkdownString, options: MarkdownRenderOptions, element: HTMLElement, previous: MarkdownFragment | undefined, resume: boolean): { tail: MarkdownTail; patch?: MarkdownTailPatch; } | undefined {
+	private renderTail(markdown: IMarkdownString, options: MarkdownRenderOptions, element: HTMLElement, previous: MarkdownFragment | undefined, resumeEnd: number | undefined): { tail: MarkdownTail; patch?: MarkdownTailPatch; } | undefined {
 		if (!canPatchTail(markdown.value) || markdown.supportHtml || /[$\\<>]|!\[|`{3}|~{3}/u.test(markdown.value)
 			|| options.transformUri || options.markedExtensions?.length
 			|| options.sanitizerConfig?.allowedTags || options.sanitizerConfig?.allowedAttributes) {
@@ -465,13 +440,15 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 			return raw;
 		};
 		const oldTail = previous?.tail;
-		const boundary = resume ? oldTail?.checkpoint : undefined;
+		const boundary = resumeEnd === undefined ? undefined : oldTail?.checkpoint;
 		const lexerOptions = renderOptions.markedOptions ?? {};
 		// The detached tree and the live DOM have the same checkpoint. Reparse
 		// only the mutable suffix, and retain the preceding children in both.
 		if (previous && oldTail?.policy === policy && boundary?.children && markdown.value.startsWith(previous.source)
 			&& !/\]:|\r/u.test(markdown.value)) {
-			const input = boundary.context + markdown.value.slice(boundary.offset);
+			// A proven sibling separator stays in the fragment's source for offset
+			// tracking, but is outside the block that the checkpoint describes.
+			const input = boundary.context + markdown.value.slice(boundary.offset, resumeEnd);
 			const suffix = parse(input);
 			if (suffix?.tagName === oldTail.raw.tagName) {
 				const checkpoint = markdownTailCheckpoint(input, suffix, this.plainLexer, lexerOptions, boundary);

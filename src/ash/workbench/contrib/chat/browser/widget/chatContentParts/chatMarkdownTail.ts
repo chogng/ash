@@ -1,4 +1,4 @@
-import type { Marked, MarkedOptions } from '../../../../../../base/common/marked/marked.js';
+import type { Marked, MarkedOptions, TokensList } from '../../../../../../base/common/marked/marked.js';
 
 export type MarkdownTailCheckpoint = {
 	readonly offset: number;
@@ -10,6 +10,25 @@ const paragraphContext = '`x`';
 const paragraphCheckpointScanLimit = 4096;
 const listItem = /^([-+*]|\d{1,9}[.)]) [\p{L}\p{N}]/u;
 const plainInline = /^[^*_`~[\]<>!\\$]*$/u;
+
+/** Discovers a new sibling block without lexing the source before a proven checkpoint. */
+export function lexMarkdownTail(
+	source: string,
+	checkpoint: MarkdownTailCheckpoint,
+	lexer: Marked,
+	options: Pick<MarkedOptions, 'breaks' | 'gfm'>,
+): { tokens: TokensList; prefix: string; contextLength: number; firstBlockEnd: number; } | undefined {
+	const { context, offset } = checkpoint;
+	const input = context + source.slice(offset);
+	const tokens = lexer.lexer(input, options);
+	const [first, separator, sibling] = tokens;
+	// A loose list changes the markup of earlier items. Require an actual
+	// separator and sibling so a continuation cannot be mistaken for a split.
+	if (first?.type !== checkpoint.kind || first.type === 'list' && first.loose
+		|| separator?.type !== 'space' || !sibling || !first.raw.startsWith(context) || first.raw.length <= context.length
+		|| Object.keys(tokens.links).length || tokens.map(token => token.raw).join('') !== input) return undefined;
+	return { tokens, prefix: source.slice(0, offset), contextLength: context.length, firstBlockEnd: offset + first.raw.length - context.length };
+}
 
 /** Finds a resumable boundary in the source just rendered by Marked. */
 export function markdownTailCheckpoint(

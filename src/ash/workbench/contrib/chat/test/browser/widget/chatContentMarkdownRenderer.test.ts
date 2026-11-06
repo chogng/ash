@@ -201,8 +201,12 @@ suite('Shared chat Markdown rendering', () => {
 		part.tryIncrementalUpdate({ value: '' }, false);
 		await frame();
 		assert.equal(part.domNode.textContent, '');
-		part.setVisible(false);
 		const before = updates;
+		assert.equal(part.tryQueueIncrementalUpdate({ value: prefix + 'queued before hiding' }, true), true);
+		part.setVisible(false);
+		await frame();
+		assert.equal(part.domNode.textContent, '');
+		assert.equal(updates, before);
 		part.tryIncrementalUpdate({ value: prefix + 'hidden' }, true);
 		await frame();
 		assert.equal(updates, before);

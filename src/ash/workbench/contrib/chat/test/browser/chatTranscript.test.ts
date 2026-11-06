@@ -872,17 +872,36 @@ suite('chatTranscript browser component', () => {
 				const appended = prefix + addition;
 				const afterAppend = await fixture.compareStreamingMarkdown(appended, false);
 				const retained = stable !== null && root().querySelector(selector) === stable;
+				const afterCompletion = await fixture.compareStreamingMarkdown(appended + '\n \t\nA new final paragraph.', true);
+				const retainedOnCompletion = stable !== null && root().querySelector(selector) === stable;
+				fixture.remove();
+				await fixture.compareStreamingMarkdown(appended, false);
 				const afterStructure = await fixture.compareStreamingMarkdown(appended + structuralChange, false);
 				const corrected = appended.replace(kind === 'hugeParagraph' ? 'Markdown' : kind === 'largeList' ? 'Item 0' : 'Row 0', 'Corrected');
 				const afterCorrection = await fixture.compareStreamingMarkdown(corrected, true);
-				return { retained, afterAppend, afterStructure, afterCorrection };
+				return { retained, retainedOnCompletion, afterAppend, afterCompletion, afterStructure, afterCorrection };
 			}, kind);
 			expect(result.retained, kind).toBe(true);
+			expect(result.retainedOnCompletion, `${kind} completion`).toBe(true);
 			expect(result.afterAppend.actual, `${kind} append`).toBe(result.afterAppend.expected);
+			expect(result.afterCompletion.actual, `${kind} completion`).toBe(result.afterCompletion.expected);
 			expect(result.afterStructure.actual, `${kind} structure change`).toBe(result.afterStructure.expected);
 			expect(result.afterCorrection.actual, `${kind} correction`).toBe(result.afterCorrection.expected);
 			expect(result.afterCorrection.actual).toContain('Corrected');
 		}
+	});
+
+	test('streaming Markdown resolves a final reference definition in committed list items', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const result = await page.evaluate(async () => {
+			const fixture = window.ashChatTranscriptIntegration;
+			const source = fixture.markdownWorkload('largeList').split('\n\n')[0].replace('Item 0:', 'Item 0: [reference][target]');
+			await fixture.compareStreamingMarkdown(source, false);
+			return fixture.compareStreamingMarkdown(source + '\n\n[target]: https://example.org/target\n\nDone.', true);
+		});
+		expect(result.actual).toBe(result.expected);
+		expect(result.actual).toContain('href="https://example.org/target"');
 	});
 
 	test('streaming Markdown fences, lists and corrections match a complete render at every boundary', async function () {
