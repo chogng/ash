@@ -84,7 +84,10 @@ import { IContextMenuService } from '../../../../../../platform/contextview/brow
 import type { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
 import type { ModelCatalogEntry } from '../../../../../services/chat/common/chatService.js';
 import type { ChatAgent } from '../../../../../services/chat/common/chatService.js';
+import { isMacintosh } from '../../../../../../base/common/platform.js';
+import { pickFiles } from '../../../../../../base/browser/fileAccess.js';
 import { AttachContextAction } from '../../actions/chatContextActions.js';
+import { ChatInputAttachMenu } from './chatInputAttachMenu.js';
 import { OpenWorkspacePickerAction } from '../../actions/chatExecuteActions.js';
 import { createToolSelectionAttachment } from '../../actions/chatToolPicker.js';
 import { status as announceStatus } from '../../../../../../base/browser/ui/aria/aria.js';
@@ -235,6 +238,8 @@ export interface IChatInputPart extends IDisposable {
 	openModePicker(): void;
 	openPermissionPicker(): void;
 	openWorkspacePicker(): void;
+	openAttachMenu(anchor?: HTMLElement): void;
+	triggerUploadOrAddFiles(): void;
 	/** Current model admission shared with registered image context sources. */
 	supportsImages(): boolean;
 	acceptActiveToolConfirmation(): Promise<void>;
@@ -288,17 +293,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private filePicker?: HTMLInputElement;
 	private applyingModelDraft = false;
 	private readonly attachContext = this._register(new MutableDisposable<AttachContextAction>());
-	private readonly attachAction = this._register(new Action('ash.chat.input.attach', '', '', true, () => {
-		if (this.filePicker) {
-			this.filePicker.click();
-			return;
-		}
-		// The command creates the picker owner only when this composer opens it.
-		this.attachContext.value ??= this.instantiationService.createInstance(AttachContextAction, {
-			container: this.inputContainer, target: this, focusInput: () => this.focus(), supportsImages: () => this.supportsImages(),
-			attachGitHubReference: this.options.attachGitHubReference,
-		});
-		return this.attachContext.value.run(this.element.querySelector<HTMLElement>('[data-action-id="ash.chat.input.attach"] button') ?? undefined);
+	private readonly attachMenu = this._register(new MutableDisposable<ChatInputAttachMenu>());
+	private readonly attachAction = this._register(new Action('ash.chat.input.attach', '', '', true, (target?: unknown) => {
+		this.openAttachMenu(target instanceof HTMLElement ? target : undefined);
 	}));
 	public readonly attachmentModel = this._register(new ChatAttachmentModel());
 	private readonly inlineContext: ChatDynamicVariableModel;
@@ -517,6 +514,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		updateCursorAtTop();
 		this.inlineContext = this._register(new ChatDynamicVariableModel(this.input, this.attachmentModel));
 		this.pasteTarget = this._register(instantiationService.createInstance(ChatWidgetPasteTarget, this.input, this.inlineContext, this.attachmentModel));
+		this._register(addDisposableListener(this.inputContainer, 'keydown', (event: KeyboardEvent) => {
+			if ((isMacintosh ? event.metaKey : event.ctrlKey) && !event.shiftKey && !event.altKey && (event.key === 'u' || event.key === 'U')) {
+				stopEvent(event);
+				this.triggerUploadOrAddFiles();
+			}
+		}));
 		if (this.input.codeEditor) {
 			this.inputDecorations = this._register(new InputEditorDecorations(this.input.codeEditor,
 				() => this.visible && this.mode === 'agent' && !this.state.aiDisabled ? this.state.selectedAgent : undefined));
@@ -1229,6 +1232,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.historyInputRevision++;
 		this.historySearch.clear();
 		this.attachContext.clear();
+		this.attachMenu.clear();
 		// Retiring capture must not post its eventual failure into the next input lifetime.
 		void this.dictationSession.cancel().catch(() => undefined);
 	}
@@ -1261,6 +1265,41 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}
 		this.workspaceWidget?.focus();
 		this.workspaceWidget?.show();
+	}
+
+	public openAttachMenu(anchor?: HTMLElement): void {
+		if (this.isDisposed || !this.visible) return;
+		const targetAnchor = anchor
+			?? this.element.querySelector<HTMLElement>('[data-action-id="ash.chat.input.attach"] button')
+			?? this.element.querySelector<HTMLElement>('[data-action-id="ash.chat.input.attach"]')
+			?? this.inputContainer;
+		this.attachMenu.value = this.instantiationService.createInstance(ChatInputAttachMenu, {
+			anchor: targetAnchor,
+			onUploadFiles: () => this.triggerUploadOrAddFiles(),
+			onAttachSkill: (skill: SkillReference) => this.attachSkill(skill),
+			getSkills: () => this.state.skillSelectors,
+			focusInput: () => this.focus(),
+		});
+		this.attachMenu.value.show();
+	}
+
+	public triggerUploadOrAddFiles(): void {
+		if (this.filePicker) {
+			this.filePicker.click();
+			return;
+		}
+		void this.showFilePicker();
+	}
+
+	private async showFilePicker(): Promise<void> {
+		const files = await pickFiles({
+			ownerDocument: this.inputContainer.ownerDocument,
+			selection: 'multiple',
+			ariaLabel: localize('chat.attach.files', 'Attach files'),
+		});
+		if (files && files.length && !this.isDisposed) {
+			await this.attachFiles(files);
+		}
 	}
 
 	/** Compose product help inside this provider so registry priority cannot hide it. */
@@ -2381,7 +2420,7 @@ class ChatContextUsageActionViewItem extends ActionViewItem {
 class ChatAttachContextActionViewItem extends ButtonActionViewItem {
 	override render(container: HTMLElement): void {
 		super.render(container);
-		this.button.domNode.setAttribute('aria-haspopup', 'dialog');
+		this.button.domNode.setAttribute('aria-haspopup', 'menu');
 		this.button.domNode.setAttribute('aria-expanded', 'false');
 	}
 }
