@@ -23,26 +23,40 @@ import type { ChatEditorInput } from './widgetHosts/editor/chatEditorInput.js';
 
 export const CHAT_WIDGET_VIEW_STATE_CACHE_LIMIT = 100;
 
-/** Borrows a reply from its rendered row and limits playback to that row's lifetime. */
-export class ChatResponseActionContext extends Disposable {
+/** Binds a toolbar action to its rendered message and row lifetime. */
+export class ChatMessageActionContext extends Disposable {
+	constructor(
+		private currentItem: IChatListItem,
+		readonly actions: HTMLElement,
+		private readonly isVisible: () => boolean,
+	) { super(); }
+
+	get visible(): boolean { return !this.isDisposed && this.isVisible(); }
+	get item(): IChatListItem { return this.currentItem; }
+
+	update(item: IChatListItem): void {
+		this.currentItem = item;
+	}
+}
+
+/** Limits reply playback to the row's lifetime. */
+export class ChatResponseActionContext extends ChatMessageActionContext {
 	private playback: AbortController | undefined;
 	private status: HTMLElement | undefined;
 
 	constructor(
-		private currentItem: IChatListItem,
-		readonly actions: HTMLElement,
+		item: IChatListItem,
+		actions: HTMLElement,
 		readonly window: Window & typeof globalThis,
-		private readonly isVisible: () => boolean,
+		isVisible: () => boolean,
 		private readonly setReading: (reading: boolean) => void,
-	) { super(); }
+	) { super(item, actions, isVisible); }
 
-	get visible(): boolean { return !this.isDisposed && this.isVisible(); }
 	get isReading(): boolean { return !!this.playback; }
-	get item(): IChatListItem { return this.currentItem; }
 
-	update(item: IChatListItem): void {
+	override update(item: IChatListItem): void {
 		const previous = this.item;
-		this.currentItem = item;
+		super.update(item);
 		if (previous.text !== item.text || previous.attachmentSource?.sessionId !== item.attachmentSource?.sessionId
 			|| previous.attachmentSource?.threadId !== item.attachmentSource?.threadId) this.stop();
 	}

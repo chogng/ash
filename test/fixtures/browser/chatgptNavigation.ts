@@ -110,6 +110,7 @@ import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/pa
 import { DialogService } from '../../../src/ash/workbench/services/dialogs/common/dialogService.js';
 import { IClipboardService } from '../../../src/ash/platform/clipboard/common/clipboardService.js';
 import { AccessibilitySupport, IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
+import { AccessibilityService } from '../../../src/ash/platform/accessibility/browser/accessibilityService.js';
 import '../../../src/ash/sessions/contrib/chat/browser/chat.contribution.js';
 
 declare global {
@@ -222,6 +223,9 @@ const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);
 registerTestDictationOnboarding(services);
 registerTestComponentServices(services);
+services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({
+	root: document.body, contextKeyService: services.get(IContextKeyService), configurationService: configuration,
+})));
 resources.add(services.createInstance(ChatCopyActionRendering));
 const attachmentFolder = URI.file('/fixture-folder');
 const attachmentFile = URI.joinPath(attachmentFolder, 'notes.txt');

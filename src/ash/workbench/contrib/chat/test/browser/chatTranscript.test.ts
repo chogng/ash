@@ -116,6 +116,51 @@ suite('chatTranscript browser component', () => {
 			]);
 		});
 
+		test(`Agent Window sent messages expose only Copy and Edit in ${locale}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatTranscript.html?sessions&locale=${locale}`);
+			const text = 'First line 汉字\n[original](file:///fixture.txt)';
+			await page.evaluate(text => window.ashChatTranscriptIntegration.prepareRequestEditing(false, text, true, true), text);
+			const row = page.locator('[data-item-id="presentation-entry"]');
+			const toolbar = row.getByRole('toolbar', { name: locale === 'en' ? 'Message actions' : '消息操作', exact: true });
+			const copy = toolbar.getByRole('button', { name: locale === 'en' ? 'Copy message' : '复制消息', exact: true });
+			const edit = toolbar.getByRole('button', { name: locale === 'en' ? 'Edit message' : '编辑消息', exact: true });
+			await expect(row.locator('.ash-chat-message-actions').getByRole('button')).toHaveCount(2);
+			const copyIcon = copy.locator('[data-ash-icon-id="copy"]');
+			const checkIcon = copy.locator('[data-ash-icon-id="check"]');
+			await expect(copyIcon).toBeVisible();
+			await expect(edit.locator('[data-ash-icon-id="edit"]')).toBeVisible();
+			await copy.focus();
+			const copyBounds = await copy.boundingBox();
+			const editBounds = await edit.boundingBox();
+			const iconColor = await copyIcon.evaluate(icon => getComputedStyle(icon).color);
+			await page.clock.install();
+			await page.clock.pauseAt(new Date());
+			await copy.press('Enter');
+			await expect(checkIcon).toBeVisible();
+			await expect(checkIcon).toHaveCSS('color', iconColor);
+			await expect(row.locator('.ash-chat-message-copy-status')).toBeEmpty();
+			await expect(copy).toBeFocused();
+			expect(await copy.boundingBox()).toEqual(copyBounds);
+			expect(await edit.boundingBox()).toEqual(editBounds);
+			await page.clock.runFor(1199);
+			await expect(checkIcon).toBeVisible();
+			await expect(page.locator('.ash-aria-status').filter({ hasText: locale === 'en' ? 'Message copied.' : '消息已复制。' })).toHaveCount(1);
+			await page.clock.runFor(1);
+			await expect(copyIcon).toBeVisible();
+			await page.clock.resume();
+			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe(text);
+			await page.keyboard.press('ArrowRight');
+			await expect(edit).toBeFocused();
+			await page.keyboard.press('Space');
+			const input = row.getByRole('textbox', { name: locale === 'en' ? 'Edit request' : '编辑请求', exact: true });
+			await expect(input).toBeFocused();
+			await expect(input).toHaveValue(text);
+			await page.keyboard.press('Escape');
+			await expect(edit).toBeFocused();
+			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.requestEdits())).toEqual([]);
+		});
+
 		test(`message checkpoint restore targets its request and returns focus on cancel in ${locale}`, async () => {
 			const { page } = browserTests;
 			await page.goto(`/chatTranscript.html?locale=${locale}`);
@@ -223,6 +268,14 @@ suite('chatTranscript browser component', () => {
 			if (!cowork) {
 				await expect(send).toBeEnabled();
 				await expect(send).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				const composerSend = composer.locator('.ash-chat-input-send-action');
+				await expect(send.locator('.ash-icon')).toHaveClass((await composerSend.locator('.ash-icon').getAttribute('class'))!);
+				await chat.evaluate(element => {
+					element.classList.add('ash-sessions-window');
+					element.querySelector(':scope > .ash-chat-input-part')!.classList.add('ash-sessions-chat-input');
+				});
+				await expect(composerSend).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				await expect(send).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 				await expect.poll(() => send.evaluate(button => {
 					const { width, height } = button.getBoundingClientRect();
 					const radius = parseFloat(getComputedStyle(button).borderTopLeftRadius);
@@ -322,34 +375,38 @@ suite('chatTranscript browser component', () => {
 		});
 	}
 
-	test('A long request keeps its bubble position when the edit toolbar is added', async function () {
+	test('A long request keeps its bubble position when its actions give way to the editor', async function () {
 		const { page } = browserTests;
 		await page.goto('/chatTranscript.html?richInput&sessions');
 		await page.evaluate(() => window.ashChatTranscriptIntegration.prepareRequestEditing(false,
 			Array.from({ length: 20 }, (_, index) => `Review the sample workspace and summarize its changes. Request line ${index + 1}.`).join('\n')));
 		const chat = page.locator('#app-chat');
-		const bubble = chat.locator('.ash-chat-user-message > pre');
+		const row = chat.locator('.ash-chat-user-message');
+		const bubble = row.locator(':scope > pre');
 		const following = chat.getByText('Following response', { exact: true });
 		await following.scrollIntoViewIfNeeded();
 		await expect(following).toBeInViewport();
 		const original = (await bubble.boundingBox())!;
+		const originalRowHeight = (await row.boundingBox())!.height;
 		const followingTop = (await following.boundingBox())!.y;
 		await page.mouse.click(original.x + original.width / 2, original.y + original.height / 2);
 		const edit = chat.locator('.ash-chat-request-editor');
 		await expect(edit.getByRole('textbox', { name: 'Edit request' })).toBeFocused();
+		await expect(row.getByRole('toolbar', { name: 'Message actions' })).toBeHidden();
 		await expect.poll(async () => {
 			const bounds = (await edit.boundingBox())!;
+			const rowHeightChange = (await row.boundingBox())!.height - originalRowHeight;
 			const followingShift = (await following.boundingBox())!.y - followingTop;
 			return {
 				leftShift: Math.round(bounds.x - original.x),
 				topShift: Math.round(bounds.y - original.y),
 				widthChange: Math.round(bounds.width - original.width),
 				grewDownward: bounds.height > original.height,
-				pushedResponseDown: followingShift > 0 && Math.abs(followingShift - (bounds.height - original.height)) < 1,
+				responseFollowsRow: Math.abs(followingShift - rowHeightChange) < 1,
 			};
-		}).toEqual({ leftShift: 0, topShift: 0, widthChange: 0, grewDownward: true, pushedResponseDown: true });
+		}).toEqual({ leftShift: 0, topShift: 0, widthChange: 0, grewDownward: true, responseFollowsRow: true });
 		await page.keyboard.press('Escape');
-		await expect(bubble).toBeFocused();
+		await expect(chat.getByRole('button', { name: 'Edit message', exact: true })).toBeFocused();
 		await expect.poll(async () => Math.round((await bubble.boundingBox())!.y - original.y)).toBe(0);
 	});
 
@@ -393,7 +450,7 @@ suite('chatTranscript browser component', () => {
 				await expect(edit).toHaveCount(0);
 			} else {
 				await page.keyboard.press('Escape');
-				await expect(bubble).toBeFocused();
+				await expect(chat.getByRole('button', { name: 'Edit message', exact: true })).toBeFocused();
 			}
 			await expect.poll(metrics).toEqual(original);
 		}
@@ -1329,7 +1386,7 @@ suite('chatTranscript browser component', () => {
 				for (const theme of ['dark', 'light', 'hc'] as const) {
 					await page.evaluate(theme => { window.ashChatTranscriptIntegration.setTheme(theme); document.querySelector<HTMLElement>('[data-item-id="copy-response"]')!.closest('main')!.style.width = '220px'; }, theme);
 					await button.focus(); await page.keyboard.press('Enter');
-					await expect(row.locator('.ash-chat-message-copy-status')).toHaveText(locale === 'zh-CN' ? '消息已复制。' : 'Message copied.');
+					await expect(row.locator('.ash-chat-message-copy-status')).toBeEmpty();
 					await expect(button.locator('[data-ash-icon-id="check"]')).toBeVisible();
 					await expect(button).toBeFocused();
 					expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe(text);

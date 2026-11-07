@@ -42,12 +42,11 @@ import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 import { captureAnimationTarget, triggerClickAnimation, ClickAnimation } from '../../../../../base/browser/ui/animations/animations.js';
 import { ChatResponseFeedbackStoragePrefix, ChatUpvoteAnimationSettingId, getResponseVote, isResponseHelpful, type ChatUpvoteAnimation } from '../../common/chatResponseFeedback.js';
 import { MarkHelpfulActionId } from '../actions/chatTitleActions.js';
-import { renderChatRequestCopyButton } from '../actions/chatCopyActions.js';
 import { ChatEditPendingRequestAction, ChatRemovePendingRequestAction, ChatSendPendingImmediatelyAction } from '../actions/chatQueueActions.js';
 import type { Icon } from '../../../../../base/common/icon.js';
 import { ChatForkActionViewItem } from './chatForkActionViewItem.js';
 import { ChatTurnChangesPill } from './chatTurnPills.js';
-import { ChatResponseActionContext, type ChatTurnChangesOpener } from '../chat.js';
+import { ChatMessageActionContext, ChatResponseActionContext, type ChatTurnChangesOpener } from '../chat.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { RedoChatHistoryActionId, RestoreCheckpointActionId } from '../chatEditing/chatEditingActions.js';
 
@@ -105,7 +104,7 @@ export class ChatListItemRenderer extends Disposable {
 	public getLastFocusedFileTree() { return this.toolPart?.getLastFocusedFileTree() ?? this.resources.value?.getLastFocusedFileTree(); }
 	inViewport = true;
 	private readonly edit = this._register(new MutableDisposable<DisposableStore>());
-	private copyButton: Button | undefined;
+	private requestActionContext: ChatMessageActionContext | undefined;
 	private responseActionContext: ChatResponseActionContext | undefined;
 	private updateResponseActions: ((beforeLayout?: () => void) => boolean) | undefined;
 	private updateTurnChanges: (() => void) | undefined;
@@ -157,6 +156,7 @@ export class ChatListItemRenderer extends Disposable {
 		const same = sameItem(this.item, item);
 		if (same && this.item.content === item.content && (!contentPart || contentPart.hasSameContent(item))) {
 			this.item = item;
+			this.requestActionContext?.update(item);
 			// Providers can gain or lose response actions without changing the transcript.
 			if (this.options.getResponseActions) {
 				if (this.updateResponseActions?.(beforeLayout)) return 'updated';
@@ -218,7 +218,6 @@ export class ChatListItemRenderer extends Disposable {
 	}
 
 	private refreshContent(): void {
-		if (this.copyButton) this.copyButton.enabled = this.item.text.length > 0;
 		this.updateResponseActions?.();
 		this.updateTurnChanges?.();
 		this.renderAttachments();
@@ -284,9 +283,37 @@ export class ChatListItemRenderer extends Disposable {
 		return actions;
 	}
 
-	private renderCopyAction(lifetime: DisposableStore): HTMLElement {
+	private createMessageToolbar(actions: HTMLElement, menu: MenuId, label: string, context: IContextKeyService, lifetime: DisposableStore): MenuWorkbenchToolBar {
+		const windowId = getWindowId(getWindow(actions)) ?? 0;
+		const toolbar = lifetime.add(new MenuWorkbenchToolBar(actions, this.menus, this.contextMenus, menu, {
+			ariaLabel: label,
+			contextKeyService: context,
+			menuOptions: { shouldForwardArgs: true, renderShortTitle: true },
+			actionViewItemProvider: (action, options) => {
+				const buttonOptions = { ...options, iconOnly: true, buttonPresentation: 'quiet' as const };
+				const factory = this.actionViewItems.lookUp(menu, action.id);
+				return factory?.(action, buttonOptions, this.instantiationService, windowId)
+					?? createActionViewItem(action, this.contextMenus, buttonOptions)
+					?? new ButtonActionViewItem(action, buttonOptions);
+			},
+		}));
+		lifetime.add(toolbar.actionRunner.onDidRun(event => {
+			if (event.error && !this.isDisposed && !isCancellationError(event.error)) this.notifications.error(String(event.error));
+		}));
+		return toolbar;
+	}
+
+	private renderRequestActions(requestText: HTMLElement, lifetime: DisposableStore): HTMLElement {
 		const actions = this.createMessageActions();
-		this.copyButton = renderChatRequestCopyButton(actions, lifetime, this.commands, () => this.item, this.options.isVisible);
+		const context = lifetime.add(this.contextKeys.createScoped(actions));
+		ChatContextKeys.requestHasText.bindTo(context).set(!!this.item.text);
+		const toolbar = this.createMessageToolbar(actions, MenuId.ChatMessageTitle, localize('chat.request.actions', 'Message actions'), context, lifetime);
+		toolbar.context = this.requestActionContext = lifetime.add(new ChatMessageActionContext(this.item, actions, this.options.isVisible));
+		if (this.item.requestSource) {
+			const open = this.installRequestEditor(requestText, lifetime, actions, () => toolbar.focus(toolbar.getItemsLength() - 1));
+			toolbar.setTrailingActions([this.messageAction('ash.chat.request.edit', localize('chat.edit.label', 'Edit message'), Lxicon.edit, open)]);
+		}
+		actions.prepend(toolbar.element);
 		return actions;
 	}
 
@@ -344,18 +371,7 @@ export class ChatListItemRenderer extends Disposable {
 		};
 		const getActions = () => this.options.getResponseActions?.(this.item);
 		updateMenuContext(getActions()?.menuContext);
-		const toolbar = footer = lifetime.add(new MenuWorkbenchToolBar(actions, this.menus, this.contextMenus, MenuId.ChatMessageFooter, {
-			ariaLabel: localize('chat.message.actions', 'Response actions'),
-			contextKeyService: context,
-			menuOptions: { shouldForwardArgs: true, renderShortTitle: true },
-			actionViewItemProvider: (action, options) => {
-				const buttonOptions = { ...options, iconOnly: true, buttonPresentation: 'quiet' as const };
-				const factory = this.actionViewItems.lookUp(MenuId.ChatMessageFooter, action.id);
-				return factory?.(action, buttonOptions, this.instantiationService, getWindowId(targetWindow) ?? 0)
-					?? createActionViewItem(action, this.contextMenus, buttonOptions)
-					?? new ButtonActionViewItem(action, buttonOptions);
-			},
-		}));
+		const toolbar = footer = this.createMessageToolbar(actions, MenuId.ChatMessageFooter, localize('chat.message.actions', 'Response actions'), context, lifetime);
 		toolbar.context = response;
 		actions.prepend(toolbar.element);
 		let trailing: readonly IAction[] = [];
@@ -380,9 +396,6 @@ export class ChatListItemRenderer extends Disposable {
 		const getHelpful = this.options.getResponseActions || this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key)
 			? undefined : this.createHelpfulAction(actions, lifetime, update);
 		this.updateResponseActions = update;
-		lifetime.add(toolbar.actionRunner.onDidRun(event => {
-			if (event.error && !this.isDisposed && !isCancellationError(event.error)) this.notifications.error(String(event.error));
-		}));
 		lifetime.add(addDisposableListener(this.element, 'keydown', event => {
 			if (event.key !== 'Escape' || !response.stop()) return;
 			event.preventDefault();
@@ -391,7 +404,7 @@ export class ChatListItemRenderer extends Disposable {
 		this.renderTurnChanges(actions, lifetime);
 	}
 
-	private responseAction(id: string, label: string, icon: Icon, run: () => unknown): IAction {
+	private messageAction(id: string, label: string, icon: Icon, run: () => unknown): IAction {
 		return {
 			id, label, tooltip: label, icon, enabled: true, run: () => {
 				if (!this.isDisposed && this.options.isVisible()) return run();
@@ -506,7 +519,7 @@ export class ChatListItemRenderer extends Disposable {
 		const feedback = lifetime.add(new MutableDisposable());
 		let pending = false;
 		const getTarget = () => !this.item.transient && !this.item.isError ? this.item.feedbackSource : undefined;
-		const helpful = this.responseAction(MarkHelpfulActionId, localize('chat.response.helpful', 'Helpful'), Lxicon.thumbsup, async () => {
+		const helpful = this.messageAction(MarkHelpfulActionId, localize('chat.response.helpful', 'Helpful'), Lxicon.thumbsup, async () => {
 			const target = getTarget();
 			if (!target || pending) return;
 			const button = actions.querySelector<HTMLElement>(`[data-action-id="${MarkHelpfulActionId}"] > button`);
@@ -543,11 +556,7 @@ export class ChatListItemRenderer extends Disposable {
 		};
 	}
 
-	private renderEditAction(requestText: HTMLElement, lifetime: DisposableStore, actions?: HTMLElement): void {
-		const edit = actions && !this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key) ? lifetime.add(new Button(actions, {
-			...defaultButtonStyles, label: localize('chat.edit.label', 'Edit message'), presentation: 'quiet', size: 'small',
-		})) : undefined;
-		const editTarget = edit?.domNode ?? requestText;
+	private installRequestEditor(requestText: HTMLElement, lifetime: DisposableStore, actions: HTMLElement, focusEdit: () => void): () => void {
 		requestText.classList.add('ash-chat-request-editable');
 		const open = (): void => {
 			if (this.edit.value || !this.item.requestSource || !this.options.isVisible()) return;
@@ -568,7 +577,7 @@ export class ChatListItemRenderer extends Disposable {
 				const returnToEdit = restoreFocus && this.options.isVisible() && editor.contains(editor.ownerDocument.activeElement);
 				const restoreReadingPosition = this.options.isVisible() ? this.options.onWillChangeRequestEditor(false) : undefined;
 				this.edit.clear();
-				if (returnToEdit) editTarget.focus({ preventScroll: true });
+				if (returnToEdit) focusEdit();
 				restoreReadingPosition?.();
 				this.options.onDidChangeHeight();
 				this.options.onDidChangeContent();
@@ -589,11 +598,11 @@ export class ChatListItemRenderer extends Disposable {
 			if (this.options.createRequestInput) editor.style.inlineSize = `${originalBounds.width}px`;
 			requestText.before(editor);
 			requestText.hidden = true;
-			if (actions) actions.hidden = true;
+			actions.hidden = true;
 			store.add(toDisposable(() => {
 				editor.remove();
 				requestText.hidden = false;
-				if (actions) actions.hidden = false;
+				actions.hidden = false;
 			}));
 			let attempt: { signature: string; commandId: string; } | undefined;
 			const reportError = (error: unknown): void => {
@@ -682,24 +691,12 @@ export class ChatListItemRenderer extends Disposable {
 			}));
 			this.options.onDidChangeHeight(); this.options.onDidChangeContent();
 		};
-		if (edit) {
-			lifetime.add(edit.onDidClick(open));
-		} else {
-			requestText.tabIndex = 0;
-			requestText.setAttribute('role', 'button');
-			requestText.setAttribute('aria-description', localize('chat.edit.label', 'Edit message'));
-			lifetime.add(addDisposableListener(requestText, 'keydown', event => {
-				if (event.isComposing || (event.key !== 'Enter' && event.key !== ' ')) return;
-				event.preventDefault();
-				event.stopPropagation();
-				if (!event.repeat) open();
-			}));
-		}
 		lifetime.add(addDisposableListener(requestText, 'click', event => {
 			// Keep drag-to-select available on the message text.
 			const selection = requestText.ownerDocument.getSelection();
 			if (event.button === 0 && (!selection || selection.isCollapsed)) open();
 		}));
+		return open;
 	}
 
 	private renderMemoryReferences(): void {
@@ -881,17 +878,15 @@ export class ChatListItemRenderer extends Disposable {
 				{ id: ChatRemovePendingRequestAction.ID, label: localize('chat.queue.rowRemove', 'Remove queued message'), icon: Lxicon.close },
 			], () => this.item.queueTarget);
 		} else if (requestText) {
-			const checkpoint = item.canForkBeforeRequest && item.requestSource;
-			const actions = this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key)
-				? (checkpoint || item.canRunAnotherVersion ? this.createMessageActions() : undefined)
-				: this.renderCopyAction(disposables);
-			if (item.requestSource) this.renderEditAction(requestText, disposables, actions);
-			if (checkpoint && actions) {
-				this.renderRestoreCheckpointAction(actions, checkpoint, disposables);
-				const { sessionId, threadId, itemId } = checkpoint;
-				disposables.add(this.instantiationService.createInstance(ChatForkActionViewItem, actions, { sessionId, threadId, beforeItemId: itemId }, this.options.isVisible));
+			const actions = this.renderRequestActions(requestText, disposables);
+			if (!this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key) && item.requestSource) {
+				if (item.canForkBeforeRequest) {
+					this.renderRestoreCheckpointAction(actions, item.requestSource, disposables);
+					const { sessionId, threadId, itemId } = item.requestSource;
+					disposables.add(this.instantiationService.createInstance(ChatForkActionViewItem, actions, { sessionId, threadId, beforeItemId: itemId }, this.options.isVisible));
+				}
+				if (item.canRunAnotherVersion) this.renderRequestCheckpointMenu(actions, item.requestSource, disposables);
 			}
-			if (actions && item.requestSource && item.canRunAnotherVersion) this.renderRequestCheckpointMenu(actions, item.requestSource, disposables);
 		}
 	}
 

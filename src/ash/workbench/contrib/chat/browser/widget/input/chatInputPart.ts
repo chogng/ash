@@ -1788,7 +1788,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		} else if (this.toolbarState.hasInput || keepSendVisible || canSubmitDictation) {
 			const label = this.options.inlineEdit ? localize('chat.edit.resend', 'Send edited request') : localize('chat.input.send', 'Send');
 			const tooltip = this.options.inlineEdit ? label : this.toolbarState.inputKind === 'command' ? localize('chat.input.runCommand', 'Run command') : localize('chat.input.sendMessage', 'Send message');
-			const icon = this.options.inlineEdit || this.toolbarState.inputKind === 'command' ? Lxicon.arrowUp : Lxicon.enter;
+			const icon = this.toolbarState.inputKind === 'command' ? Lxicon.arrowUp : Lxicon.enter;
 			trailingActions.push(new ChatInputAction('ash.chat.input.send', label, tooltip, icon, this.toolbarState.canSubmit || canSubmitDictation, 'send', () => this.inputContainer.requestSubmit()));
 		} else if (showIdleVoice) {
 			const label = voice?.isActive ? localize('chat.voice.stop', 'Stop voice conversation') : localize('chat.input.voice', 'Voice conversation');

@@ -28,14 +28,22 @@
 	position: relative;
 }
 
-.ash-sessions-chat-input
+:is(
+		.ash-sessions-chat-input,
+		:where(.ash-sessions-window .ash-chat-request-editor)
+			> .ash-chat-input-part
+	)
 	.ash-chat-input-toolbars
 	.ash-chat-input-send-action:enabled {
 	color: var(--ash-foreground);
 	background: transparent;
 }
 
-.ash-sessions-chat-input
+:is(
+		.ash-sessions-chat-input,
+		:where(.ash-sessions-window .ash-chat-request-editor)
+			> .ash-chat-input-part
+	)
 	.ash-chat-input-toolbars
 	.ash-chat-input-send-action:enabled:hover {
 	background: var(--ash-button-hoverBackground);

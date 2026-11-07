@@ -101,6 +101,7 @@ export class MenuId {
 	static readonly DiffEditorHunkToolbar = new MenuId('DiffEditorHunkToolbar');
 	static readonly DiffEditorSelectionToolbar = new MenuId('DiffEditorSelectionToolbar');
 	static readonly ChatTitle = new MenuId('ChatTitle');
+	static readonly ChatMessageTitle = new MenuId('ChatMessageTitle');
 	static readonly ChatMessageFooter = new MenuId('ChatMessageFooter');
 	static readonly ChatMessageCheckpoint = new MenuId('ChatMessageCheckpoint');
 	static readonly ChatExecute = new MenuId('ChatExecute');

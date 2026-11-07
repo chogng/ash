@@ -77,10 +77,13 @@ import type { ThreadTranscriptUpdateEnvelope as TranscriptDto, ServerNotificatio
 import type { ThreadTranscriptUpdateEnvelope } from '../../../src/ash/platform/agentHost/common/agent.js';
 import { BrowserLayoutService, ILayoutService } from '../../../src/ash/platform/layout/browser/layoutService.js';
 import { AccessibleViewType, IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
+import { AccessibilityService } from '../../../src/ash/platform/accessibility/browser/accessibilityService.js';
+import { IAccessibilityService } from '../../../src/ash/platform/accessibility/common/accessibility.js';
 import { AccessibleViewService } from '../../../src/ash/workbench/contrib/accessibility/browser/accessibleView.js';
 import '../../../src/ash/workbench/contrib/chat/browser/chat.contribution.js';
 import '../../../src/ash/base/browser/ui/styles.css';
 import '../../../src/ash/base/browser/markdownRenderer.css';
+import '../../../src/ash/sessions/contrib/chat/browser/media/chatInput.css';
 import '../../../src/ash/editor/browser/coreCommands.js';
 import { Disposable, DisposableStore } from '../../../src/ash/base/common/lifecycle.js';
 import { Lexer } from '../../../src/ash/base/common/marked/marked.js';
@@ -104,7 +107,7 @@ import { ChatWidget, type IChatWidgetModel } from '../../../src/ash/workbench/co
 import { IMenuService } from '../../../src/ash/platform/actions/common/actions.js';
 import { MenuService } from '../../../src/ash/platform/actions/common/menuService.js';
 import { IContextViewService, IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
-import { IContextKeyService } from '../../../src/ash/platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IsSessionsWindowContext } from '../../../src/ash/workbench/common/contextkeys.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { ISpeechService, SpeechToTextStatus, type ISpeechToTextEvent } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
@@ -173,6 +176,9 @@ const windowLogger = resources.add(new LogService({ level: LogLevel.Debug, sinks
 parentServices.registerInstance(ILogService, windowLogger);
 parentServices.registerInstance(ILoggerService, windowLogger);
 const services = resources.add(createTestEditorServices(resources.add(new WorkbenchConfigurationService()), parentServices, document));
+services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({
+	root: document.body, contextKeyService: services.get(IContextKeyService), configurationService: services.get(IConfigurationService),
+})));
 resources.add(services.createInstance(ChatCopyActionRendering));
 services.registerInstance(IInstructionService, { isAvailable: false, list: async () => [] });
 services.registerInstance(IContentSearchService, new FileContentSearchService(services.get(IFileService)));
@@ -682,7 +688,7 @@ declare global {
 			setUpvoteAnimation(value: string): Promise<void>;
 			showFind(query?: string): void;
 			runNavigationCommand(command: string): Promise<void>;
-			prepareRequestEditing(cowork: boolean, text?: string, unanswered?: boolean): void;
+			prepareRequestEditing(cowork: boolean, text?: string, unanswered?: boolean, hasCheckpoint?: boolean): void;
 			setAutoFollowReplies(enabled: boolean): Promise<void>;
 			appendChatItem(item: IChatListItem): void;
 			setConversationChanges(visible: boolean): void;
@@ -890,11 +896,15 @@ window.ashChatTranscriptIntegration = {
 	},
 	renderItems: items => { rendererItems = items; list.render(items); },
 	setUpvoteAnimation: value => services.get(IConfigurationService).updateValue('chat.upvoteAnimation', value),
-	prepareRequestEditing: (cowork, text, unanswered) => {
+	prepareRequestEditing: (cowork, text, unanswered, hasCheckpoint) => {
 		requestEditMode = true;
 		window.ashChatTranscriptIntegration.showChatApp(false, cowork);
 		requestEdits.length = 0;
-		const request: IChatListItem = { id: 'presentation-entry', type: 'userMessage', text: text ?? 'Original request', transient: false, requestSource: { sessionId: 'app-session', threadId: 'app-thread', turnId: 'original-turn', itemId: 'backend-request' } };
+		const request: IChatListItem = {
+			id: 'presentation-entry', type: 'userMessage', text: text ?? 'Original request', transient: false,
+			requestSource: { sessionId: 'app-session', threadId: 'app-thread', turnId: 'original-turn', itemId: 'backend-request' },
+			canForkBeforeRequest: hasCheckpoint, canRunAnotherVersion: hasCheckpoint,
+		};
 		appItems = text === undefined ? [request] : [
 			{ id: 'preceding-answer', type: 'agentMessage', text: 'Earlier response\n\n'.repeat(15), transient: false },
 			request,
