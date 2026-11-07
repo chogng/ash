@@ -5,7 +5,9 @@ use super::AppServer;
 use super::environment_runtime::EnvRuntime;
 use super::environment_runtime::EnvRuntimeConfig;
 use super::session_execution_router::SessionExecutionRouter;
+use crate::dir_grants::SessionApproval;
 use ash_action_policy::ActionReviewRequest;
+use ash_action_policy::ApprovalRequest;
 use ash_action_policy::ExecutionDecision;
 use ash_async_utils::CancellationToken;
 use ash_config::ConfigStore;
@@ -47,6 +49,54 @@ struct PermissionContext {
 }
 
 impl SharedExecutionPolicy {
+    fn exact_session_approval(&self, request: &ActionReviewRequest) -> SessionApproval {
+        SessionApproval::ExactAction {
+            provenance: request.provenance().clone(),
+            digest: request.action().digest().clone(),
+            capabilities: request.action().required_capabilities().clone(),
+            policy_revision: self.revision(),
+        }
+    }
+
+    fn file_session_approval(&self, request: &ActionReviewRequest) -> Option<SessionApproval> {
+        if request.action().kind() != &ash_protocol::ActionKind::FileSystemMutation
+            || request.provenance().source() != &ash_protocol::ActionSource::BuiltInTool
+            || !matches!(
+                request.provenance().source_id(),
+                "write_file" | "edit" | "apply_patch"
+            )
+        {
+            return None;
+        }
+        let write = request.file_write()?;
+        let [path] = write.targets.as_slice() else {
+            return None;
+        };
+        // The user must be able to see the exact path in the approval capabilities.
+        if !path.is_absolute() || path.to_str().is_none() {
+            return None;
+        }
+        Some(SessionApproval::FileWrite {
+            directory_id: write.directory_id.clone(),
+            path: path.clone(),
+            policy_revision: self.revision(),
+        })
+    }
+
+    fn command_prefix_approval(
+        &self,
+        shell: &ash_action_policy::ShellReview,
+        prefix: &ash_execpolicy::ExecPolicyCommand,
+        revision: &str,
+    ) -> SessionApproval {
+        SessionApproval::CommandPrefix {
+            prefix: prefix.clone(),
+            working_directory: shell.working_directory.clone(),
+            scope: shell.scope.clone(),
+            policy_revision: revision.to_owned(),
+        }
+    }
+
     fn approval_available(&self, request: &ActionReviewRequest) -> Result<bool, CoreError> {
         let environment = self
             .environment
@@ -214,18 +264,28 @@ impl ActionPolicyService for SharedExecutionPolicy {
         use ash_protocol::ActionApprovalDecision as Decision;
         let mut decisions = vec![Decision::Decline, Decision::ApproveOnce];
         if matches!(request.phase(), ash_protocol::ActionReviewPhase::Initial)
-            && self
-                .rules()
-                .ok()
-                .and_then(|rules| ash_action_policy::decide_exec_policy(&rules, request).ok())
-                .flatten()
-                .is_none()
+            && self.rules().is_ok_and(|rules| {
+                ash_action_policy::decide_exec_policy(&rules, request)
+                    .is_ok_and(|decision| decision.is_none())
+            })
         {
-            decisions.push(Decision::ApproveForSession);
-            if self.config.is_some()
-                && request.action().kind() != &ash_protocol::ActionKind::NetworkRequest
+            if self.runtime.is_some() && self.file_session_approval(request).is_some() {
+                decisions.push(Decision::ApproveFileWriteForSession);
+            }
+            if self.runtime.is_some()
+                && request
+                    .shell()
+                    .is_some_and(|shell| shell.session_prefixes.len() == 1)
             {
-                decisions.push(Decision::ApproveAndSaveRule);
+                decisions.push(Decision::ApproveCommandPrefixForSession);
+            }
+            if !request.requires_manual_confirmation() {
+                decisions.push(Decision::ApproveForSession);
+                if self.config.is_some()
+                    && request.action().kind() != &ash_protocol::ActionKind::NetworkRequest
+                {
+                    decisions.push(Decision::ApproveAndSaveRule);
+                }
             }
         }
         decisions
@@ -244,16 +304,31 @@ impl ActionPolicyService for SharedExecutionPolicy {
             ));
         }
         match decision {
-            Decision::ApproveForSession => {
-                let mut approval = ash_core::durable_approval_request(
-                    request,
-                    &ash_action_policy::ApprovalRequest::new(
-                        request.action().digest().clone(),
-                        request.action().required_capabilities().clone(),
-                        "exact session action",
-                    ),
-                )?;
-                approval.policy_revision = self.revision();
+            Decision::ApproveForSession
+            | Decision::ApproveFileWriteForSession
+            | Decision::ApproveCommandPrefixForSession => {
+                let approval = match decision {
+                    Decision::ApproveForSession => self.exact_session_approval(request),
+                    Decision::ApproveFileWriteForSession => {
+                        self.file_session_approval(request).ok_or_else(|| {
+                            CoreError::Policy("a file approval requires one reviewed target".into())
+                        })?
+                    }
+                    Decision::ApproveCommandPrefixForSession => {
+                        let Some(shell) = request.shell() else {
+                            return Err(CoreError::Policy(
+                                "command prefix requires shell review".into(),
+                            ));
+                        };
+                        let [prefix] = shell.session_prefixes.as_slice() else {
+                            return Err(CoreError::Policy(
+                                "command prefix requires one reviewed command".into(),
+                            ));
+                        };
+                        self.command_prefix_approval(shell, prefix, &self.revision())
+                    }
+                    _ => unreachable!("matched a reusable approval decision"),
+                };
                 self.runtime
                     .as_ref()
                     .and_then(|context| context.runtime.upgrade())
@@ -261,11 +336,7 @@ impl ActionPolicyService for SharedExecutionPolicy {
                     .read()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .dir_grants
-                    .remember_approval(
-                        context.session.clone(),
-                        request.provenance().clone(),
-                        approval,
-                    )
+                    .remember_approval(context.session.clone(), approval)
                     .map_err(CoreError::Policy)?;
                 Ok(core_api::ApprovalRecordEffect::Recorded)
             }
@@ -402,23 +473,38 @@ impl ActionPolicyService for SharedExecutionPolicy {
             .as_ref()
             .and_then(|context| context.runtime.upgrade())
         {
-            let mut approval = ash_core::durable_approval_request(
-                request,
-                &ash_action_policy::ApprovalRequest::new(
-                    request.action().digest().clone(),
-                    request.action().required_capabilities().clone(),
-                    "exact session action",
-                ),
-            )?;
-            approval.policy_revision = self.revision();
-            if runtime
+            let exact = (!request.requires_manual_confirmation())
+                .then(|| self.exact_session_approval(request));
+            let file = self.file_session_approval(request);
+            let revision = self.revision();
+            let runtime = runtime
                 .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .dir_grants
-                .has_approval(context.session, request.provenance(), &approval)
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            let grants = &runtime.dir_grants;
+            if matches!(request.phase(), ash_protocol::ActionReviewPhase::Initial)
+                && let ash_action_policy::SandboxCompatibility::Supported(sandbox) =
+                    request.sandbox()
+                && let Some(shell) = request.shell()
+                && !shell.session_prefixes.is_empty()
+                && shell.session_prefixes.iter().all(|prefix| {
+                    grants.has_approval(
+                        context.session,
+                        &self.command_prefix_approval(shell, prefix, &revision),
+                    )
+                })
             {
+                return Ok(ExecutionDecision::RunSandboxed(*sandbox));
+            }
+            let exact =
+                exact.is_some_and(|approval| grants.has_approval(context.session, &approval));
+            let file = file.is_some_and(|approval| grants.has_approval(context.session, &approval));
+            if exact || file {
                 return Ok(ExecutionDecision::RunUnsandboxed {
-                    grant_id: ash_action_policy::GrantId::new("approved-session-action"),
+                    grant_id: ash_action_policy::GrantId::new(if file {
+                        "approved-session-file-write"
+                    } else {
+                        "approved-session-action"
+                    }),
                 });
             }
         }
@@ -468,6 +554,9 @@ impl ActionPolicyService for SharedExecutionPolicy {
                     grant_id: ash_action_policy::GrantId::new("requested-network-permission"),
                 });
             }
+        }
+        if request.requires_manual_confirmation() {
+            return Ok(decision);
         }
         self.owner.decide_in_context(context, request, cancellation)
     }
@@ -521,7 +610,22 @@ impl ActionPolicyService for SharedExecutionPolicy {
         ) {
             return Ok(owned);
         }
-        let decision = shared.unwrap_or(owned);
+        let configured_shell_authority = request.shell().is_some_and(|shell| {
+            matches!(shared, Some(ExecutionDecision::RunSandboxed(_)))
+                || shell.allow_config_prefix
+                    && matches!(shared, Some(ExecutionDecision::RunExecPolicyGranted(_)))
+        });
+        let mut decision = shared.unwrap_or(owned);
+        if request.requires_manual_confirmation()
+            && !configured_shell_authority
+            && !matches!(decision, ExecutionDecision::AskUser(_))
+        {
+            decision = ExecutionDecision::AskUser(ApprovalRequest::new(
+                request.action().digest().clone(),
+                request.action().required_capabilities().clone(),
+                "the action requires user approval",
+            ));
+        }
         if matches!(decision, ExecutionDecision::AskUser(_)) && !self.approval_available(request)? {
             return Ok(ExecutionDecision::Block(
                 ash_action_policy::BlockReason::DeterministicRule {

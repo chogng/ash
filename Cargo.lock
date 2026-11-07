@@ -3038,7 +3038,9 @@ name = "ash-shell-command"
 version = "0.1.0"
 dependencies = [
  "ash-async-utils",
+ "ash-execpolicy",
  "ash-file-access",
+ "ash-grammars",
  "ash-install-context",
  "ash-mxc-sandbox",
  "ash-network-proxy",
@@ -3048,6 +3050,7 @@ dependencies = [
  "ash-tools",
  "serde",
  "serde_json",
+ "tree-sitter",
 ]
 
 [[package]]

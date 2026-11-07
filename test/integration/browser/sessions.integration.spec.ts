@@ -1525,7 +1525,7 @@ test.describe('Sessions settings components', () => {
 	test('modified settings refresh after configuration changes and reset without replacing search', async ({
 		page,
 	}) => {
-		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		const search = settings.getByRole('searchbox', { name: 'Search settings' });
 		const setting = settings.locator('[data-settings-item-id="chat.disableAIFeatures"]');
 		const empty = settings.locator('.ash-sessions-settings-empty');
@@ -1566,7 +1566,7 @@ test.describe('Sessions settings components', () => {
 	test('preferences keyboard navigation clears search before handing off to shared shortcuts', async ({
 		page,
 	}, testInfo) => {
-		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		const search = settings.getByRole('searchbox');
 		await search.fill('compact');
 		await search.press('Escape');
@@ -1616,7 +1616,7 @@ test.describe('Sessions settings components', () => {
 	test('Customize settings and feature links open the actual Workbench settings owner', async ({
 		page,
 	}, testInfo) => {
-		let settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		let settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		await settings.locator('[data-settings-category-id="customize"]').click();
 		await settings.getByRole('button', { name: 'Open Workbench Settings', exact: true }).click();
 		await expect(settings).toHaveCount(0);
@@ -1644,7 +1644,7 @@ test.describe('Sessions settings components', () => {
 		] as const) {
 			await page.getByRole('button', { name: 'Accounts', exact: true }).click();
 			await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
-			settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+			settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 			await settings.locator(`[data-settings-category-id="${category}"]`).click();
 			await settings.getByRole('button', { name: label, exact: true }).click();
 			await expect(settings).toHaveCount(0);
@@ -1664,7 +1664,7 @@ test.describe('Sessions settings components', () => {
 			['customize', 'Preferences: Open User Settings (JSON)', 'User Settings (JSON)', '{}'],
 			['keyboard-shortcuts', 'Preferences: Open Keyboard Shortcuts (JSON)', 'Keyboard Shortcuts (JSON)', '[]'],
 		] as const) {
-			const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+			const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 			await settings.locator(`[data-settings-category-id="${category}"]`).click();
 			await settings.getByRole('button', { name: command, exact: true }).click();
 			await expect(settings).toHaveCount(0);
@@ -1686,7 +1686,7 @@ test.describe('Sessions settings components', () => {
 	});
 
 	test('dictation settings switch between local models and API connections', async ({ page }) => {
-		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
 		await expect(settings.locator('[data-configuration-key="dictation.backend"]')).toBeVisible();
 		await expect(settings.getByRole('grid', { name: 'Local dictation models' })).toBeVisible();

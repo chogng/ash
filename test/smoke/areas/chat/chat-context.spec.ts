@@ -432,7 +432,7 @@ test('Sessions tool context opens the current Tools catalog in its settings dial
 	await page.getByRole('dialog').getByRole('combobox').fill('read_file');
 	await page.getByRole('dialog').getByRole('option', { name: /^read_file(?:\s|$)/ }).click();
 	await chat.getByRole('button', { name: 'Open Tool: read_file', exact: true }).press('Enter');
-	const settings = page.getByRole('dialog', { name: 'Sessions Settings', exact: true });
+	const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 	await expect(settings.getByRole('button', { name: 'Tools', exact: true })).toHaveAttribute('aria-current', 'page');
 	await expect(settings.locator('.ash-agent-capabilities-list')).toContainText('read_file');
 	await page.keyboard.press('Escape');

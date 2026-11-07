@@ -74,6 +74,9 @@ pub struct ActionApprovalRequest {
     pub command: Option<ActionApprovalCommand>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
+    pub session_command_prefix: Option<ActionApprovalCommand>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
     pub sandbox_denial: Option<SandboxDenialOutput>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
@@ -86,6 +89,8 @@ pub struct ActionApprovalRequest {
 pub enum ActionApprovalDecision {
     ApproveOnce,
     ApproveForSession,
+    ApproveFileWriteForSession,
+    ApproveCommandPrefixForSession,
     ApproveAndSaveRule,
     Decline,
 }

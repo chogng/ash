@@ -4,6 +4,7 @@ use globset::GlobBuilder;
 use globset::GlobMatcher;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::BTreeSet;
 use std::path::Component;
 use std::path::Path;
 use std::path::PathBuf;
@@ -76,7 +77,13 @@ pub struct PathAccessPolicy {
     baseline: PathAccess,
     host_read: HostReadAccess,
     rules: Vec<(PathAccessRule, GlobMatcher)>,
-    exact_files: Vec<PathBuf>,
+    exact_files: Vec<ExactFiles>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ExactFiles {
+    files: BTreeSet<PathBuf>,
+    operation: Option<PathOperation>,
 }
 
 impl Default for PathAccessPolicy {
@@ -130,16 +137,35 @@ impl PathAccessPolicy {
     /// Restricts a directory proof to one relative file, including its resolved target.
     /// This ceiling cannot authorize siblings, parent listing, or a symlink to another file.
     pub fn for_exact_file(path: &Path) -> Result<Self, String> {
-        if path.as_os_str().is_empty()
-            || path
-                .components()
-                .any(|part| !matches!(part, Component::Normal(_)))
-        {
-            return Err("exact file scope must be a non-empty relative file path".into());
-        }
+        let mut policy = Self::exact_files([path], None)?;
+        policy.host_read = HostReadAccess::GrantedRoots;
+        Ok(policy)
+    }
+
+    /// Restricts writes to the reviewed paths while retaining the surrounding read policy.
+    pub fn for_exact_writes<'a>(paths: impl IntoIterator<Item = &'a Path>) -> Result<Self, String> {
+        Self::exact_files(paths, Some(PathOperation::Write))
+    }
+
+    fn exact_files<'a>(
+        paths: impl IntoIterator<Item = &'a Path>,
+        operation: Option<PathOperation>,
+    ) -> Result<Self, String> {
+        let files = paths
+            .into_iter()
+            .map(|path| {
+                if path.as_os_str().is_empty()
+                    || path
+                        .components()
+                        .any(|part| !matches!(part, Component::Normal(_)))
+                {
+                    return Err("exact file scope must be a non-empty relative file path".into());
+                }
+                Ok(path.to_path_buf())
+            })
+            .collect::<Result<BTreeSet<_>, String>>()?;
         Ok(Self {
-            host_read: HostReadAccess::GrantedRoots,
-            exact_files: vec![path.to_path_buf()],
+            exact_files: vec![ExactFiles { files, operation }],
             ..Self::default()
         })
     }
@@ -180,9 +206,9 @@ impl PathAccessPolicy {
             }
         }
         let mut exact_files = self.exact_files.clone();
-        for file in &other.exact_files {
-            if !exact_files.contains(file) {
-                exact_files.push(file.clone());
+        for scope in &other.exact_files {
+            if !exact_files.contains(scope) {
+                exact_files.push(scope.clone());
             }
         }
         Self {
@@ -199,8 +225,10 @@ impl PathAccessPolicy {
             matches!(access, PathAccess::ReadWrite)
                 || operation == PathOperation::Read && access == PathAccess::ReadOnly
         };
-        self.exact_files.iter().all(|file| relative == file)
-            && permitted(self.baseline)
+        self.exact_files.iter().all(|scope| {
+            scope.operation.is_some_and(|limited| limited != operation)
+                || scope.files.contains(relative)
+        }) && permitted(self.baseline)
             && self.rules.iter().all(|(rule, matcher)| {
                 !relative.ancestors().any(|path| matcher.is_match(path)) || permitted(rule.access)
             })

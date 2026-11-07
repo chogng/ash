@@ -54,7 +54,7 @@ test('Code Sessions consumes the shared JSON extension for settings completion, 
 });
 
 
-test.extend({ openWorkspace: false })('Code offers New Session from Pull Request in the Chinese sidebar and Command Palette', { tag: ['@electron-ui'] }, async ({ target, workbench, restartWorkbench }) => {
+test.extend({ openWorkspace: false })('Code offers New Session from Pull Request in the Chinese sidebar and Command Palette', { tag: ['@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 	await language.fill('简体中文');

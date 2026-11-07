@@ -178,11 +178,14 @@
 	display: none;
 }
 
-.ash-general-toggle-control,
-.ash-editor-toggle-control {
-	width: 100%;
-	grid-column: 1 / -1;
-	cursor: pointer;
+.ash-configuration-setting.ash-configuration-toggle-setting {
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.ash-configuration-toggle-setting > .ash-switch {
+	justify-self: end;
+	padding: var(--ash-spacing-size40);
+	margin-inline-end: calc(-1 * var(--ash-spacing-size40));
 }
 
 .ash-general-setting-control,

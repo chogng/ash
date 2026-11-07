@@ -17,6 +17,51 @@ use std::fs;
 
 struct PassThroughBackend;
 
+#[cfg(unix)]
+#[test]
+fn shell_review_binds_literal_redirects_and_denies_escaping_or_protected_targets() {
+    let directory = tempfile::tempdir().unwrap();
+    let suite = text_edit_suite(directory.path());
+    let command = suite.grant.authorize(Permission::ExecuteCommands).unwrap();
+    let scope = suite.sandbox_scope_for(&command, None, None).unwrap();
+    let prepare = |script: &str| {
+        let call = tool_call(
+            "shell-command",
+            json!({"program":"sh","arguments":["-c",script],"working_directory":"."}),
+        );
+        suite
+            .shell
+            .prepare_at(&call, &command, PathBuf::from("."), &scope)
+    };
+    let review = prepare("git status > result.txt").unwrap();
+    let shell = review.shell().unwrap();
+    assert!(shell.requires_confirmation);
+    assert!(shell.session_prefixes.is_empty());
+    assert!(
+        review
+            .action()
+            .required_capabilities()
+            .iter()
+            .any(|capability| {
+                capability.kind() == &CapabilityKind::FileWrite
+                    && capability.scope().ends_with("/result.txt")
+            })
+    );
+
+    let outside = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(outside.path(), directory.path().join("escape")).unwrap();
+    for script in [
+        "git status > ../escape.txt",
+        "git status > escape/marker",
+        "git status > .env",
+    ] {
+        assert!(prepare(script).is_err(), "{script}");
+    }
+    let pending = prepare("git status > \"$TARGET\"").unwrap();
+    assert!(pending.shell().unwrap().commands.is_empty());
+    assert!(pending.requires_manual_confirmation());
+}
+
 #[test]
 fn patch_move_review_checks_both_paths_and_preserves_the_move_header() {
     let directory = tempfile::tempdir().unwrap();
@@ -30,7 +75,7 @@ fn patch_move_review_checks_both_paths_and_preserves_the_move_header() {
         source.display(),
         target.display()
     );
-    let (_, rewritten, targets) = super::super::materialize_patch_targets(
+    let (_, rewritten, write) = super::super::materialize_patch_targets(
         std::slice::from_ref(&authorized),
         authorized.dir(),
         &patch,
@@ -39,9 +84,9 @@ fn patch_move_review_checks_both_paths_and_preserves_the_move_header() {
     .unwrap();
     assert!(rewritten.contains("*** Update File: old.txt"));
     assert!(rewritten.contains("*** Move to: new.txt"));
-    assert_eq!(targets.len(), 2);
-    assert!(targets.iter().any(|path| path.ends_with("old.txt")));
-    assert!(targets.iter().any(|path| path.ends_with("new.txt")));
+    assert_eq!(write.targets.len(), 2);
+    assert!(write.targets.iter().any(|path| path.ends_with("old.txt")));
+    assert!(write.targets.iter().any(|path| path.ends_with("new.txt")));
     let outside = tempfile::tempdir().unwrap();
     let escaping = patch.replace(
         &target.display().to_string(),
@@ -58,6 +103,71 @@ fn patch_move_review_checks_both_paths_and_preserves_the_move_header() {
     );
     assert_eq!(fs::read_to_string(source).unwrap(), "old\n");
     assert!(!target.exists());
+}
+
+#[test]
+fn patch_review_protects_new_sensitive_targets_and_freezes_every_write_path() {
+    let directory = tempfile::tempdir().unwrap();
+    let grant = authorization(directory.path());
+    let authorized = grant.authorize(Permission::WriteFiles).unwrap();
+    let patch = "*** Begin Patch\n*** Add File: normal.txt\n+normal\n*** Add File: .vscode/tasks.json\n+{}\n*** End Patch";
+    let (prepared, _, write) = super::super::materialize_patch_targets(
+        std::slice::from_ref(&authorized),
+        authorized.dir(),
+        patch,
+        &[],
+    )
+    .unwrap();
+    assert!(write.protected);
+    assert_eq!(write.targets.len(), 2);
+    for path in ["normal.txt", ".vscode/tasks.json"] {
+        assert!(
+            prepared
+                .path_policy()
+                .allows(Path::new(path), ash_file_access::PathOperation::Write)
+        );
+    }
+    assert!(!prepared.path_policy().allows(
+        Path::new("other.txt"),
+        ash_file_access::PathOperation::Write
+    ));
+    assert!(prepared.path_policy().allows(
+        Path::new(".editorconfig"),
+        ash_file_access::PathOperation::Read
+    ));
+}
+
+#[cfg(unix)]
+#[test]
+fn direct_write_review_follows_sensitive_aliases_and_rejects_retargeting() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    fs::create_dir(root.join(".vscode")).unwrap();
+    fs::write(root.join(".vscode/tasks.json"), "{}").unwrap();
+    fs::write(root.join("other.json"), "{}").unwrap();
+    let alias = root.join("alias.json");
+    std::os::unix::fs::symlink(".vscode/tasks.json", &alias).unwrap();
+    let suite = text_edit_suite(root);
+    let call = tool_call(
+        "write_file",
+        json!({"path": "alias.json", "content": "new content"}),
+    );
+    let review = suite.prepare(&call).unwrap();
+    let reviewed = review.file_write().unwrap();
+    assert!(reviewed.protected);
+    assert!(reviewed.targets[0].ends_with(".vscode/tasks.json"));
+
+    fs::remove_file(&alias).unwrap();
+    std::os::unix::fs::symlink("other.json", &alias).unwrap();
+    let cancellation = ash_async_utils::CancellationSource::new().token();
+    assert!(matches!(
+        suite.execute_document_tool(&call, "direct", None, None, None, Some(reviewed), &cancellation),
+        Err(CoreError::Policy(message)) if message.contains("target changed")
+    ));
+    assert_eq!(fs::read_to_string(root.join("other.json")).unwrap(), "{}");
+    fs::remove_file(&alias).unwrap();
+    std::os::unix::fs::symlink("missing.json", &alias).unwrap();
+    assert!(suite.prepare(&call).is_err());
 }
 
 fn text_edit_suite(path: &std::path::Path) -> LocalToolSuite<PassThroughBackend> {
@@ -364,6 +474,7 @@ fn document_writes_reacquire_snapshots_when_the_write_grant_selects_a_different_
                     Some(&session),
                     None,
                     None,
+                    None,
                     &token,
                 )
                 .unwrap(),
@@ -390,6 +501,7 @@ fn document_writes_reacquire_snapshots_when_the_write_grant_selects_a_different_
                 &tool_call("write_file", json!({"path":path,"content":"new"})),
                 "document-roots",
                 Some(&session),
+                None,
                 None,
                 None,
                 &token,
@@ -631,6 +743,7 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
             Some(&session_id),
             None,
             None,
+            None,
             &ash_async_utils::CancellationSource::new().token(),
         )
         .unwrap();
@@ -647,6 +760,7 @@ fn dir_resolution_is_bound_to_the_exact_session_and_grant() {
             ),
             "thread",
             Some(&session_id),
+            None,
             None,
             None,
             &ash_async_utils::CancellationSource::new().token(),
@@ -752,6 +866,7 @@ fn file_tools_read_a_large_workspace_without_scanning_every_entry() {
             None,
             None,
             None,
+            None,
             &ash_async_utils::CancellationSource::new().token(),
         )
         .unwrap();
@@ -762,6 +877,7 @@ fn file_tools_read_a_large_workspace_without_scanning_every_entry() {
             serde_json::json!({"path": private, "offset": null, "limit": null}),
         ),
         "thread",
+        None,
         None,
         None,
         None,

@@ -139,25 +139,6 @@
 	> .ash-icon-label-icon {
 	display: none;
 }
-.ash-menu .ash-button > .ash-menu-check-and-icon {
-	width: auto;
-	flex: 0 0 auto;
-	gap: var(--ash-spacing-size40);
-}
-.ash-menu .ash-button > .ash-menu-check-and-icon > .ash-icon-check {
-	display: block;
-	visibility: hidden;
-	order: -1;
-}
-.ash-menu .ash-button.checked > .ash-menu-check-and-icon > .ash-icon-check {
-	visibility: visible;
-}
-.ash-menu
-	.ash-button.checked
-	> .ash-menu-check-and-icon
-	> .ash-icon-label-icon:not(:empty) {
-	display: inline-flex;
-}
 .ash-menu-icons-trailing
 	> .ash-action-view-item
 	> .ash-button
@@ -182,6 +163,32 @@
 	order: 1;
 	margin-inline-start: 0;
 }
+
+/*
+ * Collapse the shared icon column when it is empty across the entire menu.
+ * An action icon, a checkable row (even unchecked), or a trailing submenu
+ * arrow keeps the column for all rows so labels and shortcuts stay aligned.
+ * Leading menus place submenu arrows separately on the right.
+ */
+.ash-menu:not(
+		:has(
+			> .ash-action-view-item
+				> .ash-button
+				:is(
+					.ash-menu-leading-check,
+					.ash-menu-trailing-check,
+					.ash-menu-trailing-slot.ash-submenu-indicator,
+					:is(.ash-menu-leading-slot, .ash-menu-trailing-slot)
+						> .ash-icon-label-icon:not(:empty)
+				)
+		)
+	)
+	> .ash-action-view-item
+	> .ash-button
+	> :is(.ash-menu-leading-slot, .ash-menu-trailing-slot) {
+	display: none;
+}
+
 /* Count the menu padding toward the divider inset from the popup edge. */
 .ash-menu .ash-action-view-item-separator {
 	width: auto;

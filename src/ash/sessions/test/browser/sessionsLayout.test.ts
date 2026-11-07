@@ -556,7 +556,7 @@ suite('sessions browser component', () => {
 
 		test('layout scope uses the shared settings owner and persists through window recreation', async function () {
 			const { page } = browserTests;
-			const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+			const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 			await settings.getByRole('button', { name: 'Appearance', exact: true }).click();
 			const scope = settings.locator('[data-configuration-key="sessions.experimental.layoutScope"]').getByRole('combobox');
 			await expect(scope).toHaveText('Session');
@@ -564,6 +564,7 @@ suite('sessions browser component', () => {
 			await page.getByRole('option', { name: 'Chat', exact: true }).click();
 			await expect(scope).toHaveText('Chat');
 			await expect(scope).toBeEnabled();
+			await expect(settings.locator('[data-settings-item-id="sessions.experimental.layoutScope"] .ash-settings-configured-marker')).toHaveCSS('display', 'none');
 			await page.evaluate(() => window.ashSessionsIntegration.updateConfiguration('sessions.experimental.layoutScope', 'chat-shared'));
 			await expect(scope).toHaveText('Chat, shared visibility');
 			await page.evaluate(() => window.ashSessionsIntegration.remountAfterDirectDispose());
@@ -573,25 +574,43 @@ suite('sessions browser component', () => {
 			await expect(scope).toHaveText('Chat, shared visibility');
 		});
 
-		test('settings cards and responsive panes preserve their geometry', async function () {
+		test('settings header and responsive panes preserve their geometry', async function () {
 			const { page } = browserTests;
-			const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+			const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 			await expect(settings).toBeVisible();
 			// A later-loaded base widget must preserve the Settings presentation.
 			await page.addStyleTag({ path: 'src/ash/base/browser/ui/dialog/dialog.css' });
-			await expect(settings).toHaveCSS('width', '920px');
+			const viewport = page.viewportSize();
+			if (!viewport) throw new Error('Browser test requires a viewport');
+			await page.setViewportSize({ width: 1440, height: 900 });
+			await expect(settings).toHaveCSS('width', '960px');
+			await expect(settings).toHaveCSS('height', '640px');
 			await expect(settings).toHaveCSS('border-radius', '12px');
 			await expect(settings).toHaveCSS('padding', '0px');
-			await settings.getByRole('button', { name: 'Voice', exact: true }).click();
-			await expect(settings.locator('.ash-dialog-title')).toBeHidden();
+			await expect(settings.locator('.ash-dialog-header')).toHaveCSS('padding', '12px');
+			await settings.getByRole('button', { name: 'Appearance', exact: true }).click();
+			await expect(settings.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+			const close = settings.getByRole('button', { name: 'Close Dialog', exact: true });
+			await expect(close).toBeVisible();
 			await expect(settings).toHaveCSS('border-top-width', '1px');
 			await expect(settings.locator('.ash-sessions-settings')).toHaveCSS('border-top-width', '0px');
 			await expect(settings.locator('.ash-sessions-settings-list').first()).toHaveCSS('border-top-width', '0px');
-			const settingsCard = settings.locator('.ash-sessions-settings-list.ash-settings-card');
-			for (const card of await settingsCard.all()) { await expect(card).toHaveCSS('border-radius', '8px'); }
-			for (const card of await settingsCard.all()) { await expect(card).toHaveCSS('background-color', /rgb\(/); }
-			await expect(settingsCard.locator('.ash-configuration-setting').first()).toHaveCSS('border-top-left-radius', '8px');
-			await expect(settingsCard.locator('.ash-configuration-setting').last()).toHaveCSS('border-bottom-right-radius', '8px');
+			const settingsRows = settings.locator('.ash-sessions-settings-list.ash-settings-card:has(> .ash-configuration-setting)');
+			await expect(settingsRows).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			const row = settingsRows.locator('.ash-configuration-setting').first();
+			const title = row.locator('.ash-configuration-setting-title');
+			await expect(title).toHaveCSS('font-weight', '400');
+			await title.hover();
+			await expect(row).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await expect(row.getByRole('button', { name: 'More actions for Layout scope' })).toHaveCSS('opacity', '0');
+			await title.click({ button: 'right' });
+			const menu = settings.getByRole('menu');
+			await expect(menu.getByRole('menuitem', { name: 'Copy Setting as JSON' })).toBeVisible();
+			await expect(menu.getByRole('menuitem', { name: 'Copy Setting as JSON' }).locator('.ash-menu-leading-slot')).toHaveCSS('display', 'none');
+			await page.keyboard.press('Escape');
+			await expect(menu).toHaveCount(0);
+			await expect(title).toHaveCSS('color', 'rgb(59, 59, 59)');
+			await expect(row.locator('.ash-configuration-setting-description:not([hidden])')).toHaveCSS('color', 'rgb(118, 118, 118)');
 			const sidebar = settings.locator('.ash-sessions-settings-sidebar');
 			const settingsPage = settings.locator('.ash-sessions-settings-page');
 			const sidebarBounds = await sidebar.boundingBox();
@@ -601,22 +620,24 @@ suite('sessions browser component', () => {
 			expect(sidebarBounds!.x + sidebarBounds!.width).toBeLessThanOrEqual(pageBounds!.x + 1);
 			expect(sidebarBounds!.y + sidebarBounds!.height).toBeGreaterThanOrEqual(pageBounds!.y + pageBounds!.height - 1);
 			await expect(settings.locator('.ash-dialog-actions')).toHaveCount(0);
-			const originalViewport = page.viewportSize();
-			if (!originalViewport) throw new Error('Browser test requires a viewport');
 			await page.setViewportSize({ width: 540, height: 500 });
 			await expect(settings).toHaveCSS('width', '508px');
+			await expect(settings).toHaveCSS('height', '410px');
 			const narrowSidebarBounds = await sidebar.boundingBox();
 			const narrowPageBounds = await settingsPage.boundingBox();
 			expect(narrowSidebarBounds).not.toBeNull();
 			expect(narrowPageBounds).not.toBeNull();
 			expect(narrowSidebarBounds!.y + narrowSidebarBounds!.height).toBeLessThanOrEqual(narrowPageBounds!.y + 1);
 			await expect(settings.getByRole('searchbox', { name: 'Search settings' })).toBeVisible();
-			await page.setViewportSize(originalViewport);
+			await close.click();
+			await expect(settings).toHaveCount(0);
+			await expect(page.getByRole('button', { name: 'Accounts', exact: true })).toBeFocused();
+			await page.setViewportSize(viewport);
 		});
 
 		test('settings categories, localization icons and search display their own contents', async function () {
 			const { page } = browserTests;
-			const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+			const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 			const settingsPage = settings.locator('.ash-sessions-settings-page');
 			const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
 			for (const [section, categories] of [
@@ -637,6 +658,13 @@ suite('sessions browser component', () => {
 			await expect(settings.locator('.ash-local-transcription-model-controls')).toHaveCount(0);
 			await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsActivityBar"]')).toHaveCount(0);
 			await expect(settings.locator('[data-configuration-key="accessibility.verbosity.sessionsSettings"]')).toHaveCount(0);
+			const chatTips = settings.locator('[data-settings-item-id="chat.tips.enabled"]');
+			const chatTipsSwitch = chatTips.getByRole('switch', { name: 'Show Chat tips', exact: true });
+			await expect(chatTipsSwitch).toBeChecked();
+			await chatTips.getByText('Show Chat tips', { exact: true }).click();
+			await expect(chatTipsSwitch).toBeChecked();
+			await chatTips.locator('.ash-switch-track').click();
+			await expect(chatTipsSwitch).not.toBeChecked();
 			await navigation.getByRole('button', { name: 'Voice', exact: true }).click();
 			await expect(settings.getByRole('heading', { name: 'Voice', exact: true })).toBeVisible();
 			await expect(settings.locator('[data-configuration-key="dictation.backend"]')).toBeVisible();
@@ -658,6 +686,7 @@ suite('sessions browser component', () => {
 			await expect(settings.getByRole('heading', { name: 'Appearance' })).toBeVisible();
 			await expect(settings.locator('[data-configuration-key="workbench.layoutStyle"]')).toHaveCount(0);
 			const searchSettings = settings.getByRole('searchbox', { name: 'Search settings' });
+			await expect(searchSettings).toHaveAttribute('placeholder', 'Search');
 			await expect(settings.locator('.ash-sessions-settings-search [data-ash-icon-id="search"]')).toBeVisible();
 			await searchSettings.fill('layout');
 			await expect(settings.getByRole('heading', { name: 'Search results' })).toBeVisible();
@@ -670,7 +699,7 @@ suite('sessions browser component', () => {
 
 		test('layout style retains icon sizes and closing settings restores Accounts focus', async function () {
 			const { page } = browserTests;
-			const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+			const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 			const activityNavigation = page.locator('.ash-sessions-activity-content');
 			const accounts = page.getByRole('button', { name: 'Accounts', exact: true });
 			await settings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Appearance' }).click();

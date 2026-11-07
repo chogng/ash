@@ -258,6 +258,7 @@ pub(crate) fn decide_turn_action_in_context(
                 request.action_policy_revision().clone(),
             ),
         )),
+        ApprovalMode::Auto if request.requires_manual_confirmation() => Ok(decision),
         ApprovalMode::Auto => Ok(policy
             .review_approval(request, cancellation)?
             .unwrap_or(decision)),

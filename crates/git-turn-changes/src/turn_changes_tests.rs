@@ -259,7 +259,7 @@ fn ledger_seals_rename_mode_and_line_statistics_from_immutable_trees() {
                 worktree_root: directory.path().to_path_buf(),
                 target_branch: Some("main".into()),
                 base_object_id: Some(head),
-                baseline_dependency_paths: BTreeSet::new(),
+                baseline_tree: run_git(directory.path(), &["rev-parse", "HEAD^{tree}"]),
             }],
             commit_message_configured: true,
             opaque_dependencies: false,
@@ -322,6 +322,55 @@ fn ledger_seals_rename_mode_and_line_statistics_from_immutable_trees() {
 }
 
 #[test]
+fn ledger_reuses_existing_baseline_after_git_metadata_becomes_unavailable() {
+    let directory = tempfile::tempdir().unwrap();
+    run_git(directory.path(), &["init", "--quiet"]);
+    std::fs::write(
+        directory.path().join("baseline.txt"),
+        "pre-existing change\n",
+    )
+    .unwrap();
+    run_git(directory.path(), &["add", "baseline.txt"]);
+    let request = crate::TurnChangeBeginRequest {
+        session_id: SessionId::new("session-baseline").unwrap(),
+        thread_id: ThreadId::new("thread-baseline").unwrap(),
+        turn_id: TurnId::new("turn-baseline").unwrap(),
+        repositories: vec![crate::RepositoryCaptureTarget {
+            repository_id: "repository-baseline".into(),
+            worktree_root: directory.path().to_path_buf(),
+            target_branch: None,
+            base_object_id: None,
+            baseline_tree: run_git(directory.path(), &["write-tree"]),
+        }],
+        commit_message_configured: false,
+        opaque_dependencies: false,
+    };
+    let store = std::sync::Arc::new(MemoryStore::default());
+    let ledger = crate::TurnChangeLedger::start(store.clone()).unwrap();
+    let records = ledger.begin_turn(request.clone()).unwrap();
+    assert_eq!(
+        records[0].baseline_dependency_paths,
+        BTreeSet::from([PathBuf::from("baseline.txt")])
+    );
+    drop(ledger);
+
+    std::fs::rename(
+        directory.path().join(".git"),
+        directory.path().join("git-metadata"),
+    )
+    .unwrap();
+    let ledger = crate::TurnChangeLedger::start(store).unwrap();
+    assert_eq!(ledger.begin_turn(request.clone()).unwrap(), records);
+    assert!(matches!(
+        ledger.begin_turn(crate::TurnChangeBeginRequest {
+            turn_id: TurnId::new("turn-without-capture").unwrap(),
+            ..request
+        }),
+        Err(crate::TurnChangeLedgerError::Baseline(_))
+    ));
+}
+
+#[test]
 fn opaque_reads_do_not_claim_writes_outside_a_recorded_execution_window() {
     let directory = tempfile::tempdir().unwrap();
     run_git(
@@ -347,7 +396,7 @@ fn opaque_reads_do_not_claim_writes_outside_a_recorded_execution_window() {
                 worktree_root: directory.path().to_path_buf(),
                 target_branch: Some("main".into()),
                 base_object_id: Some(head),
-                baseline_dependency_paths: BTreeSet::new(),
+                baseline_tree: run_git(directory.path(), &["rev-parse", "HEAD^{tree}"]),
             }],
             commit_message_configured: false,
             opaque_dependencies: true,

@@ -3240,7 +3240,7 @@ pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), Strin
         return Err("approval reason must not be empty".into());
     }
     if request.allowed_decisions.is_empty()
-        || request.allowed_decisions.len() > 4
+        || request.allowed_decisions.len() > 6
         || !request
             .allowed_decisions
             .contains(&ash_protocol::ActionApprovalDecision::Decline)
@@ -3252,15 +3252,32 @@ pub(crate) fn validate_agent_request(request: &AgentRequest) -> Result<(), Strin
     {
         return Err("approval decisions must be a bounded unique set including decline".into());
     }
-    if request.command.as_ref().is_some_and(|command| {
-        command.program.is_empty()
-            || command.program.len() > 4096
-            || command.arguments.len() > 256
-            || command
-                .arguments
-                .iter()
-                .any(|argument| argument.len() > 65536 || argument.contains('\0'))
-    }) {
+    if request
+        .allowed_decisions
+        .contains(&ash_protocol::ActionApprovalDecision::ApproveCommandPrefixForSession)
+        != request.session_command_prefix.is_some()
+        || request.session_command_prefix.is_some()
+            && (request.command.is_none() || request.sandbox_denial.is_some())
+    {
+        return Err(
+            "session command prefix requires an initial approval and a displayed command".into(),
+        );
+    }
+    if request
+        .command
+        .iter()
+        .chain(&request.session_command_prefix)
+        .any(|command| {
+            command.program.is_empty()
+                || command.program.len() > 4096
+                || command.program.contains('\0')
+                || command.arguments.len() > 256
+                || command
+                    .arguments
+                    .iter()
+                    .any(|argument| argument.len() > 65536 || argument.contains('\0'))
+        })
+    {
         return Err("approval command exceeds its display limits".into());
     }
     if let Some(denial) = &request.sandbox_denial

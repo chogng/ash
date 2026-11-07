@@ -177,23 +177,29 @@ impl Directory {
 
     /// Resolves a relative write target while checking its nearest existing ancestor.
     ///
-    /// This authorizations creating a new file but rejects lexical escapes and existing parent symlinks
-    /// that leave the directory boundary.
+    /// Allows new files but rejects lexical escapes, dangling links, and symlinks outside the root.
     pub fn resolve_for_write(
         &self,
         relative_path: impl AsRef<Path>,
     ) -> Result<PathBuf, DirPathError> {
         let relative_path = relative_path.as_ref();
         let candidate = self.candidate(relative_path)?;
-        if candidate.exists() {
-            return self.resolve_existing(relative_path);
-        }
-
         let mut existing_parent = candidate.as_path();
-        while !existing_parent.exists() {
-            existing_parent = existing_parent
-                .parent()
-                .ok_or_else(|| DirPathError::InvalidRelativePath(relative_path.to_path_buf()))?;
+        loop {
+            match std::fs::symlink_metadata(existing_parent) {
+                Ok(_) => break,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    existing_parent = existing_parent.parent().ok_or_else(|| {
+                        DirPathError::InvalidRelativePath(relative_path.to_path_buf())
+                    })?;
+                }
+                Err(error) => {
+                    return Err(DirPathError::RootUnavailable {
+                        path: existing_parent.to_path_buf(),
+                        message: error.to_string(),
+                    });
+                }
+            }
         }
         let canonical_parent = dunce::canonicalize(existing_parent).map_err(|error| {
             DirPathError::RootUnavailable {

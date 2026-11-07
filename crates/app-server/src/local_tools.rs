@@ -2,9 +2,11 @@ use ash_action_policy::ActionClassifier;
 use ash_action_policy::ActionPolicyEngine;
 use ash_action_policy::ActionReviewRequest;
 use ash_action_policy::ExecutionDecision;
+use ash_action_policy::FileWriteReview;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::ReviewFailurePolicy;
 use ash_action_policy::SandboxCompatibility;
+use ash_action_policy::ShellReview;
 use ash_apply_patch::ApplyPatchLimits;
 use ash_apply_patch::ApplyPatchTool;
 use ash_async_utils::CancellationToken;
@@ -66,6 +68,9 @@ use ash_shell_command::RipgrepExecutable;
 use ash_shell_command::ShellCommandLimits;
 use ash_shell_command::ShellCommandRequest;
 use ash_shell_command::ShellCommandTool;
+use ash_shell_command::shell_review;
+use ash_shell_command::shell_review::Redirect;
+use ash_shell_command::shell_review::ShellInvocation;
 use ash_tools::ToolPayload;
 use ash_tools::to_protocol_tool_definition;
 use core_api::ActionPolicyService;
@@ -861,7 +866,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         ))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         let request = self.materialize_at(request, authorization.dir(), relative)?;
-        self.review_request_scoped(&request, Some(scope))
+        self.review_request_scoped(&request, scope, ShellInput::Closed)
     }
 
     fn prepare_session_at(
@@ -872,7 +877,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         scope: &SandboxScope,
     ) -> Result<ActionReviewRequest, CoreError> {
         let request = self.materialize_at(request, authorization.dir(), relative)?;
-        self.review_request_scoped(&request, Some(scope))
+        self.review_request_scoped(&request, scope, ShellInput::Interactive)
     }
 
     fn execute_at(
@@ -907,13 +912,14 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
         request: &ShellCommandRequest,
     ) -> Result<ActionReviewRequest, CoreError> {
         let scope = local_sandbox_scope(&self.authorization, &[], self.profile_policy)?;
-        self.review_request_scoped(request, Some(&scope))
+        self.review_request_scoped(request, &scope, ShellInput::Closed)
     }
 
     fn review_request_scoped(
         &self,
         request: &ShellCommandRequest,
-        sandbox_scope: Option<&SandboxScope>,
+        sandbox_scope: &SandboxScope,
+        input: ShellInput,
     ) -> Result<ActionReviewRequest, CoreError> {
         let selected_root = request
             .dir_root()
@@ -928,15 +934,15 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
             "program": request.program(),
             "arguments": request.arguments(),
             "working_directory": canonical_working_directory,
-            "sandboxScope": sandbox_scope.map(|scope| json!({
-                "commandDir": scope.command_dir().id(),
-                "grants": scope.grants().iter().map(|grant| json!({
+            "sandboxScope": {
+                "commandDir": sandbox_scope.command_dir().id(),
+                "grants": sandbox_scope.grants().iter().map(|grant| json!({
                     "dirId": grant.dir().id(),
                     "access": format!("{:?}", grant.access()),
                 })).collect::<Vec<_>>(),
-                "hiddenDirs": scope.hidden_dirs().iter().map(Dir::id).collect::<Vec<_>>(),
-                "constraints": scope.policy_identity(),
-            })),
+                "hiddenDirs": sandbox_scope.hidden_dirs().iter().map(Dir::id).collect::<Vec<_>>(),
+                "constraints": sandbox_scope.policy_identity(),
+            },
         }))
         .map_err(|error| CoreError::Policy(error.to_string()))?;
         let is_ripgrep = request.program() == self.ripgrep.path().to_string_lossy();
@@ -949,7 +955,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
             read_only_sandbox()
         } else {
             sandbox_scope
-                .and_then(SandboxScope::policy_ceiling)
+                .policy_ceiling()
                 .filter(|policy| policy.network() == NetworkAccess::Managed)
                 .map(|_| {
                     SandboxPolicy::new(self.shell_policy.file_system(), NetworkAccess::Managed)
@@ -958,7 +964,7 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
                 })
                 .unwrap_or(self.shell_policy)
         };
-        Ok(ActionReviewRequest::new(
+        let review = ActionReviewRequest::new(
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(canonical),
                 ActionKind::LocalProcess(if is_ripgrep {
@@ -977,7 +983,15 @@ impl<B: SandboxBackend> LocalShellToolService<B> {
             ActionProvenance::new(ActionSource::BuiltInTool, "shell-command"),
             SandboxCompatibility::Supported(sandbox),
             self.action_policy_revision.clone(),
-        ))
+        );
+        review_shell_invocation(
+            review,
+            request,
+            &canonical_working_directory,
+            sandbox_scope,
+            sandbox,
+            input,
+        )
     }
 
     fn execute_request(
@@ -1103,6 +1117,171 @@ struct LocalExecutorReviewer {
     ripgrep: RipgrepExecutable,
     action_policy_revision: ActionPolicyRevision,
     dir_grants: Arc<DirGrants>,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum ShellInput {
+    Closed,
+    Interactive,
+}
+
+fn review_shell_invocation(
+    review: ActionReviewRequest,
+    request: &ShellCommandRequest,
+    working_directory: &Path,
+    scope: &SandboxScope,
+    sandbox: SandboxPolicy,
+    input: ShellInput,
+) -> Result<ActionReviewRequest, CoreError> {
+    let (commands, redirects, allow_config_prefix) =
+        match shell_review::analyze(request.program(), request.arguments()) {
+            ShellInvocation::Direct => {
+                let command = review
+                    .action()
+                    .command()
+                    .expect("shell reviews have explicit argv");
+                if input == ShellInput::Interactive
+                    || shell_review::session_prefix(command).is_none()
+                {
+                    return Ok(review);
+                }
+                (vec![command.clone()], Vec::new(), true)
+            }
+            ShellInvocation::Literal {
+                commands,
+                redirects,
+                login_shell,
+            } => {
+                let allow_prefix =
+                    redirects.is_empty() && !login_shell && input == ShellInput::Closed;
+                (commands, redirects, allow_prefix)
+            }
+            ShellInvocation::Opaque => (Vec::new(), Vec::new(), false),
+        };
+    let session_prefixes = if allow_config_prefix {
+        commands
+            .iter()
+            .map(shell_review::session_prefix)
+            .collect::<Option<Vec<_>>>()
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let requires_confirmation =
+        commands.len() != 1 || !allow_config_prefix || !session_prefixes.is_empty();
+    let targets = if redirects.is_empty() {
+        Vec::new()
+    } else {
+        let filesystem = scope
+            .resolve_filesystem_with_continuous_patterns(
+                scope.constrain_policy(sandbox).file_system(),
+            )
+            .map_err(|error| CoreError::Policy(error.to_string()))?;
+        redirects
+            .into_iter()
+            .map(|redirect| review_shell_redirect(redirect, working_directory, scope, &filesystem))
+            .collect::<Result<Vec<_>, _>>()?
+    };
+    Ok(review.with_shell(
+        ShellReview {
+            commands,
+            session_prefixes,
+            working_directory: working_directory.to_path_buf(),
+            scope: scope.policy_identity(),
+            allow_config_prefix,
+            requires_confirmation,
+        },
+        targets,
+    ))
+}
+
+fn review_shell_redirect(
+    redirect: Redirect,
+    working_directory: &Path,
+    scope: &SandboxScope,
+    filesystem: &ash_sandboxing::ResolvedFileSystem,
+) -> Result<Capability, CoreError> {
+    use ash_file_access::PathAccess;
+    use ash_file_access::PathOperation;
+    let (operation, target) = match redirect {
+        Redirect::Read(target) => (PathOperation::Read, target),
+        Redirect::Write(target) => (PathOperation::Write, target),
+    };
+    let path = working_directory.join(target);
+    let denied = || {
+        CoreError::Policy(format!(
+            "shell redirection target is outside the permitted paths: {}",
+            path.display()
+        ))
+    };
+    let (owner, relative) = scope
+        .grants()
+        .iter()
+        .find_map(|grant| {
+            let dir = grant.dir();
+            path.strip_prefix(dir.canonical_path())
+                .or_else(|_| path.strip_prefix(dir.requested_path()))
+                .ok()
+                .map(|relative| (dir, relative))
+        })
+        .ok_or_else(denied)?;
+    let canonical = match operation {
+        PathOperation::Read => owner.resolve_existing(relative),
+        PathOperation::Write => owner.resolve_for_write(relative),
+    }
+    .map_err(|_| denied())?;
+    let requested = owner.canonical_path().join(relative);
+    let resolved = canonical
+        .strip_prefix(owner.canonical_path())
+        .map_err(|_| denied())?;
+    for candidate in [&requested, &canonical] {
+        let allowed = match operation {
+            PathOperation::Read => filesystem.allows_read(candidate),
+            PathOperation::Write => filesystem.allows_write(candidate),
+        };
+        if !allowed {
+            return Err(denied());
+        }
+    }
+    if !LOCAL_FILE_ACCESS_POLICY.allows(relative, operation)
+        || !LOCAL_FILE_ACCESS_POLICY.allows(resolved, operation)
+    {
+        return Err(denied());
+    }
+    for rule in scope
+        .path_rules()
+        .iter()
+        .filter(|rule| rule.owner() == owner)
+    {
+        let Some(pattern) = rule.continuous_pattern() else {
+            continue;
+        };
+        let access = match rule.access() {
+            SandboxPathAccess::Denied => PathAccess::Denied,
+            SandboxPathAccess::ReadOnly => PathAccess::ReadOnly,
+            SandboxPathAccess::ReadWrite => continue,
+        };
+        let policy = ash_file_access::PathAccessPolicy::new(
+            PathAccess::ReadWrite,
+            vec![ash_file_access::PathAccessRule {
+                pattern: pattern.to_owned(),
+                access,
+            }],
+        )
+        .map_err(CoreError::Policy)?;
+        if !policy.allows(relative, operation) || !policy.allows(resolved, operation) {
+            return Err(denied());
+        }
+    }
+    ensure_local_file_access(owner, &canonical)?;
+    let kind = match operation {
+        PathOperation::Read => CapabilityKind::FileRead,
+        PathOperation::Write => CapabilityKind::FileWrite,
+    };
+    Ok(Capability::new(
+        kind,
+        canonical.to_str().ok_or_else(denied)?,
+    ))
 }
 
 impl ToolExecutorReviewer for LocalExecutorReviewer {
@@ -1281,6 +1460,14 @@ impl LocalExecutorReviewer {
             SandboxCompatibility::Supported(sandbox),
             self.action_policy_revision.clone(),
         );
+        let review = review_shell_invocation(
+            review,
+            &request,
+            &working_directory,
+            &scope,
+            sandbox,
+            ShellInput::Closed,
+        )?;
         // Keep the reviewed host scope with the frozen payload. Reconstructing
         // a plain directory scope in the executor drops denied path rules.
         let mut prepared = PreparedToolExecution::new(
@@ -1468,12 +1655,13 @@ impl LocalExecutorReviewer {
             .as_ref()
             .map(|scope| scope.primary().dir())
             .unwrap_or_else(|| self.authorization.dir());
-        let (authorization, rewritten_patch, targets) =
+        let (authorization, rewritten_patch, file_write) =
             materialize_patch_targets(&authorizations, relative_root, patch, &[])?;
+        let targets = &file_write.targets;
         let capabilities = targets.iter().flat_map(|target| {
             [
-                Capability::new(CapabilityKind::FileRead, target.clone()),
-                Capability::new(CapabilityKind::FileWrite, target.clone()),
+                Capability::new(CapabilityKind::FileRead, target.to_string_lossy()),
+                Capability::new(CapabilityKind::FileWrite, target.to_string_lossy()),
             ]
         });
         let canonical = serde_json::to_vec(&json!({
@@ -1494,7 +1682,8 @@ impl LocalExecutorReviewer {
                 reason: "apply_patch validates every target through Dir and commits host-mediated file mutations".into(),
             },
             self.action_policy_revision.clone(),
-        );
+        )
+        .with_file_write(file_write);
         Ok((review, rewritten_patch, authorization))
     }
 }
@@ -1504,10 +1693,11 @@ fn materialize_patch_targets(
     relative_root: &Dir,
     patch: &str,
     source_aliases: &[(Dir, Authorization)],
-) -> Result<(Authorization, String, Vec<String>), CoreError> {
+) -> Result<(Authorization, String, FileWriteReview), CoreError> {
     let mut selected: Option<Authorization> = None;
     let mut targets = Vec::new();
     let mut rewritten = Vec::new();
+    let mut protected = false;
     for line in patch.lines() {
         let operation = [
             ("*** Update File: ", true),
@@ -1604,8 +1794,17 @@ fn materialize_patch_targets(
                 "apply_patch target is denied by the permission profile".into(),
             ));
         }
-        targets.push(resolved.display().to_string());
-        rewritten.push(format!("{prefix}{}", relative.display()));
+        let canonical_relative = resolved
+            .strip_prefix(authorization.dir().canonical_path())
+            .map_err(|error| CoreError::Policy(error.to_string()))?;
+        let canonical_path = canonical_relative.to_str().ok_or_else(|| {
+            CoreError::Policy("apply_patch target path is not valid UTF-8".into())
+        })?;
+        protected |= is_protected_write_path(&path)
+            || is_protected_write_path(&authorization.dir().requested_path().join(&relative))
+            || is_protected_write_path(&resolved);
+        rewritten.push(format!("{prefix}{canonical_path}"));
+        targets.push(resolved);
     }
     targets.sort();
     targets.dedup();
@@ -1614,11 +1813,59 @@ fn materialize_patch_targets(
             "apply_patch contains no file operations to review".into(),
         ));
     }
-    Ok((
-        selected.expect("a patch with targets selected one directory"),
-        rewritten.join("\n"),
+    let authorization = selected.expect("a patch with targets selected one directory");
+    let root = authorization.dir();
+    let relative_targets = targets.iter().map(|target| {
+        target
+            .strip_prefix(root.canonical_path())
+            .expect("resolved patch target is in its directory")
+    });
+    let exact_paths = ash_file_access::PathAccessPolicy::for_exact_writes(relative_targets)
+        .map_err(CoreError::Policy)?;
+    let file_write = FileWriteReview {
+        directory_id: root.id().to_string(),
         targets,
+        protected,
+    };
+    Ok((
+        authorization.constrained_by(&exact_paths),
+        rewritten.join("\n"),
+        file_write,
     ))
+}
+
+/// Files whose contents can register commands outside the current tool invocation.
+fn is_protected_write_path(path: &std::path::Path) -> bool {
+    let Some(name) = path.file_name() else {
+        return false;
+    };
+    let components = path
+        .components()
+        .map(|part| part.as_os_str())
+        .collect::<Vec<_>>();
+    name.eq_ignore_ascii_case(".devcontainer.json")
+        || name.eq_ignore_ascii_case("devcontainer.json")
+            && components
+                .iter()
+                .any(|part| part.eq_ignore_ascii_case(".devcontainer"))
+        || path
+            .parent()
+            .and_then(std::path::Path::file_name)
+            .is_some_and(|parent| {
+                parent.eq_ignore_ascii_case(".vscode")
+                    && path
+                        .extension()
+                        .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
+                    || parent.eq_ignore_ascii_case(".ash")
+                        && name.eq_ignore_ascii_case("config.toml")
+                    || parent.eq_ignore_ascii_case(".git") && name.eq_ignore_ascii_case("config")
+            })
+        || components.windows(2).any(|parts| {
+            parts[1].eq_ignore_ascii_case("hooks")
+                && [".ash", ".git", ".github"]
+                    .iter()
+                    .any(|parent| parts[0].eq_ignore_ascii_case(parent))
+        })
 }
 
 struct LocalShellPolicy {
@@ -2084,6 +2331,26 @@ pub(crate) fn local_command_authority(
     shell_policy: SandboxPolicy,
     scope: Option<&SandboxScope>,
 ) -> Result<CommandExecutionAuthority, CoreError> {
+    let sandboxed_approval;
+    let authorization = match authorization {
+        ToolAuthorization::ApprovedOnce(grant)
+            if grant.approval().sandbox_denial.is_none()
+                && grant.approval().command.as_ref().is_some_and(|command| {
+                    !matches!(
+                        shell_review::analyze(&command.program, &command.arguments),
+                        ShellInvocation::Direct
+                    ) || shell_review::session_prefix(&ash_execpolicy::ExecPolicyCommand::new(
+                        command.program.clone(),
+                        command.arguments.clone(),
+                    ))
+                    .is_some()
+                }) =>
+        {
+            sandboxed_approval = ToolAuthorization::Sandboxed(shell_policy);
+            &sandboxed_approval
+        }
+        _ => authorization,
+    };
     // Approval may authorize a broader command, but cannot erase directory or
     // profile read-only constraints when choosing the process launch path.
     let restricted = scope

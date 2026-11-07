@@ -88,6 +88,13 @@ impl<C: ActionClassifier> ActionPolicyEngine<C> {
         if let Some(decision) = decide_exec_policy(&self.exec_policy, request)? {
             return Ok(decision);
         }
+        if request.shell().is_some() && request.requires_manual_confirmation() {
+            return Ok(ExecutionDecision::AskUser(ApprovalRequest::new(
+                request.action().digest().clone(),
+                request.action().required_capabilities().clone(),
+                "the action requires user approval",
+            )));
+        }
         if let Some(grant) = self.user_allowlist.matching_grant(request) {
             return Ok(ExecutionDecision::RunUnsandboxed {
                 grant_id: grant.id().clone(),
@@ -285,6 +292,10 @@ fn evaluate_exec_policy(
         request.action().command(),
         request.action().network_target(),
     );
+    let subject = match request.shell() {
+        Some(shell) => subject.with_shell_commands(&shell.commands, shell.allow_config_prefix),
+        None => subject,
+    };
     policy.evaluate(&subject)
 }
 

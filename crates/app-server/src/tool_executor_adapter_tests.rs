@@ -146,6 +146,7 @@ pub(crate) fn assert_managed_sandbox_execution(
                 &ash_protocol::ThreadId::new("managed-thread").unwrap(),
                 &TurnId::new("managed-turn").unwrap(),
                 None,
+                None,
                 &mut RecordingSink::default(),
             )
             .unwrap();
@@ -290,6 +291,7 @@ fn executor_runtime_preserves_registry_binding_environment_and_output() {
             &ash_protocol::ThreadId::new("thread-7").unwrap(),
             &TurnId::new("turn-7").unwrap(),
             None,
+            None,
             &mut sink,
         )
         .unwrap();
@@ -362,6 +364,7 @@ fn executor_runtime_rechecks_and_retires_a_revoked_dir_authorization() {
         &ash_protocol::ThreadId::new("thread-9").unwrap(),
         &TurnId::new("turn-9").unwrap(),
         None,
+        None,
         &mut RecordingSink::default(),
     );
 
@@ -424,6 +427,7 @@ fn executor_runtime_preserves_original_image_detail_until_model_capability_gate(
             &ash_protocol::SessionId::new("session-8").unwrap(),
             &ash_protocol::ThreadId::new("thread-8").unwrap(),
             &TurnId::new("turn-8").unwrap(),
+            None,
             None,
             &mut RecordingSink::default(),
         )

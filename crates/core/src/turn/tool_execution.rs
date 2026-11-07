@@ -420,7 +420,7 @@ impl ToolExecutionOrchestrator {
                 expected_review_sequence: None,
             },
         )?;
-        let output = match self.execute_service(context, &call, &authorization) {
+        let output = match self.execute_service(context, &call, reviewed, &authorization) {
             Ok(ToolExecutionOutput::NeedsResultConfirmation(review)) => {
                 self.review_result(context, &call, review)?
             }
@@ -464,7 +464,7 @@ impl ToolExecutionOrchestrator {
         reviewed: &ActionReviewRequest,
         authorization: ToolAuthorization,
     ) -> Result<ToolAttempt, CoreError> {
-        let result = self.execute_service(context, call, &authorization);
+        let result = self.execute_service(context, call, reviewed, &authorization);
         match result {
             Ok(ToolExecutionOutput::NeedsResultConfirmation(review)) => Ok(ToolAttempt::Commit {
                 output: self.review_result(context, call, review)?,
@@ -524,6 +524,7 @@ impl ToolExecutionOrchestrator {
         &self,
         context: &ToolExecutionContext<'_>,
         call: &ToolCall,
+        reviewed: &ActionReviewRequest,
         authorization: &ToolAuthorization,
     ) -> Result<ToolExecutionOutput, CoreError> {
         let snapshot = self.threads.read_thread(context.thread_id)?;
@@ -534,7 +535,8 @@ impl ToolExecutionOrchestrator {
                 .definitions()
                 .into_iter()
                 .map(|definition| definition.name),
-        )?;
+        )?
+        .with_reviewed_action(reviewed);
         if !facts.allows_tool(&call.name) {
             return Err(CoreError::Policy(format!(
                 "Tool '{}' is outside the current capability scope",
@@ -801,7 +803,7 @@ impl ToolExecutionOrchestrator {
         }
         escalated?;
 
-        let output = match self.execute_service(context, call, &authorization) {
+        let output = match self.execute_service(context, call, &second_review, &authorization) {
             Ok(ToolExecutionOutput::NeedsResultConfirmation(review)) => {
                 self.review_result(context, call, review)?
             }

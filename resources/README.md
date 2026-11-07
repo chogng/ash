@@ -144,8 +144,8 @@ explains layer replacement and platform previews.
 supplied Ash Type System v2.1 TTF bundle using FontForge 20230101. These are
 static-font projects reconstructed from the compiled fonts; they do not recover
 the original design masters or editing history. `fonts/reference/` retains the
-unmodified input TTFs for comparison; edit the `.sfd` projects and keep new
-exports in `.build/fonts/`.
+unmodified input TTFs for comparison. Edit the `.sfd` projects and keep trial
+exports in `.build/fonts/`. Approved Ash Sans exports ship from `fonts/runtime/`.
 
 | Family       | Projects                                                            | Weights       |
 | ------------ | ------------------------------------------------------------------- | ------------- |
@@ -162,6 +162,11 @@ with the TrueType format to export a TTF into the ignored `.build/fonts/`
 directory; enable OpenType layout and retain the imported TrueType instructions
 when exporting an unedited project. These projects are editing sources; runtime
 font loading belongs to each product host.
+
+Ash Sans and Ash Sans SC share a 900-unit ascender and 100-unit descender on a
+1000-unit em. Keep the `hhea` and `OS/2` typographic metrics in sync across
+weights. The runtime TTFs apply these metrics to the original font tables
+with FontTools, preserving the supplied outlines and advance widths.
 
 Saving and reopening the SFDs preserves the imported quadratic outlines,
 available layout lookups and TrueType instructions. Re-export checks retain the

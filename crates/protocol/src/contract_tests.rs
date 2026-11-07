@@ -933,6 +933,7 @@ fn approval_interaction_serializes_its_exact_policy_binding() {
                     ActionApprovalDecision::Decline,
                 ],
                 risk_assessment: None,
+                session_command_prefix: None,
                 sandbox_denial: Some(SandboxDenialOutput::safe_to_retry(
                     "network access denied",
                     ProcessExecutionOutput::from_captured_streams(
@@ -1015,6 +1016,7 @@ fn ordinary_approval_omits_the_sandbox_escalation_payload() {
             crate::ActionApprovalDecision::Decline,
         ],
         risk_assessment: None,
+        session_command_prefix: None,
         sandbox_denial: None,
     };
 

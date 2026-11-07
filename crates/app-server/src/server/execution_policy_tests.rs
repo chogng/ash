@@ -27,6 +27,132 @@ impl ActionPolicyService for DomainPolicy {
             "domain request",
         )))
     }
+
+    fn review_approval(
+        &self,
+        request: &ActionReviewRequest,
+        _: &CancellationToken,
+    ) -> Result<Option<ExecutionDecision>, CoreError> {
+        assert!(!request.file_write().is_some_and(|write| write.protected));
+        Ok(None)
+    }
+}
+
+#[test]
+fn protected_file_approval_is_manual_and_reusable_only_for_the_same_file_and_session() {
+    use ash_protocol::ActionApprovalDecision;
+    use ash_protocol::ApprovalMode;
+    use ash_protocol::Capability;
+    use ash_protocol::CapabilityKind;
+
+    let server = crate::tests::server();
+    let policy = server.shared_action_policy(Arc::new(DomainPolicy));
+    let cancellation = ash_async_utils::CancellationSource::new().token();
+    let directory = tempfile::tempdir().unwrap();
+    let request = |name: &str, contents: &str, directory_id: &str| {
+        let path = directory.path().join(name);
+        ActionReviewRequest::new(
+            ash_action_policy::ResolvedAction::new(
+                ActionDigest::from_canonical_bytes(contents.as_bytes()),
+                ActionKind::FileSystemMutation,
+                "file write",
+                CapabilitySet::new([Capability::new(
+                    CapabilityKind::FileWrite,
+                    path.to_string_lossy(),
+                )]),
+            ),
+            ActionProvenance::new(ActionSource::BuiltInTool, "write_file"),
+            ash_action_policy::SandboxCompatibility::NotApplicable {
+                reason: "host file tool".into(),
+            },
+            ActionPolicyRevision::new("domain"),
+        )
+        .with_file_write(ash_action_policy::FileWriteReview {
+            directory_id: directory_id.into(),
+            targets: vec![path],
+            protected: true,
+        })
+    };
+    let original = request("tasks.json", "original", "root");
+    for mode in [ApprovalMode::Manual, ApprovalMode::Auto] {
+        assert!(matches!(
+            ash_core::decide_turn_action(
+                policy.as_ref(),
+                &policy.revision(),
+                mode,
+                &original,
+                &cancellation
+            ),
+            Ok(ExecutionDecision::AskUser(_))
+        ));
+    }
+    assert!(matches!(
+        ash_core::decide_turn_action(
+            policy.as_ref(),
+            &policy.revision(),
+            ApprovalMode::BypassPermissions,
+            &original,
+            &cancellation
+        ),
+        Ok(ExecutionDecision::RunWithPermissionBypass(_))
+    ));
+    assert_eq!(
+        policy.approval_decisions(&original),
+        [
+            ActionApprovalDecision::Decline,
+            ActionApprovalDecision::ApproveOnce,
+            ActionApprovalDecision::ApproveFileWriteForSession,
+        ]
+    );
+
+    let session = ash_protocol::SessionId::new("file-grant").unwrap();
+    let thread = ash_protocol::ThreadId::new("file-thread").unwrap();
+    let turn = ash_protocol::TurnId::new("file-turn").unwrap();
+    let context = core_api::ActionPolicyContext {
+        session: &session,
+        thread: &thread,
+        turn: &turn,
+    };
+    policy
+        .record_approval(
+            &context,
+            &original,
+            ActionApprovalDecision::ApproveFileWriteForSession,
+        )
+        .unwrap();
+    let same_file = request("tasks.json", "changed contents", "root");
+    assert!(matches!(
+        policy.decide_in_context(&context, &same_file, &cancellation),
+        Ok(ExecutionDecision::RunUnsandboxed { .. })
+    ));
+    for different in [
+        request("settings.json", "original", "root"),
+        request("tasks.json", "original", "replaced-root"),
+    ] {
+        assert!(matches!(
+            policy.decide_in_context(&context, &different, &cancellation),
+            Ok(ExecutionDecision::AskUser(_))
+        ));
+    }
+    let other = core_api::ActionPolicyContext {
+        session: &ash_protocol::SessionId::new("another-session").unwrap(),
+        thread: &thread,
+        turn: &turn,
+    };
+    assert!(matches!(
+        policy.decide_in_context(&other, &same_file, &cancellation),
+        Ok(ExecutionDecision::AskUser(_))
+    ));
+    server
+        .env_runtime
+        .read()
+        .unwrap()
+        .dir_grants
+        .clear_session(&session);
+    assert!(matches!(
+        policy.decide_in_context(&context, &same_file, &cancellation),
+        Ok(ExecutionDecision::AskUser(_))
+    ));
 }
 
 #[test]

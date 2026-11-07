@@ -15,10 +15,13 @@ network-proxy = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 ash-async-utils = { workspace = true }
+ash-execpolicy = { workspace = true }
+ash-grammars = { workspace = true }
 ash-tool-executor = { workspace = true }
 ash-sandboxing = { workspace = true }
 ash-file-access = { workspace = true }
 ash-tools = { workspace = true }
+tree-sitter = { workspace = true }
 
 [dev-dependencies]
 mxc-sandbox = { workspace = true }

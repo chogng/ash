@@ -4409,6 +4409,7 @@ fn start_directory_approval(server: &AppServer) -> ash_protocol::ThreadId {
                         }],
                         reason: "directory reopen regression".into(),
                         risk_assessment: None,
+                        session_command_prefix: None,
                         sandbox_denial: None,
                         allowed_decisions: vec![
                             ash_protocol::ActionApprovalDecision::ApproveOnce,

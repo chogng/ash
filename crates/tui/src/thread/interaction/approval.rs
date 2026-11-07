@@ -18,6 +18,8 @@ use crossterm::event::KeyEventKind;
 pub(crate) enum ApprovalDecision {
     ApproveOnce,
     ApproveForSession,
+    ApproveFileWriteForSession,
+    ApproveCommandPrefixForSession,
     ApproveAndSaveRule,
     Decline,
 }
@@ -56,6 +58,8 @@ impl Approval {
         let choices = [
             ApprovalDecision::ApproveOnce,
             ApprovalDecision::ApproveForSession,
+            ApprovalDecision::ApproveFileWriteForSession,
+            ApprovalDecision::ApproveCommandPrefixForSession,
             ApprovalDecision::ApproveAndSaveRule,
             ApprovalDecision::Decline,
         ]
@@ -69,6 +73,17 @@ impl Approval {
                 command.program,
                 serde_json::to_string(&command.arguments).unwrap_or_default()
             )));
+        }
+        if let Some(prefix) = request.session_command_prefix {
+            details.push(crate::nls::Text::template(
+                "Command prefix  ·  {0}",
+                vec![crate::nls::Text::literal(
+                    std::iter::once(prefix.program)
+                        .chain(prefix.arguments)
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                )],
+            ));
         }
         details.extend(request.capabilities.iter().map(capability_detail));
         let selected = choices
@@ -186,6 +201,10 @@ impl ApprovalDecision {
         match self {
             Self::ApproveOnce => ActionApprovalDecision::ApproveOnce,
             Self::ApproveForSession => ActionApprovalDecision::ApproveForSession,
+            Self::ApproveFileWriteForSession => ActionApprovalDecision::ApproveFileWriteForSession,
+            Self::ApproveCommandPrefixForSession => {
+                ActionApprovalDecision::ApproveCommandPrefixForSession
+            }
             Self::ApproveAndSaveRule => ActionApprovalDecision::ApproveAndSaveRule,
             Self::Decline => ActionApprovalDecision::Decline,
         }
@@ -194,6 +213,8 @@ impl ApprovalDecision {
         match self {
             Self::ApproveOnce => "Approve once",
             Self::ApproveForSession => "Approve same action this session",
+            Self::ApproveFileWriteForSession => "Allow edits to this file this session",
+            Self::ApproveCommandPrefixForSession => "Allow this command prefix this session",
             Self::ApproveAndSaveRule => "Save approval for this exact action",
             Self::Decline => "Decline",
         }

@@ -1,6 +1,6 @@
 @font-face {
 	font-family: "Ash Sans";
-	src: url("../../../../../resources/fonts/reference/AshSans-Regular.ttf")
+	src: url("../../../../../resources/fonts/runtime/AshSans-Regular.ttf")
 		format("truetype");
 	font-weight: 400;
 	font-display: swap;
@@ -8,7 +8,7 @@
 
 @font-face {
 	font-family: "Ash Sans";
-	src: url("../../../../../resources/fonts/reference/AshSans-SemiBold.ttf")
+	src: url("../../../../../resources/fonts/runtime/AshSans-SemiBold.ttf")
 		format("truetype");
 	font-weight: 600;
 	font-display: swap;
@@ -16,7 +16,7 @@
 
 @font-face {
 	font-family: "Ash Sans SC";
-	src: url("../../../../../resources/fonts/reference/AshSansSC-Regular.ttf")
+	src: url("../../../../../resources/fonts/runtime/AshSansSC-Regular.ttf")
 		format("truetype");
 	font-weight: 400;
 	font-display: swap;
