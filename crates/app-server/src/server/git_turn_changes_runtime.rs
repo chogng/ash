@@ -17,6 +17,7 @@ use ash_app_server_protocol::protocol::turn_changes::TurnChangesChanged;
 use ash_app_server_protocol::protocol::turn_changes::TurnChangesMutationResult;
 use ash_config::ConfigStore;
 use ash_core::ThreadController;
+use ash_file_access::Permission;
 use ash_protocol::CommandId;
 use ash_protocol::SessionId;
 use ash_protocol::ThreadId;
@@ -40,6 +41,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 use worktree::ManagedDirBinding;
 use worktree::ManagedDirKind;
+use worktree::ManagedDirOwner;
 
 /// App Server adapter from Turn execution events to the Git ChangeSet domain.
 pub(super) struct GitTurnChangesRuntime {
@@ -300,6 +302,33 @@ impl GitTurnChangesRuntime {
                 ManagedDirKind::Directory => "isolated non-Git directory copy".into(),
             },
         })
+    }
+
+    /// Projects only a checkout root already inside the owning Thread's current read scope.
+    pub(super) fn readable_worktree_path(&self, thread_id: &ThreadId) -> Option<String> {
+        let binding = self.binding(thread_id)?;
+        let ManagedDirOwner::Thread { thread_id: owner } = binding.owner();
+        if binding.kind() != ManagedDirKind::Git || owner != thread_id.as_str() {
+            return None;
+        }
+        let scope = self
+            .dirs
+            .file_access
+            .thread_scope(thread_id, Permission::ReadFiles)
+            .ok()??;
+        let authorization = scope.primary();
+        if authorization.dir().canonical_path() != binding.dir() {
+            return None;
+        }
+        let root = authorization
+            .dir()
+            .resolve_existing_path(binding.checkout_root())
+            .ok()?;
+        if root != binding.checkout_root() {
+            return None;
+        }
+        authorization.ensure_active().ok()?;
+        root.to_str().map(ToOwned::to_owned)
     }
 
     pub(super) fn list(

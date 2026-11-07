@@ -25,6 +25,7 @@ import { IMarkdownRendererService, MarkdownRendererService } from '../../../../.
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { IHoverService } from '../../../../../../platform/hover/browser/hoverService.js';
 import { ILinkPresentationService, type ILinkPresentationRule } from '../../../../../../platform/dataChannel/common/dataChannel.js';
+import { ISessionSummaryHoverService, SessionSummaryHoverService } from '../../../browser/agentSessions/sessionSummaryHoverService.js';
 import { ChatMarkdownContentPart } from '../../../browser/widget/chatContentParts/chatMarkdownContentPart.js';
 import { IncrementalDOMMorpher } from '../../../browser/widget/chatContentParts/chatIncrementalRendering/chatIncrementalRendering.js';
 import { ChatContentMarkdownRenderer } from '../../../browser/widget/chatContentMarkdownRenderer.js';
@@ -56,6 +57,7 @@ function services(
 	});
 	instance.registerInstance(IMarkdownRendererService, instance.createInstance(MarkdownRendererService));
 	instance.registerInstance(ILinkPresentationService, linkPresentation?.service ?? { onDidChangeLinkPresentationRules: Event.None, linkPresentationRules: [] } as unknown as ILinkPresentationService);
+	instance.registerSingleton(ISessionSummaryHoverService, () => instance.createInstance(SessionSummaryHoverService));
 	instance.registerInstance(IHoverService, (linkPresentation?.hover ?? {}) as IHoverService);
 	return instance;
 }

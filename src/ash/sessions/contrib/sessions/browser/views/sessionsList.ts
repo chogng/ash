@@ -36,7 +36,7 @@ import { IGitHubService } from '../../../github/browser/githubService.js';
 import { getPullRequestLabel } from '../../../github/common/types.js';
 import { getHighestPriorityPullRequestIcon } from '../../../../../workbench/common/chatPullRequest.js';
 import { sessionManagementLabel } from '../../../../browser/sessionManagementLabels.js';
-import type { ISession, SessionManagementInfo } from '../../../../services/sessions/common/session.js';
+import type { IChat, ISession, SessionManagementInfo } from '../../../../services/sessions/common/session.js';
 import type { ThemeIcon } from '../../../../../base/common/themables.js';
 import { colorCssVariable } from '../../../../../platform/theme/common/colorUtils.js';
 import { autorun, derived, observableFromEvent, type IObservable } from '../../../../../base/common/observable.js';
@@ -61,7 +61,7 @@ import { IConfigurationService } from '../../../../../platform/configuration/com
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { Menus } from '../../../../browser/menus.js';
 import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogProjectAppearance, SessionsCatalogProjectOperations, SessionsCatalogRow } from './sessionsCatalogList.js';
-import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { DeferredPromise, RunOnceScheduler } from '../../../../../base/common/async.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
 import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
@@ -73,7 +73,8 @@ import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { Icon } from '../../../../../base/common/icon.js';
 import { SessionLeadingIcon } from '../../../../browser/ui/sessionLeadingIcon.js';
-import { createSessionSummaryHover, getSessionSummaryHoverData } from '../sessionHoverContent.js';
+import { SessionSummaryHoverWidget, type ISessionSummaryHoverData } from '../../../../../workbench/contrib/chat/browser/agentSessions/sessionSummaryHover.js';
+import { getSessionSummaryHoverData, loadSessionSummaryHoverDetails } from '../sessionHoverContent.js';
 import { IHoverService, type IManagedHover } from '../../../../../platform/hover/browser/hoverService.js';
 import { LocalChatSessionUri } from '../../../../../workbench/contrib/chat/common/model/chatUri.js';
 import { fillChatReferenceDragData } from '../../../../browser/dnd.js';
@@ -1112,6 +1113,15 @@ export class SessionsList extends DomWidget {
 		}
 	}
 
+	private updateSessionSummary(item: SessionListItem, session: ISession, chat: IChat): void {
+		const scopes = this.providerScopes;
+		const { sessionId } = session;
+		const { threadId } = chat;
+		item.updateSummary(this.hoverService, getSessionSummaryHoverData(session, chat), threadId, scopes
+			? token => loadSessionSummaryHoverDetails(this.sessionService, scopes, sessionId, threadId, token)
+			: undefined);
+	}
+
 	private render(): void {
 		const ownerDocument = this.domNode.ownerDocument;
 		const focused = this.list.contains(ownerDocument.activeElement) ? ownerDocument.activeElement as HTMLElement : undefined;
@@ -1326,13 +1336,13 @@ export class SessionsList extends DomWidget {
 			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, open, management);
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor));
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
-			item.updateSummary(this.hoverService, getSessionSummaryHoverData(session, thread));
+			this.updateSessionSummary(item, session, thread);
 			const children = nested.map(chat => {
 				const child = itemFor(`chat:${JSON.stringify([session.sessionId, chat.threadId])}`, 'conversation', restingIcon ?? Lxicon.chatSession);
 				child.target = { sessionId: session.sessionId, threadId: chat.threadId };
 				child.update(chat.title || localize('sessions.list.untitledChat', 'Untitled Chat'), current?.threadId === chat.threadId,
 					() => this.openRow(options => this.viewService.openSession(session.sessionId, chat.threadId, options)), chat.management);
-				child.updateSummary(this.hoverService, getSessionSummaryHoverData(session, chat));
+				this.updateSessionSummary(child, session, chat);
 				child.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: chat.threadId } }, child, anchor));
 				return child.domNode;
 			});
@@ -1782,14 +1792,17 @@ class SessionListItem extends AbstractDisposable {
 		this.button.setAttribute('aria-label', parts.join('. '));
 	}
 
-	updateSummary(hoverService: IHoverService | undefined, metadata: readonly string[]): void {
+	updateSummary(hoverService: IHoverService | undefined, metadata: readonly string[], threadId: string, loadDetails?: ISessionSummaryHoverData['loadDetails']): void {
 		if (!hoverService) return;
 		const title = this.row.title;
 		const details = [this.managementDescription, ...metadata, this.pullRequestDescription].filter((value): value is string => !!value);
-		const summaryText = JSON.stringify([title, details]);
+		const summaryText = JSON.stringify([title, details, threadId]);
 		if (this.summaryText === summaryText) return;
 		this.summaryText = summaryText;
-		const content = createSessionSummaryHover(this.button.ownerDocument, title, details);
+		const data = { title, details, loadDetails };
+		const content = loadDetails
+			? (token: CancellationToken) => new SessionSummaryHoverWidget(this.button.ownerDocument, data, token).domNode
+			: new SessionSummaryHoverWidget(this.button.ownerDocument, data).domNode;
 		if (this.summaryHover.value) {
 			this.summaryHover.value.update(content);
 		} else {

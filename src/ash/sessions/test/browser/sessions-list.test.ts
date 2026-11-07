@@ -448,7 +448,11 @@ test('SessionsList updates passive status without changing row identity or selec
 	assert.equal(button.textContent, 'Background session');
 	assert.equal(button.parentElement?.querySelector('[aria-live="polite"]')?.textContent, 'Working');
 	assert.equal(button.hasAttribute('title'), false);
-	assert.equal((summaries.get(button) as HTMLElement).children[1].textContent, 'Working');
+	const summary = summaries.get(button) as HTMLElement;
+	assert.equal(summary.className, 'ash-session-summary-hover');
+	assert.deepEqual([...summary.children].map(row => row.textContent), [
+		'Background session', 'Working', 'fixture/repo #7 · Synthetic PR · Open · Checks failed',
+	]);
 
 	session = { ...session, management: { status: 'needsInput', statusChangedAtUnixMs: 20 } };
 	changes.fire();
@@ -566,7 +570,7 @@ test('The keyboard menu targets the saved Session workspace and the original nes
 	]);
 });
 
-test('Session hover localizes workspace and provider without translating their values', () => {
+test('Session hover localizes the project folder independently of the thread directory', () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
@@ -575,13 +579,13 @@ test('Session hover localizes workspace and provider without translating their v
 			providerLabel: 'Provider name', workspace: { authorityId: 'local', root: '/workspace' },
 		};
 		assert.deepEqual(getSessionSummaryHoverData(session), ['项目文件夹：/workspace', '提供方：Provider name']);
-		assert.deepEqual(getSessionSummaryHoverData(session, {
+		const chat = {
 			threadId: 'child', status: 'active', origin: { type: 'root' },
 			workspace: { authorityId: 'remote', root: '/child-workspace' },
-		}), ['项目文件夹：/child-workspace', '提供方：Provider name']);
-		assert.deepEqual(getSessionSummaryHoverData(session, {
-			threadId: 'directoryless', status: 'active', origin: { type: 'root' }, workspace: null,
-		}), ['提供方：Provider name']);
+		} as const;
+		assert.deepEqual(getSessionSummaryHoverData(session, chat), ['项目文件夹：/workspace', '提供方：Provider name']);
+		assert.deepEqual(getSessionSummaryHoverData(session, { ...chat, workspace: null }), ['项目文件夹：/workspace', '提供方：Provider name']);
+		assert.deepEqual(getSessionSummaryHoverData({ ...session, workspace: null }, chat), ['提供方：Provider name']);
 	} finally {
 		resetNlsResolver();
 	}

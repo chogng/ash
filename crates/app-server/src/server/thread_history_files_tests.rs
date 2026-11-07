@@ -410,6 +410,12 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
         );
         let original_summary =
             conversation_changes(&server, &mut connection, &session_id, &thread_id);
+        if git {
+            assert_eq!(original_summary["worktreePath"], read["directory"]["root"]);
+            assert_ne!(directory, dunce::canonicalize(source.path()).unwrap());
+        } else {
+            assert!(original_summary.get("worktreePath").is_none());
+        }
         assert_eq!(
             original_summary["statistics"]["files"],
             if git { 1 } else { 0 }
@@ -741,6 +747,23 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
                     assert_eq!(file["after"].as_str().unwrap().trim(), "continued");
                 }
             }
+            let runtime = server.git_turn_changes.as_ref().unwrap();
+            let typed_thread_id = ash_protocol::ThreadId::new(&thread_id).unwrap();
+            runtime.dirs.file_access.bind_thread_dir(
+                typed_thread_id.clone(),
+                ash_file_access::Dir::open_local(source.path()).unwrap(),
+            );
+            assert!(
+                conversation_changes(&server, &mut connection, &session_id, &thread_id)
+                    .get("worktreePath")
+                    .is_none()
+            );
+            runtime.dirs.file_access.unbind_thread_dir(&typed_thread_id);
+            assert!(
+                conversation_changes(&server, &mut connection, &session_id, &thread_id)
+                    .get("worktreePath")
+                    .is_none()
+            );
             server.close_connection(connection);
         }
         assert_eq!(

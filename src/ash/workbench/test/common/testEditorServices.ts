@@ -53,6 +53,7 @@ import { InstantiationService } from '../../../platform/instantiation/common/ins
 import { IResourceIconRenderer, IResourceLabelService, ResourceLabelService } from '../../browser/labels.js';
 import { TestWorkspaceService } from '../../services/configuration/test/common/testServices.js';
 import { ILinkPresentationService } from '../../../platform/dataChannel/common/dataChannel.js';
+import { ISessionSummaryHoverService, SessionSummaryHoverService } from '../../contrib/chat/browser/agentSessions/sessionSummaryHoverService.js';
 import { LinkPresentationService } from '../../services/dataChannel/browser/dataChannelService.js';
 import { darkColorTheme } from '../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../platform/theme/test/common/testThemeService.js';
@@ -185,6 +186,7 @@ export function createTestEditorServices(configuration?: IConfigurationService, 
 	if (!services.has(IWebWorkerService)) services.registerInstance(IWebWorkerService, new WebWorkerService());
 	if (!services.has(IContextKeyService)) services.registerSingleton(IContextKeyService, () => new ContextKeyService());
 	if (!services.has(ILinkPresentationService)) services.registerSingleton(ILinkPresentationService, () => services.createInstance(LinkPresentationService));
+	if (!services.has(ISessionSummaryHoverService)) services.registerSingleton(ISessionSummaryHoverService, () => services.createInstance(SessionSummaryHoverService));
 	if (configuration) {
 		services.registerInstance(IConfigurationService, configuration);
 	} else if (!services.has(IConfigurationService)) {

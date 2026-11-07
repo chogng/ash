@@ -95,6 +95,7 @@ impl<'a> GitTurnChangesRequestProcessor<'a> {
         result(&TurnChangesSummaryResult {
             sequence: summary.sequence,
             revision: summary.revision,
+            worktree_path: runtime.readable_worktree_path(&params.thread_id),
             statistics,
             repositories,
             warnings,

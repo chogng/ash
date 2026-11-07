@@ -230,6 +230,8 @@ export interface TurnChangeDetails {
 export interface ThreadChangesSummary {
 	readonly sequence: number;
 	readonly revision: string;
+	/** Verified root of the current thread's managed Git checkout, when readable. */
+	readonly worktreePath?: string;
 	readonly statistics: TurnChangeSetSummary['statistics'];
 	readonly repositories: readonly { readonly repositoryId: string; readonly files: readonly TurnChangeFile[]; }[];
 	readonly warnings: readonly string[];

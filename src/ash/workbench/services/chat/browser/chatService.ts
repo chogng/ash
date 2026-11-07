@@ -463,6 +463,7 @@ export class ChatService extends Disposable implements IChatService {
 		const result = await this.turnChangesApi.summary({ sessionId, threadId });
 		return {
 			sequence: result.sequence, revision: result.revision, statistics: { ...result.statistics },
+			...(result.worktreePath === undefined ? {} : { worktreePath: result.worktreePath }),
 			repositories: result.repositories.map(repository => ({ repositoryId: repository.repositoryId, files: repository.files.map(file => ({ ...file })) })),
 			warnings: [...result.warnings],
 		};

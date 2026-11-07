@@ -1,9 +1,11 @@
 import { addDisposableListener } from '../../../../../../base/browser/dom.js';
+import type { CancellationToken } from '../../../../../../base/common/cancellation.js';
 import { appendLabelIcon } from '../../../../../../base/browser/ui/iconlabel/iconLabels.js';
 import { createPixelSpinner, type IPixelSpinner } from '../../../../../../base/browser/ui/pixelSpinner/pixelSpinner.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { autorun, observableFromEvent, type IObservable } from '../../../../../../base/common/observable.js';
 import { URI } from '../../../../../../base/common/uri.js';
+import { OPEN_SESSION_LINK_SCHEME } from '../../../../../../platform/agentHost/common/openSessionLink.js';
 import { ILinkPresentationService } from '../../../../../../platform/dataChannel/common/dataChannel.js';
 import { IHoverService } from '../../../../../../platform/hover/browser/hoverService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
@@ -11,13 +13,20 @@ import { AccessibilityVerbositySettingId } from '../../../../../../platform/acce
 import { localize } from '../../../../../../nls.js';
 import { colorCssVariable } from '../../../../../../platform/theme/common/colorUtils.js';
 import { GitHubResourcePresentation, type IGitHubResourceHover } from '../../../../github/browser/githubResourceHover.js';
+import { ISessionSummaryHoverService } from '../../agentSessions/sessionSummaryHoverService.js';
 
 /** Owns provider decorations for the live, sanitized anchors of one response. */
 export class ChatMarkdownDecorationsRenderer extends Disposable {
 	private readonly bindings = this._register(new DisposableMap<HTMLAnchorElement, DisposableStore>());
 	private readonly verbosity: IObservable<boolean>;
 
-	constructor(private readonly root: HTMLElement, @ILinkPresentationService private readonly links: ILinkPresentationService, @IHoverService private readonly hoverService: IHoverService, @IConfigurationService configuration: IConfigurationService) {
+	constructor(
+		private readonly root: HTMLElement,
+		@ILinkPresentationService private readonly links: ILinkPresentationService,
+		@IHoverService private readonly hoverService: IHoverService,
+		@IConfigurationService configuration: IConfigurationService,
+		@ISessionSummaryHoverService private readonly summaryHover: ISessionSummaryHoverService,
+	) {
 		super();
 		this.verbosity = observableFromEvent(this, configuration.onDidChangeConfiguration, () => configuration.getValue<boolean>(AccessibilityVerbositySettingId.GitHub));
 		this._register(links.onDidChangeLinkPresentationRules(() => {
@@ -113,11 +122,14 @@ export class ChatMarkdownDecorationsRenderer extends Disposable {
 					glyph.style.color = `var(${colorCssVariable(icon.color!.id)})`;
 					anchor.prepend(glyph);
 				}
-				const content = (): HTMLElement | string => {
+				const content = (token: CancellationToken): HTMLElement | string => {
 					card.clear();
 					if (presentation instanceof GitHubResourcePresentation) {
 						card.value = presentation.createHover();
 						return card.value.element;
+					}
+					if (resource.scheme === OPEN_SESSION_LINK_SCHEME) {
+						return this.summaryHover.createHoverElement(resource, token, anchor.ownerDocument) ?? presentation.tooltip ?? label;
 					}
 					return presentation.tooltip ?? label;
 				};

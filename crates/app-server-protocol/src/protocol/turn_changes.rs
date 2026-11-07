@@ -172,6 +172,10 @@ pub struct TurnChangesSummaryResult {
     #[ts(type = "number")]
     pub sequence: u64,
     pub revision: String,
+    /// Checkout root of this Thread's managed Git worktree, when covered by its current read grant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub worktree_path: Option<String>,
     pub statistics: TurnChangeFileStatisticsDto,
     pub repositories: Vec<TurnChangesRepositorySummary>,
     pub warnings: Vec<String>,

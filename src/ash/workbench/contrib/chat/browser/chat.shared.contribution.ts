@@ -1,4 +1,5 @@
 import './promptTimeline/promptTimeline.contribution.js';
+import { ISessionSummaryHoverService, SessionSummaryHoverService } from './agentSessions/sessionSummaryHoverService.js';
 import { BtwSlashCommandContribution } from './btwSlashCommand.js';
 import './contextContrib/chatContext.contribution.js';
 import { ChatSideChatProvider } from './chatSideChatProvider.js';
@@ -112,6 +113,7 @@ import { chatUpvoteAnimationConfiguration } from '../common/chatResponseFeedback
 import { ChatStatusBarEntry } from './chatStatus/chatStatusEntry.js';
 // Both renderer hosts use these primitives; each host owns session navigation and History actions.
 registerSingleton(IChatEditingService, ChatEditingService, InstantiationType.Delayed);
+registerSingleton(ISessionSummaryHoverService, SessionSummaryHoverService, InstantiationType.Delayed);
 registerSingleton(ICodeMapperService, CodeMapperService, InstantiationType.Delayed);
 registerSingleton(IDictationOnboardingService, DictationOnboardingService, InstantiationType.Delayed);
 registerSingleton(IVoiceInputModeService, VoiceInputModeService, InstantiationType.Delayed);
