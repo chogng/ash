@@ -104,7 +104,7 @@ import { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import { isChatQuestionAnswerValid } from '../../../common/model/chatQuestionValidation.js';
 import type { ChatInputDelegate, ChatInputState } from './chatInput.js';
 import { CHAT_INPUT_DEFAULT_MAX_HEIGHT, ChatInputEditors, type ChatInputEditorOptions, type IChatInputEditor, type IChatInputEditorProvider } from './chatInputEditorRegistry.js';
-import { ChatInputPickerResponsiveLayout } from './chatInputPickerResponsiveLayout.js';
+import { ChatInputPickerResponsiveLayout, type IChatInputPickerResponsiveLayoutItem } from './chatInputPickerResponsiveLayout.js';
 import {
 	chatInputStackClass, chatInputStackSlotClass, ChatInputStackSlot,
 	refreshChatInputStack, setChatInputStackInputFocused, setChatInputStackSlot,
@@ -915,6 +915,14 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	get changesActionsHost(): HTMLElement { return this.changesPill.domNode; }
 	get composerForm(): HTMLElement { return this.inputContainer; }
 	get composerFooter(): HTMLElement | undefined { return this.inputFooter; }
+
+	public useResponsiveFooter(getLeadingPickers: () => readonly IChatInputPickerResponsiveLayoutItem[]): void {
+		if (!this.inputFooter) return;
+		this.pickerResponsiveLayout.setFooter(this.inputFooter, () => [
+			getLeadingPickers(),
+			[this.modePickerActionItem, this.permissionWidget, this.modelPickerActionItem].flatMap(item => item && !item.isDisposed ? [item] : []),
+		], () => this.options.modePicker === 'visible');
+	}
 
 	public createEditor(options: ChatInputEditorOptions): IChatInputEditor {
 		return this.editorProvider.create(options);

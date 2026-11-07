@@ -59,6 +59,10 @@ export class ModePickerActionItem extends ChatSessionPickerActionItem {
 		container.classList.toggle('disabled', !this.action.enabled);
 	}
 
+	public setCompact(compact: boolean): void {
+		this.element.classList.toggle('icon-only', compact);
+	}
+
 	protected override renderLabel(element: HTMLElement): IDisposable | null {
 		const label = super.renderLabel(element);
 		element.classList.add('ash-chat-input-action', 'ash-chat-input-mode-action');

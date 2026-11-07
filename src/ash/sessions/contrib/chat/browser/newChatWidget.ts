@@ -177,6 +177,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		}
 		this.renderDraftNotice(parent);
 		parent.append(footer);
+		this.input.useResponsiveFooter(() => this.sessionControls?.responsivePickers ?? []);
 		refreshChatInputStack(parent);
 		this.composerThreadId = model.threadId;
 		const pickersAvailable = NewSessionPickersAvailableContext.bindTo(this.scopedContextKeys);

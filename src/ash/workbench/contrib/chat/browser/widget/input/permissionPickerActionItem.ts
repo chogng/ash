@@ -1,6 +1,8 @@
+import { appendIcon } from '../../../../../../base/browser/ui/lxicons/lxicon.js';
 import type { IAction } from '../../../../../../base/common/actions.js';
 import type { Event } from '../../../../../../base/common/event.js';
 import type { IDisposable } from '../../../../../../base/common/lifecycle.js';
+import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
@@ -41,6 +43,7 @@ export class PermissionPickerActionItem extends ChatInputPickerActionViewItem {
 	public override render(container: HTMLElement): void {
 		super.render(container);
 		this.element.classList.add('ash-chat-input-permission-picker');
+		appendIcon(Lxicon.lock, this.element).classList.add('ash-chat-input-permission-icon');
 		this._register(this.onDidChange(() => {
 			this.refreshActionLabel();
 			this.updateEnabled();
@@ -54,6 +57,10 @@ export class PermissionPickerActionItem extends ChatInputPickerActionViewItem {
 			this.focus();
 		}
 		super.show(anchor);
+	}
+
+	public setCompact(compact: boolean): void {
+		this.element.classList.toggle('icon-only', compact);
 	}
 
 	private registerMenuHelp(menu: HTMLElement): IDisposable {

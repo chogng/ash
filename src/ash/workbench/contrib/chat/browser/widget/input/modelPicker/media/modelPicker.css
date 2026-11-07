@@ -25,6 +25,25 @@
 	flex: 1 1 auto;
 }
 
+.ash-chat-input-model-action > .ash-chat-input-model-action-icon {
+	display: none;
+}
+
+.ash-chat-model-picker-control > .ash-chat-input-model-action.icon-only {
+	width: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	flex: 0 0 auto;
+	padding: 0;
+}
+
+.ash-chat-input-model-action.icon-only > .ash-chat-input-model-action-icon {
+	display: inline-flex;
+}
+
+.ash-chat-input-model-action.icon-only > .ash-chat-input-model-label {
+	display: none;
+}
+
 .ash-chat-input-model-label {
 	display: flex;
 	align-items: baseline;

@@ -120,6 +120,7 @@ class ComposerPickerActionViewItem extends ActionViewItem {
 	}
 
 	override focus(): void { this.trigger?.focus(); }
+	setCompact(compact: boolean): void { this.trigger?.classList.toggle('icon-only', compact); }
 	setVisible(visible: boolean): void { this.picker?.setVisible(visible); }
 	open(): void { this.picker?.showPicker(); }
 }
@@ -130,6 +131,7 @@ export class ComposerSessionControls extends Disposable {
 	private readonly items = new Map<string, ComposerPickerActionViewItem>();
 	private isVisible = true;
 	get visible(): boolean { return this.isVisible; }
+	get responsivePickers() { return [...this.items.values()].filter(item => !item.isDisposed); }
 
 	constructor(
 		footer: HTMLElement,

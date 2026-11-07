@@ -360,6 +360,7 @@ export class DesktopWorkbenchLayout
 	private partUpdateDepth = 0;
 	private compactTools = false;
 	private compactSidebarWidth = 0;
+	private sidebarSuppressed = false;
 	private narrowConversation = false;
 	private responsiveLayout = false;
 	private readonly unavailableParts = new Set<SessionsPartId>();
@@ -524,7 +525,7 @@ export class DesktopWorkbenchLayout
 		}), this.grid.onDidChange(() => {
 			if (this.partUpdateDepth === 0) {
 				// Sash snapping changes Grid visibility directly; retain it across page changes and reloads.
-				if (!this.compactTools && !this.unavailableParts.has('sidebar'))
+				if (!this.compactTools && !this.sidebarSuppressed && !this.unavailableParts.has('sidebar'))
 					this.desiredVisibility.sidebar = this.isViewVisible(this.view('sidebar'));
 				if (!this.compactTools && !this.grid.hasMaximizedView() && this.isViewVisible(this.view('auxiliarybar')))
 					this.detailsWidth = this.getViewSize(this.view('auxiliarybar')).width;
@@ -567,6 +568,7 @@ export class DesktopWorkbenchLayout
 			this.partUpdateDepth++;
 			try {
 				this.layoutTools(dimension);
+				this.layoutSidebar(dimension);
 				this.updateContentCorners();
 				this.compositionChanged.fire();
 				const editor = this.view('editor').part;
@@ -601,7 +603,10 @@ export class DesktopWorkbenchLayout
 			this.conversationWidth = this.getViewSize(this.view('sessions')).width;
 		}
 		this.publishPartVisibility();
-		if (this.compactTools && focused && this.mainContainer.contains(focused) && focused.closest('[hidden]')) {
+		const sidebarLostFocus = this.sidebarSuppressed && focused && this.view('sidebar').part.domNode.contains(focused);
+		if (sidebarLostFocus && this.isPartVisible('sessions')) {
+			this.focus();
+		} else if (sidebarLostFocus || this.compactTools && focused && this.mainContainer.contains(focused) && focused.closest('[hidden]')) {
 			const area = this.view('editor').part;
 			if (area instanceof DesktopEditorArea && this.isPartVisible('editor')) area.focusCurrentTool();
 		}
@@ -610,6 +615,27 @@ export class DesktopWorkbenchLayout
 		super.layout(dimension);
 		// Reload can precede the periodic storage save; commit only the completed Part arrangement.
 		this.saveState();
+	}
+
+	private layoutSidebar(dimension: IDimension): void {
+		if (this.grid.hasMaximizedView()) return;
+		const sidebar = this.view('sidebar');
+		const requested = this.isPartRequested('sidebar');
+		if (this.compactTools) {
+			this.sidebarSuppressed = false;
+			return;
+		}
+		const centerWidth = (['sessions', 'editor', 'auxiliarybar', 'customview'] as const)
+			.filter(id => this.isPartVisible(id))
+			.reduce((width, id) => width + this.view(id).minimumWidth, 0);
+		const wasSuppressed = this.sidebarSuppressed;
+		this.sidebarSuppressed = requested && dimension.width < sidebar.minimumWidth + centerWidth;
+		if (wasSuppressed === this.sidebarSuppressed) return;
+		if (wasSuppressed && requested) {
+			// Restore the cached width against the expanded window's constraints.
+			this.grid.layout(dimension.width, dimension.height);
+		}
+		this.setViewVisible(sidebar, requested);
 	}
 
 	/** The outer Grid budgets the workspace before giving the tool Grid a width. */
@@ -843,7 +869,7 @@ export class DesktopWorkbenchLayout
 	}
 
 	private updateContentCorners(auxiliarybarVisible = this.isPartVisible('auxiliarybar')): void {
-		const sidebarVisible = this.compactTools ? this.isPartVisible('sidebar') : this.desiredVisibility.sidebar && !this.unavailableParts.has('sidebar');
+		const sidebarVisible = this.grid ? this.isPartVisible('sidebar') : this.isPartRequested('sidebar');
 		const editorVisible =
 			!this.customViewVisible && (this.compactTools ? this.isPartVisible('editor') : this.desiredVisibility.editor && !this.unavailableParts.has('editor'));
 		const sessionsVisible = !this.customViewVisible && (this.compactTools ? this.isPartVisible('sessions') : !this.unavailableParts.has('sessions'));
@@ -896,7 +922,9 @@ export class DesktopWorkbenchLayout
 	}
 
 	private isViewVisible(view: ISerializableView): boolean { return this.grid.isViewVisible(view); }
-	private setViewVisible(view: ISerializableView, visible: boolean): void { this.grid.setViewVisible(view, visible); }
+	private setViewVisible(view: ISerializableView, visible: boolean): void {
+		this.grid.setViewVisible(view, visible && !(!this.compactTools && this.sidebarSuppressed && view === this.view('sidebar')));
+	}
 	private getViewSize(view: ISerializableView): IDimension { return this.grid.getViewSize(view); }
 	private resizeView(view: ISerializableView, dimension: IDimension): void { this.grid.resizeView(view, dimension); }
 

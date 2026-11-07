@@ -76,7 +76,7 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 	private readonly openingPopouts = new Map<SessionView, Promise<void>>();
 
 	override get minimumWidth(): number {
-		return 420;
+		return 400;
 	}
 
 	constructor(

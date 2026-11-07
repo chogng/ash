@@ -1,8 +1,10 @@
 import { bindActionWidgetActivation } from '../../../../../../../platform/actionWidget/browser/actionWidgetDropdown.js';
 import './media/modelPicker.css';
 import { addDisposableListener, h, stopEvent } from '../../../../../../../base/browser/dom.js';
+import { appendIcon } from '../../../../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../../../../base/common/uuid.js';
+import { Lxicon } from '../../../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../../../nls.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../../../../platform/accessibility/browser/accessibleView.js';
@@ -43,6 +45,7 @@ export class ModelPickerWidget extends Disposable {
 		this.nameButton = name;
 		this.configurationButton = options;
 		name.classList.add('ash-chat-input-model-action');
+		appendIcon(Lxicon.model, name).classList.add('ash-chat-input-model-action-icon');
 		if (this.delegate.configureInMenu || this.delegate.chatModelSlider) {
 			const labelGroup = h(container.ownerDocument, 'span', { className: 'ash-chat-input-model-label' });
 			this.effortLabel = h(container.ownerDocument, 'span', {
@@ -84,6 +87,10 @@ export class ModelPickerWidget extends Disposable {
 
 	public focus(): void {
 		this.nameButton?.focus();
+	}
+
+	public setCompact(compact: boolean): void {
+		this.nameButton?.classList.toggle('icon-only', compact);
 	}
 
 	public setEnabled(enabled: boolean): void {
