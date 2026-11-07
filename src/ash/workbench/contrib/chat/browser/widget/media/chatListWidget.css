@@ -190,23 +190,43 @@
 	font: inherit;
 	white-space: pre-wrap;
 }
-article.ash-chat-user-message > pre {
-	box-sizing: border-box;
-	font-size: var(--ash-chat-request-font-size, inherit);
+.ash-chat-request-bubble {
+	position: relative;
 	inline-size: fit-content;
 	max-inline-size: 90%;
 	margin-inline-start: auto;
-	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+}
+
+article.ash-chat-user-message > pre,
+.ash-chat-request-bubble {
 	text-align: left;
+	font-size: var(--ash-chat-request-font-size, inherit);
+}
+
+article.ash-chat-user-message > pre,
+.ash-chat-request-bubble > pre,
+.ash-chat-request-editor {
+	box-sizing: border-box;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
 	border: var(--ash-strokeThickness) solid
 		var(--ash-contrastBorder, transparent);
 	border-radius: var(--ash-cornerRadius-xLarge);
+}
+
+article.ash-chat-user-message > pre,
+.ash-chat-request-bubble > pre {
 	background-color: color-mix(
 		in srgb,
 		var(--ash-foreground) 8%,
 		var(--ash-chat-transcript-surface, var(--ash-editor-background))
 	);
 }
+article.ash-chat-user-message > pre {
+	inline-size: fit-content;
+	max-inline-size: 90%;
+	margin-inline-start: auto;
+}
+
 .ash-chat-request-editable {
 	cursor: text;
 }
@@ -327,36 +347,48 @@ article.ash-chat-user-message > pre {
 	background: var(--ash-button-activeBackground);
 }
 
+.ash-chat-request-editing,
+.ash-chat-message-actions:has(> .ash-chat-request-edit-actions)
+	> :not(.ash-chat-request-edit-actions) {
+	visibility: hidden;
+}
+
 .ash-chat-request-editor {
-	--ash-chat-input-min-height: 0px;
-	--ash-chat-input-padding: var(--ash-spacing-size80)
-		var(--ash-spacing-size120);
-	--ash-chat-input-radius: var(--ash-cornerRadius-xLarge);
+	position: absolute;
+	inset: 0;
+	display: block;
+	inline-size: 100%;
+	block-size: 100%;
+	background-color: var(--ash-input-background);
+	color: var(--ash-input-foreground);
+	font: inherit;
+	tab-size: inherit;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	resize: none;
 }
-.ash-chat-request-editor:has(> .ash-chat-input-part) {
-	max-inline-size: 90%;
-	min-inline-size: min(
-		90%,
-		calc(
-			3 * var(--ash-toolbar-actionSize) + 2 * var(--ash-spacing-size120) +
-				2 * var(--ash-strokeThickness) + 2 * var(--ash-spacing-size80)
-		)
-	);
-	margin-inline-start: auto;
+.ash-chat-request-editor:focus {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
-.ash-chat-request-editor .ash-chat-input-container:focus-within,
-.ash-chat-request-editor.ash-chat-input-container:focus-within {
-	border-color: var(--ash-focusBorder);
+
+.ash-chat-message-actions:has(> .ash-chat-request-edit-actions) {
+	position: relative;
 }
-.ash-chat-request-editor > .ash-chat-input-toolbars {
+.ash-chat-request-edit-actions {
+	position: absolute;
+	inset: 0;
+	display: flex;
+	align-items: center;
 	justify-content: flex-end;
+	gap: var(--ash-spacing-size40);
 }
-.ash-chat-request-editor > [role="status"] {
-	grid-column: 1 / -1;
+.ash-chat-request-edit-feedback {
 	color: var(--ash-error-foreground);
+	text-align: end;
 	overflow-wrap: anywhere;
 }
-.ash-chat-request-editor > [role="status"]:empty {
+.ash-chat-request-edit-feedback:empty {
 	position: absolute;
 }
 .ash-chat-item:focus-visible {

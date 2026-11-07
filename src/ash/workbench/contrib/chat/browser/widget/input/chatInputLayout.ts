@@ -5,13 +5,12 @@ import { EditorOption } from '../../../../../../editor/common/config/editorOptio
 import type { IChatInputEditor } from './chatInputEditorRegistry.js';
 import './chatInputLayout.css';
 
-/** Shares the composer layout between new messages and in-place edits. */
-export function installChatInputLayout(container: HTMLElement, input: IChatInputEditor, actions: HTMLElement, attachments?: HTMLElement, layoutMode: 'adaptive' | 'stacked' = 'adaptive'): IDisposable {
+/** Keeps short drafts and composer actions on the same line when they fit. */
+export function installChatInputLayout(container: HTMLElement, input: IChatInputEditor, actions: HTMLElement, attachments: HTMLElement): IDisposable {
 	const store = new DisposableStore();
 	container.classList.add('ash-chat-input-adaptive');
-	if (layoutMode === 'stacked') container.classList.add('expanded');
 	actions.classList.add('ash-chat-input-inline-toolbar');
-	attachments?.classList.add('ash-chat-input-inline-toolbar', 'ash-chat-input-attachment-toolbar');
+	attachments.classList.add('ash-chat-input-inline-toolbar', 'ash-chat-input-attachment-toolbar');
 
 	const fitsOnSingleLine = input.fitsOnSingleLine?.bind(input);
 	if (!fitsOnSingleLine) return store;
@@ -22,8 +21,8 @@ export function installChatInputLayout(container: HTMLElement, input: IChatInput
 		const gap = parseFloat(style.rowGap);
 		const rightPadding = parseFloat(style.paddingRight);
 		const compactWidth = container.clientWidth - parseFloat(style.paddingLeft) - rightPadding
-			- actions.offsetWidth - gap - (attachments ? attachments.offsetWidth + gap : 0);
-		const expanded = layoutMode === 'stacked' || !fitsOnSingleLine(compactWidth);
+			- actions.offsetWidth - gap - attachments.offsetWidth - gap;
+		const expanded = !fitsOnSingleLine(compactWidth);
 		const changed = expanded !== container.classList.contains('expanded');
 		container.classList.toggle('expanded', expanded);
 		const editorChanged = input.setCompactLayout?.(!expanded, rightPadding);
@@ -41,7 +40,7 @@ export function installChatInputLayout(container: HTMLElement, input: IChatInput
 	store.add(toDisposable(() => observer.disconnect()));
 	observer.observe(container);
 	observer.observe(actions);
-	if (attachments) observer.observe(attachments);
+	observer.observe(attachments);
 	schedule();
 	return store;
 }

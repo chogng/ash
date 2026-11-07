@@ -17,7 +17,6 @@ interface ChatInputSurfaceOptions<T extends IChatInputEditor> {
 	readonly submit: () => void;
 	readonly modelPickerPosition: 'leading' | 'trailing';
 	readonly layout?: 'compact';
-	readonly compactLayout?: 'stacked';
 	readonly actionViewItemProvider: ActionViewItemProvider;
 }
 
@@ -55,7 +54,7 @@ export class ChatInputSurface<T extends IChatInputEditor> extends Disposable {
 			this.inlineActionsToolbar = this._register(new WorkbenchToolBar(this.form, contextMenus, { ariaLabel, actionViewItemProvider }));
 			this.inlineActionsToolbar.element.classList.add('ash-chat-input-toolbars');
 			this.footer.append(this.toolbar.element);
-			this._register(installChatInputLayout(this.form, this.editor, this.inlineActionsToolbar.element, this.attachmentToolbar.element, options.compactLayout));
+			this._register(installChatInputLayout(this.form, this.editor, this.inlineActionsToolbar.element, this.attachmentToolbar.element));
 		}
 		this._register(addDisposableListener(this.form, 'submit', event => {
 			event.preventDefault();

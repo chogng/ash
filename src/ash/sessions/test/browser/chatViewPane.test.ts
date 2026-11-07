@@ -1344,15 +1344,6 @@ test('Cowork composer submits the exact Skill reference through the shared input
 	assert.deepEqual(submissions, [{ text: '$commit staged changes', skills: [skill] }]);
 });
 
-test('Sessions editor provider honors the height of an inline request editor', async () => {
-	using fixture = await sessionsWidgetFixture();
-	using editor = fixture.input.createEditor({
-		container: document.body, placeholder: '', ariaLabel: 'Edit request',
-		height: { minimum: 420, maximum: 420 },
-	});
-	assert.equal(editor.element.style.minHeight, '420px');
-});
-
 for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with Enter and replaces dictation with Stop task in ${locale}`, async () => {
 	initializeTestLocalization(locale);
 	try {

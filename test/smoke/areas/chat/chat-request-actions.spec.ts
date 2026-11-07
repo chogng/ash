@@ -415,10 +415,9 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork', 'Ash Chat'] as con
 			}
 			await chat.getByRole('button', { name: 'Edit message', exact: true }).click();
 			const edit = chat.getByRole('textbox', { name: 'Edit request', exact: true });
-			await expect(chat.locator('.ash-chat-request-editor .view-lines')).toHaveText('Original request');
-			await edit.press('ControlOrMeta+A');
-			await page.keyboard.insertText('Edited request');
-			await edit.press('ControlOrMeta+Enter');
+			await expect(edit).toHaveValue('Original request');
+			await edit.fill('Edited request');
+			await chat.getByRole('button', { name: 'Send edited request', exact: true }).click();
 			await expect(chat).not.toHaveAttribute('data-thread-id', root);
 			await expect(chat).toHaveAttribute('data-thread-id', /.+/u);
 			const edited = (await chat.getAttribute('data-thread-id'))!;

@@ -1,4 +1,4 @@
-import type { ChatRequestInputOptions, ChatResponseActions } from './chatListRenderer.js';
+import type { ChatResponseActions } from './chatListRenderer.js';
 import { ChatGoalBannerWidget } from './input/chatGoalBannerWidget.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import { parseInlineFileReference } from '../../common/widget/annotations.js';
@@ -52,7 +52,7 @@ import { OPEN_CHAT_CHANGES_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, OPEN_CHAT_
 import { OpenSettingsCommandId } from '../../../preferences/common/preferences.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ChatQueueEditor } from './input/chatInputPart.js';
-import { ChatInputEditors, type ChatInputEditorOptions } from './input/chatInputEditorRegistry.js';
+import { ChatInputEditors } from './input/chatInputEditorRegistry.js';
 import { ChatRequestOriginPart } from './chatContentParts/chatRequestOriginPart.js';
 import type { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import type { IOpenAgentsWindowOptions } from '../../../../../platform/native/common/nativeHost.js';
@@ -259,30 +259,6 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
 			onDidRequestEdit: (requestId: string) => this.startEditing(requestId),
 			canEditRequest: () => !this.isTranscriptProgressActive,
-			createRequestInput: ({ container, descriptionId, initialHeight, submit, reportError }: ChatRequestInputOptions) => {
-				const delegate: ChatInputDelegate = {
-					...inputDelegate,
-					voiceConversation: undefined,
-					executeServerCommand: undefined,
-					openChanges: undefined,
-					readWorkspaceChanges: undefined,
-					send: async (text, _mode, _skills, contexts, signal) => {
-						const resolved = await Promise.all((contexts ?? []).map(resolveChatContextAttachment));
-						if (signal?.aborted) throw canceled();
-						await submit(text, resolved);
-					},
-				};
-				const part = scopedInstantiation.createInstance(ChatInputPart, container, delegate, contextMenuService, contextViewService, accessibleViewService, notifications, { create: (options: ChatInputEditorOptions) => this.input.createEditor(options) }, [], {
-					layout: 'compact', modePicker: 'hidden', modelPickerPosition: 'trailing',
-					renderSecondaryToolbar: false, draftStorage: 'host', inlineEdit: { descriptionId, initialHeight, reportError },
-				});
-				const state = this.model.inputState;
-				part.render({
-					...state, phase: 'ready', canInterrupt: false, queuedMessages: 0, draftIdentity: undefined,
-					interaction: undefined, pendingUserInputRequestId: undefined, toolInvocation: undefined, toolInvocations: undefined,
-				});
-				return part;
-			},
 			promptTimelineChanges: this.viewOptions?.promptTimelineChanges,
 			showPromptTimeline: this.viewOptions?.showPromptTimeline,
 			readResponseResource: model.readResponseResource?.bind(model),
