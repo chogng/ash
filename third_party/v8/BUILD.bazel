@@ -1,7 +1,8 @@
 load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
 load("@rules_cc//cc:cc_static_library.bzl", "cc_static_library")
 load("@rules_cc//cc:defs.bzl", "cc_library")
-load("@//third_party/v8:source.bzl", "v8_source_archive")
+load("@rules_rs//rs:rules_rust_bindgen.bzl", "rust_bindgen")
+load("@//third_party/v8:source.bzl", "v8_source_file")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -293,7 +294,7 @@ cc_static_library(
     }),
 )
 
-v8_source_archive(
+v8_source_file(
     name = "rusty_v8_source_archive",
     src = ":rusty_v8_source_archive_impl",
 )
@@ -345,18 +346,58 @@ alias(
     }),
 )
 
-alias(
-    name = "rusty_v8_source_binding_for_target",
-    # The crate's release bindings describe the same V8 API/layout. Like Codex,
-    # musl uses the matching CPU's GNU binding; it contains no libc declarations.
-    actual = select({
-        "@rules_rs//rs/platforms/config:aarch64-unknown-linux-gnu": "@v8_crate_152_2_0//:src_binding_release_aarch64_unknown_linux_gnu",
-        ":platform_aarch64_unknown_linux_musl": "@v8_crate_152_2_0//:src_binding_release_aarch64_unknown_linux_gnu",
-        "@rules_rs//rs/platforms/config:x86_64-unknown-linux-gnu": "@v8_crate_152_2_0//:src_binding_release_x86_64_unknown_linux_gnu",
-        ":platform_x86_64_unknown_linux_musl": "@v8_crate_152_2_0//:src_binding_release_x86_64_unknown_linux_gnu",
-        "@rules_rs//rs/platforms/config:aarch64-apple-darwin": "@v8_crate_152_2_0//:src_binding_release_aarch64_apple_darwin",
-        "@rules_rs//rs/platforms/config:x86_64-apple-darwin": "@v8_crate_152_2_0//:src_binding_release_x86_64_apple_darwin",
+# Use the compilation context of the archive's C++ bindings. Local compiler
+# options are passed separately because CcInfo only exports headers and defines.
+cc_library(
+    name = "binding_headers_152_2_0",
+    hdrs = [
+        "@v8_crate_152_2_0//:binding_hpp",
+        "@v8_crate_152_2_0//:support_h",
+    ],
+    tags = ["manual"],
+    deps = [":v8_152_2_0_binding"],
+)
+
+rust_bindgen(
+    name = "binding_generated_152_2_0",
+    bindgen_flags = [
+        "--generate-cstr",
+        "--rustified-enum=.*UseCounterFeature",
+        "--rustified-enum=.*ModuleImportPhase",
+        "--rustified-enum=.*Intercepted",
+        "--bitfield-enum=.*GCType",
+        "--bitfield-enum=.*GCCallbackFlags",
+        "--allowlist-item=v8__.*",
+        "--allowlist-item=cppgc__.*",
+        "--allowlist-item=RustObj",
+        "--allowlist-item=memory_span_t",
+        "--allowlist-item=const_memory_span_t",
+        "--allowlist-item=ExternalConstOneByteStringResource",
+        "--blocklist-item=cppgc.*Visitor",
+        "--blocklist-item=RustObj.*Trace",
+    ],
+    cc_lib = ":binding_headers_152_2_0",
+    clang_flags = ["-x", "c++"] + V8_COPTS + V8_CUSTOM_LIBCXX_COPTS + select({
+        # Bindgen resolves C flags by default. Keep C++ modules disabled when
+        # parsing the macOS SDK, as in the C++ toolchain.
+        "@platforms//os:osx": ["-Xclang", "-fno-cxx-modules"],
+        "//conditions:default": [],
+    }) + select({
+        "@rules_rs//rs/platforms/config:aarch64-apple-darwin": ["--target=arm64-apple-darwin"],
+        "@rules_rs//rs/platforms/config:x86_64-apple-darwin": ["--target=x86_64-apple-darwin"],
+        ":platform_aarch64_unknown_linux_musl": ["--target=aarch64-unknown-linux-musl"],
+        ":platform_x86_64_unknown_linux_musl": ["--target=x86_64-unknown-linux-musl"],
+        "@llvm//platforms/config:linux_aarch64_gnu": ["--target=aarch64-unknown-linux-gnu"],
+        "@llvm//platforms/config:linux_x86_64_gnu": ["--target=x86_64-unknown-linux-gnu"],
     }),
+    header = "@v8_crate_152_2_0//:binding_hpp",
+    tags = ["manual"],
+)
+
+v8_source_file(
+    name = "rusty_v8_source_binding_for_target",
+    src = ":binding_generated_152_2_0",
+    tags = ["manual"],
 )
 
 filegroup(

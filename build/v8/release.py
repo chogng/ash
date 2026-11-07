@@ -26,8 +26,7 @@ from build.lib.v8 import LockedFile, load_v8_lock, materialize  # noqa: E402
 
 
 PROFILE = "ptrcomp_sandbox_release"
-# Linux ARM64 is cross-built on x64 and executed in a separate workflow job.
-# Windows ARM64 and musl ARM64 are link-only here.
+# ARM64 Linux and Windows producers cross-link their probes on x64.
 BUILD_TARGETS = {
     "aarch64-apple-darwin": ("macos-26", "run"),
     "x86_64-apple-darwin": ("macos-26-intel", "run"),
@@ -37,6 +36,12 @@ BUILD_TARGETS = {
     "x86_64-unknown-linux-musl": ("ubuntu-24.04", "run"),
     "aarch64-pc-windows-msvc": ("windows-2022", "link"),
     "x86_64-pc-windows-msvc": ("windows-2022", "run"),
+}
+
+CROSS_SMOKE_RUNNERS = {
+    "aarch64-unknown-linux-gnu": "ubuntu-24.04-arm",
+    "aarch64-unknown-linux-musl": "ubuntu-24.04-arm",
+    "aarch64-pc-windows-msvc": "windows-11-arm",
 }
 
 # One target mapping owns both the source producer and the staged-pair smoke
@@ -177,6 +182,10 @@ def release_metadata(root: Path = ROOT, tag: str | None = None) -> dict[str, str
         raise ValueError("V8 manifest, Cargo lock and sandbox artifact lock must agree")
     if pairs.keys() != BUILD_TARGETS.keys():
         raise ValueError("V8 release runners must cover every locked target")
+    if CROSS_SMOKE_RUNNERS.keys() != {
+        target for target, (_, smoke) in BUILD_TARGETS.items() if smoke == "link"
+    }:
+        raise ValueError("Every cross-linked V8 probe needs a native runner")
     release_tag = f"rusty-v8-v{version}"
     if tag is not None and tag != release_tag:
         raise ValueError(f"Tag {tag} does not match {release_tag}")
@@ -189,6 +198,15 @@ def release_metadata(root: Path = ROOT, tag: str | None = None) -> dict[str, str
                 "include": [
                     {"target": target, "runner": runner, "smoke": smoke}
                     for target, (runner, smoke) in BUILD_TARGETS.items()
+                ]
+            },
+            separators=(",", ":"),
+        ),
+        "cross_smoke_matrix": json.dumps(
+            {
+                "include": [
+                    {"target": target, "runner": runner}
+                    for target, runner in CROSS_SMOKE_RUNNERS.items()
                 ]
             },
             separators=(",", ":"),

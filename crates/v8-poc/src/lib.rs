@@ -122,6 +122,43 @@ mod tests {
     }
 
     #[test]
+    fn typed_array_inline_storage_matches_binding() {
+        initialize_v8();
+        let isolate = &mut v8::Isolate::new(Default::default());
+        v8::scope!(let scope, isolate);
+        let context = v8::Context::new(scope, Default::default());
+        let scope = &mut v8::ContextScope::new(scope, context);
+        let inline_limit = v8::TYPED_ARRAY_MAX_SIZE_IN_HEAP;
+
+        for length in [
+            0,
+            1,
+            inline_limit.saturating_sub(1),
+            inline_limit,
+            inline_limit + 1,
+        ] {
+            v8::scope!(let scope, scope);
+            let source =
+                v8::String::new(scope, &format!("new Uint8Array({length}).fill(90)")).unwrap();
+            let value = v8::Script::compile(scope, source, None)
+                .unwrap()
+                .run(scope)
+                .unwrap();
+            let view = v8::Local::<v8::ArrayBufferView>::try_from(value).unwrap();
+            let inline = inline_limit != 0 && length <= inline_limit;
+            // Detect a stale binding before passing its buffer size to native code.
+            assert_eq!(
+                view.has_buffer(),
+                !inline,
+                "TypedArray length {length}, binding inline limit {inline_limit}"
+            );
+            let mut storage = vec![0; inline_limit];
+            assert_eq!(view.get_contents(&mut storage), vec![90; length]);
+            assert_eq!(view.has_buffer(), !inline);
+        }
+    }
+
+    #[test]
     fn evaluates_string_concatenation() {
         assert_eq!(evaluate_expression("'hello ' + 'world'"), "hello world");
     }
