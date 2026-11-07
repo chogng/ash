@@ -65,7 +65,7 @@ import { TestNotificationService } from '../../../workbench/services/notificatio
 import { IChatService, type ThreadUpdateEnvelope } from '../../../workbench/services/chat/common/chatService.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import type { IUntitledChatSession } from '../../services/sessions/common/session.js';
-import { SessionsService } from '../../../sessions/services/sessions/browser/sessionsService.js';
+import { ISessionsService, SessionsService } from '../../../sessions/services/sessions/browser/sessionsService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../platform/storage/common/storage.js';
 import { BrowserStorageService } from '../../../workbench/services/storage/browser/storageService.js';
 import { ChatTipService, IChatTipService } from '../../../workbench/contrib/chat/browser/chatTipService.js';
@@ -178,6 +178,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 			throw new Error('Session creation is unavailable');
 		},
 		promoteUntitledSession() { },
+		completeBackgroundSend(): never { throw new Error('Unexpected background send'); },
 		async ensureActiveThread() {
 			throw new Error('No active thread');
 		},
@@ -362,6 +363,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	services.registerInstance(ICustomViewService, customViews);
 	services.registerInstance(ICommandService, commandService);
 	using viewService = services.createInstance(SessionsService);
+	services.registerInstance(ISessionsService, viewService);
 	await viewService.initialize();
 	services.registerInstance(IChatTipService, resources.add(services.createInstance(ChatTipService)));
 	services.registerInstance(ICoworkTipService, resources.add(services.createInstance(CoworkTipService)));

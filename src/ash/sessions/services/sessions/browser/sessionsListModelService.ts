@@ -32,6 +32,8 @@ export interface ISessionsListModelService {
 	setSortDirection(mode: SessionsListMode, direction: SessionSortDirection): void;
 	readonly grouping: SessionGrouping;
 	setGrouping(grouping: SessionGrouping): void;
+	readonly showAttentionGroup: boolean;
+	setShowAttentionGroup(show: boolean): void;
 	readonly showComparisonGroups: boolean;
 	setShowComparisonGroups(show: boolean): void;
 	readonly automationSessionsMode: AutomationSessionsListMode;
@@ -60,6 +62,7 @@ const sortModeKey = 'sessions.list.sortMode';
 const sortDirectionKey = 'sessions.list.sortDirection';
 const groupingKey = 'sessions.list.grouping';
 const comparisonGroupsKey = 'sessions.list.showComparisonGroups';
+const attentionGroupKey = 'sessions.list.showAttentionGroup';
 const manualOrderPrefix = 'sessions.list.manualOrder.';
 const pinnedSessionPrefix = 'sessions.list.pinned.';
 const rowIconPrefix = 'sessions.list.rowIcon.';
@@ -85,6 +88,7 @@ export class SessionsListModelService implements ISessionsListModelService {
 		this.onDidChange = (listener, thisArgs, disposables) => storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && (event.key === automationVisibilityKey || event.key.startsWith(`${sortModeKey}.`)
 				|| event.key.startsWith(`${sortDirectionKey}.`) || event.key === groupingKey || event.key === comparisonGroupsKey
+				|| event.key === attentionGroupKey
 				|| event.key.startsWith(automationOverridePrefix) || event.key.startsWith(automationReplyPrefix)
 				|| event.key.startsWith(pinnedSessionPrefix) || event.key.startsWith(manualOrderPrefix) || event.key.startsWith(rowIconPrefix))) {
 				listener.call(thisArgs);
@@ -151,6 +155,14 @@ export class SessionsListModelService implements ISessionsListModelService {
 
 	setGrouping(grouping: SessionGrouping): void {
 		this.storage.store(groupingKey, grouping, StorageScope.PROFILE, StorageTarget.USER);
+	}
+
+	get showAttentionGroup(): boolean {
+		return this.storage.getBoolean(attentionGroupKey, StorageScope.PROFILE, false);
+	}
+
+	setShowAttentionGroup(show: boolean): void {
+		this.storage.store(attentionGroupKey, show, StorageScope.PROFILE, StorageTarget.USER);
 	}
 
 	get showComparisonGroups(): boolean {

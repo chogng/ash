@@ -24,6 +24,7 @@ export const CHAT_WIDGET_VIEW_STATE_CACHE_LIMIT = 100;
 export type IChatWidgetViewState = Omit<ReturnType<ChatListWidget['getViewState']>, 'visible' | 'focus'>;
 
 export interface IChatAcceptInputOptions {
+	readonly background?: boolean;
 	readonly queue?: ChatRequestQueueKind;
 	readonly cancelCurrentRequest?: boolean;
 	readonly sideChat?: boolean;

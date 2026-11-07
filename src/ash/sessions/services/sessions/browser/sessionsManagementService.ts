@@ -476,7 +476,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 				const workspace = session.workspace;
 				const additionalFolders = session.environment?.folders.filter(folder =>
 					!('root' in workspace) || workspace.type !== folder.type || workspace.root !== folder.root);
-				const active = await this.createSession(session.title, workspace, session.agent, untitledSessionId, session.providerId, {
+				const active = await this.createSession(session.title, workspace, session.agent, session.creationId ?? untitledSessionId, session.providerId, {
 					token: cancellation.token, devContainer: session.devContainer, branchName: session.branchName,
 					additionalFolders, environmentVariables, automaticTitle: session.automaticTitle, kind: session.kind,
 				}, session.forkSource);
@@ -530,6 +530,18 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 	public cancelUntitledSessionPreparation(untitledSessionId: string): void {
 		this.materializations.get(untitledSessionId)?.cancellation.cancel();
+	}
+
+	completeBackgroundSend(untitledSessionId: string, active: IActiveSessionThread): void {
+		if (this.isDisposed) return;
+		this.materializations.delete(untitledSessionId);
+		this._untitledSessions = this._untitledSessions.map(draft => draft.untitledSessionId === untitledSessionId
+			? { ...draft, creationId: createUuid() } : draft);
+		// Catalog refresh may already contain a newer projection of the accepted request.
+		if (!this._sessions.some(session => session.sessionId === active.session.sessionId)) {
+			this._sessions = [active.session, ...this._sessions];
+		}
+		this._onDidChange.fire();
 	}
 
 	async ensureActiveThread(): Promise<IActiveSessionThread> {

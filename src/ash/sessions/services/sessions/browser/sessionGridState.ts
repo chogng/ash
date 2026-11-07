@@ -113,6 +113,7 @@ function nonEmptyString(value: unknown): value is string {
 export function isUntitledSession(value: unknown): value is IUntitledChatSession {
 	return isRecord(value) && nonEmptyString(value.untitledSessionId) && typeof value.title === 'string'
 		&& (value.kind === undefined || value.kind === 'chat' || value.kind === 'code')
+		&& (value.creationId === undefined || nonEmptyString(value.creationId))
 		&& (value.model === undefined || isRecord(value.model) && nonEmptyString(value.model.provider) && nonEmptyString(value.model.model))
 		&& (value.forkSource === undefined || isRecord(value.forkSource) && nonEmptyString(value.forkSource.sessionId) && nonEmptyString(value.forkSource.threadId))
 		&& (value.providerId === undefined || nonEmptyString(value.providerId))

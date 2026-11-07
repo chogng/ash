@@ -32,7 +32,7 @@ import { sessionManagementLabel } from '../../../../browser/sessionManagementLab
 import type { ISession, SessionManagementInfo } from '../../../../services/sessions/common/session.js';
 import type { ThemeIcon } from '../../../../../base/common/themables.js';
 import { colorCssVariable } from '../../../../../platform/theme/common/colorUtils.js';
-import { autorun, observableFromEvent, type IObservable } from '../../../../../base/common/observable.js';
+import { autorun, derived, observableFromEvent, type IObservable } from '../../../../../base/common/observable.js';
 import { IMenuService, SubmenuItemAction, type MenuId } from '../../../../../platform/actions/common/actions.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
@@ -67,6 +67,9 @@ import { fillChatReferenceDragData } from '../../../../browser/dnd.js';
 import { DragAndDropDataKind } from '../../../../../base/browser/ui/dnd/dnd.js';
 import { ObjectTreeElementCollapseState, type TreeDragAndDrop, type TreeDragData } from '../../../../../base/browser/ui/tree/tree.js';
 import type { URI } from '../../../../../base/common/uri.js';
+import { IBlockedSessionsIndicatorService, type IBlockedSession } from '../blockedSessionsIndicatorModel.js';
+
+const attentionSection = 'attention';
 
 interface SessionBucket {
 	readonly id: string;
@@ -217,6 +220,7 @@ export class SessionsList extends DomWidget {
 	private readonly empty: HTMLParagraphElement;
 	private readonly projectError: HTMLButtonElement;
 	private readonly catalog: SessionsCatalogListInput | undefined;
+	private readonly attention: IObservable<ReadonlyMap<string, IBlockedSession>>;
 	private readonly catalogViewport: HTMLElement | null | undefined;
 	private readonly catalogRows = new Map<string, SessionsCatalogRow>();
 	private readonly catalogMenu = this._register(new MutableDisposable());
@@ -251,6 +255,7 @@ export class SessionsList extends DomWidget {
 		@INotificationService private readonly notifications: INotificationService,
 		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
 		@ISessionSectionOrderService private readonly sectionOrder: ISessionSectionOrderService,
+		@IBlockedSessionsIndicatorService indicator: IBlockedSessionsIndicatorService,
 		@IContextKeyService private readonly contextKeys?: IContextKeyService,
 		@IHoverService private readonly hoverService?: IHoverService,
 		@ISessionProviderScopeService private readonly providerScopes?: ISessionProviderScopeService,
@@ -262,6 +267,9 @@ export class SessionsList extends DomWidget {
 		this.catalog = contributed?.catalog;
 		const mode = this.mode = typeof presentation === 'string' ? presentation : 'chat';
 		this.entry = typeof presentation !== 'string' && 'openCommand' in presentation ? presentation : undefined;
+		const showAttention = observableFromEvent(this, listModel.onDidChange, () => !this.entry && listModel.showAttentionGroup);
+		this.attention = derived(reader => new Map(showAttention.read(reader)
+			? indicator.blockedSessions.read(reader).map(alert => [alert.session.sessionId, alert] as const) : []));
 		const nativeLoading = observableFromEvent(this, sessionService.onDidChange, () => sessionService.state === 'loading' && sessionService.sessions.length > 0);
 		this.loading = nativeLoading.map((loading, reader) => loading || !!this.catalog?.snapshot.read(reader).loading);
 		const ownerDocument = container.ownerDocument;
@@ -280,6 +288,7 @@ export class SessionsList extends DomWidget {
 			},
 			canReorder: element => !!element.dataset.sectionOrderId,
 			reorder: (source, target) => {
+				if (target.dataset.parentSection === attentionSection) return undefined;
 				const attribute = source.dataset.rowOrderId ? 'rowOrderId' : 'sectionOrderId';
 				const id = target.dataset[attribute];
 				if (source.dataset[attribute] && id && this.parentOf(source) === this.parentOf(target)) {
@@ -390,6 +399,7 @@ export class SessionsList extends DomWidget {
 		}
 		this._register(autorun(reader => {
 			customViews.activeCustomView.read(reader);
+			this.attention.read(reader);
 			this.render();
 		}));
 		this.render();
@@ -427,6 +437,8 @@ export class SessionsList extends DomWidget {
 			]),
 			new SubmenuAction('sessions.list.sortBy', localize('sessions.list.sortBy', 'Sort By'), sessionSortActions(model, this.mode)),
 			new SubmenuAction('sessions.list.show', localize('sessions.list.show', 'Show'), [
+				...(!this.entry ? [choice('sessions.list.showAttentionGroup', localize('sessions.list.needsAttention', 'Needs Attention'),
+					model.showAttentionGroup, () => model.setShowAttentionGroup(!model.showAttentionGroup))] : []),
 				choice('sessions.list.showComparisonGroups', localize('sessions.list.showComparisonGroups', 'Comparison Groups'),
 					model.showComparisonGroups, () => model.setShowComparisonGroups(!model.showComparisonGroups)),
 				new Separator(),
@@ -531,7 +543,7 @@ export class SessionsList extends DomWidget {
 	private moveOrderedItem(element: HTMLElement, attribute: 'rowOrderId' | 'sectionOrderId', targetId: string): void {
 		const parent = this.parentOf(element);
 		const id = element.dataset[attribute];
-		if (!id) return;
+		if (!id || parent?.element.dataset.section === attentionSection) return;
 		const ids = this.orderedSiblingIds(parent, attribute);
 		if (attribute === 'rowOrderId') {
 			const section = parent?.element.dataset.section ?? '';
@@ -556,7 +568,7 @@ export class SessionsList extends DomWidget {
 		const attribute = kind === 'row' ? 'rowOrderId' : 'sectionOrderId';
 		const id = element.dataset[attribute];
 		const parent = this.parentOf(element);
-		if (!id) {
+		if (!id || parent?.element.dataset.section === attentionSection) {
 			return [];
 		}
 		const ids = this.orderedSiblingIds(parent, attribute);
@@ -783,6 +795,9 @@ export class SessionsList extends DomWidget {
 		const present = new Set<string>();
 		const activeSections = new Set<string>();
 		const pinned: HTMLElement[] = [];
+		const attentionRows: HTMLElement[] = [];
+		const alerts = this.attention.get();
+		const attentionLabel = alerts.size ? localize('sessions.list.needsAttention', 'Needs Attention') : '';
 		const recent: HTMLElement[] = [];
 		const remaining = new Map<string, HTMLElement>();
 		const childrenByRow = new Map<HTMLElement, readonly HTMLElement[]>();
@@ -829,7 +844,9 @@ export class SessionsList extends DomWidget {
 			activeSections.add(key);
 			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, kind,
 				collapsed => this.tree.setSectionCollapsed(key, collapsed), key === 'projects' ? this.createListToolbar : undefined));
-			childrenByRow.set(section.domNode, reorderChildren(sortRows(children), ids => this.listModel.getSessionOrder(this.mode, key, ids), 'rowOrderId'));
+			const sorted = sortRows(children);
+			childrenByRow.set(section.domNode, key === attentionSection ? sorted
+				: reorderChildren(sorted, ids => this.listModel.getSessionOrder(this.mode, key, ids), 'rowOrderId'));
 			section.update(title, {
 				open,
 				actionLabel: open ? localize('sessions.list.openComparison', 'Open comparison {0}', title) : undefined,
@@ -846,24 +863,40 @@ export class SessionsList extends DomWidget {
 		const projectRows: HTMLElement[] = [];
 		const contributedGroups = new Map<string, readonly HTMLElement[]>();
 		const external = this.catalog?.snapshot.get();
-		const externalRow = (row: SessionsCatalogRow, project?: string): HTMLElement => {
+		const externalRow = (row: SessionsCatalogRow, project?: string, alert?: IBlockedSession): HTMLElement => {
 			const key = project ? JSON.stringify([row.id, project]) : row.id;
 			this.catalogRows.set(key, row);
 			const item = itemFor(key, 'conversation');
-			item.updateCatalogRow(row);
+			item.updateCatalogRow(row, alert?.threadId);
+			item.target = alert && { sessionId: alert.session.sessionId, threadId: alert.threadId };
 			item.setContextMenu(anchor => void this.showCatalogMenu(row, item, anchor));
 			if (project) item.domNode.dataset.parentProject = `project:${project}`;
 			const value = sort?.field === 'name' ? row.title : sort?.field === 'created' ? row.createdAt : row.updatedAt ?? row.createdAt;
 			if (value !== undefined) sortKeys.set(item.domNode, value);
 			return item.domNode;
 		};
+		const placedAlerts = new Set<string>();
+		const catalogRowsFor = (rows: readonly SessionsCatalogRow[], isPinned: boolean, project?: { readonly key: string; readonly title: string; }): HTMLElement[] => {
+			const children: HTMLElement[] = [];
+			for (const row of rows) {
+				const alert = !isPinned && !row.pinned && !row.disabled && row.sessionId ? alerts.get(row.sessionId) : undefined;
+				if (!this.search.matches(row.title, project?.title, alert && attentionLabel)) continue;
+				if (!alert) {
+					children.push(externalRow(row, project?.key));
+				} else if (!placedAlerts.has(alert.session.sessionId)) {
+					placedAlerts.add(alert.session.sessionId);
+					attentionRows.push(externalRow(row, project?.key, alert));
+				}
+			}
+			return children;
+		};
 		for (const section of external?.sections ?? []) {
-			const rows = section.rows.filter(row => this.search.matches(row.title)).map(row => externalRow(row));
+			const rows = catalogRowsFor(section.rows, section.key === 'pinned');
 			if (section.key === 'pinned') pinned.push(...rows);
 			else if (section.key === 'recent') recent.push(...rows);
 			else contributedGroups.set(section.key, rows);
 			for (const project of section.projects) {
-				const children = project.rows.filter(row => this.search.matches(row.title, project.title)).map(row => externalRow(row, project.key));
+				const children = catalogRowsFor(project.rows, section.key === 'pinned', project);
 				if (!children.length && !this.search.matches(project.title)) continue;
 				const key = `catalog-project:${project.key}`;
 				if (project.onExpand) this.catalogProjects.set(key, { load: project.onExpand });
@@ -919,13 +952,15 @@ export class SessionsList extends DomWidget {
 		const groupNames = new Map(this.groups.groups.flatMap(group => group.sessionIds.map(id => [id, group.name] as const)));
 		const projectNames = new Map(this.projects.flatMap(project => project.sessionIds.map(id => [id, project.name] as const)));
 		for (const session of catalog) {
+			const isPinned = this.listModel.isSessionPinned(session);
+			const alert = isPinned ? undefined : alerts.get(session.sessionId);
 			const current = activeSelection?.kind === 'session' && activeSelection.active.session.sessionId === session.sessionId ? activeSelection.active : undefined;
 			const activeChats = session.chats.filter(chat => chat.status === 'active');
 			const thread = activeChats.find(chat => chat.threadId === session.sessionId)
 				?? activeChats.find(chat => chat.origin.type === 'root') ?? activeChats[0];
 			if (!thread) continue;
 			const requests = this.github.getSessionPullRequests(session.sessionId);
-			const fields = [session.title, session.providerLabel, session.workspace?.root, groupNames.get(session.sessionId), projectNames.get(session.sessionId),
+			const fields = [session.title, session.providerLabel, session.workspace?.root, groupNames.get(session.sessionId), projectNames.get(session.sessionId), alert && attentionLabel,
 			...requests.map(getPullRequestLabel)];
 			const matchesSession = this.search.matches(thread.title, ...fields);
 			const nested = activeChats.filter(chat => chat !== thread && chat.origin.type !== 'agentSpawn'
@@ -933,8 +968,11 @@ export class SessionsList extends DomWidget {
 			if (!matchesSession && !nested.length && !nestedDrafts.has(session.sessionId)) continue;
 			const item = itemFor(`session:${session.sessionId}`, 'conversation', restingIcon ?? Lxicon.cowork);
 			if (sort) sortKeys.set(item.domNode, sort.field === 'name' ? session.title : sessionSortTime(session, sort.field));
-			item.target = { sessionId: session.sessionId, threadId: thread.threadId };
-			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, () => this.openRow(options => this.viewService.openSession(session.sessionId, thread.threadId, options)), session.management);
+			const target = { sessionId: session.sessionId, threadId: alert?.threadId ?? thread.threadId };
+			item.target = target;
+			const open = () => this.openRow(options => this.viewService.openSession(target.sessionId, target.threadId, options));
+			const management = alert?.reason === 'input' ? activeChats.find(chat => chat.threadId === alert.threadId)?.management ?? session.management : session.management;
+			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, open, management);
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor));
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
 			item.updateSummary(this.hoverService, getSessionSummaryHoverData(session, thread));
@@ -949,7 +987,8 @@ export class SessionsList extends DomWidget {
 			});
 			childrenByRow.set(item.domNode, [...children, ...(nestedDrafts.get(session.sessionId) ?? [])]);
 			item.domNode.dataset.rowOrderId = session.sessionId;
-			if (this.listModel.isSessionPinned(session)) pinned.push(item.domNode);
+			if (isPinned) pinned.push(item.domNode);
+			else if (alert) attentionRows.push(item.domNode);
 			else remaining.set(session.sessionId, item.domNode);
 		}
 		const projects = projectRows;
@@ -1050,7 +1089,7 @@ export class SessionsList extends DomWidget {
 				orderedRecent.push(sectionFor(`grouping:${grouping}:${id}`, bucket.label, bucket.rows, 'subgroup'));
 			}
 		}
-		const showEmpty = orderedRecent.length === 0 && pinned.length === 0 && chatGroups.length === 0 && !hasProjectConversations;
+		const showEmpty = orderedRecent.length === 0 && pinned.length === 0 && attentionRows.length === 0 && chatGroups.length === 0 && !hasProjectConversations;
 		const loading = this.sessionService.state === 'loading' || external?.loading;
 		this.tree.element.setAttribute('aria-busy', String(loading || this.projectsLoading));
 		const emptyStatus = loading ? localize('sessions.list.loading', 'Loading sessions…') : this.sessionService.error
@@ -1058,6 +1097,7 @@ export class SessionsList extends DomWidget {
 		if (showEmpty && emptyStatus) { this.empty.textContent = emptyStatus; }
 		const ordered: HTMLElement[] = [];
 		if (pinned.length) ordered.push(sectionFor('pinned', localize('sessions.list.pinned', 'Pinned'), pinned));
+		if (attentionRows.length) ordered.push(sectionFor(attentionSection, attentionLabel, attentionRows));
 		ordered.push(sectionFor('projects', localize('projects.title', 'Projects'), projects));
 		ordered.push(...reorderChildren(chatGroups, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId'));
 		if (orderedRecent.length || !this.search.hasQuery && (pinned.length || hasProjectConversations)) {
@@ -1103,6 +1143,7 @@ export class SessionsList extends DomWidget {
 		if (this.mode === 'code' || this.catalog) this.syncTreeSelection();
 		if (focused?.isConnected && !focused.closest('[hidden]') && ownerDocument.activeElement !== focused) focused.focus({ preventScroll: true });
 		else if (focusedRow && !focusedRow.isConnected && this.tree.model.has(SessionsListTree.id(focusedRow))) this.tree.focusRow(focusedRow, true);
+		else if (focusedRow?.dataset.section === attentionSection && !attentionRows.length) this.focus();
 	}
 
 	private syncTreeSelection(): void {
@@ -1286,10 +1327,10 @@ class SessionListItem extends AbstractDisposable {
 		}
 	}
 
-	updateCatalogRow(entry: SessionsCatalogRow): void {
+	updateCatalogRow(entry: SessionsCatalogRow, threadId?: string): void {
 		const previous = this.catalogRow;
 		this.catalogRow = entry;
-		this.update(entry.title, entry.selected, entry.open);
+		this.update(entry.title, entry.selected, () => entry.open(threadId));
 		this.domNode.classList.add('ash-chat-navigation-row');
 		this.button.classList.add('ash-chat-navigation-item');
 		const icon = entry.iconId && getRegisteredIcon(entry.iconId, this.domNode.ownerDocument);

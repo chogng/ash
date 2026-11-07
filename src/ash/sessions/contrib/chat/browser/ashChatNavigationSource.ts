@@ -71,12 +71,12 @@ export class AshChatNavigationSource extends Disposable implements ChatListSourc
 					pinned: isPinned,
 					setPinned: pinned => pinned ? list.pinSession(session) : list.unpinSession(session),
 					moveToGroup: group => groups.move(id, group),
-					open: async signal => {
+					open: async (signal, threadId = thread.threadId) => {
 						await commands.executeCommand(SHOW_ASH_CHAT_COMMAND);
 						if (signal.aborted) return;
 						const current = selection.selection.get();
-						if (current.kind !== 'thread' || current.sessionId !== id || current.threadId !== thread.threadId) {
-							selection.select({ kind: 'thread', sessionId: id, threadId: thread.threadId });
+						if (current.kind !== 'thread' || current.sessionId !== id || current.threadId !== threadId) {
+							selection.select({ kind: 'thread', sessionId: id, threadId });
 						}
 					},
 					getActions: () => [

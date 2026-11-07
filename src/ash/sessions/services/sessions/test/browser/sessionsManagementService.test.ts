@@ -75,13 +75,14 @@ test('Code New skips an inaccessible Session directory and checks the host fallb
 	const fake = sessionHost([{ ...session('existing', 'root'), executionTarget: missing }], undefined, () => fallback);
 	const checked: string[] = [];
 	using management = new SessionsManagementService(createProvider(fake, undefined, undefined, async target => {
-		checked.push(target.root);
-		if (target.root === missing.root) throw new Error('Directory unavailable');
+		const root = target.root.replaceAll('\\', '/');
+		checked.push(root);
+		if (root === missing.root) throw new Error('Directory unavailable');
 		return true;
 	}));
 	await management.initialize();
 	assert.deepEqual((await management.resolveNewSessionTarget()).workspace, fallback);
-	assert.deepEqual(checked, ['/missing', '/default']);
+	assert.deepEqual(checked, [missing.root, fallback.root]);
 });
 
 test('Code New recovers a remote Dev Container source and defers preparation until first send', async () => {

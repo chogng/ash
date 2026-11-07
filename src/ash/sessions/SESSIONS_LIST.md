@@ -10,16 +10,17 @@ This specification defines stable placement and state-ownership rules. Row styli
 
 ## Ownership
 
-| Concern                                       | Owner                                                       |
-| --------------------------------------------- | ----------------------------------------------------------- |
-| Session catalog and lifecycle                 | `ISessionsManagementService`                                |
-| Pins, manual row order, and automation filter | `ISessionsListModelService`                                 |
-| Sidebar collapse state                        | `WorkbenchObjectTree` and the sidebar's profile preferences |
-| Custom groups and membership                  | `ISessionGroupsService`                                     |
-| Top-level group/workspace order               | `ISessionSectionOrderService`                               |
-| Tree interaction and drop targets             | `SessionsListTree`                                          |
-| Desktop contributed projects and paging       | Conversation catalog sources and their projection           |
-| Row rendering, keyboard focus and scrolling   | Sidebar view and list controls                              |
+| Concern                                          | Owner                                                        |
+| ------------------------------------------------ | ------------------------------------------------------------ |
+| Session catalog and lifecycle                    | `ISessionsManagementService`                                 |
+| Pins, manual row order, and automation filter    | `ISessionsListModelService`                                  |
+| Attention classification and ignored occurrences | `IBlockedSessionsIndicatorService` shared with the title bar |
+| Sidebar collapse state                           | `WorkbenchObjectTree` and the sidebar's profile preferences  |
+| Custom groups and membership                     | `ISessionGroupsService`                                      |
+| Top-level group/workspace order                  | `ISessionSectionOrderService`                                |
+| Tree interaction and drop targets                | `SessionsListTree`                                           |
+| Desktop contributed projects and paging          | Conversation catalog sources and their projection            |
+| Row rendering, keyboard focus and scrolling      | Sidebar view and list controls                               |
 
 Desktop Chat and Code each retain a Sessions tree with its own sorting, row order, and collapse state. Pins and custom-group membership remain attached to their conversation identities. Native Session rows retain their thread hierarchy, and catalog sources supply provider-owned conversation rows, project membership, and paging. Opening a row uses its owning conversation service. Workspace grouping uses the Agent's bound execution directory, which can be a worktree or container for the same Project.
 
@@ -44,6 +45,7 @@ A session appears in exactly one primary section. Higher-precedence states win:
 ```text
 Archived
     > Pinned
+    > Needs Attention (when shown)
     > Project (Code)
     > Custom group
     > External (when dedicated sectioning is enabled)
@@ -53,6 +55,7 @@ Archived
 
 - Archived sessions appear only in the final archived section.
 - Pinned sessions appear in the pinned section, retaining their project and custom-group membership. Unpinning derives placement from that membership again.
+- Needs Attention uses the same background Session, host, and occurrence rules as the title bar. Eligible unpinned rows temporarily move into the section within the existing tree and open the Thread associated with the alert. The profile preference and section collapse are presentation state. Resolving or ignoring an alert restores ordinary placement without modifying its memberships or manual order.
 - The Desktop Chat sidebar nests project members under their project. The Projects page provides access to project home pages. The standard Sessions list keeps Chat conversations flat within their custom group or the conversation section.
 - A valid custom-group membership places an unpinned, unarchived session in that group, including a quick chat.
 - When dedicated external sectioning is enabled, remaining external sessions appear together before the archived section. Pinning and custom-group membership retain their precedence; disabling sectioning returns external sessions to the ordinary grouping rules without changing that presentation state.

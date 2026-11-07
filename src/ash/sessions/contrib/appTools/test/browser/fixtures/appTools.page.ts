@@ -11,7 +11,7 @@ import { InstantiationType } from '../../../../../../platform/instantiation/comm
 import { ITerminalEditorService, ITerminalGroupService, type ITerminalInstance, type TerminalEditorLocation } from '../../../../../../workbench/contrib/terminal/browser/terminal.js';
 import { TerminalEditorService } from '../../../../../../workbench/contrib/terminal/browser/terminalEditorService.js';
 import { TerminalGroupService } from '../../../../../../workbench/contrib/terminal/browser/terminalGroupService.js';
-import { observableValue } from '../../../../../../base/common/observable.js';
+import { constObservable, observableValue } from '../../../../../../base/common/observable.js';
 import type { ICustomViewService } from '../../../../../services/customView/browser/customViewService.js';
 import type { IMenuService } from '../../../../../../platform/actions/common/actions.js';
 import { IEnvironmentVariableService } from '../../../../../../workbench/contrib/terminal/common/environmentVariable.js';
@@ -163,7 +163,7 @@ document.body.append(container);
 const listModel = new SessionsListModelService(storage);
 const services = resources.add(new InstantiationService());
 services.registerInstance(IAccessibilityService, { onDidChangeReducedMotion: Event.None, isMotionReduced: () => window.matchMedia('(prefers-reduced-motion: reduce)').matches } as unknown as IAccessibilityService);
-resources.add(new SessionsList(container, 'Tasks', fixtureOptions.has('chatMode') ? 'chat' : 'code', management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, groups, storage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, listModel, new SessionSectionOrderService(storage), undefined, undefined, undefined, fixtureOptions.has('leadingIcons') ? services : undefined));
+resources.add(new SessionsList(container, 'Tasks', fixtureOptions.has('chatMode') ? 'chat' : 'code', management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, groups, storage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, listModel, new SessionSectionOrderService(storage), { blockedSessions: constObservable([]), ignore: () => undefined }, undefined, undefined, undefined, fixtureOptions.has('leadingIcons') ? services : undefined));
 services.registerInstance(IStorageService, storage);
 services.registerInstance(ISessionsListModelService, listModel);
 services.registerInstance(IDialogService, resources.add(new DialogService()));

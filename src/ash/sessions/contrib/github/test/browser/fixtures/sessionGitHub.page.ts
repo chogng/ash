@@ -17,7 +17,7 @@ import { IGitHubService as ISessionGitHubService } from '../../../browser/github
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
 import type { IWorkbenchHost } from '../../../../../../workbench/browser/rendererApi.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../../../../browser/agentHost/sessionProviderScopeService.js';
-import { observableValue } from '../../../../../../base/common/observable.js';
+import { constObservable, observableValue } from '../../../../../../base/common/observable.js';
 import { ICustomViewService } from '../../../../../services/customView/browser/customViewService.js';
 import type { IMenuService } from '../../../../../../platform/actions/common/actions.js';
 import { CommandsRegistry, type ICommandService } from '../../../../../../platform/commands/common/commands.js';
@@ -300,7 +300,7 @@ if (inputStack) {
 	refreshChatInputStack(main);
 }
 const listStorage = resources.add(new BrowserStorageService({ ownerWindow: window, workspaceId: 'github-list', flushInterval: 0 }));
-const list = resources.add(new SessionsList(main, 'Sessions', 'chat', management, sessions, github, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, listStorage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(listStorage), new SessionSectionOrderService(listStorage)));
+const list = resources.add(new SessionsList(main, 'Sessions', 'chat', management, sessions, github, { groups: [], onDidChange: Event.None } as unknown as ISessionGroupsService, listStorage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(listStorage), new SessionSectionOrderService(listStorage), { blockedSessions: constObservable([]), ignore: () => undefined }));
 const submissions: Record<string, unknown>[] = [];
 if (new URL(location.href).searchParams.has('checks')) {
 	transport.failingChecks = true;

@@ -35,7 +35,7 @@ export interface ChatListEntry extends SessionListOrganization {
 	readonly defaultIcon: Icon;
 	readonly iconId?: string;
 	readonly setIcon?: (icon: Icon | undefined) => void;
-	readonly open: (signal: AbortSignal) => Promise<void>;
+	readonly open: (signal: AbortSignal, threadId?: string) => Promise<void>;
 	readonly getActions: (signal: AbortSignal, restoreFocus: () => void) => readonly IAction[] | Promise<readonly IAction[]>;
 }
 
@@ -293,6 +293,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 		} : () => entry.project;
 		return {
 			id: entry.id,
+			sessionId,
 			title: entry.title,
 			createdAt: entry.createdAt,
 			updatedAt: entry.updatedAt,
@@ -308,10 +309,10 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			organization: () => entry.disabled || entry.actionsDisabled ? undefined : {
 				pinned: entry.pinned, setPinned: entry.setPinned, moveToGroup: entry.moveToGroup, project: project(),
 			},
-			open: () => {
+			open: threadId => {
 				const controller = new AbortController();
 				this.opening.value = toDisposable(() => controller.abort());
-				void entry.open(controller.signal).catch(error => {
+				void entry.open(controller.signal, threadId).catch(error => {
 					if (!controller.signal.aborted) this.notifications.error(toErrorMessage(error));
 				});
 			},

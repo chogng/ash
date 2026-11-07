@@ -1133,6 +1133,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (this.isDisposed || !this.visible) { return; }
 		const queue = options?.queue;
 		const intent = this.parseInput(value ?? this.commandText());
+		const sendInBackground = options?.background ? this.delegate.sendInBackground : undefined;
+		if (options?.background && (!sendInBackground || intent.kind !== 'message' || queue || options.sideChat || options.cancelCurrentRequest)) return;
 		if (queue && intent.kind === 'command') {
 			throw new Error(localize('chat.queue.messageOnly', 'Queue and steering actions accept messages, not slash commands.'));
 		}
@@ -1166,6 +1168,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			const textRevision = this.textRevision;
 			const mode = this.mode;
 			const input = this.parseInput(this.commandText(draft.text, draft.attachments));
+			if (sendInBackground && input.kind !== 'message') return;
 			// Speech and prepared context can change the parsed input after initial admission.
 			if (queue && input.kind === 'command') {
 				throw new Error(localize('chat.queue.messageOnly', 'Queue and steering actions accept messages, not slash commands.'));
@@ -1214,7 +1217,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 					await this.delegate.interrupt();
 					if (this.isDisposed || lifecycle.aborted || !this.visible) throw new CancellationError();
 				}
-				await this.delegate.send(draft.text, mode, draft.skills.length > 0 ? draft.skills : undefined, requestContexts, lifecycle, queue);
+				const skills = draft.skills.length > 0 ? draft.skills : undefined;
+				if (sendInBackground) await sendInBackground(draft.text, mode, skills, requestContexts, lifecycle);
+				else await this.delegate.send(draft.text, mode, skills, requestContexts, lifecycle, queue);
 				if (!this.isDisposed && !lifecycle.aborted) this.inputNotifications.handleMessageSent({ inputUri: this.notificationUri });
 			});
 		} finally {

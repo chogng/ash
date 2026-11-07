@@ -214,6 +214,8 @@ export interface IUntitledChatSession {
 	readonly providerId?: string;
 	readonly untitledSessionId: string;
 	readonly kind?: SessionKind;
+	/** A reusable composer rotates this backend creation identity after a background send. */
+	readonly creationId?: string;
 	/** The draft label is provisional until the backend receives the first message. */
 	readonly automaticTitle?: true;
 	readonly forkSource?: { readonly sessionId: SessionId; readonly threadId: ThreadId; };

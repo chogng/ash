@@ -580,6 +580,15 @@ export class ChatWidgetModel extends Disposable {
 	}
 
 	async send(text: string, mode: ChatMode = this.mode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions): Promise<void> {
+		await this.submitMessage(text, mode, skills, contexts, options);
+	}
+
+	sendInBackground(text: string, mode: ChatMode, skills: readonly SkillReference[] | undefined, contexts: readonly ResolvedChatContext[], signal?: AbortSignal): Promise<IActiveSessionThread | undefined> {
+		if (this.selection.kind !== 'untitled' || this.selection.session.forkSource) throw canceled();
+		return this.submitMessage(text, mode, skills, contexts, { signal }, this.selection.session.untitledSessionId);
+	}
+
+	private async submitMessage(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ResolvedChatContext[], options?: ChatSubmissionOptions, backgroundDraftId?: string): Promise<IActiveSessionThread | undefined> {
 		if (!text.trim() && !contexts?.length) return;
 		this.assertAIEnabled();
 		this.assertWorkspaceSelected();
@@ -604,15 +613,24 @@ export class ChatWidgetModel extends Disposable {
 			const reasoningEffort = this.selectedReasoningEffort;
 			this.setState('submitting');
 			this.requireCurrentOperation(operation);
-			const active = await this.ensureActiveSession(operation.signal);
-			if (this.isDisposed || operation.signal?.aborted || operation.generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
-			// Materializing this composer changes its identity from draft to durable Thread.
-			operation.identity = active.threadId;
-			if (this._thread?.threadId !== active.threadId) {
-				await this.subscribe(active);
+			let active: IActiveSessionThread;
+			let thread: Thread | undefined;
+			if (backgroundDraftId) {
+				active = await this.sessionService.materializeUntitledSession(backgroundDraftId, operation.signal);
+				this.requireCurrentOperation(operation);
+				thread = (await this.chatService.readThread(active.session.sessionId, active.threadId, { type: 'latest', turnLimit: 1 })).thread;
+				if (thread.turns.length > 0) {
+					throw new Error(localize('sessions.chat.backgroundSend.alreadyStarted', 'This session already has a request. Open it from the session list to continue.'));
+				}
+			} else {
+				active = await this.ensureActiveSession(operation.signal);
+				if (this.isDisposed || operation.signal?.aborted || operation.generation !== this.composerGeneration || active.session.sessionId !== this.sessionId || active.threadId !== this.threadId) throw canceled();
+				// Materializing a foreground composer changes its identity to the durable Thread.
+				operation.identity = active.threadId;
+				if (this._thread?.threadId !== active.threadId) await this.subscribe(active);
+				thread = this._thread;
 			}
 			this.requireCurrentOperation(operation);
-			const thread = this._thread;
 			if (!thread || thread.threadId !== active.threadId) {
 				throw new Error('Chat Thread is not available');
 			}
@@ -636,6 +654,12 @@ export class ChatWidgetModel extends Disposable {
 				source: options?.source,
 				skills,
 			};
+			if (backgroundDraftId) {
+				await this.chatService.startTurn(submission);
+				this.sessionService.completeBackgroundSend(backgroundDraftId, active);
+				if (this.isCurrentTarget(operation)) this.setState('ready');
+				return active;
+			}
 			const needsNewTurn = !!turn && (turn.kind !== undefined && turn.kind !== 'coding' && turn.kind !== 'review' || turn.mode !== mode || !!skills?.length);
 			if (turn && options?.queue === ChatRequestQueueKind.Steering && needsNewTurn) {
 				throw new Error(localize('chat.steer.incompatible', 'The current request has a different mode, Skill or task type. Add this message to the queue instead.'));

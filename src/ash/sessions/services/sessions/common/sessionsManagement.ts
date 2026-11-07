@@ -45,6 +45,8 @@ export interface ISessionsManagementService {
 	materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal): Promise<IActiveSessionThread>;
 	cancelUntitledSessionPreparation(untitledSessionId: string): void;
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void;
+	/** Publishes the sent Session and re-arms the same composer for a different Session. */
+	completeBackgroundSend(untitledSessionId: string, active: IActiveSessionThread): void;
 	ensureActiveThread(): Promise<IActiveSessionThread>;
 	startNewSession(title?: string, background?: { readonly workspace: SessionWorkspaceSelection; readonly providerId: string; readonly creation: ISessionCreateOptions; readonly creationId?: string; }): Promise<IActiveSessionThread>;
 	stopSession(sessionId: SessionId): Promise<void>;

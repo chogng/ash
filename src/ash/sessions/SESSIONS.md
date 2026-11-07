@@ -268,7 +268,7 @@ Providers may expose an `ISessionConfigurationSnapshot` of resolved draft config
 
 ### Existing session
 
-Requests route through `ISessionsManagementService` to the provider identified by the session. Providers update chat and session observables. Foreground sends may update view state through lifecycle notifications; background sends do not implicitly steal focus.
+Requests route through `ISessionsManagementService` to the provider identified by the session. Providers update chat and session observables. Foreground sends may update view state through lifecycle notifications; background sends do not implicitly steal focus. After an explicit background first send is accepted, management publishes the durable session and gives the retained untitled composer a fresh, persisted backend creation identity. The composer keeps its own draft identity, and the confirmation captures the sent Session and Thread for explicit navigation.
 
 ### Multiple chats
 

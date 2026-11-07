@@ -2,16 +2,19 @@ import { ActionViewItem } from '../../../../base/browser/ui/actionbar/actionView
 import { h } from '../../../../base/browser/dom.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { IActionViewItemService } from '../../../../platform/actions/browser/actionViewItemService.js';
 import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { Action2, IMenuService, MenusRegistry, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import { ContextKeyExpr, RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../workbench/common/contributions.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
+import { IChatWidgetService } from '../../../../workbench/contrib/chat/browser/chat.js';
+import { ChatContextKeys } from '../../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { Menus } from '../../../browser/menus.js';
 import { ISessionsConversationService } from '../../../services/sessions/common/sessionsConversation.js';
 import {
@@ -21,6 +24,31 @@ import {
 import { SessionEnvironmentPicker } from './sessionEnvironmentPicker.js';
 import { SessionWorkspacePicker } from './sessionWorkspacePicker.js';
 import { ASH_CHAT_SELECTED_CONTEXT } from '../common/constants.js';
+
+export const BackgroundSendAvailableContext = new RawContextKey<boolean>('sessions.backgroundSendAvailable', false);
+
+registerAction2(class extends Action2 {
+	constructor() {
+		super({
+			id: 'sessions.sendInBackground',
+			title: localize2('sessions.chat.backgroundSend.action', 'Send in Background'),
+			f1: true,
+			precondition: BackgroundSendAvailableContext.isEqualTo(true),
+			keybinding: {
+				primary: KeyMod.CtrlCmd | KeyCode.Enter,
+				when: ChatContextKeys.inChatInput.isEqualTo(true),
+				weight: KeybindingWeight.SessionsContrib,
+			},
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
+		if (!widget?.visible) return;
+		widget.input.focus();
+		await widget.acceptInput(undefined, { background: true });
+	}
+});
 
 const pickers = [
 	{

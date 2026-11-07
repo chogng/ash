@@ -200,6 +200,7 @@ class PendingSessionService implements ISessionsManagementService {
 	cancelUntitledSessionPreparation(): void { throw new Error('Unexpected preparation cancellation'); }
 	materializeUntitledSession(_untitledSessionId: string): Promise<IActiveSessionThread> { return Promise.reject(new Error('Backend is unavailable')); }
 	promoteUntitledSession(_untitledSessionId: string, _active: IActiveSessionThread): void { }
+	completeBackgroundSend(): never { throw new Error('Unexpected background send'); }
 	ensureActiveThread(): Promise<IActiveSessionThread> { return Promise.reject(new Error('Backend is unavailable')); }
 	startNewSession(_title?: string): Promise<IActiveSessionThread> { return Promise.reject(new Error('Backend is unavailable')); }
 	stopSession(_sessionId: SessionId): Promise<void> { return Promise.reject(new Error('Backend is unavailable')); }

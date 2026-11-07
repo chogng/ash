@@ -12,7 +12,7 @@ import type { IProjectService, Project } from '../../../platform/projects/common
 import type { ICommandService } from '../../../platform/commands/common/commands.js';
 import type { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import type { INotificationService } from '../../../platform/notification/common/notification.js';
-import { observableValue } from '../../../base/common/observable.js';
+import { constObservable, observableValue } from '../../../base/common/observable.js';
 import type { ICustomViewService } from '../../services/customView/browser/customViewService.js';
 import { MenuService } from '../../../platform/actions/common/menuService.js';
 import { ContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
@@ -32,6 +32,11 @@ import { DeferredPromise } from '../../../base/common/async.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { SessionsList } from '../../contrib/sessions/browser/views/sessionsList.js';
+import { BlockedSessionsIndicatorModel } from '../../contrib/sessions/browser/blockedSessionsIndicatorModel.js';
+import type { SessionsCatalogRow } from '../../contrib/sessions/browser/views/sessionsCatalogList.js';
+import type { IGitHubService } from '../../contrib/github/browser/githubService.js';
+import { AccessibilityVerbositySettingId } from '../../../platform/accessibility/browser/accessibleView.js';
+import { Lxicon } from '../../../base/common/lxicons.js';
 import type { IHoverService, HoverSetupOptions } from '../../../platform/hover/browser/hoverService.js';
 import type { HoverContent } from '../../../base/browser/ui/hover/hover.js';
 import { getSessionSummaryHoverData } from '../../contrib/sessions/browser/sessionHoverContent.js';
@@ -48,6 +53,134 @@ const menuContexts = new ContextKeyService();
 const listMenus = new MenuService(listCommands, menuContexts);
 suiteTeardown(() => menuContexts.dispose());
 const listContextMenus = { showContextMenu() { } } as unknown as IContextMenuService;
+const noAttention = { blockedSessions: constObservable([]), ignore: () => undefined };
+
+test('Needs Attention reuses title bar alerts in the single sidebar tree', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using domLifetime = toDisposable(() => dom.window.close());
+	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'attention', flushInterval: 0 });
+	using catalogChanged = new Emitter<void>();
+	using checksChanged = new Emitter<void>();
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	using locale = toDisposable(resetNlsResolver);
+
+	const makeSession = (sessionId: string, needsInput = false): ISession => ({
+		sessionId, kind: 'code', title: sessionId, status: 'active', nextApprovalMode: 'manual',
+		chats: [
+			{ threadId: 'root', status: 'active', origin: { type: 'root' } },
+			{
+				threadId: 'question', title: 'Question thread', status: 'active', origin: { type: 'fork', parentThreadId: 'root', parentSequence: 1 },
+				management: needsInput ? { status: 'needsInput', statusChangedAtUnixMs: 1 } : undefined
+			},
+		],
+	});
+	const waiting = makeSession('waiting', true);
+	const ci = makeSession('ci');
+	const pinned = makeSession('pinned', true);
+	const chat = { ...makeSession('chat', true), kind: 'chat' } as const;
+	let sessions = [waiting, ci, pinned, chat];
+	const management = { get sessions() { return sessions; }, untitledSessions: [], state: 'ready', onDidChange: catalogChanged.event } as unknown as ISessionsManagementService;
+	const opened: [string, string | undefined][] = [];
+	const view = {
+		onDidChange: Event.None, getSelection: () => ({ visibleSelections: [] }),
+		openSession: async (sessionId: string, threadId: string) => { opened.push([sessionId, threadId]); },
+	} as unknown as ISessionsService;
+	let failing = true;
+	const request: IResolvedSessionPullRequest = {
+		uri: URI.parse('https://github.com/owner/repo/pull/1'), owner: 'owner', repo: 'repo', number: 1, title: 'Check PR',
+		headCommit: 'first', state: 'open', status: { hasFailingChecks: true }, icon: computePullRequestIcon('open', { hasFailingChecks: true }),
+	};
+	const github = { onDidChange: checksChanged.event, getSessionPullRequests: (id: string) => failing && id === ci.sessionId ? [request] : [] } as unknown as IGitHubService;
+	const indicator = new BlockedSessionsIndicatorModel(management, view, github, storage);
+	const model = new SessionsListModelService(storage);
+	model.pinSession(pinned);
+	const groups = { onDidChange: Event.None, groups: [{ sectionId: 'work', name: 'Work', sessionIds: ['waiting'] }] } as unknown as ISessionGroupsService;
+	const catalogRow = (session: ISession, title: string): SessionsCatalogRow => ({
+		id: `session:${session.sessionId}`, sessionId: session.sessionId, title, selected: false, defaultIcon: Lxicon.chatSession,
+		organization: () => undefined, getActions: () => [],
+		open: threadId => { opened.push([session.sessionId, threadId]); },
+	});
+	const chatRow = catalogRow(chat, 'Chat conversation');
+	const projects = ['one', 'two'].map(key => ({ key, title: key, rows: [chatRow], loading: false }));
+	let menu: IContextMenuDelegate | undefined;
+	const contextMenu = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
+	using list = new SessionsList(dom.window.document.body, 'Sessions', {
+		catalog: {
+			snapshot: constObservable({
+				sections: [
+					{ key: 'pinned', rows: [catalogRow(pinned, 'Pinned conversation')], projects: [] },
+					{ key: 'group:work', rows: [catalogRow(waiting, 'Question thread')], projects: [] },
+					{ key: 'recent', rows: [catalogRow(ci, 'Question about CI')], projects },
+				], loading: false
+			}), loadMore() { }
+		},
+		accessibility: { focusContext: 'testSessionsList', verbositySetting: AccessibilityVerbositySettingId.Chat, hint: () => '' },
+	}, management, view, github, groups, storage, emptyProjects, listCommands, contextMenu, listCustomViews, listMenus, listNotifications, model, new SessionSectionOrderService(storage), indicator);
+	const tree = () => model.readTree('chat')!;
+	const attention = () => tree().find(section => section.id === 'attention');
+	const alertSessions = () => attention()?.children?.map(row => row.sessionId).sort();
+	const attentionAction = (): IAction => {
+		list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-more button')!.click();
+		const show = menu?.getActions().find(action => action.id === 'sessions.list.show');
+		assert.ok(show instanceof SubmenuAction);
+		menu?.onHide?.(true);
+		const action = show.actions.find(action => action.id === 'sessions.list.showAttentionGroup');
+		assert.ok(action);
+		return action;
+	};
+
+	assert.equal(attention(), undefined);
+	assert.equal(attentionAction().checked, false);
+	assert.equal(attentionAction().label, '需要处理');
+	const row = list.domNode.querySelector<HTMLElement>('[data-item="session:waiting"]')!;
+	const button = row.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
+	const enable = attentionAction();
+	button.focus();
+	await enable.run();
+	assert.equal(new SessionsListModelService(storage).showAttentionGroup, true);
+	assert.equal(attention()?.label, '需要处理');
+	assert.deepEqual(alertSessions(), ['chat', 'ci', 'waiting']);
+	assert.equal(tree()[0].id, 'pinned');
+	assert.equal(list.domNode.querySelectorAll('[role="tree"]').length, 1);
+	assert.equal(list.domNode.querySelector('[data-parent-section="attention"][data-item="session:waiting"]'), row);
+	assert.equal(dom.window.document.activeElement, button);
+	button.click();
+	const chatButton = [...list.domNode.querySelectorAll<HTMLButtonElement>('[data-parent-section="attention"] .ash-chat-navigation-item')]
+		.find(candidate => candidate.textContent?.includes('Chat conversation'));
+	assert.ok(chatButton);
+	chatButton.click();
+	assert.deepEqual(opened, [['waiting', 'question'], ['chat', 'question']]);
+
+	list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-more button')!.click();
+	const searchAction = menu?.getActions().find(action => action.id === 'sessions.list.search');
+	assert.ok(searchAction);
+	menu?.onHide?.(true);
+	await searchAction.run();
+	const search = list.domNode.querySelector<HTMLInputElement>('.ash-sessions-list-search')!;
+	search.value = 'Question';
+	search.dispatchEvent(new dom.window.Event('input'));
+	assert.deepEqual(alertSessions(), ['ci', 'waiting']);
+	search.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	assert.deepEqual(alertSessions(), ['chat', 'ci', 'waiting']);
+
+	const ignored = indicator.ignore(indicator.blockedSessions.get().filter(alert => alert.session.sessionId === 'waiting'));
+	assert.ok(ignored);
+	assert.deepEqual(alertSessions(), ['chat', 'ci']);
+	assert.equal(list.domNode.querySelector('[data-parent-section="group:work"][data-item="session:waiting"]'), row);
+	ignored();
+	assert.deepEqual(alertSessions(), ['chat', 'ci', 'waiting']);
+	failing = false;
+	checksChanged.fire();
+	assert.deepEqual(alertSessions(), ['chat', 'waiting']);
+
+	sessions = [makeSession('waiting'), ci, pinned, chat];
+	catalogChanged.fire();
+	assert.deepEqual(alertSessions(), ['chat']);
+	await attentionAction().run();
+	assert.equal(attention(), undefined);
+	assert.equal(new SessionsListModelService(storage).showAttentionGroup, false);
+});
 
 test('SessionsList keeps session buttons and focus while refreshing', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
@@ -78,7 +211,7 @@ test('SessionsList keeps session buttons and focus while refreshing', async () =
 	const executed: unknown[][] = [];
 	const contextMenus = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
 	const commands = { executeCommand: async (...args: unknown[]) => { executed.push(args); } } as ICommandService;
-	const list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage));
+	const list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention);
 	const buttons = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')];
 	list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-actions button')!.click();
 	const actions = menu!.getActions().filter(action => action.id !== 'ash.actions.separator');
@@ -152,7 +285,7 @@ for (const mode of ['chat', 'code'] as const) {
 					visibleSelections: [{ kind: 'untitled', session: blank }],
 					openUntitledSession(id: string) { opened.push(id); },
 				} as unknown as ISessionsService;
-				using list = new SessionsList(dom.window.document.body, 'Sessions', mode, management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, listCommands, listContextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage));
+				using list = new SessionsList(dom.window.document.body, 'Sessions', mode, management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, listCommands, listContextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention);
 				const assertRows = (...draftIds: string[]): void => {
 					const rows = [...list.domNode.querySelectorAll<HTMLElement>('[data-item]')].map(row => row.dataset.item);
 					const draftRows = draftIds.map(id => `untitled:${id}`);
@@ -230,7 +363,7 @@ test('SessionsList updates passive status without changing row identity or selec
 			});
 		},
 	} as IHoverService;
-	using list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), undefined, hoverService);
+	using list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, undefined, hoverService);
 	const button = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 	button.focus();
 	const viewport = list.domNode.querySelector<HTMLDivElement>('.ash-sessions-list-items > .ash-scrollbar-viewport')!;
@@ -304,7 +437,7 @@ test('The localized keyboard menu targets the saved Session folder and the origi
 	using list = new SessionsList(dom.window.document.body, 'Sessions', 'code', management, view,
 		{ onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } },
 		emptyGroups, storage, emptyProjects, { executeCommand: async (...args: unknown[]) => { invoked.push(args); } } as ICommandService,
-		{ showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage));
+		{ showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention);
 	const row = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => button.textContent === 'Move me')!;
 	row.focus();
 	row.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
@@ -367,7 +500,7 @@ for (const outcome of ['confirmed', 'cancelled', 'failed', 'disposed'] as const)
 	using list = new SessionsList(dom.window.document.body, 'Sessions', 'code', sessions, views,
 		{ onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } },
 		emptyGroups, storage, emptyProjects, { executeCommand: () => pending.p } as unknown as ICommandService,
-		{ showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage));
+		{ showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention);
 	const row = list.domNode.querySelector<HTMLElement>('.ash-sessions-list-row')!;
 	Object.defineProperty(row, 'getBoundingClientRect', { value: () => new dom.window.DOMRect(10, 48, 240, 28) });
 	row.querySelector<HTMLButtonElement>('.ash-sessions-list-actions button')!.click();
@@ -443,7 +576,7 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	const commands = { executeCommand: async (...args: unknown[]) => { appearanceCommands.push(args); } } as ICommandService;
 	const makeList = (mode: 'chat' | 'code') => new SessionsList(dom.window.document.body, 'Sessions', mode, management, view,
 		github, groups, storage, emptyProjects, commands, context, listCustomViews, listMenus, listNotifications,
-		new SessionsListModelService(storage), new SessionSectionOrderService(storage));
+		new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention);
 	const sectionNames = (list: SessionsList) => Array.from(list.domNode.querySelectorAll('[data-section^="group:"] > h3'), heading => heading.textContent);
 	const rows = (list: SessionsList) => Array.from(list.domNode.querySelectorAll('[data-parent-section="group:quality"][data-row-order-id]'), row => row.getAttribute('data-row-order-id'));
 	const moveUp = async (button: HTMLButtonElement) => {
@@ -570,7 +703,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	} as unknown as ISessionProviderScopeService;
 	const makeList = (mode: 'chat' | 'code') => new SessionsList(dom.window.document.body, 'Sessions', mode, management, view,
 		github, emptyGroups, storage, projects, listCommands, context, listCustomViews, listMenus, listNotifications,
-		new SessionsListModelService(storage), new SessionSectionOrderService(storage), undefined, undefined, scopes);
+		new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, undefined, undefined, scopes);
 	const rows = (list: SessionsList) => Array.from(list.domNode.querySelectorAll<HTMLElement>('[data-row-order-id]'), row => row.dataset.rowOrderId);
 	const submenuAction = (list: SessionsList, submenu: string, id: string): IAction => {
 		list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-more button')!.click();

@@ -13,6 +13,8 @@ export interface SessionsCatalogAccessibility {
 
 export interface SessionsCatalogRow {
 	readonly id: string;
+	/** Canonical Session identity for rows backed by the Sessions catalog. */
+	readonly sessionId?: string;
 	readonly title: string;
 	readonly createdAt?: number;
 	readonly updatedAt?: number;
@@ -26,7 +28,7 @@ export interface SessionsCatalogRow {
 	readonly pinned?: boolean;
 	readonly setPinned?: (pinned: boolean) => void | Promise<void>;
 	organization(): SessionListOrganization | undefined;
-	open(): void;
+	open(threadId?: string): void;
 	getActions(signal: AbortSignal, restoreFocus: () => void): readonly IAction[] | Promise<readonly IAction[]>;
 }
 

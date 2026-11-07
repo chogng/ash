@@ -4,14 +4,14 @@ import { autorun } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';
 import type { IQuickInputService, IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import type { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
-import type { BlockedSessionsIndicatorModel, IBlockedSession } from './blockedSessionsIndicatorModel.js';
+import type { IBlockedSessionsIndicatorService, IBlockedSession } from './blockedSessionsIndicatorModel.js';
 import type { BlockedSessionsCIFixModel } from './blockedSessionsCIFixModel.js';
-import type { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { Severity, type INotificationService } from '../../../../platform/notification/common/notification.js';
 
 export function showBlockedSessionsList(
 	quickInput: IQuickInputService,
 	navigation: IChatSessionNavigationService,
-	indicator: BlockedSessionsIndicatorModel,
+	indicator: IBlockedSessionsIndicatorService,
 	fixes: BlockedSessionsCIFixModel,
 	notifications: INotificationService,
 	anchor: HTMLElement,
@@ -25,13 +25,32 @@ export function showBlockedSessionsList(
 	const ignore = { id: 'ignore', label: localize('sessions.blocked.ignore', 'Ignore this alert') };
 	const ignoreAll = { label: localize('sessions.blocked.ignoreAll', 'Ignore all current alerts') };
 	const fixAll = { label: localize('sessions.blocked.fixAll', 'Ask agents to fix failing checks') };
+	const ignoreWithUndo = (items: readonly IBlockedSession[]): void => {
+		const undo = indicator.ignore(items);
+		if (!undo) return;
+		notifications.notify({
+			severity: Severity.Info,
+			message: items.length === 1
+				? localize('sessions.blocked.ignoredOne', 'Ignored 1 session alert.')
+				: localize('sessions.blocked.ignoredMany', 'Ignored {0} session alerts.', items.length),
+			actions: {
+				primary: [{
+					id: 'sessions.blocked.undoIgnore',
+					label: localize('sessions.blocked.undoIgnore', 'Undo'),
+					tooltip: '',
+					enabled: true,
+					run: async () => undo(),
+				}],
+			},
+		});
+	};
 	lifetime.add(picker.onDidTriggerItemButton(({ item, button }) => {
-		if (button.id === ignore.id) indicator.ignore([item]);
+		if (button.id === ignore.id) ignoreWithUndo([item]);
 	}));
 	lifetime.add(picker.onDidTriggerButton(button => {
 		const items = indicator.blockedSessions.get();
 		if (button === ignoreAll) {
-			indicator.ignore(items);
+			ignoreWithUndo(items);
 		} else if (button === fixAll) {
 			picker.hide();
 			void fixes.fixAll(items, item => indicator.blockedSessions.get().some(current =>

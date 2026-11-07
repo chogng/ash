@@ -4,6 +4,10 @@ import { localize } from '../../../../../nls.js';
 import type { IProjectService } from '../../../../../platform/projects/common/projectService.js';
 import type { ISessionsListModelService, SessionSortDirection, SessionSortMode, SessionsListMode } from '../../../../services/sessions/browser/sessionsListModelService.js';
 
+export function getSessionsListAttentionHelp(): string {
+	return localize('sessions.list.attentionHelp', 'In More Sessions Actions, choose Show, then Needs Attention to group background sessions waiting for input or with failing checks. Press Enter on a row to open the conversation that needs attention.');
+}
+
 export interface SessionListProjectOrganization {
 	readonly current?: string;
 	readonly destinations: readonly { readonly id: string; readonly title: string; }[];

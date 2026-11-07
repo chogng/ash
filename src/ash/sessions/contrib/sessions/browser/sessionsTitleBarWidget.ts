@@ -30,7 +30,7 @@ import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { ISessionsListModelService } from '../../../services/sessions/browser/sessionsListModelService.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
-import { BlockedSessionsIndicatorModel } from './blockedSessionsIndicatorModel.js';
+import { IBlockedSessionsIndicatorService } from './blockedSessionsIndicatorModel.js';
 import { BlockedSessionsCIFixModel } from './blockedSessionsCIFixModel.js';
 import { showBlockedSessionsList } from './blockedSessionsList.js';
 
@@ -60,9 +60,9 @@ export class SessionsTitleBarWidget extends Disposable {
 		@IAgentSessionActionsService sessionActions: IAgentSessionActionsService,
 		@IContextMenuService contextMenus: IContextMenuService,
 		@ISessionsListModelService listModel: ISessionsListModelService,
+		@IBlockedSessionsIndicatorService indicator: IBlockedSessionsIndicatorService,
 	) {
 		super();
-		const indicator = instantiation.createInstance(BlockedSessionsIndicatorModel);
 		const fixes = instantiation.createInstance(BlockedSessionsCIFixModel);
 		const picker = this._register(new MutableDisposable());
 		const element = h(layout.mainContainer.ownerDocument, 'div', { className: 'ash-sessions-titlebar-widget' });
