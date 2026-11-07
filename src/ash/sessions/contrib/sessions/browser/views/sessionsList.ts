@@ -1,5 +1,5 @@
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { CodeConversationPageContext, SessionsMenuActiveConversationContext, SessionsMenuCanChangeFolderContext, SessionsMenuCanMoveConversationContext, SessionsMenuConversationPinnedContext } from '../../../../common/contextkeys.js';
+import { CodeConversationPageContext, SessionsMenuActiveConversationContext, SessionsMenuCanChangeFolderContext, SessionsMenuCanClearFolderContext, SessionsMenuCanMoveConversationContext, SessionsMenuConversationPinnedContext, SessionsMenuWorkspaceIdleContext } from '../../../../common/contextkeys.js';
 import { ISessionsListModelService, type ISessionsListTreeNode, type SessionGrouping } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
@@ -64,7 +64,7 @@ import { basename, extUriBiasedIgnorePathCase } from '../../../../../base/common
 import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { DropdownMenuActionViewItem } from '../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
-import { createSessionItemActions, createSessionWorkspaceActions } from '../../../../browser/agentSessionsModel.js';
+import { createSessionItemActions, getSessionWorkspaceMenuState } from '../../../../browser/agentSessionsModel.js';
 import type { SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -871,23 +871,28 @@ export class SessionsList extends DomWidget {
 		target?: { readonly sessionId: string; readonly threadId?: string; } | { readonly catalogId: string; }, pinned = false): void {
 		this.rowMenuContext.clear();
 		const context = this.rowMenuContext.value = this.contextKeys?.createScoped(item.domNode);
+		const workspace = this.mode === 'code' && target && 'sessionId' in target && target.threadId
+			? getSessionWorkspaceMenuState(target.sessionId, target.threadId, this.sessionService)
+			: undefined;
 		if (context && target && 'sessionId' in target) {
 			const { sessionId, threadId } = target;
 			SessionsMenuActiveConversationContext.bindTo(context).set(true);
 			SessionsMenuConversationPinnedContext.bindTo(context).set(pinned);
 			if (this.mode === 'code' && threadId) {
-				SessionsMenuCanChangeFolderContext.bindTo(context).set(threadId === sessionId && !!this.sessionService.canChangeDirectory?.(sessionId, { ignoreActivity: true }));
+				SessionsMenuCanChangeFolderContext.bindTo(context).set(!!workspace);
+				SessionsMenuCanClearFolderContext.bindTo(context).set(!!workspace?.clearLabel);
+				SessionsMenuWorkspaceIdleContext.bindTo(context).set(workspace?.enabled === true);
 				SessionsMenuCanMoveConversationContext.bindTo(context).set(!!this.sessionService.getChatMoveDestinations?.(sessionId, threadId).length);
 			}
 		}
 		const menu = this.mode === 'code' ? Menus.SidebarCodeSessionContext : Menus.SidebarChatSessionContext;
-		const workspaceActions = this.mode === 'code' && target && 'sessionId' in target && target.threadId
-			? createSessionWorkspaceActions(target.sessionId, target.threadId, this.sessionService, this.commands)
-			: [];
 		this.showRowMenu(item, anchor, {
-			getActions: () => Separator.join(actions, getFlatContextMenuActions(this.menus.getMenuActions(menu, { arg: target }, context)).flatMap(action => {
-				if (action.id === 'agentSession.changeDirectory' || action.id === 'agentSession.clearDirectory') {
-					return workspaceActions.filter(workspaceAction => workspaceAction.id === action.id);
+			getActions: () => Separator.join(actions, getFlatContextMenuActions(this.menus.getMenuActions(menu, { arg: target }, context)).map(action => {
+				if (action.id === 'agentSession.changeDirectory' && workspace) {
+					return { ...action, label: workspace.changeLabel, tooltip: workspace.changeLabel, badge: workspace.busyBadge, run: () => action.run() };
+				}
+				if (action.id === 'agentSession.clearDirectory' && workspace?.clearLabel) {
+					return { ...action, label: workspace.clearLabel, tooltip: workspace.clearLabel, run: () => action.run() };
 				}
 				if (action.id === 'agentSession.delete') return { ...action, class: 'ash-session-delete-action', run: () => action.run() };
 				if (action.id === 'sessions.list.togglePin') return {

@@ -36,24 +36,38 @@ function registerSidebarSessionActions(menuId: MenuId): void {
 registerSidebarSessionActions(Menus.SidebarChatSessionContext);
 registerSidebarSessionActions(Menus.SidebarCodeSessionContext);
 
-export function createSessionWorkspaceActions(sessionId: string, threadId: string, sessions: ISessionsManagementService, commands: ICommandService): IAction[] {
-	if (threadId !== sessionId || !sessions.canChangeDirectory?.(sessionId, { ignoreActivity: true })) return [];
+export function getSessionWorkspaceMenuState(sessionId: string, threadId: string, sessions: ISessionsManagementService) {
+	if (threadId !== sessionId) return undefined;
+	const enabled = sessions.canChangeDirectory?.(sessionId) === true;
+	if (!enabled && !sessions.canChangeDirectory?.(sessionId, { ignoreActivity: true })) return undefined;
 	const workspace = sessions.sessions.find(session => session.sessionId === sessionId)?.workspace;
-	const enabled = sessions.canChangeDirectory(sessionId);
-	const actions: IAction[] = [{
-		id: 'agentSession.changeDirectory',
-		label: workspace
+	return {
+		enabled,
+		changeLabel: workspace
 			? localize({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Workspace…')
 			: localize({ bundle: 'ash.sessions', key: 'sessions.directory.set' }, 'Set Workspace…'),
-		tooltip: '', enabled, icon: Lxicon.folder,
-		badge: enabled ? undefined : localize({ bundle: 'ash.sessions', key: 'sessions.directory.wait' }, 'Available when idle'),
+		clearLabel: workspace && sessions.canClearDirectory?.(sessionId)
+			? localize({ bundle: 'ash.sessions', key: 'sessions.directory.clear' }, 'Remove Workspace')
+			: undefined,
+		busyBadge: enabled ? undefined : localize({ bundle: 'ash.sessions', key: 'sessions.directory.wait' }, 'Available when idle'),
+	};
+}
+
+export function createSessionWorkspaceActions(sessionId: string, threadId: string, sessions: ISessionsManagementService, commands: ICommandService): IAction[] {
+	const workspace = getSessionWorkspaceMenuState(sessionId, threadId, sessions);
+	if (!workspace) return [];
+	const actions: IAction[] = [{
+		id: 'agentSession.changeDirectory',
+		label: workspace.changeLabel,
+		tooltip: '', enabled: workspace.enabled, icon: Lxicon.folder,
+		badge: workspace.busyBadge,
 		run: () => commands.executeCommand('agentSession.changeDirectory', sessionId),
 	}];
-	if (workspace && sessions.canClearDirectory?.(sessionId)) {
+	if (workspace.clearLabel) {
 		actions.push({
 			id: 'agentSession.clearDirectory',
-			label: localize({ bundle: 'ash.sessions', key: 'sessions.directory.clear' }, 'Remove Workspace'),
-			tooltip: '', enabled,
+			label: workspace.clearLabel,
+			tooltip: '', enabled: workspace.enabled,
 			run: () => commands.executeCommand('agentSession.clearDirectory', sessionId),
 		});
 	}

@@ -11,10 +11,10 @@ import { BrowserStorageService } from '../../../workbench/services/storage/brows
 import type { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
 import type { ISessionProviderScopeService } from '../../browser/agentHost/sessionProviderScopeService.js';
 import type { IProjectService, Project } from '../../../platform/projects/common/projectService.js';
-import type { ICommandService } from '../../../platform/commands/common/commands.js';
+import { CommandsRegistry, type ICommandService } from '../../../platform/commands/common/commands.js';
 import type { IContextMenuService } from '../../../platform/contextview/browser/contextView.js';
 import type { IQuickInputService } from '../../../platform/quickinput/common/quickInput.js';
-import type { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
+import { IFileDialogService, type IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import { NullLoggerService, type LogEntry } from '../../../platform/log/common/log.js';
 import { LogService } from '../../../platform/log/common/logServiceImpl.js';
 import { Severity, type INotificationService } from '../../../platform/notification/common/notification.js';
@@ -27,6 +27,9 @@ import { formatNlsMessage, setNlsResolver, resetNlsResolver } from '../../../nls
 import { sessionManagementLabel } from '../../browser/sessionManagementLabels.js';
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import { URI } from '../../../base/common/uri.js';
+import { setARIAContainer } from '../../../base/browser/ui/aria/aria.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
+import { ServiceCollection } from '../../../platform/instantiation/common/serviceCollection.js';
 import { computePullRequestIcon } from '../../../workbench/common/chatPullRequest.js';
 import type { IResolvedSessionPullRequest } from '../../contrib/github/common/types.js';
 import assert from 'node:assert/strict';
@@ -35,7 +38,7 @@ import { JSDOM } from 'jsdom';
 import { SubmenuAction, type IAction } from '../../../base/common/actions.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { DeferredPromise } from '../../../base/common/async.js';
-import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
+import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { SessionsList } from '../../contrib/sessions/browser/views/sessionsList.js';
 import { BlockedSessionsIndicatorModel } from '../../contrib/sessions/browser/blockedSessionsIndicatorModel.js';
@@ -488,6 +491,7 @@ test('SessionsList updates passive status without changing row identity or selec
 test('The keyboard menu targets the saved Session workspace and the original nested Thread', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	using domLifetime = toDisposable(() => dom.window.close());
+	using aria = setARIAContainer(dom.window.document.body);
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'move-chat', flushInterval: 0 });
 	const chat = (threadId: string, title: string) => ({ threadId, title, status: 'active' as const, origin: { type: 'root' as const } });
 	const session = (sessionId: string, chats: ISession['chats']): ISession => ({
@@ -495,18 +499,32 @@ test('The keyboard menu targets the saved Session workspace and the original nes
 		workspace: { authorityId: 'local', root: '/workspace' },
 	});
 	const source = session('source', [chat('source', 'Source root'), chat('original', 'Move me')]);
-	const destination = session('target', [chat('target', 'Target root')]);
+	let destination = session('target', [chat('target', 'Target root')]);
 	let busy = false;
+	const workspaceChanges: [string, string | null][] = [];
 	const management = {
-		sessions: [source, destination], untitledSessions: [], state: 'ready', onDidChange: Event.None,
+		get sessions() { return [source, destination]; },
+		untitledSessions: [], state: 'ready', onDidChange: Event.None,
 		canChangeDirectory: (id: string, options?: { ignoreActivity?: true; }) => id === 'target' && (!busy || options?.ignoreActivity === true),
 		canClearDirectory: (id: string) => id === 'target',
+		changeDirectory: async (id: string, path: string | null) => { workspaceChanges.push([id, path]); },
 		getChatMoveDestinations: (id: string, threadId: string) => id === 'source' && threadId === 'original' ? [destination] : [],
 	} as unknown as ISessionsManagementService;
 	const view = { onDidChange: Event.None, activeSelection: undefined, visibleSelections: [] } as unknown as ISessionsService;
 	let menu: IContextMenuDelegate | undefined;
 	const invoked: unknown[][] = [];
-	const commands = { executeCommand: async (...args: unknown[]) => { invoked.push(args); } } as ICommandService;
+	using services = new InstantiationService(new ServiceCollection(
+		[ISessionsManagementService, management],
+		[IFileDialogService, { showOpenDialog: async () => [URI.file('/new-workspace')] }],
+	));
+	const commands = {
+		executeCommand: async (id: string, ...args: unknown[]) => {
+			invoked.push([id, ...args]);
+			if (id === 'agentSession.changeDirectory' || id === 'agentSession.clearDirectory') {
+				await services.invokeFunction(CommandsRegistry.getCommand(id)!, ...args);
+			}
+		},
+	} as ICommandService;
 	using list = new SessionsList(dom.window.document.body, 'Sessions', 'code', management, view,
 		{ onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } },
 		emptyGroups, storage, emptyProjects, commands,
@@ -529,15 +547,22 @@ test('The keyboard menu targets the saved Session workspace and the original nes
 	const clear = menu?.getActions().find(action => action.id === 'agentSession.clearDirectory');
 	assert.equal(clear?.label, '解除工作区');
 	await clear?.run();
+	assert.deepEqual(workspaceChanges, [['target', URI.file('/new-workspace').fsPath], ['target', null]]);
 	busy = true;
 	target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
 	const disabled = menu?.getActions().find(action => action.id === 'agentSession.changeDirectory');
 	assert.equal(disabled?.enabled, false);
 	assert.equal(disabled?.badge, '空闲时可用');
+	assert.equal(menu?.getActions().find(action => action.id === 'agentSession.clearDirectory')?.enabled, false);
+	busy = false;
+	destination = { ...destination, workspace: null };
+	target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
+	assert.equal(menu?.getActions().find(action => action.id === 'agentSession.changeDirectory')?.label, '设置工作区…');
+	assert.equal(menu?.getActions().some(action => action.id === 'agentSession.clearDirectory'), false);
 	assert.deepEqual(invoked, [
 		['sessions.list.moveChatToSession', { sessionId: 'source', threadId: 'original' }],
-		['agentSession.changeDirectory', 'target'],
-		['agentSession.clearDirectory', 'target'],
+		['agentSession.changeDirectory', { sessionId: 'target', threadId: 'target' }],
+		['agentSession.clearDirectory', { sessionId: 'target', threadId: 'target' }],
 	]);
 });
 
