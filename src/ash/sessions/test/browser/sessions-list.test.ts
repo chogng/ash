@@ -32,6 +32,9 @@ import { DeferredPromise } from '../../../base/common/async.js';
 import type { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import type { ISessionsService } from '../../services/sessions/browser/sessionsService.js';
 import { SessionsList } from '../../contrib/sessions/browser/views/sessionsList.js';
+import type { SessionsCatalogRow, SessionsCatalogSnapshot } from '../../contrib/sessions/browser/views/sessionsCatalogList.js';
+import { AccessibilityVerbositySettingId } from '../../../platform/accessibility/browser/accessibleView.js';
+import { Lxicon } from '../../../base/common/lxicons.js';
 import type { IHoverService, HoverSetupOptions } from '../../../platform/hover/browser/hoverService.js';
 import type { HoverContent } from '../../../base/browser/ui/hover/hover.js';
 import { getSessionSummaryHoverData } from '../../contrib/sessions/browser/sessionHoverContent.js';
@@ -543,8 +546,8 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	let menu: IContextMenuDelegate | undefined;
 	const context = { showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService;
 	const project: Project = {
-		id: 'release', name: 'Release', revision: 1, archived: false, sessionCount: 1,
-		description: '', materials: [], sessionIds: ['manual'],
+		id: 'release', name: 'Release', revision: 1, archived: false, sessionCount: 2,
+		description: '', materials: [], sessionIds: ['manual', 'run'],
 	};
 	const projects = { onDidChange: Event.None, list: async () => [project], read: async () => project } as unknown as IProjectService;
 	const repositoryReads: unknown[] = [];
@@ -568,7 +571,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 			},
 		}),
 	} as unknown as ISessionProviderScopeService;
-	const makeList = (mode: 'chat' | 'code') => new SessionsList(dom.window.document.body, 'Sessions', mode, management, view,
+	const makeList = (mode: ConstructorParameters<typeof SessionsList>[2]) => new SessionsList(dom.window.document.body, 'Sessions', mode, management, view,
 		github, emptyGroups, storage, projects, listCommands, context, listCustomViews, listMenus, listNotifications,
 		new SessionsListModelService(storage), new SessionSectionOrderService(storage), undefined, undefined, scopes);
 	const rows = (list: SessionsList) => Array.from(list.domNode.querySelectorAll<HTMLElement>('[data-row-order-id]'), row => row.dataset.rowOrderId);
@@ -626,6 +629,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 
 	await submenuAction(code, 'sessions.list.sortBy', 'sessions.list.sortBy.name').run();
 	await submenuAction(code, 'sessions.list.sortBy', 'sessions.list.sortDirection.descending').run();
+	assert.deepEqual(rows(code).slice(0, 2), ['run', 'manual']);
 	assert.deepEqual(rows(chat), ['manual', 'run', remoteId]);
 	assert.equal(submenuAction(chat, 'sessions.list.sortBy', 'sessions.list.sortBy.updated').checked, true);
 	await submenuAction(chat, 'sessions.list.sortBy', 'sessions.list.sortBy.name').run();
@@ -639,7 +643,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	assert.equal(submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.status').checked, true);
 	assert.deepEqual(repositoryReads, []);
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.projects').run();
-	assert.equal(chat.domNode.querySelector('[data-parent-section="grouping:projects:release"][data-row-order-id]')?.getAttribute('data-row-order-id'), 'manual');
+	assert.equal(chat.domNode.querySelector('[data-row-order-id="manual"]')?.getAttribute('data-parent-section'), 'grouping:projects:release');
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.environment').run();
 	assert.equal(chat.domNode.querySelector('[data-section="grouping:environment:local"] h3 button')?.textContent, '本地');
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.repository').run();
@@ -648,6 +652,33 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	assert.ok([...chat.domNode.querySelectorAll('[data-section^="grouping:repository:"] > h3 button')].some(button => button.textContent === 'team/repo'));
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.none').run();
 	assert.equal(chat.domNode.querySelector('[data-section^="grouping:"]'), null);
+
+	const contributedRow: SessionsCatalogRow = {
+		id: 'catalog-manual', title: manual.title, groupingContext: manual, selected: false, defaultIcon: Lxicon.chatSession,
+		open() { }, organization: () => undefined, getActions: () => [],
+	};
+	using contributed = makeList({
+		accessibility: { focusContext: 'testCatalogFocused', verbositySetting: AccessibilityVerbositySettingId.Chat, hint: () => '' },
+		catalog: {
+			snapshot: observableValue<SessionsCatalogSnapshot>('testCatalog', {
+				loading: false, sections: [{ key: 'recent', rows: [contributedRow], projects: [] }],
+			}),
+			loadMore() { },
+		},
+	});
+	const parent = () => contributed.domNode.querySelector('[data-item="catalog-manual"]')?.getAttribute('data-parent-section');
+	assert.equal(parent(), 'recent');
+	await submenuAction(code, 'sessions.list.groupBy', 'sessions.list.groupBy.status').run();
+	assert.equal(parent(), 'grouping:status:working');
+	await submenuAction(contributed, 'sessions.list.groupBy', 'sessions.list.groupBy.environment').run();
+	assert.equal(parent(), 'grouping:environment:local');
+	await submenuAction(contributed, 'sessions.list.groupBy', 'sessions.list.groupBy.repository').run();
+	await new Promise<void>(resolve => setImmediate(resolve));
+	assert.equal(parent(), 'grouping:repository:["git.example","team","repo"]');
+	await submenuAction(contributed, 'sessions.list.groupBy', 'sessions.list.groupBy.projects').run();
+	assert.equal(parent(), 'grouping:projects:');
+	await submenuAction(contributed, 'sessions.list.groupBy', 'sessions.list.groupBy.none').run();
+	assert.equal(parent(), 'recent');
 });
 
 test('The previous shared sidebar sort seeds both modes once', async () => {

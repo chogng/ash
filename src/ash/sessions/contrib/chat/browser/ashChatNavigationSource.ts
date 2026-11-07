@@ -6,6 +6,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
+import { buildAgentHostSessionWorkspace } from '../../../common/agentHostSessionWorkspace.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsListModelService } from '../../../services/sessions/browser/sessionsListModelService.js';
 import type { ChatListEntry, ChatListSnapshot, ChatListSource } from './chatListModel.js';
@@ -61,6 +62,7 @@ export class AshChatNavigationSource extends Disposable implements ChatListSourc
 					id: `ash:${id}`,
 					title: session.title || localize('sessions.list.untitled', 'Untitled Session'),
 					sessionId: id,
+					groupingContext: { sessionId: id, workspace: buildAgentHostSessionWorkspace(session.executionTarget), management: session.manager },
 					createdAt: thread.createdAtUnixMs,
 					updatedAt: thread.lastActivityAtUnixMs ?? thread.createdAtUnixMs,
 					selected: selectedId === id,
