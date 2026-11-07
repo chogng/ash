@@ -763,6 +763,31 @@ impl UpdateBroker {
             SubscriptionDelivery::Active => {
                 if subscription.session_owners.contains(&pending.session_id) {
                     subscription.sequence = subscription.sequence.max(sequence);
+                    if scope == ThreadSubscriptionScope::Thread {
+                        // A Session subscription can receive an offer before a Chat opens.
+                        // Replay it to its current owner when the Chat subscribes directly.
+                        let now = unix_time_millis();
+                        for (id, request) in &state.pending_interactions {
+                            if request.session_id == pending.session_id
+                                && request.thread_id == registration.thread_id
+                                && state.interaction_assignments.get(id)
+                                    == Some(&registration.connection_id)
+                                && !matches!(
+                                    request.interaction.request,
+                                    ash_protocol::AgentRequest::DynamicTool { .. }
+                                )
+                                && request
+                                    .interaction
+                                    .deadline
+                                    .is_none_or(|deadline| deadline.expires_at_unix_ms > now)
+                            {
+                                queue.push(notification(
+                                    ServerNotificationMethod::AgentRequest,
+                                    request,
+                                ));
+                            }
+                        }
+                    }
                 }
             }
             SubscriptionDelivery::Buffered(buffer) => {
