@@ -83,6 +83,40 @@ suite('Menu browser behavior', () => {
 		assert.deepEqual(await browser.page.evaluate(() => window.ashMenuTest.state().calls), [{ id: 'alternate', context: { version: 1 } }]);
 	});
 
+	test('trailing menus align command icons, selection marks and submenu arrows after optional shortcuts', async () => {
+		await open('trailing');
+		const primary = browser.page.getByRole('menuitem', { name: 'Primary' });
+		const submenu = browser.page.getByRole('menuitem', { name: 'First' });
+		const icon = primary.locator('.ash-menu-trailing-slot [data-ash-icon-id="search"]');
+		const arrow = submenu.locator('.ash-menu-trailing-slot > .ash-icon');
+		await expect(icon).toBeVisible();
+		await expect(arrow).toBeVisible();
+		await expect(primary.locator('.ash-menu-leading-slot')).toHaveCount(0);
+		const iconColumn = async (row: typeof primary) => {
+			const slot = (await row.locator('.ash-menu-trailing-slot').boundingBox())!;
+			const shortcut = (await row.locator('.ash-menu-keybinding').boundingBox())!;
+			assert.ok(shortcut.x + shortcut.width <= slot.x);
+			return slot.x;
+		};
+		assert.equal(await iconColumn(primary), await iconColumn(submenu));
+		await browser.page.evaluate(() => window.ashMenuTest.update());
+		await expect(icon).toBeHidden();
+		const check = browser.page.locator('[data-action-id="primary"] .ash-menu-trailing-slot > [data-ash-icon-id="check"]');
+		await expect(check).toBeVisible();
+		await browser.page.keyboard.down('Alt');
+		await expect(check).toBeHidden();
+		await browser.page.keyboard.up('Alt');
+		await expect(check).toBeVisible();
+		await submenu.focus();
+		await submenu.press('ArrowRight');
+		const choice = browser.page.getByRole('menuitemradio', { name: 'Choice', checked: true });
+		await expect(choice).toBeFocused();
+		await expect(choice.locator('.ash-menu-trailing-slot > [data-ash-icon-id="check"]')).toBeVisible();
+		await expect(choice.locator('.ash-menu-keybinding')).toHaveCount(0);
+		await choice.press('Escape');
+		await expect(submenu).toBeFocused();
+	});
+
 	test('propagates providers, radio descriptions, context changes and keyboard event context through nested menus', async () => {
 		await open('nested');
 		await browser.page.locator('[data-action-id="first"] > button').click();
@@ -139,9 +173,10 @@ suite('Menu browser behavior', () => {
 		await row.click();
 		const anchor = await row.boundingBox();
 		const popup = await browser.page.locator('.ash-context-view-menu:not([hidden])').boundingBox();
-		assert.ok(anchor && popup);
+		const firstChild = await browser.page.getByRole('menuitemradio', { name: 'Choice', exact: true }).boundingBox();
+		assert.ok(anchor && popup && firstChild);
 		assert.ok(popup.x + popup.width <= anchor.x);
-		assert.ok(Math.abs(popup.y - anchor.y) < 3);
+		assert.ok(Math.abs(firstChild.y - anchor.y) < 3);
 	});
 
 	test('touch panning keeps a clamped menu open and dismisses it only after a real scroll', async () => {

@@ -123,14 +123,64 @@
 	flex: 0 0 16px;
 }
 /* A hidden check must not reserve space beside the action icon. */
-.ash-menu-leading-check > .ash-icon {
+:is(.ash-menu-leading-slot, .ash-menu-trailing-slot) > .ash-icon-check {
 	display: none;
+	color: var(--ash-menu-check-foreground, currentColor);
 }
-.ash-menu .ash-button.checked > .ash-menu-leading-check > .ash-icon {
+.ash-menu
+	.ash-button.checked
+	> :is(.ash-menu-leading-check, .ash-menu-trailing-check)
+	> .ash-icon {
 	display: block;
 }
-.ash-menu .ash-button.checked > .ash-menu-leading-check > .ash-icon-label-icon {
+.ash-menu
+	.ash-button.checked
+	> :is(.ash-menu-leading-check, .ash-menu-trailing-check)
+	> .ash-icon-label-icon {
 	display: none;
+}
+.ash-menu .ash-button > .ash-menu-check-and-icon {
+	width: auto;
+	flex: 0 0 auto;
+	gap: var(--ash-spacing-size40);
+}
+.ash-menu .ash-button > .ash-menu-check-and-icon > .ash-icon-check {
+	display: block;
+	visibility: hidden;
+	order: -1;
+}
+.ash-menu .ash-button.checked > .ash-menu-check-and-icon > .ash-icon-check {
+	visibility: visible;
+}
+.ash-menu
+	.ash-button.checked
+	> .ash-menu-check-and-icon
+	> .ash-icon-label-icon:not(:empty) {
+	display: inline-flex;
+}
+.ash-menu-icons-trailing
+	> .ash-action-view-item
+	> .ash-button
+	> .ash-button-content {
+	flex: 1 1 auto;
+}
+.ash-menu-icons-trailing
+	> .ash-action-view-item
+	> .ash-button
+	> :is(.ash-menu-badge, .ash-menu-keybinding) {
+	margin-inline-start: 0;
+}
+.ash-menu-icons-trailing .ash-button > .ash-menu-keybinding {
+	flex-shrink: 0;
+}
+.ash-menu-icons-trailing .ash-button > .ash-menu-trailing-slot {
+	position: static;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 var(--ash-menu-trailing-icon-size, var(--ash-lxiconFontSize));
+	order: 1;
+	margin-inline-start: 0;
 }
 /* Count the menu padding toward the divider inset from the popup edge. */
 .ash-menu .ash-action-view-item-separator {
@@ -144,7 +194,8 @@
 	);
 	opacity: 1;
 }
-.ash-menu .ash-button:has(> .ash-submenu-indicator) {
+.ash-menu:not(.ash-menu-icons-trailing)
+	.ash-button:has(> .ash-submenu-indicator) {
 	position: relative;
 	--ash-menu-item-padding-end: var(--ash-menu-submenu-padding-end);
 }

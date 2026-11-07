@@ -3399,7 +3399,9 @@ suite('chatInput browser component', () => {
 				await expect(picker).toBeVisible();
 				await expect(picker.getByRole('menuitemradio')).toHaveCount(3);
 				await expect(picker.locator('.ash-keybinding-label-keycap')).toHaveText(['1', '2', '3']);
-				for (const label of await picker.locator('.ash-button-label').all()) {
+				const labels = picker.locator('.ash-action-widget-label');
+				await expect(labels).toHaveCount(3);
+				for (const label of await labels.all()) {
 					await expect(label).toHaveCSS('font-weight', '600');
 				}
 				await expect(picker.locator('.ash-action-widget-summary')).toHaveCount(3);

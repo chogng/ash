@@ -6,6 +6,7 @@ import { getActiveElement } from '../../../browser/dom.js';
 import { ContextView, ContextViewFocusRestore } from '../../../browser/ui/contextview/contextview.js';
 import { Keybinding, logicalKey, resolveKeybinding } from '../../../common/keybindings.js';
 import { OperatingSystem } from '../../../common/platform.js';
+import { Lxicon } from '../../../common/lxicons.js';
 import { TestThemeService } from '../../../../platform/theme/test/common/testThemeService.js';
 import { defaultMenuStyles, defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { lightColorTheme, darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme } from '../../../../platform/theme/common/colorTheme.js';
@@ -32,7 +33,7 @@ const overlay = Object.assign(new EventTarget(), {
 let overlayRect = new DOMRect();
 Object.defineProperty(navigator, 'windowControlsOverlay', { configurable: true, value: overlay });
 
-function mount(kind: 'basic' | 'nested' | 'long' | 'shadow' | 'left' | 'event' | 'menubar' | 'compact'): void {
+function mount(kind: 'basic' | 'nested' | 'long' | 'shadow' | 'left' | 'event' | 'menubar' | 'compact' | 'trailing'): void {
 	scene.clear();
 	host.replaceChildren();
 	host.style.transform = '';
@@ -61,6 +62,10 @@ function mount(kind: 'basic' | 'nested' | 'long' | 'shadow' | 'left' | 'event' |
 	Object.defineProperty(primary, 'alt', { value: alternate });
 	const checked = action('choice', '&Choice');
 	checked.checked = false;
+	if (kind === 'trailing') {
+		primary.icon = Lxicon.search;
+		checked.checked = true;
+	}
 	const child = action('child', '&Child');
 	const first = new SubmenuAction('first', '&First', [checked, new SubmenuAction('nested', '&Nested', [child])]);
 	const second = new SubmenuAction('second', '&Second', [action('other', '&Other')]);
@@ -79,11 +84,12 @@ function mount(kind: 'basic' | 'nested' | 'long' | 'shadow' | 'left' | 'event' |
 		: [primary, action('after', '&After'), first, second];
 	menu = lifetime.add(new Menu(container, actions, {
 		enableMnemonics: true,
+		iconPlacement: kind === 'trailing' ? 'trailing' : undefined,
 		expandDirection: kind === 'left' ? { horizontal: HorizontalDirection.Left, vertical: VerticalDirection.Above } : undefined,
 		context: { version: 1 },
 		useEventAsContext: kind === 'event',
 		actionRunner: lifetime.add(new ActionRunner()),
-		getKeyBinding: item => item.id === 'primary' || item.id === 'alternate'
+		getKeyBinding: item => item.id === 'primary' || item.id === 'alternate' || (kind === 'trailing' && item.id === 'first')
 			? resolveKeybinding(Keybinding.single(logicalKey(item.id === 'primary' ? 'p' : 'a', { ctrlKey: true })), OperatingSystem.Windows) : undefined,
 		getAriaDescription: item => `Details for ${item.id}`,
 		getCheckedActionsRepresentation: () => 'radio',

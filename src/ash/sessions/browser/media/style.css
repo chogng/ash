@@ -35,6 +35,7 @@
 	);
 	--ash-action-widget-filter-position: relative;
 	--ash-action-widget-filter-divider-content: "";
+	--ash-action-widget-icon-size: var(--ash-lxiconFontSize-large);
 	--ash-icon-font-family: "Ash UI Variable";
 	--ash-icon-font-weight: 550;
 }
@@ -66,7 +67,9 @@
 
 .ash-sessions-window .ash-button .ash-icon-label-icon > .ash-icon,
 .ash-sessions-window .ash-action-label-icon > .ash-icon,
-.ash-sessions-window .ash-menu-leading-check > .ash-icon {
+.ash-sessions-window
+	:is(.ash-menu-leading-check, .ash-menu-trailing-check)
+	> .ash-icon {
 	width: var(--ash-lxiconFontSize-large);
 	height: var(--ash-lxiconFontSize-large);
 	font-size: var(--ash-lxiconFontSize-large);
