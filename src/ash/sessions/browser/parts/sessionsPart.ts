@@ -24,6 +24,7 @@ import { Disposable, DisposableStore, type IDisposable, setDisposableOwner, toDi
 import type { IObservable } from '../../../base/common/observable.js';
 import { localize } from '../../../nls.js';
 import { WELCOME_COMPLETE_KEY } from '../../common/welcome.js';
+import { IsNewSessionContext } from '../../common/contextkeys.js';
 import type { SessionId } from '../../services/sessions/common/session.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
@@ -108,7 +109,10 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 					id,
 					item: {
 						command: infoCommand,
-						when: ContextKeyExpr.equals('sessions.toolsAvailable', true),
+						when: ContextKeyExpr.and(
+							ContextKeyExpr.equals('sessions.toolsAvailable', true),
+							id === Menus.TitleBarRightLayout ? ContextKeyExpr.not(IsNewSessionContext.key) : undefined,
+						),
 						group: 'navigation',
 						order: -1,
 					},

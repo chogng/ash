@@ -17,3 +17,9 @@ export const SessionsMenuActiveConversationContext = new RawContextKey<boolean>(
 
 /** The current entry is showing its new conversation draft. */
 export const NewSessionDraftVisibleContext = new RawContextKey<boolean>('sessions.activity.newSessionDraftVisible', false);
+
+/** The conversation area is showing a new session, including while its draft is being edited. */
+export const IsNewSessionContext = new RawContextKey<boolean>('sessions.isNewSession', false);
+
+/** The active draft has selected a workspace and the window has a folder it can use. */
+export const NewSessionHasUsableWorkspaceContext = new RawContextKey<boolean>('sessions.newSessionHasUsableWorkspace', false);

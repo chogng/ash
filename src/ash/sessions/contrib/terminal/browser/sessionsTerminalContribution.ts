@@ -12,6 +12,7 @@ import { TerminalEditorInput } from '../../../../workbench/contrib/terminal/brow
 import { Menus } from '../../../browser/menus.js';
 import type { DesktopEditorParts } from '../../../browser/parts/desktopEditorParts.js';
 import type { IAgentWorkbenchLayoutService } from '../../../browser/workbench.js';
+import { IsNewSessionContext, NewSessionHasUsableWorkspaceContext } from '../../../common/contextkeys.js';
 
 const terminalVisibleContext = new RawContextKey<boolean>('sessions.terminalVisible', false);
 const codeVisible = ContextKeyExpr.equals('sessions.desktopCode', true);
@@ -53,7 +54,10 @@ export function registerSessionsTerminalContribution(
 							id: Menus.TitleBarRightLayout,
 							group: 'navigation',
 							order: 3,
-							when: codeVisible,
+							when: ContextKeyExpr.and(codeVisible, ContextKeyExpr.or(
+								IsNewSessionContext.isEqualTo(false),
+								NewSessionHasUsableWorkspaceContext.isEqualTo(true),
+							)),
 						},
 						{
 							id: MenuId.MenubarViewMenu,
