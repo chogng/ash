@@ -1,5 +1,5 @@
 .ash-sessions-settings-dialog.ash-dialog {
-	width: min(1024px, calc(100vw - var(--ash-spacing-size320)));
+	width: min(960px, calc(100vw - var(--ash-spacing-size320)));
 	height: min(640px, calc(100dvh - min(90px, 20dvh)));
 	border-radius: var(--ash-cornerRadius-xLarge);
 	container-type: inline-size;
@@ -11,7 +11,7 @@
 }
 
 .ash-sessions-settings-dialog > .ash-dialog-header {
-	padding: var(--ash-spacing-size120) var(--ash-spacing-size200);
+	padding: var(--ash-spacing-size120);
 	border-bottom: var(--ash-strokeThickness) solid var(--ash-widget-border);
 }
 
@@ -19,7 +19,7 @@
 	display: grid;
 	min-width: 0;
 	min-height: 0;
-	grid-template-columns: clamp(184px, 21%, 232px) minmax(0, 1fr);
+	grid-template-columns: clamp(184px, 22.5%, 232px) minmax(0, 1fr);
 	grid-template-rows: minmax(0, 1fr);
 	padding: 0;
 }
@@ -159,7 +159,7 @@
 }
 
 .ash-sessions-settings-page .ash-settings-card > .ash-configuration-setting {
-	padding-inline: var(--ash-spacing-size80);
+	padding-inline: 0 var(--ash-spacing-size80);
 	border-radius: var(--ash-cornerRadius-large);
 }
 
@@ -179,7 +179,7 @@
 }
 
 .ash-sessions-settings-page .ash-settings-field-row {
-	padding-inline: var(--ash-spacing-size80);
+	padding-inline: 0 var(--ash-spacing-size80);
 }
 
 .ash-sessions-settings-page .ash-configuration-setting-copy {
@@ -203,6 +203,30 @@
 }
 
 .ash-sessions-settings-page
+	:is(
+		.ash-input-box-field,
+		input.ash-general-setting-control,
+		.ash-editor-setting-text
+	) {
+	border-radius: var(--ash-cornerRadius-medium);
+}
+
+.ash-sessions-settings-page
+	:is(
+		.ash-input-box-compact,
+		input.ash-general-setting-control,
+		.ash-editor-setting-text
+	) {
+	min-height: var(--ash-spacing-size280);
+}
+
+.ash-sessions-settings-page .ash-input-box-field.ash-input-box-compact > input {
+	min-height: calc(
+		var(--ash-spacing-size280) - 2 * var(--ash-strokeThickness)
+	);
+}
+
+.ash-sessions-settings-page
 	:is(.ash-configuration-setting, .ash-setting-font-controls)
 	> .ash-select-box-field
 	> .ash-select-box-button {
@@ -221,6 +245,36 @@
 	> .ash-select-box-field.ash-dropdown-open
 	> .ash-select-box-button {
 	--ash-select-style-select-background: var(--ash-toolbar-hoverBackground);
+}
+
+.ash-sessions-settings-dialog
+	.ash-context-view-default:has(> .ash-select-box-list) {
+	color: var(--ash-menu-foreground);
+	background: var(--ash-menu-background);
+	border-color: var(--ash-contrastBorder, var(--ash-border));
+	border-radius: var(--ash-cornerRadius-xxLarge);
+}
+
+:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-sessions-settings-dialog
+	.ash-context-view-default:has(> .ash-select-box-list) {
+	box-shadow: none;
+}
+
+.ash-sessions-settings-dialog .ash-select-box-list.ash-list {
+	--ash-list-rowHeight: var(--ash-spacing-size280);
+	--ash-list-hoverBackground: var(--ash-menu-hoverBackground);
+	padding: var(--ash-spacing-size60);
+	color: inherit;
+	background: inherit;
+}
+
+.ash-sessions-settings-dialog .ash-select-box-option {
+	padding-inline: var(
+		--ash-menu-item-padding-inline,
+		var(--ash-spacing-size120)
+	);
+	border-radius: var(--ash-cornerRadius-large);
 }
 
 .ash-sessions-settings-section-title {

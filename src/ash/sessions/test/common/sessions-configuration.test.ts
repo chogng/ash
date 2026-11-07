@@ -25,7 +25,7 @@ test('Sessions settings keep their values while their labels belong to the Sessi
 		assert.ok(activityBarSetting?.valueType === 'select');
 		assert.equal(activityBarSetting.description, '将活动栏放在侧边、顶部或底部。');
 		assert.deepEqual(activityBarSetting.options.map(option => option.value), ['default', 'top', 'bottom']);
-		assert.equal(chinese.bundles.ash?.['sessions.settings.title'], '会话设置');
+		assert.equal(chinese.bundles.ash?.['sessions.settings.title'], '设置');
 		assert.equal(registry.getConfiguration(SESSIONS_DIFF_VIEW_MODE)?.setting?.title, '差异视图');
 		for (const [key, label] of Object.entries({
 			'sessions.settings.section.basics': '基础',

@@ -15,7 +15,7 @@ test('Collab retains channel navigation while Agent settings are open', { tag: [
 	const collaboration = page.locator('[data-view-container-id="ash.collaboration"]');
 	await expect(collaboration.getByRole('button', { name: 'Connect Channels', exact: true })).toBeVisible();
 	await new QuickAccess(page).runCommand('workbench.action.openSettings');
-	const settings = page.getByRole('dialog', { name: 'Sessions Settings', exact: true });
+	const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 	await settings.getByRole('button', { name: 'Agents', exact: true }).click();
 	await settings.getByRole('tab', { name: 'Teams', exact: true }).click();
 	await expect(settings.getByRole('button', { name: 'New Team', exact: true })).toBeVisible();

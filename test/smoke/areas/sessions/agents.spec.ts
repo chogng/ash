@@ -17,7 +17,7 @@ test('Agent settings share role management and Teams and restore the selected vi
 	await page.keyboard.insertText(draft);
 	const openSettings = async () => {
 		await new QuickAccess(page).runCommand('workbench.action.openSettings');
-		const settings = page.getByRole('dialog', { name: 'Sessions Settings', exact: true });
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		await settings.getByRole('button', { name: 'Agents', exact: true }).click();
 		return settings.locator('.ash-sessions-agents');
 	};
@@ -96,7 +96,7 @@ test.describe('Agents Chinese interface', () => {
 	test('Agent settings localize both views in the Desktop window', { tag: ['@electron-app-server'] }, async ({ target, workbench }, testInfo) => {
 		const page = await workbench.openAgentsWindow(target.kind);
 		await new QuickAccess(page).runCommand('workbench.action.openSettings');
-		const settings = page.getByRole('dialog', { name: '会话设置', exact: true });
+		const settings = page.getByRole('dialog', { name: '设置', exact: true });
 		await settings.getByRole('button', { name: '智能体', exact: true }).click();
 		const panel = settings.locator('.ash-sessions-agents');
 		await expect(panel.getByRole('tab')).toHaveText(['角色', '团队']);

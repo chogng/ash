@@ -530,7 +530,7 @@ test('Desktop Voice imports after Settings closes and shares model deletion with
 	const sessionsPage = await sessionPagePromise;
 	await sessionsPage.locator('.ash-sessions-activity-bottom button').last().click();
 	await sessionsPage.getByRole('menuitem', { name: 'Settings' }).click();
-	const sessionsSettings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	const sessionsSettings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
 	await sessionsSettings.getByRole('navigation').getByRole('button', { name: 'General', exact: true }).click();
 	const installed = sessionsSettings.getByRole('row').filter({ hasText: 'paraformer-large-online-ec6a3c64' });
 	await expect(installed).toContainText('paraformer-large-online-ec6a3c64', { timeout: 30000 });
@@ -602,7 +602,7 @@ test('Workbench and Sessions Models share model visibility', { tag: ['@electron-
 	const accounts = sessionsPage.locator('.ash-sessions-activity-bottom button').last();
 	await accounts.click();
 	await sessionsPage.getByRole('menuitem', { name: 'Settings' }).click();
-	const sessionsSettings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	const sessionsSettings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
 	await sessionsSettings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Models' }).click();
 	const sessionSwitch = sessionsSettings.getByRole('switch', { name: modelLabel });
 	await expect(sessionSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
@@ -631,7 +631,7 @@ test('Browser Workbench and Sessions persist model visibility across page naviga
 	await expect(page.locator('[data-part="sessions"]')).toBeVisible();
 	await page.locator('.ash-sessions-activity-bottom button').last().click();
 	await page.getByRole('menuitem', { name: 'Settings' }).click();
-	const sessionsSettings = page.getByRole('dialog', { name: 'Sessions Settings' });
+	const sessionsSettings = page.getByRole('dialog', { name: 'Settings', exact: true });
 	await sessionsSettings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Models' }).click();
 	const sessionSwitch = sessionsSettings.getByRole('switch', { name: modelLabel });
 	await expect(sessionSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));

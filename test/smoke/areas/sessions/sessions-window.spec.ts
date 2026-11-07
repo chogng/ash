@@ -470,7 +470,7 @@ test('Sessions Design contribution keeps its viewport and applies canvas cursor 
 	await page.mouse.up();
 	await expect(viewport).toHaveCSS('cursor', /url\("data:image\/svg\+xml,/u);
 
-	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+	const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 	const openDesignSettings = async (): Promise<void> => {
 		await new Workbench(page).menus.select(
 			application,
@@ -1817,7 +1817,7 @@ test(
 		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
 		await page.locator('.ash-sessions-activity-bottom button').last().click();
 		await page.getByRole('menuitem', { name: 'Settings' }).click();
-		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
 		await navigation.getByRole('button', { name: 'Appearance' }).click();
 		const originalViewport = page.viewportSize();
@@ -1864,7 +1864,7 @@ test(
 		const accounts = page.locator('.ash-sessions-activity-bottom button').last();
 		await accounts.click();
 		await page.getByRole('menuitem', { name: 'Settings' }).click();
-		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		await settings
 			.getByRole('navigation', { name: 'Settings categories' })
 			.getByRole('button', { name: 'Models' })
@@ -2035,9 +2035,9 @@ test(
 		await accountButton.click();
 		await expect(accountButton).toHaveAttribute('aria-expanded', 'true');
 		await page.getByRole('menuitem', { name: 'Settings' }).click();
-		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		await expect(settings).toBeVisible();
-		await expect(settings.getByRole('heading', { name: 'Sessions Settings', exact: true })).toBeVisible();
+		await expect(settings.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
 		await expect(settings.getByRole('button', { name: 'Close Dialog', exact: true })).toBeVisible();
 		const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
 		await expect(navigation.locator('.ash-scrollbar-viewport')).toHaveCSS('scrollbar-width', 'none');

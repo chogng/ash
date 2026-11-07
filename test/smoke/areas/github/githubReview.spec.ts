@@ -69,7 +69,7 @@ test('GitHub settings share the Preferences renderer in Workbench and Sessions a
 	await expect(workbench.settingsEditor.element).toBeHidden();
 	const sessionsPage = await workbench.openAgentsWindow(target.kind);
 	await new QuickAccess(sessionsPage).runCommand('workbench.action.openSettings');
-	const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings', exact: true });
+	const settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
 	await settings.getByRole('button', { name: 'Git & PRs', exact: true }).click();
 	const sessionsSection = settings.locator('.ash-settings-section');
 	await expect(sessionsSection.getByRole('button', { name: 'Manage automatic reviews', exact: true })).toBeVisible();

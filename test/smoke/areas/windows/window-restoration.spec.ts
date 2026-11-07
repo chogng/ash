@@ -513,7 +513,7 @@ test('Desktop startup window setting is shared across IDE and Agent settings wit
 
 		const agents = await workbench.openAgentsWindow('electron');
 		await new Workbench(agents).quickaccess.runCommand('workbench.action.openSettings');
-		const agentSettings = agents.getByRole('dialog', { name: '会话设置' });
+		const agentSettings = agents.getByRole('dialog', { name: '设置', exact: true });
 		await agentSettings.getByRole('navigation').getByRole('button', { name: '通用', exact: true }).click();
 		const agentSelect = agentSettings.locator('[data-settings-item-id="window.startupWindow"]').getByRole('combobox');
 		await expect(agentSelect).toContainText('Agent 窗口');

@@ -295,7 +295,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		this.domNode.className = `ash-configuration-setting ash-${this.presentation}-setting`;
 		this.domNode.setAttribute('role', 'group');
 		if (kind === 'select' && this.presentation === 'editor') this.domNode.classList.add('ash-editor-setting-select-row');
-		if (kind === 'toggle') this.domNode.classList.add(`ash-${this.presentation}-toggle-setting`);
+		if (kind === 'toggle') this.domNode.classList.add('ash-configuration-toggle-setting');
 		this._register(toDisposable(() => this.domNode.remove()));
 
 		this.copyDomNode = h(document, 'span');
@@ -472,13 +472,11 @@ class BooleanSettingWidget extends AbstractSettingWidget<IBooleanSetting, boolea
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService, 'toggle');
+		this.domNode.append(this.copyDomNode);
 		this.toggle = this._register(new Switch(this.domNode, {
 			...defaultToggleStyles,
 			ariaLabel: descriptor.title,
-			content: this.copyDomNode,
-			contentPlacement: 'before-control',
 		}));
-		this.toggle.element.classList.add(`ash-${this.presentation}-toggle-control`);
 		this.toggle.input.dataset.configurationKey = descriptor.configuration.key;
 		this.bindState(state => {
 			this.toggle.checked = state.value;

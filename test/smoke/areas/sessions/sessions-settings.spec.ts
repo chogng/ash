@@ -10,7 +10,7 @@ test('Sessions General settings switch the interface language after restart', { 
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.getByRole('button', { name: 'Accounts', exact: true }).click();
 	await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
-	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+	const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 	await settings.getByRole('button', { name: 'General', exact: true }).click();
 	const language = settings.getByRole('combobox', { name: 'Interface language', exact: true });
 	await expect(language).toHaveText('English');
@@ -52,7 +52,7 @@ test('Sessions Settings command queries reuse search and restore saved values af
 		await launcher.focus();
 		await expect(launcher).toBeFocused();
 		await sessionsPage.keyboard.press('Control+Alt+Y');
-		const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+		const settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
 		await expect(settings.getByRole('searchbox')).toHaveValue('chat.disableAIFeatures');
 		await expect(settings.getByRole('searchbox')).toBeFocused();
 		await settings.getByRole('searchbox').evaluate(element => element.setAttribute('data-settings-query-reuse', 'retained'));
@@ -60,10 +60,10 @@ test('Sessions Settings command queries reuse search and restore saved values af
 		await expect(settings.getByRole('searchbox')).toHaveAttribute('data-settings-query-reuse', 'retained');
 		await expect(settings.getByRole('searchbox')).toHaveValue('@id:chat.disableAIFeatures');
 		await expect(settings.getByRole('searchbox')).toBeFocused();
-		await expect(sessionsPage.getByRole('dialog', { name: 'Sessions Settings' })).toHaveCount(1);
+		await expect(sessionsPage.getByRole('dialog', { name: 'Settings', exact: true })).toHaveCount(1);
 	};
 	await openQuery();
-	let settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	let settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
 	const disabledAI = settings.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch');
 	await expect(disabledAI).not.toBeChecked();
 	await disabledAI.press('Space');
@@ -85,16 +85,16 @@ test('Sessions Settings command queries reuse search and restore saved values af
 	await expect(settings).toHaveCount(0);
 	await openQuery();
 	await expect(sessionsPage.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch')).toBeChecked();
-	await sessionsPage.getByRole('dialog', { name: 'Sessions Settings' }).evaluate(element => (element as HTMLDialogElement).requestClose());
+	await sessionsPage.getByRole('dialog', { name: 'Settings', exact: true }).evaluate(element => (element as HTMLDialogElement).requestClose());
 	sessionsPage = await workbench.reopenAgentsWindow(application, sessionsPage);
 	await openQuery();
-	settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
 	await expect(settings.locator('[data-settings-item-id="chat.disableAIFeatures"]').getByRole('switch')).toBeChecked();
 	await expect.poll(readSaved).toBe(true);
 	await settings.evaluate(element => (element as HTMLDialogElement).requestClose());
 	await openQuery();
-	await sessionsPage.getByRole('dialog', { name: 'Sessions Settings' }).getByRole('searchbox').fill('@lang:plaintext @id:editor.fontSize');
-	await expect(sessionsPage.getByRole('dialog', { name: 'Sessions Settings' })).toHaveCount(0);
+	await sessionsPage.getByRole('dialog', { name: 'Settings', exact: true }).getByRole('searchbox').fill('@lang:plaintext @id:editor.fontSize');
+	await expect(sessionsPage.getByRole('dialog', { name: 'Settings', exact: true })).toHaveCount(0);
 	const sharedSettings = sessionsPage.getByRole('dialog').filter({ has: sessionsPage.locator('.ash-settings-editor') });
 	await expect(sharedSettings.getByRole('searchbox')).toHaveValue('@lang:plaintext @id:editor.fontSize');
 	const languageSize = sharedSettings.locator('[data-settings-item-id="editor.fontSize"]').getByRole('spinbutton');
@@ -109,7 +109,7 @@ test('Sessions Settings command queries reuse search and restore saved values af
 	await expect(groupedSettings).toBeVisible();
 	await expect(groupedSettings.getByRole('searchbox')).toHaveValue('@id:editor.fontSize');
 	await expect(groupedSettings.getByRole('searchbox')).toBeFocused();
-	await expect(sessionsPage.getByRole('dialog', { name: 'Sessions Settings' })).toHaveCount(0);
+	await expect(sessionsPage.getByRole('dialog', { name: 'Settings', exact: true })).toHaveCount(0);
 
 	await testInfo.attach('sessions-settings-query-diagnostics', { body: JSON.stringify(runningApplication.diagnostics), contentType: 'application/json' });
 	expect(runningApplication.diagnostics.errors).toEqual([]);
@@ -133,7 +133,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 		await sessionsPage.getByRole('menuitem', { name: 'Settings', exact: true }).click();
 	};
 	await openSettings();
-	let settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	let settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
 	await settings.getByRole('searchbox').fill('AI @id:chat.disableAIFeatures');
 	const filter = settings.getByRole('button', { name: 'Filter Settings', exact: true });
 	const inputBounds = await settings.getByRole('searchbox').boundingBox();
@@ -205,7 +205,7 @@ test('Sessions Modified Settings refreshes after external writes, reset and wind
 	}
 	sessionsPage = await workbench.reopenAgentsWindow(application, sessionsPage);
 	await openSettings();
-	settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
 	await settings.getByRole('searchbox').fill('@modified @id:chat.disableAIFeatures');
 	await expect(settings.locator('[data-settings-item-id="chat.disableAIFeatures"]')).toHaveCount(0);
 	await settings.getByRole('button', { name: 'Filter Settings', exact: true }).press('Enter');
@@ -250,7 +250,7 @@ test('Sessions setting menus copy their current registered value as JSON', async
 		});
 	}
 	try {
-		const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+		const settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
 		const openSettings = async (): Promise<void> => {
 			const accounts = sessionsPage.locator('.ash-sessions-activity-bottom button').last();
 			// The saved custom menu style also applies to the Sessions account menu.
@@ -365,7 +365,7 @@ test('Workbench and Sessions keep one settings document across edits and window 
 		await accounts.click();
 		await sessionsPage.getByRole('menuitem', { name: 'Settings', exact: true }).click();
 	}
-	const settings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+	const settings = sessionsPage.getByRole('dialog', { name: 'Settings', exact: true });
 	await settings.getByRole('button', { name: 'Appearance', exact: true }).click();
 	await settings.locator('[data-configuration-key="sessions.layoutStyle"]').getByRole('combobox').click();
 	await sessionsPage.getByRole('option', { name: 'Modern', exact: true }).click();
@@ -409,11 +409,11 @@ test('Sessions preferences opens shared shortcuts and retains the profile after 
 			await accounts.click();
 			await page.getByRole('menuitem', { name: 'Settings', exact: true }).click();
 		}
-		await expect(page.getByRole('dialog', { name: 'Sessions Settings' })).toBeVisible();
+		await expect(page.getByRole('dialog', { name: 'Settings', exact: true })).toBeVisible();
 	};
 	const openShortcuts = async (): Promise<void> => {
 		await openPreferences();
-		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 		await settings.locator('[data-settings-category-id="keyboard-shortcuts"]').click();
 		await settings.locator('.ash-sessions-settings-page').getByRole('button', { name: 'Keyboard Shortcuts', exact: true }).click();
 		await expect(settings).toHaveCount(0);
@@ -442,7 +442,7 @@ test('Sessions preferences opens shared shortcuts and retains the profile after 
 	await expect(shortcuts.locator('.ash-keybindings-recorder')).toBeHidden();
 	await expect(userRows()).toHaveCount(1);
 	await openPreferences();
-	const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
+	const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
 	await settings.getByRole('searchbox').fill('compact');
 	await settings.getByRole('searchbox').press('Escape');
 	await expect(settings).toBeVisible();
