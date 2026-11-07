@@ -211,6 +211,9 @@ test('Chat copies an unsaved editor snapshot through paste, undo and redo withou
 	const chat = page.locator('.ash-chat-view-pane .ash-chat:visible');
 	await expect(chat).toBeVisible();
 	await chat.getByRole('button', { name: 'Add context', exact: true }).press('Enter');
+	await page.keyboard.press('ArrowDown');
+	await expect(page.getByRole('menuitem', { name: 'Search attachments', exact: true })).toBeFocused();
+	await page.keyboard.press('Enter');
 	const picker = page.getByRole('dialog', { name: 'Search attachments', exact: true });
 	await picker.getByRole('combobox').fill('Open editors');
 	await picker.getByRole('option', { name: 'Open editors', exact: true }).click();

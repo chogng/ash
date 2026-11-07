@@ -12,7 +12,7 @@ import { Dialog } from '../../../base/browser/ui/dialog/dialog.js';
 import type { AnchorPosition, ContextView } from '../../../base/browser/ui/contextview/contextview.js';
 import { KeybindingLabel } from '../../../base/browser/ui/keybindinglabel/keybindinglabel.js';
 import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
-import { Menu } from '../../../base/browser/ui/menu/menu.js';
+import { Menu, type IMenuOptions } from '../../../base/browser/ui/menu/menu.js';
 import { Separator, SubmenuAction, type IAction } from '../../../base/common/actions.js';
 import type { Icon } from '../../../base/common/icon.js';
 import type { ResolvedKeybinding } from '../../../base/common/keybindings.js';
@@ -68,8 +68,7 @@ export interface IActionListOptions {
 	readonly anchorPosition?: AnchorPosition;
 	readonly className?: string;
 	readonly presentation?: 'menu' | 'details';
-	/** Show selection after the label while preserving the leading action icon. */
-	readonly checkPlacement?: 'trailing';
+	readonly menuIconPlacement?: IMenuOptions['iconPlacement'];
 	/** Enable row tooltips in menus, or disable the default tooltips in detail rows. */
 	readonly showRowTooltips?: boolean;
 	readonly showFilter?: boolean;
@@ -135,7 +134,7 @@ class ActionListAction extends ActionViewItem {
 		const listbox = this.options.ariaMultiselectable && this.options.filterAsCombobox;
 		const toggle = this.entry.standaloneToggle;
 		const checked = toggle?.checked ?? this.entry.checked;
-		const trailingCheck = this.options.checkPlacement === 'trailing' && !toggle;
+		const trailingCheck = this.options.menuIconPlacement === 'leading-with-trailing-check' && !toggle;
 		const icon = checked && !toggle && !trailingCheck ? undefined : this.action.icon;
 		const ownerDocument = container.ownerDocument;
 		const control = this.button = this.createButton(container, {
@@ -463,6 +462,7 @@ export class ActionList<T> extends Disposable {
 			submenuClassName: 'ash-action-widget-menu ash-action-widget-submenu',
 			submenuContextView: this.sidePanel,
 			tabLeavesSubmenu: !!this.sidePanel,
+			iconPlacement: this.options.menuIconPlacement,
 			getCheckedActionsRepresentation: () => 'radio',
 			getKeyBinding: action => entries.get(action.id)?.keybinding,
 			getAriaDescription: action => [entries.get(action.id)?.detail, entries.get(action.id)?.badge].filter(Boolean).join(' · '),
@@ -470,7 +470,7 @@ export class ActionList<T> extends Disposable {
 				const entry = entries.get(action.id);
 				if (!entry || action instanceof SubmenuAction) { return undefined; }
 				if (entry.kind === ActionListItemKind.Header) { return new ActionListHeader(action); }
-				const customRow = this.options.checkPlacement === 'trailing' || entry.standaloneToggle || this.options.presentation === 'details' || this.options.ariaMultiselectable
+				const customRow = entry.standaloneToggle || this.options.presentation === 'details' || this.options.ariaMultiselectable
 					|| (this.options.showRowTooltips && (entry.tooltip || entry.description));
 				if (!customRow) return undefined;
 				const row = new ActionListAction(action, entry, this.options);

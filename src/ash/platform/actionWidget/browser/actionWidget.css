@@ -209,6 +209,8 @@
 
 .ash-action-widget-check-trailing > .ash-action-widget-selection {
 	order: 1;
+	justify-content: center;
+	inline-size: var(--ash-menu-trailing-icon-size, var(--ash-lxiconFontSize));
 }
 
 .ash-action-widget-accent-checks {
@@ -232,7 +234,6 @@
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
-	font-weight: var(--ash-action-widget-label-font-weight, inherit);
 }
 
 .ash-action-widget-summary {
@@ -241,7 +242,10 @@
 	white-space: nowrap;
 	text-overflow: ellipsis;
 	color: var(--ash-description-foreground);
-	font-size: var(--ash-fontSize-label2);
+	font-size: var(
+		--ash-action-widget-summary-font-size,
+		var(--ash-fontSize-label2)
+	);
 }
 
 .ash-action-widget-menu.ash-menu .ash-action-widget-detail-row {

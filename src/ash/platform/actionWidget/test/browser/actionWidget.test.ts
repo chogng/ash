@@ -704,6 +704,25 @@ suite('actionWidget browser component', () => {
 				expect((await selected.locator('.ash-action-widget-summary').boundingBox())!.x).toBe(labelBox.x);
 			}
 		});
+
+		test(`action widget ${presentation} rows keep their action icon when the trailing check is shown`, async function () {
+			const { page } = browserTests;
+			await page.goto('/actionWidget.html');
+			await page.evaluate(presentation => window.ashActionWidgetIntegration.show(
+				['First', 'Second'], { presentation, menuIconPlacement: 'leading-with-trailing-check' }, 'Description',
+			), presentation);
+			const row = page.getByRole('menuitemradio', { name: 'First', checked: true });
+			const icon = row.locator('[data-ash-icon-id="unlimited"]');
+			const check = row.locator('[data-ash-icon-id="check"]');
+			await expect(icon).toBeVisible();
+			await expect(check).toBeVisible();
+			const label = row.locator(presentation === 'details' ? '.ash-action-widget-label' : '.ash-button-label');
+			const [iconBounds, labelBounds, checkBounds] = await Promise.all([icon.boundingBox(), label.boundingBox(), check.boundingBox()]);
+			expect(iconBounds!.x + iconBounds!.width).toBeLessThanOrEqual(labelBounds!.x);
+			expect(labelBounds!.x + labelBounds!.width).toBeLessThanOrEqual(checkBounds!.x);
+			await row.press('ArrowDown');
+			await expect(page.getByRole('menuitemradio', { name: 'Second', checked: false })).toBeFocused();
+		});
 	}
 
 	test('action menu grows with content, respects width limits and truncates long labels', async function () {

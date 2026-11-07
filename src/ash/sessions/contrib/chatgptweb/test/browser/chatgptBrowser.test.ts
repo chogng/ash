@@ -98,14 +98,14 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect(picker).toHaveAccessibleName('项目或文件夹：Research · fixture-folder');
 		await picker.press('Enter');
 		const selectedProject = page.getByRole('menuitemradio', { name: 'Research', checked: true });
-		const projectIcon = selectedProject.locator('.ash-action-widget-command-icon.ash-icon-projects');
-		const check = selectedProject.locator('.ash-action-widget-selection .ash-icon-check');
+		const projectIcon = selectedProject.locator('.ash-menu-leading-slot .ash-icon-projects');
+		const check = selectedProject.locator('.ash-menu-trailing-slot .ash-icon-check');
 		await expect(projectIcon).toBeVisible();
 		await expect(check).toBeVisible();
 		await expect(check.locator('..')).toHaveAttribute('aria-hidden', 'true');
 		const [iconBounds, labelBounds, checkBounds] = await Promise.all([
 			projectIcon.boundingBox(),
-			selectedProject.locator('.ash-action-widget-label').boundingBox(),
+			selectedProject.locator('.ash-button-label').boundingBox(),
 			check.boundingBox(),
 		]);
 		expect(iconBounds!.x + iconBounds!.width).toBeLessThanOrEqual(labelBounds!.x);
@@ -355,7 +355,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);
 		await page.goto('/chatgptNavigation.html?locale=en&screenReader');
-		const announcement = page.locator('.ash-aria-live');
+		const announcement = page.locator('.ash-aria-live:has(> .ash-aria-status)');
 		await expect(announcement).toContainText('What are we building?\nTo disable this announcement, set accessibility.verbosity.newSessionWelcome to false.');
 		await fillMessage(page, 'Draft');
 		await page.evaluate(() => window.ashChatGPTIntegration.setConfiguration('sessions.chat.experimental.welcomeName', 'Ash'));
@@ -727,13 +727,19 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			const picker = page.locator('.ash-chat-input-model-action');
 			await expect(picker).toBeEnabled();
 			await picker.click();
+			await expect(page.locator('.ash-chat-model-slider-dialog')).toBeFocused();
+			await page.keyboard.press('Escape');
+			await expect(picker).toBeFocused();
+			await picker.press('Enter');
 			await expect(page.getByRole('slider')).toHaveCount(0);
 			await expect(page.getByRole('menuitemradio', { name: 'Fixture model' })).toHaveAttribute('aria-checked', 'true');
 			expect(await page.locator('body').getAttribute('data-native-model-providers-read')).toBeNull();
 			await expect(page.getByRole('menuitem', { name: /Add Models|More Models|添加模型|更多模型/ })).toHaveCount(0);
 			await expect(page.getByRole('combobox')).toHaveCount(0);
 			await expect(page.getByRole('menuitemradio', { name: 'Fixture model' })).toBeFocused();
-			await page.getByRole('menuitemradio', { name: 'Second model' }).click();
+			await page.keyboard.press('ArrowDown');
+			await expect(page.getByRole('menuitemradio', { name: 'Second model' })).toBeFocused();
+			await page.keyboard.press('Enter');
 			await expect(picker).toHaveText('Second model');
 			await expect(picker).toBeFocused();
 			await picker.click();
@@ -898,7 +904,6 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		}));
 		await page.goto('/chatgptNavigation.html');
 		const sidebar = page.locator('.ash-chat-navigation');
-		const list = sidebar.getByRole('navigation', { name: '会话', exact: true });
 		const viewport = sidebar.locator('.ash-chat-navigation-scrollable > .ash-scrollbar-viewport');
 		const conversation = sidebar.getByRole('button', { name: 'Synthetic conversation', exact: true });
 		await expect(conversation).toBeEnabled();
@@ -906,6 +911,9 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect(sidebar.getByRole('button', { name: '加载更多', exact: true })).toHaveCount(0);
 		await conversation.focus();
 		await conversation.press('Home');
+		const recents = sidebar.getByRole('button', { name: '最近使用', exact: true });
+		await expect(recents).toBeFocused();
+		await recents.press('ArrowDown');
 		await expect(conversation).toBeFocused();
 		await conversation.press('Enter');
 		await expect(page.locator('.ash-chat-transcript')).toContainText('Synthetic answer');

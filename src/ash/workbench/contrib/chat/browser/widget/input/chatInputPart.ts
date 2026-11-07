@@ -1297,6 +1297,16 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.attachMenu.value = this.instantiationService.createInstance(ChatInputAttachMenu, {
 			anchor: targetAnchor,
 			onUploadFiles: () => this.triggerUploadOrAddFiles(),
+			onSearchAttachments: this.delegate.draft ? undefined : () => {
+				const action = this.attachContext.value ??= this.instantiationService.createInstance(AttachContextAction, {
+					target: this,
+					container: this.inputContainer,
+					focusInput: () => this.focus(),
+					supportsImages: () => this.supportsImages(),
+					attachGitHubReference: this.options.attachGitHubReference,
+				});
+				void action.run(targetAnchor);
+			},
 			onAttachSkill: (skill: SkillReference) => this.attachSkill(skill),
 			getSkills: () => this.state.skillSelectors,
 			focusInput: () => this.focus(),

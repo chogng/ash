@@ -25,6 +25,7 @@ const STORAGE_KEY_MEMORY = 'ash.chat.attachMenu.memory.enabled';
 export interface ChatInputAttachMenuOptions {
 	readonly anchor: HTMLElement;
 	readonly onUploadFiles: () => void;
+	readonly onSearchAttachments?: () => void;
 	readonly onAttachSkill?: (skill: SkillReference) => void;
 	readonly getSkills?: () => readonly SkillSelectorDefinition[];
 	readonly onSelectProject?: (projectId: string) => void;
@@ -305,6 +306,12 @@ export class ChatInputAttachMenu extends Disposable {
 				shortcut: shortcutU,
 				run: () => this.options.onUploadFiles(),
 			},
+			...(this.options.onSearchAttachments ? [{
+				id: 'searchAttachments',
+				label: localize('chat.context.searchAttachments', 'Search attachments'),
+				icon: Lxicon.search,
+				run: this.options.onSearchAttachments,
+			}] : []),
 			// 2. Add to project
 			{
 				id: 'project',

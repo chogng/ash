@@ -60,7 +60,7 @@ export class ChatGPTProjectFolderPicker extends ChatInputPickerActionViewItem {
 			tabLeavesPopup: true,
 			listOptions: {
 				ariaLabel: label,
-				checkPlacement: 'trailing',
+				menuIconPlacement: 'leading-with-trailing-check',
 				showFilter: true,
 				focusFilterOnOpen: true,
 				filterPlaceholder: localize('sessions.chatgpt.searchProjectOrFolder', 'Search'),

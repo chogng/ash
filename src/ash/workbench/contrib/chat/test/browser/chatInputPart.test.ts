@@ -3068,7 +3068,12 @@ suite('chatInput browser component', () => {
 				await input.press('Home');
 				for (let index = 0; index < 8; index++) await input.press('ArrowRight');
 				await page.getByRole('button', { name: locale === 'en' ? 'Add context' : '添加上下文', exact: true }).press('Enter');
+				const search = page.getByRole('menuitem', { name: locale === 'en' ? 'Search attachments' : '搜索附件', exact: true });
+				await page.keyboard.press('ArrowDown');
+				await expect(search).toBeFocused();
+				await page.keyboard.press('Enter');
 				const picker = page.getByRole('dialog');
+				await expect(picker.getByRole('combobox')).toBeFocused();
 				await picker.getByRole('combobox').fill('edited');
 				await picker.getByRole('option', { name: /edited.ts/ }).click();
 				const wholeFile = page.locator('.ash-chat-code-reference').filter({ hasText: /^edited.ts$/ });
@@ -3271,6 +3276,7 @@ suite('chatInput browser component', () => {
 				await input.press('Enter');
 				await expect(page.getByLabel('Submission', { exact: true })).toHaveText('[]');
 				await page.getByRole('button', { name: locale === 'en' ? 'Add context' : '添加上下文', exact: true }).press('Enter');
+				await page.getByRole('menuitem', { name: locale === 'en' ? 'Search attachments' : '搜索附件', exact: true }).click();
 				const picker = page.getByRole('dialog');
 				await picker.getByRole('combobox').fill('edited');
 				await picker.getByRole('option', { name: /edited.ts/ }).click();
@@ -3443,11 +3449,11 @@ suite('chatInput browser component', () => {
 				const picker = page.locator('.ash-action-widget');
 				await expect(picker).toBeVisible();
 				await expect(picker.getByRole('menuitemradio')).toHaveCount(3);
-				await expect(picker.locator('.ash-keybinding-label-keycap')).toHaveText(['1', '2', '3']);
+				await expect(picker.locator('.ash-keybinding-label-keycap')).toHaveCount(0);
 				const labels = picker.locator('.ash-action-widget-label');
 				await expect(labels).toHaveCount(3);
 				for (const label of await labels.all()) {
-					await expect(label).toHaveCSS('font-weight', '600');
+					await expect(label).toHaveCSS('font-weight', '400');
 				}
 				await expect(picker.locator('.ash-action-widget-summary')).toHaveCount(3);
 				await page.keyboard.press('End');
@@ -3474,6 +3480,9 @@ suite('chatInput browser component', () => {
 				await expect(permissions).toHaveAttribute('aria-expanded', 'false');
 				await permissions.click();
 				await page.keyboard.press('1');
+				await expect(permissions).toHaveAttribute('aria-expanded', 'true');
+				await page.keyboard.press('Home');
+				await page.keyboard.press('Enter');
 				await expect(footer.getByRole('button', { name: locale === 'en' ? 'Permissions: Auto' : '权限：自动' })).toBeVisible();
 				await expect(footer.getByRole('button', { name: locale === 'en' ? 'Permissions: Auto' : '权限：自动' })).toHaveText(locale === 'en' ? 'Auto' : '自动');
 				await expect(picker).toBeHidden();
@@ -4841,7 +4850,7 @@ suite('chatInput browser component', () => {
 			const agent = widget.getByRole('menuitemradio', { name: 'Agent', exact: true });
 			await expect(agent).toBeFocused();
 			await expect(agent).toHaveAttribute('aria-checked', 'true');
-			await expect(agent.locator('.ash-icon-label-icon [data-ash-icon-id="unlimited"]')).toBeVisible();
+			await expect(agent.locator('.ash-menu-leading-slot [data-ash-icon-id="unlimited"]')).toBeVisible();
 			const check = agent.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]');
 			await expect(check).toBeVisible();
 			const labelBounds = (await agent.locator('.ash-button-label').boundingBox())!;

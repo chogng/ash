@@ -33,7 +33,7 @@ const overlay = Object.assign(new EventTarget(), {
 let overlayRect = new DOMRect();
 Object.defineProperty(navigator, 'windowControlsOverlay', { configurable: true, value: overlay });
 
-function mount(kind: 'basic' | 'nested' | 'long' | 'shadow' | 'left' | 'event' | 'menubar' | 'compact' | 'trailing'): void {
+function mount(kind: 'basic' | 'nested' | 'long' | 'shadow' | 'left' | 'event' | 'menubar' | 'compact' | 'trailing' | 'leading-with-trailing-check'): void {
 	scene.clear();
 	host.replaceChildren();
 	host.style.transform = '';
@@ -62,7 +62,8 @@ function mount(kind: 'basic' | 'nested' | 'long' | 'shadow' | 'left' | 'event' |
 	Object.defineProperty(primary, 'alt', { value: alternate });
 	const checked = action('choice', '&Choice');
 	checked.checked = false;
-	if (kind === 'trailing') {
+	const iconPlacement = kind === 'trailing' || kind === 'leading-with-trailing-check' ? kind : undefined;
+	if (iconPlacement) {
 		primary.icon = Lxicon.search;
 		checked.checked = true;
 	}
@@ -84,12 +85,12 @@ function mount(kind: 'basic' | 'nested' | 'long' | 'shadow' | 'left' | 'event' |
 		: [primary, action('after', '&After'), first, second];
 	menu = lifetime.add(new Menu(container, actions, {
 		enableMnemonics: true,
-		iconPlacement: kind === 'trailing' ? 'trailing' : undefined,
+		iconPlacement,
 		expandDirection: kind === 'left' ? { horizontal: HorizontalDirection.Left, vertical: VerticalDirection.Above } : undefined,
 		context: { version: 1 },
 		useEventAsContext: kind === 'event',
 		actionRunner: lifetime.add(new ActionRunner()),
-		getKeyBinding: item => item.id === 'primary' || item.id === 'alternate' || (kind === 'trailing' && item.id === 'first')
+		getKeyBinding: item => item.id === 'primary' || item.id === 'alternate' || (iconPlacement && item.id === 'first')
 			? resolveKeybinding(Keybinding.single(logicalKey(item.id === 'primary' ? 'p' : 'a', { ctrlKey: true })), OperatingSystem.Windows) : undefined,
 		getAriaDescription: item => `Details for ${item.id}`,
 		getCheckedActionsRepresentation: () => 'radio',

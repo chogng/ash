@@ -170,7 +170,9 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 			await select(`session:${identity.sessionId}`);
 			await expect(active()).toHaveAttribute('data-thread-id', identity.threadId);
 			const root = identity === a ? rootA : rootB;
-			await expect(active().locator('.ash-session-workspace-status')).toHaveText(root);
+			const status = active().locator('.ash-session-workspace-status');
+			await expect(status).toHaveText(basename(cwd));
+			await expect(status).toHaveAttribute('title', root);
 			expect(await verify(identity)).toBe(root);
 		}
 

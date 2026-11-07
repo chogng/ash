@@ -134,6 +134,32 @@ suite('Menu browser behavior', () => {
 		await expect(submenu).toBeFocused();
 	});
 
+	test('trailing checks preserve leading icons and align with submenu arrows', async () => {
+		await open('leading-with-trailing-check');
+		await browser.page.evaluate(() => window.ashMenuTest.update());
+		const selected = browser.page.getByRole('menuitemradio', { name: 'Updated', checked: true });
+		const icon = selected.locator('.ash-menu-leading-slot [data-ash-icon-id="search"]');
+		const check = selected.locator('.ash-menu-trailing-slot [data-ash-icon-id="check"]');
+		const submenu = browser.page.getByRole('menuitem', { name: 'First' });
+		const arrow = submenu.locator('.ash-menu-trailing-slot');
+		await expect(icon).toBeVisible();
+		await expect(check).toBeVisible();
+		await expect(check.locator('..')).toHaveAttribute('aria-hidden', 'true');
+		const label = await selected.locator('.ash-button-label').boundingBox();
+		const leading = await icon.boundingBox();
+		const trailing = await check.locator('..').boundingBox();
+		assert.ok(leading!.x + leading!.width <= label!.x);
+		assert.ok(label!.x + label!.width <= trailing!.x);
+		assert.equal(trailing!.x, (await arrow.boundingBox())!.x);
+		await submenu.press('ArrowRight');
+		const choice = browser.page.getByRole('menuitemradio', { name: 'Choice', checked: true });
+		await expect(choice).toBeFocused();
+		await expect(choice.locator('.ash-menu-leading-slot')).toBeHidden();
+		await expect(choice.locator('.ash-menu-trailing-slot [data-ash-icon-id="check"]')).toBeVisible();
+		await choice.press('Escape');
+		await expect(submenu).toBeFocused();
+	});
+
 	test('propagates providers, radio descriptions, context changes and keyboard event context through nested menus', async () => {
 		await open('nested');
 		await browser.page.locator('[data-action-id="first"] > button').click();

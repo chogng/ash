@@ -1087,7 +1087,7 @@ test('Chat title and history switching retain conversations and drafts', async (
 		['Agent', 'Plan', 'Debug', 'Multitask', 'Ask'],
 	);
 	assert.deepEqual(
-		[...modeMenu?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].map(item => item.querySelector('.ash-menu-leading-slot .ash-icon-label-icon .ash-icon')?.getAttribute('data-ash-icon-id') ?? null),
+		[...modeMenu?.querySelectorAll<HTMLElement>('[data-action-id]') ?? []].map(item => item.querySelector('.ash-menu-leading-slot [data-ash-icon-id]')?.getAttribute('data-ash-icon-id') ?? null),
 		['unlimited', 'plan', 'debug', 'multitask', 'ask'],
 	);
 	assert.deepEqual(
