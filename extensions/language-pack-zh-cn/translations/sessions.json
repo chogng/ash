@@ -356,7 +356,7 @@
     "sessions.chatgpt.projectOrFolder": "项目或文件夹",
     "sessions.chatgpt.projectAndFolder": "{0} · {1}",
     "sessions.chatgpt.projectOrFolderSelected": "项目或文件夹：{0}",
-    "sessions.chatgpt.searchProjectOrFolder": "搜索项目或文件夹操作",
+    "sessions.chatgpt.searchProjectOrFolder": "搜索",
     "sessions.chatgpt.clearProject": "清除项目",
     "sessions.chatgpt.chooseFolder": "选择文件夹…",
     "sessions.chatgpt.attachFromFolder": "从文件夹添加附件…",

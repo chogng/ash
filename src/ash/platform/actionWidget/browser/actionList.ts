@@ -10,6 +10,7 @@ import '../../../base/browser/ui/menu/menu.css';
 import '../../../base/browser/ui/toggle/toggle.css';
 import { Dialog } from '../../../base/browser/ui/dialog/dialog.js';
 import type { AnchorPosition, ContextView } from '../../../base/browser/ui/contextview/contextview.js';
+import { KeybindingLabel } from '../../../base/browser/ui/keybindinglabel/keybindinglabel.js';
 import { appendIcon } from '../../../base/browser/ui/lxicons/lxicon.js';
 import { Menu } from '../../../base/browser/ui/menu/menu.js';
 import { Separator, SubmenuAction, type IAction } from '../../../base/common/actions.js';
@@ -67,6 +68,8 @@ export interface IActionListOptions {
 	readonly anchorPosition?: AnchorPosition;
 	readonly className?: string;
 	readonly presentation?: 'menu' | 'details';
+	/** Show selection after the label while preserving the leading action icon. */
+	readonly checkPlacement?: 'trailing';
 	/** Enable row tooltips in menus, or disable the default tooltips in detail rows. */
 	readonly showRowTooltips?: boolean;
 	readonly showFilter?: boolean;
@@ -132,7 +135,8 @@ class ActionListAction extends ActionViewItem {
 		const listbox = this.options.ariaMultiselectable && this.options.filterAsCombobox;
 		const toggle = this.entry.standaloneToggle;
 		const checked = toggle?.checked ?? this.entry.checked;
-		const icon = checked && !toggle ? undefined : this.action.icon;
+		const trailingCheck = this.options.checkPlacement === 'trailing' && !toggle;
+		const icon = checked && !toggle && !trailingCheck ? undefined : this.action.icon;
 		const ownerDocument = container.ownerDocument;
 		const control = this.button = this.createButton(container, {
 			label: '',
@@ -143,6 +147,7 @@ class ActionListAction extends ActionViewItem {
 		});
 		const button = control.domNode;
 		button.classList.add('ash-action-widget-primary');
+		button.classList.toggle('ash-action-widget-check-trailing', trailingCheck);
 		let role = toggle ? 'menuitemcheckbox' : checked === undefined ? 'menuitem' : 'menuitemradio';
 		if (this.options.ariaMultiselectable) {
 			button.id = `${this.action.id}.option`;
@@ -159,15 +164,18 @@ class ActionListAction extends ActionViewItem {
 				indicator.classList.toggle('checked', checked);
 				indicator.append(h(ownerDocument, 'span', { className: 'ash-switch-track' }));
 				this.toggleIndicator = indicator;
-			} else if (!icon) {
-				const indicator = h(ownerDocument, 'span', { className: 'ash-action-widget-selection' });
-				indicator.setAttribute('aria-hidden', 'true');
-				appendIcon(Lxicon.check, indicator);
-				button.append(indicator);
 			}
+		}
+		if (trailingCheck || (checked !== undefined && !toggle && !icon)) {
+			const indicator = h(ownerDocument, 'span', { className: 'ash-action-widget-selection' });
+			indicator.setAttribute('aria-hidden', 'true');
+			appendIcon(Lxicon.check, indicator);
+			button.append(indicator);
 		}
 		if (icon) {
 			appendIcon(icon, button).classList.add('ash-action-widget-command-icon');
+		} else if (trailingCheck) {
+			button.append(h(ownerDocument, 'span', { className: 'ash-action-widget-command-icon', attributes: { 'aria-hidden': 'true' } }));
 		}
 		button.append(h(ownerDocument, 'span', { className: 'ash-action-widget-label' }, this.action.label));
 		if (this.toggleIndicator) {
@@ -182,7 +190,11 @@ class ActionListAction extends ActionViewItem {
 		if (this.entry.badge) {
 			button.append(h(ownerDocument, 'span', { className: 'ash-menu-badge' }, this.entry.badge));
 		}
-		if (this.options.showRowTooltips !== false) {
+		if (trailingCheck && this.entry.keybinding) {
+			const shortcut = this._register(new KeybindingLabel(button, { ...defaultKeybindingLabelStyles, keybinding: this.entry.keybinding }));
+			shortcut.element.classList.add('ash-menu-keybinding');
+		}
+		if (this.options.showRowTooltips !== false && (!trailingCheck || this.options.showRowTooltips || this.options.presentation === 'details' || this.options.ariaMultiselectable)) {
 			this.setupDelayedHover(button, this.entry.tooltip ?? [this.action.label, this.entry.description].filter(Boolean).join(' · '));
 		}
 	}
@@ -458,7 +470,7 @@ export class ActionList<T> extends Disposable {
 				const entry = entries.get(action.id);
 				if (!entry || action instanceof SubmenuAction) { return undefined; }
 				if (entry.kind === ActionListItemKind.Header) { return new ActionListHeader(action); }
-				const customRow = entry.standaloneToggle || this.options.presentation === 'details' || this.options.ariaMultiselectable
+				const customRow = this.options.checkPlacement === 'trailing' || entry.standaloneToggle || this.options.presentation === 'details' || this.options.ariaMultiselectable
 					|| (this.options.showRowTooltips && (entry.tooltip || entry.description));
 				if (!customRow) return undefined;
 				const row = new ActionListAction(action, entry, this.options);

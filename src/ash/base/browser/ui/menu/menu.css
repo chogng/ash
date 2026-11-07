@@ -136,9 +136,13 @@
 .ash-menu
 	.ash-button.checked
 	> :is(.ash-menu-leading-check, .ash-menu-trailing-check)
-	> .ash-icon-label-icon {
+	> .ash-menu-action-icon {
 	display: none;
 }
+.ash-menu-action-icon {
+	display: inline-flex;
+}
+
 .ash-menu-icons-trailing
 	> .ash-action-view-item
 	> .ash-button
@@ -164,25 +168,8 @@
 	margin-inline-start: 0;
 }
 
-/*
- * Collapse the shared icon column when it is empty across the entire menu.
- * An action icon, a checkable row (even unchecked), or a trailing submenu
- * arrow keeps the column for all rows so labels and shortcuts stay aligned.
- * Leading menus place submenu arrows separately on the right.
- */
-.ash-menu:not(
-		:has(
-			> .ash-action-view-item
-				> .ash-button
-				:is(
-					.ash-menu-leading-check,
-					.ash-menu-trailing-check,
-					.ash-menu-trailing-slot.ash-submenu-indicator,
-					:is(.ash-menu-leading-slot, .ash-menu-trailing-slot)
-						> .ash-icon-label-icon:not(:empty)
-				)
-		)
-	)
+/* Reserve a column for all standard rows only when a row needs it. */
+.ash-menu:not(.has-icon-column)
 	> .ash-action-view-item
 	> .ash-button
 	> :is(.ash-menu-leading-slot, .ash-menu-trailing-slot) {
@@ -201,8 +188,7 @@
 	);
 	opacity: 1;
 }
-.ash-menu:not(.ash-menu-icons-trailing)
-	.ash-button:has(> .ash-submenu-indicator) {
+.ash-menu:not(.ash-menu-icons-trailing) .ash-button.ash-submenu-trigger {
 	position: relative;
 	--ash-menu-item-padding-end: var(--ash-menu-submenu-padding-end);
 }

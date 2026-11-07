@@ -85,9 +85,31 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 		await expect(picker).toBeFocused();
 		expect(uploaded).toBeUndefined();
 		await picker.press('Enter');
-		await page.getByRole('menu').getByText('Research', { exact: true }).click();
+		const filter = page.getByRole('searchbox', { name: '项目或文件夹' });
+		await expect(filter).toBeFocused();
+		await filter.fill('rese');
+		const project = page.getByRole('menuitemradio', { name: 'Research' });
+		await expect(page.getByRole('menu').getByText('选择文件夹…', { exact: true })).toHaveCount(0);
+		await expect(filter).toBeFocused();
+		await filter.press('ArrowDown');
+		await expect(project).toBeFocused();
+		await project.press('Enter');
+		await expect(picker).toBeFocused();
 		await expect(picker).toHaveAccessibleName('项目或文件夹：Research · fixture-folder');
 		await picker.press('Enter');
+		const selectedProject = page.getByRole('menuitemradio', { name: 'Research', checked: true });
+		const projectIcon = selectedProject.locator('.ash-action-widget-command-icon.ash-icon-projects');
+		const check = selectedProject.locator('.ash-action-widget-selection .ash-icon-check');
+		await expect(projectIcon).toBeVisible();
+		await expect(check).toBeVisible();
+		await expect(check.locator('..')).toHaveAttribute('aria-hidden', 'true');
+		const [iconBounds, labelBounds, checkBounds] = await Promise.all([
+			projectIcon.boundingBox(),
+			selectedProject.locator('.ash-action-widget-label').boundingBox(),
+			check.boundingBox(),
+		]);
+		expect(iconBounds!.x + iconBounds!.width).toBeLessThanOrEqual(labelBounds!.x);
+		expect(labelBounds!.x + labelBounds!.width).toBeLessThanOrEqual(checkBounds!.x);
 		await page.getByText('清除项目', { exact: true }).click();
 		await expect(picker).toHaveAccessibleName('项目或文件夹：fixture-folder');
 		await picker.press('Enter');

@@ -199,6 +199,18 @@
 	visibility: hidden;
 }
 
+.ash-action-widget-check-trailing > .ash-action-widget-command-icon {
+	flex: 0 0 var(--ash-action-widget-icon-size, var(--ash-lxiconFontSize));
+}
+
+.ash-action-widget-check-trailing > .ash-action-widget-label {
+	flex: 1 1 auto;
+}
+
+.ash-action-widget-check-trailing > .ash-action-widget-selection {
+	order: 1;
+}
+
 .ash-action-widget-accent-checks {
 	--ash-menu-check-foreground: var(--ash-accent-foreground);
 }
@@ -261,6 +273,11 @@
 }
 
 .ash-action-widget-detail-row > .ash-action-widget-switch {
+	grid-area: accessory;
+}
+
+.ash-action-widget-detail-row.ash-action-widget-check-trailing
+	> .ash-action-widget-selection {
 	grid-area: accessory;
 }
 

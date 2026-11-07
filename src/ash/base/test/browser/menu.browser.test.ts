@@ -98,6 +98,7 @@ suite('Menu browser behavior', () => {
 		const icon = primary.locator('.ash-menu-trailing-slot [data-ash-icon-id="search"]');
 		const arrow = submenu.locator('.ash-menu-trailing-slot > .ash-icon');
 		await expect(icon).toBeVisible();
+		await expect(primary.locator('.ash-button-content [data-ash-icon-id]')).toHaveCount(0);
 		await expect(arrow).toBeVisible();
 		await expect(primary.locator('.ash-menu-leading-slot')).toHaveCount(0);
 		const after = browser.page.getByRole('menuitem', { name: 'After' });
