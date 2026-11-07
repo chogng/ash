@@ -1,7 +1,6 @@
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import './media/auxiliaryEditorPart.css';
-import { Dimension, getActiveWindow, getWindow } from '../../../../base/browser/dom.js';
-import { mainWindow } from '../../../../base/browser/window.js';
+import { Dimension } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableStore, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import type { IAuxiliaryWindow } from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
@@ -18,8 +17,8 @@ import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/c
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IsAuxiliaryWindowContext, IsCompactTitleBarContext } from '../../../common/contextkeys.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { getWindowCommandTarget } from '../../actions/windowActions.js';
 
 // Commands resolve the window at invocation; the live part owns its mode and chrome.
 const compactWindowCommands = new WeakMap<Window, (compact?: boolean) => void>();
@@ -53,11 +52,9 @@ for (const compact of [undefined, true, false]) {
 				});
 			}
 
-			override run(accessor: ServicesAccessor): void {
-				const focused = getActiveWindow();
-				const target =
-					focused === mainWindow ? getWindow(accessor.get(ILayoutService).activeContainer) : focused;
-				compactWindowCommands.get(target)?.(compact);
+			override run(accessor: ServicesAccessor, ...args: unknown[]): void {
+				const target = getWindowCommandTarget(accessor, args);
+				if (target) compactWindowCommands.get(target)?.(compact);
 			}
 		},
 	);

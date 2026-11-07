@@ -6,7 +6,7 @@ import { localize } from '../../../../nls.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import './media/titlebarpart.css';
-import { addDisposableListener, getWindow, h, type IDimension } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, getWindowId, h, type IDimension } from '../../../../base/browser/dom.js';
 import { observeResize } from '../../../../base/browser/observer.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
@@ -19,6 +19,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { createActionViewItem, getActionBarActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IsAuxiliaryWindowContext, IsCompactTitleBarContext } from '../../../common/contextkeys.js';
+import type { IWindowCommandContext } from '../../../common/windowCommandContext.js';
 import { Part } from '../../part.js';
 import type { GlobalCompositeBar } from '../globalCompositeBar.js';
 import { WorkbenchWindowBarHeight } from '../workbenchPartDimensions.js';
@@ -424,7 +425,10 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 			this.editorTitleControlHost.replaceChildren(...(titleControl ? [titleControl] : []));
 		}
 		this.centerDomNode.classList.toggle('ash-titlebar-center-custom', titleControl !== undefined);
-		const layout = getActionBarActions(this.layoutMenu.getActions(), 'navigation');
+		const windowId = getWindowId(getWindow(this.domNode));
+		const layout = getActionBarActions(this.layoutMenu.getActions(
+			windowId === undefined ? undefined : { arg: { windowId } satisfies IWindowCommandContext },
+		), 'navigation');
 		const global = getActionBarActions(this.isCompact ? [] : this.globalMenu.getActions());
 		const editor = this.editorActions?.actions;
 		this.actions.setActions(
