@@ -2,17 +2,21 @@ use super::SqliteThreadStore;
 use super::SqliteTurnChangeStore;
 use super::TurnChangeCommandOutcome;
 use ash_core::CreateThreadRequest;
+use ash_core::NoThreadWorktreeBinder;
 use ash_core::RequestTurnInteraction;
 use ash_core::StartTurnRequest;
 use ash_core::ThreadController;
 use ash_history::CURRENT_STORED_EVENT_SCHEMA_VERSION;
 use ash_history::EventId;
 use ash_history::StoredEvent;
+use ash_history::ThreadCreatedKindEncoding;
 use ash_history::Timestamp;
+use ash_protocol::CommandId;
 use ash_protocol::ModelId;
 use ash_protocol::ModelRef;
 use ash_protocol::ProviderId;
 use ash_protocol::SessionId;
+use ash_protocol::SessionKind;
 use ash_protocol::SessionManagerInfo;
 use ash_protocol::SessionThread;
 use ash_protocol::ThreadEvent;
@@ -24,6 +28,9 @@ use ash_thread_store::ThreadEventBatch;
 use ash_thread_store::ThreadStore;
 use ash_thread_store::ThreadStoreError;
 use ash_thread_store::session_from_catalog;
+use core_api::CoreError;
+use core_api::CreateBranchRequest;
+use core_api::StartThreadRequest;
 use git_turn_changes::ChangeSetId;
 use git_turn_changes::MessageState;
 use git_turn_changes::TerminalTurnState;
@@ -2123,6 +2130,107 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
     ));
     drop(connection);
     fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn sqlite_retries_legacy_chat_branch_creation_after_upgrade() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("state.sqlite3");
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let threads = ThreadController::with_store(store.clone());
+    let start = |kind| StartThreadRequest {
+        kind,
+        agent_id: None,
+        agent: None,
+        command_id: CommandId::new("start-chat").unwrap(),
+        title: "Chat".into(),
+        branch_name: None,
+        worktree_start: None,
+        execution_target: None,
+    };
+    let root = threads
+        .start_thread(&NoThreadWorktreeBinder, start(SessionKind::Chat))
+        .unwrap();
+    let branch_request = |command, title: &str| CreateBranchRequest {
+        agent_id: None,
+        command_id: CommandId::new(command).unwrap(),
+        session_id: root.session_id.clone(),
+        title: title.into(),
+    };
+    let branch = threads
+        .create_branch(
+            &NoThreadWorktreeBinder,
+            branch_request("create-branch", "Branch"),
+        )
+        .unwrap();
+    // Legacy branches omitted the classification even when their root stored a Chat surface.
+    let mut branch_catalog = threads.thread_catalog_record(&branch.thread_id).unwrap();
+    branch_catalog.kind = SessionKind::Code;
+    store.backfill_catalog(&branch_catalog).unwrap();
+    let legacy_events = [&root.thread_id, &branch.thread_id].map(|thread_id| {
+        let mut event = store.load(thread_id).unwrap().remove(0);
+        event.schema_version = 32;
+        event.thread_created_kind_encoding = if thread_id == &root.thread_id {
+            ThreadCreatedKindEncoding::Surface
+        } else {
+            ThreadCreatedKindEncoding::Omitted
+        };
+        event
+    });
+    drop(threads);
+    drop(store);
+
+    let connection = rusqlite::Connection::open(&path).unwrap();
+    for event in legacy_events {
+        let json = serde_json::to_string(&event).unwrap();
+        let digest = ash_protocol::ContentDigest::sha256(json.as_bytes());
+        connection
+            .execute(
+                "INSERT INTO history_records (digest, record_json) VALUES (?1, ?2)",
+                rusqlite::params![digest.as_str(), json],
+            )
+            .unwrap();
+        connection
+            .execute(
+                "UPDATE thread_events SET schema_version = ?1, record_digest = ?2 WHERE thread_id = ?3 AND sequence = 1",
+                rusqlite::params![event.schema_version, digest.as_str(), event.thread_id.as_str()],
+            )
+            .unwrap();
+    }
+    drop(connection);
+
+    let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
+    let threads = ThreadController::with_store(store.clone());
+    for _ in 0..2 {
+        let retried = threads
+            .create_branch(
+                &NoThreadWorktreeBinder,
+                branch_request("create-branch", "Branch"),
+            )
+            .unwrap();
+        assert_eq!(retried.thread_id, branch.thread_id);
+        assert_eq!(retried.sequence, branch.sequence);
+        assert_eq!(retried.kind, SessionKind::Code);
+    }
+    assert_eq!(store.load(&branch.thread_id).unwrap().len(), 1);
+    assert!(matches!(
+        threads.create_branch(
+            &NoThreadWorktreeBinder,
+            branch_request("create-branch", "Different branch"),
+        ),
+        Err(CoreError::CommandConflict)
+    ));
+    assert!(matches!(
+        threads.start_thread(&NoThreadWorktreeBinder, start(SessionKind::Code)),
+        Err(CoreError::CommandConflict)
+    ));
+    let new_branch = threads
+        .create_branch(
+            &NoThreadWorktreeBinder,
+            branch_request("create-new-branch", "New branch"),
+        )
+        .unwrap();
+    assert_eq!(new_branch.kind, SessionKind::Chat);
 }
 
 #[cfg(unix)]

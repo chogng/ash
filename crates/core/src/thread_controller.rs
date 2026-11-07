@@ -44,6 +44,7 @@ use ash_protocol::ModelRef;
 use ash_protocol::RequestId;
 use ash_protocol::Session;
 use ash_protocol::SessionId;
+use ash_protocol::SessionKind;
 use ash_protocol::SessionManagerActivity;
 use ash_protocol::SessionManagerInfo;
 use ash_protocol::SessionManagerStatus;
@@ -226,6 +227,12 @@ pub struct CreateThreadRequest {
     pub thread_id: ThreadId,
     pub title: String,
     pub execution_target: Option<ash_protocol::SessionExecutionTarget>,
+}
+
+#[derive(Clone, Copy)]
+enum ThreadCreationKind {
+    Fixed(SessionKind),
+    SessionDefault(SessionKind),
 }
 
 enum ForkDestination {
@@ -692,18 +699,24 @@ impl ThreadController {
     /// Creates the child Thread already planned by its owning Session.
     ///
     /// Repeating the same request is safe when the durable Thread identity, owner, and title all
-    /// match. A conflicting existing stream is rejected.
+    /// match. The Session kind is a default for new children, including in Sessions whose older
+    /// children have a different persisted kind.
     pub fn create_thread(&self, request: CreateThreadRequest) -> Result<ThreadSnapshot, CoreError> {
         let kind = self
             .read_session_catalog(&request.session_id)?
-            .map_or(ash_protocol::SessionKind::Code, |session| session.kind);
-        self.create_thread_with_history(request, kind, Vec::new(), Vec::new())
+            .map_or(SessionKind::Code, |session| session.kind);
+        self.create_thread_with_history(
+            request,
+            ThreadCreationKind::SessionDefault(kind),
+            Vec::new(),
+            Vec::new(),
+        )
     }
 
     fn create_thread_with_history(
         &self,
         request: CreateThreadRequest,
-        kind: ash_protocol::SessionKind,
+        kind: ThreadCreationKind,
         initial_events: Vec<ThreadEvent>,
         history_prefixes: Vec<ash_history::HistoryPrefix>,
     ) -> Result<ThreadSnapshot, CoreError> {
@@ -737,7 +750,9 @@ impl ThreadController {
             session_id: request.session_id,
             thread_id: request.thread_id.clone(),
             title: request.title,
-            kind,
+            kind: match kind {
+                ThreadCreationKind::Fixed(kind) | ThreadCreationKind::SessionDefault(kind) => kind,
+            },
             execution_target: request.execution_target,
         }];
         events.extend(initial_events);
@@ -805,7 +820,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: request.execution_target,
             },
-            request.kind,
+            ThreadCreationKind::Fixed(request.kind),
             Vec::new(),
             Vec::new(),
         )
@@ -939,7 +954,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: source.execution_target,
             },
-            source.kind,
+            ThreadCreationKind::Fixed(source.kind),
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id,
                 prefix: reference,
@@ -1138,7 +1153,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: source.execution_target.clone(),
             },
-            source.kind,
+            ThreadCreationKind::Fixed(source.kind),
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id: request.thread_id,
                 prefix: reference,
@@ -1195,7 +1210,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: source.execution_target.clone(),
             },
-            source.kind,
+            ThreadCreationKind::Fixed(source.kind),
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id: request.thread_id,
                 prefix: reference,
@@ -4015,10 +4030,14 @@ fn fork_origin(
 fn matching_created_thread(
     snapshot: &ThreadSnapshot,
     request: &CreateThreadRequest,
-    kind: ash_protocol::SessionKind,
+    kind: ThreadCreationKind,
 ) -> Result<ThreadSnapshot, CoreError> {
+    let kind_matches = match kind {
+        ThreadCreationKind::Fixed(kind) => snapshot.kind == kind,
+        ThreadCreationKind::SessionDefault(_) => true,
+    };
     if snapshot.session_id == request.session_id
-        && snapshot.kind == kind
+        && kind_matches
         && snapshot.agent_id == request.agent_id
         && snapshot.origin == request.origin
         && snapshot.thread_id == request.thread_id
