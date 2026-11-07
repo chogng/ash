@@ -22,7 +22,14 @@ test('sidebar project menus share actions and retain appearance across window re
 		const read = async (projectId: string) => (await client.request(APP_SERVER_METHODS['project/read'], { projectId })).project;
 		let page = await workbench.openAgentsWindow(target.kind);
 		const header = (name: string) => page.getByRole('button', { name, exact: true });
-		const expectProjectMenu = () => expect(page.getByRole('menuitem')).toHaveText(['Rename', 'Change Icon...', 'Change Color...', 'Archive', 'Delete']);
+		const expectProjectMenu = () => expect(page.getByRole('menuitem')).toHaveText(['Pin', 'Rename', 'Change Icon...', 'Change Color...', 'Archive', 'Delete']);
+		const projectRow = (id: string) => page.locator(`.ash-sessions-list:visible [data-project-id="${id}"]`);
+		const setPinned = async (id: string, name: string, pinned: boolean) => {
+			await header(name).press('Shift+F10');
+			await page.getByRole('menuitem', { name: pinned ? 'Pin' : 'Unpin', exact: true }).click();
+			await expect(projectRow(id)).toHaveAttribute('data-parent-section', pinned ? 'pinned' : 'projects');
+			await expect(header(name)).toBeFocused();
+		};
 		const pick = async (action: string, title: string, choice: string) => {
 			await page.getByRole('menuitem', { name: action, exact: true }).click();
 			const picker = new QuickAccess(page);
@@ -39,8 +46,11 @@ test('sidebar project menus share actions and retain appearance across window re
 		await pick('Change Color...', 'Change project color', 'Red');
 		await expect.poll(async () => (await read(chat.projectId)).color).toBe('terminal.ansiRed');
 		await expect(header(chat.name).locator('.ash-sessions-list-project-icon')).toHaveAttribute('style', /color: var\(--ash-terminal-ansiRed\)/);
+		await setPinned(chat.projectId, chat.name, true);
 
 		page = await workbench.reopenAgentsWindow(application, page);
+		await expect(projectRow(chat.projectId)).toHaveAttribute('data-parent-section', 'pinned');
+		await setPinned(chat.projectId, chat.name, false);
 		await expect(header(chat.name).locator('[data-ash-icon-id="chat"]')).toHaveCount(1);
 		await header(chat.name).press('Shift+F10');
 		await pick('Change Icon...', 'Change project icon', 'Default');
@@ -50,6 +60,8 @@ test('sidebar project menus share actions and retain appearance across window re
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await expect(header(code.name)).toBeVisible();
 		await expect(header(code.name)).not.toHaveAttribute('aria-expanded');
+		await header(code.name).click();
+		await expect(page.getByRole('menu')).toHaveCount(0);
 		await header(code.name).click({ button: 'right' });
 		await expectProjectMenu();
 		await pick('Change Icon...', 'Change project icon', 'Chat');
@@ -75,6 +87,22 @@ test('sidebar project menus share actions and retain appearance across window re
 				commandId: randomUUID(), projectId: project.projectId, expectedRevision: project.revision, sessionId,
 			});
 		}
+		await setPinned(code.projectId, 'Renamed Code project', true);
+		for (const sessionId of members) {
+			await expect(page.locator(`[data-item="session:${sessionId}"][data-parent-project-id="${code.projectId}"]`)).toHaveAttribute('data-parent-section', 'pinned');
+		}
+		await setPinned(code.projectId, 'Renamed Code project', false);
+		for (const sessionId of members) {
+			const row = page.locator(`[data-item="session:${sessionId}"][data-parent-project-id="${code.projectId}"]`);
+			await row.locator('button.ash-sessions-list-item').press('Shift+F10');
+			await page.getByRole('menuitem', { name: 'Pin', exact: true }).click();
+			await expect(page.locator(`[data-item="session:${sessionId}"][data-parent-section="pinned"]`)).toBeVisible();
+		}
+		await expect(renamed).not.toHaveAttribute('aria-expanded');
+		await renamed.click();
+		await expect(page.getByRole('menu')).toHaveCount(0);
+		await renamed.press('Enter');
+		await expect(page.getByRole('menu')).toHaveCount(0);
 		await renamed.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
 		const archive = page.getByRole('dialog').getByRole('button', { name: 'Archive', exact: true });
@@ -399,7 +427,7 @@ test.describe('Code folder projects in Simplified Chinese', () => {
 			expect((await client.request(APP_SERVER_METHODS['project/list'], { scope: 'chat' })).projects).toEqual([]);
 
 			const header = () => page.locator(`[data-project-id="${project.projectId}"]`).getByRole('button', { name: project.name, exact: true });
-			const expectProjectMenu = () => expect(page.getByRole('menuitem')).toHaveText(['重命名', '更改图标…', '更改颜色…', '归档', '删除']);
+			const expectProjectMenu = () => expect(page.getByRole('menuitem')).toHaveText(['置顶', '重命名', '更改图标…', '更改颜色…', '归档', '删除']);
 			await header().click({ button: 'right' });
 			await expectProjectMenu();
 			await page.keyboard.press('Escape');

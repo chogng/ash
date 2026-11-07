@@ -156,7 +156,6 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 					project: !conversation.local && !id.startsWith('pending:') && (!projectId || currentProject) && state.connected && state.networkAvailable ? {
 						current: currentProject,
 						destinations,
-						loadDestinations: async signal => visibleProjects(await this.chat.listProjects(signal)),
 						move: async destination => {
 							if (state.catalogScope !== this.chat.state.get().catalogScope) {
 								throw new Error(localize('sessions.chatgpt.projectMoveFailed', 'Could not move this conversation. Try again.'));

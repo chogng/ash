@@ -979,7 +979,7 @@ suite('ChatGPT shared service', () => {
 		assert.equal(chat.state.get().conversations[0]!.pinned, true);
 	});
 
-	test('project menus read every server page and share links reject a foreign origin', async () => {
+	test('catalog reload reads every project page and share links reject a foreign origin', async () => {
 		using chat = fixture(async (path, _signal, request) => {
 			if (path.includes('/gizmos/snorlax/sidebar?')) {
 				const next = new URL(path, 'https://test.invalid').searchParams.get('cursor');
@@ -988,8 +988,8 @@ suite('ChatGPT shared service', () => {
 			if (request.method === 'POST' && path.endsWith('/share/v2/create')) { return Response.json({ share_url: 'https://other.test/share/one' }); }
 			return response(path);
 		});
-		assert.deepEqual(await chat.listProjects(new AbortController().signal), [{ id: 'g-p-one', title: 'One' }, { id: 'g-p-two', title: 'Two' }]);
 		await chat.reload();
+		assert.deepEqual(chat.state.get().projects, [{ id: 'g-p-one', title: 'One' }, { id: 'g-p-two', title: 'Two' }]);
 		assert.equal(await chat.share('one'), undefined);
 		assert.match(chat.state.get().error, /unsupported/);
 	});

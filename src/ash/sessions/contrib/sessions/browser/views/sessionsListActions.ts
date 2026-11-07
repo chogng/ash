@@ -11,7 +11,6 @@ export function getSessionsListAttentionHelp(): string {
 export interface SessionListProjectOrganization {
 	readonly current?: string;
 	readonly destinations: readonly { readonly id: string; readonly title: string; }[];
-	readonly loadDestinations?: (signal: AbortSignal) => Promise<SessionListProjectOrganization['destinations']>;
 	move(projectId: string | undefined): Promise<void>;
 }
 

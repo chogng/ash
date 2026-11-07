@@ -181,7 +181,6 @@ export interface IChatGPTService {
 	moveToProject(id: string, projectId: string | null): Promise<void>;
 	share(id: string, messageId?: string): Promise<string | undefined>;
 	readResponseAudio(id: string, messageId: string, signal: AbortSignal): Promise<Blob>;
-	listProjects(signal: AbortSignal): Promise<readonly ChatGPTProject[]>;
 	editProjectDetails(id: string, signal: AbortSignal): Promise<ChatGPTProjectEdit>;
 	archiveProjectConversations(id: string): Promise<boolean>;
 	deleteProject(id: string): Promise<void>;
@@ -388,18 +387,6 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		finally { this.refreshOperation = undefined; }
 		await this.syncOutbox();
 	}
-	public async listProjects(signal: AbortSignal): Promise<readonly ChatGPTProject[]> {
-		this.refreshOperation?.abort();
-		const request = AbortSignal.any([signal, this.management.signal, AbortSignal.timeout(30_000)]);
-		const projects = await this.client.projects(request);
-		request.throwIfAborted();
-		const previous = this.model.get().projects;
-		if (projects.length !== previous.length || projects.some((project, index) => project.id !== previous[index]?.id || project.title !== previous[index]?.title)) {
-			this.updateCatalog({ projects });
-		}
-		return projects;
-	}
-
 	public async editProjectDetails(id: string, signal: AbortSignal): Promise<ChatGPTProjectEdit> {
 		const account = this.management.signal;
 		const details = await this.client.projectDetails(id, AbortSignal.any([account, signal, AbortSignal.timeout(30_000)]));

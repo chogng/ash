@@ -19,6 +19,7 @@ import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
 import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
+import { Event } from '../../../../../base/common/event.js';
 import { AbstractDisposable, Disposable, DisposableMap, type DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { getFlatContextMenuActions } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { SessionActionFeedback } from '../sessionActionFeedback.js';
@@ -37,7 +38,9 @@ import type { ThemeIcon } from '../../../../../base/common/themables.js';
 import { colorCssVariable } from '../../../../../platform/theme/common/colorUtils.js';
 import { autorun, derived, observableFromEvent, type IObservable } from '../../../../../base/common/observable.js';
 import { IMenuService, SubmenuItemAction, type MenuId } from '../../../../../platform/actions/common/actions.js';
-import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { WebAppServerUnavailableError } from '../../../../../platform/agentHost/browser/disconnectedAppServer.js';
+import { ILogService } from '../../../../../platform/log/common/log.js';
+import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IProjectService, type Project, type ProjectSummary } from '../../../../../platform/projects/common/projectService.js';
@@ -46,6 +49,7 @@ import { IContextMenuService, type IContextMenuMenuDelegate } from '../../../../
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { ARCHIVE_PROJECT_COMMAND, confirmProjectDelete, showSidebarProjectMenu } from '../../../projects/browser/projectsActions.js';
+import { IProjectsService } from '../../../projects/browser/projectsService.js';
 import { WorkbenchObjectTree } from '../../../../../platform/list/browser/listService.js';
 import { defaultListStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ObjectTreeElement, ObjectTreeNode } from '../../../../../base/browser/ui/tree/objectTreeModel.js';
@@ -230,8 +234,8 @@ export class SessionsList extends DomWidget {
 	private migratingCodeFolderProjects = false;
 	private projectsFailed = false;
 	private projectsLoading = false;
+	private readonly projectLoadNotice = this._register(new MutableDisposable());
 	private readonly empty: HTMLParagraphElement;
-	private readonly projectError: HTMLButtonElement;
 	private readonly catalog: SessionsCatalogListInput | undefined;
 	private readonly menuContext: IScopedContextKeyService | undefined;
 	private readonly attention: IObservable<ReadonlyMap<string, IBlockedSession>>;
@@ -273,6 +277,8 @@ export class SessionsList extends DomWidget {
 		@IBlockedSessionsIndicatorService indicator: IBlockedSessionsIndicatorService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IDialogService private readonly dialogs: IDialogService,
+		@ILogService private readonly logService: ILogService,
+		@IProjectsService private readonly projectPreferences: IProjectsService,
 		@IContextKeyService private readonly contextKeys?: IContextKeyService,
 		@IHoverService private readonly hoverService?: IHoverService,
 		@ISessionProviderScopeService private readonly providerScopes?: ISessionProviderScopeService,
@@ -351,10 +357,6 @@ export class SessionsList extends DomWidget {
 		}
 		this.empty = h(ownerDocument, 'p');
 		this.empty.className = 'ash-sessions-empty';
-		this.projectError = h(ownerDocument, 'button', { className: 'ash-sessions-list-item' });
-		this.projectError.type = 'button';
-		this.projectError.textContent = localize('sessions.list.projectsRetry', 'Could not load projects. Retry');
-		this._register(addDisposableListener(this.projectError, 'click', () => { void this.loadProjects(); }));
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener(this.list, 'keydown', event => {
@@ -420,6 +422,7 @@ export class SessionsList extends DomWidget {
 		this._register(autorun(reader => {
 			customViews.activeCustomView.read(reader);
 			this.attention.read(reader);
+			if (!this.catalog) this.projectPreferences.state.read(reader);
 			this.render();
 		}));
 		this.render();
@@ -518,14 +521,43 @@ export class SessionsList extends DomWidget {
 			if (this.isDisposed || generation !== this.projectLoad) return;
 			this.projects = projects.filter(project => !project.archived);
 			this.projectsFailed = false;
-		} catch {
+			this.projectLoadNotice.clear();
+		} catch (error) {
 			if (this.isDisposed || generation !== this.projectLoad) return;
 			this.projectsFailed = true;
+			const cause = error instanceof Error ? error.cause ?? error : error;
+			// A browser host without App Server support has nothing to retry.
+			if (!(cause instanceof WebAppServerUnavailableError)) {
+				this.logService.error('sessions.projects', `Could not load ${this.mode} projects`, cause instanceof Error ? cause : toErrorMessage(cause));
+				this.notifyProjectLoadFailure();
+			}
 		} finally {
 			if (migrate) this.migratingCodeFolderProjects = false;
 		}
 		this.projectsLoading = false;
 		this.render();
+	}
+
+	private notifyProjectLoadFailure(): void {
+		if (this.projectLoadNotice.value) return;
+		const notice = this.notifications.notify({
+			severity: Severity.Error,
+			message: localize('sessions.list.projectsLoadFailed', 'Could not load projects.'),
+			actions: {
+				primary: [{
+					id: `sessions.list.retryProjects.${this.mode}`,
+					label: localize('sessions.list.retryProjects', 'Retry'),
+					tooltip: '',
+					enabled: true,
+					keepOpen: true,
+					run: async () => {
+						if (!this.isDisposed && !this.projectsLoading) await this.loadProjects();
+					},
+				}],
+			},
+		});
+		this.projectLoadNotice.value = toDisposable(() => notice.close());
+		Event.once(notice.onDidClose)(() => this.projectLoadNotice.clear());
 	}
 
 	private shouldMigrateCodeFolderProjects(): boolean {
@@ -603,15 +635,8 @@ export class SessionsList extends DomWidget {
 			if (controller.signal.aborted || !item.domNode.isConnected) return;
 			const project = row.organization()?.project;
 			if (project) {
-				try {
-					const destinations = project.loadDestinations ? await project.loadDestinations(controller.signal) : project.destinations;
-					if (controller.signal.aborted || !item.domNode.isConnected) return;
-					const separator = actions.map(action => action instanceof Separator).lastIndexOf(true);
-					actions.splice(separator < 0 ? actions.length : separator, 0, ...this.projectActions(item, project, destinations));
-				} catch (error) {
-					if (controller.signal.aborted || !item.domNode.isConnected) return;
-					this.notifications.error(toErrorMessage(error));
-				}
+				const separator = actions.map(action => action instanceof Separator).lastIndexOf(true);
+				actions.splice(separator < 0 ? actions.length : separator, 0, ...this.projectActions(item, project));
 			}
 			this.showConversationMenu(item, anchor, actions, row.sessionId ? { sessionId: row.sessionId } : { catalogId: row.id }, row.pinned);
 		} catch (error) {
@@ -619,10 +644,9 @@ export class SessionsList extends DomWidget {
 		}
 	}
 
-	private projectActions(item: SessionListItem, project: SessionListProjectOrganization,
-		destinations = project.destinations): readonly IAction[] {
-		if (!project.current && !destinations.length && !project.loadDestinations) return [];
-		return sessionListProjectActions(project, destinations, async run => {
+	private projectActions(item: SessionListItem, project: SessionListProjectOrganization): readonly IAction[] {
+		if (!project.current && !project.destinations.length) return [];
+		return sessionListProjectActions(project, project.destinations, async run => {
 			try {
 				await run();
 				if (!this.isDisposed) this.tree.focusRow(item.domNode);
@@ -738,6 +762,7 @@ export class SessionsList extends DomWidget {
 		operations: SessionsCatalogProjectOperations, anchor: ContextMenuAnchor): void {
 		if (!this.menuContext) return;
 		const { rename, archive, remove } = operations;
+		const pinned = this.projectPreferences.isPinned(projectId);
 		const runRemoval = async (operation: () => Promise<boolean | void>): Promise<void> => {
 			if (this.isDisposed) return;
 			const completed = await operation();
@@ -746,15 +771,29 @@ export class SessionsList extends DomWidget {
 		showSidebarProjectMenu(this.contextMenus, this.menuContext, this.mode, {
 			projectId,
 			actions: {
+				pin: pinned ? undefined : () => this.setProjectPinned(projectId, true),
+				unpin: pinned ? () => this.setProjectPinned(projectId, false) : undefined,
 				rename: rename && (() => this.renameProject(title, rename)),
 				icon: change && (() => change('icon')),
 				color: change && (() => change('color')),
 				archive: archive && (() => runRemoval(archive)),
 				remove: remove && (async () => {
-					if (await confirmProjectDelete(this.dialogs, title, remove.removesContents)) await runRemoval(remove.run);
+					if (!await confirmProjectDelete(this.dialogs, title, remove.removesContents)) return;
+					await runRemoval(async () => {
+						await remove.run();
+						if (this.projectPreferences.isPinned(projectId)) this.projectPreferences.togglePinned(projectId);
+					});
 				}),
 			},
 		}, anchor);
+	}
+
+	private setProjectPinned(projectId: string, pinned: boolean): void {
+		if (this.isDisposed) return;
+		if (this.projectPreferences.isPinned(projectId) !== pinned) this.projectPreferences.togglePinned(projectId);
+		this.tree.setSectionCollapsed(pinned ? 'pinned' : 'projects', false);
+		const row = this.tree.getVisibleElements().find(element => element.dataset.projectId === projectId);
+		if (row) this.tree.focusRow(row);
 	}
 
 	private async renameProject(title: string, rename: NonNullable<SessionsCatalogProjectOperations['rename']>): Promise<void> {
@@ -1051,7 +1090,7 @@ export class SessionsList extends DomWidget {
 			if (kind === 'project') {
 				if (project) {
 					section.setContextMenu(anchor => this.showLocalProjectMenu(title, project, anchor));
-				} else if (catalogProjectId && (projectAppearance || projectOperations?.archive || projectOperations?.rename || projectOperations?.remove)) {
+				} else if (catalogProjectId) {
 					section.setContextMenu(anchor => this.showProjectMenu(catalogProjectId, title, projectAppearance && (field =>
 						pickProjectAppearance(this.quickInput, field, projectAppearance[field], value => projectAppearance.set(field, value))), projectOperations ?? {}, anchor));
 				} else {
@@ -1216,20 +1255,20 @@ export class SessionsList extends DomWidget {
 			const drafts = projectDrafts.get(project.id) ?? [];
 			if (!members.length && !drafts.length && !this.search.matches(project.name)) continue;
 			const key = `project:${project.id}`;
+			const destination = this.projectPreferences.isPinned(project.id) ? pinned : projects;
 			if (this.mode === 'code') {
 				const section = sectionFor(key, project.name, [...members, ...drafts], 'project', { project });
 				section.dataset.projectId = project.id;
-				projects.push(section);
+				destination.push(section);
 			} else {
 				const item = itemFor(key, 'project');
 				item.domNode.dataset.projectId = project.id;
 				item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
 				item.updateProjectAppearance(project);
 				item.setContextMenu(anchor => this.showLocalProjectMenu(project.name, project, anchor));
-				projects.push(item.domNode);
+				destination.push(item.domNode);
 			}
 		}
-		if (this.projectsFailed && !this.search.hasQuery) projects.push(this.projectError);
 		const catalogIds = new Set(catalog.map(session => session.sessionId));
 		for (const group of this.groups.groups) {
 			const contributed = contributedGroups.get(`group:${group.sectionId}`);
@@ -1249,7 +1288,8 @@ export class SessionsList extends DomWidget {
 			}));
 		}
 		const orderedRecent = reorderChildren(recent, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId');
-		if (this.mode === 'code' && (grouping === 'none' || grouping === 'projects')) {
+		const groupCodeWorkspaces = this.mode === 'code' && (grouping === 'none' || grouping === 'projects');
+		if (groupCodeWorkspaces) {
 			// Saved sessions can have a creation workspace without a Code project membership.
 			// Use the Session workspace so managed checkouts of the same folder stay together.
 			const workspaces = new Map<string, { readonly label: string; readonly resource: URI; readonly rows: HTMLElement[]; }>();
@@ -1270,7 +1310,7 @@ export class SessionsList extends DomWidget {
 				orderedRecent.push(sectionFor(`workspace:${key}`, workspace.label, workspace.rows, 'subgroup', { workspace: workspace.resource }));
 			}
 		}
-		if (grouping === 'none') {
+		if (grouping === 'none' || groupCodeWorkspaces) {
 			orderedRecent.push(...remaining.values());
 		} else {
 			const projectsBySession = new Map<string, Project>();
@@ -1692,7 +1732,6 @@ class SessionListSection extends Disposable {
 		this._register(addDisposableListener(this.button, 'click', event => {
 			event.stopPropagation();
 			if (this.open) this.open();
-			else if (this.kind === 'project' && this.contextMenu && !this.button.hasAttribute('aria-expanded')) this.contextMenu(this.button);
 			else toggle();
 		}));
 		this._register(addDisposableListener(this.button, 'contextmenu', event => {

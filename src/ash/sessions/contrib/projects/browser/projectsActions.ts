@@ -22,6 +22,8 @@ import { Menus } from '../../../browser/menus.js';
 export const ARCHIVE_PROJECT_COMMAND = 'projects.archive';
 
 const sidebarProjectActions = [
+	{ key: 'pin', group: '1_edit', order: 0, icon: Lxicon.pin, title: localize('sessions.list.pinProject', 'Pin') },
+	{ key: 'unpin', group: '1_edit', order: 0, icon: Lxicon.pinFilled, title: localize('sessions.list.unpinProject', 'Unpin') },
 	{ key: 'rename', group: '1_edit', order: 1, icon: Lxicon.edit, title: localize('sessions.list.rename', 'Rename') },
 	{ key: 'icon', group: '2_appearance', order: 1, title: localize('sessions.list.changeProjectIcon', 'Change Icon...') },
 	{ key: 'color', group: '2_appearance', order: 2, title: localize('sessions.list.changeProjectColor', 'Change Color...') },
@@ -33,7 +35,7 @@ type SidebarProjectAction = typeof sidebarProjectActions[number]['key'];
 
 interface SidebarProjectMenuTarget {
 	readonly projectId: string;
-	readonly actions: Partial<Record<SidebarProjectAction, () => Promise<void>>>;
+	readonly actions: Partial<Record<SidebarProjectAction, () => void | Promise<void>>>;
 }
 
 CommandsRegistry.registerMany(sidebarProjectActions.map(({ key }) => ({

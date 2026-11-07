@@ -931,10 +931,12 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 				}
 			}));
 			const writes: { method: string; path: string; body?: Record<string, unknown>; }[] = [];
+			let projectReads = 0;
 			await page.route('**/service/backend-api/**', async route => {
 				const request = route.request();
 				const url = new URL(request.url());
 				if (url.pathname.endsWith('/gizmos/snorlax/sidebar')) {
+					projectReads++;
 					const next = url.searchParams.has('cursor');
 					await route.fulfill({ json: { items: [{ gizmo: { id: next ? 'g-p-two' : 'g-p-one', display: { name: next ? 'Project Two' : 'Project One' } } }], cursor: next ? null : 'next' } });
 				} else if (request.method() !== 'GET') {
@@ -1027,7 +1029,11 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(menu).toBeHidden();
 			await expect(more).toBeFocused();
 			await expect(unpin).toHaveAttribute('aria-pressed', 'true');
-			await openMore();
+			await expect(page.getByRole('button', { name: 'Project Two', exact: true })).toBeVisible();
+			const readsBeforeMenu = projectReads;
+			await title.click({ button: 'right' });
+			await expect(page.getByRole('menuitem', { name: labels.move, exact: true })).toBeVisible();
+			expect(projectReads).toBe(readsBeforeMenu);
 			await page.getByRole('menuitem', { name: labels.move, exact: true }).focus();
 			await page.keyboard.press('ArrowRight');
 			await expect(page.getByRole('menuitemcheckbox', { name: 'Project One', exact: true })).toBeVisible();

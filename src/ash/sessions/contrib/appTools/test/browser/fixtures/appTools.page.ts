@@ -1,3 +1,4 @@
+import { ProjectsService } from '../../../../projects/browser/projectsService.js';
 import { TerminalLocation } from '../../../../../../platform/terminal/common/terminal.js';
 import { SessionSectionOrderService } from '../../../../../services/sessions/browser/sessionSectionOrderService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../../../services/sessions/browser/sessionsListModelService.js';
@@ -167,7 +168,9 @@ services.registerInstance(IQuickInputService, fixtureOptions.has('leadingIcons')
 	? resources.add(new TestQuickInputService({ container: document.body, instantiationService: services }))
 	: { createQuickPick: () => { throw new Error('No interaction expected'); } } as unknown as IQuickInputService);
 services.registerInstance(IDialogService, resources.add(new DialogService()));
-resources.add(new SessionsList(container, 'Tasks', fixtureOptions.has('chatMode') ? 'chat' : 'code', management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, groups, storage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, listModel, new SessionSectionOrderService(storage), { blockedSessions: constObservable([]), ignore: () => undefined }, services.get(IQuickInputService), services.get(IDialogService), undefined, undefined, undefined, fixtureOptions.has('leadingIcons') ? services : undefined));
+services.registerInstance(ILogService, new NullLoggerService());
+const listProjects = { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService;
+resources.add(new SessionsList(container, 'Tasks', fixtureOptions.has('chatMode') ? 'chat' : 'code', management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, groups, storage, listProjects, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, listModel, new SessionSectionOrderService(storage), { blockedSessions: constObservable([]), ignore: () => undefined }, services.get(IQuickInputService), services.get(IDialogService), services.get(ILogService), resources.add(new ProjectsService(listProjects, storage)), undefined, undefined, undefined, fixtureOptions.has('leadingIcons') ? services : undefined));
 services.registerInstance(IStorageService, storage);
 services.registerInstance(ISessionsListModelService, listModel);
 services.registerInstance(ISecretStorageService, resources.add(new BaseSecretStorageService()));
@@ -266,7 +269,6 @@ services.registerInstance(IFileService, {
 	stat: async (resource: URI) => { if (!resource.path.endsWith('/.vscode/tasks.json')) throw new FileNotFoundError(resource); return { kind: FileKind.File }; },
 	readFile: async (resource: URI) => { if (!resource.path.endsWith('/.vscode/tasks.json')) throw new FileNotFoundError(resource); return { content: taskSource }; },
 } as unknown as import('../../../../../../platform/files/common/files.js').IFileService);
-services.registerInstance(ILogService, new NullLoggerService());
 services.registerInstance(IOutputService, { createChannel: () => Object.assign(toDisposable(() => { }), { appendLine() { } }) } as unknown as import('../../../../../../workbench/services/output/common/output.js').IOutputService);
 services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 services.registerInstance(IModelService, { getModel: () => null } as unknown as import('../../../../../../editor/common/services/model.js').IModelService);
