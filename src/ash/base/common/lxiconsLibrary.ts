@@ -168,6 +168,7 @@ export const lxiconsLibrary = {
 	image: registerLxicon("image", 0xe090),
 	imageFilled: registerLxicon("image-filled", 0xe08f),
 	imageSession: registerLxicon("image-session", 0xe15c),
+	inbox: registerLxicon("inbox", 0xe16a),
 	info: registerLxicon("info", 0xe091),
 	inspect: registerLxicon("inspect", 0xe092),
 	issueDraft: registerLxicon("issue-draft", 0xe14f),

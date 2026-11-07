@@ -822,6 +822,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "inbox",
+      "file": "inbox.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "info",
       "file": "info.svg",
       "rendering": "symbolic"

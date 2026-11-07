@@ -361,7 +361,8 @@
     "brain": "E166",
     "share": "E167",
     "sign-out": "E168",
-    "open-in-window": "E169"
+    "open-in-window": "E169",
+    "inbox": "E16A"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -528,6 +529,7 @@
     "image-filled": "fd3946f119d3e559f907cbba97058d6bc920f79ed130bcd90449e20e67c21b6f",
     "image-session": "516b52d6a22812a53989c73bdf38c40c4cf2a45932cf859efc34cfb130a91f4a",
     "image": "042e8d9296272fce8c09318cf379388949557c769e2ce90206a52f714c962ac9",
+    "inbox": "26233c377c38626bae0ac7832fdf8918e905ec3a92c8e07ca61ccfaa86fdcb1a",
     "info": "9aa637884722838ba53238992e560569c9df12bf4f918e2404fbce11d40178d5",
     "inspect": "b92172aa91de23b36c765e4a43f4059c7086bd83b27b435541c2fff1c99da76d",
     "issue-draft": "e0ed832579f75eacea32f79b3281e026ab54f6ec2b7d2b7c1985c82ebd8271c9",
@@ -540,11 +542,11 @@
     "layout-grid": "db667b6387f02f69112ffff25cd03485fe9f78b146b6e6f95ac00213f668990a",
     "layout-panel-off": "fca5c87c7fa90597a016838200ac41f9a78b35f481b7896c3b37b64b07e06627",
     "layout-panel": "02b9448297364a6960376d5891379c78b8d961a65fc8ab38c92c3a91dc25af1e",
-    "layout-sidebar-left-off-session": "699b34abab5d833b62338f33359db88410d55b684c711a63c346141f5b2f451d",
+    "layout-sidebar-left-off-session": "6ef7961cd3b956060a70f1272677f2a3c0205cbb602234cfc6f44c5849b173b2",
     "layout-sidebar-left-off": "d62ae35d27569596f7913ea051a5fd298a05cdbb9a1af0356f8aa645f08ab443",
     "layout-sidebar-left-session": "7069f9f5dac9209bbdf0971d1d6e138f3dc8f15de9b3a0602d96a22cbcc93e10",
     "layout-sidebar-left": "00ad22d60d2f6a5c0cdcf15b30285463d2c83584b8ebf6d62749630370737784",
-    "layout-sidebar-right-off-session": "68e79bb3c4e263fe11350c3118ecf46bd5aa256d68f15b9330f765ba5dc891b7",
+    "layout-sidebar-right-off-session": "c05f557efe3430ebc4f4889d6d230afc420d13cf34eec584c7b8ce4ac91d3014",
     "layout-sidebar-right-off": "d9741c7222a399d575d548fcff06d00df15b1207c8183431094b36cee903d24b",
     "layout-sidebar-right-session": "329b6b5e87cfd6b9c3d339c675132eef5feb3f7353dcc2addd8b09adb4e268c3",
     "layout-sidebar-right": "dbf4736c660e9215bd27a5972d7ad9beff8a7b008f6381a80d5da59f7f02ba76",
