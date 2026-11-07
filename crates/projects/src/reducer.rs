@@ -40,6 +40,8 @@ pub(crate) fn apply(
                 scope: *scope,
                 name: name.clone(),
                 description: description.clone(),
+                icon: None,
+                color: None,
                 roots: BTreeMap::new(),
                 session_ids: BTreeSet::new(),
                 materials: materials.clone(),
@@ -116,6 +118,8 @@ fn apply_existing(project: &mut Project, command: &ProjectCommand) -> Result<(),
                 project.materials = materials.clone();
             }
         }
+        ProjectCommand::SetIcon { icon } => project.icon.clone_from(icon),
+        ProjectCommand::SetColor { color } => project.color.clone_from(color),
         ProjectCommand::AddRoot { root } => {
             root.validate()?;
             if project

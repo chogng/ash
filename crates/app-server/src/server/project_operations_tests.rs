@@ -390,6 +390,71 @@ fn call(
 }
 
 #[test]
+fn project_appearance_updates_one_field_and_preserves_project_details() {
+    let fixture = Fixture::new();
+    let mut host = fixture.server.product_host_connection();
+    initialize(&fixture.server, &mut host);
+    let created = call(
+        &fixture.server,
+        &mut host,
+        2,
+        "project/create",
+        serde_json::json!({
+            "commandId": "create-review", "projectId": "review", "name": "Review", "description": "Check results",
+        }),
+    );
+    assert_eq!(created["result"]["project"]["revision"], 1);
+    let mut update = |id, revision, field: &str, value| {
+        call(
+            &fixture.server,
+            &mut host,
+            id,
+            "project/appearance/update",
+            serde_json::json!({
+                "commandId": format!("review-appearance-{id}"), "projectId": "review",
+                "expectedRevision": revision, "field": field, "value": value,
+            }),
+        )
+    };
+    assert_eq!(
+        update(3, 1, "icon", Some("chat"))["result"]["project"]["icon"],
+        "chat"
+    );
+    assert_eq!(
+        update(4, 1, "color", Some("terminal.ansiRed"))["error"]["message"],
+        "ProjectRevisionConflict"
+    );
+    assert_eq!(
+        update(5, 2, "color", Some("invalid token"))["error"]["message"],
+        "ProjectOperationFailed"
+    );
+    let updated = update(6, 2, "color", Some("terminal.ansiRed"));
+    assert_eq!(updated["result"]["project"]["icon"], "chat");
+    assert_eq!(updated["result"]["project"]["color"], "terminal.ansiRed");
+    let cleared = update(7, 3, "icon", None);
+    assert_eq!(cleared["result"]["project"]["color"], "terminal.ansiRed");
+    assert!(cleared["result"]["project"].get("icon").is_none());
+    let listed = call(
+        &fixture.server,
+        &mut host,
+        8,
+        "project/list",
+        serde_json::json!({}),
+    );
+    assert_eq!(listed["result"]["projects"][0]["color"], "terminal.ansiRed");
+    let read = call(
+        &fixture.server,
+        &mut host,
+        9,
+        "project/read",
+        serde_json::json!({"projectId": "review"}),
+    );
+    assert_eq!(read["result"]["project"]["description"], "Check results");
+    assert_eq!(read["result"]["project"]["color"], "terminal.ansiRed");
+    assert!(read["result"]["project"].get("icon").is_none());
+}
+
+#[test]
 fn project_materials_round_trip_without_granting_file_access() {
     let fixture = Fixture::new();
     let mut host = fixture.server.product_host_connection();

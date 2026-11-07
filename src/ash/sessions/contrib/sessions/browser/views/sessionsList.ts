@@ -6,7 +6,7 @@ import { ISessionSectionOrderService } from '../../../../services/sessions/brows
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../../services/sessions/browser/sessionGroupsService.js';
-import { CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
+import { CHANGE_PROJECT_APPEARANCE, CHANGE_SESSION_GROUP_APPEARANCE, pickProjectAppearance } from './sessionGroupAppearancePicker.js';
 import '../media/sessionsList.css';
 import { addDisposableListener, getWindow, h, isHTMLElement } from '../../../../../base/browser/dom.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
@@ -16,6 +16,7 @@ import { appendIcon, getRegisteredIcon } from '../../../../../base/browser/ui/lx
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize } from '../../../../../nls.js';
 import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
 import { AbstractDisposable, Disposable, DisposableMap, type DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { MOVE_CHAT_TO_SESSION_ACTION_ID } from '../sessionsActions.js';
 import { SessionActionFeedback } from '../sessionActionFeedback.js';
@@ -37,9 +38,12 @@ import { IMenuService, SubmenuItemAction, type MenuId } from '../../../../../pla
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
-import { IProjectService, type Project } from '../../../../../platform/projects/common/projectService.js';
+import { IProjectService, type Project, type ProjectSummary } from '../../../../../platform/projects/common/projectService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { ARCHIVE_PROJECT_COMMAND, getProjectRemovalActions } from '../../../projects/browser/projectsActions.js';
 import { WorkbenchObjectTree } from '../../../../../platform/list/browser/listService.js';
 import { defaultListStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ObjectTreeElement, ObjectTreeNode } from '../../../../../base/browser/ui/tree/objectTreeModel.js';
@@ -47,7 +51,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { Menus } from '../../../../browser/menus.js';
-import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogRow } from './sessionsCatalogList.js';
+import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogProjectAppearance, SessionsCatalogProjectOperations, SessionsCatalogRow } from './sessionsCatalogList.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
@@ -224,6 +228,7 @@ export class SessionsList extends DomWidget {
 	private readonly catalogViewport: HTMLElement | null | undefined;
 	private readonly catalogRows = new Map<string, SessionsCatalogRow>();
 	private readonly catalogMenu = this._register(new MutableDisposable());
+	private readonly projectRename = this._register(new MutableDisposable());
 	private readonly catalogProjects = new Map<string, { readonly load: () => void; readonly anchor?: HTMLElement; }>();
 	private readonly catalogPaging = this._register(new RunOnceScheduler(() => {
 		if (!this.domNode.isConnected || !this.domNode.clientHeight) return;
@@ -256,6 +261,8 @@ export class SessionsList extends DomWidget {
 		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
 		@ISessionSectionOrderService private readonly sectionOrder: ISessionSectionOrderService,
 		@IBlockedSessionsIndicatorService indicator: IBlockedSessionsIndicatorService,
+		@IQuickInputService private readonly quickInput: IQuickInputService,
+		@IDialogService private readonly dialogs: IDialogService,
 		@IContextKeyService private readonly contextKeys?: IContextKeyService,
 		@IHoverService private readonly hoverService?: IHoverService,
 		@ISessionProviderScopeService private readonly providerScopes?: ISessionProviderScopeService,
@@ -591,22 +598,86 @@ export class SessionsList extends DomWidget {
 	private showSectionMenu(section: SessionListSection, group: SessionGroup, anchor: ContextMenuAnchor): void {
 		const actions = this.orderActions(section.domNode, 'section');
 		if (group.kind !== 'comparison') {
-			const appearanceAction = (property: 'icon' | 'color', label: string): IAction => ({
-				id: `${CHANGE_SESSION_GROUP_APPEARANCE}.${property}`,
-				label,
-				tooltip: '',
-				enabled: true,
-				run: () => this.commands.executeCommand(CHANGE_SESSION_GROUP_APPEARANCE, group.sectionId, property)
-					.catch(error => this.notifications.error(String(error))),
-			});
-			actions.push(
-				appearanceAction('icon', localize('sessions.list.changeGroupIcon', 'Change group icon')),
-				appearanceAction('color', localize('sessions.list.changeGroupColor', 'Change group color')),
-			);
+			actions.push(...this.appearanceActions(CHANGE_SESSION_GROUP_APPEARANCE,
+				field => this.commands.executeCommand(CHANGE_SESSION_GROUP_APPEARANCE, group.sectionId, field),
+				localize('sessions.list.changeGroupIcon', 'Change group icon'),
+				localize('sessions.list.changeGroupColor', 'Change group color')));
 		}
 		if (actions.length) {
 			this.contextMenus.showContextMenu({ getAnchor: () => anchor, getActions: () => actions, autoSelectFirstItem: true });
 		}
+	}
+
+	private ashProjectOperations(project: ProjectSummary): SessionsCatalogProjectOperations {
+		return {
+			rename: async (name, signal) => {
+				const current = await this.projectService.read(project.id, this.mode);
+				signal.throwIfAborted();
+				await this.projectService.update(current, name, current.description, current.materials);
+			},
+			archive: () => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.id, this.mode),
+			remove: { removesContents: false, run: () => this.projectService.remove(project) },
+		};
+	}
+
+	private showProjectMenu(title: string, change: ((field: 'icon' | 'color') => Promise<void>) | undefined,
+		operations: SessionsCatalogProjectOperations, anchor: ContextMenuAnchor): void {
+		const groups: IAction[][] = [];
+		const { rename } = operations;
+		if (rename) {
+			const label = localize('sessions.list.rename', 'Rename');
+			groups.push([{
+				id: 'projects.rename', label, tooltip: label, icon: Lxicon.edit, enabled: true,
+				run: () => this.renameProject(title, rename),
+			}]);
+		}
+		if (change) {
+			groups.push(this.appearanceActions(CHANGE_PROJECT_APPEARANCE, change,
+				localize('sessions.list.changeProjectIcon', 'Change Icon...'),
+				localize('sessions.list.changeProjectColor', 'Change Color...')));
+		}
+		const removal = getProjectRemovalActions(this.dialogs, title, operations, async operation => {
+			if (this.isDisposed) return;
+			try {
+				const completed = await operation();
+				if (completed !== false && !this.isDisposed) this.focus();
+			} catch (error) {
+				this.notifications.error(toErrorMessage(error));
+			}
+		});
+		if (removal.length) groups.push(removal);
+		const actions = Separator.join(...groups);
+		if (actions.length) this.contextMenus.showContextMenu({ getAnchor: () => anchor, getActions: () => actions, autoSelectFirstItem: true });
+	}
+
+	private async renameProject(title: string, rename: NonNullable<SessionsCatalogProjectOperations['rename']>): Promise<void> {
+		const controller = new AbortController();
+		const lifetime = toDisposable(() => controller.abort());
+		this.projectRename.value = lifetime;
+		try {
+			const name = (await this.quickInput.input({
+				title: localize('sessions.list.renameProject', 'Rename project'),
+				value: title,
+				validateInput: async value => value.trim() ? undefined : localize('sessions.list.projectNameRequired', 'Enter a project name.'),
+			}))?.trim();
+			if (controller.signal.aborted || !name || name === title) return;
+			await rename(name, controller.signal);
+			if (!controller.signal.aborted) status(localize('sessions.list.projectRenamed', 'Project renamed to {0}.', name));
+		} catch (error) {
+			if (!controller.signal.aborted && !isCancellationError(error)) this.notifications.error(toErrorMessage(error));
+		} finally {
+			if (this.projectRename.value === lifetime) this.projectRename.clear();
+		}
+	}
+
+	private appearanceActions(id: string, change: (field: 'icon' | 'color') => Promise<void>, iconLabel: string, colorLabel: string): IAction[] {
+		return ([['icon', iconLabel], ['color', colorLabel]] as const).map(([field, label]) => ({
+			id: `${id}.${field}`,
+			label,
+			tooltip: '',
+			enabled: true,
+			run: () => change(field).catch(error => this.notifications.error(toErrorMessage(error))),
+		}));
 	}
 
 	private automationVisibilityActions(selection: SessionsViewSelection): IAction[] {
@@ -834,23 +905,37 @@ export class SessionsList extends DomWidget {
 			}
 			return item;
 		};
-		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], kind: SessionListSectionKind = 'section', open?: () => void, group?: SessionGroup): HTMLElement => {
+		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], kind: SessionListSectionKind = 'section',
+			options?: { readonly open?: () => void; readonly group?: SessionGroup; readonly project?: ProjectSummary; readonly projectAppearance?: SessionsCatalogProjectAppearance; readonly projectOperations?: SessionsCatalogProjectOperations; }): HTMLElement => {
 			activeSections.add(key);
 			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, kind,
 				collapsed => this.tree.setSectionCollapsed(key, collapsed), key === 'projects' ? this.createListToolbar : undefined));
 			const sorted = sortRows(children);
 			childrenByRow.set(section.domNode, key === attentionSection ? sorted
 				: reorderChildren(sorted, ids => this.listModel.getSessionOrder(this.mode, key, ids), 'rowOrderId'));
+			const { open, group, project, projectAppearance, projectOperations } = options ?? {};
+			const appearance = project ?? projectAppearance ?? group;
 			section.update(title, {
 				open,
 				actionLabel: open ? localize('sessions.list.openComparison', 'Open comparison {0}', title) : undefined,
-				icon: group?.icon ? getRegisteredIcon(group.icon, ownerDocument) : undefined,
-				color: group?.color ? `var(${colorCssVariable(group.color)})` : undefined,
+				icon: appearance?.icon ? getRegisteredIcon(appearance.icon, ownerDocument) : undefined,
+				color: appearance?.color ? `var(${colorCssVariable(appearance.color)})` : undefined,
 			});
 			if (group) {
 				section.domNode.dataset.sectionOrderId = key;
 				section.domNode.dataset.groupDropTarget = String(group.kind !== 'comparison');
 				section.setContextMenu(anchor => this.showSectionMenu(section, group, anchor));
+			}
+			if (kind === 'project') {
+				if (project) {
+					section.setContextMenu(anchor => this.showProjectMenu(title, field =>
+						this.commands.executeCommand(CHANGE_PROJECT_APPEARANCE, project.id, field), this.ashProjectOperations(project), anchor));
+				} else if (projectAppearance || projectOperations?.archive || projectOperations?.rename || projectOperations?.remove) {
+					section.setContextMenu(anchor => this.showProjectMenu(title, projectAppearance && (field =>
+						pickProjectAppearance(this.quickInput, field, projectAppearance[field], value => projectAppearance.set(field, value))), projectOperations ?? {}, anchor));
+				} else {
+					section.setContextMenu(undefined);
+				}
 			}
 			return section.domNode;
 		};
@@ -909,7 +994,13 @@ export class SessionsList extends DomWidget {
 					item.setDisabled(!action.action, false);
 					children.push(item.domNode);
 				}
-				const node = sectionFor(key, project.title, children, 'project');
+				const node = sectionFor(key, project.title, children, 'project', {
+					project: project.localProject, projectAppearance: project.appearance,
+					projectOperations: project.operations && {
+						...project.operations,
+						archive: project.operations.archive && (() => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.key, 'catalog')),
+					},
+				});
 				node.dataset.catalogProject = 'true';
 				node.dataset.projectId = project.key;
 				node.dataset.item = `project:${project.key}`;
@@ -1005,13 +1096,16 @@ export class SessionsList extends DomWidget {
 			if (!members.length && !drafts.length && !this.search.matches(project.name)) continue;
 			const key = `project:${project.id}`;
 			if (this.mode === 'code') {
-				const section = sectionFor(key, project.name, [...members, ...drafts], 'project');
+				const section = sectionFor(key, project.name, [...members, ...drafts], 'project', { project });
 				section.dataset.projectId = project.id;
 				projects.push(section);
 			} else {
-				const item = itemFor(key, 'project', Lxicon.projects);
+				const item = itemFor(key, 'project');
 				item.domNode.dataset.projectId = project.id;
 				item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
+				item.updateProjectAppearance(project);
+				item.setContextMenu(anchor => this.showProjectMenu(project.name, field =>
+					this.commands.executeCommand(CHANGE_PROJECT_APPEARANCE, project.id, field), this.ashProjectOperations(project), anchor));
 				projects.push(item.domNode);
 			}
 		}
@@ -1029,8 +1123,10 @@ export class SessionsList extends DomWidget {
 				if (item) { members.push(item); remaining.delete(id); }
 			}
 			if (this.search.hasQuery && !members.length && !this.search.matches(group.name)) continue;
-			(this.mode === 'code' ? recent : chatGroups).push(sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code' ? 'subgroup' : 'section',
-				group.kind === 'comparison' ? () => { void this.openComparison(group.sessionIds); } : undefined, group));
+			(this.mode === 'code' ? recent : chatGroups).push(sectionFor(`group:${group.sectionId}`, group.name, members, this.mode === 'code' ? 'subgroup' : 'section', {
+				open: group.kind === 'comparison' ? () => { void this.openComparison(group.sessionIds); } : undefined,
+				group,
+			}));
 		}
 		const orderedRecent = reorderChildren(recent, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId');
 		if (this.mode === 'code' && (grouping === 'none' || grouping === 'projects')) {
@@ -1249,6 +1345,7 @@ class SessionListItem extends AbstractDisposable {
 	private readonly contextListeners;
 	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
 	private catalogRow: SessionsCatalogRow | undefined;
+	private projectIcon: HTMLSpanElement | undefined;
 
 	describe(children: readonly ISessionsListTreeNode[]): ISessionsListTreeNode {
 		const id = this.domNode.dataset.item!;
@@ -1358,6 +1455,16 @@ class SessionListItem extends AbstractDisposable {
 		}
 	}
 
+	updateProjectAppearance(project: ProjectSummary): void {
+		const icon = (project.icon && getRegisteredIcon(project.icon, this.button.ownerDocument)) || Lxicon.projects;
+		if (this.projectIcon?.dataset.ashIconId !== icon.id) {
+			this.projectIcon?.remove();
+			this.projectIcon = appendIcon(icon, this.button);
+			this.button.prepend(this.projectIcon);
+		}
+		this.projectIcon!.style.color = project.color ? `var(${colorCssVariable(project.color)})` : '';
+	}
+
 	update(title: string, selected: boolean, open: () => void, management?: SessionManagementInfo): void {
 		this.row.setTitle(title);
 		this.leadingIcon?.setTitle(title);
@@ -1430,6 +1537,8 @@ class SessionListSection extends Disposable {
 	private spinner: HTMLSpanElement | undefined;
 	private open: (() => void) | undefined;
 	private contextMenu: ((anchor: ContextMenuAnchor) => void) | undefined;
+	private projectIcon: Icon | undefined;
+	private collapsed = true;
 
 	private get subgroup(): boolean { return this.kind !== 'section'; }
 	get title(): string { return this.label.textContent ?? ''; }
@@ -1455,10 +1564,16 @@ class SessionListSection extends Disposable {
 			this.domNode.classList.add('ash-sessions-list-section-with-actions');
 			this.toolbar = createToolbar(this.domNode, this._store);
 		}
-		this._register(addDisposableListener(this.button, 'click', event => { event.stopPropagation(); if (this.open) this.open(); else toggle(); }));
+		this._register(addDisposableListener(this.button, 'click', event => {
+			event.stopPropagation();
+			if (this.open) this.open();
+			else if (this.kind === 'project' && this.contextMenu && !this.button.hasAttribute('aria-expanded')) this.contextMenu(this.button);
+			else toggle();
+		}));
 		this._register(addDisposableListener(this.button, 'contextmenu', event => {
 			if (!this.contextMenu) return;
 			event.preventDefault();
+			event.stopPropagation();
 			this.contextMenu({ x: event.clientX, y: event.clientY, targetWindow: getWindow(this.button) });
 		}));
 		this._register(addDisposableListener(this.button, 'keydown', event => {
@@ -1476,9 +1591,10 @@ class SessionListSection extends Disposable {
 		}));
 	}
 
-	setContextMenu(menu: (anchor: ContextMenuAnchor) => void): void {
+	setContextMenu(menu: ((anchor: ContextMenuAnchor) => void) | undefined): void {
 		this.contextMenu = menu;
-		this.button.setAttribute('aria-haspopup', 'menu');
+		if (menu) this.button.setAttribute('aria-haspopup', 'menu');
+		else this.button.removeAttribute('aria-haspopup');
 	}
 
 	setLoading(loading: boolean): void {
@@ -1501,6 +1617,12 @@ class SessionListSection extends Disposable {
 		else this.button.removeAttribute('aria-label');
 		const customIcon = options?.icon;
 		const color = options?.color ?? '';
+		if (this.kind === 'project') {
+			this.projectIcon = customIcon;
+			this.icon.style.color = color;
+			this.renderIcon();
+			return;
+		}
 		this.icon.style.color = customIcon ? '' : color;
 		if (customIcon) {
 			if (this.appearanceIcon.firstElementChild?.getAttribute('data-ash-icon-id') !== customIcon.id) {
@@ -1515,7 +1637,8 @@ class SessionListSection extends Disposable {
 	}
 
 	renderCollapse(collapsed: boolean, collapsible: boolean): void {
-		if (!collapsible) {
+		this.collapsed = collapsed;
+		if (!collapsible && !(this.kind === 'project' && this.contextMenu)) {
 			if (this.label.parentElement !== this.heading) {
 				this.heading.classList.add('ash-sessions-list-section-static');
 				this.heading.replaceChildren(...(this.subgroup ? [this.icon, this.label] : [this.label]));
@@ -1527,12 +1650,19 @@ class SessionListSection extends Disposable {
 				this.heading.replaceChildren(this.button);
 				this.heading.classList.remove('ash-sessions-list-section-static');
 			}
-			this.button.setAttribute('aria-expanded', String(!collapsed));
 		}
-		const chevron = collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
-		const icon = this.subgroup ? (collapsed ? Lxicon.folder : Lxicon.folderOpened) : chevron;
-		if (this.icon.firstElementChild?.getAttribute('data-ash-icon-id') !== icon.id) {
-			this.icon.replaceChildren();
+		if (collapsible) this.button.setAttribute('aria-expanded', String(!collapsed));
+		else this.button.removeAttribute('aria-expanded');
+		this.renderIcon();
+	}
+
+	private renderIcon(): void {
+		const chevron = this.collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
+		const icon = this.projectIcon ?? (this.subgroup ? (this.collapsed ? Lxicon.folder : Lxicon.folderOpened) : chevron);
+		const glyphs = this.icon.querySelectorAll(':scope > .ash-icon');
+		if (glyphs[0]?.getAttribute('data-ash-icon-id') !== icon.id
+			|| this.kind === 'project' && glyphs[1]?.getAttribute('data-ash-icon-id') !== chevron.id) {
+			for (const glyph of glyphs) glyph.remove();
 			appendIcon(icon, this.icon);
 			if (this.kind === 'project') {
 				appendIcon(chevron, this.icon).classList.add('ash-sessions-list-project-chevron');

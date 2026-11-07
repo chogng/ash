@@ -8,6 +8,84 @@ import { connectProfile, enableFixtureModel } from './sessionProfileFixture.js';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { Menus } from '../../../automation/menus.js';
+import { QuickAccess } from '../../../automation/quickaccess.js';
+
+test('sidebar project appearance follows the project across window reopen', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+	const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+	try {
+		const { client } = connection;
+		const create = async (name: string, scope: 'chat' | 'code') => (await client.request(APP_SERVER_METHODS['project/create'], {
+			commandId: randomUUID(), projectId: randomUUID(), name, description: '', materials: [], scope,
+		})).project;
+		const chat = await create('Chat appearance fixture', 'chat');
+		const code = await create('Code appearance fixture', 'code');
+		const read = async (projectId: string) => (await client.request(APP_SERVER_METHODS['project/read'], { projectId })).project;
+		let page = await workbench.openAgentsWindow(target.kind);
+		const header = (name: string) => page.getByRole('button', { name, exact: true });
+		const pick = async (action: string, title: string, choice: string) => {
+			await page.getByRole('menuitem', { name: action, exact: true }).click();
+			const picker = new QuickAccess(page);
+			await expect(picker.input).toHaveAttribute('placeholder', title);
+			await picker.search(choice);
+			await picker.select(choice);
+		};
+
+		await header(chat.name).click({ button: 'right' });
+		await pick('Change Icon...', 'Change project icon', 'Chat');
+		await expect(header(chat.name).locator('[data-ash-icon-id="chat"]')).toHaveCount(1);
+		await header(chat.name).press('Shift+F10');
+		await pick('Change Color...', 'Change project color', 'Red');
+		await expect.poll(async () => (await read(chat.projectId)).color).toBe('terminal.ansiRed');
+		await expect(header(chat.name).locator('.ash-sessions-list-project-icon')).toHaveAttribute('style', /color: var\(--ash-terminal-ansiRed\)/);
+
+		page = await workbench.reopenAgentsWindow(application, page);
+		await expect(header(chat.name).locator('[data-ash-icon-id="chat"]')).toHaveCount(1);
+		await header(chat.name).press('Shift+F10');
+		await pick('Change Icon...', 'Change project icon', 'Default');
+		await expect.poll(async () => (await read(chat.projectId)).icon).toBeUndefined();
+		expect((await read(chat.projectId)).color).toBe('terminal.ansiRed');
+
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await expect(header(code.name)).toBeVisible();
+		await expect(header(code.name)).not.toHaveAttribute('aria-expanded');
+		await header(code.name).press('Shift+F10');
+		await pick('Change Icon...', 'Change project icon', 'Chat');
+		await expect(header(code.name).locator('[data-ash-icon-id="chat"]')).toHaveCount(1);
+		expect((await read(code.projectId)).icon).toBe('chat');
+		await header(code.name).press('Shift+F10');
+		await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
+		const name = page.locator('.ash-quick-input-host').getByRole('textbox');
+		await expect(name).toHaveValue(code.name);
+		await name.fill('Renamed Code project');
+		await name.press('Enter');
+		const renamed = header('Renamed Code project');
+		await expect(renamed).toBeVisible();
+		const createSession = async (title: string) => (await client.request(APP_SERVER_METHODS['session/create'], {
+			commandId: randomUUID(), kind: 'code', title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory },
+		})).session.sessionId;
+		const members = [await createSession('First project conversation'), await createSession('Second project conversation')];
+		const outside = await createSession('Unrelated conversation');
+		for (const sessionId of members) {
+			const project = await read(code.projectId);
+			await client.request(APP_SERVER_METHODS['project/session/link'], {
+				commandId: randomUUID(), projectId: project.projectId, expectedRevision: project.revision, sessionId,
+			});
+		}
+		await renamed.press('Shift+F10');
+		await page.getByRole('menuitem', { name: 'Archive', exact: true }).click();
+		const archive = page.getByRole('dialog').getByRole('button', { name: 'Archive', exact: true });
+		await archive.click();
+		await expect(renamed).toHaveCount(0);
+		const archived = await read(code.projectId);
+		expect(archived.status).toBe('archived');
+		expect(archived.sessionIds.toSorted()).toEqual(members.toSorted());
+		const { sessions } = await client.request(APP_SERVER_METHODS['session/list'], {});
+		expect(members.map(id => sessions.find(session => session.sessionId === id)?.status)).toEqual(['archived', 'archived']);
+		expect(sessions.find(session => session.sessionId === outside)?.status).toBe('active');
+	} finally {
+		await connection.close();
+	}
+});
 
 test('switching modes separates conversations, projects and Activity Bar entries', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
@@ -522,6 +600,7 @@ test('Sessions Projects card actions persist pins, merge gallery edits, archive 
 		await expect(page.locator('.ash-projects h1')).toHaveText('Projects');
 		await expect(pinFor('Revised review plan')).toHaveAttribute('aria-pressed', 'true');
 		await (await openMenu('Revised review plan')).getByRole('menuitem', { name: 'Archive', exact: true }).click();
+		await page.getByRole('dialog').getByRole('button', { name: 'Archive', exact: true }).click();
 		await expect(rowFor('Revised review plan')).toHaveCount(0);
 		expect((await client.request(APP_SERVER_METHODS['project/read'], { projectId: first.projectId })).project.status).toBe('archived');
 		await (await openMenu(second.name)).getByRole('menuitem', { name: 'Delete', exact: true }).click();

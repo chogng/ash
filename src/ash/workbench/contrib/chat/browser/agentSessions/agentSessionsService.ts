@@ -40,6 +40,7 @@ export interface IAgentSessionActionsService {
 	readonly sessions: readonly IAgentSessionActionItem[];
 	initialize(): Promise<void>;
 	resolveTarget(argument: unknown, useActive?: boolean): IAgentSessionActionTarget;
+	resolveCatalogArchiveTarget(catalogId: string): { readonly title: string; archive(): Promise<boolean>; };
 	/** Resolve the requesting composer's identity, without materializing a draft or changing selection. */
 	getReviewEnvironmentTargets(target: { readonly sessionId?: string; readonly threadId?: string; readonly untitledSessionId?: string; }, workspace: IWorkspace): readonly IAgentSessionReviewEnvironmentTarget[];
 	discardDraft(argument: unknown): boolean;

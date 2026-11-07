@@ -25,6 +25,7 @@ export class AppServerProjectService implements IProjectService {
 			return result.projects.map(project => ({
 				id: project.projectId, revision: project.revision, name: project.name, archived: project.status === 'archived', sessionCount: project.sessionCount,
 				createdAtMs: project.createdAtMs ?? undefined, updatedAtMs: project.updatedAtMs ?? undefined,
+				icon: project.icon, color: project.color,
 			}));
 		} catch (error) { throw projectError(error); }
 	}
@@ -78,6 +79,14 @@ export class AppServerProjectService implements IProjectService {
 		} catch (error) { throw projectError(error); }
 	}
 
+	public async setAppearance(project: ProjectSummary, field: 'icon' | 'color', value: string | undefined): Promise<void> {
+		try {
+			await appServerRequest(this.connection, 'project/appearance/update', {
+				commandId: generateUuid(), projectId: project.id, expectedRevision: project.revision, field, value: value ?? null,
+			});
+		} catch (error) { throw projectError(error); }
+	}
+
 	public async restore(project: ProjectSummary): Promise<Project> {
 		try {
 			return fromDto((await appServerRequest(this.connection, 'project/restore', { commandId: generateUuid(), projectId: project.id, expectedRevision: project.revision })).project);
@@ -96,6 +105,7 @@ function fromDto(project: ProjectDto): Project {
 	return {
 		id: project.projectId, revision: project.revision, name: project.name, archived: project.status === 'archived',
 		createdAtMs: project.createdAtMs ?? undefined, updatedAtMs: project.updatedAtMs ?? undefined,
+		icon: project.icon, color: project.color,
 		description: project.description, sessionIds: project.sessionIds, sessionCount: project.sessionIds.length,
 		roots: project.roots.map(root => URI.parse(root.path)),
 		materials: project.materials.map(material => ({ name: material.name, kind: material.kind, resource: URI.parse(material.path) })),

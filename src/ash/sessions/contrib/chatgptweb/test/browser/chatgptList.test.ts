@@ -10,6 +10,156 @@ const rateLimitNotice = 'ChatGPT 暂时限制了历史请求，请稍后重试�
 suite('ChatGPT catalog in the Ash chat list', () => {
 	const browserTests = useBrowserTests();
 
+	test('project archive visits every page and retries the remaining ChatGPT conversations', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+			json: { items: [{ gizmo: { id: 'g-p-batch', display: { name: 'Batch project' } } }], cursor: null },
+		}));
+		const requests: string[] = [];
+		const archived = new Set(['already-archived']);
+		let failSecond = true;
+		await page.route('**/service/backend-api/gizmos/g-p-batch/conversations?*', route => {
+			const next = new URL(route.request().url()).searchParams.has('cursor');
+			requests.push(next ? 'next page' : 'first page');
+			const ids = next ? ['second'] : ['first', 'already-archived'];
+			return route.fulfill({
+				json: { items: ids.map(id => ({ id, title: id, is_archived: archived.has(id) })), cursor: next ? null : 'next' },
+			});
+		});
+		await page.route('**/service/backend-api/conversation/*', route => {
+			if (route.request().method() !== 'PATCH') return route.fallback();
+			const id = new URL(route.request().url()).pathname.split('/').at(-1)!;
+			requests.push(id);
+			expect(route.request().postDataJSON()).toEqual({ is_archived: true });
+			if (id === 'second' && failSecond) {
+				failSecond = false;
+				return route.fulfill({ status: 503 });
+			}
+			archived.add(id);
+			return route.fulfill({ status: 204 });
+		});
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		const project = page.locator('.ash-chat-navigation-list').getByRole('button', { name: 'Batch project', exact: true });
+		const confirm = page.getByRole('dialog');
+		const openArchive = async () => {
+			await project.press('Shift+F10');
+			await page.getByRole('menuitem', { name: '归档', exact: true }).click();
+		};
+		await openArchive();
+		await expect(confirm).toContainText('这会归档项目中的所有活跃对话');
+		await confirm.getByRole('button', { name: '取消', exact: true }).click();
+		expect(requests).toEqual([]);
+		await openArchive();
+		await confirm.getByRole('button', { name: '归档', exact: true }).click();
+		await expect.poll(() => historyNotices(page)).toContain('未能完成“Batch project”的归档。请重试以继续。');
+		await expect(project).toBeVisible();
+		expect(requests).toEqual(['first page', 'next page', 'first', 'second']);
+
+		await openArchive();
+		await confirm.getByRole('button', { name: '归档', exact: true }).click();
+		await expect(project).toHaveCount(0);
+		expect(requests).toEqual(['first page', 'next page', 'first', 'second', 'first page', 'next page', 'second']);
+	});
+
+	test('sidebar project menu renames, archives, and confirms deletion through the ChatGPT catalog', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page);
+		const writes: unknown[] = [];
+		const deleted: string[] = [];
+		await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+			json: {
+				items: ['Research', 'Writing'].map((name, index) => ({
+					gizmo: { id: `g-p-sidebar-${index}`, display: { name } },
+				})), cursor: null
+			},
+		}));
+		await page.route('**/service/backend-api/gizmos/g-p-sidebar-0', route => route.fulfill({
+			json: { gizmo: { id: 'g-p-sidebar-0', instructions: 'Saved notes', display: { name: 'Research', theme: 'blue' } } },
+		}));
+		await page.route('**/service/backend-api/projects/g-p-sidebar-0', route => {
+			writes.push(route.request().postDataJSON());
+			return route.fulfill({ status: 204 });
+		});
+		await page.route('**/service/backend-api/gizmos/g-p-sidebar-1', route => {
+			deleted.push(route.request().method());
+			return route.fulfill({ status: 204 });
+		});
+		await page.goto('/chatgptNavigation.html?projects&locale=zh-CN');
+		const sidebar = page.locator('.ash-chat-navigation-list');
+		const project = (name: string) => sidebar.getByRole('button', { name, exact: true });
+		const action = (name: string) => page.getByRole('menuitem', { name, exact: true });
+		await project('Research').click({ button: 'right' });
+		await action('重命名').click();
+		const input = page.locator('.ash-quick-input-host').getByRole('textbox');
+		await expect(input).toHaveValue('Research');
+		await input.fill('  Updated research  ');
+		await input.press('Enter');
+		await expect(project('Updated research')).toBeVisible();
+		expect(writes).toEqual([{ name: 'Updated research', instructions: 'Saved notes', emoji: null, theme: 'blue' }]);
+		await project('Updated research').press('Shift+F10');
+		await action('归档').click();
+		await page.getByRole('dialog').getByRole('button', { name: '归档', exact: true }).click();
+		await expect(project('Updated research')).toHaveCount(0);
+		const projects = page.locator('.ash-projects');
+		await projects.getByRole('button', { name: '已归档', exact: true }).click();
+		await projects.getByRole('button', { name: '取消归档 Updated research' }).click();
+		await expect(project('Updated research')).toBeVisible();
+
+		const dialog = page.getByRole('dialog');
+		await project('Writing').click({ button: 'right' });
+		await action('删除').click();
+		await expect(dialog).toContainText('这会永久删除项目、其中的对话和说明');
+		await dialog.getByRole('button', { name: '取消', exact: true }).click();
+		await expect(project('Writing')).toBeVisible();
+		expect(deleted).toEqual([]);
+		await project('Writing').click({ button: 'right' });
+		await action('删除').click();
+		await dialog.getByRole('button', { name: '删除', exact: true }).click();
+		await expect(project('Writing')).toHaveCount(0);
+		expect(deleted).toEqual(['DELETE']);
+	});
+
+	test('ChatGPT project titles open the appearance menu and retain their own icon and color', async () => {
+		const { page } = browserTests;
+		await mockChatGPTRequests(page);
+		await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
+			json: {
+				items: ['Research', 'Writing'].map((name, index) => ({
+					gizmo: { id: `g-p-appearance-${index}`, display: { name } },
+				})), cursor: null
+			},
+		}));
+		await page.goto('/chatgptNavigation.html?locale=zh-CN');
+		const sidebar = page.locator('.ash-chat-navigation-list');
+		const research = sidebar.getByRole('button', { name: 'Research', exact: true });
+		const writing = sidebar.getByRole('button', { name: 'Writing', exact: true });
+		const iconSlot = research.locator('.ash-sessions-list-project-icon');
+		const pick = async (action: string, title: string, value: string) => {
+			await page.getByRole('menuitem', { name: action, exact: true }).click();
+			const picker = page.getByRole('combobox', { name: title, exact: true });
+			await picker.fill(value);
+			await page.getByRole('option').filter({
+				has: page.locator('.ash-quick-pick-row-label').getByText(value, { exact: true }),
+			}).click();
+		};
+
+		await research.click({ button: 'right' });
+		await pick('更改图标…', '更改项目图标', '聊天');
+		await expect(iconSlot.locator('[data-ash-icon-id="chat"]')).toHaveCount(1);
+		await research.press('Shift+F10');
+		await pick('更改颜色…', '更改项目颜色', '红色');
+		await expect(iconSlot).toHaveAttribute('style', /color: var\(--ash-terminal-ansiRed\)/);
+		await expect(writing.locator('[data-ash-icon-id="folder"]')).toHaveCount(1);
+		await page.reload();
+		await expect(iconSlot.locator('[data-ash-icon-id="chat"]')).toHaveCount(1);
+		await expect(iconSlot).toHaveAttribute('style', /color: var\(--ash-terminal-ansiRed\)/);
+		await research.press('Shift+F10');
+		await pick('更改图标…', '更改项目图标', '默认');
+		await expect(iconSlot.locator('[data-ash-icon-id="folder"]')).toHaveCount(1);
+		await expect(iconSlot).toHaveAttribute('style', /color: var\(--ash-terminal-ansiRed\)/);
+	});
+
 	test('the Chat sidebar shows Ash and ChatGPT rows and excludes Code', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);
@@ -625,6 +775,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await updated.hover();
 			await updated.locator('..').locator('.ash-toolbar-more-actions button').click();
 			await page.getByRole('menuitem', { name: zh ? '归档' : 'Archive', exact: true }).click();
+			await page.getByRole('dialog').getByRole('button', { name: zh ? '归档' : 'Archive', exact: true }).click();
 			await expect(updated).toHaveCount(0);
 			const archived = projects.getByRole('button', { name: zh ? '已归档' : 'Archived', exact: true });
 			await archived.click();
@@ -839,7 +990,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(rename).toBeFocused();
 			const menuItems = menu.getByRole('menuitem');
 			await expect(menu.getByRole('separator').or(menuItems)).toHaveText([labels.rename, '', labels.share, labels.move, '', labels.archive, labels.delete]);
-			await expect(menuItems.locator('.ash-menu-leading-slot .ash-icon-label-icon > .ash-icon')).toHaveCount(5);
+			await expect(menuItems.locator('.ash-menu-leading-slot .ash-icon')).toHaveCount(5);
 			const deleteItem = menuItems.last();
 			const errorColor = await deleteItem.evaluate(element => {
 				const sample = element.appendChild(document.createElement('span'));
@@ -893,6 +1044,12 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(title).toBeVisible();
 			await openMore();
 			await page.getByRole('menuitem', { name: labels.archive, exact: true }).click();
+			await dialog.getByRole('button', { name: labels.cancel, exact: true }).click();
+			await expect(row).toBeVisible();
+			expect(writes.some(write => write.body?.is_archived)).toBe(false);
+			await openMore();
+			await page.getByRole('menuitem', { name: labels.archive, exact: true }).click();
+			await dialog.getByRole('button', { name: labels.archive, exact: true }).click();
 			await expect(row).toHaveCount(0);
 			const third = page.locator('.ash-chat-navigation-row[data-item="chatgpt:third"]');
 			await third.hover();

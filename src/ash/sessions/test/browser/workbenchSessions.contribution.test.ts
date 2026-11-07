@@ -75,7 +75,7 @@ function createReviewServices(profileId: string): InstantiationService {
 	}));
 	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
 	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
-	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
+	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService, undefined));
 	return services;
 }
 

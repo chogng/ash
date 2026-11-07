@@ -3601,6 +3601,8 @@ fn project_folder_picker_switches_only_to_a_non_current_root_without_a_draft() {
         status: ProjectStatusDto::Active,
         name: "Project".into(),
         description: String::new(),
+        icon: None,
+        color: None,
         roots: vec![
             ProjectRootDto {
                 environment_id: EnvId::local(),
@@ -3677,6 +3679,8 @@ fn project_folder_picker_opens_add_root_when_add_item_is_selected() {
         status: ProjectStatusDto::Active,
         name: "Project".into(),
         description: String::new(),
+        icon: None,
+        color: None,
         roots: vec![ProjectRootDto {
             environment_id: EnvId::local(),
             dir_id: dir_id('a'),

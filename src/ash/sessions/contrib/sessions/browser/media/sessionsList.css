@@ -377,13 +377,13 @@
 	visibility: hidden;
 }
 
-.ash-sessions-list-section-toggle:is(:hover, :focus-visible)
+.ash-sessions-list-section-toggle[aria-expanded]:is(:hover, :focus-visible)
 	.ash-sessions-list-project-icon
 	> .ash-icon {
 	visibility: hidden;
 }
 
-.ash-sessions-list-section-toggle:is(:hover, :focus-visible)
+.ash-sessions-list-section-toggle[aria-expanded]:is(:hover, :focus-visible)
 	.ash-sessions-list-project-icon
 	> .ash-sessions-list-project-chevron {
 	visibility: visible;

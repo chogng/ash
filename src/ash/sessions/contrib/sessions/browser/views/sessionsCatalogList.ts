@@ -2,6 +2,7 @@ import type { IAction } from '../../../../../base/common/actions.js';
 import type { Icon } from '../../../../../base/common/icon.js';
 import type { IObservable } from '../../../../../base/common/observable.js';
 import type { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import type { ProjectSummary } from '../../../../../platform/projects/common/projectService.js';
 import type { ISessionStatusIcon } from '../../../../browser/sessionStatusIcon.js';
 import type { ISession } from '../../../../services/sessions/common/session.js';
 import type { SessionListOrganization } from './sessionsListActions.js';
@@ -41,9 +42,24 @@ export interface SessionsCatalogProject {
 	readonly title: string;
 	readonly rows: readonly SessionsCatalogRow[];
 	readonly loading: boolean;
+	readonly localProject?: ProjectSummary;
+	readonly appearance?: SessionsCatalogProjectAppearance;
+	readonly operations?: SessionsCatalogProjectOperations;
 	readonly history?: { readonly label: string; readonly action?: () => void; };
 	readonly onExpand?: () => void;
 	readonly loadMore?: () => void;
+}
+
+export interface SessionsCatalogProjectAppearance {
+	readonly icon?: string;
+	readonly color?: string;
+	set(field: 'icon' | 'color', value: string | undefined): void | Promise<void>;
+}
+
+export interface SessionsCatalogProjectOperations {
+	readonly rename?: (name: string, signal: AbortSignal) => Promise<void>;
+	readonly archive?: () => Promise<boolean>;
+	readonly remove?: { readonly removesContents: boolean; run(): Promise<void>; };
 }
 
 interface SessionsCatalogSection {

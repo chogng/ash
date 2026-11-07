@@ -37,6 +37,8 @@ import { ASH_CHAT_SELECTED_CONTEXT, CHAT_WORKSPACE_NAVIGATION_ID, SHOW_ASH_CHAT_
 import { registerChatWorkspaceNavigation } from '../../../src/ash/sessions/contrib/chat/electron-browser/chatWorkspace.contribution.js';
 import { PaneComposite } from '../../../src/ash/workbench/browser/panecomposite.js';
 import { IChatListCatalog, type ChatListSource } from '../../../src/ash/sessions/contrib/chat/browser/chatListModel.js';
+import { SessionActionsService } from '../../../src/ash/sessions/browser/sessionActionsService.js';
+import { IAgentSessionActionsService } from '../../../src/ash/workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { ISessionsListModelService, SessionsListModelService } from '../../../src/ash/sessions/services/sessions/browser/sessionsListModelService.js';
 import { ReplyChatEditor } from '../../../src/ash/sessions/contrib/chat/browser/replyChatEditor.js';
 import { chatGPTReplyEditor } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTWeb.js';
@@ -216,6 +218,8 @@ const services = resources.add(new InstantiationService(new ServiceCollection(
 )));
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
+const commands = resources.add(new CommandService(services));
+services.registerInstance(ICommandService, commands);
 registerTestDictationOnboarding(services);
 registerTestComponentServices(services);
 resources.add(services.createInstance(ChatCopyActionRendering));
@@ -232,7 +236,6 @@ services.registerInstance(IFileDialogService, {
 		return undefined;
 	},
 } as IFileDialogService);
-const commands = resources.add(new CommandService(services));
 const menuService = new MenuService(commands, services.get(IContextKeyService));
 services.registerInstance(IMenuService, menuService);
 ChatContextKeys.enabled.bindTo(services.get(IContextKeyService)).set(true);
@@ -335,6 +338,7 @@ if (parameters.has('mixedCatalog')) {
 	sources.push(resources.add(ashServices.createInstance(AshChatNavigationSource)));
 }
 services.registerInstance(IChatListCatalog, { sources });
+services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService, services.get(IChatListCatalog)));
 const titlebarContent = document.createElement('div');
 titlebarContent.className = 'ash-sessions-titlebar-page-content';
 titlebarContent.style.display = 'contents';

@@ -2124,6 +2124,10 @@ use crate::protocol::plugins::PluginPackageDto;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::plugins::PluginPermissionDto;
 use crate::protocol::plugins::PluginsChanged;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::projects::ProjectAppearanceFieldDto;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::projects::ProjectAppearanceUpdateParams;
 use crate::protocol::projects::ProjectChanged;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::projects::ProjectCommandDispositionDto;
@@ -4275,6 +4279,11 @@ client_methods! {
     },
     ProjectDetailsUpdate => "project/details/update" {
         params: ProjectDetailsUpdateParams,
+        response: ProjectMutationResult,
+        serialization: GlobalExclusive,
+    },
+    ProjectAppearanceUpdate => "project/appearance/update" {
+        params: ProjectAppearanceUpdateParams,
         response: ProjectMutationResult,
         serialization: GlobalExclusive,
     },
@@ -7607,6 +7616,8 @@ typescript_bindings! {
     ProjectReadResult,
     ProjectCreateParams,
     ProjectDetailsUpdateParams,
+    ProjectAppearanceFieldDto,
+    ProjectAppearanceUpdateParams,
     ProjectRootAddParams,
     ProjectRootUpdateParams,
     ProjectRootRemoveParams,

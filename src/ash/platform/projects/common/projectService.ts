@@ -18,6 +18,8 @@ export interface ProjectSummary {
 	readonly name: string;
 	readonly archived: boolean;
 	readonly sessionCount: number;
+	readonly icon?: string;
+	readonly color?: string;
 }
 
 export interface Project extends ProjectSummary {
@@ -40,6 +42,7 @@ export interface IProjectService {
 	/** Changes one project membership. Other memberships of the Session are independent. */
 	moveSession(sessionId: string, fromProjectId: string | undefined, toProjectId: string | undefined): Promise<void>;
 	update(project: Project, name: string, description: string, materials: readonly ProjectMaterial[]): Promise<Project>;
+	setAppearance(project: ProjectSummary, field: 'icon' | 'color', value: string | undefined): Promise<void>;
 	archive(project: ProjectSummary): Promise<Project>;
 	restore(project: ProjectSummary): Promise<Project>;
 	/** Removes the project and its references, preserving conversations and source files. */

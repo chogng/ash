@@ -35,6 +35,7 @@ import { CommandsRegistry, ICommandService } from '../../../platform/commands/co
 import { ISessionsLayoutService } from '../../services/layout/common/sessionsLayoutService.js';
 import { ILayoutService } from '../../../platform/layout/browser/layoutService.js';
 import { ISessionGroupsService } from '../../services/sessions/browser/sessionGroupsService.js';
+import { IProjectService, type Project } from '../../../platform/projects/common/projectService.js';
 import '../../contrib/sessions/browser/views/sessionGroupAppearancePicker.js';
 
 registerNewChatActions();
@@ -426,6 +427,33 @@ test('The group appearance picker localizes choices and saves or resets the sele
 		await commands.executeCommand('sessions.list.changeGroupAppearance', 'review', 'icon');
 		await commands.executeCommand('sessions.list.changeGroupAppearance', 'review', 'color');
 		assert.deepEqual(updates, [['review', 'icon', 'chat'], ['review', 'color', 'terminal.ansiRed'], ['review', 'icon', undefined]]);
+	} finally { resetNlsResolver(); }
+});
+
+test('The project appearance command uses the project revision and the shared localized picker', async () => {
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	try {
+		using services = new InstantiationService();
+		using commands = new CommandService(services);
+		const input = new TestQuickInputService(['聊天', '默认', null]);
+		services.registerInstance(IQuickInputService, input);
+		const project: Project = {
+			id: 'review', revision: 3, name: 'Review', archived: false, sessionCount: 0,
+			description: '', materials: [], sessionIds: [], color: 'terminal.ansiRed',
+		};
+		const updates: unknown[][] = [];
+		services.registerInstance(IProjectService, {
+			read: async (id: string) => { assert.equal(id, project.id); return project; },
+			setAppearance: async (...args: unknown[]) => { updates.push(args); },
+		} as IProjectService);
+		await commands.executeCommand('sessions.list.changeProjectAppearance', 'review', 'icon');
+		assert.equal(input.picker?.ariaLabel, '更改项目图标');
+		await commands.executeCommand('sessions.list.changeProjectAppearance', 'review', 'color');
+		assert.equal(input.picker?.ariaLabel, '更改项目颜色');
+		assert.equal(input.picker?.activeItems[0]?.id, 'terminal.ansiRed');
+		await commands.executeCommand('sessions.list.changeProjectAppearance', 'review', 'color');
+		assert.deepEqual(updates, [[project, 'icon', 'chat'], [project, 'color', undefined]]);
 	} finally { resetNlsResolver(); }
 });
 

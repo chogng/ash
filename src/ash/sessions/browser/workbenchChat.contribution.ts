@@ -178,4 +178,4 @@ registerEditorPane({
 	create: options => options.instantiationService!.createInstance(ChatEditor),
 });
 
-registerSingleton(IAgentSessionActionsService, SessionActionsService, InstantiationType.Delayed);
+registerSingleton(IAgentSessionActionsService, new SyncDescriptor(SessionActionsService, [undefined], true));

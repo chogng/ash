@@ -72,6 +72,10 @@ pub struct Project {
     pub scope: Option<ProjectScope>,
     pub name: String,
     pub description: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
     pub roots: BTreeMap<DirId, ProjectRoot>,
     pub session_ids: BTreeSet<SessionId>,
     #[serde(default)]
@@ -119,6 +123,18 @@ impl Project {
             ));
         }
         validate_text("Project name", &self.name)?;
+        for id in [&self.icon, &self.color].into_iter().flatten() {
+            if id.len() > 128
+                || !id.as_bytes().first().is_some_and(u8::is_ascii_alphanumeric)
+                || !id
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-'))
+            {
+                return Err(crate::ProjectError::InvalidInput(
+                    "invalid Project appearance identifier".into(),
+                ));
+            }
+        }
         for (dir_id, root) in &self.roots {
             if dir_id != &root.dir_id {
                 return Err(crate::ProjectError::InvalidInput(

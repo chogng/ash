@@ -1,6 +1,7 @@
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { disposableWindowInterval, disposableWindowTimeout } from '../../../../base/browser/scheduler.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
+import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { getLxiconDefinition } from '../../../../base/common/lxiconsUtil.js';
@@ -26,6 +27,7 @@ import { IChatGPTNativeService, IChatGPTService, selectedChatConversationId, typ
 
 const conversationIconPrefix = 'sessions.chatgpt.icon:';
 const projectArchivePrefix = 'sessions.chatgpt.projectArchived:';
+const projectAppearancePrefix = 'sessions.chatgpt.projectAppearance:';
 
 function conversationIconKey(id: string, scope: string | undefined): string | undefined {
 	if (id.startsWith('local:')) return `${conversationIconPrefix}${id}`;
@@ -70,7 +72,8 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		super();
 		const preferencesChanged = observableSignalFromEvent(this, listener => storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE
-				&& (event.key.startsWith(conversationIconPrefix) || event.key.startsWith(projectArchivePrefix))) listener(event);
+				&& (event.key.startsWith(conversationIconPrefix) || event.key.startsWith(projectArchivePrefix)
+					|| event.key.startsWith(projectAppearancePrefix))) listener(event);
 		}));
 		this._register(chat.onDidRetireConversationIdentity(({ id, replacementId }) => {
 			const scope = chat.state.get().catalogScope;
@@ -124,8 +127,10 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 				const iconKey = conversationIconKey(id, state.catalogScope);
 				// Custom GPT conversations also have gizmo IDs, but are not project members.
 				const currentProject = projectId && (projectId.startsWith('g-p-') || projects.has(projectId)) ? projectId : undefined;
+				const catalogId = this.conversationCatalogId(id);
+				const canArchive = !id.startsWith('pending:') && (conversation.local || state.connected && state.networkAvailable);
 				return {
-					id: `${chat.native ? 'chatgpt-native' : 'chatgpt'}:${id}`,
+					id: catalogId,
 					title, pinned,
 					createdAt: conversation.createdAt,
 					updatedAt: conversation.updatedAt,
@@ -146,6 +151,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 						storage.store(iconKey, value?.id, StorageScope.PROFILE, StorageTarget.MACHINE);
 					} : undefined,
 					open: signal => this.open(id, signal),
+					archive: canArchive ? async () => chat.state.get().catalogScope === state.catalogScope && await chat.archive(id) : undefined,
 					setPinned: id.startsWith('pending:') ? undefined : pinned => chat.setPinned(id, pinned),
 					project: !conversation.local && !id.startsWith('pending:') && (!projectId || currentProject) && state.connected && state.networkAvailable ? {
 						current: currentProject,
@@ -164,27 +170,56 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 			return {
 				entries,
 				projects: state.projects.map(project => {
+					const isCurrentAccount = () => this.chat.state.get().catalogScope === state.catalogScope;
 					const archiveKey = projectArchiveKey(project.id, state.catalogScope);
 					const setArchived = archiveKey ? (archived: boolean) => {
-						if (this.chat.state.get().catalogScope !== state.catalogScope) return;
+						if (!isCurrentAccount()) return;
 						if (archived) storage.store(archiveKey, true, StorageScope.PROFILE, StorageTarget.MACHINE);
 						else storage.remove(archiveKey, StorageScope.PROFILE);
 					} : undefined;
 					return {
 						...project,
 						history: this.projectHistory(project.id, state),
+						appearance: this.projectAppearance(project.id, state.catalogScope),
 						archived: archiveKey ? storage.getBoolean(archiveKey, StorageScope.PROFILE, false) : undefined,
 						restore: setArchived ? () => setArchived(false) : undefined,
-						archive: setArchived ? () => setArchived(true) : undefined,
+						archive: setArchived && state.connected && state.networkAvailable && !state.busy && !state.sending && !state.managing && state.voice === 'idle'
+							? async () => {
+								if (!isCurrentAccount() || !await this.chat.archiveProjectConversations(project.id) || !isCurrentAccount()) return false;
+								setArchived(true);
+								return true;
+							} : undefined,
 						remove: state.connected && state.networkAvailable && !state.managing
-							? { removesContents: true, run: () => this.chat.deleteProject(project.id) } : undefined,
+							? { removesContents: true, run: async () => { if (isCurrentAccount()) await this.chat.deleteProject(project.id); } } : undefined,
 						editDetails: state.connected && state.networkAvailable
-							? signal => this.chat.editProjectDetails(project.id, signal) : undefined,
+							? async signal => {
+								if (!isCurrentAccount()) throw new CancellationError();
+								return this.chat.editProjectDetails(project.id, signal);
+							} : undefined,
 					};
 				}),
 				loading: state.loading?.kind === 'history',
 			};
 		});
+	}
+
+	private projectAppearance(projectId: string, scope: string | undefined): ChatListProject['appearance'] {
+		if (!scope) return undefined;
+		const key = (field: 'icon' | 'color') => `${projectAppearancePrefix}${field}:${scope}:${projectId}`;
+		const read = (field: 'icon' | 'color') => {
+			const value = this.storage.get(key(field), StorageScope.PROFILE);
+			return value && /^[a-zA-Z0-9][a-zA-Z0-9.-]{0,127}$/u.test(value) ? value : undefined;
+		};
+		return {
+			icon: read('icon'),
+			color: read('color'),
+			set: (field, value) => {
+				const current = this.chat.state.get();
+				if (current.catalogScope === scope && current.projects.some(project => project.id === projectId)) {
+					this.storage.store(key(field), value, StorageScope.PROFILE, StorageTarget.MACHINE);
+				}
+			},
+		};
 	}
 
 	private projectHistory(projectId: string, state: ChatGPTState): ChatListProject['history'] {
@@ -258,6 +293,10 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		return { id: `sessions.chatgpt.${id}`, label, tooltip: label, icon, enabled: true, run };
 	}
 
+	private conversationCatalogId(id: string): string {
+		return `${this.chat.native ? 'chatgpt-native' : 'chatgpt'}:${id}`;
+	}
+
 	private getActions(conversation: ChatGPTConversation, restoreFocus: () => void): readonly IAction[] {
 		const state = this.chat.state.get();
 		const remove = { ...this.action('delete', localize('sessions.chatgpt.delete', 'Delete'), Lxicon.trash, () => this.deleteConversation(conversation)), class: 'ash-chat-navigation-delete-action' };
@@ -271,7 +310,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 		if (!conversation.local) {
 			actions.push(new Separator(), this.action('share', localize('sessions.chatgpt.share', 'Share'), Lxicon.share, () => shareChatGPTConversation(this.chat, this.dialogs, this.clipboard, conversation.id, conversation.title)));
 		}
-		actions.push(new Separator(), this.action('archive', localize('sessions.chatgpt.archive', 'Archive'), Lxicon.archive, () => this.chat.archive(conversation.id)), remove);
+		actions.push(new Separator(), remove);
 		return actions;
 	}
 

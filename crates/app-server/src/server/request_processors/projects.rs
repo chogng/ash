@@ -4,6 +4,8 @@ use super::decode;
 use super::project_projection;
 use super::result;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
+use ash_app_server_protocol::protocol::projects::ProjectAppearanceFieldDto;
+use ash_app_server_protocol::protocol::projects::ProjectAppearanceUpdateParams;
 use ash_app_server_protocol::protocol::projects::ProjectChanged;
 use ash_app_server_protocol::protocol::projects::ProjectCommandDispositionDto;
 use ash_app_server_protocol::protocol::projects::ProjectCreateParams;
@@ -151,6 +153,29 @@ impl<'a> ProjectRequestProcessor<'a> {
                         })
                         .transpose()?,
                 },
+            },
+        )
+    }
+
+    pub(super) fn project_appearance_update(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        let params: ProjectAppearanceUpdateParams = decode(params)?;
+        let command = match params.field {
+            ProjectAppearanceFieldDto::Icon => ProjectCommand::SetIcon { icon: params.value },
+            ProjectAppearanceFieldDto::Color => ProjectCommand::SetColor {
+                color: params.value,
+            },
+        };
+        self.apply_project(
+            connection,
+            ProjectCommandRequest {
+                command_id: params.command_id,
+                project_id: params.project_id,
+                expected_revision: params.expected_revision,
+                command,
             },
         )
     }

@@ -163,10 +163,13 @@ document.body.append(container);
 const listModel = new SessionsListModelService(storage);
 const services = resources.add(new InstantiationService());
 services.registerInstance(IAccessibilityService, { onDidChangeReducedMotion: Event.None, isMotionReduced: () => window.matchMedia('(prefers-reduced-motion: reduce)').matches } as unknown as IAccessibilityService);
-resources.add(new SessionsList(container, 'Tasks', fixtureOptions.has('chatMode') ? 'chat' : 'code', management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, groups, storage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, listModel, new SessionSectionOrderService(storage), { blockedSessions: constObservable([]), ignore: () => undefined }, undefined, undefined, undefined, fixtureOptions.has('leadingIcons') ? services : undefined));
+services.registerInstance(IQuickInputService, fixtureOptions.has('leadingIcons')
+	? resources.add(new TestQuickInputService({ container: document.body, instantiationService: services }))
+	: { createQuickPick: () => { throw new Error('No interaction expected'); } } as unknown as IQuickInputService);
+services.registerInstance(IDialogService, resources.add(new DialogService()));
+resources.add(new SessionsList(container, 'Tasks', fixtureOptions.has('chatMode') ? 'chat' : 'code', management, view, { onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, groups, storage, { onDidChange: Event.None, list: async () => [] } as unknown as IProjectService, {} as ICommandService, {} as IContextMenuService, listCustomViews, listMenus, listNotifications, listModel, new SessionSectionOrderService(storage), { blockedSessions: constObservable([]), ignore: () => undefined }, services.get(IQuickInputService), services.get(IDialogService), undefined, undefined, undefined, fixtureOptions.has('leadingIcons') ? services : undefined));
 services.registerInstance(IStorageService, storage);
 services.registerInstance(ISessionsListModelService, listModel);
-services.registerInstance(IDialogService, resources.add(new DialogService()));
 services.registerInstance(ISecretStorageService, resources.add(new BaseSecretStorageService()));
 const platform = new URL(location.href).searchParams.get('os') ?? 'linux';
 const workspace = resources.add(new TestWorkspaceService({ id: 'app-tools', uri: platform === 'windows' ? URI.from({ scheme: 'file', path: '/c:/workspace' }) : URI.file('/workspace') }));
@@ -268,9 +271,6 @@ services.registerInstance(IOutputService, { createChannel: () => Object.assign(t
 services.registerInstance(IMarkerService, resources.add(new MarkerService()));
 services.registerInstance(IModelService, { getModel: () => null } as unknown as import('../../../../../../editor/common/services/model.js').IModelService);
 services.registerInstance(IFileSearchService, { glob: async () => ({ matches: [] }) } as unknown as import('../../../../../../platform/search/common/fileSearch.js').IFileSearchService);
-services.registerInstance(IQuickInputService, fixtureOptions.has('leadingIcons')
-	? resources.add(new TestQuickInputService({ container: document.body, instantiationService: services }))
-	: { createQuickPick: () => { throw new Error('No interaction expected'); } } as unknown as IQuickInputService);
 services.registerInstance(INotificationService, { warning() { }, error() { } } as unknown as import('../../../../../../platform/notification/common/notification.js').INotificationService);
 
 const taskService = resources.add(services.createInstance(TaskService));

@@ -231,6 +231,23 @@ export class ChatGPTClient {
 		}
 	}
 
+	/** Snapshot the project before mutations can change its pagination. */
+	async listProjectConversationIds(projectId: string, signal: AbortSignal): Promise<readonly string[]> {
+		const ids = new Set<string>();
+		const cursors = new Set<string>();
+		let cursor: string | undefined;
+		do {
+			const page = await this.readProjectConversations(projectId, cursor, signal);
+			for (const item of page.items) ids.add(item.id);
+			cursor = page.cursor;
+			if (cursor) {
+				if (cursors.has(cursor)) throw this.invalidResponse();
+				cursors.add(cursor);
+			}
+		} while (cursor);
+		return [...ids];
+	}
+
 	private async readProjectConversations(projectId: string, cursor: string | undefined, signal: AbortSignal): Promise<{ items: readonly ChatGPTConversation[]; cursor?: string; }> {
 		const query = new URLSearchParams({ limit: '20', owned_only: 'false', ...(cursor ? { cursor } : {}) });
 		const value = await this.json(`/gizmos/${encodeURIComponent(projectId)}/conversations?${query}`, signal, 'project');

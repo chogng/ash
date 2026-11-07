@@ -30,6 +30,8 @@ fn project_root_picker_preselects_the_current_workspace() {
         status: ProjectStatusDto::Active,
         name: "Ash".into(),
         description: String::new(),
+        icon: None,
+        color: None,
         roots: vec![root("a", &a), root("b", &b)],
         session_ids: Vec::new(),
     };

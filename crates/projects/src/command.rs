@@ -25,6 +25,12 @@ pub enum ProjectCommand {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         materials: Option<Vec<ProjectMaterial>>,
     },
+    SetIcon {
+        icon: Option<String>,
+    },
+    SetColor {
+        color: Option<String>,
+    },
     AddRoot {
         root: ProjectRoot,
     },

@@ -46,7 +46,7 @@ function registerSessionActions(services: InstantiationService, workspace: IWork
 	services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerSingleton(ISessionsListModelService, () => services.createInstance(SessionsListModelService));
-	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService));
+	services.registerSingleton(IAgentSessionActionsService, () => services.createInstance(SessionActionsService, undefined));
 }
 
 test('permission command uses stable IDs and keeps bypass confirmation on the requesting composer', async () => {

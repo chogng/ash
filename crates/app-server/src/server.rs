@@ -3950,6 +3950,9 @@ impl AppServer {
             Some(ClientMethod::ProjectDetailsUpdate) => self
                 .project_processor()
                 .project_details_update(connection, &request.params),
+            Some(ClientMethod::ProjectAppearanceUpdate) => self
+                .project_processor()
+                .project_appearance_update(connection, &request.params),
             Some(ClientMethod::ProjectRootAdd) => self
                 .project_processor()
                 .project_root_add(connection, &request.params),

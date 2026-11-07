@@ -176,13 +176,14 @@ export interface IChatGPTService {
 	loadProjectConversations(projectId: string, nextPage?: boolean): Promise<void>;
 	rename(id: string, title: string): Promise<void>;
 	setPinned(id: string, pinned: boolean): Promise<void>;
-	archive(id: string): Promise<void>;
+	archive(id: string): Promise<boolean>;
 	deleteConversation(id: string): Promise<void>;
 	moveToProject(id: string, projectId: string | null): Promise<void>;
 	share(id: string, messageId?: string): Promise<string | undefined>;
 	readResponseAudio(id: string, messageId: string, signal: AbortSignal): Promise<Blob>;
 	listProjects(signal: AbortSignal): Promise<readonly ChatGPTProject[]>;
 	editProjectDetails(id: string, signal: AbortSignal): Promise<ChatGPTProjectEdit>;
+	archiveProjectConversations(id: string): Promise<boolean>;
 	deleteProject(id: string): Promise<void>;
 	setDraft(value: string): void;
 	setDraftTarget(change: Partial<ChatGPTDraftTarget>): void;
@@ -424,6 +425,35 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		};
 	}
 
+	public async archiveProjectConversations(id: string): Promise<boolean> {
+		const state = this.model.get();
+		if (this.isDisposed || state.busy || state.sending || state.managing || state.voice !== 'idle'
+			|| !state.connected || !state.networkAvailable || !state.projects.some(project => project.id === id)) return false;
+		const account = this.management.signal;
+		const projectHistory = new Map(state.projectHistory);
+		// Retire in-flight pages so an old response cannot repopulate archived rows.
+		projectHistory.delete(id);
+		this.refreshOperation?.abort();
+		this.update({ managing: true, projectHistory });
+		const archived = new Set<string>();
+		try {
+			const ids = await this.client.listProjectConversationIds(id, AbortSignal.any([account, AbortSignal.timeout(30_000)]));
+			for (const conversationId of ids) {
+				account.throwIfAborted();
+				await this.removeRemoteConversation(conversationId, false, AbortSignal.any([account, AbortSignal.timeout(30_000)]));
+				archived.add(conversationId);
+			}
+			account.throwIfAborted();
+			return true;
+		} finally {
+			if (!account.aborted) {
+				this.update({ managing: false });
+				const selected = this.model.get().conversationId;
+				if (selected && archived.has(selected)) this.newChat();
+			}
+		}
+	}
+
 	public async deleteProject(id: string): Promise<void> {
 		const state = this.model.get();
 		if (state.managing || !state.connected || !state.networkAvailable || !state.projects.some(project => project.id === id)) return;
@@ -454,7 +484,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 	public async loadProjectConversations(projectId: string, nextPage = false): Promise<void> {
 		const state = this.model.get();
 		const previous = state.projectHistory.get(projectId);
-		if (this.isDisposed || !state.connected || !state.networkAvailable || !state.projects.some(project => project.id === projectId)
+		if (this.isDisposed || state.managing || !state.connected || !state.networkAvailable || !state.projects.some(project => project.id === projectId)
 			|| previous?.status === 'loading' || (previous && (!nextPage || previous.status === 'ready' && !previous.cursor))) { return; }
 
 		const management = this.management;
@@ -524,7 +554,7 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		});
 	}
 
-	public archive(id: string): Promise<void> { return this.removeConversation(id, false); }
+	public archive(id: string): Promise<boolean> { return this.removeConversation(id, false); }
 	public async deleteConversation(id: string): Promise<void> {
 		const outbox = this.outbox;
 		const state = this.model.get();
@@ -559,10 +589,10 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 		}
 	}
 
-	private async removeConversation(id: string, deleted: boolean): Promise<void> {
+	private async removeConversation(id: string, deleted: boolean): Promise<boolean> {
 		if (id.startsWith('local:')) {
 			const state = this.model.get();
-			if (state.sending || state.managing) return;
+			if (state.sending || state.managing || !deleted && !state.conversations.some(item => item.id === id)) return false;
 			const wasSelected = selectedChatConversationId(state) === id;
 			if (deleted) {
 				const localId = this.timeline.read(id)?.localId;
@@ -572,21 +602,27 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 			} else this.updateLocalConversation(id, { archived: true });
 			this.update({ conversations: this.model.get().conversations.filter(item => item.id !== id) });
 			if (wasSelected) this.newChat();
-			return;
+			return true;
 		}
 		const completed = await this.manage(id, async signal => {
-			if (deleted) {
-				try { await this.client.deleteConversation(id, signal); }
-				catch (error) { if (!isMissingConversation(error)) { throw error; } }
-			}
-			else { await this.client.updateConversation(id, { is_archived: true }, signal); }
-			signal.throwIfAborted();
-			if (this.recentIds.delete(id)) { this.recentOffset = Math.max(0, this.recentOffset - 1); }
-			this.updateCatalog({ conversations: this.model.get().conversations.filter(item => item.id !== id) });
-			if (deleted) { this.forgetRemoteConversation(id); }
+			await this.removeRemoteConversation(id, deleted, signal);
 			return true;
 		});
 		if (completed && this.model.get().conversationId === id) { this.newChat(); }
+		return completed === true;
+	}
+
+	private async removeRemoteConversation(id: string, deleted: boolean, signal: AbortSignal): Promise<void> {
+		try {
+			if (deleted) await this.client.deleteConversation(id, signal);
+			else await this.client.updateConversation(id, { is_archived: true }, signal);
+		} catch (error) {
+			if (!deleted || !isMissingConversation(error)) throw error;
+		}
+		signal.throwIfAborted();
+		if (this.recentIds.delete(id)) this.recentOffset = Math.max(0, this.recentOffset - 1);
+		this.updateCatalog({ conversations: this.model.get().conversations.filter(item => item.id !== id) });
+		if (deleted) this.forgetRemoteConversation(id);
 	}
 
 	private forgetRemoteConversation(id: string): void {
