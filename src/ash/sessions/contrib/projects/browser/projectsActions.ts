@@ -12,8 +12,61 @@ import { groupChatList, IChatListCatalog, type ChatListGroup, type ConversationP
 import type { SessionsCatalogProjectOperations } from '../../sessions/browser/views/sessionsCatalogList.js';
 import { IProjectsService, type ProjectSortOrder } from './projectsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { type MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
+import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import type { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
+import type { ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
+import { Menus } from '../../../browser/menus.js';
 
 export const ARCHIVE_PROJECT_COMMAND = 'projects.archive';
+
+const sidebarProjectActions = [
+	{ key: 'rename', group: '1_edit', order: 1, icon: Lxicon.edit, title: localize('sessions.list.rename', 'Rename') },
+	{ key: 'icon', group: '2_appearance', order: 1, title: localize('sessions.list.changeProjectIcon', 'Change Icon...') },
+	{ key: 'color', group: '2_appearance', order: 2, title: localize('sessions.list.changeProjectColor', 'Change Color...') },
+	{ key: 'archive', group: '3_remove', order: 1, icon: Lxicon.archive, title: localize('projects.archive', 'Archive') },
+	{ key: 'remove', group: '3_remove', order: 2, icon: Lxicon.trash, title: localize('projects.delete', 'Delete') },
+] as const;
+
+type SidebarProjectAction = typeof sidebarProjectActions[number]['key'];
+
+interface SidebarProjectMenuTarget {
+	readonly projectId: string;
+	readonly actions: Partial<Record<SidebarProjectAction, () => Promise<void>>>;
+}
+
+CommandsRegistry.registerMany(sidebarProjectActions.map(({ key }) => ({
+	id: `sessions.sidebarProject.${key}`,
+	handler: (_accessor, target) => {
+		const run = (target as SidebarProjectMenuTarget | undefined)?.actions?.[key];
+		if (typeof run === 'function') return run();
+	},
+})));
+
+function registerSidebarProjectActions(menuId: MenuId): void {
+	MenusRegistry.appendMenuItems(sidebarProjectActions.map(({ key, group, order, title, ...appearance }) => ({
+		id: menuId,
+		item: { command: { id: `sessions.sidebarProject.${key}`, title, ...appearance }, group, order, when: ContextKeyExpr.has(`sidebarProject.${key}`) },
+	})));
+}
+
+registerSidebarProjectActions(Menus.SidebarChatProjectContext);
+registerSidebarProjectActions(Menus.SidebarCodeProjectContext);
+
+export function showSidebarProjectMenu(contextMenus: IContextMenuService, context: IContextKeyService,
+	mode: 'chat' | 'code', target: SidebarProjectMenuTarget, anchor: ContextMenuAnchor): void {
+	context.bufferChangeEvents(() => {
+		for (const { key } of sidebarProjectActions) context.setContext(`sidebarProject.${key}`, !!target.actions[key]);
+	});
+	contextMenus.showContextMenu({
+		menuId: mode === 'code' ? Menus.SidebarCodeProjectContext : Menus.SidebarChatProjectContext,
+		contextKeyService: context,
+		menuActionOptions: { arg: target },
+		getAnchor: () => anchor,
+		autoSelectFirstItem: true,
+	});
+}
 
 CommandsRegistry.register(ARCHIVE_PROJECT_COMMAND, async (accessor, id: unknown, scope: unknown): Promise<boolean> => {
 	if (typeof id !== 'string' || !id || scope !== 'chat' && scope !== 'code' && scope !== 'catalog') {
@@ -214,16 +267,20 @@ export function getProjectRemovalActions(
 		actions.push({
 			id: 'projects.delete', label, tooltip: label, icon: Lxicon.trash,
 			enabled, run: async () => {
-				const result = await dialogs.confirm({
-					message: localize('projects.deleteConfirm', 'Delete project "{0}"?', title),
-					detail: remove.removesContents
-						? localize('projects.deleteContentsDetail', 'This permanently deletes the project, its conversations and instructions, and files stored only in the project.')
-						: localize('projects.deleteDetail', 'The project and its material references will be removed. Conversations and source files will be kept.'),
-					primaryButton: label,
-				});
-				if (result.confirmed) await run(remove.run);
+				if (await confirmProjectDelete(dialogs, title, remove.removesContents)) await run(remove.run);
 			}
 		});
 	}
 	return actions;
+}
+
+export async function confirmProjectDelete(dialogs: IDialogService, title: string, removesContents: boolean): Promise<boolean> {
+	const result = await dialogs.confirm({
+		message: localize('projects.deleteConfirm', 'Delete project "{0}"?', title),
+		detail: removesContents
+			? localize('projects.deleteContentsDetail', 'This permanently deletes the project, its conversations and instructions, and files stored only in the project.')
+			: localize('projects.deleteDetail', 'The project and its material references will be removed. Conversations and source files will be kept.'),
+		primaryButton: localize('projects.delete', 'Delete'),
+	});
+	return result.confirmed;
 }

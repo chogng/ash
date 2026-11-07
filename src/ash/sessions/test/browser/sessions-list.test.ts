@@ -44,6 +44,7 @@ import type { HoverContent } from '../../../base/browser/ui/hover/hover.js';
 import { getSessionSummaryHoverData } from '../../contrib/sessions/browser/sessionHoverContent.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
 import '../../contrib/sessions/browser/views/sessionsViewActions.js';
+import '../../contrib/sessions/browser/sessionsActions.js';
 
 
 const listCustomViews = { activeCustomView: observableValue('testCustomView', undefined) } as unknown as ICustomViewService;
@@ -156,17 +157,16 @@ test('Needs Attention reuses title bar alerts in the single sidebar tree', async
 	chatButton.click();
 	assert.deepEqual(opened, [['waiting', 'question'], ['chat', 'question']]);
 
-	list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-more button')!.click();
-	const searchAction = menu?.getActions().find(action => action.id === 'sessions.list.search');
-	assert.ok(searchAction);
-	menu?.onHide?.(true);
-	await searchAction.run();
+	button.focus();
+	button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true, cancelable: true }));
 	const search = list.domNode.querySelector<HTMLInputElement>('.ash-sessions-list-search')!;
+	assert.equal(dom.window.document.activeElement, search);
 	search.value = 'Question';
 	search.dispatchEvent(new dom.window.Event('input'));
 	assert.deepEqual(alertSessions(), ['ci', 'waiting']);
 	search.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 	assert.deepEqual(alertSessions(), ['chat', 'ci', 'waiting']);
+	assert.equal(dom.window.document.activeElement, button);
 
 	const ignored = indicator.ignore(indicator.blockedSessions.get().filter(alert => alert.session.sessionId === 'waiting'));
 	assert.ok(ignored);
@@ -293,12 +293,13 @@ for (const mode of ['chat', 'code'] as const) {
 				const assertRows = (...draftIds: string[]): void => {
 					const rows = [...list.domNode.querySelectorAll<HTMLElement>('[data-item]')].map(row => row.dataset.item);
 					const draftRows = draftIds.map(id => `untitled:${id}`);
-					// Code shows the saved workspace under Projects, above unassigned drafts in Recents.
-					assert.deepEqual(rows, mode === 'code' ? ['session:saved', ...draftRows] : [...draftRows, 'session:saved']);
+					assert.deepEqual(rows, [...draftRows, 'session:saved']);
 				};
 				assertRows();
 				if (mode === 'code') {
 					assert.match(list.domNode.querySelector('[data-item="session:saved"]')?.getAttribute('data-parent-section') ?? '', /^workspace:/u);
+					assert.ok(list.domNode.querySelector('[data-section="recent"]'));
+					assert.ok(list.domNode.querySelector('[data-section^="workspace:"]')?.closest('[data-parent-section="recent"]'));
 				}
 				writeNewChatDraftState(storage, { mode: 'agent', text: ' \n\t', contexts: [] }, 'untitled:blank', chatInputStatePersistence);
 				assertRows();
@@ -367,7 +368,7 @@ test('SessionsList updates passive status without changing row identity or selec
 			});
 		},
 	} as IHoverService;
-	using list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, undefined, hoverService);
+	using list = new SessionsList(dom.window.document.body, 'Sessions', 'chat', sessionService, viewService, { onDidChange: Event.None, getSessionPullRequests: () => [request], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } }, emptyGroups, storage, emptyProjects, commands, contextMenus, listCustomViews, new MenuService(commands, menuContexts), listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, menuContexts, hoverService);
 	const button = list.domNode.querySelector<HTMLButtonElement>('.ash-sessions-list-item')!;
 	button.focus();
 	const viewport = list.domNode.querySelector<HTMLDivElement>('.ash-sessions-list-items > .ash-scrollbar-viewport')!;
@@ -395,19 +396,20 @@ test('SessionsList updates passive status without changing row identity or selec
 	assert.equal(more.getAttribute('aria-haspopup'), 'menu');
 	more.click();
 	assert.deepEqual(opened, [], 'opening More must not select the chat');
-	assert.equal(more.getAttribute('aria-expanded'), 'true');
 	const actions = menu!.getActions().filter(action => action.id !== 'ash.actions.separator');
+	assert.equal(more.getAttribute('aria-expanded'), 'true');
 	assert.deepEqual(actions.map(action => action.id), [
 		'sessions.list.togglePin', 'agentSession.rename', 'agentSession.addToProject',
-		'agentSession.moveToGroup', 'sessions.openInNewWindow', 'agentSession.archive', 'agentSession.delete',
+		'agentSession.moveToGroup', 'agentSession.archive', 'agentSession.delete',
 	]);
 	actions[1]!.run();
-	assert.deepEqual(executed, [['agentSession.rename', 'background']]);
+	assert.deepEqual(executed, [['agentSession.rename', { sessionId: 'background', threadId: 'root' }]]);
 	menu!.onHide?.(true);
 	assert.equal(more.getAttribute('aria-expanded'), 'false');
 	button.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
+	const pin = menu!.getActions()[0]!;
 	assert.equal(more.getAttribute('aria-expanded'), 'true');
-	await menu!.getActions()[0]!.run();
+	await pin.run();
 	assert.ok(button.closest('[data-parent-section="pinned"]'));
 	assert.equal(dom.window.document.activeElement, button);
 	menu!.onHide?.(false);
@@ -416,13 +418,10 @@ test('SessionsList updates passive status without changing row identity or selec
 	dom.window.close();
 });
 
-test('The localized keyboard menu targets the saved Session folder and the original nested Thread', async () => {
+test('The keyboard menu targets the saved Session workspace and the original nested Thread', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	using domLifetime = toDisposable(() => dom.window.close());
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'move-chat', flushInterval: 0 });
-	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
-	using locale = toDisposable(resetNlsResolver);
 	const chat = (threadId: string, title: string) => ({ threadId, title, status: 'active' as const, origin: { type: 'root' as const } });
 	const session = (sessionId: string, chats: ISession['chats']): ISession => ({
 		sessionId, kind: 'code' as const, title: sessionId, status: 'active', chats, nextApprovalMode: 'manual',
@@ -440,16 +439,20 @@ test('The localized keyboard menu targets the saved Session folder and the origi
 	const view = { onDidChange: Event.None, activeSelection: undefined, visibleSelections: [] } as unknown as ISessionsService;
 	let menu: IContextMenuDelegate | undefined;
 	const invoked: unknown[][] = [];
+	const commands = { executeCommand: async (...args: unknown[]) => { invoked.push(args); } } as ICommandService;
 	using list = new SessionsList(dom.window.document.body, 'Sessions', 'code', management, view,
 		{ onDidChange: Event.None, getSessionPullRequests: () => [], getSessionIssues: () => [], attachIssue: async () => { }, detachIssue: async () => { }, initialize: () => { }, attachPullRequest: async () => { }, detachPullRequest: async () => { }, invokePullRequestArtifact: async () => { } },
-		emptyGroups, storage, emptyProjects, { executeCommand: async (...args: unknown[]) => { invoked.push(args); } } as ICommandService,
-		{ showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService, listCustomViews, listMenus, listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs);
+		emptyGroups, storage, emptyProjects, commands,
+		{ showContextMenu: (delegate: IContextMenuDelegate) => { menu = delegate; } } as IContextMenuService, listCustomViews, new MenuService(commands, menuContexts), listNotifications, new SessionsListModelService(storage), new SessionSectionOrderService(storage), noAttention, listQuickInput, listDialogs, menuContexts);
 	const row = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => button.textContent === 'Move me')!;
 	row.focus();
 	row.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
 	const action = menu?.getActions().find(action => action.id === 'sessions.list.moveChatToSession');
-	assert.equal(action?.label, '将对话移到会话…');
+	assert.equal(action?.label, 'Move Conversation to Session…');
 	await action?.run();
+	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
+	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	using locale = toDisposable(resetNlsResolver);
 	const target = [...list.domNode.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => button.textContent === 'target')!;
 	target.focus();
 	target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));

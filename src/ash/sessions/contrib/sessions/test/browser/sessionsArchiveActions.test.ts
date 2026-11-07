@@ -17,6 +17,7 @@ import { ChatSessionArchiveActionWordingSettingId } from '../../../../../platfor
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IDialogService, type IConfirmationDialogResult } from '../../../../../platform/dialogs/common/dialogs.js';
 import { IAgentSessionActionsService, IAgentSessionsService } from '../../../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
@@ -39,6 +40,7 @@ import '../../../../../workbench/contrib/chat/browser/chat.contribution.js';
 import { TestSessionsManagementService as SessionsManagementService } from '../../../../services/sessions/test/browser/testSessionsManagementService.js';
 import type { IActiveSessionThread, ISession } from '../../../../services/sessions/common/session.js';
 import { ISessionsManagementService } from '../../../../services/sessions/common/sessionsManagement.js';
+import { SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
 import type { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
 
 class Provider extends Disposable implements ISessionsProvider {
@@ -89,6 +91,7 @@ async function fixture(wording: 'archive' | 'done', archived = false) {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	resources.add(toDisposable(() => dom.window.close()));
 	const services = resources.add(new InstantiationService());
+	services.registerInstance(IContextKeyService, resources.add(new ContextKeyService()));
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'session-actions', flushInterval: 0 }));
 	services.registerInstance(IStorageService, storage);
 	const provider = new Provider();
@@ -394,11 +397,15 @@ test('Session naming retains its captured Session across navigation and cancella
 
 test('sidebar destination commands act on the captured chat and reread the project revision', async () => {
 	using current = await fixture('archive');
+	SessionsWorkspaceModeContext.bindTo(current.services.get(IContextKeyService)).set('code');
 	const added: unknown[] = [];
 	const moved: unknown[] = [];
+	const projectScopes: (string | undefined)[] = [];
 	const project: Project = { id: 'project', name: 'Test project', revision: 9, archived: false, description: '', materials: [], sessionIds: [], sessionCount: 0 };
 	current.services.registerInstance(IProjectService, {
-		onDidChange: Event.None, list: async () => [{ ...project, revision: 1 }], read: async () => project,
+		onDidChange: Event.None,
+		list: async scope => { projectScopes.push(scope); return [{ ...project, revision: 1 }]; },
+		read: async (_id, scope) => { projectScopes.push(scope); return project; },
 		addSession: async (value, id) => { added.push([value.revision, id]); return { ...value, sessionIds: [id] }; },
 		moveSession: async () => { throw new Error('Unexpected project membership transfer'); },
 		setAppearance: async () => { throw new Error('Unexpected project appearance update'); },
@@ -417,6 +424,7 @@ test('sidebar destination commands act on the captured chat and reread the proje
 	projectPicker.accept();
 	await projectAction;
 	assert.deepEqual(added, [[9, 'second']]);
+	assert.deepEqual(projectScopes, ['code', 'code']);
 	const groupAction = current.commands.executeCommand('agentSession.moveToGroup', 'second');
 	const groupPicker = await pickerFor(current.quickInput);
 	groupPicker.activeItems = [groupPicker.items[2] as IQuickPickItem];

@@ -79,7 +79,9 @@ The sidebar may group otherwise ungrouped conversations under Chats or Recents b
 
 ### Workspace grouping
 
-In the default Code sidebar and when grouped by Projects, unpinned conversations without an active Code project or custom group appear in workspace groups under Projects. The group uses the Session's saved creation workspace, including its authority. Code sorts these groups by folder name and keeps the user-managed order of custom groups in Recents. Project membership remains with `IProjectService`.
+The Projects section shows projects with a Project record. When the Code sidebar first loads the saved Session catalog for a profile, it creates or reuses Code projects for legacy local workspace groups and links their active, unassigned conversations. Existing project and custom-group memberships take precedence. The migration runs once so that deleting a project or removing a conversation from it stays effective.
+
+In the default Code sidebar and when grouped by Projects, remaining unpinned conversations without a project or custom group appear in workspace groups under Recents. Code groups these conversations by their saved creation workspace, including its authority, and sorts the workspace groups by folder name. Project membership remains with `IProjectService`.
 
 ### Date grouping
 

@@ -249,7 +249,7 @@ services.registerInstance(IChatAttachmentResolveService, new ChatAttachmentResol
 services.registerInstance(IContextMenuService, resources.add(new BrowserContextMenuService(
 	menuService, services.get(IContextKeyService),
 	{ lookupKeybinding: () => undefined } as unknown as IKeybindingService,
-	services.get(IContextViewService), resources.add(new TestNotificationService()),
+	services.get(IContextViewService), notifications,
 )));
 services.registerInstance(IQuickInputService, resources.add(new TestQuickInputService({ container: document.body, instantiationService: services, contextKeyService: services.get(IContextKeyService) })));
 const dialogs = resources.add(new DialogService());

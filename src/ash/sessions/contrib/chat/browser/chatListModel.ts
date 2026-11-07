@@ -19,7 +19,7 @@ import { localize } from '../../../../nls.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 
 import type { SessionGroup } from '../../../services/sessions/browser/sessionGroupsService.js';
-import { sessionListProjectActions, sessionProjectOrganization, type SessionListOrganization } from '../../sessions/browser/views/sessionsListActions.js';
+import { sessionProjectOrganization, type SessionListOrganization } from '../../sessions/browser/views/sessionsListActions.js';
 
 export interface ChatListEntry extends SessionListOrganization {
 	/** Opaque identity, unique across the entire list. */
@@ -41,7 +41,7 @@ export interface ChatListEntry extends SessionListOrganization {
 	readonly setIcon?: (icon: Icon | undefined) => void;
 	readonly open: (signal: AbortSignal, threadId?: string) => Promise<void>;
 	readonly archive?: () => Promise<boolean>;
-	readonly getActions: (signal: AbortSignal, restoreFocus: () => void) => readonly IAction[] | Promise<readonly IAction[]>;
+	readonly getActions?: (signal: AbortSignal, restoreFocus: () => void) => readonly IAction[] | Promise<readonly IAction[]>;
 }
 
 type ProjectHistory =
@@ -338,7 +338,8 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 				});
 			},
 			getActions: async (signal, restoreFocus) => {
-				const actions = [...await entry.getActions(signal, restoreFocus)];
+				const contributed = await entry.getActions?.(signal, restoreFocus);
+				const actions = [...contributed ?? []];
 				if (entry.archive && !signal.aborted) {
 					const presentation = getChatSessionArchiveActionPresentation(getChatSessionArchiveActionWording(this.configuration)).archive;
 					const separator = actions.map(action => action instanceof Separator).lastIndexOf(true);
@@ -347,25 +348,6 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 						label: presentation.title.value, tooltip: presentation.title.value, icon: presentation.icon, enabled: true,
 						run: () => this.commands.executeCommand('agentSession.archive', { catalogId: entry.id }),
 					});
-				}
-				const organization = project();
-				if (!signal.aborted && organization && (organization.current || organization.destinations.length || organization.loadDestinations)) {
-					try {
-						const destinations = organization.loadDestinations ? await organization.loadDestinations(signal) : organization.destinations;
-						if (signal.aborted) return actions;
-						const projectActions = sessionListProjectActions(organization, destinations, async run => {
-							try {
-								await run();
-								restoreFocus();
-							} catch (error) {
-								this.notifications.error(toErrorMessage(error));
-							}
-						});
-						const separator = actions.map(action => action instanceof Separator).lastIndexOf(true);
-						actions.splice(separator < 0 ? actions.length : separator, 0, ...projectActions);
-					} catch (error) {
-						if (!signal.aborted) this.notifications.error(toErrorMessage(error));
-					}
 				}
 				return actions;
 			},

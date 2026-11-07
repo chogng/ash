@@ -58,7 +58,8 @@ suite('sessions browser component', () => {
 	});
 
 
-	async function expectActivityIconSize(navigation: Locator, size: number, horizontal = false): Promise<void> {
+	async function expectActivityIconSize(navigation: Locator, size: number, position: 'default' | 'top' | 'bottom' = 'default'): Promise<void> {
+		const horizontal = position !== 'default';
 		await expect.poll(() => navigation.evaluate(element => element.classList.contains('horizontal'))).toBe(horizontal);
 		const labeled = await navigation.evaluate(element => element.classList.contains('labeled'));
 		await expect(navigation).not.toHaveClass(/compact/);
@@ -73,16 +74,17 @@ suite('sessions browser component', () => {
 			else { await expect(item).toHaveCSS('width', `${itemWidth}px`); }
 			await expect(item).toHaveCSS('height', `${itemHeight}px`);
 		}
-		await expect(icons).toHaveCount(horizontal ? 7 : labeled ? 6 : 8);
+		await expect(icons).toHaveCount(6);
 		const accounts = navigation.page().getByRole('button', { name: 'Accounts', exact: true });
 		await expect(accounts).toHaveCount(1);
 		const titlebarAccounts = navigation.page().locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });
-		await expect(titlebarAccounts).toHaveCount(horizontal ? 1 : 0);
-		if (horizontal) {
-			await expect(navigation.getByRole('button', { name: 'Accounts', exact: true })).toHaveCount(0);
+		await expect(titlebarAccounts).toHaveCount(position === 'top' ? 1 : 0);
+		if (position === 'top') {
 			await expect(titlebarAccounts.locator('.ash-icon')).toHaveCSS('width', '18px');
 			await expect(titlebarAccounts.locator('.ash-icon')).toHaveCSS('height', '18px');
 			await expect(titlebarAccounts).toHaveAttribute('aria-haspopup', 'menu');
+		} else {
+			await expect(navigation.page().locator('[data-part="sidebar"]').getByRole('button', { name: 'Accounts', exact: true })).toBeVisible();
 		}
 		for (const icon of await icons.all()) {
 			await expect(icon).toHaveCSS('width', `${size}px`);
@@ -337,10 +339,19 @@ suite('sessions browser component', () => {
 		const more = activityNavigation.getByRole('button', { name: 'More', exact: true });
 		const collaboration = page.getByRole('menuitemradio', { name: 'Collab', exact: true });
 		const codeMode = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
+		const chatMode = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true });
 		const buttons = activityNavigation.locator('.ash-sessions-navigation button');
-		const sharedNavigation = await buttons.allTextContents();
+		const chatNavigation = ['New', 'Search', 'Projects', 'Artifacts', 'Customize', 'More'];
+		await expect(buttons).toHaveText(chatNavigation);
 		await codeMode.click();
-		await expect(buttons).toHaveText(sharedNavigation);
+		await expect(codeMode).toHaveAttribute('aria-pressed', 'true');
+		await expect(buttons).toHaveText(['New', 'Search', 'Customize', 'More']);
+		await more.press('Enter');
+		await expect(page.getByRole('menuitemradio', { name: 'Symphony', exact: true })).toBeVisible();
+		await expect(collaboration).toHaveCount(0);
+		await page.keyboard.press('Escape');
+		await chatMode.click();
+		await expect(buttons).toHaveText(chatNavigation);
 		const projects = activityNavigation.getByRole('button', { name: 'Projects' });
 		const chat = activityNavigation.getByRole('button', { name: 'New' });
 		await more.press('Enter');
@@ -358,14 +369,14 @@ suite('sessions browser component', () => {
 		await collaboration.click();
 		await more.click();
 		await expect(collaboration).toHaveAttribute('aria-checked', 'true');
+		await expect(collaboration.locator('[data-ash-icon-id="collab"]')).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(page.locator('.ash-sessions-list:visible')).toBeHidden();
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
 		await expect(page.locator('[data-part="auxiliarybar"] h2')).toBeHidden();
 		await projects.click();
 		await expect(page.locator('.ash-projects')).toBeVisible();
-		await expect(codeMode).toHaveAttribute('aria-pressed', 'true');
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true }).click();
+		await expect(chatMode).toHaveAttribute('aria-pressed', 'true');
 		await expect(projects.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'projects');
 		await projects.click();
 		await expect(activityNavigation.locator('[data-action-id="sessions.open.projects"] button')).toHaveAttribute('aria-current', 'page');
@@ -756,7 +767,7 @@ suite('sessions browser component', () => {
 		await expect(activityBar).toHaveCount(0);
 		const topHost = page.locator('.ash-sessions-activity-host.top');
 		await expect(topHost).toBeVisible();
-		await expectActivityIconSize(activityNavigation, 18, true);
+		await expectActivityIconSize(activityNavigation, 18, 'top');
 		const titlebarAccounts = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });
 		await titlebarAccounts.press('Enter');
 		await expect(titlebarAccounts).toHaveAttribute('aria-expanded', 'true');
@@ -769,7 +780,7 @@ suite('sessions browser component', () => {
 		await page.getByRole('menuitemradio', { name: 'Bottom' }).click();
 		await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
 		await expect(topHost).toBeHidden();
-		await expectActivityIconSize(activityNavigation, 18, true);
+		await expectActivityIconSize(activityNavigation, 18, 'bottom');
 		await page.locator('.ash-sessions-activity-host.bottom button').first().click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 		await page.getByRole('menuitemradio', { name: 'Default' }).click();
@@ -779,21 +790,25 @@ suite('sessions browser component', () => {
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 		await page.getByRole('menuitemradio', { name: 'Top' }).click();
 		await expect(topHost).toBeVisible();
-		await expectActivityIconSize(activityNavigation, 18, true);
+		await expectActivityIconSize(activityNavigation, 18, 'top');
 		await topHost.locator('button').first().click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 		await page.getByRole('menuitemradio', { name: 'Bottom' }).click();
 		const bottomHost = page.locator('.ash-sessions-activity-host.bottom');
 		await expect(bottomHost).toBeVisible();
-		await expectActivityIconSize(activityNavigation, 18, true);
-		await titlebarAccounts.press('Shift+F10');
+		await expectActivityIconSize(activityNavigation, 18, 'bottom');
+		await expect(titlebarAccounts).toHaveCount(0);
+		const sidebarAccounts = page.locator('[data-part="sidebar"]').getByRole('button', { name: 'Accounts', exact: true });
+		await sidebarAccounts.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 		await page.getByRole('menuitemradio', { name: 'Default' }).click();
 		await expectActivityIconSize(activityNavigation, 18);
 		await chatButton.click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
-		await page.getByRole('menuitemradio', { name: 'Hidden' }).click();
-		await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeHidden();
+		await expect(page.getByRole('menuitemradio')).toHaveText(['Default', 'Top', 'Bottom']);
+		await expect(page.getByRole('menuitemradio', { name: 'Default' })).toHaveAttribute('aria-checked', 'true');
+		await page.keyboard.press('Escape');
+		await expect(topHost.locator('.ash-sessions-activity-content')).toBeVisible();
 		await expect(activityBar).toHaveCount(0);
 	});
 
@@ -1300,6 +1315,11 @@ suite('sessions browser component', () => {
 			await page.keyboard.press('Enter');
 			await expect(more).toHaveAttribute('aria-expanded', 'true');
 			await expect(toolbar).toHaveCSS('opacity', '1');
+			const filterMenu = page.locator('.ash-sessions-list-menu');
+			await expect(filterMenu.getByRole('menuitem')).toContainText(chinese
+				? ['分组方式', '排序方式', '显示']
+				: ['Group By', 'Sort By', 'Show']);
+			await expect(filterMenu.getByRole('menuitem', { name: chinese ? '在侧栏中搜索会话' : 'Search sessions in the sidebar', exact: true })).toHaveCount(0);
 			const group = page.getByRole('menuitem', { name: chinese ? '分组方式' : 'Group By', exact: true });
 			await expect(group).toBeFocused();
 			await group.press('ArrowRight');

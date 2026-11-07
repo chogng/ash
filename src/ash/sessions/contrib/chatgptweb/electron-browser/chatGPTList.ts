@@ -299,7 +299,7 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 
 	private getActions(conversation: ChatGPTConversation, restoreFocus: () => void): readonly IAction[] {
 		const state = this.chat.state.get();
-		const remove = { ...this.action('delete', localize('sessions.chatgpt.delete', 'Delete'), Lxicon.trash, () => this.deleteConversation(conversation)), class: 'ash-chat-navigation-delete-action' };
+		const remove = { ...this.action('delete', localize('sessions.chatgpt.delete', 'Delete'), Lxicon.trash, () => this.deleteConversation(conversation)), class: 'ash-session-delete-action' };
 		if (conversation.id.startsWith('pending:') || !conversation.local && (!state.connected || !state.networkAvailable)) {
 			return [remove];
 		}

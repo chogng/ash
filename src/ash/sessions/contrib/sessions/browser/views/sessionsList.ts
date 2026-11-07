@@ -1,9 +1,11 @@
 import { IContextKeyService, type IScopedContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { CodeConversationPageContext, SessionsMenuActiveConversationContext } from '../../../../common/contextkeys.js';
+import { CodeConversationPageContext, SessionsMenuActiveConversationContext, SessionsMenuCanChangeFolderContext, SessionsMenuCanMoveConversationContext, SessionsMenuConversationPinnedContext } from '../../../../common/contextkeys.js';
 import { ISessionsListModelService, type ISessionsListTreeNode, type SessionGrouping } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../../base/common/actions.js';
 import { ISessionSectionOrderService } from '../../../../services/sessions/browser/sessionSectionOrderService.js';
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
+import { COPY_PATH_COMMAND_ID } from '../../../../../workbench/contrib/files/browser/fileConstants.js';
+import { projectForFolder, projectFolders, readCodeProjects } from '../../../chat/browser/sessionWorkspaceProjects.js';
 import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
 import { ISessionGroupsService, type SessionGroup } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { CHANGE_PROJECT_APPEARANCE, CHANGE_SESSION_GROUP_APPEARANCE, pickProjectAppearance } from './sessionGroupAppearancePicker.js';
@@ -18,10 +20,10 @@ import { localize } from '../../../../../nls.js';
 import { toErrorMessage } from '../../../../../base/common/errorMessage.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { AbstractDisposable, Disposable, DisposableMap, type DisposableStore, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { MOVE_CHAT_TO_SESSION_ACTION_ID } from '../sessionsActions.js';
+import { getFlatContextMenuActions } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { SessionActionFeedback } from '../sessionActionFeedback.js';
 import { getSessionsListEntries, sessionSortTime } from './sessionsListFilters.js';
-import { sessionListProjectActions, sessionProjectOrganization, sessionSortActions, type SessionListOrganization } from './sessionsListActions.js';
+import { sessionListProjectActions, sessionProjectOrganization, sessionSortActions, type SessionListOrganization, type SessionListProjectOrganization } from './sessionsListActions.js';
 import { SessionsListSearch } from './sessionsListSearch.js';
 import { DomWidget } from '../../../../../platform/domWidget/browser/domWidget.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
@@ -40,10 +42,10 @@ import { ICustomViewService } from '../../../../services/customView/browser/cust
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IProjectService, type Project, type ProjectSummary } from '../../../../../platform/projects/common/projectService.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
-import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IContextMenuService, type IContextMenuMenuDelegate } from '../../../../../platform/contextview/browser/contextView.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { ARCHIVE_PROJECT_COMMAND, getProjectRemovalActions } from '../../../projects/browser/projectsActions.js';
+import { ARCHIVE_PROJECT_COMMAND, confirmProjectDelete, showSidebarProjectMenu } from '../../../projects/browser/projectsActions.js';
 import { WorkbenchObjectTree } from '../../../../../platform/list/browser/listService.js';
 import { defaultListStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ObjectTreeElement, ObjectTreeNode } from '../../../../../base/browser/ui/tree/objectTreeModel.js';
@@ -74,6 +76,12 @@ import type { URI } from '../../../../../base/common/uri.js';
 import { IBlockedSessionsIndicatorService, type IBlockedSession } from '../blockedSessionsIndicatorModel.js';
 
 const attentionSection = 'attention';
+const codeFolderProjectMigrationKey = 'sessions.code.folderProjectsMigrated';
+
+function workspaceFolderKey(resource: URI): string {
+	const path = resource.toEncodedComponents().path.replace(/\/+$/u, '') || '/';
+	return extUriBiasedIgnorePathCase.getComparisonKey(resource.withEncodedPath(path));
+}
 
 interface SessionBucket {
 	readonly id: string;
@@ -219,11 +227,13 @@ export class SessionsList extends DomWidget {
 	private readonly repositoryGroups = new Map<string, SessionBucket | undefined>();
 	private readonly repositoryLookup = new MutableDisposable<CancellationTokenSource>();
 	private projectLoad = 0;
+	private migratingCodeFolderProjects = false;
 	private projectsFailed = false;
 	private projectsLoading = false;
 	private readonly empty: HTMLParagraphElement;
 	private readonly projectError: HTMLButtonElement;
 	private readonly catalog: SessionsCatalogListInput | undefined;
+	private readonly menuContext: IScopedContextKeyService | undefined;
 	private readonly attention: IObservable<ReadonlyMap<string, IBlockedSession>>;
 	private readonly catalogViewport: HTMLElement | null | undefined;
 	private readonly catalogRows = new Map<string, SessionsCatalogRow>();
@@ -256,7 +266,7 @@ export class SessionsList extends DomWidget {
 		@ICommandService private readonly commands: ICommandService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 		@ICustomViewService private readonly customViews: ICustomViewService,
-		@IMenuService menus: IMenuService,
+		@IMenuService private readonly menus: IMenuService,
 		@INotificationService private readonly notifications: INotificationService,
 		@ISessionsListModelService private readonly listModel: ISessionsListModelService,
 		@ISessionSectionOrderService private readonly sectionOrder: ISessionSectionOrderService,
@@ -361,7 +371,10 @@ export class SessionsList extends DomWidget {
 			if (row) this.tree.reveal(SessionsListTree.id(row));
 			button?.focus({ preventScroll: !!row });
 		}, true));
-		this._register(sessionService.onDidChange(() => this.render()));
+		this._register(sessionService.onDidChange(() => {
+			if (this.shouldMigrateCodeFolderProjects() && !this.projectsFailed) void this.loadProjects();
+			else this.render();
+		}));
 		this._register(storage.onDidChangeValue(event => {
 			if (event.scope === StorageScope.PROFILE && event.key.startsWith(`sessions.list.${mode}.collapsed.`)
 				|| event.scope === StorageScope.WORKSPACE && event.key.startsWith('sessions.inputDraft:untitled:')) this.render();
@@ -383,7 +396,7 @@ export class SessionsList extends DomWidget {
 		this._register(viewService.onDidChange(() => this.render()));
 		this._register(github.onDidChange(() => this.render()));
 		this._register(groups.onDidChange(() => this.render()));
-		const menuContext = contextKeys && this._register(contextKeys.createScoped(this.domNode));
+		const menuContext = this.menuContext = contextKeys && this._register(contextKeys.createScoped(this.domNode));
 		this.createListToolbar = (container, disposables) => createSessionsListToolbar(
 			container, disposables, menus, contextMenus, notifications, menuContext,
 			Menus.SidebarSessionsHeader, Menus.SessionsViewFilter, actions => this.getFilterActions(actions),
@@ -456,13 +469,7 @@ export class SessionsList extends DomWidget {
 				choice('sessions.list.showAutomationSessionsAfterReply', localize('sessions.list.showAutomationSessionsAfterReply', 'Show Automation Sessions After Reply'),
 					automation === 'afterReply', () => model.setAutomationSessionsMode(automation === 'afterReply' ? 'never' : 'afterReply')),
 			]),
-		], [{
-			id: 'sessions.list.search',
-			label: localize({ bundle: 'ash.sessions', key: 'sessions.list.inlineSearch' }, 'Search sessions in the sidebar'),
-			tooltip: '',
-			enabled: true,
-			run: () => this.search.open(),
-		}], [...contributed]);
+		], [...contributed]);
 	}
 
 	focus(): void {
@@ -492,21 +499,81 @@ export class SessionsList extends DomWidget {
 	}
 
 	private async loadProjects(): Promise<void> {
+		// The migration itself publishes Project changes. Refresh once its writes finish.
+		if (this.migratingCodeFolderProjects) return;
 		const generation = ++this.projectLoad;
+		const migrate = this.shouldMigrateCodeFolderProjects();
+		this.migratingCodeFolderProjects = migrate;
 		this.projectsLoading = true;
 		this.render();
 		try {
-			const summaries = await this.projectService.list(this.mode);
-			const projects = await Promise.all(summaries.filter(project => !project.archived).map(project => this.projectService.read(project.id, this.mode)));
+			let projects: readonly Project[];
+			if (migrate) {
+				await this.migrateCodeFolderProjects();
+				projects = await readCodeProjects(this.projectService);
+			} else {
+				const summaries = await this.projectService.list(this.mode);
+				projects = await Promise.all(summaries.filter(project => !project.archived).map(project => this.projectService.read(project.id, this.mode)));
+			}
 			if (this.isDisposed || generation !== this.projectLoad) return;
 			this.projects = projects.filter(project => !project.archived);
 			this.projectsFailed = false;
 		} catch {
 			if (this.isDisposed || generation !== this.projectLoad) return;
 			this.projectsFailed = true;
+		} finally {
+			if (migrate) this.migratingCodeFolderProjects = false;
 		}
 		this.projectsLoading = false;
 		this.render();
+	}
+
+	private shouldMigrateCodeFolderProjects(): boolean {
+		return this.mode === 'code' && this.sessionService.state === 'ready'
+			&& !this.storage.getBoolean(codeFolderProjectMigrationKey, StorageScope.PROFILE, false);
+	}
+
+	private async migrateCodeFolderProjects(): Promise<void> {
+		const projects = await readCodeProjects(this.projectService);
+		if (this.isDisposed || !this.shouldMigrateCodeFolderProjects()) return;
+		const organized = new Set([...projects.flatMap(project => project.sessionIds), ...this.groups.groups.flatMap(group => group.sessionIds)]);
+		const folders = new Map<string, { readonly resource: URI; readonly sessionIds: string[]; }>();
+		for (const session of this.sessionService.sessions) {
+			if (session.kind !== 'code' || session.status !== 'active' || session.backendSessionId
+				|| !session.workspace || organized.has(session.sessionId)) continue;
+			const resource = sessionWorkspaceUri(session.workspace);
+			if (resource.scheme !== 'file' || resource.authority) continue;
+			const key = workspaceFolderKey(resource);
+			let entry = folders.get(key);
+			if (!entry) folders.set(key, entry = { resource, sessionIds: [] });
+			entry.sessionIds.push(session.sessionId);
+		}
+		for (const [key, { resource, sessionIds }] of folders) {
+			if (this.isDisposed || !this.shouldMigrateCodeFolderProjects()) return;
+			const matching = projects.filter(project => projectFolders(project).some(folder => workspaceFolderKey(folder) === key));
+			if (matching.length && matching.every(project => project.archived)) continue;
+			let project = matching.find(project => !project.archived) ?? await projectForFolder(this.projectService, projects, resource);
+			for (const id of sessionIds) {
+				if (project.sessionIds.includes(id)) continue;
+				try {
+					project = await this.projectService.addSession(project, id);
+				} catch (error) {
+					const current = (await readCodeProjects(this.projectService)).find(candidate => candidate.id === project.id);
+					// Another window may have removed this project, including one replayed by the creation command.
+					if (!current || current.archived) break;
+					if (current.sessionIds.includes(id)) {
+						project = current;
+						continue;
+					}
+					if (current.revision === project.revision) throw error;
+					project = await this.projectService.addSession(current, id);
+				}
+			}
+		}
+		// A removed project or membership stays removed on subsequent opens.
+		if (!this.isDisposed && this.sessionService.state === 'ready') {
+			this.storage.store(codeFolderProjectMigrationKey, true, StorageScope.PROFILE, StorageTarget.MACHINE);
+		}
 	}
 
 	private getOrganization(element: HTMLElement): SessionListOrganization | undefined {
@@ -532,21 +599,59 @@ export class SessionsList extends DomWidget {
 		this.catalogMenu.value = toDisposable(() => controller.abort());
 		try {
 			const focus = () => this.tree.focusRow(item.domNode);
-			const actions = await row.getActions(controller.signal, focus);
+			const actions = [...await row.getActions(controller.signal, focus)];
 			if (controller.signal.aborted || !item.domNode.isConnected) return;
-			const button = item.moreButton;
-			item.setMenuVisible(true);
-			this.contextMenus.showContextMenu({
-				getAnchor: () => anchor, getActions: () => actions,
-				autoSelectFirstItem: !!button?.matches(':focus-visible') || anchor === item.domNode.querySelector('.ash-sessions-list-item'),
-				onHide: cancelled => {
-					item.setMenuVisible(false);
-					if (cancelled && button?.isConnected) button.focus({ preventScroll: true });
-				},
-			});
+			const project = row.organization()?.project;
+			if (project) {
+				try {
+					const destinations = project.loadDestinations ? await project.loadDestinations(controller.signal) : project.destinations;
+					if (controller.signal.aborted || !item.domNode.isConnected) return;
+					const separator = actions.map(action => action instanceof Separator).lastIndexOf(true);
+					actions.splice(separator < 0 ? actions.length : separator, 0, ...this.projectActions(item, project, destinations));
+				} catch (error) {
+					if (controller.signal.aborted || !item.domNode.isConnected) return;
+					this.notifications.error(toErrorMessage(error));
+				}
+			}
+			this.showConversationMenu(item, anchor, actions, row.sessionId ? { sessionId: row.sessionId } : { catalogId: row.id }, row.pinned);
 		} catch (error) {
 			if (!controller.signal.aborted) this.notifications.error(toErrorMessage(error));
 		}
+	}
+
+	private projectActions(item: SessionListItem, project: SessionListProjectOrganization,
+		destinations = project.destinations): readonly IAction[] {
+		if (!project.current && !destinations.length && !project.loadDestinations) return [];
+		return sessionListProjectActions(project, destinations, async run => {
+			try {
+				await run();
+				if (!this.isDisposed) this.tree.focusRow(item.domNode);
+			} catch (error) {
+				this.notifications.error(toErrorMessage(error));
+			}
+		});
+	}
+
+	private showRowMenu(item: SessionListItem, anchor: ContextMenuAnchor,
+		delegate: Omit<IContextMenuMenuDelegate, 'getAnchor' | 'autoSelectFirstItem'>): void {
+		const trigger = item.getMenuTrigger(anchor);
+		this.contextMenus.showContextMenu({
+			...delegate,
+			getAnchor: () => anchor,
+			autoSelectFirstItem: anchor === trigger || !!trigger?.matches(':focus-visible'),
+			getActions: () => {
+				item.setMenuVisible(true);
+				return (delegate.getActions?.() ?? []).map(action => action.id === 'agentSession.archive' ? {
+					...action,
+					run: () => this.feedback.archive(item.domNode, () => action.run()),
+				} : action);
+			},
+			onHide: cancelled => {
+				item.setMenuVisible(false);
+				delegate.onHide?.(cancelled);
+				if (cancelled && trigger?.isConnected) trigger.focus({ preventScroll: true });
+			},
+		});
 	}
 
 	private moveOrderedItem(element: HTMLElement, attribute: 'rowOrderId' | 'sectionOrderId', targetId: string): void {
@@ -608,8 +713,8 @@ export class SessionsList extends DomWidget {
 		}
 	}
 
-	private ashProjectOperations(project: ProjectSummary): SessionsCatalogProjectOperations {
-		return {
+	private showLocalProjectMenu(title: string, project: ProjectSummary, anchor: ContextMenuAnchor): void {
+		this.showProjectMenu(project.id, title, field => this.commands.executeCommand(CHANGE_PROJECT_APPEARANCE, project.id, field), {
 			rename: async (name, signal) => {
 				const current = await this.projectService.read(project.id, this.mode);
 				signal.throwIfAborted();
@@ -617,37 +722,39 @@ export class SessionsList extends DomWidget {
 			},
 			archive: () => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.id, this.mode),
 			remove: { removesContents: false, run: () => this.projectService.remove(project) },
-		};
+		}, anchor);
 	}
 
-	private showProjectMenu(title: string, change: ((field: 'icon' | 'color') => Promise<void>) | undefined,
+	private showWorkspaceMenu(resource: URI, anchor: ContextMenuAnchor): void {
+		const label = localize({ bundle: 'ash', key: 'workbench.copyPath' }, 'Copy Path');
+		const actions: IAction[] = [{
+			id: COPY_PATH_COMMAND_ID, label, tooltip: label, icon: Lxicon.copy, enabled: true,
+			run: () => this.commands.executeCommand(COPY_PATH_COMMAND_ID, resource),
+		}];
+		this.contextMenus.showContextMenu({ getAnchor: () => anchor, getActions: () => actions, autoSelectFirstItem: true });
+	}
+
+	private showProjectMenu(projectId: string, title: string, change: ((field: 'icon' | 'color') => Promise<void>) | undefined,
 		operations: SessionsCatalogProjectOperations, anchor: ContextMenuAnchor): void {
-		const groups: IAction[][] = [];
-		const { rename } = operations;
-		if (rename) {
-			const label = localize('sessions.list.rename', 'Rename');
-			groups.push([{
-				id: 'projects.rename', label, tooltip: label, icon: Lxicon.edit, enabled: true,
-				run: () => this.renameProject(title, rename),
-			}]);
-		}
-		if (change) {
-			groups.push(this.appearanceActions(CHANGE_PROJECT_APPEARANCE, change,
-				localize('sessions.list.changeProjectIcon', 'Change Icon...'),
-				localize('sessions.list.changeProjectColor', 'Change Color...')));
-		}
-		const removal = getProjectRemovalActions(this.dialogs, title, operations, async operation => {
+		if (!this.menuContext) return;
+		const { rename, archive, remove } = operations;
+		const runRemoval = async (operation: () => Promise<boolean | void>): Promise<void> => {
 			if (this.isDisposed) return;
-			try {
-				const completed = await operation();
-				if (completed !== false && !this.isDisposed) this.focus();
-			} catch (error) {
-				this.notifications.error(toErrorMessage(error));
-			}
-		});
-		if (removal.length) groups.push(removal);
-		const actions = Separator.join(...groups);
-		if (actions.length) this.contextMenus.showContextMenu({ getAnchor: () => anchor, getActions: () => actions, autoSelectFirstItem: true });
+			const completed = await operation();
+			if (completed !== false && !this.isDisposed) this.focus();
+		};
+		showSidebarProjectMenu(this.contextMenus, this.menuContext, this.mode, {
+			projectId,
+			actions: {
+				rename: rename && (() => this.renameProject(title, rename)),
+				icon: change && (() => change('icon')),
+				color: change && (() => change('color')),
+				archive: archive && (() => runRemoval(archive)),
+				remove: remove && (async () => {
+					if (await confirmProjectDelete(this.dialogs, title, remove.removesContents)) await runRemoval(remove.run);
+				}),
+			},
+		}, anchor);
 	}
 
 	private async renameProject(title: string, rename: NonNullable<SessionsCatalogProjectOperations['rename']>): Promise<void> {
@@ -706,47 +813,59 @@ export class SessionsList extends DomWidget {
 	}
 
 	private showItemMenu(selection: SessionsViewSelection, item: SessionListItem, anchor: ContextMenuAnchor): void {
-		const sessionActions: IAction[] = [];
-		if (selection.kind === 'session') {
-			const { session, threadId } = selection.active;
-			sessionActions.push(...createSessionWorkspaceActions(session.sessionId, threadId, this.sessionService, this.commands));
-			if (this.sessionService.getChatMoveDestinations?.(session.sessionId, threadId).length) {
-				sessionActions.push({
-					id: MOVE_CHAT_TO_SESSION_ACTION_ID,
-					label: localize({ bundle: 'ash.sessions', key: 'sessions.list.moveChat' }, 'Move Conversation to Session…'),
-					tooltip: '',
-					enabled: true,
-					run: () => this.commands.executeCommand(MOVE_CHAT_TO_SESSION_ACTION_ID, { sessionId: session.sessionId, threadId }),
-				});
-			}
+		this.catalogMenu.clear();
+		const actions = this.orderActions(item.domNode, 'row');
+		if (selection.kind === 'untitled') {
+			this.showConversationMenu(item, anchor, [...actions, ...createSessionItemActions(selection, this.commands, this.listModel, this.notifications,
+				() => this.commands.executeCommand('sessions.openInNewWindow', selection),
+				sessionId => this.restoreViewState({ top: this.tree.scrollTop, focus: `session:${sessionId}` }))]);
+			return;
 		}
+		const { session, threadId } = selection.active;
 		const project = this.getOrganization(item.domNode)?.project;
-		if (project && (project.current || project.destinations.length)) {
-			sessionActions.push(...sessionListProjectActions(project, project.destinations, async run => {
-				try {
-					await run();
-					if (!this.isDisposed) this.tree.focusRow(item.domNode);
-				} catch (error) { this.notifications.error(toErrorMessage(error)); }
-			}));
-		}
+		if (project) actions.push(...this.projectActions(item, project));
+		actions.push(...this.automationVisibilityActions(selection));
+		this.showConversationMenu(item, anchor, actions, { sessionId: session.sessionId, threadId }, this.listModel.isSessionPinned(session));
+	}
+
+	private showConversationMenu(item: SessionListItem, anchor: ContextMenuAnchor, actions: IAction[],
+		target?: { readonly sessionId: string; readonly threadId?: string; } | { readonly catalogId: string; }, pinned = false): void {
 		this.rowMenuContext.clear();
 		const context = this.rowMenuContext.value = this.contextKeys?.createScoped(item.domNode);
-		if (context) SessionsMenuActiveConversationContext.bindTo(context).set(this.mode === 'code' && selection.kind === 'session' && selection.active.session.status === 'active');
-		item.setMenuVisible(true);
-		this.contextMenus.showContextMenu({
-			menuId: Menus.SidebarSessionContext,
-			menuActionOptions: { arg: selection },
-			contextKeyService: context,
-			getAnchor: () => anchor,
-			getActions: () => [...this.orderActions(item.domNode, 'row'), ...sessionActions, ...this.automationVisibilityActions(selection), ...createSessionItemActions(selection, this.commands, this.listModel, this.notifications,
-				() => this.commands.executeCommand('sessions.openInNewWindow', selection),
-				sessionId => this.restoreViewState({ top: this.tree.scrollTop, focus: `session:${sessionId}` })).map(action => action.id !== 'agentSession.archive' ? action : {
-					...action,
-					run: () => this.feedback.archive(item.domNode, () => action.run()),
-				})],
+		if (context && target && 'sessionId' in target) {
+			const { sessionId, threadId } = target;
+			SessionsMenuActiveConversationContext.bindTo(context).set(true);
+			SessionsMenuConversationPinnedContext.bindTo(context).set(pinned);
+			if (this.mode === 'code' && threadId) {
+				SessionsMenuCanChangeFolderContext.bindTo(context).set(threadId === sessionId && !!this.sessionService.canChangeDirectory?.(sessionId, { ignoreActivity: true }));
+				SessionsMenuCanMoveConversationContext.bindTo(context).set(!!this.sessionService.getChatMoveDestinations?.(sessionId, threadId).length);
+			}
+		}
+		const menu = this.mode === 'code' ? Menus.SidebarCodeSessionContext : Menus.SidebarChatSessionContext;
+		const workspaceActions = this.mode === 'code' && target && 'sessionId' in target && target.threadId
+			? createSessionWorkspaceActions(target.sessionId, target.threadId, this.sessionService, this.commands)
+			: [];
+		this.showRowMenu(item, anchor, {
+			getActions: () => Separator.join(actions, getFlatContextMenuActions(this.menus.getMenuActions(menu, { arg: target }, context)).flatMap(action => {
+				if (action.id === 'agentSession.changeDirectory' || action.id === 'agentSession.clearDirectory') {
+					return workspaceActions.filter(workspaceAction => workspaceAction.id === action.id);
+				}
+				if (action.id === 'agentSession.delete') return { ...action, class: 'ash-session-delete-action', run: () => action.run() };
+				if (action.id === 'sessions.list.togglePin') return {
+					...action, run: async () => {
+						const id = await action.run();
+						if (typeof id === 'string' && !this.isDisposed) {
+							if (this.catalog) {
+								// A pinned Chat conversation keeps its row inside the project.
+								if (item.domNode.isConnected) this.tree.focusRow(item.domNode);
+							} else this.restoreViewState({ top: this.tree.scrollTop, focus: `session:${id}` });
+						}
+					}
+				};
+				return action;
+			})),
 			onHide: () => {
 				if (this.rowMenuContext.value === context) this.rowMenuContext.clear();
-				item.setMenuVisible(false);
 			},
 		});
 	}
@@ -906,14 +1025,14 @@ export class SessionsList extends DomWidget {
 			return item;
 		};
 		const sectionFor = (key: string, title: string, children: readonly HTMLElement[], kind: SessionListSectionKind = 'section',
-			options?: { readonly open?: () => void; readonly group?: SessionGroup; readonly project?: ProjectSummary; readonly projectAppearance?: SessionsCatalogProjectAppearance; readonly projectOperations?: SessionsCatalogProjectOperations; }): HTMLElement => {
+			options?: { readonly open?: () => void; readonly group?: SessionGroup; readonly project?: ProjectSummary; readonly projectAppearance?: SessionsCatalogProjectAppearance; readonly projectOperations?: SessionsCatalogProjectOperations; readonly workspace?: URI; readonly catalogProjectId?: string; }): HTMLElement => {
 			activeSections.add(key);
-			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, kind,
+			const section = this.sections.get(key) ?? this.sections.set(key, new SessionListSection(ownerDocument, key, kind, this.mode,
 				collapsed => this.tree.setSectionCollapsed(key, collapsed), key === 'projects' ? this.createListToolbar : undefined));
 			const sorted = sortRows(children);
 			childrenByRow.set(section.domNode, key === attentionSection ? sorted
 				: reorderChildren(sorted, ids => this.listModel.getSessionOrder(this.mode, key, ids), 'rowOrderId'));
-			const { open, group, project, projectAppearance, projectOperations } = options ?? {};
+			const { open, group, project, projectAppearance, projectOperations, workspace, catalogProjectId } = options ?? {};
 			const appearance = project ?? projectAppearance ?? group;
 			section.update(title, {
 				open,
@@ -926,12 +1045,14 @@ export class SessionsList extends DomWidget {
 				section.domNode.dataset.groupDropTarget = String(group.kind !== 'comparison');
 				section.setContextMenu(anchor => this.showSectionMenu(section, group, anchor));
 			}
+			if (workspace) {
+				section.setContextMenu(anchor => this.showWorkspaceMenu(workspace, anchor));
+			}
 			if (kind === 'project') {
 				if (project) {
-					section.setContextMenu(anchor => this.showProjectMenu(title, field =>
-						this.commands.executeCommand(CHANGE_PROJECT_APPEARANCE, project.id, field), this.ashProjectOperations(project), anchor));
-				} else if (projectAppearance || projectOperations?.archive || projectOperations?.rename || projectOperations?.remove) {
-					section.setContextMenu(anchor => this.showProjectMenu(title, projectAppearance && (field =>
+					section.setContextMenu(anchor => this.showLocalProjectMenu(title, project, anchor));
+				} else if (catalogProjectId && (projectAppearance || projectOperations?.archive || projectOperations?.rename || projectOperations?.remove)) {
+					section.setContextMenu(anchor => this.showProjectMenu(catalogProjectId, title, projectAppearance && (field =>
 						pickProjectAppearance(this.quickInput, field, projectAppearance[field], value => projectAppearance.set(field, value))), projectOperations ?? {}, anchor));
 				} else {
 					section.setContextMenu(undefined);
@@ -995,7 +1116,7 @@ export class SessionsList extends DomWidget {
 					children.push(item.domNode);
 				}
 				const node = sectionFor(key, project.title, children, 'project', {
-					project: project.localProject, projectAppearance: project.appearance,
+					project: project.localProject, catalogProjectId: project.key, projectAppearance: project.appearance,
 					projectOperations: project.operations && {
 						...project.operations,
 						archive: project.operations.archive && (() => this.commands.executeCommand<boolean>(ARCHIVE_PROJECT_COMMAND, project.key, 'catalog')),
@@ -1104,8 +1225,7 @@ export class SessionsList extends DomWidget {
 				item.domNode.dataset.projectId = project.id;
 				item.update(project.name, false, () => { void this.commands.executeCommand('sessions.open.projects', project.id).catch(error => this.notifications.error(String(error))); });
 				item.updateProjectAppearance(project);
-				item.setContextMenu(anchor => this.showProjectMenu(project.name, field =>
-					this.commands.executeCommand(CHANGE_PROJECT_APPEARANCE, project.id, field), this.ashProjectOperations(project), anchor));
+				item.setContextMenu(anchor => this.showLocalProjectMenu(project.name, project, anchor));
 				projects.push(item.domNode);
 			}
 		}
@@ -1132,25 +1252,23 @@ export class SessionsList extends DomWidget {
 		if (this.mode === 'code' && (grouping === 'none' || grouping === 'projects')) {
 			// Saved sessions can have a creation workspace without a Code project membership.
 			// Use the Session workspace so managed checkouts of the same folder stay together.
-			const workspaces = new Map<string, { readonly label: string; readonly rows: HTMLElement[]; }>();
+			const workspaces = new Map<string, { readonly label: string; readonly resource: URI; readonly rows: HTMLElement[]; }>();
 			for (const session of catalog) {
 				const row = remaining.get(session.sessionId);
 				if (!row || !session.workspace) continue;
 				const resource = sessionWorkspaceUri(session.workspace);
-				const path = resource.toEncodedComponents().path.replace(/\/+$/u, '') || '/';
-				const key = extUriBiasedIgnorePathCase.getComparisonKey(resource.withEncodedPath(path));
+				const key = workspaceFolderKey(resource);
 				let workspace = workspaces.get(key);
 				if (!workspace) {
-					workspace = { label: basename(resource) || session.workspace.root, rows: [] };
+					workspace = { label: basename(resource) || session.workspace.root, resource, rows: [] };
 					workspaces.set(key, workspace);
 				}
 				workspace.rows.push(row);
 				remaining.delete(session.sessionId);
 			}
 			for (const [key, workspace] of [...workspaces].sort((left, right) => left[1].label.localeCompare(right[1].label))) {
-				projects.push(sectionFor(`workspace:${key}`, workspace.label, workspace.rows, 'project'));
+				orderedRecent.push(sectionFor(`workspace:${key}`, workspace.label, workspace.rows, 'subgroup', { workspace: workspace.resource }));
 			}
-			hasProjectConversations ||= workspaces.size > 0;
 		}
 		if (grouping === 'none') {
 			orderedRecent.push(...remaining.values());
@@ -1419,6 +1537,12 @@ class SessionListItem extends AbstractDisposable {
 		return this.actions.element.querySelector('[data-action-id="sessions.list.more"] button');
 	}
 
+	getMenuTrigger(anchor: ContextMenuAnchor): HTMLButtonElement | undefined {
+		if (anchor === this.button) return this.button;
+		const more = this.moreButton;
+		return more?.matches(':focus') ? more : undefined;
+	}
+
 	setDisabled(disabled: boolean, actionsDisabled: boolean): void {
 		this.button.disabled = disabled;
 		for (const button of this.domNode.querySelectorAll('button')) {
@@ -1544,7 +1668,8 @@ class SessionListSection extends Disposable {
 	get title(): string { return this.label.textContent ?? ''; }
 	get rowClassName(): string { return this.subgroup ? 'ash-sessions-list-subgroup-row' : 'ash-sessions-list-section-row'; }
 
-	constructor(document: Document, key: string, private readonly kind: SessionListSectionKind, toggle: (collapsed?: boolean) => void,
+	constructor(document: Document, key: string, private readonly kind: SessionListSectionKind, private readonly mode: 'chat' | 'code',
+		toggle: (collapsed?: boolean) => void,
 		createToolbar?: (container: HTMLElement, disposables: DisposableStore) => MenuWorkbenchToolBar) {
 		super();
 		this.domNode = h(document, 'section', { className: this.subgroup ? 'ash-sessions-list-subgroup' : 'ash-sessions-list-section' });
@@ -1599,13 +1724,12 @@ class SessionListSection extends Disposable {
 
 	setLoading(loading: boolean): void {
 		this.button.setAttribute('aria-busy', String(loading));
+		this.icon.classList.toggle('loading', loading);
 		if (loading) {
 			this.spinner ??= createLoadingSpinner(this.button.ownerDocument);
-			this.icon.remove();
-			this.label.before(this.spinner);
+			if (!this.spinner.parentElement) this.icon.append(this.spinner);
 		} else {
 			this.spinner?.remove();
-			if (!this.icon.parentElement) this.label.before(this.icon);
 		}
 	}
 
@@ -1658,7 +1782,13 @@ class SessionListSection extends Disposable {
 
 	private renderIcon(): void {
 		const chevron = this.collapsed ? Lxicon.chevronRight : Lxicon.chevronDown;
-		const icon = this.projectIcon ?? (this.subgroup ? (this.collapsed ? Lxicon.folder : Lxicon.folderOpened) : chevron);
+		let icon = chevron;
+		if (this.kind === 'project' && this.mode === 'chat') {
+			icon = this.collapsed ? Lxicon.projects : Lxicon.projectsFilled;
+		} else if (this.subgroup) {
+			icon = this.collapsed ? Lxicon.folder : Lxicon.folderOpened;
+		}
+		icon = this.projectIcon ?? icon;
 		const glyphs = this.icon.querySelectorAll(':scope > .ash-icon');
 		if (glyphs[0]?.getAttribute('data-ash-icon-id') !== icon.id
 			|| this.kind === 'project' && glyphs[1]?.getAttribute('data-ash-icon-id') !== chevron.id) {

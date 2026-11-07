@@ -1,5 +1,5 @@
 import * as chatInputStatePersistence from '../../../../../workbench/contrib/chat/browser/widget/input/chatInputStatePersistence.js';
-import { captureSessionActionTarget } from '../../../../browser/sessionActionsService.js';
+import { captureSessionActionTarget, resolveSessionThreadSelection } from '../../../../browser/sessionActionsService.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
 import { Menus } from '../../../../browser/menus.js';
@@ -8,7 +8,7 @@ import { localize, localize2 } from '../../../../../nls.js';
 import { Action2, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
-import { SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
+import { SessionsMenuActiveConversationContext, SessionsMenuCanChangeFolderContext, SessionsWorkspaceModeContext } from '../../../../common/contextkeys.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
@@ -145,13 +145,19 @@ registerAction2(class MoveSessionToGroupAction extends Action2 {
 });
 
 registerAction2(class ChangeSessionDirectoryAction extends Action2 {
-	constructor() { super({ id: 'agentSession.changeDirectory', title: localize2({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Workspace…') }); }
+	constructor() {
+		super({
+			id: 'agentSession.changeDirectory', title: localize2({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Workspace…'),
+			menu: { id: Menus.SidebarCodeSessionContext, group: '4_conversation', when: SessionsMenuCanChangeFolderContext.isEqualTo(true) },
+		});
+	}
 
 	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
-		if (typeof argument !== 'string') return;
 		const sessions = accessor.get(ISessionsManagementService);
-		if (!sessions.canChangeDirectory?.(argument) || !sessions.changeDirectory) return;
-		const workspace = sessions.sessions.find(session => session.sessionId === argument)?.workspace;
+		const target = typeof argument === 'string' ? argument : resolveSessionThreadSelection(sessions, argument);
+		const id = typeof target === 'string' ? target : target && target.active.threadId === target.active.session.sessionId ? target.active.session.sessionId : undefined;
+		if (!id || !sessions.canChangeDirectory?.(id) || !sessions.changeDirectory) return;
+		const workspace = sessions.sessions.find(session => session.sessionId === id)?.workspace;
 		const dialogs = accessor.get(IFileDialogService);
 		const [folder] = await dialogs.showOpenDialog({
 			title: workspace
@@ -162,7 +168,7 @@ registerAction2(class ChangeSessionDirectoryAction extends Action2 {
 		}) ?? [];
 		if (folder?.scheme !== 'file' || folder.authority) return;
 		try {
-			await sessions.changeDirectory(argument, folder.fsPath);
+			await sessions.changeDirectory(id, folder.fsPath);
 			status(localize({ bundle: 'ash.sessions', key: 'sessions.workspace.enabled' }, 'Workspace set to {0}.', folder.fsPath));
 		} catch (error) {
 			if (!isCancellationError(error)) throw error;
@@ -171,7 +177,12 @@ registerAction2(class ChangeSessionDirectoryAction extends Action2 {
 });
 
 registerAction2(class ClearSessionDirectoryAction extends Action2 {
-	constructor() { super({ id: 'agentSession.clearDirectory', title: localize2({ bundle: 'ash.sessions', key: 'sessions.directory.clear' }, 'Remove Workspace') }); }
+	constructor() {
+		super({
+			id: 'agentSession.clearDirectory', title: localize2({ bundle: 'ash.sessions', key: 'sessions.directory.clear' }, 'Remove Workspace'),
+			menu: { id: Menus.SidebarCodeSessionContext, group: '4_conversation', order: 1, when: SessionsMenuCanChangeFolderContext.isEqualTo(true) },
+		});
+	}
 
 	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
 		if (typeof argument !== 'string') return;
@@ -188,7 +199,12 @@ registerAction2(class ClearSessionDirectoryAction extends Action2 {
 });
 
 registerAction2(class OpenSessionInNewWindowAction extends Action2 {
-	constructor() { super({ id: 'sessions.openInNewWindow', title: localize2('sessions.list.openWindow', 'Open in new window') }); }
+	constructor() {
+		super({
+			id: 'sessions.openInNewWindow', title: localize2('sessions.list.openWindow', 'Open in new window'), icon: Lxicon.linkExternal,
+			menu: { id: Menus.SidebarCodeSessionContext, group: '4_conversation', when: SessionsMenuActiveConversationContext.isEqualTo(true) },
+		});
+	}
 
 	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
 		const sessions = accessor.get(ISessionsManagementService);
@@ -207,7 +223,7 @@ registerAction2(class OpenSessionInNewWindowAction extends Action2 {
 				const threadId = active && Reflect.get(active, 'threadId');
 				const session = sessions.sessions.find(candidate => candidate.sessionId === id && candidate.status === 'active');
 				selection = session?.chats.some(chat => chat.threadId === threadId && chat.status === 'active') ? { kind: 'session', active: { session, threadId } } : undefined;
-			} else throw new TypeError(localize('chatSession.target.invalid', 'Choose a valid session.'));
+			} else selection = resolveSessionThreadSelection(sessions, argument);
 		}
 		if (!selection) throw new Error(localize('chatSession.target.invalid', 'Choose a valid session.'));
 		view.activateSelection(selection);

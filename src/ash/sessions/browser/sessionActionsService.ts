@@ -17,6 +17,16 @@ import { readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/c
 import type { IWorkspace } from '../../platform/workspace/common/workspace.js';
 import { selectionFromWorkspace } from '../common/agentHostSessionWorkspace.js';
 import type { IChatListCatalog } from '../contrib/chat/browser/chatListModel.js';
+import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
+
+/** Resolve the exact saved conversation named by a sidebar command. */
+export function resolveSessionThreadSelection(sessions: ISessionsManagementService, argument: unknown): Extract<SessionsViewSelection, { kind: 'session'; }> | undefined {
+	if (!isRecord(argument) || typeof argument.sessionId !== 'string' || typeof argument.threadId !== 'string') return;
+	const session = sessions.sessions.find(session => session.sessionId === argument.sessionId && session.status === 'active');
+	return session?.chats.some(chat => chat.threadId === argument.threadId && chat.status === 'active')
+		? { kind: 'session', active: { session, threadId: argument.threadId } }
+		: undefined;
+}
 
 /** Resolve the captured item only after its picker/confirmation is accepted. */
 export function captureSessionActionTarget(sessions: ISessionsManagementService, storage: IStorageService, navigation: IChatSessionNavigationService, argument: unknown, useActive = false): { readonly title: string; resolve(): Promise<ISession>; } {

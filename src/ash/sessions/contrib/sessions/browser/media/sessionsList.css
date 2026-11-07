@@ -369,10 +369,11 @@
 	place-items: center;
 }
 
-.ash-sessions-list-project-icon > .ash-icon {
+.ash-sessions-list-project-icon > :is(.ash-icon, .ash-loading-spinner) {
 	grid-area: 1 / 1;
 }
 
+.ash-sessions-list-project-icon.loading > .ash-icon,
 .ash-sessions-list-project-icon > .ash-sessions-list-project-chevron {
 	visibility: hidden;
 }
@@ -384,7 +385,7 @@
 }
 
 .ash-sessions-list-section-toggle[aria-expanded]:is(:hover, :focus-visible)
-	.ash-sessions-list-project-icon
+	.ash-sessions-list-project-icon:not(.loading)
 	> .ash-sessions-list-project-chevron {
 	visibility: visible;
 }
@@ -542,12 +543,6 @@
 	display: flex;
 	opacity: 1;
 	pointer-events: auto;
-}
-
-.ash-menu
-	.ash-action-view-item
-	> .ash-button.ash-chat-navigation-delete-action {
-	color: var(--ash-error-foreground);
 }
 
 @media (forced-colors: active) {

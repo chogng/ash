@@ -10,7 +10,7 @@ import { Editor } from '../../../automation/editor.js';
 import { Menus } from '../../../automation/menus.js';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 
-test('sidebar project appearance follows the project across window reopen', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+test('sidebar project menus share actions and retain appearance across window reopen', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
 	try {
 		const { client } = connection;
@@ -22,6 +22,7 @@ test('sidebar project appearance follows the project across window reopen', { ta
 		const read = async (projectId: string) => (await client.request(APP_SERVER_METHODS['project/read'], { projectId })).project;
 		let page = await workbench.openAgentsWindow(target.kind);
 		const header = (name: string) => page.getByRole('button', { name, exact: true });
+		const expectProjectMenu = () => expect(page.getByRole('menuitem')).toHaveText(['Rename', 'Change Icon...', 'Change Color...', 'Archive', 'Delete']);
 		const pick = async (action: string, title: string, choice: string) => {
 			await page.getByRole('menuitem', { name: action, exact: true }).click();
 			const picker = new QuickAccess(page);
@@ -31,6 +32,7 @@ test('sidebar project appearance follows the project across window reopen', { ta
 		};
 
 		await header(chat.name).click({ button: 'right' });
+		await expectProjectMenu();
 		await pick('Change Icon...', 'Change project icon', 'Chat');
 		await expect(header(chat.name).locator('[data-ash-icon-id="chat"]')).toHaveCount(1);
 		await header(chat.name).press('Shift+F10');
@@ -48,11 +50,13 @@ test('sidebar project appearance follows the project across window reopen', { ta
 		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		await expect(header(code.name)).toBeVisible();
 		await expect(header(code.name)).not.toHaveAttribute('aria-expanded');
-		await header(code.name).press('Shift+F10');
+		await header(code.name).click({ button: 'right' });
+		await expectProjectMenu();
 		await pick('Change Icon...', 'Change project icon', 'Chat');
 		await expect(header(code.name).locator('[data-ash-icon-id="chat"]')).toHaveCount(1);
 		expect((await read(code.projectId)).icon).toBe('chat');
 		await header(code.name).press('Shift+F10');
+		await expectProjectMenu();
 		await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
 		const name = page.locator('.ash-quick-input-host').getByRole('textbox');
 		await expect(name).toHaveValue(code.name);
@@ -117,6 +121,14 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		const mode = page.locator('.ash-window-mode-control');
 		const menus = new Menus(page);
 		const newMenu = () => menus.inspect(application, () => activity.getByRole('button', { name: 'New', exact: true }).click({ button: 'right' }));
+		const expectConversationMenu = async (mode: 'chat' | 'code', pin = 'Pin') => {
+			for (const name of [pin, 'Rename', 'Add to project', 'Move to group', 'Move to project', 'Remove from project', 'Archive', 'Delete']) {
+				await expect(page.getByRole('menuitem', { name, exact: true })).toBeVisible();
+			}
+			await expect(page.getByRole('menuitem', { name: 'Compare Agents…', exact: true })).toHaveCount(mode === 'code' ? 1 : 0);
+			await expect(page.getByRole('menuitem', { name: 'Show Conversation Recap', exact: true })).toHaveCount(mode === 'code' ? 1 : 0);
+			await expect(page.getByRole('menuitem', { name: 'Open in new window', exact: true })).toHaveCount(mode === 'code' ? 1 : 0);
+		};
 		await expect(activity.locator('[data-action-id="sessions.open.projects"]')).toBeVisible();
 		await expect(activity.locator('[data-action-id="sessions.open.creator"]')).toBeVisible();
 		expect((await newMenu()).some(item => item.label.startsWith('ChatGPT'))).toBe(true);
@@ -141,7 +153,24 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		await expect.poll(() => members(first.projectId)).toEqual([chatSession.sessionId]);
 		await firstProject.click();
 		await expect(row).toBeVisible();
-		await row.dragTo(secondProject);
+		await row.click({ button: 'right' });
+		await expectConversationMenu('chat');
+		await page.keyboard.press('Escape');
+		await row.press('Shift+F10');
+		await expectConversationMenu('chat');
+		await page.keyboard.press('Escape');
+		await expect(row).toBeFocused();
+		await row.press('Shift+F10');
+		await page.getByRole('menuitem', { name: 'Pin', exact: true }).click();
+		const projectRow = chat.locator(`[data-parent-project="project:${first.projectId}"]`).getByRole('button', { name: chatSession.title, exact: true });
+		await expect(chat.locator('[data-parent-section="pinned"]').getByRole('button', { name: chatSession.title, exact: true })).toBeVisible();
+		await projectRow.press('Shift+F10');
+		await expectConversationMenu('chat', 'Unpin');
+		await page.getByRole('menuitem', { name: 'Unpin', exact: true }).click();
+		await expect(chat.locator('[data-parent-section="pinned"]').getByRole('button', { name: chatSession.title, exact: true })).toHaveCount(0);
+		await projectRow.press('Shift+F10');
+		await page.getByRole('menuitem', { name: 'Move to project', exact: true }).press('ArrowRight');
+		await page.getByRole('menuitemcheckbox', { name: second.name, exact: true }).click();
 		await expect.poll(() => members(second.projectId)).toEqual([chatSession.sessionId]);
 		await expect.poll(() => members(first.projectId)).toEqual([]);
 
@@ -171,16 +200,20 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		await conversation.click();
 		await expect(conversation).toHaveAttribute('aria-current', 'page');
 		await expect(code).toBeVisible();
+		await conversation.click({ button: 'right' });
+		await expectConversationMenu('code');
+		await page.keyboard.press('Escape');
 		await conversation.press('Shift+F10');
+		await expectConversationMenu('code');
 		await page.getByRole('menuitem', { name: 'Remove from project', exact: true }).click();
 		await expect.poll(() => members(codeWorkspace.projectId)).toEqual([]);
 		expect(await members(second.projectId)).toEqual([chatSession.sessionId]);
 		await expect(codeRow).not.toHaveAttribute('data-parent-project-id');
-		const workspace = code.getByRole('button', { name: basename(testWorkspace.directory), exact: true });
+		const workspace = code.locator('[data-section^="workspace:"]').getByRole('button', { name: basename(testWorkspace.directory), exact: true });
 		await expect(workspace).toHaveAttribute('aria-expanded', 'true');
 		await expect(codeRow).toHaveAttribute('data-parent-section', /^workspace:/);
 		const previousRow = code.locator(`[data-row-order-id="${previous.sessionId}"]`);
-		await expect(previousRow).toHaveAttribute('data-parent-section', (await codeRow.getAttribute('data-parent-section'))!);
+		await expect(previousRow).toHaveAttribute('data-parent-project-id', /.+/u);
 		await workspace.press('ArrowLeft');
 		await expect(conversation).toBeHidden();
 		await workspace.press('ArrowRight');
@@ -332,6 +365,75 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 			await new Promise<void>(resolve => server.close(() => resolve()));
 		}
 	}
+});
+
+test.describe('Code folder projects in Simplified Chinese', () => {
+	test.use({ electronUserSettings: { 'workbench.locale': 'zh-CN' } });
+
+	test('legacy Code folders get persisted projects and the shared menu before interaction', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+		const directory = await realpath(testWorkspace.directory);
+		const connection = await connectProfile(application, undefined, directory, workbench.page);
+		try {
+			const { client } = connection;
+			const sessionIds: string[] = [];
+			for (const title of ['First workspace conversation', 'Second workspace conversation']) {
+				const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
+					commandId: randomUUID(), kind: 'code', title, agent: { type: 'default' }, executionTarget: { type: 'local', root: directory },
+				});
+				sessionIds.push(session.sessionId);
+			}
+			const codeProjects = async () => (await client.request(APP_SERVER_METHODS['project/list'], { scope: 'code' })).projects;
+			expect(await codeProjects()).toEqual([]);
+			let page = await workbench.openAgentsWindow(target.kind);
+			const openCode = () => page.locator('.ash-window-mode-control').getByRole('button', { name: '代码', exact: true }).click();
+			await openCode();
+			for (const id of sessionIds) {
+				await expect(page.locator(`[data-item="session:${id}"]`)).toHaveAttribute('data-parent-project-id', /.+/u);
+			}
+			const projects = await codeProjects();
+			expect(projects).toHaveLength(1);
+			const { project } = await client.request(APP_SERVER_METHODS['project/read'], { scope: 'code', projectId: projects[0]!.projectId });
+			expect(project.name).toBe(basename(directory));
+			expect(project.materials).toEqual([{ kind: 'folder', name: basename(directory), path: pathToFileURL(directory).toString() }]);
+			expect([...project.sessionIds].sort()).toEqual([...sessionIds].sort());
+			expect((await client.request(APP_SERVER_METHODS['project/list'], { scope: 'chat' })).projects).toEqual([]);
+
+			const header = () => page.locator(`[data-project-id="${project.projectId}"]`).getByRole('button', { name: project.name, exact: true });
+			const expectProjectMenu = () => expect(page.getByRole('menuitem')).toHaveText(['重命名', '更改图标…', '更改颜色…', '归档', '删除']);
+			await header().click({ button: 'right' });
+			await expectProjectMenu();
+			await page.keyboard.press('Escape');
+			await header().press('Shift+F10');
+			await expectProjectMenu();
+			await page.keyboard.press('Escape');
+			await expect(header()).toBeFocused();
+
+			const row = page.locator(`[data-item="session:${sessionIds[0]}"]`).locator(':scope > button.ash-sessions-list-item');
+			await row.press('Shift+F10');
+			for (const name of ['重命名', '从项目中移除', '比较 Agent…', '显示对话回顾']) {
+				await expect(page.getByRole('menuitem', { name, exact: true })).toBeVisible();
+			}
+			await page.keyboard.press('Escape');
+			await expect(row).toBeFocused();
+
+			page = await workbench.reopenAgentsWindow(application, page);
+			await openCode();
+			await header().press('Shift+F10');
+			await expectProjectMenu();
+			await page.getByRole('menuitem', { name: '删除', exact: true }).click();
+			await page.getByRole('dialog').getByRole('button', { name: '删除', exact: true }).click();
+			await expect.poll(codeProjects).toEqual([]);
+
+			page = await workbench.reopenAgentsWindow(application, page);
+			await openCode();
+			for (const id of sessionIds) {
+				await expect(page.locator(`[data-item="session:${id}"]`)).toHaveAttribute('data-parent-section', /^workspace:/u);
+			}
+			expect(await codeProjects()).toEqual([]);
+		} finally {
+			await connection.close();
+		}
+	});
 });
 
 test.describe('Projects sorting persistence', () => {

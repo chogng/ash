@@ -22,13 +22,14 @@ import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../../../common/agentHostSessionsP
 import { parseSessionIdentity } from '../../../services/sessions/common/sessionIdentity.js';
 import { selectionFromResource } from '../../../common/agentHostSessionWorkspace.js';
 import { Menus } from '../../../browser/menus.js';
+import { resolveSessionThreadSelection } from '../../../browser/sessionActionsService.js';
 import { SessionsMenuActiveConversationContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { comparisonTurn, ISessionComparisonService, parseComparisonVerdict, type SessionComparisonService } from '../../../services/sessions/browser/sessionComparisonService.js';
 import type { ComparisonAttempt, ComparisonParticipantSettings, ComparisonThread, SessionComparison } from '../../../services/sessions/common/sessionComparison.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
-import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
+import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 
 registerAction2(class CompareAgentsAction extends Action2 {
@@ -37,12 +38,12 @@ registerAction2(class CompareAgentsAction extends Action2 {
 			id: 'sessions.chat.compareAgents',
 			title: localize2('sessions.chat.compareAgents', 'Compare Agents…'),
 			f1: true,
-			menu: { id: Menus.SidebarSessionContext, when: SessionsMenuActiveConversationContext.isEqualTo(true), group: 'comparison' },
+			menu: { id: Menus.SidebarCodeSessionContext, when: SessionsMenuActiveConversationContext.isEqualTo(true), group: '4_conversation' },
 			precondition: ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('code'), ContextKeyExpr.not(`config.${ChatAIDisabledSettingId}`)),
 		});
 	}
 
-	async run(accessor: ServicesAccessor, selection?: SessionsViewSelection): Promise<void> {
+	async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
 		const views = accessor.get(ISessionsService);
 		const sessions = accessor.get(ISessionsManagementService);
 		const providers = accessor.get(ISessionsProvidersService);
@@ -54,7 +55,7 @@ registerAction2(class CompareAgentsAction extends Action2 {
 		const notifications = accessor.get(INotificationService);
 		const log = accessor.get(ILogService);
 		const configuration = accessor.get(IConfigurationService);
-		const source = selection ?? views.activeSelection;
+		const source = argument === undefined ? views.activeSelection : resolveSessionThreadSelection(sessions, argument);
 		if (source?.kind !== 'session' || source.active.session.status !== 'active') {
 			notifications.warn(localize('sessions.compare.openChat', 'Open an active conversation to compare agents.'));
 			return;
