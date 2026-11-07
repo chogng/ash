@@ -109,11 +109,13 @@ CommandsRegistry.register(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, async (accessor, mod
 	}
 	const contextKeys = accessor.get(IContextKeyService);
 	const configuration = accessor.get(IConfigurationService);
+	const experimental = contextKeys.getValue(experimentalChatGPTSelected) === true;
+	const selectedContext = experimental ? experimentalChatGPTSelected : chatGPTSelectedContext;
 	const canOpen = () => contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'chat'
-		&& contextKeys.getValue(chatGPTSelectedContext) === true
+		&& contextKeys.getValue(selectedContext) === true
 		&& !configuration.getValue<boolean>('chat.disableAIFeatures');
 	if (!canOpen()) return;
-	const chat = accessor.get(IChatGPTService);
+	const chat = accessor.get(experimental ? IChatGPTNativeService : IChatGPTService);
 	const source = chat.state.get().localConversationId;
 	const revision = chat.newDraftRevision;
 	await openAshChatWithModel(accessor, { provider: model.provider, model: model.model }, () => {

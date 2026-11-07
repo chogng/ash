@@ -37,7 +37,7 @@ export function canUseAshModels(state: ChatGPTState): boolean {
 export function chatGPTModelEntries(backend: IChatGPTService): IObservable<readonly ModelCatalogEntry[]> {
 	return backend.state.map(state => state.models).map(families => families.map(family => ({
 		model: { provider: 'chatgpt', model: family.id },
-		displayName: family.title,
+		displayName: family.title === 'GPT-5.6 Sol' ? family.title.slice('GPT-'.length) : family.title,
 		longContext: null,
 		presets: family.presets,
 	})));
@@ -82,7 +82,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 			ashModelsChanged.read(reader);
 			return this.ashCatalog.read(reader).filter(entry => primary.models.isModelVisible(entry.model));
 		});
-		const ashEligible = backend.state.map(state => !backend.native && canUseAshModels(state));
+		const ashEligible = backend.state.map(canUseAshModels);
 		this.pickerEntries = derived(reader => {
 			const web = this.webEntries.read(reader);
 			return ashEligible.read(reader) ? [...web, ...this.ashEntries.read(reader)] : web;
@@ -107,12 +107,10 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 			if (switched) this.composerChanged.fire();
 			this.changed.fire();
 		}));
-		if (!backend.native) {
-			this._register(autorun(reader => {
-				ashModelsChanged.read(reader);
-				void this.loadAshModels();
-			}));
-		}
+		this._register(autorun(reader => {
+			ashModelsChanged.read(reader);
+			void this.loadAshModels();
+		}));
 	}
 
 	get olderHistory(): { readonly loading: boolean; } | undefined {
@@ -222,7 +220,7 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 				}
 			}
 		}
-		if (!this.backend.native && canUseAshModels(state) && this.ashEntries.get().some(entry => modelRefIdentity(entry.model) === modelRefIdentity(model))) {
+		if (canUseAshModels(state) && this.ashEntries.get().some(entry => modelRefIdentity(entry.model) === modelRefIdentity(model))) {
 			await this.commands.executeCommand(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, model);
 			return;
 		}

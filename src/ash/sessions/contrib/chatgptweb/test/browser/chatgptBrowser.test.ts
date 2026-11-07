@@ -562,7 +562,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			await modelButton.click();
 			const modelMenu = dialog.getByRole('menu');
 			const selectedModel = modelMenu.getByRole('menuitemradio', { name: 'GPT-6', exact: true });
-			const alternativeModel = modelMenu.getByRole('menuitemradio', { name: 'GPT-5.6 Sol', exact: true });
+			const alternativeModel = modelMenu.getByRole('menuitemradio', { name: '5.6 Sol', exact: true });
 			await expect(modelMenu).toHaveClass(/\bash-menu-icons-trailing\b/u);
 			await expect(modelMenu).toBeFocused();
 			await expect(selectedModel).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
@@ -675,7 +675,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 				if (expected[index]![1] === undefined) { expect(submitted.slice(-2).every(body => !('thinking_effort' in body))).toBe(true); }
 				await expect(picker).toBeEnabled();
 			}
-			await choose('GPT-5.6 Sol', labels[3]!);
+			await choose('5.6 Sol', labels[3]!);
 			await page.setViewportSize({ width: 1600, height: 900 });
 			const longestSelectionWidth = (await picker.boundingBox())!.width;
 			expect(initialPickerBounds.width).toBeGreaterThanOrEqual(longestSelectionWidth - 1);
