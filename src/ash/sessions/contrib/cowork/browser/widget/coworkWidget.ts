@@ -120,6 +120,9 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		const activeRequest = ChatContextKeys.hasActiveRequest.bindTo(context);
 		activeRequest.set(model.inputState.canInterrupt);
 		this._register(model.onDidChange(() => activeRequest.set(model.inputState.canInterrupt)));
+		const transcriptProgress = ChatContextKeys.transcriptProgressActive.bindTo(context);
+		transcriptProgress.set(model.inputState.inputBlocked === true || model.inputState.aiDisabled === true);
+		this._register(model.onDidChange(() => transcriptProgress.set(this.isTranscriptProgressActive)));
 		ChatContextKeys.findSupported.bindTo(context).set(true);
 		const findVisible = ChatContextKeys.findWidgetVisible.bindTo(context);
 		// Detached Markdown fragments still inherit this conversation's command scope.
@@ -135,6 +138,8 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 		} : undefined));
 		this.goalBanner = new ChatGoalBannerWidget(ownerDocument);
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
+			onDidRequestEdit: (requestId: string) => this.startEditing(requestId),
+			canEditRequest: () => !this.isTranscriptProgressActive,
 			createRequestEditor: (options: ChatInputEditorOptions) => this.input.createEditor(options),
 			onDidChangeFindVisibility: (visible: boolean) => findVisible.set(visible),
 			imageResourceLoader,
@@ -304,16 +309,24 @@ export class CoworkWidget<TModel extends ICoworkWidgetModel = ICoworkWidgetModel
 	}
 
 	public acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {
+		if (this.listWidget.isEditingRequest) return Promise.resolve();
 		return this.queueEditor.value ? this.queueEditor.value.acceptInput(value, options) : this.input.acceptInput(value, options);
 	}
 
-	public async startEditing(request: QueuedMessage): Promise<void> {
-		if (this.queueEditor.value || !this.visible) return;
+	public async startEditing(request: string | QueuedMessage): Promise<void> {
+		if (!this.visible || this.queueEditor.value) return;
+		if (typeof request === 'string') {
+			if (!this.isTranscriptProgressActive) this.listWidget.startEditing(request);
+			return;
+		}
+		if (this.listWidget.isEditingRequest) return;
 		const editor = this.instantiationService.createInstance(ChatQueueEditor, this, request);
 		this.queueEditor.value = editor;
 		try { await editor.show(); }
 		finally { if (this.queueEditor.value === editor) this.queueEditor.clear(); }
 	}
+
+	public cancelEditing(): boolean { return this.listWidget.cancelEditing(); }
 
 	startVoiceConversation(): Promise<void> {
 		if (this.model.inputState.aiDisabled) return Promise.reject(new Error(localize('chat.ai.disabled.message', 'AI features are disabled. Turn off Disable AI features in Settings to send messages.')));

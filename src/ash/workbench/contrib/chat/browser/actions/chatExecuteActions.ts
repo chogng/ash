@@ -148,6 +148,15 @@ export function registerChatExecuteActions(): DisposableStore {
 	const store = new DisposableStore();
 	store.add(registerAction2(ChatSubmitAction));
 	store.add(registerAction2(CancelAction));
+	store.add(registerAction2(class CancelEdit extends Action2 {
+		constructor() {
+			super({ id: 'workbench.edit.chat.cancel', title: localize2('chat.edit.cancel', 'Cancel Edit') });
+		}
+
+		override run(accessor: ServicesAccessor): void {
+			accessor.get(IChatWidgetService).lastFocusedWidget?.cancelEditing?.();
+		}
+	}));
 	store.add(registerAction2(OpenModelPickerAction));
 	store.add(registerAction2(OpenModePickerAction));
 	store.add(registerAction2(OpenPermissionPickerAction));

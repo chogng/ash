@@ -47,6 +47,8 @@ import { ChatFindWidget, computeRevealScrollTop, type IChatFindHost } from './ch
 import type { ChatInputEditorOptions, IChatInputEditor } from './input/chatInputEditorRegistry.js';
 
 interface ChatListWidgetOptions {
+	readonly onDidRequestEdit?: (requestId: string) => void | Promise<void>;
+	readonly canEditRequest?: () => boolean;
 	readonly createRequestInput?: (options: ChatRequestInputOptions) => IChatInputPart;
 	readonly createRequestEditor?: (options: ChatInputEditorOptions) => IChatInputEditor;
 	readonly promptTimelineChanges?: (prompt: IChatListItem) => PromptTurnChanges | undefined;
@@ -125,7 +127,8 @@ export class ChatListWidget extends DomWidget {
 	private readonly thinkingExpansion = new Map<string, boolean>();
 	private visible = true;
 	private shouldFollow = true;
-	private activeRequestEdit: (() => boolean) | undefined;
+	private activeRequestEdit: ((restoreFocus: boolean) => boolean) | undefined;
+	private readonly refreshAfterRequestEdit = this._register(new RunOnceScheduler(() => this.render(this.items, this.working), 0));
 	private readingPosition: ReadingAnchor | undefined;
 	private layingOut = false;
 	private readonly relayout = this._register(new RunOnceScheduler(() => { if (this.visible) this.layout(); }, 0));
@@ -232,6 +235,16 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	public reveal(item: IChatListItem): void { this.revealItem(item.id); }
+
+	public startEditing(requestId: string): void {
+		this.renderedItems.get(requestId)?.startEditing();
+	}
+
+	get isEditingRequest(): boolean { return this.activeRequestEdit !== undefined; }
+
+	public cancelEditing(): boolean {
+		return this.activeRequestEdit?.(true) ?? false;
+	}
 
 	public focusResponseItem(lastFocused = false): void {
 		if (!this.visible) { return; }
@@ -488,8 +501,9 @@ export class ChatListWidget extends DomWidget {
 		};
 		const active = this.element.ownerDocument.activeElement;
 		const focusedRow = this.lastFocusedItemId ? this.renderedItems.get(this.lastFocusedItemId) : undefined;
-		const focusedActionRowId = (focusedRow?.item.queueTarget || focusedRow?.item.historyRedoTarget || focusedRow?.item.turnChanges) && focusedRow.element.contains(active)
+		const focusedActionRowId = (focusedRow?.item.requestSource || focusedRow?.item.queueTarget || focusedRow?.item.historyRedoTarget || focusedRow?.item.turnChanges) && focusedRow.element.contains(active)
 			? focusedRow.item.id : undefined;
+		const focusedActionId = focusedActionRowId ? active?.closest<HTMLElement>('[data-action-id]')?.dataset.actionId : undefined;
 		const imageFocus = isHTMLElement(active) && [...this.imageBatches].some(([, entry]) => entry.part.domNode.contains(active)) ? active : undefined;
 		let changed = false;
 		const ids = new Set(items.map(item => item.id));
@@ -523,6 +537,10 @@ export class ChatListWidget extends DomWidget {
 				this.renderedItems.deleteAndDispose(item.id);
 				row = this.renderedItems.set(item.id, this.instantiationService.createInstance(ChatListItemRenderer, item, this.element.ownerDocument, {
 					...this.options,
+					onDidRequestEdit: this.options.onDidRequestEdit ?? (requestId => this.startEditing(requestId)),
+					canEditRequest: this.options.canEditRequest ?? (() => true),
+					cancelRequestEdit: () => this.cancelEditing(),
+					refreshRequestAfterEdit: () => this.refreshAfterRequestEdit.schedule(),
 					classPrefix: this.classPrefix,
 					deferCodeBlockModels: !!this.viewportObserver,
 					isVisible: () => this.visible,
@@ -530,8 +548,8 @@ export class ChatListWidget extends DomWidget {
 					contextExpansion: this.contextExpansion,
 					thinkingExpansion: this.thinkingExpansion,
 					onDidChangeHeight: () => this.relayout.schedule(),
-					beginRequestEdit: (close: () => boolean) => {
-						if (this.activeRequestEdit && !this.activeRequestEdit()) return undefined;
+					beginRequestEdit: (close: (restoreFocus: boolean) => boolean) => {
+						if (this.activeRequestEdit && !this.activeRequestEdit(false)) return undefined;
 						this.activeRequestEdit = close;
 						return toDisposable(() => {
 							if (this.activeRequestEdit === close) this.activeRequestEdit = undefined;
@@ -581,7 +599,10 @@ export class ChatListWidget extends DomWidget {
 		}
 		if (focusedActionRowId && !active?.isConnected && this.element.ownerDocument.activeElement === this.element.ownerDocument.body) {
 			const row = this.renderedItems.get(focusedActionRowId);
-			if (row) this.focus(row.item);
+			const replacement = focusedActionId && row && Array.from(row.element.querySelectorAll<HTMLButtonElement>('[data-action-id] > button'))
+				.find(button => button.parentElement?.dataset.actionId === focusedActionId && !button.disabled);
+			if (replacement) replacement.focus({ preventScroll: true });
+			else if (row) this.focus(row.item);
 			else this.focusReadingPosition();
 		}
 		if (this.lastFocusedItemId && !ids.has(this.lastFocusedItemId)) { this.lastFocusedItemId = undefined; }

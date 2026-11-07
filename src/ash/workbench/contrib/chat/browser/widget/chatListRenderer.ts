@@ -46,9 +46,9 @@ import { ChatEditPendingRequestAction, ChatRemovePendingRequestAction, ChatSendP
 import type { Icon } from '../../../../../base/common/icon.js';
 import { ChatForkActionViewItem } from './chatForkActionViewItem.js';
 import { ChatTurnChangesPill } from './chatTurnPills.js';
-import { ChatMessageActionContext, ChatResponseActionContext, type ChatTurnChangesOpener } from '../chat.js';
+import { ChatRequestActionContext, ChatResponseActionContext, type ChatTurnChangesOpener } from '../chat.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
-import { RedoChatHistoryActionId, RestoreCheckpointActionId } from '../chatEditing/chatEditingActions.js';
+import { EditChatRequestActionId, RedoChatHistoryActionId, RestoreCheckpointActionId } from '../chatEditing/chatEditingActions.js';
 
 import type { IChatInputPart } from './input/chatInputPart.js';
 import type { ResolvedChatContext } from '../../../../services/chat/common/chatContextService.js';
@@ -72,6 +72,10 @@ export interface ChatResponseActions {
 
 interface ChatListItemRendererOptions {
 	readonly classPrefix: string;
+	readonly onDidRequestEdit: (requestId: string) => void | Promise<void>;
+	readonly canEditRequest: () => boolean;
+	readonly cancelRequestEdit: () => boolean;
+	readonly refreshRequestAfterEdit: () => void;
 	readonly createRequestInput?: (options: ChatRequestInputOptions) => IChatInputPart;
 	readonly createRequestEditor?: (options: ChatInputEditorOptions) => IChatInputEditor;
 	readonly deferCodeBlockModels: boolean;
@@ -81,7 +85,7 @@ interface ChatListItemRendererOptions {
 	readonly contextExpansion: Map<string, boolean>;
 	readonly thinkingExpansion: Map<string, boolean>;
 	readonly onDidChangeHeight: () => void;
-	readonly beginRequestEdit: (close: () => boolean) => IDisposable | undefined;
+	readonly beginRequestEdit: (close: (restoreFocus: boolean) => boolean) => IDisposable | undefined;
 	readonly onWillChangeRequestEditor: (opening: boolean) => () => void;
 	readonly onDidChangeMarkdownHeight: (id: string) => void;
 	readonly onDidChangeContent: () => void;
@@ -104,7 +108,9 @@ export class ChatListItemRenderer extends Disposable {
 	public getLastFocusedFileTree() { return this.toolPart?.getLastFocusedFileTree() ?? this.resources.value?.getLastFocusedFileTree(); }
 	inViewport = true;
 	private readonly edit = this._register(new MutableDisposable<DisposableStore>());
-	private requestActionContext: ChatMessageActionContext | undefined;
+	private requestActionContext: ChatRequestActionContext | undefined;
+	private openRequestEditor: (() => void) | undefined;
+	private deferredRequestUpdate = false;
 	private responseActionContext: ChatResponseActionContext | undefined;
 	private updateResponseActions: ((beforeLayout?: () => void) => boolean) | undefined;
 	private updateTurnChanges: (() => void) | undefined;
@@ -163,6 +169,13 @@ export class ChatListItemRenderer extends Disposable {
 			} else {
 				this.responseActionContext?.update(item);
 			}
+			return 'unchanged';
+		}
+		const source = this.item.requestSource;
+		if (this.edit.value && source && item.type === 'userMessage' && item.requestSource?.sessionId === source.sessionId
+			&& item.requestSource.threadId === source.threadId && item.requestSource.turnId === source.turnId && item.requestSource.itemId === source.itemId) {
+			// Keep the editor mounted across presentation updates to the same request.
+			this.deferredRequestUpdate = true;
 			return 'unchanged';
 		}
 		if (item.text.length >= markdownFrameThreshold && this.tryQueuePlainResponse(item)) return 'queued';
@@ -307,11 +320,19 @@ export class ChatListItemRenderer extends Disposable {
 		const actions = this.createMessageActions();
 		const context = lifetime.add(this.contextKeys.createScoped(actions));
 		ChatContextKeys.requestHasText.bindTo(context).set(!!this.item.text);
+		ChatContextKeys.requestCanEdit.bindTo(context).set(!!this.item.requestSource);
 		const toolbar = this.createMessageToolbar(actions, MenuId.ChatMessageTitle, localize('chat.request.actions', 'Message actions'), context, lifetime);
-		toolbar.context = this.requestActionContext = lifetime.add(new ChatMessageActionContext(this.item, actions, this.options.isVisible));
+		toolbar.context = this.requestActionContext = lifetime.add(new ChatRequestActionContext(this.item, actions, this.options.isVisible, this.options.onDidRequestEdit));
 		if (this.item.requestSource) {
-			const open = this.installRequestEditor(requestText, lifetime, actions, () => toolbar.focus(toolbar.getItemsLength() - 1));
-			toolbar.setTrailingActions([this.messageAction('ash.chat.request.edit', localize('chat.edit.label', 'Edit message'), Lxicon.edit, open)]);
+			this.installRequestEditor(requestText, lifetime, actions, () => {
+				toolbar.element.querySelector<HTMLButtonElement>(`[data-action-id="${EditChatRequestActionId}"] > button`)?.focus({ preventScroll: true });
+			});
+			lifetime.add(addDisposableListener(this.element, 'keydown', event => {
+				if (event.target !== this.element || event.key !== 'Enter' || event.isComposing || event.repeat
+					|| event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !this.options.canEditRequest()) return;
+				event.preventDefault();
+				void this.commands.executeCommand(EditChatRequestActionId, this.requestActionContext);
+			}));
 		}
 		actions.prepend(toolbar.element);
 		return actions;
@@ -457,17 +478,25 @@ export class ChatListItemRenderer extends Disposable {
 		}));
 	}
 
-	private renderRequestCheckpointMenu(actions: HTMLElement, source: NonNullable<IChatListItem['requestSource']>, lifetime: DisposableStore): void {
-		const context = lifetime.add(this.contextKeys.createScoped(actions));
-		ChatContextKeys.requestCanRunAnotherVersion.bindTo(context).set(this.item.canRunAnotherVersion === true);
-		const toolbar = lifetime.add(new MenuWorkbenchToolBar(actions, this.menus, this.contextMenus, MenuId.ChatMessageCheckpoint, {
-			ariaLabel: localize('chat.message.checkpointActions', 'Request checkpoint actions'),
-			contextKeyService: context,
-			menuOptions: { shouldForwardArgs: true },
+	private installRequestCheckpointMenu(requestText: HTMLElement, source: NonNullable<IChatListItem['requestSource']>, lifetime: DisposableStore): void {
+		const context = lifetime.add(this.contextKeys.createScoped(requestText));
+		ChatContextKeys.requestCanRunAnotherVersion.bindTo(context).set(true);
+		const menu = lifetime.add(this.menus.createMenu(MenuId.ChatMessageCheckpoint, context));
+		const showMenu = (event: MouseEvent | KeyboardEvent) => {
+			const actions = menu.getActions({ arg: source }).flatMap(([, group]) => group);
+			if (!actions.length) return;
+			event.preventDefault();
+			event.stopPropagation();
+			this.contextMenus.showContextMenu({
+				getAnchor: () => 'clientX' in event ? { x: event.clientX, y: event.clientY, targetWindow: getWindow(requestText) } : requestText,
+				getActions: () => actions,
+			});
+		};
+		lifetime.add(addDisposableListener(requestText, 'contextmenu', event => {
+			if (requestText.ownerDocument.getSelection()?.isCollapsed !== false) showMenu(event);
 		}));
-		toolbar.context = source;
-		lifetime.add(toolbar.actionRunner.onDidRun(event => {
-			if (event.error && !this.isDisposed && !isCancellationError(event.error)) this.notifications.error(String(event.error));
+		lifetime.add(addDisposableListener(this.element, 'keydown', event => {
+			if (event.target === this.element && (event.key === 'ContextMenu' || event.shiftKey && event.key === 'F10')) showMenu(event);
 		}));
 	}
 
@@ -556,10 +585,14 @@ export class ChatListItemRenderer extends Disposable {
 		};
 	}
 
-	private installRequestEditor(requestText: HTMLElement, lifetime: DisposableStore, actions: HTMLElement, focusEdit: () => void): () => void {
+	public startEditing(): void {
+		if (!this.isDisposed) this.openRequestEditor?.();
+	}
+
+	private installRequestEditor(requestText: HTMLElement, lifetime: DisposableStore, actions: HTMLElement, focusEdit: () => void): void {
 		requestText.classList.add('ash-chat-request-editable');
-		const open = (): void => {
-			if (this.edit.value || !this.item.requestSource || !this.options.isVisible()) return;
+		this.openRequestEditor = () => {
+			if (this.edit.value || !this.item.requestSource || !this.options.isVisible() || !this.options.canEditRequest()) return;
 			const source = this.item.requestSource;
 			const store = new DisposableStore();
 			const editor = h(this.element.ownerDocument, 'div');
@@ -581,13 +614,17 @@ export class ChatListItemRenderer extends Disposable {
 				restoreReadingPosition?.();
 				this.options.onDidChangeHeight();
 				this.options.onDidChangeContent();
+				if (this.deferredRequestUpdate) {
+					this.deferredRequestUpdate = false;
+					this.options.refreshRequestAfterEdit();
+				}
 			};
 			let pending = false;
 			let requestInput: IChatInputPart | undefined;
 			const canClose = () => !pending && !requestInput?.isSubmitting;
-			const editLease = this.options.beginRequestEdit(() => {
+			const editLease = this.options.beginRequestEdit(restoreFocus => {
 				if (!canClose()) return false;
-				close(false);
+				close(restoreFocus);
 				return true;
 			});
 			if (!editLease) { store.dispose(); return; }
@@ -610,6 +647,7 @@ export class ChatListItemRenderer extends Disposable {
 			};
 			const submit = async (text: string, contexts: readonly ResolvedChatContext[] = []): Promise<void> => {
 				if (pending || !text.trim() || this.isDisposed || !this.options.isVisible()) return;
+				if (!this.options.canEditRequest()) throw new Error(localize('chat.edit.blocked', 'The conversation is currently unavailable for editing.'));
 				const signature = JSON.stringify([text, contexts]);
 				if (attempt?.signature !== signature) attempt = { signature, commandId: createUuid() };
 				pending = true;
@@ -687,16 +725,15 @@ export class ChatListItemRenderer extends Disposable {
 			}, true));
 			store.add(addDisposableListener(editor, 'keydown', event => {
 				if (event.isComposing) return;
-				if (event.key === 'Escape' && canClose()) { event.preventDefault(); event.stopPropagation(); close(); }
+				if (event.key === 'Escape' && this.options.cancelRequestEdit()) { event.preventDefault(); event.stopPropagation(); }
 			}));
 			this.options.onDidChangeHeight(); this.options.onDidChangeContent();
 		};
 		lifetime.add(addDisposableListener(requestText, 'click', event => {
 			// Keep drag-to-select available on the message text.
 			const selection = requestText.ownerDocument.getSelection();
-			if (event.button === 0 && (!selection || selection.isCollapsed)) open();
+			if (event.button === 0 && (!selection || selection.isCollapsed)) void this.options.onDidRequestEdit(this.item.id);
 		}));
-		return open;
 	}
 
 	private renderMemoryReferences(): void {
@@ -885,8 +922,8 @@ export class ChatListItemRenderer extends Disposable {
 					const { sessionId, threadId, itemId } = item.requestSource;
 					disposables.add(this.instantiationService.createInstance(ChatForkActionViewItem, actions, { sessionId, threadId, beforeItemId: itemId }, this.options.isVisible));
 				}
-				if (item.canRunAnotherVersion) this.renderRequestCheckpointMenu(actions, item.requestSource, disposables);
 			}
+			if (item.canRunAnotherVersion && item.requestSource) this.installRequestCheckpointMenu(requestText, item.requestSource, disposables);
 		}
 	}
 

@@ -187,6 +187,9 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 		const activeRequest = ChatContextKeys.hasActiveRequest.bindTo(context);
 		activeRequest.set(model.inputState.canInterrupt);
 		this._register(model.onDidChange(() => activeRequest.set(model.inputState.canInterrupt)));
+		const transcriptProgress = ChatContextKeys.transcriptProgressActive.bindTo(context);
+		transcriptProgress.set(this.isTranscriptProgressActive);
+		this._register(model.onDidChange(() => transcriptProgress.set(this.isTranscriptProgressActive)));
 		ChatContextKeys.findSupported.bindTo(context).set(true);
 		const findVisible = ChatContextKeys.findWidgetVisible.bindTo(context);
 		// Detached Markdown fragments still inherit this conversation's command scope.
@@ -254,6 +257,8 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 			await openChangesForTurn(source, AbortSignal.any([signal, controller.signal]));
 		});
 		const listWidgets = ChatListWidget.instantiateObservable(scopedInstantiation, this._store, h(ownerDocument, 'div'), {
+			onDidRequestEdit: (requestId: string) => this.startEditing(requestId),
+			canEditRequest: () => !this.isTranscriptProgressActive,
 			createRequestInput: ({ container, descriptionId, initialHeight, submit, reportError }: ChatRequestInputOptions) => {
 				const delegate: ChatInputDelegate = {
 					...inputDelegate,
@@ -527,16 +532,25 @@ export class ChatWidget<TModel extends IChatWidgetModel = IChatWidgetModel> exte
 	}
 
 	public acceptInput(value?: string, options?: IChatAcceptInputOptions): Promise<void> {
+		// Sent edits branch through the inline form. Global send commands must not submit the main draft.
+		if (this.listWidget.isEditingRequest) return Promise.resolve();
 		return this.queueEditor.value ? this.queueEditor.value.acceptInput(value, options) : this.input.acceptInput(value, options);
 	}
 
-	public async startEditing(request: QueuedMessage): Promise<void> {
-		if (this.queueEditor.value || !this.visible) return;
+	public async startEditing(request: string | QueuedMessage): Promise<void> {
+		if (!this.visible || this.queueEditor.value) return;
+		if (typeof request === 'string') {
+			if (!this.isTranscriptProgressActive) this.listWidget.startEditing(request);
+			return;
+		}
+		if (this.listWidget.isEditingRequest) return;
 		const editor = this.instantiationService.createInstance(ChatQueueEditor, this, request);
 		this.queueEditor.value = editor;
 		try { await editor.show(); }
 		finally { if (this.queueEditor.value === editor) this.queueEditor.clear(); }
 	}
+
+	public cancelEditing(): boolean { return this.listWidget.cancelEditing(); }
 
 	private async runVoice(operation: () => Promise<void>): Promise<void> {
 		try { await operation(); }

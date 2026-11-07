@@ -125,11 +125,15 @@ suite('chatTranscript browser component', () => {
 			const toolbar = row.getByRole('toolbar', { name: locale === 'en' ? 'Message actions' : '消息操作', exact: true });
 			const copy = toolbar.getByRole('button', { name: locale === 'en' ? 'Copy message' : '复制消息', exact: true });
 			const edit = toolbar.getByRole('button', { name: locale === 'en' ? 'Edit message' : '编辑消息', exact: true });
+			await expect(toolbar.locator('[data-action-id="workbench.action.chat.editRequests"] > button')).toHaveAccessibleName(locale === 'en' ? 'Edit message' : '编辑消息');
 			await expect(row.locator('.ash-chat-message-actions').getByRole('button')).toHaveCount(2);
 			const copyIcon = copy.locator('[data-ash-icon-id="copy"]');
 			const checkIcon = copy.locator('[data-ash-icon-id="check"]');
 			await expect(copyIcon).toBeVisible();
 			await expect(edit.locator('[data-ash-icon-id="edit"]')).toBeVisible();
+			await row.focus();
+			await page.keyboard.press('Shift+F10');
+			await expect(page.locator('body')).toHaveAttribute('data-chat-context-actions', 'sessions.chat.runAnotherVersion');
 			await copy.focus();
 			const copyBounds = await copy.boundingBox();
 			const editBounds = await edit.boundingBox();
@@ -159,6 +163,41 @@ suite('chatTranscript browser component', () => {
 			await page.keyboard.press('Escape');
 			await expect(edit).toBeFocused();
 			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.requestEdits())).toEqual([]);
+		});
+
+		test(`Sent edit survives a checkpoint update and fences global Send in ${locale}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatTranscript.html?sessions&locale=${locale}`);
+			await page.evaluate(() => window.ashChatTranscriptIntegration.prepareRequestEditing(false));
+			const chat = page.locator('#app-chat');
+			const draft = chat.locator(':scope > .ash-chat-input-part .ash-chat-textarea-input');
+			const row = chat.locator('[data-item-id="presentation-entry"]');
+			const edit = row.getByRole('button', { name: locale === 'en' ? 'Edit message' : '编辑消息', exact: true });
+			const input = row.getByRole('textbox', { name: locale === 'en' ? 'Edit request' : '编辑请求', exact: true });
+			await draft.fill('Unsent private draft');
+			await page.evaluate(() => window.ashChatTranscriptIntegration.setAIDisabled(true));
+			await expect(edit).toHaveCount(0);
+			await row.focus();
+			await page.keyboard.press('Enter');
+			await expect(input).toHaveCount(0);
+			await page.evaluate(() => window.ashChatTranscriptIntegration.setAIDisabled(false));
+			await expect(edit).toBeVisible();
+			await row.focus();
+			await page.keyboard.press('Enter');
+			await expect(input).toBeFocused();
+			await input.fill('Retained edit');
+			await page.evaluate(() => window.ashChatTranscriptIntegration.updateRequestCheckpoint());
+			await expect(input).toBeFocused();
+			await expect(input).toHaveValue('Retained edit');
+			await page.evaluate(() => window.ashChatTranscriptIntegration.runChatCommand('workbench.action.chat.submit'));
+			await expect(draft).toHaveValue('Unsent private draft');
+			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.chatMessages())).toEqual([]);
+			await page.evaluate(() => window.ashChatTranscriptIntegration.runChatCommand('workbench.edit.chat.cancel'));
+			await expect(input).toHaveCount(0);
+			await expect(edit).toBeFocused();
+			await row.focus();
+			await page.keyboard.press('Shift+F10');
+			await expect(page.locator('body')).toHaveAttribute('data-chat-context-actions', 'sessions.chat.runAnotherVersion');
 		});
 
 		test(`message checkpoint restore targets its request and returns focus on cancel in ${locale}`, async () => {

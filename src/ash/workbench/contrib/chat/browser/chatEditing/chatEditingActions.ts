@@ -11,7 +11,9 @@ import { extUriBiasedIgnorePathCase } from '../../../../../base/common/resources
 import { URI } from '../../../../../base/common/uri.js';
 import { createSshRemoteWorkspaceUri, createProviderRemoteWorkspaceUri, withRemoteWorkspacePath } from '../../../../../platform/remote/common/remote.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -21,9 +23,35 @@ import { throwIfCancelled } from '../../../../../base/common/cancellation.js';
 import { IChatSessionNavigationService } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { IWorkingCopyService } from '../../../../services/workingCopy/common/workingCopyService.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
+import { ChatRequestActionContext, IChatWidgetService } from '../chat.js';
 
 export const RestoreCheckpointActionId = 'workbench.action.chat.restoreCheckpoint';
 export const RedoChatHistoryActionId = 'workbench.action.chat.redoEdit';
+export const EditChatRequestActionId = 'workbench.action.chat.editRequests';
+const canEditRequest = ContextKeyExpr.and(ChatContextKeys.requestCanEdit.isEqualTo(true), ChatContextKeys.transcriptProgressActive.isEqualTo(false));
+
+export function registerChatEditRequestAction(): void {
+	registerAction2(class EditAction extends Action2 {
+		constructor() {
+			super({
+				id: EditChatRequestActionId,
+				title: localize2('chat.edit.label', 'Edit message'),
+				icon: Lxicon.edit,
+				menu: { id: MenuId.ChatMessageTitle, group: 'navigation', order: 2, when: canEditRequest },
+			});
+		}
+
+		override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
+			if (context instanceof ChatRequestActionContext && context.visible && context.item.requestSource) {
+				await context.startEditing(context.item.id);
+			} else if (context === undefined) {
+				const widget = accessor.get(IChatWidgetService).lastFocusedWidget;
+				const item = widget?.getFocus();
+				if (item?.requestSource) await widget?.startEditing(item.id);
+			}
+		}
+	});
+}
 
 export function registerChatRestoreCheckpointAction(): void {
 	registerAction2(class RestoreCheckpointAction extends Action2 {

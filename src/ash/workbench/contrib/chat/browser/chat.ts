@@ -39,6 +39,12 @@ export class ChatMessageActionContext extends Disposable {
 	}
 }
 
+export class ChatRequestActionContext extends ChatMessageActionContext {
+	constructor(item: IChatListItem, actions: HTMLElement, isVisible: () => boolean, readonly startEditing: (requestId: string) => void | Promise<void>) {
+		super(item, actions, isVisible);
+	}
+}
+
 /** Limits reply playback to the row's lifetime. */
 export class ChatResponseActionContext extends ChatMessageActionContext {
 	private playback: AbortController | undefined;
@@ -169,8 +175,9 @@ export interface IChatWidget {
 	readonly onDidHide: Event<void>;
 	readonly onDidChangeViewModel: Event<void>;
 	acceptInput(query?: string, options?: IChatAcceptInputOptions): Promise<void>;
-	/** Edits a queued request without replacing the unsent composer draft. */
-	startEditing(request: QueuedMessage): void | Promise<void>;
+	/** Opens a sent request by row ID, or edits a queued request. */
+	startEditing(request: string | QueuedMessage): void | Promise<void>;
+	cancelEditing?(): boolean;
 	cancelTranscriptProgress?(): boolean;
 	retryFailedTurn(turnId?: string): Promise<void>;
 	getFindController(): IChatFindController | undefined;

@@ -47,7 +47,7 @@ import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 import { registerEditorPane } from '../../../browser/editor.js';
 import type { ChatDebugEditor } from './chatDebug/chatDebugEditor.js';
 import { chatDebugEditorId } from './chatDebug/chatDebugEditorInput.js';
-import { registerChatChangesActions, registerChatHistoryActions, registerChatRestoreCheckpointAction } from './chatEditing/chatEditingActions.js';
+import { registerChatChangesActions, registerChatEditRequestAction, registerChatHistoryActions, registerChatRestoreCheckpointAction } from './chatEditing/chatEditingActions.js';
 import { registerAgentSessionActions } from './agentSessions/agentSessionsActions.js';
 import { Extensions as WorkbenchExtensions, type IConfigurationMigrationRegistry } from '../../../common/configuration.js';
 import { DEFAULT_LOCAL_TRANSCRIPTION_MODEL } from '../../../../platform/localTranscription/common/localTranscription.js';
@@ -617,6 +617,7 @@ Registry.as<IConfigurationMigrationRegistry>(WorkbenchExtensions.ConfigurationMi
 registerAgentSessionActions();
 
 registerChatChangesActions();
+registerChatEditRequestAction();
 registerChatHistoryActions();
 registerChatRestoreCheckpointAction();
 

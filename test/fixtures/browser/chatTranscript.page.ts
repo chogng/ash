@@ -109,6 +109,8 @@ import { MenuService } from '../../../src/ash/platform/actions/common/menuServic
 import { IContextViewService, IContextMenuService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { IsSessionsWindowContext } from '../../../src/ash/workbench/common/contextkeys.js';
+import { SessionsWorkspaceModeContext } from '../../../src/ash/sessions/common/contextkeys.js';
+import '../../../src/ash/sessions/contrib/chat/browser/chatRunAnotherVersionActions.js';
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { ISpeechService, SpeechToTextStatus, type ISpeechToTextEvent } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
@@ -689,6 +691,8 @@ declare global {
 			showFind(query?: string): void;
 			runNavigationCommand(command: string): Promise<void>;
 			prepareRequestEditing(cowork: boolean, text?: string, unanswered?: boolean, hasCheckpoint?: boolean): void;
+			updateRequestCheckpoint(): void;
+			runChatCommand(id: string): Promise<unknown>;
 			setAutoFollowReplies(enabled: boolean): Promise<void>;
 			appendChatItem(item: IChatListItem): void;
 			setConversationChanges(visible: boolean): void;
@@ -912,6 +916,11 @@ window.ashChatTranscriptIntegration = {
 		];
 		chatChanges.fire();
 	},
+	updateRequestCheckpoint: () => {
+		appItems = appItems.map(item => item.id === 'presentation-entry' ? { ...item, canRunAnotherVersion: true } : item);
+		chatChanges.fire();
+	},
+	runChatCommand: id => composerServices!.get(ICommandService).executeCommand(id),
 	setAutoFollowReplies: enabled => services.get(IConfigurationService).updateValue('chat.autoFollowReplies', enabled),
 	appendChatItem: item => { appItems = [...appItems, item]; chatChanges.fire(); },
 	setConversationChanges: visible => { hasConversationChanges = visible; chatChanges.fire(); },
@@ -1246,6 +1255,7 @@ window.ashChatTranscriptIntegration = {
 		const chatServices = resources.add(services.createChild());
 		if (new URLSearchParams(location.search).has('sessions')) {
 			IsSessionsWindowContext.bindTo(chatServices.get(IContextKeyService)).set(true);
+			SessionsWorkspaceModeContext.bindTo(chatServices.get(IContextKeyService)).set('code');
 		}
 		chatServices.registerInstance(IAccessibleViewService, accessibleView);
 		chatServices.registerInstance(ILanguageModelsService, { onDidChangeModels: Event.None, isModelVisible: () => true } as unknown as ILanguageModelsService);
@@ -1281,10 +1291,15 @@ window.ashChatTranscriptIntegration = {
 			resources.add(ChatInputEditors.register({ id: 'integration', create: options => chatServices.createInstance(ChatInputEditor, options) }));
 		}
 		chatServices.registerInstance(IDialogService, { confirm: async () => ({ confirmed: false }) } as unknown as IDialogService);
-		const contextMenus: IContextMenuService = { contextMenuStyle: 'custom', showContextMenu() { }, hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None };
+		const contextMenus: IContextMenuService = {
+			contextMenuStyle: 'custom', hideContextMenu() { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
+			showContextMenu(delegate) {
+				if ('getActions' in delegate) document.body.dataset.chatContextActions = delegate.getActions?.().map(action => action.id).join(' ');
+			},
+		};
+		chatServices.registerInstance(IContextMenuService, contextMenus);
 		if (cowork) {
 			chatServices.registerSingleton(ITerminalConfigurationService, () => chatServices.createInstance(TerminalConfigurationService));
-			chatServices.registerInstance(IContextMenuService, contextMenus);
 			chatServices.registerSingleton(IChatTipService, () => chatServices.createInstance(ChatTipService));
 			chatServices.registerInstance(ILifecycleService, { onWillShutdown: Event.None } as unknown as ILifecycleService);
 		}
