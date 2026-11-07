@@ -1,5 +1,6 @@
 import type { ITerminalAutoReply, TerminalProcessSignal } from '../common/terminal.js';
-import { APP_SERVER_METHODS, type TerminalAttachResult, type TerminalReconnectLease } from '../../../../../.build/protocol/typescript/index.js';
+import { APP_SERVER_METHODS, type TerminalAttachResult, type TerminalCommandSessionAction, type TerminalReconnectLease } from '../../../../../.build/protocol/typescript/index.js';
+import { decodeBase64 } from '../../../base/common/buffer.js';
 import { timeout } from '../../../base/common/async.js';
 import { CancellationError, isCancellationError } from '../../../base/common/errors.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
@@ -8,6 +9,7 @@ import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import type { AppServerConnectionState } from '../../agentHost/common/appServerApi.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import type {
+	IAgentCommandTerminal, IAgentCommandTerminalTarget,
 	ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation,
 	ITerminalProcessInfo,
 	ITerminalProcessInvalidationEvent,
@@ -48,6 +50,7 @@ interface TerminalRecord {
 
 /** Retains PTY leases across connection and backend replacement while the execution host remains alive. */
 export class ReconnectableTerminalProcessService extends Disposable implements ITerminalProcessService {
+	readonly commandSession?: (target: IAgentCommandTerminalTarget) => IAgentCommandTerminal;
 	private readonly now: () => number;
 	private readonly wait: (milliseconds: number) => Promise<void>;
 	private readonly reportError: (message: string, error: unknown) => void;
@@ -61,6 +64,7 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 
 	constructor(private readonly supervisor: AppServerProtocolClient, private readonly options: ReconnectableTerminalProcessServiceOptions = {}) {
 		super();
+		if (options.lifetimeToken) this.commandSession = target => this.bindCommandSession(target);
 		this.now = options.now ?? (() => performance.now());
 		this.wait = options.wait ?? timeout;
 		this.reportError = options.reportError ?? defaultReportError;
@@ -74,6 +78,25 @@ export class ReconnectableTerminalProcessService extends Disposable implements I
 	}
 
 	get operatingSystem() { return this.supervisor.operatingSystem; }
+
+	private bindCommandSession(target: IAgentCommandTerminalTarget): IAgentCommandTerminal {
+		const generation = this.supervisor.generation;
+		const request = (action: TerminalCommandSessionAction) => {
+			if (this.isDisposed || this.supervisor.state !== 'ready' || this.supervisor.generation !== generation) throw new CancellationError();
+			return this.supervisor.request(APP_SERVER_METHODS['terminal/commandSession'], { ...target, action });
+		};
+		return {
+			read: async cursor => {
+				const output = await request({ type: 'read', cursor });
+				if (output.type !== 'output') throw new Error('Expected command terminal output');
+				return { bytes: decodeBase64(output.dataBase64).buffer, nextCursor: output.nextCursor, gap: output.gap, exited: output.exited, exitCode: output.exitCode ?? undefined };
+			},
+			takeInput: async () => { await request({ type: 'takeInput' }); },
+			releaseInput: async () => { await request({ type: 'releaseInput' }); },
+			write: async bytes => { await request({ type: 'write', dataBase64: encodeTerminalProcessInput(bytes) }); },
+			resize: async (rows, cols) => { await request({ type: 'resize', rows, cols }); },
+		};
+	}
 
 	async listProfiles(dirId?: string): Promise<readonly ITerminalProcessProfile[]> {
 		if (this.whenDirectoriesReady) await this.waitForDirectories();

@@ -3,8 +3,62 @@ use std::fmt;
 use crate::JsonSchema;
 use crate::TS;
 use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
+use ash_protocol::ToolCallId;
 use serde::Deserialize;
 use serde::Serialize;
+
+/// Addresses an existing Agent PTY by its exact originating call.
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TerminalCommandSessionParams {
+    pub session_id: SessionId,
+    pub thread_id: ThreadId,
+    pub tool_call_id: ToolCallId,
+    pub command_session_id: String,
+    pub action: TerminalCommandSessionAction,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum TerminalCommandSessionAction {
+    Read {
+        #[ts(type = "number")]
+        cursor: u64,
+    },
+    TakeInput,
+    ReleaseInput,
+    Write {
+        data_base64: String,
+    },
+    Resize {
+        rows: u16,
+        cols: u16,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum TerminalCommandSessionResult {
+    Acknowledged,
+    Output {
+        data_base64: String,
+        #[ts(type = "number")]
+        next_cursor: u64,
+        gap: bool,
+        exited: bool,
+        exit_code: Option<i32>,
+    },
+}
 
 /// Literal argv, or a pre-escaped Windows command-line tail.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

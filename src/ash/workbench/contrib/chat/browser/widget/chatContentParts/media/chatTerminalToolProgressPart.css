@@ -7,3 +7,9 @@
 	overflow-wrap: anywhere;
 	white-space: normal;
 }
+
+.ash-chat-tool-terminal-actions:not([hidden]) {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size80);
+}

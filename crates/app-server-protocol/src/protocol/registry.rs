@@ -2486,6 +2486,12 @@ use crate::protocol::terminal::TerminalAutoReply;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalCloseParams;
 #[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalCommandSessionAction;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalCommandSessionParams;
+#[cfg(any(test, feature = "export"))]
+use crate::protocol::terminal::TerminalCommandSessionResult;
+#[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalCommandStatus;
 #[cfg(any(test, feature = "export"))]
 use crate::protocol::terminal::TerminalCommandStatusEvent;
@@ -5888,6 +5894,11 @@ client_methods! {
         response: TerminalAttachResult,
         serialization: None,
     },
+    TerminalCommandSession => "terminal/commandSession" {
+        params: TerminalCommandSessionParams,
+        response: TerminalCommandSessionResult,
+        serialization: None,
+    },
     TerminalWrite => "terminal/write" {
         params: TerminalWriteParams,
         response: (),
@@ -8057,6 +8068,9 @@ typescript_bindings! {
     TerminalReconnectLease,
     TerminalAttachParams,
     TerminalAttachResult,
+    TerminalCommandSessionParams,
+    TerminalCommandSessionAction,
+    TerminalCommandSessionResult,
     TerminalWriteParams,
     TerminalWriteBinaryParams,
     TerminalProcessReady,

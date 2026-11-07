@@ -61,16 +61,21 @@ pub(crate) struct CommandAuthorization {
 
 impl CommandAuthorization {
     pub(crate) fn ensure_active(&self) -> Result<(), core_api::CoreError> {
+        self.ensure_grants_active()?;
+        self.cancellation
+            .token()
+            .check()
+            .map_err(|signal| core_api::CoreError::Cancelled(signal.reason().to_string()))?;
+        Ok(())
+    }
+
+    fn ensure_grants_active(&self) -> Result<(), core_api::CoreError> {
         for authorization in &self.authorizations {
             if let Err(error) = authorization.ensure_active() {
                 self.cancellation.cancel();
                 return Err(core_api::CoreError::Policy(error.to_string()));
             }
         }
-        self.cancellation
-            .token()
-            .check()
-            .map_err(|signal| core_api::CoreError::Cancelled(signal.reason().to_string()))?;
         Ok(())
     }
 
@@ -171,6 +176,21 @@ impl DirGrants {
             .unwrap_or_else(std::sync::PoisonError::into_inner);
         command.ensure_active()?;
         operation()
+    }
+
+    /// An attached view can drain buffered output after the Turn closes. A revoked
+    /// directory grant still ends its access immediately.
+    pub(crate) fn read_command_output<T>(
+        &self,
+        command: &CommandAuthorization,
+        read: impl FnOnce() -> Result<T, core_api::CoreError>,
+    ) -> Result<T, core_api::CoreError> {
+        let _commands = self
+            .commands
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        command.ensure_grants_active()?;
+        read()
     }
 
     fn cancel_revoked_commands(commands: &mut Vec<Weak<CommandAuthorization>>) {

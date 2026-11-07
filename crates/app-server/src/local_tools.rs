@@ -94,6 +94,9 @@ mod grep_output;
 mod permission_requests;
 mod suite;
 
+pub(crate) use suite::CommandTerminalAction;
+pub(crate) use suite::CommandTerminalService;
+pub(crate) use suite::CommandTerminalTarget;
 pub(crate) use suite::LocalToolSuite;
 
 const LOCAL_GRANT_SNAPSHOT_REVISION: &str = "local-static-grants-v1";
@@ -106,6 +109,7 @@ pub(crate) struct LocalToolComposition {
     pub(crate) policy: Arc<dyn ActionPolicyService>,
     action_policy_revision: ActionPolicyRevision,
     executors: Vec<LocalExecutorContribution>,
+    command_terminals: Option<Arc<dyn CommandTerminalService>>,
 }
 
 /// Durable configuration inputs used to compose the local Agent Tool suite.
@@ -413,8 +417,10 @@ pub(crate) fn compose_local_tools_with_config(
     if let Some(documents) = documents {
         service = service.with_text_document_editor(documents);
     }
+    let service = Arc::new(service);
     Ok(LocalToolComposition {
-        tools: Arc::new(service),
+        tools: service.clone(),
+        command_terminals: Some(service),
         policy: Arc::new(policy),
         action_policy_revision,
         executors: vec![
@@ -443,6 +449,7 @@ impl LocalToolComposition {
             policy,
             action_policy_revision: local_policy_revision(),
             executors: Vec::new(),
+            command_terminals: None,
         }
     }
 
@@ -452,6 +459,7 @@ impl LocalToolComposition {
 
     pub(crate) fn tool_port(&self) -> Result<ToolPort, ToolCompositionError> {
         let mut port = ToolPort::local(Arc::clone(&self.tools), Arc::clone(&self.policy));
+        port.command_terminals = self.command_terminals.clone();
         let local_definitions = self.tools.definitions();
         let shell_name =
             ash_protocol::ToolName::new("shell-command").expect("static local tool name is valid");
@@ -484,6 +492,7 @@ pub(crate) fn append_local_tool(
         policy: composition.policy,
         action_policy_revision: composition.action_policy_revision,
         executors: composition.executors,
+        command_terminals: composition.command_terminals,
     }
 }
 

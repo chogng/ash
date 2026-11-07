@@ -367,7 +367,7 @@ export class AshChatWidgetModel extends Disposable implements IReplyChatEditorMo
 	}
 
 	private render(binding: ThreadBinding): void {
-		const source = { sessionId: binding.sessionId, threadId: binding.threadId };
+		const source = { sessionId: binding.sessionId, threadId: binding.threadId, commandTerminals: !!this.primary.host?.terminal?.commandSession };
 		this.renderedItems = chatTranscriptListItems(binding.entries, binding.thread?.turns.at(-1)?.turnId, binding.thread?.turns, source, {
 			archived: binding.thread?.status === 'archived',
 		});

@@ -25,6 +25,7 @@ import '../workbench/contrib/chat/electron-browser/chatScreenshot.contribution.j
 import { registerWorkbenchContribution, WorkbenchPhase } from '../workbench/common/contributions.js';
 import { IInstantiationService } from '../platform/instantiation/common/instantiation.js';
 import '../workbench/contrib/terminal/electron-browser/terminal.contribution.js';
+import '../workbench/contrib/terminalContrib/chat/browser/terminal.chat.contribution.js';
 import '../workbench/services/clipboard/electron-browser/clipboardService.js';
 import '../workbench/services/menubar/electron-browser/menubarService.js';
 import '../workbench/services/process/electron-browser/processService.js';

@@ -32,8 +32,8 @@ use std::path::PathBuf;
 pub use ash_tool_executor::{
     ApprovalPolicy, ApprovalRequirement, CommandExecutionAuthority, CommandExecutionOutcome,
     CommandSessionCursor, CommandSessionId, CommandSessionOptions, CommandSessionOwner,
-    CommandSessionStart, CommandSessionStatus, CommandSessionUpdate, CommandTerminalSize,
-    ExecutionError, ExecutionLimits as ShellCommandLimits,
+    CommandSessionStart, CommandSessionStatus, CommandSessionUpdate, CommandTerminalOutput,
+    CommandTerminalSize, ExecutionError, ExecutionLimits as ShellCommandLimits,
 };
 
 /// Error raised while constructing the shell-command executor.
@@ -195,6 +195,15 @@ impl<P: ApprovalPolicy, B: SandboxBackend> ShellCommandTool<P, B> {
         wait_budget: std::time::Duration,
     ) -> Result<CommandSessionUpdate, ExecutionError> {
         self.executor.read_session(owner, id, cursor, wait_budget)
+    }
+
+    pub fn read_command_terminal(
+        &self,
+        owner: &CommandSessionOwner,
+        id: &CommandSessionId,
+        cursor: u64,
+    ) -> Result<CommandTerminalOutput, ExecutionError> {
+        self.executor.read_command_terminal(owner, id, cursor)
     }
 
     /// Observes completion of an existing command without rerunning it or returning progress.

@@ -2,6 +2,9 @@ use super::ConnectionState;
 use super::RpcError;
 use super::decode;
 use super::result;
+use crate::local_tools::CommandTerminalAction;
+use crate::local_tools::CommandTerminalService;
+use crate::local_tools::CommandTerminalTarget;
 use ash_app_server_protocol::protocol::error::AppServerErrorName;
 use ash_app_server_protocol::protocol::terminal as wire;
 use ash_app_server_protocol::protocol::terminal::TerminalAttachParams;
@@ -18,6 +21,7 @@ use serde_json::Value;
 /// Coordinates the existing owners needed by the terminals adapter.
 /// This contract deliberately exposes no server object or unrestricted service registry.
 pub(super) trait TerminalRequestProcessorContext: Send + Sync {
+    fn command_terminals(&self) -> Option<std::sync::Arc<dyn CommandTerminalService>>;
     fn session_dir_authorization(
         &self,
         session_id: &ash_protocol::SessionId,
@@ -354,6 +358,69 @@ impl<'ctx, C: TerminalRequestProcessorContext + ?Sized> TerminalRequestProcessor
             ready: ready_to_dto(attached.ready),
             terminal_id: attached.terminal_id,
             reconnect: lease_to_dto(attached.reconnect),
+        })
+    }
+
+    pub(super) fn terminal_command_session(
+        &self,
+        connection: &ConnectionState,
+        params: &Value,
+    ) -> Result<Value, RpcError> {
+        if connection.authority != super::ConnectionAuthority::ProductHost {
+            return Err(terminal_error(
+                exec_server::terminal::TerminalError::AttachRejected,
+            ));
+        }
+        let params: wire::TerminalCommandSessionParams = decode(params)?;
+        let invalid = || RpcError::new(-32602, AppServerErrorName::InvalidParams);
+        let id = ash_shell_command::CommandSessionId::new(params.command_session_id)
+            .map_err(|_| invalid())?;
+        use wire::TerminalCommandSessionAction as Action;
+        let action = match params.action {
+            Action::Read { cursor } => CommandTerminalAction::Read(cursor),
+            Action::TakeInput => CommandTerminalAction::TakeInput,
+            Action::ReleaseInput => CommandTerminalAction::ReleaseInput,
+            Action::Write { data_base64 } if data_base64.len() <= 87_384 => {
+                let bytes = base64::engine::general_purpose::STANDARD
+                    .decode(data_base64)
+                    .map_err(|_| invalid())?;
+                if bytes.len() > 65_536 {
+                    return Err(invalid());
+                }
+                CommandTerminalAction::Write(bytes)
+            }
+            Action::Resize { rows, cols }
+                if (1..=1000).contains(&rows) && (1..=1000).contains(&cols) =>
+            {
+                CommandTerminalAction::Resize(ash_shell_command::CommandTerminalSize { rows, cols })
+            }
+            Action::Write { .. } | Action::Resize { .. } => return Err(invalid()),
+        };
+        let output = self
+            .context
+            .command_terminals()
+            .ok_or_else(|| terminal_error(exec_server::terminal::TerminalError::NotFound))?
+            .command_terminal(
+                CommandTerminalTarget {
+                    session: params.session_id,
+                    thread: params.thread_id,
+                    call: params.tool_call_id,
+                    id,
+                },
+                connection.connection_id,
+                &|| connection.is_closed(),
+                action,
+            )
+            .map_err(super::core_error)?;
+        result(&match output {
+            Some(output) => wire::TerminalCommandSessionResult::Output {
+                data_base64: base64::engine::general_purpose::STANDARD.encode(output.bytes),
+                next_cursor: output.next_cursor,
+                gap: output.gap,
+                exited: output.exited,
+                exit_code: output.exit_code,
+            },
+            None => wire::TerminalCommandSessionResult::Acknowledged,
         })
     }
 

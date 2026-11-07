@@ -695,6 +695,12 @@ impl super::symphony_tracker::SymphonyTrackerRequestProcessorContext for AppServ
 }
 
 impl super::terminal_operations::TerminalRequestProcessorContext for AppServer {
+    fn command_terminals(
+        &self,
+    ) -> Option<std::sync::Arc<dyn crate::local_tools::CommandTerminalService>> {
+        self.local_env_tool_ports()?.command_terminals()
+    }
+
     fn session_dir_authorization(
         &self,
         session_id: &ash_protocol::SessionId,

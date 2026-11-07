@@ -38,6 +38,7 @@ import { hasSelectedCodeWorkspace } from '../common/sessionWorkspace.js';
 import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsWorkspaceModeContext } from '../common/contextkeys.js';
 import { readChatRequestVersions } from './chatRequestVersions.js';
+import { isNative } from '../../base/common/platform.js';
 
 const historyPageTurns = 20;
 
@@ -416,7 +417,9 @@ export class ChatWidgetModel extends Disposable {
 	get items(): readonly IChatListItem[] {
 		const thread = this._thread;
 		const latestTurnId = thread?.turns.at(-1)?.turnId;
-		let transcript = chatTranscriptListItems(this.transcriptEntries, latestTurnId, thread?.turns, thread, {
+		const provider = this.selection.kind === 'session' ? this.selection.active.session.providerId : this.selection.session.providerId;
+		const source = thread && { sessionId: thread.sessionId, threadId: thread.threadId, commandTerminals: isNative && (!provider || provider === LOCAL_AGENT_HOST_PROVIDER_ID) };
+		let transcript = chatTranscriptListItems(this.transcriptEntries, latestTurnId, thread?.turns, source, {
 			archived: thread?.status === 'archived', hasOlderTurns: this.historyBoundary?.hasOlderTurns,
 		}, this._changeSets);
 		if (thread && this.isCodeConversation && (this._changeSets.length || this.comparableVersionTurns.size)) {

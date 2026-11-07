@@ -139,7 +139,7 @@ export function chatTranscriptListItems(
 	entries: readonly ThreadTranscriptEntry[],
 	latestTurnId?: string,
 	turns: readonly Turn[] = [],
-	source?: { readonly sessionId: string; readonly threadId: string; },
+	source?: { readonly sessionId: string; readonly threadId: string; readonly commandTerminals?: boolean; },
 	forkHistory?: { readonly archived: boolean; readonly hasOlderTurns?: boolean; },
 	changeSets: readonly TurnChangeSetSummary[] = [],
 ): readonly IChatListItem[] {
@@ -209,10 +209,11 @@ export function chatTranscriptListItems(
 				transient: !result && !stoppedTurns.has(entry.turnId), isError: result?.isError,
 				toolInvocation: {
 					call, result, output, streaming: entry.transient && !result && !stoppedTurns.has(entry.turnId), stopped: stoppedTurns.has(entry.turnId),
+					...(source?.commandTerminals && call.name === 'shell-session' ? { commandTerminalSource: { sessionId: source.sessionId, threadId: source.threadId } } : {}),
 					waitingFor: !result && !stoppedTurns.has(entry.turnId) && pending?.itemId === call.itemId ? pending.kind : undefined,
 					executionStarted: startedCalls.has(identity),
 				},
-				...(source && result?.content?.some(part => part.type !== 'text') ? { attachmentSource: { ...source, itemId: result.itemId, kind: 'toolResult' as const } } : {}),
+				...(source && result?.content?.some(part => part.type !== 'text') ? { attachmentSource: { sessionId: source.sessionId, threadId: source.threadId, itemId: result.itemId, kind: 'toolResult' as const } } : {}),
 			}];
 		}
 		if (entry.type === 'item' && entry.item.type === 'toolResult') {
@@ -266,7 +267,7 @@ export function chatTranscriptListItems(
 			}
 		}
 		return source && entry.type === 'item' && item.content?.some(part => part.type !== 'text')
-			? [{ ...item, attachmentSource: { ...source, itemId: entry.item.itemId, kind: entry.item.type === 'toolResult' ? 'toolResult' as const : 'item' as const } }] : [item];
+			? [{ ...item, attachmentSource: { sessionId: source.sessionId, threadId: source.threadId, itemId: entry.item.itemId, kind: entry.item.type === 'toolResult' ? 'toolResult' as const : 'item' as const } }] : [item];
 	});
 }
 

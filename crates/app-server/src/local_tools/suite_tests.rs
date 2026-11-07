@@ -1268,6 +1268,35 @@ fn command_registration_and_revocation_cover_both_launch_orderings() {
 }
 
 #[test]
+fn command_terminal_output_drains_after_turn_cancellation_until_its_grant_is_revoked() {
+    let dir = tempfile::tempdir().unwrap();
+    let access = DirGrants::default();
+    let session = SessionId::new("terminal-output-grant").unwrap();
+    let grant = Grant::for_session_tree(
+        session.clone(),
+        Dir::open_local(dir.path()).unwrap(),
+        GrantSource::ExplicitUser,
+        Permissions::new([Permission::ExecuteCommands]),
+    );
+    access.add_dir(session.clone(), grant.clone()).unwrap();
+    let turn = ash_async_utils::CancellationSource::new();
+    let command = access
+        .authorize_command(
+            vec![grant.authorize(Permission::ExecuteCommands).unwrap()],
+            &turn.token(),
+        )
+        .unwrap();
+    turn.cancel();
+    assert!(access.execute_command(&command, || Ok(())).is_err());
+    assert_eq!(
+        access.read_command_output(&command, || Ok("tail")).unwrap(),
+        "tail"
+    );
+    access.remove_dir(&session, dir.path());
+    assert!(access.read_command_output(&command, || Ok(())).is_err());
+}
+
+#[test]
 fn command_input_and_directory_revocation_share_an_admission_gate() {
     let dir = tempfile::tempdir().unwrap();
     let access = Arc::new(DirGrants::default());

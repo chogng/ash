@@ -266,8 +266,25 @@ export interface ITerminalProcessInvalidationEvent {
 	readonly reason: 'replacement' | 'expiry';
 }
 
+export interface IAgentCommandTerminalTarget {
+	readonly sessionId: string;
+	readonly threadId: string;
+	readonly toolCallId: string;
+	readonly commandSessionId: string;
+}
+
+export interface IAgentCommandTerminal {
+	read(cursor: number): Promise<{ readonly bytes: Uint8Array; readonly nextCursor: number; readonly gap: boolean; readonly exited: boolean; readonly exitCode?: number; }>;
+	takeInput(): Promise<void>;
+	releaseInput(): Promise<void>;
+	write(bytes: Uint8Array): Promise<void>;
+	resize(rows: number, cols: number): Promise<void>;
+}
+
 /** Platform contract for creating and communicating with terminal processes. */
 export interface ITerminalProcessService {
+	/** Binds a view to one live connection and an already running Agent PTY. */
+	commandSession?(target: IAgentCommandTerminalTarget): IAgentCommandTerminal;
 	/** A process lease was permanently retired, independently of host connection readiness. */
 	readonly onDidInvalidateProcess?: Event<ITerminalProcessInvalidationEvent>;
 	/** Initialized execution host OS; unavailable before connection readiness. */
@@ -360,10 +377,13 @@ export interface IProcessProperty {
 export interface ITerminalChildProcess extends IDisposable {
 	readonly id: number;
 	readonly shouldPersist: boolean;
+	/** A borrowed PTY releases its view without terminating the underlying process. */
+	readonly ownsProcess?: boolean;
 	readonly onProcessData: Event<string | IProcessDataEvent>;
 	readonly onProcessReady: Event<IProcessReadyEvent>;
 	readonly onDidChangeProperty: Event<IProcessProperty>;
 	readonly onProcessExit: Event<number | undefined>;
+	readonly onDidChangeInputMode?: Event<void>;
 	start(): Promise<void>;
 	shutdown(immediate: boolean): void;
 	input?(data: string): void | Promise<void>;

@@ -1112,6 +1112,18 @@ impl Drop for EnvToolPorts {
 }
 
 impl EnvToolPorts {
+    pub(super) fn command_terminals(
+        &self,
+    ) -> Option<Arc<dyn crate::local_tools::CommandTerminalService>> {
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .local
+            .as_ref()?
+            .command_terminals
+            .clone()
+    }
+
     pub(crate) fn capabilities_snapshot(
         &self,
     ) -> (

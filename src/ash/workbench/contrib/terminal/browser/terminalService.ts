@@ -5,12 +5,13 @@ import type { IContextKey } from '../../../../platform/contextkey/common/context
 import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../../base/common/lifecycle.js';
-import { ITerminalProcessService, type TerminalProcessConnectionState } from '../../../../platform/terminal/common/terminal.js';
+import { ITerminalProcessService, type IAgentCommandTerminalTarget, type TerminalProcessConnectionState } from '../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IWorkspaceTrustManagementService, IWorkspaceTrustRequestService } from '../../../../platform/workspace/common/workspaceTrust.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { TerminalTransferError, ITerminalEditorService, ITerminalGroupService, type ICreateTerminalOptions, type ITerminalCreateOptions, type ITerminalDimensions, type ITerminalInstance, type ITerminalProfile, type ITerminalService, type ITerminalLocationOptions } from './terminal.js';
 import { TerminalInstance } from './terminalInstance.js';
+import { AgentCommandPty } from './agentHostPty.js';
 import { TerminalInstanceService } from './terminalInstanceService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
@@ -46,6 +47,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 	private readonly _onDidChangeInstances = this._register(new Emitter<void>());
 	private readonly _onDidChangeActiveInstance = this._register(new Emitter<ITerminalInstance | undefined>());
 	private readonly ownedInstances = this._register(new DisposableMap<string, TerminalInstance>());
+	private readonly commandTerminals = new Map<string, Promise<{ readonly instance: ITerminalInstance; readonly pty: AgentCommandPty; }>>();
 	private _activeInstance: TerminalInstance | undefined;
 	private readonly hasActiveInstanceContext: IContextKey<boolean>;
 	private readonly instanceFactory: TerminalInstanceService;
@@ -84,6 +86,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 	}
 
 	protected override disposeCore(): void {
+		this.commandTerminals.clear();
 		this._instances.length = 0;
 		this._activeInstance = undefined;
 		this.hasActiveInstanceContext.reset();
@@ -96,6 +99,49 @@ export class TerminalService extends Disposable implements ITerminalService {
 
 	get activeInstance(): ITerminalInstance | undefined {
 		return this._activeInstance;
+	}
+
+	async revealAgentCommand(target: IAgentCommandTerminalTarget, takeInput: boolean): Promise<void> {
+		const key = JSON.stringify([target.sessionId, target.threadId, target.toolCallId, target.commandSessionId]);
+		let pending = this.commandTerminals.get(key);
+		if (!pending) {
+			const command = this.processService.commandSession?.(target);
+			if (!command) throw new Error(localize('terminal.agentCommand.unavailable', 'The Agent terminal is unavailable on this connection.'));
+			let pty: AgentCommandPty | undefined;
+			// Attachment reuses the original command grant. The current window's
+			// workspace and shell profile only apply when starting a new process.
+			pending = command.read(0).then(() => this.createTerminalCore({
+				dimensions: { rows: 24, cols: 80 },
+				config: {
+					name: localize('terminal.agentCommand.title', 'Agent Command'),
+					isFeatureTerminal: true,
+					customPtyImplementation: (id, cols, rows) => pty = new AgentCommandPty(id, command, cols, rows),
+				},
+			}, this.getDefaultLocation())).then(instance => {
+				if (!pty || !this.instances.includes(instance)) throw new CancellationError();
+				const disposed = this.onDidDisposeInstance(closed => {
+					if (closed !== instance) return;
+					disposed.dispose();
+					if (this.commandTerminals.get(key) === pending) this.commandTerminals.delete(key);
+				});
+				return { instance, pty };
+			}).catch(error => {
+				if (this.commandTerminals.get(key) === pending) this.commandTerminals.delete(key);
+				throw error;
+			});
+			this.commandTerminals.set(key, pending);
+		}
+		const { instance, pty } = await pending;
+		if (instance instanceof TerminalInstance && instance.isClosing) {
+			await instance.close();
+			return this.revealAgentCommand(target, takeInput);
+		}
+		if (takeInput) await pty.takeInput();
+		if (!this.instances.includes(instance)) throw new CancellationError();
+		this.setActiveInstance(instance);
+		if (instance.target === TerminalLocation.Editor) await this.terminalEditors.openEditor(instance);
+		else await this.groups.showPanel(true);
+		(await instance.xtermReadyPromise)?.focus();
 	}
 
 	async createTerminal(options: ICreateTerminalOptions = {}): Promise<ITerminalInstance> {
@@ -413,6 +459,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 	}
 
 	private async performInstanceRelaunch(instance: ITerminalInstance, dimensions: ITerminalDimensions): Promise<void> {
+		if (instance instanceof TerminalInstance && !instance.ownsProcess) return;
 		if (!instance.isReadOnly) {
 			this.resolveWorkspaceFolder(instance.dirId);
 		}

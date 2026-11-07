@@ -1832,6 +1832,12 @@ impl AppServer {
         if !connection.mark_closed() {
             return;
         }
+        if let Some(terminals) = self
+            .local_env_tool_ports()
+            .and_then(|ports| ports.command_terminals())
+        {
+            terminals.release_connection(connection.connection_id);
+        }
         connection.wire_log.lock().unwrap().close();
         connection.tcp_streams.close_all();
         self.cancel_connection_logins(connection.connection_id);
@@ -4913,6 +4919,9 @@ impl AppServer {
             Some(ClientMethod::TerminalAttach) => self
                 .terminal_processor()
                 .terminal_attach(connection, &request.params),
+            Some(ClientMethod::TerminalCommandSession) => self
+                .terminal_processor()
+                .terminal_command_session(connection, &request.params),
             Some(ClientMethod::TerminalWrite) => self
                 .terminal_processor()
                 .terminal_write(connection, &request.params),

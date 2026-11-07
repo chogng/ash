@@ -638,6 +638,7 @@ fn local_composition(
             .unwrap();
     let grep = Arc::new(grep::Service::new(grep::Backend::Tgrep, ripgrep.clone(), None).unwrap());
     LocalToolComposition {
+        command_terminals: None,
         tools: Arc::new(LocalToolSuite::new(
             shell,
             Arc::clone(&grep),

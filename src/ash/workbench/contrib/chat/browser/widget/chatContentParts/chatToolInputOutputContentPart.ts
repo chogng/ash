@@ -12,6 +12,12 @@ interface ToolTextSection {
 	readonly text: Text;
 }
 
+export interface IToolOutputPresentation {
+	readonly stdout: string;
+	readonly stderr: string;
+	readonly result: string;
+}
+
 /** Projects tool evidence into independently scrollable disclosures without interpreting its contents. */
 export class ChatCollapsibleInputOutputContentPart extends Disposable {
 	public readonly domNode: HTMLElement;
@@ -42,15 +48,15 @@ export class ChatCollapsibleInputOutputContentPart extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
-	public render(invocation: IChatToolInvocation): void {
+	public render(invocation: IChatToolInvocation, presentation?: IToolOutputPresentation): void {
 		const result = invocation.result;
 		const textParts = result?.content?.filter(part => part.type === 'text');
 		const resultText = textParts?.length ? textParts.map(part => part.text).join('\n') : result?.text ?? '';
 		const values = {
 			input: { label: localize('chat.tool.input', 'Input'), text: invocation.call.argumentsJson },
-			stdout: { label: localize('chat.tool.stdout', 'Standard output'), text: invocation.output.filter(part => part.stream === 'stdout').map(part => part.text).join('\n') },
-			stderr: { label: localize('chat.tool.stderr', 'Standard error'), text: invocation.output.filter(part => part.stream === 'stderr').map(part => part.text).join('\n') },
-			result: { label: result?.isError ? localize('chat.tool.error', 'Error') : localize('chat.tool.result', 'Result'), text: resultText },
+			stdout: { label: localize('chat.tool.stdout', 'Standard output'), text: presentation?.stdout ?? invocation.output.filter(part => part.stream === 'stdout').map(part => part.text).join('\n') },
+			stderr: { label: localize('chat.tool.stderr', 'Standard error'), text: presentation?.stderr ?? invocation.output.filter(part => part.stream === 'stderr').map(part => part.text).join('\n') },
+			result: { label: result?.isError ? localize('chat.tool.error', 'Error') : localize('chat.tool.result', 'Result'), text: presentation?.result ?? resultText },
 		};
 		let changed = false;
 		for (const [key, section] of this.sections) {

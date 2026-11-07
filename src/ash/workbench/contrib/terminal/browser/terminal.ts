@@ -1,4 +1,4 @@
-import type { ITerminalAutoReply } from '../../../../platform/terminal/common/terminal.js';
+import type { IAgentCommandTerminalTarget, ITerminalAutoReply } from '../../../../platform/terminal/common/terminal.js';
 import type { ITerminalProcessOwnership } from '../../../services/terminal/common/terminal.js';
 import { localize } from '../../../../nls.js';
 import type { URI } from '../../../../base/common/uri.js';
@@ -253,6 +253,7 @@ export interface ITerminalService extends IDisposable {
 	readonly onDidChangeActiveInstance: Event<ITerminalInstance | undefined>;
 
 	createTerminal(options?: ICreateTerminalOptions): Promise<ITerminalInstance>;
+	revealAgentCommand?(target: IAgentCommandTerminalTarget, takeInput: boolean): Promise<void>;
 	importTerminalState(state: ITerminalSerializedState, lease: ITerminalReconnectLease): Promise<ITerminalInstance>;
 	relaunchTerminal(instance: ITerminalInstance, dimensions: ITerminalDimensions): Promise<void>;
 	setActiveInstance(instance: ITerminalInstance | undefined): void;
