@@ -1,8 +1,9 @@
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test, type TestInfo } from '@playwright/test';
-import { launchElectron } from './playwrightElectron.js';
+import { launchPackagedDesktop } from './packagedDesktop.js';
 import type { ElectronLaunchOptions } from './electron.js';
+import { Workbench } from './workbench.js';
 
 /** Verify editing, terminal and webview resources through the delivered application's own backend. */
 export async function exercisePackagedWorkbench(
@@ -31,10 +32,9 @@ export async function exercisePackagedWorkbench(
 	};
 	const desktop = await test.step(`${stage}: launch delivered application`, async () => {
 		try {
-			return await launchElectron({
+			return await launchPackagedDesktop({
 				...options,
 				packagedBundle,
-				appServerMode: 'required',
 				startupTimeout: 60_000,
 				userDataDirectory,
 				workspaceDirectory,
@@ -45,24 +45,22 @@ export async function exercisePackagedWorkbench(
 			throw error;
 		}
 	});
-	const page = desktop.driver.workbench.page;
-	const diagnostics = desktop.driver.diagnostics;
+	const { page, diagnostics } = desktop;
+	const workbench = new Workbench(page);
 	let failed = false;
 	try {
 		await page.context().tracing.start({ snapshots: true, sources: true });
 		try {
-			expect(
-				await desktop.application.evaluate(({ app }) => ({
-					packaged: app.isPackaged,
-					version: app.getVersion(),
-				})),
-			).toEqual({ packaged: true, version });
+			const resources = process.platform === 'darwin' ? join(packagedBundle, 'Contents', 'Resources') : join(packagedBundle, 'resources');
+			expect(JSON.parse(await readFile(join(resources, 'app', 'package.json'), 'utf8')).version).toBe(version);
+			expect(await page.evaluate(() => (globalThis as unknown as { ash: { process: { isBuilt: boolean; }; }; }).ash.process.isBuilt)).toBe(true);
 			const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 			if (await showSidebar.isVisible()) await showSidebar.click();
 			const row = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });
 			await expect(row).toHaveCount(1, { timeout: 30_000 });
 			await row.dblclick();
-			const editor = desktop.driver.workbench.editors.groupAt(0).editor;
+			const editor = workbench.editors.groupAt(0).editor;
+			await expect(editor.element).toHaveAttribute('aria-label', 'main.ts');
 			await editor.waitForEditorFocus();
 			await editor.input.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
 			// Use the shared editor driver: one text insertion followed by a rendered-content
@@ -90,7 +88,7 @@ export async function exercisePackagedWorkbench(
 			if (stage !== 'previous') {
 				await test.step(`${stage}: render packaged Markdown and a workspace image`, () => diagnostics.waitFor(async () => {
 					await page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'sanity-preview.md' }).dblclick();
-					const source = desktop.driver.workbench.editors.groupAt(0);
+					const source = workbench.editors.groupAt(0);
 					await source.editor.waitForEditorContents(contents => contents.includes('# Release webview'));
 					await source.title.locator('[data-action-id="markdown.reopenAsPreview"] button').click();
 					const preview = source.content.frameLocator('iframe.ash-webview:visible').frameLocator('iframe');

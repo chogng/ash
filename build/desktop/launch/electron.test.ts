@@ -137,7 +137,12 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
 		await writeFile(join(desktop, 'package.json'), '{"main":"fixture.cjs","type":"module"}');
 		await writeFile(join(desktop, 'node_modules/electron/index.js'), 'module.exports = process.execPath;');
 		await writeFile(join(desktop, 'fixture.cjs'), `
-      require('node:fs').appendFileSync('launches.log', JSON.stringify({ pid: process.pid, recordedAt: Date.now(), cwd: process.cwd(), args: process.argv.slice(2), runAsNode: process.env.ELECTRON_RUN_AS_NODE, launchWorker: process.env.ASH_ELECTRON_LAUNCH_WORKER, runDirectory: process.env.ASH_SMOKE_RUN_DIRECTORY, home: process.env.ASH_HOME }) + '\\n');
+      require('node:fs').appendFileSync('launches.log', JSON.stringify({
+        pid: process.pid, recordedAt: Date.now(), cwd: process.cwd(), args: process.argv.slice(2),
+        runAsNode: process.env.ELECTRON_RUN_AS_NODE, nodeOptions: process.env.NODE_OPTIONS,
+        vscodeInspectorOptions: process.env.VSCODE_INSPECTOR_OPTIONS,
+        launchWorker: process.env.ASH_ELECTRON_LAUNCH_WORKER, runDirectory: process.env.ASH_SMOKE_RUN_DIRECTORY, home: process.env.ASH_HOME,
+      }) + '\\n');
       if (require('node:fs').existsSync('refuse-startup')) process.exit(0);
       if (require('node:fs').existsSync('busy-startup')) {
         process.send('ash:dev:busy', () => process.exit(0));
@@ -188,7 +193,15 @@ for (const profile of ['default', 'custom', 'separated', 'cancelled'] as const) 
 		const userDataArgs = profile === 'separated' ? ['--user-data-dir', userData] : [`--user-data-dir=${userData}`];
 		const child = spawn(process.execPath, [join(root, 'build/desktop/launch/electron.ts'), '--watch', '--fixture', ...(custom ? userDataArgs : [])], {
 			cwd: tmpdir(), windowsHide: true, stdio: 'pipe',
-			env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', ASH_DESKTOP_UI_ONLY: '1', ASH_HOME: custom ? home : undefined, PYTHON: pythonCommand([]).command },
+			env: {
+				...process.env,
+				ELECTRON_RUN_AS_NODE: '1',
+				NODE_OPTIONS: '--inspect-publish-uid=http',
+				VSCODE_INSPECTOR_OPTIONS: ':::{}',
+				ASH_DESKTOP_UI_ONLY: '1',
+				ASH_HOME: custom ? home : undefined,
+				PYTHON: pythonCommand([]).command,
+			},
 		});
 		let output = '';
 		child.stdout.on('data', chunk => { output += chunk; });

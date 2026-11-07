@@ -138,7 +138,11 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		let ready = false;
 		let relaunch = false;
 		let busy = false;
-		const child = spawn(executable, [sourceRoot, ...args], { cwd: sourceRoot, env: environment, stdio: watch ? ['inherit', 'inherit', 'inherit', 'ipc'] : 'inherit', detached: detachedProcess() });
+		const electronEnvironment = { ...environment };
+		// VS Code injects a Node preload for the launcher. Electron Main uses its own inspector arguments.
+		delete electronEnvironment.NODE_OPTIONS;
+		delete electronEnvironment.VSCODE_INSPECTOR_OPTIONS;
+		const child = spawn(executable, [sourceRoot, ...args], { cwd: sourceRoot, env: electronEnvironment, stdio: watch ? ['inherit', 'inherit', 'inherit', 'ipc'] : 'inherit', detached: detachedProcess() });
 		child.on('message', message => {
 			if (message === 'ash:dev:ready') { ready = true; busySince = undefined; }
 			if (message === 'ash:dev:relaunch') relaunch = true;

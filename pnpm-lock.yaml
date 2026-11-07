@@ -310,6 +310,9 @@ importers:
       '@ash/typescript-compiler':
         specifier: npm:typescript@7.0.2
         version: typescript@7.0.2
+      '@electron/fuses':
+        specifier: 2.1.3
+        version: 2.1.3
       '@electron/packager':
         specifier: 20.0.4
         version: 20.0.4(supports-color@10.2.2)
@@ -473,6 +476,11 @@ packages:
 
   '@electron/asar@4.3.0':
     resolution: {integrity: sha512-k/FFC/NQoTykGBi/Ga4L4KorsAKDdkK0LfNVG90eUG6vPVpJaL3iR9V1ZLbzBAF3QpojK5DcaGOdQOheKZv4JQ==}
+    engines: {node: '>=22.12.0'}
+    hasBin: true
+
+  '@electron/fuses@2.1.3':
+    resolution: {integrity: sha512-LoKJUXNiJ4JM8IIrUltSHI+8pkogaGj5wmJx81jE/Wk3g2w1/kfMbTEKNoY5kitGE8hiC12h32R/1SlywFtxXg==}
     engines: {node: '>=22.12.0'}
     hasBin: true
 
@@ -3079,6 +3087,8 @@ snapshots:
     dependencies:
       glob: 13.0.6
       minimatch: 10.2.6
+
+  '@electron/fuses@2.1.3': {}
 
   '@electron/get@5.0.0(supports-color@10.2.2)':
     dependencies:
