@@ -279,9 +279,6 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			this.membership.delete(project.key);
 			this.membershipVersion.set(this.membershipVersion.get() + 1);
 		} : undefined;
-		const label = retry ? localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry')
-			: !rows.length && !loading && (!history || history.state === 'complete')
-				? localize('sessions.chatList.emptyProject', 'No chats in this project') : undefined;
 		return {
 			key: project.key,
 			title: project.title,
@@ -298,7 +295,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 				archive: project.project?.archive,
 				remove: project.project?.remove,
 			},
-			history: label ? { label, action: retry } : undefined,
+			history: retry ? { label: localize('sessions.chatList.retryProjectChats', 'Could not load project chats. Retry'), action: retry } : undefined,
 			onExpand: history?.state === 'idle' ? history.load : undefined,
 			loadMore: history?.state === 'more' ? history.load : undefined,
 		};

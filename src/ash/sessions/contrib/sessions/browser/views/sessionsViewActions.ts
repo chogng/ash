@@ -84,9 +84,9 @@ registerAction2(class AddSessionToProjectAction extends Action2 {
 	}
 });
 
-async function promptForSessionGroupName(input: IQuickInputService, title = localize('sessions.list.groupName', 'Group name')): Promise<string | undefined> {
+async function promptForSessionGroupName(input: IQuickInputService): Promise<string | undefined> {
 	const name = await input.input({
-		title,
+		title: localize('sessions.list.groupName', 'Group name'),
 		validateInput: async value => !value.trim() || value.trim().length > 128 ? localize('sessions.list.invalidGroup', 'Enter a name with 1 to 128 characters.') : undefined,
 	});
 	return name?.trim();
@@ -102,25 +102,6 @@ MenusRegistry.appendMenuItems([
 		}
 	},
 ]);
-
-registerAction2(class CreateSessionGroupAction extends Action2 {
-	constructor() {
-		super({
-			id: 'sessionsViewPane.createGroup',
-			title: localize2('sessions.list.addFolder', 'Add folder…'),
-			icon: Lxicon.newFolder,
-			menu: { id: Menus.SidebarSessionsHeader, group: 'navigation', order: 20, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code') },
-		});
-	}
-
-	override async run(accessor: ServicesAccessor): Promise<void> {
-		const groups = accessor.get(ISessionGroupsService);
-		const name = await promptForSessionGroupName(accessor.get(IQuickInputService), localize('sessions.list.folderName', 'Folder name'));
-		if (name !== undefined) {
-			await groups.create(name);
-		}
-	}
-});
 
 registerAction2(class MoveSessionToGroupAction extends Action2 {
 	constructor() { super({ id: 'agentSession.moveToGroup', title: localize2('sessions.list.moveToGroup', 'Move to group') }); }

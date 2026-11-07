@@ -249,7 +249,7 @@ export class SessionsList extends DomWidget {
 	private readonly catalogRows = new Map<string, SessionsCatalogRow>();
 	private readonly catalogMenu = this._register(new MutableDisposable());
 	private readonly projectRename = this._register(new MutableDisposable());
-	private readonly catalogProjects = new Map<string, { readonly load: () => void; readonly anchor?: HTMLElement; }>();
+	private readonly catalogProjects = new Map<string, { readonly load?: () => void; readonly anchor?: HTMLElement; }>();
 	private readonly catalogPaging = this._register(new RunOnceScheduler(() => {
 		if (!this.domNode.isConnected || !this.domNode.clientHeight) return;
 		const viewport = this.catalogViewport;
@@ -260,7 +260,7 @@ export class SessionsList extends DomWidget {
 		for (const [key, project] of this.catalogProjects) {
 			const id = `section:${key}`;
 			const anchor = project.anchor ? SessionsListTree.id(project.anchor) : id;
-			if (this.tree.isCollapsed(id) === false && this.tree.getRelativeTop(anchor) !== null) project.load();
+			if (project.load && this.tree.isCollapsed(id) === false && this.tree.getRelativeTop(anchor) !== null) project.load();
 		}
 	}, 0));
 
@@ -406,7 +406,7 @@ export class SessionsList extends DomWidget {
 		this._register(groups.onDidChange(() => this.render()));
 		const menuContext = this.menuContext = contextKeys && this._register(contextKeys.createScoped(this.domNode));
 		this.createListToolbar = (container, disposables) => createSessionsListToolbar(
-			container, disposables, menus, contextMenus, notifications, menuContext,
+			container, disposables, menus, contextMenus, menuContext,
 			Menus.SidebarSessionsHeader, Menus.SessionsViewFilter, actions => this.getFilterActions(actions),
 		);
 		if (contributed) {
@@ -1256,13 +1256,14 @@ export class SessionsList extends DomWidget {
 				const key = `catalog-project:${project.key}`;
 				if (project.onExpand) this.catalogProjects.set(key, { load: project.onExpand });
 				else if (project.loadMore) this.catalogProjects.set(key, { load: project.loadMore, anchor: children.at(-1) });
+				// Keep the project expandable while its first page is in flight.
+				else if (project.loading) this.catalogProjects.set(key, {});
 				const action = project.history ?? (project.loadMore && {
 					label: localize({ bundle: 'ash.sessions', key: 'sessions.list.moreProjectConversations' }, 'Load more conversations'), action: project.loadMore,
 				});
 				if (action) {
 					const item = itemFor(`${key}:history`, 'project');
-					item.update(action.label, false, () => action.action?.());
-					item.setDisabled(!action.action, false);
+					item.update(action.label, false, action.action);
 					children.push(item.domNode);
 				}
 				const node = sectionFor(key, project.title, children, 'project', {
@@ -1482,7 +1483,7 @@ export class SessionsList extends DomWidget {
 			const children: ObjectTreeElement<HTMLElement>[] = [];
 			const rowChildren = childrenByRow.get(element) ?? [];
 			const projectSection = key === 'projects' || element.dataset.projectId !== undefined;
-			const collapsible = key !== undefined && (element.dataset.catalogProject === 'true' || !projectSection || rowChildren.length > 0);
+			const collapsible = key !== undefined && (!projectSection || rowChildren.length > 0 || this.catalogProjects.has(key));
 			let collapsed: ObjectTreeElementCollapseState | undefined;
 			if (key !== undefined && collapsible) {
 				const saved = this.storage.getBoolean(this.collapseKey(key), StorageScope.PROFILE, element.dataset.catalogProject === 'true');
@@ -1554,7 +1555,7 @@ function reorderChildren(children: readonly HTMLElement[], order: (ids: readonly
 
 /** Shared Projects header controls for the conversation catalogs. */
 function createSessionsListToolbar(container: HTMLElement, disposables: DisposableStore, menus: IMenuService,
-	contextMenus: IContextMenuService, notifications: INotificationService, contextKeys: IContextKeyService | undefined,
+	contextMenus: IContextMenuService, contextKeys: IContextKeyService | undefined,
 	menuId: MenuId, submenu: MenuId, getActions: (contributed: readonly IAction[]) => readonly IAction[]): MenuWorkbenchToolBar {
 	const toolbar = disposables.add(new MenuWorkbenchToolBar(container, menus, contextMenus, menuId, {
 		ariaLabel: localize('sessions.list.headerActions', 'Sessions List Actions'),
@@ -1580,11 +1581,6 @@ function createSessionsListToolbar(container: HTMLElement, disposables: Disposab
 				{ ...options, iconOnly: true },
 			);
 		},
-	}));
-	disposables.add(toolbar.actionRunner.onDidRun(({ action, error }) => {
-		if (action.id === 'sessionsViewPane.createGroup' && error !== undefined) {
-			notifications.error(toErrorMessage(error));
-		}
 	}));
 	toolbar.element.classList.add('ash-sessions-list-more');
 	// Toolbar inputs stay within the header without activating tree rows.
@@ -1881,7 +1877,7 @@ class SessionListSection extends Disposable {
 		this._register(addDisposableListener(this.button, 'click', event => {
 			event.stopPropagation();
 			if (this.open) this.open();
-			else toggle();
+			else if (this.button.hasAttribute('aria-expanded')) toggle();
 		}));
 		this._register(addDisposableListener(this.domNode, 'contextmenu', event => {
 			if (!this.contextMenu) return;
@@ -1902,7 +1898,7 @@ class SessionListSection extends Disposable {
 			}
 		}));
 		this._register(addDisposableListener(this.button, 'keydown', event => {
-			if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+			if (!this.button.hasAttribute('aria-expanded') || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
 			event.preventDefault();
 			event.stopPropagation();
 			toggle(event.key === 'ArrowLeft');
@@ -1998,12 +1994,13 @@ class SessionListSection extends Disposable {
 			icon = this.collapsed ? Lxicon.folder : Lxicon.folderOpened;
 		}
 		icon = this.projectIcon ?? icon;
+		const showChevron = this.kind === 'project' && this.button.hasAttribute('aria-expanded');
 		const glyphs = this.icon.querySelectorAll(':scope > .ash-icon');
 		if (glyphs[0]?.getAttribute('data-ash-icon-id') !== icon.id
-			|| this.kind === 'project' && glyphs[1]?.getAttribute('data-ash-icon-id') !== chevron.id) {
+			|| glyphs[1]?.getAttribute('data-ash-icon-id') !== (showChevron ? chevron.id : undefined)) {
 			for (const glyph of glyphs) glyph.remove();
 			appendIcon(icon, this.icon);
-			if (this.kind === 'project') {
+			if (showChevron) {
 				appendIcon(chevron, this.icon).classList.add('ash-sessions-list-project-chevron');
 			}
 		}

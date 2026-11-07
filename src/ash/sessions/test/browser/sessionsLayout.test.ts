@@ -1236,7 +1236,6 @@ suite('sessions browser component', () => {
 		const heading = projects.getByRole('heading', { level: 3, name: chinese ? '项目' : 'Projects', exact: true });
 		const more = projects.getByRole('button', { name: chinese ? '更多会话操作' : 'More Sessions Actions', exact: true });
 		const toolbar = projects.getByRole('toolbar');
-		const add = projects.getByRole('button', { name: chinese ? '添加文件夹…' : 'Add folder…', exact: true });
 		const treeRow = list.getByRole('treeitem').filter({ has: page.locator('[data-section="projects"]') });
 		const newSession = page.locator('[data-action-id="sessions.newSession"] button');
 		await page.goto(`/sessions.html?catalog&search&locale=${locale}`);
@@ -1248,11 +1247,10 @@ suite('sessions browser component', () => {
 			const projectRow = list.locator('[data-project-id="search-project"]');
 			await expect(list.getByRole('heading', { level: 2 })).toHaveCount(0);
 			await expect(heading).toBeVisible();
-			await expect(toolbar.getByRole('button')).toHaveCount(code ? 1 : 2);
+			await expect(toolbar.getByRole('button')).toHaveCount(1);
 			await expect(toolbar).toHaveCSS('opacity', '0');
 			await expect(projects.locator('[data-ash-icon-id="list-filter"]')).toBeVisible();
 			await expect(more.locator('.ash-dropdown-menu-indicator')).toBeHidden();
-			await expect(add.locator('[data-ash-icon-id="new-folder"]')).toHaveCount(code ? 0 : 1);
 			await expect(projectRow).toBeVisible();
 			await toggle.press('ControlOrMeta+f');
 			const search = list.getByRole('searchbox');
@@ -1261,7 +1259,6 @@ suite('sessions browser component', () => {
 			await expect(heading).toBeVisible();
 			await expect(toggle).toHaveCount(0);
 			await expect(more).toBeVisible();
-			if (!code) await expect(add).toBeVisible();
 			const emptyTitleBounds = (await heading.boundingBox())!;
 			const emptyActionBounds = (await more.boundingBox())!;
 			expect(emptyTitleBounds.x + emptyTitleBounds.width).toBeLessThan(emptyActionBounds.x);
@@ -1283,15 +1280,7 @@ suite('sessions browser component', () => {
 			await expect(treeRow).toHaveCSS('padding-left', '0px');
 			expect((await projects.boundingBox())!.width).toBeCloseTo(rowBounds.width);
 			await expect(projects).toHaveCSS('padding-inline-end', '4px');
-			if (code) {
-				expect(rowBounds.x + rowBounds.width - (actionBounds.x + actionBounds.width)).toBeCloseTo(4);
-			} else {
-				const addBounds = (await add.boundingBox())!;
-				expect(rowBounds.x + rowBounds.width - (addBounds.x + addBounds.width)).toBeCloseTo(4);
-				expect(addBounds.x - (actionBounds.x + actionBounds.width)).toBeCloseTo(4);
-				expect(addBounds.width).toBe(actionBounds.width);
-				expect(addBounds.height).toBe(actionBounds.height);
-			}
+			expect(rowBounds.x + rowBounds.width - (actionBounds.x + actionBounds.width)).toBeCloseTo(4);
 			await expect(toggle).toHaveCSS('font-weight', '400');
 			expect(titleBounds.x + titleBounds.width).toBeLessThan(actionBounds.x);
 			expect(titleBounds.y + titleBounds.height / 2).toBeCloseTo(actionBounds.y + actionBounds.height / 2, 0);
@@ -1302,24 +1291,16 @@ suite('sessions browser component', () => {
 			const hoverBackground = await treeRow.evaluate(element => getComputedStyle(element).backgroundColor);
 			expect(hoverBackground).not.toBe(transparent);
 			await expect(toggle).toHaveCSS('background-color', transparent);
-			for (const action of code ? [more] : [more, add]) {
-				await action.hover();
-				await expect(treeRow).toHaveCSS('background-color', hoverBackground);
-				await expect(action).not.toHaveCSS('background-color', transparent);
-				await expect(action).toHaveCSS('border-width', '0px');
-			}
+			await more.hover();
+			await expect(treeRow).toHaveCSS('background-color', hoverBackground);
+			await expect(more).not.toHaveCSS('background-color', transparent);
+			await expect(more).toHaveCSS('border-width', '0px');
 			await page.mouse.move(0, 0);
 			await expect(treeRow).toHaveCSS('background-color', transparent);
 			await expect(toolbar).toHaveCSS('opacity', '1');
 			await page.keyboard.press('Tab');
 			await expect(more).toBeFocused();
 			await expect(more).toHaveCSS('outline-style', 'solid');
-			if (!code) {
-				await page.keyboard.press('ArrowRight');
-				await expect(add).toBeFocused();
-			}
-			await page.keyboard.press('Home');
-			await expect(more).toBeFocused();
 			await page.keyboard.press('Enter');
 			await expect(more).toHaveAttribute('aria-expanded', 'true');
 			await expect(toolbar).toHaveCSS('opacity', '1');
@@ -1346,21 +1327,6 @@ suite('sessions browser component', () => {
 			await expect(more).toBeFocused();
 			await expect(toggle).toHaveAttribute('aria-expanded', 'false');
 		}
-
-		await modes.nth(0).click();
-		const prompt = page.locator('.ash-quick-input-host').getByRole('textbox');
-		const group = list.getByRole('button', { name: 'Sidebar fixture group', exact: true });
-		await add.press('Enter');
-		await expect(prompt).toBeFocused();
-		await prompt.fill('Sidebar fixture group');
-		await prompt.press('Escape');
-		await expect(add).toBeFocused();
-		await expect(group).toHaveCount(0);
-		await add.press('Enter');
-		await prompt.fill('  Sidebar fixture group  ');
-		await prompt.press('Enter');
-		await expect(group).toBeVisible();
-		await expect(add).toBeFocused();
 	});
 
 	for (const locale of ['en', 'zh-CN']) test(`Projects navigation opens the project creation dialog (${locale})`, async function () {

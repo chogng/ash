@@ -45,7 +45,7 @@ export interface SessionsCatalogProject {
 	readonly localProject?: ProjectSummary;
 	readonly appearance?: SessionsCatalogProjectAppearance;
 	readonly operations?: SessionsCatalogProjectOperations;
-	readonly history?: { readonly label: string; readonly action?: () => void; };
+	readonly history?: { readonly label: string; readonly action: () => void; };
 	readonly onExpand?: () => void;
 	readonly loadMore?: () => void;
 }
