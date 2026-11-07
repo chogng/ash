@@ -172,6 +172,10 @@
 .ash-chat-list-widget .ash-markdown {
 	font-size: inherit;
 }
+.ash-chat-item-agentMessage > .ash-chat-markdown-part code:not(pre code) {
+	/* Native selection paints the text, leaving inline padding unhighlighted. */
+	padding-inline: 0;
+}
 .ash-chat-item-label {
 	margin-bottom: 4px;
 	color: var(--ash-description-foreground);
