@@ -36,13 +36,15 @@ export function sessionProjectOrganization(
 }
 
 export function sessionListProjectActions(
+	mode: SessionsListMode,
 	project: SessionListProjectOrganization,
 	run: (operation: () => Promise<void>) => Promise<void>,
 	promptName: () => Promise<string | undefined>,
 ): readonly IAction[] {
+	const projectIcon = mode === 'code' ? Lxicon.folder : Lxicon.projects;
 	const targets = project.destinations.filter(({ id }) => id !== project.current).map(({ id, title }): IAction => ({
 		id: `sessions.list.moveToProject.${id}`, label: title, tooltip: title,
-		icon: Lxicon.projects, enabled: true, run: () => run(() => project.move(id)),
+		icon: projectIcon, enabled: true, run: () => run(() => project.move(id)),
 	}));
 	const createAndMove = project.createAndMove;
 	const newProject = localize('sessions.list.newProject', 'New project');
@@ -55,7 +57,7 @@ export function sessionListProjectActions(
 	}] : [];
 	const destinations = Separator.join(create, targets);
 	const actions: IAction[] = [];
-	if (destinations.length) actions.push(new SubmenuAction('sessions.list.moveToProject', localize('sessions.chatgpt.moveToProject', 'Move to project'), destinations, Lxicon.projects));
+	if (destinations.length) actions.push(new SubmenuAction('sessions.list.moveToProject', localize('sessions.chatgpt.moveToProject', 'Move to project'), destinations, projectIcon));
 	if (project.current) actions.push({
 		id: 'sessions.list.removeFromProject', label: localize('sessions.list.removeFromProject', 'Remove from project'),
 		tooltip: '', enabled: true, run: () => run(() => project.move(undefined)),

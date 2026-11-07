@@ -89,10 +89,48 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		const sidebar = page.locator('.ash-chat-navigation-list');
 		const project = (name: string) => sidebar.getByRole('button', { name, exact: true });
 		const action = (name: string) => page.getByRole('menuitem', { name, exact: true });
-		await project('Research').click({ button: 'right' });
-		await action('重命名').click();
-		const input = page.locator('.ash-quick-input-host').getByRole('textbox');
+		const more = sidebar.locator('[data-project-id="g-p-sidebar-0"]').getByRole('button', { name: '更多项目操作', exact: true });
+		const openRename = async () => {
+			await project('Research').press('Shift+F10');
+			await action('重命名').press('Enter');
+		};
+		const rename = page.getByRole('dialog', { name: '重命名项目', exact: true });
+		const input = rename.getByRole('textbox', { name: '项目名称', exact: true });
+		await openRename();
+		await expect(rename).not.toHaveAttribute('aria-modal', 'true');
+		await expect(input).toBeFocused();
 		await expect(input).toHaveValue('Research');
+		expect(await input.evaluate((element: HTMLInputElement) => element.value.slice(element.selectionStart!, element.selectionEnd!))).toBe('Research');
+		await page.keyboard.press('Escape');
+		await expect(rename).toHaveCount(0);
+		await expect(project('Research')).toBeFocused();
+		expect(writes).toEqual([]);
+
+		await project('Research').hover();
+		await more.click();
+		await expect(more).toHaveAttribute('aria-expanded', 'true');
+		await action('重命名').click();
+		await expect(more).toHaveAttribute('aria-expanded', 'false');
+		await input.fill('Discarded');
+		await project('Writing').click({ button: 'right' });
+		await expect(rename).toHaveCount(0);
+		const deleteAction = action('删除');
+		const dangerColor = 'rgb(244, 135, 113)';
+		await expect(deleteAction.getByText('删除', { exact: true })).toHaveCSS('color', dangerColor);
+		await expect(deleteAction.locator('[data-ash-icon-id="trash"]')).toHaveCSS('color', dangerColor);
+		await expect(action('归档')).not.toHaveCSS('color', dangerColor);
+		await page.keyboard.press('End');
+		await expect(deleteAction).toBeFocused();
+		await expect(deleteAction).toHaveCSS('color', dangerColor);
+		await page.keyboard.press('Escape');
+		expect(writes).toEqual([]);
+
+		await openRename();
+		await input.fill('   ');
+		await input.press('Enter');
+		await expect(rename).toContainText('请输入项目名称。');
+		await expect(input).toBeFocused();
+		expect(writes).toEqual([]);
 		await input.fill('  Updated research  ');
 		await input.press('Enter');
 		await expect(project('Updated research')).toBeVisible();
@@ -996,8 +1034,15 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(page.locator('.ash-chat-navigation-item').first()).toHaveText('Synthetic conversation');
 			await expect(page.locator('.ash-chat-item')).toHaveCount(0);
 			const restingPinBackground = await unpin.evaluate(button => getComputedStyle(button).backgroundColor);
-			await openMore();
 			const menu = page.getByRole('menu');
+			await openMore();
+			await expect(menu).toBeVisible();
+			const editorBounds = (await page.locator('#editor').boundingBox())!;
+			await page.mouse.click(editorBounds.x + editorBounds.width / 2, editorBounds.y + editorBounds.height / 2);
+			await expect(menu).toBeHidden();
+			await expect(toolbar).toHaveCSS('opacity', '0');
+
+			await openMore();
 			const rename = menu.getByRole('menuitem', { name: labels.rename, exact: true });
 			await expect(menu).toBeFocused();
 			await expect(menu).toHaveCSS('outline-style', 'none');
@@ -1032,6 +1077,8 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(menu).toBeHidden();
 			await expect(more).toBeFocused();
 			await expect(unpin).toHaveAttribute('aria-pressed', 'true');
+			await page.locator('#editor').hover();
+			await expect(toolbar).toHaveCSS('opacity', '0');
 			await expect(page.getByRole('button', { name: 'Project Two', exact: true })).toBeVisible();
 			const readsBeforeMenu = projectReads;
 			await title.click({ button: 'right' });

@@ -246,7 +246,10 @@
 	font: inherit;
 }
 
-.ash-sessions-list-section-with-actions {
+:is(
+	.ash-sessions-list-section-with-actions,
+	.ash-sessions-list-project-row.ash-sessions-list-subgroup
+) {
 	display: flex;
 	align-items: center;
 	gap: var(--ash-spacing-size40);
@@ -260,7 +263,8 @@
 	);
 }
 
-.ash-sessions-list-section-with-actions > h3 {
+:is(.ash-sessions-list-section-with-actions, .ash-sessions-list-project-row)
+	> h3 {
 	flex: 1 1 auto;
 	min-width: 0;
 }
@@ -422,7 +426,8 @@
 }
 
 .ash-sessions-list-row:hover .ash-sessions-list-actions,
-.ash-sessions-list-row:focus-within .ash-sessions-list-actions,
+.ash-sessions-list-row:focus-within:not(.menu-dismissed-by-pointer)
+	.ash-sessions-list-actions,
 .ash-sessions-list-row.menu-visible .ash-sessions-list-actions {
 	opacity: 1;
 	pointer-events: auto;
@@ -522,11 +527,85 @@
 
 .ash-sessions-list .ash-tree-row:hover .ash-sessions-list-actions:not([hidden]),
 .ash-sessions-list
-	.ash-sessions-list-row:is(:focus-within, .menu-visible)
+	.ash-sessions-list-row:is(
+		.menu-visible,
+		:focus-within:not(.menu-dismissed-by-pointer)
+	)
 	.ash-sessions-list-actions:not([hidden]) {
 	display: flex;
 	opacity: 1;
 	pointer-events: auto;
+}
+
+.ash-sessions-list
+	.ash-sessions-list-project-row
+	> .ash-sessions-list-actions:not([hidden]) {
+	display: flex;
+	opacity: 1;
+	pointer-events: auto;
+}
+
+@media (hover: hover) {
+	.ash-sessions-list
+		.ash-sessions-list-project-row:not(:focus-within, .menu-visible)
+		> .ash-sessions-list-actions:not([hidden]) {
+		opacity: 0;
+		pointer-events: none;
+	}
+
+	.ash-sessions-list
+		.ash-tree-row:hover
+		.ash-sessions-list-project-row
+		> .ash-sessions-list-actions:not([hidden]) {
+		opacity: 1;
+		pointer-events: auto;
+	}
+}
+
+.ash-sessions-project-rename {
+	display: grid;
+	gap: var(--ash-spacing-size80);
+	box-sizing: border-box;
+	inline-size: min(288px, calc(100vw - var(--ash-spacing-size80)));
+	padding: var(--ash-spacing-size120);
+	background: var(--ash-dialog-background);
+}
+
+.ash-sessions-project-rename-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--ash-spacing-size80);
+	min-block-size: var(--ash-spacing-size280);
+}
+
+.ash-sessions-project-rename-header > h2 {
+	margin: 0;
+	min-inline-size: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--ash-fontSize-body1);
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-sessions-project-rename .ash-input-box-field {
+	min-inline-size: 0;
+	border-radius: var(--ash-cornerRadius-large);
+}
+
+.ash-sessions-project-rename .ash-input-box-message {
+	margin: 0 var(--ash-spacing-size80) var(--ash-spacing-size60);
+	color: var(--ash-error-foreground);
+	font-size: var(--ash-fontSize-label1);
+	overflow-wrap: anywhere;
+}
+
+.ash-sessions-project-rename-actions {
+	display: flex;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: var(--ash-spacing-size40);
 }
 
 @media (forced-colors: active) {

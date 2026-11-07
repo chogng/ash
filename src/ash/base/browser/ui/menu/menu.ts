@@ -120,6 +120,7 @@ abstract class MenuButtonActionViewItem extends ActionViewItem {
 		const action = this.displayedAction;
 		const lostFocus = !action.enabled && getActiveElement(this.button.domNode.ownerDocument) === this.button.domNode;
 		this.button.enabled = action.enabled;
+		this.button.domNode.classList.toggle('ash-menu-destructive-action', action.destructive === true);
 		const parsed = parseMenuLabel(action.label, this.menuOptions.enableMnemonics === true);
 		if (this.renderedLabel !== action.label) {
 			this.button.label = parsed.label;

@@ -238,10 +238,6 @@
 	transition: none;
 }
 
-.ash-projects-menu .ash-projects-destructive-action {
-	color: var(--ash-error-foreground);
-}
-
 .ash-projects-row:dir(rtl) .ash-projects-card-actions::before {
 	transform: scaleX(-1);
 }

@@ -24,6 +24,7 @@ test('sidebar project menus share actions and retain appearance across window re
 		const header = (name: string) => page.getByRole('button', { name, exact: true });
 		const expectProjectMenu = () => expect(page.getByRole('menuitem')).toHaveText(['Pin', 'Rename', 'Change Icon...', 'Change Color...', 'Archive', 'Delete']);
 		const projectRow = (id: string) => page.locator(`.ash-sessions-list:visible [data-project-id="${id}"]`);
+		const more = (id: string) => projectRow(id).getByRole('button', { name: 'More project actions', exact: true });
 		const setPinned = async (id: string, name: string, pinned: boolean) => {
 			await header(name).press('Shift+F10');
 			await page.getByRole('menuitem', { name: pinned ? 'Pin' : 'Unpin', exact: true }).click();
@@ -39,6 +40,10 @@ test('sidebar project menus share actions and retain appearance across window re
 		};
 
 		await header(chat.name).click({ button: 'right' });
+		await expectProjectMenu();
+		await page.keyboard.press('Escape');
+		await header(chat.name).hover();
+		await more(chat.projectId).click();
 		await expectProjectMenu();
 		await pick('Change Icon...', 'Change project icon', 'Chat');
 		await expect(header(chat.name).locator('[data-ash-icon-id="chat"]')).toHaveCount(1);
@@ -67,10 +72,13 @@ test('sidebar project menus share actions and retain appearance across window re
 		await pick('Change Icon...', 'Change project icon', 'Chat');
 		await expect(header(code.name).locator('[data-ash-icon-id="chat"]')).toHaveCount(1);
 		expect((await read(code.projectId)).icon).toBe('chat');
-		await header(code.name).press('Shift+F10');
+		await header(code.name).press('Tab');
+		await expect(more(code.projectId)).toBeFocused();
+		await more(code.projectId).press('Enter');
 		await expectProjectMenu();
 		await page.getByRole('menuitem', { name: 'Rename', exact: true }).click();
-		const name = page.locator('.ash-quick-input-host').getByRole('textbox');
+		const rename = page.getByRole('dialog', { name: 'Rename project', exact: true });
+		const name = rename.getByRole('textbox', { name: 'Project name', exact: true });
 		await expect(name).toHaveValue(code.name);
 		await name.fill('Renamed Code project');
 		await name.press('Enter');

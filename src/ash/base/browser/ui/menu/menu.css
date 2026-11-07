@@ -84,6 +84,23 @@
 	outline-offset: -1px;
 }
 
+.ash-menu .ash-button.ash-menu-destructive-action:not(:disabled) {
+	color: var(--ash-error-foreground);
+}
+
+.ash-menu
+	.ash-action-view-item.focused
+	> .ash-menu-destructive-action:not(:disabled) {
+	/* Keep the danger foreground legible on the highlight in all built-in themes. */
+	background: var(--ash-list-hoverBackground);
+}
+
+.ash-menu
+	.ash-action-view-item.focused
+	> .ash-menu-destructive-action:focus-visible {
+	outline-color: var(--ash-focusBorder);
+}
+
 .ash-menu::-webkit-scrollbar {
 	width: var(--ash-spacing-size80);
 	height: var(--ash-spacing-size80);

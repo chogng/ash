@@ -11,6 +11,7 @@ import { isNode } from '../../../base/browser/dom.js';
 import {
 	AnchorPosition,
 	ContextViewFocusRestore,
+	type ContextViewHideReason,
 } from '../../../base/browser/ui/contextview/contextview.js';
 import { Menu } from '../../../base/browser/ui/menu/menu.js';
 import { ActionRunner, type IAction } from '../../../base/common/actions.js';
@@ -63,12 +64,12 @@ export class ContextMenuHandler extends Disposable {
 		let didHide = false;
 		let shown = false;
 		let mounting = false;
-		let pendingHideCallback = false;
-		const notifyHide = (): void => {
+		let pendingHide: { readonly reason: ContextViewHideReason | undefined; } | undefined;
+		const notifyHide = (reason?: ContextViewHideReason): void => {
 			if (this.activeMenu === request) { this.activeMenu = undefined; }
-			delegate.onHide?.(!executingAction);
+			delegate.onHide?.(!executingAction, reason);
 		};
-		const finish = (): void => {
+		const finish = (reason?: ContextViewHideReason): void => {
 			if (didHide) { return; }
 			didHide = true;
 			try {
@@ -77,8 +78,8 @@ export class ContextMenuHandler extends Disposable {
 			} finally {
 				// A successor must mount after the current host's synchronous show frame returns,
 				// even when a custom view item's resource disposal fails.
-				if (mounting) { pendingHideCallback = true; }
-				else { notifyHide(); }
+				if (mounting) { pendingHide = { reason }; }
+				else { notifyHide(reason); }
 			}
 		};
 		const request = {
@@ -155,7 +156,7 @@ export class ContextMenuHandler extends Disposable {
 			throw error;
 		} finally {
 			mounting = false;
-			if (pendingHideCallback) { notifyHide(); }
+			if (pendingHide) { notifyHide(pendingHide.reason); }
 		}
 		if (!shown) {
 			finish();

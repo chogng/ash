@@ -259,6 +259,7 @@ export class MenuItemAction implements IAction {
 	readonly label: string;
 	readonly tooltip: string;
 	readonly icon?: Icon;
+	readonly destructive?: boolean;
 	readonly enabled: boolean;
 	readonly checked?: boolean;
 	private readonly options: IMenuActionOptions | undefined;
@@ -281,6 +282,7 @@ export class MenuItemAction implements IAction {
 			? commandActionLabel(item.tooltip)
 			: this.label;
 		this.icon = item.icon;
+		this.destructive = item.destructive;
 		this.enabled = contextKeyService.contextMatchesRules(item.precondition);
 
 		if (item.toggled) {

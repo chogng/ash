@@ -9,6 +9,8 @@ export interface IAction {
 	readonly label: string;
 	readonly tooltip: string;
 	readonly icon?: Icon;
+	/** Marks an action whose effect can permanently remove or destroy data. */
+	readonly destructive?: boolean;
 	readonly class?: string;
 	readonly enabled: boolean;
 	readonly checked?: boolean;

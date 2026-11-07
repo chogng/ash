@@ -494,7 +494,7 @@ export class SessionWorkspacePicker extends Disposable {
 							run: () => { if (isCurrent()) return this.selectWorkspace(draft, 'folder', selectionFromResource(folder), project.id); },
 						});
 						return {
-							id: `sessions.project.${project.id}`, label: project.name, icon: Lxicon.projects,
+							id: `sessions.project.${project.id}`, label: project.name, icon: Lxicon.folder,
 							tooltip: folders.length === 1 ? folders[0]!.fsPath : project.name, enabled: true,
 							checked: draft.projectId === project.id,
 							submenu: folders.length > 1 ? folders.map(chooseFolder) : undefined,

@@ -270,11 +270,6 @@ export class ProjectsList extends Disposable {
 								delegate.onHide?.(didCancel);
 							},
 						});
-						// The menu mounts synchronously in this window; Projects owns its destructive styling.
-						const destructiveAction = row.ownerDocument.querySelector(
-							'.ash-projects-menu [data-action-id="projects.delete"]',
-						);
-						destructiveAction?.classList.add('ash-projects-destructive-action');
 					},
 				},
 				{

@@ -552,7 +552,7 @@ export class ChatInputAttachMenu extends Disposable {
 					items.push({
 						id: `project:${project.id}`,
 						label: project.name,
-						icon: Lxicon.folder,
+						icon: Lxicon.projects,
 						run: () => {
 							this.options.onSelectProject?.(project.id);
 							void this.commandService.executeCommand('sessions.open.projects', project.id).catch(() => undefined);

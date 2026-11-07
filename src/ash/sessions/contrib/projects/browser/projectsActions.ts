@@ -15,8 +15,7 @@ import { ISessionsManagementService } from '../../../services/sessions/common/se
 import { type MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import type { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
-import type { ContextMenuAnchor } from '../../../../base/browser/contextmenu.js';
+import type { IContextMenuMenuDelegate, IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { Menus } from '../../../browser/menus.js';
 
 export const ARCHIVE_PROJECT_COMMAND = 'projects.archive';
@@ -28,7 +27,7 @@ const sidebarProjectActions = [
 	{ key: 'icon', group: '2_appearance', order: 1, title: localize('sessions.list.changeProjectIcon', 'Change Icon...') },
 	{ key: 'color', group: '2_appearance', order: 2, title: localize('sessions.list.changeProjectColor', 'Change Color...') },
 	{ key: 'archive', group: '3_remove', order: 1, icon: Lxicon.archive, title: localize('projects.archive', 'Archive') },
-	{ key: 'remove', group: '3_remove', order: 2, icon: Lxicon.trash, title: localize('projects.delete', 'Delete') },
+	{ key: 'remove', group: '3_remove', order: 2, icon: Lxicon.trash, title: localize('projects.delete', 'Delete'), destructive: true },
 ] as const;
 
 type SidebarProjectAction = typeof sidebarProjectActions[number]['key'];
@@ -57,7 +56,7 @@ registerSidebarProjectActions(Menus.SidebarChatProjectContext);
 registerSidebarProjectActions(Menus.SidebarCodeProjectContext);
 
 export function showSidebarProjectMenu(contextMenus: IContextMenuService, context: IContextKeyService,
-	mode: 'chat' | 'code', target: SidebarProjectMenuTarget, anchor: ContextMenuAnchor): void {
+	mode: 'chat' | 'code', target: SidebarProjectMenuTarget, presentation: Pick<IContextMenuMenuDelegate, 'getAnchor' | 'onHide'>): void {
 	context.bufferChangeEvents(() => {
 		for (const { key } of sidebarProjectActions) context.setContext(`sidebarProject.${key}`, !!target.actions[key]);
 	});
@@ -65,7 +64,7 @@ export function showSidebarProjectMenu(contextMenus: IContextMenuService, contex
 		menuId: mode === 'code' ? Menus.SidebarCodeProjectContext : Menus.SidebarChatProjectContext,
 		contextKeyService: context,
 		menuActionOptions: { arg: target },
-		getAnchor: () => anchor,
+		...presentation,
 		autoSelectFirstItem: true,
 	});
 }
@@ -267,7 +266,7 @@ export function getProjectRemovalActions(
 	if (remove) {
 		const label = localize('projects.delete', 'Delete');
 		actions.push({
-			id: 'projects.delete', label, tooltip: label, icon: Lxicon.trash,
+			id: 'projects.delete', label, tooltip: label, icon: Lxicon.trash, destructive: true,
 			enabled, run: async () => {
 				if (await confirmProjectDelete(dialogs, title, remove.removesContents)) await run(remove.run);
 			}

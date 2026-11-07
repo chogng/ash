@@ -5,6 +5,7 @@ import type {
 	AnchorAlignment,
 	AnchorAxisAlignment,
 	AnchorPosition,
+	ContextViewHideReason,
 } from './ui/contextview/contextview.js';
 import type { ActionViewItem } from './ui/actionbar/actionViewItems.js';
 import type { IMenuOptions, MenuActionViewItemOptions } from './ui/menu/menu.js';
@@ -42,7 +43,8 @@ export interface IContextMenuDelegate {
 	readonly submenuClassName?: string;
 	/** Use the browser menu's trailing icon column for this menu and its submenus. */
 	readonly iconPlacement?: IMenuOptions['iconPlacement'];
-	readonly onHide?: (didCancel: boolean) => void;
+	/** Browser menus also report how the popup closed. */
+	readonly onHide?: (didCancel: boolean, reason?: ContextViewHideReason) => void;
 	/** Cancels only this presentation; an action that has already started still completes. */
 	readonly cancellationToken?: CancellationToken;
 	readonly actionRunner?: IActionRunner;
