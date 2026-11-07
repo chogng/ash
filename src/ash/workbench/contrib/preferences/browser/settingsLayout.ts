@@ -3,6 +3,7 @@ import { escapeRegExpCharacters } from '../../../../base/common/strings.js';
 import type { ISetting, ISettingsGroup, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
 import { localize } from '../../../../nls.js';
 import type { SettingsTreeNode } from './settingsTreeModels.js';
+import { AgentsVoiceSettingId } from '../../agentsVoice/common/agentsVoice.js';
 
 export interface SettingsGroupDescriptor {
 	readonly id: string;
@@ -705,7 +706,12 @@ export const SettingsNavigation = [
 				description: '',
 				keywords: ['agent profiles', 'custom agents', 'subagents', 'delegation', 'advisor', 'second opinion', 'commit', 'commit message'],
 				presentation: 'general',
-				groups: [],
+				groups: [{
+					id: 'agent-voice-model',
+					label: localize('agentsVoice.model.title', 'Voice model'),
+					description: '',
+					settings: [AgentsVoiceSettingId.Model],
+				}],
 			},
 			{
 				id: 'teams',

@@ -26,6 +26,23 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 registerSingleton(IAgentsVoiceWindowService, AgentsVoiceWindowService, InstantiationType.Delayed);
 registerSingleton(IVoiceModeOnboardingService, VoiceModeOnboardingService, InstantiationType.Delayed);
 
+const voiceModels = [{ value: 'gpt-live-1', label: 'GPT-Live 1' }] as const;
+Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
+	key: AgentsVoiceSettingId.Model, defaultValue: voiceModels[0].value, scope: ConfigurationScope.APPLICATION,
+	schema: { type: 'string', enum: voiceModels.map(model => model.value) },
+	parse(value) {
+		const model = voiceModels.find(model => model.value === value);
+		if (model) return model.value;
+		throw new TypeError(localize('agentsVoice.model.invalid', 'Choose a supported voice model.'));
+	},
+	setting: {
+		valueType: 'select',
+		get title() { return localize('agentsVoice.model.title', 'Voice model'); },
+		get description() { return localize('agentsVoice.model.description', 'Choose the model used by the voice conversation button. You can choose a voice when starting a conversation.'); },
+		options: voiceModels,
+	},
+});
+
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AgentsVoiceSettingId.ShowButton, defaultValue: true, scope: ConfigurationScope.WINDOW,
 	parse: value => {

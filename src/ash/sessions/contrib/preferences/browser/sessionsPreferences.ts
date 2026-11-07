@@ -24,6 +24,7 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
+import { AgentsVoiceSettingId } from '../../../../workbench/contrib/agentsVoice/common/agentsVoice.js';
 import { ConfigurationTarget, IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ILanguagePackService } from '../../../../platform/languagePacks/common/languagePacks.js';
 import { ILocaleService, LocalizationConfiguration } from '../../../../workbench/services/localization/common/locale.js';
@@ -595,7 +596,7 @@ export class SessionsPreferences extends Disposable {
 		}, {
 			title: localize('sessions.settings.section.development', 'Development'),
 			categories: [
-				{ id: 'agents', title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.agent, settings: [], content: management.get('agents') },
+				{ id: 'agents', title: localize('sessions.settings.agents', 'Agents'), icon: Lxicon.agent, settings: defaults.all.filter(setting => setting.id === AgentsVoiceSettingId.Model), content: management.get('agents') },
 				{ id: 'execution-trace', title: localize('sessions.settings.executionTrace', 'Execution trace'), icon: Lxicon.history, settings: [], content: traceContent },
 				{ id: 'design', title: localize('sessions.settings.design', 'Design'), icon: Lxicon.symbolColor, settings: designSettings },
 				{ id: 'models', title: localize('sessions.settings.models', 'Models'), icon: Lxicon.model, settings: [], content: modelContent },

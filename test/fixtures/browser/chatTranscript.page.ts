@@ -481,7 +481,13 @@ let chosenVoice: AgentVoiceSelection | undefined;
 const voiceControls: string[] = [];
 const voiceFixture: IAgentVoiceService = {
 	isAvailable: true, get state() { return voiceSession; }, onDidChange: voiceChanges.event, onDidRequestTask: voiceTasks.event,
-	getOptions: async () => [{ connectionId: 'fixture', name: 'Voice fixture', defaultModel: 'speech', models: [{ modelId: 'speech', defaultVoice: 'cedar', voices: ['cedar', 'marin'] }] }],
+	getOptions: async () => [{
+		connectionId: 'fixture', name: 'Voice fixture', defaultModel: 'other-speech',
+		models: [
+			{ modelId: 'other-speech', defaultVoice: 'other-voice', voices: ['other-voice'] },
+			{ modelId: 'gpt-live-1', defaultVoice: 'cedar', voices: ['cedar', 'marin'] },
+		],
+	}],
 	start: async (source, selection) => { chosenVoice = { ...selection }; voiceControls.push('start'); voiceSession = { ...source, resourceId: 'voice-media', mediaEpoch: (voiceSession?.mediaEpoch ?? 0) + 1, sequence: 1, state: 'connected', inputMode: 'openMic' as const, muted: false, listening: true, inputSequence: 0, usageMilliseconds: 0 }; voiceChanges.fire(); return voiceSession; },
 	stop: async () => { voiceControls.push('stop'); if (voiceSession) voiceSession = { ...voiceSession, state: 'ended' }; voiceChanges.fire(); },
 	setMuted: async muted => { voiceControls.push('mute:' + muted); if (voiceSession) voiceSession = { ...voiceSession, muted, listening: !muted && voiceSession.inputMode === 'openMic' }; voiceChanges.fire(); },

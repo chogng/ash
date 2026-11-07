@@ -1258,12 +1258,14 @@ test('the new Session composer keeps its pickers and dictation in keyboard navig
 	await page.keyboard.press('Tab');
 	await expect(page.locator('.ash-sessions-chat-slot.active').getByRole('button', { name: 'Add context' })).toBeFocused();
 	await page.keyboard.press('Tab');
-	const dictation = page.locator('.ash-sessions-chat-slot.active [data-action-id="workbench.action.chat.toggleSpeechToText"] button');
+	const dictation = page.locator('.ash-sessions-chat-slot.active [data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action');
 	await expect(dictation).toBeFocused();
 	const actions = page.locator('.ash-sessions-chat-slot.active .ash-chat-input-toolbars.ash-chat-input-inline-toolbar');
 	const send = actions.locator('.ash-chat-input-send-action');
-	await expect(send).toBeDisabled();
-	await expect(send).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+	const voice = actions.getByRole('button', { name: 'Voice conversation', exact: true });
+	await expect(voice).toBeDisabled();
+	await expect(voice.locator('[data-ash-icon-id="voice-mode"]')).toBeVisible();
+	await expect(send).toHaveCount(0);
 	await page.keyboard.press('Tab');
 	await expect(picker).toBeFocused();
 	await page.keyboard.press('Tab');
@@ -1272,7 +1274,10 @@ test('the new Session composer keeps its pickers and dictation in keyboard navig
 	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-input-mode-action')).toBeFocused();
 	await input.focus();
 	await page.keyboard.insertText('Draft');
+	await expect(voice).toHaveCount(0);
+	await expect(send.locator('[data-ash-icon-id="enter"]')).toBeVisible();
 	await expect(send).toBeDisabled();
+	await expect(send).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 	await expect(page.locator('.ash-sessions-chat-slot.active .ash-chat-status'))
 		.toHaveText('Choose a project before sending.');
 	await input.press('Enter');

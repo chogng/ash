@@ -30,7 +30,7 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 	readonly onDidChangeDropdownVisibility = this.changeDropdownVisibilityEmitter.event;
 	private readonly contextMenuProvider: IContextMenuProvider;
 	private readonly viewItemOptions: ActionViewItemOptions;
-	private primaryButton: HTMLButtonElement | undefined;
+	protected primaryButton: HTMLButtonElement | undefined;
 	private dropdownButton: HTMLButtonElement | undefined;
 	private dropdownContainer: HTMLElement | undefined;
 	private dropdownVisible = false;
@@ -108,8 +108,8 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 	}
 
 	override focus(fromRight = false): void {
-		if (fromRight) {
-			this.dropdownItem.value?.focus();
+		if ((fromRight || this.primaryButton?.disabled) && !this.dropdownButton?.disabled) {
+			this.dropdownButton?.focus();
 			return;
 		}
 		this.primaryButton?.focus();
@@ -121,8 +121,9 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 	}
 
 	override setTabbable(tabbable: boolean): void {
-		this.primaryItem.setTabbable(tabbable);
-		this.dropdownItem.value?.setTabbable(false);
+		const useDropdown = this.primaryButton?.disabled === true || !!this.dropdownButton && this.dropdownButton === this.dropdownButton.ownerDocument.activeElement;
+		this.primaryItem.setTabbable(tabbable && !useDropdown);
+		this.dropdownItem.value?.setTabbable(tabbable && useDropdown && !this.dropdownButton?.disabled);
 	}
 
 	setFocusable(focusable: boolean): void {

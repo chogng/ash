@@ -32,7 +32,6 @@ import type { IChatWidgetModel } from '../chatWidget.js';
 import type { ILifecycleService } from '../../../../../services/lifecycle/common/lifecycle.js';
 import { defaultButtonStyles } from '../../../../../../platform/theme/browser/defaultStyles.js';
 import { Event } from '../../../../../../base/common/event.js';
-import { MenuItemAction } from '../../../../../../platform/actions/common/actions.js';
 import { IImageEditorService } from '../../../../../services/imageEditor/common/imageEditorService.js';
 import { convertBufferToScreenshotVariable } from '../../attachments/chatScreenshotContext.js';
 import { workspaceTrustPermissionNames } from '../../../../../../platform/workspace/common/workspaceTrust.js';
@@ -51,7 +50,7 @@ import { IQuickInputService, type IQuickPickItem } from '../../../../../../platf
 import type { ChatInputEditorSelection } from './chatInputEditorRegistry.js';
 import '../media/chat.css';
 import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../speechToText/chatSpeechToTextService.js';
-import { DictationActionViewItem } from '../../speechToText/dictationActionViewItem.js';
+import { DictationActionViewItem, DictationToolbarAction } from '../../speechToText/dictationActionViewItem.js';
 import { IVoiceInputModeService } from '../../voiceInputMode/voiceInputMode.js';
 import { AgentsVoiceSettingId } from '../../../../agentsVoice/common/agentsVoice.js';
 import { VoiceInputModeActionViewItem, isVoiceInputModeAvailable } from '../../voiceInputMode/voiceInputModeActionViewItem.js';
@@ -1752,21 +1751,28 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			);
 		const micAction = this.dictationSession.action;
 		const voice = this.delegate.voiceConversation;
-		const segmentedVoice = !this.inlineActionsToolbar && !this.state.aiDisabled && (voice?.isAvailable || voice?.isActive) &&
-			(isVoiceInputModeAvailable(this.voiceInputMode) === 'both' || this.voiceInputMode.voiceAvailable.get() && voice?.isConnected);
+		// The idle voice button shares Send's slot. Keep the segmented controls for a live call.
+		const segmentedVoice = !this.inlineActionsToolbar && !this.state.aiDisabled && voice?.isActive &&
+			(isVoiceInputModeAvailable(this.voiceInputMode) === 'both' || this.voiceInputMode.voiceAvailable.get() && voice.isConnected);
+		const showVoiceButton = this.configuration.getValue<boolean>(AgentsVoiceSettingId.ShowButton) !== false;
+		// Availability controls whether Voice can be used, not which action represents an empty draft.
+		const showIdleVoice = showVoiceButton && !this.options.inlineEdit && !segmentedVoice &&
+			(!this.inlineActionsToolbar || !voice?.isActive && (this.delegate.draft || !this.toolbarState.canInterrupt));
 		const trailingActions: IAction[] = [];
 		const executionActions = this.options.inlineEdit || this.delegate.draft ? [] : this.executeMenu.getActions({ arg: this.executionContext() }).flatMap(([, actions]) => actions);
-		const keepSendVisible = this.inlineActionsToolbar && !this.delegate.draft && !this.toolbarState.canInterrupt && !voice?.isActive;
+		const keepSendVisible = this.inlineActionsToolbar && !this.delegate.draft && !this.toolbarState.canInterrupt && !voice?.isActive && !showIdleVoice;
 		const canSubmitDictation = !!this.delegate.draft && this.dictationSession.isActive && !this.submitting && !this.isSubmissionBlocked(false);
 		if (executionActions.length) {
 			trailingActions.push(...executionActions);
 		} else if (this.toolbarState.hasInput || keepSendVisible || canSubmitDictation) {
 			const label = this.options.inlineEdit ? localize('chat.edit.resend', 'Send edited request') : localize('chat.input.send', 'Send');
 			const tooltip = this.options.inlineEdit ? label : this.toolbarState.inputKind === 'command' ? localize('chat.input.runCommand', 'Run command') : localize('chat.input.sendMessage', 'Send message');
-			trailingActions.push(new ChatInputAction('ash.chat.input.send', label, tooltip, Lxicon.arrowUp, this.toolbarState.canSubmit || canSubmitDictation, 'send', () => this.inputContainer.requestSubmit()));
-		} else if ((!this.inlineActionsToolbar || this.delegate.draft && !voice?.isActive) && !segmentedVoice && this.configuration.getValue<boolean>(AgentsVoiceSettingId.ShowButton) !== false) {
+			const icon = this.options.inlineEdit || this.toolbarState.inputKind === 'command' ? Lxicon.arrowUp : Lxicon.enter;
+			trailingActions.push(new ChatInputAction('ash.chat.input.send', label, tooltip, icon, this.toolbarState.canSubmit || canSubmitDictation, 'send', () => this.inputContainer.requestSubmit()));
+		} else if (showIdleVoice) {
 			const label = voice?.isActive ? localize('chat.voice.stop', 'Stop voice conversation') : localize('chat.input.voice', 'Voice conversation');
-			trailingActions.push(new ChatInputAction('ash.chat.input.voice', label, voice?.isAvailable || voice?.isActive ? label : localize('chat.input.voiceUnavailable', 'Voice conversation is unavailable'), Lxicon.voiceMode, voice?.isAvailable === true || voice?.isActive === true, 'voice', () => voice?.toggle()));
+			const enabled = voice?.isActive === true || this.toolbarState.voiceAvailable && (!this.speechToText.isBusy || this.dictationSession.isActive);
+			trailingActions.push(new ChatInputAction('ash.chat.input.voice', label, this.toolbarState.voiceAvailable || voice?.isActive ? label : localize('chat.input.voiceUnavailable', 'Voice conversation is unavailable'), Lxicon.voiceMode, enabled, 'voice', () => this.toggleVoiceInput()));
 		}
 		if (this.toolbarState.canInterrupt) {
 			const label = this.state.interruptKind === 'reply' ? localize('chat.input.stopReply', 'Stop') : localize('chat.input.stopTask', 'Stop task');
@@ -1792,7 +1798,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				voice?.isActive === true || !this.speechToText.isBusy || this.dictationSession.isActive, 'voice', () => this.toggleVoiceInput(),
 			));
 		} else if (this.dictationSession.showButton) {
-			dictationActions.push(micAction);
+			dictationActions.push(new DictationToolbarAction(micAction));
 		}
 		const inputActions = this.options.inlineEdit ? [] : this.toolbarState.inputKind === 'command' ? modeActions : [...additionalActions, ...modeActions, this.modelAction, ...(this.inlineActionsToolbar ? [] : dictationActions)];
 		this.attachmentToolbar?.setActions([this.attachAction]);
@@ -2058,7 +2064,9 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			if (factory) return factory(action, { buttonStyles: defaultButtonStyles, actionContext: this.executionContext() }, this.executeInstantiation, 0);
 		}
 		if (action.id === this.attachAction.id) return new ChatAttachContextActionViewItem(action, { buttonStyles: defaultButtonStyles });
-		if (action instanceof MenuItemAction && action.id === this.dictationSession.action.id) { return this.instantiationService.createInstance(DictationActionViewItem, action, undefined, this.dictationSession.activeState); }
+		if (action instanceof DictationToolbarAction) {
+			return this.instantiationService.createInstance(DictationActionViewItem, action.primary, this.dictationSession.activeState);
+		}
 		if (!(action instanceof ChatInputAction)) return undefined;
 		if (action.presentation === 'model') {
 			const options = this.options;

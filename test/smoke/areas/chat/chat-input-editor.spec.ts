@@ -207,7 +207,7 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		const input = chat.locator('.ash-chat-input-editor .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.insertText('Keep this draft');
-		const button = chat.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] button');
+		const button = chat.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action');
 		await expect(button).toBeEnabled();
 		await expect(button).toHaveAttribute('aria-label', 'Dictate message');
 		await button.focus();

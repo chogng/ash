@@ -6,7 +6,7 @@ import type { IAction, IActionRunner } from '../../../common/actions.js';
 import { Separator } from '../../../common/actions.js';
 import { Disposable } from '../../../common/lifecycle.js';
 import { Lxicon } from '../../../common/lxicons.js';
-import { ActionBar, type ActionBarOrientation, type ActionViewItemProvider } from '../actionbar/actionbar.js';
+import { ActionBar, type ActionBarOptions, type ActionBarOrientation, type ActionViewItemProvider } from '../actionbar/actionbar.js';
 import type { ActionViewItemOptions } from '../actionbar/actionViewItems.js';
 import type { AnchorPosition } from '../contextview/contextview.js';
 import { DropdownMenuActionViewItem } from '../dropdown/dropdownMenuActionViewItem.js';
@@ -27,6 +27,7 @@ export interface ToolBarOptions {
 	readonly contextMenuProvider: IContextMenuProvider;
 	readonly ariaLabel?: string;
 	readonly orientation?: ActionBarOrientation;
+	readonly tabNavigation?: ActionBarOptions['tabNavigation'];
 	readonly actionViewItemProvider?: ActionViewItemProvider;
 	readonly presentation?: ToolBarPresentation;
 	readonly highlightToggledItems?: boolean;
@@ -72,6 +73,7 @@ export class ToolBar extends Disposable {
 			actionRunner: options.actionRunner,
 			ariaLabel: options.ariaLabel,
 			orientation: options.orientation,
+			tabNavigation: options.tabNavigation,
 			highlightToggledItems: options.highlightToggledItems,
 			actionViewItemOptions,
 			actionViewItemProvider: (action, actionOptions) => {

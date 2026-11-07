@@ -148,6 +148,7 @@ export class ComposerSessionControls extends Disposable {
 		const menu = Menus.NewSessionChatInputToolbar;
 		const toolbar = this._register(new MenuWorkbenchToolBar(footer, menus, contextMenus, menu, {
 			ariaLabel: localize('sessions.newChatComposer.sessionControls', 'Session controls'),
+			tabNavigation: 'each-action',
 			actionViewItemProvider: (action, options) => {
 				if (!pickers.some(picker => picker.id === action.id)) return undefined;
 				const item = presentations.lookUp(menu, action.id)?.(action, { ...options, actionContext: this }, instantiation, 0);

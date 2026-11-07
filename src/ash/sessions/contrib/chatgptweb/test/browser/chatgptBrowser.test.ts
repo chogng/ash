@@ -736,7 +736,9 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 				await fillMessage(page, 'A short prompt');
 				await expectDraft(page, 'A short prompt');
 				await expect(send).toHaveAttribute('aria-label', locale === 'en' ? 'Send' : '发送');
-				await expect(send.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'arrow-up');
+				await expect(send.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'enter');
+				await expect(voice).toHaveCount(0);
+				expect((await send.boundingBox())!.x).toBeCloseTo(sendBounds!.x);
 				await expect(editor).toHaveCSS('height', '20px');
 				if (!theme.startsWith('hc')) {
 					await expect(composer).toHaveCSS('box-shadow', activeShadow);

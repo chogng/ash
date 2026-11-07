@@ -580,6 +580,7 @@ if (dictationFixture) {
 	await services.get(IConfigurationService).updateValue('dictation.backend', 'cloud');
 }
 services.registerInstance(IVoiceCodeTranscriptionBackendService, dictationFixture ? createTestDictationBackend(resources, {
+	getOptions: async () => ({ inputDevices: [], languages: ['en', 'zh'] }),
 	start: async (_options, transcript) => {
 		emitDictation = transcript;
 		return {
@@ -909,7 +910,7 @@ const workspaceChanged = resources.add(new Emitter<IWorkspacePickerItem | undefi
 let selectedWorkspace: IWorkspacePickerItem | undefined;
 const workspaceChoices = [{ uri: URI.file('/fixture/workspace'), label: 'Fixture workspace', isFolder: true }];
 let part!: ChatInputPart;
-part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, { contextMenuStyle: 'custom', showContextMenu: () => { }, hideContextMenu: () => { }, onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None } satisfies IContextMenuService, services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
+part = resources.add(services.createInstance(ChatInputPart, document.querySelector('main')!, delegate, services.get(IContextMenuService), services.get(IContextViewService), accessibleView, notifications, editorProvider, [], {
 	layout: new URLSearchParams(location.search).has('compact') ? 'compact' : undefined,
 	modePicker: cowork ? 'hidden' : 'visible',
 	modelPickerPosition: cowork ? 'trailing' : 'leading',

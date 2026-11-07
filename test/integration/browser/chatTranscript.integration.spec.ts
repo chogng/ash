@@ -674,8 +674,10 @@ for (const locale of ['en', 'zh-CN']) {
 			const start = chat.getByRole('button', { name: locale === 'en' ? 'Voice conversation' : '语音对话', exact: true });
 			await expect(start).toBeEnabled(); await start.focus(); await start.press('Enter');
 			const options = page.getByRole('combobox', { name: locale === 'en' ? 'Voice conversation options' : '语音对话选项', exact: true });
-			await expect(options).toBeFocused(); await options.fill('marin'); await options.press('Enter');
-			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.voiceSelection())).toEqual({ connectionId: 'fixture', modelId: 'speech', voice: 'marin' });
+			await expect(options).toBeFocused();
+			await expect(page.getByRole('option', { name: /other-voice/u })).toHaveCount(0);
+			await options.fill('marin'); await options.press('Enter');
+			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.voiceSelection())).toEqual({ connectionId: 'fixture', modelId: 'gpt-live-1', voice: 'marin' });
 			await expect.poll(() => page.evaluate(() => window.ashChatTranscriptIntegration.voiceState())).toEqual(['start']);
 			await expect(chat.getByRole('button', { name: locale === 'en' ? 'Stop voice conversation' : '停止语音对话', exact: true })).toBeFocused();
 			const draft = chat.locator(cowork ? '.stanza-editor-input' : '.ash-chat-input-part textarea');
