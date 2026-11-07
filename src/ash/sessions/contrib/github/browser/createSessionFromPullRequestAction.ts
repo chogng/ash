@@ -14,7 +14,6 @@ import { getPullRequestContext } from '../../../../workbench/contrib/sessions/br
 import { IsSessionsWindowContext } from '../../../../workbench/common/contextkeys.js';
 import { IExtensionService } from '../../../../workbench/services/extensions/common/extensionService.js';
 import { ISessionProviderScopeService } from '../../../browser/agentHost/sessionProviderScopeService.js';
-import { Menus } from '../../../browser/menus.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { ISessionsProvidersService } from '../../../services/sessions/browser/sessionsProvidersService.js';
@@ -29,7 +28,6 @@ registerAction2(class NewSessionFromPullRequestAction extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.newSessionFromPullRequest', title, f1: true, precondition: when,
-			menu: { id: Menus.SessionsViewFilter, when, group: 'create' },
 		});
 	}
 

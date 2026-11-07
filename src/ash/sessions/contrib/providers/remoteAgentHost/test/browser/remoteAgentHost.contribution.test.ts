@@ -409,7 +409,7 @@ test('Agents host command registers independent providers and routes equal backe
 	const hasManageHosts = (menu: MenuId) => MenusRegistry.getMenuItems(menu)
 		.some(item => isMenuItem(item) && item.command.id === manageHosts);
 	assert.equal(hasManageHosts(MenuId.CommandPalette), true);
-	assert.equal(hasManageHosts(Menus.SessionsViewFilter), true);
+	assert.equal(hasManageHosts(Menus.SessionsViewFilter), false);
 	await context.connect('build-a');
 	await context.connect('build-b');
 	const [first, second] = context.registry.getProviders();
