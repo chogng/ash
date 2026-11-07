@@ -77,6 +77,43 @@ suite('Agent Sessions shared Tree in a browser', () => {
 			await expect.poll(() => page.evaluate(() => window.agentSessionsFixture.opened)).toEqual([]);
 		});
 	}
+	test('filter survives reload while search stays local and section folding is restored', async () => {
+		const { page } = browser;
+		await page.goto('/agentSessions.html');
+		await page.evaluate(() => window.agentSessionsFixture.ready());
+		const tree = page.getByRole('tree');
+		const filter = page.getByRole('button', { name: 'Filter Sessions', exact: true });
+		const search = page.getByRole('searchbox');
+		const section = tree.getByRole('treeitem', { name: 'Sessions', exact: true });
+		const rows = tree.locator('[data-item]');
+		await section.click();
+		await expect(section).toHaveAttribute('aria-expanded', 'false');
+
+		await filter.press('Enter');
+		await page.evaluate(() => window.agentSessionsFixture.chooseFilter('running'));
+		await expect(filter).toBeFocused();
+		await expect(filter).toHaveAttribute('aria-pressed', 'true');
+		await expect(rows).toHaveAttribute('data-item', 'session-1');
+		await search.fill('Session 2');
+		await expect(page.getByRole('status')).toHaveText('No matching sessions');
+
+		await page.reload();
+		await page.evaluate(() => window.agentSessionsFixture.ready());
+		await expect(search).toHaveValue('');
+		await expect(filter).toHaveAttribute('aria-pressed', 'true');
+		await expect(rows).toHaveAttribute('data-item', 'session-1');
+
+		await filter.press('Enter');
+		await page.evaluate(() => window.agentSessionsFixture.chooseFilter('all'));
+		await expect(filter).toHaveAttribute('aria-pressed', 'false');
+		await expect(section).toHaveAttribute('aria-expanded', 'false');
+		await expect(rows).toHaveAttribute('data-item', 'session-0');
+
+		await page.evaluate(() => window.agentSessionsFixture.pin());
+		await filter.press('Enter');
+		await page.evaluate(() => window.agentSessionsFixture.chooseFilter('pinned'));
+		await expect(rows).toHaveAttribute('data-item', 'session-1');
+	});
 	for (const locale of ['en', 'zh-CN']) {
 		test(`Tree owns keyboard focus, sections, activation and search (${locale})`, async () => {
 			const { page } = browser;

@@ -9,6 +9,7 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IQuickInputService, type IQuickPickItem, type IQuickPickSeparator } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IAgentSessionsService } from './agentSessionsService.js';
 import type { IAgentSession } from './agentSessionsModel.js';
+import { prepareSessionOpen } from './agentSessionsOpener.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
@@ -138,12 +139,12 @@ export class AgentSessionsPicker {
 		disposables.add(picker.onDidAccept(() => {
 			const item = picker.selectedItems[0];
 			if (!item) return;
-			const session = this.agentSessionsService.getSession(item.session.resource);
-			if (!session) { refresh(); return; }
+			const overrideSessionOpen = this.options?.overrideSessionOpen?.bind(this.options);
+			const open = prepareSessionOpen(this.agentSessionsService, item.session.resource, { allowArchived: true, overrideSessionOpen });
+			if (!open) { refresh(); return; }
 			void runOperation(async () => {
-				if (this.options?.overrideSessionOpen) await this.options.overrideSessionOpen(session);
-				else {
-					await session.open();
+				await open();
+				if (!overrideSessionOpen) {
 					await this.views.focusView(CHAT_VIEW_ID);
 				}
 			}, true);
