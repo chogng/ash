@@ -51,7 +51,9 @@ suite('Menu browser behavior', () => {
 		await expect(popup).toHaveCSS('top', '200px');
 		await browser.page.keyboard.press('ArrowDown');
 		await browser.page.keyboard.press('ArrowRight');
-		await expect(browser.page.getByRole('menuitem', { name: 'Child', exact: true })).toBeFocused();
+		const child = browser.page.getByRole('menuitem', { name: 'Child', exact: true });
+		await expect(child).toBeFocused();
+		await expect(child.locator('.ash-menu-leading-slot')).toHaveCSS('display', 'none');
 		for (const view of await popup.all()) {
 			const box = await view.boundingBox();
 			assert.ok(box && box.y >= 200 && box.x >= 0 && box.x + box.width <= 1280 && box.y + box.height <= 720);
@@ -67,6 +69,8 @@ suite('Menu browser behavior', () => {
 		const primary = browser.page.locator('[data-action-id="primary"] > button');
 		await expect(primary).toBeFocused();
 		await expect(primary).toContainText('Ctrl+P');
+		const slot = primary.locator('.ash-menu-leading-slot');
+		await expect(slot).toHaveCSS('display', 'none');
 		await browser.page.keyboard.down('Alt');
 		await expect(primary).toHaveAccessibleName('Alternate');
 		await expect(primary).toContainText('Ctrl+A');
@@ -76,6 +80,10 @@ suite('Menu browser behavior', () => {
 		await browser.page.evaluate(() => window.ashMenuTest.update());
 		await expect(primary).toHaveAccessibleName('Updated');
 		await expect(primary).toHaveAttribute('aria-checked', 'true');
+		await expect(slot).toBeVisible();
+		await browser.page.keyboard.down('Alt');
+		await expect(slot).toHaveCSS('display', 'none');
+		await browser.page.keyboard.up('Alt');
 		await browser.page.keyboard.press('Tab');
 		await expect(primary).toBeFocused();
 		await browser.page.evaluate(() => window.ashMenuTest.disable());
@@ -92,6 +100,8 @@ suite('Menu browser behavior', () => {
 		await expect(icon).toBeVisible();
 		await expect(arrow).toBeVisible();
 		await expect(primary.locator('.ash-menu-leading-slot')).toHaveCount(0);
+		const after = browser.page.getByRole('menuitem', { name: 'After' });
+		expect(await after.locator('.ash-menu-trailing-slot').evaluate(slot => slot.getBoundingClientRect().width)).toBeGreaterThan(0);
 		const iconColumn = async (row: typeof primary) => {
 			const slot = (await row.locator('.ash-menu-trailing-slot').boundingBox())!;
 			const shortcut = (await row.locator('.ash-menu-keybinding').boundingBox())!;
@@ -113,7 +123,13 @@ suite('Menu browser behavior', () => {
 		await expect(choice).toBeFocused();
 		await expect(choice.locator('.ash-menu-trailing-slot > [data-ash-icon-id="check"]')).toBeVisible();
 		await expect(choice.locator('.ash-menu-keybinding')).toHaveCount(0);
-		await choice.press('Escape');
+		await choice.press('ArrowDown');
+		await browser.page.keyboard.press('ArrowRight');
+		const child = browser.page.getByRole('menuitem', { name: 'Child', exact: true });
+		await expect(child).toBeFocused();
+		await expect(child.locator('.ash-menu-trailing-slot')).toHaveCSS('display', 'none');
+		await child.press('Escape');
+		await browser.page.keyboard.press('Escape');
 		await expect(submenu).toBeFocused();
 	});
 

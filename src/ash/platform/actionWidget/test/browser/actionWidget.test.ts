@@ -681,23 +681,24 @@ suite('actionWidget browser component', () => {
 	});
 
 	for (const presentation of ['menu', 'details'] as const) {
-		test(`action widget ${presentation} rows put both selection and command icons before the label`, async function () {
+		test(`action widget ${presentation} rows share one leading slot for the check and command icon`, async function () {
 			const { page } = browserTests;
 			await page.goto('/actionWidget.html');
 			await page.evaluate(presentation => window.ashActionWidgetIntegration.show(['First', 'Second'], { presentation }, 'Description'), presentation);
 			const selected = page.getByRole('menuitemradio', { name: 'First', checked: true });
 			const unselected = page.getByRole('menuitemradio', { name: 'Second', checked: false });
 			const check = selected.locator('[data-ash-icon-id="check"]');
-			const icon = selected.locator('[data-ash-icon-id="unlimited"]');
+			const icon = unselected.locator('[data-ash-icon-id="unlimited"]');
 			await expect(check).toBeVisible();
 			await expect(icon).toBeVisible();
+			await expect(selected.locator('[data-ash-icon-id="unlimited"]')).toBeHidden();
 			await expect(unselected.locator('[data-ash-icon-id="check"]')).toBeHidden();
 			const checkBox = (await check.boundingBox())!;
 			const iconBox = (await icon.boundingBox())!;
 			const label = presentation === 'details' ? '.ash-action-widget-label' : '.ash-button-label';
 			const labelBox = (await selected.locator(label).boundingBox())!;
-			expect(checkBox.x + checkBox.width).toBeLessThanOrEqual(iconBox.x);
-			expect(iconBox.x + iconBox.width).toBeLessThanOrEqual(labelBox.x);
+			expect(checkBox.x).toBeCloseTo(iconBox.x, 0);
+			expect(checkBox.x + checkBox.width).toBeLessThanOrEqual(labelBox.x);
 			expect((await unselected.locator(label).boundingBox())!.x).toBe(labelBox.x);
 			if (presentation === 'details') {
 				expect((await selected.locator('.ash-action-widget-summary').boundingBox())!.x).toBe(labelBox.x);

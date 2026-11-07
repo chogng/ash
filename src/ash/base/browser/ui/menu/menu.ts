@@ -175,7 +175,6 @@ export class MenuActionViewItem extends MenuButtonActionViewItem {
 		if (slot) {
 			const placement = this.menuOptions.submenuOptions?.iconPlacement;
 			slot.classList.toggle(placement === 'trailing' ? 'ash-menu-trailing-check' : 'ash-menu-leading-check', checked);
-			slot.classList.toggle('ash-menu-check-and-icon', placement === 'leadingWithSeparateCheck' && checked && action.icon !== undefined);
 			if (checked && !slot.querySelector(':scope > .ash-icon')) appendIcon(Lxicon.check, slot);
 		}
 		if (action.badge && !this.badge) {
@@ -502,8 +501,8 @@ export interface IMenuOptions {
 	readonly actionRunner?: IActionRunner;
 	readonly context?: unknown;
 	readonly className?: string;
-	/** Leading or trailing icons. `leadingWithSeparateCheck` reserves space for both a check and a command icon. */
-	readonly iconPlacement?: 'leading' | 'leadingWithSeparateCheck' | 'trailing';
+	/** Position of the shared icon and check slot. A visible check takes precedence over the action icon. */
+	readonly iconPlacement?: 'leading' | 'trailing';
 	readonly actionViewItemProvider?: (
 		action: IAction,
 		options: MenuActionViewItemOptions,

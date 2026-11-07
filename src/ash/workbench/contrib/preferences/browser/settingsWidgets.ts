@@ -6,8 +6,8 @@ import {
 } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/settingsWidgets.css';
 import { localize, localize2 } from '../../../../nls.js';
-import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
-import { addDisposableListener, getActiveElement, h, stopEvent } from '../../../../base/browser/dom.js';
+import type { ContextMenuAnchor, IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
+import { addDisposableListener, getActiveElement, getWindow, h, isElement, stopEvent } from '../../../../base/browser/dom.js';
 import { isAncestorOfActiveElement } from '../../../../base/browser/focus.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
 import { LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
@@ -138,6 +138,7 @@ export class SettingsSearchWidget extends Disposable {
 export interface SettingWidgetOptions {
 	readonly configurationOverrides?: IConfigurationOverrides;
 	readonly configurationTarget?: ConfigurationTarget;
+	readonly actionsOnContextMenu?: boolean;
 	readonly onStatus: (message: string, isError: boolean) => void;
 	readonly onOpenSettings?: (key: string) => Promise<void>;
 	readonly onRevealSetting?: (key: string) => void;
@@ -153,6 +154,7 @@ export interface SettingWidget extends IDisposable {
 interface SettingActionsOptions {
 	readonly reference: SettingReference;
 	readonly canReset: () => boolean;
+	readonly actionsOnContextMenu?: boolean;
 	readonly onError: (error: unknown) => void;
 	readonly copySettingAsJSON?: () => string;
 	readonly editInJSON?: () => Promise<void>;
@@ -183,6 +185,16 @@ class SettingActions extends Disposable {
 		container.dataset.settingsItemKind = 'setting';
 		container.classList.add('ash-setting-item');
 		container.prepend(this.actionsDomNode);
+		if (options.actionsOnContextMenu) {
+			this._register(addDisposableListener(container, 'contextmenu', (event: MouseEvent) => {
+				if (event.defaultPrevented || (isElement(event.target) && event.target.closest('input, textarea, a, [contenteditable]'))) return;
+				stopEvent(event);
+				const anchor = event.clientX || event.clientY
+					? { x: event.clientX, y: event.clientY, targetWindow: getWindow(container) }
+					: container;
+				this.show(anchor);
+			}));
+		}
 		this._register(toDisposable(() => {
 			container.classList.remove('ash-setting-item');
 			this.actionsDomNode.remove();
@@ -196,7 +208,7 @@ class SettingActions extends Disposable {
 		this.trigger.domNode.setAttribute('aria-label', actionLabel);
 	}
 
-	private show(): void {
+	private show(anchor: ContextMenuAnchor = this.trigger.domNode): void {
 		if (this.actionsDomNode.classList.contains('is-open')) return;
 		const actions: IAction[] = [
 			{
@@ -235,7 +247,7 @@ class SettingActions extends Disposable {
 		this.setOpen(true);
 		try {
 			this.contextMenuService.showContextMenu({
-				getAnchor: () => this.trigger.domNode,
+				getAnchor: () => anchor,
 				getActions: () => actions,
 				onHide: () => this.setOpen(false),
 			});
@@ -309,6 +321,7 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 					reset: () => this.resetSetting(),
 				},
 				canReset: () => !this.hasPolicyValue,
+				actionsOnContextMenu: options.actionsOnContextMenu,
 				editInJSON: descriptor.binding || !options.onOpenSettings ? undefined : () => options.onOpenSettings!(this.descriptor.id),
 				onError: (error: unknown) => this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'actions.failed' }, 'Unable to run the setting action.')), true),
 				copySettingAsJSON: descriptor.binding ? undefined : () => {

@@ -132,6 +132,7 @@ class ActionListAction extends ActionViewItem {
 		const listbox = this.options.ariaMultiselectable && this.options.filterAsCombobox;
 		const toggle = this.entry.standaloneToggle;
 		const checked = toggle?.checked ?? this.entry.checked;
+		const icon = checked && !toggle ? undefined : this.action.icon;
 		const ownerDocument = container.ownerDocument;
 		const control = this.button = this.createButton(container, {
 			label: '',
@@ -158,15 +159,15 @@ class ActionListAction extends ActionViewItem {
 				indicator.classList.toggle('checked', checked);
 				indicator.append(h(ownerDocument, 'span', { className: 'ash-switch-track' }));
 				this.toggleIndicator = indicator;
-			} else {
+			} else if (!icon) {
 				const indicator = h(ownerDocument, 'span', { className: 'ash-action-widget-selection' });
 				indicator.setAttribute('aria-hidden', 'true');
 				appendIcon(Lxicon.check, indicator);
 				button.append(indicator);
 			}
 		}
-		if (this.action.icon) {
-			appendIcon(this.action.icon, button).classList.add('ash-action-widget-command-icon');
+		if (icon) {
+			appendIcon(icon, button).classList.add('ash-action-widget-command-icon');
 		}
 		button.append(h(ownerDocument, 'span', { className: 'ash-action-widget-label' }, this.action.label));
 		if (this.toggleIndicator) {
@@ -447,7 +448,6 @@ export class ActionList<T> extends Disposable {
 			buttonStyles: defaultButtonStyles,
 			keybindingLabelStyles: defaultKeybindingLabelStyles,
 			className: 'ash-action-widget-menu',
-			iconPlacement: 'leadingWithSeparateCheck',
 			submenuClassName: 'ash-action-widget-menu ash-action-widget-submenu',
 			submenuContextView: this.sidePanel,
 			tabLeavesSubmenu: !!this.sidePanel,

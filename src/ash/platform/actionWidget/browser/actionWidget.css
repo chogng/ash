@@ -234,16 +234,17 @@
 
 .ash-action-widget-menu.ash-menu .ash-action-widget-detail-row {
 	display: grid;
-	grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+	grid-template-columns: auto minmax(0, 1fr) auto auto;
 	grid-template-areas:
-		"selection icon label accessory badge"
-		". . summary accessory badge";
+		"icon label accessory badge"
+		". summary accessory badge";
 	gap: var(--ash-spacing-size20) var(--ash-spacing-size40);
 	height: auto;
 	padding-block: var(--ash-spacing-size60);
 }
 
-.ash-action-widget-detail-row > .ash-action-widget-command-icon {
+.ash-action-widget-detail-row
+	> :is(.ash-action-widget-command-icon, .ash-action-widget-selection) {
 	grid-area: icon;
 }
 
@@ -257,10 +258,6 @@
 	white-space: normal;
 	line-height: 1.35;
 	overflow-wrap: anywhere;
-}
-
-.ash-action-widget-detail-row > .ash-action-widget-selection {
-	grid-area: selection;
 }
 
 .ash-action-widget-detail-row > .ash-action-widget-switch {

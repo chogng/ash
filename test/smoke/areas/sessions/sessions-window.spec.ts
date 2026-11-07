@@ -2037,9 +2037,8 @@ test(
 		await page.getByRole('menuitem', { name: 'Settings' }).click();
 		const settings = page.getByRole('dialog', { name: 'Sessions Settings' });
 		await expect(settings).toBeVisible();
-		for (const card of await settings.locator('.ash-sessions-settings-list.ash-settings-card').all()) {
-			await expect(card).toHaveCSS('border-radius', '8px');
-		}
+		await expect(settings.getByRole('heading', { name: 'Sessions Settings', exact: true })).toBeVisible();
+		await expect(settings.getByRole('button', { name: 'Close Dialog', exact: true })).toBeVisible();
 		const navigation = settings.getByRole('navigation', { name: 'Settings categories' });
 		await expect(navigation.locator('.ash-scrollbar-viewport')).toHaveCSS('scrollbar-width', 'none');
 		await expect(settings.locator('.ash-sessions-settings-page .ash-scrollbar-viewport')).toHaveCSS(
