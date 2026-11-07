@@ -587,16 +587,34 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			await expect(modelButton).toBeFocused();
 			await page.keyboard.press('Tab');
 			await expect(slider).toBeFocused();
+			await expect(slider).toHaveCSS('outline-style', 'solid');
+			const thumb = slider.locator('.ash-chat-slider-thumb');
+			for (const endpoint of [labels.length - 1, 0]) {
+				const tick = slider.locator('.ash-chat-slider-tick').nth(endpoint);
+				await tick.click();
+				await expect(slider).toHaveAttribute('aria-valuetext', labels[endpoint]!);
+				await expect(slider).toBeFocused();
+				await expect(slider).toHaveCSS('outline-style', 'none');
+				await expect.poll(async () => {
+					const [track, handle, stop] = await Promise.all([slider.boundingBox(), thumb.boundingBox(), tick.boundingBox()]);
+					const endGap = endpoint === 0 ? handle!.x - track!.x : track!.x + track!.width - handle!.x - handle!.width;
+					const topGap = handle!.y - track!.y;
+					return Math.max(
+						Math.abs(handle!.x + handle!.width / 2 - stop!.x - stop!.width / 2),
+						Math.abs(endGap - topGap),
+					);
+				}).toBeLessThan(0.5);
+			}
 			const initialPickerBounds = (await picker.boundingBox())!;
 			const initialPanelLeft = (await dialog.boundingBox())!.x;
 			await page.keyboard.press('ArrowRight');
+			await expect(slider).toHaveCSS('outline-style', 'solid');
 			await expect(slider).toHaveAttribute('aria-valuetext', labels[1]!);
 			await expect(modelButton).toHaveAccessibleDescription(labels[1]!);
 			await expect(effortLabel).toHaveText(labels[1]!);
 			await expect.poll(() => dialog.evaluate(element =>
 				element.getAnimations({ subtree: true }).some(animation => animation.playState === 'running')
 			)).toBe(false);
-			const thumb = slider.locator('.ash-chat-slider-thumb');
 			const fill = slider.locator('.ash-chat-slider-fill');
 			const start = (await thumb.boundingBox())!;
 			const rail = (await slider.boundingBox())!;
@@ -605,6 +623,7 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			await page.mouse.move(start.x + start.width / 2, thumbY);
 			await page.mouse.down();
 			await expect(slider).toHaveClass(/\bdragging\b/u);
+			await expect(slider).toHaveCSS('outline-style', 'none');
 			await page.mouse.move(targetX, thumbY, { steps: 4 });
 			await expect(effortLabel).toHaveText(labels[3]!);
 			await expect(slider).toHaveAttribute('aria-valuetext', labels[1]!);

@@ -350,6 +350,10 @@
 	outline-offset: calc(-1 * var(--ash-strokeThickness));
 }
 
+.ash-chat-slider-track.pointer-focused:focus {
+	outline: none;
+}
+
 .ash-chat-slider-model-summary {
 	display: flex;
 	flex-direction: column;
@@ -436,10 +440,14 @@
 }
 
 .ash-chat-slider-track {
+	--ash-chat-slider-thumb-width: 26px;
+	--ash-chat-slider-inset: calc(
+		var(--ash-chat-slider-thumb-width) / 2 + var(--ash-spacing-size20)
+	);
 	position: relative;
 	margin-top: 2px;
 	height: 22px;
-	border-radius: 9999px;
+	border-radius: var(--ash-cornerRadius-circle);
 	background: rgba(255, 255, 255, 0.12);
 	cursor: pointer;
 	touch-action: pan-y;
@@ -493,9 +501,10 @@
 	position: absolute;
 	top: 50%;
 	transform: translate(-50%, -50%);
-	width: 26px;
-	height: 18px;
-	border-radius: 6px;
+	box-sizing: border-box;
+	width: var(--ash-chat-slider-thumb-width);
+	height: calc(100% - 2 * var(--ash-spacing-size20));
+	border-radius: var(--ash-cornerRadius-circle);
 	background: #ffffff;
 	box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 	pointer-events: none;

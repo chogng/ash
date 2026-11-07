@@ -291,13 +291,14 @@ export class ChatModelSliderWidget extends Disposable {
 				});
 				track = slider;
 
-				const position = (index: number) => Math.round(6 + index / (presets.length - 1) * 88);
+				const position = (index: number) => index / (presets.length - 1);
+				const offsetAt = (fraction: number) => `calc(var(--ash-chat-slider-inset) + (100% - 2 * var(--ash-chat-slider-inset)) * ${fraction})`;
 				const fill = h(document, 'div', { className: 'ash-chat-slider-fill', attributes: { 'aria-hidden': 'true' } });
 				const thumb = h(document, 'div', { className: 'ash-chat-slider-thumb', attributes: { 'aria-hidden': 'true' } });
 				slider.append(fill);
 				const drag = rendered.add(new GlobalPointerMoveMonitor());
-				const showPosition = (percent: number, previewIndex = activeIndex) => {
-					const offset = `${percent}%`;
+				const showPosition = (fraction: number, previewIndex = activeIndex) => {
+					const offset = offsetAt(fraction);
 					if (thumb.style.left !== offset) {
 						fill.style.width = offset;
 						thumb.style.left = offset;
@@ -358,9 +359,7 @@ export class ChatModelSliderWidget extends Disposable {
 				};
 
 				// Render ticks
-				presets.forEach((p, idx) => {
-					const pct = position(idx);
-
+				const ticks = presets.map((p, idx) => {
 					const tick = h(document, 'button', {
 						className: 'ash-chat-slider-tick',
 						attributes: {
@@ -369,7 +368,7 @@ export class ChatModelSliderWidget extends Disposable {
 							title: p.label,
 						},
 					});
-					tick.style.left = `${pct}%`;
+					tick.style.left = offsetAt(position(idx));
 
 					rendered.add(addDisposableListener(tick, 'click', e => {
 						stopEvent(e);
@@ -381,15 +380,16 @@ export class ChatModelSliderWidget extends Disposable {
 					}));
 
 					slider.append(tick);
+					return tick;
 				});
 
 				slider.append(thumb);
 
-				const closestEffort = (percent: number) => {
+				const closestEffort = (fraction: number) => {
 					let closestIdx = 0;
 					let minDiff = Infinity;
 					presets.forEach((_, idx) => {
-						const diff = Math.abs(position(idx) - percent);
+						const diff = Math.abs(position(idx) - fraction);
 						if (diff < minDiff) {
 							minDiff = diff;
 							closestIdx = idx;
@@ -401,25 +401,28 @@ export class ChatModelSliderWidget extends Disposable {
 				rendered.add(addDisposableListener(slider, 'pointerdown', event => {
 					if (event.button !== 0 || drag.isMonitoring() || this.savingModelPreference || this.delegate.canSelectModel?.() === false) { return; }
 					layout();
-					const rail = slider.getBoundingClientRect();
-					if (!rail.width) { return; }
+					// Read the rendered end stops so the pointer uses the same travel as the ticks and thumb.
+					const firstTick = ticks[0].getBoundingClientRect();
+					const lastTick = ticks[ticks.length - 1].getBoundingClientRect();
+					const start = firstTick.left + firstTick.width / 2;
+					const travel = lastTick.left + lastTick.width / 2 - start;
+					if (travel <= 0) { return; }
 					event.preventDefault();
 					const bounds = thumb.getBoundingClientRect();
 					const onThumb = event.clientX >= bounds.left && event.clientX <= bounds.right
 						&& event.clientY >= bounds.top && event.clientY <= bounds.bottom;
 					const center = bounds.left + bounds.width / 2;
 					const grabOffset = onThumb ? event.clientX - center : 0;
-					const percentAt = (x: number) => clamp(
-						(x - grabOffset - rail.left) / rail.width * 100,
-						position(0), position(presets.length - 1),
-					);
+					const fractionAt = (x: number) => clamp((x - grabOffset - start) / travel, 0, 1);
 					const movedAlongTrack = (x: number) => Math.abs(x - event.clientX) >= 4;
-					let preview = onThumb ? position(activeIndex) : percentAt(event.clientX);
+					let preview = onThumb ? position(activeIndex) : fractionAt(event.clientX);
 					let followsPointer = onThumb;
 					slider.classList.toggle('dragging', followsPointer);
 					slider.classList.toggle('track-press', !followsPointer);
 					const previewIndex = closestEffort(preview);
-					showPosition(onThumb ? percentAt(event.clientX) : position(previewIndex), previewIndex);
+					showPosition(onThumb ? fractionAt(event.clientX) : position(previewIndex), previewIndex);
+					// Programmatic focus can inherit keyboard focus visibility after a pointer press.
+					slider.classList.add('pointer-focused');
 					slider.focus({ preventScroll: true });
 					const finish = async (index: number) => {
 						slider.classList.remove('dragging');
@@ -433,7 +436,7 @@ export class ChatModelSliderWidget extends Disposable {
 						}
 					};
 					const release = (clientX: number) => finish(closestEffort(
-						clientX === event.clientX || (!followsPointer && !movedAlongTrack(clientX)) ? preview : percentAt(clientX),
+						clientX === event.clientX || (!followsPointer && !movedAlongTrack(clientX)) ? preview : fractionAt(clientX),
 					));
 					drag.startMonitoring(thumb, event.pointerId, event.buttons, next => {
 						if (!followsPointer) {
@@ -441,7 +444,7 @@ export class ChatModelSliderWidget extends Disposable {
 							followsPointer = true;
 							slider.classList.replace('track-press', 'dragging');
 						}
-						preview = percentAt(next.clientX);
+						preview = fractionAt(next.clientX);
 						showPosition(preview, closestEffort(preview));
 					}, next => {
 						switch (next?.type) {
@@ -453,9 +456,11 @@ export class ChatModelSliderWidget extends Disposable {
 					}, event.pointerType);
 				}));
 				rendered.add(addDisposableListener(getWindow(slider), 'resize', () => drag.stopMonitoring(true)));
+				rendered.add(addDisposableListener(slider, 'blur', () => slider.classList.remove('pointer-focused')));
 
 				// Keyboard navigation on track
 				rendered.add(addDisposableListener(slider, 'keydown', async event => {
+					slider.classList.remove('pointer-focused');
 					if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
 						stopEvent(event);
 						slider.classList.remove('track-press');
