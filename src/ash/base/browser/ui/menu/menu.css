@@ -180,7 +180,11 @@
 .ash-menu-icons-trailing:not(.has-icon-column)
 	> .ash-action-view-item
 	> .ash-button
-	> .ash-menu-trailing-slot {
+	> .ash-menu-trailing-slot,
+.ash-menu-indicators-trailing
+	> .ash-action-view-item
+	> .ash-button
+	> .ash-menu-trailing-slot:empty {
 	display: none;
 }
 

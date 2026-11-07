@@ -1467,6 +1467,7 @@ function createSessionsListToolbar(container: HTMLElement, disposables: Disposab
 						...delegate,
 						getMenuClassName: () => 'ash-sessions-list-menu',
 						submenuClassName: 'ash-sessions-list-menu',
+						iconPlacement: 'trailing',
 						getCheckedActionsRepresentation: item => item.id.startsWith('sessions.list.groupBy.') || item.id.startsWith('sessions.list.sort') ? 'radio' : 'checkbox',
 					}),
 				},

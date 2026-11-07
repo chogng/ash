@@ -459,7 +459,9 @@ export class ActionList<T> extends Disposable {
 			buttonStyles: defaultButtonStyles,
 			keybindingLabelStyles: defaultKeybindingLabelStyles,
 			className: 'ash-action-widget-menu',
-			submenuClassName: 'ash-action-widget-menu ash-action-widget-submenu',
+			submenuClassName: this.options.menuIconPlacement && this.options.menuIconPlacement !== 'leading'
+				? undefined
+				: 'ash-action-widget-menu ash-action-widget-submenu',
 			submenuContextView: this.sidePanel,
 			tabLeavesSubmenu: !!this.sidePanel,
 			iconPlacement: this.options.menuIconPlacement,

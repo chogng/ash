@@ -369,7 +369,8 @@ suite('sessions browser component', () => {
 		await collaboration.click();
 		await more.click();
 		await expect(collaboration).toHaveAttribute('aria-checked', 'true');
-		await expect(collaboration.locator('[data-ash-icon-id="collab"]')).toBeVisible();
+		await expect(collaboration.locator('.ash-menu-leading-slot [data-ash-icon-id="collab"]')).toBeVisible();
+		await expect(collaboration.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]')).toBeVisible();
 		await page.keyboard.press('Escape');
 		await expect(page.locator('.ash-sessions-list:visible')).toBeHidden();
 		await expect(page.locator('.ash-sessions-surface-header')).toHaveCount(0);
@@ -1327,7 +1328,7 @@ suite('sessions browser component', () => {
 			const selected = page.getByRole('menuitemradio', { checked: true });
 			await expect(selected).toBeVisible();
 			const label = (await selected.locator('.ash-button-label').boundingBox())!;
-			const check = (await selected.locator('[data-ash-icon-id="check"]').boundingBox())!;
+			const check = (await selected.locator('.ash-menu-trailing-slot [data-ash-icon-id="check"]').boundingBox())!;
 			const inset = await selected.evaluate(row => parseFloat(getComputedStyle(row).paddingInlineStart));
 			expect(label.x - (await selected.boundingBox())!.x).toBeCloseTo(inset);
 			expect(check.x).toBeGreaterThan(label.x + label.width);
@@ -1371,6 +1372,19 @@ suite('sessions browser component', () => {
 		const dialog = page.getByRole('dialog', { name: chinese ? '新建环境' : 'New Environment', exact: true });
 		const name = dialog.getByRole('textbox', { name: chinese ? '名称' : 'Name', exact: true });
 		await expect(trigger).toBeVisible();
+		await host.press('Enter');
+		const environmentMenu = page.locator('.ash-sessions-environment-menu');
+		const localEnvironment = environmentMenu.getByRole('menuitemradio', { name: chinese ? '此电脑' : 'This Computer', checked: true, exact: true });
+		const localLabel = localEnvironment.locator('.ash-button-label');
+		const localCheck = localEnvironment.locator('.ash-menu-trailing-slot [data-ash-icon-id="check"]');
+		await expect(localEnvironment.locator('.ash-menu-leading-slot [data-ash-icon-id="local"]')).toBeVisible();
+		await expect(localCheck).toBeVisible();
+		const labelBounds = (await localLabel.boundingBox())!;
+		const checkBounds = (await localCheck.boundingBox())!;
+		expect(checkBounds.x).toBeGreaterThanOrEqual(labelBounds.x + labelBounds.width);
+		await page.keyboard.press('Escape');
+		await expect(environmentMenu).toBeHidden();
+		await expect(host).toBeFocused();
 		const recentProjects = card.getByRole('group', { name: chinese ? '最近打开的项目' : 'Recent projects', exact: true });
 		const recentProject = recentProjects.getByRole('button', { name: 'host-a', exact: true });
 		await expect(project).toHaveText(chinese ? '选择项目' : 'Choose project');

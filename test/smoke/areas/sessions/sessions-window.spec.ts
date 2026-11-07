@@ -1692,17 +1692,31 @@ test('Code Sessions mode selection updates its shared composer', async ({ target
 	const local = environmentMenu.getByRole('menuitemradio', { name: 'This Computer', exact: true });
 	await expect(local).toHaveAttribute('aria-checked', 'true');
 	await expect(local.locator('.ash-menu-leading-slot [data-ash-icon-id="local"]')).toBeVisible();
-	const check = local.locator('.ash-menu-trailing-check [data-ash-icon-id="check"]');
+	const check = local.locator('.ash-menu-trailing-slot > [data-ash-icon-id="check"]');
 	await expect(check).toBeVisible();
 	if (target.kind === 'electron') {
 		const remote = environmentMenu.getByRole('menuitem', { name: 'Remote', exact: true });
-		const arrow = remote.locator('.ash-submenu-indicator [data-ash-icon-id="menu-submenu"]');
+		const arrow = remote.locator('.ash-menu-trailing-slot > [data-ash-icon-id="menu-submenu"]');
 		await expect(arrow).toBeVisible();
 		const checkBounds = (await check.boundingBox())!;
 		const arrowBounds = (await arrow.boundingBox())!;
 		const checkCenter = checkBounds.x + checkBounds.width / 2;
 		const arrowCenter = arrowBounds.x + arrowBounds.width / 2;
 		expect(checkCenter).toBeCloseTo(arrowCenter, 0);
+		await remote.press('ArrowRight');
+		const submenu = page.getByRole('menu', { name: 'Remote', exact: true });
+		await expect(submenu.getByRole('menuitem')).toHaveText(['SSH', 'Ash Tunnel']);
+		for (const row of await submenu.getByRole('menuitem').all()) {
+			await expect(row).toHaveCSS('height', '28px');
+			await expect(row).toHaveCSS('padding-inline-start', '12px');
+			await expect(row.locator('.ash-menu-leading-slot')).toBeHidden();
+			await expect(row.locator('.ash-menu-trailing-slot')).toBeHidden();
+			const label = (await row.locator('.ash-button-label').boundingBox())!;
+			expect(label.x - (await row.boundingBox())!.x).toBeCloseTo(12);
+		}
+		await page.keyboard.press('Escape');
+		await expect(submenu).toBeHidden();
+		await expect(remote).toBeFocused();
 	}
 	await page.keyboard.press('Escape');
 	await expect(environmentMenu).toBeHidden();
@@ -1721,7 +1735,7 @@ test('Code Sessions mode selection updates its shared composer', async ({ target
 	await mode.press('ArrowDown');
 	await expect(plan).toHaveAttribute('aria-checked', 'true');
 	await expect(plan.locator('.ash-menu-leading-slot [data-ash-icon-id="plan"]')).toBeVisible();
-	await expect(plan.locator('.ash-menu-trailing-check [data-ash-icon-id="check"]')).toBeVisible();
+	await expect(plan.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]')).toBeVisible();
 	await page.keyboard.press('Escape');
 	await expect(mode).toBeFocused();
 });
@@ -1822,6 +1836,7 @@ test('Sessions navigation retains its own selection and hover skin across naviga
 				await item.press('Enter');
 				await more.press('Enter');
 				await expect(item).toHaveAttribute('aria-checked', 'true');
+				await expect(item.locator('.ash-menu-leading-slot [data-ash-icon-id="collab"]')).toBeVisible();
 				await expect(item.locator('.ash-menu-trailing-check [data-ash-icon-id="check"]')).toBeVisible();
 				await page.keyboard.press('Escape');
 			} else {
