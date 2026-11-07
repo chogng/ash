@@ -1090,8 +1090,11 @@ export abstract class Workbench extends Disposable {
 		services.registerSingleton(IDiffEditorCommandsService, () => services.createInstance(SessionsDiffEditorCommandsService));
 		services.registerInstance(IEditorGroupsService, editors);
 		// The browser host resolves Workbench browsing, which borrows the window's editor services.
-		if (options.createBrowserHost) { this._register(options.createBrowserHost(services)); }
-		else { services.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined); }
+		if (!services.has(IBrowserViewWorkbenchService)) {
+			services.registerInstance<IBrowserViewWorkbenchService | undefined>(IBrowserViewWorkbenchService, undefined);
+		}
+		const browsers: IBrowserViewWorkbenchService | undefined = services.get(IBrowserViewWorkbenchService);
+		if (options.createBrowserHost) this._register(options.createBrowserHost(services));
 		const workbenchPreferences = this._register(services.createInstance(PreferencesService));
 		services.registerInstance(IPreferencesService, {
 			openSettings: options => preferences.open(options),
@@ -1124,7 +1127,7 @@ export abstract class Workbench extends Disposable {
 			['customview', customViewPart],
 		]);
 		layout.createWorkbenchLayout(parts);
-		if (options.createBrowserHost) {
+		if (browsers) {
 			const browserVisible = contextKeys.createKey<boolean>('sessions.browserVisible', false);
 			const updateBrowserContext = (): void => browserVisible.set(editors.visibleEditors.some(input => input.resource.scheme === BrowserViewUri.scheme));
 			this._register(toDisposable(() => browserVisible.reset()));
@@ -1134,7 +1137,6 @@ export abstract class Workbench extends Disposable {
 					await commandService.executeCommand('sessions.open.code');
 				}
 				if (!await editor.toggleToolEditors(input => input.resource.scheme === BrowserViewUri.scheme)) {
-					const browsers = services.get(IBrowserViewWorkbenchService);
 					const retained = browsers.getKnownBrowserViews().values().next().value;
 					if (retained) await editors.openEditor(retained, { pinned: true });
 					else await browsers.createBrowserView({ initialUrl: 'about:blank', owner: { type: 'user' } });
@@ -1189,7 +1191,6 @@ export abstract class Workbench extends Disposable {
 		const contributions = this._register(WorkbenchContributionsRegistry.createHost(services, undefined, options.contributionIds));
 		contributions.advance(WorkbenchPhase.BlockStartup);
 		contributions.advance(WorkbenchPhase.BlockRestore);
-		if (options.createBrowserHost) serviceContributionReady.push(services.get(IBrowserViewWorkbenchService).initialize());
 		this.layoutService.layout();
 		const entryLayout = services.get(ISessionsLayoutService);
 		// Stop layout persistence before Parts are released; the service scope otherwise outlives their editor grids.
@@ -1204,7 +1205,7 @@ export abstract class Workbench extends Disposable {
 			using suppression = entryLayout.suppressEditorAutoVisibility();
 			const previousGroups = new Set(editor.groups.map(group => group.id));
 			const previousActive = editor.activeGroup;
-			const legacyBrowser = options.createBrowserHost && storage.get('sessions.browser.editorState', StorageScope.WORKSPACE);
+			const legacyBrowser = browsers && storage.get('sessions.browser.editorState', StorageScope.WORKSPACE);
 			try {
 				if (legacyBrowser && !editor.groups.some(group => group.inputs.some(input => input.resource.scheme === BrowserViewUri.scheme))) {
 					await editor.applyWorkingSet(JSON.parse(legacyBrowser) as EditorWorkingSet, { preserveFocus: true, preserveGroups: [...previousGroups] });

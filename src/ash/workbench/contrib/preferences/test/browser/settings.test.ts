@@ -2154,7 +2154,7 @@ test('settingsLayout is the single projection from registered settings to catego
 	assert.equal(chinese?.bundles.ash?.['settings.workbench.startup.group.label'], '启动时的编辑器');
 	assert.equal(chinese?.bundles.ash?.['window.restoreWindows.all'], '全部窗口');
 	assert.equal(chinese?.bundles.ash?.['window.startupWindow.title'], '启动时打开');
-	assert.equal(chinese?.bundles.ash?.['window.startupWindow.default'], '沿用上次（默认）');
+	assert.equal(chinese?.bundles.ash?.['window.startupWindow.default'], '默认');
 	assert.equal(chinese?.bundles.ash?.['window.startupWindow.agents'], 'Agent 窗口');
 	assert.equal(chinese?.bundles.ash?.['window.newWindowDimensions.title'], '新窗口尺寸');
 	assert.equal(chinese?.bundles.ash?.['window.restoreFullscreen.title'], '恢复全屏');

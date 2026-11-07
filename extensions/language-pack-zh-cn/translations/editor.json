@@ -392,7 +392,7 @@
     "window.titleBarStyle.system": "系统",
     "window.startupWindow.title": "启动时打开",
     "window.startupWindow.description": "选择 Ash 启动时打开的窗口，下次启动生效。直接打开项目时，以项目为准。",
-    "window.startupWindow.default": "沿用上次（默认）",
+    "window.startupWindow.default": "默认",
     "window.startupWindow.ide": "IDE",
     "window.startupWindow.agents": "Agent 窗口",
     "window.restoreWindows.title": "恢复窗口",

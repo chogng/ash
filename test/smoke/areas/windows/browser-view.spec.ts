@@ -519,7 +519,7 @@ test('browser automation starts lazily in one separate process and its crash ret
 	await expect(page.locator('.ash-browser-editor')).toHaveCount(0);
 });
 
-test('desktop browser retains a live page through renderer reload and restores workspace login after restart', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ target, application, workbench, reloadWorkbench }) => {
+test('desktop browser retains a live page through renderer reload and restores workspace login after restart', { tag: ['@electron-app-server'] }, async ({ application, workbench, reloadWorkbench }) => {
 	const cookies: string[] = [];
 	const server = createServer((request, response) => {
 		cookies.push(request.headers.cookie ?? '');
@@ -552,6 +552,45 @@ test('desktop browser retains a live page through renderer reload and restores w
 		await expect(restarted.workbench.page.getByRole('tab', { name: 'Restored browser', exact: true })).toHaveCount(1);
 		await expect.poll(() => cookies.at(-1)).toContain('browser_login=retained');
 		await restarted.workbench.page.getByRole('button', { name: 'Close Restored browser', exact: true }).click();
+	} finally {
+		server.closeAllConnections();
+		await new Promise<void>(resolve => server.close(() => resolve()));
+	}
+});
+
+test('desktop browser only loads restored tabs when shown', { tag: ['@electron-ui'] }, async ({ workbench, reloadWorkbench }) => {
+	let navigations = 0;
+	const server = createServer((request, response) => {
+		if (request.url === '/') navigations++;
+		response.setHeader('Content-Type', 'text/html');
+		response.end('<title>Restored browser</title>');
+	});
+	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+	try {
+		const address = server.address();
+		if (!address || typeof address === 'string') { throw new Error('Missing fixture endpoint'); }
+		await workbench.quickaccess.runCommand('workbench.action.browser.open');
+		const location = workbench.page.locator('.ash-browser-editor').getByRole('textbox', { name: 'Browser address' });
+		await location.fill(`http://127.0.0.1:${address.port}/`);
+		await location.press('Enter');
+		await expect(workbench.page.getByRole('tab', { name: 'Restored browser', exact: true })).toBeVisible();
+		const beforeSelectedRestore = navigations;
+
+		const selected = (await reloadWorkbench()).workbench;
+		const tab = (page: Page) => page.getByRole('tab', { name: 'Restored browser', exact: true });
+		await expect(tab(selected.page)).toHaveAttribute('aria-selected', 'true');
+		await expect.poll(() => navigations).toBeGreaterThan(beforeSelectedRestore);
+		await selected.quickaccess.runCommand('workbench.action.files.newUntitledFile');
+		await expect(tab(selected.page)).toHaveAttribute('aria-selected', 'false');
+		const beforeBackgroundRestore = navigations;
+
+		const background = (await reloadWorkbench()).workbench.page;
+		await expect(tab(background)).toHaveAttribute('aria-selected', 'false');
+		await installMainChannelTestClient(background);
+		expect(await background.evaluate(() => globalThis.ashTestMainProcess.call('browserView', 'getBrowserViews', []))).toEqual([]);
+		expect(navigations).toBe(beforeBackgroundRestore);
+		await tab(background).click();
+		await expect.poll(() => navigations).toBeGreaterThan(beforeBackgroundRestore);
 	} finally {
 		server.closeAllConnections();
 		await new Promise<void>(resolve => server.close(() => resolve()));

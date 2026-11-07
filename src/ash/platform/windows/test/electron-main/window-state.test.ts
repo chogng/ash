@@ -135,11 +135,17 @@ test('leaving window restoration persists only windows that were actually restor
 	await handler.saveSession();
 	{
 		using restoration = handler.beginRestoration();
-		windows = [windows[0]!];
-		handler.windowOpened();
+		{
+			using savedWindowsRestoration = handler.beginRestoration();
+			windows = [windows[0]!];
+			handler.windowOpened();
+		}
+		handler.windowFocused(windows[0]!.id);
 		assert.equal(handler.readSession()?.windows.length, 2);
+		assert.equal(state.flushCount, 1);
 	}
 	assert.deepEqual(handler.readSession(), { active: 0, windows: [entries[0]] });
+	assert.equal(state.flushCount, 2);
 });
 
 class TestWindow implements IStatefulWindow {

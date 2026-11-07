@@ -397,7 +397,7 @@ export interface IWindowSessionWindow<TEntry extends IWindowSessionEntry> {
 
 /** Owns the persisted list and active identity of top-level application windows. */
 export class WindowSessionStateHandler<TEntry extends IWindowSessionEntry> {
-	private restoring = false;
+	private restorationDepth = 0;
 	private shuttingDown = false;
 	private lastFocusedWindowId: number | undefined;
 	private lastClosedWindow: TEntry | undefined;
@@ -437,8 +437,11 @@ export class WindowSessionStateHandler<TEntry extends IWindowSessionEntry> {
 	}
 
 	beginRestoration(): IDisposable {
-		this.restoring = true;
-		return toDisposable(() => { this.restoring = false; this.scheduleSave(); });
+		this.restorationDepth++;
+		return toDisposable(() => {
+			this.restorationDepth--;
+			this.scheduleSave();
+		});
 	}
 
 	windowOpened(): void {
@@ -488,7 +491,7 @@ export class WindowSessionStateHandler<TEntry extends IWindowSessionEntry> {
 	}
 
 	private scheduleSave(): void {
-		if (this.restoring || this.shuttingDown) return;
+		if (this.restorationDepth > 0 || this.shuttingDown) return;
 		void this.saveSession().catch(error => console.error('Failed to save window session', error));
 	}
 }

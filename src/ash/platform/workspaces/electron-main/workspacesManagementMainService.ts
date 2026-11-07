@@ -14,7 +14,7 @@ import { DiskFileSystemProvider } from '../../files/node/diskFileSystemProvider.
 import { FileNotFoundError, FileRevisionConflictError } from '../../files/common/files.js';
 import type { WorkspaceContextMainService } from '../../window/electron-main/window.js';
 import type { WorkspaceEditRequest, WorkspaceConfigurationRequest } from '../../workspace/common/workspaceIpc.js';
-import { hasWorkspaceFileExtension, isWorkspaceIdentifier, serializeWorkspace, getWorkspaceRemoteAuthority } from '../../workspace/common/workspace.js';
+import { hasWorkspaceFileExtension, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, serializeWorkspace, getWorkspaceRemoteAuthority } from '../../workspace/common/workspace.js';
 import { getWorkspaceIdentifier } from '../node/workspaces.js';
 import type { WorkspaceTrustGrant } from '../../workspace/common/workspaceTrust.js';
 import { parseJsonc } from '../../../base/common/jsonc.js';
@@ -35,8 +35,12 @@ export class WorkspacesManagementMainService {
 		return getSingleFolderWorkspaceIdentifier(URI.file(folder.path));
 	}
 
-	public async resolveWorkspace(identifier: IAnyWorkspaceIdentifier): Promise<IWorkspace> {
+	public async resolveWorkspace(identifier: IAnyWorkspaceIdentifier, options?: { readonly restoring?: boolean; }): Promise<IWorkspace> {
 		if (!('configPath' in identifier)) {
+			// Restoring a saved folder bypasses the normal launch-target validation.
+			if (options?.restoring && isSingleFolderWorkspaceIdentifier(identifier) && identifier.uri.scheme === 'file') {
+				await this.resolveFolder(identifier.uri.fsPath);
+			}
 			return workspaceFromIdentifier(identifier);
 		}
 		if (!this.pathService.readFile) {
@@ -45,9 +49,10 @@ export class WorkspacesManagementMainService {
 		if (identifier.configPath.scheme !== 'file') throw new TypeError(localize('workspace.localConfigurationOnly', 'Desktop workspace configuration must be a local file.'));
 		const configPath = identifier.configPath.fsPath;
 		const source = await this.pathService.readFile(configPath);
-		const document = parseJsonc(source, configPath) as { remoteAuthority?: unknown; };
+		const document = parseJsonc(source, configPath) as { remoteAuthority?: unknown; transient?: unknown; } | null;
 		const configuredFolders = parseStoredWorkspaceFolders(document, configPath);
-		const storedAuthority = document.remoteAuthority === undefined ? undefined : getWorkspaceRemoteAuthority(parseWorkspaceIdentifier({ id: identifier.id, remoteAuthority: document.remoteAuthority }));
+		if (options?.restoring && document?.transient === true) throw new Error(`Cannot restore transient workspace: ${configPath}`);
+		const storedAuthority = document?.remoteAuthority === undefined ? undefined : getWorkspaceRemoteAuthority(parseWorkspaceIdentifier({ id: identifier.id, remoteAuthority: document.remoteAuthority }));
 		let remoteAuthority = identifier.remoteAuthority ?? storedAuthority;
 		if (identifier.remoteAuthority && storedAuthority && identifier.remoteAuthority !== storedAuthority) throw new Error(localize('workspace.remoteAuthorityMismatch', 'Workspace folders must belong to one remote host.'));
 		const folders: IWorkspaceFolder[] = [];

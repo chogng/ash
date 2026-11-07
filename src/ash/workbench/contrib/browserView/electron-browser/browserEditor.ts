@@ -85,6 +85,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 	private readonly contributions = new Map<Constructor<BrowserEditorContribution>, BrowserEditorContribution>();
 	private visible = false;
 	private inputRevision = 0;
+	private loadOnShow: (() => Promise<void>) | undefined;
 
 	static registerContribution(ctor: Constructor<BrowserEditorContribution>): void { this.contributionTypes.add(ctor); }
 	getContribution<T extends BrowserEditorContribution>(ctor: Constructor<T>): T | undefined { return this.contributions.get(ctor) as T | undefined; }
@@ -151,6 +152,16 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		this.clearInput();
 		this.currentInput = input;
 		const revision = ++this.inputRevision;
+		// Restored tabs can have a pane before the editor group shows them.
+		if (this.group && !this.visible && !input.model) {
+			this.loadOnShow = () => this.attachInput(input, signal, revision);
+			return;
+		}
+		await this.attachInput(input, signal, revision);
+	}
+
+	private async attachInput(input: BrowserEditorInput, signal: AbortSignal, revision: number): Promise<void> {
+		signal.throwIfAborted();
 		const isNew = !input.model;
 		const model = await input.resolve();
 		signal.throwIfAborted();
@@ -165,6 +176,7 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 	}
 	public override clearInput(): void {
 		this.inputRevision++;
+		this.loadOnShow = undefined;
 		this.modelListeners.clear();
 		this.currentModel = undefined;
 		this.currentInput = undefined;
@@ -178,6 +190,20 @@ export class BrowserEditor extends EditorPane implements IEditorPane {
 		super.setVisible(visibility);
 		this.visible = visibility;
 		for (const contribution of this.getContributions()) { contribution.onPaneVisibilityChanged(visibility); }
+		if (visibility && this.loadOnShow) {
+			const load = this.loadOnShow;
+			const revision = this.inputRevision;
+			// The group can activate a pane and hide it again in the same layout pass.
+			queueMicrotask(() => {
+				if (!this.visible || this.loadOnShow !== load) return;
+				this.loadOnShow = undefined;
+				void load().catch(error => {
+					if (revision !== this.inputRevision || this.isDisposed) return;
+					this.loadOnShow = load;
+					this.report(error);
+				});
+			});
+		}
 	}
 	public override focus(): void {
 		for (const contribution of this.getContributions()) { if (contribution.tryFocus()) { break; } }

@@ -79,7 +79,7 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 		get description() { return localize('window.startupWindow.description', 'Choose which window opens when Ash starts. Takes effect next launch. Opening a project directly takes priority.'); },
 		get options() {
 			return [
-				{ value: 'default', label: localize('window.startupWindow.default', 'Same as last time (default)') },
+				{ value: 'default', label: localize('window.startupWindow.default', 'Default') },
 				{ value: 'ide', label: localize('window.startupWindow.ide', 'IDE') },
 				{ value: 'agents', label: localize('window.startupWindow.agents', 'Agent window') },
 			] as const;

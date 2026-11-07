@@ -5,6 +5,8 @@ import { URI } from '../../../../src/ash/base/common/uri.js';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 import { launchElectronApplication, type ElectronApplicationLaunchResult } from '../../../automation/playwrightElectron.js';
 import { Workbench } from '../../../automation/workbench.js';
+import { installMainChannelTestClient } from '../../../automation/mainProcessIpc.js';
+
 import type { ElectronLaunchOptions } from '../../../automation/electron.js';
 import type { EditorPartsState } from '../../../../src/ash/workbench/browser/parts/editor/editorParts.js';
 
@@ -501,7 +503,7 @@ test('Desktop startup window setting is shared across IDE and Agent settings wit
 		const setting = workbench.settingsEditor.element.locator('[data-settings-item-id="window.startupWindow"]');
 		await expect(setting).toContainText('启动时打开');
 		const select = setting.getByRole('combobox');
-		await expect(select).toContainText('沿用上次（默认）');
+		await expect(select).toHaveText('默认');
 		await select.focus();
 		await select.press('Space');
 		await page.keyboard.press('End');
@@ -584,6 +586,79 @@ for (const startupWindow of ['default', 'ide', 'agents'] as const) {
 		} finally { await session.close(); }
 	});
 }
+
+test('Desktop restores the Agents window after switching projects', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
+	test.setTimeout(90_000);
+	const userDataDirectory = testInfo.outputPath('user-data');
+	const firstProject = testInfo.outputPath('first-project');
+	const nextProject = testInfo.outputPath('next-project');
+	await Promise.all([firstProject, nextProject, join(userDataDirectory, 'profile')].map(path => mkdir(path, { recursive: true })));
+	await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"window.restoreWindows":"one"}');
+	let session = await launch(userDataDirectory, firstProject, ['--agents-window']);
+	try {
+		const agents = await session.application.firstWindow();
+		const ready = '.ash-sessions-window[aria-busy="false"]';
+		await expect(agents.locator(ready)).toBeVisible();
+		await installMainChannelTestClient(agents);
+
+		expect(await agents.evaluate(() => globalThis.ashTestMainProcess.call('browserView', 'getBrowserViews', []))).toEqual([]);
+		await expect.poll(() => workspaceFolder(agents)).toBe(firstProject);
+		await session.application.evaluate(({ app }, folder) => {
+			app.emit('second-instance', {}, [process.execPath, app.getAppPath(), '--agents-window', '--folder', folder], process.cwd(), {});
+		}, nextProject);
+		await expect.poll(() => workspaceFolder(agents)).toBe(nextProject);
+		expect(session.application.windows()).toHaveLength(1);
+		// Check the live checkpoint before quit can write a replacement snapshot.
+		await expect.poll(async () => {
+			const state = JSON.parse(await readFile(join(userDataDirectory, 'state.json'), 'utf8')) as {
+				windowSession?: { windows: { kind: string; workspace: { uri?: string; }; }[]; };
+			};
+			return state.windowSession?.windows.find(window => window.kind === 'sessions')?.workspace.uri;
+		}).toBe(URI.file(nextProject).toString());
+		await session.quit();
+
+		session = await launch(userDataDirectory);
+		const restored = await session.application.firstWindow();
+		await expect(restored.locator(ready)).toBeVisible();
+		await installMainChannelTestClient(restored);
+
+		expect(await restored.evaluate(() => globalThis.ashTestMainProcess.call('browserView', 'getBrowserViews', []))).toEqual([]);
+		await expect.poll(() => workspaceFolder(restored)).toBe(nextProject);
+		expect(session.application.windows()).toHaveLength(1);
+	} finally {
+		await session.close();
+	}
+});
+
+test('Desktop skips unavailable and transient projects during window restoration', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
+	const userDataDirectory = testInfo.outputPath('user-data');
+	const folder = testInfo.outputPath('available-project');
+	const missing = testInfo.outputPath('missing-project');
+	const transient = testInfo.outputPath('transient.code-workspace');
+	await Promise.all([userDataDirectory, folder].map(path => mkdir(path, { recursive: true })));
+	await writeFile(transient, JSON.stringify({ folders: [{ path: folder }], transient: true }));
+	await writeFile(join(userDataDirectory, 'state.json'), JSON.stringify({
+		windowSession: {
+			version: 1,
+			active: 0,
+			windows: [
+				{ kind: 'workbench', workspace: { id: 'missing-ide', uri: URI.file(missing).toString() } },
+				{ kind: 'sessions', workspace: { id: 'missing-agents', uri: URI.file(missing).toString() } },
+				{ kind: 'workbench', workspace: { id: 'transient', configPath: URI.file(transient).toString() } },
+				{ kind: 'workbench', workspace: { id: 'available', uri: URI.file(folder).toString() } },
+			],
+		},
+	}));
+	const session = await launch(userDataDirectory);
+	try {
+		const restored = await session.application.firstWindow();
+		await new Workbench(restored).waitForReady();
+		expect(await workspaceFolder(restored)).toBe(folder);
+		expect(session.application.windows()).toHaveLength(1);
+	} finally {
+		await session.close();
+	}
+});
 
 test('Desktop restores open Workbench and Agents windows and honors startup intent', { tag: ['@electron-ui'] }, async ({ }, testInfo) => {
 	test.setTimeout(120_000);
@@ -711,6 +786,7 @@ test('Workbench restores editor tabs unless editor restoration is disabled', { t
 	const folder = testInfo.outputPath('folder');
 	await mkdir(join(userDataDirectory, 'profile'), { recursive: true });
 	await mkdir(folder, { recursive: true });
+	await writeFile(join(userDataDirectory, 'profile', 'settings.json'), '{"workbench.startupEditor":"welcomePage"}\n');
 	let application: ElectronApplication | undefined;
 	let session: ElectronApplicationLaunchResult | undefined;
 	try {

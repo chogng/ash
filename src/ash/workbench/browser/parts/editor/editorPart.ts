@@ -1362,7 +1362,8 @@ export class EditorPart extends Part implements IEditorPart, IEditorGroupsContai
 							pinned: !editor.preview || (startup?.hasOpened() === true && group === this._activeGroup),
 							preferredEditorId: editor.paneId,
 							preserveFocus: true,
-							inactive: startup !== undefined,
+							inactive: true,
+							restoring: true,
 						});
 					} catch (error) {
 						if (startup && error instanceof EditorOpenSupersededError) continue;

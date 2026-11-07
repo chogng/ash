@@ -800,9 +800,9 @@ export class AshApplication extends Disposable {
 		for (const entry of selection.windows) {
 			try {
 				if (entry.kind === 'workbench') {
-					await this.openWorkspace(entry.workspace, workspaces, true, entry.windowSessionId);
+					await this.performOpenWorkspace(entry.workspace, workspaces, true, { windowSessionId: entry.windowSessionId, restoring: true });
 				} else {
-					await this.openSessionsWindow(entry.workspace, await workspaces.resolveWorkspace(entry.workspace));
+					await this.openSessionsWindow(entry.workspace, await workspaces.resolveWorkspace(entry.workspace, { restoring: true }));
 				}
 			} catch (error) {
 				console.error('Failed to restore window', error);
@@ -1220,13 +1220,14 @@ export class AshApplication extends Disposable {
 
 	private async openWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false, windowSessionId?: string, terminalTransferStartup = false): Promise<WorkbenchWindowRecord | undefined> {
 		if (forceNewWindow) {
-			return this.performOpenWorkspace(workspace, workspaces, true, windowSessionId, terminalTransferStartup);
+			return this.performOpenWorkspace(workspace, workspaces, true, { windowSessionId, terminalTransferStartup });
 		}
 		const window = await this.windowsMainService.openWorkspace(workspace, async () => (await this.performOpenWorkspace(workspace, workspaces))?.window);
 		return window ? this.workbenchWindowData.get(window.id) : undefined;
 	}
 
-	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false, windowSessionId?: string, terminalTransferStartup = false): Promise<WorkbenchWindowRecord | undefined> {
+	private async performOpenWorkspace(workspace: IAnyWorkspaceIdentifier, workspaces: WorkspacesManagementMainService, forceNewWindow = false, options: { readonly windowSessionId?: string; readonly terminalTransferStartup?: boolean; readonly restoring?: boolean; } = {}): Promise<WorkbenchWindowRecord | undefined> {
+		let windowSessionId = options.windowSessionId;
 		const existingWindow = this.windowsMainService.findWorkspace(workspace);
 		const existing = existingWindow ? this.workbenchWindowData.get(existingWindow.id) : undefined;
 		if (existing && !forceNewWindow) {
@@ -1236,7 +1237,7 @@ export class AshApplication extends Disposable {
 		const resources = new DisposableStore();
 		let reservedWindowSessionId: string | undefined;
 		try {
-			const resolvedWorkspace = await workspaces.resolveWorkspace(workspace);
+			const resolvedWorkspace = await workspaces.resolveWorkspace(workspace, options);
 			if ('configPath' in workspace) workspace = { ...workspace, ...(getWorkspaceRemoteAuthority(resolvedWorkspace) ? { remoteAuthority: getWorkspaceRemoteAuthority(resolvedWorkspace) } : {}) };
 			// A closed window's checkpoint can outlive the open-window session list.
 			// Claim an unoccupied identity before opening yields to another launch.
@@ -1261,7 +1262,7 @@ export class AshApplication extends Disposable {
 				resources.dispose();
 				return undefined;
 			}
-			return await this.openWorkbenchWindow(workspaceContext, workspaces, supervisor, resources, windowSessionId, terminalTransferStartup);
+			return await this.openWorkbenchWindow(workspaceContext, workspaces, supervisor, resources, windowSessionId, options.terminalTransferStartup ?? false);
 		} catch (error) {
 			resources.dispose();
 			throw error;
@@ -2278,6 +2279,7 @@ export class AshApplication extends Disposable {
 					windowDisposables.add(session.workspaceContext.onDidChangeWorkspace(({ workspace, resolvedWorkspace }) => {
 						if (!window.isDestroyed()) {
 							this.windowsMainService.updateWorkspace(window.id, workspace);
+							this.windowSessionStateHandler.windowChanged();
 							this.windowsMainService.getWindowById(window.id)?.send(WORKSPACE_CONTEXT_CHANGED_CHANNEL, serializeWorkspace(resolvedWorkspace));
 						}
 					}));
@@ -2549,16 +2551,17 @@ export class AshApplication extends Disposable {
 	}
 
 	private getOpenWindowSessions(): readonly IWindowSessionWindow<WindowSessionEntry>[] {
-		const focusedWindowId = BrowserWindow.getFocusedWindow()?.id;
+		// A focused auxiliary editor belongs to its top-level window in the saved session.
+		const activeWindowId = this.windowsMainService.getLastActiveWindow()?.id;
 		const session = this.sessionsWindow.value;
 		const sessionsWindow = session && this.windowsMainService.managedWindow(AGENTS_WINDOW_KEY);
 		return [
 			...this.windowsMainService.getWindows().map(window => ({
 				id: window.id,
 				entry: { kind: 'workbench' as const, workspace: this.workbenchWindowData.get(window.id)!.workspaceContext.getWorkspace(), windowSessionId: this.workbenchWindowData.get(window.id)!.windowSessionId },
-				focused: window.id === focusedWindowId,
+				focused: window.id === activeWindowId,
 			})),
-			...(sessionsWindow && session ? [{ id: sessionsWindow.id, entry: { kind: 'sessions' as const, workspace: session.workspaceContext.getWorkspace() }, focused: sessionsWindow.id === focusedWindowId }] : []),
+			...(sessionsWindow && session ? [{ id: sessionsWindow.id, entry: { kind: 'sessions' as const, workspace: session.workspaceContext.getWorkspace() }, focused: sessionsWindow.id === activeWindowId }] : []),
 		];
 	}
 
