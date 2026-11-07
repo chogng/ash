@@ -273,7 +273,11 @@ export class ChatGPTList extends Disposable implements ChatListSource {
 			}, 1000);
 		}));
 		store.add(addDisposableListener(window.document, 'visibilitychange', refresh));
-		if (!this.chat.native) { store.add(disposableWindowInterval(window, refresh, 60_000)); }
+		if (!this.chat.native) {
+			store.add(disposableWindowInterval(window, () => {
+				if (this.chat.state.get().pendingSync) { refresh(); }
+			}, 60_000));
+		}
 		return store;
 	}
 

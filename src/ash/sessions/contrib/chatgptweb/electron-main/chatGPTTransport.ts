@@ -159,7 +159,7 @@ export class ChatGPTTransport extends Disposable {
 				return response;
 			};
 			const gate = request.method === 'GET' && url.pathname === '/backend-api/conversations' ? this.options.recentHistoryGate : undefined;
-			const response = gate && authorization.cacheScope ? await gate.request(authorization.cacheScope, signal, send) : await send();
+			const response = gate && authorization.cacheScope ? await gate.request(authorization.cacheScope, this.options.native === true, signal, send) : await send();
 			const contentType = response.headers.get('content-type') ?? '';
 			const headers = new Headers();
 			const retryAfter = response.status === 429 ? response.headers.get('Retry-After') : null;

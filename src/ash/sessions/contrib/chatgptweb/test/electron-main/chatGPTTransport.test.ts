@@ -82,51 +82,54 @@ function runtime(fetcher: typeof fetch, prepareHeaders: IChatGPTVerificationRunt
 
 suite('ChatGPT transport', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
-	test('native recent history shares the original 429 deadline across windows and desktop restarts', async () => {
-		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
-		const directory = await mkdtemp(join(tmpdir(), 'ash-chatgpt-cooldown-'));
-		try {
-			const statePath = join(directory, 'workbench-state.json');
-			const account = 'a'.repeat(64);
-			const signal = new AbortController().signal;
-			let upstreamCalls = 0;
-			const fetch = async () => {
-				upstreamCalls++;
-				return Response.json({});
-			};
-			{
-				using storage = new StorageMainService(statePath);
-				await storage.initialize();
-				using gate = new ChatGPTRecentHistoryGate(storage, new NullLoggerService());
-				const upstream = new DeferredPromise<Response>();
-				const first = gate.request(account, signal, async () => { upstreamCalls++; return upstream.p; });
-				const fromAnotherWindow = gate.request(account, signal, fetch);
-				await upstream.complete(new Response(null, { status: 429, headers: { 'Retry-After': '120' } }));
-				assert.equal((await first).headers.get('Retry-After'), '120');
-				assert.equal((await fromAnotherWindow).status, 429);
-				assert.equal(upstreamCalls, 1);
-				await storage.close();
+	for (const native of [false, true]) {
+		test(`${native ? 'Native' : 'Web'} recent history shares the original 429 deadline across windows and desktop restarts`, async () => {
+			mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+			const directory = await mkdtemp(join(tmpdir(), 'ash-chatgpt-cooldown-'));
+			try {
+				const statePath = join(directory, 'workbench-state.json');
+				const account = 'a'.repeat(64);
+				const signal = new AbortController().signal;
+				const retryAfter = native ? 120 : 30;
+				let upstreamCalls = 0;
+				const fetch = async () => {
+					upstreamCalls++;
+					return Response.json({});
+				};
+				{
+					using storage = new StorageMainService(statePath);
+					await storage.initialize();
+					using gate = new ChatGPTRecentHistoryGate(storage, new NullLoggerService());
+					const upstream = new DeferredPromise<Response>();
+					const first = gate.request(account, native, signal, async () => { upstreamCalls++; return upstream.p; });
+					const fromAnotherWindow = gate.request(account, native, signal, fetch);
+					await upstream.complete(new Response(null, { status: 429, headers: { 'Retry-After': String(retryAfter) } }));
+					assert.equal((await first).headers.get('Retry-After'), String(retryAfter));
+					assert.equal((await fromAnotherWindow).status, 429);
+					assert.equal(upstreamCalls, 1);
+					await storage.close();
+				}
+				{
+					using storage = new StorageMainService(statePath);
+					await storage.initialize();
+					using gate = new ChatGPTRecentHistoryGate(storage, new NullLoggerService());
+					mock.timers.tick((retryAfter - 5) * 1000);
+					const blocked = await gate.request(account, native, signal, fetch);
+					assert.equal(blocked.status, 429);
+					assert.equal(blocked.headers.get('Retry-After'), '5');
+					assert.equal(upstreamCalls, 1);
+					assert.equal((await gate.request('b'.repeat(64), native, signal, fetch)).status, 200);
+					mock.timers.tick(5000);
+					assert.equal((await gate.request(account, native, signal, fetch)).status, 200);
+					assert.equal(upstreamCalls, 3);
+					await storage.close();
+				}
+			} finally {
+				mock.timers.reset();
+				await rm(directory, { recursive: true, force: true });
 			}
-			{
-				using storage = new StorageMainService(statePath);
-				await storage.initialize();
-				using gate = new ChatGPTRecentHistoryGate(storage, new NullLoggerService());
-				mock.timers.tick(61_000);
-				const blocked = await gate.request(account, signal, fetch);
-				assert.equal(blocked.status, 429);
-				assert.equal(blocked.headers.get('Retry-After'), '59');
-				assert.equal(upstreamCalls, 1);
-				assert.equal((await gate.request('b'.repeat(64), signal, fetch)).status, 200);
-				mock.timers.tick(59_000);
-				assert.equal((await gate.request(account, signal, fetch)).status, 200);
-				assert.equal(upstreamCalls, 3);
-				await storage.close();
-			}
-		} finally {
-			mock.timers.reset();
-			await rm(directory, { recursive: true, force: true });
-		}
-	});
+		});
+	}
 
 	test('admits native history only on the experimental channel', async () => fixture(async auth => {
 		const path = '/service/backend-api/conversations/thread/messages?num_turns=20&include_has_versions=true&before=cursor';

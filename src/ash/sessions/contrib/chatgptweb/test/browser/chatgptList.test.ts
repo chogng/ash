@@ -223,6 +223,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		let rateLimited = false;
 		let changed = false;
 		let requests = 0;
+		await page.clock.install();
 		await mockChatGPTRequests(page);
 		await page.route('**/service/backend-api/conversations?*', route => {
 			requests++;
@@ -238,7 +239,11 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await previous.click();
 		const chat = page.locator('.ash-chatgpt-widget');
 		await expect(chat).toContainText('Synthetic answer');
+		await page.clock.fastForward(6 * 60_000);
+		await page.clock.runFor(1_000);
+		expect(requests).toBe(1);
 		rateLimited = true;
+		await page.evaluate(() => window.dispatchEvent(new Event('offline')));
 		await page.evaluate(() => window.dispatchEvent(new Event('online')));
 		await expect.poll(() => historyNotices(page)).toEqual([rateLimitNotice]);
 		await page.evaluate(() => window.ashChatGPTIntegration.retryHistory());
@@ -250,7 +255,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 
 		rateLimited = false;
 		changed = true;
-		await page.clock.setFixedTime(new Date(Date.now() + 65_000));
+		await page.clock.fastForward(65_000);
 		await page.evaluate(() => window.dispatchEvent(new Event('online')));
 		await expect(page.getByRole('button', { name: 'New on another device', exact: true })).toBeVisible();
 		await expect(previous).toHaveCount(0);
@@ -613,7 +618,9 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		const label = button.locator('.ash-sessions-list-label');
 		const text = label.locator('span');
 		const short = page.getByRole('button', { name: '短标题', exact: true });
-		await expect(label).toHaveCSS('text-overflow', 'ellipsis');
+		await expect(label).toHaveCSS('text-overflow', 'clip');
+		await expect(label).toHaveCSS('mask-image', /^linear-gradient/);
+		await expect(text).toHaveCSS('animation-name', 'none');
 		for (const direction of ['ltr', 'rtl']) {
 			await page.locator('#navigation').evaluate((element, dir) => { element.setAttribute('dir', dir); }, direction);
 			await button.hover();
@@ -629,6 +636,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 
 			await short.hover();
 			await expect(text).toHaveCSS('transform', 'none');
+			await expect(label).toHaveCSS('animation-name', 'none');
 			await expect(short.locator('.ash-sessions-list-label')).toHaveCSS('mask-image', 'none');
 		}
 		await page.emulateMedia({ reducedMotion: 'reduce' });

@@ -122,12 +122,19 @@ suite('ChatGPT shared service', () => {
 		}
 		{
 			const loaded = new DeferredPromise<void>();
+			const paths: string[] = [];
 			using fresh = fixture(async path => {
-				if (path.includes('/conversations?')) { void loaded.complete(); }
+				paths.push(path);
 				return response(path);
 			}, { values });
+			using ready = autorun(reader => {
+				if (fresh.state.read(reader).connected) { void loaded.complete(); }
+			});
 			fresh.newChat({ clearDraft: true });
 			await loaded.p;
+			assert.equal(paths.length, 1);
+			assert.ok(paths[0]?.includes('/models?'));
+			assert.deepEqual(fresh.state.get().conversations.map(item => item.id), ['one', 'two']);
 			assert.equal(fresh.state.get().draft, '');
 			assert.equal(selectedChatConversationId(fresh.state.get()), undefined);
 			fresh.setDraft('New draft to restore');
@@ -629,14 +636,20 @@ suite('ChatGPT shared service', () => {
 		assert.equal(chat.state.get().uncertain, false);
 	});
 
-	test('refresh synchronizes cloud additions, edits and confirmed deletions across loaded pages and disk', async () => {
+	test('refresh reads only the recent head and keeps cached pages and the active chat usable', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		using clock = toDisposable(() => mock.timers.reset());
 		const values = new Map<string, string>();
+		const offsets: number[] = [];
+		let sidebarReads = 0;
 		let ids = ['one', 'two', 'older'];
 		let unavailable = false;
 		let revised = false;
 		const respond = async (path: string): Promise<Response> => {
+			if (path.includes('/pins?') || path.includes('/gizmos/snorlax/sidebar?')) { sidebarReads++; }
 			if (path.includes('/conversations?')) {
 				const offset = Number(new URL(path, 'https://fixture.invalid').searchParams.get('offset'));
+				offsets.push(offset);
 				return Response.json({ items: ids.slice(offset, offset + 2).map(id => ({ id, title: id })), total: ids.length });
 			}
 			if (path.endsWith('/conversation/two')) {
@@ -657,19 +670,30 @@ suite('ChatGPT shared service', () => {
 		await chat.loadMore();
 		await chat.select('two');
 		chat.setDraft('Unsent text');
-		revised = true;
 		await chat.refresh();
+		assert.deepEqual(offsets, [0, 2]);
+		revised = true;
+		mock.timers.tick(5 * 60_000);
+		await Promise.all([chat.refresh(), chat.refresh()]);
+		assert.deepEqual(offsets, [0, 2, 0]);
+		assert.equal(sidebarReads, 2);
 		assert.equal(chat.state.get().messages[0]?.text, 'Updated remotely');
 		assert.equal(chat.state.get().draft, 'Unsent text');
 
 		ids = ['new', 'one', 'older'];
 		unavailable = true;
+		mock.timers.tick(5 * 60_000);
 		await chat.refresh();
-		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ['new', 'one', 'older', 'two']);
+		assert.deepEqual(offsets, [0, 2, 0, 0]);
+		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ['new', 'one', 'two', 'older']);
+		await chat.loadMore();
+		assert.deepEqual(offsets, [0, 2, 0, 0, 2]);
 		assert.equal(chat.state.get().conversationId, 'two');
 		assert.equal(chat.state.get().messages[0]?.text, 'Updated remotely');
 		unavailable = false;
+		mock.timers.tick(5 * 60_000);
 		await chat.refresh();
+		assert.equal(sidebarReads, 4);
 		assert.deepEqual(chat.state.get().conversations.map(item => item.id), ids);
 		assert.equal(chat.state.get().conversationId, undefined);
 		assert.equal(chat.state.get().draft, 'Unsent text');
@@ -682,6 +706,8 @@ suite('ChatGPT shared service', () => {
 	});
 
 	test('a remote snapshot in flight cannot undo an acknowledged local delete', async () => {
+		mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+		using clock = toDisposable(() => mock.timers.reset());
 		const entered = new DeferredPromise<void>();
 		const released = new DeferredPromise<void>();
 		let held = false;
@@ -701,6 +727,7 @@ suite('ChatGPT shared service', () => {
 		});
 		await chat.reload();
 		held = true;
+		mock.timers.tick(5 * 60_000);
 		const stale = chat.refresh();
 		await entered.p;
 		await chat.deleteConversation('two');
@@ -900,7 +927,7 @@ suite('ChatGPT shared service', () => {
 				assert.equal(deletes, 0);
 			}
 			indexed = true;
-			await reopened.refresh();
+			await reopened.reload();
 			assert.equal(posts, 1);
 			assert.equal(deletes, cancelled ? 1 : 0);
 			assert.equal(reopened.state.get().conversationId, cancelled ? undefined : 'cloud-created');

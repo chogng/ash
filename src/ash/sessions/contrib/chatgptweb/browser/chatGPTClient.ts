@@ -75,7 +75,7 @@ export function isChatGPTRateLimit(error: unknown): error is ChatGPTRequestError
 	return error instanceof ChatGPTRequestError && error.status === 429;
 }
 
-type HistoryRead = 'recent' | 'project' | 'conversation';
+type HistoryRead = 'recent' | 'projects' | 'pins' | 'project' | 'conversation';
 
 /** ChatGPT web conversation client. Authentication is supplied by the host per request. */
 export class ChatGPTClient {
@@ -147,7 +147,7 @@ export class ChatGPTClient {
 	}
 
 	async pinnedConversations(signal: AbortSignal): Promise<readonly ChatGPTConversation[]> {
-		const value = await this.json('/pins?item_type=conversation', signal);
+		const value = await this.json('/pins?item_type=conversation', signal, this.native ? undefined : 'pins');
 		if (!Array.isArray(value)) { throw this.invalidResponse(); }
 		return value.flatMap(pin => {
 			const item = isRecord(pin) ? pin.item : undefined;
@@ -162,7 +162,7 @@ export class ChatGPTClient {
 		let cursor: string | undefined;
 		do {
 			const query = new URLSearchParams({ conversations_per_gizmo: '0', limit: '20', owned_only: 'false', ...(cursor ? { cursor } : {}) });
-			const value = await this.json('/gizmos/snorlax/sidebar?' + query, signal);
+			const value = await this.json('/gizmos/snorlax/sidebar?' + query, signal, this.native ? undefined : 'projects');
 			if (!isRecord(value) || !Array.isArray(value.items) || (value.cursor != null && typeof value.cursor !== 'string')) { throw this.invalidResponse(); }
 			for (const item of value.items) {
 				if (!isRecord(item) || !isRecord(item.gizmo)) { continue; }
@@ -556,11 +556,10 @@ export class ChatGPTClient {
 			return value;
 		} catch (error) {
 			if (!history || !isChatGPTRateLimit(error) || signal.aborted) { throw error; }
-			// The recent list uses a minimum cooldown. Detail reads can resume sooner
-			// when the server gives a deadline. A local rejection never extends it.
+			// A shared cooldown can return only a few seconds remaining.
+			// A local rejection must never extend that deadline.
 			const now = Date.now();
-			const fallback = history === 'recent' || error.retryAt === undefined ? now + chatGPTHistoryCooldownMs : now;
-			const retryAt = Math.max(fallback, error.retryAt ?? 0, this.historyLimits.get(history)?.retryAt ?? 0);
+			const retryAt = Math.max(error.retryAt ?? now + chatGPTHistoryCooldownMs, this.historyLimits.get(history)?.retryAt ?? 0);
 			const message = history === 'conversation'
 				? localize('sessions.chatgpt.conversationRateLimited', 'ChatGPT conversation sync is temporarily paused. Try again later.')
 				: error.message;
