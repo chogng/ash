@@ -19,9 +19,12 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../../pla
 import { IWorkspaceContextService, type IWorkspace } from '../../../../../platform/workspace/common/workspace.js';
 import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { IWorkspacesService } from '../../../../../platform/workspaces/common/workspaces.js';
+import { IViewDescriptorService, ViewContainerLocation } from '../../../../common/views.js';
 import { IHostService } from '../../../../services/host/browser/host.js';
 import { TestHostService } from '../../../../services/host/test/browser/testHostService.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
+import { IWorkbenchLayoutService } from '../../../../services/layout/browser/layoutService.js';
+import { IPaneCompositePartService } from '../../../../services/panecomposite/browser/panecomposite.js';
 import { IViewsService } from '../../../../services/views/common/viewsService.js';
 import { createTestComponentServices } from '../../../../test/common/testEditorServices.js';
 import type { IChatWidgetViewOptions, IQuickChatSession } from '../../../chat/browser/chat.js';
@@ -61,6 +64,8 @@ function fixture(workspace: IWorkspace = { id: 'empty', folders: [] }, lifecycle
 	let restored: unknown;
 	const prefilled = new DeferredPromise<void>();
 	let released = 0;
+	let chatPartVisible = false;
+	let chatCloseCount = 0;
 	const draft = { mode: 'plan' as const, text: 'Review the selected project', contexts: [{ id: 'context', kind: 'file', name: 'notes.txt', content: 'Captured notes', reference: undefined }] };
 	const view = Object.create(ChatViewPane.prototype) as ChatViewPane;
 	view.createEmbeddedChat = (container, _title, value) => {
@@ -72,7 +77,10 @@ function fixture(workspace: IWorkspace = { id: 'empty', folders: [] }, lifecycle
 			onDidDispose: Event.None, setVisible() { }, reveal() { }, dispose() { released++; root.remove(); }, [Symbol.dispose]() { released++; root.remove(); },
 		} as unknown as IQuickChatSession;
 	};
-	services.registerInstance(IViewsService, { openView: async () => view, isViewVisible: () => false, closeView() { } } as unknown as IViewsService);
+	services.registerInstance(IViewsService, { openView: async () => view, isViewVisible: () => false, closeView() { chatCloseCount++; } } as unknown as IViewsService);
+	services.registerInstance(IViewDescriptorService, { getViewContainerForView: () => ({ id: 'chat-container', location: ViewContainerLocation.AuxiliaryBar }) } as unknown as IViewDescriptorService);
+	services.registerInstance(IPaneCompositePartService, { getPartId: () => 'auxiliarybar', getActivePaneComposite: () => undefined, getLastActivePaneCompositeId: () => 'chat-container' } as unknown as IPaneCompositePartService);
+	services.registerInstance(IWorkbenchLayoutService, { isPartVisible: () => chatPartVisible } as unknown as IWorkbenchLayoutService);
 	const page = resources.add(services.createInstance(AgentSessionsWelcomePage));
 	page.create(dom.window.document.body);
 	page.setVisible(true);
@@ -81,10 +89,21 @@ function fixture(workspace: IWorkspace = { id: 'empty', folders: [] }, lifecycle
 		attachments: draft.contexts.map(context => ({ ...context, resolve: async () => ({ name: context.name, content: context.content }) })),
 		storage: services.get(IStorageService), get options() { assert.ok(options); return options; }, get restored() { return restored; }, get released() { return released; },
 		fail() { failOpen = true; },
+		showChatPart() { chatPartVisible = true; },
+		get chatCloseCount() { return chatCloseCount; },
 		async open() { await page.setInput(new AgentSessionsWelcomeInput(), new AbortController().signal); },
 		[Symbol.dispose]() { resources.dispose(); },
 	};
 }
+
+test('Restoring Welcome preserves the saved Chat side bar visibility before its view mounts', async () => {
+	for (const visible of [true, false]) {
+		using f = fixture(undefined, { phase: LifecyclePhase.Ready, when: async () => { } });
+		if (visible) { f.showChatPart(); }
+		await f.open();
+		assert.equal(f.chatCloseCount, visible ? 0 : 1);
+	}
+});
 
 test('Welcome exposes only trusted targets and opens a chosen workspace with its captured draft', async () => {
 	using f = fixture();
@@ -158,14 +177,14 @@ test('Welcome editor identity round trips without serializing another copy of th
 });
 
 
-test('Chinese Welcome uses the translated heading, host actions and editor name', async () => {
+test('Chinese Welcome uses the translated heading, region label and editor name', async () => {
 	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
 	try {
 		using f = fixture();
 		await f.open();
 		const content = f.page.getContainer()!;
 		assert.equal(content.querySelector('h1')?.textContent, '你想处理什么工作？');
-		assert.deepEqual([...content.querySelectorAll('button')].map(button => button.textContent), ['在聊天视图中打开', '聊天历史']);
+		assert.equal(content.getAttribute('aria-label'), 'Agent 会话欢迎页');
 		using input = new AgentSessionsWelcomeInput();
 		assert.equal(input.getName(), 'Agent 会话欢迎页');
 	} finally { resetNlsResolver(); }

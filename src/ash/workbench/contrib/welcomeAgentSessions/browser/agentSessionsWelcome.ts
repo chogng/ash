@@ -16,10 +16,13 @@ import { IWorkspaceTrustManagementService } from '../../../../platform/workspace
 import { IWorkspacesService, recentWorkspaceUri } from '../../../../platform/workspaces/common/workspaces.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import type { IResourceEditorInput } from '../../../common/editor.js';
+import { IViewDescriptorService } from '../../../common/views.js';
 import type { EditorInputSerializer } from '../../../services/editor/common/editorInputSerializer.js';
 import { captureChatDraft } from '../../../services/chat/common/chatContextService.js';
 import { ILifecycleService, LifecyclePhase } from '../../../services/lifecycle/common/lifecycle.js';
 import { IHostService } from '../../../services/host/browser/host.js';
+import { IWorkbenchLayoutService } from '../../../services/layout/browser/layoutService.js';
+import { IPaneCompositePartService } from '../../../services/panecomposite/browser/panecomposite.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { takeTransferredChatDraft } from '../../chat/browser/actions/chatTransfer.js';
 import type { IWorkspacePickerDelegate, IWorkspacePickerItem, IQuickChatSession, IChatViewPane } from '../../chat/browser/chat.js';
@@ -43,6 +46,9 @@ export class AgentSessionsWelcomePage extends EditorPane {
 
 	constructor(
 		@IViewsService private readonly views: IViewsService,
+		@IViewDescriptorService private readonly viewDescriptors: IViewDescriptorService,
+		@IPaneCompositePartService private readonly panes: IPaneCompositePartService,
+		@IWorkbenchLayoutService private readonly layoutService: IWorkbenchLayoutService,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 		@IWorkspacesService private readonly history: IWorkspacesService,
 		@IWorkspaceTrustManagementService private readonly trust: IWorkspaceTrustManagementService,
@@ -97,7 +103,7 @@ export class AgentSessionsWelcomePage extends EditorPane {
 		signal.throwIfAborted();
 		if (this.configuration.getValue<boolean>(ChatAIDisabledSettingId)) { throw canceled(); }
 		if (!this.mount.value) {
-			const wasVisible = this.views.isViewVisible(CHAT_VIEW_ID);
+			const wasVisible = this.views.isViewVisible(CHAT_VIEW_ID) || this.isChatViewPendingRestore();
 			const view = await this.views.openView<IChatViewPane>(CHAT_VIEW_ID);
 			signal.throwIfAborted();
 			if (this.isDisposed) { throw canceled(); }
@@ -151,6 +157,16 @@ export class AgentSessionsWelcomePage extends EditorPane {
 	public override layout(_dimension: IDimension): void { }
 	public override setVisible(visible: boolean): void { super.setVisible(visible); this.shown = visible; this.updateVisibility(); }
 	public override focus(): void { this.mount.value?.widget.focusInput(); }
+
+	private isChatViewPendingRestore(): boolean {
+		if (this.lifecycle.phase >= LifecyclePhase.Restored) { return false; }
+		// Welcome can be restored as an editor before the Workbench opens the saved view containers.
+		const container = this.viewDescriptors.getViewContainerForView(CHAT_VIEW_ID);
+		return container !== undefined
+			&& this.layoutService.isPartVisible(this.panes.getPartId(container.location))
+			&& !this.panes.getActivePaneComposite(container.location)
+			&& this.panes.getLastActivePaneCompositeId(container.location) === container.id;
+	}
 
 	private updateVisibility(): void {
 		if (!this.root) { return; }

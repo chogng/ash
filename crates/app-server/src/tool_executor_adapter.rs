@@ -381,13 +381,24 @@ impl ToolExecutorRuntime {
             context,
         );
         let outcome = pollster::block_on(self.executor.execute(invocation));
-        if !matches!(outcome, ToolExecutionOutcome::SandboxDenied(_)) {
+        let output = match outcome {
+            ToolExecutionOutcome::SandboxDenied(denial)
+                if matches!(authority, ToolRuntimeAuthority::Sandboxed(_))
+                    && !matches!(authorization, ToolAuthorization::Sandboxed(_)) =>
+            {
+                // The launch still needed isolation after approval or bypass. A new
+                // outside-sandbox approval cannot change that launch requirement.
+                Ok(ToolExecutionOutput::Failure(denial.reason().to_owned()))
+            }
+            outcome => protocol_execution_output(outcome, sink),
+        };
+        if !matches!(&output, Ok(ToolExecutionOutput::SandboxDenied(_))) {
             self.prepared
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .remove(&call.id);
         }
-        protocol_execution_output(outcome, sink)
+        output
     }
 }
 

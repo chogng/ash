@@ -86,13 +86,14 @@ function fixture(kind: 'Code' | 'Cowork', subscribe?: (threadId: string) => Prom
 	} as unknown as ILanguageModelsService;
 	const preferences = { onDidChangeModels: Event.None } as ILanguageModelsConfigurationService;
 	const session: ISession = { sessionId: 'session', kind: 'code' as const, title: 'Session', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, nextApprovalMode: 'manual', chats: [{ threadId: 'A', origin: { type: 'root' }, status: 'active' }, { threadId: 'B', origin: { type: 'fork', parentThreadId: 'A', parentSequence: 1 }, status: 'active' }] };
-	const sessions = {} as ISessionsManagementService;
+	// Tests select a thread explicitly. An empty catalog keeps fork-version reads out of transcript tests.
+	const sessions = { onDidChange: Event.None, sessions: [], untitledSessions: [] } as unknown as ISessionsManagementService;
 	const selection = { kind: 'session' as const, active: { session, threadId: 'A' } };
 	const storage = { get: () => undefined, store: () => { } } as unknown as IStorageService;
 	const contextKeys = resources.add(new ContextKeyService());
 	SessionsWorkspaceModeContext.bindTo(contextKeys).set(kind === 'Code' ? 'code' : 'chat');
 	const model = resources.add(kind === 'Code' ? new ChatWidgetModel(routedChat, selection, sessions, prompts, models, execution, configuration, storage, contextKeys) : new CoworkWidgetModel(routedChat, selection, sessions, prompts, models, preferences, execution, configuration));
-	return { resources, model, configuration, storage, contextKeys, chat, routedChat, models, prompts, executionSettings: execution, threadApi, turnApi, modelApi, execution, starts, queues, steers, consults, compacts, updates, transcripts, offers, session, reconnect: () => { generation++; connection.fire('ready'); } };
+	return { resources, model, configuration, storage, contextKeys, chat, routedChat, models, prompts, executionSettings: execution, threadApi, turnApi, modelApi, execution, starts, queues, steers, consults, compacts, updates, transcripts, offers, session, sessions, reconnect: () => { generation++; connection.fire('ready'); } };
 }
 
 async function turnTask(): Promise<void> { await new Promise(resolve => setTimeout(resolve, 0)); }
@@ -714,6 +715,7 @@ test('Code keeps a directoryless draft editable and blocks sending and voice unt
 	const draft = { untitledSessionId: 'directoryless', title: 'New Chat', model: undefined, agent: undefined, workspace: { type: 'current' as const } };
 	let creations = 0;
 	const sessions = {
+		onDidChange: Event.None,
 		untitledSessions: [draft],
 		materializeUntitledSession: async () => { creations++; return { session: f.session, threadId: 'A' }; },
 		promoteUntitledSession: () => { },
@@ -765,7 +767,7 @@ test('Ash Chat can continue a directoryless conversation using the shared compos
 	const mode = SessionsWorkspaceModeContext.bindTo(contextKeys);
 	const session = { ...f.session, workspace: null };
 	const active = { session, threadId: 'A' };
-	using model = new ChatWidgetModel(f.chat, { kind: 'session', active }, {} as ISessionsManagementService, f.prompts, f.models, f.execution, f.configuration, f.storage, contextKeys);
+	using model = new ChatWidgetModel(f.chat, { kind: 'session', active }, f.sessions, f.prompts, f.models, f.execution, f.configuration, f.storage, contextKeys);
 	await model.initialize();
 
 	mode.set('code');
@@ -784,6 +786,7 @@ test('voice source preparation materializes the model selected immediately befor
 	let draft = { untitledSessionId: 'voice-draft', title: 'New Chat', model: undefined as typeof selected | undefined, modelSelectionKind: 'manual' as const, modelDefaults: { workspace: codeConversationWorkspaceKey(workspace) ?? null }, agent: undefined, workspace, projectId: 'project' };
 	const materializedModels: (typeof selected | undefined)[] = [];
 	const sessionService = {
+		onDidChange: Event.None,
 		get untitledSessions() { return [draft]; }, get activeUntitledSession() { return draft; },
 		setUntitledSessionModel: (_id: string, model: typeof selected) => { draft = { ...draft, model }; },
 		materializeUntitledSession: async () => { materializedModels.push(draft.model); return { session: { ...f.session, model: draft.model }, threadId: 'A' }; },
@@ -951,7 +954,7 @@ for (const kind of ['Code', 'Cowork'] as const) {
 		await f.model.initialize();
 		const draft = { untitledSessionId: 'organized', title: 'Unsent', model: undefined, modelSelectionKind: 'manual' as const, agent: undefined, workspace: { type: 'current' as const } };
 		const materialized = observableValue<ReadonlyMap<string, { sessionId: string; threadId: string; }>>('test materialization', new Map());
-		const sessions = { untitledSessions: [draft], materializedSessions: materialized } as unknown as ISessionsManagementService;
+		const sessions = { onDidChange: Event.None, untitledSessions: [draft], materializedSessions: materialized } as unknown as ISessionsManagementService;
 		using configuration = new TestConfigurationService();
 		using model = kind === 'Code'
 			? new ChatWidgetModel(f.chat, { kind: 'untitled', session: draft }, sessions, f.prompts, f.models, f.execution, configuration, f.storage, f.contextKeys)

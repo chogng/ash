@@ -120,7 +120,7 @@ test('sandbox approval preserves captured enforcement evidence without exposing 
 	assert.equal(offers.length, 1);
 	assert.deepEqual(offers[0].interaction.request, {
 		type: 'approval', request: {
-			reason: 'Approve access', allowedDecisions: undefined, command: undefined, sandboxDenial,
+			reason: 'Approve access', allowedDecisions: undefined, command: undefined, sessionCommandPrefix: undefined, sandboxDenial,
 			riskAssessment: { riskLevel: 'high', reason: 'publishes externally' },
 			capabilities: [{ kind: 'network', scope: 'example.test' }],
 		},

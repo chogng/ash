@@ -21,6 +21,9 @@ use ash_protocol::ActionPolicyRevision;
 use ash_protocol::ActionProvenance;
 use ash_protocol::ActionSource;
 use ash_protocol::CapabilitySet;
+use ash_protocol::ProcessExecutionOutput;
+use ash_protocol::ProcessExitStatus;
+use ash_protocol::SandboxDenialOutput;
 use ash_protocol::ToolCall;
 use ash_protocol::ToolCallId;
 use ash_protocol::ToolExecutionOutput;
@@ -99,8 +102,15 @@ pub(crate) fn assert_managed_sandbox_execution(
                     .all(|grant| grant.access() == ash_sandboxing::SandboxDirAccess::ReadOnly)
             );
             self.1.store(true, Ordering::SeqCst);
-            Box::pin(future::ready(ToolExecutionOutcome::Returned(
-                ToolOutput::success(vec![]),
+            Box::pin(future::ready(ToolExecutionOutcome::SandboxDenied(
+                SandboxDenialOutput::safe_to_retry(
+                    "fixture sandbox unavailable",
+                    ProcessExecutionOutput::from_captured_streams(
+                        ProcessExitStatus::Terminated,
+                        "",
+                        "",
+                    ),
+                ),
             )))
         }
     }
@@ -136,7 +146,7 @@ pub(crate) fn assert_managed_sandbox_execution(
             arguments: serde_json::json!({"program":std::env::current_exe().unwrap(), "arguments":[], "working_directory":"."}),
         };
         runtime.prepare(&call).unwrap();
-        runtime
+        let output = runtime
             .execute_for_turn(
                 &binding,
                 &call,
@@ -151,6 +161,15 @@ pub(crate) fn assert_managed_sandbox_execution(
             )
             .unwrap();
         assert!(observed.load(Ordering::SeqCst));
+        if matches!(authorization, ToolAuthorization::Sandboxed(_)) {
+            assert!(matches!(output, ToolExecutionOutput::SandboxDenied(_)));
+            assert!(runtime.prepared.lock().unwrap().contains_key(&call.id));
+        } else {
+            assert!(
+                matches!(output, ToolExecutionOutput::Failure(reason) if reason == "fixture sandbox unavailable")
+            );
+            assert!(!runtime.prepared.lock().unwrap().contains_key(&call.id));
+        }
     }
 }
 

@@ -254,10 +254,14 @@ export class ChatService extends Disposable implements IChatService {
 			if (this.isDisposed || subscription.generation !== this.appServerApi.connectionGeneration || this.threadSubscriptions.get(key) !== subscription) { throw canceled(); }
 			// A notification arriving during this RPC can describe newer state than its snapshot.
 			// Only an offer that predates the RPC can be retired by that snapshot.
-			if (subscription.offer && subscription.offer === offeredBeforeSubscribe) {
-				const turn = result.thread.turns.find(turn => turn.turnId === subscription.offer?.turnId);
-				// An omitted Turn in a bounded window says nothing about its pending interaction.
-				if (turn ? !['waitingForApproval', 'waitingForUserInput', 'waitingForCapability'].includes(turn.status) : !result.history) this.retireInteractionOffer(subscription);
+			if (offeredBeforeSubscribe && subscription.offer === offeredBeforeSubscribe) {
+				const turn = result.thread.turns.find(turn => turn.turnId === offeredBeforeSubscribe.turnId);
+				// A waiting Turn can move to another request. An omitted Turn in a bounded window says nothing about its request.
+				const offerRetired = turn
+					? !['waitingForApproval', 'waitingForUserInput', 'waitingForCapability'].includes(turn.status)
+					|| (turn.pendingInteraction != null && turn.pendingInteraction.requestId !== offeredBeforeSubscribe.interaction.requestId)
+					: !result.history;
+				if (offerRetired) this.retireInteractionOffer(subscription);
 			}
 			return result;
 		} finally {
