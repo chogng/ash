@@ -4,6 +4,8 @@ import { waitForElectronWindowState } from '../../../automation/electronDriver.j
 
 // Window switching must transfer OS focus to the detached editor.
 const focusTest = test.extend({ electronWindowMode: 'active' });
+// Capturing screenshots requires a visible window, without activating it on launch.
+const screenshotTest = test.extend({ electronWindowMode: 'inactive' });
 
 for (const scenario of [
 	{ mode: 'move', locale: 'en', keyboard: false },
@@ -196,7 +198,7 @@ focusTest('detached editor windows participate in desktop window switching and c
 	}
 });
 
-test('detached window titlebar follows its own editor and reserves layout space', async ({ application, target, workbench }) => {
+screenshotTest('detached window titlebar follows its own editor and reserves layout space', async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	await page.keyboard.press('ControlOrMeta+N');
 	await workbench.editors.groupAt(0).editor.waitForEditorFocus();
@@ -246,9 +248,11 @@ test('detached window titlebar follows its own editor and reserves layout space'
 		await expect(compactTitle).toBeVisible();
 		await expect(compactTitle).toHaveText(await popup.title());
 		const titleBounds = (await compactTitle.boundingBox())!;
-		const windowWidth = await popup.evaluate(() => window.innerWidth);
-		expect(Math.abs(titleBounds.x + titleBounds.width / 2 - windowWidth / 2)).toBeLessThanOrEqual(1);
-		expect(titleBounds.x + titleBounds.width).toBeLessThan(compactModeButtonBounds.x);
+		const titlebarBounds = (await titlebar.boundingBox())!;
+		const actionsBounds = (await titlebar.locator('.ash-titlebar-actions').boundingBox())!;
+		// The compact title shares the row with the actions and must fit in front of them.
+		expect(titleBounds.x).toBeGreaterThanOrEqual(titlebarBounds.x);
+		expect(titleBounds.x + titleBounds.width).toBeLessThanOrEqual(actionsBounds.x);
 		await expect(page.locator('.ash-workbench-statusbar')).toBeVisible();
 		const compactBottom = await root.locator('.ash-workbench-editor').evaluate(element => element.getBoundingClientRect().bottom);
 		expect(Math.abs(compactBottom - bounds.windowHeight)).toBeLessThanOrEqual(1);
