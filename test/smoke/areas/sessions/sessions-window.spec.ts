@@ -2002,6 +2002,8 @@ test(
 			await updateSettings('bottom');
 			await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
 			await expectActivityIconSize(activityNavigation, 16);
+			await expect(page.locator('.ash-sessions-activity-host.bottom').getByRole('button', { name: 'Accounts', exact: true })).toBeVisible();
+			await expect(titlebarAccounts).toHaveCount(0);
 			await updateSettings('default');
 			await expect(page.locator('.ash-sessions-activity-content')).toBeVisible();
 			await expectActivityIconSize(activityNavigation, 16);
@@ -3233,8 +3235,7 @@ test('Sessions Activity Bar tooltips follow side, top and bottom placement witho
 	await setPosition('Bottom');
 	await expect(page.locator('.ash-sessions-activity-host.bottom')).toBeVisible();
 	await checkTooltip(chat, 'Chat', 'above');
-	// Horizontal layouts place Accounts in the title bar, whose tooltip opens below.
-	await checkTooltip(accounts, 'Accounts', 'below', true);
+	await checkTooltip(accounts, 'Accounts', 'above', true);
 	await setPosition('Default');
 	await expect(page.locator('.ash-sessions-activity-content')).toBeVisible();
 	const originalAccounts = await accounts.elementHandle();

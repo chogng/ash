@@ -45,7 +45,7 @@ test('Real reasoning streams keep disclosure and focus through canonical complet
 		});
 		await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: provider, apiKey: 'synthetic-thinking-fixture-key' });
 		const created = await client.request(APP_SERVER_METHODS['session/create'], {
-			commandId: 'thinking-session', title: 'Reasoning disclosure', agent: { type: 'default' },
+			commandId: 'thinking-session', kind: 'code', title: 'Reasoning disclosure', agent: { type: 'default' },
 			executionTarget: { type: 'local', root: testWorkspace.directory },
 		});
 		const sessionId = created.session.sessionId;

@@ -13,7 +13,7 @@ for (const approvalMode of ['bypassPermissions', 'manual'] as const) test(`Chat 
 	try {
 		const { client } = connection;
 		const created = await client.request(APP_SERVER_METHODS['session/create'], {
-			commandId: 'tool-output-session', title: 'Tool output presentation', agent: { type: 'default' },
+			commandId: 'tool-output-session', kind: 'code', title: 'Tool output presentation', agent: { type: 'default' },
 			executionTarget: { type: 'local', root: testWorkspace.directory },
 		});
 		const sessionId = created.session.sessionId;

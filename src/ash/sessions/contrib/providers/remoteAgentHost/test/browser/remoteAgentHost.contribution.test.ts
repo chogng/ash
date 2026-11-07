@@ -173,7 +173,7 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 				if (existing?.host) return existing.host;
 				opened.push(target.name);
 				const session: AgentSession = {
-					sessionId: 'same-session', title: target.name, status: 'active',
+					sessionId: 'same-session', kind: 'code' as const, title: target.name, status: 'active',
 					executionTarget: containerSessions ? { type: 'provider', providerId: 'ash.dev-containers', workspace: '/Source', root: '/workspace', hostAuthority: remoteAgentHostRoot(target, target.name).authority } : undefined,
 					manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [],
 				};

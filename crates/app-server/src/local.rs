@@ -108,6 +108,7 @@ pub struct AppServerOptions {
     pub profile_root: PathBuf,
     codex_home: Option<PathBuf>,
     grok_auth_path: Option<PathBuf>,
+    host_kimi_credentials: bool,
     host_zcode_credentials: bool,
     pub dir_config: Option<LocalDirConfigOptions>,
     pub slash_commands: SlashCommandCatalog,
@@ -183,6 +184,7 @@ impl AppServerOptions {
             execution_environments: Vec::new(),
             codex_home: None,
             grok_auth_path: None,
+            host_kimi_credentials: false,
             host_zcode_credentials: false,
             dir_config: None,
             slash_commands: SlashCommandCatalog::default(),
@@ -231,6 +233,12 @@ impl AppServerOptions {
     /// Reads the backend host's Grok login when Ash has no xAI credential.
     pub fn with_host_grok_auth(mut self) -> Self {
         self.grok_auth_path = supergrok::grok_auth_path();
+        self
+    }
+
+    /// Exposes the backend host's Kimi Desktop and Kimi Code logins as model connections.
+    pub(crate) fn with_host_kimi_credentials(mut self) -> Self {
+        self.host_kimi_credentials = true;
         self
     }
 
@@ -463,6 +471,7 @@ impl fmt::Debug for AppServerOptions {
             )
             .field("profile_root", &self.profile_root)
             .field("codex_home", &self.codex_home)
+            .field("host_kimi_credentials", &self.host_kimi_credentials)
             .field("host_zcode_credentials", &self.host_zcode_credentials)
             .field("dir_config", &self.dir_config)
             .field("slash_commands", &self.slash_commands)
@@ -518,6 +527,7 @@ impl PartialEq for AppServerOptions {
             .eq(other.execution_environments.iter().map(|env| env.info()))
             && self.profile_root == other.profile_root
             && self.codex_home == other.codex_home
+            && self.host_kimi_credentials == other.host_kimi_credentials
             && self.host_zcode_credentials == other.host_zcode_credentials
             && self.dir_config == other.dir_config
             && self.slash_commands == other.slash_commands
@@ -1703,7 +1713,7 @@ pub fn open_app_server_with_codebase_providers(
         )
         .map_err(|error| OpenAppServerError(error.to_string()))?,
     };
-    let model_provider = match model_operation_client {
+    let mut model_provider = match model_operation_client {
         Some(client) => ModelProviderRuntime::with_client_and_secrets(
             provider_configs.clone(),
             telemetry.instrument_model(client),
@@ -1722,14 +1732,14 @@ pub fn open_app_server_with_codebase_providers(
     .with_kimi_oauth(Arc::clone(&kimi_oauth))
     .with_glm_accounts(glm_accounts.clone())
     .with_supergrok_oauth(Arc::clone(&supergrok_oauth));
-    let model_provider = match KimiDesktop::production() {
-        Some(desktop) => model_provider.with_kimi_desktop(Arc::new(desktop)),
-        None => model_provider,
-    };
-    let model_provider = match KimiCli::production() {
-        Some(cli) => model_provider.with_kimi_cli(Arc::new(cli)),
-        None => model_provider,
-    };
+    if options.host_kimi_credentials {
+        if let Some(desktop) = KimiDesktop::production() {
+            model_provider = model_provider.with_kimi_desktop(Arc::new(desktop));
+        }
+        if let Some(cli) = KimiCli::production() {
+            model_provider = model_provider.with_kimi_cli(Arc::new(cli));
+        }
+    }
     let models_manager = model_provider.models_manager();
     let model_provider = Arc::new(model_provider);
     let catalog_runtime = Arc::new(

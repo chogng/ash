@@ -111,9 +111,7 @@ pub enum ThreadEvent {
         session_id: SessionId,
         thread_id: ThreadId,
         title: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[ts(optional)]
-        surface: Option<crate::SessionSurface>,
+        kind: crate::SessionKind,
         /// The root Thread records the Session execution authority. Descendants inherit it.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]

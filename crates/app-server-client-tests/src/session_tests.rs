@@ -133,7 +133,7 @@ fn embedded_session_delivers_idle_notifications_without_a_polling_request() {
         .unwrap();
     let created_session = client
         .create_session(SessionCreateParams {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             branch_name: None,
             worktree_start: None,
             environment_variables: None,

@@ -130,6 +130,12 @@ impl AppServer {
             connection.connection_id,
             params.capabilities.app_tools.clone(),
         );
+        // The built-in CLI clients expose Code conversations. This product scope is separate
+        // from the transport authority that controls host capabilities.
+        super::connection_state(connection).code_sessions_only = matches!(
+            params.client_info.name.as_str(),
+            "ash-cli" | "ash-cli-remote" | "ash-cli-management" | "ash-cli-exec"
+        );
         connection.set_initialized();
         let (file_system, git, content_search, codebase, cloud_codebase, terminal, debug_adapter) =
             self.env_features();

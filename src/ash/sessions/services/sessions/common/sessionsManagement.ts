@@ -31,7 +31,7 @@ export interface ISessionsManagementService {
 	selectThread(sessionId: SessionId, threadId: ThreadId): void;
 	interruptThread(sessionId: SessionId, threadId: ThreadId): Promise<void>;
 	/** Background presentations can retain a draft without changing foreground selection. */
-	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection, providerId?: string, activate?: boolean, forkSource?: IUntitledChatSession['forkSource'], options?: { readonly devContainer?: boolean; readonly projectId?: string; }): IUntitledChatSession;
+	createUntitledSession(title?: string, workspace?: SessionWorkspaceSelection, providerId?: string, activate?: boolean, forkSource?: IUntitledChatSession['forkSource'], options?: { readonly kind?: IUntitledChatSession['kind']; readonly devContainer?: boolean; readonly projectId?: string; }): IUntitledChatSession;
 	resolveNewSessionTarget(): Promise<{ readonly providerId: string; readonly workspace: SessionWorkspaceSelection; readonly devContainer?: boolean; readonly projectId?: string; }>;
 	restoreUntitledSession(session: IUntitledChatSession): void;
 	selectUntitledSession(untitledSessionId: string): void;
@@ -42,7 +42,7 @@ export interface ISessionsManagementService {
 	setUntitledSessionAgent(untitledSessionId: string, agent: ChatAgent | undefined): void;
 	setUntitledSessionWorkspace(untitledSessionId: string, workspace: SessionWorkspaceSelection | undefined, options?: { readonly devContainer?: boolean; readonly branchName?: string; readonly providerId?: string; readonly environment?: SessionEnvironmentSelection; readonly clearEnvironment?: boolean; readonly projectId?: string; }): void;
 	/** Organization and first send share one creation; creating a durable identity does not submit a request. */
-	materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal, surface?: ISessionCreateOptions['surface']): Promise<IActiveSessionThread>;
+	materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal): Promise<IActiveSessionThread>;
 	cancelUntitledSessionPreparation(untitledSessionId: string): void;
 	promoteUntitledSession(untitledSessionId: string, active: IActiveSessionThread): void;
 	ensureActiveThread(): Promise<IActiveSessionThread>;

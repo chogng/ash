@@ -694,13 +694,16 @@ impl ThreadController {
     /// Repeating the same request is safe when the durable Thread identity, owner, and title all
     /// match. A conflicting existing stream is rejected.
     pub fn create_thread(&self, request: CreateThreadRequest) -> Result<ThreadSnapshot, CoreError> {
-        self.create_thread_with_history(request, None, Vec::new(), Vec::new())
+        let kind = self
+            .read_session_catalog(&request.session_id)?
+            .map_or(ash_protocol::SessionKind::Code, |session| session.kind);
+        self.create_thread_with_history(request, kind, Vec::new(), Vec::new())
     }
 
     fn create_thread_with_history(
         &self,
         request: CreateThreadRequest,
-        surface: Option<ash_protocol::SessionSurface>,
+        kind: ash_protocol::SessionKind,
         initial_events: Vec<ThreadEvent>,
         history_prefixes: Vec<ash_history::HistoryPrefix>,
     ) -> Result<ThreadSnapshot, CoreError> {
@@ -717,13 +720,13 @@ impl ThreadController {
             .lock()
             .map_err(|_| CoreError::Journal("loaded Thread state lock poisoned".into()))?;
         if let Some(existing) = loaded.as_ref() {
-            return matching_created_thread(&existing.snapshot, &request, surface);
+            return matching_created_thread(&existing.snapshot, &request, kind);
         }
         let durable = self.store.load(&request.thread_id)?;
         if !durable.is_empty() {
             let existing = crate::history::HistoryReader::new(self.store.as_ref(), &[])
                 .load_thread(&request.thread_id)?;
-            let existing = matching_created_thread(&existing, &request, surface)?;
+            let existing = matching_created_thread(&existing, &request, kind)?;
             *loaded = Some(self.loaded_threads.install(existing.clone()));
             return Ok(existing);
         }
@@ -734,7 +737,7 @@ impl ThreadController {
             session_id: request.session_id,
             thread_id: request.thread_id.clone(),
             title: request.title,
-            surface,
+            kind,
             execution_target: request.execution_target,
         }];
         events.extend(initial_events);
@@ -802,7 +805,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: request.execution_target,
             },
-            request.surface,
+            request.kind,
             Vec::new(),
             Vec::new(),
         )
@@ -936,7 +939,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: source.execution_target,
             },
-            source.surface,
+            source.kind,
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id,
                 prefix: reference,
@@ -1135,7 +1138,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: source.execution_target.clone(),
             },
-            source.surface,
+            source.kind,
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id: request.thread_id,
                 prefix: reference,
@@ -1192,7 +1195,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: source.execution_target.clone(),
             },
-            source.surface,
+            source.kind,
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id: request.thread_id,
                 prefix: reference,
@@ -3620,6 +3623,7 @@ impl ThreadController {
                 *workspace_checkpoint = Some(captures[0].workspace().clone());
             }
             let envelope = StoredEvent {
+                thread_created_kind_encoding: Default::default(),
                 time_context: if matches!(
                     &event,
                     ThreadEvent::ItemCompleted {
@@ -4011,10 +4015,10 @@ fn fork_origin(
 fn matching_created_thread(
     snapshot: &ThreadSnapshot,
     request: &CreateThreadRequest,
-    surface: Option<ash_protocol::SessionSurface>,
+    kind: ash_protocol::SessionKind,
 ) -> Result<ThreadSnapshot, CoreError> {
     if snapshot.session_id == request.session_id
-        && snapshot.surface == surface
+        && snapshot.kind == kind
         && snapshot.agent_id == request.agent_id
         && snapshot.origin == request.origin
         && snapshot.thread_id == request.thread_id
@@ -4037,7 +4041,7 @@ fn thread_catalog_record(snapshot: &ThreadSnapshot) -> ThreadCatalogRecord {
             origin: snapshot.origin.clone(),
         },
         session_id: snapshot.session_id.clone(),
-        surface: snapshot.surface,
+        kind: snapshot.kind,
         preview: crate::thread_title::preview(snapshot),
         thread: SessionThread {
             recap: snapshot.recap.as_ref().map(|recap| recap.text.clone()),

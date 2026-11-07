@@ -39,7 +39,7 @@ fn response() -> SessionResult {
         environment_applied: None,
         worktree_start_applied: None,
         session: Session {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             source: None,
             model: None,
             session_id: SessionId::new("thread:session-1").unwrap(),

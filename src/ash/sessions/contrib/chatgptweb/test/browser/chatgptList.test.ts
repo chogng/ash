@@ -10,7 +10,7 @@ const rateLimitNotice = 'ChatGPT 暂时限制了历史请求，请稍后重试�
 suite('ChatGPT catalog in the Ash chat list', () => {
 	const browserTests = useBrowserTests();
 
-	test('the shared sidebar retains Ash and ChatGPT rows across Chat and Code', async () => {
+	test('the Chat sidebar shows Ash and ChatGPT rows and excludes Code', async () => {
 		const { page } = browserTests;
 		await mockChatGPTRequests(page);
 		await page.goto('/chatgptNavigation.html?locale=en&mixedCatalog');
@@ -20,13 +20,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		await expect(ash).toBeVisible();
 		await expect(chatGPT).toBeVisible();
 		const code = sidebar.getByRole('button', { name: /^Local Code conversation/ });
-		await expect(code).toBeVisible();
-		const tree = await sidebar.elementHandle();
-		await code.press('Enter');
-		await expect(page.locator('body')).toHaveAttribute('data-opened-code', 'fixture-code/fixture-code');
-		await expect(ash).toBeVisible();
-		await expect(chatGPT).toBeVisible();
-		expect(await sidebar.evaluate((current, previous) => current === previous, tree)).toBe(true);
+		await expect(code).toHaveCount(0);
 
 		await ash.press('Enter');
 		await expect(page.locator('body')).toHaveAttribute('data-opened-ash', 'fixture-chat/fixture-thread');
@@ -578,7 +572,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 		const storageKeys = () => page.evaluate(() => window.ashChatGPTIntegration.storageKeys());
 		const previousKeys = (keys: readonly string[]) => keys.filter(key => key.startsWith('sessions.chatgpt.navigation.collapsed.'));
 		expect(previousKeys(await storageKeys())).toEqual([]);
-		expect(await storageKeys()).toContain('sessions.list.code.collapsed.catalog-project:g-p-unloaded');
+		expect(await storageKeys()).toContain('sessions.list.chat.collapsed.catalog-project:g-p-unloaded');
 		expect((await storageKeys()).some(key => key.endsWith('.projects.collapsed'))).toBe(false);
 		await expect(recent.getByRole('button', { name: 'Synthetic conversation', exact: true })).toBeHidden();
 		await heading.click();

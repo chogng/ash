@@ -44,7 +44,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 				}
 			});
 			await client.request(methods['provider/apiKey/set'], { connection: provider, apiKey: 'isolated-find-fixture-key' });
-			const created = await client.request(methods['session/create'], { commandId: 'find-session', title: 'Find earlier conversation', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+			const created = await client.request(methods['session/create'], { commandId: 'find-session', kind: 'code', title: 'Find earlier conversation', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const sessionId = created.session.sessionId;
 			const threadId = created.session.threads[0].threadId;
 			const read = async () => (await client.request(methods['session/thread/read'], { sessionId, threadId })).thread;

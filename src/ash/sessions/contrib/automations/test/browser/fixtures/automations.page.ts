@@ -311,7 +311,7 @@ const drafts: IUntitledChatSession[] = [{
 	untitledSessionId: 'draft', title: 'Draft', model: undefined, agent: undefined,
 	get workspace() { return { type: 'local' as const, root: directory }; }
 }];
-const backgroundSession: ISession = { providerId: 'host', source: 'automation', sessionId: 'background-session', title: 'Background session', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'background-thread', origin: { type: 'root' }, status: 'active' }] };
+const backgroundSession: ISession = { providerId: 'host', source: 'automation', sessionId: 'background-session', kind: 'code' as const, title: 'Background session', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'background-thread', origin: { type: 'root' }, status: 'active' }] };
 const management = {
 	sessions: [backgroundSession], untitledSessions: drafts, state: 'ready', materializedSessions: observableValue('materialized', new Map()),
 	onDidChange: sessionChanged.event,

@@ -49,7 +49,7 @@ fn saved_session_switches_directory_and_keeps_its_previous_working_copy() {
         &mut old_connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":2,"method":"session/create","params":{
-                "commandId":"directory-session","title":"Directory history","executionTarget":{"type":"local","root":old.path()}
+                "commandId":"directory-session","title":"Directory history","kind":"code", "executionTarget":{"type":"local","root":old.path()}
             }
         }),
     );
@@ -1376,7 +1376,7 @@ fn run_gateway_file_tools(document_mode: crate::client_host::TextDocumentMode) {
     assert!(granted.get("result").is_some(), "{granted}");
     let created = call(
         "session/create",
-        json!({"commandId":"document-session","title":"Documents","agent":{"type":"default"},"executionTarget":{"type":"local","root":source.path()}}),
+        json!({"commandId":"document-session","title":"Documents","agent":{"type":"default"},"kind":"code", "executionTarget":{"type":"local","root":source.path()}}),
     );
     assert!(created.get("result").is_some(), "{created}");
     let session = created["result"]["session"]["sessionId"].clone();
@@ -1800,7 +1800,7 @@ fn gateway_delivers_one_config_change_with_multiple_directory_routes() {
             "session/create",
             serde_json::json!({
                 "commandId":format!("config-directory-{index}"),"title":"Config test",
-                "executionTarget":{"type":"local","root":dir.path()}
+                "kind":"code", "executionTarget":{"type":"local","root":dir.path()}
             }),
         );
         assert!(created["result"].is_object(), "{created}");
@@ -1932,7 +1932,7 @@ fn directory_resources_remain_on_their_creating_gateway_connection() {
         "session/create",
         serde_json::json!({
             "commandId":"resource-session", "title":"Resource owner",
-            "executionTarget":{"type":"local", "root":root.path()}
+            "kind":"code", "executionTarget":{"type":"local", "root":root.path()}
         }),
     );
     assert!(created.get("result").is_some(), "{created}");
@@ -2255,7 +2255,7 @@ fn voice_media_stays_in_profile_while_the_gateway_resolves_the_original_director
         &mut client,
         2,
         "session/create",
-        serde_json::json!({"commandId":"voice-directory","title":"Voice source","executionTarget":{"type":"local","root":root.path()}}),
+        serde_json::json!({"commandId":"voice-directory","title":"Voice source","kind":"code", "executionTarget":{"type":"local","root":root.path()}}),
     );
     assert!(created.get("result").is_some(), "{created}");
     let session_id = created["result"]["session"]["sessionId"].clone();
@@ -2397,7 +2397,7 @@ fn voice_gateway_real_room_records_directory_speech_and_stops_profile_media() {
         &mut client,
         2,
         "session/create",
-        serde_json::json!({"commandId":"voice-directory","title":"Directory voice","executionTarget":{"type":"local","root":root.path()}}),
+        serde_json::json!({"commandId":"voice-directory","title":"Directory voice","kind":"code", "executionTarget":{"type":"local","root":root.path()}}),
     );
     assert!(created.get("result").is_some(), "{created}");
     let session_id = created["result"]["session"]["sessionId"].clone();
@@ -2538,7 +2538,7 @@ fn ide_attachment_follows_one_gateway_connection_across_directory_routes() {
             "session/create",
             serde_json::json!({
                 "commandId":format!("gateway-ide-{id}"), "title":"Directory session",
-                "executionTarget":{"type":"local","root":root}
+                "kind":"code", "executionTarget":{"type":"local","root":root}
             }),
         );
         sessions.push((
@@ -2699,7 +2699,7 @@ fn wire_log_records_the_renderer_boundary_across_directory_routes_and_connection
         &mut owner,
         3,
         "session/create",
-        serde_json::json!({"commandId":"wire-create","title":"Wire test","executionTarget":{"type":"local","root":root.path()}}),
+        serde_json::json!({"commandId":"wire-create","title":"Wire test","kind":"code", "executionTarget":{"type":"local","root":root.path()}}),
     );
     let session_id = created["result"]["session"]["sessionId"].clone();
     assert!(session_id.is_string(), "{created}");

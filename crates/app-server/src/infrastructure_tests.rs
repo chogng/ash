@@ -143,10 +143,10 @@ fn queue_uses_session_approval_defaults_and_replays_the_accepted_mode() {
     let response = call(&server, &mut connection, update(2, 0, "auto"));
     assert!(response.get("error").is_none(), "{response}");
     let mut accepted = Vec::new();
-    for (id, surface, expected) in [(3, Some("chat"), "manual"), (5, None, "auto")] {
-        let mut create = json!({"commandId":format!("create-{id}"),"title":"Queue route","executionTarget":null});
-        if let Some(surface) = surface {
-            create["surface"] = json!(surface);
+    for (id, kind, expected) in [(3, Some("chat"), "manual"), (5, None, "auto")] {
+        let mut create = json!({"commandId":format!("create-{id}"),"title":"Queue route","kind":"code", "executionTarget":null});
+        if let Some(kind) = kind {
+            create["kind"] = json!(kind);
         }
         let created = call(
             &server,
@@ -254,7 +254,7 @@ fn profile_chat_queue_delivers_without_a_directory() {
         &server,
         &mut connection,
         json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{
-            "commandId":"create-chat","title":"Profile Chat","surface":"chat","executionTarget":null
+            "commandId":"create-chat","title":"Profile Chat","kind":"chat","executionTarget":null
         }}),
     );
     let session = created["result"]["session"]["sessionId"]
@@ -283,7 +283,7 @@ fn profile_chat_queue_delivers_without_a_directory() {
             core_api::StartThreadRequest {
                 command_id: ash_protocol::CommandId::new("bound-code").unwrap(),
                 title: "Directory-bound Code".into(),
-                surface: Some(ash_protocol::SessionSurface::Code),
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: Some(ash_protocol::SessionExecutionTarget::Local {
                     root: root.path().to_owned(),
                 }),

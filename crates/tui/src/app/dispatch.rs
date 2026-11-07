@@ -295,7 +295,7 @@ where
         TuiSlashCommandAction::Archive => {
             output.conversation_change = Some(
                 require_conversation_mut(conversation)?
-                    .archive_and_replace(client)
+                    .archive_and_replace(client, workspace)
                     .map_err(session_error)?,
             );
         }
@@ -328,7 +328,7 @@ where
                 // workspace does not describe every active conversation.
                 output.conversation_change = Some(
                     active
-                        .replace_with_new(client, &arguments)
+                        .replace_with_new(client, &arguments, workspace)
                         .map_err(session_error)?,
                 );
                 return Ok(output);

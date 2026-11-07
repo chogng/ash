@@ -59,7 +59,7 @@ fn session_create_serializes_execution_target_and_named_worktrees() {
         "agent": { "type": "default" },
         "commandId": "create-session",
         "title": "topic",
-        "executionTarget": { "type": "local", "root": "/repo" }
+        "kind":"code", "executionTarget": { "type": "local", "root": "/repo" }
     });
     let mut params: SessionCreateParams = serde_json::from_value(existing.clone()).unwrap();
     assert_eq!(params.branch_name, None);
@@ -72,7 +72,7 @@ fn session_create_serializes_execution_target_and_named_worktrees() {
             "agent": { "type": "default" },
             "commandId": "create-session",
             "title": "topic",
-            "executionTarget": { "type": "local", "root": "/repo" },
+            "kind":"code", "executionTarget": { "type": "local", "root": "/repo" },
             "branchName": "ash/topic"
         })
     );
@@ -84,7 +84,7 @@ fn session_create_transports_environment_overrides_without_debug_values() {
         "agent": { "type": "default" },
         "commandId": "create-session",
         "title": "topic",
-        "executionTarget": null,
+        "kind":"code", "executionTarget": null,
         "environmentVariables": { "MODE": "synthetic-secret" }
     });
     let params: SessionCreateParams = serde_json::from_value(request.clone()).unwrap();
@@ -97,7 +97,7 @@ fn session_create_accepts_an_unscoped_target_but_no_implicit_current_variant() {
     let unscoped = json!({
         "commandId": "create-session",
         "title": "topic",
-        "executionTarget": null
+        "kind":"code", "executionTarget": null
     });
     let params: SessionCreateParams = serde_json::from_value(unscoped.clone()).unwrap();
     assert_eq!(params.execution_target, None);
@@ -107,21 +107,30 @@ fn session_create_accepts_an_unscoped_target_but_no_implicit_current_variant() {
             "agent": { "type": "default" },
             "commandId": "create-session",
             "title": "topic",
-            "executionTarget": null
+            "kind":"code", "executionTarget": null
         })
     );
     assert!(
         serde_json::from_value::<SessionCreateParams>(json!({
             "commandId": "create-session",
             "title": "topic",
-            "executionTarget": { "type": "current" }
+            "kind":"code", "executionTarget": { "type": "current" }
         }))
         .is_err()
     );
     assert!(
         serde_json::from_value::<SessionCreateParams>(json!({
             "commandId": "create-session",
-            "title": "topic"
+            "title": "topic",
+            "kind": "code"
+        }))
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<SessionCreateParams>(json!({
+            "commandId": "create-session",
+            "title": "topic",
+            "executionTarget": null
         }))
         .is_err()
     );

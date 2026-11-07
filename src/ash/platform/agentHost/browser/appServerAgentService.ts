@@ -1068,7 +1068,7 @@ function toSessionResult(result: SessionResultDto, remoteHost?: string | { reado
 function toAgentSession(session: SessionDto, remoteHost?: string | { readonly authority: string; }): AgentSession {
 	return {
 		sessionId: session.sessionId,
-		...(session.surface ? { surface: session.surface } : {}),
+		kind: session.kind,
 		...(session.source ? { source: session.source } : {}),
 		title: session.title,
 		status: session.status,

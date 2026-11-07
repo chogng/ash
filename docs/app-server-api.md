@@ -809,12 +809,16 @@ spawn 前执行 `env_clear`，所以 PTY 看不到最终 map 之外的 App Serve
   "params": {
     "commandId": "command_session_1",
     "title": "Investigate repository",
+    "kind": "code",
+    "executionTarget": { "type": "local", "root": "/repo" },
     "agent": { "type": "default" }
   }
 }
 ```
 
 返回 `{ "session": Session, "agentTree": AgentTree }`。创建根 Thread，Session 由其 `sessionId` 聚合。
+
+`kind` 必须是 `chat` 或 `code`。`executionTarget` 为 `null` 时，会话没有单独选定的执行目录。
 
 `agent` 使用 `{ "type": "default" }` 或 `{ "type": "exact", "source": { "type": "builtIn" }, "name": "issue" }`；目录来源为 `{ "type": "directory", "id": "<authorized-directory-id>" }`。省略 agent 等同 Default，不按标题匹配。调用方不能提交角色正文或扩大工具权限。
 

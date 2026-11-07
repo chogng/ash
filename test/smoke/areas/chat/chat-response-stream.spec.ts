@@ -50,7 +50,7 @@ test('Real streamed Chat responses retain code selection, focus and reading posi
 		const config = await client.request(APP_SERVER_METHODS['config/read'], {});
 		await client.request(APP_SERVER_METHODS['provider/configure'], { commandId: 'response-provider', expectedRevision: config.revision, config: { connection: provider, provider, baseUrl: `http://127.0.0.1:${address.port}/v1`, custom: { name: 'Isolated response stream fixture', protocol: 'responses', order: 0, contextWindow: 272_000 }, modelContext: { [model.model]: { contextWindow: 272_000 } } } });
 		await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: provider, apiKey: 'synthetic-fixture-key' });
-		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'response-session', title: 'Controlled Chat response', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'response-session', kind: 'code', title: 'Controlled Chat response', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const sessionId = created.session.sessionId;
 		const threadId = created.session.threads[0]!.threadId;
 		const read = async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;

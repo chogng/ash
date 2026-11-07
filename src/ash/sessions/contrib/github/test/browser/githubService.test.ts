@@ -34,7 +34,7 @@ import type { ISessionProviderScope, ISessionProviderScopeService, SessionProvid
 import { parseSessionIdentity, sessionIdentity } from '../../../../services/sessions/common/sessionIdentity.js';
 import { CancellationError } from '../../../../../base/common/errors.js';
 
-const session: ISession = { sessionId: 'session', title: 'PR work', status: 'active', workspace: { authorityId: 'local', root: '/work' }, nextApprovalMode: 'manual', chats: [{ threadId: 'thread', origin: { type: 'root' }, status: 'active' }] };
+const session: ISession = { sessionId: 'session', kind: 'code' as const, title: 'PR work', status: 'active', workspace: { authorityId: 'local', root: '/work' }, nextApprovalMode: 'manual', chats: [{ threadId: 'thread', origin: { type: 'root' }, status: 'active' }] };
 const pullRequest: GitHubPullRequest = { number: 7, title: 'Branch work', body: '', url: 'https://github.com/team/repo/pull/7', state: 'open', draft: false, mergedAt: null, mergeable: null, headCommit: 'a'.repeat(40), headBranch: 'feature', headRepository: 'team/repo', baseBranch: 'main', autoMerge: false };
 
 function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<RepositoryCommandsFixture> = {}) {

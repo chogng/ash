@@ -183,7 +183,7 @@ fn open_change_set(thread_id: ThreadId) -> TurnChangeSet {
 
 fn catalog(session_id: &SessionId, thread_id: &ThreadId, sequence: u64) -> ThreadCatalogRecord {
     ThreadCatalogRecord {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         model: None,
         resumable_model_providers: Some(Default::default()),
         directory_configured: false,
@@ -248,6 +248,7 @@ fn append_created_thread(
             thread_id: thread_id.clone(),
             expected_sequence: 0,
             events: vec![StoredEvent {
+                thread_created_kind_encoding: Default::default(),
                 time_context: None,
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
                 event_id: EventId(format!("thread-event-{ordinal}")),
@@ -256,7 +257,7 @@ fn append_created_thread(
                 recorded_at: Timestamp(u128::from(ordinal)),
                 command: None,
                 event: ThreadEvent::ThreadCreated {
-                    surface: None,
+                    kind: ash_protocol::SessionKind::Code,
                     execution_target: None,
                     agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                     origin: Default::default(),
@@ -294,7 +295,7 @@ fn append_recent_activity_with_padding(
     let turn = TurnId::new(format!("turn-{label}")).unwrap();
     let target = ash_protocol::SessionExecutionTarget::Local { root: root.into() };
     let mut events = vec![ThreadEvent::ThreadCreated {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         execution_target: Some(target.clone()),
         agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
         origin: Default::default(),
@@ -357,6 +358,7 @@ fn append_recent_activity_with_padding(
                 .into_iter()
                 .enumerate()
                 .map(|(index, event)| StoredEvent {
+                    thread_created_kind_encoding: Default::default(),
                     time_context: None,
                     schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
                     event_id: EventId(format!("event-{label}-{index}")),
@@ -639,6 +641,7 @@ fn sqlite_thread_store_recovers_typed_events() {
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     let thread_event = StoredEvent {
+        thread_created_kind_encoding: Default::default(),
         time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId("thread-event-1".into()),
@@ -647,7 +650,7 @@ fn sqlite_thread_store_recovers_typed_events() {
         recorded_at: Timestamp(2),
         command: None,
         event: ThreadEvent::ThreadCreated {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
             origin: Default::default(),
@@ -824,6 +827,7 @@ fn sqlite_session_list_tracks_thread_archive_in_the_event_transaction() {
             thread_id: thread_id.clone(),
             expected_sequence: 1,
             events: vec![StoredEvent {
+                thread_created_kind_encoding: Default::default(),
                 time_context: None,
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
                 event_id: EventId("advisor-event".into()),
@@ -858,6 +862,7 @@ fn sqlite_session_list_tracks_thread_archive_in_the_event_transaction() {
             thread_id: thread_id.clone(),
             expected_sequence: 2,
             events: vec![StoredEvent {
+                thread_created_kind_encoding: Default::default(),
                 time_context: None,
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
                 event_id: EventId("archive-event".into()),
@@ -1117,6 +1122,7 @@ fn assert_session_catalog_fact_updates(
                 thread_id: thread_id.clone(),
                 expected_sequence: sequence - 1,
                 events: vec![StoredEvent {
+                    thread_created_kind_encoding: Default::default(),
                     time_context: None,
                     schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
                     event_id: EventId(format!("catalog-facts-{sequence}")),
@@ -1812,6 +1818,7 @@ fn sqlite_thread_catalog_rejects_index_metadata_mismatch() {
             thread_id: thread_id.clone(),
             expected_sequence: 0,
             events: vec![StoredEvent {
+                thread_created_kind_encoding: Default::default(),
                 time_context: None,
                 schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
                 event_id: EventId("thread-event-1".into()),
@@ -1820,7 +1827,7 @@ fn sqlite_thread_catalog_rejects_index_metadata_mismatch() {
                 recorded_at: Timestamp(2),
                 command: None,
                 event: ThreadEvent::ThreadCreated {
-                    surface: None,
+                    kind: ash_protocol::SessionKind::Code,
                     execution_target: None,
                     agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                     origin: Default::default(),
@@ -1940,6 +1947,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     let event = StoredEvent {
+        thread_created_kind_encoding: Default::default(),
         time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId("event-1".into()),
@@ -1948,7 +1956,7 @@ fn sqlite_thread_append_is_atomic_and_sequence_checked() {
         recorded_at: Timestamp(1),
         command: None,
         event: ThreadEvent::ThreadCreated {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
             origin: Default::default(),
@@ -1998,6 +2006,7 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
     let session_id = SessionId::new("session_1").unwrap();
     let thread_id = ThreadId::new("thread_1").unwrap();
     let mut event = StoredEvent {
+        thread_created_kind_encoding: Default::default(),
         time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId("event-1".into()),
@@ -2006,7 +2015,7 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
         recorded_at: Timestamp(1),
         command: None,
         event: ThreadEvent::ThreadCreated {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
             origin: Default::default(),
@@ -2049,6 +2058,7 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
     ));
 
     event.schema_version = ash_history::MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION;
+    event.thread_created_kind_encoding = ash_history::ThreadCreatedKindEncoding::Omitted;
     let json = serde_json::to_string(&event).unwrap();
     let digest = ash_protocol::ContentDigest::sha256(json.as_bytes());
     connection
@@ -2071,6 +2081,33 @@ fn sqlite_thread_recovery_rejects_metadata_mismatch_and_accepts_legacy_schema() 
             .unwrap(),
         vec![event.clone()]
     );
+    for table in ["thread_catalog", "session_catalog"] {
+        let json: String = connection
+            .query_row(&format!("SELECT record_json FROM {table}"), [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let json = json.replace(r#","kind":"code""#, "");
+        let digest = ash_protocol::ContentDigest::sha256(json.as_bytes());
+        connection
+            .execute(
+                &format!("UPDATE {table} SET record_json = ?1, record_digest = ?2"),
+                rusqlite::params![json, digest.as_str()],
+            )
+            .unwrap();
+    }
+    let threads = ThreadController::with_store(Arc::new(SqliteThreadStore::open(&path).unwrap()));
+    assert_eq!(
+        threads.list_sessions().unwrap()[0].kind,
+        ash_protocol::SessionKind::Code
+    );
+    let repaired: String = connection
+        .query_row("SELECT record_json FROM session_catalog", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert!(repaired.contains(r#""kind":"code""#));
+    drop(threads);
     connection
         .execute(
             "UPDATE thread_streams SET current_sequence = 2 WHERE thread_id = ?1",

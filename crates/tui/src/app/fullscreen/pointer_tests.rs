@@ -949,7 +949,7 @@ fn session_manager_items_hover_and_activate_without_changing_the_draft() {
     let session_id = SessionId::new("pointer-session").unwrap();
     let thread_id = ThreadId::new("pointer-thread").unwrap();
     app.update(SessionEvent::CatalogReceived(vec![Session {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         source: None,
         model: None,
         session_id: session_id.clone(),

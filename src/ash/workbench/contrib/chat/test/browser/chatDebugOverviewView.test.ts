@@ -39,7 +39,7 @@ test('Overview shows current backend metadata separately and reveals through the
 		using view = new ChatDebugOverviewView(dom.window.document.body);
 		const opened: unknown[] = [];
 		using listener = view.onDidRevealSession(value => opened.push(value));
-		view.setSession({ sessionId: 'remote-session', title: 'Current backend title', status: 'active', manager: { status: 'working', statusChangedAtUnixMs: 1 }, executionTarget: { type: 'ssh', host: 'build', root: '/workspace' }, threads: [{ threadId: 'root', title: 'Root', status: 'active', createdAtUnixMs: 1 }] });
+		view.setSession({ sessionId: 'remote-session', kind: 'code' as const, title: 'Current backend title', status: 'active', manager: { status: 'working', statusChangedAtUnixMs: 1 }, executionTarget: { type: 'ssh', host: 'build', root: '/workspace' }, threads: [{ threadId: 'root', title: 'Root', status: 'active', createdAtUnixMs: 1 }] });
 		assert.match(view.getAccessibleContent(), /Current backend title/);
 		assert.match(view.getAccessibleContent(), /Working/); assert.match(view.getAccessibleContent(), /build:\/workspace/);
 		[...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Reveal Chat Session')!.click();

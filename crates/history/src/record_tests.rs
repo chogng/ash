@@ -6,6 +6,33 @@ use ash_protocol::ThreadEvent;
 use ash_protocol::ThreadId;
 
 #[test]
+fn legacy_creation_keeps_the_classification_bytes_used_by_history_prefixes() {
+    use ash_protocol::SessionKind;
+
+    for (field, kind) in [
+        ("", SessionKind::Code),
+        (r#","surface":"chat""#, SessionKind::Chat),
+        (r#","surface":"code""#, SessionKind::Code),
+    ] {
+        let json = format!(
+            r#"{{"schemaVersion":32,"eventId":"created","sequence":1,"threadId":"old","recordedAt":1,"event":{{"type":"threadCreated","agentId":"agent","sessionId":"old","threadId":"old","title":"Old"{field},"executionTarget":{{"type":"local","root":"/repo"}}}}}}"#
+        );
+        let event: StoredEvent = serde_json::from_str(&json).unwrap();
+        assert!(
+            matches!(event.event, ThreadEvent::ThreadCreated { kind: actual, .. } if actual == kind)
+        );
+        assert_eq!(serde_json::to_string(&event).unwrap(), json);
+        let prefix = crate::HistoryPrefix {
+            events: vec![event],
+        };
+        assert_eq!(
+            prefix.reference().unwrap().digest,
+            ash_protocol::ContentDigest::sha256(format!(r#"{{"events":[{json}]}}"#).as_bytes())
+        );
+    }
+}
+
+#[test]
 fn old_permission_ids_restore_without_changing_history_bytes_or_command_identity() {
     for (old_id, mode) in [
         ("askPermissions", ash_protocol::ApprovalMode::Manual),
@@ -31,7 +58,7 @@ fn old_permission_ids_restore_without_changing_history_bytes_or_command_identity
                 matches!(record.event, ThreadEvent::TurnAccepted { approval_mode, .. } if approval_mode == mode)
             );
             assert_eq!(serde_json::to_string(&record).unwrap(), json);
-            let creation = r#"{"schemaVersion":22,"eventId":"created","sequence":1,"threadId":"old","recordedAt":1,"event":{"type":"threadCreated","agentId":"agent","sessionId":"session","threadId":"old","title":"Old"}}"#;
+            let creation = r#"{"schemaVersion":22,"eventId":"created","sequence":1,"threadId":"old","recordedAt":1,"event":{"type":"threadCreated","agentId":"agent","sessionId":"session","threadId":"old","title":"Old","kind":"code"}}"#;
             let prefix = crate::HistoryPrefix {
                 events: vec![serde_json::from_str(creation).unwrap(), record],
             };
@@ -66,6 +93,7 @@ fn old_permission_ids_restore_without_changing_history_bytes_or_command_identity
 fn stored_event_round_trip_preserves_history_contract() {
     let thread_id = ThreadId::new("thread_1").unwrap();
     let event = StoredEvent {
+        thread_created_kind_encoding: Default::default(),
         time_context: None,
         schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
         event_id: EventId("event_1".into()),
@@ -80,7 +108,7 @@ fn stored_event_round_trip_preserves_history_contract() {
             },
         }),
         event: ThreadEvent::ThreadCreated {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
             origin: Default::default(),
@@ -96,11 +124,14 @@ fn stored_event_round_trip_preserves_history_contract() {
 
     assert_eq!(decoded, event);
     assert_eq!(decoded.thread_id(), &thread_id);
+    let mut untyped = serde_json::to_value(&event).unwrap();
+    untyped["event"].as_object_mut().unwrap().remove("kind");
+    assert!(serde_json::from_value::<StoredEvent>(untyped).is_err());
 }
 
 #[test]
 fn legacy_workspace_field_replays_as_execution_target() {
-    let json = r#"{"schemaVersion":20,"eventId":"created","sequence":1,"threadId":"old","recordedAt":1,"event":{"type":"threadCreated","agentId":"agent","sessionId":"session","threadId":"old","title":"Old","workspace":{"type":"local","root":"/repo"}}}"#;
+    let json = r#"{"schemaVersion":20,"eventId":"created","sequence":1,"threadId":"old","recordedAt":1,"event":{"type":"threadCreated","agentId":"agent","sessionId":"session","threadId":"old","title":"Old","kind":"code","workspace":{"type":"local","root":"/repo"}}}"#;
     let record: StoredEvent = serde_json::from_str(json).unwrap();
     assert!(matches!(&record.event, ThreadEvent::ThreadCreated {
         execution_target: Some(ash_protocol::SessionExecutionTarget::Local { root }), ..
@@ -130,7 +161,7 @@ fn supported_schema_range_distinguishes_reads_from_new_writes() {
 
 #[test]
 fn legacy_creation_keeps_serialized_event_bytes_and_new_creation_requires_identity() {
-    let json = r#"{"schemaVersion":15,"eventId":"created","sequence":1,"threadId":"old","recordedAt":1,"event":{"type":"threadCreated","sessionId":"session","threadId":"old","title":"Old"}}"#;
+    let json = r#"{"schemaVersion":15,"eventId":"created","sequence":1,"threadId":"old","recordedAt":1,"event":{"type":"threadCreated","sessionId":"session","threadId":"old","title":"Old","kind":"code"}}"#;
     let mut record: StoredEvent = serde_json::from_str(json).unwrap();
     assert_eq!(
         created_thread_agent_id(&record).unwrap().as_str(),
@@ -180,6 +211,7 @@ fn legacy_imported_turns_keep_bytes_without_mode_while_current_turns_expose_it()
             },
         ] {
             let mut current = StoredEvent {
+                thread_created_kind_encoding: Default::default(),
                 time_context: None,
                 schema_version: 22,
                 event_id: EventId("imported".into()),

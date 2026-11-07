@@ -86,7 +86,7 @@ test('Session Issue associations persist through reopen and expose keyboard acti
 	if (webAppServer) { await source.goto(workbench.page.url(), { waitUntil: 'domcontentloaded' }); }
 	const connection = await connectProfile(application, webAppServer, testWorkspace.directory, source);
 	try {
-		const created = await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'issue-session', title: 'Issue associations', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const created = await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'issue-session', kind: 'code', title: 'Issue associations', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const sessionId = created.session.sessionId;
 		for (const number of [11, 12, 11]) {
 			await connection.client.request(APP_SERVER_METHODS['github/session/issue/attach'], { sessionId, reference: { repository: { host: 'github.com', owner: 'ash-fixture', name: 'issues' }, number } });

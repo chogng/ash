@@ -90,7 +90,7 @@ const test = base.extend<{ taskScenario: TaskScenario; taskKind: 'process' | 'sh
 			const config = await client.request(APP_SERVER_METHODS['config/read'], {});
 			await client.request(APP_SERVER_METHODS['config/update'], { commandId: 'task-fixture-model', expectedRevision: config.revision, model: taskModel, execution: { ...config.execution, approvalMode: 'manual' } });
 			const permissions = ['readFiles', 'browseFiles', 'watchFiles', 'executeCommands'] as const;
-			const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'task-fixture-session', title: 'Mock Agent Task Regression', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+			const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'task-fixture-session', kind: 'code', title: 'Mock Agent Task Regression', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const sessionId = created.session.sessionId;
 			const threadId = created.session.threads[0]!.threadId;
 			const snapshot = await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });

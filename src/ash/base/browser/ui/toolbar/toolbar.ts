@@ -174,18 +174,13 @@ export class ToolBar extends Disposable {
 			for (let index = 0; index < this.renderedActions.length; index++) {
 				this.actionWidths.set(this.renderedActions[index]!, this.actionBar.getWidth(index));
 			}
-			const fits = (actions: readonly IAction[]): boolean => {
-				const itemWidths = actions.reduce((total, action) => total + (this.actionWidths.get(action) ?? 0), 0);
-				return itemWidths + Math.max(0, actions.length - 1) * gap <= availableWidth;
-			};
-			let count = this.primaryActions.length;
-			if (this.menuActions.length > 0 || !fits([...this.primaryActions, ...this.trailingActions])) {
-				while (count > 0) {
-					const primary = cleanSeparators(this.primaryActions.slice(0, count));
-					if (fits([...primary, this.moreActions, ...this.trailingActions])) break;
-					count--;
-				}
-			}
+			const count = getFittingActionCount(this.primaryActions, this.moreActions, {
+				availableWidth,
+				gap,
+				getWidth: action => this.actionWidths.get(action) ?? 0,
+				hasMenuActions: this.menuActions.length > 0,
+				trailingActions: this.trailingActions,
+			});
 			const overflow = cleanSeparators(this.primaryActions.slice(count));
 			this.secondaryActions = cleanSeparators([
 				...overflow,
@@ -258,6 +253,32 @@ class MoreActionsViewItem extends DropdownMenuActionViewItem {
 		super.render(container);
 		container.classList.add('ash-toolbar-more-actions');
 	}
+}
+
+/** Fits a prefix of actions, reserving space for More when any action goes in the menu. */
+export function getFittingActionCount(
+	primaryActions: readonly IAction[],
+	moreAction: IAction,
+	{ availableWidth, gap, getWidth, hasMenuActions = false, trailingActions = [] }: {
+		readonly availableWidth: number;
+		readonly gap: number;
+		readonly getWidth: (action: IAction) => number;
+		readonly hasMenuActions?: boolean;
+		readonly trailingActions?: readonly IAction[];
+	},
+): number {
+	const fits = (actions: readonly IAction[]): boolean => {
+		const itemWidths = actions.reduce((total, action) => total + getWidth(action), 0);
+		return itemWidths + Math.max(0, actions.length - 1) * gap <= availableWidth;
+	};
+	let count = primaryActions.length;
+	if (!hasMenuActions && fits([...primaryActions, ...trailingActions])) return count;
+	while (count > 0) {
+		const primary = cleanSeparators(primaryActions.slice(0, count));
+		if (fits([...primary, moreAction, ...trailingActions])) break;
+		count--;
+	}
+	return count;
 }
 
 function cleanSeparators(actions: readonly IAction[]): IAction[] {

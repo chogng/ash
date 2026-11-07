@@ -130,7 +130,7 @@ export function installMultiHostSessionsFixture(): {
 					github: { ...host.github, listAccounts: async () => [], listSessionPullRequests: async () => [], listSessionIssues: async () => [] },
 				});
 				const automations = automation ? lifetime.add(child.createInstance(AgentHostAutomationStore, name, observableValue<'connected'>('searchFixtureConnection', 'connected'))) : undefined;
-				let session: ISession = { sessionId: 'same', title: params.has('comparisonPreview') ? `Attempt ${name === 'Host A' ? 1 : 2} · ${name}` : `Task from ${name}`, model: model.model, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'same', status: 'active', origin: { type: 'root' } }, ...(sideThreads ? [{ threadId: 'side', title: 'Follow-up chat', status: 'active' as const, origin: { type: 'fork' as const, parentThreadId: 'same', parentSequence: 1 } }] : [])], agentTree: background ? [{
+				let session: ISession = { sessionId: 'same', kind: 'code' as const, title: params.has('comparisonPreview') ? `Attempt ${name === 'Host A' ? 1 : 2} · ${name}` : `Task from ${name}`, model: model.model, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'same', status: 'active', origin: { type: 'root' } }, ...(sideThreads ? [{ threadId: 'side', title: 'Follow-up chat', status: 'active' as const, origin: { type: 'fork' as const, parentThreadId: 'same', parentSequence: 1 } }] : [])], agentTree: background ? [{
 					threadId: 'side', threadSequence: 1, title: 'Research worker',
 					origin: { type: 'agentSpawn', parentThreadId: 'same', parentSequence: 1, delegationId: 'delegate' },
 					membershipStatus: 'active', executionStatus: 'running', usage: { inputTokens: 0, outputTokens: 0 }, joins: [], children: [{

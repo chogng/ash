@@ -332,7 +332,7 @@ test('Session worktree mounts use raw authority metadata, share roots and releas
 			return toDisposable(() => { registration.released = true; });
 		},
 	};
-	const session: ISession = { sessionId: context.sessionId, backendSessionId: 'same', providerId: 'remote', title: 'Remote', status: 'active', nextApprovalMode: 'manual', workspace: { authorityId: 'ssh+remote', root: '/worktree' }, chats: [] };
+	const session: ISession = { sessionId: context.sessionId, kind: 'code' as const, backendSessionId: 'same', providerId: 'remote', title: 'Remote', status: 'active', nextApprovalMode: 'manual', workspace: { authorityId: 'ssh+remote', root: '/worktree' }, chats: [] };
 	Object.assign(context.management, { sessions: [session, { ...session, sessionId: sessionIdentity('remote', 'second', 'primary'), backendSessionId: 'second' }] });
 	using contribution = new SessionFileSystemContribution('primary', context.management, context.registry, context.scopes, files);
 	assert.equal(registrations.length, 1);
@@ -438,7 +438,7 @@ test('shared peer-chat creation and process-log export use the remote Session ow
 	Object.assign(context.remoteHost.session, {
 		createThread: async (params: unknown) => {
 			calls.push(params);
-			return { session: { sessionId: 'same', title: 'Remote', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'new-thread', title: 'Peer', status: 'active' }] }, threadId: 'new-thread' };
+			return { session: { sessionId: 'same', kind: 'code' as const, title: 'Remote', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'new-thread', title: 'Peer', status: 'active' }] }, threadId: 'new-thread' };
 		},
 		collectDebugLogs: async (params: unknown, signal: AbortSignal) => { calls.push({ params, signal }); return { files: [], omittedFiles: 0 }; },
 	});

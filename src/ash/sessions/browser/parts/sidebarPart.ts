@@ -4,6 +4,7 @@ import './media/sidebarPart.css';
 import { h } from '../../../base/browser/dom.js';
 import { localize } from '../../../nls.js';
 import { ActivityBarPosition } from '../../../workbench/common/configuration.js';
+import type { SessionsActivityBarLocation } from '../../common/configuration.js';
 import { SidebarPart as WorkbenchSidebarPart } from '../../../workbench/browser/parts/sidebar/sidebarPart.js';
 import { IViewDescriptorService } from '../../../workbench/common/views.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
@@ -111,15 +112,13 @@ export class SidebarPart extends WorkbenchSidebarPart {
 		super.showComposite(id, focus);
 		this.contentDomNode.insertBefore(this.getComposite(id)!.element, this.updateStatus);
 	}
-	override setActivityBarLocation(location: ActivityBarPosition): HTMLElement | undefined {
+	override setActivityBarLocation(location: SessionsActivityBarLocation): HTMLElement {
 		const integrated = location === ActivityBarPosition.DEFAULT;
+		const atBottom = location === ActivityBarPosition.BOTTOM;
 		this.topActivityBarHost.classList.toggle('integrated', integrated);
 		this.bottomActivityBarHost.classList.toggle('integrated', integrated);
-		this.topActivityBarHost.hidden = !integrated && location !== ActivityBarPosition.TOP;
-		this.bottomActivityBarHost.hidden = !integrated && location !== ActivityBarPosition.BOTTOM;
-		if (integrated) { return this.topActivityBarHost; }
-		if (location === ActivityBarPosition.TOP) { return this.topActivityBarHost; }
-		if (location === ActivityBarPosition.BOTTOM) { return this.bottomActivityBarHost; }
-		return undefined;
+		this.topActivityBarHost.hidden = atBottom;
+		this.bottomActivityBarHost.hidden = !integrated && !atBottom;
+		return atBottom ? this.bottomActivityBarHost : this.topActivityBarHost;
 	}
 }

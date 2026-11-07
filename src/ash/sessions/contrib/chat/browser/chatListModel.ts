@@ -182,7 +182,9 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			}
 			const recent = groups.find(group => group.key === 'recent');
 			const grouped = new Set<string>();
+			const sessionIds = new Set(entries.map(entry => entry.sessionId));
 			for (const group of snapshots.flatMap(snapshot => snapshot.groups ?? [])) {
+				if (group.sessionIds.length && !group.sessionIds.some(id => sessionIds.has(id))) continue;
 				const members = new Set(group.sessionIds);
 				const rows = (recent?.rows ?? []).filter(entry => entry.sessionId && members.has(entry.sessionId)
 					&& !projectEntryIds.has(entry.id) && !grouped.has(entry.id));
@@ -217,16 +219,18 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 	}
 
 	private migrateCollapseState(storage: IStorageService): void {
-		const prefix = 'sessions.list.code.collapsed.';
+		const prefix = 'sessions.list.chat.collapsed.';
+		const previousListPrefix = 'sessions.list.code.collapsed.';
 		const previousPrefixes = [
 			`workbench.viewContainer.${CHAT_WORKSPACE_NAVIGATION_ID}.${CHAT_WORKSPACE_NAVIGATION_ID}.`,
 			'sessions.chatgpt.navigation.collapsed.',
 		];
 		for (const key of storage.keys(StorageScope.PROFILE, StorageTarget.MACHINE)) {
+			const previousProject = key.startsWith(`${previousListPrefix}catalog-project:`);
 			const previousPrefix = previousPrefixes.find(prefix => key.startsWith(prefix));
-			if (!previousPrefix) continue;
-			const section = key.slice(previousPrefix.length).replace(/\.collapsed$/, '');
-			const group = section === 'pinned' || section === 'recent' || section.startsWith('group:');
+			if (!previousProject && !previousPrefix) continue;
+			const section = previousProject ? key.slice(previousListPrefix.length) : key.slice(previousPrefix!.length).replace(/\.collapsed$/, '');
+			const group = previousProject || section === 'pinned' || section === 'recent' || section.startsWith('group:');
 			const next = prefix + (group ? section : `catalog-project:${section.replace(/^project:/, '')}`);
 			const previous = storage.getBoolean(key, StorageScope.PROFILE);
 			if (section && section !== 'projects' && previous !== undefined && storage.getBoolean(next, StorageScope.PROFILE) === undefined) {

@@ -10,17 +10,22 @@ import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import type { IChatWidgetModel } from '../../../../workbench/contrib/chat/browser/widget/chatWidget.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
+import { canOpenThreadInCode } from '../../../services/sessions/common/session.js';
+import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 
 export const sessionWorkspaceButtonHelp = () => localize({ bundle: 'ash.sessions', key: 'sessions.workspace.toggleHelp' }, 'In a saved local conversation, use Tab to reach Use workspace. Press Enter or Space to choose a folder or to turn the workspace off for subsequent messages. Wait for any running work or pending approvals to finish before changing the folder.');
+export const continueInCodeHelp = () => localize({ bundle: 'ash.sessions', key: 'sessions.workspace.continueInCodeHelp' }, 'After binding a workspace, use Tab to reach Continue in Code. Press Enter or Space to open this conversation and its history in Code.');
 
 /** Changes the directory of the conversation owned by this composer. */
 export class SessionWorkspaceButton extends Disposable {
 	constructor(
 		footer: HTMLElement,
 		model: IChatWidgetModel,
+		showContinueInCode: boolean,
 		@ISessionsManagementService sessions: ISessionsManagementService,
 		@IFileDialogService dialogs: IFileDialogService,
 		@INotificationService notifications: INotificationService,
+		@ISessionsService view: ISessionsService,
 	) {
 		super();
 		const label = localize({ bundle: 'ash.sessions', key: 'sessions.workspace.use' }, 'Use workspace');
@@ -31,6 +36,22 @@ export class SessionWorkspaceButton extends Disposable {
 		});
 		button.append(indicator, label);
 		footer.prepend(button);
+		const continueButton = showContinueInCode ? h(footer.ownerDocument, 'button', {
+			className: 'ash-button ash-button-quiet ash-button-small',
+			properties: { type: 'button' },
+		}) : undefined;
+		if (continueButton) {
+			continueButton.textContent = localize({ bundle: 'ash.sessions', key: 'sessions.workspace.continueInCode' }, 'Continue in Code');
+			button.after(continueButton);
+			this._register(addDisposableListener(continueButton, 'click', () => {
+				const session = sessions.sessions.find(candidate => candidate.sessionId === model.sessionId);
+				const thread = session?.chats.find(candidate => candidate.threadId === model.threadId);
+				if (operation || session?.kind !== 'chat' || session.status !== 'active' || !thread || !canOpenThreadInCode(session, thread)) return;
+				void view.openSession(session.sessionId, thread.threadId, { reveal: 'code' }).catch(error => {
+					if (!isCancellationError(error)) notifications.error(toErrorMessage(error));
+				});
+			}));
+		}
 		let operation: AbortController | undefined;
 		let sessionId: string | undefined;
 		const update = () => {
@@ -40,6 +61,13 @@ export class SessionWorkspaceButton extends Disposable {
 				operation = undefined;
 			}
 			const session = sessions.sessions.find(candidate => candidate.sessionId === sessionId);
+			if (continueButton) {
+				const thread = session?.chats.find(candidate => candidate.threadId === model.threadId);
+				const available = session?.kind === 'chat' && session.status === 'active' && !!thread && canOpenThreadInCode(session, thread);
+				continueButton.hidden = !available;
+				continueButton.classList.toggle('hidden', !available);
+				continueButton.disabled = !!operation;
+			}
 			const supported = !!session && sessions.canClearDirectory?.(session.sessionId) === true;
 			button.hidden = !supported;
 			button.classList.toggle('hidden', !supported);
@@ -55,6 +83,7 @@ export class SessionWorkspaceButton extends Disposable {
 		this._register(toDisposable(() => {
 			operation?.abort();
 			button.remove();
+			continueButton?.remove();
 		}));
 		this._register(model.onDidChange(update));
 		this._register(sessions.onDidChange(update));

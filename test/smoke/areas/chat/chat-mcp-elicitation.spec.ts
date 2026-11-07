@@ -79,7 +79,7 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', li
 		await client.request(methods['provider/apiKey/set'], { connection: provider, apiKey: 'synthetic-elicitation-key' });
 		config = await client.request(methods['config/read'], {});
 		await client.request(methods['config/update'], { commandId: 'elicitation-default-model', expectedRevision: config.revision, model });
-		const created = await client.request(methods['session/create'], { commandId: 'elicitation-session', title: 'MCP optional form', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const created = await client.request(methods['session/create'], { commandId: 'elicitation-session', kind: 'code', title: 'MCP optional form', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const sessionId = created.session.sessionId;
 		const threadId = created.session.threads[0]!.threadId;
 		const read = async () => (await client.request(methods['session/thread/read'], { sessionId, threadId })).thread;

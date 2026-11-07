@@ -232,7 +232,7 @@ resources.add(bindTestColorTheme(theme, document.body));
 const selected = resources.add(new Emitter<void>());
 const statusChanged = resources.add(new Emitter<ReturnType<typeof gitStatus>>());
 const accountsChanged = resources.add(new Emitter<AccountState>());
-const session: ISession = { sessionId: 'session', title: 'Implement PR integration', status: 'active', workspace: new URL(location.href).searchParams.has('noWorkspace') ? null : { authorityId: 'local', root: '/workspace' }, nextApprovalMode: 'manual', chats: [{ threadId: 'thread', origin: { type: 'root' }, status: 'active' }] };
+const session: ISession = { sessionId: 'session', kind: 'code' as const, title: 'Implement PR integration', status: 'active', workspace: new URL(location.href).searchParams.has('noWorkspace') ? null : { authorityId: 'local', root: '/workspace' }, nextApprovalMode: 'manual', chats: [{ threadId: 'thread', origin: { type: 'root' }, status: 'active' }] };
 let selection: SessionsViewSelection | undefined = { kind: 'session', active: { session, threadId: 'thread' } };
 let branch = 'feature';
 const gitStatus = (id: string) => ({ repositoryId: id, streamInstanceId: 'stream', historyRevision: 1, revision: 1, workspacePath: '/workspace', head: { type: 'branch' as const, name: branch, objectId: 'a'.repeat(40), upstream: undefined }, changes: [] });

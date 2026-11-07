@@ -94,7 +94,7 @@ for (const surface of ['IDE', 'Agent Window'] as const) {
 		try {
 			await connection.client.request(methods['mcp/server/connect'], { serverId: 'user:mcp:trees' });
 			const { session } = await connection.client.request(methods['session/create'], {
-				commandId: 'tree-session', title: 'Captured tree source', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory },
+				commandId: 'tree-session', kind: 'code', title: 'Captured tree source', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory },
 			});
 			const threadId = session.threads[0].threadId;
 			const read = () => connection.client.request(methods['session/thread/read'], { sessionId: session.sessionId, threadId });

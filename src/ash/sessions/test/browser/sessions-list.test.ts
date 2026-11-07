@@ -143,7 +143,7 @@ for (const mode of ['chat', 'code'] as const) {
 				const attachment = { untitledSessionId: 'attachment', title: 'Attachment' };
 				const corrupt = { untitledSessionId: 'corrupt', title: 'Unreadable' };
 				let drafts = [blank, attachment, corrupt];
-				const saved = { sessionId: 'saved', title: 'Saved conversation', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, chats: [{ threadId: 'root', origin: { type: 'root' }, status: 'active' }] };
+				const saved = { sessionId: 'saved', kind: 'code' as const, title: 'Saved conversation', status: 'active', workspace: { authorityId: 'local', root: '/workspace' }, chats: [{ threadId: 'root', origin: { type: 'root' }, status: 'active' }] };
 				const management = { get untitledSessions() { return drafts; }, sessions: [saved], state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
 				const opened: string[] = [];
 				const view = {
@@ -214,7 +214,7 @@ test('SessionsList updates passive status without changing row identity or selec
 		}
 	} as ICommandService;
 	let session = {
-		sessionId: 'background', title: 'Background session', status: 'active' as const, nextApprovalMode: 'manual' as const,
+		sessionId: 'background', kind: 'code' as const, title: 'Background session', status: 'active' as const, nextApprovalMode: 'manual' as const,
 		chats: [{ threadId: 'root', origin: { type: 'root' as const }, status: 'active' as const }],
 		management: { status: 'working', statusChangedAtUnixMs: 10 },
 	};
@@ -288,7 +288,7 @@ test('The localized keyboard menu targets the saved Session folder and the origi
 	using locale = toDisposable(resetNlsResolver);
 	const chat = (threadId: string, title: string) => ({ threadId, title, status: 'active' as const, origin: { type: 'root' as const } });
 	const session = (sessionId: string, chats: ISession['chats']): ISession => ({
-		sessionId, title: sessionId, status: 'active', chats, nextApprovalMode: 'manual',
+		sessionId, kind: 'code' as const, title: sessionId, status: 'active', chats, nextApprovalMode: 'manual',
 		workspace: { authorityId: 'local', root: '/workspace' },
 	});
 	const source = session('source', [chat('source', 'Source root'), chat('original', 'Move me')]);
@@ -328,7 +328,7 @@ test('Session hover localizes workspace and provider without translating their v
 	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
 	try {
 		const session: ISession = {
-			sessionId: 'session', title: 'Session', status: 'active', nextApprovalMode: 'manual', chats: [],
+			sessionId: 'session', kind: 'code' as const, title: 'Session', status: 'active', nextApprovalMode: 'manual', chats: [],
 			providerLabel: 'Provider name', workspace: { authorityId: 'local', root: '/workspace' },
 		};
 		assert.deepEqual(getSessionSummaryHoverData(session), ['项目文件夹：/workspace', '提供方：Provider name']);
@@ -413,7 +413,7 @@ test('Sidebar keyboard menus move sections and durable rows independently across
 	using changed = new Emitter<void>();
 	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'list', flushInterval: 0 });
 	const catalog = ['one', 'two', 'three'].map(sessionId => ({
-		sessionId, title: sessionId, status: 'active' as const, nextApprovalMode: 'manual' as const,
+		sessionId, kind: 'code' as const, title: sessionId, status: 'active' as const, nextApprovalMode: 'manual' as const,
 		workspace: { authorityId: 'local', root: '/workspace' },
 		chats: [{ threadId: 'root', status: 'active' as const, origin: { type: 'root' as const } }],
 	}));
@@ -526,7 +526,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	const remote = 'remote-agent-host';
 	const remoteId = sessionIdentity(remote, 'run', local);
 	const makeSession = (sessionId: string): ISession => ({
-		sessionId, title: sessionId, status: 'active', nextApprovalMode: 'manual',
+		sessionId, kind: 'code' as const, title: sessionId, status: 'active', nextApprovalMode: 'manual',
 		chats: [{ threadId: 'root', status: 'active', origin: { type: 'root' }, workspace: { authorityId: 'local', root: '/workspace' } }],
 	});
 	const manual: ISession = {

@@ -159,7 +159,7 @@ impl AppServer {
                             return Ok(observed);
                         }
                         None => match self.agent_runtime().start_thread(StartThreadRequest {
-                            surface: None,
+                            kind: ash_protocol::SessionKind::Code,
                             branch_name: None,
                             worktree_start: None,
                             agent_id: None,

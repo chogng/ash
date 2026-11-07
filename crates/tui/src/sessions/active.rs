@@ -186,6 +186,7 @@ impl ActiveConversation {
     pub(crate) fn archive_and_replace<T>(
         &mut self,
         client: &mut AppServerClient<T>,
+        workspace: &std::path::Path,
     ) -> Result<ConversationChange, SessionsError>
     where
         T: JsonRpcTransport,
@@ -204,7 +205,7 @@ impl ActiveConversation {
             })
             .and_then(expect_session_result)?
             .session;
-        let mut change = self.replace_with_new(client, "")?;
+        let mut change = self.replace_with_new(client, "", workspace)?;
         change.notice = "Archived the previous session and started a new session.".into();
         Ok(change)
     }
@@ -213,13 +214,18 @@ impl ActiveConversation {
         &mut self,
         client: &mut AppServerClient<T>,
         arguments: &str,
+        workspace: &std::path::Path,
     ) -> Result<ConversationChange, SessionsError>
     where
         T: JsonRpcTransport,
     {
         let title = arguments.to_owned();
-        let (conversation, _) =
-            create_conversation(client, title, self.session.execution_target.clone())?;
+        let target = self.session.execution_target.clone().unwrap_or_else(|| {
+            SessionExecutionTarget::Local {
+                root: workspace.to_path_buf(),
+            }
+        });
+        let (conversation, _) = create_conversation(client, title, Some(target))?;
         *self = conversation;
         Ok(ConversationChange {
             notice: "Started a new session.".into(),
@@ -408,7 +414,7 @@ where
     T: JsonRpcTransport,
 {
     let session = client.create_session(SessionCreateParams {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         agent_id: None,
         agent: ash_protocol::AgentRoleSelection::Default,
         command_id: new_command_id("session"),

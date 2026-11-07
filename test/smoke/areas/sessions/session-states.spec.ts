@@ -63,7 +63,7 @@ test.describe('Saved conversations shared with the IDE', () => {
 			});
 			await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: model.provider, apiKey: 'isolated-fixture-key' });
 			({ session } = await client.request(APP_SERVER_METHODS['session/create'], {
-				commandId: 'shared-folderless-conversation', title, agent: { type: 'default' }, executionTarget: null,
+				commandId: 'shared-folderless-conversation', kind: 'code', title, agent: { type: 'default' }, executionTarget: null,
 			}));
 		} finally {
 			await close();
@@ -129,7 +129,7 @@ for (const locale of ['en', 'zh-CN']) {
 			});
 			for (let index = 0; index < 28; index++) {
 				await client.request(APP_SERVER_METHODS['session/create'], {
-					commandId: `sidebar-scroll-${index}`, title: `Sidebar fixture ${index}`,
+					commandId: `sidebar-scroll-${index}`, kind: 'code', title: `Sidebar fixture ${index}`,
 					agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory },
 				});
 			}
@@ -226,7 +226,7 @@ for (const locale of ['en', 'zh-CN']) {
 			await client.request(APP_SERVER_METHODS['provider/configure'], { commandId: 'management-provider', expectedRevision: config.revision, config: { connection: provider, provider, baseUrl: `http://127.0.0.1:${address.port}/v1`, custom: { name: 'Isolated management model', protocol: 'chatCompletions', order: 0, contextWindow: 272_000 }, modelContext: { 'management-model': { contextWindow: 272_000 } } } });
 			await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: provider, apiKey: 'isolated-fixture-key' });
 			await enableFixtureModel(workbench, model, locale);
-			const create = async (commandId: string, title: string): Promise<Session> => (await client.request(APP_SERVER_METHODS['session/create'], { commandId, title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
+			const create = async (commandId: string, title: string): Promise<Session> => (await client.request(APP_SERVER_METHODS['session/create'], { commandId, kind: 'code', title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
 			// Catalog order follows durable IDs. Keep its initial selected Session separate
 			// so this background tree is never hydrated before the passive assertions.
 			await create('management-a-foreground', 'Foreground session');

@@ -960,6 +960,7 @@ fn actual_tui_pty_streams_utf8_resizes_exits_and_resumes() {
     process.quit();
     eprintln!("PTY lifecycle: reading persisted session");
     let (session, thread) = fixture.only_thread();
+    assert_eq!(fixture.sessions()[0].kind, ash_protocol::SessionKind::Code);
     eprintln!("PTY lifecycle: starting resumed process");
     let mut resumed = TuiProcess::start(&fixture, &["resume", &session, &thread], LARGE_SIZE);
     resumed.wait_for_screen("PTY lifecycle reply");

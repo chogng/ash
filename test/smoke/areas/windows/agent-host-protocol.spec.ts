@@ -164,7 +164,7 @@ test('Browser protocol isolates matching request IDs and closing a page preserve
 			try {
 				const failed = connected.find(result => result.status === 'rejected');
 				if (failed?.status === 'rejected') { throw failed.reason; }
-				const create = (title: string) => ({ commandId: crypto.randomUUID(), title, executionTarget: null, agent: { type: 'default' } });
+				const create = (title: string) => ({ commandId: crypto.randomUUID(), kind: 'code' as const, title, executionTarget: null, agent: { type: 'default' } });
 				const left = peers[0];
 				const right = peers[1];
 				const [leftResult, rightResult] = await Promise.all([left.request(2, 'session/create', create('A protocol left')), right.request(2, 'session/create', create('A protocol right'))]);

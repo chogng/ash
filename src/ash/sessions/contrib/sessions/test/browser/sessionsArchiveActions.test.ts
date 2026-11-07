@@ -81,7 +81,7 @@ class Provider extends Disposable implements ISessionsProvider {
 }
 
 function session(id: string): ISession {
-	return { sessionId: id, title: id, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: `${id}-root`, origin: { type: 'root' }, status: 'active' }] };
+	return { sessionId: id, kind: 'code' as const, title: id, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: `${id}-root`, origin: { type: 'root' }, status: 'active' }] };
 }
 
 async function fixture(wording: 'archive' | 'done', archived = false) {

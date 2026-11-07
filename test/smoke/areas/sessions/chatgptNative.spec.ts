@@ -264,6 +264,65 @@ test.describe('Experimental ChatGPT desktop entry', () => {
 test.describe('Unified Chat sidebar', () => {
 	test.use({ electronWindowMode: 'active', electronUserSettings: { 'window.startupWindow': 'ide', 'workbench.locale': 'zh-CN', 'sessions.chatgpt.defaultBackend': 'chatgptweb' } });
 
+	test('continues a workspace-bound native Chat in Code on the original Thread', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
+		const application = browser as ElectronApplication;
+		await installService(application);
+		const modelRequests: string[] = [];
+		await using catalog = createAshModelServer(modelRequests);
+		await configureAshModel(catalog, application, workbench, testWorkspace.directory);
+		const { client, close } = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
+		try {
+			const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
+				commandId: 'continue-native-chat-in-code', title: 'Native Chat handoff', kind: 'chat',
+				executionTarget: null, agent: { type: 'default' },
+			});
+			const { sessionId } = session;
+			const { threadId } = session.threads[0];
+			const readThread = async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;
+			await client.request(APP_SERVER_METHODS['session/request'], {
+				commandId: 'first-native-chat-turn', sessionId, request: {
+					type: 'startTurn', threadId, expectedSequence: (await readThread()).sequence, model: ashFixtureModel,
+					mode: 'agent', approvalMode: 'manual', input: [{ type: 'text', text: 'Original Chat message' }],
+				},
+			});
+			await expect.poll(async () => (await readThread()).turns[0]?.status).toBe('completed');
+			const page = await workbench.openAgentsWindow(target.kind);
+			await page.locator(`[data-item="ash:${sessionId}"] .ash-sessions-list-item`).press('Enter');
+			const chat = page.locator('.ash-native-chat-widget .ash-chat');
+			await expect(chat).toHaveAttribute('data-thread-id', threadId);
+			const continueInCode = chat.getByRole('button', { name: '在 Code 中继续', exact: true });
+			await expect(continueInCode).toBeHidden();
+			const originalDialog = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
+			try {
+				await application.evaluate(({ dialog }, directory) => {
+					dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] });
+				}, testWorkspace.directory);
+				await chat.getByRole('button', { name: '使用工作区', exact: true }).click();
+				await expect(continueInCode).toBeEnabled();
+				await expect(continueInCode).toBeVisible();
+			} finally {
+				await application.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original; }, originalDialog);
+				await originalDialog.dispose();
+			}
+			await continueInCode.press('Enter');
+			const code = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
+			await expect(code).toHaveAttribute('data-session-id', sessionId);
+			await expect(code).toHaveAttribute('data-thread-id', threadId);
+			await expect(code).toContainText('Original Chat message');
+			await expect(code).toContainText('Answer from Ash');
+			const composer = new Editor(code);
+			await composer.waitForEditorFocus();
+			await composer.waitForTypeInEditor('Follow up from Code');
+			await composer.input.press('Enter');
+			await expect.poll(async () => (await readThread()).turns.map(turn => turn.status)).toEqual(['completed', 'completed']);
+			await expect(code).toContainText('Follow up from Code');
+			const saved = (await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId })).session;
+			expect(saved?.kind).toBe('chat');
+			expect(saved?.threads.map(thread => thread.threadId)).toEqual([threadId]);
+			expect(modelRequests).toEqual([ashFixtureModel.model, ashFixtureModel.model]);
+		} finally { await close(); }
+	});
+
 	test('opens and restores an existing native Ash conversation without sending a message', { tag: ['@electron-app-server'] }, async ({ application: browser, target, workbench, testWorkspace }) => {
 		const application = browser as ElectronApplication;
 		await installService(application);
@@ -271,14 +330,14 @@ test.describe('Unified Chat sidebar', () => {
 		try {
 			const { client } = connection;
 			const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
-				commandId: 'desktop-session-pre-upgrade-chat', title: 'Existing Ash Chat', surface: 'chat',
+				commandId: 'desktop-session-pre-upgrade-chat', title: 'Existing Ash Chat', kind: 'chat',
 				executionTarget: null, agent: { type: 'default' },
 			});
 			await client.request(APP_SERVER_METHODS['thread/goal/set'], {
 				threadId: session.threads[0]!.threadId, objective: 'Saved native Chat goal', status: 'paused',
 			});
-			const { session: legacy } = await client.request(APP_SERVER_METHODS['session/create'], {
-				commandId: 'legacy-code-without-surface', title: 'Existing Code Session',
+			const { session: code } = await client.request(APP_SERVER_METHODS['session/create'], {
+				commandId: 'existing-code', title: 'Existing Code Session', kind: 'code',
 				executionTarget: { type: 'local', root: testWorkspace.directory }, agent: { type: 'default' },
 			});
 			const page = await workbench.openAgentsWindow(target.kind);
@@ -297,7 +356,7 @@ test.describe('Unified Chat sidebar', () => {
 			const mode = page.locator('.ash-window-mode-control');
 			await mode.getByRole('button', { name: '代码', exact: true }).click();
 			await expect(chat).toBeHidden();
-			const codeRow = page.locator(`[data-item="session:${legacy.sessionId}"] .ash-sessions-list-item`);
+			const codeRow = page.locator(`[data-item="session:${code.sessionId}"] .ash-sessions-list-item`);
 			await expect(codeRow).toBeVisible();
 			await codeRow.press('Enter');
 			await expect(codeRow).toHaveAttribute('aria-current', 'page');

@@ -99,7 +99,7 @@ import { ICommandService } from '../platform/commands/common/commands.js';
 import { ContextKeyExpr } from '../platform/contextkey/common/contextkey.js';
 import { localize2 } from '../nls.js';
 import { Menus } from './browser/menus.js';
-import { NewSessionDraftVisibleContext } from './common/contextkeys.js';
+import { NewSessionDraftVisibleContext, SessionsWorkspaceModeContext } from './common/contextkeys.js';
 import { InstantiationType, registerSingleton } from '../platform/instantiation/common/extensions.js';
 import { IWebWorkerService } from '../platform/webWorker/browser/webWorkerService.js';
 import { WebWorkerService } from '../platform/webWorker/browser/webWorkerServiceImpl.js';
@@ -116,7 +116,7 @@ MenusRegistry.appendMenuItem(Menus.ActivityBar, {
 
 MenusRegistry.appendMenuItem(Menus.ActivityBar, {
 	command: { id: 'sessions.open.collaboration', title: localize2({ bundle: 'ash', key: 'collaboration.title' }, 'Collab'), icon: Lxicon.collab, toggled: ContextKeyExpr.has('sessions.activity.collaborationSelected') },
-	group: 'more', order: 30,
+	group: 'more', order: 30, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code'),
 });
 
 registerTerminalView(SessionsViewRegistry);

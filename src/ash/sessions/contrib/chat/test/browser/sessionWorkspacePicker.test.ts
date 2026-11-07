@@ -326,7 +326,7 @@ test('Recents fold a verified checkout under a different visible repository', as
 
 test('Workspace includes recent active Session folders from the draft host after explicit recents', async () => {
 	const session = (id: string, lastActivity: number, providerId = LOCAL_AGENT_HOST_PROVIDER_ID, status: ISession['status'] = 'active'): ISession => ({
-		sessionId: id, title: id, status, providerId, nextApprovalMode: 'manual',
+		sessionId: id, kind: 'code' as const, title: id, status, providerId, nextApprovalMode: 'manual',
 		workspace: { authorityId: 'local', root: URI.file(`/${id}`).fsPath },
 		chats: [{ threadId: id, status: 'active', origin: { type: 'root' }, updatedAt: new Date(lastActivity) }],
 	});

@@ -5,7 +5,7 @@ import { autorun, transaction, type IReader } from '../../../../base/common/obse
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
-import type { IUntitledChatSession, SessionWorkspaceSelection, SessionId, ThreadId } from '../common/session.js';
+import { canOpenThreadInCode, type IUntitledChatSession, type SessionWorkspaceSelection, type SessionId, type ThreadId } from '../common/session.js';
 import { ISessionsManagementService } from '../common/sessionsManagement.js';
 import { WELCOME_COMPLETE_KEY } from '../../../common/welcome.js';
 import { ICustomViewService } from '../../customView/browser/customViewService.js';
@@ -362,9 +362,9 @@ export class SessionsService extends Disposable implements ISessionsService {
 			const session = this.sessionService.untitledSessions.find(candidate => candidate.untitledSessionId === reference.untitledSessionId);
 			return session ? { kind: 'untitled', session } : undefined;
 		}
-		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === reference.sessionId && candidate.status === 'active' && candidate.surface !== 'chat');
-		const thread = session?.chats.find(candidate => candidate.threadId === reference.threadId && candidate.status === 'active');
-		return session && thread ? { kind: 'session', active: { session, threadId: thread.threadId }, ...(reference.sideThread ? { sideThread: true } : {}) } : undefined;
+		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === reference.sessionId && candidate.status === 'active');
+		const thread = session?.chats.find(candidate => candidate.threadId === reference.threadId);
+		return session && thread && canOpenThreadInCode(session, thread) ? { kind: 'session', active: { session, threadId: thread.threadId }, ...(reference.sideThread ? { sideThread: true } : {}) } : undefined;
 	}
 }
 

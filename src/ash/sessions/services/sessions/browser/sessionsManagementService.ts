@@ -267,6 +267,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 			model: undefined,
 			agent: undefined,
 			workspace,
+			...(options?.kind ? { kind: options.kind } : {}),
 			...(options?.projectId ? { projectId: options.projectId } : {}),
 			...(title === undefined ? { automaticTitle: true } : {}),
 			...(forkSource ? { forkSource } : {}),
@@ -435,7 +436,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		this._onDidChange.fire();
 	}
 
-	async materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal, surface?: ISessionCreateOptions['surface']): Promise<IActiveSessionThread> {
+	async materializeUntitledSession(untitledSessionId: string, signal?: AbortSignal): Promise<IActiveSessionThread> {
 		if (this.isDisposed || signal?.aborted) throw canceled();
 		const materialized = this.materializedSessions.get().get(untitledSessionId);
 		if (materialized) {
@@ -477,7 +478,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 					!('root' in workspace) || workspace.type !== folder.type || workspace.root !== folder.root);
 				const active = await this.createSession(session.title, workspace, session.agent, untitledSessionId, session.providerId, {
 					token: cancellation.token, devContainer: session.devContainer, branchName: session.branchName,
-					additionalFolders, environmentVariables, automaticTitle: session.automaticTitle, surface,
+					additionalFolders, environmentVariables, automaticTitle: session.automaticTitle, kind: session.kind,
 				}, session.forkSource);
 				if (project && !project.sessionIds.includes(active.session.sessionId)) {
 					// The same draft creation ID recovers this Session if linking needs a retry.
@@ -586,7 +587,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	getChatMoveDestinations(sessionId: SessionId, threadId: ThreadId): readonly ISession[] {
 		const source = this._sessions.find(session => session.sessionId === sessionId);
 		const thread = source?.chats.find(chat => chat.threadId === threadId);
-		if (!source || source.source || source.surface === 'chat' || source.status !== 'active' || !thread || threadId === sessionId
+		if (!source || source.source || source.kind === 'chat' || source.status !== 'active' || !thread || threadId === sessionId
 			|| !source.chats.some(chat => chat.threadId === sessionId && chat.status === 'active')
 			|| thread.status !== 'active' || thread.origin.type !== 'root'
 			|| thread.executionStatus === 'queued' || thread.executionStatus === 'running' || thread.executionStatus === 'waiting'
@@ -598,7 +599,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 		const workspace = source.workspace;
 		if (workspace === undefined) return [];
 		return this._sessions.filter(session => session.sessionId !== sessionId && !session.source
-			&& session.status === 'active' && session.surface !== 'chat' && session.providerId === source.providerId
+			&& session.status === 'active' && session.kind !== 'chat' && session.providerId === source.providerId
 			&& session.chats.some(chat => chat.threadId === session.sessionId && chat.status === 'active')
 			&& (workspace === null ? session.workspace === null : session.workspace?.root === workspace.root
 				&& session.workspace.authorityId === workspace.authorityId
@@ -863,7 +864,7 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 
 function firstActiveThread(sessions: readonly ISession[]): IActiveSessionThread | undefined {
 	for (const session of sessions) {
-		if (session.status !== 'active' || session.surface === 'chat') continue;
+		if (session.status !== 'active' || session.kind === 'chat') continue;
 		const thread = session.chats.find(candidate => candidate.status === 'active' && candidate.origin.type === 'root') ?? session.chats.find(candidate => candidate.status === 'active');
 		if (thread) return { session, threadId: thread.threadId };
 	}
@@ -885,7 +886,7 @@ function sameManagement(left: SessionManagementInfo | undefined, right: SessionM
 
 function sameSession(left: ISession | undefined, right: ISession | undefined): boolean {
 	if (!left || !right) return left === right;
-	if (left.title !== right.title || left.surface !== right.surface || left.status !== right.status || left.agentTree !== right.agentTree || left.chats.length !== right.chats.length) return false;
+	if (left.title !== right.title || left.kind !== right.kind || left.status !== right.status || left.agentTree !== right.agentTree || left.chats.length !== right.chats.length) return false;
 	if (left.nextApprovalMode !== right.nextApprovalMode || !sameManagement(left.management, right.management) || !sameModel(left.model, right.model) || left.workspace?.authorityId !== right.workspace?.authorityId || left.workspace?.root !== right.workspace?.root) return false;
 	return left.chats.every((chat, index) => {
 		const next = right.chats[index];

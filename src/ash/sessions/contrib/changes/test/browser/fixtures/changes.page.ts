@@ -147,7 +147,7 @@ let holdNextLedger: { key: string; missingSecond: boolean; } | undefined;
 const heldLedgers = new Map<string, { resolve(): void; reject(error: Error): void; }>();
 services.registerInstance(ISessionsService, {
 	onDidChange: changed.event,
-	get activeSelection() { return { kind: 'session', active: { session: { sessionId, status: 'active', title: 'Test changes', chats: [{ threadId, status: 'active', origin: { type: 'root' } }], workspace: { authorityId: 'local', root: '/workspace' } }, threadId } }; },
+	get activeSelection() { return { kind: 'session', active: { session: { sessionId, kind: 'code' as const, status: 'active', title: 'Test changes', chats: [{ threadId, status: 'active', origin: { type: 'root' } }], workspace: { authorityId: 'local', root: '/workspace' } }, threadId } }; },
 } as unknown as ISessionsService);
 services.registerInstance(IChatService, {
 	readThread: async () => ({ thread: { sessionId, threadId: 'thread', status: 'active', sequence: 7, turns: activeTurn ? [{ status: 'running' }] : [] } }),

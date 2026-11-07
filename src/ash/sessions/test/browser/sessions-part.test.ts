@@ -511,7 +511,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 		active: {
 			threadId: 'unavailable-thread',
 			session: {
-				sessionId: 'unavailable-session',
+				sessionId: 'unavailable-session', kind: 'code' as const,
 				title: 'Unavailable Session',
 				status: 'active',
 				nextApprovalMode: 'manual',

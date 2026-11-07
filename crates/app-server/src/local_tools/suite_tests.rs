@@ -1425,7 +1425,7 @@ fn rpc_agent_tools_search_unsaved_content_and_persist_edits_through_the_originat
     let created = call(
         &mut origin,
         "session/create",
-        json!({"commandId":"documents-session","title":"Edit document","executionTarget":null,"agent":{"type":"default"}}),
+        json!({"commandId":"documents-session","title":"Edit document","kind":"code", "executionTarget":null,"agent":{"type":"default"}}),
     );
     let session = created["session"]["sessionId"].as_str().unwrap();
     call(

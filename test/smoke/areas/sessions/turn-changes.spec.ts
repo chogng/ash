@@ -52,7 +52,7 @@ test('Turn file selection commits a reviewed file and keeps another Session sepa
 		const config = await client.request(APP_SERVER_METHODS['config/read'], {});
 		await client.request(APP_SERVER_METHODS['execPolicy/rule/upsert'], { commandId: 'allow-turn-selection-shell', expectedRevision: config.revision, rule: { id: 'turn-selection-shell', selector: { type: 'source', source: 'built_in_tool', sourceId: 'shell-command' }, effect: { type: 'allowUnsandboxed' }, justification: 'The scenario writes only to its isolated temporary repositories.' } });
 		const create = async (name: string, command: string): Promise<{ sessionId: string; threadId: string; }> => {
-			const session = await client.request(APP_SERVER_METHODS['session/create'], { commandId: `create-${name}`, title: name, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+			const session = await client.request(APP_SERVER_METHODS['session/create'], { commandId: `create-${name}`, kind: 'code', title: name, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const thread = await client.request(APP_SERVER_METHODS['session/request'], { commandId: `thread-${name}`, sessionId: session.session.sessionId, request: { type: 'createThread', title: name } });
 			if (thread.type !== 'thread') throw new Error('Expected a Thread');
 			const identity = { sessionId: session.session.sessionId, threadId: thread.value.threadId };

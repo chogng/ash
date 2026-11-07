@@ -313,7 +313,7 @@ function draft(id: string, host: string, root: string): IUntitledChatSession {
 function flush(): Promise<void> { return new Promise(resolve => setImmediate(resolve)); }
 
 function session(sessionId: string, threadId: string): ISession {
-	return { sessionId, title: sessionId, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId, origin: { type: 'root' }, status: 'active' }] };
+	return { sessionId, kind: 'code' as const, title: sessionId, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId, origin: { type: 'root' }, status: 'active' }] };
 }
 
 function selected(session: ISession): SessionsViewSelection {

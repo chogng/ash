@@ -845,7 +845,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
         .map(|(index, item)| (item.item_id().clone(), index as u64 + 2))
         .collect();
     ThreadSnapshot {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         voice_transcripts: Vec::new(),
         execution_target: None,
         directory_configured: false,

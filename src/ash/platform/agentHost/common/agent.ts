@@ -104,10 +104,10 @@ export interface SessionWorktreeStart {
 	readonly commit: string;
 }
 
-export type SessionSurface = 'chat' | 'code';
+export type SessionKind = 'chat' | 'code';
 
 export interface SessionCreateParams {
-	readonly surface?: SessionSurface;
+	readonly kind: SessionKind;
 	readonly worktreeStart?: SessionWorktreeStart;
 	readonly environmentVariables?: Readonly<Record<string, string>>;
 	readonly commandId: string;
@@ -143,7 +143,7 @@ export interface AgentSessionChange {
 }
 
 export interface AgentSession {
-	readonly surface?: SessionSurface;
+	readonly kind: SessionKind;
 	readonly sessionId: string;
 	readonly source?: 'automation';
 	readonly title: string;

@@ -293,7 +293,7 @@ services.registerInstance(IGitHubService, { onDidChange: Event.None, getSessionP
 services.registerInstance(ISessionsManagementService, {
 	state: 'ready', onDidChange: Event.None, untitledSessions: [],
 	sessions: parameters.has('mixedCatalog') ? [{
-		sessionId: 'fixture-code', title: 'Local Code conversation', status: 'active', surface: 'code',
+		sessionId: 'fixture-code', title: 'Local Code conversation', status: 'active', kind: 'code',
 		chats: [{ threadId: 'fixture-code', status: 'active', origin: { type: 'root' } }],
 	}] : [],
 } as unknown as ISessionsManagementService);
@@ -308,7 +308,7 @@ if (parameters.has('mixedCatalog')) {
 		[IAshChatSessionService, {
 			initializeCatalog() {},
 			catalog: constObservable([{
-				sessionId: 'fixture-chat', title: 'Local Ash conversation', status: 'active', surface: 'chat',
+				sessionId: 'fixture-chat', title: 'Local Ash conversation', status: 'active', kind: 'chat',
 				manager: { status: 'idle' },
 				threads: [{ threadId: 'fixture-thread', status: 'active', createdAtUnixMs: 1 }],
 			}]),

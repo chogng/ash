@@ -44,6 +44,7 @@ pub use record::EventId;
 pub use record::MINIMUM_SUPPORTED_EVENT_SCHEMA_VERSION;
 pub use record::StoredEvent;
 pub use record::ThreadCommandReceipt;
+pub use record::ThreadCreatedKindEncoding;
 pub use record::Timestamp;
 pub use record::supports_stored_event_schema_version;
 

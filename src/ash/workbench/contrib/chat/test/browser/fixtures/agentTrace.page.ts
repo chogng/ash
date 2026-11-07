@@ -76,7 +76,7 @@ services.registerInstance(IChatSessionNavigationService, { openConversation: asy
 services.registerInstance(IChatDebugService, {
 		onDidChangeAvailableSessionResources: Event.None,
 		getAvailableSessionResources: () => [URI.parse('ash-agent-trace:/catalog-fixture')], getHistoricalSessionTitle: () => 'Catalog fixture',
-		readSession: async sessionId => ({ sessionId, title: 'Catalog fixture', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'root', title: 'Root', status: 'active' }] }),
+		readSession: async sessionId => ({ sessionId, kind: 'code' as const, title: 'Catalog fixture', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'root', title: 'Root', status: 'active' }] }),
 		exportWireLog: async () => { throw new Error('Fixture must not export Wire capture'); },
 		startWireLog: async () => { throw new Error('Fixture must not start Wire capture'); },
 		stopWireLog: async () => { },

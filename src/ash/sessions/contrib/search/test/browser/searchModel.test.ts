@@ -12,7 +12,7 @@ import { SessionsSearchModel, type SearchResult } from '../../browser/searchMode
 
 function fixture() {
 	const session: ISession = {
-		sessionId: 'alpha', title: 'Alpha review', providerLabel: 'Host A', status: 'active', nextApprovalMode: 'manual', agentTree: [],
+		sessionId: 'alpha', kind: 'code' as const, title: 'Alpha review', providerLabel: 'Host A', status: 'active', nextApprovalMode: 'manual', agentTree: [],
 		chats: [
 			{ threadId: 'root', status: 'active', origin: { type: 'root' } },
 			{ threadId: 'archived', status: 'archived', origin: { type: 'root' } },

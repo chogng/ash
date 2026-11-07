@@ -150,6 +150,7 @@ fn serve_remote_stdio(
     let mut options = AppServerOptions::new(host.profile_root())
         .with_build_info(build_info)
         .with_host_grok_auth()
+        .with_host_kimi_credentials()
         .with_host_zcode_credentials();
     if let Some(root) = host.dir_root() {
         options = options.with_dir_root(root);
@@ -423,6 +424,7 @@ pub(super) fn open_server(
     let mut options = AppServerOptions::new(host.profile_root())
         .with_build_info(build_info)
         .with_host_grok_auth()
+        .with_host_kimi_credentials()
         .with_host_zcode_credentials()
         .with_pty_helper(env::current_exe().map_err(|error| error.to_string())?);
     if let Some(exporter) = crate::trace::from_environment()? {

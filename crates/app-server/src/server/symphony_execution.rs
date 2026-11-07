@@ -202,7 +202,7 @@ impl AppServer {
                             cancellation,
                         },
                         StartThreadRequest {
-                            surface: None,
+                            kind: ash_protocol::SessionKind::Code,
                             command_id: session_command.clone(),
                             title: job.issue.title.clone(),
                             branch_name: None,

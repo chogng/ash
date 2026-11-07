@@ -26,7 +26,7 @@ fn task(server: &crate::AppServer, name: &str) -> (ThreadId, TurnId) {
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
             core_api::StartThreadRequest {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,

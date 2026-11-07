@@ -36,7 +36,7 @@ for (const locale of ['en', 'zh-CN'] as const) {
 				try {
 					await installBrowserNetworkPolicy(electron, url);
 					const create = async (title: string) => (await connection.client.request(APP_SERVER_METHODS['session/create'], {
-						commandId: title, title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory },
+						commandId: title, kind: 'code', title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory },
 					})).session;
 					const source = await create('Canvas source fixture');
 					const other = await create('Canvas other fixture');
@@ -156,8 +156,8 @@ exports.activate = context => {
 	await writeFile(packagePath, JSON.stringify(manifest));
 	const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
 	try {
-		const source = (await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'provider-canvas', title: 'Provider Canvas session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
-		const peer = (await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'provider-peer', title: 'Provider peer session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
+		const source = (await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'provider-canvas', kind: 'code', title: 'Provider Canvas session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
+		const peer = (await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'provider-peer', kind: 'code', title: 'Provider peer session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
 		const page = workbench.page;
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const install = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
@@ -308,7 +308,7 @@ exports.activate = context => {
 	await writeFile(packagePath, JSON.stringify(manifest));
 	const connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
 	try {
-		const source = (await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'canvas-refresh', title: 'Canvas refresh session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
+		const source = (await connection.client.request(APP_SERVER_METHODS['session/create'], { commandId: 'canvas-refresh', kind: 'code', title: 'Canvas refresh session', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } })).session;
 		const page = workbench.page;
 		await workbench.quickaccess.runCommand('ash.extensions.installLocal');
 		const install = page.getByRole('dialog', { name: 'Install extension from workspace', exact: true });
@@ -392,7 +392,7 @@ test('a secondary SSH host presents and pins its own registered Canvas and recon
 		const installed = await appServerRequest(seed.client, 'plugin/installLocal', { commandId: 'canvas-remote-install', expectedRevision: plugins.revision, path: 'remote-canvas', dirId: null });
 		const enabled = await appServerRequest(seed.client, 'plugin/enable', { commandId: 'canvas-remote-enable', expectedRevision: installed.command.revision, id: installed.id, version: installed.version, digest: installed.digest });
 		await appServerRequest(seed.client, 'plugin/grant', { commandId: 'canvas-remote-authorize', expectedRevision: enabled.revision, id: installed.id, version: installed.version, digest: installed.digest });
-		const source = (await appServerRequest(seed.client, 'session/create', { commandId: 'canvas-remote-session', title: 'SSH Canvas conversation', agent: { type: 'default' }, executionTarget: { type: 'local', root: remoteRoot } })).session;
+		const source = (await appServerRequest(seed.client, 'session/create', { commandId: 'canvas-remote-session', kind: 'code', title: 'SSH Canvas conversation', agent: { type: 'default' }, executionTarget: { type: 'local', root: remoteRoot } })).session;
 		await ide.page.evaluate(connection => (globalThis as unknown as { ash: ISandboxGlobals; }).ash.ipcRenderer.invoke('ash:remote:connection:save', { connection }), { name: 'canvas-ssh-host', host: ssh.host, workspace: remoteRoot });
 		const agents = await ide.openAgentsWindow('electron');
 		const commands = new QuickAccess(agents);

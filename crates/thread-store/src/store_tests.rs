@@ -16,6 +16,7 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
         thread_id: ThreadId::new("thread_1").expect("test ID is non-empty"),
         expected_sequence,
         events: vec![StoredEvent {
+            thread_created_kind_encoding: Default::default(),
             time_context: None,
             schema_version: CURRENT_STORED_EVENT_SCHEMA_VERSION,
             event_id: EventId("event_1".into()),
@@ -24,7 +25,7 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
             recorded_at: Timestamp(1),
             command: None,
             event: ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,
@@ -36,7 +37,7 @@ fn batch(expected_sequence: u64, event_sequence: u64) -> ThreadEventBatch {
             },
         }],
         catalog: ThreadCatalogRecord {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             model: None,
             resumable_model_providers: Some(Default::default()),
             binding: agent_graph_store::ThreadBinding {

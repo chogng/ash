@@ -196,7 +196,7 @@ fn time_context_refreshes_after_tools_and_keeps_input_reference_through_recovery
         .start_thread(
             &NoThreadWorktreeBinder,
             StartThreadRequest {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,
@@ -327,7 +327,7 @@ fn time_context_off_emits_no_time_and_legacy_input_is_not_assigned_a_new_referen
         .start_thread(
             &NoThreadWorktreeBinder,
             StartThreadRequest {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,

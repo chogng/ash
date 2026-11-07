@@ -1396,7 +1396,7 @@ window.ashChatTranscriptIntegration = {
 		lifecycleServices.registerSingleton(IAgentSessionActionsService, () => lifecycleServices.createInstance(actionsDescriptor));
 		const disconnected = createDisconnectedRendererApi();
 		lifecycleServices.registerInstance(IAgentConnection, disconnected);
-		let catalog: AgentSession[] = [{ sessionId: 'lifecycle', title: 'Synthetic task', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'lifecycle', title: 'Root', status: 'active' }, { threadId: 'lifecycle-child', title: 'Child', parentThreadId: 'lifecycle', status: 'active' }] }];
+		let catalog: AgentSession[] = [{ sessionId: 'lifecycle', kind: 'code' as const, title: 'Synthetic task', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [{ threadId: 'lifecycle', title: 'Root', status: 'active' }, { threadId: 'lifecycle-child', title: 'Child', parentThreadId: 'lifecycle', status: 'active' }] }];
 		const read = () => ({ session: catalog[0]!, agentTree: { roots: [] } });
 		lifecycleServices.registerInstance(IAppServerApi, { isAvailable: true, connectionGeneration: 1, getConnectionState: async () => 'ready', getSlashCommands: async () => [], onConnectionState: () => Disposable.None });
 		lifecycleServices.registerInstance(IServerEventApi, { subscribe: () => Disposable.None });

@@ -137,7 +137,7 @@ fn explicit_product_turn_in_isolated_checkout_keeps_its_document_owner() {
             &mut owner,
             json!({"jsonrpc":"2.0", "id":2, "method":"session/create", "params":{
                 "commandId":"isolated-document-session", "title":"Isolated editor",
-                "executionTarget":{"type":"local", "root":source.path()}
+                "kind":"code", "executionTarget":{"type":"local", "root":source.path()}
             }}),
         );
         assert!(created.get("result").is_some(), "{created}");
@@ -246,7 +246,7 @@ fn repeated_turn_wakeups_remain_interruptible_through_rpc_and_allow_a_new_turn()
     let session = call(
         2,
         "session/create",
-        json!({"commandId":"interrupt-session", "title":"Interrupt", "executionTarget":null}),
+        json!({"commandId":"interrupt-session", "title":"Interrupt", "kind":"code", "executionTarget":null}),
     );
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
     let thread = call(
@@ -429,7 +429,7 @@ fn root_agent_picker_lists_authorized_roles_and_creates_the_selected_session() {
     let created = call(
         3,
         "session/create",
-        json!({"commandId":"selected-reviewer", "title":"Review", "executionTarget":null, "agent":{"type":"exact", "source":source, "name":"reviewer"}}),
+        json!({"commandId":"selected-reviewer", "title":"Review", "kind":"code", "executionTarget":null, "agent":{"type":"exact", "source":source, "name":"reviewer"}}),
     );
     assert!(created.get("result").is_some(), "{created}");
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
@@ -480,7 +480,7 @@ fn recovered_spawn_with_document_context(documents: bool) {
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
             StartThreadRequest {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,
@@ -848,7 +848,7 @@ fn built_in_model_guidance_reaches_rpc_roots_and_default_workers_through_tool_ex
         );
         let created = call(
             "session/create",
-            json!({"commandId":"initial-guidance-root", "title":"guided root", "executionTarget":null, "agent":{"type":"default"}}),
+            json!({"commandId":"initial-guidance-root", "title":"guided root", "kind":"code", "executionTarget":null, "agent":{"type":"default"}}),
         );
         let session = created["session"]["sessionId"].as_str().unwrap();
         let session_id = ash_protocol::SessionId::new(session).unwrap();
@@ -1114,7 +1114,7 @@ fn rpc_turn_executes_browser_tool_only_on_its_originating_window() {
         let created = call(
             connection,
             "session/create",
-            json!({"commandId":format!("browser-session-{index}"),"title":"Browser task","executionTarget":null,"agent":{"type":"default"}}),
+            json!({"commandId":format!("browser-session-{index}"),"title":"Browser task","kind":"code", "executionTarget":null,"agent":{"type":"default"}}),
         );
         let session = created["session"]["sessionId"].as_str().unwrap();
         call(

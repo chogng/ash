@@ -50,7 +50,7 @@ registerAction2(class ManageAutomationsAction extends Action2 {
 			icon: Lxicon.clockface,
 			precondition: ContextKeyExpr.has('sessions.automationsAvailable'),
 			toggled: ContextKeyExpr.has('sessions.activity.automationsSelected'),
-			menu: { id: Menus.ActivityBar, group: 'more', order: 20, when: ContextKeyExpr.has('sessions.automationsAvailable') },
+			menu: { id: Menus.ActivityBar, group: 'more', order: 20, when: ContextKeyExpr.and(SessionsWorkspaceModeContext.isEqualTo('code'), ContextKeyExpr.has('sessions.automationsAvailable')) },
 		});
 	}
 

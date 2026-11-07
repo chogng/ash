@@ -75,7 +75,7 @@ readline.createInterface({ input: process.stdin }).on('line', async line => {
 		config = await client.request(APP_SERVER_METHODS['config/read'], {});
 		await client.request(APP_SERVER_METHODS['provider/configure'], { commandId: 'image-model', expectedRevision: config.revision, config: { connection: provider, provider, baseUrl: `${endpoint}/v1`, custom: { name: 'Synthetic image fixture', protocol: 'responses', order: 0, contextWindow: 272_000 }, modelContext: { [model.model]: { contextWindow: 272_000 } } } });
 		await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: provider, apiKey: 'synthetic-image-fixture-key' });
-		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'image-session', title: 'Generated image test', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'image-session', kind: 'code', title: 'Generated image test', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const sessionId = created.session.sessionId;
 		const threadId = created.session.threads[0]!.threadId;
 		const read = async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;

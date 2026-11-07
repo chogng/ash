@@ -4519,7 +4519,7 @@ function session(
 	title = `Session ${id}`,
 ): ISession {
 	return {
-		sessionId: id,
+		sessionId: id, kind: 'code' as const,
 		title,
 		status: 'active',
 		nextApprovalMode: 'manual',
@@ -4531,7 +4531,7 @@ function session(
 
 function sessionDto(value: ISession): SessionDto {
 	return {
-		sessionId: value.sessionId,
+		sessionId: value.sessionId, kind: 'code' as const,
 		title: value.title,
 		status: value.status,
 		model: value.model,

@@ -1,4 +1,4 @@
-import type { SessionSurface } from '../../../../platform/agentHost/common/agent.js';
+import type { SessionKind } from '../../../../platform/agentHost/common/agent.js';
 import type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agent.js';
 export type { AgentSessionActivity as SessionManagementInfo } from '../../../../platform/agentHost/common/agent.js';
 import type { ApprovalMode, ChatAgent, ModelRef, SessionId, ThreadId } from '../../../../workbench/services/chat/common/chatService.js';
@@ -145,6 +145,11 @@ export function chatExecutionWorkspace(session: ISession, chat: IChat | undefine
 	return chat?.workspace === undefined ? session.workspace : chat.workspace;
 }
 
+/** Native Chat can enter Code once its Thread has a bound execution workspace. */
+export function canOpenThreadInCode(session: ISession, chat: IChat): boolean {
+	return chat.status === 'active' && (session.kind !== 'chat' || !!chatExecutionWorkspace(session, chat));
+}
+
 export type SessionStatus = 'active' | 'archived';
 export type SessionWorkspaceSelection =
 	| { readonly type: 'current'; }
@@ -179,7 +184,7 @@ export interface ISession {
 	readonly application?: ISessionApplication;
 	readonly sessionId: SessionId;
 	readonly source?: 'automation';
-	readonly surface?: SessionSurface;
+	readonly kind: SessionKind;
 	readonly title: string;
 	readonly status: SessionStatus;
 	readonly model?: ModelRef | null;
@@ -208,6 +213,7 @@ export interface SessionEnvironmentSelection {
 export interface IUntitledChatSession {
 	readonly providerId?: string;
 	readonly untitledSessionId: string;
+	readonly kind?: SessionKind;
 	/** The draft label is provisional until the backend receives the first message. */
 	readonly automaticTitle?: true;
 	readonly forkSource?: { readonly sessionId: SessionId; readonly threadId: ThreadId; };

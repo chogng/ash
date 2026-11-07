@@ -18,8 +18,7 @@ use serde::Serialize;
 pub struct ThreadCatalogRecord {
     pub binding: agent_graph_store::ThreadBinding,
     pub session_id: SessionId,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub surface: Option<ash_protocol::SessionSurface>,
+    pub kind: ash_protocol::SessionKind,
     pub thread: SessionThread,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preview: Option<String>,
@@ -71,7 +70,7 @@ pub fn session_from_catalog(
     Ok(Session {
         session_id,
         source,
-        surface: root.surface,
+        kind: root.kind,
         title,
         status,
         execution_target: root.execution_target.clone(),
@@ -427,7 +426,7 @@ pub fn validate_append_batch(
             agent_id,
             origin,
             session_id,
-            surface,
+            kind,
             ..
         } = &event.event
         {
@@ -435,7 +434,7 @@ pub fn validate_append_batch(
                 || agent_id.as_ref() != Some(&batch.catalog.binding.agent_id)
                 || origin != &batch.catalog.binding.origin
                 || session_id != &batch.catalog.session_id
-                || surface != &batch.catalog.surface
+                || kind != &batch.catalog.kind
             {
                 return Err(ThreadStoreError::InvalidBatch(
                     "Thread creation and Agent binding disagree".into(),

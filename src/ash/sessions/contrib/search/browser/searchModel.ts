@@ -67,7 +67,7 @@ export class SessionsSearchModel extends Disposable {
 				});
 			}
 			for (const session of sessions.sessions) {
-				if (session.status !== 'active' || session.surface === 'chat') { continue; }
+				if (session.status !== 'active' || session.kind === 'chat') { continue; }
 				for (const thread of session.chats) {
 					if (thread.status !== 'active') { continue; }
 					results.push({

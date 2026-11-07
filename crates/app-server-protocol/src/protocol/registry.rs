@@ -3023,6 +3023,8 @@ use ash_protocol::Session;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionExecutionTarget;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::SessionKind;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionManagerActivity;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionManagerInfo;
@@ -3036,8 +3038,6 @@ use ash_protocol::SessionRuntimeResult;
 use ash_protocol::SessionSource;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionStatus;
-#[cfg(any(test, feature = "export"))]
-use ash_protocol::SessionSurface;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::SessionThread;
 #[cfg(any(test, feature = "export"))]
@@ -7134,7 +7134,7 @@ typescript_bindings! {
     DirectoryGrantsForgetParams,
     SessionStatus,
     SessionSource,
-    SessionSurface,
+    SessionKind,
     SessionManagerStatus,
     SessionManagerActivity,
     SessionManagerInfo,

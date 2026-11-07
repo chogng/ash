@@ -190,7 +190,7 @@ test('Web backend selection restores a Sessions connection and preserves its dra
 async function createConversation(page: Page, title: string): Promise<string> {
 	return page.evaluate(async title => {
 		const api = globalThis.ashWebWorkbenchHost!.api.session;
-		const created = await api.create({ commandId: crypto.randomUUID(), title, executionTarget: null, agent: { type: 'default' } });
+		const created = await api.create({ commandId: crypto.randomUUID(), title, kind: 'code', executionTarget: null, agent: { type: 'default' } });
 		await api.createThread({ commandId: crypto.randomUUID(), sessionId: created.session.sessionId, title: 'Main' });
 		return created.session.sessionId;
 	}, title);

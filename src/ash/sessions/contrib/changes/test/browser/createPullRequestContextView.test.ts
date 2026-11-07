@@ -42,7 +42,7 @@ function fixture() {
 			},
 		},
 	};
-	const session = { sessionId: 'qualified-session', title: 'Remote', status: 'active', nextApprovalMode: 'manual', chats: [], workspace: { authorityId: 'ssh+builder', root: '/historical' } } as ISession;
+	const session = { sessionId: 'qualified-session', kind: 'code' as const, title: 'Remote', status: 'active', nextApprovalMode: 'manual', chats: [], workspace: { authorityId: 'ssh+builder', root: '/historical' } } as ISession;
 	const scope: ISessionProviderScope = {
 		providerId: 'remote', services: { host } as unknown as SessionProviderServices, thread: base.thread,
 		identity: value => `qualified-${value}`, backendIdentity: value => { assert.equal(value, session.sessionId); return 'same-session'; },

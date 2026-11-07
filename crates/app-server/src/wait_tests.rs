@@ -47,7 +47,7 @@ fn runtime_wait_resumes_model_once_and_cancelled_wait_never_resumes_it() {
             .start_thread(
                 &ash_core::NoThreadWorktreeBinder,
                 StartThreadRequest {
-                    surface: None,
+                    kind: ash_protocol::SessionKind::Code,
                     execution_target: None,
                     branch_name: None,
                     worktree_start: None,

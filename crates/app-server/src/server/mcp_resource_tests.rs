@@ -104,7 +104,7 @@ fn linked_resource_rpc_uses_canonical_coordinates_frozen_bindings_and_connection
     let session = call(
         &server,
         &mut owner,
-        json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"resource-session","title":"Resources","executionTarget":null}}),
+        json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"resource-session","title":"Resources","kind":"code", "executionTarget":null}}),
     );
     let session_id =
         SessionId::new(session["result"]["session"]["sessionId"].as_str().unwrap()).unwrap();
@@ -463,7 +463,7 @@ fn app_tool_rpc_uses_the_original_thread_approval_result_and_cancellation() {
     let created = call(
         &server,
         &mut owner,
-        json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"app-session","title":"App","executionTarget":null}}),
+        json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"app-session","title":"App","kind":"code", "executionTarget":null}}),
     );
     let session = &created["result"]["session"];
     let session_id = SessionId::new(session["sessionId"].as_str().unwrap()).unwrap();

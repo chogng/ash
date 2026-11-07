@@ -206,7 +206,7 @@ fn session_admission_materializes_context_once_and_rejects_corruption() {
         let session = call(
             &server,
             &mut connection,
-            json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"session","title":"snapshots","executionTarget":null}}),
+            json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"session","title":"snapshots","kind":"code", "executionTarget":null}}),
         );
         let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
         let created = call(

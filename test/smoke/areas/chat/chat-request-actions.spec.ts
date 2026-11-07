@@ -12,7 +12,7 @@ test('IDE archives and unarchives from History with the default labels and prese
 	const connection = await connectProfile(application, webAppServer, testWorkspace.directory, page);
 	try {
 		const { client } = connection;
-		const created = await client.request(methods['session/create'], { commandId: 'archive-history-session', title: 'Archive history fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const created = await client.request(methods['session/create'], { commandId: 'archive-history-session', kind: 'code', title: 'Archive history fixture', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const sessionId = created.session.sessionId;
 		const root = created.session.threads[0].threadId;
 		await workbench.quickaccess.runCommand('workbench.action.chat.open');
@@ -122,7 +122,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) for (con
 			await client.request(methods['provider/apiKey/set'], { connection: provider, apiKey: 'isolated-request-actions-key' });
 			const configured = await client.request(methods['config/read'], {});
 			await client.request(methods['config/update'], { commandId: 'request-default-model', expectedRevision: configured.revision, model });
-			const created = await client.request(methods['session/create'], { commandId: 'request-actions-session', title: 'Request actions source', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+			const created = await client.request(methods['session/create'], { commandId: 'request-actions-session', kind: 'code', title: 'Request actions source', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const sessionId = created.session.sessionId;
 			const root = created.session.threads[0].threadId;
 			const read = async (threadId: string, owner = sessionId) => (await client.request(methods['session/thread/read'], { sessionId: owner, threadId })).thread;

@@ -22,7 +22,7 @@ class Provider extends Disposable implements ISessionsProvider {
 	readonly onDidChangeCatalog = this.catalog.event;
 	readonly sessionChanges = this._register(new Emitter<{ readonly sessionId: string; readonly detailChanged: boolean; }>());
 	readonly onDidChangeSession = this.sessionChanges.event;
-	items: ISession[] = [{ sessionId: 'same', title: 'Same ID', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }], agentTree: [] }];
+	items: ISession[] = [{ sessionId: 'same', kind: 'code' as const, title: 'Same ID', status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: 'thread', status: 'active', origin: { type: 'root' } }], agentTree: [] }];
 	readonly calls: string[] = [];
 	pending: DeferredPromise<readonly ISession[]> | undefined;
 	constructor(readonly id: string) { super(); this.label = id; }

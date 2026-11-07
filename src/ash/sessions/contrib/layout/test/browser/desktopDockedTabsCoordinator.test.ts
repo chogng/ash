@@ -100,7 +100,7 @@ suite('DesktopDockedTabsCoordinator', () => {
 });
 
 function selection(id: string): SessionsViewSelection {
-	return { kind: 'session', active: { session: { sessionId: id, title: id, status: 'active', nextApprovalMode: 'manual', chats: [] }, threadId: id + '-thread' } };
+	return { kind: 'session', active: { session: { sessionId: id, kind: 'code' as const, title: id, status: 'active', nextApprovalMode: 'manual', chats: [] }, threadId: id + '-thread' } };
 }
 
 class TabsFixture extends Disposable {

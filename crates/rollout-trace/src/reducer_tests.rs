@@ -265,7 +265,7 @@ fn reducer_links_message_delivery_and_delegation_using_saved_identities() {
                     record(
                         "child",
                         1,
-                        json!({ "type": "threadCreated", "threadId": "child", "sessionId": "session", "title": "Child", "origin": { "type": "agentSpawn", "parentThreadId": "root", "parentSequence": 1, "delegationId": "delegation" } }),
+                        json!({ "type": "threadCreated", "kind": "code", "threadId": "child", "sessionId": "session", "title": "Child", "origin": { "type": "agentSpawn", "parentThreadId": "root", "parentSequence": 1, "delegationId": "delegation" } }),
                     ),
                     record(
                         "child",
@@ -280,7 +280,7 @@ fn reducer_links_message_delivery_and_delegation_using_saved_identities() {
                     record(
                         "root",
                         1,
-                        json!({ "type": "threadCreated", "threadId": "root", "sessionId": "session", "title": "Root" }),
+                        json!({ "type": "threadCreated", "kind": "code", "threadId": "root", "sessionId": "session", "title": "Root" }),
                     ),
                     record(
                         "root",

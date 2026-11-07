@@ -20,7 +20,7 @@ import { SessionsWindowNotifier } from '../../browser/sessionsWindowNotifier.js'
 
 function session(status: SessionManagementInfo['status'], time: number): ISession {
 	return {
-		sessionId: 'ssh/session', title: 'Example session', status: 'active', nextApprovalMode: 'manual',
+		sessionId: 'ssh/session', kind: 'code' as const, title: 'Example session', status: 'active', nextApprovalMode: 'manual',
 		chats: [{ threadId: 'ssh/thread', title: 'Branch', status: 'active', origin: { type: 'root' }, management: { status, statusChangedAtUnixMs: time } }],
 	};
 }

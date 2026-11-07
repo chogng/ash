@@ -34,6 +34,7 @@ use ash_file_system::FileSystem;
 use ash_model_provider::ProviderCredentialService;
 use ash_protocol::InteractionCancelReason;
 use ash_protocol::SessionId;
+use ash_protocol::ThreadId;
 use ash_protocol::ThreadUpdateEnvelope;
 use ash_skills_extension::SkillConfigSnapshotProvider;
 use ash_skills_extension::SkillRuntime;
@@ -490,6 +491,7 @@ struct ConnectionMutableState {
     request_ids: request_processing::RequestIds,
     extension_packages_leases: BTreeSet<String>,
     directory_grants_host: bool,
+    code_sessions_only: bool,
 }
 
 impl ConnectionState {
@@ -518,6 +520,10 @@ impl ConnectionState {
 
     fn set_initialized(&self) {
         connection_state(self).initialized = true;
+    }
+
+    fn code_sessions_only(&self) -> bool {
+        connection_state(self).code_sessions_only
     }
 
     fn record_request_id(&self, request_id: u64) -> bool {
@@ -3340,6 +3346,53 @@ impl AppServer {
         self.dispatch_request(connection, request, cancellation)
     }
 
+    fn check_code_session_access(&self, params: &Value) -> Result<(), RpcError> {
+        let check_session = |id: &str| {
+            let id = SessionId::new(id)
+                .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+            let session = self.threads.read_session_catalog(&id).map_err(core_error)?;
+            if session
+                .as_ref()
+                .is_some_and(|session| session.kind == ash_protocol::SessionKind::Chat)
+            {
+                return Err(core_error(CoreError::NotFound(id.to_string())));
+            }
+            Ok(session)
+        };
+        let session = params
+            .get("sessionId")
+            .and_then(Value::as_str)
+            .map(check_session)
+            .transpose()?
+            .flatten();
+        if let Some(thread_id) = params.get("threadId").and_then(Value::as_str)
+            && !session.as_ref().is_some_and(|session| {
+                session
+                    .threads
+                    .iter()
+                    .any(|thread| thread.thread_id.as_str() == thread_id)
+            })
+        {
+            // A request may carry a Thread without a Session, or an unrelated Session ID.
+            let thread_id = ThreadId::new(thread_id)
+                .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+            match self.threads.thread_catalog_record(&thread_id) {
+                Ok(record) => {
+                    check_session(record.session_id.as_str())?;
+                }
+                Err(CoreError::NotFound(_)) => {}
+                Err(error) => return Err(core_error(error)),
+            }
+        }
+        if let Some(destination) = params
+            .pointer("/request/destinationSessionId")
+            .and_then(Value::as_str)
+        {
+            check_session(destination)?;
+        }
+        Ok(())
+    }
+
     fn dispatch_request(
         &self,
         connection: &mut ConnectionState,
@@ -3358,6 +3411,9 @@ impl AppServer {
         }
         if !connection.is_initialized() {
             return Err(RpcError::new(-32001, AppServerErrorName::NotInitialized));
+        }
+        if connection.code_sessions_only() {
+            self.check_code_session_access(&request.params)?;
         }
         match client_method(&request.method) {
             Some(ClientMethod::Initialize | ClientMethod::TransportHello) => {
@@ -3656,7 +3712,7 @@ impl AppServer {
             Some(ClientMethod::AgentCapabilitiesRead) => {
                 self.agent_processor().agent_capabilities_read(connection)
             }
-            Some(ClientMethod::SessionList) => self.session_processor().session_list(),
+            Some(ClientMethod::SessionList) => self.session_processor().session_list(connection),
             Some(ClientMethod::SessionCatalogSubscribe) => self
                 .session_processor()
                 .session_catalog_subscribe(connection),

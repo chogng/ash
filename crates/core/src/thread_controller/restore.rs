@@ -217,7 +217,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: source.execution_target.clone(),
             },
-            source.surface,
+            source.kind,
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id,
                 prefix: reference,

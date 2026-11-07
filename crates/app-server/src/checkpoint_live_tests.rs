@@ -110,7 +110,7 @@ fn manual_compaction_persists_before_restart_and_preserves_the_next_request() {
         .start_thread(
             &NoThreadWorktreeBinder,
             core_api::StartThreadRequest {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,
@@ -603,7 +603,7 @@ fn observe_luna_usage_after_same_thread_restart() -> Vec<Exchange> {
         .start_thread(
             &NoThreadWorktreeBinder,
             core_api::StartThreadRequest {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,
@@ -805,7 +805,7 @@ fn luna_cache_survives_fork_and_message_restore_after_restart() {
         .start_thread(
             &NoThreadWorktreeBinder,
             core_api::StartThreadRequest {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,

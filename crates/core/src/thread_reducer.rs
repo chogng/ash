@@ -73,7 +73,7 @@ pub struct ThreadSnapshot {
     pub(crate) history_workspace: Option<ash_protocol::WorkspaceCheckpoint>,
     pub agent_id: ash_protocol::AgentId,
     pub origin: ash_protocol::ThreadOrigin,
-    pub surface: Option<ash_protocol::SessionSurface>,
+    pub kind: ash_protocol::SessionKind,
     pub session_id: SessionId,
     pub thread_id: ThreadId,
     pub created_at_unix_ms: u64,
@@ -461,7 +461,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
             ThreadEvent::ThreadCreated {
                 origin,
                 agent,
-                surface,
+                kind,
                 session_id,
                 title,
                 execution_target,
@@ -486,7 +486,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     agent_id: ash_history::created_thread_agent_id(envelope)
                         .map_err(CoreError::Journal)?,
                     origin: origin.clone(),
-                    surface: *surface,
+                    kind: *kind,
                     session_id: session_id.clone(),
                     thread_id: thread_id.clone(),
                     created_at_unix_ms,

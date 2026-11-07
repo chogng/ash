@@ -15,7 +15,7 @@ test('the Sessions application badge deduplicates attention reasons and clears o
 	using settingsChanged = new Emitter<IConfigurationChangeEvent>();
 	let enabled = true;
 	const session: ISession = {
-		sessionId: 'attention', title: 'Attention', status: 'active', nextApprovalMode: 'manual',
+		sessionId: 'attention', kind: 'code' as const, title: 'Attention', status: 'active', nextApprovalMode: 'manual',
 		management: { status: 'needsInput', statusChangedAtUnixMs: 1 }, chats: [],
 	};
 	let catalog = [session, { ...session, sessionId: 'archived', status: 'archived' as const }];

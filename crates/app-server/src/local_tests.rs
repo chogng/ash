@@ -1256,7 +1256,7 @@ fn local_git_turn_changes_seal_and_commit_a_shell_turn_through_rpc() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":2,"method":"session/create",
-            "params":{"commandId":"create-session","title":"Turn changes","executionTarget":{"type":"local","root":dir.path()}}
+            "params":{"commandId":"create-session","title":"Turn changes","kind":"code", "executionTarget":{"type":"local","root":dir.path()}}
         }),
     );
     assert!(session.get("error").is_none(), "{session}");
@@ -1670,7 +1670,7 @@ fn windows_shell_turn_enforces_isolation_through_rpc(backend: WindowsShellSandbo
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":3,"method":"session/create",
-            "params":{"commandId":"sandbox-session","title":"Sandbox","executionTarget":{"type":"local","root":work}}
+            "params":{"commandId":"sandbox-session","title":"Sandbox","kind":"code", "executionTarget":{"type":"local","root":work}}
         }),
     );
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
@@ -1884,7 +1884,7 @@ fn managed_network_approval_resumes_the_same_shell_process_through_rpc() {
         &server,
         &mut connection,
         serde_json::json!({
-            "jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"network-session","title":"Network","executionTarget":null}
+            "jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"network-session","title":"Network","kind":"code", "executionTarget":null}
         }),
     );
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
@@ -2040,7 +2040,7 @@ fn non_git_turns_keep_their_isolated_dir_without_creating_change_sets() {
         &mut connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":3,"method":"session/create",
-            "params":{"commandId":"create-non-git-session","title":"Plain directory","executionTarget":null}
+            "params":{"commandId":"create-non-git-session","title":"Plain directory","kind":"code", "executionTarget":null}
         }),
     );
     let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
@@ -2146,7 +2146,7 @@ fn shared_profile_runtime_shares_sessions_across_env_hosts() {
     let expected_dir = Dir::open_local(first_dir.path()).unwrap();
     let created: serde_json::Value = serde_json::from_str(&first.handle_json(
         &mut first_connection,
-        &serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-shared","title":"Shared task","executionTarget":{"type":"local","root":requested_root}}}).to_string(),
+        &serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-shared","title":"Shared task","kind":"code", "executionTarget":{"type":"local","root":requested_root}}}).to_string(),
     ))
     .unwrap();
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
@@ -2574,7 +2574,7 @@ fn encrypted_storage_unavailable_keyring_keeps_local_composition_running() {
     let created = rpc(
         &mut connection,
         "session/create",
-        serde_json::json!({"commandId":"release-create","title":"Headless release fixture","executionTarget":null}),
+        serde_json::json!({"commandId":"release-create","title":"Headless release fixture","kind":"code", "executionTarget":null}),
     );
     let session = &created["session"]["sessionId"];
     let thread = &created["session"]["threads"][0]["threadId"];
@@ -4827,7 +4827,7 @@ fn message_restore_points_preserve_git_versions_after_restart() {
     let session = local_call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"root","title":"Restore messages","executionTarget":{"type":"local","root":repo.path()}}}),
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/create","params":{"commandId":"root","title":"Restore messages","kind":"code", "executionTarget":{"type":"local","root":repo.path()}}}),
     );
     let session_id = session["result"]["session"]["sessionId"]
         .as_str()
@@ -5020,7 +5020,7 @@ fn deleting_a_managed_worktree_deletes_its_session_and_discards_checkout_content
     let created = local_call(
         &server,
         &mut connection,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-managed","title":"Managed work","executionTarget":null}}),
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/create","params":{"commandId":"create-managed","title":"Managed work","kind":"code", "executionTarget":null}}),
     );
     assert!(created.get("error").is_none(), "{created}");
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();

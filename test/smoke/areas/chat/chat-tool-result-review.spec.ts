@@ -68,7 +68,7 @@ readline.createInterface({ input: process.stdin }).on('line', line => {
 		config = await client.request(APP_SERVER_METHODS['config/read'], {});
 		await client.request(APP_SERVER_METHODS['provider/configure'], { commandId: 'review-model', expectedRevision: config.revision, config: { connection: provider, provider, baseUrl: `http://127.0.0.1:${address.port}/v1`, custom: { name: 'Result review fixture', protocol: 'responses', order: 0, contextWindow: 272_000 }, modelContext: { [model.model]: { contextWindow: 272_000 } } } });
 		await client.request(APP_SERVER_METHODS['provider/apiKey/set'], { connection: provider, apiKey: 'synthetic-review-key' });
-		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'review-session', title: 'Result disclosure review', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+		const created = await client.request(APP_SERVER_METHODS['session/create'], { commandId: 'review-session', kind: 'code', title: 'Result disclosure review', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 		const sessionId = created.session.sessionId;
 		const threadId = created.session.threads[0]!.threadId;
 		const read = async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;

@@ -439,14 +439,14 @@ fn workflow_commands_run_dedicated_agents_through_rpc_and_require_user_acceptanc
         &server,
         &mut connection,
         "session/create",
-        serde_json::json!({"commandId":"forbidden-role", "title":"No workflow bypass", "executionTarget":null, "agent":{"type":"exact","source":{"type":"builtIn"},"name":"develop/implementer"}}),
+        serde_json::json!({"commandId":"forbidden-role", "title":"No workflow bypass", "kind":"code", "executionTarget":null, "agent":{"type":"exact","source":{"type":"builtIn"},"name":"develop/implementer"}}),
     );
     assert!(rejected.get("error").is_some(), "{rejected}");
     let created = call(
         &server,
         &mut connection,
         "session/create",
-        serde_json::json!({"commandId":"workflow-root", "title":"Workflow", "executionTarget":null}),
+        serde_json::json!({"commandId":"workflow-root", "title":"Workflow", "kind":"code", "executionTarget":null}),
     );
     let session = created["result"]["session"]["sessionId"].as_str().unwrap();
     let root = ThreadId::new(session).unwrap();
@@ -699,7 +699,7 @@ fn session_role_is_atomic_replayable_and_applied_to_real_model_input() {
         source: AgentRoleSource::BuiltIn,
         name: "issue".into(),
     };
-    let params = serde_json::json!({"commandId":"root-issue", "title":"Selected issues", "executionTarget":null, "agent":agent});
+    let params = serde_json::json!({"commandId":"root-issue", "title":"Selected issues", "kind":"code", "executionTarget":null, "agent":agent});
     let created = call(&server, &mut connection, "session/create", params.clone());
     assert!(created.get("result").is_some(), "{created}");
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
@@ -766,7 +766,7 @@ fn session_role_is_atomic_replayable_and_applied_to_real_model_input() {
         &server,
         &mut connection,
         "session/create",
-        serde_json::json!({"commandId":"root-issue", "title":"Selected issues", "executionTarget":null, "agent":{"type":"default"}}),
+        serde_json::json!({"commandId":"root-issue", "title":"Selected issues", "kind":"code", "executionTarget":null, "agent":{"type":"default"}}),
     );
     assert!(conflict.get("error").is_some());
     let restored = ThreadController::with_store(store)
@@ -805,7 +805,7 @@ fn missing_role_fails_before_a_session_is_created_and_default_never_routes_by_ti
         &server,
         &mut connection,
         "session/create",
-        serde_json::json!({"commandId":"missing-role", "title":"Issue work", "executionTarget":null, "agent":{"type":"exact","source":{"type":"builtIn"},"name":"missing"}}),
+        serde_json::json!({"commandId":"missing-role", "title":"Issue work", "kind":"code", "executionTarget":null, "agent":{"type":"exact","source":{"type":"builtIn"},"name":"missing"}}),
     );
     assert!(rejected.get("error").is_some());
     assert!(
@@ -818,7 +818,7 @@ fn missing_role_fails_before_a_session_is_created_and_default_never_routes_by_ti
         &server,
         &mut connection,
         "session/create",
-        serde_json::json!({"commandId":"default-role", "title":"issue coordinator implementation", "executionTarget":null}),
+        serde_json::json!({"commandId":"default-role", "title":"issue coordinator implementation", "kind":"code", "executionTarget":null}),
     );
     assert!(created.get("result").is_some(), "{created}");
     assert!(
@@ -873,7 +873,7 @@ fn fork_session_binds_extensions_and_delivers_approval_after_subscription() {
         &server,
         &mut connection,
         "session/create",
-        serde_json::json!({"commandId":"source", "title":"Source", "executionTarget":null}),
+        serde_json::json!({"commandId":"source", "title":"Source", "kind":"code", "executionTarget":null}),
     );
     let source_id = created["result"]["session"]["sessionId"].as_str().unwrap();
     let params = serde_json::json!({"commandId":"copy", "sessionId":source_id,
@@ -1015,7 +1015,7 @@ fn collaboration_modes_preserve_the_selected_base_in_rpc_turns_and_init() {
                 &server,
                 &mut connection,
                 "session/create",
-                serde_json::json!({"commandId":"mode-root","title":"Modes","executionTarget":null}),
+                serde_json::json!({"commandId":"mode-root","title":"Modes","kind":"code", "executionTarget":null}),
             );
             let id = created["result"]["session"]["sessionId"].as_str().unwrap();
             let response = call(
@@ -1108,7 +1108,7 @@ fn analysis_modes_inspect_workflow_commands_without_launching_workflow_agents() 
             &server,
             &mut connection,
             "session/create",
-            serde_json::json!({"commandId":"analysis-root","title":"Analysis","executionTarget":null}),
+            serde_json::json!({"commandId":"analysis-root","title":"Analysis","kind":"code", "executionTarget":null}),
         );
         let id = created["result"]["session"]["sessionId"].as_str().unwrap();
         let response = call(
@@ -1264,7 +1264,7 @@ fn subscription_test_thread(
         connection,
         serde_json::json!({
             "jsonrpc":"2.0","id":2,"method":"session/create",
-            "params":{"commandId":"subscription-session","title":"task","executionTarget":null}
+            "params":{"commandId":"subscription-session","title":"task","kind":"code", "executionTarget":null}
         }),
     );
     let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
@@ -1920,7 +1920,7 @@ fn unnamed_thread_projects_preview_then_persists_the_generated_title() {
             serde_json::json!({}),
         );
     }
-    let params = serde_json::json!({"commandId":"unnamed", "title":"", "executionTarget":null});
+    let params = serde_json::json!({"commandId":"unnamed", "title":"", "kind":"code", "executionTarget":null});
     let created = call(&server, &mut first, "session/create", params.clone());
     let session = created["result"]["session"]["sessionId"]
         .as_str()
@@ -1986,14 +1986,14 @@ fn unnamed_thread_projects_preview_then_persists_the_generated_title() {
 }
 
 #[test]
-fn chat_session_surface_survives_replay_and_rejects_a_conflicting_creation() {
+fn chat_session_kind_survives_replay_and_rejects_a_conflicting_creation() {
     let directory = tempfile::tempdir().unwrap();
-    let path = directory.path().join("chat-surface.sqlite3");
+    let path = directory.path().join("chat-kind.sqlite3");
     let params = serde_json::json!({
         "commandId": "ash-chat-root",
         "title": "Ash Chat",
         "executionTarget": null,
-        "surface": "chat",
+        "kind": "chat",
     });
     let session_id;
     {
@@ -2011,10 +2011,10 @@ fn chat_session_surface_survives_replay_and_rejects_a_conflicting_creation() {
             &server,
             &mut connection,
             "initialize",
-            serde_json::json!({"clientInfo":{"name":"chat-surface","version":"1"}}),
+            serde_json::json!({"clientInfo":{"name":"chat-kind","version":"1"}}),
         );
         let created = call(&server, &mut connection, "session/create", params.clone());
-        assert_eq!(created["result"]["session"]["surface"], "chat", "{created}");
+        assert_eq!(created["result"]["session"]["kind"], "chat", "{created}");
         session_id = ash_protocol::SessionId::new(
             created["result"]["session"]["sessionId"].as_str().unwrap(),
         )
@@ -2022,7 +2022,7 @@ fn chat_session_surface_survives_replay_and_rejects_a_conflicting_creation() {
         let replayed = call(&server, &mut connection, "session/create", params.clone());
         assert_eq!(replayed["result"]["session"], created["result"]["session"]);
         let mut conflicting = params;
-        conflicting["surface"] = serde_json::json!("code");
+        conflicting["kind"] = serde_json::json!("code");
         let rejected = call(&server, &mut connection, "session/create", conflicting);
         assert!(rejected.get("error").is_some(), "{rejected}");
     }
@@ -2030,15 +2030,137 @@ fn chat_session_surface_survives_replay_and_rejects_a_conflicting_creation() {
         ThreadController::with_store(Arc::new(ash_state::SqliteThreadStore::open(&path).unwrap()));
     let root = ThreadId::new(session_id.as_str()).unwrap();
     assert_eq!(
-        reopened.read_thread(&root).unwrap().surface,
-        Some(ash_protocol::SessionSurface::Chat)
+        reopened.read_thread(&root).unwrap().kind,
+        ash_protocol::SessionKind::Chat
     );
     assert_eq!(
         reopened
             .read_session_catalog(&session_id)
             .unwrap()
             .unwrap()
-            .surface,
-        Some(ash_protocol::SessionSurface::Chat)
+            .kind,
+        ash_protocol::SessionKind::Chat
+    );
+}
+
+#[test]
+fn desktop_and_cli_share_code_threads_and_cli_cannot_open_chat() {
+    let store = Arc::new(InMemoryThreadStore::default());
+    let threads = Arc::new(ThreadController::with_store(store));
+    let code = threads
+        .start_thread(
+            &ash_core::NoThreadWorktreeBinder,
+            core_api::StartThreadRequest {
+                command_id: CommandId::new("shared-code").unwrap(),
+                title: "Shared Code".into(),
+                kind: ash_protocol::SessionKind::Code,
+                execution_target: None,
+                branch_name: None,
+                worktree_start: None,
+                agent_id: None,
+                agent: None,
+            },
+        )
+        .unwrap();
+    let (sender, _) = mpsc::channel();
+    let server = AppServer::new(
+        threads,
+        Arc::new(CaptureModel(sender)),
+        ash_app_server_diff::compute,
+    );
+    let mut desktop = server.connection();
+    let mut cli = server.connection();
+    for (connection, name) in [(&mut desktop, "ash-desktop-agents"), (&mut cli, "ash-cli")] {
+        let initialized = call(
+            &server,
+            connection,
+            "initialize",
+            serde_json::json!({
+                "clientInfo": {"name":name,"version":"1"}
+            }),
+        );
+        assert!(initialized.get("result").is_some(), "{initialized}");
+    }
+    let chat = call(
+        &server,
+        &mut desktop,
+        "session/create",
+        serde_json::json!({
+            "commandId":"private-chat","title":"Desktop Chat","kind":"chat","executionTarget":null
+        }),
+    );
+    let chat_id = chat["result"]["session"]["sessionId"]
+        .as_str()
+        .expect("Chat Session ID");
+    let cli_catalog = call(
+        &server,
+        &mut cli,
+        "session/catalog/subscribe",
+        serde_json::json!({}),
+    );
+    let sessions = cli_catalog["result"]["sessions"].as_array().unwrap();
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0]["sessionId"], code.session_id.as_str());
+    for (method, params) in [
+        ("session/read", serde_json::json!({"sessionId":chat_id})),
+        (
+            "session/thread/read",
+            serde_json::json!({"sessionId":chat_id,"threadId":chat_id}),
+        ),
+        ("thread/goal/get", serde_json::json!({"threadId":chat_id})),
+        (
+            "thread/goal/get",
+            serde_json::json!({"threadId":chat_id,"sessionId":code.session_id}),
+        ),
+        (
+            "session/request",
+            serde_json::json!({
+                "sessionId":chat_id,"commandId":"cli-rename-chat","request":{"type":"renameSession","title":"CLI title"}
+            }),
+        ),
+    ] {
+        let response = call(&server, &mut cli, method, params);
+        assert!(response.get("error").is_some(), "{method}: {response}");
+    }
+    for connection in [&mut desktop, &mut cli] {
+        let subscribed = call(
+            &server,
+            connection,
+            "session/subscribe",
+            serde_json::json!({"sessionId":code.session_id}),
+        );
+        assert!(subscribed.get("result").is_some(), "{subscribed}");
+    }
+    let goal = serde_json::json!({"threadId":code.thread_id,"objective":"Work from the terminal"});
+    let set = call(&server, &mut cli, "thread/goal/set", goal);
+    assert!(set.get("result").is_some(), "{set}");
+    let read = call(
+        &server,
+        &mut desktop,
+        "thread/goal/get",
+        serde_json::json!({"threadId":code.thread_id}),
+    );
+    assert_eq!(
+        read["result"]["goal"]["objective"],
+        "Work from the terminal"
+    );
+    let set = call(
+        &server,
+        &mut desktop,
+        "thread/goal/set",
+        serde_json::json!({
+            "threadId":code.thread_id,"objective":"Continue from the desktop"
+        }),
+    );
+    assert!(set.get("result").is_some(), "{set}");
+    let read = call(
+        &server,
+        &mut cli,
+        "thread/goal/get",
+        serde_json::json!({"threadId":code.thread_id}),
+    );
+    assert_eq!(
+        read["result"]["goal"]["objective"],
+        "Continue from the desktop"
     );
 }

@@ -45,6 +45,12 @@ get_session(session_id)
   = all Threads where thread.session_id == session_id
 ```
 
+`Session.kind` 记录会话创建时的分类。桌面原生 Chat 创建 `chat`，桌面 Code 与
+`ash code` 创建 `code`。两个 Code 客户端可以同时订阅并操作同一条 Thread，
+由 App Server 管理 Turn 顺序和交互请求。CLI 的会话目录和按 ID 操作只接受
+Code 会话。执行目录和当前打开的界面分别由后端和客户端管理。
+已绑定工作区的原生 Chat 可以在桌面 Code 打开，继续使用原 Session 和 Thread。
+
 根 Thread 通常满足 `thread.id == session_id`；持久 fork 或子 Agent 通常产生新的 `thread.id` 并保留
 原 `session_id`。这不是所有派生模式的普遍定律：需要新会话树的临时派生可以使用新的
 `session_id`。因此代码只能依赖显式字段，不能靠 ID 相等猜关系。

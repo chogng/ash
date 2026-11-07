@@ -55,7 +55,7 @@ for (const surface of ['IDE', 'Agents Code', 'Agents Cowork'] as const) {
 			await client.request(methods['provider/apiKey/set'], { connection: provider, apiKey: 'isolated-execution-key' });
 			const configured = await client.request(methods['config/read'], {});
 			await client.request(methods['config/update'], { commandId: 'execution-default-model', expectedRevision: configured.revision, model });
-			const created = await client.request(methods['session/create'], { commandId: 'execution-session', title: 'Execution queue conversation', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
+			const created = await client.request(methods['session/create'], { commandId: 'execution-session', kind: 'code', title: 'Execution queue conversation', agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory } });
 			const sessionId = created.session.sessionId;
 			const threadId = created.session.threads[0].threadId;
 			const read = async () => (await client.request(methods['session/thread/read'], { sessionId, threadId })).thread;

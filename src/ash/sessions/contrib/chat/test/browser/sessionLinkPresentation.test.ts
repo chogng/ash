@@ -24,7 +24,7 @@ test('Conversation link previews follow the matching host catalog for the contri
 	const providerId = 'remote';
 	const identity = (id: string) => sessionIdentity(providerId, id, LOCAL_AGENT_HOST_PROVIDER_ID);
 	let sessions: readonly ISession[] = [{
-		providerId, sessionId: identity('same'), title: 'Remote session', status: 'active', nextApprovalMode: 'manual',
+		providerId, sessionId: identity('same'), kind: 'code' as const, title: 'Remote session', status: 'active', nextApprovalMode: 'manual',
 		chats: [{ threadId: identity('root'), origin: { type: 'root' }, status: 'active', title: 'Remote chat' }],
 	}];
 	services.registerInstance(ILinkPresentationService, links);

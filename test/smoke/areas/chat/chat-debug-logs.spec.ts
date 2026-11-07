@@ -48,7 +48,7 @@ async function seedSession(client: AppServerProtocolClient, root: string, title:
 	const provider = 'custom-debug-logs';
 	const model = { provider, model: 'debug-log-model' };
 	const { session } = await client.request(methods['session/create'], {
-		commandId: 'debug-logs-session', title, agent: { type: 'default' },
+		commandId: 'debug-logs-session', kind: 'code', title, agent: { type: 'default' },
 		executionTarget: { type: 'local', root },
 	});
 	const threadId = session.threads[0].threadId;

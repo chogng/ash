@@ -164,7 +164,7 @@ fn spawn_reuses_an_explicit_agent_identity_across_sessions() {
         .start_thread(
             &crate::NoThreadWorktreeBinder,
             StartThreadRequest {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,
@@ -1233,7 +1233,7 @@ fn fixture_with_profile(
         .start_thread(
             &crate::NoThreadWorktreeBinder,
             StartThreadRequest {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,

@@ -13,7 +13,7 @@ use ash_home::AshHome;
 use ash_protocol::ApprovalMode;
 use ash_protocol::SessionExecutionTarget;
 use ash_protocol::SessionId;
-use ash_protocol::SessionSurface;
+use ash_protocol::SessionKind;
 use ash_skills_extension::DynamicSkillSourceSnapshot;
 use ash_skills_extension::SessionSkillSourceProvider;
 use core_api::CoreError;
@@ -30,31 +30,25 @@ pub(super) struct SessionExecutionRouter {
 /// Durable routing facts shared by admission and model context. Live grants remain with their
 /// owners and are checked again whenever a source or tool uses them.
 pub(super) struct SessionExecutionRoute {
-    surface: Option<SessionSurface>,
+    kind: SessionKind,
     target: Option<SessionExecutionTarget>,
     directory_configured: bool,
 }
 
 impl SessionExecutionRoute {
-    pub(super) fn new(
-        surface: Option<SessionSurface>,
-        target: Option<SessionExecutionTarget>,
-    ) -> Self {
+    pub(super) fn new(kind: SessionKind, target: Option<SessionExecutionTarget>) -> Self {
         Self {
-            surface,
+            kind,
             target,
             directory_configured: false,
         }
     }
 
     pub(super) fn admit_creation(
-        self,
+        target: Option<SessionExecutionTarget>,
         dirs: Option<&ThreadDirs>,
     ) -> Result<Option<SessionExecutionTarget>, CoreError> {
-        match self.target {
-            None if self.surface == Some(SessionSurface::Code) => Err(CoreError::InvalidInput(
-                "Code Session creation requires an execution directory".into(),
-            )),
+        match target {
             None => Ok(None),
             Some(SessionExecutionTarget::Local { root }) => {
                 let selected = dirs.ok_or_else(|| {
@@ -86,10 +80,10 @@ impl SessionExecutionRoute {
         requested: Option<ApprovalMode>,
         configured: impl FnOnce() -> Result<ApprovalMode, super::RpcError>,
     ) -> Result<ApprovalMode, super::RpcError> {
-        match (requested, self.surface) {
+        match (requested, self.kind) {
             (Some(mode), _) => Ok(mode),
-            (None, Some(SessionSurface::Chat)) => Ok(ApprovalMode::Manual),
-            (None, Some(SessionSurface::Code) | None) => configured(),
+            (None, SessionKind::Chat) => Ok(ApprovalMode::Manual),
+            (None, SessionKind::Code) => configured(),
         }
     }
 
@@ -97,12 +91,8 @@ impl SessionExecutionRoute {
         if self.directory_configured {
             return self.target.is_some();
         }
-        match self.surface {
-            Some(SessionSurface::Chat) => false,
-            Some(SessionSurface::Code) => self.target.is_some(),
-            // Older Sessions also serve clients whose directory is bound by their host.
-            None => true,
-        }
+        // Code can use a workspace supplied by its execution host. Chat requires an explicit binding.
+        self.kind == SessionKind::Code
     }
 
     pub(super) fn uses_profile_host(&self, thread_target: Option<&SessionExecutionTarget>) -> bool {
@@ -145,14 +135,16 @@ impl SessionExecutionRouter {
             .threads
             .upgrade()
             .ok_or_else(|| CoreError::Context("Session execution router is unavailable".into()))?;
-        // Read the owning Session, including for a branch whose original surface can differ.
+        // Read the owning Session, including for a branch whose original kind can differ.
         let session = threads
             .read_session_catalog(session_id)?
             .ok_or_else(|| CoreError::NotFound(session_id.to_string()))?;
-        let mut route = SessionExecutionRoute::new(session.surface, session.execution_target);
-        if route.surface.is_none()
-            || route.surface == Some(SessionSurface::Chat) && route.target.is_some()
-        {
+        let mut route = SessionExecutionRoute::new(session.kind, session.execution_target);
+        let needs_directory_binding = match route.kind {
+            SessionKind::Chat => route.target.is_some(),
+            SessionKind::Code => route.target.is_none(),
+        };
+        if needs_directory_binding {
             let root = threads
                 .session_thread_catalog(session_id)?
                 .into_iter()

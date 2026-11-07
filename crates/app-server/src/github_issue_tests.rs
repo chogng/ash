@@ -1286,7 +1286,7 @@ fn assert_stalled_reads_keep_dispatch_available(method: &str) {
         101,
         "session/create",
         json!({
-            "commandId":"network-independent-session", "title":"ready", "executionTarget":null,
+            "commandId":"network-independent-session", "title":"ready", "kind":"code", "executionTarget":null,
         }),
     );
     loop {

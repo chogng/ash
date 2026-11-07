@@ -1293,7 +1293,7 @@ fn agent_thread_switcher_starts_at_the_empty_input_cursor_column() {
         thread_id: root_id.clone(),
     });
     app.update(SessionEvent::CatalogReceived(vec![Session {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         session_id,
         title: "Session".into(),
         status: SessionStatus::Active,
@@ -2152,7 +2152,7 @@ fn manager_session(
 ) -> Session {
     let session_id = SessionId::new(id).unwrap();
     Session {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         source: None,
         model: None,
         session_id: session_id.clone(),

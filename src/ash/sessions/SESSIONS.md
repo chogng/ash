@@ -22,14 +22,18 @@ On Desktop, the ChatGPT Web source owns its conversation records. Native Ash Cha
 creates its root Threads, reads its catalog and validates saved selections and
 links through the local App Server domain service. The shared connection retains
 its catalog subscription while either consumer needs it. Native Chat preserves
-its existing selection, draft and conversation identities. Sessions without a
-recorded surface remain accessible through Code.
+its existing selection, draft and conversation identities. The domain exposes the
+creation category as `kind`. Sessions without a recorded kind remain accessible
+through Code.
 
 A saved local root conversation can bind or clear its execution directory while
 idle. The directory command preserves its Session and Thread identities and
 history, and uses the existing directory admission and grant checks. Clearing
 retires the directory runtime and sends subsequent turns to the profile host.
 The backend continues to own execution policy and approval defaults.
+An active native Chat Thread with a bound workspace can also be opened in Code.
+Code uses the original Session and Thread, including their history and execution
+policy. Opening the Thread does not change its kind or its default Chat link destination.
 
 ## Architecture
 

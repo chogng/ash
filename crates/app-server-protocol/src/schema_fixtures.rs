@@ -510,6 +510,7 @@ fn rpc_envelopes_preserve_json_rpc_2_shape() {
                 "type": "committed",
                 "event": {
                     "type": "threadCreated",
+                    "kind": "code",
                     "sessionId": "session-1",
                     "threadId": "thread-1",
                     "title": "Thread"
@@ -540,6 +541,7 @@ fn rpc_envelopes_preserve_json_rpc_2_shape() {
                     "type": "committed",
                     "event": {
                         "type": "threadCreated",
+                        "kind": "code",
                         "sessionId": "session-1",
                         "threadId": "thread-1",
                         "title": "Thread"

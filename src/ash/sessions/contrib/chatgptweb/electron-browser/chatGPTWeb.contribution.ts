@@ -122,12 +122,17 @@ CommandsRegistry.register(OPEN_ASH_CHAT_WITH_MODEL_COMMAND, async (accessor, mod
 	});
 });
 
+const chatNewSessionMenu = ContextKeyExpr.and(
+	ActivityBarItemContext.isEqualTo('sessions.newSession'),
+	ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code'),
+);
+
 registerAction2(class OpenChatGPT extends Action2 {
 	constructor() {
 		super({
 			id: 'sessions.open.chatgpt', title: localize2('sessions.chatgpt.webTitle', 'ChatGPT Web'), icon: Lxicon.openai,
 			toggled: ContextKeyExpr.has(chatGPTSelectedContext),
-			menu: { id: Menus.ActivityBarContext, when: ContextKeyExpr.and(ActivityBarItemContext.isEqualTo('sessions.newSession'), ContextKeyExpr.has(experimentalChatGPTSelected)), group: 'navigation' },
+			menu: { id: Menus.ActivityBarContext, when: ContextKeyExpr.and(chatNewSessionMenu, ContextKeyExpr.has(experimentalChatGPTSelected)), group: 'navigation' },
 			f1: true,
 		});
 	}
@@ -143,7 +148,7 @@ registerAction2(class OpenExperimentalChatGPT extends Action2 {
 			precondition: ContextKeyExpr.not('config.chat.disableAIFeatures'),
 			menu: {
 				id: Menus.ActivityBarContext,
-				when: ContextKeyExpr.and(ActivityBarItemContext.isEqualTo('sessions.newSession'), ContextKeyExpr.not(experimentalChatGPTSelected)),
+				when: ContextKeyExpr.and(chatNewSessionMenu, ContextKeyExpr.not(experimentalChatGPTSelected)),
 				group: 'navigation',
 			},
 			f1: true,
@@ -172,7 +177,7 @@ registerAction2(class ReloadChatGPT extends Action2 {
 			shortTitle: localize2('sessions.chatgpt.reloadShort', 'Reload'),
 			menu: {
 				id: Menus.ActivityBarContext,
-				when: ContextKeyExpr.and(ActivityBarItemContext.isEqualTo('sessions.newSession'), ContextKeyExpr.or(ContextKeyExpr.has(chatGPTSelectedContext), ContextKeyExpr.has(experimentalChatGPTSelected))),
+				when: ContextKeyExpr.and(chatNewSessionMenu, ContextKeyExpr.or(ContextKeyExpr.has(chatGPTSelectedContext), ContextKeyExpr.has(experimentalChatGPTSelected))),
 				group: 'navigation',
 			},
 			f1: true,
@@ -186,7 +191,7 @@ registerAction2(class ReloadChatGPT extends Action2 {
 
 const authenticationMenu = {
 	id: Menus.ActivityBarContext,
-	when: ContextKeyExpr.and(ActivityBarItemContext.isEqualTo('sessions.newSession'), ContextKeyExpr.has(chatGPTSelectedContext)),
+	when: ContextKeyExpr.and(chatNewSessionMenu, ContextKeyExpr.has(chatGPTSelectedContext)),
 	group: 'authentication',
 };
 

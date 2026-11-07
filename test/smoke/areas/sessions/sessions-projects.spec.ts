@@ -7,8 +7,9 @@ import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index
 import { connectProfile, enableFixtureModel } from './sessionProfileFixture.js';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
+import { Menus } from '../../../automation/menus.js';
 
-test('Chat and Code organize the same Ash conversation in separate project catalogs', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+test('switching modes separates conversations, projects and Activity Bar entries', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	const connection = await connectProfile(application, undefined, testWorkspace.directory, workbench.page);
 	try {
 		const { client } = connection;
@@ -19,11 +20,14 @@ test('Chat and Code organize the same Ash conversation in separate project catal
 		const second = await createProject('Second Chat project', 'chat');
 		const codeWorkspace = await createProject('Code project', 'code');
 		const title = 'Organize this conversation';
+		const { session: chatSession } = await client.request(APP_SERVER_METHODS['session/create'], {
+			commandId: randomUUID(), kind: 'chat', title: 'Organize this chat', agent: { type: 'default' }, executionTarget: null,
+		});
 		const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
-			commandId: randomUUID(), title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory },
+			commandId: randomUUID(), kind: 'code', title, agent: { type: 'default' }, executionTarget: { type: 'local', root: testWorkspace.directory },
 		});
 		const { session: previous } = await client.request(APP_SERVER_METHODS['session/create'], {
-			commandId: randomUUID(), title: 'Previous workspace conversation', agent: { type: 'default' },
+			commandId: randomUUID(), kind: 'code', title: 'Previous workspace conversation', agent: { type: 'default' },
 			executionTarget: { type: 'local', root: testWorkspace.directory },
 		});
 		await client.request(APP_SERVER_METHODS['project/session/link'], {
@@ -31,6 +35,13 @@ test('Chat and Code organize the same Ash conversation in separate project catal
 		});
 		const members = async (projectId: string) => (await client.request(APP_SERVER_METHODS['project/read'], { projectId })).project.sessionIds;
 		const page = await workbench.openAgentsWindow(target.kind);
+		const activity = page.getByRole('toolbar', { name: /^Navigation\b/ });
+		const mode = page.locator('.ash-window-mode-control');
+		const menus = new Menus(page);
+		const newMenu = () => menus.inspect(application, () => activity.getByRole('button', { name: 'New', exact: true }).click({ button: 'right' }));
+		await expect(activity.locator('[data-action-id="sessions.open.projects"]')).toBeVisible();
+		await expect(activity.locator('[data-action-id="sessions.open.creator"]')).toBeVisible();
+		expect((await newMenu()).some(item => item.label.startsWith('ChatGPT'))).toBe(true);
 		const chat = page.locator('.ash-chat-navigation-list');
 		const projects = chat.locator('[data-section="projects"]');
 		const add = projects.getByRole('button', { name: 'Add folder…', exact: true });
@@ -42,20 +53,26 @@ test('Chat and Code organize the same Ash conversation in separate project catal
 		await expect(chat.getByRole('button', { name: 'Chat sidebar group', exact: true })).toBeVisible();
 		await expect(add).toBeFocused();
 		await projects.getByRole('button', { name: 'Projects', exact: true }).press('ArrowRight');
-		const row = chat.getByRole('button', { name: title, exact: true });
+		const row = chat.getByRole('button', { name: chatSession.title, exact: true });
 		const firstProject = chat.getByRole('button', { name: first.name, exact: true });
 		const secondProject = chat.getByRole('button', { name: second.name, exact: true });
 		await expect(firstProject).toBeVisible();
 		await expect(chat.getByRole('button', { name: codeWorkspace.name, exact: true })).toHaveCount(0);
+		await expect(chat.getByRole('button', { name: title, exact: true })).toHaveCount(0);
 		await row.dragTo(firstProject);
-		await expect.poll(() => members(first.projectId)).toEqual([session.sessionId]);
+		await expect.poll(() => members(first.projectId)).toEqual([chatSession.sessionId]);
 		await firstProject.click();
 		await expect(row).toBeVisible();
 		await row.dragTo(secondProject);
-		await expect.poll(() => members(second.projectId)).toEqual([session.sessionId]);
+		await expect.poll(() => members(second.projectId)).toEqual([chatSession.sessionId]);
 		await expect.poll(() => members(first.projectId)).toEqual([]);
 
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+		await mode.getByRole('button', { name: 'Code', exact: true }).click();
+		await expect(chat).toBeHidden();
+		await expect(activity.locator('[data-action-id="sessions.open.projects"]')).toHaveCount(0);
+		await expect(activity.locator('[data-action-id="sessions.open.creator"]')).toHaveCount(0);
+		await expect(activity.locator('[data-action-id="sessions.newSession"]')).toBeVisible();
+		expect((await newMenu()).some(item => item.label.startsWith('ChatGPT'))).toBe(false);
 		const code = page.locator('.ash-sessions-list[data-mode="code"]');
 		const codeProject = code.getByRole('button', { name: codeWorkspace.name, exact: true });
 		await code.getByRole('button', { name: 'More Sessions Actions', exact: true }).press('Enter');
@@ -65,6 +82,7 @@ test('Chat and Code organize the same Ash conversation in separate project catal
 		const conversation = codeRow.locator(':scope > button.ash-sessions-list-item');
 		await expect(codeRow).toHaveAttribute('data-parent-project-id', codeWorkspace.projectId);
 		await expect(code.getByRole('button', { name: second.name, exact: true })).toHaveCount(0);
+		await expect(code.getByRole('button', { name: chatSession.title, exact: true })).toHaveCount(0);
 		await expect(conversation).toHaveText(title);
 		await expect(codeProject).toHaveAttribute('aria-expanded', 'true');
 		await codeProject.click();
@@ -78,7 +96,7 @@ test('Chat and Code organize the same Ash conversation in separate project catal
 		await conversation.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Remove from project', exact: true }).click();
 		await expect.poll(() => members(codeWorkspace.projectId)).toEqual([]);
-		expect(await members(second.projectId)).toEqual([session.sessionId]);
+		expect(await members(second.projectId)).toEqual([chatSession.sessionId]);
 		await expect(codeRow).not.toHaveAttribute('data-parent-project-id');
 		const workspace = code.getByRole('button', { name: basename(testWorkspace.directory), exact: true });
 		await expect(workspace).toHaveAttribute('aria-expanded', 'true');
@@ -152,7 +170,7 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 		const sidebar = () => page.locator('.ash-chat-navigation-list');
 		const projectName = () => sidebar().getByRole('button', { name: project.name, exact: true });
 		const sidebarChats = () => sidebar().locator('[data-parent-project] > .ash-chat-navigation-item:visible');
-		const activeChat = () => page.locator('.ash-sessions-chat-slot.active:visible :is(.ash-chat,.ash-cowork):visible');
+		const activeChat = () => page.locator('.ash-native-chat-widget:visible .ash-chat:visible');
 		const send = async (editor: Editor, text: string) => {
 			await editor.input.focus();
 			await editor.waitForTypeInEditor(text);
@@ -171,6 +189,7 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 			const { sessions } = await client.request(APP_SERVER_METHODS['session/list'], {});
 			const session = sessions.find(session => session.threads.some(thread => thread.threadId === threadId));
 			expect(session).toBeDefined();
+			expect(session?.kind).toBe('chat');
 			rowIds.push(`ash:${session!.sessionId}`);
 			await openProject();
 			await expect(projectChats()).toHaveCount(threadIds.length);

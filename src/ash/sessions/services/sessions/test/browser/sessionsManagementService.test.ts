@@ -1208,7 +1208,7 @@ test('interrupt reads the current Thread sequence before sending the command', a
 
 function session(sessionId: string, threadId: string): SessionDto {
 	return {
-		sessionId,
+		sessionId, kind: 'code' as const,
 		title: `Session ${sessionId}`,
 		status: 'active',
 		manager: { status: 'idle', statusChangedAtUnixMs: 0 },

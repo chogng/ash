@@ -161,7 +161,7 @@ fn code_mode_nested_write_is_owned_and_can_publish_a_commit_selection() {
         &mut connection,
         "session/create",
         serde_json::json!({
-            "commandId":"nested-session", "title":"Nested write", "executionTarget":{"type":"local","root":source.path()}
+            "commandId":"nested-session", "title":"Nested write", "kind":"code", "executionTarget":{"type":"local","root":source.path()}
         }),
     );
     let session = created["session"]["sessionId"].as_str().unwrap();
@@ -333,7 +333,7 @@ fn git_and_directory_history_restore_files_and_keep_the_same_thread_after_restar
             &server,
             &mut connection,
             "session/create",
-            serde_json::json!({"commandId":"session","title":"History","executionTarget":{"type":"local","root":source.path()}}),
+            serde_json::json!({"commandId":"session","title":"History","kind":"code", "executionTarget":{"type":"local","root":source.path()}}),
         );
         let session_id = session["session"]["sessionId"]
             .as_str()

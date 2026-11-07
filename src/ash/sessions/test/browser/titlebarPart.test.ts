@@ -70,7 +70,7 @@ test('Batch CI repair submits once per current conversation using its own connec
 		},
 	} as unknown as IChatSessionNavigationService, operations);
 	const item = (sessionId: string): IBlockedSession => ({
-		session: { sessionId, title: sessionId, status: 'active', nextApprovalMode: 'manual', chats: [] },
+		session: { sessionId, kind: 'code' as const, title: sessionId, status: 'active', nextApprovalMode: 'manual', chats: [] },
 		threadId: 'root', occurrence: 'ci-head', reason: 'ci',
 		checks: [{ uri: URI.parse('https://github.com/owner/repo/pull/1'), headCommit: 'abcd' } as IResolvedSessionPullRequest],
 	});
@@ -86,7 +86,7 @@ test('Sessions titlebar tracks CI status only for open PRs on the active host', 
 	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'blocked', flushInterval: 0 });
 	using checksChanged = new Emitter<void>();
 	const createSession = (sessionId: string, providerId: string): ISession => ({
-		sessionId, providerId, title: sessionId, status: 'active', nextApprovalMode: 'manual',
+		sessionId, kind: 'code' as const, providerId, title: sessionId, status: 'active', nextApprovalMode: 'manual',
 		chats: [{ threadId: sessionId, origin: { type: 'root' }, status: 'active' }],
 	});
 	const active = createSession('active', 'host');

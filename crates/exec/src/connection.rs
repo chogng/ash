@@ -193,7 +193,7 @@ impl ExecConnection for ServerConnection {
     ) -> Result<Session, ConnectionError> {
         self.client
             .create_session(SessionCreateParams {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 branch_name: None,
                 worktree_start: None,
                 environment_variables: None,

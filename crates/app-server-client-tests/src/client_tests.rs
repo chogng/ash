@@ -352,7 +352,7 @@ fn ephemeral_session_state_ignores_and_does_not_append_durable_history() {
     .unwrap();
     durable
         .create_session(SessionCreateParams {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             branch_name: None,
             worktree_start: None,
             environment_variables: None,
@@ -379,7 +379,7 @@ fn ephemeral_session_state_ignores_and_does_not_append_durable_history() {
     assert!(ephemeral.list_sessions().unwrap().sessions.is_empty());
     ephemeral
         .create_session(SessionCreateParams {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             branch_name: None,
             worktree_start: None,
             environment_variables: None,
@@ -478,7 +478,7 @@ fn in_process_client_uses_session_first_contract_and_canonical_updates() {
     assert_eq!(client.initialization().unwrap(), &initialized);
     let session = client
         .create_session(SessionCreateParams {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             branch_name: None,
             worktree_start: None,
             environment_variables: None,

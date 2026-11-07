@@ -46,7 +46,7 @@ suite('Session runtime connection ownership', () => {
 				request: async (method: { method: string; }, params: unknown) => {
 					if (method.method === 'session/runtime/invoke') return { type: 'target', target };
 					created = params;
-					return { session: { sessionId: 'one', title: 'One', status: 'active', executionTarget: target, threads: [], manager: { status: 'idle', statusChangedAtUnixMs: 0 } }, agentTree: { roots: [] } };
+					return { session: { sessionId: 'one', kind: 'code' as const, title: 'One', status: 'active', executionTarget: target, threads: [], manager: { status: 'idle', statusChangedAtUnixMs: 0 } }, agentTree: { roots: [] } };
 				},
 			};
 			const api = createAppServerAgentSessionService(connection as unknown as AppServerProtocolClient, source);
@@ -55,7 +55,7 @@ suite('Session runtime connection ownership', () => {
 			if (runtime.type !== 'target') throw new Error('Missing runtime');
 			const authority = typeof source === 'string' ? 'ssh+build-host' : source.authority;
 			assert.deepEqual(runtime.target, { ...target, hostAuthority: authority });
-			const params = { commandId: 'create', title: 'One', executionTarget: runtime.target, agent: { type: 'default' as const } };
+			const params = { commandId: 'create', kind: 'code' as const, title: 'One', executionTarget: runtime.target, agent: { type: 'default' as const } };
 			await api.create(params);
 			assert.deepEqual(created, { ...params, executionTarget: target });
 			assert.throws(() => api.create({ ...params, executionTarget: { ...target, hostAuthority: 'ssh+another-host' } }), /another host/);
@@ -220,7 +220,7 @@ for (const operation of ['read', 'subscribe', 'sessionSubscribe'] as const) test
 		async request(): Promise<unknown> {
 			const projection = { ...wire, updates: [] };
 			return operation === 'sessionSubscribe'
-				? { session: { sessionId: 'session', title: 'Pending tool', status: 'active', manager: {}, threads: [] }, agentTree: { roots: [] }, threadProjections: [projection] }
+				? { session: { sessionId: 'session', kind: 'code' as const, title: 'Pending tool', status: 'active', manager: {}, threads: [] }, agentTree: { roots: [] }, threadProjections: [projection] }
 				: projection;
 		},
 	} as unknown as AppServerProtocolClient;
@@ -250,7 +250,7 @@ for (const operation of ['read', 'subscribe', 'sessionSubscribe'] as const) test
 		async request(): Promise<unknown> {
 			const value = { ...wire, updates: [] };
 			return operation === 'sessionSubscribe'
-				? { session: { sessionId: 'session', title: 'Body reuse', status: 'active', manager: {}, threads: [] }, agentTree: { roots: [] }, threadProjections: [value] }
+				? { session: { sessionId: 'session', kind: 'code' as const, title: 'Body reuse', status: 'active', manager: {}, threads: [] }, agentTree: { roots: [] }, threadProjections: [value] }
 				: value;
 		},
 	} as unknown as AppServerProtocolClient;
@@ -403,7 +403,7 @@ test('message checkpoints and restoration use the existing typed session protoco
 
 test('Session catalog and subscriptions share the Agent domain snapshot boundary', async () => {
 	const session = {
-		sessionId: 'session', title: 'Task', status: 'active' as const, source: 'automation' as const,
+		sessionId: 'session', kind: 'code' as const, title: 'Task', status: 'active' as const, source: 'automation' as const,
 		executionTarget: { type: 'local' as const, root: '/workspace' },
 		model: { provider: 'openai', model: 'test' },
 		manager: { status: 'working' as const, statusChangedAtUnixMs: 4 }, threads: [],
@@ -457,7 +457,7 @@ test('SSH-bound Session requests use server-local paths and retain host identity
 	const root = "C:/workspace 中文/O'Brien";
 	const local = { type: 'local' as const, root };
 	const remote = { type: 'ssh' as const, host: 'windows-dev', root };
-	const session = { sessionId: 'session', title: 'Remote task', status: 'active' as const, executionTarget: local, manager: { status: 'idle' as const, statusChangedAtUnixMs: 0 }, threads: [] };
+	const session = { sessionId: 'session', kind: 'code' as const, title: 'Remote task', status: 'active' as const, executionTarget: local, manager: { status: 'idle' as const, statusChangedAtUnixMs: 0 }, threads: [] };
 	const requests: { method: string; params: unknown; }[] = [];
 	const connection = {
 		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
@@ -469,7 +469,7 @@ test('SSH-bound Session requests use server-local paths and retain host identity
 		},
 	} as unknown as AppServerProtocolClient;
 	const service = createAppServerAgentSessionService(connection, remote.host);
-	const params = { commandId: 'create', title: 'Remote task', executionTarget: remote, agent: { type: 'default' as const } };
+	const params = { commandId: 'create', kind: 'code' as const, title: 'Remote task', executionTarget: remote, agent: { type: 'default' as const } };
 	assert.deepEqual((await service.create(params)).session.executionTarget, remote);
 	assert.deepEqual(requests[0], { method: 'session/create', params: { ...params, executionTarget: local } });
 	assert.deepEqual(params.executionTarget, remote);
@@ -494,7 +494,7 @@ test('SSH-bound Thread reads and subscriptions qualify remote directory paths', 
 	const directory = { type: 'local' as const, root: 'C:/workspace' };
 	const thread = { origin: { type: 'root' }, usage: {}, turns: [] };
 	const snapshot = { thread, directory, transcript: { entries: [] }, updates: [] };
-	const session = { sessionId: 'session', title: 'Remote', status: 'active', manager: {}, threads: [] };
+	const session = { sessionId: 'session', kind: 'code' as const, title: 'Remote', status: 'active', manager: {}, threads: [] };
 	const connection = {
 		async request(definition: { method: string; }): Promise<unknown> {
 			return definition.method === 'session/subscribe' ? { session, agentTree: { roots: [] }, threadProjections: [snapshot] } : snapshot;
@@ -512,7 +512,7 @@ test('SSH-bound Thread reads and subscriptions qualify remote directory paths', 
 
 test('Session restoration uses the existing typed lifecycle request', async () => {
 	const session = {
-		sessionId: 'session', title: 'Restored', status: 'active' as const,
+		sessionId: 'session', kind: 'code' as const, title: 'Restored', status: 'active' as const,
 		manager: { status: 'idle' as const, statusChangedAtUnixMs: 0 },
 		threads: [{ threadId: 'session', title: 'Root', createdAtUnixMs: 1_000, lastActivityAtUnixMs: 2_000, status: 'active' as const }],
 	};
@@ -902,7 +902,7 @@ test('naming and deletion preserve request identity and reject responses for ano
 		async request(definition: { method: string; }, params: { request: { type: string; }; }): Promise<unknown> {
 			requests.push({ method: definition.method, params });
 			if (params.request.type === 'delete') return { type: 'deleted', value: returnedId };
-			return { type: 'session', value: { session: { sessionId: returnedId, title: '命名', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [] }, agentTree: { roots: [] } } };
+			return { type: 'session', value: { session: { sessionId: returnedId, kind: 'code' as const, title: '命名', status: 'active', manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [] }, agentTree: { roots: [] } } };
 		},
 	} as unknown as AppServerProtocolClient;
 	const sessions = createAppServerAgentSessionService(connection);

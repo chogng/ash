@@ -1542,9 +1542,8 @@ export class ChatWidgetModel extends Disposable {
 		if (this.selection.kind === 'session') return this.selection.active;
 		const untitledSession = this.selection.session;
 		const generation = this.composerGeneration;
-		const surface = this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) === 'code' ? 'code' : undefined;
 		return commitChatSession({
-			resolve: () => this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId, signal, surface),
+			resolve: () => this.sessionService.materializeUntitledSession(untitledSession.untitledSessionId, signal),
 			isCurrent: () => !this.isDisposed && this.composerGeneration === generation,
 			adopt: created => {
 				// Catalog notifications may create a durable pane before the create response.

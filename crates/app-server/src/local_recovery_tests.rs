@@ -68,7 +68,7 @@ fn legacy_goal_failure_does_not_block_startup_or_other_goal_recovery() {
         created_threads.push(
             initial
                 .start_thread(StartThreadRequest {
-                    surface: None,
+                    kind: ash_protocol::SessionKind::Code,
                     agent_id: None,
                     agent: None,
                     command_id: CommandId::new(name).unwrap(),
@@ -327,7 +327,7 @@ fn initial_directory_opens_before_recovered_tool_continuations_resume() {
         let server = open_app_server(options(), ash_app_server_diff::compute).unwrap();
         let thread = server
             .start_thread(StartThreadRequest {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 agent_id: None,
                 agent: None,
                 command_id: CommandId::new("recovery-thread").unwrap(),
@@ -523,7 +523,7 @@ fn unavailable_keyring_allows_local_model_turns_and_queue_restart() {
     );
     let created = rpc(
         "session/create",
-        serde_json::json!({"commandId":"local-model-session","title":"Local model","executionTarget":null}),
+        serde_json::json!({"commandId":"local-model-session","title":"Local model","kind":"code", "executionTarget":null}),
         &mut connection,
     );
     let session = created["session"]["sessionId"].as_str().unwrap();

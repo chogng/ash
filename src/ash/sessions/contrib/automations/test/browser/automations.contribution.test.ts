@@ -595,6 +595,8 @@ test('Automations entry opens a Custom View and never registers a Panel in eithe
 		const provider = value.host('one');
 		await value.facade.refresh();
 		assert.equal(custom.activeCustomViewOpen.get()?.source, 'restore');
+		assert.deepEqual(navigation(), []);
+		contexts.setContext('sessions.workspaceMode', 'code');
 		assert.deepEqual(navigation().map(action => ({ id: action.id, checked: action.checked, enabled: action.enabled })), [{ id: 'sessionsView.manageAutomations', checked: true, enabled: true }]);
 		assert.equal(navigation()[0]?.icon?.id, 'clockface');
 		assert.equal(menus.getMenuActions(Menus.SidebarSessionsHeader).flatMap(([, actions]) => actions).some(action => action.id === 'sessionsView.manageAutomations'), false);

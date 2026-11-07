@@ -145,7 +145,7 @@ const terminalViews: Array<{ id: string; focus: boolean | undefined; }> = [];
 const fixtureOptions = new URLSearchParams(location.search);
 if (fixtureOptions.has('leadingIcons')) document.body.classList.add('ash-workbench');
 const sessions = [1, 2, ...(fixtureOptions.has('treeFixture') ? [3] : [])].map(id => ({
-	sessionId: `session-${id}`, title: id === 2 ? fixtureOptions.get('rootTitle') ?? 'Task 2' : `Task ${id}`, status: 'active',
+	sessionId: `session-${id}`, kind: 'code' as const, title: id === 2 ? fixtureOptions.get('rootTitle') ?? 'Task 2' : `Task ${id}`, status: 'active',
 	management: fixtureOptions.has('working') && id === 1 ? { status: 'working', statusChangedAtUnixMs: 0 } : undefined,
 	source: id === 3 ? 'automation' : undefined,
 	chats: [

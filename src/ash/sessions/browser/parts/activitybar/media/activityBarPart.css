@@ -19,6 +19,11 @@
 	padding: 0 var(--ash-spacing-size80);
 }
 
+.ash-sessions-activity-content.horizontal > .ash-sessions-navigation {
+	width: 100%;
+	min-width: 0;
+}
+
 .ash-sessions-activity-item {
 	/* Sessions uses 32px-high rows in default vertical navigation.
 	 * Its hover, selection background and radius remain independent of Workbench. */

@@ -62,7 +62,7 @@ fn reentering_a_session_falls_back_to_main_after_the_viewed_subagent_completes()
 
 fn session(value: &str) -> Session {
     Session {
-        surface: None,
+        kind: ash_protocol::SessionKind::Code,
         source: None,
         model: None,
         session_id: session_id(value),

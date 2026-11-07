@@ -210,7 +210,7 @@ impl<'ctx, C: TeamRequestProcessorContext + ?Sized> TeamRequestProcessor<'ctx, C
                 self.context
                     .agent_runtime()
                     .start_thread(StartThreadRequest {
-                        surface: None,
+                        kind: ash_protocol::SessionKind::Code,
                         agent_id: Some(team.coordinator_id.clone()),
                         command_id: thread_command_id,
                         title,

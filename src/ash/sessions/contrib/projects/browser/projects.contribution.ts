@@ -22,6 +22,7 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Menus } from '../../../browser/menus.js';
 import { SessionsViewRegistry } from '../../../common/views.js';
+import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { CHAT_WORKSPACE_NAVIGATION_ID } from '../../chat/common/constants.js';
 import { groupChatList, IChatListCatalog } from '../../chat/browser/chatListModel.js';
 import { ProjectsEditorPane } from './projectsEditor.js';
@@ -39,7 +40,7 @@ CommandsRegistry.register('sessions.show.projects', (accessor, source) =>
 		.openEntry(
 			{
 				id: 'projects',
-				workspaceMode: 'current',
+				workspaceMode: 'chat',
 				activityContext: 'sessions.activity.projectsSelected',
 				content: 'editor',
 				sidebarContainerId: SessionsViewRegistry.getViewContainer(CHAT_WORKSPACE_NAVIGATION_ID)?.id,
@@ -74,7 +75,7 @@ registerAction2(
 				title: localize2({ bundle: 'ash', key: 'sessions.activity.projects' }, 'Projects'),
 				icon: Lxicon.projects,
 				toggled: ContextKeyExpr.has('sessions.activity.projectsSelected'),
-				menu: { id: Menus.ActivityBar, group: 'navigation', order: 30 },
+				menu: { id: Menus.ActivityBar, group: 'navigation', order: 30, when: ContextKeyExpr.notEquals(SessionsWorkspaceModeContext.key, 'code') },
 			});
 		}
 		public override async run(accessor: ServicesAccessor, projectId?: unknown): Promise<void> {

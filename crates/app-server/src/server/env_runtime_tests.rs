@@ -274,7 +274,7 @@ fn clearing_directories_keeps_home_instructions_in_model_requests() {
     server.activate_local_dirs(Vec::new()).unwrap();
     let thread = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -367,7 +367,7 @@ fn managed_thread_turn_uses_instructions_after_workspace_rebinding() {
     .unwrap();
     let thread = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -992,7 +992,7 @@ fn dirs_are_session_scoped_and_removable() {
         .unwrap();
     let first = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -1004,7 +1004,7 @@ fn dirs_are_session_scoped_and_removable() {
         .unwrap();
     let second = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -1061,7 +1061,7 @@ fn cwd_directory_can_be_added_explicitly() {
         .unwrap();
     let session = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -1101,7 +1101,7 @@ fn dir_mutation_requires_a_directory_grants_host_connection() {
         .unwrap();
     let session = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -1168,7 +1168,7 @@ fn projectless_session_terminal_uses_its_grant_without_enabling_an_unscoped_term
         .unwrap();
     let session = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -1312,7 +1312,7 @@ fn directory_grants_are_revision_bound_and_filter_capability_snapshots() {
         .unwrap();
     let session = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -2253,7 +2253,7 @@ fn user_config_revocation_removes_executable_services_but_keeps_file_access() {
     assert!(server.terminal_service().is_ok());
     let thread = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -2524,7 +2524,7 @@ fn active_turn_blocks_directory_root_switch_without_changing_authority() {
         .unwrap();
     let thread = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -2594,7 +2594,7 @@ fn active_turn_accepts_session_access_changes_and_revokes_old_snapshots() {
         .unwrap();
     let thread = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -2676,7 +2676,7 @@ fn session_directory_move_changes_future_context_only_for_that_session() {
     server.switch_local_dir_root(primary.path.clone()).unwrap();
     let first = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -2688,7 +2688,7 @@ fn session_directory_move_changes_future_context_only_for_that_session() {
         .unwrap();
     let second = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -2742,7 +2742,7 @@ fn session_files_copy_within_the_selected_directory_and_reject_ambiguous_targets
     server.switch_local_dir_root(primary.path.clone()).unwrap();
     let thread = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -3659,7 +3659,7 @@ fn permission_requests_follow_core_interaction_enforce_subset_and_expire_on_comp
         .unwrap();
     let thread = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -3882,7 +3882,7 @@ fn reusable_approvals_follow_core_and_bind_the_exact_action() {
             .unwrap();
         let thread = server
             .start_thread(StartThreadRequest {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,
@@ -4163,7 +4163,7 @@ fn remote_network_connections_require_the_exact_core_approval_before_upstream_io
             .unwrap();
         let thread = server
             .start_thread(StartThreadRequest {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,
@@ -4356,7 +4356,7 @@ fn capability_scoped_directory_startup_keeps_repository_watching_and_indexing_op
 fn start_directory_approval(server: &AppServer) -> ash_protocol::ThreadId {
     let thread = server
         .start_thread(StartThreadRequest {
-            surface: None,
+            kind: ash_protocol::SessionKind::Code,
             execution_target: None,
             branch_name: None,
             worktree_start: None,
@@ -4603,7 +4603,7 @@ fn filesystem_resource_routes_are_independent_of_selection_and_never_grant_acces
             .start_thread(
                 &ash_core::NoThreadWorktreeBinder,
                 StartThreadRequest {
-                    surface: None,
+                    kind: ash_protocol::SessionKind::Code,
                     command_id: CommandId::new(name).unwrap(),
                     title: name.into(),
                     execution_target: None,

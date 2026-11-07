@@ -478,7 +478,7 @@ fn update(session_id: &str, thread_id: &str, durable_sequence: u64) -> ThreadUpd
         stream_cursor: None,
         update: ThreadUpdate::Committed {
             event: ThreadEvent::ThreadCreated {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 agent_id: Some(ash_protocol::AgentId::new("agent-test").unwrap()),
                 origin: Default::default(),
                 agent: None,

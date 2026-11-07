@@ -9,7 +9,7 @@ import { AshChatSessionService } from '../../browser/ashChatSessionService.js';
 
 test('Ash Chat retries a saved draft with the original creation identity and restores only Chat records', async () => {
 	const session: AgentSession = {
-		sessionId: 'saved-session', surface: 'chat', title: 'Existing Ash Chat', status: 'active',
+		sessionId: 'saved-session', kind: 'chat', title: 'Existing Ash Chat', status: 'active',
 		manager: { status: 'idle', statusChangedAtUnixMs: 0 },
 		threads: [{ threadId: 'saved-root', title: 'Root', status: 'active' }],
 	};
@@ -22,7 +22,7 @@ test('Ash Chat retries a saved draft with the original creation identity and res
 			async create(params: SessionCreateParams) { calls.push(params); return { session }; },
 			async unsubscribe(params: { sessionId: string; }) { calls.push(params); },
 			async readCatalog({ sessionId }: { sessionId: string; }) {
-				return { session: sessionId === session.sessionId ? session : { ...session, sessionId, surface: undefined } };
+				return { session: sessionId === session.sessionId ? session : { ...session, sessionId, kind: undefined } };
 			},
 		},
 	} as unknown as IAgentConnection);
@@ -32,7 +32,7 @@ test('Ash Chat retries a saved draft with the original creation identity and res
 	const expected = { sessionId: 'saved-session', threadId: 'saved-root' };
 	assert.deepEqual(await chat.create('saved-draft'), expected);
 	assert.deepEqual(await chat.create('saved-draft'), expected);
-	const request = { commandId: 'desktop-session-saved-draft', title: '', surface: 'chat', executionTarget: null, agent: { type: 'default' } };
+	const request = { commandId: 'desktop-session-saved-draft', title: '', kind: 'chat', executionTarget: null, agent: { type: 'default' } };
 	assert.deepEqual(calls, [request, { sessionId: 'saved-session' }, request, { sessionId: 'saved-session' }]);
 	assert.equal(await chat.read('saved-session'), session);
 	assert.equal(await chat.read('legacy-code-session'), undefined);

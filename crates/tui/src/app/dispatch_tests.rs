@@ -153,11 +153,12 @@ fn compact_from_the_composer_creates_a_compaction_turn() {
 
 #[test]
 fn branch_persists_lineage_switches_threads_and_does_not_call_the_model() {
-    let (mut client, state_root, model) = client_with_model_probe();
+    let (mut client, state_root, model) = client_with_model_probe_options(true);
     let mut conversation = ActiveConversation::start(&mut client, "original".into()).unwrap();
     let original_session = conversation.session_id().clone();
     let original_thread = conversation.thread_id().clone();
-    let mut app = App::new();
+    let workspace = state_root.join("workspace").canonicalize().unwrap();
+    let mut app = App::for_dir(&workspace);
 
     execute(
         &mut conversation,
@@ -232,7 +233,11 @@ fn branch_persists_lineage_switches_threads_and_does_not_call_the_model() {
         .unwrap()
         .session;
     assert_eq!(fresh_session.title, "fresh task");
-    assert_eq!(fresh_session.execution_target, None);
+    assert_eq!(fresh_session.kind, ash_protocol::SessionKind::Code);
+    assert_eq!(
+        fresh_session.execution_target,
+        Some(ash_protocol::SessionExecutionTarget::Local { root: workspace })
+    );
     assert_eq!(fresh_session.threads.len(), 1);
     assert_ne!(conversation.thread_id(), &original_thread);
     assert_eq!(fresh_session.threads[0].forked_from_id, None);
@@ -359,10 +364,10 @@ fn branch_then_new_preserves_execution_target_and_resume_restores_original_sessi
 
 #[test]
 fn archive_persists_status_starts_a_new_session_and_does_not_call_the_model() {
-    let (mut client, state_root, model) = client_with_model_probe();
+    let (mut client, state_root, model) = client_with_model_probe_options(true);
     let mut conversation = ActiveConversation::start(&mut client, "archive me".into()).unwrap();
     let archived_session_id = conversation.session_id().clone();
-    let mut app = App::new();
+    let mut app = App::for_dir(&state_root.join("workspace"));
 
     execute(
         &mut conversation,
@@ -387,6 +392,7 @@ fn archive_persists_status_starts_a_new_session_and_does_not_call_the_model() {
         .unwrap()
         .session;
     assert_eq!(next.status, SessionStatus::Active);
+    assert_eq!(next.kind, ash_protocol::SessionKind::Code);
     assert_eq!(
         app.messages().last().unwrap().text(),
         "Archived the previous session and started a new session."
@@ -1403,6 +1409,12 @@ fn client() -> (DispatchTestClient, PathBuf) {
 }
 
 fn client_with_model_probe() -> (DispatchTestClient, PathBuf, Arc<OfflineOperationClient>) {
+    client_with_model_probe_options(false)
+}
+
+fn client_with_model_probe_options(
+    bind_startup_workspace: bool,
+) -> (DispatchTestClient, PathBuf, Arc<OfflineOperationClient>) {
     let guard = dispatch_test_guard();
     static NEXT_STATE_ROOT: AtomicU64 = AtomicU64::new(1);
     let state_root = std::env::temp_dir().join(format!(
@@ -1415,18 +1427,21 @@ fn client_with_model_probe() -> (DispatchTestClient, PathBuf, Arc<OfflineOperati
         NEXT_STATE_ROOT.fetch_add(1, Ordering::Relaxed)
     ));
     let model = Arc::new(OfflineOperationClient::default());
-    let client = start_in_process_client(
-        crate::test_support::in_process_options(
-            &state_root,
-            ClientInfo {
-                name: "ash-tui-test".into(),
-                version: "1".into(),
-            },
-        )
-        .with_codex_home(state_root.join("codex"))
-        .with_model_operation_client(model.clone()),
+    let mut options = crate::test_support::in_process_options(
+        &state_root,
+        ClientInfo {
+            name: "ash-tui-test".into(),
+            version: "1".into(),
+        },
     )
-    .unwrap();
+    .with_codex_home(state_root.join("codex"))
+    .with_model_operation_client(model.clone());
+    if bind_startup_workspace {
+        let workspace = state_root.join("workspace");
+        fs::create_dir(&workspace).unwrap();
+        options = options.with_dir_root(workspace);
+    }
+    let client = start_in_process_client(options).unwrap();
     (
         DispatchTestClient {
             client,
@@ -1571,6 +1586,9 @@ fn model_pins_keep_provider_identity_and_provider_deletion_cleans_preferences() 
                 features: Default::default(),
                 model: Default::default(),
                 model_reasoning_effort: Default::default(),
+                thread_title_model: Default::default(),
+                thread_recap_model: Default::default(),
+                thread_recap_enabled: Default::default(),
                 code_review_model: Default::default(),
                 commit_message_model: Default::default(),
                 commit_message_enabled: Default::default(),
@@ -1758,13 +1776,16 @@ fn set_model_sets_and_clears_model_reasoning_effort() {
         crate::models::set_model(&mut *client, "openai/gpt-6-astra super", &catalog).unwrap_err();
     assert!(err.to_string().contains("invalid reasoning effort"));
 
-    // Setting model without effort clears model reasoning effort.
+    // Omitting effort clears the override and displays the selected model's catalog default.
     let update = crate::models::set_model(&mut *client, "openai/gpt-6-astra", &catalog).unwrap();
     let crate::models::ModelNotice::Command(notice) = update.notice else {
         panic!("model selection must produce a command notice");
     };
-    assert_eq!(&*notice, "Model: openai/gpt-6-astra");
-    assert_eq!(update.summary.model_reasoning_effort(), None);
+    assert_eq!(&*notice, "Model: openai/gpt-6-astra (medium)");
+    assert_eq!(
+        update.summary.model_reasoning_effort(),
+        Some(ReasoningEffort::Medium)
+    );
     let read = client.read_config().unwrap();
     assert_eq!(read.model_reasoning_effort, None);
 

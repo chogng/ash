@@ -32,12 +32,12 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
     )));
     let work = tempfile::tempdir().unwrap();
     let dir = Dir::open_local(work.path()).unwrap();
-    let create = |title: &str, surface, execution_target| {
+    let create = |title: &str, kind, execution_target| {
         threads
             .start_thread(
                 &ash_core::NoThreadWorktreeBinder,
                 core_api::StartThreadRequest {
-                    surface: Some(surface),
+                    kind,
                     agent_id: None,
                     agent: None,
                     command_id: CommandId::new(title).unwrap(),
@@ -49,15 +49,15 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
             )
             .unwrap()
     };
-    let chat = create("memory-chat", ash_protocol::SessionSurface::Chat, None);
+    let chat = create("memory-chat", ash_protocol::SessionKind::Chat, None);
     let code = create(
         "memory-code",
-        ash_protocol::SessionSurface::Code,
+        ash_protocol::SessionKind::Code,
         Some(ash_protocol::SessionExecutionTarget::Local {
             root: work.path().to_str().unwrap().into(),
         }),
     );
-    let separate = create("memory-other", ash_protocol::SessionSurface::Code, None);
+    let separate = create("memory-other", ash_protocol::SessionKind::Code, None);
     let (session, thread) = (code.session_id, code.thread_id);
     let turn = TurnId::new("turn").unwrap();
     let project = ProjectId::new("project").unwrap();
@@ -323,7 +323,7 @@ fn memories_are_recollected_after_preflight_compaction_and_revocation() {
         .start_thread(
             &ash_core::NoThreadWorktreeBinder,
             core_api::StartThreadRequest {
-                surface: None,
+                kind: ash_protocol::SessionKind::Code,
                 execution_target: None,
                 branch_name: None,
                 worktree_start: None,

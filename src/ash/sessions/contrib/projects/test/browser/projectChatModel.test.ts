@@ -9,6 +9,7 @@ import { ICommandService } from '../../../../../platform/commands/common/command
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
+import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IProjectService, type Project } from '../../../../../platform/projects/common/projectService.js';
 import { TestConfigurationService } from '../../../../../workbench/services/configuration/test/common/testServices.js';
 import { ILanguageModelsService } from '../../../../../workbench/contrib/chat/common/languageModels.js';
@@ -57,7 +58,7 @@ class ProjectChatFixture extends Disposable {
 		super();
 		const active: IActiveSessionThread = {
 			session: {
-				sessionId: 'session',
+				sessionId: 'session', kind: 'code' as const,
 				title: 'New Chat',
 				status: 'active',
 				nextApprovalMode: 'manual',
@@ -206,6 +207,7 @@ class ProjectChatFixture extends Disposable {
 				throw error;
 			},
 		} as unknown as INotificationService);
+		this.services.registerInstance(IOpenerService, { open: async () => false } as unknown as IOpenerService);
 		this.model = this._register(this.services.createInstance(ProjectChatModel, 'project', this.draft));
 		this._register(
 			toDisposable(() => {

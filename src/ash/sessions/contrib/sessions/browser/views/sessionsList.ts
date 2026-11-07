@@ -8,7 +8,7 @@ import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../../platform/
 import { ISessionGroupsService, type SessionGroup } from '../../../../services/sessions/browser/sessionGroupsService.js';
 import { CHANGE_SESSION_GROUP_APPEARANCE } from './sessionGroupAppearancePicker.js';
 import '../media/sessionsList.css';
-import { addDisposableListener, getWindow, h } from '../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h, isHTMLElement } from '../../../../../base/browser/dom.js';
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { createLoadingSpinner } from '../../../../../base/browser/ui/loadingSpinner/loadingSpinner.js';
 import { observeResize } from '../../../../../base/browser/observer.js';
@@ -260,7 +260,7 @@ export class SessionsList extends DomWidget {
 		super();
 		const contributed = typeof presentation !== 'string' && 'catalog' in presentation ? presentation : undefined;
 		this.catalog = contributed?.catalog;
-		const mode = this.mode = typeof presentation === 'string' ? presentation : contributed ? 'code' : 'chat';
+		const mode = this.mode = typeof presentation === 'string' ? presentation : 'chat';
 		this.entry = typeof presentation !== 'string' && 'openCommand' in presentation ? presentation : undefined;
 		const nativeLoading = observableFromEvent(this, sessionService.onDidChange, () => sessionService.state === 'loading' && sessionService.sessions.length > 0);
 		this.loading = nativeLoading.map((loading, reader) => loading || !!this.catalog?.snapshot.read(reader).loading);
@@ -272,7 +272,7 @@ export class SessionsList extends DomWidget {
 		this.domNode.dataset.mode = mode;
 		const config = configuration ?? this._register(new InMemoryConfigurationService());
 		// Embedded Sessions shares Chat's viewport with the conversation history.
-		this.tree = this._register(new SessionsListTree(this.domNode, title, config, mode, this.entry ? 'external' : 'managed', {
+		this.tree = this._register(new SessionsListTree(this.domNode, title, config, mode === 'code' || !!contributed, this.entry ? 'external' : 'managed', {
 			organization: element => this.getOrganization(element),
 			reference: element => {
 				const target = this.items.get(element.dataset.item ?? '')?.target;
@@ -301,7 +301,7 @@ export class SessionsList extends DomWidget {
 			this.tree.element.classList.add('ash-chat-navigation-list');
 			this.catalogViewport = this.list.querySelector(':scope > .ash-scrollbar-viewport');
 		}
-		if (mode === 'code') {
+		if (mode === 'code' || contributed) {
 			this._register(this.tree.onDidChangeSelection(({ browserEvent }) => {
 				// The active conversation owns selection. Tree input can still move focus.
 				if (browserEvent) this.syncTreeSelection();
@@ -317,9 +317,10 @@ export class SessionsList extends DomWidget {
 			const row = [...this.list.querySelectorAll<HTMLButtonElement>('.ash-sessions-list-item')].find(button => !button.closest('[hidden]'));
 			row?.focus();
 		}));
-		if (!this.entry) this._register(listModel.registerTree(this.catalog ? 'shared' : mode, () => this.readTree()));
-		if (this.entry && contextKeys) {
-			const keys = new Set([this.entry.activeContext]);
+		if (!this.entry) this._register(listModel.registerTree(mode, () => this.readTree()));
+		const activeContext = this.entry?.activeContext ?? (mode === 'code' ? CodeConversationPageContext.key : undefined);
+		if (activeContext && contextKeys) {
+			const keys = new Set([activeContext]);
 			this._register(contextKeys.onDidChangeContext(event => { if (event.affectsSome(keys)) this.render(); }));
 		}
 		this.empty = h(ownerDocument, 'p');
@@ -382,12 +383,6 @@ export class SessionsList extends DomWidget {
 			this._register(this.tree.onDidScroll(() => this.catalogPaging.schedule()));
 			this._register(addDisposableListener(this.list, 'focusin', () => this.catalogPaging.schedule()));
 			this._register(observeResize(this.domNode, () => this.catalogPaging.schedule()));
-			if (contextKeys) {
-				const keys = new Set([CodeConversationPageContext.key]);
-				this._register(contextKeys.onDidChangeContext(event => {
-					if (event.affectsSome(keys)) this.render();
-				}));
-			}
 			this._register(autorun(reader => {
 				catalog.snapshot.read(reader);
 				this.render();
@@ -398,8 +393,10 @@ export class SessionsList extends DomWidget {
 			this.render();
 		}));
 		this.render();
-		this._register(projectService.onDidChange(() => { void this.loadProjects(); }));
-		void this.loadProjects();
+		if (!this.catalog) {
+			this._register(projectService.onDidChange(() => { void this.loadProjects(); }));
+			void this.loadProjects();
+		}
 	}
 
 	private async openRow(open: (options: Parameters<ISessionsService['openSession']>[2]) => Promise<void>): Promise<void> {
@@ -407,7 +404,7 @@ export class SessionsList extends DomWidget {
 			if (this.entry && !this.contextKeys?.getValue(this.entry.activeContext)) {
 				await this.commands.executeCommand(this.entry.openCommand);
 			}
-			if (!this.isDisposed) await open(this.catalog ? { reveal: 'code' } : undefined);
+			if (!this.isDisposed) await open(this.mode === 'code' ? { reveal: 'code' } : undefined);
 		} catch (error) {
 			if (!this.isDisposed) this.notifications.error(String(error));
 		}
@@ -804,8 +801,8 @@ export class SessionsList extends DomWidget {
 		};
 		this.catalogRows.clear();
 		this.catalogProjects.clear();
-		const activeSelection = this.customViews.activeCustomView.get() || this.entry && !this.contextKeys?.getValue(this.entry.activeContext)
-			|| this.catalog && !this.contextKeys?.getValue(CodeConversationPageContext.key)
+		const activeSelection = this.catalog || this.customViews.activeCustomView.get() || this.entry && !this.contextKeys?.getValue(this.entry.activeContext)
+			|| !this.entry && this.mode === 'code' && this.contextKeys?.getValue(CodeConversationPageContext.key) === false
 			? undefined : this.viewService.activeSelection;
 		const restingIcon = this.mode === 'code' ? quietSessionIcon : undefined;
 		const statusIcons = this.mode === 'code' ? codeManagementIcons : managementIcons;
@@ -893,7 +890,8 @@ export class SessionsList extends DomWidget {
 		// Include parked drafts too, so switching conversations does not hide their only sidebar entry.
 		const nestedDrafts = new Map<string, HTMLElement[]>();
 		const projectDrafts = new Map<string, HTMLElement[]>();
-		for (const session of this.sessionService.untitledSessions) {
+		for (const session of this.catalog ? [] : this.sessionService.untitledSessions) {
+			if (session.kind === 'chat') continue;
 			let draft: ReturnType<typeof readNewChatDraftState>;
 			try { draft = readNewChatDraftState(this.storage, `untitled:${session.untitledSessionId}`, chatInputStatePersistence); }
 			catch { continue; } // The composer reports unreadable drafts; one must not break the whole list.
@@ -916,7 +914,7 @@ export class SessionsList extends DomWidget {
 				recent.push(item.domNode);
 			}
 		}
-		const catalog = getSessionsListEntries(this.sessionService.sessions.filter(session => session.surface !== 'chat'), this.listModel, this.mode,
+		const catalog = getSessionsListEntries(this.catalog ? [] : this.sessionService.sessions.filter(session => session.kind === 'code'), this.listModel, this.mode,
 			activeSelection?.kind === 'session' ? activeSelection.active.session.sessionId : undefined);
 		const groupNames = new Map(this.groups.groups.flatMap(group => group.sessionIds.map(id => [id, group.name] as const)));
 		const projectNames = new Map(this.projects.flatMap(project => project.sessionIds.map(id => [id, project.name] as const)));
@@ -980,11 +978,14 @@ export class SessionsList extends DomWidget {
 			}
 		}
 		if (this.projectsFailed && !this.search.hasQuery) projects.push(this.projectError);
+		const catalogIds = new Set(catalog.map(session => session.sessionId));
 		for (const group of this.groups.groups) {
+			const contributed = contributedGroups.get(`group:${group.sectionId}`);
+			if (this.catalog ? !contributed : group.sessionIds.length && !group.sessionIds.some(id => catalogIds.has(id))) continue;
 			if (group.kind === 'comparison' && !this.listModel.showComparisonGroups) {
 				continue;
 			}
-			const members = [...contributedGroups.get(`group:${group.sectionId}`) ?? []];
+			const members = [...contributed ?? []];
 			for (const id of group.sessionIds) {
 				const item = remaining.get(id);
 				if (item) { members.push(item); remaining.delete(id); }
@@ -1060,7 +1061,8 @@ export class SessionsList extends DomWidget {
 		ordered.push(sectionFor('projects', localize('projects.title', 'Projects'), projects));
 		ordered.push(...reorderChildren(chatGroups, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId'));
 		if (orderedRecent.length || !this.search.hasQuery && (pinned.length || hasProjectConversations)) {
-			ordered.push(sectionFor('recent', this.mode === 'chat' ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents'), orderedRecent));
+			const label = this.mode === 'chat' && !this.catalog ? localize('sessions.list.chats', 'Chats') : localize('sessions.list.recents', 'Recents');
+			ordered.push(sectionFor('recent', label, orderedRecent));
 		}
 		if (showEmpty && emptyStatus) ordered.push(this.empty);
 		// Keep filtered rows available so closing search can restore the original focus target.
@@ -1098,7 +1100,7 @@ export class SessionsList extends DomWidget {
 		};
 		this.tree.setChildren(ordered.map(element => project(element)));
 		if (this.catalog) this.catalogPaging.schedule();
-		if (this.mode === 'code') this.syncTreeSelection();
+		if (this.mode === 'code' || this.catalog) this.syncTreeSelection();
 		if (focused?.isConnected && !focused.closest('[hidden]') && ownerDocument.activeElement !== focused) focused.focus({ preventScroll: true });
 		else if (focusedRow && !focusedRow.isConnected && this.tree.model.has(SessionsListTree.id(focusedRow))) this.tree.focusRow(focusedRow, true);
 	}
@@ -1574,12 +1576,12 @@ class SessionListRowRenderer extends Disposable {
 
 /** Shared tree renderer for the retained controls supplied by each session sidebar. */
 class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
-	constructor(container: HTMLElement, title: string, configurationService: IConfigurationService, mode: 'chat' | 'code', scrolling: 'external' | 'managed', dragOptions?: SessionsListDragOptions) {
+	constructor(container: HTMLElement, title: string, configurationService: IConfigurationService, highlightRows: boolean, scrolling: 'external' | 'managed', dragOptions?: SessionsListDragOptions) {
 		const dnd = dragOptions && new SessionsListDragAndDrop(container.ownerDocument, dragOptions);
 		super(container, {
 			configurationService,
 			ariaLabel: title,
-			styles: mode === 'code' ? {
+			styles: highlightRows ? {
 				...defaultListStyles,
 				listHoverBackground: 'var(--ash-sessions-sidebar-hover-background)',
 				listActiveSelectionBackground: 'var(--ash-sessions-sidebar-selection-background)',
@@ -1615,6 +1617,23 @@ class SessionsListTree extends WorkbenchObjectTree<HTMLElement> {
 		if (dnd) this._register(dnd);
 		this.element.classList.add('ash-sessions-list-tree');
 		this.element.tabIndex = -1;
+		// Move real focus between the nested row buttons when navigating the hierarchy.
+		this._register(addDisposableListener(this.element, 'keydown', event => {
+			const button = event.target;
+			if (!isHTMLElement(button) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+			let target: HTMLElement | undefined;
+			if (event.key === 'ArrowRight' && button.matches('.ash-sessions-list-section-toggle[aria-expanded="true"]')) {
+				const section = button.closest<HTMLElement>('[data-section]')!;
+				target = this.model.getNode(SessionsListTree.id(section))?.children[0]?.element;
+			} else if (event.key === 'ArrowLeft' && button.matches('.ash-sessions-list-item')) {
+				const row = button.closest<HTMLElement>('[data-item]')!;
+				target = this.model.getParent(SessionsListTree.id(row))?.element;
+			}
+			if (!target) return;
+			event.preventDefault();
+			event.stopPropagation();
+			this.focusRow(target);
+		}, true));
 	}
 
 	static id(element: HTMLElement): string {

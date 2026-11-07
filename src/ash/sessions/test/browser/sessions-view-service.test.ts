@@ -930,7 +930,7 @@ class FakeSessionService implements ISessionsManagementService {
 
 function session(sessionId: SessionId, threadId: ThreadId): ISession {
 	return {
-		sessionId,
+		sessionId, kind: 'code' as const,
 		title: sessionId,
 		status: 'active',
 		nextApprovalMode: 'manual',

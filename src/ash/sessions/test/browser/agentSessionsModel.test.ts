@@ -19,7 +19,7 @@ function fixture() {
 	const groupChanged = resources.add(new Emitter<void>());
 	const services = resources.add(new InstantiationService());
 	let sessions: ISession[] = [{
-		sessionId: 'session', providerId: 'provider', title: 'Review', status: 'active', nextApprovalMode: 'manual',
+		sessionId: 'session', kind: 'code' as const, providerId: 'provider', title: 'Review', status: 'active', nextApprovalMode: 'manual',
 		workspace: { root: '/workspace', authorityId: 'local' },
 		chats: [
 			{ threadId: 'root', status: 'active', origin: { type: 'root' }, management: { status: 'working', statusChangedAtUnixMs: 0, activity: { type: 'operation', text: 'Reading files' } } },
@@ -77,7 +77,7 @@ suite('Shared Agent Sessions catalog', () => {
 	test('same-title conversations expose distinct hosts and open the selected host identity', () => {
 		using f = fixture();
 		const remote = (host: string): ISession => ({
-			sessionId: `${host}/session`, providerId: host, providerLabel: host, title: 'Review', status: 'active', nextApprovalMode: 'manual',
+			sessionId: `${host}/session`, kind: 'code' as const, providerId: host, providerLabel: host, title: 'Review', status: 'active', nextApprovalMode: 'manual',
 			workspace: { root: '/workspace', authorityId: host },
 			chats: [{ threadId: `${host}/root`, status: 'active', origin: { type: 'root' } }],
 		});
