@@ -109,6 +109,15 @@ export class SessionsService extends Disposable implements ISessionsService {
 
 	get recentSessions(): readonly SessionRecencyEntry[] { return this.recency.entries.filter((entry): entry is SessionRecencyEntry => !('kind' in entry)); }
 	getLastViewedAt(entry: SessionRecencyEntry): number | undefined { return this.recency.getLastViewedAt(entry); }
+
+	markVisibleThreadViewed(entry: SessionRecencyEntry): void {
+		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === entry.sessionId && candidate.status === 'active');
+		const thread = session?.chats.find(candidate => candidate.threadId === entry.threadId && candidate.status === 'active');
+		if (thread?.updatedAt) {
+			// Record the activity seen in this window, even when the provider's clock differs from ours.
+			this.recency.markViewed(entry, thread.updatedAt.getTime());
+		}
+	}
 	get navigationRevision(): number { return this._navigationRevision; }
 	get visibleSelections(): readonly SessionsViewSelection[] { return this.getSelection().visibleSelections; }
 	get activeSelection(): SessionsViewSelection | undefined { return this.getSelection().activeSelection; }

@@ -22,6 +22,7 @@ import { CommandsRegistry, ICommandService } from '../../../platform/commands/co
 import { KeybindingRuleKind, KeybindingWeight, KeybindingsRegistry } from '../../../platform/keybinding/common/keybindingsRegistry.js';
 import { IsSessionsWindowContext } from '../../../workbench/common/contextkeys.js';
 import '../../contrib/sessions/browser/sessionsActions.js';
+import { groupSessionsForPicker } from '../../contrib/sessions/browser/sessionsPicker.js';
 import '../../contrib/sessions/browser/views/sessionsViewActions.js';
 import { AbstractCustomView } from '../../services/customView/browser/customView.js';
 
@@ -473,6 +474,34 @@ test('Recent visits persist as deduplicated conversation identities without chan
 	await restored.initialize();
 	assert.deepEqual(restored.recentSessions.map(entry => entry.sessionId), ['first', 'second', 'third']);
 	assert.ok(restored.getLastViewedAt({ sessionId: 'first', threadId: 'root' }));
+});
+
+test('Viewing activity in a detached Thread clears its unread group without navigating', async () => {
+	const main = session('main', 'root');
+	const detached = session('detached', 'root');
+	const catalog = [main, {
+		...detached,
+		chats: [
+			{ ...detached.chats[0]!, updatedAt: new Date(200) },
+			{ ...detached.chats[0]!, threadId: 'sibling', updatedAt: new Date(200) },
+		],
+	}];
+	using sessions = new FakeSessionService(catalog);
+	using storage = createTestStorage();
+	using view = createView(sessions, storage);
+	await view.initialize();
+
+	const unreadThreads = () => groupSessionsForPicker(catalog, view.recentSessions, entry => view.getLastViewedAt(entry)).unread.map(item => item.threadId);
+	assert.deepEqual(unreadThreads(), ['root', 'sibling']);
+	const revision = view.navigationRevision;
+	const recent = view.recentSessions;
+	const entry = { sessionId: 'detached', threadId: 'root' };
+	view.markVisibleThreadViewed(entry);
+
+	assert.equal(view.getLastViewedAt(entry), 200);
+	assert.deepEqual(unreadThreads(), ['sibling']);
+	assert.equal(view.navigationRevision, revision);
+	assert.deepEqual(view.recentSessions, recent);
 });
 
 test('Restoring a Session window keeps the Forward destination from the saved recency order', async () => {

@@ -10,10 +10,11 @@ import { IStorageService, StorageScope } from '../../../platform/storage/common/
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import type { ChatContextAttachment } from '../../../workbench/services/chat/common/chatContextService.js';
 import './media/sessionsPart.css';
-import { Dimension, h } from '../../../base/browser/dom.js';
+import { addDisposableListener, Dimension, h } from '../../../base/browser/dom.js';
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { Part } from '../../../workbench/browser/part.js';
 import type { SessionsViewSelection } from '../../services/sessions/browser/sessionsService.js';
+import type { SessionRecencyEntry } from '../../services/sessions/browser/sessionsRecencyHistory.js';
 import { sessionViewSelectionKey } from '../../services/sessions/browser/visibleSessions.js';
 import { ChatAuxiliaryWindow } from '../../../workbench/contrib/chat/browser/widgetHosts/chatAuxiliaryWindow.js';
 import { SessionView, type ISessionsConversationPane } from './sessionView.js';
@@ -48,6 +49,7 @@ export interface SessionsPartOptions {
 		selection: SessionsViewSelection,
 	) => ISessionsConversationPane;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
+	readonly markVisibleThreadViewed: (entry: SessionRecencyEntry) => void;
 	readonly closeSelection: (selection: SessionsViewSelection) => void;
 	readonly createNewSession: () => void;
 	readonly createComparisonControls?: (container: HTMLElement) => IDisposable;
@@ -291,10 +293,23 @@ export class SessionsPart extends Part implements ISessionsConversationService {
 			window.container.classList.add('ash-sessions-window');
 			shell.mount(view.element);
 			view.setVisible(true);
-			window.window.document.title = title;
+			const document = window.window.document;
+			const markViewed = () => {
+				if (this.popouts.get(view)?.window !== window || document.hidden || !document.hasFocus()) return;
+				const selection = view.currentSelection;
+				if (selection.kind === 'session') {
+					const { session, threadId } = selection.active;
+					this.options.markVisibleThreadViewed({ sessionId: session.sessionId, threadId });
+				}
+			};
+			resources.add(addDisposableListener(window.window, 'focus', markViewed));
+			resources.add(addDisposableListener(document, 'visibilitychange', markViewed));
+			resources.add(this.sessionService.onDidChange(markViewed));
+			document.title = title;
 			window.layout();
 			window.window.focus();
 			view.focus();
+			markViewed();
 		} catch (error) {
 			resources.dispose();
 			window.dispose();

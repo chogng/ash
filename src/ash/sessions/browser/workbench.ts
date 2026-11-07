@@ -917,6 +917,7 @@ export abstract class Workbench extends Disposable {
 						view.openNewSession();
 					}),
 				activateSelection: selection => view.activateSelection(selection),
+				markVisibleThreadViewed: entry => view.markVisibleThreadViewed(entry),
 				closeSelection: selection => {
 					if (view.activeSelection !== selection) view.activateSelection(selection);
 					void commandService.executeCommand('sessionsViewPane.closeSession')
