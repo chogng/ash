@@ -23,6 +23,8 @@ import { writeNewChatDraftState } from '../../../chat/common/newChatDraftState.j
 import { pickSessionDestination } from '../sessionsPicker.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { IFileDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { status } from '../../../../../base/browser/ui/aria/aria.js';
+import { isCancellationError } from '../../../../../base/common/errors.js';
 
 registerAction2(class CloseSessionAction extends Action2 {
 	constructor() {
@@ -143,7 +145,7 @@ registerAction2(class MoveSessionToGroupAction extends Action2 {
 });
 
 registerAction2(class ChangeSessionDirectoryAction extends Action2 {
-	constructor() { super({ id: 'agentSession.changeDirectory', title: localize2({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Session Folder…') }); }
+	constructor() { super({ id: 'agentSession.changeDirectory', title: localize2({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Workspace…') }); }
 
 	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
 		if (typeof argument !== 'string') return;
@@ -152,11 +154,36 @@ registerAction2(class ChangeSessionDirectoryAction extends Action2 {
 		const workspace = sessions.sessions.find(session => session.sessionId === argument)?.workspace;
 		const dialogs = accessor.get(IFileDialogService);
 		const [folder] = await dialogs.showOpenDialog({
-			title: localize({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Session Folder…'),
+			title: workspace
+				? localize({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Workspace…')
+				: localize({ bundle: 'ash.sessions', key: 'sessions.directory.set' }, 'Set Workspace…'),
 			canSelectFolders: true, canSelectFiles: false, canSelectMany: false, availableFileSystems: ['file'],
 			defaultUri: workspace ? URI.file(workspace.root) : undefined,
 		}) ?? [];
-		if (folder?.scheme === 'file') await sessions.changeDirectory(argument, folder.fsPath);
+		if (folder?.scheme !== 'file' || folder.authority) return;
+		try {
+			await sessions.changeDirectory(argument, folder.fsPath);
+			status(localize({ bundle: 'ash.sessions', key: 'sessions.workspace.enabled' }, 'Workspace set to {0}.', folder.fsPath));
+		} catch (error) {
+			if (!isCancellationError(error)) throw error;
+		}
+	}
+});
+
+registerAction2(class ClearSessionDirectoryAction extends Action2 {
+	constructor() { super({ id: 'agentSession.clearDirectory', title: localize2({ bundle: 'ash.sessions', key: 'sessions.directory.clear' }, 'Remove Workspace') }); }
+
+	override async run(accessor: ServicesAccessor, argument?: unknown): Promise<void> {
+		if (typeof argument !== 'string') return;
+		const sessions = accessor.get(ISessionsManagementService);
+		if (!sessions.canChangeDirectory?.(argument) || !sessions.canClearDirectory?.(argument) || !sessions.changeDirectory
+			|| !sessions.sessions.find(session => session.sessionId === argument)?.workspace) return;
+		try {
+			await sessions.changeDirectory(argument, null);
+			status(localize({ bundle: 'ash.sessions', key: 'sessions.workspace.disabled' }, 'Workspace off.'));
+		} catch (error) {
+			if (!isCancellationError(error)) throw error;
+		}
 	}
 });
 

@@ -426,9 +426,11 @@ test('The localized keyboard menu targets the saved Session folder and the origi
 	});
 	const source = session('source', [chat('source', 'Source root'), chat('original', 'Move me')]);
 	const destination = session('target', [chat('target', 'Target root')]);
+	let busy = false;
 	const management = {
 		sessions: [source, destination], untitledSessions: [], state: 'ready', onDidChange: Event.None,
-		canChangeDirectory: (id: string) => id === 'target',
+		canChangeDirectory: (id: string, options?: { ignoreActivity?: true; }) => id === 'target' && (!busy || options?.ignoreActivity === true),
+		canClearDirectory: (id: string) => id === 'target',
 		getChatMoveDestinations: (id: string, threadId: string) => id === 'source' && threadId === 'original' ? [destination] : [],
 	} as unknown as ISessionsManagementService;
 	const view = { onDidChange: Event.None, activeSelection: undefined, visibleSelections: [] } as unknown as ISessionsService;
@@ -448,11 +450,20 @@ test('The localized keyboard menu targets the saved Session folder and the origi
 	target.focus();
 	target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
 	const change = menu?.getActions().find(action => action.id === 'agentSession.changeDirectory');
-	assert.equal(change?.label, '更改会话文件夹…');
+	assert.equal(change?.label, '更换工作区…');
 	await change?.run();
+	const clear = menu?.getActions().find(action => action.id === 'agentSession.clearDirectory');
+	assert.equal(clear?.label, '解除工作区');
+	await clear?.run();
+	busy = true;
+	target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true }));
+	const disabled = menu?.getActions().find(action => action.id === 'agentSession.changeDirectory');
+	assert.equal(disabled?.enabled, false);
+	assert.equal(disabled?.badge, '空闲时可用');
 	assert.deepEqual(invoked, [
 		['sessions.list.moveChatToSession', { sessionId: 'source', threadId: 'original' }],
 		['agentSession.changeDirectory', 'target'],
+		['agentSession.clearDirectory', 'target'],
 	]);
 });
 

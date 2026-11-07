@@ -1,10 +1,13 @@
 import { execFile } from 'node:child_process';
 import { createServer } from 'node:http';
 import { readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
+import { readStorageEntries } from '../../../automation/storage.js';
+import { StorageScope } from '../../../../src/ash/platform/storage/common/storage.js';
+import type { ISessionGridState } from '../../../../src/ash/sessions/services/sessions/browser/sessionGridState.js';
 import { APP_SERVER_METHODS, APPROVAL_MODE_DEFINITIONS } from '../../../../.build/protocol/typescript/index.js';
 import { DEVELOPMENT_DIR_PERMISSIONS } from '../../../../src/ash/platform/workspace/common/workspaceTrust.js';
 import { connectProfile } from './sessionProfileFixture.js';
@@ -70,33 +73,51 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 		await code();
 		const active = () => page.locator('.ash-sessions-chat-slot.active:visible .ash-chat:visible');
 		const workspace = () => active().locator('.ash-sessions-workspace-picker');
-		const chooseBranch = async (name: string) => {
-			await workspace().click();
-			await page.getByRole('menuitem', { name: 'New worktree…', exact: true }).click();
-			const input = page.getByRole('dialog', { name: 'New worktree…', exact: true }).getByRole('textbox');
-			await input.fill(name);
-			await input.press('Enter');
-			await expect(workspace()).toHaveText(`Worktree · ${name}`);
+		const worktreeToggle = () => page.getByRole('menuitemcheckbox', { name: 'New worktree', exact: true });
+		const expectWorktreeEnabled = async () => {
+			await workspace().press('Enter');
+			await expect(worktreeToggle()).toHaveAttribute('aria-checked', 'true');
+			await page.keyboard.press('Escape');
 		};
-		const draft = async (marker: string, branch: string) => {
+		const draft = async (marker: string) => {
+			const previousId = await active().getAttribute('data-untitled-session-id');
 			await page.locator('[data-action-id="sessions.newSession"] button').click();
+			await expect(active()).toHaveAttribute('data-untitled-session-id', /.+/u);
+			if (previousId) await expect(active()).not.toHaveAttribute('data-untitled-session-id', previousId);
+			const id = (await active().getAttribute('data-untitled-session-id'))!;
 			await new Editor(active()).waitForEditorFocus();
 			await page.keyboard.insertText(marker);
-			await chooseBranch(branch);
-			const id = await active().getAttribute('data-untitled-session-id');
-			if (!id) throw new Error('Missing draft identity');
-			return id;
+			await workspace().press('Enter');
+			// The saved project and its matching local folder can both appear in the picker.
+			await page.getByRole('menuitemradio', { name: basename(cwd), exact: true }).first().click();
+			await expect(workspace()).toHaveText(basename(cwd));
+			await workspace().press('Enter');
+			await expect(worktreeToggle()).toHaveAttribute('aria-checked', 'false');
+			await worktreeToggle().click();
+			await expect(worktreeToggle()).toHaveAttribute('aria-checked', 'true');
+			await page.keyboard.press('Escape');
+
+			// The picker generates the branch name. Read the saved draft to inject failures at its exact Git ref.
+			let branch: string | undefined;
+			await expect.poll(async () => {
+				const stored = (await readStorageEntries(application, page, { scope: StorageScope.WORKSPACE, id: 'sessions' }))['sessions.viewState'];
+				const state: ISessionGridState | undefined = stored && JSON.parse(stored.value);
+				branch = state?.drafts.find(draft => draft.untitledSessionId === id)?.branchName;
+				return branch;
+			}).toMatch(/^ash\/[a-f0-9-]+$/u);
+			return { id, branch: branch!, marker };
 		};
 		const select = async (id: string) => page.locator('.ash-sessions-list').locator(`[data-item="${id}"] .ash-sessions-list-item`).click();
-		const first = await draft('workspace-a', 'review/first');
-		const second = await draft('workspace-b', 'review/second');
-		expect(await git('branch', '--list', 'review/*')).toBe('');
+		const first = await draft('workspace-a');
+		const second = await draft('workspace-b');
+		expect(first.branch).not.toBe(second.branch);
+		expect(await git('branch', '--list', first.branch, second.branch)).toBe('');
 		page = await workbench.reopenAgentsWindow(application, page);
 		await code();
-		const send = async (id: string, branch: string, marker: string) => {
+		const send = async ({ id, branch, marker }: Awaited<ReturnType<typeof draft>>) => {
 			await select(`untitled:${id}`);
 			await expect(active()).toHaveAttribute('data-untitled-session-id', id);
-			await expect(workspace()).toHaveText(`Worktree · ${branch}`);
+			await expectWorktreeEnabled();
 			await new Editor(active()).waitForEditorContents(text => text === marker);
 			await active().locator('.ash-chat-input-mode-action').click();
 			await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Agent', exact: true }).click();
@@ -111,10 +132,10 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 			if (!sessionId || !threadId) throw new Error('Missing durable identity');
 			return { sessionId, threadId, branch, marker };
 		};
-		const a = await send(first, 'review/first', 'workspace-a');
+		const a = await send(first);
 		await expect.poll(() => sent.has('workspace-a')).toBe(true);
 		// Hold A's model response until B is created, so execution follows a real switch.
-		const b = await send(second, 'review/second', 'workspace-b');
+		const b = await send(second);
 		releaseFirst();
 		expect(a.sessionId).not.toBe(b.sessionId);
 		expect(a.threadId).not.toBe(b.threadId);
@@ -148,46 +169,47 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 		for (const identity of [a, b]) {
 			await select(`session:${identity.sessionId}`);
 			await expect(active()).toHaveAttribute('data-thread-id', identity.threadId);
-			await expect.poll(() => workspace().getAttribute('aria-label')).toContain(cwd);
-			expect(await verify(identity)).toBe(identity === a ? rootA : rootB);
+			const root = identity === a ? rootA : rootB;
+			await expect(active().locator('.ash-session-workspace-status')).toHaveText(root);
+			expect(await verify(identity)).toBe(root);
 		}
 
 		// Both failures happen after selection, at the real Git provisioning boundary.
-		const failed = await draft('workspace-retry', 'review/first');
+		const failed = await draft('workspace-retry');
 		const traffic = requests.length;
 		const sessions = async () => (await client.request(APP_SERVER_METHODS['session/list'], {})).sessions.map(session => session.sessionId).sort();
 		const beforeFailure = await sessions();
-		await new Editor(active()).input.press('Enter');
-		await expect(active().getByRole('region', { name: 'CoreOperationFailed', exact: true })).toBeVisible();
-		await expect(workspace()).toBeEnabled();
-		await expect(active()).toHaveAttribute('data-untitled-session-id', failed);
-		await expect(workspace()).toHaveText('Worktree · review/first');
-		await new Editor(active()).waitForEditorContents(text => text === 'workspace-retry');
-		expect(await git('worktree', 'list', '--porcelain')).toBe(inventory);
-		expect(requests).toHaveLength(traffic);
-		expect(await sessions()).toEqual(beforeFailure);
-		const locked = await draft('workspace-retry', 'review/retry');
-		await expect(active().getByRole('region', { name: 'CoreOperationFailed', exact: true })).toHaveCount(0);
-		const lock = join(cwd, '.git', 'refs', 'heads', 'review', 'retry.lock');
-		await writeFile(lock, 'synthetic lock');
-		try {
+		const expectFailedDraft = async (id: string) => {
 			await new Editor(active()).input.press('Enter');
 			await expect(active().getByRole('region', { name: 'CoreOperationFailed', exact: true })).toBeVisible();
 			await expect(workspace()).toBeEnabled();
-			await expect(active()).toHaveAttribute('data-untitled-session-id', locked);
+			await expect(active()).toHaveAttribute('data-untitled-session-id', id);
 			await new Editor(active()).waitForEditorContents(text => text === 'workspace-retry');
-			expect(await git('branch', '--list', 'review/retry')).toBe('');
 			expect(await git('worktree', 'list', '--porcelain')).toBe(inventory);
 			expect(requests).toHaveLength(traffic);
 			expect(await sessions()).toEqual(beforeFailure);
+		};
+		const occupiedRef = `${failed.branch}/occupied`;
+		await git('branch', occupiedRef);
+		try {
+			await expectFailedDraft(failed.id);
+			await expectWorktreeEnabled();
+		} finally { await git('branch', '-D', occupiedRef); }
+		const locked = await draft('workspace-retry');
+		await expect(active().getByRole('region', { name: 'CoreOperationFailed', exact: true })).toHaveCount(0);
+		const lock = join(cwd, '.git', 'refs', 'heads', `${locked.branch}.lock`);
+		await writeFile(lock, 'synthetic lock');
+		try {
+			await expectFailedDraft(locked.id);
+			expect(await git('branch', '--list', locked.branch)).toBe('');
 		} finally { await rm(lock, { force: true }); }
-		// The failed command identity can retry after repair, without adopting A or B.
-		const retry = await send(locked, 'review/retry', 'workspace-retry');
+		// Retry the same draft after repairing the Git ref.
+		const retry = await send(locked);
 		await verify(retry);
 		await verify(a);
 		await verify(b);
-		await select(`untitled:${failed}`);
-		await expect(workspace()).toHaveText('Worktree · review/first');
+		await select(`untitled:${failed.id}`);
+		await expectWorktreeEnabled();
 		await new Editor(active()).waitForEditorContents(text => text === 'workspace-retry');
 		expect(await git('branch', '--show-current')).toBe('main');
 		expect(await git('rev-parse', 'HEAD')).toBe(sourceHead);

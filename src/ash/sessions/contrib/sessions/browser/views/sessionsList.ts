@@ -54,7 +54,7 @@ import { basename, extUriBiasedIgnorePathCase } from '../../../../../base/common
 import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { DropdownMenuActionViewItem } from '../../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
-import { createSessionItemActions } from '../../../../browser/agentSessionsModel.js';
+import { createSessionItemActions, createSessionWorkspaceActions } from '../../../../browser/agentSessionsModel.js';
 import type { SessionsViewSelection } from '../../../../services/sessions/browser/sessionsService.js';
 import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
@@ -638,15 +638,7 @@ export class SessionsList extends DomWidget {
 		const sessionActions: IAction[] = [];
 		if (selection.kind === 'session') {
 			const { session, threadId } = selection.active;
-			if (threadId === session.sessionId && this.sessionService.canChangeDirectory?.(session.sessionId)) {
-				sessionActions.push({
-					id: 'agentSession.changeDirectory',
-					label: localize({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Session Folder…'),
-					tooltip: '',
-					enabled: true,
-					run: () => this.commands.executeCommand('agentSession.changeDirectory', session.sessionId),
-				});
-			}
+			sessionActions.push(...createSessionWorkspaceActions(session.sessionId, threadId, this.sessionService, this.commands));
 			if (this.sessionService.getChatMoveDestinations?.(session.sessionId, threadId).length) {
 				sessionActions.push({
 					id: MOVE_CHAT_TO_SESSION_ACTION_ID,

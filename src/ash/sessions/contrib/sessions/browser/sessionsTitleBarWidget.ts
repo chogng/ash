@@ -1,6 +1,7 @@
 import './media/sessionsTitleBarWidget.css';
 import { addDisposableListener, getActiveElement, h } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
+import { Separator } from '../../../../base/common/actions.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Disposable, MutableDisposable } from '../../../../base/common/lifecycle.js';
@@ -22,13 +23,14 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { IAgentSessionActionsService, type IAgentSessionActionTarget } from '../../../../workbench/contrib/chat/browser/agentSessions/agentSessionsService.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { SHOW_SESSIONS_PICKER_COMMAND_ID } from './sessionsActions.js';
-import { createSessionItemActions } from '../../../browser/agentSessionsModel.js';
+import { createSessionItemActions, createSessionWorkspaceActions } from '../../../browser/agentSessionsModel.js';
 import { ISessionsTitlebarService } from '../../../browser/parts/titlebarPart.js';
 import { buildAgentHostSessionWorkspace } from '../../../common/agentHostSessionWorkspace.js';
 import { SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { ISessionsListModelService } from '../../../services/sessions/browser/sessionsListModelService.js';
+import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { ISessionsService, type SessionsViewSelection } from '../../../services/sessions/browser/sessionsService.js';
 import { IBlockedSessionsIndicatorService } from './blockedSessionsIndicatorModel.js';
 import { BlockedSessionsCIFixModel } from './blockedSessionsCIFixModel.js';
@@ -61,6 +63,7 @@ export class SessionsTitleBarWidget extends Disposable {
 		@IContextMenuService contextMenus: IContextMenuService,
 		@ISessionsListModelService listModel: ISessionsListModelService,
 		@IBlockedSessionsIndicatorService indicator: IBlockedSessionsIndicatorService,
+		@ISessionsManagementService management: ISessionsManagementService,
 	) {
 		super();
 		const fixes = instantiation.createInstance(BlockedSessionsCIFixModel);
@@ -127,8 +130,11 @@ export class SessionsTitleBarWidget extends Disposable {
 				const target = renameTarget(selection);
 				if (!selection || target === undefined) return;
 				const targetKey = JSON.stringify(target);
-				const actions = createSessionItemActions(selection, commands, listModel, notifications,
-					() => commands.executeCommand('sessions.openInNewWindow', selection));
+				const workspaceActions = selection.kind === 'session'
+					? createSessionWorkspaceActions(selection.active.session.sessionId, selection.active.threadId, management, commands)
+					: [];
+				const actions = Separator.join(workspaceActions, [...createSessionItemActions(selection, commands, listModel, notifications,
+					() => commands.executeCommand('sessions.openInNewWindow', selection))]);
 				menuOpen.set(true, undefined);
 				contextMenus.showContextMenu({
 					getAnchor: () => menuButton.domNode,

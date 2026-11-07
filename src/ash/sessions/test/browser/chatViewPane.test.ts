@@ -1369,11 +1369,15 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with
 		assert.ok(footer.querySelector('[data-action-id="ash.chat.input.model"]'));
 		assert.equal(footer.querySelector('[data-action-id="ash.chat.input.send"]'), null);
 		const sendButton = '[data-action-id="ash.chat.input.send"] button';
-		assert.equal(form.querySelector<HTMLButtonElement>(sendButton)?.disabled, true);
+		const voiceButton = '[data-action-id="ash.chat.input.voice"] button';
+		assert.equal(form.querySelector(sendButton), null);
+		assert.ok(form.querySelector(voiceButton));
 		fixture.input.appendToDraft('Keep this text');
 		assert.equal((await fixture.input.captureDraft())?.draft.text, 'Keep this text');
 		assert.deepEqual(sent, []);
 		assert.equal(form.querySelector<HTMLButtonElement>(sendButton)?.disabled, false);
+		assert.ok(form.querySelector(`${sendButton} .ash-icon-enter`));
+		assert.equal(form.querySelector(voiceButton), null);
 		const actions = form.querySelector('.ash-chat-input-toolbars.ash-chat-input-inline-toolbar');
 		assert.ok(actions);
 		assert.ok(actions.contains(form.querySelector(sendButton)));
@@ -1399,7 +1403,7 @@ for (const locale of ['en', 'zh-CN']) test(`Sessions compact composer sends with
 		assert.equal(stop.getAttribute('aria-label'), locale === 'en' ? 'Stop task' : '停止任务');
 		assert.ok(stop.querySelector('.ash-icon-stop-circle'));
 		assert.equal(form.querySelector('[data-action-id="workbench.action.chat.toggleSpeechToText"]'), null);
-		assert.equal(form.querySelector('[data-action-id="ash.chat.input.send"]'), null);
+		assert.equal(form.querySelector(sendButton), null);
 		stop.click();
 		assert.equal(interrupted, 1);
 		assert.deepEqual(sent, ['Keep this text']);
@@ -5246,7 +5250,7 @@ test('approval capabilities reach the composer only through owner-directed backe
 	fake.emit({ method: 'session/thread/update', params: { sessionId: 'session-1', threadId: 'thread-1', durableSequence: 2, update: { type: 'committed', event: { type: 'interactionRequested', threadId: 'thread-1', turnId: 'turn-1', interaction } } } });
 	assert.equal(model.interaction, undefined);
 	fake.emit({ method: 'agent/request', params: { sessionId: 'session-1', threadId: 'thread-1', turnId: 'turn-1', interaction } });
-	assert.deepEqual(model.inputState.interaction?.request, { type: 'approval', request: { reason: interaction.request.request.reason, allowedDecisions: interaction.request.request.allowedDecisions, command: undefined, riskAssessment: undefined, sandboxDenial: undefined, capabilities: interaction.request.request.capabilities } });
+	assert.deepEqual(model.inputState.interaction?.request, { type: 'approval', request: { reason: interaction.request.request.reason, allowedDecisions: interaction.request.request.allowedDecisions, command: undefined, sessionCommandPrefix: undefined, riskAssessment: undefined, sandboxDenial: undefined, capabilities: interaction.request.request.capabilities } });
 	await nextTask();
 });
 

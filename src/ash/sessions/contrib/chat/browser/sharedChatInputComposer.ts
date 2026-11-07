@@ -24,7 +24,7 @@ import { IApprovalEnvironmentService } from '../../../../platform/approvalEnviro
 import { OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../../../workbench/contrib/chat/common/chat.js';
 import { getSessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
 import { SessionReferenceCompletions } from './sessionReferenceCompletions.js';
-import { SessionWorkspaceButton } from './sessionWorkspaceButton.js';
+import { SessionWorkspaceStatus } from './sessionWorkspaceStatus.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { ILifecycleService } from '../../../../workbench/services/lifecycle/common/lifecycle.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../common/newChatDraftState.js';
@@ -98,7 +98,7 @@ export class SharedChatInputComposer extends Disposable {
 		} satisfies Pick<IChatInputEditorProvider, 'create'>, [], {
 			layout: 'compact', modelPickerPosition: 'trailing', configureModelInMenu: true, renderSecondaryToolbar: false, draftStorage: 'host',
 			contextUsageInFooter: true,
-			renderLeadingFooter: footer => instantiationService.createInstance(SessionWorkspaceButton, footer, model, false),
+			renderLeadingFooter: footer => instantiationService.createInstance(SessionWorkspaceStatus, footer, model),
 			get modePicker() { return chatPresentation.get() ? 'hidden' : 'visible'; },
 			get chatModelSlider() { return chatPresentation.get(); },
 			get showContextUsage() { return !chatPresentation.get(); },

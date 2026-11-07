@@ -569,14 +569,14 @@ export class SessionsManagementService extends Disposable implements ISessionsMa
 	}
 
 
-	canChangeDirectory(sessionId: SessionId): boolean {
+	canChangeDirectory(sessionId: SessionId, options?: { readonly ignoreActivity?: true; }): boolean {
 		const session = this._sessions.find(candidate => candidate.sessionId === sessionId);
 		const chat = session?.chats[0];
 		if (!session || session.source || session.status !== 'active' || session.chats.length !== 1 || chat?.threadId !== sessionId
 			|| chat.origin.type !== 'root' || chat.status !== 'active'
-			|| session.workspace && (session.workspace.authorityId !== 'local' || session.workspace.runtime)
-			|| chat.executionStatus === 'queued' || chat.executionStatus === 'running' || chat.executionStatus === 'waiting'
-			|| chat.management?.status === 'working' || chat.management?.status === 'needsInput') return false;
+			|| session.workspace && (session.workspace.authorityId !== 'local' || session.workspace.runtime)) return false;
+		if (!options?.ignoreActivity && (chat.executionStatus === 'queued' || chat.executionStatus === 'running' || chat.executionStatus === 'waiting'
+			|| chat.management?.status === 'working' || chat.management?.status === 'needsInput')) return false;
 		const provider = this.providers.getProvider(parseSessionIdentity(sessionId, this.defaultProviderId).providerId);
 		return !!provider?.changeDirectory && provider.canChangeDirectory?.() === true;
 	}

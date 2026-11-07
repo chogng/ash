@@ -5,7 +5,32 @@ import { Lxicon } from '../../base/common/lxicons.js';
 import type { ICommandService } from '../../platform/commands/common/commands.js';
 import type { INotificationService } from '../../platform/notification/common/notification.js';
 import type { SessionsViewSelection } from '../services/sessions/browser/sessionsService.js';
+import type { ISessionsManagementService } from '../services/sessions/common/sessionsManagement.js';
 import { localize } from '../../nls.js';
+
+export function createSessionWorkspaceActions(sessionId: string, threadId: string, sessions: ISessionsManagementService, commands: ICommandService): IAction[] {
+	if (threadId !== sessionId || !sessions.canChangeDirectory?.(sessionId, { ignoreActivity: true })) return [];
+	const workspace = sessions.sessions.find(session => session.sessionId === sessionId)?.workspace;
+	const enabled = sessions.canChangeDirectory(sessionId);
+	const actions: IAction[] = [{
+		id: 'agentSession.changeDirectory',
+		label: workspace
+			? localize({ bundle: 'ash.sessions', key: 'sessions.directory.change' }, 'Change Workspace…')
+			: localize({ bundle: 'ash.sessions', key: 'sessions.directory.set' }, 'Set Workspace…'),
+		tooltip: '', enabled, icon: Lxicon.folder,
+		badge: enabled ? undefined : localize({ bundle: 'ash.sessions', key: 'sessions.directory.wait' }, 'Available when idle'),
+		run: () => commands.executeCommand('agentSession.changeDirectory', sessionId),
+	}];
+	if (workspace && sessions.canClearDirectory?.(sessionId)) {
+		actions.push({
+			id: 'agentSession.clearDirectory',
+			label: localize({ bundle: 'ash.sessions', key: 'sessions.directory.clear' }, 'Remove Workspace'),
+			tooltip: '', enabled,
+			run: () => commands.executeCommand('agentSession.clearDirectory', sessionId),
+		});
+	}
+	return actions;
+}
 
 /** Session menus share presentation and captured-target commands; opening a window is host-owned. */
 export function createSessionItemActions(selection: SessionsViewSelection, commands: ICommandService, listModel: ISessionsListModelService, notifications: INotificationService, openInNewWindow: () => Promise<unknown>, didPin?: (sessionId: string) => void): readonly IAction[] {

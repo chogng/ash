@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { expect, test } from '../../../automation/test.js';
@@ -278,7 +280,8 @@ test.describe('Unified Chat sidebar', () => {
 			});
 			const { sessionId } = session;
 			const { threadId } = session.threads[0];
-			const readThread = async () => (await client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId })).thread;
+			const readConversation = () => client.request(APP_SERVER_METHODS['session/thread/read'], { sessionId, threadId });
+			const readThread = async () => (await readConversation()).thread;
 			await client.request(APP_SERVER_METHODS['session/request'], {
 				commandId: 'first-native-chat-turn', sessionId, request: {
 					type: 'startTurn', threadId, expectedSequence: (await readThread()).sequence, model: ashFixtureModel,
@@ -287,29 +290,49 @@ test.describe('Unified Chat sidebar', () => {
 			});
 			await expect.poll(async () => (await readThread()).turns[0]?.status).toBe('completed');
 			const page = await workbench.openAgentsWindow(target.kind);
-			await page.locator(`[data-item="ash:${sessionId}"] .ash-sessions-list-item`).press('Enter');
+			const row = page.locator(`[data-item="ash:${sessionId}"] .ash-sessions-list-item`);
+			await row.press('Enter');
 			const chat = page.locator('.ash-native-chat-widget .ash-chat');
 			await expect(chat).toHaveAttribute('data-thread-id', threadId);
-			const continueInCode = chat.getByRole('button', { name: '在 Code 中继续', exact: true });
-			await expect(continueInCode).toBeHidden();
+			const workspace = chat.locator('.ash-session-workspace-status');
+			await expect(workspace).toBeHidden();
+			await expect(chat.getByRole('button', { name: '使用工作区', exact: true })).toHaveCount(0);
+			const continueInCode = page.getByRole('menuitem', { name: '在 Code 中继续', exact: true });
 			const originalDialog = await application.evaluateHandle(({ dialog }) => dialog.showOpenDialog);
 			try {
+				const initialFolder = join(testWorkspace.directory, 'initial-workspace');
+				await mkdir(initialFolder);
+				await application.evaluate(({ dialog }, directory) => {
+					dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] });
+				}, initialFolder);
+				await row.press('Shift+F10');
+				await expect(continueInCode).toHaveCount(0);
+				await page.getByRole('menuitem', { name: '设置工作区…', exact: true }).click();
+				await page.getByRole('button', { name: '信任并打开', exact: true }).click();
+				await expect(workspace).toBeVisible();
+				await expect(workspace).toHaveText(initialFolder);
 				await application.evaluate(({ dialog }, directory) => {
 					dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] });
 				}, testWorkspace.directory);
-				await chat.getByRole('button', { name: '使用工作区', exact: true }).click();
-				await expect(continueInCode).toBeEnabled();
-				await expect(continueInCode).toBeVisible();
+				await row.press('Shift+F10');
+				await page.getByRole('menuitem', { name: '更换工作区…', exact: true }).click();
+				await expect(workspace).toHaveText(testWorkspace.directory);
 			} finally {
 				await application.evaluate(({ dialog }, original) => { dialog.showOpenDialog = original; }, originalDialog);
 				await originalDialog.dispose();
 			}
+			await row.press('Shift+F10');
+			await expect(page.getByRole('menuitem', { name: '更换工作区…', exact: true })).toBeEnabled();
+			await expect(page.getByRole('menuitem', { name: '解除工作区', exact: true })).toBeEnabled();
 			await continueInCode.press('Enter');
 			const code = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat');
 			await expect(code).toHaveAttribute('data-session-id', sessionId);
 			await expect(code).toHaveAttribute('data-thread-id', threadId);
 			await expect(code).toContainText('Original Chat message');
 			await expect(code).toContainText('Answer from Ash');
+			const { directory } = await readConversation();
+			expect(directory?.type).toBe('local');
+			await expect(code.locator('.ash-session-workspace-status')).toHaveText(directory!.root);
 			const composer = new Editor(code);
 			await composer.waitForEditorFocus();
 			await composer.waitForTypeInEditor('Follow up from Code');
@@ -320,6 +343,23 @@ test.describe('Unified Chat sidebar', () => {
 			expect(saved?.kind).toBe('chat');
 			expect(saved?.threads.map(thread => thread.threadId)).toEqual([threadId]);
 			expect(modelRequests).toEqual([ashFixtureModel.model, ashFixtureModel.model]);
+			await page.locator('.ash-sessions-titlebar-menu').press('Enter');
+			await page.getByRole('menuitem', { name: '解除工作区', exact: true }).click();
+			await expect.poll(async () => {
+				const { session } = await client.request(APP_SERVER_METHODS['session/catalog/read'], { sessionId });
+				return session && !session.executionTarget;
+			}).toBe(true);
+			const mode = page.locator('.ash-window-mode-control');
+			await mode.getByRole('button', { name: '聊天 / Agents', exact: true }).click();
+			await row.press('Enter');
+			await expect(chat).toHaveAttribute('data-thread-id', threadId);
+			await expect(chat).toContainText('Follow up from Code');
+			await expect(workspace).toBeHidden();
+			await mode.getByRole('button', { name: '代码', exact: true }).click();
+			await page.locator('[data-action-id="sessions.newSession"] button').click();
+			const draft = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat[data-untitled-session-id]');
+			await expect(draft.locator('.ash-sessions-workspace-picker')).toBeVisible();
+			await expect(draft.locator('.ash-session-workspace-status')).toBeHidden();
 		} finally { await close(); }
 	});
 

@@ -33,7 +33,7 @@ import { IFileService } from '../../platform/files/common/files.js';
 import { URI } from '../../base/common/uri.js';
 import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
 import { IConfigurationService } from '../../platform/configuration/common/configuration.js';
-import { createSessionItemActions } from './agentSessionsModel.js';
+import { createSessionItemActions, createSessionWorkspaceActions } from './agentSessionsModel.js';
 import { ILifecycleService } from '../../workbench/services/lifecycle/common/lifecycle.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { localize } from '../../nls.js';
@@ -110,7 +110,10 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 			const captured: SessionsViewSelection = 'untitledSessionId' in selection
 				? { kind: 'untitled', session: selection }
 				: { kind: 'session', active: { session: selection, threadId: 'threadId' in target ? target.threadId! : selection.chats[0]!.threadId } };
-			return createSessionItemActions(captured, commandService, this.listModel, notifications, () => this.openInNewWindow(captured));
+			const workspaceActions = captured.kind === 'session'
+				? createSessionWorkspaceActions(captured.active.session.sessionId, captured.active.threadId, sessionService, commandService)
+				: [];
+			return [...workspaceActions, ...createSessionItemActions(captured, commandService, this.listModel, notifications, () => this.openInNewWindow(captured))];
 		}, preserveFocus => {
 			const focusChat = !this.sessionsSideBySide || !preserveFocus;
 			this.hideSessionsAfterSelection();
@@ -510,6 +513,9 @@ export class SessionChatViewPane extends ChatViewPane<ChatWidgetModel> {
 				},
 			},
 			...actions.filter(action => action !== rename),
+			...(selection.kind === 'session'
+				? createSessionWorkspaceActions(selection.active.session.sessionId, selection.active.threadId, this.sessionService, this.commandService)
+				: []),
 		];
 	}
 

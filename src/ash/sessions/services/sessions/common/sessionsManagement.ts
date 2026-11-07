@@ -56,7 +56,8 @@ export interface ISessionsManagementService {
 	deleteSession(sessionId: SessionId): Promise<void>;
 	renameSession(sessionId: SessionId, title: string): Promise<void>;
 	getChatMoveDestinations?(sessionId: SessionId, threadId: ThreadId): readonly ISession[];
-	canChangeDirectory?(sessionId: SessionId): boolean;
+	/** Ignore temporary activity when deciding whether to offer a disabled menu action. */
+	canChangeDirectory?(sessionId: SessionId, options?: { readonly ignoreActivity?: true; }): boolean;
 	canClearDirectory?(sessionId: SessionId): boolean;
 	changeDirectory?(sessionId: SessionId, root: string | null, signal?: AbortSignal): Promise<void>;
 	moveChat?(sessionId: SessionId, threadId: ThreadId, destination: SessionId): Promise<void>;

@@ -5,10 +5,14 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { createSessionWorkspaceActions } from '../../../browser/agentSessionsModel.js';
 import type { ISessionStatusIcon } from '../../../browser/sessionStatusIcon.js';
 import { buildAgentHostSessionWorkspace } from '../../../common/agentHostSessionWorkspace.js';
 import { ISessionGroupsService } from '../../../services/sessions/browser/sessionGroupsService.js';
 import { ISessionsListModelService } from '../../../services/sessions/browser/sessionsListModelService.js';
+import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { canOpenThreadInCode } from '../../../services/sessions/common/session.js';
+import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import type { ChatListEntry, ChatListSnapshot, ChatListSource } from './chatListModel.js';
 import { ASH_CHAT_SELECTED_CONTEXT, SHOW_ASH_CHAT_COMMAND } from '../common/constants.js';
 import { IAshChatSelectionService } from './ashChatSelectionService.js';
@@ -28,6 +32,8 @@ export class AshChatNavigationSource extends Disposable implements ChatListSourc
 		@ICommandService commands: ICommandService,
 		@IContextKeyService contextKeys: IContextKeyService,
 		@ISessionsSearchService search: ISessionsSearchService,
+		@ISessionsManagementService management: ISessionsManagementService,
+		@ISessionsService view: ISessionsService,
 	) {
 		super();
 		const context = new Set([ASH_CHAT_SELECTED_CONTEXT]);
@@ -81,13 +87,26 @@ export class AshChatNavigationSource extends Disposable implements ChatListSourc
 							selection.select({ kind: 'thread', sessionId: id, threadId });
 						}
 					},
-					getActions: () => [
-						action('agentSession.rename', localize('sessions.list.rename', 'Rename'), Lxicon.edit),
-						action('agentSession.moveToGroup', localize('sessions.list.moveToGroup', 'Move to group'), Lxicon.folders),
-						new Separator(),
-						action('agentSession.archive', localize('chatSession.archive', 'Archive'), Lxicon.archive),
-						{ ...action('agentSession.delete', localize('sessions.list.delete', 'Delete'), Lxicon.trash), class: 'ash-chat-navigation-delete-action' },
-					],
+					getActions: () => {
+						const saved = management.sessions.find(session => session.sessionId === id);
+						const savedThread = saved?.chats.find(chat => chat.threadId === thread.threadId);
+						const workspaceActions = createSessionWorkspaceActions(id, thread.threadId, management, commands);
+						if (saved?.status === 'active' && savedThread && canOpenThreadInCode(saved, savedThread)) {
+							workspaceActions.push({
+								id: 'sessions.workspace.continueInCode',
+								label: localize({ bundle: 'ash.sessions', key: 'sessions.workspace.continueInCode' }, 'Continue in Code'),
+								tooltip: '', enabled: true,
+								run: () => view.openSession(id, thread.threadId, { reveal: 'code' }),
+							});
+						}
+						return Separator.join(workspaceActions, [
+							action('agentSession.rename', localize('sessions.list.rename', 'Rename'), Lxicon.edit),
+							action('agentSession.moveToGroup', localize('sessions.list.moveToGroup', 'Move to group'), Lxicon.folders),
+							new Separator(),
+							action('agentSession.archive', localize('chatSession.archive', 'Archive'), Lxicon.archive),
+							{ ...action('agentSession.delete', localize('sessions.list.delete', 'Delete'), Lxicon.trash), class: 'ash-chat-navigation-delete-action' },
+						]);
+					},
 				});
 			}
 			return { entries: rows, groups: groups.groups.filter(group => group.kind !== 'comparison') };
