@@ -134,7 +134,7 @@
 	--sessions-row-title-scroll-direction: 1;
 }
 
-.ash-sessions-list-row:hover .ash-sessions-list-label.title-overflows {
+.ash-sessions-list-label.title-overflows {
 	text-overflow: var(--sessions-row-title-overflow, clip);
 	/* Fade the glyphs over the single row background. */
 	mask-image: var(
@@ -153,13 +153,11 @@
 	mask-position: right;
 }
 
-[dir="rtl"]
-	.ash-sessions-list-row:hover
-	.ash-sessions-list-label.title-overflows {
+[dir="rtl"] .ash-sessions-list-label.title-overflows {
 	mask-position: left;
 }
 
-@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+@media (hover: hover) and (prefers-reduced-motion: no-preference) and (forced-colors: none) {
 	.ash-sessions-list-row:hover:not(
 			.menu-visible,
 			.ash-reduce-motion *,

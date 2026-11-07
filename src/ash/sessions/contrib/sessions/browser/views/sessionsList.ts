@@ -2007,7 +2007,6 @@ class SessionListRowRenderer extends Disposable {
 	readonly button: HTMLButtonElement;
 	private readonly titleText: HTMLSpanElement;
 	private readonly titleViewport: HTMLSpanElement;
-	private readonly titleResize = this._register(new MutableDisposable());
 
 	constructor(document: Document, titleBehavior: 'static' | 'scrollOnHover', leading?: HTMLElement) {
 		super();
@@ -2017,17 +2016,7 @@ class SessionListRowRenderer extends Disposable {
 		this.titleText = titleBehavior === 'scrollOnHover' ? h(document, 'span') : this.titleViewport;
 		if (titleBehavior === 'scrollOnHover') {
 			this.titleViewport.append(this.titleText);
-			this._register(addDisposableListener(this.element, 'pointerenter', event => {
-				if (event.pointerType === 'touch') {
-					return;
-				}
-				this.updateTitleOverflow();
-				this.titleResize.value = observeResize(this.titleViewport, () => this.updateTitleOverflow());
-			}));
-			this._register(addDisposableListener(this.element, 'pointerleave', () => {
-				this.titleResize.clear();
-				this.titleViewport.classList.remove('title-overflows');
-			}));
+			this._register(observeResize(this.titleViewport, () => this.updateTitleOverflow()));
 		}
 		this.button.append(this.titleViewport);
 		if (leading) {
@@ -2052,7 +2041,7 @@ class SessionListRowRenderer extends Disposable {
 			return;
 		}
 		this.titleText.textContent = title;
-		if (this.titleResize.value) {
+		if (this.titleText !== this.titleViewport && this.titleViewport.isConnected) {
 			this.updateTitleOverflow();
 		}
 	}

@@ -164,6 +164,26 @@ async function chatPage(page: Page, answer = 'Synthetic answer'): Promise<void> 
 	await expect(page.locator('.ash-chat-item-agentMessage')).toHaveCount(1);
 }
 
+test('ChatGPT sidebar fades long titles at rest and uses ellipsis in forced colors', async ({ page }) => {
+	const longTitle = '侧栏分组与会话条目的交互设计以及长标题渐隐效果';
+	await mockChatGPTRequests(page);
+	await page.route('**/service/backend-api/conversations?*', route => route.fulfill({
+		json: { items: [{ id: 'fixture-chat', title: longTitle }, { id: 'fixture-short', title: '短标题' }], total: 2 },
+	}));
+	await page.goto('/chatgptNavigation.html?locale=zh-CN&theme=light');
+	const sidebar = page.locator('.ash-chat-navigation');
+	const longLabel = sidebar.getByRole('button', { name: longTitle, exact: true }).locator('.ash-sessions-list-label');
+	const shortLabel = sidebar.getByRole('button', { name: '短标题', exact: true }).locator('.ash-sessions-list-label');
+
+	await expect(longLabel).toHaveCSS('text-overflow', 'clip');
+	await expect(longLabel).toHaveCSS('mask-image', /^linear-gradient/);
+	await expect(shortLabel).toHaveCSS('mask-image', 'none');
+
+	await page.emulateMedia({ forcedColors: 'active' });
+	await expect(longLabel).toHaveCSS('text-overflow', 'ellipsis');
+	await expect(longLabel).toHaveCSS('mask-image', 'none');
+});
+
 test('ChatGPT sidebar groups align rows and keep the selected background when showing actions', async ({ page }, testInfo) => {
 	await mockChatGPTRequests(page);
 	await page.route('**/service/backend-api/pins?*', route => route.fulfill({
@@ -188,11 +208,13 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	const sessionIcon = '[data-ash-icon-id="chat-session"]';
 	await expect(sidebar.locator('[data-item="chatgpt:fixture-pinned"]').locator(sessionIcon)).toBeVisible();
 	await expect(row.locator(sessionIcon)).toBeVisible();
+	const conversationTreeRow = row.locator('xpath=ancestor::*[@role="treeitem"][1]');
 	const item = row.locator('.ash-chat-navigation-item');
-	const actions = row.locator('.ash-chat-navigation-actions');
+	const actions = row.locator('.ash-sessions-list-actions');
 	const recent = sidebar.locator('[data-section="recent"]');
 	const pinnedHeader = sidebar.getByRole('button', { name: '置顶', exact: true });
-	const recentHeader = sidebar.getByRole('button', { name: '最近', exact: true });
+	const recentHeader = recent.getByRole('button', { name: '最近使用', exact: true });
+	await expect(recentHeader).toBeVisible();
 	await expect.poll(() => recent.evaluate(group => {
 		const header = group.querySelector('.ash-sessions-list-section-toggle')!.getBoundingClientRect();
 		const treeRow = group.closest('.ash-tree-row')!;
@@ -200,8 +222,26 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 		const a = first!.getBoundingClientRect();
 		const b = second!.getBoundingClientRect();
 		const previous = treeRow.previousElementSibling!.getBoundingClientRect();
-		return [header.height, a.height, a.top - header.bottom, b.top - a.bottom, header.top - previous.bottom, a.width - header.width];
-	})).toEqual([32, 32, 2, 2, 8, 0]);
+		return [header.height, a.height, a.top - header.bottom, b.top - a.bottom, header.top - previous.bottom];
+	})).toEqual([32, 32, 2, 2, 8]);
+	const headerBounds = (await recentHeader.boundingBox())!;
+	const rowBounds = (await conversationTreeRow.boundingBox())!;
+	expect([rowBounds.x, rowBounds.width]).toEqual([headerBounds.x, headerBounds.width]);
+	// The content clears the scrollbar track while the outer row still aligns with the header.
+	expect(await row.evaluate(element => {
+		const treeRow = element.closest('.ash-tree-row')!;
+		const scrollable = element.closest<HTMLElement>('.ash-list-scrollable')!;
+		const trackSize = '--ash-scrollbar-vertical-size';
+		const originalSize = scrollable.style.getPropertyValue(trackSize);
+		const clearance = () => treeRow.getBoundingClientRect().right - element.getBoundingClientRect().right;
+		const normal = clearance();
+		scrollable.style.setProperty(trackSize, '14px');
+		try {
+			return [normal, clearance()];
+		} finally {
+			scrollable.style.setProperty(trackSize, originalSize);
+		}
+	})).toEqual([2, 6]);
 	await pinnedHeader.click();
 	await expect(pinnedHeader).toHaveAttribute('aria-expanded', 'false');
 	await expect.poll(async () => {
@@ -214,7 +254,7 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	await expect(pinnedHeader).toHaveAttribute('aria-expanded', 'true');
 
 	const transparent = 'rgba(0, 0, 0, 0)';
-	const rowBackground = () => row.evaluate(element => getComputedStyle(element, '::before').backgroundColor);
+	const rowBackground = () => conversationTreeRow.evaluate(element => getComputedStyle(element).backgroundColor);
 	const resting = await rowBackground();
 	await item.hover();
 	const hovered = await rowBackground();
@@ -252,7 +292,7 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	await expect(item).toHaveCSS('height', navigationStyle.height);
 	await expect(item).toHaveCSS('border-radius', navigationStyle.borderRadius);
 	await expect(item).toHaveCSS('background-color', transparent);
-	await expect.poll(() => row.evaluate(element => {
+	await expect.poll(() => conversationTreeRow.evaluate(element => {
 		const row = element.getBoundingClientRect();
 		const host = element.closest('.ash-chat-navigation')!.getBoundingClientRect();
 		return [row.left - host.left, host.right - row.right];
@@ -266,17 +306,16 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	await expect(actions).toHaveCSS('background-image', 'none');
 	await expect(actions.locator('[data-action-id]')).toHaveCount(2);
 	await expect(actions.getByRole('button').last()).toHaveAccessibleName('更多操作');
-	await expect.poll(() => row.evaluate(element => {
+	await expect.poll(() => actions.evaluate(element => {
 		const centerY = (node: Element): number => {
 			const bounds = node.getBoundingClientRect();
 			return bounds.top + bounds.height / 2;
 		};
-		const rowCenter = centerY(element);
-		return [...element.querySelectorAll('.ash-chat-navigation-actions button')]
-			.map(button => centerY(button) - rowCenter);
+		const rowCenter = centerY(element.closest('.ash-tree-row')!);
+		return [...element.querySelectorAll('button')].map(button => centerY(button) - rowCenter);
 	})).toEqual([0, 0]);
 	await expect.poll(async () => {
-		const bounds = (await row.boundingBox())!;
+		const bounds = (await conversationTreeRow.boundingBox())!;
 		const more = (await actions.locator('button').last().boundingBox())!;
 		return bounds.x + bounds.width - more.x - more.width;
 	}).toBe(2);
@@ -289,14 +328,14 @@ test('ChatGPT sidebar groups align rows and keep the selected background when sh
 	await expect(more).toHaveAttribute('aria-expanded', 'true');
 	await expect(page.getByRole('menuitem', { name: '重命名' })).toBeVisible();
 	await page.keyboard.press('Escape');
-	await expect(more).toBeFocused();
+	await expect(item).toBeFocused();
 	await item.click({ button: 'right' });
 	await expect(page.getByRole('menuitem', { name: '重命名' })).toBeVisible();
 	await page.keyboard.press('Escape');
 
 	await page.emulateMedia({ forcedColors: 'active' });
-	await expect(item).toHaveCSS('outline-style', 'solid');
-	await expect(item).toHaveCSS('outline-width', '2px');
+	await expect(conversationTreeRow).toHaveCSS('outline-style', 'solid');
+	await expect(conversationTreeRow).toHaveCSS('outline-width', '1px');
 });
 
 test('ChatGPT sidebar icon picker selects, persists and resets a conversation icon', async ({ page }, testInfo) => {
