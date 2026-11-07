@@ -45,25 +45,30 @@ interface MenuItemHostOptions extends MenuActionViewItemOptions {
 	readonly onInvalidFocus?: () => void;
 }
 
-function prependMenuLeadingSlot(
+function createMenuIconSlot(
 	button: HTMLButtonElement,
 	checked: boolean | undefined,
-): void {
+	placement: 'leading' | 'trailing' = 'leading',
+): HTMLElement {
 	const slot = h(button.ownerDocument, 'span');
-	slot.className = 'ash-menu-leading-slot';
+	slot.className = `ash-menu-${placement}-slot`;
 	slot.setAttribute('aria-hidden', 'true');
 	// Keep IconLabel's icon node so Button.icon updates still reach the menu slot.
 	const icon = button.querySelector<HTMLElement>(':scope > .ash-button-content > .ash-icon-label-icon');
 	if (icon) slot.append(icon);
 	if (checked !== undefined) {
-		slot.classList.add('ash-menu-leading-check');
+		slot.classList.add(`ash-menu-${placement}-check`);
 		appendIcon(Lxicon.check, slot);
 	}
-	button.prepend(slot);
+	if (placement === 'trailing') button.append(slot);
+	else button.prepend(slot);
+	return slot;
 }
 
 /** Menus project one action, selected from current modifiers, into a stable control. */
 abstract class MenuButtonActionViewItem extends ButtonActionViewItem {
+	private readonly shortcut = this._register(new MutableDisposable<KeybindingLabel>());
+	private shortcutValue: ResolvedKeybinding | undefined;
 	private renderedLabel: string | undefined;
 	private renderedClass: string | undefined;
 	private renderedIcon: IAction['icon'];
@@ -125,17 +130,32 @@ abstract class MenuButtonActionViewItem extends ButtonActionViewItem {
 		}
 		return lostFocus;
 	}
+
+	protected updateKeybinding(action: IAction): void {
+		const keybinding = this.menuOptions.getKeyBinding ? this.menuOptions.getKeyBinding(action)
+			: action === this.action ? this.menuOptions.keybinding : undefined;
+		if (this.shortcutValue !== keybinding) {
+			this.shortcut.clear();
+			if (keybinding) {
+				const label = this.shortcut.value = new KeybindingLabel(this.button.domNode, {
+					...this.menuOptions.keybindingLabelStyles, keybinding,
+				});
+				label.element.classList.add('ash-menu-keybinding');
+			}
+			this.shortcutValue = keybinding;
+		}
+	}
 }
 
 /** Runnable menu action with live checked, shortcut and alternative presentation. */
 export class MenuActionViewItem extends MenuButtonActionViewItem {
-	private readonly shortcut = this._register(new MutableDisposable<KeybindingLabel>());
+	private iconSlot: HTMLElement | undefined;
 	private badge: HTMLElement | undefined;
-	private shortcutValue: ResolvedKeybinding | undefined;
 
 	override render(container: HTMLElement): void {
 		super.render(container);
-		prependMenuLeadingSlot(this.button.domNode, this.action.checked);
+		const placement = this.menuOptions.submenuOptions?.iconPlacement === 'trailing' ? 'trailing' : 'leading';
+		this.iconSlot = createMenuIconSlot(this.button.domNode, this.action.checked, placement);
 		if (this.menuOptions.ariaDescription) this.button.domNode.setAttribute('aria-description', this.menuOptions.ariaDescription);
 		this.update();
 	}
@@ -151,9 +171,11 @@ export class MenuActionViewItem extends MenuButtonActionViewItem {
 			: 'menuitem');
 		if (checked) this.button.domNode.setAttribute('aria-checked', String(action.checked));
 		else this.button.domNode.removeAttribute('aria-checked');
-		const slot = this.button.domNode.querySelector<HTMLElement>('.ash-menu-leading-slot');
+		const slot = this.iconSlot;
 		if (slot) {
-			slot.classList.toggle('ash-menu-leading-check', checked);
+			const placement = this.menuOptions.submenuOptions?.iconPlacement;
+			slot.classList.toggle(placement === 'trailing' ? 'ash-menu-trailing-check' : 'ash-menu-leading-check', checked);
+			slot.classList.toggle('ash-menu-check-and-icon', placement === 'leadingWithSeparateCheck' && checked && action.icon !== undefined);
 			if (checked && !slot.querySelector(':scope > .ash-icon')) appendIcon(Lxicon.check, slot);
 		}
 		if (action.badge && !this.badge) {
@@ -164,18 +186,7 @@ export class MenuActionViewItem extends MenuButtonActionViewItem {
 			this.badge.textContent = action.badge ?? '';
 			this.badge.hidden = !action.badge;
 		}
-		const keybinding = this.menuOptions.getKeyBinding ? this.menuOptions.getKeyBinding(action)
-			: action === this.action ? this.menuOptions.keybinding : undefined;
-		if (this.shortcutValue !== keybinding) {
-			this.shortcut.clear();
-			if (keybinding) {
-				const label = this.shortcut.value = new KeybindingLabel(this.button.domNode, {
-					...this.menuOptions.keybindingLabelStyles, keybinding,
-				});
-				label.element.classList.add('ash-menu-keybinding');
-			}
-			this.shortcutValue = keybinding;
-		}
+		this.updateKeybinding(action);
 		return lostFocus;
 	}
 
@@ -231,7 +242,8 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 
 	override render(container: HTMLElement): void {
 		super.render(container);
-		prependMenuLeadingSlot(this.button.domNode, undefined);
+		const trailingIcons = this.options.submenuOptions?.iconPlacement === 'trailing';
+		if (!trailingIcons) createMenuIconSlot(this.button.domNode, undefined);
 		const ownerDocument = container.ownerDocument;
 		if (
 			this.contextViewContainer &&
@@ -254,7 +266,8 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 		this.button.domNode.setAttribute('aria-haspopup', 'menu');
 		this.button.domNode.setAttribute('aria-expanded', 'false');
 		const indicator = h(ownerDocument, 'span');
-		indicator.className = 'ash-submenu-indicator';
+		indicator.className = trailingIcons ? 'ash-submenu-indicator ash-menu-trailing-slot' : 'ash-submenu-indicator';
+		indicator.setAttribute('aria-hidden', 'true');
 		appendIcon(Lxicon.menuSubmenu, indicator);
 		this.button.domNode.append(indicator);
 		this._register(addDisposableListener(container, 'mouseenter', (event) => {
@@ -282,8 +295,8 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 		this.update();
 	}
 
-	override runAction(event?: MouseEvent | KeyboardEvent): void {
-		this.open((event?.detail ?? 0) === 0);
+	override runAction(): void {
+		this.open();
 	}
 
 	private openFromPointer(): void {
@@ -400,6 +413,9 @@ export class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 
 	override update(): boolean {
 		const lostFocus = super.update();
+		if (this.options.submenuOptions?.iconPlacement === 'trailing') {
+			this.updateKeybinding(this.displayedAction);
+		}
 		this.menu?.update();
 		return lostFocus;
 	}
@@ -486,6 +502,8 @@ export interface IMenuOptions {
 	readonly actionRunner?: IActionRunner;
 	readonly context?: unknown;
 	readonly className?: string;
+	/** Leading or trailing icons. `leadingWithSeparateCheck` reserves space for both a check and a command icon. */
+	readonly iconPlacement?: 'leading' | 'leadingWithSeparateCheck' | 'trailing';
 	readonly actionViewItemProvider?: (
 		action: IAction,
 		options: MenuActionViewItemOptions,
@@ -518,6 +536,7 @@ export class Menu extends ActionBar {
 		const ownerDocument = container.ownerDocument;
 		const element = this.domNode;
 		element.classList.add('ash-menu');
+		element.classList.toggle('ash-menu-icons-trailing', options.iconPlacement === 'trailing');
 		if (options.className) element.classList.add(...options.className.split(/\s+/).filter(Boolean));
 		element.tabIndex = -1;
 		if (options.ariaLabel) this.setAriaLabel(options.ariaLabel);

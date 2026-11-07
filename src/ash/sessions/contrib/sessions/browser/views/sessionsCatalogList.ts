@@ -3,7 +3,10 @@ import type { Icon } from '../../../../../base/common/icon.js';
 import type { IObservable } from '../../../../../base/common/observable.js';
 import type { AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { ISessionStatusIcon } from '../../../../browser/sessionStatusIcon.js';
+import type { ISession } from '../../../../services/sessions/common/session.js';
 import type { SessionListOrganization } from './sessionsListActions.js';
+
+export type SessionGroupingContext = Pick<ISession, 'sessionId' | 'workspace' | 'management'> & Partial<Pick<ISession, 'providerLabel'>>;
 
 export interface SessionsCatalogAccessibility {
 	readonly focusContext: string;
@@ -16,6 +19,7 @@ export interface SessionsCatalogRow {
 	/** Canonical Session identity for rows backed by the Sessions catalog. */
 	readonly sessionId?: string;
 	readonly title: string;
+	readonly groupingContext?: SessionGroupingContext;
 	readonly createdAt?: number;
 	readonly updatedAt?: number;
 	readonly selected: boolean;

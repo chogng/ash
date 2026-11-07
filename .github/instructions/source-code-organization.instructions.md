@@ -21,6 +21,11 @@ Modules may import their own layer and lower layers; they must not import, refer
 
 `src/ash/nls.ts` is the shared root NLS entrypoint and may depend only on `base`. Layer checks must allow that entrypoint and check its dependencies; do not move it into `base/common` merely to satisfy a path assertion.
 
+## Module Boundaries
+
+- When a local VS Code counterpart exists, use its module responsibilities, public contract and call path to guide Ash's boundaries.
+- Compose modules through semantic inputs and public APIs. Keep rendering helpers that depend on a component's internal structure with that component.
+
 ## Target Environments
 
 Pure helpers may stay beside browser feature orchestration; absence of DOM access does not require moving them to `common`.

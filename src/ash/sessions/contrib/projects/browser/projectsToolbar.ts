@@ -64,6 +64,7 @@ export class ProjectsToolbar extends Disposable {
 										...delegate,
 										anchorPosition: AnchorPosition.Below,
 										getMenuClassName: () => 'ash-projects-sort-menu',
+										iconPlacement: 'trailing',
 										getCheckedActionsRepresentation: () => 'radio',
 									}),
 							},

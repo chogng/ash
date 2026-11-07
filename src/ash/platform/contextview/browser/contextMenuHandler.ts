@@ -116,6 +116,7 @@ export class ContextMenuHandler extends Disposable {
 			layer: delegate.layer ?? 10,
 			className: delegate.getMenuClassName?.(),
 			submenuClassName: delegate.submenuClassName,
+			iconPlacement: delegate.iconPlacement,
 			actionViewItemProvider: delegate.getActionViewItem,
 			getCheckedActionsRepresentation: delegate.getCheckedActionsRepresentation,
 			actionRunner,

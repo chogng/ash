@@ -47,7 +47,7 @@ import { InMemoryConfigurationService } from '../../../../../platform/configurat
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.js';
 import { Menus } from '../../../../browser/menus.js';
-import type { SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogRow } from './sessionsCatalogList.js';
+import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogRow } from './sessionsCatalogList.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
@@ -439,9 +439,11 @@ export class SessionsList extends DomWidget {
 			new SubmenuAction('sessions.list.show', localize('sessions.list.show', 'Show'), [
 				...(!this.entry ? [choice('sessions.list.showAttentionGroup', localize('sessions.list.needsAttention', 'Needs Attention'),
 					model.showAttentionGroup, () => model.setShowAttentionGroup(!model.showAttentionGroup))] : []),
-				choice('sessions.list.showComparisonGroups', localize('sessions.list.showComparisonGroups', 'Comparison Groups'),
-					model.showComparisonGroups, () => model.setShowComparisonGroups(!model.showComparisonGroups)),
-				new Separator(),
+				...(!this.catalog ? [
+					choice('sessions.list.showComparisonGroups', localize('sessions.list.showComparisonGroups', 'Comparison Groups'),
+						model.showComparisonGroups, () => model.setShowComparisonGroups(!model.showComparisonGroups)),
+					new Separator(),
+				] : []),
 				choice('sessions.list.toggleAutomationSessions', localize('sessions.list.showAutomationSessions', 'Show Automation Sessions'),
 					automation === 'always', () => model.setAutomationSessionsMode(automation === 'always' ? 'never' : 'always')),
 				choice('sessions.list.showAutomationSessionsAfterReply', localize('sessions.list.showAutomationSessionsAfterReply', 'Show Automation Sessions After Reply'),
@@ -713,11 +715,11 @@ export class SessionsList extends DomWidget {
 		this.repositoryGroups.clear();
 	}
 
-	private repositoryKey(session: ISession): string {
+	private repositoryKey(session: SessionGroupingContext): string {
 		return JSON.stringify([session.sessionId, session.workspace?.authorityId, session.workspace?.root]);
 	}
 
-	private async loadRepositoryGroups(sessions: readonly ISession[]): Promise<void> {
+	private async loadRepositoryGroups(sessions: readonly SessionGroupingContext[]): Promise<void> {
 		const scopes = this.providerScopes;
 		if (!scopes || this.repositoryLookup.value) {
 			return;
@@ -764,24 +766,24 @@ export class SessionsList extends DomWidget {
 		this.render();
 	}
 
-	private sessionBucket(session: ISession, grouping: Exclude<SessionGrouping, 'none'>, projects: ReadonlyMap<string, Project>): SessionBucket {
+	private sessionBucket(session: SessionGroupingContext | undefined, grouping: Exclude<SessionGrouping, 'none'>, projects: ReadonlyMap<string, Project>): SessionBucket {
 		switch (grouping) {
 			case 'projects': {
-				const project = projects.get(session.sessionId);
+				const project = session && projects.get(session.sessionId);
 				return project ? { id: project.id, label: project.name } : { id: '', label: localize('sessions.list.noProjectGroup', 'No Project') };
 			}
 			case 'repository':
-				return this.repositoryGroups.get(this.repositoryKey(session)) ?? { id: '', label: localize('sessions.list.noRepositoryGroup', 'No Repository Information') };
+				return (session && this.repositoryGroups.get(this.repositoryKey(session))) ?? { id: '', label: localize('sessions.list.noRepositoryGroup', 'No Repository Information') };
 			case 'status':
-				return { id: session.management?.status ?? '', label: sessionManagementLabel(session.management) ?? localize('sessions.list.unknownStatusGroup', 'Unknown Status') };
+				return { id: session?.management?.status ?? '', label: sessionManagementLabel(session?.management) ?? localize('sessions.list.unknownStatusGroup', 'Unknown Status') };
 			case 'environment': {
-				const workspace = session.workspace;
+				const workspace = session?.workspace;
 				if (workspace?.runtime) {
 					const runtime = workspace.runtime;
 					return { id: JSON.stringify([runtime.providerId, runtime.hostAuthority, runtime.workspace]), label: runtime.workspace };
 				}
 				if (workspace) {
-					return { id: workspace.authorityId, label: workspace.authorityId === 'local' ? localize('sessions.list.localEnvironmentGroup', 'Local') : session.providerLabel || workspace.authorityId };
+					return { id: workspace.authorityId, label: workspace.authorityId === 'local' ? localize('sessions.list.localEnvironmentGroup', 'Local') : session?.providerLabel || workspace.authorityId };
 				}
 				return { id: '', label: localize('sessions.list.noEnvironmentGroup', 'No Environment') };
 			}
@@ -801,10 +803,10 @@ export class SessionsList extends DomWidget {
 		const recent: HTMLElement[] = [];
 		const remaining = new Map<string, HTMLElement>();
 		const childrenByRow = new Map<HTMLElement, readonly HTMLElement[]>();
-		const sort = this.catalog && this.listModel.getSort(this.mode);
+		const sort = this.listModel.getSort(this.mode);
+		const grouping = this.listModel.grouping;
 		const sortKeys = new Map<HTMLElement, string | number>();
 		const sortRows = (rows: readonly HTMLElement[]): readonly HTMLElement[] => {
-			if (!sort) return rows;
 			const sign = sort.direction === 'ascending' ? 1 : -1;
 			const sortable = rows.filter(row => sortKeys.has(row)).sort((left, right) => {
 				const a = sortKeys.get(left)!;
@@ -862,6 +864,7 @@ export class SessionsList extends DomWidget {
 		};
 		const projectRows: HTMLElement[] = [];
 		const contributedGroups = new Map<string, readonly HTMLElement[]>();
+		const contributedRecent: [HTMLElement, SessionGroupingContext | undefined][] = [];
 		const external = this.catalog?.snapshot.get();
 		const externalRow = (row: SessionsCatalogRow, project?: string, alert?: IBlockedSession): HTMLElement => {
 			const key = project ? JSON.stringify([row.id, project]) : row.id;
@@ -871,18 +874,20 @@ export class SessionsList extends DomWidget {
 			item.target = alert && { sessionId: alert.session.sessionId, threadId: alert.threadId };
 			item.setContextMenu(anchor => void this.showCatalogMenu(row, item, anchor));
 			if (project) item.domNode.dataset.parentProject = `project:${project}`;
-			const value = sort?.field === 'name' ? row.title : sort?.field === 'created' ? row.createdAt : row.updatedAt ?? row.createdAt;
+			const value = sort.field === 'name' ? row.title : sort.field === 'created' ? row.createdAt : row.updatedAt ?? row.createdAt;
 			if (value !== undefined) sortKeys.set(item.domNode, value);
 			return item.domNode;
 		};
 		const placedAlerts = new Set<string>();
-		const catalogRowsFor = (rows: readonly SessionsCatalogRow[], isPinned: boolean, project?: { readonly key: string; readonly title: string; }): HTMLElement[] => {
+		const catalogRowsFor = (rows: readonly SessionsCatalogRow[], sectionKey: string, project?: { readonly key: string; readonly title: string; }): HTMLElement[] => {
 			const children: HTMLElement[] = [];
 			for (const row of rows) {
-				const alert = !isPinned && !row.pinned && !row.disabled && row.sessionId ? alerts.get(row.sessionId) : undefined;
+				const alert = sectionKey !== 'pinned' && !row.pinned && !row.disabled && row.sessionId ? alerts.get(row.sessionId) : undefined;
 				if (!this.search.matches(row.title, project?.title, alert && attentionLabel)) continue;
 				if (!alert) {
-					children.push(externalRow(row, project?.key));
+					const node = externalRow(row, project?.key);
+					if (!project && sectionKey === 'recent' && grouping !== 'none') contributedRecent.push([node, row.groupingContext]);
+					children.push(node);
 				} else if (!placedAlerts.has(alert.session.sessionId)) {
 					placedAlerts.add(alert.session.sessionId);
 					attentionRows.push(externalRow(row, project?.key, alert));
@@ -891,12 +896,14 @@ export class SessionsList extends DomWidget {
 			return children;
 		};
 		for (const section of external?.sections ?? []) {
-			const rows = catalogRowsFor(section.rows, section.key === 'pinned');
+			const rows = catalogRowsFor(section.rows, section.key);
 			if (section.key === 'pinned') pinned.push(...rows);
-			else if (section.key === 'recent') recent.push(...rows);
+			else if (section.key === 'recent') {
+				if (grouping === 'none') recent.push(...rows);
+			}
 			else contributedGroups.set(section.key, rows);
 			for (const project of section.projects) {
-				const children = catalogRowsFor(project.rows, section.key === 'pinned', project);
+				const children = catalogRowsFor(project.rows, section.key, project);
 				if (!children.length && !this.search.matches(project.title)) continue;
 				const key = `catalog-project:${project.key}`;
 				if (project.onExpand) this.catalogProjects.set(key, { load: project.onExpand });
@@ -947,7 +954,7 @@ export class SessionsList extends DomWidget {
 				recent.push(item.domNode);
 			}
 		}
-		const catalog = getSessionsListEntries(this.catalog ? [] : this.sessionService.sessions.filter(session => session.kind === 'code'), this.listModel, this.mode,
+		const catalog = getSessionsListEntries(this.catalog ? [] : this.sessionService.sessions.filter(session => session.kind === 'code'), this.listModel,
 			activeSelection?.kind === 'session' ? activeSelection.active.session.sessionId : undefined);
 		const groupNames = new Map(this.groups.groups.flatMap(group => group.sessionIds.map(id => [id, group.name] as const)));
 		const projectNames = new Map(this.projects.flatMap(project => project.sessionIds.map(id => [id, project.name] as const)));
@@ -967,7 +974,7 @@ export class SessionsList extends DomWidget {
 				&& (matchesSession || this.search.matches(chat.title, chat.workspace?.root, ...fields)));
 			if (!matchesSession && !nested.length && !nestedDrafts.has(session.sessionId)) continue;
 			const item = itemFor(`session:${session.sessionId}`, 'conversation', restingIcon ?? Lxicon.cowork);
-			if (sort) sortKeys.set(item.domNode, sort.field === 'name' ? session.title : sessionSortTime(session, sort.field));
+			sortKeys.set(item.domNode, sort.field === 'name' ? session.title : sessionSortTime(session, sort.field));
 			const target = { sessionId: session.sessionId, threadId: alert?.threadId ?? thread.threadId };
 			item.target = target;
 			const open = () => this.openRow(options => this.viewService.openSession(target.sessionId, target.threadId, options));
@@ -1034,7 +1041,6 @@ export class SessionsList extends DomWidget {
 				group.kind === 'comparison' ? () => { void this.openComparison(group.sessionIds); } : undefined, group));
 		}
 		const orderedRecent = reorderChildren(recent, ids => this.sectionOrder.getOrder(this.mode, ids), 'sectionOrderId');
-		const grouping = this.listModel.grouping;
 		if (this.mode === 'code' && (grouping === 'none' || grouping === 'projects')) {
 			// Saved sessions can have a creation workspace without a Code project membership.
 			// Use the Session workspace so managed checkouts of the same folder stay together.
@@ -1071,19 +1077,23 @@ export class SessionsList extends DomWidget {
 					}
 				}
 			}
-			const ungrouped = catalog.filter(session => remaining.has(session.sessionId));
+			const ungrouped = contributedRecent;
+			for (const session of catalog) {
+				const row = remaining.get(session.sessionId);
+				if (row) ungrouped.push([row, session]);
+			}
 			if (grouping === 'repository') {
-				void this.loadRepositoryGroups(ungrouped);
+				void this.loadRepositoryGroups(ungrouped.flatMap(([, session]) => session ? [session] : []));
 			}
 			const buckets = new Map<string, { readonly label: string; readonly rows: HTMLElement[]; }>();
-			for (const session of ungrouped) {
+			for (const [row, session] of ungrouped) {
 				const { id, label } = this.sessionBucket(session, grouping, projectsBySession);
 				let bucket = buckets.get(id);
 				if (!bucket) {
 					bucket = { label, rows: [] };
 					buckets.set(id, bucket);
 				}
-				bucket.rows.push(remaining.get(session.sessionId)!);
+				bucket.rows.push(row);
 			}
 			for (const [id, bucket] of [...buckets].sort((left, right) => left[1].label.localeCompare(right[1].label))) {
 				orderedRecent.push(sectionFor(`grouping:${grouping}:${id}`, bucket.label, bucket.rows, 'subgroup'));

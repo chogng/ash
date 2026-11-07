@@ -40,6 +40,8 @@ export interface IContextMenuDelegate {
 	getMenuClassName?(): string;
 	/** Caller-owned styling applied to every submenu of this popup. */
 	readonly submenuClassName?: string;
+	/** Use the browser menu's trailing icon column for this menu and its submenus. */
+	readonly iconPlacement?: 'leading' | 'trailing';
 	readonly onHide?: (didCancel: boolean) => void;
 	/** Cancels only this presentation; an action that has already started still completes. */
 	readonly cancellationToken?: CancellationToken;

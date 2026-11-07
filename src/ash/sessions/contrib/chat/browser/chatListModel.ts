@@ -3,7 +3,7 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IProjectService } from '../../../../platform/projects/common/projectService.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IProjectsService } from '../../projects/browser/projectsService.js';
-import type { SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
+import type { SessionGroupingContext, SessionsCatalogProject, SessionsCatalogRow, SessionsCatalogSnapshot } from '../../sessions/browser/views/sessionsCatalogList.js';
 import type { SessionsCatalogListModel } from '../../sessions/browser/views/sessionsView.js';
 import { CHAT_WORKSPACE_NAVIGATION_ID } from '../common/constants.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
@@ -24,6 +24,7 @@ export interface ChatListEntry extends SessionListOrganization {
 	readonly title: string;
 	/** Session catalog identity, when this row represents an Ash session. */
 	readonly sessionId?: string;
+	readonly groupingContext?: SessionGroupingContext;
 	/** Milliseconds since the Unix epoch, when supplied by the catalog. */
 	readonly createdAt?: number;
 	readonly updatedAt?: number;
@@ -295,6 +296,7 @@ export class ChatWorkspaceListModel extends Disposable implements SessionsCatalo
 			id: entry.id,
 			sessionId,
 			title: entry.title,
+			groupingContext: entry.groupingContext,
 			createdAt: entry.createdAt,
 			updatedAt: entry.updatedAt,
 			selected: entry.selected,

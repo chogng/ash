@@ -195,7 +195,7 @@ import { TextResourcePropertiesService } from '../../workbench/services/textreso
 import { CoworkPaneFactory } from '../contrib/cowork/browser/cowork.contribution.js';
 import { ISessionsConversationService } from '../services/sessions/common/sessionsConversation.js';
 import { ChatTipService, IChatTipService } from '../../workbench/contrib/chat/browser/chatTipService.js';
-import { SessionsWorkspaceModeContext } from '../common/contextkeys.js';
+import { IsNewSessionContext, SessionsWorkspaceModeContext } from '../common/contextkeys.js';
 import { migrateNewChatDraftState, readNewChatDraftState, writeNewChatDraftState } from '../contrib/chat/common/newChatDraftState.js';
 import { IAccessibilityService } from '../../platform/accessibility/common/accessibility.js';
 import { AccessibilityService } from '../../platform/accessibility/browser/accessibilityService.js';
@@ -1138,7 +1138,12 @@ export abstract class Workbench extends Disposable {
 					command: {
 						id: 'ash.sessions.toggleBrowser', title: localize2('sessions.cards.toggleBrowser', 'Toggle browser pane'),
 						icon: Lxicon.browserExplore, toggled: ContextKeyExpr.equals('sessions.browserVisible', true),
-					}, when: ContextKeyExpr.equals('sessions.toolsAvailable', true), group: 'navigation', order: 4.5
+					},
+					when: ContextKeyExpr.and(
+						ContextKeyExpr.equals('sessions.toolsAvailable', true),
+						id === Menus.TitleBarRightLayout ? ContextKeyExpr.not(IsNewSessionContext.key) : undefined,
+					),
+					group: 'navigation', order: 4.5
 				},
 			}))));
 		}
@@ -1170,7 +1175,7 @@ export abstract class Workbench extends Disposable {
 		// Browser integration resolves editor and view services; install it after the window graph is complete.
 		if (options.createAppToolsHost) this._register(options.createAppToolsHost(services));
 		this._register(new SessionsModernUIContribution(this.domNode, configurationService));
-		this._register(registerLayoutActions(layout, view, contextKeys, editor));
+		this._register(registerLayoutActions(layout, view, contextKeys, editor, workspace));
 		this._register(registerAddFileAsContextAction(this.sessionsPart));
 		this._register(registerSessionsTerminalContribution(layout, contextKeys, editor));
 		const contributions = this._register(WorkbenchContributionsRegistry.createHost(services, undefined, options.contributionIds));

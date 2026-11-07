@@ -263,7 +263,7 @@ suite('Projects toolbar', () => {
 					await expect(item).toHaveCSS('padding-inline-end', '12px');
 					await expect(item).toHaveCSS('border-radius', '8px');
 				}
-				const check = selected.locator('.ash-menu-leading-check > .ash-icon');
+				const check = selected.locator('.ash-menu-trailing-check > .ash-icon');
 				await expect(check).toHaveClass(/ash-icon-check/);
 				await expect(check).toHaveCSS('font-size', '18px');
 				const checkBounds = (await check.boundingBox())!;

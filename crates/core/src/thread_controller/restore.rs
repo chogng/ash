@@ -1,5 +1,6 @@
 use super::CreateThreadRequest;
 use super::ThreadController;
+use super::ThreadCreationKind;
 use super::command_thread_id;
 use super::validate_thread_title;
 use crate::CoreError;
@@ -217,7 +218,7 @@ impl ThreadController {
                 title: request.title,
                 execution_target: source.execution_target.clone(),
             },
-            source.kind,
+            ThreadCreationKind::Fixed(source.kind),
             vec![ThreadEvent::HistoryPrefixBound {
                 thread_id,
                 prefix: reference,

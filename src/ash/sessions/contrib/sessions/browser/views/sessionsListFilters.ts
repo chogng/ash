@@ -1,18 +1,9 @@
-import type { ISessionsListModelService, SessionSortMode, SessionsListMode } from '../../../../services/sessions/browser/sessionsListModelService.js';
+import type { ISessionsListModelService, SessionSortMode } from '../../../../services/sessions/browser/sessionsListModelService.js';
 import type { ISession } from '../../../../services/sessions/common/session.js';
 
 /** The selected session stays reachable when its automation visibility changes. */
-export function getSessionsListEntries(catalog: readonly ISession[], model: ISessionsListModelService, mode: SessionsListMode, activeSessionId: string | undefined): readonly ISession[] {
-	const { field, direction } = model.getSort(mode);
-	const sign = direction === 'ascending' ? 1 : -1;
-	const visible = catalog.filter(session => session.status === 'active' && (session.sessionId === activeSessionId || model.isSessionListed(session)));
-	if (field === 'name') {
-		return visible.sort((left, right) => sign * left.title.localeCompare(right.title, undefined, { numeric: true }));
-	}
-	return visible
-		.map(session => ({ session, time: sessionSortTime(session, field) }))
-		.sort((left, right) => sign * (left.time - right.time))
-		.map(entry => entry.session);
+export function getSessionsListEntries(catalog: readonly ISession[], model: ISessionsListModelService, activeSessionId: string | undefined): readonly ISession[] {
+	return catalog.filter(session => session.status === 'active' && (session.sessionId === activeSessionId || model.isSessionListed(session)));
 }
 
 export function sessionSortTime(session: ISession, mode: Exclude<SessionSortMode, 'name'>): number {

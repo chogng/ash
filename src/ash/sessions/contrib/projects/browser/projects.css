@@ -66,11 +66,6 @@
 	flex-shrink: 0;
 }
 
-.ash-projects-sort-menu .ash-menu-leading-check {
-	order: 1;
-	margin-left: auto;
-}
-
 .ash-projects-feedback {
 	margin-bottom: var(--ash-spacing-size200);
 	color: var(--ash-description-foreground);
