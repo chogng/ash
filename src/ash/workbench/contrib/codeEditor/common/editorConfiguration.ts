@@ -17,6 +17,8 @@ export type RenderLineHighlightSetting = 'none' | 'gutter' | 'line' | 'all';
 
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
 
+export const bundledMonospaceFonts = Object.freeze(['Ash Mono', 'Ash Mono SC']);
+
 /** Typed user preferences owned by the Workbench code-editor integration. */
 export const CodeEditorConfiguration = Object.freeze({
 	fontFamily: configurationRegistry.registerConfiguration<string>({
@@ -24,6 +26,8 @@ export const CodeEditorConfiguration = Object.freeze({
 		scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
 		defaultValue: '',
 		schema: {
+			format: 'font-family',
+			examples: bundledMonospaceFonts,
 			// Project Editor-owned candidates without replacing this setting's typed default or parser.
 			get defaultSnippets() { return editorConfiguration.properties['editor.fontFamily'].defaultSnippets; },
 		},

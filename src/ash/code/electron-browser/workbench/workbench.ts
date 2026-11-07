@@ -19,6 +19,7 @@ try {
 		resolveLanguagePackCatalog(typeof preference === 'string' ? preference : 'en', productLanguagePackSources, new BrowserLanguagePackStore()));
 	const [splash, catalog] = await Promise.all([splashReady, catalogReady]);
 	setNlsMessages(catalog.locale, catalog.bundles);
+	document.documentElement.lang = catalog.locale;
 	// Module registration uses renderer NLS. Native menus need the selected catalog
 	// by the time the Workbench starts using host services.
 	const nativeLocalizationReady = invoke<void>(NLS_ACTIVATE_CHANNEL, catalog);

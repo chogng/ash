@@ -27,6 +27,7 @@ import { registerChatApprovalEnvironmentActions } from './actions/chatApprovalEn
 import { registerChatCodeBlockActions } from './actions/chatCodeblockActions.js';
 import { registerChatToolActions } from './actions/chatToolActions.js';
 import { AgentTaskModelSettingsModel } from '../../preferences/browser/agentTaskModelSettingsModel.js';
+import { bundledMonospaceFonts } from '../../codeEditor/common/editorConfiguration.js';
 import { registerChatTitleActions } from './actions/chatTitleActions.js';
 import { registerChatElicitationActions } from './actions/chatElicitationActions.js';
 import { registerChatExecuteActions } from './actions/chatExecuteActions.js';
@@ -382,7 +383,7 @@ configurationRegistry.registerConfiguration<ChatSessionArchiveActionWording>({
 /** Message typography leaves composer and code-editor preferences independent. */
 configurationRegistry.registerConfiguration<string>({
 	key: ChatConfiguration.FontFamily, defaultValue: 'default', scope: ConfigurationScope.WINDOW,
-	schema: { type: 'string', maxLength: 256, pattern: '^[^\\r\\n\\u0000]*$' },
+	schema: { type: 'string', maxLength: 256, pattern: '^[^\\r\\n\\u0000]*$', format: 'font-family', examples: Object.freeze(['Ash Sans', 'Ash Sans SC', 'Ash Serif', 'Ash Serif SC']) },
 	parse(value: unknown): string {
 		if (typeof value === 'string' && value.length <= 256 && !/[\r\n\0]/u.test(value)) return value;
 		throw new TypeError(localize('chat.fontFamily.invalid', 'Message font must be a single-line string no longer than 256 characters.'));
@@ -390,8 +391,8 @@ configurationRegistry.registerConfiguration<string>({
 	setting: {
 		valueType: 'text',
 		get title() { return localize('chat.fontFamily.title', 'Font family'); },
-		get description() { return localize('chat.fontFamily.description', 'Set the font for chat messages, including Markdown and link text. Use default or leave empty to follow the interface font. Input and code-block fonts are configured separately.'); },
-		get placeholder() { return localize('chat.fontFamily.default', 'Interface font'); },
+		get description() { return localize('chat.fontFamily.description', 'Set the font for chat messages, including Markdown and link text. The default follows the interface font.'); },
+		get placeholder() { return localize('chat.fontFamily.default', 'Follow interface font'); },
 	},
 });
 configurationRegistry.registerConfiguration<number>({
@@ -461,7 +462,7 @@ configurationRegistry.registerConfiguration<number>({
 /** Code-block preferences override the file editor's typography within Chat replies. */
 configurationRegistry.registerConfiguration<string>({
 	key: ChatEditorConfiguration.fontFamily, defaultValue: '', scope: ConfigurationScope.APPLICATION,
-	schema: { type: 'string', maxLength: 256, pattern: '^[^\\r\\n\\u0000]*$' },
+	schema: { type: 'string', maxLength: 256, pattern: '^[^\\r\\n\\u0000]*$', format: 'font-family', examples: bundledMonospaceFonts },
 	parse(value: unknown): string {
 		if (typeof value === 'string' && value.length <= 256 && !/[\r\n\0]/u.test(value)) return value;
 		throw new TypeError(localize('chat.editor.fontFamily.invalid', 'Code block font must be a single-line string no longer than 256 characters.'));
@@ -469,7 +470,7 @@ configurationRegistry.registerConfiguration<string>({
 	setting: {
 		valueType: 'text',
 		get title() { return localize('chat.editor.fontFamily.title', 'Font family'); },
-		get description() { return localize('chat.editor.fontFamily.description', 'Set the font for code blocks in replies. Leave empty to use the editor font.'); },
+		get description() { return localize('chat.editor.fontFamily.description', 'Set the font for code blocks in replies. The default follows the editor font.'); },
 		get placeholder() { return localize('chat.editor.fontFamily.default', 'Use editor font'); },
 	},
 });

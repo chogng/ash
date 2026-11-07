@@ -706,6 +706,13 @@ export abstract class Workbench extends Disposable {
 		options.container.replaceChildren();
 		this.domNode = h(ownerDocument, 'main');
 		this.domNode.className = 'ash-sessions-window ash-code-sessions-window';
+		const applyInterfaceFont = () => {
+			this.domNode.dataset.interfaceFont = configurationService.getValue<string>(SessionsConfiguration.interfaceFontFamily);
+		};
+		applyInterfaceFont();
+		this._register(configurationService.onDidChangeConfiguration(event => {
+			if (event.affectsConfiguration(SessionsConfiguration.interfaceFontFamily)) applyInterfaceFont();
+		}));
 		this._register(bindSashFeedbackPresentation(this.domNode, 'handle'));
 		this.domNode.setAttribute('aria-busy', 'true');
 		options.container.append(this.domNode);

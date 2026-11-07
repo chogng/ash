@@ -40,6 +40,10 @@
 	--ash-icon-font-weight: 550;
 }
 
+.ash-sessions-window[data-interface-font="system"] {
+	--ash-font-family: var(--ash-system-font-family);
+}
+
 .ash-sessions-window .ash-workbench-sidebar {
 	--ash-toolbar-actionSize: var(--ash-spacing-size240);
 	--ash-sessions-sidebar-item-inset: var(--ash-spacing-size40);

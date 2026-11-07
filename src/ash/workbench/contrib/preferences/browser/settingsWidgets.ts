@@ -727,7 +727,7 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 					this.input.focus();
 					this.input.select();
 				} else {
-					void this.updateSetting(this.model.state.defaultValue);
+					void this.updateSetting(value === 'default' ? this.model.state.defaultValue : value);
 				}
 			}));
 		} else {
@@ -751,20 +751,24 @@ class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 		this.input.value = state.value;
 		this.input.disabled = state.isPending || this.hasPolicyValue;
 		if (!this.fontMode) return;
-		const isDefaultFont = state.value === state.defaultValue;
+		const isDefaultFont = state.value === state.defaultValue || !state.value.trim();
 		// This is a projection of the CSS family list; the configuration keeps its original value.
-		const firstFamily = state.defaultValue.match(/^(?:"([^"]+)"|'([^']+)'|([^,]+))/u);
+		const firstFamily = state.defaultValue === 'default' ? undefined : state.defaultValue.match(/^(?:"([^"]+)"|'([^']+)'|([^,]+))/u);
 		let family = (firstFamily?.[1] ?? firstFamily?.[2] ?? firstFamily?.[3] ?? '').trim();
 		if (family === 'system-ui') family = isWindows ? 'Segoe UI' : localize({ bundle: 'ash.settings', key: 'font.systemUI' }, 'System UI');
 		if (family === 'ui-monospace') family = localize({ bundle: 'ash.settings', key: 'font.monospace' }, 'Monospace');
+		const bundledFonts = (this.descriptor.configuration.schema?.examples ?? [])
+			.filter((example): example is string => typeof example === 'string');
+		const mode = isDefaultFont ? 'default' : bundledFonts.includes(state.value) ? state.value : 'custom';
 		const choices = [
 			{ value: 'default', label: family ? localize({ bundle: 'ash.settings', key: 'font.system' }, 'System ({0})', family) : this.descriptor.placeholder },
+			...bundledFonts.map(font => ({ value: font, label: font })),
 			{ value: 'custom', label: localize({ bundle: 'ash.settings', key: 'font.custom' }, 'Custom') },
 		];
 		if (!sameSelectOptions(this.fontMode.options, choices)) this.fontMode.setOptions(choices);
-		this.fontMode.value = isDefaultFont ? 'default' : 'custom';
+		this.fontMode.value = mode;
 		this.fontMode.enabled = !state.isPending && !this.hasPolicyValue;
-		this.input.hidden = isDefaultFont;
+		this.input.hidden = mode !== 'custom';
 	}
 }
 

@@ -1,5 +1,5 @@
 import { localize } from '../../nls.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
+import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
 import { ActivityBarPosition } from '../../workbench/common/configuration.js';
 
@@ -52,6 +52,27 @@ export type SessionsActivityBarLocation = Exclude<ActivityBarPosition, ActivityB
 
 /** Appearance preferences owned by the dedicated Sessions window. */
 export const SessionsConfiguration = Object.freeze({
+	interfaceFontFamily: configurationRegistry.registerConfiguration<'ash-sans' | 'system'>({
+		key: 'sessions.interfaceFontFamily',
+		defaultValue: 'ash-sans',
+		scope: ConfigurationScope.APPLICATION,
+		parse(value: unknown) {
+			if (value === 'ash-sans' || value === 'system') return value;
+			throw new TypeError(localize('sessions.interfaceFontFamily.invalid', 'Choose Ash Sans or System font.'));
+		},
+		setting: {
+			included: false,
+			valueType: 'select',
+			get title() { return localize('sessions.interfaceFontFamily.title', 'Interface font'); },
+			get description() { return localize('sessions.interfaceFontFamily.description', 'Choose the font for Agent Window navigation, menus, tabs, and controls.'); },
+			get options() {
+				return [
+					{ value: 'ash-sans', label: 'Ash Sans' },
+					{ value: 'system', label: localize('sessions.interfaceFontFamily.system', 'System font') },
+				] as const;
+			},
+		},
+	}),
 	activityBarLocation: configurationRegistry.registerConfiguration<SessionsActivityBarLocation>({
 		key: 'sessions.activityBar.location',
 		defaultValue: ActivityBarPosition.DEFAULT,

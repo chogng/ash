@@ -377,6 +377,25 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 		assert.equal(categoryButton(id).getAttribute('aria-current'), 'page', `reopening navigates to ${id}`);
 		assert.equal(categoryButton(id).getAttribute('aria-controls'), 'ash-sessions-settings-content');
 	}
+	await preferences.open({ section: 'appearance' });
+	for (const [key, initialLabel, optionLabel, savedValue] of [
+		['sessions.interfaceFontFamily', 'Ash Sans', 'System font', 'system'],
+		['chat.fontFamily', 'Follow interface font', 'Ash Sans SC', 'Ash Sans SC'],
+		['chat.editor.fontFamily', 'Use editor font', 'Ash Mono SC', 'Ash Mono SC'],
+	]) {
+		const picker = window.document.querySelector<HTMLElement>(`[data-settings-item-id="${key}"] [role="combobox"]`)!;
+		assert.equal(picker.textContent, initialLabel);
+		picker.click();
+		const options = window.document.getElementById(picker.getAttribute('aria-controls')!)!;
+		const choice = [...options.querySelectorAll<HTMLElement>('[role="option"]')].find(option => option.textContent === optionLabel);
+		assert.ok(choice, optionLabel);
+		choice.click();
+		await new Promise(resolve => setTimeout(resolve, 0));
+		assert.equal(configuration.getValue(key), savedValue);
+		assert.equal(picker.textContent, optionLabel);
+		await configuration.updateValue(key, undefined);
+		assert.equal(picker.textContent, initialLabel);
+	}
 	await preferences.open({ section: 'dictation' });
 	assert.equal(categoryButton('dictation').getAttribute('aria-current'), 'page');
 	assert.equal(categoryButton('dictation').textContent, 'Voice');

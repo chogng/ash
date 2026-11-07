@@ -18,6 +18,7 @@ try {
 	const preference = await preferenceRequest;
 	const catalog = await resolveLanguagePackCatalog(typeof preference === 'string' ? preference : 'en', productLanguagePackSources, new BrowserLanguagePackStore());
 	setNlsMessages(catalog.locale, catalog.bundles);
+	document.documentElement.lang = catalog.locale;
 	await invoke<void>(NLS_ACTIVATE_CHANNEL, catalog);
 	canShowSplash = false;
 	await import('../sessions.desktop.main.js');
