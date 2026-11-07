@@ -229,7 +229,50 @@ impl ExecPolicySelector {
         }
     }
 
-    pub(crate) fn matches(&self, subject: &ExecPolicySubject<'_>) -> bool {
+    pub(crate) fn matches_rule(
+        &self,
+        subject: &ExecPolicySubject<'_>,
+        effect: &ExecPolicyEffect,
+    ) -> bool {
+        let Some((commands, allow_prefix)) =
+            subject.shell_commands().filter(|_| self.uses_command())
+        else {
+            return self.matches(subject, subject.command(), false);
+        };
+        match effect {
+            ExecPolicyEffect::AllowUnsandboxed => {
+                allow_prefix
+                    && !commands.is_empty()
+                    && commands
+                        .iter()
+                        .all(|command| self.matches(subject, Some(command), false))
+            }
+            ExecPolicyEffect::Deny(_)
+            | ExecPolicyEffect::RequireApproval
+            | ExecPolicyEffect::RequireSandbox => {
+                self.matches(subject, subject.command(), commands.is_empty())
+                    || commands
+                        .iter()
+                        .any(|command| self.matches(subject, Some(command), false))
+            }
+            ExecPolicyEffect::Continue => self.matches(subject, subject.command(), false),
+        }
+    }
+
+    fn uses_command(&self) -> bool {
+        match self {
+            Self::CommandPrefix { .. } => true,
+            Self::All { selectors } => selectors.iter().any(Self::uses_command),
+            _ => false,
+        }
+    }
+
+    fn matches(
+        &self,
+        subject: &ExecPolicySubject<'_>,
+        command: Option<&crate::ExecPolicyCommand>,
+        opaque_command: bool,
+    ) -> bool {
         match self {
             Self::Any => true,
             Self::ActionDigest { digest } => digest == subject.action_digest(),
@@ -242,13 +285,16 @@ impl ExecPolicySelector {
                         .as_deref()
                         .is_none_or(|value| value == subject.source_id())
             }
-            Self::CommandPrefix { pattern } => subject.command().is_some_and(|command| {
-                pattern.iter().enumerate().all(|(index, expected)| {
-                    command
-                        .token(index)
-                        .is_some_and(|actual| expected.matches(actual))
-                })
-            }),
+            Self::CommandPrefix { pattern } => {
+                opaque_command
+                    || command.is_some_and(|command| {
+                        pattern.iter().enumerate().all(|(index, expected)| {
+                            command
+                                .token(index)
+                                .is_some_and(|actual| expected.matches(actual))
+                        })
+                    })
+            }
             Self::Network {
                 protocol,
                 host,
@@ -266,7 +312,9 @@ impl ExecPolicySelector {
             } => subject.capabilities().iter().any(|capability| {
                 capability.kind() == capability_kind && scope.matches(capability.scope())
             }),
-            Self::All { selectors } => selectors.iter().all(|selector| selector.matches(subject)),
+            Self::All { selectors } => selectors
+                .iter()
+                .all(|selector| selector.matches(subject, command, opaque_command)),
         }
     }
 

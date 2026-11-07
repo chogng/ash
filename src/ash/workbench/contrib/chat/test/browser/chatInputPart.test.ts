@@ -1553,6 +1553,50 @@ test('approval exposes only offered reusable decisions and renders exact argv as
 	assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'approveForSession' } }, { type: 'approval', response: { decision: 'approveAndSaveRule' } }]);
 });
 
+test('file write approval submits the offered session scope', async () => {
+	const responses: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+	part.render({
+		mode: 'agent', queuedMessages: 0, approvalMode: 'auto', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: {
+			requestId: 'file-write', request: {
+				type: 'approval', request: {
+					reason: 'File write', capabilities: [{ kind: 'fileWrite', scope: '/workspace/.vscode/tasks.json' }],
+					allowedDecisions: ['decline', 'approveOnce', 'approveFileWriteForSession']
+				}
+			}
+		},
+	});
+	const interaction = part.element.querySelector('.ash-chat-interaction')!;
+	assert.equal(interaction.querySelector('code')?.textContent, '/workspace/.vscode/tasks.json');
+	const buttons = [...interaction.querySelectorAll('button')];
+	assert.ok(!buttons.some(button => button.textContent === 'Save approval for this exact action'));
+	buttons.find(button => button.textContent === 'Allow edits to this file this session')!.click();
+	assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'approveFileWriteForSession' } }]);
+});
+
+test('shell approval displays and submits the backend command prefix', async () => {
+	const responses: unknown[] = [];
+	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async response => { responses.push(response); } });
+	part.render({
+		mode: 'agent', queuedMessages: 0, approvalMode: 'auto', phase: 'ready', canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false,
+		interaction: {
+			requestId: 'shell-prefix', request: {
+				type: 'approval', request: {
+					reason: 'Run Git status', capabilities: [{ kind: 'processSpawn', scope: '/workspace' }],
+					command: { program: 'bash', arguments: ['-c', 'git status --short'] },
+					sessionCommandPrefix: { program: 'git', arguments: ['status'] },
+					allowedDecisions: ['decline', 'approveOnce', 'approveCommandPrefixForSession']
+				}
+			}
+		},
+	});
+	const interaction = part.element.querySelector('.ash-chat-interaction')!;
+	const button = [...interaction.querySelectorAll('button')].find(button => button.textContent === 'Allow the git status prefix this session')!;
+	button.click();
+	assert.deepEqual(responses, [{ type: 'approval', response: { decision: 'approveCommandPrefixForSession' } }]);
+});
+
 test('result review retains literal evidence and sends only the exact offer decision', async () => {
 	const responses: unknown[] = [];
 	using part = inputPart(sharedNotifications, undefined, 'agent', { resolveInteraction: async (response, requestId) => { responses.push({ response, requestId }); } });

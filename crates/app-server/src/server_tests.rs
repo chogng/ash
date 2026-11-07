@@ -5886,6 +5886,308 @@ fn provider_context_budget_metadata_round_trips_through_the_rpc() {
 }
 
 #[test]
+fn protected_file_approval_is_reused_by_the_running_app_server() {
+    struct FileModel(AtomicUsize);
+    impl ModelService for FileModel {
+        fn invoke(
+            &self,
+            _: core_api::ModelSelection<'_>,
+            _: &ash_protocol::ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ash_protocol::ModelResponse, CoreError> {
+            let step = self.0.fetch_add(1, Ordering::SeqCst);
+            let (name, arguments) = match step {
+                0 => (
+                    "write_file",
+                    serde_json::json!({"path":".vscode/tasks.json","content":"{}\n"}),
+                ),
+                1 => (
+                    "apply_patch",
+                    serde_json::json!({"patch":"*** Begin Patch\n*** Update File: .vscode/tasks.json\n@@\n-{}\n+{\"version\":\"2.0.0\"}\n*** End Patch"}),
+                ),
+                2 => (
+                    "write_file",
+                    serde_json::json!({"path":".vscode/launch.json","content":"{}\n"}),
+                ),
+                _ => panic!("the second file should be awaiting approval"),
+            };
+            Ok(ash_protocol::ModelResponse {
+                output: vec![ash_protocol::ResponseItem::ToolCall(
+                    ash_protocol::ToolCall {
+                        id: ash_protocol::ToolCallId::new(format!("protected-write-{step}"))
+                            .unwrap(),
+                        name: ash_protocol::ToolName::new(name).unwrap(),
+                        arguments,
+                    },
+                )],
+                usage: None,
+                billing: None,
+                stop_reason: ash_protocol::StopReason::Completed,
+            })
+        }
+    }
+
+    let profile = tempfile::tempdir().unwrap();
+    let workspace = tempfile::tempdir().unwrap();
+    std::fs::create_dir(workspace.path().join(".vscode")).unwrap();
+    let server = directory_test_server_with_model(
+        profile.path(),
+        workspace.path(),
+        Arc::new(FileModel(AtomicUsize::new(0))),
+    );
+    let mut connection = server.connection();
+    let capabilities = initialize_test_connection(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "agentInteractions":{"version":1,"kinds":["approval"]}
+        }),
+    );
+    assert_eq!(capabilities["codebase"], true);
+    let session = create_session(&server, &mut connection, 2, "protected-files");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(
+        &server,
+        &mut connection,
+        3,
+        "protected-thread",
+        session_id,
+        1,
+    );
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request",
+            "params":{"commandId":"protected-turn","sessionId":session_id,
+                "request":{"type":"startTurn","expectedSequence":1,"threadId":thread_id,"approvalMode":"auto","toolMode":"direct","input":[{"type":"text","text":"Update the workspace configuration"}]}}
+        }),
+    );
+    assert!(started.get("error").is_none(), "{started}");
+    let typed_thread_id = ash_protocol::ThreadId::new(thread_id).unwrap();
+    let wait_for_approval = || {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let snapshot = server.threads().read_thread(&typed_thread_id).unwrap();
+            let turn = snapshot.turns.last().unwrap();
+            if turn.status == TurnStatus::WaitingForApproval {
+                return snapshot;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "Turn did not request approval: {:?} {:?}",
+                turn.status,
+                snapshot.items
+            );
+            thread::sleep(Duration::from_millis(1));
+        }
+    };
+    let snapshot = wait_for_approval();
+    let turn = snapshot.turns.last().unwrap();
+    let first = turn.pending_interaction.as_ref().unwrap();
+    let AgentRequest::Approval { request } = &first.request else {
+        panic!("tasks.json should request approval");
+    };
+    // Code Sessions use an isolated working tree. The approval shows the actual write target.
+    let tasks = request
+        .capabilities
+        .iter()
+        .find(|capability| capability.kind == ash_protocol::ActionApprovalCapabilityKind::FileWrite)
+        .map(|capability| std::path::PathBuf::from(&capability.scope))
+        .unwrap();
+    assert!(tasks.ends_with(".vscode/tasks.json"));
+    assert!(!tasks.exists());
+    let launch = tasks.with_file_name("launch.json");
+    let resolved = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":5,"method":"session/request",
+            "params":{"commandId":"approve-protected-file","sessionId":session_id,
+                "request":{"type":"resolveInteraction","expectedSequence":snapshot.sequence,"threadId":thread_id,"turnId":turn.turn_id,"requestId":first.request_id,
+                    "response":{"type":"approval","response":{"decision":"approveFileWriteForSession"}}}}
+        }),
+    );
+    assert!(resolved.get("error").is_none(), "{resolved}");
+    let snapshot = wait_for_approval();
+    let pending = snapshot
+        .turns
+        .last()
+        .unwrap()
+        .pending_interaction
+        .as_ref()
+        .unwrap();
+    assert_ne!(pending.request_id, first.request_id);
+    let AgentRequest::Approval { request } = &pending.request else {
+        panic!("launch.json should require its own approval");
+    };
+    assert!(
+        request
+            .capabilities
+            .iter()
+            .any(|capability| std::path::Path::new(&capability.scope) == launch)
+    );
+    let contents = std::fs::read_to_string(tasks);
+    assert_eq!(
+        contents.as_deref().ok(),
+        Some("{\"version\":\"2.0.0\"}\n"),
+        "writes returned {:?}",
+        snapshot
+            .items
+            .iter()
+            .filter(|item| matches!(item, ash_protocol::ThreadItem::ToolResult { .. }))
+            .collect::<Vec<_>>()
+    );
+    assert!(!launch.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn shell_review_session_prefix_reuses_git_status_but_waits_for_the_next_subcommand() {
+    struct ShellModel(AtomicUsize);
+    impl ModelService for ShellModel {
+        fn invoke(
+            &self,
+            _: core_api::ModelSelection<'_>,
+            _: &ash_protocol::ModelRequest,
+            _: &CancellationToken,
+        ) -> Result<ash_protocol::ModelResponse, CoreError> {
+            let step = self.0.fetch_add(1, Ordering::SeqCst);
+            let (program, arguments) = match step {
+                0 => ("git", vec!["status"]),
+                1 => ("sh", vec!["-c", "git status --short"]),
+                2 => ("sh", vec!["-c", "git status && touch not-approved"]),
+                _ => panic!("the compound command should be awaiting approval"),
+            };
+            Ok(ash_protocol::ModelResponse {
+                output: vec![ash_protocol::ResponseItem::ToolCall(
+                    ash_protocol::ToolCall {
+                        id: ash_protocol::ToolCallId::new(format!("shell-prefix-{step}")).unwrap(),
+                        name: ash_protocol::ToolName::new("shell-command").unwrap(),
+                        arguments: serde_json::json!({"program":program,"arguments":arguments,"working_directory":"."}),
+                    },
+                )],
+                usage: None,
+                billing: None,
+                stop_reason: ash_protocol::StopReason::Completed,
+            })
+        }
+    }
+    let profile = tempfile::tempdir().unwrap();
+    let workspace = tempfile::tempdir().unwrap();
+    let server = directory_test_server_with_model(
+        profile.path(),
+        workspace.path(),
+        Arc::new(ShellModel(AtomicUsize::new(0))),
+    );
+    let mut connection = server.connection();
+    initialize_test_connection(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "agentInteractions":{"version":1,"kinds":["approval"]}
+        }),
+    );
+    let session = create_session(&server, &mut connection, 2, "shell-session-prefix");
+    let session_id = session["result"]["session"]["sessionId"].as_str().unwrap();
+    let thread = create_thread(
+        &server,
+        &mut connection,
+        3,
+        "shell-prefix-thread",
+        session_id,
+        1,
+    );
+    let thread_id = thread["result"]["value"]["threadId"].as_str().unwrap();
+    let started = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":4,"method":"session/request",
+            "params":{"commandId":"shell-prefix-turn","sessionId":session_id,
+                "request":{"type":"startTurn","expectedSequence":1,"threadId":thread_id,"approvalMode":"auto","toolMode":"direct","input":[{"type":"text","text":"Check Git status"}]}}
+        }),
+    );
+    assert!(started.get("error").is_none(), "{started}");
+    let typed_thread_id = ash_protocol::ThreadId::new(thread_id).unwrap();
+    let wait_for_approval = || {
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let snapshot = server.threads().read_thread(&typed_thread_id).unwrap();
+            let turn = snapshot.turns.last().unwrap();
+            if turn.status == TurnStatus::WaitingForApproval {
+                return snapshot;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "Turn did not request shell approval: {:?} {:?}",
+                turn.status,
+                snapshot.items
+            );
+            thread::sleep(Duration::from_millis(1));
+        }
+    };
+    let first = wait_for_approval();
+    let turn = first.turns.last().unwrap();
+    let pending = turn.pending_interaction.as_ref().unwrap();
+    let AgentRequest::Approval { request } = &pending.request else {
+        panic!("expected command approval")
+    };
+    assert_eq!(
+        request.session_command_prefix,
+        Some(ash_protocol::ActionApprovalCommand {
+            program: "git".into(),
+            arguments: vec!["status".into()],
+        })
+    );
+    let approved = call(
+        &server,
+        &mut connection,
+        serde_json::json!({
+            "jsonrpc":"2.0","id":5,"method":"session/request",
+            "params":{"commandId":"approve-git-prefix","sessionId":session_id,
+                "request":{"type":"resolveInteraction","expectedSequence":first.sequence,"threadId":thread_id,"turnId":turn.turn_id,"requestId":pending.request_id,
+                    "response":{"type":"approval","response":{"decision":"approveCommandPrefixForSession"}}}}
+        }),
+    );
+    assert!(approved.get("error").is_none(), "{approved}");
+    let later = wait_for_approval();
+    let pending = later
+        .turns
+        .last()
+        .unwrap()
+        .pending_interaction
+        .as_ref()
+        .unwrap();
+    let AgentRequest::Approval { request } = &pending.request else {
+        panic!("expected compound command approval")
+    };
+    assert_eq!(
+        request.command.as_ref().unwrap().arguments[1],
+        "git status && touch not-approved"
+    );
+    assert!(request.session_command_prefix.is_none());
+    assert_eq!(
+        request.allowed_decisions,
+        [
+            ash_protocol::ActionApprovalDecision::Decline,
+            ash_protocol::ActionApprovalDecision::ApproveOnce
+        ]
+    );
+    assert!(
+        later
+            .started_tool_calls
+            .contains(&ash_protocol::ToolCallId::new("shell-prefix-1").unwrap())
+    );
+    assert!(
+        !later
+            .started_tool_calls
+            .contains(&ash_protocol::ToolCallId::new("shell-prefix-2").unwrap())
+    );
+}
+
+#[test]
 fn interaction_resolution_uses_the_durable_identity_and_resumes_the_turn() {
     let server = server();
     let mut connection = server.connection();
@@ -6458,6 +6760,7 @@ fn approval_interaction_resolves_through_the_typed_app_server_contract() {
                             ash_protocol::ActionApprovalDecision::Decline,
                         ],
                         risk_assessment: None,
+                        session_command_prefix: None,
                         sandbox_denial: None,
                     },
                 },
@@ -6638,6 +6941,7 @@ fn interaction_response_is_rejected_from_a_capable_non_owner_connection() {
                             ash_protocol::ActionApprovalDecision::Decline,
                         ],
                         risk_assessment: None,
+                        session_command_prefix: None,
                         sandbox_denial: None,
                     },
                 },

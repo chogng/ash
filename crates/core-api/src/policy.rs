@@ -84,6 +84,8 @@ pub trait ActionPolicyService: Send + Sync {
             ash_protocol::ActionApprovalDecision::ApproveOnce
             | ash_protocol::ActionApprovalDecision::Decline => Ok(ApprovalRecordEffect::Recorded),
             ash_protocol::ActionApprovalDecision::ApproveForSession
+            | ash_protocol::ActionApprovalDecision::ApproveFileWriteForSession
+            | ash_protocol::ActionApprovalDecision::ApproveCommandPrefixForSession
             | ash_protocol::ActionApprovalDecision::ApproveAndSaveRule => Err(CoreError::Policy(
                 "this host does not support reusable approvals".into(),
             )),

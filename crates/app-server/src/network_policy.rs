@@ -52,9 +52,11 @@ impl ExecutionNetworkPolicy {
                 | ActionApprovalDecision::ApproveForSession
                 | ActionApprovalDecision::ApproveAndSaveRule,
             ) => NetworkDecision::Allow,
-            Ok(ActionApprovalDecision::Decline) => {
-                NetworkDecision::Deny("network request denied by policy or user".into())
-            }
+            Ok(
+                ActionApprovalDecision::Decline
+                | ActionApprovalDecision::ApproveFileWriteForSession
+                | ActionApprovalDecision::ApproveCommandPrefixForSession,
+            ) => NetworkDecision::Deny("network request denied by policy or user".into()),
             Err(error) => NetworkDecision::Deny(error.to_string()),
         }
     }
@@ -98,9 +100,11 @@ impl NetworkPolicy for ExecutionNetworkPolicy {
                     | ActionApprovalDecision::ApproveForSession
                     | ActionApprovalDecision::ApproveAndSaveRule,
                 )) => NetworkDecision::Allow,
-                Ok(Ok(ActionApprovalDecision::Decline)) => {
-                    NetworkDecision::Deny("network request denied by policy or user".into())
-                }
+                Ok(Ok(
+                    ActionApprovalDecision::Decline
+                    | ActionApprovalDecision::ApproveFileWriteForSession
+                    | ActionApprovalDecision::ApproveCommandPrefixForSession,
+                )) => NetworkDecision::Deny("network request denied by policy or user".into()),
                 Ok(Err(error)) => NetworkDecision::Deny(error.to_string()),
                 Err(_) => NetworkDecision::Deny("network approval authority stopped".into()),
             }

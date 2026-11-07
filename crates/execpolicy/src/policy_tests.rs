@@ -89,6 +89,62 @@ fn exact_command_network_and_capability_selectors_are_evaluated() {
 }
 
 #[test]
+fn shell_review_checks_each_child_and_refuses_unknown_prefix_authority() {
+    let allow = ExecPolicyRule::new(
+        ExecPolicyRuleId::new("status"),
+        ExecPolicySelector::command_prefix([
+            ExecPolicyToken::literal("git"),
+            ExecPolicyToken::literal("status"),
+        ]),
+        ExecPolicyEffect::AllowUnsandboxed,
+    );
+    let deny = ExecPolicyRule::new(
+        ExecPolicyRuleId::new("rm"),
+        ExecPolicySelector::command_prefix([ExecPolicyToken::literal("rm")]),
+        ExecPolicyEffect::Deny("removal denied".into()),
+    );
+    let snapshot = ExecPolicySnapshot::new(
+        ExecPolicyDefault::Continue,
+        vec![layer(ExecPolicyLayerKind::User, vec![allow, deny])],
+    )
+    .unwrap();
+    let shell = ExecPolicyCommand::new("bash", []);
+    let status = ExecPolicyCommand::new("git", ["status".into()]);
+    for (commands, prefixes_allowed, expected) in [
+        (
+            vec![status.clone()],
+            true,
+            ExecPolicyEffect::AllowUnsandboxed,
+        ),
+        (vec![status.clone()], false, ExecPolicyEffect::Continue),
+        (
+            vec![status.clone(), ExecPolicyCommand::new("pwd", [])],
+            true,
+            ExecPolicyEffect::Continue,
+        ),
+        (
+            vec![status, ExecPolicyCommand::new("rm", [])],
+            true,
+            ExecPolicyEffect::Deny("removal denied".into()),
+        ),
+        (
+            Vec::new(),
+            false,
+            ExecPolicyEffect::Deny("removal denied".into()),
+        ),
+    ] {
+        assert_eq!(
+            snapshot
+                .evaluate(
+                    &subject(Some(&shell), None).with_shell_commands(&commands, prefixes_allowed)
+                )
+                .effect(),
+            &expected
+        );
+    }
+}
+
+#[test]
 fn restrictive_parent_layer_cannot_be_overridden_by_user_allow() {
     let host_deny = ExecPolicyRule::new(
         ExecPolicyRuleId::new("host-deny"),

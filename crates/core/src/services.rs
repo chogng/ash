@@ -677,6 +677,10 @@ pub trait ToolService: Send + Sync {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ToolExecutionFacts {
     execution: Option<ToolExecutionIdentity>,
+    reviewed_action: Option<(
+        ash_protocol::ActionDigest,
+        Option<ash_action_policy::FileWriteReview>,
+    )>,
     read_paths: BTreeSet<PathBuf>,
     available_tools: BTreeSet<ash_protocol::ToolName>,
     delegation_tools: BTreeSet<ash_protocol::ToolName>,
@@ -797,6 +801,7 @@ impl ToolExecutionFacts {
             None => (host_tools.clone(), host_tools),
         };
         let facts = Self {
+            reviewed_action: None,
             execution: Some(ToolExecutionIdentity {
                 session_id: snapshot.session_id.clone(),
                 thread_id: snapshot.thread_id.clone(),
@@ -824,6 +829,26 @@ impl ToolExecutionFacts {
     /// Returns the exact durable Thread/Turn identity executing the current Tool Call.
     pub fn execution_identity(&self) -> Option<&ToolExecutionIdentity> {
         self.execution.as_ref()
+    }
+
+    pub(crate) fn with_reviewed_action(mut self, reviewed: &ActionReviewRequest) -> Self {
+        self.reviewed_action = Some((
+            reviewed.action().digest().clone(),
+            reviewed.file_write().cloned(),
+        ));
+        self
+    }
+
+    /// The admitted action and any canonical write targets supplied to its executor.
+    pub fn reviewed_action(
+        &self,
+    ) -> Option<(
+        &ash_protocol::ActionDigest,
+        Option<&ash_action_policy::FileWriteReview>,
+    )> {
+        self.reviewed_action
+            .as_ref()
+            .map(|(digest, write)| (digest, write.as_ref()))
     }
 
     /// Checks discovery and nested targets against the same Turn and Agent ceilings.

@@ -5,6 +5,7 @@
 //! `ash-tool-executor`.
 
 mod ripgrep;
+pub mod shell_review;
 
 pub use ripgrep::{
     BuiltInRipgrepPolicy, RipgrepDiscoveryError, RipgrepExecutable, RipgrepRequestError,
@@ -363,7 +364,11 @@ pub struct ShellCommandRequest {
 
 impl ShellCommandRequest {
     /// Attaches trusted host overrides after decoding model-supplied tool arguments.
-    pub fn with_environment(mut self, environment: ash_tool_executor::CommandEnvironment) -> Self {
+    pub fn with_environment(
+        mut self,
+        mut environment: ash_tool_executor::CommandEnvironment,
+    ) -> Self {
+        shell_review::filter_shell_startup(&self.program, &self.arguments, &mut environment);
         self.environment = environment;
         self
     }

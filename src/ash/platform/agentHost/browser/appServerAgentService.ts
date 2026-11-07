@@ -827,6 +827,7 @@ function toTurnInteraction(interaction: import('../../../../../.build/protocol/t
 						reason: request.request.reason,
 						allowedDecisions: request.request.allowedDecisions ? [...request.request.allowedDecisions] : undefined,
 						command: request.request.command ? { ...request.request.command, arguments: [...request.request.command.arguments] } : request.request.command,
+						sessionCommandPrefix: request.request.sessionCommandPrefix ? { ...request.request.sessionCommandPrefix, arguments: [...request.request.sessionCommandPrefix.arguments] } : request.request.sessionCommandPrefix,
 						sandboxDenial: request.request.sandboxDenial ? structuredClone(request.request.sandboxDenial) : request.request.sandboxDenial,
 						riskAssessment: request.request.riskAssessment ? { riskLevel: request.request.riskAssessment.riskLevel, reason: request.request.riskAssessment.reason } : request.request.riskAssessment,
 						capabilities: request.request.capabilities.map(capability => ({ ...capability })),

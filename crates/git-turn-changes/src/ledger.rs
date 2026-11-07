@@ -11,6 +11,7 @@ use crate::TurnChangeStore;
 use crate::TurnChangeStoreError;
 use ash_git::GitClient;
 use ash_git::GitPrivateRef;
+use ash_git::GitRepository;
 use ash_git::GitTreeChange;
 use ash_git::GitTreeChangeKind;
 use ash_git::GitTreeId;
@@ -34,7 +35,7 @@ pub struct RepositoryCaptureTarget {
     pub worktree_root: PathBuf,
     pub target_branch: Option<String>,
     pub base_object_id: Option<String>,
-    pub baseline_dependency_paths: BTreeSet<PathBuf>,
+    pub baseline_tree: String,
 }
 
 /// File and destination versions required to restore a message after its worktree is removed.
@@ -474,15 +475,20 @@ impl LedgerWorker {
                 Err(TurnChangeStoreError::NotFound(_)) => {}
                 Err(error) => return Err(error.into()),
             }
-            let before_tree = self.capture_snapshot(&target.worktree_root).await?;
-            let repository = self.git.open_repository(&target.worktree_root).await?;
+            let repository = self
+                .git
+                .open_repository(&target.worktree_root)
+                .await
+                .map_err(TurnChangeLedgerError::Baseline)?;
+            // Dependencies describe the original worktree binding and belong to its first capture.
+            let baseline_dependency_paths = self
+                .baseline_dependency_paths(&repository, &target)
+                .await
+                .map_err(TurnChangeLedgerError::Baseline)?;
+            let before_tree = self.git.capture_worktree_tree(&repository).await?;
             let reference = before_reference(&change_set_id)?;
             self.git
-                .pin_private_ref(
-                    &repository,
-                    &reference,
-                    &GitTreeId::new(before_tree.clone())?,
-                )
+                .pin_private_ref(&repository, &reference, &before_tree)
                 .await?;
             let mut change_set = TurnChangeSet::open(TurnChangeSetDraft {
                 change_set_id,
@@ -494,8 +500,8 @@ impl LedgerWorker {
                 git_common_dir: repository.common_dir().to_path_buf(),
                 target_branch: target.target_branch,
                 base_object_id: target.base_object_id,
-                before_tree,
-                baseline_dependency_paths: target.baseline_dependency_paths,
+                before_tree: before_tree.as_str().to_owned(),
+                baseline_dependency_paths,
                 message_state: if request.commit_message_configured {
                     MessageState::Queued
                 } else {
@@ -509,6 +515,27 @@ impl LedgerWorker {
             records.push(change_set);
         }
         Ok(records)
+    }
+
+    async fn baseline_dependency_paths(
+        &self,
+        repository: &GitRepository,
+        target: &RepositoryCaptureTarget,
+    ) -> Result<BTreeSet<PathBuf>, ash_git::GitError> {
+        let target_tree = match &target.base_object_id {
+            Some(head) => self.git.resolve_tree(repository, head).await?,
+            None => self.git.empty_tree(repository).await?,
+        };
+        let baseline_tree = GitTreeId::new(target.baseline_tree.clone())?;
+        let changes = self
+            .git
+            .diff_trees(repository, &target_tree, &baseline_tree)
+            .await?;
+        Ok(changes
+            .iter()
+            .flat_map(|change| std::iter::once(change.path()).chain(change.previous_path()))
+            .map(std::path::Path::to_path_buf)
+            .collect())
     }
 
     async fn seal(
@@ -908,6 +935,8 @@ pub enum TurnChangeLedgerError {
     Domain(#[from] crate::TurnChangeError),
     #[error(transparent)]
     Store(#[from] TurnChangeStoreError),
+    #[error(transparent)]
+    Baseline(ash_git::GitError),
     #[error(transparent)]
     Git(#[from] ash_git::GitError),
 }

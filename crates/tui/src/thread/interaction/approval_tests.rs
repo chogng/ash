@@ -141,33 +141,11 @@ fn reusable_approval_choices_render_and_submit_the_advertised_authority() {
                 arguments: vec!["a b".into(), "<input>".into()],
             }),
             risk_assessment: None,
+            session_command_prefix: None,
             sandbox_denial: None,
         },
     );
-    let mut terminal = Terminal::new(TestBackend::new(72, 12)).unwrap();
-    terminal
-        .draw(|frame| {
-            super::draw(
-                frame,
-                Rect::new(0, 0, 72, 12),
-                approval.view(),
-                None,
-                None,
-                crate::render::test_context().with_language(crate::nls::Language::Chinese),
-            )
-        })
-        .unwrap();
-    let buffer = terminal.backend().buffer();
-    let text = (0..12)
-        .map(|row| {
-            (0..72)
-                .map(|column| buffer[(column, row)].symbol())
-                .collect::<String>()
-                .trim_end()
-                .to_owned()
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let text = render_approval_in_chinese(&approval);
     insta::assert_snapshot!("reusable_approval_choices", text);
     let visible = text.replace(' ', "");
     assert!(visible.contains("本会话内批准同一操作"));
@@ -194,4 +172,118 @@ fn reusable_approval_choices_render_and_submit_the_advertised_authority() {
         matches!(approval.response(ApprovalDecision::ApproveAndSaveRule).response, ash_protocol::AgentResponse::Approval { response }
         if response.decision == ash_protocol::ActionApprovalDecision::ApproveAndSaveRule)
     );
+}
+
+#[test]
+fn file_write_approval_renders_and_submits_the_session_choice() {
+    use ash_protocol::ActionApprovalDecision as Decision;
+
+    let mut approval = Approval::open(
+        ash_protocol::TurnId::new("turn").unwrap(),
+        ash_protocol::RequestId::new("file-approval").unwrap(),
+        ash_protocol::ActionApprovalRequest {
+            action_digest: "a".repeat(64),
+            policy_revision: "policy".into(),
+            reason: "Write workspace configuration?".into(),
+            capabilities: vec![ash_protocol::ActionApprovalCapability {
+                kind: ash_protocol::ActionApprovalCapabilityKind::FileWrite,
+                scope: "/project/.vscode/tasks.json".into(),
+            }],
+            allowed_decisions: vec![
+                Decision::ApproveOnce,
+                Decision::ApproveFileWriteForSession,
+                Decision::Decline,
+            ],
+            command: None,
+            risk_assessment: None,
+            session_command_prefix: None,
+            sandbox_denial: None,
+        },
+    );
+    approval.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let text = render_approval_in_chinese(&approval);
+    insta::assert_snapshot!("file_write_approval", text);
+    assert!(text.replace(' ', "").contains("本会话内允许编辑此文件"));
+    let ApprovalOutcome::Respond(decision) =
+        approval.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("selected file approval should submit");
+    };
+    assert!(matches!(
+        approval.response(decision).response,
+        ash_protocol::AgentResponse::Approval { response }
+            if response.decision == Decision::ApproveFileWriteForSession
+    ));
+}
+
+#[test]
+fn shell_review_approval_displays_and_submits_the_session_prefix() {
+    use ash_protocol::ActionApprovalCommand;
+    use ash_protocol::ActionApprovalDecision as Decision;
+    let mut approval = Approval::open(
+        ash_protocol::TurnId::new("turn").unwrap(),
+        ash_protocol::RequestId::new("shell-approval").unwrap(),
+        ash_protocol::ActionApprovalRequest {
+            action_digest: "a".repeat(64),
+            policy_revision: "policy".into(),
+            reason: "Run Git status?".into(),
+            capabilities: vec![ash_protocol::ActionApprovalCapability {
+                kind: ash_protocol::ActionApprovalCapabilityKind::ProcessSpawn,
+                scope: "/project".into(),
+            }],
+            allowed_decisions: vec![
+                Decision::ApproveOnce,
+                Decision::ApproveCommandPrefixForSession,
+                Decision::Decline,
+            ],
+            command: Some(ActionApprovalCommand {
+                program: "bash".into(),
+                arguments: vec!["-c".into(), "git status --short".into()],
+            }),
+            session_command_prefix: Some(ActionApprovalCommand {
+                program: "git".into(),
+                arguments: vec!["status".into()],
+            }),
+            risk_assessment: None,
+            sandbox_denial: None,
+        },
+    );
+    approval.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+    let text = render_approval_in_chinese(&approval);
+    insta::assert_snapshot!("shell_command_prefix_approval", text);
+    assert!(text.replace(' ', "").contains("命令前缀·gitstatus"));
+    let ApprovalOutcome::Respond(decision) =
+        approval.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE))
+    else {
+        panic!("expected session prefix approval to submit")
+    };
+    assert!(matches!(approval.response(decision).response,
+        ash_protocol::AgentResponse::Approval { response } if response.decision == Decision::ApproveCommandPrefixForSession));
+}
+
+fn render_approval_in_chinese(approval: &Approval) -> String {
+    let mut terminal = Terminal::new(TestBackend::new(72, 12)).unwrap();
+    terminal
+        .draw(|frame| {
+            super::draw(
+                frame,
+                Rect::new(0, 0, 72, 12),
+                approval.view(),
+                None,
+                None,
+                crate::render::test_context().with_language(crate::nls::Language::Chinese),
+            )
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    (0..12)
+        .map(|row| {
+            (0..72)
+                .map(|column| buffer[(column, row)].symbol())
+                .collect::<String>()
+                .trim_end()
+                .to_owned()
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }

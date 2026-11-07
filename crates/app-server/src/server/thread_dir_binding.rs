@@ -9,7 +9,6 @@ use git_turn_changes::CommitState;
 use git_turn_changes::TurnChangeSet;
 use git_turn_changes::TurnChangeStore;
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::path::Path;
 use std::path::PathBuf;
 use worktree::ManagedDirBinding;
@@ -18,7 +17,6 @@ use worktree::ManagedDirOwner;
 use worktree::ManagedDirProvisionRequest;
 use worktree::ManagedDirSource;
 use worktree::ManagedDirTarget;
-use worktree::ManagedRepositoryBinding;
 
 #[cfg(test)]
 #[path = "thread_dir_binding_tests.rs"]
@@ -211,49 +209,6 @@ impl GitTurnChangesRuntime {
                     .map_err(|error| error.to_string())?;
             }
             Ok(())
-        })
-    }
-
-    pub(super) fn initial_baseline_paths(
-        &self,
-        binding: &ManagedDirBinding,
-        repository_binding: &ManagedRepositoryBinding,
-    ) -> Result<BTreeSet<PathBuf>, CoreError> {
-        if binding.kind() == ManagedDirKind::Directory {
-            return Ok(BTreeSet::new());
-        }
-        self.dirs.runtime.block_on(async {
-            let git = ash_git::GitClient::system();
-            let repository = git
-                .open_repository(repository_binding.worktree_root())
-                .await
-                .map_err(|error| CoreError::Journal(error.to_string()))?;
-            let target_tree = if repository_binding.target_unborn() {
-                git.empty_tree(&repository)
-                    .await
-                    .map_err(|error| CoreError::Journal(error.to_string()))?
-            } else {
-                git.resolve_tree(&repository, repository_binding.target_head())
-                    .await
-                    .map_err(|error| CoreError::Journal(error.to_string()))?
-            };
-            let baseline_tree =
-                ash_git::GitTreeId::new(repository_binding.baseline_tree().to_string())
-                    .map_err(|error| CoreError::Journal(error.to_string()))?;
-            let changes = git
-                .diff_trees(&repository, &target_tree, &baseline_tree)
-                .await
-                .map_err(|error| CoreError::Journal(error.to_string()))?;
-            Ok(changes
-                .into_iter()
-                .flat_map(|change| {
-                    [
-                        Some(change.path().to_path_buf()),
-                        change.previous_path().map(PathBuf::from),
-                    ]
-                })
-                .flatten()
-                .collect())
         })
     }
 

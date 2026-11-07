@@ -61,13 +61,24 @@ export abstract class AbstractToolConfirmationSubPart extends Disposable {
 			this.addDecision(actions, label, 'approveOnce', 'primary');
 		}
 		for (const choice of decisions) {
-			if (choice !== 'approveForSession' && choice !== 'approveAndSaveRule') {
-				continue;
+			switch (choice) {
+				case 'approveForSession':
+					this.addDecision(actions, localize('chat.approval.approveForSession', 'Approve same action this session'), choice);
+					break;
+				case 'approveFileWriteForSession':
+					this.addDecision(actions, localize('chat.approval.approveFileWriteForSession', 'Allow edits to this file this session'), choice);
+					break;
+				case 'approveCommandPrefixForSession':
+					if (request.sessionCommandPrefix) {
+						const prefix = request.sessionCommandPrefix;
+						const command = [prefix.program, ...prefix.arguments].join(' ');
+						this.addDecision(actions, localize('chat.approval.approveCommandPrefixForSession', 'Allow the {0} prefix this session', command), choice);
+					}
+					break;
+				case 'approveAndSaveRule':
+					this.addDecision(actions, localize('chat.approval.saveRule', 'Save approval for this exact action'), choice);
+					break;
 			}
-			const label = choice === 'approveForSession'
-				? localize('chat.approval.approveForSession', 'Approve same action this session')
-				: localize('chat.approval.saveRule', 'Save approval for this exact action');
-			this.addDecision(actions, label, choice);
 		}
 		this.domNode.append(content, capabilities, actions);
 	}

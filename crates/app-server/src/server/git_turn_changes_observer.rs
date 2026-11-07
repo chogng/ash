@@ -13,7 +13,7 @@ use core_api::TurnToolExecutionFinished;
 use core_api::TurnToolExecutionStarted;
 use git_turn_changes::{
     MessageState, RepositoryCaptureTarget, TerminalTurnState, ToolChangeScope,
-    TurnChangeBeginRequest, TurnChangeSealRequest,
+    TurnChangeBeginRequest, TurnChangeLedgerError, TurnChangeSealRequest,
 };
 use std::collections::BTreeSet;
 use std::path::{Component, Path, PathBuf};
@@ -82,13 +82,8 @@ impl TurnExecutionObserver for GitTurnChangesRuntime {
         let mut repository_ids = BTreeSet::new();
         let repositories = roots
             .iter()
-            .flat_map(|root| {
-                root.binding
-                    .repositories()
-                    .iter()
-                    .map(move |repository| (root, repository))
-            })
-            .map(|(root, repository)| {
+            .flat_map(|root| root.binding.repositories())
+            .map(|repository| {
                 if !repository_ids.insert(repository.repository_id().to_string()) {
                     return Err(CoreError::Journal(format!(
                         "execution roots repeat repository {}",
@@ -101,8 +96,7 @@ impl TurnExecutionObserver for GitTurnChangesRuntime {
                     target_branch: repository.target_branch().map(ToOwned::to_owned),
                     base_object_id: (!repository.target_unborn())
                         .then(|| repository.target_head().to_string()),
-                    baseline_dependency_paths: self
-                        .initial_baseline_paths(&root.binding, repository)?,
+                    baseline_tree: repository.baseline_tree().to_owned(),
                 })
             })
             .collect::<Result<Vec<_>, CoreError>>()?;
@@ -119,6 +113,9 @@ impl TurnExecutionObserver for GitTurnChangesRuntime {
             ),
         }) {
             Ok(records) => records,
+            Err(TurnChangeLedgerError::Baseline(error)) => {
+                return Err(CoreError::Journal(error.to_string()));
+            }
             Err(error)
                 if !matches!(
                     event.kind,

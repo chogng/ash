@@ -4,11 +4,13 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use ash_action_policy::ActionReviewRequest;
+use ash_action_policy::FileWriteReview;
 use ash_async_utils::CancellationToken;
 use ash_core::ToolAuthorization;
 use ash_core::ToolExecutionFacts;
 use ash_core::ToolOutputSink;
 use ash_file_access::Authorization;
+use ash_protocol::ActionDigest;
 use ash_protocol::ContentPart;
 use ash_protocol::ReviewEvidence;
 use ash_protocol::ToolCall;
@@ -183,6 +185,7 @@ impl ToolExecutorRuntime {
             identity.session_id(),
             identity.thread_id(),
             identity.turn_id(),
+            facts.reviewed_action(),
             None,
             sink,
         )
@@ -209,6 +212,7 @@ impl ToolExecutorRuntime {
             identity.session_id(),
             identity.thread_id(),
             identity.turn_id(),
+            facts.reviewed_action(),
             Some(interactions),
             sink,
         )
@@ -223,6 +227,7 @@ impl ToolExecutorRuntime {
         session_id: &ash_protocol::SessionId,
         thread_id: &ash_protocol::ThreadId,
         turn_id: &TurnId,
+        admitted: Option<(&ActionDigest, Option<&FileWriteReview>)>,
         interactions: Option<Arc<dyn ash_core::ToolInteractionService>>,
         sink: &mut dyn ToolOutputSink,
     ) -> Result<ToolExecutionOutput, CoreError> {
@@ -247,6 +252,15 @@ impl ToolExecutorRuntime {
                 prepared.sandbox_scope.clone(),
             )
         };
+        let matches = admitted.map_or_else(
+            || review.file_write().is_none() && review.shell().is_none(),
+            |(digest, write)| digest == review.action().digest() && write == review.file_write(),
+        );
+        if !matches {
+            return Err(CoreError::Policy(
+                "prepared tool payload does not match the reviewed action".into(),
+            ));
+        }
         for authorization in &dir_authorizations {
             if authorization.dir().env() != &self.environment_id {
                 self.prepared

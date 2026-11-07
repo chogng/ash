@@ -682,7 +682,7 @@ export interface ActionApprovalCapability {
 	readonly scope: string;
 }
 
-export type ActionApprovalDecision = 'approveOnce' | 'approveForSession' | 'approveAndSaveRule' | 'decline';
+export type ActionApprovalDecision = 'approveOnce' | 'approveForSession' | 'approveFileWriteForSession' | 'approveCommandPrefixForSession' | 'approveAndSaveRule' | 'decline';
 
 export interface ActionApprovalRiskAssessment {
 	readonly riskLevel: 'low' | 'medium' | 'high' | 'critical';
@@ -693,6 +693,7 @@ export interface ActionApprovalRequest {
 	readonly riskAssessment?: ActionApprovalRiskAssessment | null;
 	readonly allowedDecisions?: readonly ActionApprovalDecision[];
 	readonly command?: { readonly program: string; readonly arguments: readonly string[]; } | null;
+	readonly sessionCommandPrefix?: { readonly program: string; readonly arguments: readonly string[]; } | null;
 	/** Captured sandbox enforcement evidence; an ordinary failed command is not a denial. */
 	readonly sandboxDenial?: {
 		readonly reason: string;

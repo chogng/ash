@@ -591,7 +591,7 @@ fn dto_driven_typescript_preserves_model_ref_and_patch_shape() {
     assert!(typescript.contains("approvalReviewModel: ApprovalReviewModelSelection"));
     assert!(typescript.contains("approvalReviewModel?: ApprovalReviewModelSelection | null"));
     assert!(
-        typescript.contains("export type ActionApprovalDecision = \"approveOnce\" | \"approveForSession\" | \"approveAndSaveRule\" | \"decline\"")
+        typescript.contains("export type ActionApprovalDecision = \"approveOnce\" | \"approveForSession\" | \"approveFileWriteForSession\" | \"approveCommandPrefixForSession\" | \"approveAndSaveRule\" | \"decline\"")
     );
     assert!(typescript.contains("{ \"type\": \"approval\", request: ActionApprovalRequest, }"));
     assert!(typescript.contains("{ \"type\": \"approval\", response: ActionApprovalResponse, }"));

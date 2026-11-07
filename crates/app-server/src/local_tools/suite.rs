@@ -4,6 +4,7 @@ use super::read_only_sandbox;
 use crate::dir_grants::CommandAuthorization;
 use crate::dir_grants::DirGrants;
 use ash_action_policy::ActionReviewRequest;
+use ash_action_policy::FileWriteReview;
 use ash_action_policy::ResolvedAction;
 use ash_action_policy::SandboxCompatibility;
 use ash_async_utils::CancellationToken;
@@ -13,6 +14,7 @@ use ash_core::ToolOutputSink;
 use ash_core::ToolService;
 use ash_file_access::Authorization;
 use ash_file_access::Dir;
+use ash_file_access::PathAccessPolicy;
 use ash_file_access::Permission as DirPermission;
 use ash_file_system::FileTextDocuments;
 use ash_file_system::TextFileFormat;
@@ -47,6 +49,7 @@ use serde_json::Value;
 use serde_json::json;
 use sha2::Digest;
 use sha2::Sha256;
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -238,6 +241,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
         session: Option<&SessionId>,
         thread: Option<&ThreadId>,
         editor: Option<Arc<dyn TextDocumentEditor>>,
+        reviewed: Option<&FileWriteReview>,
         cancellation: &CancellationToken,
     ) -> Result<ToolExecutionOutput, CoreError> {
         cancellation
@@ -245,7 +249,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         let path = string_arg(&call.arguments, "path")?;
         let reading = call.name.as_str() == "read_file";
-        let resolved = self
+        let mut resolved = self
             .resolve(
                 &path,
                 false,
@@ -258,6 +262,23 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 },
             )
             .map_err(CoreError::Execution)?;
+        if !reading {
+            let relative = resolved
+                .absolute
+                .strip_prefix(resolved.root.canonical_path())
+                .map_err(|error| CoreError::Policy(error.to_string()))?;
+            if reviewed.is_some_and(|review| {
+                review.directory_id != resolved.root.id().to_string()
+                    || review.targets.as_slice() != std::slice::from_ref(&resolved.absolute)
+            }) {
+                return Err(CoreError::Policy(
+                    "file write target changed after approval".into(),
+                ));
+            }
+            let scope =
+                PathAccessPolicy::for_exact_writes([relative]).map_err(CoreError::Policy)?;
+            resolved.authorization = resolved.authorization.constrained_by(&scope);
+        }
         let editor: Arc<dyn TextDocumentEditor> = match editor {
             Some(editor) => editor,
             None => Arc::new(FileTextDocuments::new(resolved.root.clone())),
@@ -687,7 +708,7 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             ));
         }
         let capabilities = CapabilitySet::new(capabilities);
-        Ok(ActionReviewRequest::new(
+        let review = ActionReviewRequest::new(
             ResolvedAction::new(
                 ActionDigest::from_canonical_bytes(canonical),
                 if write {
@@ -707,7 +728,20 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
                 SandboxCompatibility::Supported(read_only_sandbox())
             },
             self.shell.action_policy_revision.clone(),
-        ))
+        );
+        Ok(if write {
+            let protected = super::is_protected_write_path(
+                &resolved.root.requested_path().join(&resolved.relative),
+            ) || super::is_protected_write_path(Path::new(path))
+                || super::is_protected_write_path(&resolved.absolute);
+            review.with_file_write(FileWriteReview {
+                directory_id: resolved.root.id().to_string(),
+                targets: vec![resolved.absolute],
+                protected,
+            })
+        } else {
+            review
+        })
     }
 
     fn grep(
@@ -1316,35 +1350,42 @@ impl<B: ash_sandboxing::SandboxBackend> ToolService for LocalToolSuite<B> {
             call.name.as_str(),
             "read_file" | "write_file" | "edit" | "grep"
         ) {
-            if let Some(provider) = &self.documents {
-                let editor = provider
-                    .for_turn(identity.thread_id(), identity.turn_id())
-                    .map_err(|error| CoreError::Execution(error.to_string()))?;
-                if let Some(editor) = editor {
-                    let output = if call.name.as_str() == "grep" {
-                        self.grep(
-                            call,
-                            cancellation,
-                            Some(session_id),
-                            Some(identity.thread_id()),
-                            Some(editor.as_ref()),
-                        )?
-                    } else {
-                        self.execute_document_tool(
-                            call,
-                            &scope,
-                            Some(session_id),
-                            Some(identity.thread_id()),
-                            Some(editor),
-                            cancellation,
-                        )?
-                    };
-                    if let ToolExecutionOutput::Success(text) = &output {
-                        sink.emit(ToolOutputStream::Stdout, text.clone())?;
-                    }
-                    return Ok(output);
+            let editor = self
+                .documents
+                .as_ref()
+                .map(|provider| provider.for_turn(identity.thread_id(), identity.turn_id()))
+                .transpose()
+                .map_err(|error| CoreError::Execution(error.to_string()))?
+                .flatten();
+            let output = if call.name.as_str() == "grep" {
+                self.grep(
+                    call,
+                    cancellation,
+                    Some(session_id),
+                    Some(identity.thread_id()),
+                    editor.as_deref(),
+                )?
+            } else {
+                let reviewed = facts.reviewed_action().and_then(|(_, write)| write);
+                if call.name.as_str() != "read_file" && reviewed.is_none() {
+                    return Err(CoreError::Policy(
+                        "file write requires a reviewed target".into(),
+                    ));
                 }
+                self.execute_document_tool(
+                    call,
+                    &scope,
+                    Some(session_id),
+                    Some(identity.thread_id()),
+                    editor,
+                    reviewed,
+                    cancellation,
+                )?
+            };
+            if let ToolExecutionOutput::Success(text) = &output {
+                sink.emit(ToolOutputStream::Stdout, text.clone())?;
             }
+            return Ok(output);
         }
         let output = self.execute_scoped(
             call,
@@ -1506,9 +1547,15 @@ impl<B: ash_sandboxing::SandboxBackend> LocalToolSuite<B> {
             .check()
             .map_err(|signal| CoreError::Cancelled(signal.reason().to_string()))?;
         match call.name.as_str() {
-            "read_file" | "write_file" | "edit" => {
-                self.execute_document_tool(call, scope, session_id, thread_id, None, cancellation)
-            }
+            "read_file" | "write_file" | "edit" => self.execute_document_tool(
+                call,
+                scope,
+                session_id,
+                thread_id,
+                None,
+                None,
+                cancellation,
+            ),
             "grep" => self.grep(call, cancellation, session_id, thread_id, None),
             "glob" => self.glob(call, cancellation, session_id, thread_id),
             _ => Ok(ToolExecutionOutput::Failure(format!(

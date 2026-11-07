@@ -348,6 +348,8 @@ impl ToolScheduler {
                     }
                     ActionApprovalDecision::ApproveOnce
                     | ActionApprovalDecision::ApproveForSession
+                    | ActionApprovalDecision::ApproveFileWriteForSession
+                    | ActionApprovalDecision::ApproveCommandPrefixForSession
                     | ActionApprovalDecision::ApproveAndSaveRule => {
                         let Some(reviewed) = self.prepare_review_or_record_failure(
                             &snapshot,
@@ -662,6 +664,13 @@ impl ToolScheduler {
                     }
                     let mut request = durable_approval_request(&reviewed, &approval)?;
                     request.allowed_decisions = self.policy.approval_decisions(&reviewed);
+                    if request
+                        .allowed_decisions
+                        .contains(&ActionApprovalDecision::ApproveCommandPrefixForSession)
+                    {
+                        request.session_command_prefix =
+                            crate::approval_request::session_command_prefix(&reviewed);
+                    }
                     self.threads.request_turn_interaction(
                         thread_id,
                         turn_id,

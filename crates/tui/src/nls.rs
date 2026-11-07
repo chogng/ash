@@ -1503,6 +1503,24 @@ const UI_TRANSLATIONS: &[Translation] = &[
         "Autoriser la même action dans cette session",
     ),
     translation(
+        "Allow edits to this file this session",
+        "このセッションでこのファイルの編集を許可",
+        "本会话内允许编辑此文件",
+        "Autoriser les modifications de ce fichier dans cette session",
+    ),
+    translation(
+        "Allow this command prefix this session",
+        "このセッションでこのコマンドの接頭辞を許可",
+        "本会话内允许此命令前缀",
+        "Autoriser ce préfixe de commande dans cette session",
+    ),
+    translation(
+        "Command prefix  ·  {0}",
+        "コマンドの接頭辞  ·  {0}",
+        "命令前缀  ·  {0}",
+        "Préfixe de commande  ·  {0}",
+    ),
+    translation(
         "Save approval for this exact action",
         "この正確な操作の承認を保存",
         "保存此精确操作的批准",
