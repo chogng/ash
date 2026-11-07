@@ -22,9 +22,9 @@ import { IChatWidgetService } from '../../../chat/browser/chat.js';
 import {
 	ChatContextPickService, IChatContextPickService, type IChatContextPickerItem, isChatContextPickerPickItem,
 } from '../../../chat/browser/attachments/chatContextPickService.js';
+import { isCanvasOwner, type ICanvasOwner, type ICanvasReference } from '../../../../common/canvasReference.js';
 import {
-	ICanvasContextService, ICanvasService, type ICanvasContext, type ICanvasDefinition,
-	type ICanvasOwner, type ICanvasReference, type ICanvasReopenTarget, isCanvasOwner,
+	ICanvasContextService, ICanvasService, type ICanvasContext, type ICanvasDefinition, type ICanvasReopenTarget,
 } from '../../common/canvas.js';
 import { registerEditorCanvasActions } from '../../browser/editorCanvasActions.js';
 import { registerCanvasContextPicker } from '../../browser/canvasContextPicker.js';

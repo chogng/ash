@@ -18,7 +18,8 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { ILogService } from '../../../../platform/log/common/log.js';
 import type { IBrowserViewModel } from '../../browserView/common/browserView.js';
 import { WebContentsViewHost } from '../../browserView/electron-browser/webContentsViewHost.js';
-import { ICanvasContextService, ICanvasService, type ICanvas, type ICanvasReference } from '../common/canvas.js';
+import type { ICanvas, ICanvasReference } from '../../../common/canvasReference.js';
+import { ICanvasContextService, ICanvasService } from '../common/canvas.js';
 
 export const SessionCanvasFocusedContext = new RawContextKey<boolean>('sessionCanvasFocused', false);
 

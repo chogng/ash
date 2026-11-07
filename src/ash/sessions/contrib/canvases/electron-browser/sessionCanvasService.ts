@@ -5,16 +5,15 @@ import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSe
 import { CanvasesEnabledSettingId } from '../../../../platform/agentHost/common/agentService.js';
 import { IEditorPart } from '../../../../workbench/browser/parts/editor/editorPart.js';
 import type { IEditorGroup } from '../../../../workbench/services/editor/common/editorGroupsService.js';
-import type { ICanvasOwner, ICanvasReference, CanvasInput } from '../../../../workbench/contrib/canvases/common/canvas.js';
+import { canvasOwnerKey, isCanvasOwner, type ICanvasOwner, type ICanvasReference } from '../../../../workbench/common/canvasReference.js';
+import type { CanvasInput } from '../../../../workbench/contrib/canvases/common/canvas.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 import { autorun, derived, observableSignalFromEvent, observableValue, type IReader } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
-import { isCanvasOwner } from '../../../../workbench/contrib/canvases/common/canvas.js';
 import { IAgentHostCanvasCollection } from '../../../../workbench/contrib/canvases/common/agentHostCanvas.js';
 import { ISessionsLayoutService } from '../../../services/layout/common/sessionsLayoutService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { Event } from '../../../../base/common/event.js';
-import { canvasOwnerKey } from '../../../../workbench/contrib/canvases/common/canvas.js';
 import { SESSIONS_LAYOUT_SCOPE_SETTING, type ChatLayoutMode } from '../../../common/chatLayout.js';
 import { ICanvasContextService, ICanvasService, getCanvasDefinitionInstanceId, type ICanvasDefinition } from '../../../../workbench/contrib/canvases/common/canvas.js';
 import { CanvasDefinitionStore } from '../../../../workbench/contrib/canvases/common/canvasDefinitionStore.js';
@@ -134,6 +133,10 @@ export class SessionCanvasRegistryService extends Disposable implements ISession
 			return context?.definitionProvider ? { owner: context.owner, listCanvases: () => context.definitionProvider!.listCanvases() } : undefined;
 		}, 'Session Canvas registry'));
 		this.availableCanvases = store.definitions;
+	}
+
+	getActiveOwner(): ICanvasOwner | undefined {
+		return this.current.get()?.owner;
 	}
 
 	async openCanvas(canvas: ICanvasDefinition): Promise<void> {

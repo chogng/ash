@@ -23,7 +23,8 @@ import { IThemeService } from '../../../../../platform/theme/common/themeService
 import { DialogsModel, IDialogsModel } from '../../../../common/dialogs.js';
 import { IEditorGroupsService } from '../../../../services/editor/common/editorGroupsService.js';
 import { BrowserViewModel } from '../../../browserView/common/browserView.js';
-import { CanvasInput, ICanvasContextService, ICanvasService, type ICanvas, type ICanvasReference, type ICanvasModelResolution } from '../../common/canvas.js';
+import type { ICanvas, ICanvasReference } from '../../../../common/canvasReference.js';
+import { CanvasInput, ICanvasContextService, ICanvasService, type ICanvasModelResolution } from '../../common/canvas.js';
 import { CanvasEditor } from '../../electron-browser/canvasEditor.js';
 import { CanvasView, getFocusedCanvasView, type ICanvasViewInput } from '../../electron-browser/canvasView.js';
 

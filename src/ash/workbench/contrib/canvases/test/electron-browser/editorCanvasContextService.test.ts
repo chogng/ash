@@ -12,7 +12,7 @@ import type { IConfigurationService } from '../../../../../platform/configuratio
 import type { IAgentSessionService } from '../../../../../platform/agentHost/common/agentService.js';
 import type { SessionCatalogReadResult } from '../../../../../platform/agentHost/common/agent.js';
 import type { IAgentHostCanvasCollection } from '../../common/agentHostCanvas.js';
-import type { ICanvasOwner } from '../../common/canvas.js';
+import type { ICanvasOwner } from '../../../../common/canvasReference.js';
 import { EditorCanvasContextService } from '../../electron-browser/editorCanvasContextService.js';
 
 suite('IDE Canvas conversation contexts', () => {

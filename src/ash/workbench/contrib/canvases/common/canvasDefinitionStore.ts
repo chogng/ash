@@ -2,7 +2,10 @@ import { isCancellationError } from '../../../../base/common/errors.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { autorun, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { canvasOwnerKey, compareCanvasDefinitions, isOpenableExtensionCanvasDefinition, type CanvasDefinitionSnapshot, type ICanvasDefinition, type ICanvasOwner } from './canvas.js';
+import { canvasOwnerKey, type ICanvasOwner } from '../../../common/canvasReference.js';
+import {
+	compareCanvasDefinitions, isOpenableExtensionCanvasDefinition, type CanvasDefinitionSnapshot, type ICanvasDefinition,
+} from './canvas.js';
 
 export interface ICanvasDefinitionSource {
 	readonly owner: ICanvasOwner;

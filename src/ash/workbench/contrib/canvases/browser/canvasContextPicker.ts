@@ -2,9 +2,10 @@ import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { autorun, derived, observableSignalFromEvent, type IReader } from '../../../../base/common/observable.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { isCanvasOwner, type ICanvasOwner } from '../../../common/canvasReference.js';
 import {
-	ICanvasContextService, ICanvasService, getCanvasDefinitionInstanceId, getCanvasDefinitionLabels,
-	getCanvasInstanceLabels, isCanvasOwner, isOpenableExtensionCanvasDefinition, type ICanvasOwner,
+	ICanvasContextService, ICanvasService, getCanvasDefinitionInstanceId, getCanvasDefinitionLabels, getCanvasInstanceLabels,
+	getPresentableCanvasTargets, isOpenableExtensionCanvasDefinition,
 } from '../common/canvas.js';
 import { CanvasDefinitionStore } from '../common/canvasDefinitionStore.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
@@ -67,18 +68,21 @@ export function registerCanvasContextPicker(accessor: ServicesAccessor) {
 }
 
 /** Selecting a Canvas runs its action without changing the composer's attachment model. */
-export async function showCanvasContextPicker(accessor: ServicesAccessor, owner?: ICanvasOwner): Promise<void> {
+export async function showCanvasContextPicker(accessor: ServicesAccessor, getActiveOwner?: () => ICanvasOwner | undefined): Promise<void> {
 	const contexts = accessor.get(ICanvasContextService);
 	const canvases = accessor.get(ICanvasService);
-	const navigation = accessor.get(IChatSessionNavigationService);
-	const active = navigation.getActiveConversation();
-	const candidates = contexts.contexts.get().filter(context => contexts.isOwnerVisible(context.owner));
-	const context = candidates.find(context => owner ? isCanvasOwner(context.owner, owner) : active?.sessionId === context.owner.session.path.slice(1) && active.threadId === context.owner.chat.path.slice(1));
-	if (!context || !canvases.enabled.get()) { return; }
-	const isCurrent = () => {
-		const selected = navigation.getActiveConversation();
-		return contexts.isOwnerVisible(context.owner) && (owner !== undefined || selected?.sessionId === context.owner.session.path.slice(1) && selected.threadId === context.owner.chat.path.slice(1));
+	const navigation = getActiveOwner ? undefined : accessor.get(IChatSessionNavigationService);
+	const isSelected = (candidate: ICanvasOwner): boolean => {
+		if (getActiveOwner) {
+			const owner = getActiveOwner();
+			return !!owner && isCanvasOwner(candidate, owner);
+		}
+		const active = navigation?.getActiveConversation();
+		return active?.sessionId === candidate.session.path.slice(1) && active.threadId === candidate.chat.path.slice(1);
 	};
+	const context = contexts.contexts.get().find(context => contexts.isOwnerVisible(context.owner) && isSelected(context.owner));
+	if (!context || !canvases.enabled.get()) { return; }
+	const isCurrent = () => contexts.isOwnerVisible(context.owner) && isSelected(context.owner);
 	using resources = new DisposableStore();
 	const invalidated = observableSignalFromEvent(resources, Event.any(contexts.onDidChangeVisibility, context.definitionProvider?.onDidChangeDefinitions ?? Event.None));
 	const store = resources.add(accessor.get(IInstantiationService).createInstance(CanvasDefinitionStore, (reader: IReader) => {
@@ -93,11 +97,19 @@ export async function showCanvasContextPicker(accessor: ServicesAccessor, owner?
 		contexts.contexts.read(reader);
 		if (!canvases.enabled.read(reader) || !isCurrent()) { picker.hide(); return; }
 		const live = context.canvases.read(reader)?.filter(canvas => canvas.source !== undefined) ?? [];
+		const targets = getPresentableCanvasTargets(canvases, context.owner, live, reader);
+		// A live Canvas may already be shown in a fixed page. Its definition still represents that same instance.
 		const definitions = store.definitions.read(reader).filter(definition => !live.some(canvas => canvas.instanceId === getCanvasDefinitionInstanceId(definition)));
 		const definitionLabels = getCanvasDefinitionLabels(definitions);
-		const liveLabels = getCanvasInstanceLabels(live);
+		const liveLabels = getCanvasInstanceLabels(targets.map(target => target.canvas));
 		picker.items = [
-			...live.map((canvas, index) => ({ label: liveLabels[index]!, description: canvas.status ?? canvas.instanceId, run: () => canvases.revealCanvas({ ...context.owner, canvas: canvas.resource }) })),
+			...targets.map(({ canvas, reference }, index) => ({
+				label: liveLabels[index]!,
+				description: canvas.status ?? canvas.instanceId,
+				run: async () => {
+					if (canvases.isOwnerPresentable(reference)) { await canvases.revealCanvas(reference); }
+				},
+			})),
 			...definitions.map((definition, index) => ({ label: definitionLabels[index]!, description: definition.extensionName ?? definition.extensionId, detail: definition.description, run: () => context.definitionProvider!.openCanvas(definition, getCanvasDefinitionInstanceId(definition)) })),
 		];
 	}));

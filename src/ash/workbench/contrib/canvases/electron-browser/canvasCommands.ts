@@ -1,7 +1,8 @@
 import { URI } from '../../../../base/common/uri.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
-import { ICanvasService, REVEAL_CANVAS_COMMAND_ID, type ICanvasReference } from '../common/canvas.js';
+import type { ICanvasReference } from '../../../common/canvasReference.js';
+import { ICanvasService, REVEAL_CANVAS_COMMAND_ID } from '../common/canvas.js';
 
 export function registerCanvasCommands(): IDisposable {
 	return CommandsRegistry.register(REVEAL_CANVAS_COMMAND_ID, (accessor, value: unknown) => {

@@ -1,6 +1,6 @@
 import './media/pinnedCanvasPage.css';
 import { h } from '../../../../base/browser/dom.js';
-import { getCanvasReferenceKey } from '../../../../workbench/contrib/canvases/common/canvas.js';
+import { getCanvasReferenceKey } from '../../../../workbench/common/canvasReference.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { autorun, constObservable, derived } from '../../../../base/common/observable.js';
 import { localize } from '../../../../nls.js';

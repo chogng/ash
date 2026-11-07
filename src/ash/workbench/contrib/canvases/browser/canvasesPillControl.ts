@@ -8,7 +8,8 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { ICanvasService, getCanvasInstanceLabels, getCanvasReferenceKey, type ICanvas, type ICanvasContext } from '../common/canvas.js';
+import { getCanvasReferenceKey, type ICanvas } from '../../../common/canvasReference.js';
+import { ICanvasService, getCanvasInstanceLabels, type ICanvasContext } from '../common/canvas.js';
 
 interface CanvasRow {
 	readonly element: HTMLElement;

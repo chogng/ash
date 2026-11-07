@@ -9,7 +9,8 @@ import { BrowserViewStorageScope, IBrowserViewService, normalizeBrowserViewUrl, 
 import { IExtensionService } from '../../../services/extensions/common/extensionService.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { localize } from '../../../../nls.js';
-import { canvasOwnerKey, type ICanvas, type ICanvasContext, type ICanvasDefinition, type ICanvasOpenRequest, type ICanvasOwner } from './canvas.js';
+import { canvasOwnerKey, type ICanvas, type ICanvasOwner } from '../../../common/canvasReference.js';
+import type { ICanvasContext, ICanvasDefinition, ICanvasOpenRequest } from './canvas.js';
 import type { IAgentCanvasHost, IAgentCanvasOpenRequest } from '../../../../platform/agentHost/common/agentService.js';
 
 export interface ICanvasProvider {

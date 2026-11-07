@@ -10,7 +10,8 @@ import { IChatService } from '../../../services/chat/common/chatService.js';
 import { Direction } from '../../../../base/browser/ui/grid/grid.js';
 import { IEditorPart } from '../../../browser/parts/editor/editorPart.js';
 import { IChatWidgetService } from '../../chat/browser/chat.js';
-import { canvasOwnerKey, isCanvasOwner, type ICanvasContextService, type ICanvasOwner, type CanvasInput } from '../common/canvas.js';
+import { canvasOwnerKey, isCanvasOwner, type ICanvasOwner } from '../../../common/canvasReference.js';
+import type { ICanvasContextService, CanvasInput } from '../common/canvas.js';
 import type { IEditorGroup } from '../../../services/editor/common/editorGroupsService.js';
 
 /** Both products register their visible conversations in the same window-scoped registry. */

@@ -17,7 +17,7 @@ import type { INotificationService } from '../../../../../platform/notification/
 import { CanvasesEnabledSettingId } from '../../../../../platform/agentHost/common/agentService.js';
 import { BrowserStorageService } from '../../../../../workbench/services/storage/browser/storageService.js';
 import type { IAgentHostCanvasCollection } from '../../../../../workbench/contrib/canvases/common/agentHostCanvas.js';
-import type { ICanvas, ICanvasOwner, ICanvasReference } from '../../../../../workbench/contrib/canvases/common/canvas.js';
+import type { ICanvas, ICanvasOwner, ICanvasReference } from '../../../../../workbench/common/canvasReference.js';
 import type { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import type { ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import type { ISession } from '../../../../services/sessions/common/session.js';

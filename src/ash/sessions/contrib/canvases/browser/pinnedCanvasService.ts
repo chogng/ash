@@ -14,7 +14,7 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import { IAgentHostCanvasCollection } from '../../../../workbench/contrib/canvases/common/agentHostCanvas.js';
-import { getCanvasReferenceKey, type ICanvas, type ICanvasReference } from '../../../../workbench/contrib/canvases/common/canvas.js';
+import { getCanvasReferenceKey, type ICanvas, type ICanvasReference } from '../../../../workbench/common/canvasReference.js';
 import { ICustomViewService } from '../../../services/customView/browser/customViewService.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
 import { IPinnedCanvasService, MAX_PINNED_CANVASES, PINNED_CANVAS_PAGE_ID, PinnedCanvasState, type IPinnedCanvas, type IPinnedCanvasIdentity, type PinnedCanvasTarget } from './pinnedCanvases.js';

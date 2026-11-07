@@ -2,9 +2,13 @@ import { DisposableMap, DisposableStore, MutableDisposable, type IDisposable } f
 import { autorun } from '../../../../base/common/observable.js';
 import { CommandsRegistry } from '../../../../platform/commands/common/commands.js';
 import { MenusRegistry } from '../../../../platform/actions/common/actions.js';
+import type { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize, localize2 } from '../../../../nls.js';
-import { getCanvasDefinitionInstanceId, getCanvasDefinitionLabels, getCanvasInstanceLabels, getCanvasReferenceKey, type ICanvasService, type ICanvasContextService } from '../../../../workbench/contrib/canvases/common/canvas.js';
+import { getCanvasReferenceKey } from '../../../../workbench/common/canvasReference.js';
+import {
+	getCanvasDefinitionInstanceId, getCanvasDefinitionLabels, getCanvasInstanceLabels, getPresentableCanvasTargets, type ICanvasService, type ICanvasContextService,
+} from '../../../../workbench/contrib/canvases/common/canvas.js';
 import { showCanvasContextPicker } from '../../../../workbench/contrib/canvases/browser/canvasContextPicker.js';
 import type { ISessionCanvasRegistryService } from '../common/sessionCanvas.js';
 import { Menus } from '../../../browser/menus.js';
@@ -19,11 +23,14 @@ export function registerSessionCanvasActions(canvases: ICanvasService, registry:
 	const activity = lifetime.add(new MutableDisposable());
 	const commands = lifetime.add(new DisposableMap<string, IDisposable>());
 	let menuIdentity = '';
+	// The Sessions selection remains active beneath a pinned page, even when Chat navigation has no active conversation.
+	const pickCanvas = (accessor: ServicesAccessor) => showCanvasContextPicker(accessor, () => registry.getActiveOwner());
 	lifetime.add(CommandsRegistry.register(OPEN_SESSION_CANVAS_COMMAND_ID, accessor => {
-		const live = contexts.contexts.get().filter(context => contexts.isOwnerVisible(context.owner)).flatMap(context => context.canvases.get()?.filter(canvas => canvas.source).map(canvas => ({ reference: { ...context.owner, canvas: canvas.resource }, canvas })) ?? []);
-		return live.length === 1 ? canvases.revealCanvas(live[0]!.reference) : showCanvasContextPicker(accessor);
+		const live = contexts.contexts.get().filter(context => contexts.isOwnerVisible(context.owner))
+			.flatMap(context => getPresentableCanvasTargets(canvases, context.owner, context.canvases.get() ?? []));
+		return live.length === 1 ? canvases.revealCanvas(live[0]!.reference) : pickCanvas(accessor);
 	}));
-	lifetime.add(CommandsRegistry.register(REOPEN_SESSION_CANVAS_COMMAND_ID, accessor => showCanvasContextPicker(accessor)));
+	lifetime.add(CommandsRegistry.register(REOPEN_SESSION_CANVAS_COMMAND_ID, pickCanvas));
 	lifetime.add(autorun(reader => {
 		const enabled = canvases.enabled.read(reader);
 		const definitions = enabled ? registry.availableCanvases.read(reader) : [];

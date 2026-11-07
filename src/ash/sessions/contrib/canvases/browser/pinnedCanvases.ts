@@ -1,7 +1,7 @@
 import type { IObservable, IReader } from '../../../../base/common/observable.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type { ICanvas, ICanvasReference } from '../../../../workbench/contrib/canvases/common/canvas.js';
+import type { ICanvas, ICanvasReference } from '../../../../workbench/common/canvasReference.js';
 
 export const PINNED_CANVAS_PAGE_ID = 'sessions.customView.canvas';
 export const MAX_PINNED_CANVASES = 5;
