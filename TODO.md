@@ -8,6 +8,55 @@
 
 - [ ] **验收 · SSH 工作区信任** · 已通过本地桌面场景和远程路径的定向自动化测试。真实远程主机验收缺少可连接的 SSH 地址及允许创建临时目录的路径。取得这两项后，在隔离目录验证 SSH 工作区启动恢复、已有受限授权时重新提示并在确认后挂载，以及取消后目录未挂载。用远端目录绑定状态核对结果。
 
+## Desktop Chat · App Server 调试与采样
+
+- [ ] **macOS 实机验收** · 用同一个本地 Ash 桌面窗口和带调试符号的 Rust App Server 验证断点、分离和 CPU 调用栈。
+
+  1. 在 macOS 的 Terminal 中进入 Ash 仓库根目录。若缺少 Xcode Command Line Tools，先运行 `xcode-select --install`。若缺少 Samply，运行 `cargo install --locked samply`，再运行 `export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"`。从能找到 Samply 的同一个终端启动 Ash。逐条确认以下命令成功：
+
+     ```sh
+     node --version
+     pnpm --version
+     /usr/bin/lldb --version
+     samply --version
+     pnpm install --frozen-lockfile
+     pnpm prepare:backend
+     pnpm debug:backend
+     pnpm build
+     ASH_HOME="$PWD/.build/desktop/debug/profile" \
+       ASH_DEV_APP_SERVER_RELOAD=1 \
+       ASH_DEV_APP_SERVER_GENERATION="$PWD/.build/desktop/debug/app-server/current.json" \
+       pnpm start --backend-prepared --user-data-dir="$PWD/.build/desktop/debug/user-data"
+     ```
+
+  2. 在新启动的 Ash 窗口按 `F1`，运行「网络诊断」（`Network Diagnostics`），等报告打开，确认后端已就绪。另开一个 Terminal 标签页，在仓库根目录运行 `pnpm debug:backend:status`，记下 `pid` 和 `instanceId`。
+  3. 回到 Ash，运行「调试本地 App Server」（`Debug Local App Server`）。若 macOS 弹出控制 Terminal 或附加调试的授权提示，批准后继续。确认 Terminal 中的 LLDB 附加到刚才记录的 PID，然后在 LLDB 输入：
+
+     ```text
+     breakpoint set --file network.rs --line 85
+     breakpoint list
+     continue
+     ```
+
+     断点应解析到 `crates/app-server/src/server/request_processors/network.rs` 的 `network_targets`。如果行号随源码变动，改用该函数首个可执行语句的行号。回到 Ash 再运行一次「网络诊断」，看到 LLDB 因断点暂停后，在 LLDB 输入：
+
+     ```text
+     thread backtrace
+     process detach
+     quit
+     ```
+
+     保留包含 `network_targets` 和 `Process … detached` 的终端输出。确认暂停时发起的网络诊断在分离后打开新报告，再运行 `pnpm debug:backend:status`，核对 `pid` 和 `instanceId` 与附加前一致。
+
+  4. 在同一个 Ash 窗口运行「开始录制本地 App Server CPU 样本」（`Start Local App Server CPU Recording`）。等开始通知出现后，多跑几次「网络诊断」，每次等报告返回。运行「停止录制本地 App Server CPU 样本」（`Stop Local App Server CPU Recording`），在保存对话框中把报告保存为 `~/Downloads/ash-app-server-cpu.json`，然后运行：
+
+     ```sh
+     samply load "$HOME/Downloads/ash-app-server-cpu.json"
+     pnpm debug:backend:status
+     ```
+
+     `samply load` 运行期间，在打开的 Firefox Profiler 中选择刚才记录的 `ash-app-server` 进程及有样本的线程，检查 `Call Tree` 能展开多层调用栈并显示 Rust 函数名。查看完按 `Ctrl+C` 退出 `samply load`，再核对 `pid` 和 `instanceId`。断点、分离和采样均通过后，保留 LLDB 输出及 CPU JSON，再移除本条待办。
+
 ## Roadmap · Rust 运行时与 Node 退场
 
 最终目标是让 Rust 承担产品宿主、核心执行与基础设施，移除产品对 Node 运行时的依赖。迁移以实际调用链、打包依赖和进程退出为完成条件；把 Node 文件操作包成 Rust 原生模块、改目录名或另建一套平行业务后端，都不等于 Node 退场。浏览器 JavaScript／TypeScript 与 Node 是不同运行时：界面可以继续使用浏览器能力，Rust 可逐步进入前端计算与渲染流程，不要求先整体重写 UI。

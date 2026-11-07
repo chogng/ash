@@ -7,7 +7,7 @@ import { TerminalWindowLifetimeHost } from '../../platform/terminal/electron-mai
 import { parseJsonc } from '../../base/common/jsonc.js';
 import { parseDefaultLogLevels } from '../../workbench/services/log/common/defaultLogLevels.js';
 import { LogLevelToString } from '../../platform/log/common/log.js';
-import type { AppServerConnectionTarget } from '../../platform/agentHost/common/appServerTransport.js';
+import { LOCAL_APP_SERVER_DIAGNOSTICS_CHANNEL, LOCAL_APP_SERVER_RESTART_CHANNEL, type AppServerConnectionTarget, type LocalAppServerDiagnosticOperation } from '../../platform/agentHost/common/appServerTransport.js';
 import { RemoteAgentHostConnectionPool } from '../../platform/remote/electron-main/remoteConnectionIpc.js';
 import type { ImageViewMainService } from '../../platform/imageView/electron-main/imageViewMainService.js';
 import { IMAGE_VIEW_ATTACH_CHANNEL, IMAGE_VIEW_CANCEL_CHANNEL, IMAGE_VIEW_OPEN_CHANNEL, validateImageViewId, validateImageViewRequest, type ImageViewRequest } from '../../platform/imageView/common/imageView.js';
@@ -59,6 +59,7 @@ import { IClipboardService } from '../../platform/clipboard/common/clipboardServ
 import { AppServerConnectionRelay } from '../../platform/agentHost/electron-main/appServerConnectionRelay.js';
 import { DevelopmentAppServerReloader } from '../../platform/app-server-daemon/electron-main/developmentAppServerReloader.js';
 import { AppServerDaemonLauncher, createAppServerDaemonLauncher } from '../../platform/app-server-daemon/electron-main/appServerDaemonLauncher.js';
+import { AppServerProcessDiagnostics } from '../../platform/app-server-daemon/electron-main/appServerProcessDiagnostics.js';
 import { remoteExecutablePath } from '../../platform/remote/node/remotePackage.js';
 import { normalizeEntryUrl, TrustedIpcRouter, type IpcRoute } from '../../platform/ipc/electron-main/trustedIpcRouter.js';
 import { ipcBrowserViewChannelName } from '../../platform/browserView/common/browserView.js';
@@ -381,6 +382,8 @@ export class AshApplication extends Disposable {
 	private readonly logService = this._register(this.loggerService.createLogger('main'));
 	private readonly maintenance = this._register(new MutableDisposable<IDisposable>());
 	private closePersistentServicesPromise: Promise<void> | undefined;
+	private localAppServerRestart: Promise<void> | undefined;
+	private readonly appServerProcessDiagnostics = this._register(new AppServerProcessDiagnostics());
 	private quitRequested = false;
 	private quitAfterServicesClosed = false;
 	private quitAfterStateSaved = false;
@@ -1283,7 +1286,7 @@ export class AshApplication extends Disposable {
 		];
 	}
 
-	private mainProcessIpcRoutes(window: BrowserWindow): readonly IpcRoute<unknown, unknown>[] {
+	private mainProcessIpcRoutes(window: BrowserWindow, localAppServer: () => AppServerConnectionRelay | undefined): readonly IpcRoute<unknown, unknown>[] {
 		return [
 			{
 				channel: NLS_CONFIGURATION_CHANNEL,
@@ -1304,6 +1307,35 @@ export class AshApplication extends Disposable {
 				channel: HOST_RESTART_CHANNEL,
 				validate: value => { if (value !== undefined) { throw new TypeError('Restart takes no arguments'); } return undefined; },
 				invoke: () => { this.restartRequested = true; app.quit(); },
+			},
+			{
+				channel: LOCAL_APP_SERVER_RESTART_CHANNEL,
+				validate: value => { if (value !== undefined) throw new TypeError('App Server restart takes no arguments'); return undefined; },
+				invoke: () => {
+					const options = localAppServer()?.options;
+					if (!options?.enabled || !(options.processLauncher instanceof AppServerDaemonLauncher)) {
+						throw new Error('No local App Server lifecycle is available for this window');
+					}
+					// One restart serves every window attached to this profile.
+					return this.localAppServerRestart ??= options.processLauncher.restart().finally(() => { this.localAppServerRestart = undefined; });
+				},
+			},
+			{
+				channel: LOCAL_APP_SERVER_DIAGNOSTICS_CHANNEL,
+				validate: value => {
+					if (value !== 'debug' && value !== 'startProfile' && value !== 'stopProfile') {
+						throw new TypeError('Invalid App Server process diagnostic operation');
+					}
+					return value;
+				},
+				invoke: value => {
+					const options = localAppServer()?.options;
+					if (!options?.enabled || !(options.processLauncher instanceof AppServerDaemonLauncher)) {
+						throw new Error('No local App Server lifecycle is available for this window');
+					}
+					return this.appServerProcessDiagnostics.run(value as LocalAppServerDiagnosticOperation, options.processLauncher,
+						this.dialogs.showSaveDialog.bind(this.dialogs), window);
+				},
 			},
 			{
 				channel: 'ash:ipc:window-id',
@@ -1731,7 +1763,7 @@ export class AshApplication extends Disposable {
 
 		windowDisposables.add(toDisposable(() => this.dialogs.cancelWindow(window)));
 		const ipcRoutes = [
-			...this.mainProcessIpcRoutes(window),
+			...this.mainProcessIpcRoutes(window, () => getWorkspaceRemoteAuthority(workspaceContext.getWorkspace()) ? undefined : supervisor),
 			...this.terminalLifetimeRoutes(windowDisposables),
 			...this.remoteAgentHostRoutes(window, rendererEntry.url, windowDisposables),
 			...workspaceHost.routes(),
@@ -2170,7 +2202,7 @@ export class AshApplication extends Disposable {
 						prepareForRuntimeReplacement: () => this.windowsMainService.getWindowById(window.id)?.send('ash:terminal:prepareReplacement'),
 					}));
 					const ipcRoutes = [
-						...this.mainProcessIpcRoutes(window),
+						...this.mainProcessIpcRoutes(window, () => getWorkspaceRemoteAuthority(session.workspaceContext.getWorkspace()) ? undefined : sessionsRelay),
 						applicationBadgeIpcRoute(setApplicationBadge),
 						...this.terminalLifetimeRoutes(windowDisposables),
 						...this.remoteAgentHostRoutes(window, sessionsEntry.url, windowDisposables),

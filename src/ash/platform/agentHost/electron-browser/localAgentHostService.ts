@@ -1,6 +1,6 @@
 import { IWebWorkerService } from '../../webWorker/browser/webWorkerService.js';
 import { createAppServerFrameDecoder } from '../browser/appServerFrameDecoder.js';
-import { appServerConnectionChannel, type AppServerConnectionTarget } from '../common/appServerTransport.js';
+import { appServerConnectionChannel, LOCAL_APP_SERVER_DIAGNOSTICS_CHANNEL, LOCAL_APP_SERVER_RESTART_CHANNEL, type AppServerConnectionTarget, type LocalAppServerDiagnosticOperation } from '../common/appServerTransport.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
@@ -14,6 +14,15 @@ import { AppServerProtocolIncompatibleError } from '../common/appServerProtocolC
 import { AppServerMessagePortTransport } from './appServerMessagePortTransport.js';
 
 let nextConnectionId = 0;
+
+/** Requests a profile-wide restart through the Desktop lifecycle owner. */
+export function restartLocalAppServer(): Promise<void> {
+	return invoke<void>(LOCAL_APP_SERVER_RESTART_CHANNEL);
+}
+
+export function runLocalAppServerDiagnostic(operation: LocalAppServerDiagnosticOperation): Promise<void> {
+	return invoke<void>(LOCAL_APP_SERVER_DIAGNOSTICS_CHANNEL, operation);
+}
 
 /** Owns one of the window's App Server leases; the Rust process remains owned by Main. */
 export class LocalAgentHostServiceClient extends Disposable {

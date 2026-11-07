@@ -8,7 +8,9 @@ import { AgentsWindowInvitationContribution } from './agentSessions/agentsWindow
 import './chatScreenshot.contribution.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { registerChatDeveloperActions } from './actions/chatDeveloperActions.js';
 
+registerChatDeveloperActions();
 registerAction2(OpenAgentsWindowAction);
 registerAction2(OpenAgentsWindowTitleBarAction);
 registerWorkbenchContribution(AgentsWindowInvitationContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(AgentsWindowInvitationContribution));

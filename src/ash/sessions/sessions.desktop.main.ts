@@ -19,6 +19,7 @@ import '../platform/update/common/update.config.contribution.js';
 import '../workbench/services/update/electron-browser/updateService.js';
 import '../workbench/contrib/update/electron-browser/update.contribution.js';
 import '../workbench/contrib/chat/electron-browser/actions/voiceChatActions.js';
+import { registerChatDeveloperActions } from '../workbench/contrib/chat/electron-browser/actions/chatDeveloperActions.js';
 import { AgentsWindowInvitationContribution } from '../workbench/contrib/chat/electron-browser/agentSessions/agentsWindowInvitation.js';
 import '../workbench/contrib/chat/electron-browser/chatScreenshot.contribution.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../workbench/common/contributions.js';
@@ -47,6 +48,7 @@ registerSingleton(ILanguagePackStore, BrowserLanguagePackStore, InstantiationTyp
 registerSingleton(IRemoteAuthorityResolverService, RemoteAuthorityResolverService, InstantiationType.Delayed);
 
 registerChatWorkspace(chatGPTWorkspaceSource);
+registerChatDeveloperActions();
 registerOpenAgentsWindowCommand();
 registerAction2(OpenAshWindowAction);
 registerAction2(ReloadWindowAction);

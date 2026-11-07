@@ -14,6 +14,10 @@ fn lifecycle_and_connection_commands_preserve_explicit_product_services() {
             Command::Lifecycle(LifecycleCommand::EnsureSelected),
         ),
         ("restart", Command::Lifecycle(LifecycleCommand::Restart)),
+        (
+            "restart-selected",
+            Command::Lifecycle(LifecycleCommand::RestartSelected),
+        ),
         ("stop", Command::Lifecycle(LifecycleCommand::Stop)),
         ("version", Command::Lifecycle(LifecycleCommand::Version)),
     ] {

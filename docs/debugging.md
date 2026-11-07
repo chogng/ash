@@ -42,6 +42,14 @@ Code 可以从 `.vscode/launch.json` 启动或附加到一个调试目标，并�
 
 ## 自举调试
 
+### 从桌面命令面板调试本地 App Server
+
+IDE 和 Agents 窗口的“开发人员：调试本地 App Server”附加到当前 Profile 的 Rust 进程。Windows 使用桌面 `PATH` 上的 WinDbg，macOS 在 Terminal 中启动系统 LLDB，Linux 使用 `x-terminal-emulator` 或 `xterm` 启动 `PATH` 上的 LLDB。外部调试器在 App Server 暂停时仍可操作。
+
+“开始录制本地 App Server CPU 样本”使用桌面 `PATH` 上的 Samply。Windows 需要 Windows Performance Toolkit 的 `xperf` 和录制权限。macOS 和 Linux 需要操作系统允许附加到目标进程。录制按 Profile 共享，后端进程退出或录制满十分钟时自动结束。“停止录制本地 App Server CPU 样本”结束录制并弹出保存对话框，产物可用 Firefox Profiler 或 `samply load` 查看。
+
+### 从源码启动调试环境
+
 在 Ash 中打开本仓库，通过“选择并启动调试”使用 `.vscode/launch.json`：
 
 - `Ash`、`Ash Agents` 和 `Ash (Hot Reload)` 通过 Node 启动现有 Electron launcher。launcher 准备后端并启动 Vite；`Ash` 和 `Ash Agents` 还会等待 Rust 源码 watcher 就绪，并在成功构建后自动切换后端。停止调试时，launcher 一并关闭 Electron、Vite 和 Rust watcher；准备阶段也支持取消构建。`Ash (Hot Reload)` 只监听前端和 Electron 宿主。launcher 发布调试目标后，server-ready 自动启动 `Ash Main Process` 附加会话，由附加会话等待 Inspector 就绪。主进程的 TS 构建生成 source map，`outFiles` 指向 `.build/desktop/main`，附加时暂停等待 source map 绑定已有断点。开发环境仍需本仓库的 Node、pnpm 和构建工具链。
