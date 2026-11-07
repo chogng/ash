@@ -8,6 +8,7 @@ import type { IChatContentPart } from './chatContentParts/chatContentParts.js';
 import { ChatListItemRenderer, type ChatRequestInputOptions, type ChatResponseActions } from './chatListRenderer.js';
 import { cloneVisibleSelection, sanitizeChatClipboardFragment } from './chatClipboard.js';
 import { ChatLayoutTrace } from './chatLayoutTrace.js';
+import { ChatWorkingLogo } from './chatWorkingLogo.js';
 import { ILoggerService } from '../../../../../platform/log/common/log.js';
 import { autorun } from '../../../../../base/common/observable.js';
 import { IChatLayoutService } from '../../common/widget/chatLayoutService.js';
@@ -15,7 +16,7 @@ import { findLast, findLastIdx } from '../../../../../base/common/arraysFind.js'
 import { PromptTimelineStickyHeader } from '../promptTimeline/promptTimelineStickyHeader.js';
 import './media/chatListWidget.css';
 import { addDisposableListener, h, isHTMLElement } from '../../../../../base/browser/dom.js';
-import { observeResize } from '../../../../../base/browser/observer.js';
+import { observeIntersection, observeResize } from '../../../../../base/browser/observer.js';
 import { ScrollableElement } from '../../../../../base/browser/ui/scrollbar/scrollableElement.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
@@ -106,6 +107,9 @@ export class ChatListWidget extends DomWidget {
 	private readonly scrollToLatestButton: Button;
 	private readonly scrollToLatestHostObserver = this._register(new MutableDisposable());
 	private readonly transcript: HTMLDivElement;
+	private working = false;
+	private workingStatus: { readonly element: HTMLElement; readonly label: HTMLElement; readonly logo: ChatWorkingLogo; readonly sticky: HTMLElement; } | undefined;
+	private workingOutsideViewport = false;
 	private readonly stickyPrompt: PromptTimelineStickyHeader;
 	private promptModel = new PromptTimelineModel<IChatListItem>([], id => this.renderedItems.get(id)!.element);
 	private readonly promptTimeline: PromptTimelineWidgetContrib | undefined;
@@ -443,8 +447,9 @@ export class ChatListWidget extends DomWidget {
 		this.element.classList.toggle('code-word-wrap', this.configurationService.getValue<string>(ChatEditorConfiguration.wordWrap) === 'on');
 	}
 
-	render(items: readonly IChatListItem[]): void {
+	render(items: readonly IChatListItem[], working = false): void {
 		this.items = [...items];
+		this.working = working;
 		if (!this.visible) {
 			// The model continues receiving events. Hidden presentation consumes its
 			// latest projection once on show instead of parsing every intermediate one.
@@ -563,6 +568,11 @@ export class ChatListWidget extends DomWidget {
 			next = row.element.nextSibling;
 		}
 		changed = this.renderImageBatches(items, beforeLayout) || changed;
+		if (this.working !== (this.workingStatus?.element.hidden === false)) {
+			beforeLayout();
+			this.renderWorkingStatus();
+			changed = true;
+		}
 		this.promptModel = new PromptTimelineModel(items.filter(item => item.type === 'userMessage'), id => this.renderedItems.get(id)!.element);
 		// Reparenting a retained gallery can blur its button. Restore only that button,
 		// and never replace focus deliberately moved elsewhere by a render listener.
@@ -589,6 +599,43 @@ export class ChatListWidget extends DomWidget {
 			this._onDidChangeContent.fire();
 		} else if (this.visible) {
 			this.renderPromptTimeline();
+		}
+	}
+
+	private renderWorkingStatus(): void {
+		if (!this.workingStatus) {
+			const document = this.transcript.ownerDocument;
+			const element = h(document, 'div');
+			element.className = 'ash-chat-transcript-working';
+			const label = h(document, 'span');
+			const logo = this._register(this.instantiationService.createInstance(ChatWorkingLogo, document));
+			element.append(logo.domNode, label);
+			this.transcript.append(element);
+			const sticky = h(document, 'div');
+			sticky.className = 'ash-chat-transcript-working ash-chat-transcript-working-sticky';
+			sticky.hidden = true;
+			// The inline status is already announced by the transcript live region.
+			sticky.setAttribute('aria-hidden', 'true');
+			this.element.append(sticky);
+			this.workingStatus = { element, label, logo, sticky };
+			this._register(observeIntersection(element, entry => {
+				this.workingOutsideViewport = !entry.isIntersecting && entry.boundingClientRect.height > 0 && !!entry.rootBounds?.height;
+				this.updateStickyWorkingStatus();
+			}, { root: this.scrollable.scrollableElement }));
+		}
+		const { element, label, logo, sticky } = this.workingStatus;
+		element.hidden = !this.working;
+		logo.setVisible(this.visible && this.working);
+		logo.setActive(this.working);
+		label.textContent = this.working ? localize('chat.transcript.working', 'Working on your request…') : '';
+		sticky.textContent = label.textContent;
+		if (!this.working) this.workingOutsideViewport = false;
+		this.updateStickyWorkingStatus();
+	}
+
+	private updateStickyWorkingStatus(): void {
+		if (this.workingStatus) {
+			this.workingStatus.sticky.hidden = !this.visible || !this.working || !this.workingOutsideViewport;
 		}
 	}
 
@@ -647,6 +694,8 @@ export class ChatListWidget extends DomWidget {
 			this.reconcile(items);
 		}
 		this.visible = visible;
+		this.workingStatus?.logo.setVisible(visible && this.working);
+		this.updateStickyWorkingStatus();
 		for (const [, entry] of this.imageBatches) { entry.part.setVisible(visible); }
 		if (!visible) {
 			this.findWidget.value?.hide();
@@ -755,11 +804,11 @@ export class ChatListWidget extends DomWidget {
 	}
 
 	/** Re-renders from the model, then restores reading position after the host mounts the new root. */
-	public restoreViewState(state: ChatListViewState, items: readonly IChatListItem[]): void {
+	public restoreViewState(state: ChatListViewState, items: readonly IChatListItem[], working = false): void {
 		for (const [id, expanded] of state.contextExpansion ?? []) this.contextExpansion.set(id, expanded);
 		for (const [id, expanded] of state.advisorExpansion) this.advisorExpansion.set(id, expanded);
 		for (const [id, expanded] of state.thinkingExpansion ?? []) this.thinkingExpansion.set(id, expanded);
-		this.render(items);
+		this.render(items, working);
 		this.lastFocusedItemId = state.lastFocusedItemId && this.renderedItems.has(state.lastFocusedItemId) ? state.lastFocusedItemId : undefined;
 		for (const [id, expanded] of state.contextExpansion ?? []) {
 			const context = this.renderedItems.get(id)?.context;
@@ -811,7 +860,7 @@ export class ChatListWidget extends DomWidget {
 	private updateScrollToLatestVisibility(): void {
 		const { top, maximumTop } = this.scrollable.state;
 		// Transcript padding can create a scroll range even in an empty draft.
-		const hidden = !this.visible || this.items.length === 0 || maximumTop - top <= 1;
+		const hidden = !this.visible || this.items.length === 0 && !this.working || maximumTop - top <= 1;
 		if (hidden === this.scrollToLatestButton.hidden) return;
 		this.element.classList.toggle('ash-chat-transcript-has-more-below', !hidden);
 		if (hidden && this.visible && this.element.ownerDocument.activeElement === this.scrollToLatestButton.domNode) {

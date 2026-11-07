@@ -443,6 +443,7 @@ let allowAppCsp = false;
 let appCallMode: 'read' | 'delay' | 'error' = 'read';
 let appItems: readonly IChatListItem[] = [];
 let hasConversationChanges = false;
+let responseWorking = false;
 let appChat: ChatWidget | CoworkWidget | undefined;
 let composerServices: InstantiationService | undefined;
 let dictationEvents: Emitter<ISpeechToTextEvent> | undefined;
@@ -685,6 +686,7 @@ declare global {
 			setAutoFollowReplies(enabled: boolean): Promise<void>;
 			appendChatItem(item: IChatListItem): void;
 			setConversationChanges(visible: boolean): void;
+			setResponseWorking(working: boolean): void;
 			requestEdits(): readonly { readonly text: string; readonly commandId: string; readonly itemId: string; readonly contexts?: readonly { readonly name: string; readonly content: string; }[]; }[];
 			finishRequestEdit(failure?: boolean): void;
 			prepareMessageFork(): void;
@@ -903,6 +905,7 @@ window.ashChatTranscriptIntegration = {
 	setAutoFollowReplies: enabled => services.get(IConfigurationService).updateValue('chat.autoFollowReplies', enabled),
 	appendChatItem: item => { appItems = [...appItems, item]; chatChanges.fire(); },
 	setConversationChanges: visible => { hasConversationChanges = visible; chatChanges.fire(); },
+	setResponseWorking: working => { responseWorking = working; chatChanges.fire(); },
 	requestEdits: () => requestEdits,
 	finishRequestEdit: failure => completeRequestEdit?.(failure),
 	prepareMessageFork: () => {
@@ -1295,7 +1298,7 @@ window.ashChatTranscriptIntegration = {
 			},
 			get inputState() {
 				const aiDisabled = services.get(IConfigurationService).getValue<boolean>(ChatAIDisabledSettingId);
-				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: false, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, changes: hasConversationChanges ? { files: 1, additions: 1, deletions: 1 } : undefined };
+				return { mode: 'plan' as const, queuedMessages: 0, approvalMode: 'manual' as const, phase: historyFailure ? 'error' as const : 'ready' as const, inputBlocked: !!historyFailure || aiDisabled, aiDisabled, canInterrupt: responseWorking, models: [], isAutomaticModel: true, slashCommands: [], skillSelectors: [], canSelectAgent: false, changes: hasConversationChanges ? { files: 1, additions: 1, deletions: 1 } : undefined };
 			},
 			send: async (text, mode, _skills, contexts, submissionOptions) => { appChatMessages.push({ text, mode, contexts, ...(submissionOptions ? { commandId: submissionOptions.commandId, source: submissionOptions.source } : {}) }); },
 			executeServerCommand: async () => { }, interrupt: async () => { }, refreshChanges: async () => { }, selectModel: async () => { }, selectReasoningEffort: async () => { }, selectAutomaticModel: async () => { },

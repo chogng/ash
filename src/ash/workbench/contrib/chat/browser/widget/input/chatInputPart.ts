@@ -303,7 +303,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private synchronizingSourceContext = false;
 	private readonly status: HTMLDivElement;
 	private readonly statusLabel: HTMLSpanElement;
-	private readonly workingLogo: ChatWorkingLogo;
+	private readonly workingLogo: ChatWorkingLogo | undefined;
 	private readonly dictationPreview: HTMLDivElement;
 	private readonly interaction: HTMLDivElement;
 	protected readonly inputContainer: HTMLFormElement;
@@ -432,9 +432,12 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.status.setAttribute('role', 'status');
 		this.status.hidden = true;
 		this.statusLabel = h(ownerDocument, 'span');
-		this.workingLogo = this._register(instantiationService.createInstance(ChatWorkingLogo, ownerDocument));
-		this.workingLogo.setVisible(false);
-		this.status.append(this.workingLogo.domNode, this.statusLabel);
+		if (!delegate.responseProgressInTranscript) {
+			this.workingLogo = this._register(instantiationService.createInstance(ChatWorkingLogo, ownerDocument));
+			this.workingLogo.setVisible(false);
+			this.status.append(this.workingLogo.domNode);
+		}
+		this.status.append(this.statusLabel);
 		this.dictationPreview = h(ownerDocument, 'div');
 		this.dictationPreview.className = 'ash-chat-dictation-preview';
 		this.dictationPreview.setAttribute('aria-hidden', 'true');
@@ -1980,8 +1983,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.status.hidden = !summary;
 		const working = !this.state.aiDisabled && !this.state.inputBlocked && !error
 			&& (this.state.phase === 'submitting' || this.state.phase === 'ready' && this.state.canInterrupt);
-		this.workingLogo.setVisible(this.visible && working && !!summary);
-		this.workingLogo.setActive(working);
+		this.workingLogo?.setVisible(this.visible && working && !!summary);
+		this.workingLogo?.setActive(working);
 		this.renderFooter();
 	}
 
@@ -2417,13 +2420,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			case 'loading':
 				return localize('chat.input.loading', 'Loading chat…');
 			case 'submitting':
-				return localize('chat.input.working', 'Working…');
+				return this.delegate.responseProgressInTranscript ? '' : localize('chat.input.working', 'Working…');
 			case 'error':
 				return localize('chat.input.unavailable', 'Chat is unavailable.');
 			case 'ready':
 				if (state.queuedMessages > 0) return localize('chat.input.queuedMessages', '{0} messages queued', state.queuedMessages);
 				if (state.activeMode && state.activeMode !== state.mode) return localize('chat.input.modeChangeQueued', 'Working in {0}. The next message will be queued in {1} mode.', state.activeMode, state.mode);
-				return state.canInterrupt ? localize('chat.input.working', 'Working…') : '';
+				return state.canInterrupt && !this.delegate.responseProgressInTranscript ? localize('chat.input.working', 'Working…') : '';
 		}
 	}
 }

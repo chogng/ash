@@ -5,6 +5,49 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 suite('chatTranscript browser component', () => {
 	const browserTests = useBrowserTests();
 	for (const locale of ['en', 'zh-CN']) {
+		test(`active request progress follows streamed messages inside the transcript in ${locale}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/chatTranscript.html?richInput&sessions&locale=${locale}`);
+			await page.evaluate(() => {
+				window.ashChatTranscriptIntegration.prepareRequestEditing(false, 'Review the workspace', true);
+				window.ashChatTranscriptIntegration.setResponseWorking(true);
+			});
+			const chat = page.locator('#app-chat');
+			const transcript = chat.getByRole('log');
+			const progress = transcript.locator('.ash-chat-transcript-working');
+			const sticky = chat.locator('.ash-chat-transcript-working-sticky');
+			const viewport = chat.locator('.ash-chat-transcript-viewport > .ash-scrollbar-viewport');
+			await expect(progress).toBeVisible();
+			await expect(progress).toHaveText(locale === 'en' ? 'Working on your request…' : '正在处理你的请求…');
+			await expect(chat.locator('.ash-chat-input-part .ash-chat-working-logo')).toHaveCount(0);
+			await page.evaluate(() => window.ashChatTranscriptIntegration.appendChatItem({
+				id: 'working-reply', type: 'agentMessage', text: 'A streamed reply\n\n'.repeat(45), transient: true,
+			}));
+			await expect(transcript.locator('[data-item-id="working-reply"] + .ash-chat-transcript-working')).toBeVisible();
+			await chat.scrollIntoViewIfNeeded();
+			const scroll = (latest: boolean) => viewport.evaluate((element, latest) => { element.scrollTop = latest ? element.scrollHeight : 0; }, latest);
+			await scroll(true);
+			await expect.poll(async () => {
+				const row = (await progress.boundingBox())!;
+				const bounds = (await viewport.boundingBox())!;
+				return row.y >= bounds.y && row.y + row.height <= bounds.y + bounds.height;
+			}).toBe(true);
+			await expect(sticky).toBeHidden();
+			await scroll(false);
+			await expect(sticky).toBeVisible();
+			await expect(sticky).toHaveText(locale === 'en' ? 'Working on your request…' : '正在处理你的请求…');
+			await expect(sticky).toHaveAttribute('aria-hidden', 'true');
+			expect(await viewport.evaluate(element => element.scrollTop)).toBe(0);
+			await scroll(true);
+			await expect(sticky).toBeHidden();
+			await scroll(false);
+			await expect(sticky).toBeVisible();
+			await page.evaluate(() => window.ashChatTranscriptIntegration.setResponseWorking(false));
+			await expect(progress).toBeHidden();
+			await expect(sticky).toBeHidden();
+			expect(await viewport.evaluate(element => element.scrollTop)).toBe(0);
+		});
+
 		test(`reply turn changes appear in place and keep the source and keyboard focus in ${locale}`, async () => {
 			const { page } = browserTests;
 			await page.goto(`/chatTranscript.html?locale=${locale}&turnChanges`);
@@ -433,11 +476,13 @@ suite('chatTranscript browser component', () => {
 		await page.goto('/chatTranscript.html?richInput&sessions');
 		await page.evaluate(() => window.ashChatTranscriptIntegration.prepareRequestEditing(false, 'Review the workspace', true));
 		const chat = page.locator('#app-chat');
-		const viewport = chat.locator('.ash-chat-transcript-viewport > .ash-scrollbar-viewport');
+		const list = chat.locator('.ash-chat-transcript-viewport');
+		const viewport = list.locator(':scope > .ash-scrollbar-viewport');
 		const composer = chat.locator(':scope > .ash-chat-input-part .ash-chat-input-container');
 		const row = chat.locator('.ash-chat-input-changes');
 		const summary = row.locator('.ash-chat-changes-pill');
 		const jump = row.getByRole('button', { name: 'Scroll to Latest' });
+		const edgeFade = () => list.evaluate(element => getComputedStyle(element, '::after').backgroundImage);
 		const position = () => viewport.evaluate(element => ({ top: element.scrollTop, gap: element.scrollHeight - element.clientHeight - element.scrollTop }));
 		const settle = () => page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 		const changes = async (visible: boolean) => {
@@ -455,10 +500,22 @@ suite('chatTranscript browser component', () => {
 		await expect.poll(async () => (await position()).gap).toBeLessThan(1);
 		await viewport.evaluate(element => { element.scrollTop -= 140; });
 		await expect(jump).toBeVisible();
+		await composer.getByRole('textbox').focus();
+		const gradient = await edgeFade();
+		expect(gradient).toContain('linear-gradient');
+		await viewport.focus();
+		await expect(viewport).toBeFocused();
+		expect(await edgeFade()).toBe(gradient);
 		await settle();
+		const fadeEdge = await list.evaluate(element => {
+			const style = getComputedStyle(element, '::after');
+			return { height: parseFloat(style.blockSize), bottom: element.getBoundingClientRect().bottom - parseFloat(style.bottom) };
+		});
 		const readingTop = (await position()).top;
 		const rowTop = (await row.boundingBox())!.y;
 		const composerTop = (await composer.boundingBox())!.y;
+		expect(fadeEdge.height).toBe(16);
+		expect(Math.abs(fadeEdge.bottom - composerTop)).toBeLessThan(1);
 		for (const visible of [true, false, true, false]) {
 			await changes(visible);
 			await expect(jump).toBeVisible();
@@ -468,6 +525,7 @@ suite('chatTranscript browser component', () => {
 		}
 		await jump.click();
 		await expect(row).toBeHidden();
+		expect(await edgeFade()).toBe('none');
 		for (const [index, visible] of [true, false, true, false].entries()) {
 			await page.evaluate(({ index, visible }) => {
 				window.ashChatTranscriptIntegration.setConversationChanges(visible);

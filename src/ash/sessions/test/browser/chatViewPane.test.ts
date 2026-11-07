@@ -7031,7 +7031,8 @@ for (const aba of [false, true]) {
 			typeChatText(dom.window, input, 'Keep my later draft');
 			await oldReply.error(new Error('Old request failed'));
 			await previous;
-			assert.equal(chatPane.querySelector('.ash-chat-status, .ash-chat-status-summary')!.textContent, 'Working…');
+			assert.equal(chatPane.querySelector('.ash-chat-transcript-working')?.textContent, 'Working on your request…');
+			assert.equal(chatPane.querySelector('.ash-chat-status, .ash-chat-status-summary')?.textContent, '');
 			assert.equal(input.value, 'Keep my later draft');
 			await pane.acceptInput();
 			assert.equal(fake.turnStartRequests.length, 2);

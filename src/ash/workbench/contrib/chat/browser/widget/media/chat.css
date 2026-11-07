@@ -105,6 +105,21 @@
 	z-index: 1;
 }
 
+/* Keep the floating labels legible where the transcript extends behind them. */
+.ash-chat:has(
+		> .ash-chat-transcript-overlaps-composer.ash-chat-transcript-has-more-below
+	)
+	> .ash-chat-input-part
+	> :is(.ash-chat-status, .ash-chat-input-changes) {
+	box-sizing: border-box;
+	inline-size: fit-content;
+	max-inline-size: 100%;
+	background-color: var(
+		--ash-chat-transcript-surface,
+		var(--ash-editor-background)
+	);
+}
+
 .ash-chat-input-part {
 	--ash-chat-input-focus-border: var(--ash-focusBorder);
 }

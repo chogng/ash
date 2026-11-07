@@ -84,6 +84,8 @@ export interface ChatInputState {
 
 /** Operations that the input area may request from its owning Chat pane. */
 export interface ChatInputDelegate {
+	/** This host shows request progress in its transcript. */
+	readonly responseProgressInTranscript?: boolean;
 	readonly draft?: {
 		setText(text: string): void;
 		attachFiles(files: readonly File[]): Promise<void>;

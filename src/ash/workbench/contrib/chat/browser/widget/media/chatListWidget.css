@@ -51,17 +51,12 @@
 	}
 }
 
-/* Soften the transcript edge above the fixed composer while more messages remain below. */
-.ash-chat-transcript-has-more-below:not(
-		:has(> .ash-scrollbar-viewport:focus-within)
-	)::after {
+/* The extended transcript ends at the input field, below the status and action rows. */
+.ash-chat-transcript-has-more-below::after {
 	content: "";
 	position: absolute;
 	inset: auto 0 0;
-	block-size: calc(
-		var(--ash-spacing-size320) +
-			var(--ash-chat-transcript-composer-overlap, 0px)
-	);
+	block-size: var(--ash-spacing-size160);
 	z-index: 1;
 	pointer-events: none;
 	background: linear-gradient(
@@ -90,6 +85,32 @@
 
 .ash-chat-transcript {
 	padding: 6px var(--ash-chat-content-inset, var(--ash-spacing-size120)) 16px;
+}
+
+.ash-chat-transcript-working {
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+}
+
+.ash-chat-transcript-working-sticky {
+	position: absolute;
+	inset-inline-start: var(
+		--ash-chat-content-inset,
+		var(--ash-spacing-size120)
+	);
+	inset-block-end: calc(
+		var(--ash-chat-transcript-composer-overlap, 0px) +
+			var(--ash-spacing-size80)
+	);
+	z-index: 2;
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	border: var(--ash-strokeThickness) solid var(--ash-widget-border);
+	border-radius: var(--ash-cornerRadius-medium);
+	background-color: var(
+		--ash-chat-transcript-surface,
+		var(--ash-editor-background)
+	);
+	pointer-events: none;
 }
 
 @media (forced-colors: none) {

@@ -1538,6 +1538,7 @@
     "chat.media.wrongType": "附件的媒体类型与预期不符。",
     "chat.media.loadFailed": "无法加载此媒体：{0}",
     "chat.transcript.you": "你",
+    "chat.transcript.working": "正在处理你的请求…",
     "chat.transcript.plan": "计划",
     "chat.transcript.toolCall": "工具调用",
     "chat.transcript.toolError": "工具错误",
