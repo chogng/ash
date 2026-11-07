@@ -307,7 +307,7 @@ test('Sessions Projects opens its chats and continues the same conversation afte
 
 		let page = await workbench.openAgentsWindow(target.kind);
 		const openProject = async () => {
-			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			const projects = page.locator('.ash-projects');
 			const card = projects.getByRole('button', { name: project.name, exact: true });
 			const projectTitle = page.locator('.ash-sessions-titlebar .ash-project-titlebar-name').getByText(project.name, { exact: true });
@@ -481,7 +481,7 @@ test.describe('Projects sorting persistence', () => {
 		test.setTimeout(90_000);
 		let page = workbench.page;
 		const openProjects = async () => {
-			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			await expect(page.locator('.ash-projects')).toBeVisible();
 		};
 		const assertSelected = async (label: string) => {
@@ -533,7 +533,7 @@ test(
 	{ tag: ['@browser-app-server', '@electron-app-server'] },
 	async ({ application, target, workbench }, testInfo) => {
 		let page = await workbench.openAgentsWindow(target.kind);
-		await page.locator('[data-action-id="sessions.open.projects"] button').click();
+		await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 		await page.locator('.ash-projects').getByRole('button', { name: 'New project', exact: true }).first().click();
 		const dialog = page.getByRole('dialog', { name: 'Create a project' });
 		await dialog
@@ -577,7 +577,7 @@ test(
 		await breadcrumb.getByRole('button', { name: 'Projects', exact: true }).click();
 		await expect(page.locator('.ash-projects-card').filter({ hasText: 'Saved on blur' })).toBeVisible();
 		page = await workbench.reopenAgentsWindow(application, page);
-		await page.locator('[data-action-id="sessions.open.projects"] button').click();
+		await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 		await page.locator('.ash-projects-card').filter({ hasText: 'Saved on blur' }).click();
 		await expect(page.locator('.ash-sessions-titlebar .ash-project-titlebar-name')).toHaveText('Saved on blur');
 		await expect(page.locator('.ash-projects-description')).toHaveText('Keep the project goals when renaming.');
@@ -693,7 +693,7 @@ test('Sessions Projects card actions persist pins, merge gallery edits, archive 
 			materials: [{ name: 'retained-project-source.txt', kind: 'file', path: pathToFileURL(sourcePath).toString() }],
 		})).project;
 		let page = await workbench.openAgentsWindow(target.kind);
-		await page.locator('[data-action-id="sessions.open.projects"] button').click();
+		await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 		const rowFor = (name: string) => page.locator('.ash-projects-row').filter({ has: page.getByRole('button', { name, exact: true }) });
 		const pinFor = (name: string) => rowFor(name).locator('[data-action-id="projects.pin"] button');
 		const openMenu = async (name: string) => {
@@ -720,7 +720,7 @@ test('Sessions Projects card actions persist pins, merge gallery edits, archive 
 		connection = await connectProfile(application, webAppServer, testWorkspace.directory, workbench.page);
 		client = connection.client;
 		page = await workbench.openAgentsWindow(target.kind);
-		await page.locator('[data-action-id="sessions.open.projects"] button').click();
+		await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 		await expect(pinFor(first.name)).toHaveAttribute('aria-pressed', 'true');
 		const menu = await openMenu(first.name);
 		await expect(menu.getByRole('menuitem')).toHaveText(['Edit details', 'Archive', 'Delete']);

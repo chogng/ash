@@ -1633,12 +1633,12 @@ async function expectActivityIconSize(navigation: Locator, size: number): Promis
 			),
 		)
 		.toBe(true);
-	const icons = navigation.locator('button > .ash-button-content > .ash-icon-label-icon > .ash-icon');
+	const icons = navigation.locator('.ash-sessions-activity-item > .ash-button-content > .ash-icon-label-icon > .ash-icon');
 	const horizontal = await navigation.evaluate(element => element.classList.contains('horizontal'));
 	const labeled = await navigation.evaluate(element => element.classList.contains('labeled'));
 	const itemWidth = horizontal ? 24 : 36;
 	const itemHeight = horizontal ? 24 : 32;
-	const entries = navigation.locator('.ash-composite-bar-navigation-item > button');
+	const entries = navigation.locator('.ash-composite-bar-navigation-item > .ash-sessions-activity-item');
 	await expect(entries).not.toHaveCount(0);
 	for (const item of await entries.all()) {
 		await expect(item.locator('.ash-icon')).toHaveCount(1);

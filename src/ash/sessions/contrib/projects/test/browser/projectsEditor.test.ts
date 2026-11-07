@@ -15,7 +15,7 @@ suite('Projects toolbar', () => {
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/sessions.html?search&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			await page.locator('.ash-projects-card').click();
 			const composer = page.locator('.ash-projects-composer');
 			await expect(composer).toHaveAccessibleName(chinese ? '在项目中新建聊天' : 'New chat in project');
@@ -61,7 +61,7 @@ suite('Projects toolbar', () => {
 			const { page, info } = browser;
 			await page.goto(`/sessions.html?search&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			const create = page.locator('.ash-projects').getByRole('button', { name: locale === 'zh-CN' ? '新建项目' : 'New project', exact: true });
 			await create.press('Enter');
 			const dialog = page.getByRole('dialog');
@@ -94,7 +94,7 @@ suite('Projects toolbar', () => {
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/sessions.html?search&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			await page.locator('.ash-projects-card').click();
 			const breadcrumb = page.locator('.ash-projects-breadcrumb');
 			const rename = breadcrumb.getByRole('button', {
@@ -162,7 +162,7 @@ suite('Projects toolbar', () => {
 				`/sessions.html?search&locale=${locale}&projectUpdatedAt=${updatedAt.getTime()}&projectCreatedAt=${createdAt}`,
 			);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			const card = page.locator('.ash-projects-card');
 			const caption = card.locator('time.ash-projects-card-caption');
 			await expect(caption).toHaveText(chinese ? '刚刚' : 'Just now');
@@ -188,12 +188,12 @@ suite('Projects toolbar', () => {
 			await page.screenshot({ path: info.outputPath(`projects-relative-time-${locale}.png`) });
 			await page.goto(`/sessions.html?search&locale=${locale}&projectCreatedAt=${createdAt}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			await expect(caption).toHaveAttribute('datetime', new Date(createdAt).toISOString());
 			await expect(caption).toHaveText(chinese ? '8天前' : '8 days ago');
 			await page.goto(`/sessions.html?search&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			await expect(card).toBeVisible();
 			await expect(caption).toHaveCount(0);
 		});
@@ -203,7 +203,7 @@ suite('Projects toolbar', () => {
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/sessions.html?search&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			const row = page.locator('.ash-projects-row');
 			const pin = row.getByRole('button', { name: chinese ? '置顶' : 'Pin', exact: true });
 			const unpin = row.getByRole('button', { name: chinese ? '取消置顶' : 'Unpin', exact: true });
@@ -242,7 +242,7 @@ suite('Projects toolbar', () => {
 			const { page, info } = browser;
 			await page.goto(`/sessions.html?search&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			const sort = page.getByRole('button', {
 				name: locale === 'zh-CN' ? '项目排序' : 'Sort projects',
 				exact: true,
@@ -303,7 +303,7 @@ suite('Projects toolbar', () => {
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/sessions.html?search&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			const projects = page.locator('.ash-projects');
 			const search = projects.getByRole('button', {
 				name: chinese ? '搜索项目' : 'Search projects',
@@ -365,7 +365,7 @@ suite('Projects toolbar', () => {
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/sessions.html?search&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			const toolbar = page.getByRole('toolbar', { name: chinese ? '项目操作' : 'Project actions', exact: true });
 			const search = toolbar.getByRole('button', { name: chinese ? '搜索项目' : 'Search projects', exact: true });
 			const sort = toolbar.getByRole('button', { name: chinese ? '项目排序' : 'Sort projects', exact: true });
@@ -468,7 +468,7 @@ suite('Projects toolbar', () => {
 			const chinese = locale === 'zh-CN';
 			await page.goto(`/sessions.html?search&locale=${locale}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			await page.locator('[data-action-id="sessions.open.projects"] button').click();
+			await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 			const projects = page.locator('.ash-projects');
 			const search = projects.getByRole('button', {
 				name: chinese ? '搜索项目' : 'Search projects',
@@ -509,6 +509,7 @@ suite('Projects toolbar', () => {
 					expect(await create.boundingBox()).toEqual(createBefore);
 					await expect(input).toBeInViewport();
 					await expect(close).toBeInViewport();
+					expect((await input.boundingBox())!.width, `${theme} at ${width}px, search field ${field.width}px`).toBeGreaterThan(0);
 					await input.fill('Search project');
 					await expect(page.locator('.ash-projects-card-name')).toHaveText(['Search project fixture']);
 					if (theme === 'ash-light') {
@@ -533,7 +534,7 @@ suite('Projects toolbar', () => {
 		await page.emulateMedia({ reducedMotion: 'no-preference' });
 		await page.goto('/sessions.html?search');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-		await page.locator('[data-action-id="sessions.open.projects"] button').click();
+		await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 		const projects = page.locator('.ash-projects');
 		const search = projects.getByRole('button', { name: 'Search projects', exact: true });
 		const close = projects.getByRole('button', { name: 'Close project search', exact: true });
@@ -623,7 +624,7 @@ suite('Projects loading states', () => {
 			const skeleton = projects.locator('.ash-projects-skeleton');
 			const firstLoad = await holdList();
 			try {
-				await page.locator('[data-action-id="sessions.open.projects"] button').click();
+				await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 				await expect(body).toHaveAttribute('aria-busy', 'true');
 				await expect(skeleton).toHaveAttribute('aria-hidden', 'true');
 				await expect(skeleton.locator('.ash-projects-skeleton-card')).toHaveCount(6);
@@ -693,7 +694,7 @@ suite('Projects loading states', () => {
 
 			const refresh = await holdList();
 			try {
-				await page.locator('[data-action-id="sessions.open.projects"] button').click();
+				await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 				await expect(body).toHaveAttribute('aria-busy', 'true');
 				await expect(page.locator('.ash-sessions-titlebar .ash-project-titlebar-name')).toHaveText('Search project fixture');
 				await expect(projects.locator('.ash-projects-description')).toHaveText(

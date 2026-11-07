@@ -34,7 +34,7 @@ suite('Region loading in the Sessions workbench', () => {
 				await expect(root.locator('.ash-customize-panel')).toHaveAttribute('aria-busy', 'true');
 				await expect(root.getByRole('status')).toHaveText(chinese ? '正在加载资源…' : 'Loading resources…');
 				await expect(root.getByRole('tab').first()).toBeEnabled();
-				await expect(page.locator('[data-action-id="sessions.open.projects"] button')).toBeEnabled();
+				await expect(page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item')).toBeEnabled();
 				await gate.evaluate(value => value.release());
 				await expect(root.locator('.ash-customize-card-name')).toHaveText(['Team library']);
 			} finally {

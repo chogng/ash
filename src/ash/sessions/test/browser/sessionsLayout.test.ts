@@ -47,7 +47,10 @@ suite('sessions browser component', () => {
 
 		await input.press('ControlOrMeta+z');
 		await composer.getByRole('button', { name: locale === 'zh-CN' ? '添加上下文' : 'Add context', exact: true }).press('Enter');
-		const search = page.getByRole('dialog', { name: locale === 'zh-CN' ? '搜索附件' : 'Search attachments', exact: true }).getByRole('combobox');
+		const searchLabel = locale === 'zh-CN' ? '搜索附件' : 'Search attachments';
+		await page.getByRole('menuitem', { name: searchLabel, exact: true }).click();
+		const search = page.getByRole('dialog').getByRole('combobox');
+		await expect(search).toHaveAttribute('placeholder', searchLabel);
 		await search.fill(locale === 'zh-CN' ? '会话' : 'Sessions');
 		await search.press('Enter');
 		const picker = page.getByRole('dialog', { name: locale === 'zh-CN' ? '选择会话' : 'Select a session', exact: true });
@@ -66,10 +69,10 @@ suite('sessions browser component', () => {
 		await expect(navigation).toHaveCSS('display', 'flex');
 		await expect(navigation).toHaveCSS('justify-content', 'space-between');
 		await expect.poll(() => navigation.evaluate(element => getComputedStyle(element).flexDirection === (element.classList.contains('horizontal') ? 'row' : 'column'))).toBe(true);
-		const icons = navigation.locator('button > .ash-button-content > .ash-icon-label-icon > .ash-icon');
+		const icons = navigation.locator('.ash-sessions-activity-item > .ash-button-content > .ash-icon-label-icon > .ash-icon');
 		const itemWidth = horizontal ? 24 : 36;
 		const itemHeight = horizontal ? 24 : 32;
-		for (const item of await navigation.locator('.ash-composite-bar-navigation-item > button').all()) {
+		for (const item of await navigation.locator('.ash-composite-bar-navigation-item > .ash-sessions-activity-item').all()) {
 			if (labeled) { expect((await item.boundingBox())!.width).toBeGreaterThan(itemWidth); }
 			else { await expect(item).toHaveCSS('width', `${itemWidth}px`); }
 			await expect(item).toHaveCSS('height', `${itemHeight}px`);
@@ -340,7 +343,7 @@ suite('sessions browser component', () => {
 		const collaboration = page.getByRole('menuitemradio', { name: 'Collab', exact: true });
 		const codeMode = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true });
 		const chatMode = page.locator('.ash-window-mode-control').getByRole('button', { name: 'Chat / Agents', exact: true });
-		const buttons = activityNavigation.locator('.ash-sessions-navigation button');
+		const buttons = activityNavigation.locator('.ash-sessions-navigation .ash-sessions-activity-item');
 		const chatNavigation = ['New', 'Search', 'Projects', 'Artifacts', 'Customize', 'More'];
 		await expect(buttons).toHaveText(chatNavigation);
 		await codeMode.click();
@@ -380,7 +383,7 @@ suite('sessions browser component', () => {
 		await expect(chatMode).toHaveAttribute('aria-pressed', 'true');
 		await expect(projects.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'projects');
 		await projects.click();
-		await expect(activityNavigation.locator('[data-action-id="sessions.open.projects"] button')).toHaveAttribute('aria-current', 'page');
+		await expect(activityNavigation.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item')).toHaveAttribute('aria-current', 'page');
 		await expect(activityNavigation).toBeVisible();
 		await expect(activityBar).toHaveCount(0);
 		await expect(more).toBeVisible();
@@ -641,10 +644,11 @@ suite('sessions browser component', () => {
 			expect(narrowPageBounds).not.toBeNull();
 			expect(narrowSidebarBounds!.y + narrowSidebarBounds!.height).toBeLessThanOrEqual(narrowPageBounds!.y + 1);
 			await expect(settings.getByRole('searchbox', { name: 'Search settings' })).toBeVisible();
+			await page.setViewportSize(viewport);
+			await expect(page.getByRole('button', { name: 'Accounts', exact: true })).toBeVisible();
 			await close.click();
 			await expect(settings).toHaveCount(0);
 			await expect(page.getByRole('button', { name: 'Accounts', exact: true })).toBeFocused();
-			await page.setViewportSize(viewport);
 		});
 
 		test('settings categories, localization icons and search display their own contents', async function () {
@@ -769,6 +773,8 @@ suite('sessions browser component', () => {
 		const topHost = page.locator('.ash-sessions-activity-host.top');
 		await expect(topHost).toBeVisible();
 		await expectActivityIconSize(activityNavigation, 18, 'top');
+		const createProject = activityNavigation.getByRole('button', { name: 'Create project', exact: true });
+		await expect(createProject).toHaveCount(0);
 		const titlebarAccounts = page.locator('[data-part="titlebar"]').getByRole('button', { name: 'Accounts', exact: true });
 		await titlebarAccounts.press('Enter');
 		await expect(titlebarAccounts).toHaveAttribute('aria-expanded', 'true');
@@ -787,6 +793,7 @@ suite('sessions browser component', () => {
 		await page.getByRole('menuitemradio', { name: 'Default' }).click();
 		await expect(activityBar).toHaveCount(0);
 		await expectActivityIconSize(activityNavigation, 18);
+		await expect(createProject).toHaveCount(1);
 		await chatButton.click({ button: 'right' });
 		await page.getByRole('menuitem', { name: 'Activity Bar Position' }).click();
 		await page.getByRole('menuitemradio', { name: 'Top' }).click();
@@ -1084,7 +1091,7 @@ suite('sessions browser component', () => {
 		const { page, info: testInfo } = browserTests;
 		const chinese = locale === 'zh-CN';
 		await page.goto(`/sessions.html?search${chinese ? '&locale=zh-CN' : ''}`);
-		await page.locator('[data-action-id="sessions.open.projects"] button').click();
+		await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 		const projects = page.locator('.ash-projects');
 		await projects.getByRole('button', { name: chinese ? '搜索项目' : 'Search projects', exact: true }).click();
 		await projects.getByRole('searchbox').fill('No matching synthetic project');
@@ -1154,11 +1161,11 @@ suite('sessions browser component', () => {
 
 	for (const locale of ['en', 'zh-CN']) test(`Sessions icon roles stay independent of IDE defaults (${locale})`, async function () {
 		const { page, context, info: testInfo } = browserTests;
-		if (locale === 'zh-CN') await page.goto('/sessions.html?catalog&locale=zh-CN');
+		await page.goto(`/sessions.html?catalog&search&locale=${locale}`);
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		await expect(page.locator('.ash-sessions-chat-slot.active :is(.ash-chat-input-send-action, .ash-chat-input-voice-action) .ash-icon')).toHaveCount(1);
 		const primary = page.locator('[data-part="titlebar"] .ash-icon-label-icon > .ash-icon, .ash-window-mode-control .ash-segmented-control-option > .ash-icon, .ash-sessions-activity-item .ash-icon, :is(.ash-chat-input-send-action, .ash-chat-input-voice-action) .ash-icon');
-		const inline = page.locator('.ash-sessions-list-section-icon').first();
+		const inline = page.locator('.ash-sessions-list:visible [data-project-id="search-project"] [data-ash-icon-id="projects"]');
 		const accounts = page.locator('[data-action-id="sessions.activity.accounts"] button');
 		await page.locator('.ash-sessions-window').evaluate(element => {
 			const icon = element.querySelector('.ash-icon')!.cloneNode(true) as HTMLElement;
@@ -1178,7 +1185,7 @@ suite('sessions browser component', () => {
 				await expect(icon).toHaveCSS('height', '18px');
 			}
 			await expect(inline).toHaveCSS('width', '18px');
-			await expect(inline.locator('.ash-icon')).toHaveCSS('font-size', '18px');
+			await expect(inline).toHaveCSS('font-size', '18px');
 			await expect(page.getByRole('note').locator('.ash-icon')).toHaveCSS('font-size', '18px');
 			await page.locator('[data-action-id="sessions.newSession"] button').click({ button: 'right' });
 			const auxiliary = page.locator('.ash-menu .ash-submenu-indicator > .ash-icon').first();
@@ -1356,6 +1363,39 @@ suite('sessions browser component', () => {
 		await expect(add).toBeFocused();
 	});
 
+	for (const locale of ['en', 'zh-CN']) test(`Projects navigation opens the project creation dialog (${locale})`, async function () {
+		const { page } = browserTests;
+		const chinese = locale === 'zh-CN';
+		await page.goto(`/sessions.html?catalog&search&locale=${locale}`);
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		const row = page.locator('.ash-sessions-navigation [data-action-id="sessions.open.projects"]');
+		const projects = row.getByRole('button', { name: chinese ? '项目' : 'Projects', exact: true });
+		const create = row.getByRole('button', { name: chinese ? '创建项目' : 'Create project', exact: true });
+		const dialog = page.getByRole('dialog', { name: chinese ? '创建项目' : 'Create a project', exact: true });
+		const name = dialog.getByRole('textbox', { name: chinese ? '你正在做什么？' : 'What are you working on?', exact: true });
+		await expect(create).toHaveCSS('opacity', '0');
+		await projects.focus();
+		await page.keyboard.press('Tab');
+		await expect(create).toBeFocused();
+		await expect(create.locator('[data-ash-icon-id="add"]')).toBeVisible();
+		await create.press('Enter');
+		await expect(name).toBeFocused();
+		await page.keyboard.press('Escape');
+		await expect(dialog).toHaveCount(0);
+		await expect(create).toBeFocused();
+		await expect(projects).toHaveAttribute('aria-current', 'page');
+		await create.hover();
+		await expect(create).toHaveCSS('background-color', 'rgba(90, 93, 94, 0.16)');
+		const rowBounds = (await projects.boundingBox())!;
+		const createBounds = (await create.boundingBox())!;
+		expect(createBounds.width).toBe(24);
+		expect(createBounds.height).toBe(24);
+		expect(rowBounds.x + rowBounds.width - createBounds.x - createBounds.width).toBeCloseTo(4);
+		expect(createBounds.y - rowBounds.y).toBeCloseTo(4);
+		await create.click();
+		await expect(name).toBeFocused();
+	});
+
 	for (const locale of ['en', 'zh-CN']) test(`Code opens and creates an environment from the new conversation (${locale})`, async () => {
 		const { page, info: testInfo } = browserTests;
 		const chinese = locale === 'zh-CN';
@@ -1523,7 +1563,7 @@ suite('sessions browser component', () => {
 		}
 		await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-light'));
 		await page.screenshot({ path: testInfo.outputPath(`sessions-typography-${locale}.png`) });
-		await page.locator('[data-action-id="sessions.open.projects"] button').click();
+		await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 		await expect(page.locator('.ash-projects')).toHaveCSS('font-size', '14px');
 		await expect(page.locator('.ash-projects').getByRole('button', { name: chinese ? '新建项目' : 'New project', exact: true }).first()).toHaveCSS('font-size', '14px');
 		await accounts.click();

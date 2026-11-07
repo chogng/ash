@@ -173,6 +173,10 @@ export class ProjectsEditorPane extends EditorPane implements IEditorPane {
 		}));
 	}
 
+	public createProject(): void {
+		this.projectActions.createProject();
+	}
+
 	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
 	public override clearInput(): void { }
 	public override setVisible(visible: boolean): void {

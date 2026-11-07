@@ -248,7 +248,7 @@ test('Agents shows connection status without moving content and automatically re
 	connectionHarness: { application, page },
 }, testInfo) => {
 	// Use local content so this connection test does not depend on a signed-in chat provider.
-	await page.locator('[data-action-id="sessions.open.projects"] button').click();
+	await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 	const projects = page.locator('.ash-projects');
 	await expect(projects).toBeVisible();
 	const contentAction = projects.locator('[data-action-id="projects.create"] button');
@@ -525,7 +525,7 @@ for (const surface of ['workbench', 'agents'] as const) {
 					'[data-part="titlebar"] [data-action-id="workbench.trust.manage"] button',
 				);
 				await expect(permissions).toHaveCount(0);
-				await page.locator('[data-action-id="sessions.open.projects"] button').click();
+				await page.locator('[data-action-id="sessions.open.projects"] > .ash-sessions-activity-item').click();
 				await expect(page.locator('.ash-projects')).toBeVisible();
 				const partStyles = await readFile(join(desktop, 'src/ash/workbench/browser/media/part.css'), 'utf8');
 				await page.addStyleTag({ content: partStyles });

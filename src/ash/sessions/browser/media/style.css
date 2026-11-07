@@ -72,7 +72,11 @@
 .ash-sessions-window .ash-button .ash-icon-label-icon > .ash-icon,
 .ash-sessions-window .ash-action-label-icon > .ash-icon,
 .ash-sessions-window
-	:is(.ash-menu-leading-check, .ash-menu-trailing-check)
+	:is(
+		.ash-menu-leading-check,
+		.ash-menu-trailing-check,
+		.ash-menu-action-icon
+	)
 	> .ash-icon {
 	width: var(--ash-lxiconFontSize-large);
 	height: var(--ash-lxiconFontSize-large);

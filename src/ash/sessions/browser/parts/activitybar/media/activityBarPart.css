@@ -120,6 +120,44 @@
 	height: var(--ash-toolbar-actionSize);
 }
 
+.ash-sessions-activity-projects {
+	position: relative;
+}
+
+.ash-sessions-activity-content.labeled
+	.ash-sessions-activity-projects
+	> .ash-sessions-activity-item {
+	padding-inline-end: calc(
+		var(--ash-toolbar-actionSize) + 2 *
+			var(--ash-sessions-sidebar-item-inset)
+	);
+}
+
+.ash-sessions-activity-projects:hover
+	> .ash-sessions-activity-item:not(.selected) {
+	background: var(--ash-sessions-sidebar-hover-background);
+}
+
+.ash-sessions-activity-projects
+	> .ash-button.ash-sessions-activity-create-project {
+	position: absolute;
+	inset-block-start: var(--ash-sessions-sidebar-item-inset);
+	inset-inline-end: var(--ash-sessions-sidebar-item-inset);
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+	min-width: var(--ash-toolbar-actionSize);
+	min-height: var(--ash-toolbar-actionSize);
+	padding: 0;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.ash-sessions-activity-projects:is(:hover, :focus-within)
+	> .ash-button.ash-sessions-activity-create-project {
+	opacity: 1;
+	pointer-events: auto;
+}
+
 .ash-menu .ash-sessions-navigation-menu-row {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) auto;

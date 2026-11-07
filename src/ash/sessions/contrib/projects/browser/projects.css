@@ -466,6 +466,12 @@
 .ash-projects.narrow .ash-projects-heading {
 	gap: var(--ash-spacing-size80);
 }
+.ash-projects.narrow .ash-projects-heading > h1 {
+	flex-shrink: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
 .ash-projects.narrow .ash-projects-detail {
 	grid-template-columns: minmax(0, 1fr);
 	gap: var(--ash-spacing-size200);

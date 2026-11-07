@@ -9,14 +9,16 @@ import { Button, type IButtonOptions } from '../../../../base/browser/ui/button/
 import { DropdownMenuActionViewItem } from '../../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js';
 import { HoverPosition } from '../../../../base/browser/ui/hover/hoverWidget.js';
 import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
+import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { AnchorAxisAlignment } from '../../../../base/common/layout.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { Disposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
-import { CompositeActionViewItem, getActivityHoverPosition } from '../../../../workbench/browser/parts/compositeBarActions.js';
+import { CompositeActionViewItem, getActivityHoverPosition, type ICompositeBarActionViewItemOptions } from '../../../../workbench/browser/parts/compositeBarActions.js';
 import { ActivityBarPosition } from '../../../../workbench/common/configuration.js';
 import { SessionsConfiguration, type SessionsActivityBarLocation } from '../../../common/configuration.js';
 import { ActionBar } from '../../../../base/browser/ui/actionbar/actionbar.js';
@@ -74,6 +76,7 @@ export class ActivityBar extends Disposable {
 		@IMenuService private readonly menus: IMenuService,
 		@IContextKeyService private readonly contextKeys: IContextKeyService,
 		@IStorageService private readonly storage: IStorageService,
+		@ICommandService commands: ICommandService,
 	) {
 		super();
 		this.domNode = h(container.ownerDocument, 'div');
@@ -87,18 +90,26 @@ export class ActivityBar extends Disposable {
 			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
 			ariaLabel: localize('sessions.activity.navigation', 'Navigation'),
 			orientation: 'vertical',
-			actionViewItemProvider: action => action === this.moreAction
-				? new MoreActionViewItem(action, contextMenuService, () => this.menuActions, this.labeled ? {
-					pins: this.pinnedActions,
-					setPinned: (id, pinned) => this.setActionPinned(id, pinned),
-				} : undefined)
-				: new CompositeActionViewItem(action, {
+			actionViewItemProvider: action => {
+				if (action === this.moreAction) {
+					return new MoreActionViewItem(action, contextMenuService, () => this.menuActions, this.labeled ? {
+						pins: this.pinnedActions,
+						setPinned: (id, pinned) => this.setActionPinned(id, pinned),
+					} : undefined);
+				}
+				const options: ICompositeBarActionViewItemOptions = {
 					presentation: 'navigation',
 					navigationClassName: 'ash-sessions-activity-item',
 					navigationLabel: this.labeled ? 'visible' : 'hidden',
 					onDidChange: (action as ActivityAction).current.onDidChange,
 					hoverOptions: { position: () => getActivityHoverPosition(this.configurationService.getValue<ActivityBarPosition>(SessionsConfiguration.activityBarLocation), 'left') },
-				}),
+				};
+				return this.labeled && action.id === 'sessions.open.projects'
+					? new ProjectsActionViewItem(action, options, () => {
+						void commands.executeCommand('sessions.createProject').catch(onUnexpectedError);
+					})
+					: new CompositeActionViewItem(action, options);
+			},
 			dragAndDrop: {
 				canDrop: (_event, target) => this.draggedActionId !== undefined && target !== this.moreAction,
 				onDragStart: (action, event) => {
@@ -388,6 +399,36 @@ export class ActivityBar extends Disposable {
 	public updateHelpHint(hint: string | undefined): void {
 		const label = localize('sessions.activity.navigation', 'Navigation');
 		this.navigation.domNode.setAttribute('aria-label', hint ? localize('sessions.activity.helpHint', '{0}. {1}', label, hint) : label);
+	}
+}
+
+class ProjectsActionViewItem extends CompositeActionViewItem {
+	private createProjectButton!: Button;
+
+	constructor(action: IAction, options: ICompositeBarActionViewItemOptions, private readonly createProject: () => void) {
+		super(action, options);
+	}
+
+	override render(container: HTMLElement): void {
+		super.render(container);
+		container.classList.add('ash-sessions-activity-projects');
+		const label = localize('sessions.activity.createProject', 'Create project');
+		this.createProjectButton = this.createButton(container, {
+			...defaultButtonStyles,
+			label,
+			title: label,
+			icon: Lxicon.add,
+			iconOnly: true,
+			presentation: 'quiet',
+			onClick: this.createProject,
+		});
+		this.createProjectButton.domNode.classList.add('ash-sessions-activity-create-project');
+		this.createProjectButton.domNode.setAttribute('aria-haspopup', 'dialog');
+	}
+
+	override setTabbable(tabbable: boolean): void {
+		super.setTabbable(tabbable);
+		this.createProjectButton.domNode.tabIndex = tabbable ? 0 : -1;
 	}
 }
 
