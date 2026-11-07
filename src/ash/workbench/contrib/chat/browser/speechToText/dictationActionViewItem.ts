@@ -57,7 +57,7 @@ export class DictationActionViewItem extends DropdownWithPrimaryActionViewItem {
 					onUnexpectedError(error);
 				});
 			},
-		});
+		}, { separateButtons: true });
 	}
 
 	public override render(container: HTMLElement): void {

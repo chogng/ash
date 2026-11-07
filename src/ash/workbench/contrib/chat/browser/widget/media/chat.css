@@ -471,7 +471,6 @@
 }
 
 .ash-chat-input-toolbars .ash-chat-input-send-action,
-.ash-chat-input-toolbars .ash-chat-input-voice-action,
 .ash-chat-input-interrupt-action {
 	width: var(--ash-toolbar-actionSize);
 	min-width: var(--ash-toolbar-actionSize);
@@ -481,7 +480,8 @@
 	background: var(--ash-button-primaryBackground);
 }
 
-.ash-chat-input-toolbars .ash-chat-input-send-action {
+.ash-chat-input-toolbars .ash-chat-input-send-action,
+.ash-chat-input-toolbars .ash-chat-input-voice-action {
 	border-radius: var(--ash-cornerRadius-large);
 }
 
@@ -491,28 +491,9 @@
 	opacity: 1;
 }
 
-.ash-chat-input-toolbars .ash-chat-input-voice-action.disabled {
-	color: var(--ash-button-foreground);
-	background: color-mix(
-		in srgb,
-		var(--ash-button-foreground) 12%,
-		transparent
-	);
-	opacity: 1;
-}
-
 .ash-chat-input-toolbars .ash-chat-input-send-action:not(:disabled):hover,
-.ash-chat-input-toolbars .ash-chat-input-voice-action:hover,
 .ash-chat-input-interrupt-action:hover {
 	background: var(--ash-button-primaryHoverBackground);
-}
-
-.ash-chat-input-toolbars .ash-chat-input-voice-action.disabled:hover {
-	background: color-mix(
-		in srgb,
-		var(--ash-button-foreground) 12%,
-		transparent
-	);
 }
 
 @container (max-width: 360px) {

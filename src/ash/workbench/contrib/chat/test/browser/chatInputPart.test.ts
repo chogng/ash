@@ -4918,9 +4918,10 @@ suite('chatInput browser component', () => {
 	test('Chat dictation settings stay beside the microphone as voice switches to send', async function () {
 		const { page } = browserTests;
 
-		await page.goto('/chatInput.html?inlineCode&dictation');
+		await page.goto('/chatInput.html?inlineCode&dictation&voiceInput');
 		await page.evaluate(() => window.ashChatInputIntegration.showModels());
 		const chat = page.locator('main');
+		await chat.evaluate(element => element.classList.add('ash-workbench'));
 		const toolbar = chat.locator('.ash-chat-input-toolbars');
 		const rightActionLayout = async (actionId: string) => toolbar.evaluate((element, id) => {
 			const mic = element.querySelector<HTMLElement>('[data-action-id="workbench.action.chat.toggleSpeechToText"]');
@@ -4936,15 +4937,45 @@ suite('chatInput browser component', () => {
 			};
 		}, actionId);
 		await expect(toolbar.locator('[data-action-id="ash.chat.input.attachment"]')).toHaveCount(0);
-		await expect(toolbar.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')).toHaveCount(1);
+		const dictation = toolbar.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"]');
+		const microphoneSurface = dictation.locator('.ash-split-action-primary');
+		const settingsSurface = dictation.locator('.ash-split-action-dropdown');
 		const voiceButton = toolbar.locator('[data-action-id="ash.chat.input.voice"] button');
 		const microphone = toolbar.getByRole('button', { name: 'Dictate message', exact: true });
 		const settings = toolbar.getByRole('button', { name: 'Dictation settings', exact: true });
+		const transparent = 'rgba(0, 0, 0, 0)';
+		await expect(dictation).toHaveCSS('column-gap', '2px');
+		await expect(microphone).toHaveCSS('border-radius', '4px');
+		await expect(settings).toHaveCSS('border-radius', '4px');
+		await expect(voiceButton).toHaveCSS('border-radius', '8px');
+		await expect(voiceButton).toHaveCSS('background-color', transparent);
+		await expect(microphoneSurface).toHaveCSS('background-color', transparent);
+		await expect(settingsSurface).toHaveCSS('background-color', transparent);
+		await microphone.hover();
+		await expect(microphoneSurface).not.toHaveCSS('background-color', transparent);
+		await expect(settingsSurface).not.toHaveCSS('background-color', transparent);
+		await expect(microphone).not.toHaveCSS('background-color', transparent);
+		await expect(settings).toHaveCSS('background-color', transparent);
+		await settings.hover();
+		await expect(dictation).toHaveCSS('background-color', transparent);
+		await expect(microphoneSurface).not.toHaveCSS('background-color', transparent);
+		await expect(settingsSurface).not.toHaveCSS('background-color', transparent);
+		await expect(microphone).toHaveCSS('background-color', transparent);
+		await expect(settings).not.toHaveCSS('background-color', transparent);
+		await voiceButton.hover();
+		await expect(microphoneSurface).toHaveCSS('background-color', transparent);
+		await expect(settingsSurface).toHaveCSS('background-color', transparent);
+		await expect(voiceButton).not.toHaveCSS('background-color', transparent);
 		await microphone.focus();
 		await microphone.press('ArrowRight');
 		await expect(settings).toBeFocused();
 		await settings.press('Enter');
 		await expect(page.getByRole('menuitemradio', { name: 'System default microphone' })).toHaveAttribute('aria-checked', 'true');
+		await expect(microphoneSurface).not.toHaveCSS('background-color', transparent);
+		await expect(settingsSurface).not.toHaveCSS('background-color', transparent);
+		await expect(settings).not.toHaveCSS('background-color', transparent);
+		await expect(microphone).toHaveCSS('background-color', transparent);
+		await expect(dictation).toHaveCSS('background-color', transparent);
 		await page.getByRole('menuitemradio', { name: 'USB microphone' }).click();
 		await expect(settings).toBeFocused();
 		await expect(voiceButton).toBeVisible();
@@ -4956,11 +4987,9 @@ suite('chatInput browser component', () => {
 		await expect(voiceButton.locator('[data-ash-icon-id="voice-mode"]')).toHaveCount(1);
 		const shape = await voiceButton.evaluate(button => {
 			const bounds = button.getBoundingClientRect();
-			return { width: bounds.width, height: bounds.height, radius: getComputedStyle(button).borderRadius, background: getComputedStyle(button).backgroundColor };
+			return { width: bounds.width, height: bounds.height };
 		});
 		expect(shape.width).toBe(shape.height);
-		expect(shape.radius).toBe('50%');
-		expect(shape.background).not.toBe('rgba(0, 0, 0, 0)');
 		const input = chat.locator('.ash-chat-input-editor .stanza-editor-input');
 		await input.focus();
 		await page.keyboard.insertText('Hello');

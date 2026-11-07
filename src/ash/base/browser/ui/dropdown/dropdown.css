@@ -137,3 +137,32 @@
 	height: var(--ash-lxiconFontSize-compact);
 	font-size: var(--ash-lxiconFontSize-compact);
 }
+
+.ash-split-action.separated {
+	gap: var(--ash-spacing-size20);
+}
+
+.ash-split-action.separated
+	> :is(.ash-split-action-primary, .ash-split-action-dropdown) {
+	border-radius: var(
+		--ash-button-border-radius,
+		var(--ash-cornerRadius-small)
+	);
+}
+
+.ash-split-action.separated
+	> :is(.ash-split-action-primary, .ash-split-action-dropdown)
+	> .ash-button {
+	border-radius: inherit;
+}
+
+.ash-split-action.separated
+	> :is(.ash-split-action-primary, .ash-split-action-dropdown)
+	> .ash-button-quiet:where(
+		:not(:disabled, .checked):hover,
+		[aria-expanded="true"]
+	) {
+	background: var(--ash-toolbar-hoverBackground);
+	box-shadow: inset 0 0 0 var(--ash-strokeThickness)
+		var(--ash-contrastBorder, transparent);
+}

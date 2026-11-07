@@ -165,7 +165,8 @@ textarea {
 	background: var(--ash-selection-background);
 }
 
-/* Split actions layer the hovered trigger over their shared group background. */
+/* The hovered split trigger sits over the group background.
+   Separated triggers paint that background on both parts and leave the gap clear. */
 .ash-workbench
 	:where(
 		.ash-action-bar:not(.vertical)
@@ -181,16 +182,21 @@ textarea {
 .ash-workbench
 	:where(
 		.ash-action-bar:not(.vertical)
-			> .ash-split-action
+			> .ash-split-action:not(.separated)
 			> :is(.ash-split-action-primary, .ash-split-action-dropdown)
 			> .ash-button-quiet:not(:disabled):hover
 	),
 .ash-workbench
 	:where(
-		.ash-action-bar:not(.vertical) > .ash-split-action:not(.disabled):hover
-	),
-.ash-workbench
-	:where(.ash-action-bar:not(.vertical) > .ash-split-action.active) {
+		.ash-action-bar:not(.vertical)
+			> .ash-split-action:not(.separated):is(
+				:not(.disabled):hover,
+				.active
+			),
+		.ash-action-bar:not(.vertical)
+			> .ash-split-action.separated:is(:not(.disabled):hover, .active)
+			> :is(.ash-split-action-primary, .ash-split-action-dropdown)
+	) {
 	background: var(--ash-toolbar-hoverBackground);
 }
 

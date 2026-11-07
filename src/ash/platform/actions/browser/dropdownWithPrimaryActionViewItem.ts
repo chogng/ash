@@ -12,7 +12,10 @@ import { assertDefined } from '../../../base/common/types.js';
 import { MenuItemAction } from '../common/actions.js';
 import { MenuEntryActionViewItem } from './menuEntryActionViewItem.js';
 
-export type IDropdownWithPrimaryActionViewItemOptions = ActionViewItemOptions;
+export interface IDropdownWithPrimaryActionViewItemOptions extends ActionViewItemOptions {
+	/** Draw the shared hover background on two separate rounded surfaces. */
+	readonly separateButtons?: boolean;
+}
 
 /**
  * Presents one primary action and its related menu as a single split action.
@@ -29,7 +32,7 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 	private readonly changeDropdownVisibilityEmitter = this._register(new Emitter<boolean>());
 	readonly onDidChangeDropdownVisibility = this.changeDropdownVisibilityEmitter.event;
 	private readonly contextMenuProvider: IContextMenuProvider;
-	private readonly viewItemOptions: ActionViewItemOptions;
+	private readonly viewItemOptions: IDropdownWithPrimaryActionViewItemOptions;
 	protected primaryButton: HTMLButtonElement | undefined;
 	private dropdownButton: HTMLButtonElement | undefined;
 	private dropdownContainer: HTMLElement | undefined;
@@ -76,6 +79,7 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 			throw new Error(`Action view item is already rendered: ${this.action.id}`);
 		}
 		container.classList.add('ash-dropdown-with-primary-action-view-item', 'ash-split-action');
+		container.classList.toggle('separated', this.viewItemOptions.separateButtons === true);
 		container.classList.toggle('primary', this.viewItemOptions.buttonPresentation === 'primary');
 		container.classList.toggle('disabled', !this.action.enabled);
 
