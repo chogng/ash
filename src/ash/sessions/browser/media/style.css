@@ -155,6 +155,43 @@
 	content: none;
 }
 
+.ash-sessions-window
+	.ash-context-view-default:has(> .ash-chat-context-details) {
+	border-radius: var(--ash-cornerRadius-xLarge);
+	box-shadow: var(--ash-sessions-soft-shadow);
+}
+
+.ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
+	.ash-sessions-window
+	.ash-context-view-default:has(> .ash-chat-context-details) {
+	border-color: var(--ash-contrastBorder);
+	box-shadow: none;
+}
+
+.ash-sessions-window .ash-chat-context-details {
+	border-radius: inherit;
+}
+
+.ash-sessions-window .ash-chat-context-details-summary {
+	color: var(--ash-description-foreground);
+}
+
+.ash-sessions-window .ash-chat-context-details-table thead {
+	font-size: var(--ash-fontSize-label2);
+}
+
+.ash-sessions-window
+	.ash-chat-context-details-table
+	:is(th:not(:first-child), td) {
+	padding-inline-start: var(--ash-spacing-size80);
+}
+
+.ash-sessions-window .ash-chat-context-details-actions {
+	margin-top: var(--ash-spacing-size120);
+	padding-top: 0;
+	border-top: 0;
+}
+
 .ash-sessions-window .ash-context-view-menu {
 	/* The inner menu owns the inset. Reset the native popover padding. */
 	padding: 0;
