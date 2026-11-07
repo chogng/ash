@@ -186,6 +186,8 @@ Common **2,761**、Renderer **4,300** 文件类型检查通过，Desktop `pnpm b
 | 5 · 远程与相邻服务，`remote-provider`／`adjacent` | `sessions/contrib/providers/remoteAgentHost/`、`sessions/services/agentHost/`、`sessions/services/agentHostFilter/`、相邻 Dev Container／Terminal／Chat 入口             | 当前复用 `platform/remote`、扩展解析与单窗口 App Server 连接。多 host 分组、筛选、隧道及 cloud sandbox 不能因上游有文件就视作现有能力；先确定真实连接 producer 与状态 owner。                                                                                                                                                                    |
 | 后端分支 · `backend`／`protocol-state`            | `platform/agentHost/node/`、`common/state/`、`common/meta/`                                                                                                              | 454 个 Node 手写文件与 190 个 state／meta 手写文件按 Thread／Turn／权限／存储／工具／provider 职责分别核对 `crates/core`、`crates/state`、`crates/app-server-protocol`、`crates/model-provider`、`crates/models-manager`、`crates/subscriptions` 等现有领域。当前只是路由，尚未逐文件证明能力等价；不移植 Node runtime、AHP reducer 或生成协议。 |
 
+- **待补 · 云会话仓库选择**：上游 `src/vs/workbench/contrib/chat/browser/agentSessions/repositoryPicker.ts` 为云会话创建、Cloud Sandbox 和云端自动化提供仓库搜索与选择。Ash 当前缺少对应的生产调用方。等 Ash 的云会话仓库选择有实际生产调用方后，再沿该调用链对齐到 `src/ash/workbench/contrib/chat/browser/agentSessions/repositoryPicker.ts`，并从该入口验证选择与取消行为。
+
 ### 本次完成的重连策略切片
 
 Web 连接断开 → `connectWebRendererApi` 创建的 `AppServerConnectionRecovery` → `common/reconnectPolicy.ts` 的策略契约与计算 → 原调度器持有定时器、重试计数和睡眠预算 → 原协议客户端替换连接。新策略文件不持有连接或业务状态。Web 保持 500 ms 起步、10 秒封顶、五分钟恢复预算；Desktop 原固定重试与业务请求不重放的行为继续由既有测试验证。
