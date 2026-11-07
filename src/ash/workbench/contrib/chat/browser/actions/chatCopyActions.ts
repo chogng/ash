@@ -1,20 +1,120 @@
 import { localize, localize2 } from '../../../../../nls.js';
+import { h } from '../../../../../base/browser/dom.js';
+import { ButtonActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
+import { Button } from '../../../../../base/browser/ui/button/button.js';
+import { RunOnceScheduler } from '../../../../../base/common/async.js';
+import { Disposable, toDisposable, type DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
-import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { IActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
+import { Action2, MenuId, MenuItemAction, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
 import { IAppServerApi } from '../../../../../platform/agentHost/common/appServerApi.js';
 import { buildOpenSessionLinkUri } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { IClipboardService } from '../../../../../platform/clipboard/common/clipboardService.js';
+import type { ICommandService } from '../../../../../platform/commands/common/commands.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
+import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import { IChatService, type ThreadRead } from '../../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService, withChatConversation } from '../../../../services/chat/common/chatSessionNavigationService.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
-import { IChatWidgetService } from '../chat.js';
+import { getCompletedChatResponseSource, type IChatListItem } from '../../common/model/chatViewModel.js';
+import { ChatResponseActionContext, IChatWidgetService, unwrapChatResponseActionContext } from '../chat.js';
 import { toPortableMarkdown } from '../widget/chatClipboard.js';
 
 // Single-host owners retain the established local address namespace.
 const connectionAuthority = 'local';
-export const CopyItemActionId = 'workbench.action.chat.copyItem';
+const CopyItemActionId = 'workbench.action.chat.copyItem';
+
+class ChatCopyFeedback extends Disposable {
+	readonly status: HTMLElement;
+	private readonly clear = this._register(new RunOnceScheduler(() => this.reset(), 1200));
+	private copying = false;
+
+	constructor(private readonly button: Button, container: HTMLElement, private readonly tooltip: string) {
+		super();
+		this.status = h(container.ownerDocument, 'span', { className: 'ash-chat-message-copy-status', attributes: { role: 'status' } });
+		container.append(this.status);
+		this._register(toDisposable(() => this.status.remove()));
+	}
+
+	private reset(): void {
+		this.button.icon = Lxicon.copy;
+		this.button.setTitle(this.tooltip);
+		this.status.textContent = '';
+	}
+
+	async copy(run: () => unknown, isCurrent: () => boolean): Promise<void> {
+		if (this.copying || !isCurrent()) return;
+		this.copying = true;
+		this.button.domNode.setAttribute('aria-busy', 'true');
+		this.clear.cancel();
+		this.reset();
+		try {
+			await run();
+			if (this.isDisposed || !isCurrent()) return;
+			const copied = localize('chat.message.copied', 'Message copied.');
+			this.button.icon = Lxicon.check;
+			this.button.setTitle(copied);
+			this.status.textContent = copied;
+			this.clear.schedule();
+		} catch (error) {
+			if (!this.isDisposed && isCurrent()) this.status.textContent = localize('chat.message.copyFailed', 'Could not copy message: {0}', String(error));
+		} finally {
+			this.copying = false;
+			this.button.domNode.removeAttribute('aria-busy');
+		}
+	}
+}
+
+class ChatCopyActionViewItem extends ButtonActionViewItem {
+	private feedback: ChatCopyFeedback | undefined;
+
+	override render(container: HTMLElement): void {
+		super.render(container);
+		const row = this.actionContext;
+		this.feedback = this._register(new ChatCopyFeedback(this.button, row instanceof ChatResponseActionContext ? row.actions : container, this.action.tooltip));
+	}
+
+	override setActionContext(context: unknown): void {
+		super.setActionContext(context);
+		if (this.feedback && context instanceof ChatResponseActionContext && this.feedback.status.parentElement !== context.actions) {
+			context.actions.append(this.feedback.status);
+		}
+	}
+
+	protected override async runAction(): Promise<void> {
+		const row = this.actionContext;
+		if (!(row instanceof ChatResponseActionContext) || !row.visible) return;
+		const item = row.item;
+		await this.feedback?.copy(() => this.action.run(item), () => row.visible && row.item === item && !!item.text);
+	}
+}
+
+export class ChatCopyActionRendering extends Disposable {
+	static readonly ID = 'chat.copyActionRendering';
+
+	constructor(@IActionViewItemService presentations: IActionViewItemService) {
+		super();
+		this._register(presentations.register(MenuId.ChatMessageFooter, CopyItemActionId, (action, options) =>
+			action instanceof MenuItemAction ? new ChatCopyActionViewItem(action, options) : undefined));
+	}
+}
+
+export function renderChatRequestCopyButton(
+	container: HTMLElement, lifetime: DisposableStore, commands: ICommandService, getItem: () => IChatListItem, isVisible: () => boolean,
+): Button {
+	const label = localize('chat.message.copy', 'Copy message');
+	const button = lifetime.add(new Button(container, {
+		...defaultButtonStyles, label, title: label, icon: Lxicon.copy, presentation: 'quiet', size: 'small', enabled: !!getItem().text,
+	}));
+	const feedback = lifetime.add(new ChatCopyFeedback(button, container, label));
+	lifetime.add(button.onDidClick(() => {
+		const item = getItem();
+		void feedback.copy(() => commands.executeCommand(CopyItemActionId, item), () => isVisible() && getItem() === item && !!item.text);
+	}));
+	return button;
+}
 
 export class CopyChatSessionLinkAction extends Action2 {
 	constructor() {
@@ -22,14 +122,24 @@ export class CopyChatSessionLinkAction extends Action2 {
 			id: 'workbench.action.chat.copySessionLink',
 			title: localize2('chat.copySessionLink', 'Chat: Copy Conversation Link'),
 			shortTitle: localize2('chat.copySessionLink.label', 'Copy Conversation Link'),
+			icon: Lxicon.share,
 			f1: true,
-			menu: { id: MenuId.ChatTitle, group: '1_cutcopypaste', order: 10 },
+			menu: [
+				{ id: MenuId.ChatTitle, group: '1_cutcopypaste', order: 10 },
+				{
+					id: MenuId.ChatMessageFooter,
+					group: 'navigation',
+					order: 11,
+					when: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), ChatContextKeys.responseHasConversationLink.isEqualTo(true)),
+				},
+			],
 		});
 	}
 
 	override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+		context = unwrapChatResponseActionContext(context);
 		const navigation = accessor.get(IChatSessionNavigationService);
-		const selected = context === undefined ? navigation.getActiveConversation() : context;
+		const selected = context === undefined ? navigation.getActiveConversation() : getCompletedChatResponseSource(context) ?? context;
 		if (!selected || typeof selected !== 'object' || !('sessionId' in selected) || !('threadId' in selected)
 			|| typeof selected.sessionId !== 'string' || !selected.sessionId || typeof selected.threadId !== 'string' || !selected.threadId) {
 			throw new Error(localize('chat.sessionLink.draft', 'Send a message in this conversation before copying its link.'));
@@ -130,6 +240,7 @@ export function registerChatCopyActions(): void {
 			});
 		}
 		public override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
+			context = unwrapChatResponseActionContext(context);
 			if (!context || typeof context !== 'object' || !('text' in context) || typeof context.text !== 'string' || !('type' in context) || context.type !== 'agentMessage' && context.type !== 'userMessage') return;
 			await accessor.get(IClipboardService).writeText(toPortableMarkdown(context.text));
 		}

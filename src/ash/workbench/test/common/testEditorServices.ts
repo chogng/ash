@@ -1,4 +1,6 @@
 import { registerTestWorkbenchHostServices } from './workbenchHostTestServices.js';
+import { IActionViewItemService } from '../../../platform/actions/browser/actionViewItemService.js';
+import { getSingletonServiceDescriptors } from '../../../platform/instantiation/common/extensions.js';
 import { IAppServerApi } from '../../../platform/agentHost/common/appServerApi.js';
 import { StatusbarService } from '../../browser/parts/statusbar/statusbarPart.js';
 import { IChatLayoutService } from '../../contrib/chat/common/widget/chatLayoutService.js';
@@ -118,6 +120,10 @@ export function createTestComponentServices(storage?: IStorageService, parent?: 
 }
 
 export function registerTestComponentServices(services: InstantiationService, document: Document = globalThis.document): InstantiationService {
+	if (!services.has(IActionViewItemService)) {
+		const descriptor = getSingletonServiceDescriptors().find(([id]) => id === IActionViewItemService)![1];
+		services.registerSingleton(IActionViewItemService, () => services.createInstance(descriptor));
+	}
 	if (!services.has(ILoggerService)) services.registerInstance(ILoggerService, new NullLoggerService());
 	if (!services.has(IChatLayoutService)) services.registerSingleton(IChatLayoutService, () => services.createInstance(ChatLayoutService));
 	if (!services.has(IActivityService)) services.registerSingleton(IActivityService, () => services.createInstance(ActivityService));

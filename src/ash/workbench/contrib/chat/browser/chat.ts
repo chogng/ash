@@ -5,7 +5,10 @@ import type { ChatRequestQueueKind, QueuedMessage } from '../../../services/chat
 import type { IView } from '../../../common/views.js';
 import type { AgentSessionsViewerOrientation } from './agentSessions/agentSessions.js';
 import type { ICodeEditor } from '../../../../editor/browser/editorBrowser.js';
-import type { IDisposable } from '../../../../base/common/lifecycle.js';
+import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { h } from '../../../../base/browser/dom.js';
+import { isCancellationError } from '../../../../base/common/errors.js';
+import { localize } from '../../../../nls.js';
 import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { URI } from '../../../../base/common/uri.js';
@@ -19,6 +22,71 @@ import type { IChatListItem } from '../common/model/chatViewModel.js';
 import type { ChatEditorInput } from './widgetHosts/editor/chatEditorInput.js';
 
 export const CHAT_WIDGET_VIEW_STATE_CACHE_LIMIT = 100;
+
+/** Borrows a reply from its rendered row and limits playback to that row's lifetime. */
+export class ChatResponseActionContext extends Disposable {
+	private playback: AbortController | undefined;
+	private status: HTMLElement | undefined;
+
+	constructor(
+		private currentItem: IChatListItem,
+		readonly actions: HTMLElement,
+		readonly window: Window & typeof globalThis,
+		private readonly isVisible: () => boolean,
+		private readonly setReading: (reading: boolean) => void,
+	) { super(); }
+
+	get visible(): boolean { return !this.isDisposed && this.isVisible(); }
+	get isReading(): boolean { return !!this.playback; }
+	get item(): IChatListItem { return this.currentItem; }
+
+	update(item: IChatListItem): void {
+		const previous = this.item;
+		this.currentItem = item;
+		if (previous.text !== item.text || previous.attachmentSource?.sessionId !== item.attachmentSource?.sessionId
+			|| previous.attachmentSource?.threadId !== item.attachmentSource?.threadId) this.stop();
+	}
+
+	async read(run: (signal: AbortSignal) => Promise<void>): Promise<void> {
+		if (!this.visible || this.playback || this.item.transient || !this.item.text) return;
+		const controller = this.playback = new AbortController();
+		if (!this.status) {
+			this.status = h(this.actions.ownerDocument, 'span', { className: 'ash-chat-message-read-status', attributes: { role: 'status' } });
+			this.actions.append(this.status);
+		}
+		this.status.textContent = '';
+		this.setReading(true);
+		try {
+			await run(controller.signal);
+		} catch (error) {
+			if (this.playback === controller && !isCancellationError(error)) {
+				this.status.textContent = localize('chat.message.readAloudFailed', 'Could not read response aloud: {0}', String(error));
+			}
+		} finally {
+			if (this.playback === controller) this.stop();
+		}
+	}
+
+	stop(): boolean {
+		const controller = this.playback;
+		if (!controller) return false;
+		this.playback = undefined;
+		controller.abort();
+		if (!this.isDisposed) this.setReading(false);
+		return true;
+	}
+
+	protected override disposeCore(): void {
+		this.stop();
+		this.status?.remove();
+		this.status = undefined;
+		super.disposeCore();
+	}
+}
+
+export function unwrapChatResponseActionContext(context: unknown): unknown {
+	return context instanceof ChatResponseActionContext ? context.item : context;
+}
 
 /** Retained transcript presentation independent of the host's visibility and DOM focus. */
 export type IChatWidgetViewState = Omit<ReturnType<ChatListWidget['getViewState']>, 'visible' | 'focus'>;

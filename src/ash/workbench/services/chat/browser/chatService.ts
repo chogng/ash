@@ -1,6 +1,7 @@
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { ChatAIDisabledSettingId } from '../../../../platform/chat/common/chatSettings.js';
 import type { ChatContextUsage, IChatRequestSubmittedEvent, RewriteChatRequestOptions, StartReviewOptions } from '../common/chatService.js';
+import { getAcceptedChatRequest } from '../common/chatService.js';
 import type { AgentInteractionOffer, AgentInput, ThreadRead, ThreadSnapshotHistory } from '../../../../platform/agentHost/common/agent.js';
 import { localize } from '../../../../nls.js';
 import type { TurnChangeSetSummary as TurnChangeSetSummaryDto, TurnChangesReadResult as TurnChangesReadResultDto } from '../../../../../../.build/protocol/typescript/index.js';
@@ -189,26 +190,17 @@ export class ChatService extends Disposable implements IChatService {
 		const epoch = this.connectionEpoch;
 		const { thread } = await this.readThread(options.sessionId, options.threadId);
 		const turn = thread.turns.find(turn => turn.turnId === options.turnId);
-		const firstMessage = turn?.items.find(item => item.type === 'userMessage');
-		if (!turn || firstMessage?.type !== 'userMessage' || firstMessage.itemId !== options.itemId || !firstMessage.clientId) {
+		const request = turn && getAcceptedChatRequest(turn);
+		if (!request || request.message.itemId !== options.itemId) {
 			throw new Error(localize('chat.edit.unavailable', 'This request is no longer available for editing.'));
 		}
-		const input: AgentInput[] = [];
-		// Submission identity separates the original input from steering, including context-only
-		// steering received before the agent produces its first output. Legacy items lack this identity.
-		for (const item of turn.items) {
-			if (!('clientId' in item) || item.clientId !== firstMessage.clientId) continue;
-			switch (item.type) {
-				case 'userMessage':
-					if (item.itemId === firstMessage.itemId) input.push(...messageInput(options.text, options.contexts));
-					else input.push({ type: 'text', text: item.text });
-					break;
-				case 'userContext': input.push({ type: 'context', name: item.name, content: item.content, ...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {}) }); break;
-				case 'userImage': input.push({ type: 'image', url: item.url }); break;
-				case 'userImageAttachment': input.push({ type: 'imageAttachment', attachment: item.attachment }); break;
-				case 'userAudioAttachment': input.push({ type: 'audioAttachment', attachment: item.attachment }); break;
-				default: break;
-			}
+		if (options.text === undefined && (thread.status !== 'active' || turn?.status !== 'completed' || turn.kind && turn.kind !== 'coding')) {
+			throw new Error(localize('chat.requestVersions.unavailable', 'This request is no longer available to run again.'));
+		}
+		const input = request.input;
+		if (options.text !== undefined) {
+			const firstText = input.findIndex(item => item.type === 'text');
+			input.splice(firstText, 1, ...messageInput(options.text, options.contexts));
 		}
 		if (this.isDisposed || epoch !== this.connectionEpoch) throw canceled();
 		this.assertAIEnabled();

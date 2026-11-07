@@ -47,14 +47,17 @@ suite('chatTranscript browser component', () => {
 				window.ashChatTranscriptIntegration.renderItems(rows);
 			}, rows);
 			const action = (en: string, zh: string) => page.getByRole('button', { name: locale === 'en' ? en : zh, exact: true });
-			const feedback = action('Give model feedback', '提供模型反馈');
+			const feedback = page.getByRole('menuitem', { name: locale === 'en' ? 'Give model feedback' : '提供模型反馈', exact: true });
 			await expect(feedback).toHaveCount(0);
 			const reply = page.locator('[data-item-id="feedback-reply"]');
 			const retained = await reply.elementHandle();
-			await page.evaluate(({ rows, queueTarget }) => window.ashChatTranscriptIntegration.renderItems([
-				{ ...rows[0], canGiveModelFeedback: true }, rows[1], { ...rows[2], queueTarget },
-			]), { rows, queueTarget });
-			await feedback.press('Enter');
+			const completed = { ...rows[0], canGiveModelFeedback: true };
+			await page.evaluate(({ completed, rows, queueTarget }) => window.ashChatTranscriptIntegration.renderItems([
+				completed, rows[1], { ...rows[2], queueTarget },
+			]), { completed, rows, queueTarget });
+			const more = reply.getByRole('button', { name: locale === 'en' ? 'More Actions' : '更多操作', exact: true });
+			await more.press('Enter');
+			await feedback.click();
 			expect(await reply.evaluate((node, previous) => node === previous, retained)).toBe(true);
 			await retained?.dispose();
 			await action('Edit queued message', '编辑排队消息').press('Space');
@@ -62,7 +65,7 @@ suite('chatTranscript browser component', () => {
 			await action('Remove queued message', '移除排队消息').click();
 			await action('Redo last request', '重做上一条请求').click();
 			expect(await page.evaluate(() => window.ashChatTranscriptIntegration.messageRowCommands())).toEqual([
-				{ id: 'workbench.action.chat.openModelFeedbackSurvey', args: [feedbackSource] },
+				{ id: 'workbench.action.chat.openModelFeedbackSurvey', args: [completed] },
 				{ id: 'workbench.action.chat.editPendingRequest', args: [queueTarget] },
 				{ id: 'workbench.action.chat.sendPendingImmediately', args: [queueTarget] },
 				{ id: 'workbench.action.chat.removePendingRequest', args: [queueTarget] },
@@ -1269,6 +1272,7 @@ suite('chatTranscript browser component', () => {
 					await page.evaluate(theme => { window.ashChatTranscriptIntegration.setTheme(theme); document.querySelector<HTMLElement>('[data-item-id="copy-response"]')!.closest('main')!.style.width = '220px'; }, theme);
 					await button.focus(); await page.keyboard.press('Enter');
 					await expect(row.locator('.ash-chat-message-copy-status')).toHaveText(locale === 'zh-CN' ? '消息已复制。' : 'Message copied.');
+					await expect(button.locator('[data-ash-icon-id="check"]')).toBeVisible();
 					await expect(button).toBeFocused();
 					expect(await page.evaluate(() => window.ashChatTranscriptIntegration.state().copied)).toBe(text);
 					expect(await row.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
@@ -1307,6 +1311,7 @@ suite('chatTranscript browser component', () => {
 				let count = 0;
 				for (const theme of ['dark', 'light', 'hc'] as const) {
 					await page.evaluate(theme => { window.ashChatTranscriptIntegration.setTheme(theme); document.querySelector<HTMLElement>('[data-item-id="copy-response"]')!.closest('main')!.style.width = '220px'; }, theme);
+					await expect(footer.getByRole('button').first()).toHaveAccessibleName(locale === 'zh-CN' ? '复制消息' : 'Copy message');
 					await copy.focus();
 					await page.keyboard.press('ArrowRight');
 					await expect(read()).toBeFocused();

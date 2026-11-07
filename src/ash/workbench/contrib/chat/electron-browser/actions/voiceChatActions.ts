@@ -1,11 +1,14 @@
 import { renderAsPlaintext } from '../../../../../base/browser/markdownRenderer.js';
-import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { addDisposableListener } from '../../../../../base/browser/dom.js';
+import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
 import { canceled } from '../../../../../base/common/errors.js';
+import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { localize, localize2 } from '../../../../../nls.js';
-import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { Action2, MenuId, MenusRegistry, registerAction2 } from '../../../../../platform/actions/common/actions.js';
+import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ISpeechService, HasSpeechProvider, TextToSpeechInProgress } from '../../../speech/common/speechService.js';
-import { IChatWidgetService } from '../../browser/chat.js';
+import { ChatResponseActionContext, IChatWidgetService } from '../../browser/chat.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 
 export class StartVoiceChatAction extends Action2 {
@@ -30,30 +33,55 @@ export class StartVoiceChatAction extends Action2 {
 
 // This is command admission per window, not media state. The provider still owns synthesis.
 const readingWindows = new WeakMap<ISpeechService, CancellationTokenSource>();
+const nativeReadAvailable = ContextKeyExpr.and(
+	ChatContextKeys.responseUsesNativeSpeech.isEqualTo(true),
+	ChatContextKeys.responseIsReadingAloud.isEqualTo(false),
+);
 
 export class ReadChatResponseAloud extends Action2 {
+	static readonly ID = 'workbench.action.chat.readChatResponseAloud';
+
 	constructor() {
 		super({
-			id: 'workbench.action.chat.readChatResponseAloud',
+			id: ReadChatResponseAloud.ID,
 			title: localize2('chat.message.readAloud', 'Read aloud'),
-			precondition: HasSpeechProvider.isEqualTo(true),
+			icon: Lxicon.unmute,
+			precondition: ContextKeyExpr.and(HasSpeechProvider.isEqualTo(true), ChatContextKeys.responseCanRead.isEqualTo(true), ContextKeyExpr.not(TextToSpeechInProgress.key)),
+			menu: {
+				id: MenuId.ChatMessageFooter, group: 'navigation', order: 2,
+				when: ContextKeyExpr.and(nativeReadAvailable, HasSpeechProvider.isEqualTo(true)),
+			},
 		});
 	}
 
 	public override async run(accessor: ServicesAccessor, context: unknown): Promise<void> {
+		if (context instanceof ChatResponseActionContext) {
+			const speech = accessor.get(ISpeechService);
+			const { text } = context.item;
+			await context.read(async signal => {
+				using source = new CancellationTokenSource();
+				using cancelled = addDisposableListener(signal, 'abort', () => source.cancel());
+				if (signal.aborted) source.cancel();
+				await this.read(speech, text, source.token);
+			});
+			return;
+		}
 		if (!isResponse(context)) return;
-		const speech = accessor.get(ISpeechService);
+		await this.read(accessor.get(ISpeechService), context.text, context.source.token);
+	}
+
+	private async read(speech: ISpeechService, markdown: string, token: CancellationToken): Promise<void> {
 		if (readingWindows.has(speech) || speech.hasActiveTextToSpeechSession) {
 			throw new Error(localize('speech.synthesisBusy', 'Speech synthesis is already in progress.'));
 		}
-		const source = new CancellationTokenSource(context.source.token);
+		const source = new CancellationTokenSource(token);
 		readingWindows.set(speech, source);
 		using cancelled = source.token.onCancellationRequested(() => {
 			if (readingWindows.get(speech) === source) readingWindows.delete(speech);
 		});
 		try {
 			if (source.token.isCancellationRequested) throw canceled();
-			const text = renderAsPlaintext(context.text);
+			const text = renderAsPlaintext(markdown);
 			if (!text) return;
 			const session = await speech.createTextToSpeechSession(source.token, 'chat');
 			for (let offset = 0; offset < text.length;) {
@@ -87,9 +115,20 @@ export class StopReadAloud extends Action2 {
 
 export class StopReadChatItemAloud extends Action2 {
 	public static readonly ID = 'workbench.action.chat.stopReadChatItemAloud';
-	constructor() { super({ id: StopReadChatItemAloud.ID, title: localize2('chat.message.stopReadAloud', 'Stop reading aloud') }); }
+	constructor() {
+		super({
+			id: StopReadChatItemAloud.ID,
+			title: localize2('chat.message.stopReadAloud', 'Stop reading aloud'),
+			icon: Lxicon.mute,
+			menu: {
+				id: MenuId.ChatMessageFooter, group: 'navigation', order: 2,
+				when: ContextKeyExpr.and(ChatContextKeys.responseUsesNativeSpeech.isEqualTo(true), ChatContextKeys.responseIsReadingAloud.isEqualTo(true)),
+			},
+		});
+	}
 	public override run(_accessor: ServicesAccessor, context: unknown): void {
-		if (context && typeof context === 'object' && 'source' in context && context.source instanceof CancellationTokenSource) context.source.cancel();
+		if (context instanceof ChatResponseActionContext) context.stop();
+		else if (context && typeof context === 'object' && 'source' in context && context.source instanceof CancellationTokenSource) context.source.cancel();
 	}
 }
 
@@ -100,6 +139,18 @@ function isResponse(value: unknown): value is { readonly type: 'agentMessage'; r
 }
 
 registerAction2(ReadChatResponseAloud);
+MenusRegistry.appendMenuItem(MenuId.ChatMessageFooter, {
+	command: {
+		id: ReadChatResponseAloud.ID,
+		title: localize2('chat.message.readAloud', 'Read aloud'),
+		tooltip: localize2('chat.message.readAloudUnavailable', 'Read aloud requires a speech provider'),
+		icon: Lxicon.unmute,
+		precondition: HasSpeechProvider.isEqualTo(true),
+	},
+	group: 'navigation',
+	order: 2,
+	when: ContextKeyExpr.and(nativeReadAvailable, ChatContextKeys.responseHasConversationLink.isEqualTo(true), ContextKeyExpr.not(HasSpeechProvider.key)),
+});
 registerAction2(StartVoiceChatAction);
 registerAction2(StopReadAloud);
 registerAction2(StopReadChatItemAloud);

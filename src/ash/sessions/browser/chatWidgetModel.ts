@@ -2,7 +2,7 @@ import { SessionModelSelection } from './sessionModelSelection.js';
 import { findLastIdx } from '../../base/common/arraysFind.js';
 import { ChatRequestQueueKind } from '../../workbench/services/chat/common/chatService.js';
 import { updateAdvisorConfig } from '../../workbench/services/chat/common/advisor.js';
-import { raceCancellationError } from '../../base/common/async.js';
+import { raceCancellationError, RunOnceScheduler } from '../../base/common/async.js';
 import { commitChatSession } from '../../workbench/contrib/chat/browser/chatSessions/chatSessionCommit.js';
 import type { ChatContextUsage } from '../../workbench/services/chat/common/chatService.js';
 import { IAgentExecutionSettingsService } from '../../platform/agentHost/common/agentExecutionSettingsService.js';
@@ -37,6 +37,7 @@ import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../common/agentHostSessionsProvide
 import { hasSelectedCodeWorkspace } from '../common/sessionWorkspace.js';
 import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsWorkspaceModeContext } from '../common/contextkeys.js';
+import { readChatRequestVersions } from './chatRequestVersions.js';
 
 const historyPageTurns = 20;
 
@@ -73,6 +74,9 @@ export class ChatWidgetModel extends Disposable {
 	private olderHistoryError: string | undefined;
 	private selection: ChatWidgetSelection;
 	private _thread: Thread | undefined;
+	private comparableVersionTurns = new Set<string>();
+	private requestVersionRevision = 0;
+	private readonly refreshRequestVersions = this._register(new RunOnceScheduler(() => void this.loadRequestVersions(), 100));
 	private contextUsage: ChatContextUsage | undefined;
 	private contextUsageRequest = 0;
 	private _state: ChatWidgetState = 'loading';
@@ -142,9 +146,15 @@ export class ChatWidgetModel extends Disposable {
 		if (contextKeys) {
 			const keys = new Set([SessionsWorkspaceModeContext.key]);
 			this._register(contextKeys.onDidChangeContext(event => {
-				if (event.affectsSome(keys)) this._onDidChange.fire();
+				if (event.affectsSome(keys)) {
+					this.refreshRequestVersions.schedule();
+					this._onDidChange.fire();
+				}
 			}));
 		}
+		this._register(sessionService.onDidChange(() => {
+			if (this.isCodeConversation) this.refreshRequestVersions.schedule();
+		}));
 		this._register(configuration.onDidChangeConfiguration(event => {
 			if (event.affectsConfiguration(ChatAIDisabledSettingId)) this._onDidChange.fire();
 		}));
@@ -172,6 +182,7 @@ export class ChatWidgetModel extends Disposable {
 		this._register(chatService.onDidChangeQueue(() => void this.loadQueue()));
 		this._register(this.skills.onDidChangeSkills(() => void this.loadSkillSelectors()));
 		this._register(chatService.onDidUpdateTurnChanges((update) => {
+			if (update.sessionId === this.sessionId && this.isCodeConversation) this.refreshRequestVersions.schedule();
 			if (update.sessionId !== this.sessionId || update.threadId !== this.threadId) return;
 			this.acceptChangeSets(update.changeSets);
 			void this.refreshChanges();
@@ -405,12 +416,48 @@ export class ChatWidgetModel extends Disposable {
 	get items(): readonly IChatListItem[] {
 		const thread = this._thread;
 		const latestTurnId = thread?.turns.at(-1)?.turnId;
-		const transcript = chatTranscriptListItems(this.transcriptEntries, latestTurnId, thread?.turns, thread, {
+		let transcript = chatTranscriptListItems(this.transcriptEntries, latestTurnId, thread?.turns, thread, {
 			archived: thread?.status === 'archived', hasOlderTurns: this.historyBoundary?.hasOlderTurns,
 		}, this._changeSets);
+		if (thread && this.isCodeConversation && (this._changeSets.length || this.comparableVersionTurns.size)) {
+			const captured = new Map<string, boolean>();
+			for (const change of this._changeSets) {
+				if (change.threadId !== thread.threadId) continue;
+				captured.set(change.turnId, captured.get(change.turnId) !== false && change.captureState === 'sealed' && change.terminalState === 'completed');
+			}
+			const finalReplies = new Map<string, string>();
+			const replayableTurns = new Set(thread.turns.filter(turn => (!turn.kind || turn.kind === 'coding')
+				&& turn.items.find(item => item.type === 'userMessage')?.clientId).map(turn => turn.turnId));
+			for (const item of transcript) {
+				const source = item.feedbackSource;
+				if (source && this.comparableVersionTurns.has(source.turnId)) finalReplies.set(source.turnId, item.id);
+			}
+			transcript = transcript.map(item => {
+				const request = item.requestSource;
+				if (request && thread.status === 'active' && replayableTurns.has(request.turnId) && captured.get(request.turnId)) return { ...item, canRunAnotherVersion: true };
+				if (item.feedbackSource && finalReplies.get(item.feedbackSource.turnId) === item.id) return { ...item, canCompareResults: true };
+				return item;
+			});
+		}
 		const redo = this.historyRedo.item(thread);
 		const queued = this.queue.length && thread?.status === 'active' ? chatQueuedMessageListItems(this.queue) : [];
 		return redo || queued.length ? [...transcript, ...(redo ? [redo] : []), ...queued] : transcript;
+	}
+
+	private get isCodeConversation(): boolean {
+		return this.contextKeys?.getValue(SessionsWorkspaceModeContext.key) === 'code';
+	}
+
+	private async loadRequestVersions(): Promise<void> {
+		const threadId = this.threadId;
+		const session = this.sessionService.sessions.find(candidate => candidate.sessionId === this.sessionId);
+		const revision = ++this.requestVersionRevision;
+		const pairs = this.isCodeConversation && session && threadId ? await readChatRequestVersions(this.chatService, session, threadId) : [];
+		if (this.isDisposed || this.requestVersionRevision !== revision || threadId !== this.threadId || (session && session.sessionId !== this.sessionId)) return;
+		const turns = new Set(pairs.flatMap(({ original, alternate }) => original.threadId === threadId ? [original.turnId] : [alternate.turnId]));
+		if (turns.size === this.comparableVersionTurns.size && [...turns].every(turnId => this.comparableVersionTurns.has(turnId))) return;
+		this.comparableVersionTurns = turns;
+		this._onDidChange.fire();
 	}
 
 	get interaction(): TurnInteraction | undefined {
@@ -1260,6 +1307,7 @@ export class ChatWidgetModel extends Disposable {
 			const changeSets = await this.chatService.listTurnChanges(owner.session.sessionId, owner.threadId);
 			if (this.isDisposed || threadGeneration !== this.generation || changesGeneration !== this.changesGeneration) return;
 			this._changeSets = changeSets;
+			if (this.isCodeConversation) this.refreshRequestVersions.schedule();
 			this._onDidChange.fire();
 			for (const changeSet of changeSets) void this.loadChangeDetails(changeSet.changeSetId, changesGeneration);
 		} catch {

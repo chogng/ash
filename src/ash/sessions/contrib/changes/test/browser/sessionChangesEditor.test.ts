@@ -269,6 +269,7 @@ test('a Turn Changes editor includes every repository capture for that turn and 
 		setChangesCount: () => { },
 		resolveChangeset: async (_resource: URI, id: string) => ({
 			isEnabled: constObservable(true),
+			capabilities: { review: id === 'second' },
 			changes: constObservable([createSessionFileChange(captures.find(summary => summary.changeSetId === id)!, file)]),
 		}),
 	} as unknown as ISessionChangesService);
@@ -288,5 +289,6 @@ test('a Turn Changes editor includes every repository capture for that turn and 
 	await pane.setInput(new SessionChangesEditorInput(URI.parse('ash-session-changes:/session?thread=thread'), { kind: 'turn', turnId: 'selected' }), new AbortController().signal);
 	assert.deepEqual(fileReads, ['second', 'third']);
 	assert.deepEqual(comparison!.items.map(item => item.modified.initialText), ['second', 'third']);
+	assert.deepEqual(comparison!.items.map(item => item.contextKeys?.['sessions.changesCanReview']), [true, false]);
 	assert.equal(new Set(comparison!.items.map(item => item.modified.resource.toString())).size, 2);
 });

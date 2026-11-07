@@ -109,7 +109,8 @@ import { IsSessionsWindowContext } from '../../../src/ash/workbench/common/conte
 import { BrowserContextViewService } from '../../../src/ash/platform/contextview/browser/contextViewService.js';
 import { ISpeechService, SpeechToTextStatus, type ISpeechToTextEvent } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { ExtensionIdentifier } from '../../../src/ash/platform/extensions/common/extensions.js';
-import { IChatWidgetService, type IChatWidget } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
+import { IChatWidgetService, type IChatWidget, unwrapChatResponseActionContext } from '../../../src/ash/workbench/contrib/chat/browser/chat.js';
+import { ChatCopyActionRendering } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatCopyActions.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
@@ -172,6 +173,7 @@ const windowLogger = resources.add(new LogService({ level: LogLevel.Debug, sinks
 parentServices.registerInstance(ILogService, windowLogger);
 parentServices.registerInstance(ILoggerService, windowLogger);
 const services = resources.add(createTestEditorServices(resources.add(new WorkbenchConfigurationService()), parentServices, document));
+resources.add(services.createInstance(ChatCopyActionRendering));
 services.registerInstance(IInstructionService, { isAvailable: false, list: async () => [] });
 services.registerInstance(IContentSearchService, new FileContentSearchService(services.get(IFileService)));
 services.registerSingleton(ISearchService, () => services.createInstance(SearchService));
@@ -954,10 +956,11 @@ window.ashChatTranscriptIntegration = {
 		appServices.registerInstance(ICommandService, {
 			onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None,
 			async executeCommand<T>(id: string, ...args: readonly unknown[]): Promise<T> {
-				messageRowCommands.push({ id, args });
+				messageRowCommands.push({ id, args: args.map(unwrapChatResponseActionContext) });
 				return undefined as T;
 			},
 		});
+		appServices.registerSingleton(IMenuService, () => appServices.createInstance(MenuService));
 		window.ashChatTranscriptIntegration.setMessageForkEnabled(true);
 	},
 	messageRowCommands: () => messageRowCommands,
@@ -1241,8 +1244,8 @@ window.ashChatTranscriptIntegration = {
 		} as unknown as IChatSessionNavigationService);
 		chatServices.registerInstance(IChatService, {
 			rewriteRequest: async options => {
-				if (!requestEditMode) { throw new Error('Unexpected request edit'); }
-				requestEdits.push(options);
+				if (!requestEditMode || options.text === undefined) { throw new Error('Unexpected request edit'); }
+				requestEdits.push({ ...options, text: options.text });
 				await new Promise<void>((resolve, reject) => { completeRequestEdit = failure => failure ? reject(new Error('Synthetic edit failure')) : resolve(); });
 				return { sessionId: options.sessionId, threadId: 'edited-thread' };
 			}

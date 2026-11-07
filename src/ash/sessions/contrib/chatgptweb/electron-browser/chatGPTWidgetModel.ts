@@ -7,11 +7,8 @@ import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '..
 import { autorun, derived, observableSignalFromEvent, observableValue, type IObservable, type IReader } from '../../../../base/common/observable.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
-import { Lxicon } from '../../../../base/common/lxicons.js';
 import { findLast } from '../../../../base/common/arraysFind.js';
-import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import type { ModelRef } from '../../../../platform/models/common/agentModels.js';
 import type { IReplyChatEditorModel } from '../../chat/browser/replyChatEditor.js';
@@ -25,7 +22,11 @@ import type { ChatReplyMessage } from '../../../common/chatReplyBackend.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { OPEN_ASH_CHAT_WITH_MODEL_COMMAND } from '../../chat/common/constants.js';
 import { canQueueChatGPTCreation, coworkTaskStatus, IChatGPTService, pendingCreationStatus, selectedChatConversationId, type ChatGPTState } from '../browser/chatGPTService.js';
-import { shareChatGPTConversation } from './chatGPTShare.js';
+
+export const ChatGPTResponseAvailableContext = 'sessions.chatgpt.responseAvailable';
+export const ChatGPTResponseOnlineContext = 'sessions.chatgpt.responseOnline';
+const availableResponseContext = [ChatGPTResponseAvailableContext];
+const onlineResponseContext = [ChatGPTResponseAvailableContext, ChatGPTResponseOnlineContext];
 
 export function canUseAshModels(state: ChatGPTState): boolean {
 	// Existing conversations and drafts with provider-owned attachments keep their reply route.
@@ -69,8 +70,6 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 
 	constructor(
 		@IChatGPTService private readonly backend: IChatGPTService,
-		@IClipboardService private readonly clipboard: IClipboardService,
-		@IDialogService private readonly dialogs: IDialogService,
 		@IOpenerService private readonly opener: IOpenerService,
 		@ISessionPrimaryProviderServices private readonly primary: SessionProviderServices,
 		@ICommandService private readonly commands: ICommandService,
@@ -255,39 +254,28 @@ export class ChatGPTWidgetModel extends Disposable implements IReplyChatEditorMo
 		}
 	};
 
-	getResponseActions(item: IChatListItem): ChatResponseActions | undefined {
+	getResponseActionTarget(item: IChatListItem) {
 		const state = this.backend.state.get();
 		const source = this.sources.get(item.id);
-		if (item.type !== 'agentMessage' || item.transient || item.isError || !source?.conversationId || source.conversationId !== state.conversationId) return undefined;
-		const { conversationId, messageId } = source;
-		const openOriginal = {
-			label: localize('sessions.chatgpt.openConversationOnWeb', 'Open conversation in ChatGPT'),
-			icon: Lxicon.openai,
-			run: async () => {
-				const url = `https://chatgpt.com/c/${encodeURIComponent(conversationId)}`;
-				if (!await this.opener.open(url, { openExternal: true, fromUserGesture: true })) {
-					throw new Error(localize('sessions.chatgpt.openConversationOnWebFailed', 'Could not open the conversation in ChatGPT.'));
-				}
-			},
-		};
-		if (!state.connected || !state.networkAvailable || state.loading?.kind === 'conversation' || state.uncertain) return { openOriginal };
+		if (this.isDisposed || item.type !== 'agentMessage' || item.transient || item.isError || !source?.conversationId || source.conversationId !== state.conversationId) return undefined;
 		return {
-			openOriginal,
-			remote: {
-				readAloud: (window, signal) => this.readResponseAloud(conversationId, messageId, window, signal),
-				forkLabel: localize('sessions.chatgpt.forkResponse', 'Fork in ChatGPT'),
-				fork: async () => {
-					const url = `https://chatgpt.com/branch/${encodeURIComponent(conversationId)}/${encodeURIComponent(messageId)}`;
-					if (!await this.opener.open(url, { openExternal: true })) {
-						throw new Error(localize('sessions.chatgpt.openForkFailed', 'Could not open the conversation branch in ChatGPT.'));
-					}
-				},
-				share: () => shareChatGPTConversation(this.backend, this.dialogs, this.clipboard, conversationId, state.title, messageId),
-			},
+			backend: this.backend,
+			conversationId: source.conversationId,
+			messageId: source.messageId,
+			title: state.title,
+			online: state.connected && state.networkAvailable && state.loading?.kind !== 'conversation' && !state.uncertain,
 		};
 	}
 
-	private async readResponseAloud(conversationId: string, messageId: string, window: Window & typeof globalThis, signal: AbortSignal): Promise<void> {
+	getResponseActions(item: IChatListItem): ChatResponseActions | undefined {
+		const target = this.getResponseActionTarget(item);
+		if (!target) return undefined;
+		return {
+			menuContext: target.online ? onlineResponseContext : availableResponseContext,
+		};
+	}
+
+	async readResponseAloud(conversationId: string, messageId: string, window: Window & typeof globalThis, signal: AbortSignal): Promise<void> {
 		const controller = new AbortController();
 		const playback = toDisposable(() => controller.abort());
 		this.playback.value = playback;

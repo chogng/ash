@@ -2,9 +2,10 @@ import { URI } from '../../base/common/uri.js';
 import { localize } from '../../nls.js';
 import { throwIfCancelled } from '../../base/common/cancellation.js';
 import { raceCancellationError } from '../../base/common/async.js';
-import type { IChatService, TurnChangeFile, TurnChangeSetSummary, TurnCommitPreview } from '../../workbench/services/chat/common/chatService.js';
+import { equals } from '../../base/common/objects.js';
+import type { IChatService, TurnChangeFile, TurnChangeFileContents, TurnChangeSetSummary, TurnCommitPreview } from '../../workbench/services/chat/common/chatService.js';
 import { createMultiDiffEditorInput, type MultiDiffEditorInput, type MultiDiffEditorInputItem } from '../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
-import type { IActiveSessionThread } from '../services/sessions/common/session.js';
+import type { IActiveSessionThread, ISessionFileChange } from '../services/sessions/common/session.js';
 import { createSessionFileChange } from '../services/sessions/common/session.js';
 
 export type TurnMultiDiffScope = 'currentTurn' | 'throughCurrentTurn' | 'previousTurn';
@@ -34,42 +35,31 @@ export async function createTurnMultiDiffEditorInput(
 	const repositoryChangeSets = exactTurn === undefined ? selected.filter(changeSet => changeSet.repositoryId === latest.repositoryId) : selected;
 	const composed = new Map<string, ComposedTurnFile>();
 	for (const changeSet of repositoryChangeSets) {
+		const snapshot = await readTurnChangeSnapshot(chatService, changeSet, { signal });
 		checkCancelled();
-		const details = await read(chatService.readTurnChange(active.session.sessionId, active.threadId, changeSet.changeSetId));
-		checkCancelled();
-		for (const file of details.files) {
-			const contents = await read(chatService.readTurnChangeFile(active.session.sessionId, active.threadId, changeSet.changeSetId, file.path));
-			checkCancelled();
-			if (contents.truncated && !contents.binary) throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.'));
-			const identity = JSON.stringify([changeSet.repositoryId, file.path]);
+		for (const { change, contents } of snapshot.files) {
+			const identity = JSON.stringify([changeSet.repositoryId, change.file.path]);
 			const existing = composed.get(identity);
 			if (existing) {
-				existing.after = contents.after ?? '';
+				existing.modified = turnSnapshotSide(change.modifiedUri, contents.after, existing.modified.label);
 				existing.binary ||= contents.binary;
-				existing.latestSummary = details.summary;
+				existing.latestSummary = snapshot.summary;
 				continue;
 			}
 			composed.set(identity, {
-				file,
+				file: change.file,
 				binary: contents.binary,
-				before: contents.before ?? '',
-				after: contents.after ?? '',
-				firstSummary: details.summary, latestSummary: details.summary,
+				original: turnSnapshotSide(change.originalUri, contents.before, `${basename(change.file.previousPath ?? change.file.path)} (Before)`),
+				modified: turnSnapshotSide(change.modifiedUri, contents.after, `${basename(change.file.path)} (After)`),
+				latestSummary: snapshot.summary,
 			});
 		}
-		const current = await read(chatService.readTurnChange(active.session.sessionId, active.threadId, changeSet.changeSetId));
-		checkCancelled();
-		if (current.summary.revision !== details.summary.revision || current.summary.captureState === 'discarded') {
-			throw new Error(localize('sessions.changes.captureChanged', 'This Turn capture changed while loading. Reopen its changes to review the latest revision.'));
-		}
+		await assertTurnCaptureCurrent(chatService, snapshot.summary, signal);
 	}
 	if (typeof scope !== 'string') {
 		const current = await read(chatService.listTurnChanges(active.session.sessionId, active.threadId));
 		checkCancelled();
-		const sealed = sealedTurnChanges(current, scope.turnId);
-		if (sealed.length !== selected.length || selected.some(changeSet => !sealed.some(value => value.changeSetId === changeSet.changeSetId && value.revision === changeSet.revision))) {
-			throw new Error(localize('sessions.changes.captureChanged', 'This Turn capture changed while loading. Reopen its changes to review the latest revision.'));
-		}
+		assertCaptureRevisions(selected, sealedTurnChanges(current, scope.turnId));
 		const label = localize('chat.turnChanges.title', 'Turn File Changes');
 		const source = URI.from({
 			scheme: 'ash-multi-diff', path: `/turn/${scope.turnId}`, query: new URLSearchParams({
@@ -95,16 +85,92 @@ export async function createTurnMultiDiffEditorInput(
 	});
 }
 
+/** Opens a selection from the Changes editor with that selection's review capabilities. */
+export async function createTurnChangesSelectionInput(
+	chat: IChatService,
+	resource: URI,
+	label: string,
+	changes: readonly { readonly change: ISessionFileChange; readonly canReview: boolean; }[],
+	signal: AbortSignal,
+): Promise<MultiDiffEditorInput> {
+	const items = await Promise.all(changes.map(async ({ change, canReview }): Promise<MultiDiffEditorInputItem> => {
+		const contents = await readTurnFileContents(chat, change, signal);
+		return {
+			label: change.file.path, binary: contents.binary,
+			contextKeys: turnReviewContextKeys(change.summary, change.file.path, canReview),
+			original: turnSnapshotSide(change.originalUri, contents.before),
+			modified: turnSnapshotSide(change.modifiedUri, contents.after),
+		};
+	}));
+	const captures = new Map(changes.map(({ change }) => [JSON.stringify([change.summary.sessionId, change.summary.threadId, change.summary.changeSetId]), change.summary]));
+	await Promise.all([...captures.values()].map(summary => assertTurnCaptureCurrent(chat, summary, signal)));
+	return createMultiDiffEditorInput(resource, items, label, { kind: 'snapshot', label });
+}
+
 function sealedTurnChanges(changeSets: readonly TurnChangeSetSummary[], turnId: string): readonly TurnChangeSetSummary[] {
 	return changeSets.filter(changeSet => changeSet.turnId === turnId && changeSet.captureState === 'sealed' && changeSet.statistics.files > 0);
+}
+
+async function readTurnChangeSnapshot(
+	chat: IChatService,
+	capture: TurnChangeSetSummary,
+	{ signal, expectedRevision }: { readonly signal?: AbortSignal; readonly expectedRevision?: number; },
+) {
+	const { sessionId, threadId, changeSetId } = capture;
+	const read = <T>(promise: Promise<T>): Promise<T> => signal ? raceCancellationError(promise, signal) : promise;
+	if (signal) throwIfCancelled(signal);
+	const details = await read(chat.readTurnChange(sessionId, threadId, changeSetId));
+	if (details.summary.captureState === 'discarded' || expectedRevision !== undefined && details.summary.revision !== expectedRevision) {
+		throw captureChanged();
+	}
+	const files: { change: ISessionFileChange; contents: TurnChangeFileContents; }[] = [];
+	for (const file of details.files) {
+		const change = createSessionFileChange(details.summary, file);
+		files.push({ change, contents: await readTurnFileContents(chat, change, signal) });
+	}
+	return { summary: details.summary, files };
+}
+
+async function readTurnFileContents(chat: IChatService, change: ISessionFileChange, signal?: AbortSignal): Promise<TurnChangeFileContents> {
+	if (signal) throwIfCancelled(signal);
+	const { sessionId, threadId, changeSetId } = change.summary;
+	const pending = chat.readTurnChangeFile(sessionId, threadId, changeSetId, change.file.path);
+	const contents = await (signal ? raceCancellationError(pending, signal) : pending);
+	if (signal) throwIfCancelled(signal);
+	if (contents.truncated && !contents.binary) throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.'));
+	return contents;
+}
+
+async function assertTurnCaptureCurrent(chat: IChatService, summary: TurnChangeSetSummary, signal?: AbortSignal): Promise<void> {
+	if (signal) throwIfCancelled(signal);
+	const pending = chat.readTurnChange(summary.sessionId, summary.threadId, summary.changeSetId);
+	const current = await (signal ? raceCancellationError(pending, signal) : pending);
+	if (signal) throwIfCancelled(signal);
+	// File reads target a live capture. Keep their contents paired with the selected revision.
+	if (current.summary.revision !== summary.revision || current.summary.captureState === 'discarded') throw captureChanged();
+}
+
+function turnSnapshotSide(resource: URI, text: string | undefined, label?: string) {
+	return { resource, ...(label === undefined ? {} : { label }), readOnly: true, initialText: text ?? '' };
+}
+
+function captureRevisions(changes: readonly TurnChangeSetSummary[]) {
+	return changes.map(change => [change.changeSetId, change.revision]).sort();
+}
+
+function assertCaptureRevisions(expected: readonly TurnChangeSetSummary[], current: readonly TurnChangeSetSummary[]): void {
+	if (!equals(captureRevisions(expected), captureRevisions(current))) throw captureChanged();
+}
+
+function captureChanged(): Error {
+	return new Error(localize('sessions.changes.captureChanged', 'This Turn capture changed while loading. Reopen its changes to review the latest revision.'));
 }
 
 interface ComposedTurnFile {
 	readonly file: TurnChangeFile;
 	binary: boolean;
-	readonly before: string;
-	after: string;
-	readonly firstSummary: TurnChangeSetSummary;
+	readonly original: ReturnType<typeof turnSnapshotSide>;
+	modified: ReturnType<typeof turnSnapshotSide>;
 	latestSummary: TurnChangeSetSummary;
 }
 
@@ -116,33 +182,21 @@ function selectChangeSets(changeSets: readonly TurnChangeSetSummary[], scope: Tu
 }
 
 function turnFileInput(file: ComposedTurnFile): MultiDiffEditorInputItem {
-	const first = createSessionFileChange(file.firstSummary, file.file);
-	const latest = createSessionFileChange(file.latestSummary, file.file);
-	const previousPath = file.file.previousPath ?? file.file.path;
-	const original = {
-		resource: first.originalUri,
-		label: `${basename(previousPath)} (Before)`,
-		readOnly: true,
-		initialText: file.before,
-	};
-	const modified = {
-		resource: latest.modifiedUri,
-		label: `${basename(file.file.path)} (After)`,
-		readOnly: true,
-		initialText: file.after,
-	};
 	return {
 		binary: file.binary,
 		label: file.file.previousPath ? `${file.file.previousPath} → ${file.file.path}` : file.file.path,
-		original,
-		modified,
-		goToFile: modified,
-		contextKeys: {
-			'sessions.changesCanReview': file.latestSummary.captureState !== 'discarded',
-			'sessions.changesCanPreview': file.latestSummary.captureState === 'sealed'
-				&& !file.latestSummary.committedPaths.includes(file.file.path)
-				&& file.latestSummary.commitState !== 'queued' && file.latestSummary.commitState !== 'committing',
-		},
+		original: file.original,
+		modified: file.modified,
+		goToFile: file.modified,
+		contextKeys: turnReviewContextKeys(file.latestSummary, file.file.path, file.latestSummary.captureState !== 'discarded'),
+	};
+}
+
+function turnReviewContextKeys(summary: TurnChangeSetSummary, path: string, canReview: boolean): Readonly<Record<string, boolean>> {
+	return {
+		'sessions.changesCanReview': canReview,
+		'sessions.changesCanPreview': summary.captureState === 'sealed' && !summary.committedPaths.includes(path)
+			&& summary.commitState !== 'queued' && summary.commitState !== 'committing',
 	};
 }
 
@@ -176,4 +230,111 @@ export async function createTurnCommitPreviewInput(chat: IChatService, sessionId
 	const title = localize('sessions.changes.commitPreview', '{0} files to commit to {1}: {2}', preview.files.length, preview.targetBranch, preview.message);
 	const label = preview.warnings.length ? localize('sessions.changes.previewWarnings', '{0} — Review: {1}', title, preview.warnings.join('; ')) : title;
 	return createMultiDiffEditorInput(resource, items, label, { kind: 'external', providerId: 'sessions.turnCommit', label, branchName: preview.targetBranch });
+}
+
+export interface TurnCaptureTarget {
+	readonly sessionId: string;
+	readonly threadId: string;
+	readonly turnId: string;
+}
+
+export function completedTurnChangeSets(changes: readonly TurnChangeSetSummary[], target: TurnCaptureTarget): readonly TurnChangeSetSummary[] {
+	const selected = changes.filter(change => change.sessionId === target.sessionId && change.threadId === target.threadId && change.turnId === target.turnId);
+	return selected.every(change => change.captureState === 'sealed' && change.terminalState === 'completed') ? selected : [];
+}
+
+async function readCompletedTurnChanges(chat: IChatService, target: TurnCaptureTarget) {
+	return completedTurnChangeSets(await chat.listTurnChanges(target.sessionId, target.threadId), target);
+}
+
+/** Both results need a completed capture of the same set of repositories, including unchanged repositories. */
+export async function readComparableTurnChanges(chat: IChatService, original: TurnCaptureTarget, alternate: TurnCaptureTarget) {
+	const captures = await Promise.all([readCompletedTurnChanges(chat, original), readCompletedTurnChanges(chat, alternate)]);
+	const [before, after] = captures;
+	const repositories = new Set(before.map(change => change.repositoryId));
+	if (repositories.size > 0 && repositories.size === before.length && after.length === before.length
+		&& after.every(change => repositories.delete(change.repositoryId))) return captures;
+	return undefined;
+}
+
+interface FileSnapshot {
+	readonly resource: URI;
+	readonly text: string | undefined;
+	readonly mode: string | undefined;
+	readonly binary: boolean;
+}
+
+interface VersionFile {
+	readonly path: string;
+	readonly repositoryId: string;
+	before?: FileSnapshot;
+	after?: FileSnapshot;
+}
+
+/** Compares the final file snapshots of two Turns that ran from the same checkpoint. */
+export async function createTurnResultComparisonInput(
+	chat: IChatService,
+	pair: { readonly original: TurnCaptureTarget; readonly alternate: TurnCaptureTarget; },
+): Promise<MultiDiffEditorInput> {
+	const captures = await readComparableTurnChanges(chat, pair.original, pair.alternate);
+	if (!captures) throw captureChanged();
+	const [original, alternate] = captures;
+	const [leftFiles, rightFiles] = await Promise.all([readResultFiles(chat, original), readResultFiles(chat, alternate)]);
+	const current = await Promise.all([readCompletedTurnChanges(chat, pair.original), readCompletedTurnChanges(chat, pair.alternate)]);
+	assertCaptureRevisions(original, current[0]);
+	assertCaptureRevisions(alternate, current[1]);
+
+	const items: MultiDiffEditorInputItem[] = [];
+	const title = localize('sessions.requestVersions.compare', 'Compare results');
+	const originalLabel = localize('sessions.requestVersions.original', 'Original run');
+	const alternateLabel = localize('sessions.requestVersions.alternate', 'Another version');
+	const resource = URI.from({
+		scheme: 'ash-multi-diff',
+		path: '/request-versions',
+		query: JSON.stringify([pair.original, pair.alternate, captureRevisions(original), captureRevisions(alternate)]),
+	});
+	for (const id of new Set([...leftFiles.keys(), ...rightFiles.keys()])) {
+		const left = leftFiles.get(id);
+		const right = rightFiles.get(id);
+		const file = (left ?? right)!;
+		// A path untouched by one run keeps the common checkpoint's content.
+		const before = left ? left.after : right?.before;
+		const after = right ? right.after : left?.before;
+		if (!before && !after) continue;
+		const binary = before?.binary === true || after?.binary === true;
+		if (before && after && !binary && before.mode === after.mode && before.text === after.text) continue;
+		const label = original.length > 1 ? `${file.repositoryId}: ${file.path}` : file.path;
+		const missing = resource.with({ path: `/request-versions/${file.path}`, fragment: id });
+		items.push({
+			id, label: before && after && before.mode && after.mode && before.mode !== after.mode
+				? localize('sessions.changes.modeLabel', '{0} (mode {1} → {2})', label, before.mode, after.mode) : label,
+			binary,
+			original: turnSnapshotSide(before?.resource ?? missing, before?.text, originalLabel),
+			modified: turnSnapshotSide(after?.resource ?? missing, after?.text, alternateLabel),
+		});
+	}
+	return createMultiDiffEditorInput(resource, items, title, { kind: 'snapshot', label: title });
+}
+
+async function readResultFiles(chat: IChatService, captures: readonly TurnChangeSetSummary[]): Promise<Map<string, VersionFile>> {
+	const result = new Map<string, VersionFile>();
+	for (const capture of captures) {
+		const { repositoryId } = capture;
+		const snapshot = await readTurnChangeSnapshot(chat, capture, { expectedRevision: capture.revision });
+		const entry = (path: string): VersionFile => {
+			const key = JSON.stringify([repositoryId, path]);
+			let file = result.get(key);
+			if (!file) result.set(key, file = { path, repositoryId });
+			return file;
+		};
+		for (const { change: { file, originalUri, modifiedUri }, contents } of snapshot.files) {
+			if (file.kind !== 'added') {
+				entry(file.previousPath ?? file.path).before = { resource: originalUri, text: contents.before, mode: file.beforeMode, binary: contents.binary };
+			}
+			if (file.kind !== 'deleted') {
+				entry(file.path).after = { resource: modifiedUri, text: contents.after, mode: file.afterMode, binary: contents.binary };
+			}
+		}
+	}
+	return result;
 }

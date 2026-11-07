@@ -3,24 +3,30 @@ import { suite, test } from 'mocha';
 import { expect } from '@playwright/test';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
 import { StorageScope, StorageTarget, type IStorageService } from '../../../../../platform/storage/common/storage.js';
-import { isResponseHelpful, markResponseHelpful, chatUpvoteAnimationConfiguration } from '../../common/chatResponseFeedback.js';
+import { getResponseVote, isResponseHelpful, markResponseHelpful, setResponseVote, chatUpvoteAnimationConfiguration } from '../../common/chatResponseFeedback.js';
 import { chatTranscriptListItems } from '../../common/model/chatViewModel.js';
 import type { Turn, ThreadTranscriptEntry } from '../../../../services/chat/common/chatService.js';
 
 const target = { sessionId: 'feedback-session', threadId: 'feedback-thread', turnId: 'feedback-turn', itemId: 'feedback-item' };
 
 test('helpful annotations use profile state and keep response identities independent', () => {
-	const values = new Map<string, boolean>();
+	const values = new Map<string, string>();
 	const writes: unknown[] = [];
 	const storage = {
-		getBoolean: (key: string, scope: StorageScope, fallback: boolean) => { assert.equal(scope, StorageScope.PROFILE); return values.get(key) ?? fallback; },
-		store: (key: string, value: boolean, scope: StorageScope, destination: StorageTarget) => { writes.push([scope, destination]); values.set(key, value); },
+		get: (key: string, scope: StorageScope) => { assert.equal(scope, StorageScope.PROFILE); return values.get(key); },
+		store: (key: string, value: string | boolean, scope: StorageScope, destination: StorageTarget) => { writes.push([scope, destination]); values.set(key, String(value)); },
 	} as unknown as IStorageService;
 	assert.equal(markResponseHelpful(storage, target), true);
 	assert.equal(markResponseHelpful(storage, { ...target }), false);
 	assert.equal(isResponseHelpful(storage, target), true);
 	for (const key of ['sessionId', 'threadId', 'turnId', 'itemId'] as const) assert.equal(isResponseHelpful(storage, { ...target, [key]: 'other' }), false);
 	assert.deepEqual(writes, [[StorageScope.PROFILE, StorageTarget.MACHINE]]);
+	assert.equal(setResponseVote(storage, target, 'down'), true);
+	assert.equal(setResponseVote(storage, target, 'down'), false);
+	assert.equal(getResponseVote(storage, target), 'down');
+	assert.equal(isResponseHelpful(storage, target), false);
+	assert.equal(markResponseHelpful(storage, target), true);
+	assert.equal(getResponseVote(storage, target), 'up');
 	for (const option of ['off', 'confetti', 'floatingThumbs', 'pulseWave', 'radiantLines']) assert.equal(chatUpvoteAnimationConfiguration.parse(option), option);
 	assert.throws(() => chatUpvoteAnimationConfiguration.parse('invalid'));
 });

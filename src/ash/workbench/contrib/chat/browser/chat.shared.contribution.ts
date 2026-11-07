@@ -22,7 +22,7 @@ import { registerAction2 } from '../../../../platform/actions/common/actions.js'
 import { ChatContextContributions, ChatReferenceContextContribution } from './actions/chatContext.js';
 import { IChatLayoutService } from '../common/widget/chatLayoutService.js';
 import { ChatLayoutService } from './widget/chatLayoutService.js';
-import { registerChatCopyActions } from './actions/chatCopyActions.js';
+import { ChatCopyActionRendering, registerChatCopyActions } from './actions/chatCopyActions.js';
 import { registerChatApprovalEnvironmentActions } from './actions/chatApprovalEnvironmentActions.js';
 import { registerChatCodeBlockActions } from './actions/chatCodeblockActions.js';
 import { registerChatToolActions } from './actions/chatToolActions.js';
@@ -176,6 +176,7 @@ registerChatToolActions();
 registerChatTitleActions();
 registerChatExportActions();
 registerChatCopyActions();
+registerWorkbenchContribution(ChatCopyActionRendering.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(ChatCopyActionRendering));
 registerChatApprovalEnvironmentActions();
 registerChatCodeBlockActions();
 registerChatElicitationActions();

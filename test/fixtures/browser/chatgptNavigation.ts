@@ -40,6 +40,8 @@ import { IChatListCatalog, type ChatListSource } from '../../../src/ash/sessions
 import { ISessionsListModelService, SessionsListModelService } from '../../../src/ash/sessions/services/sessions/browser/sessionsListModelService.js';
 import { ReplyChatEditor } from '../../../src/ash/sessions/contrib/chat/browser/replyChatEditor.js';
 import { chatGPTReplyEditor } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTWeb.js';
+import { registerChatGPTResponseActions } from '../../../src/ash/sessions/contrib/chatgptweb/electron-browser/chatGPTResponseActions.js';
+import { ChatCopyActionRendering } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatCopyActions.js';
 import { getSingletonServiceDescriptors } from '../../../src/ash/platform/instantiation/common/extensions.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
 import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
@@ -78,9 +80,10 @@ import { AshChatSelectionService, IAshChatSelectionService } from '../../../src/
 import { ISessionsSearchService } from '../../../src/ash/sessions/contrib/search/browser/searchService.js';
 import { ISessionsManagementService } from '../../../src/ash/sessions/services/sessions/common/sessionsManagement.js';
 import { IAshChatSessionService } from '../../../src/ash/sessions/contrib/chat/browser/ashChatSessionService.js';
-import { ISessionsService } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
+import { ISessionsService, type SessionsSelection } from '../../../src/ash/sessions/services/sessions/browser/sessionsService.js';
 import { ISessionSectionOrderService } from '../../../src/ash/sessions/services/sessions/browser/sessionSectionOrderService.js';
 import { IGitHubService } from '../../../src/ash/sessions/contrib/github/browser/githubService.js';
+import { BlockedSessionsIndicatorModel, IBlockedSessionsIndicatorService } from '../../../src/ash/sessions/contrib/sessions/browser/blockedSessionsIndicatorModel.js';
 import { SessionsWorkspaceModeContext } from '../../../src/ash/sessions/common/contextkeys.js';
 import { ISessionGroupsService } from '../../../src/ash/sessions/services/sessions/browser/sessionGroupsService.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
@@ -112,6 +115,7 @@ declare global {
 }
 
 const parameters = new URLSearchParams(location.search);
+registerChatGPTResponseActions();
 // The renderer widgets consume the containing Sessions host's visual defaults.
 document.body.classList.add('ash-workbench');
 const sessionsRoot = document.createElement('div');
@@ -214,6 +218,7 @@ services.registerSingleton(ISpeechService, () => services.createInstance(SpeechS
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 registerTestDictationOnboarding(services);
 registerTestComponentServices(services);
+resources.add(services.createInstance(ChatCopyActionRendering));
 const attachmentFolder = URI.file('/fixture-folder');
 const attachmentFile = URI.joinPath(attachmentFolder, 'notes.txt');
 if (parameters.has('folderPicker')) {
@@ -299,8 +304,10 @@ services.registerInstance(ISessionsManagementService, {
 } as unknown as ISessionsManagementService);
 services.registerInstance(ISessionsService, {
 	onDidChange: Event.None,
-	openSession: (sessionId, threadId) => { document.body.dataset.openedCode = `${sessionId}/${threadId}`; },
+	getSelection: (): SessionsSelection => ({ activeSelection: undefined, visibleSelections: [] }),
+	openSession: async (sessionId, threadId) => { document.body.dataset.openedCode = `${sessionId}/${threadId}`; },
 } as ISessionsService);
+services.registerInstance(IBlockedSessionsIndicatorService, services.createInstance(BlockedSessionsIndicatorModel));
 const sources: ChatListSource[] = [resources.add(services.createInstance(ChatGPTList))];
 if (parameters.has('mixedCatalog')) {
 	const ashServices = resources.add(services.createChild(new ServiceCollection(

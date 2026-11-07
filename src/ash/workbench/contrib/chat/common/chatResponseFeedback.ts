@@ -51,12 +51,23 @@ function feedbackKey(target: ChatResponseFeedbackTarget): string {
 }
 
 export function isResponseHelpful(storage: IStorageService, target: ChatResponseFeedbackTarget): boolean {
-	return storage.getBoolean(feedbackKey(target), StorageScope.PROFILE, false);
+	return getResponseVote(storage, target) === 'up';
 }
 
-/** Profile state is the sole persisted copy; repeated votes do not replay success feedback. */
 export function markResponseHelpful(storage: IStorageService, target: ChatResponseFeedbackTarget): boolean {
-	if (isResponseHelpful(storage, target)) return false;
-	storage.store(feedbackKey(target), true, StorageScope.PROFILE, StorageTarget.MACHINE);
+	return setResponseVote(storage, target, 'up');
+}
+
+export type ChatResponseVote = 'up' | 'down';
+
+export function getResponseVote(storage: IStorageService, target: ChatResponseFeedbackTarget): ChatResponseVote | undefined {
+	const value = storage.get(feedbackKey(target), StorageScope.PROFILE);
+	return value === 'true' ? 'up' : value === 'down' ? 'down' : undefined;
+}
+
+/** Keep the original helpful marker readable, and store at most one vote per response. */
+export function setResponseVote(storage: IStorageService, target: ChatResponseFeedbackTarget, vote: ChatResponseVote): boolean {
+	if (getResponseVote(storage, target) === vote) return false;
+	storage.store(feedbackKey(target), vote === 'up' ? true : 'down', StorageScope.PROFILE, StorageTarget.MACHINE);
 	return true;
 }

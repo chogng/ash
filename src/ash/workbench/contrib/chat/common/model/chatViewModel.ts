@@ -1,7 +1,7 @@
 import type { IChatToolInvocation } from '../chatService/chatService.js';
 import type { IChatHookPart, ChatContentPart, PlanUpdate, QueuedMessage, QueueMessageTarget, ThreadGoal, ThreadItem, ThreadTranscriptEntry, Turn, TurnChangeSetSummary, TurnError } from '../../../../services/chat/common/chatService.js';
 import { getNLSLanguage, localize } from '../../../../../nls.js';
-import type { ChatResponseFeedbackTarget } from '../chatResponseFeedback.js';
+import { isChatResponseFeedbackTarget, type ChatResponseFeedbackTarget } from '../chatResponseFeedback.js';
 
 /** Both Chat presentations describe the same backend-owned goal without translating user content. */
 export function formatChatGoal(goal: ThreadGoal): string {
@@ -34,12 +34,15 @@ interface ChatTurnErrorListItemOptions {
 export interface IChatListItem {
 	readonly feedbackSource?: ChatResponseFeedbackTarget;
 	readonly canGiveModelFeedback?: boolean;
+	readonly canForkAfterResponse?: boolean;
 	readonly turnChanges?: TurnChangeSetSummary['statistics'];
 	readonly queueTarget?: QueueMessageTarget;
 	readonly historyRedoTarget?: { readonly sessionId: string; readonly threadId: string; readonly expectedSequence: number; };
 	/** Initial accepted request identity; presentation entry IDs are not backend item IDs. */
 	readonly requestSource?: { readonly sessionId: string; readonly threadId: string; readonly turnId: string; readonly itemId: string; };
 	readonly canForkBeforeRequest?: boolean;
+	readonly canRunAnotherVersion?: boolean;
+	readonly canCompareResults?: boolean;
 	readonly id: string;
 	readonly type: ThreadItem['type'] | 'turnError' | 'advisor' | 'hook' | 'voiceTranscript' | 'queuedMessage' | 'historyRedo';
 	readonly content?: readonly ChatContentPart[];
@@ -72,6 +75,14 @@ export interface IChatListItem {
 export interface ChatStreamingResponseUpdate {
 	readonly previousText: string;
 	readonly item: IChatListItem;
+}
+
+/** Footer commands receive an untyped row argument from the command service. */
+export function getCompletedChatResponseSource(value: unknown): ChatResponseFeedbackTarget | undefined {
+	if (!value || typeof value !== 'object' || !('type' in value) || value.type !== 'agentMessage'
+		|| !('transient' in value) || value.transient !== false || ('isError' in value && value.isError)
+		|| !('feedbackSource' in value) || !isChatResponseFeedbackTarget(value.feedbackSource)) return undefined;
+	return value.feedbackSource;
 }
 
 /** Projects an existing transient text append independently of the rest of its turn. */
@@ -241,6 +252,7 @@ export function chatTranscriptListItems(
 				...item,
 				feedbackSource: { sessionId: source.sessionId, threadId: source.threadId, turnId: entry.turnId, itemId: entry.item.itemId },
 				canGiveModelFeedback: !!completedTurns.get(entry.turnId)?.model,
+				canForkAfterResponse: !forkHistory?.archived,
 				...(changes ? { turnChanges: changes } : {}),
 			};
 		}

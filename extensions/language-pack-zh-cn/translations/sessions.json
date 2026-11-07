@@ -1,5 +1,14 @@
 {
   "ash": {
+    "sessions.requestVersions.run": "另跑一个版本",
+    "sessions.requestVersions.compare": "比较结果",
+    "sessions.requestVersions.original": "原始版本",
+    "sessions.requestVersions.alternate": "另跑的版本",
+    "sessions.requestVersions.unavailable": "此请求已完成的 Git 检查点不可用。",
+    "sessions.requestVersions.compareUnavailable": "两个版本的 Git 快照都已完成后，才能比较结果。",
+    "sessions.requestVersions.pickLabel": "版本 {0}",
+    "sessions.requestVersions.pick": "选择要与原始版本比较的版本",
+    "sessions.requestVersions.identical": "两个版本的文件结果相同。",
     "sessionRow.changeIcon": "更换「{0}」的图标",
     "sessions.remoteSandbox.required": "必须先在 {0} 上以管理员身份初始化 Windows 账户沙箱，才能运行 Agent 命令。",
     "sessions.remoteSandbox.instructions": "查看初始化步骤",
@@ -310,6 +319,7 @@
     "sessions.chatgpt.deleteConfirm": "删除“{0}”？",
     "sessions.chatgpt.deleteDetail": "此聊天将被永久删除。",
     "sessions.chatgpt.shareConfirm": "分享“{0}”？",
+    "sessions.chatgpt.shareResponse": "分享 ChatGPT 回复",
     "sessions.chatgpt.shareResponseConfirm": "分享“{0}”中截至这条回复的对话？",
     "sessions.chatgpt.forkResponse": "在 ChatGPT 中创建分支",
     "sessions.chatgpt.openForkFailed": "无法在 ChatGPT 中打开对话分支。",

@@ -1,5 +1,6 @@
 import { RawContextKey } from '../../../../../platform/contextkey/common/contextkey.js';
 import { ChatEntitlementContextKeys } from '../../../../services/chat/common/chatEntitlementService.js';
+import type { ChatResponseVote } from '../chatResponseFeedback.js';
 
 export namespace ChatContextKeys {
 	export const Setup = ChatEntitlementContextKeys.Setup;
@@ -14,6 +15,15 @@ export namespace ChatContextKeys {
 	export const hasActiveRequest = new RawContextKey<boolean>('chatSessionHasActiveRequest', false);
 	export const inChatSession = new RawContextKey<boolean>('inChat', false);
 	export const responseHasText = new RawContextKey<boolean>('chatResponseHasText', false);
+	export const responseHasFeedbackSurvey = new RawContextKey<boolean>('chatSessionResponseHasFeedbackSurvey', false);
+	export const responseVote = new RawContextKey<ChatResponseVote | undefined>('chatResponseVote', undefined);
+	export const responseHasConversationLink = new RawContextKey<boolean>('chatResponseHasConversationLink', false);
+	export const responseCanFork = new RawContextKey<boolean>('chatResponseCanFork', false);
+	export const responseCanCompareResults = new RawContextKey<boolean>('chatResponseCanCompareResults', false);
+	export const requestCanRunAnotherVersion = new RawContextKey<boolean>('chatRequestCanRunAnotherVersion', false);
+	export const responseUsesNativeSpeech = new RawContextKey<boolean>('chatResponseUsesNativeSpeech', false);
+	export const responseCanRead = new RawContextKey<boolean>('chatResponseCanRead', false);
+	export const responseIsReadingAloud = new RawContextKey<boolean>('chatResponseIsReadingAloud', false);
 	export const inputCursorAtTop = new RawContextKey<boolean>('chatCursorAtTop', false);
 	export const inChatInput = new RawContextKey<boolean>('inChatInput', false);
 	export const inQuickChat = new RawContextKey<boolean>('quickChatHasFocus', false);

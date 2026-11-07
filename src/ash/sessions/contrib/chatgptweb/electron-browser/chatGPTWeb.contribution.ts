@@ -15,6 +15,7 @@ import { Menus } from '../../../browser/menus.js';
 import { SESSIONS_CHATGPT_DEFAULT_BACKEND } from '../../../common/configuration.js';
 import { ActivityBarItemContext, SessionsWorkspaceModeContext } from '../../../common/contextkeys.js';
 import { registerChatGPTAccessibility } from './chatGPTAccessibility.js';
+import { registerChatGPTResponseActions } from './chatGPTResponseActions.js';
 import { registerReplyChatEditor } from '../../chat/browser/replyChatEditor.js';
 import { IChatGPTNativeTransport, IChatGPTTransport } from '../common/chatGPTTransport.js';
 import { ElectronChatGPTNativeTransport, ElectronChatGPTTransport } from './electronChatGPTTransport.js';
@@ -46,6 +47,7 @@ registerSingleton(IChatGPTNativeService, ChatGPTNativeService, InstantiationType
 registerSingleton(IChatGPTNativeTransport, ElectronChatGPTNativeTransport, InstantiationType.Delayed);
 registerReplyChatEditor(chatGPTReplyEditor);
 registerReplyChatEditor(experimentalChatGPTEditor);
+registerChatGPTResponseActions();
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
 	key: AccessibilityVerbositySettingId.ChatGPT, defaultValue: true,
 	parse(value: unknown): boolean {

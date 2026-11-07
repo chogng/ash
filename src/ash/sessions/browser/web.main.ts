@@ -82,6 +82,7 @@ export class SessionsBrowserMain extends Disposable {
 					return services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) });
 				} : undefined,
 				contributionIds: [
+					'chat.copyActionRendering',
 					'chat.queuePickerRendering',
 					'workbench.contrib.btwSlashCommand',
 					'workbench.contrib.chatSideChat',

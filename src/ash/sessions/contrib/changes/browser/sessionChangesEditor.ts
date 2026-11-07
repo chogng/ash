@@ -12,7 +12,7 @@ import { EditorPanes } from '../../../../workbench/browser/editor.js';
 import { type EditorPaneCreationOptions, EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { isEditorPaneWithViewState, type IEditorPaneWithViewState } from '../../../../workbench/browser/parts/editor/editorWithViewState.js';
 import { ISessionsManagementService } from '../../../services/sessions/common/sessionsManagement.js';
-import { createTurnMultiDiffEditorInput } from '../../../browser/turnMultiDiffSource.js';
+import { createTurnChangesSelectionInput, createTurnMultiDiffEditorInput } from '../../../browser/turnMultiDiffSource.js';
 import { createThreadMultiDiffEditorInput } from '../../../../workbench/contrib/chat/browser/chatEditing/chatEditingActions.js';
 import type { IChangesThreadFileItem } from './changesViewRenderer.js';
 import type { MultiDiffEditorInput, MultiDiffEditorInputItem } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
@@ -26,7 +26,7 @@ import { ISessionChangesService } from '../common/sessionChangesService.js';
 import { SessionChangesEditorInput } from './sessionChangesEditorInput.js';
 import type { ISessionFileChange } from '../../../services/sessions/common/session.js';
 import { findChangesEditorFileChange } from './changesEditorLabels.js';
-import { createMultiDiffEditorInput, multiDiffEditorItemKey } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
+import { multiDiffEditorItemKey } from '../../../../workbench/contrib/multiDiffEditor/browser/multiDiffEditorInput.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { MultiDiffEditorViewState } from '../../../../editor/browser/widget/multiDiffEditor/multiDiffEditorViewModel.js';
 import type { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
@@ -416,32 +416,10 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 					this.messageDomNode.textContent = localize('sessions.changes.empty', 'No changes in this conversation.');
 					return;
 				}
-				const items = await Promise.all(changes.map(async ({ change, canReview }) => {
-					const contents = await raceCancellationError(this.chat.readTurnChangeFile(change.summary.sessionId, change.summary.threadId, change.summary.changeSetId, change.file.path), controller.signal);
-					if (contents.truncated && !contents.binary) { throw new Error(localize('sessions.changes.truncated', 'This change is too large to compare in full.')); }
-					return {
-						label: change.file.path, binary: contents.binary,
-						contextKeys: {
-							'sessions.changesCanReview': canReview,
-							'sessions.changesCanPreview': change.summary.captureState === 'sealed' && !change.summary.committedPaths.includes(change.file.path) && change.summary.commitState !== 'queued' && change.summary.commitState !== 'committing',
-						},
-						original: { resource: change.originalUri, initialText: contents.before ?? '', readOnly: true },
-						modified: { resource: change.modifiedUri, initialText: contents.after ?? '', readOnly: true }
-					};
-				}));
-				if (this.isDisposed || revision !== this.revision || controller.signal.aborted) { return; }
-				// File reads target a live capture. Keep their contents paired with the revision supplied by the snapshot.
-				const captures = new Map(changes.map(({ change }) => [JSON.stringify([change.summary.sessionId, change.summary.threadId, change.summary.changeSetId]), change.summary]));
-				await Promise.all([...captures.values()].map(async summary => {
-					const current = await raceCancellationError(this.chat.readTurnChange(summary.sessionId, summary.threadId, summary.changeSetId), controller.signal);
-					if (current.summary.revision !== summary.revision || current.summary.captureState === 'discarded') {
-						throw new Error(localize('sessions.changes.captureChanged', 'This Turn capture changed while loading. Reopen its changes to review the latest revision.'));
-					}
-				}));
 				const label = selected.kind === 'transient' ? selected.changeset.label : localize('sessions.changes.turn', 'Turn {0}', selected.turnId);
 				const resource = selected.kind === 'transient' ? input.resource
 					: input.resource.with({ scheme: 'ash-multi-diff', fragment: selected.turnId });
-				comparison = createMultiDiffEditorInput(resource, items, label, { kind: 'snapshot', label });
+				comparison = await createTurnChangesSelectionInput(this.chat, resource, label, changes, controller.signal);
 			} else if (!selected?.id) {
 				comparison = await createThreadMultiDiffEditorInput(this.chat, session.sessionId, threadId, undefined, controller.signal);
 				comparison = { ...comparison, items: comparison.items.map(item => ({ ...item, contextKeys: { ...item.contextKeys, 'sessions.changesCanReview': true } })) };

@@ -93,7 +93,11 @@ suite('Ash model feedback from the standard action', () => {
 			},
 		} as unknown as IChatWidget];
 		await assert.rejects(f.run({ ...target, itemId: 'obsolete' }), /known model/u);
-		await f.run(target);
+		const reply = { type: 'agentMessage', transient: false, canGiveModelFeedback: true, feedbackSource: target };
+		await f.run({ ...reply, transient: true });
+		await f.run({ ...reply, isError: true });
+		assert.deepEqual(f.opened, []);
+		await f.run(reply);
 		assert.equal(f.form.state.issueTitle, 'Model feedback: reply-model');
 		assert.match(f.form.state.issueBody, /Connection: reply-connection/u);
 		assert.doesNotMatch(f.form.state.issueBody, /Private reply/u);

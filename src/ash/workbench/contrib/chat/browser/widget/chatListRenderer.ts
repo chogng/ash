@@ -5,15 +5,14 @@ import type { ChatLayoutTrace } from './chatLayoutTrace.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { ButtonActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import type { IAction } from '../../../../../base/common/actions.js';
-import { ICommandService, CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
+import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { MenuWorkbenchToolBar } from '../../../../../platform/actions/browser/toolbar.js';
-import { createActionViewItem, MenuEntryActionViewItem } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
-import { IMenuService, MenuId, MenuItemAction } from '../../../../../platform/actions/common/actions.js';
-import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
+import { createActionViewItem } from '../../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import { IMenuService, MenuId } from '../../../../../platform/actions/common/actions.js';
+import { IActionViewItemService } from '../../../../../platform/actions/browser/actionViewItemService.js';
 import { isCancellationError } from '../../../../../base/common/errors.js';
-import { HasSpeechProvider, TextToSpeechInProgress } from '../../../speech/common/speechService.js';
 import { Lxicon } from '../../../../../base/common/lxicons.js';
 import { ChatInputEditors, type ChatInputEditorOptions, type IChatInputEditor } from './input/chatInputEditorRegistry.js';
 import { installChatInputLayout } from './input/chatInputLayout.js';
@@ -21,7 +20,7 @@ import { ChatResourceGroupWidget } from './chatContentParts/chatResourceGroupWid
 import { DefaultChatAttachmentWidget } from '../attachments/chatAttachmentWidgets.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { ChatAttachmentsContentPart, type IChatAttachmentResource } from './chatContentParts/chatAttachmentsContentPart.js';
-import { addDisposableListener, getWindow, h } from '../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, getWindowId, h } from '../../../../../base/browser/dom.js';
 import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { ChatTurnErrorAction, IChatListItem } from '../../common/model/chatViewModel.js';
@@ -41,15 +40,14 @@ import { ChatThinkingContentPart } from './chatContentParts/chatThinkingContentP
 import { IStorageService, StorageScope } from '../../../../../platform/storage/common/storage.js';
 import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 import { captureAnimationTarget, triggerClickAnimation, ClickAnimation } from '../../../../../base/browser/ui/animations/animations.js';
-import { ChatResponseFeedbackStoragePrefix, ChatUpvoteAnimationSettingId, isResponseHelpful, type ChatUpvoteAnimation } from '../../common/chatResponseFeedback.js';
+import { ChatResponseFeedbackStoragePrefix, ChatUpvoteAnimationSettingId, getResponseVote, isResponseHelpful, type ChatUpvoteAnimation } from '../../common/chatResponseFeedback.js';
 import { MarkHelpfulActionId } from '../actions/chatTitleActions.js';
-import { CopyItemActionId } from '../actions/chatCopyActions.js';
+import { renderChatRequestCopyButton } from '../actions/chatCopyActions.js';
 import { ChatEditPendingRequestAction, ChatRemovePendingRequestAction, ChatSendPendingImmediatelyAction } from '../actions/chatQueueActions.js';
-import { ChatModelFeedbackSurveyActionId } from '../actions/chatModelFeedbackSurveyActions.js';
 import type { Icon } from '../../../../../base/common/icon.js';
 import { ChatForkActionViewItem } from './chatForkActionViewItem.js';
 import { ChatTurnChangesPill } from './chatTurnPills.js';
-import type { ChatTurnChangesOpener } from '../chat.js';
+import { ChatResponseActionContext, type ChatTurnChangesOpener } from '../chat.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { RedoChatHistoryActionId, RestoreCheckpointActionId } from '../chatEditing/chatEditingActions.js';
 
@@ -67,15 +65,10 @@ export interface ChatRequestInputOptions {
 	readonly reportError: (error: unknown) => void;
 }
 
-/** The conversation model supplies response capabilities and any destination-specific labels. */
+/** The conversation model supplies row-scoped menu capabilities. */
 export interface ChatResponseActions {
-	readonly remote?: {
-		readonly readAloud: (window: Window & typeof globalThis, signal: AbortSignal) => Promise<void>;
-		readonly forkLabel: string;
-		readonly fork: () => Promise<void>;
-		readonly share: () => Promise<void>;
-	};
-	readonly openOriginal?: { readonly label: string; readonly icon: Icon; readonly run: () => Promise<void>; };
+	/** Context keys that are true for this row. Reuse the array while the capabilities are unchanged. */
+	readonly menuContext?: readonly string[];
 }
 
 interface ChatListItemRendererOptions {
@@ -104,7 +97,6 @@ interface ChatListItemRendererOptions {
 	readonly imageResourceLoader?: (resource: URI) => Promise<Blob>;
 }
 
-const speechContextKeys = new Set([HasSpeechProvider.key, TextToSpeechInProgress.key]);
 const chatEnabledContextKeys = new Set([ChatContextKeys.enabled.key]);
 
 /** Owns one message's DOM, incremental content, actions and disposable resources. */
@@ -114,10 +106,9 @@ export class ChatListItemRenderer extends Disposable {
 	inViewport = true;
 	private readonly edit = this._register(new MutableDisposable<DisposableStore>());
 	private copyButton: Button | undefined;
-	private readonly responsePlayback = this._register(new MutableDisposable());
+	private responseActionContext: ChatResponseActionContext | undefined;
 	private updateResponseActions: ((beforeLayout?: () => void) => boolean) | undefined;
 	private updateTurnChanges: (() => void) | undefined;
-	private readonly reading = this._register(new MutableDisposable<IDisposable & { readonly source: CancellationTokenSource; readonly item: IChatListItem; }>());
 	private readonly memoryReferences = this._register(new DisposableMap<string, IDisposable & { readonly element: HTMLButtonElement; }>());
 	private readonly media = this._register(new MutableDisposable<ChatAttachmentsContentPart>());
 	private readonly mediaChanges = this._register(new MutableDisposable());
@@ -149,6 +140,7 @@ export class ChatListItemRenderer extends Disposable {
 		@IStorageService private readonly storageService: IStorageService,
 		@INotificationService private readonly notifications: INotificationService,
 		@IMenuService private readonly menus: IMenuService,
+		@IActionViewItemService private readonly actionViewItems: IActionViewItemService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
 	) {
 		super();
@@ -166,7 +158,11 @@ export class ChatListItemRenderer extends Disposable {
 		if (same && this.item.content === item.content && (!contentPart || contentPart.hasSameContent(item))) {
 			this.item = item;
 			// Providers can gain or lose response actions without changing the transcript.
-			if (this.options.getResponseActions && this.updateResponseActions?.(beforeLayout)) return 'updated';
+			if (this.options.getResponseActions) {
+				if (this.updateResponseActions?.(beforeLayout)) return 'updated';
+			} else {
+				this.responseActionContext?.update(item);
+			}
 			return 'unchanged';
 		}
 		if (item.text.length >= markdownFrameThreshold && this.tryQueuePlainResponse(item)) return 'queued';
@@ -206,7 +202,7 @@ export class ChatListItemRenderer extends Disposable {
 		const previous = this.item;
 		// Keep controls and attachments on the synchronous path when their inputs change.
 		if (!this.markdownPart || item.type !== 'agentMessage' || !previous.transient || !item.transient || !previous.text || previous.text === item.text
-			|| previous.resources?.length || item.resources?.length || this.reading.value || this.options.getResponseActions
+			|| previous.resources?.length || item.resources?.length || this.responseActionContext?.isReading || this.options.getResponseActions
 			|| previous.content?.some(part => part.type !== 'text') || item.content?.some(part => part.type !== 'text')
 			|| this.options.onDidRequestMemoryReference && (this.memoryReferences.size || item.text.includes('memory:'))
 			|| !sameItemPresentation(previous, item)) return false;
@@ -223,8 +219,6 @@ export class ChatListItemRenderer extends Disposable {
 
 	private refreshContent(): void {
 		if (this.copyButton) this.copyButton.enabled = this.item.text.length > 0;
-		const reading = this.reading.value;
-		if (reading && (reading.item.text !== this.item.text || reading.item.attachmentSource?.sessionId !== this.item.attachmentSource?.sessionId || reading.item.attachmentSource?.threadId !== this.item.attachmentSource?.threadId)) this.reading.clear();
 		this.updateResponseActions?.();
 		this.updateTurnChanges?.();
 		this.renderAttachments();
@@ -233,8 +227,7 @@ export class ChatListItemRenderer extends Disposable {
 
 	public setVisible(visible: boolean): void {
 		if (!visible) {
-			this.reading.clear();
-			this.responsePlayback.clear();
+			this.responseActionContext?.stop();
 			this.updateResponseActions?.();
 		}
 		this.media.value?.setVisible(visible);
@@ -293,165 +286,105 @@ export class ChatListItemRenderer extends Disposable {
 
 	private renderCopyAction(lifetime: DisposableStore): HTMLElement {
 		const actions = this.createMessageActions();
-		const button = lifetime.add(new Button(actions, {
-			...defaultButtonStyles,
-			label: localize('chat.message.copy', 'Copy message'),
-			title: localize('chat.message.copy', 'Copy message'),
-			icon: Lxicon.copy,
-			presentation: 'quiet',
-			size: 'small',
-			enabled: this.item.text.length > 0,
-		}));
-		this.copyButton = button;
-		const copy = this.createCopyHandler(actions, lifetime);
-		lifetime.add(button.onDidClick(() => void copy(button.domNode, item => this.commands.executeCommand(CopyItemActionId, item))));
+		this.copyButton = renderChatRequestCopyButton(actions, lifetime, this.commands, () => this.item, this.options.isVisible);
 		return actions;
-	}
-
-	private createCopyHandler(actions: HTMLElement, lifetime: DisposableStore) {
-		const feedback = h(this.element.ownerDocument, 'span');
-		feedback.className = 'ash-chat-message-copy-status';
-		feedback.setAttribute('role', 'status');
-		actions.append(feedback);
-		const clear = lifetime.add(new RunOnceScheduler(() => { feedback.textContent = ''; }, 2000));
-		let copying = false;
-		return async (button: HTMLElement, run: (item: IChatListItem) => unknown) => {
-			if (copying || this.isDisposed || !this.options.isVisible() || !this.item.text) return;
-			const item = this.item;
-			copying = true;
-			button.setAttribute('aria-busy', 'true');
-			clear.cancel();
-			feedback.textContent = '';
-			try {
-				await run(item);
-				if (this.isDisposed || this.item !== item) return;
-				feedback.textContent = localize('chat.message.copied', 'Message copied.');
-				clear.schedule();
-			} catch (error) {
-				if (this.isDisposed || this.item !== item) return;
-				feedback.textContent = localize('chat.message.copyFailed', 'Could not copy message: {0}', String(error));
-			} finally {
-				copying = false;
-				button.removeAttribute('aria-busy');
-			}
-		};
 	}
 
 	private renderResponseFooter(lifetime: DisposableStore): void {
 		const actions = this.createMessageActions();
-		const copy = this.createCopyHandler(actions, lifetime);
 		const context = lifetime.add(this.contextKeys.createScoped(actions));
 		const hasText = ChatContextKeys.responseHasText.bindTo(context);
-		hasText.set(!!this.item.text);
-		const toolbar = lifetime.add(new MenuWorkbenchToolBar(actions, this.menus, this.contextMenus, MenuId.ChatMessageFooter, {
+		const hasFeedbackSurvey = ChatContextKeys.responseHasFeedbackSurvey.bindTo(context);
+		const hasConversationLink = ChatContextKeys.responseHasConversationLink.bindTo(context);
+		const canFork = ChatContextKeys.responseCanFork.bindTo(context);
+		const canCompareResults = ChatContextKeys.responseCanCompareResults.bindTo(context);
+		const vote = this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key) && !this.options.getResponseActions
+			? ChatContextKeys.responseVote.bindTo(context) : undefined;
+		const updateVote = () => {
+			const source = !this.item.transient && !this.item.isError ? this.item.feedbackSource : undefined;
+			vote?.set(source ? getResponseVote(this.storageService, source) : undefined);
+		};
+		if (vote) lifetime.add(this.storageService.onDidChangeValue(event => {
+			if (event.scope === StorageScope.PROFILE && event.key.startsWith(ChatResponseFeedbackStoragePrefix)) updateVote();
+		}));
+		const canRead = ChatContextKeys.responseCanRead.bindTo(context);
+		ChatContextKeys.responseUsesNativeSpeech.bindTo(context).set(!this.options.getResponseActions);
+		const reading = ChatContextKeys.responseIsReadingAloud.bindTo(context);
+		const targetWindow = getWindow(this.element);
+		let footer: MenuWorkbenchToolBar | undefined;
+		const response = this.responseActionContext = lifetime.add(new ChatResponseActionContext(
+			this.item, actions, targetWindow, this.options.isVisible, value => {
+				const toolbar = footer;
+				const active = actions.ownerDocument.activeElement;
+				const focusedAction = toolbar && active instanceof targetWindow.HTMLElement ? toolbar.getItemAction(active) : undefined;
+				const index = toolbar && focusedAction
+					? Array.from({ length: toolbar.getItemsLength() }, (_, i) => toolbar.getItemAction(i)).indexOf(focusedAction)
+					: -1;
+				reading.set(value);
+				// Read and Stop share a slot but have separate command IDs.
+				if (toolbar && index >= 0 && toolbar.getItemAction(index)?.id !== focusedAction?.id) toolbar.focus(index);
+			},
+		));
+		let menuContext: readonly string[] | undefined;
+		const updateMenuContext = (nextMenuContext?: readonly string[]) => {
+			hasText.set(!!this.item.text);
+			canRead.set(!this.item.transient && !!this.item.text);
+			const hasCompletedSource = !!this.item.feedbackSource && !this.item.transient && !this.item.isError;
+			hasFeedbackSurvey.set(hasCompletedSource && this.item.canGiveModelFeedback === true);
+			hasConversationLink.set(hasCompletedSource);
+			canFork.set(hasCompletedSource && this.item.canForkAfterResponse === true);
+			canCompareResults.set(hasCompletedSource && this.item.canCompareResults === true);
+			updateVote();
+			if (nextMenuContext === menuContext) return;
+			for (const key of menuContext ?? []) {
+				if (!nextMenuContext?.includes(key)) context.removeContext(key);
+			}
+			for (const key of nextMenuContext ?? []) context.setContext(key, true);
+			menuContext = nextMenuContext;
+		};
+		const getActions = () => this.options.getResponseActions?.(this.item);
+		updateMenuContext(getActions()?.menuContext);
+		const toolbar = footer = lifetime.add(new MenuWorkbenchToolBar(actions, this.menus, this.contextMenus, MenuId.ChatMessageFooter, {
 			ariaLabel: localize('chat.message.actions', 'Response actions'),
 			contextKeyService: context,
-			menuOptions: { shouldForwardArgs: true },
+			menuOptions: { shouldForwardArgs: true, renderShortTitle: true },
 			actionViewItemProvider: (action, options) => {
 				const buttonOptions = { ...options, iconOnly: true, buttonPresentation: 'quiet' as const };
-				if (action instanceof MenuItemAction && action.id === CopyItemActionId) {
-					return new class extends MenuEntryActionViewItem {
-						protected override runAction(): Promise<void> {
-							return copy(this.button.domNode, item => action.run(item));
-						}
-					}(action, buttonOptions);
-				}
-				return createActionViewItem(action, this.contextMenus, buttonOptions) ?? new ButtonActionViewItem(action, buttonOptions);
+				const factory = this.actionViewItems.lookUp(MenuId.ChatMessageFooter, action.id);
+				return factory?.(action, buttonOptions, this.instantiationService, getWindowId(targetWindow) ?? 0)
+					?? createActionViewItem(action, this.contextMenus, buttonOptions)
+					?? new ButtonActionViewItem(action, buttonOptions);
 			},
 		}));
+		toolbar.context = response;
 		actions.prepend(toolbar.element);
-		const getActions = () => this.options.getResponseActions?.(this.item);
-		const read = this.responseAction('chat.response.readAloud', localize('chat.message.readAloud', 'Read aloud'), Lxicon.unmute, async () => {
-			const available = getActions()?.remote;
-			if (!available || this.responsePlayback.value) return;
-			const controller = new AbortController();
-			const playback = toDisposable(() => controller.abort());
-			this.responsePlayback.value = playback;
-			update();
-			try {
-				await available.readAloud(getWindow(this.element), controller.signal);
-			} catch (error) {
-				if (!controller.signal.aborted && !isCancellationError(error) && !this.isDisposed) {
-					this.notifications.error(localize('chat.message.readAloudFailed', 'Could not read response aloud: {0}', String(error)));
-				}
-			} finally {
-				if (this.responsePlayback.value === playback) {
-					this.responsePlayback.clear();
-					update();
-				}
-			}
-		});
-		const stop = this.responseAction(read.id, localize('chat.message.stopReadAloud', 'Stop reading aloud'), Lxicon.mute, () => {
-			this.responsePlayback.clear();
-			update();
-		});
-		let fork: IAction | undefined;
-		let openOriginal: IAction | undefined;
-		const share = this.responseAction('chat.response.share', localize('chat.message.share', 'Share response'), Lxicon.share, () => getActions()?.remote?.share());
 		let trailing: readonly IAction[] = [];
 		const update = (beforeLayout?: () => void): boolean => {
 			if (this.isDisposed) return false;
-			toolbar.context = this.item;
-			hasText.set(!!this.item.text);
 			const available = getActions();
-			const next: IAction[] = [];
-			if (available?.remote) {
-				if (fork?.label !== available.remote.forkLabel) {
-					fork = this.responseAction('chat.response.fork', available.remote.forkLabel, Lxicon.fork, () => getActions()?.remote?.fork());
-				}
-				next.push(this.responsePlayback.value ? stop : read, fork, share);
-			} else {
-				this.responsePlayback.clear();
-			}
-			const original = available?.openOriginal;
-			if (original && this.contextKeys.getValue(ChatContextKeys.enabled.key) === true) {
-				if (openOriginal?.label !== original.label || openOriginal.icon !== original.icon) {
-					openOriginal = this.responseAction('chat.response.openOriginal', original.label, original.icon, () => getActions()?.openOriginal?.run());
-				}
-				next.push(openOriginal);
-			}
-			const nativeRead = getNativeRead?.();
+			const menuChanged = available?.menuContext !== menuContext;
+			if (menuChanged) beforeLayout?.();
+			context.bufferChangeEvents(() => {
+				response.update(this.item);
+				updateMenuContext(available?.menuContext);
+				if (menuChanged) response.stop();
+			});
 			const helpful = getHelpful?.();
-			if (nativeRead) next.push(nativeRead);
-			if (helpful) next.push(helpful);
-			if (getModelFeedbackTarget()) next.push(modelFeedback);
-			if (next.length === trailing.length && next.every((action, index) => trailing[index] === action)) return false;
+			const next = helpful ? [helpful] : [];
+			if (next.length === trailing.length && next.every((action, index) => trailing[index] === action)) return menuChanged;
 			beforeLayout?.();
 			trailing = next;
 			toolbar.setTrailingActions(next);
 			return true;
 		};
-		const getNativeRead = this.options.getResponseActions ? undefined : this.createReadAloudAction(actions, lifetime, update);
 		const getHelpful = this.options.getResponseActions || this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key)
 			? undefined : this.createHelpfulAction(actions, lifetime, update);
-		const getModelFeedbackTarget = () => this.contextKeys.getValue(ChatContextKeys.enabled.key) === true
-			&& this.item.canGiveModelFeedback && !this.item.transient && !this.item.isError ? this.item.feedbackSource : undefined;
-		let openingFeedback = false;
-		const feedbackLabel = localize('chat.modelFeedback.messageAction', 'Give model feedback');
-		const modelFeedback = this.responseAction(ChatModelFeedbackSurveyActionId, feedbackLabel, Lxicon.comment, async () => {
-			const target = getModelFeedbackTarget();
-			if (!target || openingFeedback) return;
-			openingFeedback = true;
-			try {
-				await this.commands.executeCommand(ChatModelFeedbackSurveyActionId, target);
-			} catch (error) {
-				if (!this.isDisposed && !isCancellationError(error)) {
-					this.notifications.error(localize('chat.messageAction.failed', 'Could not run {0}: {1}', feedbackLabel, String(error)));
-				}
-			} finally {
-				openingFeedback = false;
-			}
-		});
-		lifetime.add(this.contextKeys.onDidChangeContext(event => { if (event.affectsSome(chatEnabledContextKeys)) update(); }));
 		this.updateResponseActions = update;
 		lifetime.add(toolbar.actionRunner.onDidRun(event => {
 			if (event.error && !this.isDisposed && !isCancellationError(event.error)) this.notifications.error(String(event.error));
 		}));
 		lifetime.add(addDisposableListener(this.element, 'keydown', event => {
-			if (event.key !== 'Escape' || (!this.responsePlayback.value && !this.reading.value)) return;
-			this.responsePlayback.clear();
-			this.reading.clear();
-			update();
+			if (event.key !== 'Escape' || !response.stop()) return;
 			event.preventDefault();
 			event.stopPropagation();
 		}));
@@ -508,6 +441,20 @@ export class ChatListItemRenderer extends Disposable {
 				pending = false;
 				if (!this.isDisposed) button.domNode.removeAttribute('aria-disabled');
 			}
+		}));
+	}
+
+	private renderRequestCheckpointMenu(actions: HTMLElement, source: NonNullable<IChatListItem['requestSource']>, lifetime: DisposableStore): void {
+		const context = lifetime.add(this.contextKeys.createScoped(actions));
+		ChatContextKeys.requestCanRunAnotherVersion.bindTo(context).set(this.item.canRunAnotherVersion === true);
+		const toolbar = lifetime.add(new MenuWorkbenchToolBar(actions, this.menus, this.contextMenus, MenuId.ChatMessageCheckpoint, {
+			ariaLabel: localize('chat.message.checkpointActions', 'Request checkpoint actions'),
+			contextKeyService: context,
+			menuOptions: { shouldForwardArgs: true },
+		}));
+		toolbar.context = source;
+		lifetime.add(toolbar.actionRunner.onDidRun(event => {
+			if (event.error && !this.isDisposed && !isCancellationError(event.error)) this.notifications.error(String(event.error));
 		}));
 	}
 
@@ -755,47 +702,6 @@ export class ChatListItemRenderer extends Disposable {
 		}));
 	}
 
-	private createReadAloudAction(actions: HTMLElement, lifetime: DisposableStore, update: () => void): () => IAction | undefined {
-		const feedback = h(actions.ownerDocument, 'span');
-		feedback.className = 'ash-chat-message-read-status';
-		feedback.setAttribute('role', 'status');
-		actions.append(feedback);
-		lifetime.add(this.contextKeys.onDidChangeContext(event => { if (event.affectsSome(speechContextKeys)) update(); }));
-		lifetime.add(CommandsRegistry.onDidChangeCommands(update));
-		const hasProvider = () => CommandsRegistry.hasCommand('workbench.action.chat.readChatResponseAloud') && this.contextKeys.getValue(HasSpeechProvider.key) === true;
-		const read = this.responseAction('chat.response.readAloud', localize('chat.message.readAloud', 'Read aloud'), Lxicon.unmute, async () => {
-			if (!hasProvider() || this.reading.value || this.item.transient || !this.item.text || this.contextKeys.getValue(TextToSpeechInProgress.key) === true) return;
-			const item = this.item;
-			const source = new CancellationTokenSource();
-			const operation = Object.assign(toDisposable(() => source.dispose(true)), { source, item });
-			this.reading.value = operation; feedback.textContent = ''; update();
-			try {
-				await this.commands.executeCommand('workbench.action.chat.readChatResponseAloud', { type: item.type, text: item.text, source });
-			} catch (error) {
-				if (!this.isDisposed && this.reading.value === operation && !source.token.isCancellationRequested && !isCancellationError(error)) {
-					feedback.textContent = localize('chat.message.readAloudFailed', 'Could not read response aloud: {0}', String(error));
-				}
-			} finally {
-				if (this.reading.value === operation) this.reading.clear();
-				update();
-			}
-		});
-		const ready = { ...read, checked: false };
-		const disabled = { ...ready, enabled: false };
-		const stop = {
-			...this.responseAction(read.id, localize('chat.message.stopReadAloud', 'Stop reading aloud'), Lxicon.mute, () => {
-				const source = this.reading.value?.source;
-				if (source) return this.commands.executeCommand('workbench.action.chat.stopReadChatItemAloud', { source });
-			}),
-			checked: true,
-		};
-		return () => {
-			if (!hasProvider()) return undefined;
-			if (this.reading.value) return stop;
-			return !this.item.transient && this.item.text && this.contextKeys.getValue(TextToSpeechInProgress.key) !== true ? ready : disabled;
-		};
-	}
-
 	private renderMemoryReferences(): void {
 		if (!this.options.onDidRequestMemoryReference || this.options.getResponseLinkOpener?.(this.item)) return;
 		const references = [...new Set(this.item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])].filter(reference => reference.length <= 4096).slice(0, 8);
@@ -977,7 +883,7 @@ export class ChatListItemRenderer extends Disposable {
 		} else if (requestText) {
 			const checkpoint = item.canForkBeforeRequest && item.requestSource;
 			const actions = this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key)
-				? (checkpoint ? this.createMessageActions() : undefined)
+				? (checkpoint || item.canRunAnotherVersion ? this.createMessageActions() : undefined)
 				: this.renderCopyAction(disposables);
 			if (item.requestSource) this.renderEditAction(requestText, disposables, actions);
 			if (checkpoint && actions) {
@@ -985,6 +891,7 @@ export class ChatListItemRenderer extends Disposable {
 				const { sessionId, threadId, itemId } = checkpoint;
 				disposables.add(this.instantiationService.createInstance(ChatForkActionViewItem, actions, { sessionId, threadId, beforeItemId: itemId }, this.options.isVisible));
 			}
+			if (actions && item.requestSource && item.canRunAnotherVersion) this.renderRequestCheckpointMenu(actions, item.requestSource, disposables);
 		}
 	}
 
@@ -1028,7 +935,9 @@ function sameItem(left: IChatListItem, right: IChatListItem): boolean {
 
 function sameItemPresentation(left: IChatListItem, right: IChatListItem): boolean {
 	return left.id === right.id && left.type === right.type && left.contextText === right.contextText && left.contextSourceUrl === right.contextSourceUrl
-		&& left.canGiveModelFeedback === right.canGiveModelFeedback && left.feedbackSource?.sessionId === right.feedbackSource?.sessionId
+		&& left.canGiveModelFeedback === right.canGiveModelFeedback && left.canForkAfterResponse === right.canForkAfterResponse
+		&& left.canRunAnotherVersion === right.canRunAnotherVersion && left.canCompareResults === right.canCompareResults
+		&& left.feedbackSource?.sessionId === right.feedbackSource?.sessionId
 		&& left.feedbackSource?.threadId === right.feedbackSource?.threadId && left.feedbackSource?.turnId === right.feedbackSource?.turnId
 		&& left.feedbackSource?.itemId === right.feedbackSource?.itemId
 		&& left.turnChanges?.files === right.turnChanges?.files && left.turnChanges?.additions === right.turnChanges?.additions
