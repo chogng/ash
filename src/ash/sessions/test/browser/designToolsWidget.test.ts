@@ -27,6 +27,9 @@ suite('Design tools reuse shared action views', () => {
 			await expect(dropdown).toBeFocused();
 			await dropdown.press('ArrowDown');
 			await expect(dropdown).toHaveAttribute('aria-expanded', 'true');
+			const current = page.getByRole('menuitemradio', { name: 'Select (V)', exact: true, checked: true });
+			await expect(current.locator('.ash-menu-leading-slot [data-ash-icon-id="cursor-2"]')).toBeVisible();
+			await expect(current.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]')).toBeVisible();
 			await expect(page.getByRole('menuitemradio', { name: 'Move canvas (H)', exact: true })).toBeVisible();
 			await page.keyboard.press('Escape');
 			await expect(dropdown).toBeFocused();

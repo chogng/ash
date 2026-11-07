@@ -96,6 +96,7 @@ export class SessionEnvironmentPicker extends Disposable {
 			},
 			listOptions: {
 				className: 'ash-sessions-environment-menu ash-action-widget-accent-checks',
+				menuIconPlacement: 'leading-with-trailing-check',
 				showFilter: true,
 				focusFilterOnOpen: true,
 				filterPlaceholder: localize('sessions.environment.search', 'Search environments'),

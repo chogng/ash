@@ -48,12 +48,8 @@
 	padding-inline: var(--ash-spacing-size60);
 }
 
-.ash-chat-permission-menu .ash-action-widget-primary > .ash-keybinding-label {
-	grid-area: accessory;
-}
-
 .ash-chat-permission-menu {
-	--ash-action-widget-label-font-weight: var(--ash-fontWeight-semiBold);
+	--ash-action-widget-summary-font-size: 1em;
 }
 
 .ash-chat-input-workspace-slot {

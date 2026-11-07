@@ -704,6 +704,7 @@ export class WorkspacePicker extends Disposable {
 			onError: error => this.reportError(error),
 			listOptions: {
 				className: 'ash-action-widget-accent-checks',
+				menuIconPlacement: 'leading-with-trailing-check',
 				showRowTooltips: true,
 				showFilter: true,
 				focusFilterOnOpen: true,

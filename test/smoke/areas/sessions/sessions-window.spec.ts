@@ -6,7 +6,7 @@ import type { PlaywrightApplication } from '../../../automation/playwrightDriver
 import type { Locator, Page } from '@playwright/test';
 import { mkdtemp, mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, resolve, sep } from 'node:path';
+import { basename, join, resolve, sep } from 'node:path';
 import { launchElectron } from '../../../automation/playwrightElectron.js';
 import { Editor } from '../../../automation/editor.js';
 import { Workbench } from '../../../automation/workbench.js';
@@ -1079,7 +1079,7 @@ test(
 	},
 );
 
-test('Sessions permission shortcuts use shared keycaps and keep numeric activation scoped', async ({
+test('Sessions permissions show only the selected check at the trailing edge', async ({
 	target,
 	workbench,
 }) => {
@@ -1089,27 +1089,45 @@ test('Sessions permission shortcuts use shared keycaps and keep numeric activati
 	const manual = composer.getByRole('button', { name: 'Permissions: Manual', exact: true });
 	await manual.press('ArrowDown');
 	const menu = page.getByRole('menu', { name: 'Permissions', exact: true });
-	const keys = menu.locator('.ash-keybinding-label-keycap kbd');
-	await expect(keys).toHaveText(['1', '2', '3']);
-	await expect(menu.getByRole('menuitemradio').first()).toHaveAttribute('aria-keyshortcuts', '1');
-	const keycapStyles = await keys.evaluateAll(keys => keys.map(key => {
-		const style = getComputedStyle(key);
-		return { height: style.height, fontSize: style.fontSize, labelSize: style.getPropertyValue('--ash-fontSize-label1').trim() };
-	}));
-	for (const { height, fontSize, labelSize } of keycapStyles) {
-		expect(height).toBe('20px');
-		expect(fontSize).toBe(labelSize);
-	}
+	const rows = menu.getByRole('menuitemradio');
+	await expect(rows).toHaveCount(3);
+	await expect(menu.getByRole('menuitem')).toHaveCount(0);
+	await expect(menu.locator('kbd, [aria-keyshortcuts]')).toHaveCount(0);
+	const checks = menu.locator('.ash-action-widget-selection:visible');
+	await expect(checks).toHaveCount(1);
+	const manualRow = rows.filter({ hasText: 'Manual' });
+	const label = manualRow.locator('.ash-action-widget-label');
+	const summary = manualRow.locator('.ash-action-widget-summary');
+	await expect(label).toHaveCSS('font-weight', '400');
+	await expect(summary).toHaveCSS('font-weight', '400');
+	await expect(summary).toHaveCSS('font-size', await label.evaluate(element => getComputedStyle(element).fontSize));
+	await expect(summary).not.toHaveCSS('color', await label.evaluate(element => getComputedStyle(element).color));
+	const check = manualRow.locator('.ash-action-widget-selection [data-ash-icon-id="check"]');
+	await expect(check).toBeVisible();
+	const checkBounds = (await check.boundingBox())!;
+	const labelBounds = (await label.boundingBox())!;
+	expect(checkBounds.x).toBeGreaterThan(labelBounds.x + labelBounds.width);
 	await page.keyboard.press('1');
+	await expect(manualRow).toHaveAttribute('aria-checked', 'true');
+	await page.keyboard.press('Home');
+	await page.keyboard.press('Enter');
 	const automatic = composer.getByRole('button', { name: 'Permissions: Auto', exact: true });
 	await expect(automatic).toBeFocused();
 	await automatic.press('ArrowDown');
-	await page.keyboard.press('2');
+	await expect(rows.filter({ hasText: 'Auto' }).locator('.ash-action-widget-selection')).toBeVisible();
+	await page.keyboard.press('ArrowDown');
+	await page.keyboard.press('Enter');
 	await expect(manual).toBeFocused();
 	await manual.press('ArrowDown');
 	await page.keyboard.press('Escape');
 	await expect(manual).toBeFocused();
 	await expect(menu).toBeHidden();
+	await manual.press('ArrowDown');
+	await page.keyboard.press('End');
+	await page.keyboard.press('Enter');
+	const warning = page.getByRole('dialog').filter({ hasText: 'Skip most permission approvals?' });
+	await warning.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await expect(manual).toBeVisible();
 	const editor = new Editor(composer);
 	await replaceChatInput(editor, '123');
 	await editor.waitForEditorContents(contents => contents === '123');
@@ -1119,6 +1137,7 @@ test('Sessions permission shortcuts use shared keycaps and keep numeric activati
 test('Sessions composer attaches files, chooses permissions, and restores the unsent draft', async ({
 	application,
 	target,
+	testWorkspace,
 	workbench,
 }) => {
 	let page = await workbench.openAgentsWindow(target.kind);
@@ -1135,17 +1154,28 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	);
 	await composer.getByRole('button', { name: 'Add context', exact: true }).click();
 	const upload = page.waitForEvent('filechooser');
-	await page
-		.getByRole('dialog', { name: 'Search attachments', exact: true })
-		.getByRole('combobox')
-		.fill('Attach files');
-	await page.keyboard.press('Enter');
+	await page.getByRole('menu', { name: 'Add content or context', exact: true })
+		.getByRole('menuitem', { name: 'Upload or add files', exact: true }).click();
 	await (
 		await upload
 	).setFiles({ name: 'context.ts', mimeType: 'text/plain', buffer: Buffer.from('export const value = 42;') });
 	await expect(editor.element.locator('.ash-chat-code-reference')).toHaveText(['context.ts']);
-	const fileDraft = (await editor.lines.allTextContents()).join('\n').replace(/\u00a0/g, ' ');
-	await expect(composer.locator('[data-action-id="ash.chat.input.send"] button')).toBeEnabled();
+	// The file label is a separate widget. Wait for the inline reference to reach the editor.
+	const fileDraft = '\uFFFC ';
+	await editor.waitForEditorContents(contents => contents === fileDraft);
+	const send = composer.getByRole('button', { name: 'Send', exact: true });
+	await expect(send).toBeDisabled();
+	await expect(composer.getByText('Choose a project before sending.', { exact: true })).toBeVisible();
+	// Project operations require the connected desktop host's authority.
+	if (target.kind === 'electron' && target.appServerMode === 'required') {
+		const project = page.locator('.ash-sessions-chat-slot.active:visible .ash-sessions-workspace-picker');
+		await expect(project).toHaveText('Choose project');
+		await project.click();
+		const projectName = basename(testWorkspace.directory);
+		await page.getByRole('menuitemradio', { name: projectName, exact: true }).click();
+		await expect(project).toHaveText(projectName);
+		await expect(send).toBeEnabled();
+	}
 	const permissions = composer.getByRole('button', { name: 'Permissions: Manual', exact: true });
 	await permissions.press('ArrowDown');
 	const permissionMenu = page.locator('.ash-chat-permission-menu');
@@ -1157,18 +1187,13 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await expect(permissionMenu.getByRole('menuitemradio', { name: 'Auto', exact: true })).toHaveAccessibleDescription(
 		'Review operations automatically; ask you when uncertain',
 	);
-	await expect(permissionMenu.locator('.ash-keybinding-label-keycap')).toHaveText(['1', '2', '3']);
-	const prepareReview = permissionMenu.getByRole('menuitem', { name: /Prepare review environment/u });
-	if (target.appServerMode === 'disabled') {
-		await expect(prepareReview).toHaveCount(0);
-	} else {
-		await expect(prepareReview).toBeVisible();
-	}
+	await expect(permissionMenu.getByRole('menuitem')).toHaveCount(0);
 	await page.keyboard.press('Alt+F1');
-	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/press 1, 2, or 3/u);
+	await expect(page.locator('.ash-accessible-view-content')).toHaveValue(/Press Enter or Space to select it/u);
 	await page.keyboard.press('Escape');
 	await expect(permissionMenu.getByRole('menuitemradio', { name: 'Manual', exact: true })).toBeFocused();
-	await page.keyboard.press('1');
+	await page.keyboard.press('Home');
+	await page.keyboard.press('Enter');
 	await expect(composer.getByRole('button', { name: 'Permissions: Auto', exact: true })).toBeFocused();
 	const modeButton = composer.getByRole('button', { name: 'Mode: Agent', exact: true });
 	await modeButton.click();
@@ -1177,7 +1202,8 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await modes.getByRole('menuitemradio', { name: 'Plan', exact: true }).click();
 	await expect(composer.getByRole('button', { name: 'Permissions: Auto', exact: true })).toBeVisible();
 	await composer.getByRole('button', { name: 'Permissions: Auto', exact: true }).press('ArrowDown');
-	await page.keyboard.press('3');
+	await page.keyboard.press('End');
+	await page.keyboard.press('Enter');
 	const warning = page.getByRole('dialog').filter({ hasText: 'Skip most permission approvals?' });
 	await expect(warning).toContainText('File and network access limits still apply');
 	await expect(warning.getByRole('button', { name: 'Bypass permissions', exact: true })).toBeVisible();
@@ -1185,12 +1211,14 @@ test('Sessions composer attaches files, chooses permissions, and restores the un
 	await expect(composer.getByRole('button', { name: 'Permissions: Auto', exact: true })).toBeVisible();
 	await expect(composer.getByRole('button', { name: 'Mode: Plan', exact: true })).toBeVisible();
 	await composer.getByRole('button', { name: 'Permissions: Auto', exact: true }).press('ArrowDown');
-	await page.keyboard.press('3');
+	await page.keyboard.press('End');
+	await page.keyboard.press('Enter');
 	await warning.getByRole('button', { name: 'Bypass permissions', exact: true }).click();
 	await expect(composer.getByRole('button', { name: 'Permissions: Bypass permissions', exact: true })).toBeVisible();
 	await expect(composer.getByRole('button', { name: 'Mode: Plan', exact: true })).toBeVisible();
 	await composer.getByRole('button', { name: 'Permissions: Bypass permissions', exact: true }).press('ArrowDown');
-	await page.keyboard.press('2');
+	await page.keyboard.press('ArrowUp');
+	await page.keyboard.press('Enter');
 	await expect(composer.getByRole('button', { name: 'Permissions: Manual', exact: true })).toBeFocused();
 	await composer.getByRole('button', { name: 'Permissions: Manual', exact: true }).press('ArrowDown');
 	await page.keyboard.press('Home');
@@ -1605,33 +1633,36 @@ async function expectActivityIconSize(navigation: Locator, size: number): Promis
 			),
 		)
 		.toBe(true);
-	const icons = navigation.locator('button .ash-icon');
+	const icons = navigation.locator('button > .ash-button-content > .ash-icon-label-icon > .ash-icon');
 	const horizontal = await navigation.evaluate(element => element.classList.contains('horizontal'));
 	const labeled = await navigation.evaluate(element => element.classList.contains('labeled'));
-	const itemSize = horizontal ? 24 : 36;
+	const itemWidth = horizontal ? 24 : 36;
+	const itemHeight = horizontal ? 24 : 32;
 	const entries = navigation.locator('.ash-composite-bar-navigation-item > button');
 	await expect(entries).not.toHaveCount(0);
 	for (const item of await entries.all()) {
 		await expect(item.locator('.ash-icon')).toHaveCount(1);
 		if (labeled) {
-			expect((await item.boundingBox())!.width).toBeGreaterThan(itemSize);
+			expect((await item.boundingBox())!.width).toBeGreaterThan(itemWidth);
 		} else {
-			await expect(item).toHaveCSS('width', `${itemSize}px`);
+			await expect(item).toHaveCSS('width', `${itemWidth}px`);
 		}
-		await expect(item).toHaveCSS('height', `${itemSize}px`);
+		await expect(item).toHaveCSS('height', `${itemHeight}px`);
 	}
-	await expect(icons).toHaveCount((await entries.count()) + (horizontal || labeled ? 0 : 1));
+	const more = navigation.getByRole('button', { name: 'More', exact: true });
+	await expect(icons).toHaveCount((await entries.count()) + (await more.count()));
 	const accounts = navigation.page().getByRole('button', { name: 'Accounts', exact: true });
 	await expect(accounts).toHaveCount(1);
 	const titlebarAccounts = navigation
 		.page()
 		.locator('[data-part="titlebar"]')
 		.getByRole('button', { name: 'Accounts', exact: true });
-	await expect(titlebarAccounts).toHaveCount(horizontal ? 1 : 0);
-	if (horizontal) {
+	const top = horizontal && await navigation.evaluate(element => !!element.closest('.ash-sessions-activity-host.top'));
+	await expect(titlebarAccounts).toHaveCount(top ? 1 : 0);
+	if (top) {
 		await expect(navigation.getByRole('button', { name: 'Accounts', exact: true })).toHaveCount(0);
-		await expect(titlebarAccounts.locator('.ash-icon')).toHaveCSS('width', '16px');
-		await expect(titlebarAccounts.locator('.ash-icon')).toHaveCSS('height', '16px');
+		await expect(titlebarAccounts.locator('.ash-icon')).toHaveCSS('width', '18px');
+		await expect(titlebarAccounts.locator('.ash-icon')).toHaveCSS('height', '18px');
 		await expect(titlebarAccounts).toHaveAttribute('aria-haspopup', 'menu');
 	}
 	for (const icon of await icons.all()) {
@@ -1655,15 +1686,43 @@ async function expectActivityIconSize(navigation: Locator, size: number): Promis
 test('Code Sessions mode selection updates its shared composer', async ({ target, workbench }) => {
 	const page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
+	const environment = page.getByRole('button', { name: 'Run on: This Computer', exact: true });
+	await environment.press('ArrowDown');
+	const environmentMenu = page.locator('.ash-sessions-environment-menu');
+	const local = environmentMenu.getByRole('menuitemradio', { name: 'This Computer', exact: true });
+	await expect(local).toHaveAttribute('aria-checked', 'true');
+	await expect(local.locator('.ash-menu-leading-slot [data-ash-icon-id="local"]')).toBeVisible();
+	const check = local.locator('.ash-menu-trailing-check [data-ash-icon-id="check"]');
+	await expect(check).toBeVisible();
+	if (target.kind === 'electron') {
+		const remote = environmentMenu.getByRole('menuitem', { name: 'Remote', exact: true });
+		const arrow = remote.locator('.ash-submenu-indicator [data-ash-icon-id="menu-submenu"]');
+		await expect(arrow).toBeVisible();
+		const checkBounds = (await check.boundingBox())!;
+		const arrowBounds = (await arrow.boundingBox())!;
+		const checkCenter = checkBounds.x + checkBounds.width / 2;
+		const arrowCenter = arrowBounds.x + arrowBounds.width / 2;
+		expect(checkCenter).toBeCloseTo(arrowCenter, 0);
+	}
+	await page.keyboard.press('Escape');
+	await expect(environmentMenu).toBeHidden();
+	await expect(environment).toBeFocused();
 	const mode = page.locator('[data-action-id="ash.chat.input.mode"] button').first();
 	await mode.click();
 	const menu = page.locator('.ash-chat-input-mode-menu');
-	await expect(menu.getByRole('menuitemradio', { name: 'Default Agent', exact: true })).toHaveAttribute(
+	await expect(menu.getByRole('menuitemradio', { name: 'Agent', exact: true })).toHaveAttribute(
 		'aria-checked',
 		'true',
 	);
-	await menu.getByRole('menuitemradio', { name: 'Plan', exact: true }).click();
+	const plan = menu.getByRole('menuitemradio', { name: 'Plan', exact: true });
+	await plan.click();
 	await expect(mode).toHaveText('Plan');
+	await expect(menu).toBeHidden();
+	await mode.press('ArrowDown');
+	await expect(plan).toHaveAttribute('aria-checked', 'true');
+	await expect(plan.locator('.ash-menu-leading-slot [data-ash-icon-id="plan"]')).toBeVisible();
+	await expect(plan.locator('.ash-menu-trailing-check [data-ash-icon-id="check"]')).toBeVisible();
+	await page.keyboard.press('Escape');
 	await expect(mode).toBeFocused();
 });
 
@@ -1676,14 +1735,36 @@ test('Sessions navigation retains its own selection and hover skin across naviga
 	await page.bringToFront();
 	const navigation = page.locator('.ash-sessions-activity-content');
 	const chat = navigation.getByRole('button', { name: 'New', exact: true });
-	const originalChat = await chat.elementHandle();
+	const search = navigation.getByRole('button', { name: 'Search', exact: true });
+	const selectionToken = '--ash-sessions-sidebar-selection-background';
+	const hoverToken = '--ash-sessions-sidebar-hover-background';
+	const background = (token: string): Promise<string> => navigation.evaluate((element, token) => {
+		const probe = element.ownerDocument.createElement('span');
+		probe.style.backgroundColor = `var(${token})`;
+		element.append(probe);
+		try {
+			return getComputedStyle(probe).backgroundColor;
+		} finally {
+			probe.remove();
+		}
+	}, token);
+	const expectNavigationSkin = async (): Promise<void> => {
+		await page.mouse.move(600, 400);
+		await expect(chat).toHaveAttribute('aria-current', 'page');
+		await expect(chat).toHaveCSS('background-color', await background(selectionToken));
+		await expect(chat).toHaveCSS('border-radius', '8px');
+		await expect(search).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		const foreground = await chat.locator('.ash-icon').evaluate(icon => getComputedStyle(icon).color);
+		await expect(search.locator('.ash-icon')).toHaveCSS('color', foreground);
+		await search.hover();
+		await expect(search).toHaveCSS('background-color', await background(hoverToken));
+		await expect(search.locator('.ash-icon')).toHaveCSS('color', foreground);
+	};
+
 	await chat.click();
-	await expect(chat).toHaveAttribute('aria-current', 'page');
-	await expectActivityIconSize(navigation, 16);
-	await expect(chat).toHaveCSS('width', '36px');
-	await expect(chat).toHaveCSS('height', '32px');
-	// Shared toolbar theme overrides must not change Sessions navigation feedback.
-	const hoverVariables = ['--ash-toolbar-hoverBackground', '--ash-sessions-selectionBackground'];
+	await expectActivityIconSize(navigation, 18);
+	// Shared toolbar hover overrides must not replace Sessions navigation feedback.
+	const hoverVariables = ['--ash-toolbar-hoverBackground', selectionToken];
 	const previousHoverStyles = await navigation.evaluate((element, variables) => {
 		const style = (element as HTMLElement).style;
 		const previous = variables.map(variable => ({
@@ -1696,11 +1777,7 @@ test('Sessions navigation retains its own selection and hover skin across naviga
 		return previous;
 	}, hoverVariables);
 	try {
-		await navigation.getByRole('button', { name: 'Projects', exact: true }).hover();
-		await expect(navigation.getByRole('button', { name: 'Projects', exact: true })).toHaveCSS(
-			'background-color',
-			'rgb(12, 34, 56)',
-		);
+		await expectNavigationSkin();
 		await chat.hover();
 		await expect(chat).toHaveCSS('background-color', 'rgb(12, 34, 56)');
 	} finally {
@@ -1712,82 +1789,56 @@ test('Sessions navigation retains its own selection and hover skin across naviga
 			}
 		}, previousHoverStyles);
 	}
-	for (const position of ['Top', 'Bottom', 'Default']) {
-		if ('windows' in application && process.platform === 'darwin') {
-			await captureElectronMenu(application, () => chat.click({ button: 'right' }), { label: position });
-		} else {
-			await chat.click({ button: 'right' });
-			await page.getByRole('menuitem', { name: 'Activity Bar Position', exact: true }).click();
-			await page.getByRole('menuitemcheckbox', { name: position, exact: true }).click();
+	for (const position of ['Top', 'Bottom', 'Default'] as const) {
+		await chat.click({ button: 'right' });
+		await page.getByRole('menuitem', { name: 'Activity Bar Position', exact: true }).press('ArrowRight');
+		await page.getByRole('menuitemradio', { name: position, exact: true }).click();
+		if (position === 'Default') await expect(navigation).toHaveClass(/labeled/u);
+		else {
+			await expect(page.locator(`.ash-sessions-activity-host.${position.toLowerCase()}`)).toBeVisible();
+			await expect(navigation).toHaveClass(/horizontal/u);
 		}
-		await expectActivityIconSize(navigation, position === 'Default' ? 24 : 16);
-		const selected = navigation.locator('.ash-composite-bar-navigation-item.checked > button.selected');
-		await expect(selected).toHaveCount(1);
-		await expect(selected).toHaveCSS('background-color', 'rgb(240, 240, 240)');
-		await expect(selected.locator('.ash-icon')).toHaveCSS('color', 'rgb(0, 0, 0)');
-		await expect(selected).toHaveCSS('border-radius', '8px');
-		await page.bringToFront();
+		await expectActivityIconSize(navigation, 18);
+		await expectNavigationSkin();
 		await page.mouse.move(600, 400);
 		await chat.hover();
 		const tooltip = page.getByRole('tooltip');
-		await expect(tooltip).toHaveText('Chat');
-		const anchorBounds = await chat.boundingBox();
-		const hoverBounds = await page.locator('.ash-context-view-hover', { has: tooltip }).boundingBox();
-		if (position === 'Top') expect(hoverBounds!.y).toBeGreaterThanOrEqual(anchorBounds!.y + anchorBounds!.height);
-		if (position === 'Bottom') expect(hoverBounds!.y + hoverBounds!.height).toBeLessThanOrEqual(anchorBounds!.y);
-		if (position === 'Default')
-			expect(hoverBounds!.x).toBeGreaterThanOrEqual(anchorBounds!.x + anchorBounds!.width);
+		await expect(tooltip).toHaveText('New');
+		const anchorBounds = (await chat.boundingBox())!;
+		const hoverBounds = (await page.locator('.ash-context-view-hover', { has: tooltip }).boundingBox())!;
+		if (position === 'Top') expect(hoverBounds.y).toBeGreaterThanOrEqual(anchorBounds.y + anchorBounds.height);
+		else if (position === 'Bottom') expect(hoverBounds.y + hoverBounds.height).toBeLessThanOrEqual(anchorBounds.y);
+		else expect(hoverBounds.x).toBeGreaterThanOrEqual(anchorBounds.x + anchorBounds.width);
 		await page.keyboard.press('Escape');
-		if (position !== 'Default') {
-			await expect(chat).toHaveCSS('width', '24px');
-			await expect(chat).toHaveCSS('height', '24px');
-		}
-		const projects = navigation.getByRole('button', { name: 'Projects', exact: true });
-		await page.mouse.move(600, 400);
-		await expect(projects.locator('.ash-icon')).toHaveCSS('color', 'rgb(128, 128, 128)');
-		await projects.hover();
-		await expect(projects).toHaveCSS('background-color', 'rgb(240, 240, 240)');
-		await expect(projects.locator('.ash-icon')).toHaveCSS('color', 'rgb(0, 0, 0)');
-		await page.mouse.move(600, 400);
-		await expect(projects).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await expect(projects.locator('.ash-icon')).toHaveCSS('color', 'rgb(128, 128, 128)');
-		await chat.focus();
-		await chat.press(position === 'Default' ? 'ArrowDown' : 'ArrowRight');
-		// Switch workspaces before exercising Code's Collab entry.
-		await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-		if (position === 'Default') {
-			await navigation.getByRole('button', { name: 'More', exact: true }).press('Enter');
-			const collaboration = page.getByRole('menuitemradio', { name: 'Collab', exact: true });
-			await expect(collaboration.locator('[data-ash-icon-id="collab"]')).toBeVisible();
-			await collaboration.press('Enter');
-		} else {
+
+		const originalChat = (await chat.elementHandle())!;
+		try {
 			const collaboration = navigation.getByRole('button', { name: 'Collab', exact: true });
-			await collaboration.press('Enter');
-			await expect(collaboration).toHaveAttribute('aria-current', 'page');
-			await expect(collaboration.locator('.ash-icon')).toHaveCSS('color', 'rgb(0, 0, 0)');
-			await expect(collaboration).toHaveCSS('background-color', 'rgb(240, 240, 240)');
-			await expect(collaboration.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'collab');
-			await expect(navigation.locator('.ash-composite-bar-navigation-item.checked')).toHaveCount(1);
+			if (position === 'Default') {
+				const more = navigation.getByRole('button', { name: 'More', exact: true });
+				await more.press('Enter');
+				const item = page.getByRole('menuitemradio', { name: 'Collab', exact: true });
+				await expect(item.locator('.ash-menu-leading-slot [data-ash-icon-id="collab"]')).toBeVisible();
+				await item.press('Enter');
+				await more.press('Enter');
+				await expect(item).toHaveAttribute('aria-checked', 'true');
+				await expect(item.locator('.ash-menu-trailing-check [data-ash-icon-id="check"]')).toBeVisible();
+				await page.keyboard.press('Escape');
+			} else {
+				await collaboration.press('Enter');
+				await expect(collaboration).toHaveAttribute('aria-current', 'page');
+				await expect(collaboration).toHaveCSS('background-color', await background(selectionToken));
+			}
+			await expect(chat).not.toHaveAttribute('aria-current', 'page');
+			await chat.press('Enter');
+			await expect(chat).toHaveAttribute('aria-current', 'page');
+			expect(await chat.evaluate((element, original) => element === original, originalChat)).toBe(true);
+		} finally {
+			await originalChat.dispose();
 		}
-		await expect(chat).not.toHaveAttribute('aria-current');
-		await chat.press('Enter');
-		await expect(chat).toHaveAttribute('aria-current', 'page');
-		expect(await chat.evaluate((element, original) => element === original, originalChat)).toBe(true);
 	}
-	await expectActivityIconSize(navigation, 16);
-	await expect(chat).toHaveCSS('height', '32px');
-	await expect(chat).toHaveCSS('border-radius', '8px');
 	await workbench.setAppearance(application, 'dark', page);
-	await expect(chat).toHaveCSS('background-color', 'rgb(48, 48, 48)');
-	await expect(chat).toHaveCSS('border-radius', '8px');
-	const projects = navigation.getByRole('button', { name: 'Projects', exact: true });
-	await page.mouse.move(600, 400);
-	await expect(chat.locator('.ash-icon')).toHaveCSS('color', 'rgb(255, 255, 255)');
-	await expect(projects.locator('.ash-icon')).toHaveCSS('color', 'rgb(153, 153, 153)');
-	await projects.hover();
-	await expect(projects).toHaveCSS('background-color', 'rgb(48, 48, 48)');
-	await expect(projects.locator('.ash-icon')).toHaveCSS('color', 'rgb(255, 255, 255)');
-	await originalChat!.dispose();
+	await expectNavigationSkin();
 });
 
 test(

@@ -223,6 +223,7 @@ export class ActivityBar extends Disposable {
 				? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: this.domNode.ownerDocument.defaultView ?? undefined }
 				: event.target as HTMLElement,
 			getActions: () => Separator.join([...this.getItemContextMenuActions(event.target as Element)], [...this.getUnpinActions(event.target as Element)], [...this.getOrderActions(event.target as Element)], [...this.getContextMenuActions()]),
+			iconPlacement: 'trailing',
 			getCheckedActionsRepresentation: () => 'radio',
 			autoSelectFirstItem: event.type === 'keydown',
 		});
@@ -401,6 +402,7 @@ class MoreActionViewItem extends DropdownMenuActionViewItem {
 				getActionViewItem: pinControls ? (item, options) => new PinnableMenuActionViewItem(item, options,
 					pinControls.pins.map(ids => ids.has(item.id)), pinned => pinControls.setPinned(item.id, pinned)) : undefined,
 				getMenuClassName: pinControls ? () => 'ash-sessions-navigation-menu' : undefined,
+				iconPlacement: 'leading-with-trailing-check',
 				getCheckedActionsRepresentation: () => 'radio',
 			}),
 		}, { buttonStyles: defaultButtonStyles }, () => ({ anchorAxisAlignment: AnchorAxisAlignment.Horizontal }));

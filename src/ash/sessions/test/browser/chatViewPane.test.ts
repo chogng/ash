@@ -4148,7 +4148,7 @@ test('Chat mode accessibility help explains switch_mode in Chinese and restores 
 		const provider = focusedChatHelp(fixture.services);
 		assert.match(provider.provideContent(), /退出到 Agent、Debug 或 Multitask 需要你的选择，并保留权限模式/);
 		assert.match(provider.provideContent(), /权限菜单提供 Auto、Manual 和 Bypass permissions/);
-		assert.match(provider.provideContent(), /菜单打开时按 1、2、3 选择/);
+		assert.doesNotMatch(provider.provideContent(), /按 1、2、3/);
 		assert.equal(provider.provideContent().match(/聊天：配置工具/g)?.length, 1);
 		(focused as HTMLElement).blur();
 		provider.dispose();
@@ -4172,7 +4172,8 @@ for (const locale of ['en', 'zh-CN']) test(`Permission menu accessibility help s
 		assert.equal(document.activeElement, selected);
 		const provider = focusedChatHelp(fixture.services);
 		assert.match(provider.provideContent(), locale === 'en' ? /^Permissions/ : /^权限/);
-		assert.doesNotMatch(provider.provideContent(), /Chat: Configure Tools|工作区|workspace/);
+		assert.match(provider.provideContent(), locale === 'en' ? /Press Enter or Space to select it/ : /按 Enter 或空格确认选择/);
+		assert.doesNotMatch(provider.provideContent(), /Chat: Configure Tools|工作区|workspace|1, 2, or 3|1、2、3/);
 		provider.dispose();
 		assert.equal(document.activeElement, selected);
 		const closingProvider = focusedChatHelp(fixture.services);

@@ -1087,7 +1087,7 @@
     "chat.input.actionFailed": "无法打开聊天操作：{0}",
     "chat.input.secondaryHelp": "输入框下方，“添加上下文”位于审批模式按钮左侧。已添加的附件显示在输入框内。审批模式按钮显示当前模式。按 Enter 或空格在按钮上方打开菜单，使用方向键选择模式，按 Escape 关闭菜单并返回按钮。完全访问需要确认。上下文圆环显示估算输入占自动压缩预算的比例；模型上下文容量单独显示。悬停或聚焦可查看百分比和 token 数，点击可打开圆环上方的明细浮层。容量未知时显示空环，只显示 token 数，不显示百分比。按 Escape 或激活“关闭”可关闭明细并返回圆环。加载、运行和错误状态与扩展状态指示一起显示。按 Tab 进入各工具栏，使用方向键切换操作，按 Enter 或空格执行操作。",
     "chat.input.permissions": "权限",
-    "chat.input.permissionsHelp": "权限菜单\n使用上下方向键、Home 和 End 选择权限模式。按 Enter、空格或 1、2、3 确认选择。跳过权限审批需要确认。Escape 关闭菜单并恢复焦点。Tab 关闭菜单并移到下一个控件。",
+    "chat.input.permissionsHelp": "权限菜单\n使用上下方向键、Home 和 End 选择权限模式。按 Enter 或空格确认选择。跳过权限审批需要确认。Escape 关闭菜单并恢复焦点。Tab 关闭菜单并移到下一个控件。",
     "chat.input.permissionsLabel": "权限：{0}",
     "chat.input.contextModel": "模型：{0}/{1}",
     "chat.input.contextRingLabel": "上下文预算：{0}%，估算输入 {1} / {2} 个 token",

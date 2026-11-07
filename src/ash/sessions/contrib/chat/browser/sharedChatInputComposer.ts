@@ -20,8 +20,6 @@ import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widg
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { SESSIONS_COMPACT_INPUT_HEIGHT } from '../common/constants.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../platform/agentHost/common/approvalModes.js';
-import { IApprovalEnvironmentService } from '../../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
-import { OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../../../workbench/contrib/chat/common/chat.js';
 import { getSessionsChatAccessibilityHelp } from './sessionsChatAccessibilityHelp.js';
 import { SessionReferenceCompletions } from './sessionReferenceCompletions.js';
 import { SessionWorkspaceStatus } from './sessionWorkspaceStatus.js';
@@ -52,7 +50,6 @@ export class SharedChatInputComposer extends Disposable {
 		@IConfigurationService configuration: IConfigurationService,
 		@ICommandService commands: ICommandService,
 		@IGitHubService github: IGitHubService,
-		@IApprovalEnvironmentService approvalEnvironment: IApprovalEnvironmentService | undefined,
 	) {
 		super();
 		const permissionPicker: ChatInputPartOptions['primaryPermissionPicker'] = {
@@ -68,23 +65,14 @@ export class SharedChatInputComposer extends Disposable {
 			},
 			onDidChange: model.onDidChange,
 			actionProvider: {
-				getActions: () => [
-					...approvalModeDefinitions.map(definition => ({
-						id: definition.id,
-						label: localize(definition.label.key, definition.label.text),
-						tooltip: localize(definition.description.key, definition.description.text),
-						enabled: true,
-						checked: definition.id === model.inputState.approvalMode,
-						run: () => commands.executeCommand(`sessions.chat.permission.${definition.id}`, model),
-					})),
-					...(approvalEnvironment ? [{
-						id: OPEN_GUARDIAN_SETUP_COMMAND_ID,
-						label: localize('approvalEnvironment.title', 'Prepare review environment…'),
-						tooltip: '',
-						enabled: true,
-						run: () => commands.executeCommand(OPEN_GUARDIAN_SETUP_COMMAND_ID, model),
-					}] : []),
-				],
+				getActions: () => approvalModeDefinitions.map(definition => ({
+					id: definition.id,
+					label: localize(definition.label.key, definition.label.text),
+					tooltip: localize(definition.description.key, definition.description.text),
+					enabled: true,
+					checked: definition.id === model.inputState.approvalMode,
+					run: () => commands.executeCommand(`sessions.chat.permission.${definition.id}`, model),
+				})),
 			},
 		};
 		const input = this.input = instantiationService.createInstance(ChatInputPart, container, delegate, contextMenus, contextViews, accessibleViews, notifications, {

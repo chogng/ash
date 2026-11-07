@@ -141,7 +141,9 @@ export class CreatePullRequestWidget extends Disposable {
 		};
 		if (options.onSendToChat) {
 			this.submit = this._register(new ButtonWithDropdown(actions, {
-				...submitOptions, contextMenuProvider: contextMenus, addPrimaryActionToDropdown: false,
+				...submitOptions,
+				contextMenuProvider: { showContextMenu: delegate => contextMenus.showContextMenu({ ...delegate, iconPlacement: 'trailing' }) },
+				addPrimaryActionToDropdown: false,
 				actions: {
 					getActions: () => (['create', 'sendToChat'] as const).map(action => ({
 						id: `sessions.createPullRequest.${action}`,

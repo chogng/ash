@@ -87,7 +87,7 @@ export class NewEnvironmentDialog extends Disposable {
 					return observeResize(trigger, syncWidth, { box: 'border-box' });
 				} : undefined,
 				tabLeavesPopup: true,
-				listOptions: { ariaLabel },
+				listOptions: { ariaLabel, menuIconPlacement: 'trailing' },
 			}, menus));
 			dropdown.element.classList.add('ash-environment-menu-field');
 			dropdown.element.setAttribute('aria-description', label);

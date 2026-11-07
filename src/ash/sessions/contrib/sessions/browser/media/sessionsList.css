@@ -14,22 +14,6 @@
 	flex: 0 0 auto;
 }
 
-/* Let any contributed icon take space without reserving a column for text-only actions. */
-.ash-sessions-list-menu
-	> .ash-action-view-item
-	> .ash-button
-	> .ash-menu-leading-slot:not(.ash-menu-leading-check) {
-	display: contents;
-}
-
-.ash-sessions-list-menu
-	> .ash-action-view-item
-	> .ash-button
-	> .ash-menu-leading-check {
-	order: 1;
-	margin-inline-start: auto;
-}
-
 .ash-sessions-list-search {
 	min-width: 0;
 	min-height: var(--ash-spacing-size320);

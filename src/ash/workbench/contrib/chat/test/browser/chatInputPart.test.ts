@@ -3813,7 +3813,10 @@ suite('chatInput browser component', () => {
 			await picker.getByRole('menuitem', { name: '推理强度' }).press('ArrowRight');
 			const effortMenu = page.getByRole('menu', { name: '推理强度' });
 			await expect(effortMenu.getByRole('menuitemradio')).toHaveText(['低', '高']);
-			await expect(effortMenu.getByRole('menuitemradio', { checked: true })).toHaveText('低');
+			const selectedEffort = effortMenu.getByRole('menuitemradio', { checked: true });
+			await expect(selectedEffort).toHaveText('低');
+			await expect(selectedEffort.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]')).toBeVisible();
+			await expect(selectedEffort.locator('.ash-menu-leading-slot')).toBeHidden();
 			expect(await page.evaluate(() => window.ashChatInputIntegration.modelState())).toMatchObject({ selectedReasoningEffort: undefined });
 			await effortMenu.getByRole('menuitemradio', { name: '低', exact: true }).click();
 			await expect(picker).toHaveCount(0);
@@ -4142,6 +4145,8 @@ suite('chatInput browser component', () => {
 			await expect(menu.getByRole('menuitemradio', { name, exact: true })).toBeFocused();
 			await expect(menu.getByRole('menuitemradio').and(menu.locator('[aria-checked="true"]'))).toHaveCount(1);
 			await expect(menu.getByRole('menuitemradio', { name, exact: true })).toHaveAttribute('aria-checked', 'true');
+			await expect(item.locator(`[data-ash-icon-id="${modes[name]!.icon}"]`)).toBeVisible();
+			await expect(item.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]')).toBeVisible();
 			await page.keyboard.press('Escape');
 			await expect(mode).toBeFocused();
 		}
@@ -4837,9 +4842,15 @@ suite('chatInput browser component', () => {
 			await expect(agent).toBeFocused();
 			await expect(agent).toHaveAttribute('aria-checked', 'true');
 			await expect(agent.locator('.ash-icon-label-icon [data-ash-icon-id="unlimited"]')).toBeVisible();
-			await expect(agent.locator('.ash-menu-leading-check > [data-ash-icon-id="check"]')).toBeVisible();
+			const check = agent.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]');
+			await expect(check).toBeVisible();
+			const labelBounds = (await agent.locator('.ash-button-label').boundingBox())!;
+			const checkBounds = (await check.boundingBox())!;
+			expect(checkBounds.x).toBeGreaterThan(labelBounds.x + labelBounds.width);
 			await agent.press('ArrowDown');
-			await expect(widget.getByRole('menuitemradio', { name: 'Plan', exact: true })).toBeFocused();
+			const plan = widget.getByRole('menuitemradio', { name: 'Plan', exact: true });
+			await expect(plan).toBeFocused();
+			await expect(plan.locator('.ash-menu-trailing-check > [data-ash-icon-id="check"]')).toBeHidden();
 			await page.keyboard.press('Escape');
 			await expect(widget).toHaveCount(0);
 			await expect(picker).toBeFocused();

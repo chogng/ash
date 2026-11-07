@@ -7,7 +7,7 @@ import type {
 	AnchorPosition,
 } from './ui/contextview/contextview.js';
 import type { ActionViewItem } from './ui/actionbar/actionViewItems.js';
-import type { MenuActionViewItemOptions } from './ui/menu/menu.js';
+import type { IMenuOptions, MenuActionViewItemOptions } from './ui/menu/menu.js';
 
 export interface IContextMenuPoint {
 	readonly x: number;
@@ -41,7 +41,7 @@ export interface IContextMenuDelegate {
 	/** Caller-owned styling applied to every submenu of this popup. */
 	readonly submenuClassName?: string;
 	/** Use the browser menu's trailing icon column for this menu and its submenus. */
-	readonly iconPlacement?: 'leading' | 'trailing';
+	readonly iconPlacement?: IMenuOptions['iconPlacement'];
 	readonly onHide?: (didCancel: boolean) => void;
 	/** Cancels only this presentation; an action that has already started still completes. */
 	readonly cancellationToken?: CancellationToken;

@@ -54,7 +54,7 @@ export class DesignToolsWidget extends Disposable {
 		this.domNode.append(tools, modes);
 		const menuProvider: IContextMenuProvider = {
 			showContextMenu: delegate => {
-				contextMenus.showContextMenu({ ...delegate, getMenuClassName: () => 'ash-design-menu', getCheckedActionsRepresentation: () => 'radio', onHide: cancelled => { this.menuVisible = false; delegate.onHide?.(cancelled); } });
+				contextMenus.showContextMenu({ ...delegate, getMenuClassName: () => 'ash-design-menu', iconPlacement: 'leading-with-trailing-check', getCheckedActionsRepresentation: () => 'radio', onHide: cancelled => { this.menuVisible = false; delegate.onHide?.(cancelled); } });
 				this.menuVisible = true;
 			},
 		};

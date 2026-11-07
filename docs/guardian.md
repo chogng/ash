@@ -30,7 +30,7 @@ Guardian 只在确定性规则无法独立判断时提供风险建议；它不�
 
 ### 审核模型选择
 
-`agent.approvalReviewModel` 是独立的用户配置。Sessions 的“权限 → 审核模型”可以修改它。
+`agent.approvalReviewModel` 是独立的用户配置。
 `automatic` 按主模型的当前连接选用该连接定义的审核默认值；其他提供方保留自身默认值。
 
 | OpenAI 连接  | 默认审核模型        | 默认思考强度 |
@@ -289,7 +289,7 @@ flowchart TD
 
 ### 准备项目审核环境
 
-Sessions 的“权限 → 准备审核环境”和 `/guardian setup` 为当前聊天的实际目录准备背景资料；
+在 Sessions 中使用 `/guardian setup` 为当前聊天的实际目录准备背景资料；
 `/guardian` 打开同一管理入口。TUI 也提供 `/guardian setup`，可扫描项目、查看来源内容、逐项接受
 或排除，再保存；当前 TUI 使用直接提取，不调用整理模型，也不扫描终端历史或其他仓库。
 `/permission` 选择权限模式，`/init` 创建或更新 `ASH.md`，三个命令各自负责一个步骤。已建立的聊天按 Thread

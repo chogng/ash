@@ -259,6 +259,7 @@ export class TabbedModelPicker extends Disposable {
 							)], {
 								buttonStyles: defaultButtonStyles,
 								keybindingLabelStyles: defaultKeybindingLabelStyles,
+								iconPlacement: 'leading-with-trailing-check',
 								getCheckedActionsRepresentation: () => 'radio',
 								submenuVerticalAlignment: 'bottom',
 								tabLeavesSubmenu: true,
