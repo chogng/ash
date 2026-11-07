@@ -2,6 +2,49 @@ use super::*;
 use std::path::PathBuf;
 
 #[test]
+fn acl_setup_restores_partial_changes_before_retrying_a_missing_file() {
+    let temp = tempfile::tempdir().unwrap();
+    let work = temp.path().join("work");
+    let journal = temp.path().join("journal");
+    std::fs::create_dir(&work).unwrap();
+    let mut files = mxc_sdk::mxc_common::models::ContainerPolicy::default();
+    files.readwrite_paths.push(work.to_str().unwrap().into());
+    let mut attempts = 0;
+    let mut manager = apply_acl_with_retry(&journal, &files, |manager| {
+        assert_eq!(std::fs::read_dir(&journal).unwrap().count(), 0);
+        attempts += 1;
+        manager.deny_write_access("S-1-5-21-911-912-913-914", std::slice::from_ref(&work))?;
+        assert_eq!(std::fs::read_dir(&journal).unwrap().count(), 1);
+        if attempts == 1 {
+            return Err(std::io::Error::from(std::io::ErrorKind::NotFound).into());
+        }
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(attempts, 2);
+    manager.restore_strict().unwrap();
+    assert_eq!(std::fs::read_dir(journal).unwrap().count(), 0);
+}
+
+#[test]
+fn acl_setup_limits_missing_file_retries_and_rejects_other_errors_immediately() {
+    let temp = tempfile::tempdir().unwrap();
+    let files = mxc_sdk::mxc_common::models::ContainerPolicy::default();
+    for (kind, expected_attempts) in [
+        (std::io::ErrorKind::NotFound, 3),
+        (std::io::ErrorKind::PermissionDenied, 1),
+    ] {
+        let mut attempts = 0;
+        let result = apply_acl_with_retry(temp.path(), &files, |_| {
+            attempts += 1;
+            Err(std::io::Error::from(kind).into())
+        });
+        assert!(result.is_err());
+        assert_eq!(attempts, expected_attempts);
+    }
+}
+
+#[test]
 fn denied_file_inside_writable_grant_is_not_discarded() {
     let temp = tempfile::tempdir().unwrap();
     let work = temp.path().join("work");

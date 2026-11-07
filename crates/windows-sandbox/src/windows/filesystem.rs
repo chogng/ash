@@ -5,6 +5,7 @@ use super::Execution;
 use super::win;
 use super::win::Handle;
 use super::win::Result;
+use mxc_sdk::mxc_common::filesystem_dacl::DaclError;
 use mxc_sdk::mxc_common::filesystem_dacl::DaclManager;
 use std::collections::BTreeSet;
 use std::os::windows::fs::MetadataExt;
@@ -206,32 +207,21 @@ impl Filesystem {
         if !report.errors.is_empty() {
             return Err("orphaned Windows ACL state must be recovered before execution".into());
         }
-        let mut manager = DaclManager::in_directory(journal).map_err(|error| error.to_string())?;
         let (ancestors, hidden): (Vec<_>, Vec<_>) = denied
             .into_iter()
             .partition(|path| grants.iter().any(|grant| grant.starts_with(path)));
-        manager
-            .add_deny_aces(account, &hidden)
-            .map_err(|error| error.to_string())?;
-        for ancestor in ancestors {
-            manager
-                .deny_directory_contents(account, &ancestor)
-                .map_err(|error| error.to_string())?;
-        }
-        for ancestor in traversal {
-            manager
-                .grant_directory_traversal(account, &ancestor)
-                .map_err(|error| error.to_string())?;
-        }
-        manager
-            .grant_appcontainer_access(account, &writable, &readonly)
-            .map_err(|error| error.to_string())?;
-        manager
-            .grant_appcontainer_access(capability, &writable, &[])
-            .map_err(|error| error.to_string())?;
-        manager
-            .deny_write_access(capability, &readonly)
-            .map_err(|error| error.to_string())?;
+        let manager = apply_acl_with_retry(journal, &request.files, |manager| {
+            manager.add_deny_aces(account, &hidden)?;
+            for ancestor in &ancestors {
+                manager.deny_directory_contents(account, ancestor)?;
+            }
+            for ancestor in &traversal {
+                manager.grant_directory_traversal(account, ancestor)?;
+            }
+            manager.grant_appcontainer_access(account, &writable, &readonly)?;
+            manager.grant_appcontainer_access(capability, &writable, &[])?;
+            manager.deny_write_access(capability, &readonly)
+        })?;
         Ok(Self {
             manager,
             _pins: pins,
@@ -242,6 +232,32 @@ impl Filesystem {
         self.manager
             .restore_strict()
             .map_err(|error| error.to_string())
+    }
+}
+
+fn apply_acl_with_retry(
+    journal: &Path,
+    files: &mxc_sdk::mxc_common::models::ContainerPolicy,
+    mut apply: impl FnMut(&mut DaclManager) -> std::result::Result<(), DaclError>,
+) -> Result<DaclManager> {
+    let mut attempts_remaining = 3;
+    loop {
+        let mut manager = DaclManager::in_directory(journal).map_err(|error| error.to_string())?;
+        let Err(error) = apply(&mut manager) else {
+            return Ok(manager);
+        };
+        manager.restore_strict().map_err(|restore| {
+            format!("Windows filesystem ACL setup failed ({error}) and rollback failed: {restore}")
+        })?;
+        // The SDK also uses StateIo for descendants that vanish during its ACL walk.
+        // Retry preparation under the same pinned grants only after restoring every ACE.
+        attempts_remaining -= 1;
+        if attempts_remaining == 0
+            || !matches!(&error, DaclError::StateIo(io) if io.kind() == std::io::ErrorKind::NotFound)
+        {
+            return Err(error.to_string());
+        }
+        validate(files)?;
     }
 }
 
