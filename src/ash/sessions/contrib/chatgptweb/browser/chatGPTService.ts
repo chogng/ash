@@ -179,6 +179,7 @@ export interface IChatGPTService {
 	archive(id: string): Promise<boolean>;
 	deleteConversation(id: string): Promise<void>;
 	moveToProject(id: string, projectId: string | null): Promise<void>;
+	createProjectAndMove(id: string, name: string): Promise<void>;
 	share(id: string, messageId?: string): Promise<string | undefined>;
 	readResponseAudio(id: string, messageId: string, signal: AbortSignal): Promise<Blob>;
 	editProjectDetails(id: string, signal: AbortSignal): Promise<ChatGPTProjectEdit>;
@@ -624,24 +625,45 @@ export class ChatGPTService extends Disposable implements IChatGPTService {
 
 	public async moveToProject(id: string, projectId: string | null): Promise<void> {
 		const moved = await this.manage(id, async signal => {
-			await this.client.updateConversation(id, { gizmo_id: projectId }, signal);
-			signal.throwIfAborted();
-			const state = this.model.get();
-			const projectHistory = new Map(state.projectHistory);
-			const previous = state.conversations.find(item => item.id === id)?.projectId;
-			if (previous) projectHistory.delete(previous);
-			if (projectId) projectHistory.delete(projectId);
-			this.updateCatalog({
-				projectHistory,
-				conversations: state.conversations.map(item => item.id !== id ? item : {
-					...item,
-					projectId: projectId ?? undefined,
-					projectOnly: projectId ? item.projectOnly : undefined,
-				}),
-			});
+			await this.assignConversationToProject(id, projectId, signal);
 			return true;
 		});
 		if (!moved) throw new Error(this.model.get().error || localize('sessions.chatgpt.projectMoveFailed', 'Could not move this conversation. Try again.'));
+	}
+
+	public async createProjectAndMove(id: string, name: string): Promise<void> {
+		const moved = await this.manage(id, async signal => {
+			const project = await this.client.createProject(name, signal);
+			signal.throwIfAborted();
+			this.updateCatalog({
+				projects: [project, ...this.model.get().projects.filter(item => item.id !== project.id)],
+			});
+			try {
+				await this.assignConversationToProject(id, project.id, signal);
+			} catch {
+				throw new Error(localize('sessions.chatgpt.projectCreatedMoveFailed', 'Created {0}. Choose it from Move to project to try the move again.', project.title));
+			}
+			return true;
+		});
+		if (!moved) throw new Error(this.model.get().error || localize('sessions.chatgpt.projectCreateMoveFailed', 'Could not create a project and move this conversation. Try again.'));
+	}
+
+	private async assignConversationToProject(id: string, projectId: string | null, signal: AbortSignal): Promise<void> {
+		await this.client.updateConversation(id, { gizmo_id: projectId }, signal);
+		signal.throwIfAborted();
+		const state = this.model.get();
+		const projectHistory = new Map(state.projectHistory);
+		const previous = state.conversations.find(item => item.id === id)?.projectId;
+		if (previous) projectHistory.delete(previous);
+		if (projectId) projectHistory.delete(projectId);
+		this.updateCatalog({
+			projectHistory,
+			conversations: state.conversations.map(item => item.id !== id ? item : {
+				...item,
+				projectId: projectId ?? undefined,
+				projectOnly: projectId ? item.projectOnly : undefined,
+			}),
+		});
 	}
 
 	public share(id: string, messageId?: string): Promise<string | undefined> { return this.manage(id, signal => this.client.share(id, signal, messageId)); }

@@ -955,6 +955,30 @@ suite('ChatGPT shared service', () => {
 		assert.ok(writes.at(-1)!.path.endsWith('/conversation/id/two'));
 	});
 
+	test('a failed move keeps the newly created project available for retry', async () => {
+		let creates = 0;
+		let rejectMove = true;
+		using chat = fixture(async (path, _signal, request) => {
+			if (request.method === 'POST' && path.endsWith('/projects')) {
+				creates++;
+				return Response.json({ gizmo: { id: 'g-p-new' } });
+			}
+			if (request.method === 'PATCH' && path.endsWith('/conversation/one')) {
+				return rejectMove ? new Response(null, { status: 500 }) : Response.json({ success: true });
+			}
+			return response(path);
+		});
+		await chat.reload();
+		const originalProject = chat.state.get().conversations.find(item => item.id === 'one')?.projectId;
+		await assert.rejects(chat.createProjectAndMove('one', 'New project'), /Created New project/);
+		assert.ok(chat.state.get().projects.some(project => project.id === 'g-p-new'));
+		assert.equal(chat.state.get().conversations.find(item => item.id === 'one')?.projectId, originalProject);
+		rejectMove = false;
+		await chat.moveToProject('one', 'g-p-new');
+		assert.equal(chat.state.get().conversations.find(item => item.id === 'one')?.projectId, 'g-p-new');
+		assert.equal(creates, 1);
+	});
+
 	test('pending management fences duplicate writes and navigation without aborting the accepted request', async () => {
 		let finish!: () => void;
 		let entered!: () => void;

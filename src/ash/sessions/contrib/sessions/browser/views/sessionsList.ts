@@ -645,14 +645,24 @@ export class SessionsList extends DomWidget {
 	}
 
 	private projectActions(item: SessionListItem, project: SessionListProjectOrganization): readonly IAction[] {
-		if (!project.current && !project.destinations.length) return [];
-		return sessionListProjectActions(project, project.destinations, async run => {
+		return sessionListProjectActions(project, async run => {
 			try {
 				await run();
-				if (!this.isDisposed) this.tree.focusRow(item.domNode);
 			} catch (error) {
-				this.notifications.error(toErrorMessage(error));
+				if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(toErrorMessage(error));
+			} finally {
+				if (!this.isDisposed) this.tree.focusRow(item.domNode);
 			}
+		}, async () => {
+			const name = (await this.quickInput.input({
+				title: localize('sessions.list.newProject', 'New project'),
+				validateInput: async value => {
+					if (!value.trim()) return localize('sessions.list.projectNameRequired', 'Enter a project name.');
+					if (value.trim().length > 200) return localize('sessions.list.projectNameTooLong', 'Use at most {0} characters for the project name.', 200);
+					return undefined;
+				},
+			}))?.trim();
+			return this.isDisposed ? undefined : name;
 		});
 	}
 

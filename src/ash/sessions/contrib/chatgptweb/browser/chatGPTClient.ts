@@ -183,6 +183,18 @@ export class ChatGPTClient {
 		await this.consume(`/gizmos/${encodeURIComponent(id)}`, signal, 'DELETE');
 	}
 
+	async createProject(name: string, signal: AbortSignal): Promise<ChatGPTProject> {
+		const response = await this.request('/projects', signal, {
+			method: 'POST', headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ name, instructions: '', emoji: null, theme: null }),
+		});
+		const value: unknown = await response.json();
+		signal.throwIfAborted();
+		const gizmo = isRecord(value) && isRecord(value.gizmo) ? value.gizmo : undefined;
+		if (typeof gizmo?.id !== 'string' || !/^g-p-[A-Za-z0-9_-]{1,240}$/u.test(gizmo.id)) throw this.invalidResponse();
+		return { id: gizmo.id, title: name };
+	}
+
 	async projectDetails(id: string, signal: AbortSignal): Promise<{ name: string; description: string; emoji: string | null; theme: string | null; }> {
 		const value = await this.json(`/gizmos/${encodeURIComponent(id)}`, signal);
 		const gizmo = isRecord(value) && isRecord(value.gizmo) ? value.gizmo : undefined;

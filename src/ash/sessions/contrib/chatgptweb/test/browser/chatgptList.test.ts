@@ -941,7 +941,10 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 					await route.fulfill({ json: { items: [{ gizmo: { id: next ? 'g-p-two' : 'g-p-one', display: { name: next ? 'Project Two' : 'Project One' } } }], cursor: next ? null : 'next' } });
 				} else if (request.method() !== 'GET') {
 					writes.push({ method: request.method(), path: url.pathname, ...(request.postData() ? { body: request.postDataJSON() } : {}) });
-					await route.fulfill({ json: url.pathname.endsWith('/share/v2/create') ? { share_url: 'https://chatgpt.com/share/fixture-link' } : { success: true } });
+					await route.fulfill({
+						json: url.pathname.endsWith('/share/v2/create') ? { share_url: 'https://chatgpt.com/share/fixture-link' }
+							: url.pathname.endsWith('/backend-api/projects') ? { gizmo: { id: 'g-p-three' } } : { success: true }
+					});
 				} else { await route.fallback(); }
 			});
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${zh ? 'hcDark' : 'light'}`);
@@ -1036,10 +1039,34 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			expect(projectReads).toBe(readsBeforeMenu);
 			await page.getByRole('menuitem', { name: labels.move, exact: true }).focus();
 			await page.keyboard.press('ArrowRight');
-			await expect(page.getByRole('menuitemcheckbox', { name: 'Project One', exact: true })).toBeVisible();
+			const projectMenu = page.getByRole('menu', { name: labels.move, exact: true });
+			const newProject = projectMenu.getByRole('menuitem', { name: zh ? '新建项目' : 'New project', exact: true });
+			await expect(projectMenu.getByRole('menuitem')).toHaveText([zh ? '新建项目' : 'New project', 'Project One', 'Project Two']);
+			await expect(projectMenu.getByRole('separator')).toHaveCount(1);
+			await expect(projectMenu.getByRole('menuitem', { name: 'Project One', exact: true }).locator('.ash-menu-leading-slot [data-ash-icon-id="projects"]')).toBeVisible();
 			await testInfo.attach('conversation-project-submenu', { body: await page.screenshot(), contentType: 'image/png' });
-			await page.getByRole('menuitemcheckbox', { name: 'Project Two', exact: true }).click();
+			await projectMenu.getByRole('menuitem', { name: 'Project Two', exact: true }).click();
 			await expect.poll(() => writes.some(write => write.body?.gizmo_id === 'g-p-two')).toBe(true);
+			const openProjectMenu = async () => {
+				await openMore();
+				await page.getByRole('menuitem', { name: labels.move, exact: true }).press('ArrowRight');
+			};
+			await openProjectMenu();
+			await expect(projectMenu.getByRole('menuitem', { name: 'Project Two', exact: true })).toHaveCount(0);
+			await newProject.press('Enter');
+			const projectName = page.locator('.ash-quick-input-host').getByRole('textbox');
+			await expect(projectName).toBeFocused();
+			await projectName.press('Escape');
+			expect(writes.filter(write => write.path.endsWith('/backend-api/projects'))).toHaveLength(0);
+			await openProjectMenu();
+			await newProject.press('Enter');
+			await projectName.fill('  Project Three  ');
+			await projectName.press('Enter');
+			await expect.poll(() => writes.slice(-2)).toEqual([
+				{ method: 'POST', path: '/service/backend-api/projects', body: { name: 'Project Three', instructions: '', emoji: null, theme: null } },
+				{ method: 'PATCH', path: '/service/backend-api/conversation/fixture-chat', body: { gizmo_id: 'g-p-three' } },
+			]);
+			await expect(page.getByRole('button', { name: 'Project Three', exact: true })).toBeVisible();
 			await openMore();
 			await page.getByRole('menuitem', { name: zh ? '从项目中移除' : 'Remove from project', exact: true }).click();
 			await expect.poll(() => writes.some(write => write.body?.gizmo_id === null)).toBe(true);
@@ -1082,6 +1109,7 @@ suite('ChatGPT catalog in the Ash chat list', () => {
 			await expect(page.locator('.ash-chat-navigation-row .ash-chat-navigation-item')).toHaveText(['Other chat']);
 			expect(writes.map(write => [write.method, write.path])).toEqual([
 				['PATCH', '/service/backend-api/conversation/fixture-chat'], ['PATCH', '/service/backend-api/conversation/fixture-chat'],
+				['POST', '/service/backend-api/projects'], ['PATCH', '/service/backend-api/conversation/fixture-chat'],
 				['PATCH', '/service/backend-api/conversation/fixture-chat'], ['PATCH', '/service/backend-api/conversation/fixture-chat'],
 				['POST', '/service/backend-api/conversation/id/fixture-chat/rename'], ['POST', '/service/backend-api/share/v2/create'],
 				['PATCH', '/service/backend-api/conversation/fixture-chat'], ['DELETE', '/service/backend-api/conversation/id/third'],

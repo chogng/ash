@@ -394,10 +394,12 @@ suite('ChatGPT transport', () => {
 		for (const [method, path, body] of [
 			['GET', '/pins?item_type=conversation', undefined],
 			['GET', '/gizmos/g-p-project/conversations?limit=20&owned_only=false&cursor=next%2Bpage', undefined],
+			['POST', '/projects', { name: 'Project', instructions: '', emoji: null, theme: null }],
 			['POST', '/conversation/id/chat/rename', { title: 'Renamed' }],
 			['PATCH', '/conversation/chat', { is_starred: true }],
 			['PATCH', '/conversation/chat', { is_archived: true }],
 			['PATCH', '/conversation/chat', { gizmo_id: 'g-p-project' }],
+			['PATCH', '/conversation/chat', { gizmo_id: null }],
 			['DELETE', '/conversation/id/chat', undefined],
 			['DELETE', '/gizmos/g-p-project', undefined],
 			['POST', '/share/v2/create', { conversation_id: 'chat', current_node_id: 'reply', is_anonymous: true }],
@@ -407,10 +409,14 @@ suite('ChatGPT transport', () => {
 			await channel.call('', 'request', [id, { path: '/service/backend-api' + path, method, headers: {}, ...(body ? { body: JSON.stringify(body) } : {}) }]);
 			await channel.call('', 'cancel', [id]);
 		}
-		assert.deepEqual(calls.map(call => call.method), ['GET', 'GET', 'POST', 'PATCH', 'PATCH', 'PATCH', 'DELETE', 'DELETE', 'POST', 'POST']);
-		assert.deepEqual(calls[7], { method: 'DELETE', path: '/backend-api/gizmos/g-p-project' });
+		assert.deepEqual(calls.map(call => call.method), ['GET', 'GET', 'POST', 'POST', 'PATCH', 'PATCH', 'PATCH', 'PATCH', 'DELETE', 'DELETE', 'POST', 'POST']);
+		assert.deepEqual(calls[2], { method: 'POST', path: '/backend-api/projects' });
+		assert.deepEqual(calls[9], { method: 'DELETE', path: '/backend-api/gizmos/g-p-project' });
 		for (const [method, path, body] of [
 			['POST', '/pins', '{}'],
+			['POST', '/projects', '{"name":" ","instructions":"","emoji":null,"theme":null}'],
+			['POST', '/projects', '{"name":"Project","instructions":"","emoji":null,"theme":null,"owner":"other"}'],
+			['POST', '/projects?unexpected=true', '{"name":"Project","instructions":"","emoji":null,"theme":null}'],
 			['POST', '/gizmos/g-p-project/conversations', '{}'],
 			['GET', '/gizmos/g-custom/conversations?limit=20&owned_only=false', undefined],
 			['GET', '/gizmos/g-p-project/conversations?limit=20&owned_only=false&cursor=one&cursor=two', undefined],
@@ -425,7 +431,7 @@ suite('ChatGPT transport', () => {
 		] as const) {
 			await assert.rejects(channel.call('', 'request', [randomUUID(), { path: '/service/backend-api' + path, method, headers: {}, body }]), TypeError);
 		}
-		assert.equal(calls.length, 10);
+		assert.equal(calls.length, 12);
 	}));
 
 	test('only permits ChatGPT response audio with one valid conversation and message', async () => fixture(async auth => {

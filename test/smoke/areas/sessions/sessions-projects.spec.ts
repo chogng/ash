@@ -198,7 +198,9 @@ test('switching modes separates conversations, projects and Activity Bar entries
 		await expect(chat.locator('[data-parent-section="pinned"]').getByRole('button', { name: chatSession.title, exact: true })).toHaveCount(0);
 		await projectRow.press('Shift+F10');
 		await page.getByRole('menuitem', { name: 'Move to project', exact: true }).press('ArrowRight');
-		await page.getByRole('menuitemcheckbox', { name: second.name, exact: true }).click();
+		const destinations = page.getByRole('menu', { name: 'Move to project', exact: true });
+		await expect(destinations.getByRole('menuitem', { name: first.name, exact: true })).toHaveCount(0);
+		await destinations.getByRole('menuitem', { name: second.name, exact: true }).click();
 		await expect.poll(() => members(second.projectId)).toEqual([chatSession.sessionId]);
 		await expect.poll(() => members(first.projectId)).toEqual([]);
 
