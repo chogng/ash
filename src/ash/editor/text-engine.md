@@ -189,7 +189,7 @@ Textarea 和 EditContext 都把 Enter、删除及文本变化送到同一个 `Vi
 - `KeyboardNavigationController`：把平台 chord 转成 `CursorMoveCommands` 使用的无 DOM 移动参数，并保留连续垂直移动的期望列。
 - `editorDom.ts`：页面、客户区、编辑器相对坐标和可释放 mouse/pointer 事件工厂的 browser owner。
 - `MouseTargetFactory`：使用 `ViewContext + IPointerHandlerHelper` 直接生成标准 `IMouseTarget`，不保留第二套 target 类型。
-- `MouseHandler`：持有 pointer capture、单次拖动会话、公开鼠标事件和 `ViewController.dispatchMouse` 入口；`PointerHandler` 用鼠标 `pointerdown` 保留 ID、用 `mousedown` 确定点击次数，触控和笔直接使用 `pointerdown`。`GlobalEditorPointerMoveMonitor` 持有可释放的跨窗口跟踪；`pointerup` 与兼容 `mouseup` 只结束一次手势，后者也能补齐前者丢失的释放。越界拖动统一生成 `IMouseTargetOutsideEditor`，由 `TopBottomDragScrolling` 或 `LeftRightDragScrolling` 按轴滚动、同步渲染并从视口边缘继续扩选；返回、释放、取消、失焦、布局变化和 owner 释放都会停止 operation 与后续动画帧。
+- `MouseHandler`：持有单次拖动会话、公开鼠标事件和 `ViewController.dispatchMouse` 入口；`PointerHandler` 用鼠标 `pointerdown` 保留 ID、用 `mousedown` 确定点击次数，触控和笔直接使用 `pointerdown`。共享 `GlobalPointerMoveMonitor` 管理指针捕获和窗口级跟踪，`GlobalEditorPointerMoveMonitor` 负责编辑器坐标和键盘取消；`pointerup` 与兼容 `mouseup` 只结束一次手势，后者也能补齐前者丢失的释放。越界拖动统一生成 `IMouseTargetOutsideEditor`，由 `TopBottomDragScrolling` 或 `LeftRightDragScrolling` 按轴滚动、同步渲染并从视口边缘继续扩选；返回、释放、取消、失焦、布局变化和 owner 释放都会停止 operation 与后续动画帧。
 - Clipboard/drop controller：浏览器 MIME 与异步读取；提交前再次检查 model version 和 selection snapshot。
 
 Controller 遇到未知、已处理、AltGraph 或不属于自身的事件时应返回，不抢占其他 owner。

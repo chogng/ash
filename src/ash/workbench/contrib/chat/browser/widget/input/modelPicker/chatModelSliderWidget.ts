@@ -1,16 +1,19 @@
 import { Disposable, DisposableStore, type IDisposable } from '../../../../../../../base/common/lifecycle.js';
+import { Separator, type IAction } from '../../../../../../../base/common/actions.js';
 import { AnchorAlignment, AnchorPosition } from '../../../../../../../base/common/layout.js';
 import { createUuid } from '../../../../../../../base/common/uuid.js';
+import { clamp } from '../../../../../../../base/common/numbers.js';
 import { toErrorMessage } from '../../../../../../../base/common/errorMessage.js';
-import { addDisposableListener, h, stopEvent } from '../../../../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h, stopEvent } from '../../../../../../../base/browser/dom.js';
+import { GlobalPointerMoveMonitor } from '../../../../../../../base/browser/globalPointerMoveMonitor.js';
 import { ActionBar } from '../../../../../../../base/browser/ui/actionbar/actionbar.js';
+import { Menu } from '../../../../../../../base/browser/ui/menu/menu.js';
 import type { Icon } from '../../../../../../../base/common/icon.js';
 import { localize } from '../../../../../../../nls.js';
 import { TabbedActionListWidget } from '../../../../../../../platform/actionWidget/browser/tabbedActionListWidget.js';
 import { IInstantiationService } from '../../../../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../../../../platform/notification/common/notification.js';
-import { defaultButtonStyles } from '../../../../../../../platform/theme/browser/defaultStyles.js';
-import { appendIcon } from '../../../../../../../base/browser/ui/lxicons/lxicon.js';
+import { defaultButtonStyles, defaultMenuStyles } from '../../../../../../../platform/theme/browser/defaultStyles.js';
 import { Lxicon } from '../../../../../../../base/common/lxicons.js';
 import { ILanguageModelsService } from '../../../../common/languageModels.js';
 import type { IModelPickerDelegate } from './modelPickerActionItem.js';
@@ -58,7 +61,7 @@ export class ChatModelSliderWidget extends Disposable {
 		}));
 	}
 
-	public show(anchor: HTMLElement, onClose?: () => void): void {
+	public show(anchor: HTMLElement, onClose?: () => void, focusModelOnOpen = true): void {
 		this.panel.showContent({
 			anchor,
 			anchorAlignment: AnchorAlignment.Center,
@@ -66,7 +69,15 @@ export class ChatModelSliderWidget extends Disposable {
 			width: 250,
 			ariaLabel: localize('chat.modelPicker.aria', 'Choose a chat model'),
 			render: (container, layout) => this.renderContent(container, layout),
-			focus: container => this.focusModelPicker(container),
+			focus: container => {
+				if (focusModelOnOpen) {
+					this.focusModelPicker(container);
+				} else {
+					// Keep Tab and Escape in the dialog without focusing a model on pointer open.
+					container.tabIndex = -1;
+					container.focus({ preventScroll: true });
+				}
+			},
 			onClose,
 		});
 	}
@@ -153,6 +164,7 @@ export class ChatModelSliderWidget extends Disposable {
 		const root = h(document, 'div', { className: 'ash-chat-model-slider-widget' });
 		const drawerId = `ash-chat-slider-models-${createUuid()}`;
 		const effortLabelId = `${drawerId}-effort`;
+		container.classList.add('ash-chat-model-slider-dialog');
 		container.append(root);
 
 		const models = this.delegate.getModels();
@@ -163,7 +175,7 @@ export class ChatModelSliderWidget extends Disposable {
 
 		// Expand drawer by default only if there are no effort presets to adjust
 		let isDrawerExpanded = !hasMultiplePresets;
-		const render = (focus?: 'models' | 'model' | 'effort') => {
+		const render = (focus?: 'models' | 'menu' | 'model' | 'effort') => {
 			if (lifetime.isDisposed) {
 				return;
 			}
@@ -180,39 +192,20 @@ export class ChatModelSliderWidget extends Disposable {
 			const presets = this.effortChoices(activeModel, effortOverride);
 			let activeIndex = Math.max(0, presets.findIndex(p => p.selected));
 
-			// 1. Upward Drawer (Base model selector)
 			const drawer = h(document, 'div', {
 				className: 'ash-chat-slider-model-drawer',
-				attributes: { id: drawerId, role: 'menu', 'aria-label': localize('chat.modelPicker.models', 'Models') },
+				attributes: { id: drawerId },
 			});
 			drawer.hidden = !isDrawerExpanded;
 
-			const modelListContainer = h(document, 'div', { className: 'ash-chat-slider-drawer-list' });
 			const entries = this.delegate.useWorkbenchModelManagement !== false && this.delegate.selectAutomaticModel ? [undefined, ...currentModels] : currentModels;
-			for (const entry of entries) {
-				const label = entry?.displayName ?? localize('chat.modelPicker.auto', 'Auto');
-				const isSelected = entry ? entry === activeModel : automatic;
-				const row = h(document, 'div', {
-					className: `ash-chat-slider-model-option${isSelected ? ' active' : ''}`,
-					attributes: {
-						role: 'menuitemradio',
-						'aria-label': label,
-						'aria-checked': String(isSelected),
-						tabindex: '0',
-					},
-				});
-
-				const title = h(document, 'span', { className: 'ash-chat-slider-model-name' });
-				title.textContent = label;
-				row.append(title);
-
-				if (isSelected) {
-					const check = h(document, 'span', { className: 'ash-chat-slider-check' });
-					appendIcon(Lxicon.menuSelection, check);
-					row.append(check);
-				}
-
-				const selectModel = async () => {
+			const actions: IAction[] = entries.map(entry => ({
+				id: entry ? modelRefIdentity(entry.model) : 'chat.modelPicker.auto',
+				label: entry?.displayName ?? localize('chat.modelPicker.auto', 'Auto'),
+				tooltip: '',
+				checked: entry ? entry === activeModel : automatic,
+				enabled: true,
+				run: async () => {
 					try {
 						if (entry) await this.delegate.selectModel(entry.model);
 						else await this.delegate.selectAutomaticModel?.();
@@ -229,19 +222,16 @@ export class ChatModelSliderWidget extends Disposable {
 						isDrawerExpanded = false;
 						render('model');
 					}
-				};
-				rendered.add(addDisposableListener(row, 'click', selectModel));
-
-				rendered.add(addDisposableListener(row, 'keydown', event => {
-					if (event.key === 'Enter' || event.key === ' ') {
-						stopEvent(event);
-						void selectModel();
-					}
-				}));
-
-				modelListContainer.append(row);
-			}
-			drawer.append(modelListContainer);
+				},
+			}));
+			if (actions.length) { actions.push(new Separator()); }
+			const menu = rendered.add(new Menu(drawer, actions, {
+				ariaLabel: localize('chat.modelPicker.models', 'Models'),
+				buttonStyles: defaultButtonStyles,
+				className: 'ash-chat-slider-model-menu',
+				iconPlacement: 'trailing',
+				getCheckedActionsRepresentation: () => 'radio',
+			}, defaultMenuStyles));
 			root.append(drawer);
 
 			const modelTitle = automatic ? localize('chat.modelPicker.auto', 'Auto') : activeModel?.displayName ?? activeSelectedRef?.model ?? localize('chat.modelPicker.selectModel', 'Select model');
@@ -260,31 +250,31 @@ export class ChatModelSliderWidget extends Disposable {
 			modelLabel.textContent = modelTitle;
 			modelButton.append(modelLabel);
 			const effortLabel = h(document, 'span', { className: 'ash-chat-slider-effort-label', attributes: { id: effortLabelId } });
-			const showEffortLabel = () => {
-				const preset = presets[activeIndex];
-				effortLabel.textContent = preset?.label ?? '';
-				effortLabel.hidden = !preset;
-				if (preset) { modelButton.setAttribute('aria-describedby', effortLabelId); }
+			const showEffortLabel = (index: number) => {
+				const label = presets[index]?.label ?? '';
+				if (effortLabel.textContent !== label) { effortLabel.textContent = label; }
 			};
-			showEffortLabel();
+			effortLabel.hidden = !presets.length;
+			if (presets.length) { modelButton.setAttribute('aria-describedby', effortLabelId); }
+			showEffortLabel(activeIndex);
 			const summary = h(document, 'div', { className: 'ash-chat-slider-model-summary' });
 			summary.append(modelButton, effortLabel);
 
-			rendered.add(addDisposableListener(modelButton, 'click', () => {
+			rendered.add(addDisposableListener(modelButton, 'click', event => {
 				isDrawerExpanded = !isDrawerExpanded;
-				render(isDrawerExpanded ? 'models' : 'model');
+				render(isDrawerExpanded ? (event.detail === 0 ? 'models' : 'menu') : 'model');
 			}));
 
 			const useWorkbenchModelManagement = this.delegate.useWorkbenchModelManagement !== false;
 			const effortCard = h(document, 'div', { className: 'ash-chat-slider-effort-card' });
+			root.append(effortCard);
 			if (presets.length > 1 || useWorkbenchModelManagement) {
 				const speedRow = h(document, 'div', { className: 'ash-chat-slider-speed-row' });
 				if (useWorkbenchModelManagement) { this.renderModelActions(speedRow, summary, modelButton, rendered); }
 				else { speedRow.append(summary); }
 				effortCard.append(speedRow);
-				root.append(effortCard);
 			} else {
-				root.append(summary);
+				effortCard.append(summary);
 			}
 
 			let track: HTMLElement | undefined;
@@ -302,10 +292,21 @@ export class ChatModelSliderWidget extends Disposable {
 				track = slider;
 
 				const position = (index: number) => Math.round(6 + index / (presets.length - 1) * 88);
-				const thumb = h(document, 'div', { className: 'ash-chat-slider-thumb' });
+				const fill = h(document, 'div', { className: 'ash-chat-slider-fill', attributes: { 'aria-hidden': 'true' } });
+				const thumb = h(document, 'div', { className: 'ash-chat-slider-thumb', attributes: { 'aria-hidden': 'true' } });
+				slider.append(fill);
+				const drag = rendered.add(new GlobalPointerMoveMonitor());
+				const showPosition = (percent: number, previewIndex = activeIndex) => {
+					const offset = `${percent}%`;
+					if (thumb.style.left !== offset) {
+						fill.style.width = offset;
+						thumb.style.left = offset;
+					}
+					showEffortLabel(previewIndex);
+				};
 				const showEffort = (index: number) => {
 					activeIndex = index;
-					thumb.style.left = `${position(index)}%`;
+					if (!drag.isMonitoring()) { showPosition(position(index)); }
 					slider.setAttribute('aria-valuenow', String(index));
 					slider.setAttribute('aria-valuetext', presets[index].label);
 				};
@@ -322,8 +323,24 @@ export class ChatModelSliderWidget extends Disposable {
 				showEffort(activeIndex);
 				describeUltra();
 
+				const refreshEffort = () => {
+					const model = this.delegate.getSelectedModelEntry();
+					if (!model || !activeModel || model.model.provider !== activeModel.model.provider || model.model.model !== activeModel.model.model) { return; }
+					const override = this.getSelectedBuiltInModel()?.reasoningEffortOverride;
+					const selected = this.effortChoices(model, override).find(preset => preset.selected);
+					const index = Math.max(0, presets.findIndex(preset => preset.id === selected?.id));
+					if (index !== activeIndex) {
+						showEffort(index);
+					}
+					if (override !== effortOverride) {
+						effortOverride = override;
+						describeUltra();
+					}
+				};
+				rendered.add(this.delegate.onDidChangePresentation(refreshEffort));
+
 				const selectEffort = async (index: number) => {
-					if (this.savingModelPreference || this.delegate.canSelectModel?.() === false) { return; }
+					if (drag.isMonitoring() || this.savingModelPreference || this.delegate.canSelectModel?.() === false) { return; }
 					const model = this.getSelectedBuiltInModel();
 					if (model?.reasoningEffortOverride !== undefined) {
 						if (index === activeIndex) { return; }
@@ -334,22 +351,11 @@ export class ChatModelSliderWidget extends Disposable {
 							|| selected?.provider !== model.model.provider || selected.model !== model.model.model) { return; }
 					}
 					await presets[index].select();
-					if (slider.isConnected) { render('effort'); }
+					if (slider.isConnected) {
+						refreshEffort();
+						slider.focus({ preventScroll: true });
+					}
 				};
-				rendered.add(this.delegate.onDidChangePresentation(() => {
-					const model = this.getSelectedBuiltInModel();
-					if (!model || !activeModel || model.model.provider !== activeModel.model.provider || model.model.model !== activeModel.model.model) { return; }
-					const selected = this.effortChoices(model, model.reasoningEffortOverride).find(preset => preset.selected);
-					const index = Math.max(0, presets.findIndex(preset => preset.id === selected?.id));
-					if (index !== activeIndex) {
-						showEffort(index);
-						showEffortLabel();
-					}
-					if (model.reasoningEffortOverride !== effortOverride) {
-						effortOverride = model.reasoningEffortOverride;
-						describeUltra();
-					}
-				}));
 
 				// Render ticks
 				presets.forEach((p, idx) => {
@@ -367,7 +373,11 @@ export class ChatModelSliderWidget extends Disposable {
 
 					rendered.add(addDisposableListener(tick, 'click', e => {
 						stopEvent(e);
-						void selectEffort(idx);
+						// Pointer activation commits at the end of the drag. Keep keyboard and AT clicks.
+						if (e.detail === 0) {
+							slider.classList.remove('track-press');
+							void selectEffort(idx);
+						}
 					}));
 
 					slider.append(tick);
@@ -375,36 +385,86 @@ export class ChatModelSliderWidget extends Disposable {
 
 				slider.append(thumb);
 
-				// Track click handler
-				rendered.add(addDisposableListener(slider, 'click', async (e: MouseEvent) => {
-					const rect = slider.getBoundingClientRect();
-					const clickX = e.clientX - rect.left;
-					const clickPct = (clickX / rect.width) * 100;
-
+				const closestEffort = (percent: number) => {
 					let closestIdx = 0;
-					let minDiff = 999;
+					let minDiff = Infinity;
 					presets.forEach((_, idx) => {
-						const diff = Math.abs(position(idx) - clickPct);
+						const diff = Math.abs(position(idx) - percent);
 						if (diff < minDiff) {
 							minDiff = diff;
 							closestIdx = idx;
 						}
 					});
 
-					if (closestIdx !== activeIndex) {
-						await selectEffort(closestIdx);
-					}
+					return closestIdx;
+				};
+				rendered.add(addDisposableListener(slider, 'pointerdown', event => {
+					if (event.button !== 0 || drag.isMonitoring() || this.savingModelPreference || this.delegate.canSelectModel?.() === false) { return; }
+					layout();
+					const rail = slider.getBoundingClientRect();
+					if (!rail.width) { return; }
+					event.preventDefault();
+					const bounds = thumb.getBoundingClientRect();
+					const onThumb = event.clientX >= bounds.left && event.clientX <= bounds.right
+						&& event.clientY >= bounds.top && event.clientY <= bounds.bottom;
+					const center = bounds.left + bounds.width / 2;
+					const grabOffset = onThumb ? event.clientX - center : 0;
+					const percentAt = (x: number) => clamp(
+						(x - grabOffset - rail.left) / rail.width * 100,
+						position(0), position(presets.length - 1),
+					);
+					const movedAlongTrack = (x: number) => Math.abs(x - event.clientX) >= 4;
+					let preview = onThumb ? position(activeIndex) : percentAt(event.clientX);
+					let followsPointer = onThumb;
+					slider.classList.toggle('dragging', followsPointer);
+					slider.classList.toggle('track-press', !followsPointer);
+					const previewIndex = closestEffort(preview);
+					showPosition(onThumb ? percentAt(event.clientX) : position(previewIndex), previewIndex);
+					slider.focus({ preventScroll: true });
+					const finish = async (index: number) => {
+						slider.classList.remove('dragging');
+						showPosition(position(index), index);
+						try {
+							if (index !== activeIndex) { await selectEffort(index); }
+						} catch (error) {
+							if (slider.isConnected) { this.notifications.error(toErrorMessage(error)); }
+						} finally {
+							if (!drag.isMonitoring() && slider.isConnected) { showPosition(position(activeIndex)); }
+						}
+					};
+					const release = (clientX: number) => finish(closestEffort(
+						clientX === event.clientX || (!followsPointer && !movedAlongTrack(clientX)) ? preview : percentAt(clientX),
+					));
+					drag.startMonitoring(thumb, event.pointerId, event.buttons, next => {
+						if (!followsPointer) {
+							if (!movedAlongTrack(next.clientX)) { return; }
+							followsPointer = true;
+							slider.classList.replace('track-press', 'dragging');
+						}
+						preview = percentAt(next.clientX);
+						showPosition(preview, closestEffort(preview));
+					}, next => {
+						switch (next?.type) {
+							case 'pointerup':
+							case 'mouseup': void release((next as MouseEvent).clientX); break;
+							case 'pointermove': void finish(closestEffort(preview)); break;
+							default: void finish(activeIndex); break;
+						}
+					}, event.pointerType);
 				}));
+				rendered.add(addDisposableListener(getWindow(slider), 'resize', () => drag.stopMonitoring(true)));
 
 				// Keyboard navigation on track
 				rendered.add(addDisposableListener(slider, 'keydown', async event => {
 					if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
 						stopEvent(event);
+						slider.classList.remove('track-press');
 						if (activeIndex > 0) {
 							await selectEffort(activeIndex - 1);
 						}
 					} else if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
 						stopEvent(event);
+						slider.classList.remove('track-press');
 						if (activeIndex < presets.length - 1) {
 							await selectEffort(activeIndex + 1);
 						}
@@ -418,6 +478,8 @@ export class ChatModelSliderWidget extends Disposable {
 			}
 			if (focus === 'models') {
 				this.focusModelPicker(root);
+			} else if (focus === 'menu') {
+				menu.focus(false);
 			} else if (focus) {
 				const targets = { model: modelButton, effort: track };
 				(targets[focus] ?? modelButton).focus({ preventScroll: true });

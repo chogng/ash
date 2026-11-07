@@ -148,7 +148,6 @@ export class MouseHandler extends ViewEventHandler {
 				middleButton: event.middleButton,
 			};
 			this.dispatchTarget(target, false);
-			this.pointerHandler.capturePointer(pointerId);
 			this._mouseDownOperation.add(this.pointerHandler.startTracking(pointerId, event.buttons || buttonMask(event), {
 				onMove: event => this.updatePointerSelection(event),
 				onUp: event => this.finishPointerSelection(event),
@@ -321,11 +320,9 @@ export class MouseHandler extends ViewEventHandler {
 	}
 
 	private stopPointerSelection(): void {
-		const pointerId = this.gesture?.pointerId;
 		this.gesture = undefined;
 		this.stopDragScrolling();
 		this._mouseDownOperation.clear();
-		if (pointerId !== undefined) this.pointerHandler.releasePointer(pointerId);
 	}
 
 	private toEditorMouseEvent(event: EditorMouseEvent, target: IMouseTarget): IEditorMouseEvent {

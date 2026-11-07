@@ -7,11 +7,12 @@ import type { IMouseWheelEvent } from '../../mouseEvent.js';
 import type { ScrollableElementCreationOptions, ScrollableElementChangeOptions } from './scrollableElementOptions.js';
 import { addDisposableListener, h } from '../../dom.js';
 import { FastDomNode } from '../../fastDomNode.js';
+import { GlobalPointerMoveMonitor } from '../../globalPointerMoveMonitor.js';
 import { StandardWheelEvent } from '../../mouseEvent.js';
 import { observeResize } from '../../observer.js';
 import { disposableWindowTimeout, scheduleAtNextAnimationFrame } from '../../scheduler.js';
 import { Emitter, type Event } from '../../../common/event.js';
-import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from '../../../common/lifecycle.js';
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '../../../common/lifecycle.js';
 import type { ScrollbarAxis } from './abstractScrollbar.js';
 import { HorizontalScrollbar } from './horizontalScrollbar.js';
 import {
@@ -704,7 +705,8 @@ export class SmoothScrollableElement extends Disposable {
 	private scrolling = false;
 	private readonly activity: RunOnceScheduler;
 	private readonly arrows: { button: HTMLButtonElement; axis: ScrollbarAxis; direction: number; }[] = [];
-	private readonly arrowPress = this._register(new DisposableStore());
+	private readonly arrowPress = this._register(new GlobalPointerMoveMonitor());
+	private readonly arrowRepeat = this._register(new MutableDisposable<IDisposable>());
 	private readonly inertia = this._register(new MutableDisposable<IDisposable>());
 	private applyingInertia = false;
 	private readonly wheelEvents = new WeakSet<WheelEvent>();
@@ -768,29 +770,20 @@ export class SmoothScrollableElement extends Disposable {
 				}
 				event.preventDefault();
 				event.stopPropagation();
-				this.arrowPress.clear();
-				button.setPointerCapture(event.pointerId);
-				this.arrowPress.add(toDisposable(() => {
-					if (button.hasPointerCapture(event.pointerId)) {
-						button.releasePointerCapture(event.pointerId);
-					}
-				}));
-				this.arrowPress.add(addDisposableListener(button, 'lostpointercapture', () => this.arrowPress.clear()));
+				this.arrowPress.stopMonitoring(true);
+				this.arrowPress.startMonitoring(button, event.pointerId, event.buttons, () => { },
+					() => this.arrowRepeat.clear(), event.pointerType);
 				const targetWindow = element.ownerDocument.defaultView!;
-				const repeat = this.arrowPress.add(new MutableDisposable<IDisposable>());
 				const tick = (): void => {
 					if (button.hidden || button.disabled) {
-						this.arrowPress.clear();
+						this.arrowPress.stopMonitoring(true);
 						return;
 					}
 					activate();
-					repeat.value = disposableWindowTimeout(targetWindow, tick, 50);
+					if (this.arrowPress.isMonitoring()) { this.arrowRepeat.value = disposableWindowTimeout(targetWindow, tick, 50); }
 				};
-				for (const type of ['pointerup', 'pointercancel', 'blur']) {
-					this.arrowPress.add(addDisposableListener(targetWindow, type, () => this.arrowPress.clear()));
-				}
 				activate();
-				repeat.value = disposableWindowTimeout(targetWindow, tick, 300);
+				if (this.arrowPress.isMonitoring()) { this.arrowRepeat.value = disposableWindowTimeout(targetWindow, tick, 300); }
 			}));
 		}
 		this.activity = this._register(new RunOnceScheduler(() => {
@@ -845,7 +838,7 @@ export class SmoothScrollableElement extends Disposable {
 
 	public updateOptions(options: ScrollableElementChangeOptions): void {
 		this.inertia.clear();
-		this.arrowPress.clear();
+		this.arrowPress.stopMonitoring(true);
 		this.options = { ...this.options, ...options };
 		if (!this.options.lazyRender) this.renderNow();
 	}

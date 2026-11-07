@@ -28,6 +28,19 @@
 	position: relative;
 }
 
+.ash-sessions-chat-input
+	.ash-chat-input-toolbars
+	.ash-chat-input-send-action:enabled {
+	color: var(--ash-foreground);
+	background: transparent;
+}
+
+.ash-sessions-chat-input
+	.ash-chat-input-toolbars
+	.ash-chat-input-send-action:enabled:hover {
+	background: var(--ash-button-hoverBackground);
+}
+
 .ash-sessions-chat-input .ash-chat-drop-overlay {
 	position: absolute;
 	inset: 0;

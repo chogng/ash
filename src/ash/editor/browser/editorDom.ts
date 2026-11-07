@@ -1,5 +1,6 @@
 import { addDisposableListener, getDomNodePagePosition, getWindow, h, isHTMLElement } from '../../base/browser/dom.js';
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
+import { GlobalPointerMoveMonitor } from '../../base/browser/globalPointerMoveMonitor.js';
 import { StandardMouseEvent } from '../../base/browser/mouseEvent.js';
 import { RunOnceScheduler } from '../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
@@ -172,10 +173,10 @@ export class EditorPointerEventFactory {
 	}
 }
 
-/** Owns one global pointer-move session and replaces it atomically on restart. */
+/** Adds editor coordinates and keyboard cancellation to a shared pointer drag. */
 export class GlobalEditorPointerMoveMonitor extends Disposable {
-	private readonly monitoring = this._register(new MutableDisposable<DisposableStore>());
-	private stopCurrent: ((event?: PointerEvent | KeyboardEvent) => void) | undefined;
+	private readonly monitor = this._register(new GlobalPointerMoveMonitor());
+	private readonly keyListener = this._register(new MutableDisposable<IDisposable>());
 
 	constructor(private readonly editorViewDomNode: HTMLElement) {
 		super();
@@ -186,43 +187,22 @@ export class GlobalEditorPointerMoveMonitor extends Disposable {
 		pointerId: number,
 		initialButtons: number,
 		pointerMoveCallback: (event: EditorMouseEvent) => void,
-		onStopCallback: (browserEvent?: PointerEvent | KeyboardEvent) => void,
+		onStopCallback: (browserEvent?: MouseEvent | KeyboardEvent) => void,
 	): void {
 		this.stopMonitoring();
-		const targetWindow = getWindow(initialElement);
-		const store = new DisposableStore();
-		let stopped = false;
-		const stop = (event?: PointerEvent | KeyboardEvent): void => {
-			if (stopped) return;
-			stopped = true;
-			this.stopCurrent = undefined;
-			this.monitoring.clear();
-			onStopCallback(event);
-		};
-		this.stopCurrent = stop;
-		store.add(addDisposableListener<PointerEvent>(targetWindow, 'pointermove', event => {
-			if (event.pointerId !== pointerId) return;
-			if (initialButtons !== 0 && (event.buttons & initialButtons) === 0) {
-				stop(event);
-				return;
-			}
+		this.monitor.startMonitoring(initialElement, pointerId, initialButtons, event => {
 			pointerMoveCallback(new EditorMouseEvent(event, true, this.editorViewDomNode));
-		}));
-		store.add(addDisposableListener<PointerEvent>(targetWindow, 'pointerup', event => {
-			if (event.pointerId === pointerId) stop(event);
-		}));
-		store.add(addDisposableListener<PointerEvent>(targetWindow, 'pointercancel', event => {
-			if (event.pointerId === pointerId) stop(event);
-		}));
-		store.add(addDisposableListener(targetWindow, 'blur', () => stop(), { once: true }));
-		store.add(addDisposableListener<KeyboardEvent>(initialElement.ownerDocument, 'keydown', event => {
-			if (!isModifierKey(event.key)) stop(event);
-		}, true));
-		this.monitoring.value = store;
+		}, event => {
+			this.keyListener.clear();
+			onStopCallback(event);
+		});
+		this.keyListener.value = addDisposableListener(initialElement.ownerDocument, 'keydown', event => {
+			if (!isModifierKey(event.key)) { this.monitor.stopMonitoring(true, event); }
+		}, true);
 	}
 
 	stopMonitoring(): void {
-		this.stopCurrent?.();
+		this.monitor.stopMonitoring(true);
 	}
 
 	protected override disposeCore(): void {

@@ -29,6 +29,36 @@ const { ScrollableElement, Scrollbar } = await import(
 const { DEFAULT_SCROLLBAR_SIZE, setGlobalDefaultScrollbarSize, SmoothScrollableElement } = await import('../../browser/ui/scrollbar/scrollableElement.js');
 const { Scrollable } = await import('../../common/scrollable.js');
 
+test('Scrollbar arrows stop repeating when the pointer button is released outside', () => {
+	const { window } = new JSDOM('<!doctype html><body></body>');
+	try {
+		using state = new Scrollable({ forceIntegerValues: true, smoothScrollDuration: 0, scheduleAtNextAnimationFrame: () => toDisposable(() => { }) });
+		state.setScrollDimensions({ width: 200, height: 100, scrollWidth: 200, scrollHeight: 800 }, false);
+		using view = new SmoothScrollableElement(h(window.document, 'div'), { verticalHasArrows: true }, state);
+		view.renderNow();
+		const arrow = requireElement(view.getDomNode(), 'button[aria-label="Scroll down"]');
+		const pending = new Map<number, () => void>();
+		let nextId = 0;
+		window.setTimeout = callback => {
+			const id = ++nextId;
+			pending.set(id, callback as () => void);
+			return id;
+		};
+		window.clearTimeout = id => { if (id !== undefined) { pending.delete(id); } };
+		arrow.dispatchEvent(new window.PointerEvent('pointerdown', { pointerId: 7, pointerType: 'mouse', buttons: 1 }));
+		assert.equal(state.getCurrentScrollPosition().scrollTop, 40);
+		const repeat = pending.get(1);
+		assert.ok(repeat);
+		pending.delete(1);
+		repeat();
+		assert.equal(state.getCurrentScrollPosition().scrollTop, 80);
+		window.dispatchEvent(new window.PointerEvent('pointermove', { pointerId: 7, pointerType: 'mouse', buttons: 0 }));
+		assert.equal(pending.size, 0);
+	} finally {
+		window.close();
+	}
+});
+
 test('caller-owned scrolling updates only axes with implicit scrollbar sizes', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {

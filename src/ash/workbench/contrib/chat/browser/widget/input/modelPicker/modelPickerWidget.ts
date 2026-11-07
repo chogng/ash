@@ -54,10 +54,10 @@ export class ModelPickerWidget extends Disposable {
 		options.classList.add('ash-chat-input-configuration-action');
 		name.setAttribute('aria-haspopup', 'dialog');
 		options.setAttribute('aria-haspopup', 'dialog');
-		this._register(bindActionWidgetActivation(name, () => {
+		this._register(bindActionWidgetActivation(name, source => {
 			name.focus();
 			if (this.visible) { this.hide(); }
-			else { this.show(name); }
+			else { this.show(name, undefined, source !== 'pointer'); }
 		}, () => this.enabled));
 		this._register(bindActionWidgetActivation(options, () => {
 			this.hide();
@@ -170,7 +170,7 @@ export class ModelPickerWidget extends Disposable {
 		return toDisposable(() => samples.remove());
 	}
 
-	public show(anchor: HTMLElement = this.nameButton!, detailsModel?: ModelRef): void {
+	public show(anchor: HTMLElement = this.nameButton!, detailsModel?: ModelRef, focusModelOnOpen = true): void {
 		if (!this.enabled || this.visible) { return; }
 		if (this.delegate.chatModelSlider) {
 			this.sliderPicker ??= this._register(this.instantiationService.createInstance(ChatModelSliderWidget, this.delegate));
@@ -180,7 +180,7 @@ export class ModelPickerWidget extends Disposable {
 			this.sliderPicker.show(anchor, () => {
 				width.dispose();
 				if (!this.isDisposed) { this.updateButtons(); }
-			});
+			}, focusModelOnOpen);
 		} else {
 			this.picker ??= this._register(this.instantiationService.createInstance(TabbedModelPicker, this.delegate));
 			this.picker.show(anchor, detailsModel, this.delegate.configureInMenu === true);

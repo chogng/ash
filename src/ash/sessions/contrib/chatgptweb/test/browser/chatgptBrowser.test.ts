@@ -593,6 +593,32 @@ suite('ChatGPT conversation in the Ash workspace', () => {
 			await expect(slider).toHaveAttribute('aria-valuetext', labels[1]!);
 			await expect(modelButton).toHaveAccessibleDescription(labels[1]!);
 			await expect(effortLabel).toHaveText(labels[1]!);
+			await expect.poll(() => dialog.evaluate(element =>
+				element.getAnimations({ subtree: true }).some(animation => animation.playState === 'running')
+			)).toBe(false);
+			const thumb = slider.locator('.ash-chat-slider-thumb');
+			const fill = slider.locator('.ash-chat-slider-fill');
+			const start = (await thumb.boundingBox())!;
+			const rail = (await slider.boundingBox())!;
+			const targetX = rail.x + rail.width * 0.64;
+			const thumbY = start.y + start.height / 2;
+			await page.mouse.move(start.x + start.width / 2, thumbY);
+			await page.mouse.down();
+			await expect(slider).toHaveClass(/\bdragging\b/u);
+			await page.mouse.move(targetX, thumbY, { steps: 4 });
+			await expect(effortLabel).toHaveText(labels[3]!);
+			await expect(slider).toHaveAttribute('aria-valuetext', labels[1]!);
+			const draggedThumb = (await thumb.boundingBox())!;
+			const draggedFill = (await fill.boundingBox())!;
+			expect(Math.abs(draggedThumb.x + draggedThumb.width / 2 - targetX)).toBeLessThan(1);
+			expect(Math.abs(draggedFill.x + draggedFill.width - targetX)).toBeLessThan(1);
+			await page.mouse.up();
+			await expect(slider).toHaveAttribute('aria-valuetext', labels[3]!);
+			await expect(effortLabel).toHaveText(labels[3]!);
+			await page.keyboard.press('ArrowLeft');
+			await expect(slider).toHaveAttribute('aria-valuetext', labels[2]!);
+			await page.keyboard.press('ArrowLeft');
+			await expect(slider).toHaveAttribute('aria-valuetext', labels[1]!);
 			await expect(picker).toHaveText(selectModelLabel);
 			await expectAnchored();
 			const pickerBounds = (await picker.boundingBox())!;

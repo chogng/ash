@@ -15,7 +15,7 @@ export interface EditorPointerDownEvent {
 	readonly pointerId: number;
 }
 
-/** Owns browser pointer dispatch, capture, and one-window drag sessions. */
+/** Owns browser pointer dispatch and editor drag sessions. */
 export class PointerHandler extends Disposable {
 	private readonly pointerDownEmitter = this._register(new Emitter<EditorPointerDownEvent>());
 	private readonly contextMenuEmitter = this._register(new Emitter<EditorMouseEvent>());
@@ -57,25 +57,6 @@ export class PointerHandler extends Disposable {
 	startTracking(pointerId: number, initialButtons: number, handlers: PointerTrackingHandlers): IDisposable {
 		return new PointerTrackingSession(this.element, pointerId, initialButtons, handlers);
 	}
-
-	capturePointer(pointerId: number | undefined): void {
-		if (
-			pointerId !== undefined &&
-			typeof this.element.setPointerCapture === 'function'
-		) {
-			this.element.setPointerCapture(pointerId);
-		}
-	}
-
-	releasePointer(pointerId: number | undefined): void {
-		if (
-			pointerId !== undefined &&
-			typeof this.element.hasPointerCapture === 'function' &&
-			this.element.hasPointerCapture(pointerId)
-		) {
-			this.element.releasePointerCapture(pointerId);
-		}
-	}
 }
 
 class PointerTrackingSession extends Disposable {
@@ -92,7 +73,7 @@ class PointerTrackingSession extends Disposable {
 				handlers.onBlur();
 				return;
 			}
-			const event = new EditorMouseEvent(browserEvent as PointerEvent, true, element);
+			const event = new EditorMouseEvent(browserEvent as MouseEvent, true, element);
 			if (browserEvent.type === 'pointerup') handlers.onUp(event);
 			else handlers.onCancel(event);
 		});
