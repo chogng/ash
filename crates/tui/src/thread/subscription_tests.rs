@@ -453,6 +453,7 @@ fn turn(turn_id: &str) -> Turn {
         status: TurnStatus::Completed,
         kind: Default::default(),
         instructions: None,
+        directory: None,
         model: None,
         reasoning_effort: None,
         tool_profile: None,

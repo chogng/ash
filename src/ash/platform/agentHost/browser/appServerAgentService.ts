@@ -304,7 +304,7 @@ export function createAppServerAgentSessionService(connection: AppServerProtocol
 			return {
 				...toSessionResult(result, remoteHost),
 				threadSnapshots: result.threadProjections.map((snapshot) => {
-					const thread = toThread(snapshot.thread);
+					const thread = toThread(snapshot.thread, remoteHost);
 					return {
 						thread,
 						directory: toExecutionTarget(snapshot.directory, remoteHost),
@@ -559,7 +559,7 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 		},
 		read: async (params) => {
 			const result = await appServerRequest(connection, 'session/thread/read', params);
-			const thread = toThread(result.thread);
+			const thread = toThread(result.thread, remoteHost);
 			return { thread, directory: toExecutionTarget(result.directory, remoteHost), transcript: toThreadTranscriptSnapshot(result.transcript, thread), ...(result.history ? { history: { ...result.history } } : {}) };
 		},
 		configureAdvisor: async (params) => {
@@ -579,7 +579,7 @@ export function createAppServerAgentThreadService(connection: AppServerProtocolC
 		},
 		subscribe: async (params) => {
 			const result = await appServerRequest(connection, 'session/thread/subscribe', params);
-			const thread = toThread(result.thread);
+			const thread = toThread(result.thread, remoteHost);
 			return {
 				thread,
 				directory: toExecutionTarget(result.directory, remoteHost),
@@ -749,7 +749,7 @@ function turnInteractionResolveResult(result: SessionRequestResult): TurnInterac
 	return result.value;
 }
 
-function toThread(thread: ThreadDto): Thread {
+function toThread(thread: ThreadDto, remoteHost?: string | { readonly authority: string; }): Thread {
 	return {
 		agentId: thread.agentId,
 		origin:
@@ -779,6 +779,7 @@ function toThread(thread: ThreadDto): Thread {
 		},
 		turns: thread.turns.map((turn) => ({
 			turnId: turn.turnId,
+			directory: toExecutionTarget(turn.directory, remoteHost),
 			kind: turn.kind,
 			status: turn.status,
 			mode: turn.mode,

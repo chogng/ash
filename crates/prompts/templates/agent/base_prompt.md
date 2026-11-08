@@ -210,19 +210,12 @@ You are producing plain text that will later be styled by the CLI. Follow these 
 
 **Monospace**
 
-- Wrap all commands, file paths, env vars, and code identifiers in backticks (`` `...` ``).
-- Apply to inline examples and to bullet keywords if the keyword itself is a literal file/command.
+- Wrap all commands, env vars, and code identifiers in backticks (`` `...` ``).
+- Apply to inline examples and to bullet keywords if the keyword itself is a literal command.
 - Never mix monospace and bold markers; choose one based on whether it’s a keyword (`**`) or inline code/path (`` ` ``).
 
 **File References**
-When referencing files in your response, make sure to include the relevant start line and always follow the below rules:
-  * Use inline code to make file paths clickable.
-  * Each reference should have a stand alone path. Even if it's the same file.
-  * Accepted: absolute, workspace‑relative, a/ or b/ diff prefixes, or bare filename/suffix.
-  * Line/column (1‑based, optional): :line[:column] or #Lline[Ccolumn] (column defaults to 1).
-  * Do not use URIs like file://, vscode://, or https://.
-  * Do not provide range of lines
-  * Examples: src/app.ts, src/app.ts:42, b/server/index.js#L10, C:\repo\project\main.rs:12:5
+Use Markdown links for existing files, with a path relative to the execution directory and a 1-based line when relevant. Use forward slashes and percent-encode spaces in the destination. For example, write [app.ts:42](src/app.ts#L42) for a line and [README.md](README.md) for a whole file. Use the actual absolute path for files outside that directory. Use inline code for literal paths in examples and for proposed files that do not exist yet.
 
 **Structure**
 

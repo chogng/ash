@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { expect, test } from '../../../automation/test.js';
 import { Editor } from '../../../automation/editor.js';
 import { readStorageEntries } from '../../../automation/storage.js';
+import { URI } from '../../../../src/ash/base/common/uri.js';
 import { StorageScope } from '../../../../src/ash/platform/storage/common/storage.js';
 import type { ISessionGridState } from '../../../../src/ash/sessions/services/sessions/browser/sessionGridState.js';
 import { APP_SERVER_METHODS, APPROVAL_MODE_DEFINITIONS } from '../../../../.build/protocol/typescript/index.js';
@@ -45,8 +46,8 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 			sent.add(marker);
 			if (marker === 'workspace-a' && call) await firstResponse;
 			// Relative dot deliberately lets the real tool runtime choose its directory.
-			const script = `require('node:fs').writeFileSync('agent.txt', ${JSON.stringify(marker)}); console.log(JSON.stringify({cwd:process.cwd(),branch:require('node:child_process').execFileSync('git',['branch','--show-current'],{encoding:'utf8'}).trim()}));`;
-			const delta = call ? { tool_calls: [{ index: 0, id: marker, type: 'function', function: { name: 'shell-command', arguments: JSON.stringify({ program: process.execPath, arguments: ['-e', script], working_directory: '.' }) } }] } : { content: `${marker} complete` };
+			const script = `require('node:fs').writeFileSync('agent.txt', ${JSON.stringify('Checkout marker\n' + marker)}); console.log(JSON.stringify({cwd:process.cwd(),branch:require('node:child_process').execFileSync('git',['branch','--show-current'],{encoding:'utf8'}).trim()}));`;
+			const delta = call ? { tool_calls: [{ index: 0, id: marker, type: 'function', function: { name: 'shell-command', arguments: JSON.stringify({ program: process.execPath, arguments: ['-e', script], working_directory: '.' }) } }] } : { content: `${marker} complete\n\nSee [Checkout marker](agent.txt#L2) or agent.txt:2.` };
 			response.writeHead(200, { 'content-type': 'text/event-stream' });
 			const chunk = (delta: unknown, finish_reason: string | null) => `data: ${JSON.stringify({ id: marker, object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
 			response.end(chunk(delta, null) + chunk({}, call ? 'tool_calls' : 'stop') + 'data: [DONE]\n\n');
@@ -120,7 +121,7 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 			await expectWorktreeEnabled();
 			await new Editor(active()).waitForEditorContents(text => text === marker);
 			await active().locator('.ash-chat-input-mode-action').click();
-			await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Agent', exact: true }).click();
+			await page.locator('.ash-chat-input-mode-menu').getByRole('menuitemradio', { name: 'Agent', exact: true }).press('Enter');
 			await active().getByRole('button', { name: /^Permissions:/ }).click();
 			const bypass = APPROVAL_MODE_DEFINITIONS.find(mode => mode.id === 'bypassPermissions')!;
 			await page.getByRole('menuitemradio', { name: bypass.label.english, exact: true }).click();
@@ -147,7 +148,8 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 			const root = result.directory.root;
 			expect(root).not.toBe(cwd);
 			expect((await run('git', ['branch', '--show-current'], { cwd: root })).stdout.trim()).toBe(identity.branch);
-			expect(await readFile(join(root, 'agent.txt'), 'utf8')).toBe(identity.marker);
+			expect(await readFile(join(root, 'agent.txt'), 'utf8')).toBe('Checkout marker\n' + identity.marker);
+			expect(result.thread.turns.at(-1)?.directory).toEqual({ type: 'local', root });
 			expect(await readFile(join(root, 'main.ts'), 'utf8')).toBe('const value = 17;\n');
 			const tool = result.thread.turns.flatMap(turn => turn.items).find(item => item.type === 'toolResult' && item.toolCallId === identity.marker);
 			expect(tool).toMatchObject({ type: 'toolResult', isError: false });
@@ -174,6 +176,15 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 			await expect(status).toHaveText(basename(cwd));
 			await expect(status).toHaveAttribute('title', root);
 			expect(await verify(identity)).toBe(root);
+			const explicit = active().getByRole('link', { name: 'Checkout marker', exact: true });
+			const plainTextReference = active().getByRole('link', { name: 'agent.txt:2', exact: true });
+			const target = URI.file(join(root, 'agent.txt'));
+			await expect(explicit).toHaveAttribute('href', target.with({ fragment: 'L2' }).toString());
+			await expect(plainTextReference).toHaveAttribute('href', target.with({ fragment: 'L2,1' }).toString());
+			await (identity === a ? explicit : plainTextReference).press('Enter');
+			const editor = new Editor(page.locator('.ash-editor-group:visible'));
+			await editor.waitForEditorContents(contents => contents === `Checkout marker\n${identity.marker}`);
+			await expect(editor.element.locator('.view-overlays .view-overlay-line[data-line-index="1"] .current-line-exact')).toBeVisible();
 		}
 
 		// Both failures happen after selection, at the real Git provisioning boundary.

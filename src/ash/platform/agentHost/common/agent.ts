@@ -551,6 +551,8 @@ export interface PlanUpdate {
 }
 
 export interface Turn {
+	/** Execution directory at acceptance, when recorded by the Thread owner. */
+	readonly directory?: SessionCreateParams['executionTarget'];
 	/** Missing only in older local consumers; the protocol adapter always preserves the Core purpose. */
 	readonly kind?: 'coding' | 'review' | 'advisor' | 'shell' | 'tool' | 'contextCompaction';
 	readonly turnId: string;

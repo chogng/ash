@@ -100,6 +100,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
             advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: None,
+            directory: None,
             turn_id: turn_id.clone(),
             status: TurnStatus::Running,
             status_changed_at_unix_ms: 0,

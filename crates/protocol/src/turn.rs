@@ -102,6 +102,10 @@ pub struct Turn {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub instructions: Option<TurnInstructions>,
+    /// Execution directory captured when the Turn was accepted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub directory: Option<crate::SessionExecutionTarget>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub model: Option<ModelRef>,

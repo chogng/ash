@@ -375,6 +375,7 @@ fn selected_rewind_checkpoint_emits_a_typed_rewind_action() {
             status: TurnStatus::Completed,
             kind: Default::default(),
             instructions: None,
+            directory: None,
             model: None,
             reasoning_effort: None,
             tool_profile: None,

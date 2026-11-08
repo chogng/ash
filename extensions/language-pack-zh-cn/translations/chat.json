@@ -720,6 +720,7 @@
     "chat.message.actions": "回复操作",
     "chat.message.actionsHelp": "按 Tab 移动到回复下方的“回复操作”工具栏。按左方向键或右方向键在操作之间移动，再按 Enter 或空格执行当前操作。",
     "chat.request.actions": "消息操作",
+    "chat.response.fileLinksHelp": "按 Tab 聚焦回复中的文件链接，按 Enter 打开文件并跳到引用的行。",
     "chat.request.actionsHelp": "按 Tab 移动到已发送消息下方的“消息操作”工具栏。按左方向键或右方向键选择“复制消息”或可用的“编辑消息”，再按 Enter 或空格执行。也可以在可编辑的消息上聚焦后按 Enter。编辑框会在消息原位打开。按 Tab 可移至“取消”和“发送”，也可按 Control+Enter 或 Command+Enter 发送。按 Escape 取消编辑并将焦点移回“编辑消息”。在 Code 中，右键点击符合条件的消息，或聚焦该行后按 Shift+F10，可打开“另跑一个版本”。",
     "chat.message.stopReadAloud": "停止朗读",
     "chat.message.readAloudFailed": "无法朗读回复：{0}",

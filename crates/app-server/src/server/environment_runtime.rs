@@ -3701,6 +3701,21 @@ impl AppServer {
         ))
     }
 
+    /// Records where the Turn ran. Filesystem operations authorize access separately.
+    pub(super) fn bound_turn_directory(
+        &self,
+        thread_id: &ash_protocol::ThreadId,
+    ) -> Option<ash_protocol::SessionExecutionTarget> {
+        self.env_runtime
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .dir_grants
+            .thread_dir(thread_id)
+            .map(|dir| ash_protocol::SessionExecutionTarget::Local {
+                root: dir.canonical_path().to_path_buf(),
+            })
+    }
+
     pub(super) fn thread_directory(
         &self,
         thread_id: &ash_protocol::ThreadId,

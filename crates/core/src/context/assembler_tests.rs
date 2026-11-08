@@ -691,6 +691,7 @@ fn snapshot(turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
             advisor: None,
             kind: ash_protocol::TurnKind::Coding,
             instructions: None,
+            directory: None,
             turn_id,
             status: TurnStatus::Running,
             status_changed_at_unix_ms: 0,

@@ -288,6 +288,7 @@ fn turn_metadata(turn: &ash_protocol::Turn) -> ash_protocol::Turn {
         kind: turn.kind,
         mode: turn.mode,
         instructions: turn.instructions.clone(),
+        directory: turn.directory.clone(),
         model: turn.model.clone(),
         reasoning_effort: turn.reasoning_effort,
         advisor: turn.advisor.clone(),

@@ -1222,8 +1222,18 @@ fn sqlite_replays_a_saved_session_directory_change_and_preserves_history() {
             origin: Default::default(),
             agent: None,
             title: "Existing conversation".into(),
-            execution_target: Some(ash_protocol::SessionExecutionTarget::Local { root: previous }),
+            execution_target: Some(ash_protocol::SessionExecutionTarget::Local {
+                root: previous.clone(),
+            }),
         })
+        .unwrap();
+    let model = ModelRef::new(
+        ProviderId::new("directory-provider").unwrap(),
+        ModelId::new("directory-model").unwrap(),
+    );
+    let before = start_catalog_model_turn(&threads, &thread_id, "before-directory", model.clone());
+    threads
+        .complete_turn(&thread_id, &before, "Before".into())
         .unwrap();
     let original = store.load(&thread_id).unwrap();
     let command = ash_protocol::CommandId::new("directory-command").unwrap();
@@ -1262,6 +1272,10 @@ fn sqlite_replays_a_saved_session_directory_change_and_preserves_history() {
         )
         .unwrap();
     assert_eq!(changed.sequence, retried.sequence);
+    let after = start_catalog_model_turn(&threads, &thread_id, "after-directory", model);
+    threads
+        .complete_turn(&thread_id, &after, "After".into())
+        .unwrap();
     drop(threads);
     drop(store);
     let store = Arc::new(SqliteThreadStore::open(&path).unwrap());
@@ -1274,6 +1288,29 @@ fn sqlite_replays_a_saved_session_directory_change_and_preserves_history() {
     let replayed = threads.read_thread(&thread_id).unwrap();
     assert_eq!(replayed.execution_target, target);
     assert_eq!(replayed.title, "Existing conversation");
+    let expected_directories = [
+        Some(ash_protocol::SessionExecutionTarget::Local { root: previous }),
+        target.clone(),
+    ];
+    assert_eq!(
+        replayed
+            .turns
+            .iter()
+            .map(|turn| turn.directory.clone())
+            .collect::<Vec<_>>(),
+        expected_directories
+    );
+    let page = threads
+        .read_thread_history(&thread_id, &latest_history_window(2))
+        .unwrap();
+    assert_eq!(
+        page.thread
+            .turns
+            .iter()
+            .map(|turn| turn.directory.clone())
+            .collect::<Vec<_>>(),
+        expected_directories
+    );
     assert_eq!(
         &store.load(&thread_id).unwrap()[..original.len()],
         original.as_slice()

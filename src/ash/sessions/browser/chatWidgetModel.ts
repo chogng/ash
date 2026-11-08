@@ -34,6 +34,7 @@ import type { ThreadHistoryBoundary, ThreadRead } from '../../workbench/services
 import { IStorageService, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
 import { codeConversationDefaultsSetting, codeConversationWorkspaceKey, parseCodeConversationModel, type CodeConversationDefaults, type CodeConversationModel } from '../common/codeConversationDefaults.js';
 import { LOCAL_AGENT_HOST_PROVIDER_ID } from '../common/agentHostSessionsProvider.js';
+import { agentHostTurnDirectory } from '../common/agentHostSessionWorkspace.js';
 import { hasSelectedCodeWorkspace } from '../common/sessionWorkspace.js';
 import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
 import { SessionsWorkspaceModeContext } from '../common/contextkeys.js';
@@ -418,7 +419,10 @@ export class ChatWidgetModel extends Disposable {
 		const thread = this._thread;
 		const latestTurnId = thread?.turns.at(-1)?.turnId;
 		const provider = this.selection.kind === 'session' ? this.selection.active.session.providerId : this.selection.session.providerId;
-		const source = thread && { sessionId: thread.sessionId, threadId: thread.threadId, commandTerminals: isNative && (!provider || provider === LOCAL_AGENT_HOST_PROVIDER_ID) };
+		const source = thread && {
+			sessionId: thread.sessionId, threadId: thread.threadId, commandTerminals: isNative && (!provider || provider === LOCAL_AGENT_HOST_PROVIDER_ID),
+			directoryForTurn: (turn: Turn) => agentHostTurnDirectory(thread.sessionId, turn.directory),
+		};
 		let transcript = chatTranscriptListItems(this.transcriptEntries, latestTurnId, thread?.turns, source, {
 			archived: thread?.status === 'archived', hasOlderTurns: this.historyBoundary?.hasOlderTurns,
 		}, this._changeSets);
@@ -1375,7 +1379,11 @@ export class ChatWidgetModel extends Disposable {
 					const entry = cloneTranscriptEntry(change.entry);
 					if (index < 0) this.transcriptEntries.push(entry);
 					else {
-						if (update.changes.length === 1) streamingResponse = chatStreamingResponseUpdate(this.transcriptEntries[index], entry);
+						if (update.changes.length === 1) {
+							const turn = this._thread?.turns.at(-1);
+							const workspace = turn && turn.turnId === entry.turnId ? agentHostTurnDirectory(update.sessionId, turn.directory) : undefined;
+							streamingResponse = chatStreamingResponseUpdate(this.transcriptEntries[index], entry, workspace);
+						}
 						this.transcriptEntries[index] = entry;
 					}
 					break;

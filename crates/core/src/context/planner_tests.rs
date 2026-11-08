@@ -882,6 +882,7 @@ fn snapshot(current_turn_id: TurnId, items: Vec<ThreadItem>) -> ThreadSnapshot {
                 advisor: None,
                 kind: ash_protocol::TurnKind::Coding,
                 instructions: None,
+                directory: None,
                 status: if turn_id == current_turn_id {
                     TurnStatus::Running
                 } else {

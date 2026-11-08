@@ -43,7 +43,7 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { createUuid } from '../../../../../base/common/uuid.js';
 import type { ChatContextAttachment, ChatImageCapture } from '../../../../services/chat/common/chatContextService.js';
-import type { IOpenerService } from '../../../../../platform/opener/common/opener.js';
+import { extractSelection, type IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import type { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { Schemas } from '../../../../../base/common/network.js';
@@ -788,8 +788,13 @@ export async function openChatMarkdownLink(
 		return;
 	}
 	if (isEditorResourceScheme(resource.scheme)) {
-		const workspaceResource = resolveMarkdownWorkspaceResource(resource);
-		if (workspaceResource && editorService) await editorService.openEditor({ resource: workspaceResource });
+		const { uri, selection } = extractSelection(resource);
+		const workspaceResource = resolveMarkdownWorkspaceResource(uri);
+		if (workspaceResource && editorService) {
+			const range = selection && new Range(selection.startLineNumber, selection.startColumn,
+				selection.endLineNumber ?? selection.startLineNumber, selection.endColumn ?? selection.startColumn);
+			await editorService.openEditor({ resource: workspaceResource }, range ? { selection: range } : undefined);
+		}
 		return;
 	}
 	if (openerService) await openerService.open(target, { openExternal: true, fromUserGesture: true, allowContributedOpeners: true });

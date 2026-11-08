@@ -185,7 +185,7 @@ export class ChatListItemRenderer extends Disposable {
 			this.thinkingPart.updateThinking(item);
 			this.item = item;
 			this.updateState();
-		} else if (this.markdownPart && !same && this.item.type === item.type && this.item.markdown?.supportHtml === item.markdown?.supportHtml && this.item.label === item.label && this.item.detail === item.detail && sameAction(this.item.action, item.action)
+		} else if (this.markdownPart && !same && this.item.type === item.type && sameFileReferenceDirectory(this.item, item) && this.item.markdown?.supportHtml === item.markdown?.supportHtml && this.item.label === item.label && this.item.detail === item.detail && sameAction(this.item.action, item.action)
 			&& (this.item.text === item.text && this.item.transient === item.transient
 				|| this.markdownPart.tryIncrementalUpdate({ value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true }, item.transient))) {
 			this.item = item;
@@ -831,6 +831,7 @@ export class ChatListItemRenderer extends Disposable {
 				markdown: { value: item.text, supportHtml: item.markdown?.supportHtml, supportThemeIcons: true, supportAlertSyntax: true },
 				markedOptions: { breaks: true },
 				fillInIncompleteTokens: item.transient,
+				fileReferenceDirectory: !openResponseLink && this.options.onDidRequestLink ? item.fileReferenceDirectory : undefined,
 				actionHandler: openResponseLink
 					? (target: string) => { void openResponseLink(target).catch(error => this.instantiationService.getOptional(INotificationService)?.error(String(error))); }
 					: this.options.onDidRequestLink,
@@ -973,6 +974,7 @@ function sameItemPresentation(left: IChatListItem, right: IChatListItem): boolea
 		&& left.loadedSkills?.length === right.loadedSkills?.length
 		&& (left.loadedSkills?.every((skill, index) => skill === right.loadedSkills?.[index]) ?? true)
 		&& left.hookPart?.run === right.hookPart?.run
+		&& sameFileReferenceDirectory(left, right)
 		&& left.resources === right.resources && left.markdown?.supportHtml === right.markdown?.supportHtml
 		&& left.contextEntries === right.contextEntries
 		&& left.conversationLink?.sessionId === right.conversationLink?.sessionId
@@ -985,6 +987,16 @@ function sameItemPresentation(left: IChatListItem, right: IChatListItem): boolea
 		&& left.attachmentSource?.itemId === right.attachmentSource?.itemId
 		&& left.attachmentSource?.kind === right.attachmentSource?.kind
 		&& sameAction(left.action, right.action);
+}
+
+function sameFileReferenceDirectory(left: IChatListItem, right: IChatListItem): boolean {
+	const a = left.fileReferenceDirectory;
+	const b = right.fileReferenceDirectory;
+	if (a === b) return true;
+	if (!a || !b || a.resource.toString() !== b.resource.toString()) return false;
+	return a.target.type === 'session' && b.target.type === 'session'
+		? a.target.sessionId === b.target.sessionId && a.target.path === b.target.path
+		: a.target.type === 'workspace' && b.target.type === 'workspace' && a.target.dirId === b.target.dirId;
 }
 
 function sameAction(left: ChatTurnErrorAction | undefined, right: ChatTurnErrorAction | undefined): boolean {

@@ -938,6 +938,24 @@ impl super::operations::AgentRequestProcessorContext for AppServer {
     ) -> Result<Option<ash_protocol::SessionExecutionTarget>, super::RpcError> {
         AppServer::thread_directory(self, thread_id)
     }
+
+    fn reply_directory_fallback(
+        &self,
+        thread_id: &ash_protocol::ThreadId,
+    ) -> Result<Option<ash_protocol::SessionExecutionTarget>, super::RpcError> {
+        let directory = self.bound_turn_directory(thread_id);
+        let record = self
+            .threads
+            .thread_catalog_record(thread_id)
+            .map_err(super::core_error)?;
+        // A managed binding can supply a missing reply directory while the root
+        // Thread still uses its original directory. Reading the catalog after the
+        // binding detects a concurrent directory change before applying the fallback.
+        if record.directory_configured {
+            return Ok(None);
+        }
+        Ok(directory)
+    }
 }
 
 impl super::app_tools_operations::AppToolsRequestProcessorContext for AppServer {

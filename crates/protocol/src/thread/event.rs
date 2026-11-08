@@ -20,6 +20,7 @@ use crate::ModelUsage;
 use crate::PlanUpdate;
 use crate::RequestId;
 use crate::SandboxDenialOutput;
+use crate::SessionExecutionTarget;
 use crate::SessionId;
 use crate::StableTurnError;
 use crate::ThreadArchiveReason;
@@ -246,6 +247,10 @@ pub enum ThreadEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional = nullable)]
         instructions: Option<TurnInstructions>,
+        /// Actual execution directory at acceptance, including a managed checkout.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional = nullable)]
+        directory: Option<SessionExecutionTarget>,
         #[serde(default = "legacy_turn_action_policy_revision")]
         policy_revision: String,
         #[serde(default)]

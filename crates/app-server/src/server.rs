@@ -2963,6 +2963,7 @@ impl AppServer {
             // A queued admission must not race a directory change after the route check.
             request.expected_sequence = core_api::SequenceExpectation::Exact(record.sequence);
         }
+        let directory = self.bound_turn_directory(thread);
         let mut started = None;
         self.client_host.submit_turn_with_ide(
             thread,
@@ -2970,7 +2971,9 @@ impl AppServer {
             document_mode,
             expected_ide,
             || {
-                let result = self.threads.start_turn(thread, request)?;
+                let result = self
+                    .threads
+                    .start_turn_in_directory(thread, request, directory)?;
                 let receipt = core_api::TurnReceipt {
                     turn_id: result.turn_id.clone(),
                     sequence: result.sequence,
@@ -5246,23 +5249,30 @@ impl ash_core::AgentTurnSubmission for AppServerAgentTurnSubmission {
                     .ok_or_else(|| CoreError::Execution("Thread file owner was disposed".into()))
             })
             .transpose()?;
-        let mode = match &directories {
+        let (mode, directory) = match &directories {
             Some(directories) => match (
                 directories.binding(parent_thread),
                 directories.binding(child_thread),
             ) {
-                (Some(parent), Some(child)) if parent.checkout_root() == child.checkout_root() => {
-                    crate::client_host::TextDocumentMode::Client
+                (Some(parent), Some(child)) => {
+                    let mode = if parent.checkout_root() == child.checkout_root() {
+                        crate::client_host::TextDocumentMode::Client
+                    } else {
+                        crate::client_host::TextDocumentMode::FileSystem
+                    };
+                    let directory = ash_protocol::SessionExecutionTarget::Local {
+                        root: child.dir().to_path_buf(),
+                    };
+                    (mode, Some(directory))
                 }
-                (Some(_), Some(_)) => crate::client_host::TextDocumentMode::FileSystem,
-                (None, None) => crate::client_host::TextDocumentMode::Client,
+                (None, None) => (crate::client_host::TextDocumentMode::Client, None),
                 _ => {
                     return Err(CoreError::Execution(
                         "parent and child directory bindings are incomplete".into(),
                     ));
                 }
             },
-            None => crate::client_host::TextDocumentMode::Client,
+            None => (crate::client_host::TextDocumentMode::Client, None),
         };
         self.clients.submit_agent_turn(
             parent_thread,
@@ -5270,7 +5280,10 @@ impl ash_core::AgentTurnSubmission for AppServerAgentTurnSubmission {
             child_thread,
             replayed_turn,
             mode,
-            || self.threads.start_turn(child_thread, request),
+            || {
+                self.threads
+                    .start_turn_in_directory(child_thread, request, directory)
+            },
         )
     }
 }

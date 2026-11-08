@@ -31,6 +31,7 @@ import { SessionsChatResponseFileChangesService } from './sessionTurnChanges.js'
 import { refreshChatInputStack } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputStack.js';
 import { resolveChatContextAttachment } from '../../../../workbench/services/chat/common/chatContextService.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
+import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import './media/chatInput.css';
 import './media/chatInputCard.css';
 import './media/newChatEnvironment.css';
@@ -69,6 +70,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 		@IVoiceModeOnboardingService voiceOnboarding: IVoiceModeOnboardingService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IChatSessionNavigationService navigation: IChatSessionNavigationService,
+		@IEditorService editors: IEditorService,
 	) {
 		let composer!: SharedChatInputComposer;
 		const turnChanges = instantiationService.createInstance(SessionsChatResponseFileChangesService, model);
@@ -78,7 +80,7 @@ export class NewChatWidget extends ChatWidget<ChatWidgetModel> {
 			() => contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'code');
 		const welcomeTitle = observableValue<string | null | undefined>('native chat welcome', undefined);
 		super(container, panelId, model, createNewSession, contextMenus, contextViews, commands, accessibleViews, notifications,
-			undefined, undefined, undefined,
+			undefined, editors, undefined,
 			(inputContainer, delegate) => {
 				const sendInBackground: NonNullable<ChatInputDelegate['sendInBackground']> = async (text, mode, skills, contexts, signal) => {
 					const resolved = await Promise.all(contexts.map(resolveChatContextAttachment));

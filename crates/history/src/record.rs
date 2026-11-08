@@ -10,6 +10,7 @@ use serde::de::Error;
 use serde::ser::SerializeStruct;
 
 /// Schema version written for newly persisted Thread history records.
+/// Version 34 records the actual Turn execution directory at acceptance.
 /// Version 33 records the Session classification as kind.
 /// Version 32 supports clearing a directory and treats directory changes as explicit workspace selection.
 /// Version 31 records saved conversation recaps.
@@ -19,7 +20,7 @@ use serde::ser::SerializeStruct;
 /// Version 27 adds durable Thread title changes and their command receipts.
 /// Version 26 added Thread history cursors and directory checkpoints.
 /// Older records retain their hashed byte representation.
-pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 33;
+pub const CURRENT_STORED_EVENT_SCHEMA_VERSION: u32 = 34;
 const SESSION_KIND_SCHEMA_VERSION: u32 = 33;
 
 /// Resolves the identity at the history-version boundary. Legacy branches each receive one
@@ -175,6 +176,7 @@ impl Serialize for StoredThreadEvent<'_> {
                     kind,
                     mode,
                     instructions,
+                    directory: _,
                     policy_revision,
                     approval_mode,
                     tool_mode,

@@ -366,6 +366,7 @@ fn turn(ids: &TestIds, status: TurnStatus, items: Vec<ThreadItem>) -> Turn {
         kind: ash_protocol::TurnKind::Coding,
         mode: ash_protocol::CollaborationMode::Agent,
         instructions: None,
+        directory: None,
         model: None,
         reasoning_effort: None,
         tool_profile: None,

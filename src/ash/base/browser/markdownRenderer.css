@@ -98,7 +98,7 @@
 	padding: 0;
 }
 
-.ash-markdown a {
+.ash-markdown a[href] {
 	color: var(--ash-accent-foreground);
 	cursor: pointer;
 	text-decoration: underline;

@@ -13,6 +13,8 @@ import { IOpenerService } from '../../../../../../platform/opener/common/opener.
 import { MarkedKatexExtension } from '../../../../markdown/common/markedKatexExtension.js';
 import { ChatContentMarkdownRenderer, getChatMarkdownRenderOptions } from '../chatContentMarkdownRenderer.js';
 import { IncrementalDOMMorpher, markdownFrameThreshold } from './chatIncrementalRendering/chatIncrementalRendering.js';
+import type { FileSearchDirectory } from '../../../../../../platform/search/common/fileSearch.js';
+import { ChatMarkdownFileReferences, isMarkdownFileReference } from './chatMarkdownFileReferences.js';
 import { ChatMarkdownDecorationsRenderer } from './chatMarkdownDecorationsRenderer.js';
 import { canStartListCheckpoint, lexMarkdownTail, markdownTailCheckpoint, type MarkdownTailCheckpoint } from './chatMarkdownTail.js';
 import { CodeBlockPart } from './codeBlockPart.js';
@@ -67,6 +69,7 @@ interface MarkdownFragment {
 interface ChatMarkdownContentPartOptions extends MarkdownRenderOptions {
 	readonly getChatItem?: () => IChatListItem | undefined;
 	readonly ownerDocument: Document;
+	readonly fileReferenceDirectory?: FileSearchDirectory;
 	readonly markdown?: string | IMarkdownString;
 	readonly visible?: boolean;
 	/** The transcript admits new code documents after measuring their reserved row geometry. */
@@ -80,6 +83,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 	public readonly onDidChangeHeight = this.changedHeight.event;
 	public readonly codeblocksPartId = `ash-chat-markdown-${createUuid()}`;
 	private readonly markdownRenderer: ChatContentMarkdownRenderer;
+	private readonly fileReferences?: ChatMarkdownFileReferences;
 	private readonly decorations: ChatMarkdownDecorationsRenderer;
 	private readonly incrementalRendering: IncrementalDOMMorpher;
 	private readonly renders = this._register(new DisposableMap<HTMLElement, DisposableStore>());
@@ -110,6 +114,9 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		this.domNode = h(options.ownerDocument, 'div');
 		this.domNode.className = 'ash-chat-markdown-part ash-markdown';
 		this.decorations = this._register(instantiation.createInstance(ChatMarkdownDecorationsRenderer, this.domNode));
+		if (options.fileReferenceDirectory) {
+			this.fileReferences = this._register(instantiation.createInstance(ChatMarkdownFileReferences, this.domNode, options.fileReferenceDirectory, () => this.changedHeight.fire()));
+		}
 		this.incrementalRendering = this._register(new IncrementalDOMMorpher(this.domNode, options.visible ?? true, markdownSizeLimit, (markdown, incomplete, fromFrame) => {
 			this.render(markdown, incomplete);
 			if (fromFrame) {
@@ -326,6 +333,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		} else {
 			this.decorations.reconcile();
 		}
+		if (!fillInIncompleteTokens) this.fileReferences?.reconcile();
 		const imageKeys = new Set(next.flatMap(fragment => [...fragment.images]));
 		for (const key of this.images.keys()) if (!imageKeys.has(key)) this.images.delete(key);
 		if (selected?.anchor.isConnected && selected.focus.isConnected) selection?.setBaseAndExtent(selected.anchor, selected.anchorOffset, selected.focus, selected.focusOffset);
@@ -343,6 +351,7 @@ export class ChatMarkdownContentPart extends Disposable implements IChatContentP
 		try {
 			const options: MarkdownRenderOptions = {
 				...this.options, fillInIncompleteTokens: incomplete,
+				sanitizerConfig: this.fileReferences ? { ...this.options.sanitizerConfig, deferLink: isMarkdownFileReference } : this.options.sanitizerConfig,
 				actionHandler: this.options.actionHandler ? href => this.options.actionHandler!(href, this.codeElement) : undefined,
 				asyncRenderCallback: () => { this.options.asyncRenderCallback?.(); this.changedHeight.fire(); },
 				imageResourceLoader: this.options.imageResourceLoader ? resource => {

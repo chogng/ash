@@ -68,6 +68,7 @@ fn thread(messages: &[&str]) -> Thread {
                     status: TurnStatus::Completed,
                     kind: Default::default(),
                     instructions: None,
+                    directory: None,
                     model: None,
                     reasoning_effort: None,
                     tool_profile: None,

@@ -1,3 +1,5 @@
+import { sessionWorkspaceUri } from './sessionWorkspace.js';
+import type { FileSearchDirectory } from '../../platform/search/common/fileSearch.js';
 import { URI } from '../../base/common/uri.js';
 import type { IWorkspace } from '../../platform/workspace/common/workspace.js';
 import type { SessionCreateParams } from '../../platform/agentHost/common/agent.js';
@@ -15,6 +17,12 @@ export function buildAgentHostSessionWorkspace(target: SessionCreateParams['exec
 	const authorityId = target.type === 'local' ? 'local' : target.type === 'ssh' ? createSshRemoteAuthority(target.host).authority
 		: target.type === 'remote' ? target.authority : createProviderRemoteWorkspaceUri(target.providerId, target.workspace, target.root, target.hostAuthority).authority;
 	return Object.freeze({ authorityId, root: target.root, ...(target.type === 'provider' ? { runtime: Object.freeze({ providerId: target.providerId, workspace: target.workspace, ...(target.hostAuthority ? { hostAuthority: target.hostAuthority } : {}) }) } : {}) });
+}
+
+/** Returns the resource identity for a recorded execution directory. */
+export function agentHostTurnDirectory(sessionId: string, directory: SessionCreateParams['executionTarget'] | undefined): FileSearchDirectory | undefined {
+	const workspace = buildAgentHostSessionWorkspace(directory);
+	return workspace ? { resource: sessionWorkspaceUri(workspace), target: { type: 'session', sessionId, path: workspace.root } } : undefined;
 }
 
 /** Undefined means not hydrated; null is a hydrated Thread without filesystem access. */

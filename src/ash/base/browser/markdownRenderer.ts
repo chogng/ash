@@ -42,7 +42,11 @@ export interface MarkdownSanitizerOptions {
 	readonly sanitizerConfig?: MarkdownSanitizerConfig;
 }
 
+/** An inert destination reserved for a caller that resolves links after rendering. */
+export const deferredMarkdownLinkAttribute = 'data-markdown-deferred-link';
+
 export interface MarkdownSanitizerConfig {
+	readonly deferLink?: (href: string) => boolean;
 	readonly replaceWithPlaintext?: boolean;
 	readonly allowedTags?: { readonly override: readonly string[]; };
 	readonly allowedAttributes?: { readonly override: ReadonlyArray<string | SanitizeAttributeRule>; };
@@ -578,6 +582,11 @@ function upgradeMarkdownCheckboxes(
 function applyMarkdownAttributePolicy(element: Element, markdown: IMarkdownString | undefined, config: MarkdownSanitizerConfig | undefined): void {
 	if (element.hasAttribute('href')) {
 		const href = element.getAttribute('href') ?? '';
+		if (element.tagName === 'A' && config?.deferLink?.(href)) {
+			element.removeAttribute('href');
+			element.setAttribute(deferredMarkdownLinkAttribute, href);
+			return;
+		}
 		const target = resolveMarkdownLinkTarget(href, markdown, config);
 		if (element.tagName !== 'A' || !target) {
 			element.removeAttribute('href');

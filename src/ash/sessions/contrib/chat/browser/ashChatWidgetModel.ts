@@ -15,6 +15,7 @@ import type { SkillReference } from '../../../../platform/agentHost/common/appSe
 import type { ResolvedChatContext } from '../../../../workbench/services/chat/common/chatContextService.js';
 import { ChatRequestQueueKind, type AgentInteractionDecision, type ChatMode, type ChatSubmissionOptions, type Thread, type ThreadRead, type ThreadTranscriptEntry, type ThreadTranscriptUpdateEnvelope, type Turn } from '../../../../workbench/services/chat/common/chatService.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
+import { agentHostTurnDirectory } from '../../../common/agentHostSessionWorkspace.js';
 import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { IAshChatSelectionService } from './ashChatSelectionService.js';
 import { IAshChatSessionService } from './ashChatSessionService.js';
@@ -367,7 +368,10 @@ export class AshChatWidgetModel extends Disposable implements IReplyChatEditorMo
 	}
 
 	private render(binding: ThreadBinding): void {
-		const source = { sessionId: binding.sessionId, threadId: binding.threadId, commandTerminals: !!this.primary.host?.terminal?.commandSession };
+		const source = {
+			sessionId: binding.sessionId, threadId: binding.threadId, commandTerminals: !!this.primary.host?.terminal?.commandSession,
+			directoryForTurn: (turn: Turn) => agentHostTurnDirectory(binding.sessionId, turn.directory),
+		};
 		this.renderedItems = chatTranscriptListItems(binding.entries, binding.thread?.turns.at(-1)?.turnId, binding.thread?.turns, source, {
 			archived: binding.thread?.status === 'archived',
 		});

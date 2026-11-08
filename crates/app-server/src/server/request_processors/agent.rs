@@ -221,6 +221,10 @@ pub(super) trait AgentRequestProcessorContext: Send + Sync {
         &self,
         thread_id: &ash_protocol::ThreadId,
     ) -> Result<Option<ash_protocol::SessionExecutionTarget>, super::RpcError>;
+    fn reply_directory_fallback(
+        &self,
+        thread_id: &ash_protocol::ThreadId,
+    ) -> Result<Option<ash_protocol::SessionExecutionTarget>, super::RpcError>;
 }
 
 pub(super) struct AgentRequestProcessor<'ctx, C: AgentRequestProcessorContext + ?Sized> {
@@ -1554,9 +1558,11 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
                         })
                 })
                 .collect();
-            return Ok((snapshot.public_thread(), None, pending));
+            let mut thread = snapshot.public_thread();
+            self.fill_missing_reply_directories(&mut thread)?;
+            return Ok((thread, None, pending));
         };
-        let page = self
+        let mut page = self
             .context
             .agent_runtime()
             .read_thread_history(thread_id, &history_window(history)?)
@@ -1577,7 +1583,36 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             has_older_turns: page.has_older_turns,
             oldest_turn_id: page.thread.turns.first().map(|turn| turn.turn_id.clone()),
         };
+        self.fill_missing_reply_directories(&mut page.thread)?;
         Ok((page.thread, Some(boundary), page.pending_interactions))
+    }
+
+    fn fill_missing_reply_directories(
+        &self,
+        thread: &mut ash_protocol::Thread,
+    ) -> Result<(), RpcError> {
+        if !thread.origin.is_root() {
+            return Ok(());
+        }
+        let mut turns_without_directory = thread
+            .turns
+            .iter_mut()
+            .filter(|turn| {
+                turn.directory.is_none()
+                    && turn
+                        .items
+                        .iter()
+                        .any(|item| matches!(item, ash_protocol::ThreadItem::AgentMessage { .. }))
+            })
+            .peekable();
+        if turns_without_directory.peek().is_some()
+            && let Some(directory) = self.context.reply_directory_fallback(&thread.thread_id)?
+        {
+            for turn in turns_without_directory {
+                turn.directory = Some(directory.clone());
+            }
+        }
+        Ok(())
     }
 
     pub(super) fn read_session_thread_snapshot(

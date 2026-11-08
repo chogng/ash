@@ -41,7 +41,17 @@ import { browserEnvironment } from '../../../../../editor/test/browser/testEdito
 import assert from 'node:assert/strict';
 import { mock } from 'node:test';
 import { readFileSync } from 'node:fs';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DiskFileSystemProvider } from '../../../../../platform/files/node/diskFileSystemProvider.js';
+import { BrowserFileSearchService } from '../../../../../platform/search/browser/browserFileSearchService.js';
+import { IFileSearchService } from '../../../../../platform/search/common/fileSearch.js';
+import { getChatInputAccessibilityHelp } from '../../browser/actions/chatAccessibilityHelp.js';
 import { ChatCopyActionRendering } from '../../browser/actions/chatCopyActions.js';
+import { agentHostTurnDirectory } from '../../../../../sessions/common/agentHostSessionWorkspace.js';
+import type { Turn } from '../../../../services/chat/common/chatService.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { suite, suiteSetup, test } from 'mocha';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
@@ -49,7 +59,7 @@ import { createCodeEditorServices, createTestCodeEditor, registerCodeEditorServi
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { chatTranscriptListItems } from '../../common/model/chatViewModel.js';
-import type { ThreadTranscriptEntry, Turn } from '../../../../services/chat/common/chatService.js';
+import type { ThreadTranscriptEntry } from '../../../../services/chat/common/chatService.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import type { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { openChatMarkdownLink } from '../../browser/widget/chatWidget.js';
@@ -102,6 +112,96 @@ test('Chat exposes explicit file references as streamed destinations complete', 
 		{ resource: URI.parse('file:///workspace/src/main.ts') },
 		{ selection: new Range(12, 1, 12, 1) },
 	]);
+});
+
+test('Chat opens explicit and plain-text file references at the correct line in each Git worktree', async () => {
+	const root = await mkdtemp(join(tmpdir(), 'ash-chat-references-'));
+	try {
+		const repository = join(root, 'repository');
+		const git = (...args: string[]) => execFileSync('git', ['-C', repository, ...args], { stdio: 'pipe' });
+		await mkdir(join(repository, 'src'), { recursive: true });
+		await writeFile(join(repository, 'src/suite.rs'), 'first line\nsecond line\nthird line\n');
+		git('init');
+		git('add', '.');
+		git('-c', 'commit.gpgsign=false', '-c', 'user.name=Ash Test', '-c', 'user.email=ash@example.invalid', 'commit', '-m', 'Seed test repository');
+		const first = join(root, 'first');
+		const second = join(root, 'second');
+		git('worktree', 'add', '--detach', first);
+		git('worktree', 'add', '--detach', second);
+		await mkdir(join(second, 'other'));
+		await writeFile(join(second, 'other/suite.rs'), 'another match');
+		await writeFile(join(second, 'src/last.rs'), 'last search match');
+		await writeFile(join(first, 'src/suite.rs'), 'first checkout\nsecond line\nthird line\n');
+		await writeFile(join(second, 'src/suite.rs'), 'second checkout\nsecond line\nthird line\n');
+
+		using resources = new DisposableStore();
+		const workbench = resources.add(createTestEditorServices(undefined, createCodeEditorServices(resources)));
+		const services = resources.add(workbench.createChild());
+		const files = resources.add(new FileService());
+		resources.add(files.registerProvider('file', resources.add(new DiskFileSystemProvider([URI.file(first), URI.file(second)]))));
+		services.registerInstance(IFileService, files);
+		services.registerInstance(IFileSearchService, new BrowserFileSearchService(files));
+		const openEditor = mock.fn<IEditorService['openEditor']>(async () => { });
+		using widget = services.createInstance(ChatListWidget, document.createElement('main'), {
+			onDidRequestLink: (target: string) => { void openChatMarkdownLink(target, undefined, { openEditor }); },
+		});
+		const entries: ThreadTranscriptEntry[] = [
+			{
+				type: 'item', entryId: 'first', turnId: 'one', transient: false, item: {
+					type: 'agentMessage', itemId: 'first', turnId: 'one',
+					text: '[first](src/suite.rs#L2) and `src/suite.rs:3` or suite.rs:2.',
+				}
+			},
+			{
+				type: 'item', entryId: 'second', turnId: 'two', transient: false, item: {
+					type: 'agentMessage', itemId: 'second', turnId: 'two',
+					text: '[second](src/suite.rs#L3), [missing](missing/suite.rs#L2), `suite.rs`, `Command::output()`, and last.rs.',
+				}
+			},
+		];
+		const turns = [
+			{ turnId: 'one', directory: { type: 'local', root: first } },
+			{ turnId: 'two', directory: { type: 'local', root: second } },
+		] as const;
+		const zero = { reported: 0, complete: true };
+		const history: Turn[] = turns.map(turn => ({
+			...turn, status: 'completed', mode: 'agent', approvalMode: 'manual', items: [],
+			usage: { modelInvocations: 0, inputTokens: zero, outputTokens: zero, cachedInputTokens: zero, cacheWriteInputTokens: zero, cacheReadInputTokens: zero, reasoningTokens: zero },
+		}));
+		const replies = chatTranscriptListItems(entries, 'two', history, {
+			sessionId: 'session', threadId: 'thread',
+			directoryForTurn: turn => agentHostTurnDirectory('session', turn.directory),
+		});
+		widget.render(replies.map(reply => ({ ...reply, transient: true })));
+		assert.equal(widget.element.querySelector('a[href^="file:"]'), null);
+		widget.render(replies);
+
+		const ready = new DeferredPromise<void>();
+		const resolved = () => {
+			if (widget.element.querySelectorAll('a[href^="file:"]').length === 5) void ready.complete();
+		};
+		const observer = new document.defaultView!.MutationObserver(resolved);
+		observer.observe(widget.element, { subtree: true, childList: true, attributes: true });
+		try { resolved(); await ready.p; }
+		finally { observer.disconnect(); }
+
+		const firstReply = widget.element.querySelector('[data-item-id="first"]')!;
+		const secondReply = widget.element.querySelector('[data-item-id="second"]')!;
+		assert.deepEqual([...firstReply.querySelectorAll('a[href]')].map(anchor => anchor.textContent), ['first', 'src/suite.rs:3', 'suite.rs:2']);
+		assert.deepEqual([...secondReply.querySelectorAll('a[href]')].map(anchor => anchor.textContent), ['second', 'last.rs']);
+		assert.deepEqual([...secondReply.querySelectorAll('code')].map(code => code.textContent), ['suite.rs', 'Command::output()']);
+		assert.equal(secondReply.querySelector('a:not([href])')?.textContent, 'missing');
+		secondReply.querySelector<HTMLAnchorElement>('a[href]')!.click();
+		for (const anchor of firstReply.querySelectorAll<HTMLAnchorElement>('a[href]')) anchor.click();
+		assert.deepEqual(openEditor.mock.calls.map(call => call.arguments), [
+			[{ resource: URI.file(join(second, 'src/suite.rs')) }, { selection: new Range(3, 1, 3, 1) }],
+			[{ resource: URI.file(join(first, 'src/suite.rs')) }, { selection: new Range(2, 1, 2, 1) }],
+			[{ resource: URI.file(join(first, 'src/suite.rs')) }, { selection: new Range(3, 1, 3, 1) }],
+			[{ resource: URI.file(join(first, 'src/suite.rs')) }, { selection: new Range(2, 1, 2, 1) }],
+		]);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
 });
 
 test('Workbench and Cowork tips use injected Markdown opening and preserve dismissal', () => {
@@ -341,6 +441,7 @@ test('tool invocation summaries and sections use the Chinese locale', () => {
 		assert.equal(widget.element.querySelector('summary')!.textContent, 'read · 等待结果');
 		assert.match(widget.element.textContent!, /输入\n\{\}/);
 		assert.equal(widget.element.querySelector('[role="log"]')!.getAttribute('aria-label'), '聊天记录');
+		assert.match(getChatInputAccessibilityHelp('', false, false), /按 Tab 聚焦回复中的文件链接，按 Enter 打开文件并跳到引用的行/u);
 	} finally { resetNlsResolver(); }
 });
 

@@ -575,6 +575,7 @@ fn transcript_snapshot_includes_output_assembled_before_a_consumer_subscribes() 
             kind: ash_protocol::TurnKind::Coding,
             mode: ash_protocol::CollaborationMode::Agent,
             instructions: None,
+            directory: None,
             model: None,
             reasoning_effort: None,
             advisor: None,

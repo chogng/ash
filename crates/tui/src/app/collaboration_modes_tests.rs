@@ -867,6 +867,7 @@ fn running_turn(mode: CollaborationMode) -> Turn {
         status: TurnStatus::Running,
         kind: Default::default(),
         instructions: None,
+        directory: None,
         model: None,
         reasoning_effort: None,
         tool_profile: None,

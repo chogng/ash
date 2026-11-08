@@ -13,7 +13,7 @@ export function createAppServerFileSearchApi(connection: AppServerProtocolClient
 		glob: async (directory, query, signal) => {
 			const found = await runSearch(connection, signal,
 				operationId => appServerRequest(connection, 'file/search/glob', { operationId, target: directory.target, includePatterns: [...query.includePatterns], excludePatterns: [...query.excludePatterns], requiredPattern: query.requiredPattern, maxResults: query.maxResults }),
-				operationId => appServerRequest(connection, 'file/search/glob/cancel', { operationId }));
+				operationId => appServerRequest(connection, 'file/search/glob/cancel', { operationId, ...(directory.target.type === 'session' ? { target: directory.target } : {}) }));
 			return { matches: found.paths.map(path => ({ path, resource: URI.joinPath(directory.resource, path) })), totalMatches: found.totalMatches };
 		},
 		fuzzy: async (directory, query, signal) => {

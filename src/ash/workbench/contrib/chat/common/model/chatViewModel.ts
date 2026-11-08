@@ -1,3 +1,4 @@
+import type { FileSearchDirectory } from '../../../../../platform/search/common/fileSearch.js';
 import type { IChatToolInvocation } from '../chatService/chatService.js';
 import type { IChatHookPart, ChatContentPart, LoadedTurnSkill, PlanUpdate, QueuedMessage, QueueMessageTarget, ThreadGoal, ThreadItem, ThreadTranscriptEntry, Turn, TurnChangeSetSummary, TurnError } from '../../../../services/chat/common/chatService.js';
 import { getNLSLanguage, localize } from '../../../../../nls.js';
@@ -32,6 +33,8 @@ interface ChatTurnErrorListItemOptions {
 
 /** One render-ready committed or transient Thread item. */
 export interface IChatListItem {
+	/** Execution directory of this reply, independent of the currently selected workspace. */
+	readonly fileReferenceDirectory?: FileSearchDirectory;
 	readonly feedbackSource?: ChatResponseFeedbackTarget;
 	readonly canGiveModelFeedback?: boolean;
 	readonly canForkAfterResponse?: boolean;
@@ -87,12 +90,12 @@ export function getCompletedChatResponseSource(value: unknown): ChatResponseFeed
 }
 
 /** Projects an existing transient text append independently of the rest of its turn. */
-export function chatStreamingResponseUpdate(previous: ThreadTranscriptEntry | undefined, next: ThreadTranscriptEntry): ChatStreamingResponseUpdate | undefined {
+export function chatStreamingResponseUpdate(previous: ThreadTranscriptEntry | undefined, next: ThreadTranscriptEntry, fileReferenceDirectory?: FileSearchDirectory): ChatStreamingResponseUpdate | undefined {
 	if (previous?.type !== 'item' || next.type !== 'item' || previous.entryId !== next.entryId || previous.turnId !== next.turnId
 		|| !previous.transient || !next.transient || previous.item.type !== 'agentMessage' || next.item.type !== 'agentMessage'
 		|| previous.item.itemId !== next.item.itemId || !/\S/u.test(previous.item.text) || next.item.text.length <= previous.item.text.length
 		|| !next.item.text.startsWith(previous.item.text)) return undefined;
-	return { previousText: previous.item.text, item: chatTranscriptListItem(next) };
+	return { previousText: previous.item.text, item: { ...chatTranscriptListItem(next), fileReferenceDirectory } };
 }
 
 /** Delivering messages belong to the running turn once accepted by Core. */
@@ -140,10 +143,12 @@ export function chatTranscriptListItems(
 	entries: readonly ThreadTranscriptEntry[],
 	latestTurnId?: string,
 	turns: readonly Turn[] = [],
-	source?: { readonly sessionId: string; readonly threadId: string; readonly commandTerminals?: boolean; },
+	source?: { readonly sessionId: string; readonly threadId: string; readonly commandTerminals?: boolean; readonly directoryForTurn?: (turn: Turn) => FileSearchDirectory | undefined; },
 	forkHistory?: { readonly archived: boolean; readonly hasOlderTurns?: boolean; },
 	changeSets: readonly TurnChangeSetSummary[] = [],
 ): readonly IChatListItem[] {
+	const directoryForTurn = source?.directoryForTurn;
+	const responseDirectories = directoryForTurn && new Map(turns.map(turn => [turn.turnId, directoryForTurn(turn)]));
 	const completedTurns = new Map(turns.filter(turn => turn.status === 'completed').map(turn => [turn.turnId, turn]));
 	const turnChanges = new Map<string, TurnChangeSetSummary['statistics']>();
 	for (const { turnId, captureState, statistics } of changeSets) {
@@ -255,6 +260,8 @@ export function chatTranscriptListItems(
 			return [{ id: entry.entryId, type: 'advisor' as const, text: advice, transient: false, isError: item.isError, label: localize('chat.advisor.modelLabel', 'Advisor · {0}', modelLabel), detail: details }];
 		}
 		let item = chatTranscriptListItem(entry, { actionsEnabled: entry.turnId === latestTurnId });
+		const fileReferenceDirectory = item.type === 'agentMessage' && entry.turnId !== undefined ? responseDirectories?.get(entry.turnId) : undefined;
+		if (fileReferenceDirectory) item = { ...item, fileReferenceDirectory };
 		const isFinalReply = finalReplies.get(entry.turnId ?? '') === entry.entryId;
 		if (isFinalReply && entry.turnId !== undefined) {
 			const loadedSkills = skillsByTurn.get(entry.turnId);

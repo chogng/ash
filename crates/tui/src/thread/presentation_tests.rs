@@ -58,6 +58,7 @@ fn turn(id: &str, status: TurnStatus) -> Turn {
         status,
         kind: Default::default(),
         instructions: None,
+        directory: None,
         model: None,
         reasoning_effort: None,
         tool_profile: None,

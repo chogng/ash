@@ -48,6 +48,7 @@ export class PanelChatAccessibilityHelp implements IAccessibleViewImplementation
 export function getChatInputAccessibilityHelp(screenshotHelp: string, secondaryToolbarVisible: boolean, slashCommands: boolean): string {
 	return [
 		getChatInputNoticeHelp(),
+		localize('chat.response.fileLinksHelp', 'Use Tab to reach a file link in a reply and Enter to open the file at the referenced line.'),
 		localize('chat.message.actionsHelp', 'Use Tab to reach Response actions below a reply. Press Left or Right to move between actions, then Enter or Space to activate the focused action.'),
 		localize('chat.request.actionsHelp', 'Use Tab to reach Message actions below a sent message. Use Left or Right to choose Copy message or, when available, Edit message. Press Enter or Space to activate the action. You can also press Enter on a focused editable message. The editor opens in place. Press Tab to reach Cancel and Send, or use Control+Enter or Command+Enter to send the edit. Escape cancels and returns focus to Edit message. In Code, right-click an eligible message or press Shift+F10 on its row to open Run another version.'),
 		localize('chat.modelPicker.sliderHelp', 'In the Chat model picker, press Enter or Space on the model name to expand or collapse the model list. The current thinking level appears below the model name. Use the arrow keys on the slider to change the level.'),

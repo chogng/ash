@@ -1222,7 +1222,17 @@ impl ThreadController {
     pub fn start_turn(
         &self,
         thread_id: &ThreadId,
+        request: StartTurnRequest,
+    ) -> Result<StartTurnResult, CoreError> {
+        self.start_turn_in_directory(thread_id, request, None)
+    }
+
+    /// Accepts a Turn with the host's effective checkout while leaving the Thread's route intact.
+    pub fn start_turn_in_directory(
+        &self,
+        thread_id: &ThreadId,
         mut request: StartTurnRequest,
+        directory: Option<ash_protocol::SessionExecutionTarget>,
     ) -> Result<StartTurnResult, CoreError> {
         self.store.execution_binding(thread_id)?.require_bound()?;
         validate_command_id(&request.command_id)?;
@@ -1432,6 +1442,7 @@ impl ThreadController {
                 kind: request.kind,
                 mode: request.mode,
                 instructions: Some(request.instructions.clone()),
+                directory: directory.or_else(|| snapshot.execution_target.clone()),
                 policy_revision: request.policy_revision.clone(),
                 approval_mode: request.approval_mode,
                 tool_mode: request.tool_mode,
@@ -1571,6 +1582,7 @@ impl ThreadController {
                         kind: TurnKind::Coding,
                         mode: request.mode,
                         instructions: Some(request.instructions.clone()),
+                        directory: None,
                         policy_revision: request.policy_revision.clone(),
                         approval_mode: request.approval_mode,
                         tool_mode: request.tool_mode,
@@ -2035,6 +2047,7 @@ impl ThreadController {
                     kind: TurnKind::ContextCompaction,
                     mode: ash_protocol::CollaborationMode::Agent,
                     instructions: None,
+                    directory: None,
                     policy_revision: request.policy_revision.clone(),
                     approval_mode: ApprovalMode::Manual,
                     tool_mode: ash_protocol::ToolMode::Direct,
@@ -2189,6 +2202,7 @@ impl ThreadController {
                     kind,
                     mode: ash_protocol::CollaborationMode::Agent,
                     instructions: None,
+                    directory: None,
                     policy_revision: request.policy_revision.clone(),
                     approval_mode: request.approval_mode,
                     tool_mode: ash_protocol::ToolMode::Direct,
