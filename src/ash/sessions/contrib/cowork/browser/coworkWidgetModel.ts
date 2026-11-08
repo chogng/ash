@@ -1066,6 +1066,7 @@ function sameModel(left: ModelRef | null | undefined, right: ModelRef | null | u
 function cloneTranscriptEntry(entry: ThreadTranscriptEntry): ThreadTranscriptEntry {
 	switch (entry.type) {
 		case 'voiceTranscript': return { ...entry, transcript: { ...entry.transcript } };
+		case 'skillLoad': return { ...entry, skill: { ...entry.skill } };
 		case 'hookRun': return { ...entry, run: { ...entry.run, status: { ...entry.run.status } } };
 		case 'item': return { ...entry, item: { ...entry.item } };
 		case 'turnPlan': return { ...entry, plan: { explanation: entry.plan.explanation, steps: entry.plan.steps.map((step) => ({ ...step })) } };

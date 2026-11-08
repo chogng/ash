@@ -254,12 +254,36 @@ article.ash-chat-user-message > pre {
 .ash-chat-item-reasoning,
 .ash-chat-item-plan,
 .ash-chat-item-toolCall,
+.ash-chat-item-skillLoad,
 .ash-chat-item-toolResult,
 .ash-chat-item-turnError {
 	border-left: 2px solid var(--ash-border);
 	padding-left: 8px;
 	color: var(--ash-description-foreground);
 }
+.ash-chat-skill-activity {
+	padding: var(--ash-spacing-size40) var(--ash-spacing-size80);
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-loaded-skills {
+	max-inline-size: min(420px, 85vw);
+	max-block-size: 50vh;
+	overflow: auto;
+	padding: var(--ash-spacing-size120);
+	overflow-wrap: anywhere;
+}
+
+.ash-chat-loaded-skills h2 {
+	margin: 0;
+	font-size: var(--ash-fontSize-body1);
+}
+
+.ash-chat-loaded-skills ul {
+	margin: var(--ash-spacing-size80) 0 0;
+	padding-inline-start: var(--ash-spacing-size160);
+}
+
 .ash-chat-item.error {
 	border-left-color: var(--ash-error-foreground);
 }

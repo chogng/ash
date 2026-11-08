@@ -189,6 +189,7 @@ impl TranscriptModel {
                 }
                 ThreadTranscriptEntry::VoiceTranscript { .. }
                 | ThreadTranscriptEntry::HookRun { .. }
+                | ThreadTranscriptEntry::SkillLoad { .. }
                 | ThreadTranscriptEntry::TurnPlan { .. }
                 | ThreadTranscriptEntry::TurnError { .. }
                 | ThreadTranscriptEntry::ToolOutput { .. } => None,
@@ -489,7 +490,7 @@ impl TranscriptModel {
         match entry {
             // Hook observations are retained by Thread history; terminal tool feedback is
             // already presented through the canonical ToolResult in this client.
-            ThreadTranscriptEntry::HookRun { .. } => {}
+            ThreadTranscriptEntry::HookRun { .. } | ThreadTranscriptEntry::SkillLoad { .. } => {}
             ThreadTranscriptEntry::Item {
                 entry_id,
                 turn_id,
@@ -786,8 +787,8 @@ fn cell_from_entry(entry: &ThreadTranscriptEntry, render_revision: u64) -> Trans
                 text: transcript.text.clone(),
             })
         }
-        ThreadTranscriptEntry::HookRun { .. } => {
-            unreachable!("Hook observations do not create terminal cells")
+        ThreadTranscriptEntry::HookRun { .. } | ThreadTranscriptEntry::SkillLoad { .. } => {
+            unreachable!("Hook and Skill observations do not create terminal cells")
         }
         ThreadTranscriptEntry::Item { item, .. } => match item {
             ThreadItem::UserMessage { text, .. } => TranscriptCellBody::Content(ContentCell {
@@ -846,6 +847,7 @@ fn cell_from_entry(entry: &ThreadTranscriptEntry, render_revision: u64) -> Trans
             ThreadTranscriptEntry::Item { item, .. } => item.client_id().cloned(),
             ThreadTranscriptEntry::VoiceTranscript { .. }
             | ThreadTranscriptEntry::HookRun { .. }
+            | ThreadTranscriptEntry::SkillLoad { .. }
             | ThreadTranscriptEntry::TurnPlan { .. }
             | ThreadTranscriptEntry::TurnError { .. }
             | ThreadTranscriptEntry::ToolOutput { .. } => None,

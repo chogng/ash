@@ -377,6 +377,7 @@ fn turn(ids: &TestIds, status: TurnStatus, items: Vec<ThreadItem>) -> Turn {
         plan: None,
         pending_interaction: None,
         started_tool_call_ids: None,
+        skill_loads: None,
         error: None,
     }
 }

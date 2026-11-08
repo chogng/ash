@@ -878,6 +878,7 @@ fn running_turn(mode: CollaborationMode) -> Turn {
         plan: None,
         pending_interaction: None,
         started_tool_call_ids: None,
+        skill_loads: None,
         error: None,
     }
 }

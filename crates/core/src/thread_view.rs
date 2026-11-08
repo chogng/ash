@@ -56,6 +56,7 @@ impl From<crate::ThreadSnapshot> for core_api::ThreadView {
                         approval_mode: turn.approval_mode,
                         tool_mode: turn.tool_mode,
                         activated_skills: turn.activated_skills,
+                        skill_loads: turn.skill_loads,
                         failure: turn.failure,
                         pending_interaction: turn.pending_interaction,
                         started_tool_call_ids,
@@ -146,6 +147,7 @@ impl crate::ThreadSnapshot {
                         .map(ash_protocol::TurnInteraction::pending_state),
                     error: turn.failure.clone(),
                     started_tool_call_ids: Some(self.started_tool_call_ids(&turn.turn_id)),
+                    skill_loads: (!turn.skill_loads.is_empty()).then(|| turn.skill_loads.clone()),
                 })
                 .collect(),
         }

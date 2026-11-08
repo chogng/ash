@@ -3169,6 +3169,8 @@ use ash_protocol::TurnLoopDecision;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::TurnLoopReason;
 #[cfg(any(test, feature = "export"))]
+use ash_protocol::TurnSkillLoad;
+#[cfg(any(test, feature = "export"))]
 use ash_protocol::TurnStatus;
 #[cfg(any(test, feature = "export"))]
 use ash_protocol::UnixMillis;
@@ -7395,6 +7397,7 @@ typescript_bindings! {
     TurnKind,
     TurnInstructions,
     Turn,
+    TurnSkillLoad,
     Thread,
     ToolExecutionAuthority,
     ToolOutputArtifact,

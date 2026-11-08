@@ -253,6 +253,7 @@ fn thread_snapshot() -> Thread {
             plan: None,
             pending_interaction: None,
             started_tool_call_ids: None,
+            skill_loads: None,
             error: None,
         }],
     }
@@ -284,6 +285,7 @@ fn thread_with_item(turn: &str, item: &str, text: &str) -> Thread {
             plan: None,
             pending_interaction: None,
             started_tool_call_ids: None,
+            skill_loads: None,
             error: None,
         }],
         ..thread_snapshot()

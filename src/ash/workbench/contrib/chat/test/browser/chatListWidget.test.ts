@@ -48,7 +48,7 @@ import { createCodeEditorServices, createTestCodeEditor, registerCodeEditorServi
 import { createTestEditorServices } from '../../../../test/common/testEditorServices.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { chatTranscriptListItems } from '../../common/model/chatViewModel.js';
-import type { ThreadTranscriptEntry } from '../../../../services/chat/common/chatService.js';
+import type { ThreadTranscriptEntry, Turn } from '../../../../services/chat/common/chatService.js';
 import { Range } from '../../../../../editor/common/core/range.js';
 import type { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { openChatMarkdownLink } from '../../browser/widget/chatWidget.js';
@@ -316,6 +316,18 @@ test('streaming tool content preserves disclosure focus, failure state and resto
 	assert.equal(restored.element.querySelector<HTMLDetailsElement>('details')!.open, true);
 	widget.render([]);
 	assert.equal(disclosure.isConnected, false);
+});
+
+test('Skill activity uses the Chinese locale', () => {
+	setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
+	try {
+		const items = chatTranscriptListItems([
+			{ type: 'skillLoad', entryId: 'one', turnId: 'turn', skill: { name: 'review', source: 'project', reason: 'explicit' } },
+			{ type: 'skillLoad', entryId: 'two', turnId: 'turn', skill: { name: 'design', source: 'built-in', reason: 'automatic' } },
+		]);
+		assert.deepEqual(items.map(item => [item.label, item.text]), [['已加载 Skill · review', '手动指定'], ['已加载 Skill · design', '自动选中']]);
+		assert.match(getChatInputAccessibilityHelp('', false, false), /查看已加载的 Skill/u);
+	} finally { resetNlsResolver(); }
 });
 
 test('tool invocation summaries and sections use the Chinese locale', () => {
@@ -610,6 +622,56 @@ suite('chatRenderer browser component', () => {
 		{ id: 'media', type: 'agentMessage', text: 'Delayed media.', content: [image], attachmentSource: source, transient: false },
 		...Array.from({ length: 12 }, (_, index): IChatListItem => ({ id: `reading-${index}`, type: 'agentMessage', text: `Section ${index}.\n\n` + Array.from({ length: 4 }, (_, line) => `Paragraph ${index}.${line}.`).join('\n\n'), transient: false })),
 	];
+
+	test('Skill loads stay in the activity and appear once in the completed reply toolbar', async () => {
+		const { page } = browserTests;
+		await page.goto('/chatTranscript.html');
+		const skillEntries: ThreadTranscriptEntry[] = [
+			{ type: 'skillLoad', entryId: 'review-load', turnId: 'skill-turn', skill: { name: 'review', source: 'project', reason: 'explicit' } },
+			{ type: 'skillLoad', entryId: 'design-load', turnId: 'skill-turn', skill: { name: 'design', source: 'built-in', reason: 'automatic' } },
+		];
+		const replies: ThreadTranscriptEntry[] = ['partial', 'final'].map(id => ({
+			type: 'item', entryId: id, turnId: 'skill-turn', transient: false,
+			item: { type: 'agentMessage', itemId: id, turnId: 'skill-turn', text: id },
+		}));
+		const zero = { reported: 0, complete: true };
+		const turn: Turn = {
+			turnId: 'skill-turn', status: 'running', mode: 'agent', approvalMode: 'manual', items: [],
+			usage: { modelInvocations: 0, inputTokens: zero, outputTokens: zero, cachedInputTokens: zero, cacheWriteInputTokens: zero, reasoningTokens: zero },
+		};
+		const source = { sessionId: 'session', threadId: 'thread' };
+		const entries = [...skillEntries, ...replies];
+		await page.evaluate(items => window.ashChatTranscriptIntegration.renderItems(items), chatTranscriptListItems(entries, turn.turnId, [turn], source));
+		const activity = page.getByText('Loaded Skill · review · Manually selected', { exact: true });
+		const trigger = page.getByRole('button', { name: 'View loaded Skills (2)', exact: true });
+		await expect(activity).toBeVisible();
+		await expect(trigger).toHaveCount(0);
+
+		const completed = chatTranscriptListItems(entries, turn.turnId, [{ ...turn, status: 'completed' }], source);
+		await page.evaluate(items => window.ashChatTranscriptIntegration.renderItems(items), completed);
+		await expect(trigger).toHaveCount(1);
+		await expect(trigger.getByText('2', { exact: true })).toBeVisible();
+		const footer = page.locator('[data-item-id="final"] .ash-chat-message-actions');
+		await expect(footer.getByRole('button', { name: 'View loaded Skills (2)', exact: true })).toBeVisible();
+		const buttons = await footer.getByRole('button').evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')));
+		const index = buttons.indexOf('View loaded Skills (2)');
+		assert.equal(buttons[index - 1], 'Copy Conversation Link');
+		assert.equal(buttons[index + 1], 'More Actions');
+		await trigger.focus();
+		await page.keyboard.press('Enter');
+		const details = page.getByRole('dialog', { name: 'Skills loaded in this turn' });
+		await expect(details.getByRole('listitem')).toHaveText(['review · Manually selected', 'design · Automatically selected']);
+		await page.keyboard.press('Escape');
+		await expect(details).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+
+		await page.evaluate(items => {
+			window.ashChatTranscriptIntegration.renderItems([]);
+			window.ashChatTranscriptIntegration.renderItems(items);
+		}, completed);
+		await expect(activity).toBeVisible();
+		await expect(trigger).toBeVisible();
+	});
 
 	for (const cowork of [false, true]) {
 		for (const theme of ['light', 'dark', 'hc', 'hcLight'] as const) {

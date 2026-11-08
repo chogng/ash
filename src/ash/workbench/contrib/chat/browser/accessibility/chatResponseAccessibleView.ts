@@ -6,7 +6,7 @@ import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType
 import type { IAccessibleViewImplementation } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import type { ChatToolCallBinding } from '../../../../../platform/agentHost/common/agent.js';
 import type { ChatContentPart } from '../../../../services/chat/common/chatService.js';
-import type { IChatListItem } from '../../common/model/chatViewModel.js';
+import { formatLoadedSkillReason, type IChatListItem } from '../../common/model/chatViewModel.js';
 import { reviveChatTreeData, type IChatResponseProgressFileTreeData } from '../../common/chatService/chatService.js';
 import { ChatAccessibilityProvider } from './chatAccessibilityProvider.js';
 
@@ -95,6 +95,11 @@ export class ChatResponseAccessibleView implements IAccessibleViewImplementation
 			const markdown = item.type === 'agentMessage' || item.type === 'reasoning' || item.type === 'plan' || item.type === 'advisor';
 			sections.push(markdown ? renderAsPlaintext(item.text) : item.text, item.contextText ?? '', item.detail ?? '');
 			sections.push(...this.attachments(item.content ?? []));
+			if (item.loadedSkills?.length) {
+				sections.push(localize('chat.skills.loadedTitle', 'Skills loaded in this turn'));
+				sections.push(...item.loadedSkills.map(skill =>
+					localize('chat.skills.loadedDetail', '{0} · {1}', skill.name, formatLoadedSkillReason(skill.reason))));
+			}
 		}
 		return sections.filter(Boolean).join('\n\n');
 	}

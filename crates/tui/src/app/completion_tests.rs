@@ -294,6 +294,7 @@ fn status_line_context_follows_thread_snapshots() {
             plan: None,
             pending_interaction: None,
             started_tool_call_ids: None,
+            skill_loads: None,
             error: None,
         }],
     };

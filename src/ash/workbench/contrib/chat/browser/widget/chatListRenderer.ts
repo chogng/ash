@@ -2,6 +2,7 @@ import { ChatErrorContentPart } from './chatContentParts/chatErrorContentPart.js
 import { parseInlineFileReference } from '../../common/widget/annotations.js';
 import { defaultButtonStyles } from '../../../../../platform/theme/browser/defaultStyles.js';
 import type { ChatLayoutTrace } from './chatLayoutTrace.js';
+import { appendIcon } from '../../../../../base/browser/ui/lxicons/lxicon.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
 import { ButtonActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import type { IAction } from '../../../../../base/common/actions.js';
@@ -39,11 +40,11 @@ import { IStorageService, StorageScope } from '../../../../../platform/storage/c
 import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 import { captureAnimationTarget, triggerClickAnimation, ClickAnimation } from '../../../../../base/browser/ui/animations/animations.js';
 import { ChatResponseFeedbackStoragePrefix, ChatUpvoteAnimationSettingId, getResponseVote, isResponseHelpful, type ChatUpvoteAnimation } from '../../common/chatResponseFeedback.js';
-import { MarkHelpfulActionId } from '../actions/chatTitleActions.js';
+import { MarkHelpfulActionId, ShowLoadedSkillsActionId } from '../actions/chatTitleActions.js';
 import { ChatEditPendingRequestAction, ChatRemovePendingRequestAction, ChatSendPendingImmediatelyAction } from '../actions/chatQueueActions.js';
 import type { Icon } from '../../../../../base/common/icon.js';
 import { ChatForkActionViewItem } from './chatForkActionViewItem.js';
-import { ChatTurnChangesPill } from './chatTurnPills.js';
+import { ChatLoadedSkillsActionViewItem, ChatTurnChangesPill } from './chatTurnPills.js';
 import { ChatRequestActionContext, ChatResponseActionContext, type ChatTurnChangesOpener } from '../chat.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { EditChatRequestActionId, RedoChatHistoryActionId, RestoreCheckpointActionId } from '../chatEditing/chatEditingActions.js';
@@ -290,6 +291,9 @@ export class ChatListItemRenderer extends Disposable {
 			menuOptions: { shouldForwardArgs: true, renderShortTitle: true },
 			actionViewItemProvider: (action, options) => {
 				const buttonOptions = { ...options, iconOnly: true, buttonPresentation: 'quiet' as const };
+				if (action.id === ShowLoadedSkillsActionId && this.item.loadedSkills?.length) {
+					return new ChatLoadedSkillsActionViewItem(action, buttonOptions, this.item.loadedSkills.length);
+				}
 				const factory = this.actionViewItems.lookUp(menu, action.id);
 				return factory?.(action, buttonOptions, this.instantiationService, windowId)
 					?? createActionViewItem(action, this.contextMenus, buttonOptions)
@@ -330,6 +334,7 @@ export class ChatListItemRenderer extends Disposable {
 		const hasText = ChatContextKeys.responseHasText.bindTo(context);
 		const hasFeedbackSurvey = ChatContextKeys.responseHasFeedbackSurvey.bindTo(context);
 		const hasConversationLink = ChatContextKeys.responseHasConversationLink.bindTo(context);
+		const hasLoadedSkills = ChatContextKeys.responseHasLoadedSkills.bindTo(context);
 		const canFork = ChatContextKeys.responseCanFork.bindTo(context);
 		const canCompareResults = ChatContextKeys.responseCanCompareResults.bindTo(context);
 		const vote = this.contextKeys.getValue<boolean>(IsSessionsWindowContext.key) && !this.options.getResponseActions
@@ -366,6 +371,7 @@ export class ChatListItemRenderer extends Disposable {
 			const hasCompletedSource = !!this.item.feedbackSource && !this.item.transient && !this.item.isError;
 			hasFeedbackSurvey.set(hasCompletedSource && this.item.canGiveModelFeedback === true);
 			hasConversationLink.set(hasCompletedSource);
+			hasLoadedSkills.set(!!this.item.loadedSkills?.length);
 			canFork.set(hasCompletedSource && this.item.canForkAfterResponse === true);
 			canCompareResults.set(hasCompletedSource && this.item.canCompareResults === true);
 			updateVote();
@@ -386,15 +392,19 @@ export class ChatListItemRenderer extends Disposable {
 			if (this.isDisposed) return false;
 			const available = getActions();
 			const menuChanged = available?.menuContext !== menuContext;
-			if (menuChanged) beforeLayout?.();
+			const previousSkillCount = response.item.loadedSkills?.length;
+			const skillCount = this.item.loadedSkills?.length;
+			const refreshSkillCount = !!previousSkillCount && !!skillCount && previousSkillCount !== skillCount;
+			if (menuChanged || refreshSkillCount) beforeLayout?.();
 			context.bufferChangeEvents(() => {
 				response.update(this.item);
 				updateMenuContext(available?.menuContext);
 				if (menuChanged) response.stop();
 			});
+			if (refreshSkillCount) toolbar.refresh();
 			const helpful = getHelpful?.();
 			const next = helpful ? [helpful] : [];
-			if (next.length === trailing.length && next.every((action, index) => trailing[index] === action)) return menuChanged;
+			if (next.length === trailing.length && next.every((action, index) => trailing[index] === action)) return menuChanged || refreshSkillCount;
 			beforeLayout?.();
 			trailing = next;
 			toolbar.setTrailingActions(next);
@@ -747,6 +757,14 @@ export class ChatListItemRenderer extends Disposable {
 			this.toolPart = part;
 			return;
 		}
+		if (item.type === 'skillLoad') {
+			const line = h(article.ownerDocument, 'div', { className: 'ash-chat-skill-activity' });
+			const icon = h(article.ownerDocument, 'span', { className: 'ash-chat-tool-status-icon', attributes: { 'aria-hidden': 'true' } });
+			appendIcon(Lxicon.skill, icon);
+			line.append(icon, this.accessibilityProvider.getAriaLabel(item), ' · ', item.text);
+			article.append(line);
+			return;
+		}
 		if (item.type === 'hook' && item.hookPart) {
 			const part = disposables.add(new ChatHookContentPart(article.ownerDocument, item.hookPart));
 			article.append(part.domNode);
@@ -952,6 +970,8 @@ function sameItemPresentation(left: IChatListItem, right: IChatListItem): boolea
 		&& left.requestSource?.sessionId === right.requestSource?.sessionId && left.requestSource?.threadId === right.requestSource?.threadId
 		&& left.requestSource?.turnId === right.requestSource?.turnId && left.requestSource?.itemId === right.requestSource?.itemId
 		&& left.canForkBeforeRequest === right.canForkBeforeRequest
+		&& left.loadedSkills?.length === right.loadedSkills?.length
+		&& (left.loadedSkills?.every((skill, index) => skill === right.loadedSkills?.[index]) ?? true)
 		&& left.hookPart?.run === right.hookPart?.run
 		&& left.resources === right.resources && left.markdown?.supportHtml === right.markdown?.supportHtml
 		&& left.contextEntries === right.contextEntries

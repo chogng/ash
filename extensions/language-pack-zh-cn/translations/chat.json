@@ -1,5 +1,15 @@
 {
   "ash": {
+    "chat.skills.activity": "已加载 Skill",
+    "chat.skills.loadedActivity": "已加载 Skill · {0}",
+    "chat.skills.explicit": "手动指定",
+    "chat.skills.automatic": "自动选中",
+    "chat.skills.viewLoaded": "查看已加载的 Skill",
+    "chat.skills.viewLoadedCount": "查看已加载的 Skill（{0} 个）",
+    "chat.skills.loadedTitle": "本轮已加载的 Skill",
+    "chat.skills.loadedDetail": "{0} · {1}",
+    "chat.skills.loadedDetailWithSource": "{0} · {1} · {2}",
+    "chat.skills.accessibilityHelp": "执行活动会显示 Skill 加载记录。回复完成后，在回复操作中选择“查看已加载的 Skill”，即可了解本轮加载了哪些 Skill 以及触发方式。按 Esc 关闭列表并返回按钮。",
     "chat.input.attachFiles": "添加文件",
     "chat.input.stopReply": "停止",
     "chat.input.stagedFiles": "附件",

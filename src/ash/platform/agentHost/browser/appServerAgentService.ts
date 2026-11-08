@@ -932,6 +932,11 @@ function toThreadTranscriptUpdate(update: ThreadTranscriptUpdateEnvelopeDto): Th
 function toThreadTranscriptEntry(entry: ThreadTranscriptEntryDto): ThreadTranscriptEntry {
 	switch (entry.type) {
 		case 'voiceTranscript': return { type: 'voiceTranscript', entryId: entry.entryId, transcript: { itemId: entry.transcript.itemId, voiceSessionId: entry.transcript.voiceSessionId, mediaEpoch: entry.transcript.mediaEpoch, speaker: entry.transcript.speaker, text: entry.transcript.text, startMs: entry.transcript.startMs, endMs: entry.transcript.endMs, afterItemId: entry.transcript.afterItemId } };
+		case 'skillLoad':
+			return {
+				type: 'skillLoad', entryId: entry.entryId, turnId: entry.turnId,
+				skill: { name: entry.skill.id.name, source: entry.skill.id.source, reason: entry.skill.reason },
+			};
 		case 'hookRun':
 			return {
 				type: 'hookRun',

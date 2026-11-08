@@ -270,6 +270,7 @@ impl ThreadSnapshot {
                         .map(TurnInteraction::pending_state),
                     error: turn.failure.clone(),
                     started_tool_call_ids: Some(self.started_tool_call_ids(&turn.turn_id)),
+                    skill_loads: (!turn.skill_loads.is_empty()).then(|| turn.skill_loads.clone()),
                 })
                 .collect(),
         }
@@ -347,6 +348,7 @@ pub struct TurnSnapshot {
     pub approval_mode: ApprovalMode,
     pub tool_mode: ToolMode,
     pub activated_skills: Vec<FrozenSkillActivation>,
+    pub skill_loads: Vec<ash_protocol::TurnSkillLoad>,
     pub failure: Option<StableTurnError>,
     pub pending_interaction: Option<TurnInteraction>,
     pub execution_backend_attempt: Option<String>,
@@ -1484,6 +1486,7 @@ pub(crate) fn reduce_thread_event_with_prefix(
                     approval_mode: *approval_mode,
                     tool_mode: *tool_mode,
                     activated_skills: activated_skills.clone(),
+                    skill_loads: Vec::new(),
                     failure: None,
                     pending_interaction: None,
                     execution_backend_attempt: None,
@@ -1581,6 +1584,35 @@ pub(crate) fn reduce_thread_event_with_prefix(
                 },
                 response_sequence: envelope.sequence,
             });
+        }
+        ThreadEvent::TurnSkillsLoaded { turn_id, loads, .. } => {
+            require_no_command(envelope)?;
+            let after_item_id = snapshot
+                .items
+                .iter()
+                .rev()
+                .find(|item| item.turn_id() == turn_id)
+                .map(|item| item.item_id().clone());
+            let turn = find_turn_mut(&mut snapshot, turn_id)?;
+            if turn.status != TurnStatus::Running || loads.is_empty() {
+                return Err(CoreError::Journal(
+                    "Skill loads require a running Turn and at least one Skill".into(),
+                ));
+            }
+            for load in loads {
+                if load.after_item_id != after_item_id
+                    || !turn.activated_skills.contains(&load.skill)
+                    || turn.skill_loads.iter().any(|previous| {
+                        previous.skill.id == load.skill.id
+                            && previous.skill.content_digest == load.skill.content_digest
+                    })
+                {
+                    return Err(CoreError::Journal(
+                        "Skill load must match an unrecorded Turn activation and its transcript anchor".into(),
+                    ));
+                }
+                turn.skill_loads.push(load.clone());
+            }
         }
         ThreadEvent::TurnStarted { turn_id, .. } => {
             require_no_command(envelope)?;
@@ -2942,6 +2974,7 @@ fn import_history(
             approval_mode: ApprovalMode::Manual,
             tool_mode: turn.tool_mode,
             activated_skills: Vec::new(),
+            skill_loads: turn.skill_loads.clone().unwrap_or_default(),
             failure: turn.error.clone(),
             pending_interaction: None,
             execution_backend_attempt: None,
@@ -3051,6 +3084,7 @@ fn append_imported_turn(
         approval_mode: ApprovalMode::Manual,
         tool_mode: turn.tool_mode,
         activated_skills: Vec::new(),
+        skill_loads: turn.skill_loads.clone().unwrap_or_default(),
         failure: turn.error.clone(),
         pending_interaction: None,
         execution_backend_attempt: None,

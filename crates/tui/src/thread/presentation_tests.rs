@@ -69,6 +69,7 @@ fn turn(id: &str, status: TurnStatus) -> Turn {
         plan: None,
         pending_interaction: None,
         started_tool_call_ids: None,
+        skill_loads: None,
         error: (status == TurnStatus::Failed).then(StableTurnError::model_invocation_failed),
     }
 }

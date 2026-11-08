@@ -6,6 +6,7 @@ use super::ThreadController;
 use crate::CoreError;
 use crate::ThreadCommandResult;
 use ash_model_accounting::RateCard;
+use ash_protocol::FrozenSkillActivation;
 use ash_protocol::ItemId;
 use ash_protocol::ModelBillingScope;
 use ash_protocol::ModelInputEstimate;
@@ -21,6 +22,7 @@ use ash_protocol::ThreadEvent;
 use ash_protocol::ThreadId;
 use ash_protocol::ThreadItem;
 use ash_protocol::TurnId;
+use ash_protocol::TurnSkillLoad;
 use std::sync::OnceLock;
 
 #[cfg(test)]
@@ -31,6 +33,64 @@ use ash_protocol::ToolCall;
 use ash_protocol::ToolCallBinding;
 
 impl ThreadController {
+    /// Commits each Skill once per Turn, returning the sequence to publish before streaming.
+    pub(crate) fn record_turn_skill_loads(
+        &self,
+        thread_id: &ThreadId,
+        turn_id: &TurnId,
+        skills: Vec<FrozenSkillActivation>,
+    ) -> Result<Option<u64>, CoreError> {
+        if skills.is_empty() {
+            return Ok(None);
+        }
+        self.mutate_thread(thread_id, |snapshot| {
+            let turn = snapshot
+                .turns
+                .iter()
+                .find(|turn| &turn.turn_id == turn_id)
+                .ok_or_else(|| CoreError::NotFound(turn_id.to_string()))?;
+            if matches!(
+                turn.status,
+                ash_protocol::TurnStatus::Cancelling | ash_protocol::TurnStatus::Interrupted
+            ) {
+                return Err(CoreError::Cancelled(
+                    "Turn cancelled before Skill load".into(),
+                ));
+            }
+            let after_item_id = snapshot
+                .items
+                .iter()
+                .rev()
+                .find(|item| item.turn_id() == turn_id)
+                .map(|item| item.item_id().clone());
+            let loads: Vec<_> = skills
+                .into_iter()
+                .filter(|skill| {
+                    !turn.skill_loads.iter().any(|previous| {
+                        previous.skill.id == skill.id
+                            && previous.skill.content_digest == skill.content_digest
+                    })
+                })
+                .map(|skill| TurnSkillLoad {
+                    skill,
+                    after_item_id: after_item_id.clone(),
+                })
+                .collect();
+            if loads.is_empty() {
+                return Ok(None);
+            }
+            self.record_batch(
+                snapshot,
+                vec![ThreadEvent::TurnSkillsLoaded {
+                    thread_id: thread_id.clone(),
+                    turn_id: turn_id.clone(),
+                    loads,
+                }],
+            )?;
+            Ok(Some(snapshot.sequence))
+        })
+    }
+
     /// Durably accounts for one completed provider invocation before its output is consumed.
     pub(crate) fn record_model_invocation(
         &self,

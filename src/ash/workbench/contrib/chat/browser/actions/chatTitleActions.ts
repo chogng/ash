@@ -6,17 +6,35 @@ import { IStorageService } from '../../../../../platform/storage/common/storage.
 import { isChatResponseFeedbackTarget, markResponseHelpful, setResponseVote } from '../../common/chatResponseFeedback.js';
 import { Action2, MenuId, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
+import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { IsSessionsWindowContext } from '../../../../common/contextkeys.js';
 import { ChatContextKeys } from '../../common/actions/chatContextKeys.js';
 import { getCompletedChatResponseSource } from '../../common/model/chatViewModel.js';
 import { ChatResponseActionContext, IChatWidgetService } from '../chat.js';
+import { ChatLoadedSkillsActionViewItem } from '../widget/chatTurnPills.js';
 
+export const ShowLoadedSkillsActionId = 'workbench.action.chat.showLoadedSkills';
 export const MarkHelpfulActionId = 'workbench.action.chat.markHelpful';
 const canVote = ContextKeyExpr.and(IsSessionsWindowContext.isEqualTo(true), ChatContextKeys.responseHasConversationLink.isEqualTo(true));
 
 export function registerChatTitleActions(): DisposableStore {
 	const registrations = new DisposableStore();
+	registrations.add(registerAction2(class ShowLoadedSkillsAction extends Action2 {
+		constructor() {
+			super({
+				id: ShowLoadedSkillsActionId,
+				title: localize2('chat.skills.viewLoaded', 'View Loaded Skills'),
+				menu: {
+					id: MenuId.ChatMessageFooter, group: 'navigation', order: 12,
+					when: ContextKeyExpr.and(ChatContextKeys.enabled.isEqualTo(true), ChatContextKeys.responseHasLoadedSkills.isEqualTo(true)),
+				},
+			});
+		}
+		override run(accessor: ServicesAccessor, target?: unknown): void {
+			if (target instanceof ChatLoadedSkillsActionViewItem) target.show(accessor.get(IContextViewService));
+		}
+	}));
 	registrations.add(registerAction2(class MarkHelpfulAction extends Action2 {
 		constructor() {
 			super({

@@ -123,6 +123,7 @@ fn completed_active_turn_only_updates_lifecycle_after_snapshot_mapping() {
         plan: None,
         pending_interaction: None,
         started_tool_call_ids: None,
+        skill_loads: None,
         error: None,
     };
     let thread = Thread {
@@ -187,6 +188,7 @@ fn completed_turn_advances_to_the_next_queued_turn() {
             plan: None,
             pending_interaction: None,
             started_tool_call_ids: None,
+            skill_loads: None,
             error: None,
         },
         Turn {
@@ -207,6 +209,7 @@ fn completed_turn_advances_to_the_next_queued_turn() {
             plan: None,
             pending_interaction: None,
             started_tool_call_ids: None,
+            skill_loads: None,
             error: None,
         },
     ];
@@ -240,6 +243,7 @@ fn waiting_active_turn_remains_interruptible() {
         plan: None,
         pending_interaction: None,
         started_tool_call_ids: None,
+        skill_loads: None,
         error: None,
     };
 
@@ -276,6 +280,7 @@ fn resumed_active_turn_returns_from_waiting_to_working() {
         plan: None,
         pending_interaction: None,
         started_tool_call_ids: None,
+        skill_loads: None,
         error: None,
     };
     apply_active_turn_snapshot(&mut app, &[waiting_turn]);
@@ -298,6 +303,7 @@ fn resumed_active_turn_returns_from_waiting_to_working() {
         plan: None,
         pending_interaction: None,
         started_tool_call_ids: None,
+        skill_loads: None,
         error: None,
     };
     apply_active_turn_snapshot(&mut app, &[resumed_turn]);
@@ -328,6 +334,7 @@ fn failed_turn_shows_one_concise_error_on_failure_and_resume() {
         plan: None,
         pending_interaction: None,
         started_tool_call_ids: None,
+        skill_loads: None,
         error: Some(StableTurnError::model_invocation_failed()),
     };
 

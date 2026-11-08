@@ -75,6 +75,7 @@ pub struct TurnView {
     pub approval_mode: ApprovalMode,
     pub tool_mode: ToolMode,
     pub activated_skills: Vec<FrozenSkillActivation>,
+    pub skill_loads: Vec<ash_protocol::TurnSkillLoad>,
     pub failure: Option<StableTurnError>,
     pub pending_interaction: Option<TurnInteraction>,
     pub started_tool_call_ids: Vec<ToolCallId>,
@@ -134,6 +135,7 @@ impl ThreadView {
                         .map(TurnInteraction::pending_state),
                     error: turn.failure.clone(),
                     started_tool_call_ids: Some(turn.started_tool_call_ids.clone()),
+                    skill_loads: (!turn.skill_loads.is_empty()).then(|| turn.skill_loads.clone()),
                 })
                 .collect(),
         }

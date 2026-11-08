@@ -821,6 +821,7 @@ fn imported_turn(turn_id: &str, items: Vec<ThreadItem>) -> Turn {
         plan: None,
         pending_interaction: None,
         started_tool_call_ids: None,
+        skill_loads: None,
         error: None,
     }
 }

@@ -1,5 +1,5 @@
 import type { IChatToolInvocation } from '../chatService/chatService.js';
-import type { IChatHookPart, ChatContentPart, PlanUpdate, QueuedMessage, QueueMessageTarget, ThreadGoal, ThreadItem, ThreadTranscriptEntry, Turn, TurnChangeSetSummary, TurnError } from '../../../../services/chat/common/chatService.js';
+import type { IChatHookPart, ChatContentPart, LoadedTurnSkill, PlanUpdate, QueuedMessage, QueueMessageTarget, ThreadGoal, ThreadItem, ThreadTranscriptEntry, Turn, TurnChangeSetSummary, TurnError } from '../../../../services/chat/common/chatService.js';
 import { getNLSLanguage, localize } from '../../../../../nls.js';
 import { isChatResponseFeedbackTarget, type ChatResponseFeedbackTarget } from '../chatResponseFeedback.js';
 
@@ -36,6 +36,7 @@ export interface IChatListItem {
 	readonly canGiveModelFeedback?: boolean;
 	readonly canForkAfterResponse?: boolean;
 	readonly turnChanges?: TurnChangeSetSummary['statistics'];
+	readonly loadedSkills?: readonly LoadedTurnSkill[];
 	readonly queueTarget?: QueueMessageTarget;
 	readonly historyRedoTarget?: { readonly sessionId: string; readonly threadId: string; readonly expectedSequence: number; };
 	/** Initial accepted request identity; presentation entry IDs are not backend item IDs. */
@@ -44,7 +45,7 @@ export interface IChatListItem {
 	readonly canRunAnotherVersion?: boolean;
 	readonly canCompareResults?: boolean;
 	readonly id: string;
-	readonly type: ThreadItem['type'] | 'turnError' | 'advisor' | 'hook' | 'voiceTranscript' | 'queuedMessage' | 'historyRedo';
+	readonly type: ThreadItem['type'] | 'turnError' | 'advisor' | 'hook' | 'skillLoad' | 'voiceTranscript' | 'queuedMessage' | 'historyRedo';
 	readonly content?: readonly ChatContentPart[];
 	/** Resources whose bytes are supplied by the conversation's resource reader. */
 	readonly resources?: readonly {
@@ -154,9 +155,16 @@ export function chatTranscriptListItems(
 			deletions: previous.deletions + statistics.deletions,
 		} : statistics);
 	}
+	const skillsByTurn = new Map<string, LoadedTurnSkill[]>();
+	for (const entry of entries) {
+		if (entry.type !== 'skillLoad' || !completedTurns.has(entry.turnId)) continue;
+		const skills = skillsByTurn.get(entry.turnId);
+		if (skills) skills.push(entry.skill);
+		else skillsByTurn.set(entry.turnId, [entry.skill]);
+	}
 	const finalReplies = new Map<string, string>();
 	for (const entry of entries) {
-		if (entry.type === 'item' && entry.item.type === 'agentMessage' && !entry.transient && turnChanges.has(entry.turnId)) {
+		if (entry.type === 'item' && entry.item.type === 'agentMessage' && !entry.transient && (turnChanges.has(entry.turnId) || skillsByTurn.has(entry.turnId))) {
 			finalReplies.set(entry.turnId, entry.entryId);
 		}
 	}
@@ -247,8 +255,13 @@ export function chatTranscriptListItems(
 			return [{ id: entry.entryId, type: 'advisor' as const, text: advice, transient: false, isError: item.isError, label: localize('chat.advisor.modelLabel', 'Advisor · {0}', modelLabel), detail: details }];
 		}
 		let item = chatTranscriptListItem(entry, { actionsEnabled: entry.turnId === latestTurnId });
+		const isFinalReply = finalReplies.get(entry.turnId ?? '') === entry.entryId;
+		if (isFinalReply && entry.turnId !== undefined) {
+			const loadedSkills = skillsByTurn.get(entry.turnId);
+			if (loadedSkills) item = { ...item, loadedSkills };
+		}
 		if (source && entry.type === 'item' && entry.item.type === 'agentMessage' && !entry.transient && completedTurns.has(entry.turnId)) {
-			const changes = finalReplies.get(entry.turnId) === entry.entryId ? turnChanges.get(entry.turnId) : undefined;
+			const changes = isFinalReply ? turnChanges.get(entry.turnId) : undefined;
 			item = {
 				...item,
 				feedbackSource: { sessionId: source.sessionId, threadId: source.threadId, turnId: entry.turnId, itemId: entry.item.itemId },
@@ -275,6 +288,11 @@ export function chatTranscriptListItems(
 export function chatTranscriptListItem(entry: ThreadTranscriptEntry, options: TranscriptListItemOptions = {}): IChatListItem {
 	switch (entry.type) {
 		case 'voiceTranscript': return { id: entry.entryId, type: 'voiceTranscript', text: entry.transcript.text, transient: false, label: entry.transcript.speaker === 'user' ? localize('chat.voice.transcript.user', 'Your voice transcript') : localize('chat.voice.transcript.assistant', 'Voice reply transcript') };
+		case 'skillLoad': return {
+			id: entry.entryId, type: 'skillLoad', transient: false,
+			label: localize('chat.skills.loadedActivity', 'Loaded Skill · {0}', entry.skill.name),
+			text: formatLoadedSkillReason(entry.skill.reason),
+		};
 		case 'hookRun': return chatHookListItem(entry);
 		case 'item': return { ...chatListItem(entry.item, entry.transient), id: entry.entryId };
 		case 'turnPlan': return { ...chatPlanUpdateListItem(entry.turnId, entry.plan), id: entry.entryId };
@@ -430,6 +448,13 @@ export function chatListItem(item: ThreadItem, transient = false): IChatListItem
 				content: item.content ?? undefined,
 			};
 	}
+}
+
+/** Describes the trigger using the same vocabulary in activity and reply details. */
+export function formatLoadedSkillReason(reason: LoadedTurnSkill['reason']): string {
+	return reason === 'explicit'
+		? localize('chat.skills.explicit', 'Manually selected')
+		: localize('chat.skills.automatic', 'Automatically selected');
 }
 
 /** Converts one Hook outcome for both Chat presentations. */

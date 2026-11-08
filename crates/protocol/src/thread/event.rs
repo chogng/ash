@@ -267,6 +267,11 @@ pub enum ThreadEvent {
         #[ts(optional = nullable)]
         tool_profile: Option<ToolProfileSnapshot>,
     },
+    TurnSkillsLoaded {
+        thread_id: ThreadId,
+        turn_id: TurnId,
+        loads: Vec<crate::TurnSkillLoad>,
+    },
     TurnStarted {
         thread_id: ThreadId,
         turn_id: TurnId,
@@ -477,6 +482,7 @@ impl ThreadEvent {
             Self::ContextOverflowRecoveryCommitted { .. } => "context.overflow_recovery_committed",
             Self::TurnAccepted { .. } => "turn.accepted",
             Self::TurnStarted { .. } => "turn.started",
+            Self::TurnSkillsLoaded { .. } => "turn.skills_loaded",
             Self::TurnModeChanged { .. } => "turn.mode_changed",
             Self::TurnSteered { .. } => "turn.steered",
             Self::TurnSteerDelivered { .. } => "turn.steer_delivered",
@@ -540,6 +546,7 @@ impl ThreadEvent {
             | Self::ContextOverflowRecoveryCommitted { thread_id, .. }
             | Self::TurnAccepted { thread_id, .. }
             | Self::TurnStarted { thread_id, .. }
+            | Self::TurnSkillsLoaded { thread_id, .. }
             | Self::TurnModeChanged { thread_id, .. }
             | Self::TurnSteered { thread_id, .. }
             | Self::TurnSteerDelivered { thread_id, .. }

@@ -464,6 +464,7 @@ fn turn(turn_id: &str) -> Turn {
         plan: None,
         pending_interaction: None,
         started_tool_call_ids: None,
+        skill_loads: None,
         error: None,
     }
 }

@@ -111,6 +111,7 @@ fn snapshot(sequence: u64, turn_id: TurnId) -> ThreadSnapshot {
             approval_mode: ash_protocol::ApprovalMode::Manual,
             tool_mode: ash_protocol::ToolMode::Direct,
             activated_skills: Vec::new(),
+            skill_loads: Vec::new(),
             failure: None,
             pending_interaction: None,
             execution_backend_attempt: None,

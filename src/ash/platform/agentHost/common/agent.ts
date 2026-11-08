@@ -890,7 +890,14 @@ export interface AgentVoiceTranscript {
 	readonly afterItemId: string | null;
 }
 
+export interface LoadedTurnSkill {
+	readonly name: string;
+	readonly source: string;
+	readonly reason: 'explicit' | 'automatic';
+}
+
 export type ThreadTranscriptEntry =
+	| { readonly type: 'skillLoad'; readonly entryId: string; readonly turnId: string; readonly skill: LoadedTurnSkill; }
 	| { readonly type: 'voiceTranscript'; readonly entryId: string; readonly turnId?: undefined; readonly transcript: AgentVoiceTranscript; }
 	| { readonly type: 'hookRun'; readonly entryId: string; readonly turnId: string; readonly run: ChatHookRun; }
 	| {

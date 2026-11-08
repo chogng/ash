@@ -56,7 +56,34 @@ use ash_protocol::ToolOutputStream;
 use ash_protocol::TurnId;
 
 #[test]
-fn snapshot_preserves_items_and_turn_plans_in_order() {
+fn skill_load_notification_matches_its_historical_position() {
+    let load = ash_protocol::TurnSkillLoad {
+        skill: ash_protocol::FrozenSkillActivation {
+            id: ash_protocol::SkillId::new(
+                ash_protocol::SkillSourceId::new("test:skill-source:fixture").unwrap(),
+                ash_protocol::SkillName::new("review").unwrap(),
+            ),
+            content_digest: ash_protocol::ContentDigest::sha256(b"review"),
+            catalog_generation: 1,
+            reason: ash_protocol::SkillActivationReason::Automatic,
+        },
+        after_item_id: Some(item_id("item-1")),
+    };
+    let mut accumulator = TranscriptAccumulator::new(session_id(), thread_id());
+    let live = apply(
+        &mut accumulator,
+        durable(
+            6,
+            ThreadEvent::TurnSkillsLoaded {
+                thread_id: thread_id(),
+                turn_id: turn_id(),
+                loads: vec![load.clone()],
+            },
+        ),
+    );
+    let TranscriptApplyResult::Applied(live) = live else {
+        panic!("Skill loads must reach live transcript subscribers");
+    };
     let snapshot = ThreadTranscriptSnapshot::from_thread(&Thread {
         advisor: Default::default(),
         agent_id: ash_protocol::AgentId::new("agent-test").unwrap(),
@@ -86,21 +113,32 @@ fn snapshot_preserves_items_and_turn_plans_in_order() {
             approval_mode: ash_protocol::ApprovalMode::Manual,
             usage: ModelUsageSummary::default(),
             context_usage: None,
-            items: vec![agent_item("item-1", "done")],
+            items: vec![
+                agent_item("item-1", "working"),
+                agent_item("item-2", "done"),
+            ],
             plan: Some(ash_protocol::PlanUpdate {
                 explanation: Some("why".into()),
                 steps: Vec::new(),
             }),
             pending_interaction: None,
             started_tool_call_ids: None,
+            skill_loads: Some(vec![load]),
             error: None,
         }],
     });
 
     assert_eq!(snapshot.durable_sequence, 7);
-    assert_eq!(snapshot.entries.len(), 2);
+    assert_eq!(snapshot.entries.len(), 4);
     assert_eq!(snapshot.entries[0].entry_id(), "item:item-1");
-    assert_eq!(snapshot.entries[1].entry_id(), "turn-plan:turn-1");
+    assert_eq!(
+        live.changes,
+        vec![ThreadTranscriptChange::Upsert {
+            entry: snapshot.entries[1].clone(),
+        }]
+    );
+    assert_eq!(snapshot.entries[2].entry_id(), "item:item-2");
+    assert_eq!(snapshot.entries[3].entry_id(), "turn-plan:turn-1");
 }
 
 #[test]
@@ -745,6 +783,7 @@ fn thread_with_turn(id: TurnId, status: ash_protocol::TurnStatus) -> Thread {
         plan: None,
         pending_interaction: None,
         started_tool_call_ids: None,
+        skill_loads: None,
         error: None,
     });
     thread

@@ -349,6 +349,7 @@ pub use turn::TurnKind;
 pub use turn::TurnLoopAction;
 pub use turn::TurnLoopDecision;
 pub use turn::TurnLoopReason;
+pub use turn::TurnSkillLoad;
 pub use turn::TurnStatus;
 pub use turn_execution::TurnExecutionBinding;
 

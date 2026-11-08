@@ -37,6 +37,7 @@ export type {
 	ThreadUpdate,
 	ThreadUpdateEnvelope,
 	ThreadTranscriptEntry,
+	LoadedTurnSkill,
 	ChatHookRun,
 	ThreadTranscriptSnapshot,
 	ThreadTranscriptChange,
