@@ -439,8 +439,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		if (!active) return;
 		const { store } = active;
 		const document = container.ownerDocument;
-		const title = localize('projects.code.create', 'Create project');
-		const nameLabel = localize('projects.projectName', 'Project name');
+		const nameLabel = localize('projects.nameLabel', 'What are you working on?');
 		const name = h(document, 'input', {
 			attributes: { 'aria-label': nameLabel },
 			properties: { type: 'text', required: true, maxLength: 200, placeholder: nameLabel },
@@ -527,7 +526,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 		}
 		renderFolders();
 		const actions = h(document, 'div', { className: 'ash-sessions-form-actions' });
-		const dialog = store.add(createProjectFormDialog(container, title, form, actions, {
+		const dialog = store.add(createProjectFormDialog(container, localize('projects.createTitle', 'Create a project'), form, actions, {
 			code: true,
 			canClose: () => !picking && !saving,
 			shouldConfirmDiscard: () => !!name.value || materials.size > 0 || !!appearance.appearance.icon || !!appearance.appearance.color,
@@ -539,7 +538,7 @@ export class ProjectDialogService extends Disposable implements IProjectDialogSe
 			onClick: () => void dialog.requestClose(),
 		}));
 		const submit = store.add(new Button(actions, {
-			...defaultButtonStyles, label: title, presentation: 'primary', type: 'submit', enabled: false,
+			...defaultButtonStyles, label: localize('projects.create', 'Create'), presentation: 'primary', type: 'submit', enabled: false,
 		}));
 		submit.domNode.setAttribute('form', form.id);
 		function updateSubmit(): void {
