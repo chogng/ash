@@ -251,6 +251,8 @@ Session providers register internal per-session directories as resource label ho
 visibility and explicit-open focus. The desktop Grid keeps a hidden `customview`
 leaf alongside its normal content. Custom-view visibility is transient and does
 not overwrite the underlying entry's desired visibility or saved dimensions.
+`CustomViewNode` owns the mounted page, including its header, scrolling body,
+focus and the lifetime of the contributed content.
 
 A custom view is an independent page, mutually exclusive with Sessions Part, grid Editor, Auxiliary Bar, and Panel. The title bar and window sidebar retain their normal visibility and navigation behavior. Covered content parts retain desired visibility separately from effective grid visibility so their state can be restored when the custom view closes.
 

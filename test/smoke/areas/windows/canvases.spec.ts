@@ -345,6 +345,7 @@ exports.activate = context => {
 
 		const agents = await workbench.openAgentsWindow('electron');
 		const commands = new QuickAccess(agents);
+		await agents.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 		const select = async (session: typeof source) => {
 			await agents.locator('.ash-sessions-list-item').filter({ hasText: session.title }).first().click();
 			await expect(agents.locator(`[data-thread-id="${session.threads[0]!.threadId}"]:visible`).first()).toBeVisible();
@@ -386,6 +387,7 @@ exports.activate = context => {
 			const pinnedPage = agents.locator('[data-custom-view-id="sessions.customView.canvas"]');
 			await expect(pinnedPage).toBeVisible();
 			await expect.poll(async () => (await views()).find(view => view.id === native.id)?.state.visible).toBe(true);
+			await expectPinnedCanvasBounds(application as ElectronApplication, agents, native);
 			// The sole live Canvas would take the direct-open path if it were still eligible.
 			await activity.click();
 			await expect(commands.input).toHaveAccessibleName('Open a Canvas from a visible conversation');

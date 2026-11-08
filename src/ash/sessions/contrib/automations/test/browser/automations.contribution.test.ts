@@ -803,10 +803,16 @@ suite('automations browser component', () => {
 		await dialog.getByRole('button', { name: '保存例行任务', exact: true }).click();
 		await expect(dialog).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Saved once', exact: true })).toBeEnabled();
-		await expect(page.getByText('无法刷新运行历史。当前显示上次可用的历史，可使用“刷新”重试。', { exact: true })).toBeVisible();
+		const history = page.getByRole('region', { name: '运行历史', exact: true });
+		const failure = history.getByText('无法加载运行历史。当前显示上次可用的历史。', { exact: true });
+		await expect(failure).toBeVisible();
+		await expect(page.getByRole('button', { name: '刷新', exact: true })).toHaveCount(0);
 		expect(await page.evaluate(() => window.ashAutomations.saved.length)).toBe(1);
-		await page.evaluate(() => window.ashAutomations.retryHistory());
-		await expect(page.getByText('无法刷新运行历史。当前显示上次可用的历史，可使用“刷新”重试。', { exact: true })).toBeHidden();
+		await page.evaluate(() => window.ashAutomations.recoverHistory());
+		await history.getByRole('button', { name: '重试', exact: true }).press('Enter');
+		await expect(failure).toBeHidden();
+		await expect(page.getByRole('button', { name: '重试', exact: true })).toHaveCount(0);
+		await expect(page.locator('.ash-automations')).toBeFocused();
 		expect(await page.evaluate(() => window.ashAutomations.saved.length)).toBe(1);
 	});
 

@@ -77,7 +77,6 @@ export class AutomationsCardsWidget extends Disposable {
 	readonly element: HTMLElement;
 	private readonly plans: HTMLElement;
 	private readonly history: HTMLElement;
-	private readonly message: HTMLElement;
 	private readonly search: InputBox;
 	private readonly templates: readonly Button[];
 	private readonly query = observableValue(this, '');
@@ -136,7 +135,16 @@ export class AutomationsCardsWidget extends Disposable {
 		const document = container.ownerDocument;
 		this.element = h(document, 'section', { className: 'ash-automations', attributes: { 'aria-label': chat ? localize('scheduled.title', 'Scheduled') : localize('automations.title', 'Routines'), 'data-automation-kind': sessionKind }, properties: { tabIndex: -1 } });
 		this._register(contexts.createScoped(this.element)).createKey('sessionsAutomationsFocused', true);
-		this.message = h(document, 'p', { className: 'ash-automation-notice', attributes: { role: 'status' } });
+		let retrying = false;
+		const retryLoad = async (): Promise<void> => {
+			if (retrying) return;
+			retrying = true;
+			const store = chat ? providers.getProvider(LOCAL_AGENT_HOST_PROVIDER_ID)?.automations : automations;
+			try { await store?.refresh(); }
+			catch { /* The provider reports read failures through the catalogue and history states. */ }
+			finally { retrying = false; }
+		};
+		const catalogueNotice = this.createLoadNotice(document, retryLoad);
 		const plansLabel = chat ? localize('scheduled.plans', 'Your scheduled tasks') : localize('automations.plans', 'Your routines');
 		const plansSection = h(document, 'section', { className: 'ash-automation-plans-section', attributes: { 'aria-label': plansLabel } });
 		const plansHeader = h(document, 'div', { className: 'ash-automation-section-heading' });
@@ -196,10 +204,10 @@ export class AutomationsCardsWidget extends Disposable {
 		const historyHeader = h(document, 'div', { className: 'ash-automation-section-heading' });
 		const heading = h(document, 'h2', {}, localize('automations.history', 'Run history'));
 		historyHeader.append(heading, h(document, 'p', { className: 'ash-automation-section-description' }, localize('automations.historyHint', 'Review results and pick up where your agent left off.')));
-		const historyMessage = h(document, 'p', { className: 'ash-automation-notice', attributes: { role: 'status' } });
+		const historyNotice = this.createLoadNotice(document, retryLoad);
 		const historyEmpty = h(document, 'p', { className: 'ash-automation-empty-history' }, this.emptyHistoryLabel());
 		this.history = h(document, 'div', { className: 'ash-automation-history' });
-		historySection.append(historyHeader, historyMessage, historyEmpty, this.history);
+		historySection.append(historyHeader, historyNotice.element, historyEmpty, this.history);
 		const overview = h(document, 'div', { className: 'ash-automation-overview' });
 		const notificationPreference = h(document, 'label', { className: 'ash-automation-notification-preference' });
 		const notifySuccess = h(document, 'input', { properties: { type: 'checkbox' } });
@@ -218,7 +226,7 @@ export class AutomationsCardsWidget extends Disposable {
 		this.attention.append(h(document, 'h2', {}, localize('automations.attention', 'Needs attention')));
 		this.details = h(document, 'section', { className: 'ash-automation-details', attributes: { 'aria-label': chat ? localize('scheduled.details', 'Scheduled task details') : localize('automations.details', 'Routine details') } });
 		overview.append(this.attention, plansSection, historySection, notificationPreference);
-		this.element.append(this.message, overview, this.details);
+		this.element.append(catalogueNotice.element, overview, this.details);
 		this._register(autorun(reader => {
 			const selected = this.selection.read(reader);
 			overview.hidden = !!selected;
@@ -249,12 +257,11 @@ export class AutomationsCardsWidget extends Disposable {
 			const canCreate = automations.availableProviders.read(reader).length > 0;
 			for (const template of this.templates) template.enabled = canCreate;
 			for (const item of filterButtons) item.button.checked = filter === item.value;
-			historyMessage.textContent = historyState === 'error'
-				? localize('automations.historyRefreshFailed', 'Run history could not be refreshed. Showing the last available history. Use Refresh to try again.')
+			const historyMessage = historyState === 'error'
+				? localize('automations.historyRefreshFailed', 'Could not load run history. Showing the last available history.')
 				: (historyState ?? state) === 'loading' ? localize('sessions.loadingHistory', 'Loading history…') : '';
-			historyMessage.hidden = !historyMessage.textContent;
-			this.message.textContent = getAutomationCatalogueMessage(state, sessionKind);
-			this.message.hidden = !this.message.textContent;
+			historyNotice.update(historyMessage, historyState === 'error' && state !== 'error');
+			catalogueNotice.update(getAutomationCatalogueMessage(state, sessionKind), state === 'error');
 			plansSection.setAttribute('aria-busy', String(state === 'loading'));
 			historySection.setAttribute('aria-busy', String((historyState ?? state) === 'loading'));
 			empty.hidden = state !== 'ready' || plans.length > 0;
@@ -270,6 +277,24 @@ export class AutomationsCardsWidget extends Disposable {
 			this.updateRuns(runs);
 			this.updateAttention(runs);
 		}));
+	}
+
+	private createLoadNotice(document: Document, retry: () => Promise<void>) {
+		const message = h(document, 'p', { attributes: { role: 'status' } });
+		const element = h(document, 'div', { className: 'ash-automation-notice' }, message);
+		const button = this._register(new Button(element, {
+			...defaultButtonStyles,
+			label: localize('automations.retryLoad', 'Retry'),
+			onClick: () => { void retry(); },
+		}));
+		return {
+			element, update: (text: string, retryable: boolean) => {
+				if (!retryable && getActiveElement(document) === button.domNode) this.element.focus({ preventScroll: true });
+				message.textContent = text;
+				button.domNode.hidden = !retryable;
+				element.hidden = !text;
+			}
+		};
 	}
 
 	focus(): void {
@@ -977,23 +1002,6 @@ export class AutomationsCustomViewContribution extends Disposable {
 					});
 				}
 				override async run(accessor: ServicesAccessor): Promise<void> { await accessor.get(IAutomationDialogService).showAutomationDialog({}); }
-			}));
-			lifetime.add(registerAction2(class RefreshAutomations extends Action2 {
-				constructor() {
-					super({
-						id: 'sessions.automations.refresh',
-						title: localize2('automations.refresh', 'Refresh'),
-						icon: Lxicon.refresh,
-						menu: [Menus.CustomViewAutomations, Menus.CustomViewScheduled].map(id => ({ id, group: 'navigation', order: 2 }))
-					});
-				}
-				override async run(accessor: ServicesAccessor): Promise<void> {
-					if (accessor.get(ICustomViewService).activeCustomView.get()?.id === SCHEDULED_CUSTOM_VIEW_ID) {
-						await accessor.get(ISessionsProvidersService).getProvider(LOCAL_AGENT_HOST_PROVIDER_ID)?.automations?.refresh();
-					} else {
-						await accessor.get(IAutomationService).refresh();
-					}
-				}
 			}));
 		}));
 	}
