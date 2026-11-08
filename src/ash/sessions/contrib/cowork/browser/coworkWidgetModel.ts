@@ -189,6 +189,10 @@ export class CoworkWidgetModel extends Disposable {
 		return this.activeSession?.session.sessionId;
 	}
 
+	get memoryNamespace(): ISession['kind'] | undefined {
+		return this.session?.kind;
+	}
+
 	get session(): ISession | undefined {
 		return this.selection.kind === 'session' ? this.selection.active.session : undefined;
 	}

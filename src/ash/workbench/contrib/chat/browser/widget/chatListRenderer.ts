@@ -24,7 +24,7 @@ import { RunOnceScheduler } from '../../../../../base/common/async.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import type { ChatTurnErrorAction, IChatListItem } from '../../common/model/chatViewModel.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
-import { parseCodeMemoryReference } from '../../../../../platform/memories/common/memoriesService.js';
+import { parseMemoryReference, type MemoryNamespace } from '../../../../../platform/memories/common/memoriesService.js';
 import { OPEN_SESSION_LINK_SCHEME } from '../../../../../platform/agentHost/common/openSessionLink.js';
 import { ChatMarkdownContentPart } from './chatContentParts/chatMarkdownContentPart.js';
 import { markdownFrameThreshold } from './chatContentParts/chatIncrementalRendering/chatIncrementalRendering.js';
@@ -78,6 +78,7 @@ interface ChatListItemRendererOptions {
 	readonly onDidChangeMarkdownHeight: (id: string) => void;
 	readonly onDidChangeContent: () => void;
 	readonly mcpAppDelegate?: IChatMcpAppDelegate;
+	readonly memoryNamespace?: MemoryNamespace;
 	readonly onDidRequestMemoryReference?: (reference: string) => void;
 	readonly onDidRequestErrorAction?: (action: ChatTurnErrorAction) => void;
 	readonly openTurnChanges?: ChatTurnChangesOpener;
@@ -724,7 +725,7 @@ export class ChatListItemRenderer extends Disposable {
 
 	private renderMemoryReferences(): void {
 		if (!this.options.onDidRequestMemoryReference || this.options.getResponseLinkOpener?.(this.item)) return;
-		const references = [...new Set(this.item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])].filter(reference => parseCodeMemoryReference(reference)).slice(0, 8);
+		const references = [...new Set(this.item.text.match(/memory:[A-Za-z0-9_-]+/g) ?? [])].filter(reference => parseMemoryReference(reference, this.options.memoryNamespace ?? 'code')).slice(0, 8);
 		for (const [reference] of this.memoryReferences) {
 			if (!references.includes(reference)) this.memoryReferences.deleteAndDispose(reference);
 		}

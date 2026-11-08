@@ -168,6 +168,10 @@ impl<'ctx, C: MemoriesRequestProcessorContext + ?Sized> MemoriesRequestProcessor
             .memory_scope_labels(params.thread_id.as_ref())
             .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?
             .into_iter()
+            .filter(|(scope, _)| {
+                scope.namespace() == memories::MemoryNamespace::Code
+                    || connection.allows_chat_project_memories()
+            })
             .map(|(scope, label)| {
                 memories.policy(&scope).map(|policy| {
                     ash_app_server_protocol::protocol::memory::MemoryScopeDescriptor {
@@ -311,14 +315,25 @@ impl<'ctx, C: MemoriesRequestProcessorContext + ?Sized> MemoriesRequestProcessor
         scope: &memories::MemoryScope,
     ) -> Result<(), RpcError> {
         self.memories(connection)?;
-        if let memories::MemoryScope::Project { project_id } = scope {
+        let chat = scope.namespace() == memories::MemoryNamespace::Chat;
+        if chat && !connection.allows_chat_project_memories() {
+            return Err(RpcError::new(
+                -32073,
+                AppServerErrorName::PermissionRequired,
+            ));
+        }
+        if let memories::MemoryScope::Project { project_id }
+        | memories::MemoryScope::ChatProject { project_id } = scope
+        {
             let project = self
                 .projects
                 .as_deref()
                 .ok_or_else(|| RpcError::new(-32130, AppServerErrorName::MemoryUnavailable))?
                 .read(project_id)
                 .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-            if project.scope() != ash_projects::ProjectScope::Code {
+            if (!chat && project.scope() != ash_projects::ProjectScope::Code)
+                || (chat && !project.is_active())
+            {
                 return Err(RpcError::new(
                     -32073,
                     AppServerErrorName::PermissionRequired,

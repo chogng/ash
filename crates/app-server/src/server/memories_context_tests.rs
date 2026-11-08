@@ -122,6 +122,12 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
             },
         ),
         ("dir", MemoryScope::Dir { dir_id: dir.id() }),
+        (
+            "chat-project",
+            MemoryScope::ChatProject {
+                project_id: project.clone(),
+            },
+        ),
     ] {
         memories
             .add_user_memory(
@@ -184,19 +190,19 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
         ids
     };
     assert_eq!(read_ids(&request), ["dir", "profile", "project"]);
-    assert!(
-        scopes
-            .scopes(&chat.session_id, &chat.thread_id)
-            .unwrap()
-            .is_empty()
+    assert_eq!(
+        scopes.scopes(&chat.session_id, &chat.thread_id).unwrap(),
+        [MemoryScope::ChatProject {
+            project_id: project.clone()
+        }]
     );
-    assert!(
+    assert_eq!(
         read_ids(&ContextSourceRequest {
             session_id: &chat.session_id,
             thread_id: &chat.thread_id,
             ..request
-        })
-        .is_empty()
+        }),
+        ["chat-project"]
     );
     let other = ContextSourceRequest {
         session_id: &separate.session_id,
@@ -569,7 +575,9 @@ fn config_master_switch_stops_model_access_and_keeps_scope_permissions() {
             !enabled
         );
         assert_eq!(
-            scopes.available_scopes(&session, &thread).unwrap(),
+            scopes
+                .available_scopes(SessionKind::Code, &session, &thread)
+                .unwrap(),
             [MemoryScope::Profile]
         );
     }

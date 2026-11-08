@@ -27,6 +27,18 @@ const MAX_PROJECT_INDEX_ITEM_BYTES: usize = 320;
 #[serde(rename_all = "camelCase")]
 pub enum MemoryNamespace {
     Code,
+    Chat,
+}
+
+impl MemoryScope {
+    pub fn namespace(&self) -> MemoryNamespace {
+        match self {
+            Self::ChatProject { .. } => MemoryNamespace::Chat,
+            Self::Profile | Self::Project { .. } | Self::Team { .. } | Self::Dir { .. } => {
+                MemoryNamespace::Code
+            }
+        }
+    }
 }
 
 /// An exact UTF-8 byte range in one immutable Memory revision; it grants no read authority.
@@ -71,6 +83,11 @@ impl MemoryCitation {
     }
 
     fn validate(&self) -> Result<(), MemoryError> {
+        if self.namespace != self.scope.namespace() {
+            return Err(MemoryError::InvalidInput(
+                "Memory citation namespace does not match its scope".into(),
+            ));
+        }
         if self.revision == 0 || self.start_byte >= self.end_byte || self.end_byte > 16384 {
             return Err(MemoryError::InvalidInput(
                 "Invalid Memory citation range or revision".into(),
@@ -137,7 +154,7 @@ impl Memories {
         check_cancellation(cancellation)?;
         validate_memory_citation(&memory, &citation)?;
         let citation = MemoryCitation {
-            namespace: MemoryNamespace::Code,
+            namespace: memory.scope.namespace(),
             memory_id: memory.memory_id.clone(),
             scope: memory.scope.clone(),
             revision: memory.revision,
@@ -298,7 +315,7 @@ pub(crate) fn excerpt(
     let end = start + text.len();
     (
         MemoryCitation {
-            namespace: MemoryNamespace::Code,
+            namespace: memory.scope.namespace(),
             memory_id: memory.memory_id.clone(),
             scope: memory.scope.clone(),
             revision: memory.revision,

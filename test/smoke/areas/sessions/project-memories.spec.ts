@@ -3,13 +3,15 @@ import { createServer } from 'node:http';
 import { realpath } from 'node:fs/promises';
 import { APP_SERVER_METHODS } from '../../../../.build/protocol/typescript/index.js';
 import { expect, test } from '../../../automation/test.js';
+import { QuickAccess } from '../../../automation/quickaccess.js';
 import { connectProfile } from './sessionProfileFixture.js';
 
 test.use({ gitRepository: true, electronUserSettings: { 'workbench.locale': 'zh-CN' } });
 
-test('Project memory saved from a prompt is cited in another worktree', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
+test('Code and Chat recall separate memories from the same project', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
 	test.setTimeout(120_000);
 	const note = '演示统一使用紫色样本。';
+	const chatNote = '聊天项目只使用金色样本。';
 	const followUp = '按之前说的处理。';
 	const provider = 'custom-memory-fixture';
 	const model = { provider, model: 'memory-fixture' };
@@ -21,8 +23,11 @@ test('Project memory saved from a prompt is cited in another worktree', { tag: [
 		const chunks: Buffer[] = [];
 		for await (const chunk of request) chunks.push(Buffer.from(chunk));
 		const input = Buffer.concat(chunks).toString('utf8');
-		const reference = input.includes(note) ? input.match(/memory:[A-Za-z0-9_-]+/u)?.[0] : undefined;
-		const content = reference ? `会使用紫色样本。 ${reference}` : '已收到。';
+		const hasCode = input.includes(note);
+		const hasChat = input.includes(chatNote);
+		const reference = input.match(/memory:[A-Za-z0-9_-]+/u)?.[0];
+		const content = hasCode && hasChat ? '记忆范围混合。' : reference && (hasCode || hasChat)
+			? `${hasCode ? '会使用紫色样本。' : '会使用金色样本。'} ${reference}` : '已收到。';
 		const chunk = (delta: object, finish_reason: 'stop' | null) => `data: ${JSON.stringify({ id: 'memory-fixture', object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
 		response.writeHead(200, { 'content-type': 'text/event-stream' });
 		response.end(chunk({ content }, null) + chunk({}, 'stop') + 'data: [DONE]\n\n');
@@ -122,17 +127,39 @@ test('Project memory saved from a prompt is cited in another worktree', { tag: [
 		const outside = await create('Outside project', 'ash/memory-outside', await createProject('Other project'));
 		await expectNoRecall(outside);
 
-		const { session: chat } = await client.request(APP_SERVER_METHODS['session/create'], {
-			commandId: randomUUID(), kind: 'chat', title: 'Chat fixture', agent: { type: 'default' }, executionTarget: null,
-		});
-		const chatThreadId = chat.threads[0]?.threadId;
-		if (!chatThreadId) throw new Error('Missing Chat thread');
-		const { project } = await client.request(APP_SERVER_METHODS['project/read'], { projectId });
-		await client.request(APP_SERVER_METHODS['project/session/link'], {
-			commandId: randomUUID(), projectId, expectedRevision: project.revision, sessionId: chat.sessionId,
-		});
-		expect((await client.request(APP_SERVER_METHODS['memory/scopes'], { threadId: chatThreadId })).scopes).toEqual([]);
-		await expectNoRecall({ sessionId: chat.sessionId, threadId: chatThreadId });
+		const createChat = async (title: string) => {
+			const { session } = await client.request(APP_SERVER_METHODS['session/create'], {
+				commandId: randomUUID(), kind: 'chat', title, agent: { type: 'default' }, executionTarget: null,
+			});
+			const threadId = session.threads[0]?.threadId;
+			if (!threadId) throw new Error('Missing Chat thread');
+			const { project } = await client.request(APP_SERVER_METHODS['project/read'], { projectId });
+			await client.request(APP_SERVER_METHODS['project/session/link'], {
+				commandId: randomUUID(), projectId, expectedRevision: project.revision, sessionId: session.sessionId,
+			});
+			return { sessionId: session.sessionId, threadId };
+		};
+		const chat = await createChat('Chat Memory fixture');
+		await expectNoRecall(chat);
+		const chatScope = { type: 'chatProject', projectId } as const;
+		const chatScopes = await client.request(APP_SERVER_METHODS['memory/scopes'], { threadId: chat.threadId });
+		expect(chatScopes.scopes.map(entry => entry.policy.scope)).toEqual([chatScope]);
+
+		await page.locator('.ash-window-mode-control').getByRole('button', { name: '聊天 / Agents', exact: true }).click();
+		await new QuickAccess(page).runCommand('ash.memories.open');
+		await expect(memories.getByRole('checkbox', { name: '启用 Code 模型记忆', exact: true })).toHaveCount(0);
+		const context = memories.getByRole('combobox', { name: 'Conversation context' });
+		await context.selectOption(chat.threadId);
+		await memories.getByRole('textbox', { name: '记忆标题', exact: true }).fill('聊天项目样本');
+		await memories.getByRole('textbox', { name: '记忆内容', exact: true }).fill(chatNote);
+		await memories.getByRole('button', { name: '保存记忆', exact: true }).press('Enter');
+		await expect(memories.getByRole('status')).toHaveText('记忆已保存。');
+		await memories.getByRole('checkbox', { name: '允许读取记忆', exact: true }).check();
+		await expect.poll(async () => (await client.request(APP_SERVER_METHODS['memory/policy/read'], { scope: chatScope })).automaticRead).toBe('firstInvocation');
+		const nextChat = await createChat('Another Chat in the project');
+		await turn(nextChat, followUp);
+		const items = (await read(nextChat)).thread.turns.at(-1)?.items ?? [];
+		expect(items.filter(item => item.type === 'agentMessage').map(item => item.text).join('')).toMatch(/^会使用金色样本。 memory:/u);
 
 		const scope = { type: 'project', projectId } as const;
 		const saved = (await client.request(APP_SERVER_METHODS['memory/list'], { scope })).memories[0]!;
@@ -140,6 +167,15 @@ test('Project memory saved from a prompt is cited in another worktree', { tag: [
 			commandId: randomUUID(), scope, memoryId: saved.memoryId, expectedRevision: saved.revision,
 		});
 		await expectNoRecall(await create('After deletion', 'ash/memory-deleted'));
+		const chatMemories = await client.request(APP_SERVER_METHODS['memory/list'], { scope: chatScope });
+		expect(chatMemories.memories.map(memory => memory.title)).toEqual(['聊天项目样本']);
+		const ide = await connectProfile(application, undefined, directory, workbench.page, { directoryGrantsHost: true });
+		try {
+			await expect(ide.client.request(APP_SERVER_METHODS['memory/list'], { scope: chatScope })).rejects.toMatchObject({ code: -32073 });
+		} finally {
+			await ide.close();
+		}
+
 	} finally {
 		try { await connection?.close(); }
 		finally {

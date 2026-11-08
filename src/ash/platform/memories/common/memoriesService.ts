@@ -2,7 +2,9 @@ import type { Event } from '../../../base/common/event.js';
 import { decodeBase64 } from '../../../base/common/buffer.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-export type MemoryScope = { readonly type: 'profile'; } | { readonly type: 'project'; readonly projectId: string; } | { readonly type: 'team'; readonly teamId: string; } | { readonly type: 'dir'; readonly dirId: string; };
+export type MemoryNamespace = 'chat' | 'code';
+
+export type MemoryScope = { readonly type: 'profile'; } | { readonly type: 'project'; readonly projectId: string; } | { readonly type: 'chatProject'; readonly projectId: string; } | { readonly type: 'team'; readonly teamId: string; } | { readonly type: 'dir'; readonly dirId: string; };
 export interface MemoryPolicy {
 	readonly scope: MemoryScope;
 	readonly revision: number;
@@ -35,12 +37,13 @@ export interface MemoryReference {
 	readonly origin?: MemoryConversationSource;
 }
 
-export function parseCodeMemoryReference(reference: string): object | undefined {
+export function parseMemoryReference(reference: string, namespace: MemoryNamespace): object | undefined {
 	if (!reference.startsWith('memory:') || reference.length > 4096) { return undefined; }
 	try {
 		const bytes = decodeBase64(reference.slice('memory:'.length)).buffer;
 		const value: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-		return value && typeof value === 'object' && 'namespace' in value && value.namespace === 'code' ? value : undefined;
+		return value && typeof value === 'object' && 'namespace' in value
+			&& value.namespace === namespace ? value : undefined;
 	} catch {
 		return undefined;
 	}
@@ -57,6 +60,6 @@ export interface IMemoriesService {
 	update(memory: MemorySummary, title: string, body: string, commandId: string): Promise<Memory>;
 	delete(memory: MemorySummary, commandId: string): Promise<void>;
 	setPolicy(policy: MemoryPolicy, reading: boolean, saving: boolean): Promise<MemoryPolicy>;
-	readReference(reference: string): Promise<MemoryReference>;
+	readReference(reference: string, namespace: MemoryNamespace): Promise<MemoryReference>;
 }
 export const IMemoriesService = createServiceIdentifier<IMemoriesService>('memoriesService');

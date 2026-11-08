@@ -123,6 +123,7 @@ struct Subscriber {
     scope_id: u64,
     agent_interactions: Option<AgentInteractionCapability>,
     product_host: bool,
+    chat_project_memories: bool,
     collaboration_rooms: BTreeSet<String>,
     catalog: bool,
     sessions: BTreeSet<SessionId>,
@@ -345,12 +346,21 @@ impl UpdateBroker {
                     scope_id: self.scope_id,
                     agent_interactions: None,
                     product_host,
+                    chat_project_memories: false,
                     collaboration_rooms: BTreeSet::new(),
                     catalog: false,
                     sessions: BTreeSet::new(),
                     threads: BTreeMap::new(),
                 },
             );
+        }
+    }
+
+    pub(super) fn enable_chat_memory_notifications(&self, connection_id: u64) {
+        if let Ok(mut state) = self.state.lock()
+            && let Some(subscriber) = state.subscribers.get_mut(&connection_id)
+        {
+            subscriber.chat_project_memories = true;
         }
     }
 
@@ -1419,7 +1429,10 @@ impl UpdateBroker {
             let Some(queue) = subscriber.queue.upgrade() else {
                 return false;
             };
-            if subscriber.product_host {
+            if subscriber.product_host
+                && (changed.scope.namespace() == memories::MemoryNamespace::Code
+                    || subscriber.chat_project_memories)
+            {
                 queue.push(notification(
                     ServerNotificationMethod::MemoryChanged,
                     &changed,

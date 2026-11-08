@@ -4,7 +4,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
-import { IMemoriesService, type Memory, type MemoryConversationSource, type MemoryPolicy, type MemoryScopeEntry, type MemorySummary, type MemoryTurnSource } from '../../../../platform/memories/common/memoriesService.js';
+import { IMemoriesService, type Memory, type MemoryConversationSource, type MemoryNamespace, type MemoryPolicy, type MemoryScopeEntry, type MemorySummary, type MemoryTurnSource } from '../../../../platform/memories/common/memoriesService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
@@ -15,7 +15,7 @@ export class MemoriesViewPane extends ViewPane {
 	public static readonly FocusContext = 'memoriesFocus';
 	private readonly context: HTMLSelectElement;
 	private readonly scope: HTMLSelectElement;
-	private readonly modelMemoryEnabled: HTMLInputElement;
+	private readonly modelMemoryEnabled: HTMLInputElement | undefined;
 	private readonly reading: HTMLInputElement;
 	private readonly saving: HTMLInputElement;
 	private readonly search: HTMLInputElement;
@@ -44,7 +44,7 @@ export class MemoriesViewPane extends ViewPane {
 	private contextId = '';
 	private mutationId = generateUuid();
 
-	constructor(container: HTMLElement, options: IViewPaneOptions,
+	constructor(private readonly namespace: MemoryNamespace, container: HTMLElement, options: IViewPaneOptions,
 		@IMemoriesService private readonly memories: IMemoriesService,
 		@IChatSessionNavigationService private readonly sessions: IChatSessionNavigationService,
 		@IDialogService private readonly dialogs: IDialogService,
@@ -63,7 +63,7 @@ export class MemoriesViewPane extends ViewPane {
 		this.field('Conversation context', this.context);
 		this.scope = h(document, 'select');
 		this.field(localize('memories.scope', 'Memory scope'), this.scope);
-		this.modelMemoryEnabled = this.input(localize('memories.modelMemoryEnabled', 'Enable Code model memory'), 'checkbox');
+		this.modelMemoryEnabled = namespace === 'code' ? this.input(localize('memories.modelMemoryEnabled', 'Enable Code model memory'), 'checkbox') : undefined;
 		this.reading = this.input(localize('memories.allowReading', 'Allow memory reading'), 'checkbox');
 		this.saving = this.input('Allow model saving', 'checkbox');
 		this.search = this.input('Search memories', 'search');
@@ -100,17 +100,20 @@ export class MemoriesViewPane extends ViewPane {
 		this._register(addDisposableListener(this.context, 'change', () => { void this.perform(async () => { if (!await this.discardDraft()) { this.context.value = this.contextId; return; } this.contextId = this.context.value; this.policy = undefined; await this.newMemory(); await this.refresh(); }); }));
 		this._register(addDisposableListener(this.scope, 'change', () => { void this.perform(() => this.selectScope()); }));
 		this._register(addDisposableListener(this.list, 'change', () => { void this.perform(() => this.selectMemory()); }));
-		this._register(addDisposableListener(this.modelMemoryEnabled, 'change', () => {
-			void this.perform(async () => {
-				const enabled = this.modelMemoryEnabled.checked;
-				try {
-					await this.memories.setModelMemoryEnabled(enabled);
-				} catch (error) {
-					this.modelMemoryEnabled.checked = await this.memories.readModelMemoryEnabled().catch(() => !enabled);
-					throw error;
-				}
-			});
-		}));
+		const modelMemoryEnabled = this.modelMemoryEnabled;
+		if (modelMemoryEnabled) {
+			this._register(addDisposableListener(modelMemoryEnabled, 'change', () => {
+				void this.perform(async () => {
+					const enabled = modelMemoryEnabled.checked;
+					try {
+						await this.memories.setModelMemoryEnabled(enabled);
+					} catch (error) {
+						modelMemoryEnabled.checked = await this.memories.readModelMemoryEnabled().catch(() => !enabled);
+						throw error;
+					}
+				});
+			}));
+		}
 		this._register(addDisposableListener(this.reading, 'change', () => { void this.perform(() => this.changePolicy()); }));
 		this._register(addDisposableListener(this.saving, 'change', () => { void this.perform(() => this.changePolicy()); }));
 		this._register(addDisposableListener(this.titleInput, 'input', () => { this.dirty = true; }));
@@ -126,7 +129,10 @@ export class MemoriesViewPane extends ViewPane {
 
 	public override setVisible(visible: boolean): void {
 		super.setVisible(visible);
-		if (visible && !this.policy) { void this.perform(() => this.refresh()); }
+		if (visible && !this.policy) {
+			this.refreshContexts();
+			void this.perform(() => this.refresh());
+		}
 	}
 	public override focus(): void {
 		this.scope.focus();
@@ -142,7 +148,7 @@ export class MemoriesViewPane extends ViewPane {
 		while (this.operation) { await this.operation; }
 		await this.perform(async () => {
 			const scopes = await this.memories.scopes(origin.threadId);
-			const projects = scopes.filter(entry => entry.policy.scope.type === 'project');
+			const projects = scopes.filter(entry => this.isProjectScope(entry.policy.scope));
 			if (!projects.length) {
 				this.status.textContent = localize('memories.projectRequired', 'This conversation needs to belong to a project before you can save a project memory.');
 				return;
@@ -167,7 +173,7 @@ export class MemoriesViewPane extends ViewPane {
 		while (this.operation) { await this.operation; }
 		await this.perform(async () => {
 			if (!await this.discardDraft()) { return; }
-			const result = await this.memories.readReference(reference);
+			const result = await this.memories.readReference(reference, this.namespace);
 			if (this.isDisposed) { return; }
 			this.selected = undefined;
 			this.draftOrigin = undefined;
@@ -182,24 +188,36 @@ export class MemoriesViewPane extends ViewPane {
 
 	private refreshContexts(): void {
 		const document = this.element.ownerDocument;
-		this.context.replaceChildren(this.option('Personal memories', ''));
+		const previous = this.context.value;
+		this.context.replaceChildren(this.option(this.namespace === 'code'
+			? localize('memories.personalContext', 'Personal memories')
+			: localize('memories.chooseChatConversation', 'Choose a project conversation'), ''));
 		for (const conversation of this.sessions.getConversations()) {
-			if (conversation.kind !== 'code') { continue; }
+			if (conversation.kind !== this.namespace) { continue; }
 			const option = h(document, 'option');
 			option.value = conversation.threadId;
 			option.textContent = conversation.title;
 			this.context.append(option);
 		}
+		const active = this.namespace === 'chat' ? this.sessions.getActiveConversation()?.threadId : undefined;
+		const candidate = previous || active || '';
+		this.context.value = this.contextId = Array.from(this.context.options).some(option => option.value === candidate)
+			? candidate : '';
+	}
+	private isProjectScope(scope: MemoryPolicy['scope']): boolean {
+		return scope.type === (this.namespace === 'chat' ? 'chatProject' : 'project');
 	}
 	private async refresh(): Promise<void> {
 		const generation = ++this.generation;
 		const [availableScopes, enabled] = await Promise.all([
-			this.memories.scopes(this.context.value || undefined),
-			this.memories.readModelMemoryEnabled(),
+			this.namespace === 'chat' && !this.context.value ? [] : this.memories.scopes(this.context.value || undefined),
+			this.modelMemoryEnabled ? this.memories.readModelMemoryEnabled() : false,
 		]);
 		if (this.isDisposed || generation !== this.generation) { return; }
-		this.modelMemoryEnabled.checked = enabled;
-		const scopes = this.draftOrigin ? availableScopes.filter(entry => entry.policy.scope.type === 'project') : availableScopes;
+		if (this.modelMemoryEnabled) { this.modelMemoryEnabled.checked = enabled; }
+		const scopes = this.draftOrigin || this.namespace === 'chat'
+			? availableScopes.filter(entry => this.isProjectScope(entry.policy.scope))
+			: availableScopes.filter(entry => entry.policy.scope.type !== 'chatProject');
 		const current = this.policy && JSON.stringify(this.policy.scope);
 		const index = scopes.findIndex(entry => JSON.stringify(entry.policy.scope) === current);
 		this.setScopes(scopes, this.draftOrigin ? index : Math.max(index, 0));
@@ -221,7 +239,7 @@ export class MemoriesViewPane extends ViewPane {
 	}
 	private async selectScope(): Promise<void> {
 		const nextPolicy = this.scope.value ? this.scopes[Number(this.scope.value)]?.policy : undefined;
-		if (this.draftOrigin && (!nextPolicy || nextPolicy.scope.type === 'project')) {
+		if (this.draftOrigin && (!nextPolicy || this.isProjectScope(nextPolicy.scope))) {
 			this.policy = nextPolicy;
 			this.mutationId = generateUuid();
 			this.renderPolicy();

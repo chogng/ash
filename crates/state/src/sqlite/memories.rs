@@ -167,17 +167,24 @@ impl MemoryStore for SqliteMemoryStore {
         for scope in &request.scopes {
             if read_policy(&transaction, scope)?.automatic_read == MemoryReadMode::FirstInvocation {
                 let key = scope.storage_key();
-                if request.project_index_limit > 0 && matches!(scope, MemoryScope::Project { .. }) {
+                if request.project_index_limit > 0
+                    && matches!(
+                        scope,
+                        MemoryScope::Project { .. } | MemoryScope::ChatProject { .. }
+                    )
+                {
                     projects.push(rusqlite::types::Value::Text(key.clone()));
                 }
                 enabled.push(key);
             }
         }
         let matches = context_matches(&transaction, request, enabled)?;
-        let project_index = if matches
-            .iter()
-            .any(|memory| matches!(memory.scope, MemoryScope::Project { .. }))
-        {
+        let project_index = if matches.iter().any(|memory| {
+            matches!(
+                memory.scope,
+                MemoryScope::Project { .. } | MemoryScope::ChatProject { .. }
+            )
+        }) {
             Vec::new()
         } else {
             context_project_index(&transaction, projects, request.project_index_limit)?

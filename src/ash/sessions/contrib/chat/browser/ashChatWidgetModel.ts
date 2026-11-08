@@ -39,6 +39,7 @@ interface ThreadBinding {
 }
 
 export class AshChatWidgetModel extends Disposable implements IReplyChatEditorModel {
+	readonly memoryNamespace = 'chat' as const;
 	private readonly changed = this._register(new Emitter<void>());
 	private readonly composerChanged = this._register(new Emitter<void>());
 	readonly onDidChange = this.changed.event;
