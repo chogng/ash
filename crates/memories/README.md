@@ -1,17 +1,17 @@
 # Memories
 
-- 拥有长期 Memory 的身份、作用域、用户来源、revision、分页、搜索、精确引用与删除语义。
+- 拥有 Code 长期 Memory 的身份、作用域、用户来源、revision、分页、搜索、精确引用与删除语义。
 - 提供用户显式 add、update、list、read、search 和 delete；领域本身不调用模型。
 - 模型通过 ext 在当前 Turn 整理并保存长期事实；`modelWrite` 独立授权、默认关闭，存储事务检查当前授权。
 - 模型记忆按作用域与标题形成稳定身份；合并必须提交已读取的 revision，记录来源 Session、Thread、Turn。用户编辑后归用户所有，模型不能再覆盖。
 - 自动读取按 Profile、Project、Dir 独立授权，默认关闭；显式写入不授予自动读取权限。
 - [Memories 扩展](../ext/memories/README.md) 负责首次调用的上下文贡献和模型搜索、引用读取、保存工具；本 crate 负责读写规则与授权校验。
-- `MemoryStore` 是持久化 port；SQLite 实现由 `ash-state` 提供，App Server 负责协议、任务身份和目录授权转换。
+- `MemoryStore` 是持久化 port；SQLite 实现由 `ash-state` 提供，App Server 校验 Code Session、Code Project 与当前目录授权。
 - 用户增改与模型保存接收调用方的取消令牌；获得写事务后的检查是取消截止点，具体行为见 [Memory API](../../docs/app-server-api.md#memory)。
 - Dir 使用稳定 `DirId`，不持久化路径；Project 关联不授予目录访问权。
 - `read_context_citation` 返回引用片段；`read_context_memory` 在核对当前任务作用域、读取授权、revision 与引用范围后返回完整正文；显式管理使用 `read_citation`。
 - 更新推进记录与 catalog revision，旧引用、旧分页失效；重放旧写命令不会恢复旧正文，记录已有后续版本时明确报冲突。
-- 引用绑定 Memory ID、作用域、revision 和 UTF-8 字节范围；版本冲突、越界、非字符边界和已删除引用明确报错。
+- 引用绑定 Code namespace、Memory ID、作用域、revision 和 UTF-8 字节范围；版本冲突、越界、非字符边界和已删除引用明确报错。
 - 自动检索只读当前任务关联的活跃 Project、Thread 绑定目录与 Session 已授权目录，以及 Profile；SQLite 在同一读取事务中核对授权与正文。
 - 自动检索最多接受 32 个作用域、16 个查询词、64 条候选；最多返回 8 条、每条正文 4 KiB、正文合计 16 KiB 的参考材料，Core 继续施加模型预算。
 - 自动召回的参考材料只进入 Turn 首次模型调用的用户级低信任上下文；不写入指令或 Thread 历史。重试准备上下文时重新读取，删除或撤销授权在后续读取中生效。

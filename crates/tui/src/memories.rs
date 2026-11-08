@@ -189,6 +189,7 @@ pub(crate) fn execute<T: JsonRpcTransport>(
                             scope,
                             title,
                             body,
+                            origin: None,
                         })?
                         .memory,
                 )

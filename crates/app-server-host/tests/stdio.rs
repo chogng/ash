@@ -209,6 +209,7 @@ fn memories_round_trip_through_a_real_process_and_survive_restart() {
             scope: scope.clone(),
             title: "Rust process test".into(),
             body: "Persist this Rust memory across restarts".into(),
+            origin: None,
         })
         .unwrap();
     let updated = client

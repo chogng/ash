@@ -6,7 +6,9 @@ import { Emitter } from '../../../base/common/event.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import type { AppServerProtocolClient } from '../../agentHost/browser/appServerProtocolClient.js';
 import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
-import type { IMemoriesService, Memory, MemoryPage, MemoryPolicy, MemoryReference, MemoryScope, MemoryScopeEntry, MemorySummary } from '../common/memoriesService.js';
+import { localize } from '../../../nls.js';
+import { parseCodeMemoryReference } from '../common/memoriesService.js';
+import type { IMemoriesService, Memory, MemoryConversationSource, MemoryPage, MemoryPolicy, MemoryReference, MemoryScope, MemoryScopeEntry, MemorySummary, MemoryTurnSource } from '../common/memoriesService.js';
 
 export class AppServerMemoriesService extends Disposable implements IMemoriesService {
 	private readonly changed = this._register(new Emitter<void>());
@@ -24,6 +26,23 @@ export class AppServerMemoriesService extends Disposable implements IMemoriesSer
 			this.changed.fire();
 		}));
 		this._register(client.onStateChange(() => { this.ownChanges.clear(); this.observedChanges.clear(); this.changed.fire(); }));
+	}
+
+	public async readModelMemoryEnabled(): Promise<boolean> {
+		const config = await this.client.request(APP_SERVER_METHODS['config/read'], {});
+		return config.features.some(feature => feature.feature === 'memories' && feature.enabled);
+	}
+
+	public async setModelMemoryEnabled(enabled: boolean): Promise<void> {
+		const config = await this.client.request(APP_SERVER_METHODS['config/read'], {});
+		const overrides = Object.fromEntries(config.features
+			.filter(feature => feature.source === 'user')
+			.map(feature => [feature.feature, feature.enabled]));
+		await this.client.request(APP_SERVER_METHODS['config/update'], {
+			commandId: generateUuid(),
+			expectedRevision: config.revision,
+			features: { ...overrides, memories: enabled },
+		});
 	}
 
 	private markMutation(revision: number): void {
@@ -51,8 +70,10 @@ export class AppServerMemoriesService extends Disposable implements IMemoriesSer
 	public async read(memory: MemorySummary): Promise<Memory> {
 		return record(await this.client.request(APP_SERVER_METHODS['memory/read'], { memoryId: memory.id, scope: memory.scope }).catch(explain));
 	}
-	public async add(scope: MemoryScope, title: string, body: string, commandId: string): Promise<Memory> {
-		const result = await this.client.request(APP_SERVER_METHODS['memory/add'], { commandId, memoryId: commandId, scope, title, body }).catch(explain);
+	public async add(scope: MemoryScope, title: string, body: string, commandId: string, origin?: MemoryTurnSource): Promise<Memory> {
+		const result = await this.client.request(APP_SERVER_METHODS['memory/add'], {
+			commandId, memoryId: commandId, scope, title, body, origin,
+		}).catch(explain);
 		this.markMutation(result.catalogRevision);
 		return record(result.memory);
 	}
@@ -74,15 +95,14 @@ export class AppServerMemoriesService extends Disposable implements IMemoriesSer
 		return policy(result.policy);
 	}
 	public async readReference(reference: string): Promise<MemoryReference> {
-		if (!reference.startsWith('memory:') || reference.length > 4096) { throw new Error('Enter a complete memory: reference.'); }
-		let decoded: unknown;
-		try {
-			const bytes = Uint8Array.from(atob(reference.slice(7).replaceAll('-', '+').replaceAll('_', '/')), character => character.charCodeAt(0));
-			decoded = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-		} catch { throw new Error('The memory reference is invalid.'); }
-		const params = decodeAppServerRequestParams('memory/citation/read', { citation: decoded });
+		const citation = parseCodeMemoryReference(reference);
+		if (!citation) { throw new Error(localize('memories.codeReferenceRequired', 'Enter a complete Code memory reference.')); }
+		const params = decodeAppServerRequestParams('memory/citation/read', { citation });
 		const result = await this.client.request(APP_SERVER_METHODS['memory/citation/read'], params).catch(explain);
-		return { title: result.title, body: result.body, revision: result.citation.revision };
+		return {
+			title: result.title, body: result.body, revision: result.citation.revision,
+			origin: sourceConversation(result.source),
+		};
 	}
 }
 
@@ -90,7 +110,15 @@ function policy(value: MemoryPolicyDto): MemoryPolicy {
 	return { scope: value.scope, revision: value.revision, reading: value.automaticRead === 'firstInvocation', saving: value.modelWrite === 'enabled' };
 }
 function summary(value: MemorySummaryDto): MemorySummary {
-	return { id: value.memoryId, scope: value.scope, revision: value.revision, title: value.title, source: value.source === 'user' ? 'user' : 'model' };
+	return {
+		id: value.memoryId, scope: value.scope, revision: value.revision, title: value.title,
+		source: typeof value.source === 'object' && 'model' in value.source ? 'model' : 'user',
+		origin: sourceConversation(value.source),
+	};
+}
+function sourceConversation(source: MemorySummaryDto['source']): MemoryConversationSource | undefined {
+	if (source === 'user') { return undefined; }
+	return 'model' in source ? source.model : source.userFromTurn;
 }
 function record(value: MemoryDto): Memory { return { ...summary(value), body: value.body }; }
 function explain(error: unknown): never {

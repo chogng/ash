@@ -280,6 +280,7 @@ export async function main(profile: SessionsProfile): Promise<IDisposable> {
 					'sessions.contrib.filesView',
 					'terminal.native',
 					'workbench.contrib.call',
+					'workbench.contrib.memories',
 					'sessions.contrib.multiDiffSource',
 					'sessions.openSessionLinkOpener',
 					'sessions.contrib.sharedChatInputComposer',

@@ -3,7 +3,9 @@ use super::session_execution_router::SessionExecutionRouter;
 use crate::dir_grants::DirGrants;
 use ash_file_access::Permission;
 use ash_projects::ProjectCoordinator;
+use ash_projects::ProjectScope;
 use ash_protocol::SessionId;
+use ash_protocol::SessionKind;
 use ash_protocol::ThreadId;
 use ash_teams::TeamCoordinator;
 use memories::MemoryError;
@@ -21,6 +23,50 @@ struct MemoryScopes {
 }
 
 impl AppServer {
+    pub(super) fn validate_memory_origin(
+        &self,
+        origin: &memories::MemoryTurnSource,
+        scope: &MemoryScope,
+    ) -> Result<(), super::RpcError> {
+        use ash_app_server_protocol::protocol::error::AppServerErrorName;
+        use ash_protocol::ThreadItem;
+
+        let invalid = || super::RpcError::new(-32602, AppServerErrorName::InvalidParams);
+        let MemoryScope::Project { project_id } = scope else {
+            return Err(invalid());
+        };
+        let project = self
+            .projects
+            .as_ref()
+            .ok_or_else(invalid)?
+            .read(project_id)
+            .map_err(|_| invalid())?;
+        if project.scope() != ProjectScope::Code
+            || !project.is_active()
+            || !project.session_ids.contains(&origin.session_id)
+            || self
+                .threads
+                .read_session_catalog(&origin.session_id)
+                .map_err(|_| invalid())?
+                .is_none_or(|session| session.kind != SessionKind::Code)
+        {
+            return Err(invalid());
+        }
+        let thread = self
+            .threads
+            .read_thread(&origin.thread_id)
+            .map_err(|_| invalid())?;
+        if thread.session_id != origin.session_id
+            || !thread.items.iter().any(|item| {
+                matches!(item, ThreadItem::UserMessage { item_id, turn_id, .. }
+                if *item_id == origin.item_id && *turn_id == origin.turn_id)
+            })
+        {
+            return Err(invalid());
+        }
+        Ok(())
+    }
+
     pub(super) fn memory_scope_labels(
         &self,
         thread_id: Option<&ThreadId>,
@@ -32,6 +78,14 @@ impl AppServer {
             .threads
             .read_thread(thread_id)
             .map_err(|error| error.to_string())?;
+        if self
+            .threads
+            .read_session_catalog(&thread.session_id)
+            .map_err(|error| error.to_string())?
+            .is_none_or(|session| session.kind != SessionKind::Code)
+        {
+            return Ok(Vec::new());
+        }
         let dirs = self
             .env_runtime
             .read()
@@ -138,7 +192,7 @@ impl MemoryScopeProvider for MemoryScopes {
         session_id: &SessionId,
         thread_id: &ThreadId,
     ) -> Result<Vec<MemoryScope>, MemoryError> {
-        if !self.enabled()? {
+        if !self.enabled()? || self.route(session_id)?.kind() != SessionKind::Code {
             return Ok(Vec::new());
         }
         self.available_scopes(session_id, thread_id)
@@ -152,11 +206,11 @@ impl MemoryScopeProvider for MemoryScopes {
         if !self.enabled()? {
             return Ok(Vec::new());
         }
-        if self
-            .context_router
-            .allows_workspace(session_id)
-            .map_err(|error| MemoryError::Storage(error.to_string()))?
-        {
+        let route = self.route(session_id)?;
+        if route.kind() != SessionKind::Code {
+            return Ok(Vec::new());
+        }
+        if route.allows_workspace() {
             self.available_scopes(session_id, thread_id)
         } else {
             Ok(vec![MemoryScope::Profile])
@@ -165,6 +219,15 @@ impl MemoryScopeProvider for MemoryScopes {
 }
 
 impl MemoryScopes {
+    fn route(
+        &self,
+        session_id: &SessionId,
+    ) -> Result<super::session_execution_router::SessionExecutionRoute, MemoryError> {
+        self.context_router
+            .resolve(session_id)
+            .map_err(|error| MemoryError::Storage(error.to_string()))
+    }
+
     fn enabled(&self) -> Result<bool, MemoryError> {
         self.config
             .as_ref()
@@ -189,7 +252,10 @@ impl MemoryScopes {
                 .list()
                 .map_err(|error| MemoryError::Storage(error.to_string()))?
             {
-                if project.is_active() && project.session_ids.contains(session_id) {
+                if project.is_active()
+                    && project.scope() == ProjectScope::Code
+                    && project.session_ids.contains(session_id)
+                {
                     scopes.push(MemoryScope::Project {
                         project_id: project.project_id,
                     });

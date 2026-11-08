@@ -4,7 +4,7 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
-import { IMemoriesService, type Memory, type MemoryPolicy, type MemoryScopeEntry, type MemorySummary } from '../../../../platform/memories/common/memoriesService.js';
+import { IMemoriesService, type Memory, type MemoryConversationSource, type MemoryPolicy, type MemoryScopeEntry, type MemorySummary, type MemoryTurnSource } from '../../../../platform/memories/common/memoriesService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
@@ -15,6 +15,7 @@ export class MemoriesViewPane extends ViewPane {
 	public static readonly FocusContext = 'memoriesFocus';
 	private readonly context: HTMLSelectElement;
 	private readonly scope: HTMLSelectElement;
+	private readonly modelMemoryEnabled: HTMLInputElement;
 	private readonly reading: HTMLInputElement;
 	private readonly saving: HTMLInputElement;
 	private readonly search: HTMLInputElement;
@@ -26,6 +27,7 @@ export class MemoriesViewPane extends ViewPane {
 	private readonly next: HTMLButtonElement;
 	private readonly save: HTMLButtonElement;
 	private readonly remove: HTMLButtonElement;
+	private readonly openSource: HTMLButtonElement;
 	private scopes: readonly MemoryScopeEntry[] = [];
 	private entries: readonly MemorySummary[] = [];
 	private policy: MemoryPolicy | undefined;
@@ -34,8 +36,11 @@ export class MemoriesViewPane extends ViewPane {
 	private generation = 0;
 	private readGeneration = 0;
 	private working = false;
+	private operation: Promise<void> | undefined;
 	private dirty = false;
 	private showingReference = false;
+	private referenceOrigin: MemoryConversationSource | undefined;
+	private draftOrigin: MemoryTurnSource | undefined;
 	private contextId = '';
 	private mutationId = generateUuid();
 
@@ -57,8 +62,9 @@ export class MemoriesViewPane extends ViewPane {
 		this.context = h(document, 'select');
 		this.field('Conversation context', this.context);
 		this.scope = h(document, 'select');
-		this.field('Memory scope', this.scope);
-		this.reading = this.input('Allow memory reading', 'checkbox');
+		this.field(localize('memories.scope', 'Memory scope'), this.scope);
+		this.modelMemoryEnabled = this.input(localize('memories.modelMemoryEnabled', 'Enable Code model memory'), 'checkbox');
+		this.reading = this.input(localize('memories.allowReading', 'Allow memory reading'), 'checkbox');
 		this.saving = this.input('Allow model saving', 'checkbox');
 		this.search = this.input('Search memories', 'search');
 		const toolbar = h(document, 'div');
@@ -74,22 +80,37 @@ export class MemoriesViewPane extends ViewPane {
 		this.list = h(document, 'select');
 		this.list.size = 6;
 		this.field('Saved memories', this.list);
-		this.titleInput = this.input('Memory title');
+		this.titleInput = this.input(localize('memories.title', 'Memory title'));
 		this.titleInput.maxLength = 256;
 		this.body = h(document, 'textarea');
 		this.body.rows = 8;
-		this.field('Memory content', this.body);
+		this.field(localize('memories.body', 'Memory content'), this.body);
 		const actions = h(document, 'div');
 		actions.className = 'memories-actions';
-		this.save = this.button('Save memory', () => this.saveMemory());
+		this.save = this.button(localize('memories.saveAction', 'Save memory'), () => this.saveMemory());
 		this.remove = this.button('Delete memory', () => this.deleteMemory());
-		actions.append(this.save, this.remove);
+		this.openSource = this.button(localize('memories.openSource', 'Open source conversation'), async () => {
+			const origin = this.selected?.origin ?? this.referenceOrigin ?? this.draftOrigin;
+			if (origin) { await this.sessions.openConversation(origin.sessionId, origin.threadId); }
+		});
+		actions.append(this.save, this.remove, this.openSource);
 		this.contentElement.append(actions);
 		this.reference = this.input('Memory reference');
 		this.contentElement.append(this.button('Open reference', () => this.openReference(this.reference.value)));
 		this._register(addDisposableListener(this.context, 'change', () => { void this.perform(async () => { if (!await this.discardDraft()) { this.context.value = this.contextId; return; } this.contextId = this.context.value; this.policy = undefined; await this.newMemory(); await this.refresh(); }); }));
 		this._register(addDisposableListener(this.scope, 'change', () => { void this.perform(() => this.selectScope()); }));
 		this._register(addDisposableListener(this.list, 'change', () => { void this.perform(() => this.selectMemory()); }));
+		this._register(addDisposableListener(this.modelMemoryEnabled, 'change', () => {
+			void this.perform(async () => {
+				const enabled = this.modelMemoryEnabled.checked;
+				try {
+					await this.memories.setModelMemoryEnabled(enabled);
+				} catch (error) {
+					this.modelMemoryEnabled.checked = await this.memories.readModelMemoryEnabled().catch(() => !enabled);
+					throw error;
+				}
+			});
+		}));
 		this._register(addDisposableListener(this.reading, 'change', () => { void this.perform(() => this.changePolicy()); }));
 		this._register(addDisposableListener(this.saving, 'change', () => { void this.perform(() => this.changePolicy()); }));
 		this._register(addDisposableListener(this.titleInput, 'input', () => { this.dirty = true; }));
@@ -117,29 +138,53 @@ export class MemoriesViewPane extends ViewPane {
 
 	public saveDraft(): Promise<void> { return this.perform(() => this.saveMemory()); }
 
+	public async openProjectDraft(origin: MemoryTurnSource, text: string): Promise<void> {
+		while (this.operation) { await this.operation; }
+		await this.perform(async () => {
+			const scopes = await this.memories.scopes(origin.threadId);
+			const projects = scopes.filter(entry => entry.policy.scope.type === 'project');
+			if (!projects.length) {
+				this.status.textContent = localize('memories.projectRequired', 'This conversation needs to belong to a project before you can save a project memory.');
+				return;
+			}
+			if (!await this.discardDraft() || this.isDisposed) { return; }
+			this.refreshContexts();
+			if (!Array.from(this.context.options).some(option => option.value === origin.threadId)) {
+				this.context.append(this.option(localize('memories.sourceConversation', 'Source conversation'), origin.threadId));
+			}
+			this.context.value = this.contextId = origin.threadId;
+			this.setScopes(projects, projects.length === 1 ? 0 : -1);
+			await this.newMemory();
+			this.draftOrigin = origin;
+			this.body.value = text;
+			this.dirty = true;
+			await this.loadList();
+			this.status.textContent = localize('memories.projectDraft', 'Confirm the project, enter a title, and review the text before saving.');
+		});
+	}
+
 	public async openReference(reference: string): Promise<void> {
-		if (!await this.discardDraft()) { return; }
-		const generation = ++this.readGeneration;
-		const loading = this.memories.readReference(reference);
-		void this.getProgressIndicator().showWhile(loading, 150);
-		const result = await loading;
-		if (this.isDisposed || generation !== this.readGeneration) { return; }
-		this.selected = undefined;
-		this.showingReference = true;
-		this.titleInput.value = result.title;
-		this.body.value = result.body;
-		this.titleInput.readOnly = true;
-		this.body.readOnly = true;
-		this.save.disabled = true;
-		this.remove.disabled = true;
-		this.status.textContent = localize('memories.reference', 'Exact reference, revision {0}.', result.revision);
-		this.body.focus();
+		while (this.operation) { await this.operation; }
+		await this.perform(async () => {
+			if (!await this.discardDraft()) { return; }
+			const result = await this.memories.readReference(reference);
+			if (this.isDisposed) { return; }
+			this.selected = undefined;
+			this.draftOrigin = undefined;
+			this.referenceOrigin = result.origin;
+			this.showingReference = true;
+			this.titleInput.value = result.title;
+			this.body.value = result.body;
+			this.status.textContent = localize('memories.reference', 'Exact reference, revision {0}.', result.revision);
+			this.body.focus();
+		});
 	}
 
 	private refreshContexts(): void {
 		const document = this.element.ownerDocument;
 		this.context.replaceChildren(this.option('Personal memories', ''));
 		for (const conversation of this.sessions.getConversations()) {
+			if (conversation.kind !== 'code') { continue; }
 			const option = h(document, 'option');
 			option.value = conversation.threadId;
 			option.textContent = conversation.title;
@@ -148,24 +193,43 @@ export class MemoriesViewPane extends ViewPane {
 	}
 	private async refresh(): Promise<void> {
 		const generation = ++this.generation;
-		const scopes = await this.memories.scopes(this.context.value || undefined);
+		const [availableScopes, enabled] = await Promise.all([
+			this.memories.scopes(this.context.value || undefined),
+			this.memories.readModelMemoryEnabled(),
+		]);
 		if (this.isDisposed || generation !== this.generation) { return; }
+		this.modelMemoryEnabled.checked = enabled;
+		const scopes = this.draftOrigin ? availableScopes.filter(entry => entry.policy.scope.type === 'project') : availableScopes;
 		const current = this.policy && JSON.stringify(this.policy.scope);
-		this.scopes = scopes;
-		this.scope.replaceChildren(...scopes.map((entry, index) => this.option(entry.label, String(index))));
 		const index = scopes.findIndex(entry => JSON.stringify(entry.policy.scope) === current);
-		this.scope.value = String(Math.max(index, 0));
-		this.policy = scopes[Math.max(index, 0)]?.policy;
-		this.renderPolicy();
+		this.setScopes(scopes, this.draftOrigin ? index : Math.max(index, 0));
 		await this.loadList();
 		if (this.selected && !this.dirty) {
 			const entry = this.entries.find(entry => entry.id === this.selected?.id);
 			if (entry) { this.showMemory(await this.memories.read(entry)); }
 		}
 	}
+	private setScopes(scopes: readonly MemoryScopeEntry[], index: number): void {
+		this.scopes = scopes;
+		this.scope.replaceChildren(...scopes.map((entry, index) => this.option(entry.label, String(index))));
+		if (index < 0) {
+			this.scope.prepend(this.option(localize('memories.chooseProject', 'Choose a project'), ''));
+		}
+		this.scope.value = index < 0 ? '' : String(index);
+		this.policy = scopes[index]?.policy;
+		this.renderPolicy();
+	}
 	private async selectScope(): Promise<void> {
+		const nextPolicy = this.scope.value ? this.scopes[Number(this.scope.value)]?.policy : undefined;
+		if (this.draftOrigin && (!nextPolicy || nextPolicy.scope.type === 'project')) {
+			this.policy = nextPolicy;
+			this.mutationId = generateUuid();
+			this.renderPolicy();
+			await this.loadList();
+			return;
+		}
 		if (!await this.discardDraft()) { this.scope.value = String(this.scopes.findIndex(entry => JSON.stringify(entry.policy.scope) === JSON.stringify(this.policy?.scope))); return; }
-		this.policy = this.scopes[Number(this.scope.value)]?.policy;
+		this.policy = nextPolicy;
 		this.renderPolicy();
 		await this.newMemory();
 		await this.loadList();
@@ -197,6 +261,8 @@ export class MemoriesViewPane extends ViewPane {
 		this.showMemory(memory);
 	}
 	private showMemory(memory: Memory): void {
+		this.draftOrigin = undefined;
+		this.referenceOrigin = undefined;
 		this.mutationId = generateUuid();
 		this.selected = memory;
 		this.showingReference = false;
@@ -214,6 +280,8 @@ export class MemoriesViewPane extends ViewPane {
 		this.readGeneration++;
 		this.mutationId = generateUuid();
 		this.selected = undefined;
+		this.draftOrigin = undefined;
+		this.referenceOrigin = undefined;
 		this.showingReference = false;
 		this.titleInput.value = '';
 		this.body.value = '';
@@ -231,7 +299,7 @@ export class MemoriesViewPane extends ViewPane {
 		}
 		const result = this.selected
 			? await this.memories.update(this.selected, this.titleInput.value, this.body.value, this.mutationId)
-			: await this.memories.add(this.policy.scope, this.titleInput.value, this.body.value, this.mutationId);
+			: await this.memories.add(this.policy.scope, this.titleInput.value, this.body.value, this.mutationId, this.draftOrigin);
 		if (this.isDisposed) { return; }
 		this.showMemory(result);
 		await this.loadList();
@@ -255,16 +323,34 @@ export class MemoriesViewPane extends ViewPane {
 		if (discard.confirmed) { this.dirty = false; }
 		return discard.confirmed;
 	}
-	private async perform(operation: () => Promise<void>): Promise<void> {
-		if (this.working || this.isDisposed) { return; }
-		const previousFocus = this.element.ownerDocument.activeElement;
+	private perform(operation: () => Promise<void>): Promise<void> {
+		if (this.working || this.isDisposed) { return Promise.resolve(); }
+		this.operation = this.runOperation(operation).finally(() => { this.operation = undefined; });
+		return this.operation;
+	}
+	private async runOperation(operation: () => Promise<void>): Promise<void> {
+		const document = this.element.ownerDocument;
+		const previousFocus = document.activeElement;
 		this.working = true;
 		this.applyEnabled();
 		this.contentElement.setAttribute('aria-busy', 'true');
 		const progress = this.getProgressIndicator().show(true, 150);
-		try { await operation(); }
-		catch (error) { if (!this.isDisposed) { this.status.textContent = error instanceof Error ? error.message : String(error); } }
-		finally { progress.done(); this.working = false; this.contentElement.removeAttribute('aria-busy'); if (!this.isDisposed) { this.applyEnabled(); if (previousFocus instanceof HTMLElement && previousFocus.isConnected && this.contentElement.contains(previousFocus) && !this.contentElement.contains(this.element.ownerDocument.activeElement)) { previousFocus.focus(); } } }
+		try {
+			await operation();
+		} catch (error) {
+			if (!this.isDisposed) { this.status.textContent = error instanceof Error ? error.message : String(error); }
+		} finally {
+			progress.done();
+			this.working = false;
+			this.contentElement.removeAttribute('aria-busy');
+			if (!this.isDisposed) {
+				this.applyEnabled();
+				if (document.activeElement === document.body && previousFocus instanceof HTMLElement
+					&& this.contentElement.contains(previousFocus)) {
+					previousFocus.focus();
+				}
+			}
+		}
 	}
 	private async showHelp(): Promise<void> {
 		this.accessibleView.show(AccessibleViewType.Help);
@@ -281,6 +367,7 @@ export class MemoriesViewPane extends ViewPane {
 		this.next.disabled = this.working || !this.cursor;
 		this.reading.disabled = this.working || !this.policy;
 		this.saving.disabled = this.working || !this.policy;
+		this.openSource.hidden = !(this.selected?.origin ?? this.referenceOrigin ?? this.draftOrigin);
 	}
 	private option(label: string, value: string): HTMLOptionElement {
 		const option = h(this.element.ownerDocument, 'option'); option.textContent = label; option.value = value; return option;

@@ -37,6 +37,7 @@ pub struct AddMemoryRequest {
     pub scope: MemoryScope,
     pub title: String,
     pub body: String,
+    pub origin: Option<crate::MemoryTurnSource>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -142,7 +143,9 @@ impl Memories {
                         revision: 1,
                         title: request.title,
                         body: request.body,
-                        source: MemorySource::User,
+                        source: request
+                            .origin
+                            .map_or(MemorySource::User, MemorySource::UserFromTurn),
                         created_at_unix_ms: now,
                         updated_at_unix_ms: now,
                     },
@@ -505,6 +508,18 @@ impl Serialize for AddMemoryRequest {
     where
         S: serde::Serializer,
     {
+        // Keep existing command fingerprints valid for adds without a conversation source.
+        if let Some(origin) = &self.origin {
+            return (
+                &self.command_id,
+                &self.memory_id,
+                &self.scope,
+                &self.title,
+                &self.body,
+                origin,
+            )
+                .serialize(serializer);
+        }
         (
             &self.command_id,
             &self.memory_id,

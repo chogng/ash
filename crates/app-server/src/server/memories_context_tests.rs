@@ -8,8 +8,6 @@ use ash_file_access::GrantSource;
 use ash_file_access::Permissions;
 use ash_protocol::CommandId;
 use ash_protocol::ProjectId;
-use ash_protocol::SessionId;
-use ash_protocol::ThreadId;
 use ash_protocol::TurnId;
 use memories::AddMemoryRequest;
 use memories::Memories;
@@ -58,6 +56,14 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
         }),
     );
     let separate = create("memory-other", ash_protocol::SessionKind::Code, None);
+    let second_work = tempfile::tempdir().unwrap();
+    let linked = create(
+        "memory-linked",
+        ash_protocol::SessionKind::Code,
+        Some(ash_protocol::SessionExecutionTarget::Local {
+            root: second_work.path().to_str().unwrap().into(),
+        }),
+    );
     let (session, thread) = (code.session_id, code.thread_id);
     let turn = TurnId::new("turn").unwrap();
     let project = ProjectId::new("project").unwrap();
@@ -66,7 +72,7 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
             "create",
             0,
             ash_projects::ProjectCommand::Create {
-                scope: None,
+                scope: Some(ProjectScope::Code),
                 name: "project".into(),
                 description: String::new(),
                 materials: Vec::new(),
@@ -77,6 +83,20 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
             1,
             ash_projects::ProjectCommand::LinkSession {
                 session_id: session.clone(),
+            },
+        ),
+        (
+            "link-other-thread",
+            2,
+            ash_projects::ProjectCommand::LinkSession {
+                session_id: linked.session_id.clone(),
+            },
+        ),
+        (
+            "link-chat",
+            3,
+            ash_projects::ProjectCommand::LinkSession {
+                session_id: chat.session_id.clone(),
             },
         ),
     ] {
@@ -109,6 +129,7 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
                     scope: scope.clone(),
                     title: id.into(),
                     body: format!("Rust {id} decision"),
+                    origin: None,
                 },
                 &CancellationSource::new().token(),
             )
@@ -133,7 +154,7 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
     });
     memories_extension::install(
         &mut builder,
-        memories,
+        memories.clone(),
         scopes.clone(),
         Arc::new(super::super::update_broker::UpdateBroker::default()),
     );
@@ -161,17 +182,19 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
         ids
     };
     assert_eq!(read_ids(&request), ["dir", "profile", "project"]);
-    assert_eq!(
-        scopes.scopes(&chat.session_id, &chat.thread_id).unwrap(),
-        [MemoryScope::Profile, MemoryScope::Dir { dir_id: dir.id() }]
+    assert!(
+        scopes
+            .scopes(&chat.session_id, &chat.thread_id)
+            .unwrap()
+            .is_empty()
     );
-    assert_eq!(
+    assert!(
         read_ids(&ContextSourceRequest {
             session_id: &chat.session_id,
             thread_id: &chat.thread_id,
             ..request
-        }),
-        ["profile"]
+        })
+        .is_empty()
     );
     let other = ContextSourceRequest {
         session_id: &separate.session_id,
@@ -180,6 +203,20 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
         query: "Rust",
     };
     assert_eq!(read_ids(&other), ["profile"]);
+    let vague_query = ContextSourceRequest {
+        session_id: &linked.session_id,
+        thread_id: &linked.thread_id,
+        turn_id: &turn,
+        query: "按以前说的处理",
+    };
+    assert_eq!(read_ids(&vague_query), ["project"]);
+    assert!(
+        read_ids(&ContextSourceRequest {
+            query: vague_query.query,
+            ..other
+        })
+        .is_empty()
+    );
     dirs.unbind_thread_dir(&thread);
     assert_eq!(read_ids(&request), ["profile", "project"]);
     dirs.add_dir(
@@ -197,14 +234,26 @@ fn automatic_memories_follow_session_projects_and_current_directory_grants() {
     projects
         .apply(ash_projects::ProjectCommandRequest {
             command_id: CommandId::new("unlink").unwrap(),
-            project_id: project,
-            expected_revision: 2,
+            project_id: project.clone(),
+            expected_revision: 4,
             command: ash_projects::ProjectCommand::UnlinkSession {
                 session_id: session.clone(),
             },
         })
         .unwrap();
     assert_eq!(read_ids(&request), ["profile"]);
+    assert_eq!(read_ids(&vague_query), ["project"]);
+    memories
+        .delete(memories::DeleteMemoryRequest {
+            command_id: CommandId::new("delete-project-note").unwrap(),
+            memory_id: memories::MemoryId::new("project").unwrap(),
+            scope: MemoryScope::Project {
+                project_id: project,
+            },
+            expected_revision: 1,
+        })
+        .unwrap();
+    assert!(read_ids(&vague_query).is_empty());
 }
 
 struct RevokingModel {
@@ -303,6 +352,7 @@ fn memories_are_recollected_after_preflight_compaction_and_revocation() {
                 scope: MemoryScope::Profile,
                 title: "Rust decision".into(),
                 body: "Rust MEMORY_REVOKED_DURING_PREPARATION".into(),
+                origin: None,
             },
             &CancellationSource::new().token(),
         )
@@ -474,8 +524,23 @@ fn config_master_switch_stops_model_access_and_keeps_scope_permissions() {
         teams: None,
         dirs: Arc::new(DirGrants::default()),
     };
-    let session = SessionId::new("s").unwrap();
-    let thread = ThreadId::new("t").unwrap();
+    let created = threads
+        .start_thread(
+            &ash_core::NoThreadWorktreeBinder,
+            core_api::StartThreadRequest {
+                kind: SessionKind::Code,
+                agent_id: None,
+                agent: None,
+                command_id: CommandId::new("create-code").unwrap(),
+                title: "Code".into(),
+                branch_name: None,
+                worktree_start: None,
+                execution_target: None,
+            },
+        )
+        .unwrap();
+    let session = created.session_id;
+    let thread = created.thread_id;
     assert_eq!(
         scopes.scopes(&session, &thread).unwrap(),
         [MemoryScope::Profile]

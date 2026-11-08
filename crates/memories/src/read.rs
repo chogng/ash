@@ -20,11 +20,20 @@ const MAX_CANDIDATES: usize = 64;
 const MAX_ITEMS: usize = 8;
 const MAX_ITEM_BYTES: usize = 4096;
 const MAX_TOTAL_BYTES: usize = 16 * 1024;
+const MAX_PROJECT_INDEX_ITEMS: usize = 3;
+const MAX_PROJECT_INDEX_ITEM_BYTES: usize = 320;
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum MemoryNamespace {
+    Code,
+}
 
 /// An exact UTF-8 byte range in one immutable Memory revision; it grants no read authority.
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MemoryCitation {
+    pub namespace: MemoryNamespace,
     pub memory_id: MemoryId,
     pub scope: MemoryScope,
     #[ts(type = "number")]
@@ -128,6 +137,7 @@ impl Memories {
         check_cancellation(cancellation)?;
         validate_memory_citation(&memory, &citation)?;
         let citation = MemoryCitation {
+            namespace: MemoryNamespace::Code,
             memory_id: memory.memory_id.clone(),
             scope: memory.scope.clone(),
             revision: memory.revision,
@@ -151,6 +161,26 @@ impl Memories {
         query: &str,
         cancellation: &CancellationToken,
     ) -> Result<Vec<MemoryCitationResult>, MemoryError> {
+        self.collect(scopes, query, 0, cancellation)
+    }
+
+    /// Adds a small project index when the current wording yields no project matches.
+    pub fn collect_automatic_context(
+        &self,
+        scopes: Vec<MemoryScope>,
+        query: &str,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<MemoryCitationResult>, MemoryError> {
+        self.collect(scopes, query, MAX_PROJECT_INDEX_ITEMS, cancellation)
+    }
+
+    fn collect(
+        &self,
+        scopes: Vec<MemoryScope>,
+        query: &str,
+        project_index_limit: usize,
+        cancellation: &CancellationToken,
+    ) -> Result<Vec<MemoryCitationResult>, MemoryError> {
         check_cancellation(cancellation)?;
         let scopes = scopes.into_iter().collect::<BTreeSet<_>>();
         if scopes.len() > MAX_SCOPES {
@@ -159,16 +189,17 @@ impl Memories {
             ));
         }
         let terms = query_terms(query);
-        if terms.is_empty() || scopes.is_empty() {
+        if scopes.is_empty() || (terms.is_empty() && project_index_limit == 0) {
             return Ok(Vec::new());
         }
-        let mut candidates = self.store.context(&MemoryStoreContextRequest {
+        let mut context = self.store.context(&MemoryStoreContextRequest {
             scopes: scopes.into_iter().collect(),
             normalized_terms: terms.clone(),
             limit: MAX_CANDIDATES,
+            project_index_limit,
         })?;
         check_cancellation(cancellation)?;
-        candidates.sort_by_cached_key(|memory| {
+        context.matches.sort_by_cached_key(|memory| {
             let title = memory.title.to_lowercase();
             let body = memory.body.to_lowercase();
             let score = terms
@@ -179,11 +210,23 @@ impl Memories {
                 .sum::<usize>();
             (std::cmp::Reverse(score), memory.memory_id.clone())
         });
+        let match_limit = MAX_ITEMS.saturating_sub(context.project_index.len());
+        let candidates = context
+            .project_index
+            .into_iter()
+            .map(|memory| (memory, MAX_PROJECT_INDEX_ITEM_BYTES))
+            .chain(
+                context
+                    .matches
+                    .into_iter()
+                    .take(match_limit)
+                    .map(|memory| (memory, MAX_ITEM_BYTES)),
+            );
         let mut remaining = MAX_TOTAL_BYTES;
         let mut evidence = Vec::new();
-        for memory in candidates.into_iter().take(MAX_ITEMS) {
+        for (memory, max_bytes) in candidates {
             check_cancellation(cancellation)?;
-            let (citation, body) = excerpt(&memory, &terms, MAX_ITEM_BYTES.min(remaining));
+            let (citation, body) = excerpt(&memory, &terms, max_bytes.min(remaining));
             if body.is_empty() {
                 continue;
             }
@@ -255,6 +298,7 @@ pub(crate) fn excerpt(
     let end = start + text.len();
     (
         MemoryCitation {
+            namespace: MemoryNamespace::Code,
             memory_id: memory.memory_id.clone(),
             scope: memory.scope.clone(),
             revision: memory.revision,

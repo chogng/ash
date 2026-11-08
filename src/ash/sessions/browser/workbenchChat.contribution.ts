@@ -110,11 +110,12 @@ class ChatSessionNavigationService extends Disposable implements IChatSessionNav
 		return active ? { sessionId: active.session.sessionId, threadId: active.threadId } : undefined;
 	}
 
-	getConversations(): readonly { readonly providerId: string; readonly providerLabel?: string; readonly sessionId: string; readonly threadId: string; readonly title: string; }[] {
+	getConversations(): ReturnType<IChatSessionNavigationService['getConversations']> {
 		return this.sessions.sessions.filter(session => session.status === 'active').flatMap(session =>
 			session.chats.filter(chat => chat.status === 'active').map(chat => ({
 				providerId: session.providerId ?? LOCAL_AGENT_HOST_PROVIDER_ID,
 				providerLabel: session.providerLabel,
+				kind: session.kind,
 				sessionId: session.sessionId,
 				threadId: chat.threadId,
 				title: `${session.title} · ${chat.title ?? 'Conversation'}`,

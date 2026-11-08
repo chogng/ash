@@ -64,6 +64,7 @@ impl Fixture {
                     scope: MemoryScope::Profile,
                     title,
                     body,
+                    origin: None,
                 },
                 cancellation,
             ),

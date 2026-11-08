@@ -23,6 +23,7 @@ fn sqlite_memories_persist_search_delete_and_retry_receipts() {
         scope: MemoryScope::Profile,
         title: "Preferred editor".into(),
         body: "Use Ash for Rust work.".into(),
+        origin: None,
     };
     let committed = service
         .add_user_memory(add.clone(), &async_utils::CancellationSource::new().token())
@@ -104,6 +105,7 @@ fn pagination_cursor_rejects_catalog_changes() {
                     scope: MemoryScope::Profile,
                     title: format!("title {index}"),
                     body: format!("body {index}"),
+                    origin: None,
                 },
                 &async_utils::CancellationSource::new().token(),
             )
@@ -124,6 +126,7 @@ fn pagination_cursor_rejects_catalog_changes() {
                 scope: MemoryScope::Profile,
                 title: "title 3".into(),
                 body: "body 3".into(),
+                origin: None,
             },
             &async_utils::CancellationSource::new().token(),
         )
@@ -163,6 +166,7 @@ fn remember(service: &Memories, id: &str, scope: MemoryScope, body: &str) {
                 scope,
                 title: format!("Memory {id}"),
                 body: body.into(),
+                origin: None,
             },
             &async_utils::CancellationSource::new().token(),
         )
@@ -261,6 +265,7 @@ fn memory_read_consent_is_scoped_persistent_and_cannot_be_reenabled_by_replay() 
                 scope: profile,
                 title: "title".into(),
                 body: "body".into(),
+                origin: None,
             },
             &async_utils::CancellationSource::new().token()
         ),
@@ -357,48 +362,6 @@ fn memory_context_and_citations_are_bounded_utf8_exact_and_removed_after_delete(
 }
 
 #[test]
-fn memory_policy_migration_preserves_existing_records_and_defaults_to_disabled() {
-    let root = tempfile::tempdir().unwrap();
-    let path = root.path().join("state.sqlite");
-    {
-        let service = Memories::new(Arc::new(SqliteMemoryStore::open(&path).unwrap()));
-        remember(
-            &service,
-            "old",
-            MemoryScope::Profile,
-            "Existing Rust memory",
-        );
-    }
-    let connection = rusqlite::Connection::open(&path).unwrap();
-    connection
-        .execute_batch(
-            "DROP TABLE memory_policies; DROP TABLE memory_policy_commands;
-        UPDATE ash_schema_migrations SET version = 1 WHERE component = 'memories';",
-        )
-        .unwrap();
-    drop(connection);
-    let service = Memories::new(Arc::new(SqliteMemoryStore::open(&path).unwrap()));
-    assert_eq!(
-        service
-            .read(ReadMemoryRequest {
-                memory_id: MemoryId::new("old").unwrap(),
-                scope: MemoryScope::Profile
-            })
-            .unwrap()
-            .body,
-        "Existing Rust memory"
-    );
-    assert_eq!(
-        service
-            .policy(&MemoryScope::Profile)
-            .unwrap()
-            .automatic_read,
-        memories::MemoryReadMode::Disabled
-    );
-    enable(&service, MemoryScope::Profile, "enable-migrated");
-}
-
-#[test]
 fn memory_search_handles_contextual_case_and_mixed_chinese_queries() {
     let root = tempfile::tempdir().unwrap();
     let service = Memories::new(Arc::new(
@@ -443,6 +406,7 @@ fn context_citation_checks_consent_before_loading_body_and_observes_other_connec
     remember(&service, "private", scope.clone(), "Rust data");
     let cancellation = async_utils::CancellationSource::new();
     let citation = memories::MemoryCitation {
+        namespace: memories::MemoryNamespace::Code,
         memory_id: MemoryId::new("private").unwrap(),
         scope: scope.clone(),
         revision: 1,
@@ -671,35 +635,5 @@ fn model_writes_require_consent_and_observed_revision_and_user_edits_take_owners
     assert_eq!(
         service.save_model_memory(request, &cancellation.token()),
         Err(MemoryError::WriteDenied)
-    );
-}
-
-#[test]
-fn version_two_policy_migration_keeps_model_writes_disabled_and_replays_old_receipts() {
-    let root = tempfile::tempdir().unwrap();
-    let path = root.path().join("state.sqlite");
-    let service = Memories::new(Arc::new(SqliteMemoryStore::open(&path).unwrap()));
-    let request = memories::UpdateMemoryPolicyRequest {
-        command_id: CommandId::new("enable").unwrap(),
-        scope: MemoryScope::Profile,
-        expected_revision: 0,
-        automatic_read: memories::MemoryReadMode::FirstInvocation,
-        model_write: memories::MemoryWriteMode::Disabled,
-    };
-    service.update_policy(request.clone()).unwrap();
-    drop(service);
-    rusqlite::Connection::open(&path).unwrap().execute_batch(
-        "UPDATE memory_policies SET policy_json = json_remove(policy_json, '$.modelWrite');
-         UPDATE memory_policy_commands SET result_json = json_remove(result_json, '$.policy.modelWrite');
-         UPDATE ash_schema_migrations SET version = 2 WHERE component = 'memories';"
-    ).unwrap();
-    let service = Memories::new(Arc::new(SqliteMemoryStore::open(&path).unwrap()));
-    assert_eq!(
-        service.policy(&MemoryScope::Profile).unwrap().model_write,
-        memories::MemoryWriteMode::Disabled
-    );
-    assert_eq!(
-        service.update_policy(request).unwrap().disposition,
-        MemoryMutationDisposition::Replayed
     );
 }

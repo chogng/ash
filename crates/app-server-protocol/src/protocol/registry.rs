@@ -7579,6 +7579,8 @@ typescript_bindings! {
     memories::MemoryId,
     memories::MemoryScope,
     memories::MemorySource,
+    memories::MemoryTurnSource,
+    memories::MemoryNamespace,
     memories::Memory,
     memories::MemorySummary,
     memories::MemoryListPage,

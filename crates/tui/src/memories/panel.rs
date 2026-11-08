@@ -394,7 +394,7 @@ impl Panel {
                                 actions.insert(id.clone(), Action::Read(entry.id.clone()));
                                 let source = crate::nls::localize(
                                     self.language,
-                                    if entry.source == memories::MemorySource::User {
+                                    if entry.source.is_user_owned() {
                                         "User maintained"
                                     } else {
                                         "Model maintained"
@@ -1091,7 +1091,7 @@ impl Panel {
             && self
                 .editing
                 .as_ref()
-                .is_some_and(|memory| memory.source != memories::MemorySource::User)
+                .is_some_and(|memory| !memory.source.is_user_owned())
         {
             context
                 .localize("Saving makes this memory user maintained.")
@@ -1167,7 +1167,7 @@ impl Panel {
                 .or_else(|| self.citation.as_ref().map(|entry| entry.body.as_str()))
                 .unwrap_or("");
             let content = if let Some(memory) = memory {
-                let source = context.localize(if memory.source == memories::MemorySource::User {
+                let source = context.localize(if memory.source.is_user_owned() {
                     "User maintained"
                 } else {
                     "Model maintained"

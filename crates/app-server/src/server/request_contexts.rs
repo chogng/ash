@@ -516,6 +516,14 @@ impl super::memories_operations::MemoriesRequestProcessorContext for AppServer {
     ) -> Result<Vec<(memories::MemoryScope, String)>, String> {
         AppServer::memory_scope_labels(self, thread_id)
     }
+
+    fn validate_memory_origin(
+        &self,
+        origin: &memories::MemoryTurnSource,
+        scope: &memories::MemoryScope,
+    ) -> Result<(), super::RpcError> {
+        AppServer::validate_memory_origin(self, origin, scope)
+    }
 }
 
 impl super::network_operations::NetworkRequestProcessorContext for AppServer {

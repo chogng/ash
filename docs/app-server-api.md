@@ -108,7 +108,7 @@ Session 是按 `sessionId` 聚合 Thread 的只读树视图，不保存独立状
 
 Project 是独立持久化领域，保存长期根目录表以及对 Session 的弱关联；它不复制 Thread 事件，也不改变 Session 只读聚合语义。一次多 Agent 工作只由同一 Session 的 Agent tree 表达。目标 Team 另存跨任务成员关系和任务引用，不建立跨 Session 的执行树；见 [Agent Team](../crates/docs/agent-teams.md)。
 
-Memory 是独立 profile 持久化领域。它不属于 Thread transcript，也不因 Session 关闭而删除；Profile、Project 和 Dir 作用域使用各自稳定身份，Dir 作用域不保存路径。
+Memory 是供 Code 使用的独立 profile 持久化领域。它不属于 Thread transcript，也不因 Session 关闭而删除；Profile、Project 和 Dir 作用域使用各自稳定身份，Dir 作用域不保存路径。
 
 ## 2. 一致性模型
 
@@ -456,27 +456,31 @@ Connector account 是 GitHub、Slack 等外部产品账号，不是第 11 节的
 
 ### Memory
 
-`initialize.capabilities.memories` 表示当前 App Server 安装了 Memory 后端。所有 `memory/*` 方法只接受服务端授予的产品 host 连接；协议对端不能通过 initialize 参数提升权限。
+`initialize.capabilities.memories` 表示当前 App Server 安装了 Code Memory 后端。所有 `memory/*` 方法只接受服务端授予的产品 host 连接；协议对端不能通过 initialize 参数提升权限。Chat Session 没有可用的本地 Memory 作用域。Project Memory 只接受 Code Project。
 
 `config/update.features.memories` 是记忆总开关，默认关闭；`config/read.features` 返回其有效值与来源。关闭后模型的自动召回、搜索、引用读取和保存不可用；用户显式管理与各范围授权保留。每次准备上下文和执行模型记忆操作都重新检查当前配置。
 
 支持用户显式 add、update、list、read、search、delete、精确引用读取，以及独立授权的自动读取和模型保存。模型整理通过当前 Turn 的 `memories-save` 完成。add/update/delete 使用稳定 `commandId`；相同输入重放不会重复发布 `memory/changed`。删除后 live row、命令回执和 tombstone 都不保留 title/body，tombstone 只阻止 Memory ID 被重新使用。旧 add command 在删除后返回 `MemoryNotFound`，不会恢复正文。SQLite page、WAL 和外部备份的物理清理由存储维护策略负责，当前接口不把逻辑删除描述为介质擦除。
 
+`memory/add` 可携带 `origin`，包含来源消息的 `sessionId`、`threadId`、`turnId` 和 `itemId`。服务端要求目标是活跃 Project、来源 Session 属于该 Project，且指定 Item 确实是该 Thread 和 Turn 中的用户消息。记录仍归用户所有，编辑时保留来源。
+
 list/search 默认每页 20 条，最大 50 条。cursor 绑定 catalog revision、精确作用域和搜索 query；任一 Memory 变化后继续使用旧 cursor 返回 `MemoryCursorStale`。list 不返回正文，search 返回命中位置附近最多 1024 UTF-8 字节的摘录及 citation，read 返回完整的最多 16 KiB 正文。
 
-| Method                 | 输入                                                                    | 结果与行为                                                                                                          |
-| ---------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `memory/scopes`        | 可选 `threadId`                                                         | 返回 scope 标签和当前 policy；无 Thread 时返回 Profile，有 Thread 时包含当前关联 Project 与已授权 Dir               |
-| `memory/update`        | `commandId`、`memoryId`、`scope`、`expectedRevision`、`title`、`body`   | 更新精确版本并推进 revision，来源转为 user；保留创建时间，旧引用失效                                                |
-| `memory/citation/read` | `citation`                                                              | 返回相同引用、title、source、body；引用包含 `memoryId`、`scope`、`revision`、`startByte`、`endByte`                 |
-| `memory/policy/read`   | `scope`                                                                 | 返回 `scope`、`revision`、`automaticRead`、`modelWrite`；未配置时 revision 为 0，读取和模型保存均关闭               |
-| `memory/policy/update` | `commandId`、`scope`、`expectedRevision`、`automaticRead`、`modelWrite` | 返回 disposition、catalogRevision、policy；读取为 `disabled` / `firstInvocation`，模型保存为 `disabled` / `enabled` |
+| Method                 | 输入                                                                    | 结果与行为                                                                                                               |
+| ---------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `memory/scopes`        | 可选 `threadId`                                                         | 返回 scope 标签和当前 policy；无 Thread 时返回 Code Profile，Code Thread 返回关联作用域，Chat Thread 返回空列表          |
+| `memory/update`        | `commandId`、`memoryId`、`scope`、`expectedRevision`、`title`、`body`   | 更新精确版本并推进 revision，来源转为 user；保留创建时间，旧引用失效                                                     |
+| `memory/citation/read` | `citation`                                                              | 返回相同引用、title、source、body；引用包含 `namespace: "code"`、`memoryId`、`scope`、`revision`、`startByte`、`endByte` |
+| `memory/policy/read`   | `scope`                                                                 | 返回 `scope`、`revision`、`automaticRead`、`modelWrite`；未配置时 revision 为 0，读取和模型保存均关闭                    |
+| `memory/policy/update` | `commandId`、`scope`、`expectedRevision`、`automaticRead`、`modelWrite` | 返回 disposition、catalogRevision、policy；读取为 `disabled` / `firstInvocation`，模型保存为 `disabled` / `enabled`      |
 
 引用范围是半开 UTF-8 字节区间，不能切开字符；`memory:` 引用文本是相同 citation JSON 的 URL-safe Base64 编码。引用不授予读取权限。已删除引用返回 `MemoryNotFound`，版本不符返回 `MemoryConflict`，无效范围返回 `InvalidParams`。
 
 读取与模型保存授权由 Memory 领域独立持久化。每次成功修改增加该作用域 policy revision 与 catalog revision，并发布不含正文的 `memory/changed`；并发旧版本返回 `MemoryConflict`。重放返回原命令结果且不重复应用，关闭授权后重放旧开启命令不会重新启用；客户端重连后重新读取 policy。
 
 开启 `firstInvocation` 后，每个 Turn 的首次模型调用按当前任务关联的活跃 Project、Thread 绑定目录、Session 已授权读取的目录及 Profile 检索；每个作用域都必须单独开启。Project 关联本身不授予目录权限。最多处理 32 个作用域、输入前 2048 个字符中的 16 个查询词、64 条候选；最终最多 8 条、单条正文 4 KiB、正文合计 16 KiB，并继续接受 Core 的模型预算限制。
+
+自动召回在当前查询未命中 Project 记忆时，从已获读取授权的关联 Project 取最近更新的最多 3 条作为索引，每条正文至多 320 字节，并计入同一预算。显式搜索仍按查询词返回命中。
 
 `ext/memories` 注册以下模型工具。宿主绑定 Session、Thread 身份；保存只能选择当前任务已授权的 scope，模型不能扩大范围或伪造身份。
 搜索和引用读取复用对应作用域的 `firstInvocation` 读取授权；`disabled` 同时关闭自动召回与工具读取。模型保存由独立的 `modelWrite` 控制。
@@ -498,7 +502,6 @@ list/search 默认每页 20 条，最大 50 条。cursor 绑定 catalog revision
 
 通过截止点后的取消不打断事务；Memory 领域返回实际提交结果或存储错误，已提交写入仍发布通知。RPC 请求整体仍遵循请求取消规则，客户端收到 `RequestCancelled` 不代表写入已撤销；可使用相同 `commandId` 与参数重试，按现有回执及版本规则确认结果。模型合并前须用 `memories-read` 取得完整正文并保留已有事实。
 
-Schema v2 升级到 v3 时保留读取授权，模型保存设为 `disabled`，旧授权回执仍可重放但不会重新应用。记录更新后，旧写回执不会恢复旧正文；已有后续版本时返回冲突。
 模型主动调用产生的工具结果按普通 Tool Result 保存；撤销读取授权或删除 Memory 不会追溯删除既有任务历史。
 
 自动读取只产生临时的低信任参考材料，不写入系统指令或 Thread 历史。授权与正文在同一 SQLite 读取事务中取快照；该快照前提交的删除或撤销立即生效，已交给模型的请求不会被追溯修改。上下文准备因压缩或计量重试时重新读取。来源失败使本次 Turn 明确失败，取消沿现有 Turn 中断链路传播。上述显式短查询没有单独的取消资源；connection 关闭不删除持久 Memory 或读取授权。

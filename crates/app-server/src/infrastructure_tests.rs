@@ -1002,6 +1002,7 @@ fn memory_extension_tools_execute_in_turns_and_survive_host_composition_order() 
         std::fs::create_dir(&skills).unwrap();
         let body = "Rust persisted decision";
         let citation = memories::MemoryCitation {
+            namespace: memories::MemoryNamespace::Code,
             memory_id: memories::MemoryId::new("decision").unwrap(),
             scope: memories::MemoryScope::Profile,
             revision: 1,
@@ -1167,6 +1168,7 @@ fn memories_code_mode_calls_share_identity_policy_and_durable_results() {
     for enabled in [true, false] {
         let root = tempfile::tempdir().unwrap();
         let citation = memories::MemoryCitation {
+            namespace: memories::MemoryNamespace::Code,
             memory_id: memories::MemoryId::new("seed").unwrap(),
             scope: memories::MemoryScope::Profile,
             revision: 1,

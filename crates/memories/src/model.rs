@@ -104,15 +104,31 @@ impl MemoryScope {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MemoryTurnSource {
+    pub session_id: ash_protocol::SessionId,
+    pub thread_id: ash_protocol::ThreadId,
+    pub turn_id: ash_protocol::TurnId,
+    pub item_id: ash_protocol::ItemId,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
 #[ts(rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum MemorySource {
     User,
+    UserFromTurn(MemoryTurnSource),
     Model {
         session_id: ash_protocol::SessionId,
         thread_id: ash_protocol::ThreadId,
         turn_id: ash_protocol::TurnId,
     },
+}
+
+impl MemorySource {
+    pub fn is_user_owned(&self) -> bool {
+        matches!(self, Self::User | Self::UserFromTurn(_))
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, JsonSchema, PartialEq, Serialize, TS)]

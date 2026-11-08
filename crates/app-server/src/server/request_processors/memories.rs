@@ -24,6 +24,11 @@ pub(super) trait MemoriesRequestProcessorContext: Send + Sync {
         &self,
         thread_id: Option<&ash_protocol::ThreadId>,
     ) -> Result<Vec<(memories::MemoryScope, String)>, String>;
+    fn validate_memory_origin(
+        &self,
+        origin: &memories::MemoryTurnSource,
+        scope: &memories::MemoryScope,
+    ) -> Result<(), RpcError>;
 }
 
 pub(super) struct MemoriesRequestProcessor<'ctx, C: MemoriesRequestProcessorContext + ?Sized> {
@@ -123,6 +128,9 @@ impl<'ctx, C: MemoriesRequestProcessorContext + ?Sized> MemoriesRequestProcessor
     ) -> Result<Value, RpcError> {
         let params: MemoryAddParams = decode(value)?;
         self.authorize_memory_scope(connection, &params.scope)?;
+        if let Some(origin) = &params.origin {
+            self.context.validate_memory_origin(origin, &params.scope)?;
+        }
         self.context.refresh_analytics()?;
         let mutation = self
             .memories(connection)?
@@ -133,6 +141,7 @@ impl<'ctx, C: MemoriesRequestProcessorContext + ?Sized> MemoriesRequestProcessor
                     scope: params.scope,
                     title: params.title,
                     body: params.body,
+                    origin: params.origin,
                 },
                 cancellation,
             )
@@ -303,11 +312,18 @@ impl<'ctx, C: MemoriesRequestProcessorContext + ?Sized> MemoriesRequestProcessor
     ) -> Result<(), RpcError> {
         self.memories(connection)?;
         if let memories::MemoryScope::Project { project_id } = scope {
-            self.projects
+            let project = self
+                .projects
                 .as_deref()
                 .ok_or_else(|| RpcError::new(-32130, AppServerErrorName::MemoryUnavailable))?
                 .read(project_id)
                 .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
+            if project.scope() != ash_projects::ProjectScope::Code {
+                return Err(RpcError::new(
+                    -32073,
+                    AppServerErrorName::PermissionRequired,
+                ));
+            }
         }
         if let memories::MemoryScope::Team { team_id } = scope {
             self.teams

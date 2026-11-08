@@ -9,6 +9,144 @@ use serde_json::json;
 use std::sync::Arc;
 
 #[test]
+fn project_memory_from_message_keeps_verified_source_and_user_ownership() {
+    use ash_protocol::CommandId;
+    use ash_protocol::ProjectId;
+    use ash_protocol::ThreadItem;
+
+    let root = tempfile::tempdir().unwrap();
+    let path = root.path().join("state.sqlite");
+    let server = AppServer::new(
+        Arc::new(ThreadController::with_store(Arc::new(
+            InMemoryThreadStore::default(),
+        ))),
+        Arc::new(crate::local::ProviderModelService::new(Arc::new(EchoModel))),
+        ash_app_server_diff::compute,
+    )
+    .with_ephemeral_env_state()
+    .with_local_projects(&path)
+    .unwrap()
+    .with_local_memories(&path)
+    .unwrap();
+    let mut host = server.product_host_connection();
+    let mut request_id = 0;
+    let mut call = |method: &str, params: Value| {
+        request_id += 1;
+        crate::tests::call(
+            &server,
+            &mut host,
+            json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":params}),
+        )
+    };
+    assert!(
+        call(
+            "initialize",
+            json!({"clientInfo":{"name":"test","version":"1"}})
+        )
+        .get("result")
+        .is_some()
+    );
+    let created = call(
+        "session/create",
+        json!({
+            "commandId":"create-session", "kind":"code", "title":"Project work", "executionTarget":null,
+        }),
+    );
+    assert!(created.get("result").is_some(), "{created}");
+    let session_id = created["result"]["session"]["sessionId"].as_str().unwrap();
+    let created = call(
+        "session/request",
+        json!({
+            "commandId":"create-thread", "sessionId":session_id, "request":{"type":"createThread","title":"root"},
+        }),
+    );
+    let thread_id = created["result"]["value"]["threadId"].as_str().unwrap();
+    let thread = ash_protocol::ThreadId::new(thread_id).unwrap();
+    let sequence = server.threads().read_thread(&thread).unwrap().sequence;
+    let started = call(
+        "session/request",
+        json!({
+            "commandId":"start-turn", "sessionId":session_id, "request":{
+            "type":"startTurn", "threadId":thread_id, "expectedSequence":sequence, "mode":"agent",
+                "input":[{"type":"text","text":"The demo uses the violet sample."}],
+            },
+        }),
+    );
+    assert!(started.get("result").is_some(), "{started}");
+    let snapshot = server.threads().read_thread(&thread).unwrap();
+    let (turn, item) = snapshot
+        .items
+        .iter()
+        .find_map(|item| match item {
+            ThreadItem::UserMessage {
+                item_id, turn_id, ..
+            } => Some((turn_id, item_id)),
+            _ => None,
+        })
+        .unwrap();
+    let project = ProjectId::new("demo").unwrap();
+    let coordinator = server.projects.as_ref().unwrap();
+    for (command_id, expected_revision, command) in [
+        (
+            "create-project",
+            0,
+            ash_projects::ProjectCommand::Create {
+                scope: Some(ash_projects::ProjectScope::Code),
+                name: "Demo".into(),
+                description: String::new(),
+                materials: Vec::new(),
+            },
+        ),
+        (
+            "link-session",
+            1,
+            ash_projects::ProjectCommand::LinkSession {
+                session_id: snapshot.session_id.clone(),
+            },
+        ),
+    ] {
+        coordinator
+            .apply(ash_projects::ProjectCommandRequest {
+                command_id: CommandId::new(command_id).unwrap(),
+                project_id: project.clone(),
+                expected_revision,
+                command,
+            })
+            .unwrap();
+    }
+
+    let origin = json!({"sessionId":session_id,"threadId":thread_id,"turnId":turn,"itemId":item});
+    let scope = json!({"type":"project","projectId":"demo"});
+    let add = json!({
+        "commandId":"remember", "memoryId":"demo-note", "scope":scope,
+        "title":"Demo sample", "body":"The demo uses the violet sample.", "origin":origin,
+    });
+    let mut forged = add.clone();
+    forged["origin"]["itemId"] = json!("nonexistent-item");
+    assert_eq!(
+        call("memory/add", forged)["error"]["message"],
+        "InvalidParams"
+    );
+    let saved = call("memory/add", add.clone());
+    assert_eq!(
+        saved["result"]["memory"]["source"]["userFromTurn"], origin,
+        "{saved}"
+    );
+    assert_eq!(call("memory/add", add)["result"]["disposition"], "replayed");
+    let edited = call(
+        "memory/update",
+        json!({
+            "commandId":"edit", "memoryId":"demo-note", "scope":scope,
+            "expectedRevision":1, "title":"Demo sample", "body":"Use the violet sample for demos.",
+        }),
+    );
+    assert_eq!(
+        edited["result"]["memory"]["source"]["userFromTurn"], origin,
+        "{edited}"
+    );
+}
+
+#[test]
 fn memory_requests_forward_cancellation_and_only_notify_committed_writes() {
     for revision in [0, 1] {
         let root = tempfile::tempdir().unwrap();

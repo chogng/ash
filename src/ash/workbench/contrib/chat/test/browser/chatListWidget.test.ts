@@ -549,21 +549,26 @@ test('streamed memory references retain their buttons, code editor and focus as 
 	using widget = services.createInstance(ChatListWidget, document.createElement('main'), { onDidRequestMemoryReference: (value: string) => opened.push(value) });
 	document.body.append(widget.element);
 	resources.add(toDisposable(() => widget.element.remove()));
-	const text = 'memory:first\n\n```ts\nconst a = 1;\n```';
+	const reference = (memoryId: string, namespace?: 'code') => `memory:${Buffer.from(JSON.stringify({
+		namespace, memoryId, scope: { type: 'profile' }, revision: 1, startByte: 0, endByte: 1,
+	})).toString('base64url')}`;
+	const firstReference = reference('first', 'code');
+	const secondReference = reference('second', 'code');
+	const text = [reference('old'), firstReference, '```ts\nconst a = 1;\n```'].join('\n\n');
 	widget.render([{ id: 'reply', type: 'agentMessage', text, transient: true }]);
 	const code = widget.element.querySelector('.ash-chat-code-block')!;
 	const button = [...widget.element.querySelectorAll('button')].find(button => button.textContent === 'Open memory reference 1')!;
 	button.focus();
-	widget.render([{ id: 'reply', type: 'agentMessage', text: text + '\n\nmemory:second', transient: false }]);
+	widget.render([{ id: 'reply', type: 'agentMessage', text: text + '\n\n' + secondReference, transient: false }]);
 	assert.equal(widget.element.querySelector('.ash-chat-code-block'), code);
 	assert.equal(document.activeElement, button);
 	button.click();
 	const second = [...widget.element.querySelectorAll('button')].find(button => button.textContent === 'Open memory reference 2')!;
 	second.click();
-	assert.deepEqual(opened, ['memory:first', 'memory:second']);
+	assert.deepEqual(opened, [firstReference, secondReference]);
 	widget.render([]);
 	button.click();
-	assert.deepEqual(opened, ['memory:first', 'memory:second']);
+	assert.deepEqual(opened, [firstReference, secondReference]);
 });
 
 

@@ -36,6 +36,10 @@ pub(super) struct SessionExecutionRoute {
 }
 
 impl SessionExecutionRoute {
+    pub(super) fn kind(&self) -> SessionKind {
+        self.kind
+    }
+
     pub(super) fn new(kind: SessionKind, target: Option<SessionExecutionTarget>) -> Self {
         Self {
             kind,
@@ -87,7 +91,7 @@ impl SessionExecutionRoute {
         }
     }
 
-    fn allows_workspace(&self) -> bool {
+    pub(super) fn allows_workspace(&self) -> bool {
         if self.directory_configured {
             return self.target.is_some();
         }
