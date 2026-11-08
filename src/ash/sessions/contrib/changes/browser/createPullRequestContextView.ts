@@ -13,6 +13,7 @@ import { sessionWorkspaceUri } from '../../../common/sessionWorkspace.js';
 import { URI } from '../../../../base/common/uri.js';
 import { ISessionProviderScopeService, type ISessionProviderScope } from '../../../browser/agentHost/sessionProviderScopeService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
+import { chatExecutionWorkspace } from '../../../services/sessions/common/session.js';
 import type { ISessionPullRequestCreation, ISessionPullRequestOptions, SessionPullRequestMergeMethod } from '../common/pullRequestCreation.js';
 import { CreatePullRequestChatRequest } from './createPullRequestChatRequest.js';
 import { CreatePullRequestWidget, type ICreatePullRequestWidgetOptions } from './createPullRequestWidget.js';
@@ -52,7 +53,10 @@ export class CreatePullRequestContextView extends Disposable {
 
 	private selectionKey(): string | undefined {
 		const selected = this.sessions.activeSelection;
-		return selected?.kind === 'session' ? JSON.stringify([selected.active.session.sessionId, selected.active.threadId, selected.active.session.workspace]) : undefined;
+		if (selected?.kind !== 'session') return undefined;
+		const { session, threadId } = selected.active;
+		const workspace = chatExecutionWorkspace(session, session.chats.find(chat => chat.threadId === threadId));
+		return JSON.stringify([session.sessionId, threadId, workspace]);
 	}
 
 	public async show(anchor: HTMLElement, creation?: ISessionPullRequestCreation): Promise<void> {
@@ -118,9 +122,11 @@ export class CreatePullRequestContextView extends Disposable {
 
 	private async prepareCreation(): Promise<ISessionPullRequestCreation | undefined> {
 		const selected = this.sessions.activeSelection;
-		const workspace = selected?.kind === 'session' ? selected.active.session.workspace : undefined;
-		if (!workspace || selected?.kind !== 'session') { return undefined; }
-		const sessionId = selected.active.session.sessionId;
+		if (selected?.kind !== 'session') { return undefined; }
+		const { session, threadId } = selected.active;
+		const workspace = chatExecutionWorkspace(session, session.chats.find(chat => chat.threadId === threadId));
+		if (!workspace) { return undefined; }
+		const sessionId = session.sessionId;
 		const scope = this.scope;
 		if (!scope) throw new CancellationError();
 		const host = scope.services.host;

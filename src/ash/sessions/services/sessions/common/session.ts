@@ -145,6 +145,11 @@ export function chatExecutionWorkspace(session: ISession, chat: IChat | undefine
 	return chat?.workspace === undefined ? session.workspace : chat.workspace;
 }
 
+/** Session-wide repository views follow the root Thread's checkout. */
+export function sessionExecutionWorkspace(session: ISession): ISessionWorkspace | null | undefined {
+	return chatExecutionWorkspace(session, session.chats.find(chat => chat.origin.type === 'root'));
+}
+
 /** Native Chat can enter Code once its Thread has a bound execution workspace. */
 export function canOpenThreadInCode(session: ISession, chat: IChat): boolean {
 	return chat.status === 'active' && (session.kind !== 'chat' || !!chatExecutionWorkspace(session, chat));

@@ -103,6 +103,17 @@ test('Session repository contexts use the captured connection and retain typed m
 	assert.deepEqual(calls, [['git/repositoryContexts', { sessionDirectory: { sessionId: 'same-session', path: '/historical' } }]]);
 });
 
+test('session repository contexts are empty when inspection is denied and propagate Git failures', async () => {
+	let failure = new AppServerRemoteError(-32043, 'PermissionRequired', { kind: 'PermissionRequired' });
+	const service = new AppServerLocalGitService({
+		generation: 1, state: 'ready', onStateChange: Event.None, request: async () => { throw failure; },
+	} as unknown as AppServerProtocolClient);
+	const directory = { sessionId: 'session', path: '/history' };
+	assert.deepEqual(await service.readRepositoryContexts(directory), []);
+	failure = new AppServerRemoteError(-32061, 'GitOperationFailed', { kind: 'GitOperationFailed' });
+	await assert.rejects(service.readRepositoryContexts(directory), error => error === failure);
+});
+
 test('repository reads retire on caller cancellation or connection replacement and cannot publish late snapshots', async () => {
 	const { DeferredPromise } = await import('../../../../base/common/async.js');
 	const { CancellationTokenSource } = await import('../../../../base/common/cancellation.js');

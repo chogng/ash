@@ -17,7 +17,7 @@ export interface ILocalGitService {
 	readonly _serviceBrand: undefined;
 	/** Ready checkouts for a trusted source path, or for the connection's workspace repositories. */
 	listWorktrees(token: CancellationToken, sourcePath?: string): Promise<readonly { readonly label: string; readonly path: string; readonly sourcePath: string; }[]>;
-	/** Read-only repository metadata authorized by this Session's execution directory. */
+	/** Read-only repository metadata for this Session's execution directory. Returns an empty list when inspection is not authorized. */
 	readRepositoryContexts(directory: { readonly sessionId: string; readonly path: string; }, token?: CancellationToken): Promise<readonly GitRepositoryContext[]>;
 	/** Clones into a new absolute host path. Ref selects a branch, tag or full commit ID. */
 	clone(operationId: string, cloneUrl: string, targetPath: string, ref?: string): Promise<void>;

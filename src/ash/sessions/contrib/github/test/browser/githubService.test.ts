@@ -118,7 +118,7 @@ function fixture(overrides: Partial<IGitHubService> = {}, gitOverrides: Partial<
 }
 
 suite('Session GitHub associations', () => {
-	test('equal backend Session and repository IDs route through the owning host and preserve its remote workspace', async () => {
+	test('equal backend Session and repository IDs route through the owning host to the root Thread worktree', async () => {
 		const calls: string[] = [];
 		using context = fixture({ attachSessionPullRequest: async id => { calls.push(`primary:${id}`); } });
 		const changed = new Emitter<string>();
@@ -136,12 +136,15 @@ suite('Session GitHub associations', () => {
 				localGit: {
 					...context.host.localGit, readRepositoryContexts: async directory => {
 						calls.push(`remote:repos:${directory.sessionId}:${directory.path}`);
-						return [{ id: 'repo', label: 'repo', path: '', rootPath: '/work', head: { type: 'branch', name: 'feature' }, remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'repo' } }] }];
+						return [{ id: 'repo', label: 'repo', path: '', rootPath: '/worktrees/session', head: { type: 'branch', name: 'feature' }, remotes: [{ name: 'origin', identity: { provider: 'github', host: 'github.com', owner: 'team', repository: 'repo' } }] }];
 					}
 				},
 			};
 			const scope = context.addHost('remote', host);
-			const remote = { ...session, sessionId: scope.identity('session'), providerId: 'remote', workspace: { authorityId: 'ssh+build', root: '/work' } };
+			const remote = {
+				...session, sessionId: scope.identity('session'), providerId: 'remote', workspace: { authorityId: 'ssh+build', root: '/work' },
+				chats: session.chats.map(chat => ({ ...chat, workspace: { authorityId: 'ssh+build', root: '/worktrees/session' } })),
+			};
 			context.catalog.push(remote);
 			context.select({ kind: 'session', active: { session: remote, threadId: 'thread' } });
 			await context.nextChange();
@@ -149,7 +152,7 @@ suite('Session GitHub associations', () => {
 			await context.service.attachPullRequest(remote.sessionId, pullRequest.url);
 			await context.service.detachPullRequest(remote.sessionId, { repository: { host: 'github.com', owner: 'team', name: 'repo' }, number: 7 });
 			assert.ok(calls.includes('remote:list:session'));
-			assert.ok(calls.includes('remote:repos:session:/work'));
+			assert.ok(calls.includes('remote:repos:session:/worktrees/session'));
 			assert.ok(calls.includes('remote:attach:session'));
 			assert.ok(calls.includes('remote:detach:session'));
 			assert.equal(calls.some(call => call.startsWith('primary:')), false);

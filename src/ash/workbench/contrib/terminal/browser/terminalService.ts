@@ -316,16 +316,18 @@ export class TerminalService extends Disposable implements ITerminalService {
 		const state = parseTerminalReloadState(text);
 		const revive = !credentials && state.kind === 'revive';
 		if (!credentials && (!revive || this.configuration.getValue<string>('terminal.integrated.persistentSessionReviveProcess') === 'never')) return;
-		const scope = terminalExecutionScope(this.workspaceContext.getWorkspace());
+		// Empty checkpoints have no process identity to validate or restore.
+		if (state.instances.length === 0) return;
+		const workspace = await this.workspaceContext.getCompleteWorkspace?.() ?? this.workspaceContext.getWorkspace();
+		if (this.isDisposed || credentials && credentials.expiresAt < Date.now()) return;
+		const scope = terminalExecutionScope(workspace);
 		if (scope.workspaceId !== state.workspaceId || scope.remoteAuthority !== state.remoteAuthority) throw new Error('Terminal checkpoint belongs to another workspace or host');
 		// Validate the complete checkpoint before any bearer credential attaches a process.
 		for (const snapshot of state.instances) {
-			const folders = this.workspaceContext.getWorkspace().folders;
+			const folders = workspace.folders;
 			if (parseTerminalUri(URI.parse(snapshot.resource)).instanceId !== snapshot.instanceId
 				|| !(snapshot.dirId === '' && folders.length === 0 || folders.some(folder => folder.id === snapshot.dirId))) throw new TypeError('Invalid terminal checkpoint identity');
 		}
-		// An empty checkpoint needs no process API, including hosts without a PTY backend.
-		if (state.instances.length === 0) return;
 		if (!revive && !this.processService.attach) throw new Error('Terminal attachment is unavailable');
 		const screens: Promise<unknown>[] = [];
 		const failures: unknown[] = [];

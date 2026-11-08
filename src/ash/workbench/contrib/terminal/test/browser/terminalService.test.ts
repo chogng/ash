@@ -331,22 +331,28 @@ test('the signal picker sends only its accepted item and retires when the active
 	assert.deepEqual(processes.closeCalls, []);
 });
 
-test('TerminalService restores an empty reload checkpoint without a process attachment capability', async () => {
+test('TerminalService accepts an empty reload checkpoint after the workspace changes without needing a process attachment capability', async () => {
 	const processes = new TestTerminalProcessService([]);
 	using workspace = new TestWorkspaceService({ id: 'empty-reload' });
 	using services = terminalServices(processes, workspace);
 	const stateKey = 'terminal.reload.12345678-1234-1234-1234-123456789abc';
 	services.get(IStorageService).store(stateKey, JSON.stringify({
-		version: 1, workspaceId: 'empty-reload', instances: [], groups: [],
+		version: 1, workspaceId: 'previous-workspace', instances: [], groups: [],
 	}), StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	await services.get(ISecretStorageService).set(TerminalStorageKeys.Reload, JSON.stringify({
 		stateKey, expiresAt: Date.now() + 60_000, leases: [],
 	}));
 	assert.equal((processes as ITerminalProcessService).attach, undefined);
-	const terminals = services.get(ITerminalService);
-	await terminals.whenConnected;
-	assert.deepEqual(terminals.instances, []);
-	assert.equal(processes.createCalls.length, 0);
+	const errors: unknown[] = [];
+	const previous = errorHandler.getUnexpectedErrorHandler();
+	setUnexpectedErrorHandler(error => errors.push(error));
+	try {
+		const terminals = services.get(ITerminalService);
+		await terminals.whenConnected;
+		assert.deepEqual(terminals.instances, []);
+		assert.deepEqual(processes.createCalls, []);
+		assert.deepEqual(errors, []);
+	} finally { setUnexpectedErrorHandler(previous); }
 });
 
 for (const rejectFirst of [false, true]) {

@@ -163,6 +163,7 @@ import { NotificationActionRunner } from '../../workbench/browser/parts/notifica
 import '../../workbench/contrib/accessibility/browser/accessibleViewActions.js';
 import { addDisposableListener, h, type IDimension } from '../../base/browser/dom.js';
 import { canceled, errorHandler, getErrorMessage, onUnexpectedError, setUnexpectedErrorHandler } from '../../base/common/errors.js';
+import { DeferredPromise } from '../../base/common/async.js';
 import { mainWindow } from '../../base/browser/window.js';
 import { Event } from '../../base/common/event.js';
 import { SessionsViewRegistry } from '../common/views.js';
@@ -447,7 +448,12 @@ export abstract class Workbench extends Disposable {
 		this._register(fileService.registerProvider(Schemas.vscodeUserData, userDataFileSystemProvider));
 		services.registerInstance(IUserDataProfileService, new UserDataProfileService());
 		services.registerInstance(IFileService, fileService);
-		const configurationService = this.configurationService = this._register(services.createInstance(ConfigurationService, { initialConfiguration: options.initialConfiguration, workspace: options.workspace() }));
+		const workspaceProjectionReady = new DeferredPromise<void>();
+		void workspaceProjectionReady.p.catch(() => undefined);
+		this._register(toDisposable(() => { void workspaceProjectionReady.complete(); }));
+		const configurationService = this.configurationService = this._register(services.createInstance(ConfigurationService, {
+			initialConfiguration: options.initialConfiguration, workspace: options.workspace(), initialWorkspaceReady: workspaceProjectionReady.p,
+		}));
 		services.registerInstance(IStorageService, storageService);
 		const extensionManagementService = this._register(new AppServerExtensionManagementService(options.api.extensionManagement, options.api.events));
 		services.registerInstance(IExtensionManagementService, extensionManagementService);
@@ -1203,7 +1209,19 @@ export abstract class Workbench extends Disposable {
 		// Re-reading all workspace files here would turn a disconnected backend into a fatal startup error.
 		this.whenRestored = Promise.all([keybindingsReady, extensionReady, ...serviceContributionReady, options.initialWorkspaceReady]).then(async () => {
 			if (!this.isDisposed && options.initialWorkspaceReady) workspace.updateWorkspace(options.workspace());
-			await this.initialize(view, ownerWindow, entryLayout, contributions, storage, recoveredDrafts);
+			await this.initialize(view, ownerWindow, entryLayout, contributions, storage, recoveredDrafts, () => {
+				// Terminal editors can wait on PTY recovery during layout restore. Publish the
+				// selected execution directory first, including when the catalog is still hydrating.
+				const selection = view.activeSelection;
+				if (selection?.kind === 'session') {
+					const { session, threadId } = selection.active;
+					if (session.chats.find(chat => chat.threadId === threadId)?.workspace === undefined) {
+						workspaceProjectionReady.settleWith(sessions.prepareThread(session.sessionId, threadId));
+						return;
+					}
+				}
+				void workspaceProjectionReady.complete();
+			});
 			if (this.isDisposed) return;
 			using suppression = entryLayout.suppressEditorAutoVisibility();
 			const previousGroups = new Set(editor.groups.map(group => group.id));
@@ -1227,6 +1245,7 @@ export abstract class Workbench extends Disposable {
 			}
 			if (editor.groups.includes(previousActive)) editor.activateGroup(previousActive.id);
 		});
+		void this.whenRestored.catch(error => workspaceProjectionReady.error(error));
 	}
 
 	async acceptHandoff(options: IOpenAgentsWindowOptions): Promise<void> {
@@ -1249,7 +1268,7 @@ export abstract class Workbench extends Disposable {
 		return this.lifecycleService.shutdown(reason);
 	}
 
-	private async initialize(view: SessionsService, ownerWindow: Window, entryLayout: ISessionsLayoutService, contributions: WorkbenchContributionHost, storage: IStorageService, recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>): Promise<void> {
+	private async initialize(view: SessionsService, ownerWindow: Window, entryLayout: ISessionsLayoutService, contributions: WorkbenchContributionHost, storage: IStorageService, recoveredDrafts: ReturnType<typeof migrateNewChatDraftState>, publishWorkspaceReady: () => void): Promise<void> {
 		if (this.isDisposed) return;
 		await view.initialize();
 		if (this.isDisposed) return;
@@ -1262,6 +1281,7 @@ export abstract class Workbench extends Disposable {
 			storage.remove(recovered.key, StorageScope.WORKSPACE);
 		}
 		view.activateSelection(selected, { source: 'restore' });
+		publishWorkspaceReady();
 		await entryLayout.restore();
 		if (this.isDisposed) return;
 		const revision = view.navigationRevision;

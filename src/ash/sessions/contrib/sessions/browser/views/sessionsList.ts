@@ -37,7 +37,7 @@ import { IGitHubService } from '../../../github/browser/githubService.js';
 import { getPullRequestLabel } from '../../../github/common/types.js';
 import { getHighestPriorityPullRequestIcon } from '../../../../../workbench/common/chatPullRequest.js';
 import { sessionManagementLabel } from '../../../../browser/sessionManagementLabels.js';
-import type { IChat, ISession, SessionManagementInfo } from '../../../../services/sessions/common/session.js';
+import { sessionExecutionWorkspace, type IChat, type ISession, type SessionManagementInfo } from '../../../../services/sessions/common/session.js';
 import type { ThemeIcon } from '../../../../../base/common/themables.js';
 import { colorCssVariable } from '../../../../../platform/theme/common/colorUtils.js';
 import { autorun, derived, observableFromEvent, type IObservable } from '../../../../../base/common/observable.js';
@@ -63,7 +63,7 @@ import type { ContextMenuAnchor } from '../../../../../base/browser/contextmenu.
 import { Menus } from '../../../../browser/menus.js';
 import type { SessionGroupingContext, SessionsCatalogAccessibility, SessionsCatalogListInput, SessionsCatalogProjectAppearance, SessionsCatalogProjectOperations, SessionsCatalogRow } from './sessionsCatalogList.js';
 import { CancellationTokenSource, type CancellationToken } from '../../../../../base/common/cancellation.js';
-import { DeferredPromise, RunOnceScheduler } from '../../../../../base/common/async.js';
+import { DeferredPromise, raceCancellationError, RunOnceScheduler } from '../../../../../base/common/async.js';
 import { basename, extUriBiasedIgnorePathCase } from '../../../../../base/common/resources.js';
 import { sessionWorkspaceUri } from '../../../../common/sessionWorkspace.js';
 import { ISessionProviderScopeService } from '../../../../browser/agentHost/sessionProviderScopeService.js';
@@ -1050,23 +1050,46 @@ export class SessionsList extends DomWidget {
 		return JSON.stringify([session.sessionId, session.workspace?.authorityId, session.workspace?.root]);
 	}
 
-	private async loadRepositoryGroups(sessions: readonly SessionGroupingContext[]): Promise<void> {
+	private repositoryGroupingContext(session: SessionGroupingContext, catalog: ReadonlyMap<string, ISession>): SessionGroupingContext {
+		const owner = catalog.get(session.sessionId);
+		return owner ? { ...session, workspace: sessionExecutionWorkspace(owner) } : session;
+	}
+
+	private async loadRepositoryGroups(sessions: readonly SessionGroupingContext[], catalog: ReadonlyMap<string, ISession>): Promise<void> {
 		const scopes = this.providerScopes;
 		if (!scopes || this.repositoryLookup.value) {
 			return;
 		}
-		const missing = sessions.filter(session => session.workspace && !this.repositoryGroups.has(this.repositoryKey(session)));
+		const needsDirectory = (session: SessionGroupingContext): boolean => catalog.get(session.sessionId)?.chats.some(chat =>
+			chat.origin.type === 'root' && chat.status === 'active' && chat.workspace === undefined) ?? false;
+		const missing = sessions.filter(session => {
+			const context = this.repositoryGroupingContext(session, catalog);
+			return (context.workspace || needsDirectory(session)) && !this.repositoryGroups.has(this.repositoryKey(context));
+		});
 		if (!missing.length) {
 			return;
 		}
 		const lookup = this.repositoryLookup.value = new CancellationTokenSource();
 		const token = lookup.token;
 		await Promise.resolve();
+		if (missing.some(needsDirectory)) {
+			// Catalog rows can arrive before their Thread directories. Use the hydrated
+			// checkout when it is available, even for rows supplied by a separate sidebar.
+			await raceCancellationError(this.sessionService.whenDirectoriesReady(), token).catch(() => undefined);
+			catalog = new Map(this.sessionService.sessions.map(session => [session.sessionId, session]));
+		}
 		for (const session of missing) {
 			if (token.isCancellationRequested || this.isDisposed) {
 				return;
 			}
-			const workspace = session.workspace!;
+			const context = this.repositoryGroupingContext(session, catalog);
+			const workspace = context.workspace;
+			const key = this.repositoryKey(context);
+			if (this.repositoryGroups.has(key)) continue;
+			if (!workspace) {
+				this.repositoryGroups.set(key, undefined);
+				continue;
+			}
 			let bucket: SessionBucket | undefined;
 			try {
 				const scope = scopes.getScope(session.sessionId);
@@ -1091,7 +1114,7 @@ export class SessionsList extends DomWidget {
 			if (token.isCancellationRequested || this.isDisposed) {
 				return;
 			}
-			this.repositoryGroups.set(this.repositoryKey(session), bucket);
+			this.repositoryGroups.set(key, bucket);
 		}
 		this.repositoryLookup.clear();
 		this.render();
@@ -1448,12 +1471,12 @@ export class SessionsList extends DomWidget {
 				const row = remaining.get(session.sessionId);
 				if (row) ungrouped.push([row, session]);
 			}
-			if (grouping === 'repository') {
-				void this.loadRepositoryGroups(ungrouped.flatMap(([, session]) => session ? [session] : []));
-			}
+			const repositoryCatalog = grouping === 'repository' ? new Map(this.sessionService.sessions.map(session => [session.sessionId, session])) : undefined;
+			if (repositoryCatalog) void this.loadRepositoryGroups(ungrouped.flatMap(([, session]) => session ? [session] : []), repositoryCatalog);
 			const buckets = new Map<string, { readonly label: string; readonly rows: HTMLElement[]; }>();
 			for (const [row, session] of ungrouped) {
-				const { id, label } = this.sessionBucket(session, grouping, projectsBySession);
+				const context = repositoryCatalog && session ? this.repositoryGroupingContext(session, repositoryCatalog) : session;
+				const { id, label } = this.sessionBucket(context, grouping, projectsBySession);
 				let bucket = buckets.get(id);
 				if (!bucket) {
 					bucket = { label, rows: [] };

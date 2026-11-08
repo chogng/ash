@@ -182,6 +182,10 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 			}
 			if (!revive || snapshot.launch) snapshots.push(snapshot);
 		}
+		if (snapshots.length === 0) {
+			await this.clearCheckpoint(true);
+			return;
+		}
 		const scope = terminalExecutionScope(this.workspace.getWorkspace());
 		const ids = new Set(snapshots.map(snapshot => snapshot.instanceId));
 		const state: ITerminalReloadState = {
@@ -216,7 +220,7 @@ export class TerminalNativeContribution extends Disposable implements IWorkbench
 		if (text && (!credentials || credentials.expiresAt >= Date.now())) {
 			const state = parseTerminalReloadState(text);
 			const scope = terminalExecutionScope(this.workspace.getWorkspace());
-			if (state.workspaceId !== scope.workspaceId || state.remoteAuthority !== scope.remoteAuthority) {
+			if (state.instances.length === 0 || state.workspaceId !== scope.workspaceId || state.remoteAuthority !== scope.remoteAuthority) {
 				await this.clearCheckpoint(true);
 				return;
 			}

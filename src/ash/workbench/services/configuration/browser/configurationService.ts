@@ -26,6 +26,7 @@ const configurationModelLog = new NullLoggerService();
 
 export interface WorkspaceServiceOptions {
 	readonly workspace?: IAnyWorkspaceIdentifier | IWorkspace;
+	readonly initialWorkspaceReady?: Promise<void>;
 	readonly initialConfiguration?: IConfigurationModel;
 	readonly registry?: IConfigurationRegistry;
 	readonly onError?: (error: unknown) => void;
@@ -60,6 +61,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	private workspaceResource: WorkspaceConfiguration | FolderConfiguration | undefined;
 	private workspaceInitialized = false;
 	private workspace: IWorkspace;
+	private readonly initialWorkspaceReady: Promise<void> | undefined;
 	private workspaceFolders: TernarySearchTree<URI, IWorkspaceFolder>;
 	private readonly workspaceChanged = this._register(new Emitter<IWorkspaceChangeEvent>());
 	readonly onDidChangeWorkspace = this.workspaceChanged.event;
@@ -85,6 +87,7 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 	) {
 		super();
 		this.workspace = resolveWorkspace(options.workspace ?? { id: 'empty-window' });
+		this.initialWorkspaceReady = options.initialWorkspaceReady;
 		this.workspaceFolders = indexWorkspaceFolders(this.workspace);
 		this.settingsResource = profile.currentProfile.settingsResource;
 		this.userSettings = this._register(new UserSettings(
@@ -113,6 +116,11 @@ export class WorkspaceService extends Disposable implements IConfigurationServic
 				}
 			}
 		}));
+	}
+
+	async getCompleteWorkspace(): Promise<IWorkspace> {
+		await this.initialWorkspaceReady;
+		return this.getWorkspace();
 	}
 
 	getWorkspace(): IWorkspace {

@@ -257,6 +257,16 @@ suite('Desktop terminal exit revival', () => {
 		assert.deepEqual({ committed, errors: scope.errors, closes: scope.closes }, { committed: true, errors: [], closes: [] });
 	});
 
+	test('reloading with no restorable terminals leaves no checkpoint or credentials', async () => {
+		using owner = new DisposableStore();
+		const scope = fixture(owner, async () => { });
+		const storage = scope.services.get(IStorageService);
+		await scope.lifecycle.shutdown('reload');
+		assert.deepEqual(storage.keys(StorageScope.WORKSPACE, StorageTarget.MACHINE).filter(key => key.startsWith(`${TerminalStorageKeys.Reload}.`)), []);
+		assert.equal(await scope.services.get(ISecretStorageService).get(TerminalStorageKeys.Reload), undefined);
+		assert.deepEqual(scope.errors, []);
+	});
+
 	test('reload still fails if a live terminal cannot obtain its credential because of a transport error', async () => {
 		using owner = new DisposableStore();
 		const scope = fixture(owner, async () => { });

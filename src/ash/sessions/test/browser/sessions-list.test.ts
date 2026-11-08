@@ -847,11 +847,17 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	const manual: ISession = {
 		...makeSession('manual'),
 		workspace: { authorityId: 'local', root: '/workspace/repo/folder' },
+		chats: [{ threadId: 'root', status: 'active', origin: { type: 'root' } }],
 		management: { status: 'working', statusChangedAtUnixMs: 1 },
 	};
 	const automated: ISession = { ...makeSession(remoteId), source: 'automation' };
 	const catalog = [manual, makeSession('run'), automated];
-	const management = { sessions: catalog, untitledSessions: [], state: 'ready', onDidChange: Event.None } as unknown as ISessionsManagementService;
+	const management = {
+		sessions: catalog, untitledSessions: [], state: 'ready', onDidChange: Event.None,
+		whenDirectoriesReady: async () => {
+			catalog[0] = { ...manual, chats: [{ ...manual.chats[0]!, workspace: { authorityId: 'local', root: '/worktrees/repo/folder' } }] };
+		},
+	} as unknown as ISessionsManagementService;
 	let activeSelection: ISessionsService['activeSelection'];
 	const view = { onDidChange: selectionChanged.event, get activeSelection() { return activeSelection; } } as unknown as ISessionsService;
 	const github = { onDidChange: Event.None, getSessionPullRequests: () => [] } as unknown as import('../../contrib/github/browser/githubService.js').IGitHubService;
@@ -862,7 +868,7 @@ test('The sidebar filters durable automation metadata and preserves the active s
 		description: '', materials: [], sessionIds: ['manual', 'run'],
 	};
 	const projects = { onDidChange: Event.None, list: async () => [project], read: async () => project } as unknown as IProjectService;
-	const repositoryReads: unknown[] = [];
+	const repositoryReads: { sessionId: string; path: string; }[] = [];
 	const scopes = {
 		onDidChangeScopes: Event.None,
 		getScope: () => ({
@@ -871,10 +877,10 @@ test('The sidebar filters durable automation metadata and preserves the active s
 			services: {
 				host: {
 					localGit: {
-						readRepositoryContexts: async (directory: unknown) => {
+						readRepositoryContexts: async (directory: { sessionId: string; path: string; }) => {
 							repositoryReads.push(directory);
 							return [{
-								label: 'repo', rootPath: '/workspace/repo',
+								label: 'repo', path: '', rootPath: '/worktrees/repo',
 								remotes: [{ name: 'origin', identity: { host: 'git.example', owner: 'team', repository: 'repo' } }],
 							}];
 						},
@@ -953,14 +959,14 @@ test('The sidebar filters durable automation metadata and preserves the active s
 	assert.equal(working.querySelector('h3 button')?.textContent, '进行中');
 	assert.equal(chat.domNode.querySelector('[data-parent-section="grouping:status:working"][data-row-order-id]')?.getAttribute('data-row-order-id'), 'manual');
 	assert.equal(submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.status').checked, true);
-	assert.deepEqual(repositoryReads, []);
+	assert.equal(repositoryReads.length, 0);
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.projects').run();
 	assert.equal(chat.domNode.querySelector('[data-row-order-id="manual"]')?.getAttribute('data-parent-section'), 'grouping:projects:release');
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.environment').run();
 	assert.equal(chat.domNode.querySelector('[data-section="grouping:environment:local"] h3 button')?.textContent, '本地');
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.repository').run();
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual(repositoryReads, [{ sessionId: 'manual', path: '/workspace/repo/folder' }]);
+	assert.deepEqual(repositoryReads.filter(read => read.sessionId === 'manual'), [{ sessionId: 'manual', path: '/worktrees/repo/folder' }]);
 	assert.ok([...chat.domNode.querySelectorAll('[data-section^="grouping:repository:"] > h3 button')].some(button => button.textContent === 'team/repo'));
 	await submenuAction(chat, 'sessions.list.groupBy', 'sessions.list.groupBy.none').run();
 	assert.equal(chat.domNode.querySelector('[data-section^="grouping:"]'), null);

@@ -54,7 +54,10 @@ export class AppServerLocalGitService implements ILocalGitService {
 		using cancellation = new CancellationTokenSource(token);
 		using subscription = this.connection.onStateChange(state => { if (state !== 'ready') cancellation.cancel(); });
 		if (cancellation.token.isCancellationRequested || this.connection.state !== 'ready') throw canceled();
-		const result = await raceCancellationError(appServerRequest(this.connection, 'git/repositoryContexts', { sessionDirectory: directory }), cancellation.token);
+		const result = await raceCancellationError(appServerRequest(this.connection, 'git/repositoryContexts', { sessionDirectory: directory }), cancellation.token).catch(error => {
+			if (error instanceof AppServerRemoteError && error.errorName === 'PermissionRequired') return { repositories: [] };
+			throw error;
+		});
 		if (cancellation.token.isCancellationRequested || generation !== this.connection.generation) throw canceled();
 		return result.repositories.map(repository => ({
 			id: repository.id, label: repository.label, path: repository.path, rootPath: repository.rootPath,

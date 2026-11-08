@@ -118,7 +118,10 @@ fn historical_session_repository_contexts_use_its_grant_without_environment_fall
         denied.get("error").is_some(),
         "Session grants must not cross identities: {denied}"
     );
-    assert_eq!(denied["error"]["code"], -32064, "{denied}");
+    assert_eq!(
+        denied["error"]["data"]["kind"], "PermissionRequired",
+        "{denied}"
+    );
     let revoked = call(
         &server,
         &mut connection,
@@ -130,7 +133,10 @@ fn historical_session_repository_contexts_use_its_grant_without_environment_fall
         retired.get("error").is_some(),
         "revoked historical scope must not fall back to primary: {retired}"
     );
-    assert_eq!(retired["error"]["code"], -32064, "{retired}");
+    assert_eq!(
+        retired["error"]["data"]["kind"], "PermissionRequired",
+        "{retired}"
+    );
     server.close_connection(connection);
 }
 
