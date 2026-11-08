@@ -1,4 +1,5 @@
 .ash-sessions-inbox-button.ash-button {
+	--ash-toolbar-actionSize: var(--ash-spacing-size280);
 	position: relative;
 	flex: 0 0 auto;
 	width: var(--ash-toolbar-actionSize);
@@ -27,10 +28,10 @@
 
 .ash-sessions-inbox {
 	box-sizing: border-box;
-	width: min(272px, calc(100vw - var(--ash-spacing-size160)));
 	max-height: min(360px, 60vh);
 	padding: var(--ash-spacing-size80);
 	overflow: auto;
+	overflow-wrap: anywhere;
 	border-radius: inherit;
 }
 
@@ -61,7 +62,6 @@
 	color: inherit;
 	font: inherit;
 	text-align: start;
-	overflow-wrap: anywhere;
 }
 
 .ash-sessions-inbox-row:hover {

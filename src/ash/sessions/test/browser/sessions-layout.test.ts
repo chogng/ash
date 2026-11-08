@@ -434,7 +434,7 @@ test('Sessions sidebar clamps at its minimum, snaps closed and restores from the
 		drag(-100);
 		assert.equal(layout.isPartVisible('sidebar'), false);
 		assert.equal(layout.state.sidebar.visible, false);
-		assert.equal(parts.get('titlebar')!.domNode.style.getPropertyValue('--ash-sessions-titlebar-sidebar-width'), '0px');
+		assert.equal(layout.mainContainer.style.getPropertyValue('--ash-sessions-sidebar-width'), '0px');
 		assert.equal(layout.isPartVisible('sidebar'), false, 'Rebuilding the Grid retains the snapped state');
 		drag(110);
 		assert.equal(layout.isPartVisible('sidebar'), true);

@@ -3,10 +3,9 @@
 		var(--ash-titlebar-controls-leftInset, 0px);
 	background: linear-gradient(
 		to right,
-		var(--ash-sideBar-background) 0
-			var(--ash-sessions-titlebar-sidebar-width, 0px),
+		var(--ash-sideBar-background) 0 var(--ash-sessions-sidebar-width, 0px),
 		var(--ash-sessions-titlebar-background, var(--ash-titleBar-background))
-			var(--ash-sessions-titlebar-sidebar-width, 0px)
+			var(--ash-sessions-sidebar-width, 0px)
 	);
 }
 
@@ -17,8 +16,7 @@
 	top: 0;
 	bottom: 0;
 	left: calc(
-		var(--ash-sessions-titlebar-sidebar-width, 0px) -
-			var(--ash-strokeThickness)
+		var(--ash-sessions-sidebar-width, 0px) - var(--ash-strokeThickness)
 	);
 	width: var(--ash-strokeThickness);
 	border-right: var(--ash-strokeThickness) solid
@@ -47,8 +45,7 @@
 	/* The intrinsic minimum keeps collapsed controls usable; padding matches sidebar navigation. */
 	padding-right: calc(var(--ash-spacing-size80) + var(--ash-strokeThickness));
 	width: calc(
-		var(--ash-sessions-titlebar-sidebar-width, 0px) -
-			var(--ash-spacing-size80) -
+		var(--ash-sessions-sidebar-width, 0px) - var(--ash-spacing-size80) -
 			var(--ash-titlebar-controls-leftInset, 0px)
 	);
 	flex: 0 1 auto;

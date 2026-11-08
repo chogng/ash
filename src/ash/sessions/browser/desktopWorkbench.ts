@@ -537,7 +537,7 @@ export class DesktopWorkbenchLayout
 					this.conversationWidth = this.getViewSize(this.view('sessions')).width;
 
 				this.updateContentCorners();
-				this.updateTitlebarSurface();
+				this.updateSidebarWidth();
 				this.publishPartVisibility();
 				this.saveState();
 				// Publish completed sash geometry to overlays and the shared startup cache.
@@ -593,7 +593,7 @@ export class DesktopWorkbenchLayout
 			}
 		}
 		this.grid.layout(dimension.width, dimension.height);
-		this.updateTitlebarSurface();
+		this.updateSidebarWidth();
 		if (this.partUpdateDepth > 0) return;
 		if (
 			this.primaryPart === 'editor' &&
@@ -901,11 +901,11 @@ export class DesktopWorkbenchLayout
 		}
 	}
 
-	private updateTitlebarSurface(): void {
+	private updateSidebarWidth(): void {
 		const width = this.isViewVisible(this.view('sidebar'))
 			? this.getViewSize(this.view('sidebar')).width
 			: 0;
-		this.view('titlebar').part.domNode.style.setProperty('--ash-sessions-titlebar-sidebar-width', `${width}px`);
+		this.mainContainer.style.setProperty('--ash-sessions-sidebar-width', `${width}px`);
 	}
 
 	private publishPartVisibility(): void {

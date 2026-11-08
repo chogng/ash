@@ -1,4 +1,5 @@
-import { addDisposableListener, getWindow, h } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
+import { observeResize } from '../../../../base/browser/observer.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { AnchorAlignment, AnchorPosition, ContextViewFocusRestore } from '../../../../base/browser/ui/contextview/contextview.js';
 import { equals } from '../../../../base/common/arrays.js';
@@ -42,7 +43,7 @@ export class SessionInbox extends Disposable {
 	private renderedItems: readonly InboxItem[] = [];
 
 	constructor(
-		@ISessionsSidebarFooter sidebar: ISessionsSidebarFooter,
+		@ISessionsSidebarFooter private readonly sidebar: ISessionsSidebarFooter,
 		@IAgentWorkbenchLayoutService layout: IAgentWorkbenchLayoutService,
 		@ISessionsManagementService catalog: ISessionsManagementService,
 		@ISessionsService private readonly sessions: ISessionsService,
@@ -155,21 +156,45 @@ export class SessionInbox extends Disposable {
 			this.contextViews.hide();
 			return;
 		}
-		const panel = h(this.button.domNode.ownerDocument, 'section', { className: 'ash-sessions-inbox' });
+		const button = this.button.domNode;
+		const footer = this.sidebar.footer;
+		const panel = h(button.ownerDocument, 'section', { className: 'ash-sessions-inbox' });
 		panel.setAttribute('role', 'dialog');
 		panel.setAttribute('aria-label', title);
 		panel.tabIndex = -1;
 		this.render(panel, this.items.get());
+		const updateWidth = () => {
+			const { width } = footer.getBoundingClientRect();
+			panel.style.width = `calc(${width}px - 2 * (var(--ash-spacing-size120) + var(--ash-strokeThickness)))`;
+		};
+		updateWidth();
+		const resizeFrame = new MutableDisposable();
+		const resize = observeResize(footer, () => {
+			// Updating the dialog also resizes the shared ContextView.
+			resizeFrame.value = scheduleAtNextAnimationFrame(getWindow(footer), updateWidth);
+		});
 		this.panel = panel;
 		this.button.focus();
 		if (this.contextViews.show({
-			anchor: this.button.domNode,
+			// Center across the sidebar while keeping the vertical anchor on the button.
+			anchor: {
+				get left() {
+					const { left, width } = footer.getBoundingClientRect();
+					return left + width / 2;
+				},
+				get top() { return button.getBoundingClientRect().top; },
+				width: 0,
+				get height() { return button.getBoundingClientRect().height; },
+			},
 			anchorPosition: AnchorPosition.Above,
-			anchorAlignment: AnchorAlignment.Right,
+			anchorAlignment: AnchorAlignment.Center,
 			content: panel,
 			presentation: 'dialog',
 			focusRestore: ContextViewFocusRestore.Previous,
+			isTargetWithin: target => button.contains(target),
 			onHide: () => {
+				resize.dispose();
+				resizeFrame.dispose();
 				this.panel = undefined;
 				this.renderedItems = [];
 				this.button.toggleClassName('expanded', false);

@@ -65,13 +65,14 @@ for (const [id, title, icon] of [
 }
 const titlebar = resources.add(registerTestTitlebarServices(registerTestComponentServices(services, document)).createInstance(TitlebarPart, root, document.body.dataset.os === 'mac' ? 'actions-only' : 'application-menu'));
 titlebar.domNode.classList.add('ash-electron-titlebar');
-titlebar.domNode.style.cssText = 'height: 36px; flex: 0 0 auto; --ash-sessions-titlebar-sidebar-width: 260px;';
+titlebar.domNode.style.cssText = 'height: 36px; flex: 0 0 auto;';
+root.style.setProperty('--ash-sessions-sidebar-width', '260px');
 const nativeGeometry = document.createElement('style');
 document.head.append(nativeGeometry);
 
 window.ashSessionsTitlebarFixture = {
 	get minimumSidebarWidth() { return titlebar.minimumSidebarWidth; },
-	setSidebarWidth(width: number) { titlebar.domNode.style.setProperty('--ash-sessions-titlebar-sidebar-width', `${width}px`); },
+	setSidebarWidth(width: number) { root.style.setProperty('--ash-sessions-sidebar-width', `${width}px`); },
 	setInsets(left: number, right: number) {
 		nativeGeometry.textContent = `.ash-electron-titlebar { --ash-titlebar-controls-leftInset: ${left}px; --ash-titlebar-controls-rightInset: ${right}px; }`;
 	},

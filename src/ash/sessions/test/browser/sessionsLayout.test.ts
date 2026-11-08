@@ -477,12 +477,32 @@ suite('sessions browser component', () => {
 	});
 
 	for (const locale of ['en', 'zh-CN']) test(`Agent Window shortcuts open from Accounts and Settings (${locale})`, async function () {
-		const { page } = browserTests;
+		const { page, info } = browserTests;
 		const chinese = locale === 'zh-CN';
 		if (chinese) await page.goto('/sessions.html?catalog&locale=zh-CN');
 		const accounts = page.getByRole('button', { name: chinese ? '账户' : 'Accounts', exact: true });
 		const label = chinese ? '快捷键' : 'Keyboard Shortcuts';
 		await accounts.press('Enter');
+		const footer = page.locator('.ash-sessions-sidebar-footer');
+		const menu = page.locator('.ash-sessions-sidebar-account-menu');
+		const shell = menu.locator('..');
+		const expectMenuInsets = async () => {
+			await expect(menu).toBeVisible();
+			const bounds = (await shell.boundingBox())!;
+			const sidebar = (await footer.boundingBox())!;
+			expect(Math.round(bounds.x - sidebar.x)).toBe(12);
+			expect(Math.round(sidebar.x + sidebar.width - bounds.x - bounds.width)).toBe(12);
+			expect(bounds.y + bounds.height).toBeLessThan((await accounts.boundingBox())!.y);
+		};
+		await expectMenuInsets();
+		await page.keyboard.press('Escape');
+		await expect(accounts).toBeFocused();
+		const width = (await footer.boundingBox())!.width;
+		await page.locator('.ash-primary-sidebar-sash').press('ArrowRight');
+		await expect.poll(async () => (await footer.boundingBox())!.width).toBeGreaterThan(width);
+		await accounts.click();
+		await expectMenuInsets();
+		await page.screenshot({ path: info.outputPath('sessions-sidebar-account-menu.png') });
 		const menuItem = page.getByRole('menuitem', { name: label, exact: true });
 		await expect(menuItem.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'record-keys');
 		await menuItem.press('Enter');
@@ -759,13 +779,26 @@ suite('sessions browser component', () => {
 		const chat = modes.getByRole('button').first();
 		const inbox = page.getByRole('button', { name: /^收件箱/u });
 		const panel = page.getByRole('dialog', { name: '收件箱', exact: true });
+		const footer = page.locator('.ash-sessions-sidebar-footer');
+		const expectEvenInsets = () => expect.poll(async () => {
+			const bounds = (await panel.locator('..').boundingBox())!;
+			const sidebar = (await footer.boundingBox())!;
+			return [Math.round(bounds.x - sidebar.x), Math.round(sidebar.x + sidebar.width - bounds.x - bounds.width)];
+		}).toEqual([12, 12]);
 		const icon = inbox.locator('[data-ash-icon-id="inbox"]');
 		await expect(icon).toHaveCSS('font-family', '"Ash UI Variable"');
 		await expect(icon).toHaveCSS('font-size', '18px');
+		await inbox.hover();
+		const sidebarToggle = page.locator('[data-action-id="ash.sessions.toggleSidebar"] button');
+		for (const button of [inbox, sidebarToggle]) {
+			await expect(button).toHaveCSS('width', '28px');
+			await expect(button).toHaveCSS('height', '28px');
+		}
 		await chat.click();
 		await expect(inbox).toHaveAccessibleName('收件箱');
 		await inbox.press('Enter');
 		await expect(panel).toContainText('没有需要关注的会话。');
+		await expectEvenInsets();
 		await page.keyboard.press('Escape');
 		await expect(inbox).toBeFocused();
 		await inbox.press('Alt+F1');
@@ -786,6 +819,7 @@ suite('sessions browser component', () => {
 		const unread = panel.getByRole('button', { name: 'Task from Host A 未读回复' });
 		await expect(waiting).toBeVisible();
 		await expect(unread).toBeVisible();
+		await expectEvenInsets();
 		const panelBounds = (await panel.boundingBox())!;
 		expect(panelBounds.y + panelBounds.height).toBeLessThan(inboxBounds.y);
 		await page.screenshot({ path: info.outputPath('sessions-inbox-zh-CN.png') });
@@ -805,6 +839,14 @@ suite('sessions browser component', () => {
 		await expect(inbox).toHaveAccessibleName('收件箱');
 		await code.click();
 		await expect(inbox).toHaveAccessibleName('收件箱，1 项需要关注');
+
+		await inbox.click();
+		const previousWidth = (await footer.boundingBox())!.width;
+		await page.locator('.ash-primary-sidebar-sash').press('ArrowRight');
+		await expect.poll(async () => (await footer.boundingBox())!.width).toBeGreaterThan(previousWidth);
+		await expectEvenInsets();
+		await inbox.click();
+		await expect(panel).toBeHidden();
 	});
 
 	test('Activity Bar uses fixed sizes across positions and preserves account ownership', async function () {
@@ -851,6 +893,7 @@ suite('sessions browser component', () => {
 		await titlebarAccounts.press('Enter');
 		await expect(titlebarAccounts).toHaveAttribute('aria-expanded', 'true');
 		await expect(page.getByRole('menuitem', { name: 'Settings', exact: true })).toBeVisible();
+		await expect(page.locator('.ash-sessions-account-menu')).not.toHaveClass(/ash-sessions-sidebar-account-menu/);
 		await page.keyboard.press('Escape');
 		await expect(titlebarAccounts).toHaveAttribute('aria-expanded', 'false');
 		await expect(topHost.locator('button').first()).toHaveAttribute('aria-label', /New/);
