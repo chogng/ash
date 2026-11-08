@@ -70,11 +70,10 @@ test('Sessions common entry supplies shared Chat services and startup contributi
 	const { getSingletonServiceDescriptors } = await import('../../../platform/instantiation/common/extensions.js');
 	const { WorkbenchContributionsRegistry } = await import('../../../workbench/common/contributions.js');
 	const { IChatEditingService } = await import('../../../workbench/contrib/chat/common/editing/chatEditingService.js');
-	const { IDictationOnboardingService } = await import('../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js');
 	const { IChatDebugService } = await import('../../../workbench/contrib/chat/common/chatDebugService.js');
 	const { IChatResponseResourceFileSystemProvider } = await import('../../../workbench/contrib/chat/common/widget/chatResponseResourceFileSystemProvider.js');
 	const registrations = getSingletonServiceDescriptors();
-	for (const id of [IChatEditingService, IDictationOnboardingService, IChatDebugService, IChatResponseResourceFileSystemProvider]) {
+	for (const id of [IChatEditingService, IChatDebugService, IChatResponseResourceFileSystemProvider]) {
 		assert.equal(registrations.filter(([candidate]) => candidate === id).length, 1, String(id));
 	}
 	using services = new InstantiationService();

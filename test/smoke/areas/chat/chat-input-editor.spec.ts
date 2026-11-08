@@ -232,14 +232,6 @@ test('Desktop Chat guides a missing local model to Dictation settings without op
 		await expect(button).not.toHaveAttribute('aria-pressed', 'true');
 		await expect(composer).toHaveCSS('height', '84px');
 		await expect(chat.locator('.stanza-editor-line-text')).toHaveText('Keep this draft');
-		await button.focus();
-		await workbench.quickaccess.runCommand('workbench.action.chat.showSpeechToTextIntroduction');
-		const introduction = page.getByRole('region', { name: 'Dictation introduction', exact: true });
-		await expect(introduction).toBeVisible();
-		await expect(introduction.getByRole('combobox', { name: 'Microphone', exact: true })).toBeEnabled();
-		await introduction.getByRole('button', { name: 'Done', exact: true }).focus();
-		await page.keyboard.press('Escape');
-		await expect(introduction).toHaveCount(0);
 	} finally {
 		await (async source => {
 			const snapshot = await readUserSettings(page);

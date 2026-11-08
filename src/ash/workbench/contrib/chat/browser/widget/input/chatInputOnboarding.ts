@@ -5,18 +5,12 @@ import { ChatInputStackSlot, setChatInputStackSlot } from './chatInputStack.js';
 
 export type ChatInputNoticeClaim = (options: IChatInputNoticeClaimOptions) => IDisposable;
 
-/** Registration lifetime follows the host's visibility; disposing releases its banner and recording. */
+/** Registration lifetime follows the host's visibility; disposing releases its banner. */
 export interface IChatInputOnboardingHostOptions {
 	readonly container: HTMLElement;
 	readonly focusRoot: HTMLElement;
 	readonly focus?: () => void;
 	readonly claimNotice?: ChatInputNoticeClaim;
-}
-
-export interface IChatInputOnboardingOptions {
-	readonly storageKey: string;
-	/** Voice retains its existing explicit acknowledgement preference; dictation records first visibility. */
-	readonly markSeenOn?: 'show' | 'acknowledge';
 }
 
 export interface IChatInputOnboardingContext {
@@ -28,7 +22,7 @@ export interface IChatInputOnboardingContext {
 
 export interface IChatInputOnboardingBanner extends IDisposable, IChatInputNoticeFocusTarget {
 	announce(): void;
-	/** Suspend media while another notice leads; the same card may become visible again. */
+	/** Hide the banner while another notice leads; the same card may become visible again. */
 	setVisible?(visible: boolean): void;
 }
 
@@ -51,14 +45,10 @@ export class ChatInputOnboarding extends Disposable {
 	private request: OnboardingRequest | undefined;
 
 	constructor(
-		private readonly options: IChatInputOnboardingOptions,
+		private readonly storageKey: string,
 		@IStorageService private readonly storage: IStorageService,
 	) {
 		super();
-	}
-
-	get isVisible(): boolean {
-		return !!this.request?.leading && !!this.request.banner;
 	}
 
 	registerHost(options: IChatInputOnboardingHostOptions): IDisposable {
@@ -78,11 +68,11 @@ export class ChatInputOnboarding extends Disposable {
 		if (this.request) {
 			// An unacknowledged introduction follows a new first-use request to its
 			// active surface, including a floating voice window in another document.
-			const host = this.options.markSeenOn === 'acknowledge' ? pickActiveChatInput(this.hosts) : undefined;
+			const host = pickActiveChatInput(this.hosts);
 			if (host && host !== this.request.host) return this.show(createOnboarding);
 			return true;
 		}
-		if (this.storage.getBoolean(this.options.storageKey, StorageScope.PROFILE, false)) return false;
+		if (this.storage.getBoolean(this.storageKey, StorageScope.PROFILE, false)) return false;
 		return this.show(createOnboarding);
 	}
 
@@ -118,12 +108,6 @@ export class ChatInputOnboarding extends Disposable {
 		return true;
 	}
 
-	/** The feature's existing reset command retires pending claims as well as displayed cards. */
-	reset(): void {
-		this.close(false);
-		this.storage.remove(this.options.storageKey, StorageScope.PROFILE);
-	}
-
 	private setLeading(request: OnboardingRequest, leading: boolean): void {
 		if (this.request !== request || this.isDisposed || request.leading === leading) return;
 		request.leading = leading;
@@ -141,7 +125,7 @@ export class ChatInputOnboarding extends Disposable {
 					focusInput: request.host.focus,
 					acknowledge: () => {
 						if (this.request !== request || !request.leading || !request.shown) return;
-						this.storage.store(this.options.storageKey, true, StorageScope.PROFILE, StorageTarget.USER);
+						this.storage.store(this.storageKey, true, StorageScope.PROFILE, StorageTarget.USER);
 						this.close(true);
 					},
 					dismiss: (restoreFocus = true) => {
@@ -162,9 +146,6 @@ export class ChatInputOnboarding extends Disposable {
 		if (this.request !== request || !request.leading) return;
 		if (request.leading && !request.shown) {
 			request.shown = true;
-			if (this.options.markSeenOn !== 'acknowledge') {
-				this.storage.store(this.options.storageKey, true, StorageScope.PROFILE, StorageTarget.USER);
-			}
 			request.banner.announce();
 		}
 	}

@@ -68,7 +68,7 @@ export class ChatInputSurface<T extends IChatInputEditor> extends Disposable {
 	}
 }
 
-type ChatInputToolbarPresentation = 'attach' | 'mode' | 'model' | 'mic' | 'voice' | 'send' | 'interrupt';
+type ChatInputToolbarPresentation = 'attach' | 'mode' | 'model' | 'mic' | 'dictation-cancel' | 'dictation-finish' | 'voice' | 'send' | 'interrupt';
 
 export class ChatInputAction implements IAction {
 	constructor(
@@ -87,7 +87,7 @@ export class ChatInputAction implements IAction {
 	}
 }
 
-class ChatInputButtonViewItem extends ButtonActionViewItem {
+export class ChatInputButtonViewItem extends ButtonActionViewItem {
 	constructor(private readonly inputAction: ChatInputAction) {
 		super(inputAction, { buttonStyles: defaultButtonStyles });
 	}

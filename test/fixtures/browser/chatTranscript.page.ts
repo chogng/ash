@@ -31,7 +31,7 @@ import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser
 import { ChatInputEditors } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { ChatTipService, IChatTipService } from '../../../src/ash/sessions/contrib/cowork/browser/chatTipService.js';
 import { ILifecycleService } from '../../../src/ash/workbench/services/lifecycle/common/lifecycle.js';
-import { registerTestDictationOnboarding, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
+import { registerTestVoiceInputServices, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { LocalTranscriptionService } from '../../../src/ash/workbench/services/localTranscription/electron-browser/localTranscriptionService.js';
 import { ILocalTranscriptionBackendService, ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../src/ash/platform/localTranscription/common/localTranscription.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
@@ -50,7 +50,6 @@ import { DialogService } from '../../../src/ash/workbench/services/dialogs/commo
 import { BrowserDialogHandler } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.js';
 import { DialogHandlerContribution } from '../../../src/ash/workbench/browser/parts/dialogs/dialog.web.contribution.js';
 import { IAgentVoiceService } from '../../../src/ash/platform/agentHost/common/agentService.js';
-import { IDictationOnboardingService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
 import { IChatInputNoticeHubService } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputNoticeHub.js';
 import { IChatInputNotificationService, ChatInputNotificationSeverity } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputNotificationService.js';
 import { AgentsVoiceStorageKeys } from '../../../src/ash/workbench/contrib/agentsVoice/common/agentsVoice.js';
@@ -247,7 +246,7 @@ if (builtinBackend) {
 	services.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 }
 services.registerInstance(IPreferencesService, { openSettings: async () => { throw new Error('Unexpected introduction settings'); } } as unknown as IPreferencesService);
-registerTestDictationOnboarding(services);
+registerTestVoiceInputServices(services);
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 services.registerSingleton(ITerminalLogService, () => services.createInstance(TerminalLogService));
@@ -742,7 +741,6 @@ declare global {
 			showChatApp(voice?: boolean, cowork?: boolean, withMedia?: boolean): void;
 			voiceState(): readonly string[];
 			showVoiceIntroduction(): void;
-			showDictationIntroduction(): void;
 			toggleIntroductionFocus(): void;
 			setIntroductionNotification(visible: boolean): void;
 			voiceSelection(): AgentVoiceSelection | undefined;
@@ -1279,7 +1277,7 @@ window.ashChatTranscriptIntegration = {
 		chatServices.registerInstance(IOpenerService, { open: async () => { throw new Error('Unexpected link opening'); } } as unknown as IOpenerService);
 		if (!builtinBackend) chatServices.registerInstance(IVoiceCodeTranscriptionBackendService, undefined);
 		chatServices.registerInstance(IAgentVoiceService, voice ? voiceFixture : undefined);
-		registerTestDictationOnboarding(chatServices);
+		registerTestVoiceInputServices(chatServices);
 		composerServices = chatServices;
 		if (new URLSearchParams(location.search).has('voiceOnboarding')) {
 			chatServices.get(IStorageService).remove(AgentsVoiceStorageKeys.IntroBannerShown, StorageScope.PROFILE);
@@ -1516,7 +1514,6 @@ window.ashChatTranscriptIntegration = {
 	retireChat: () => { appChatGeneration++; composerChanges.fire(); appChatThread = 'replacement-thread'; chatChanges.fire(); },
 	voiceState: () => voiceControls,
 	showVoiceIntroduction: () => { composerServices!.invokeFunction(CommandsRegistry.getCommand('agentsVoice.showIntroduction')!); },
-	showDictationIntroduction: () => { composerServices!.get(IDictationOnboardingService).show(); },
 	toggleIntroductionFocus: () => { composerServices!.get(IChatInputNoticeHubService).toggleNoticeFocus(); },
 	setIntroductionNotification: visible => {
 		const notifications = composerServices!.get(IChatInputNotificationService);

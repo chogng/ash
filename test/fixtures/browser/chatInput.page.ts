@@ -102,7 +102,7 @@ import { ChatInputPart } from '../../../src/ash/workbench/contrib/chat/browser/w
 import { ChatInputTipPresenter } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputTipPresenter.js';
 import { ChatTipService, IChatTipService } from '../../../src/ash/workbench/contrib/chat/browser/chatTipService.js';
 import { registerChatActions } from '../../../src/ash/workbench/contrib/chat/browser/actions/chatActions.js';
-import { IDictationOnboardingService } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
+import { IVoiceModeOnboardingService } from '../../../src/ash/workbench/contrib/agentsVoice/browser/voiceModeOnboarding.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { ChatInputEditors } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditorRegistry.js';
 import { ChatInputEditor } from '../../../src/ash/workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
@@ -133,7 +133,7 @@ import { ILanguageModelsService } from '../../../src/ash/workbench/contrib/chat/
 import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
-import { createTestDictationBackend, installTestDictationAudio, registerTestDictationOnboarding } from '../../../src/ash/workbench/test/common/testDictationServices.js';
+import { createTestDictationBackend, installTestDictationAudio, registerTestVoiceInputServices } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { setNlsMessages } from '../../../src/ash/nls.js';
 import { productLanguagePackCatalogs } from '../../../src/ash/workbench/services/localization/common/localizationCatalogs.js';
 import { bindTestColorTheme } from './themeFixture.js';
@@ -163,7 +163,7 @@ declare global {
 		isDictationReady(): boolean;
 		setVoiceAvailable(available: boolean): void;
 		openWorkspace(): Promise<unknown>;
-		showIntroduction(): void;
+		showVoiceIntroduction(): void;
 		showSandboxApproval(): void;
 		showResultReview(): void;
 		commandExplanations(): readonly { readonly resource: string; readonly command: string; readonly aborted: boolean; }[];
@@ -177,6 +177,7 @@ declare global {
 		toggleNoticeFocus(): Promise<unknown>;
 		noticeAccessibility(): { help?: string; content?: string; };
 		dictationState(): { stops: number; errors: string[]; };
+		dictationCapture(): { requests: number; activeTracks: number; activeContexts: number; };
 		setDictationLevel(level: number): void;
 		dictationLevelReads(): number;
 		setReduceMotion(value: 'auto' | 'on' | 'off'): Promise<void>;
@@ -623,7 +624,7 @@ services.registerInstance(IEditorService, {
 	},
 	focusActiveEditor() { },
 } satisfies IEditorService);
-registerTestDictationOnboarding(services);
+registerTestVoiceInputServices(services);
 const contextPicks = services.get(IChatContextPickService);
 const providedContexts = services.get(IChatContextService);
 let providerOpens = 0;
@@ -1139,7 +1140,7 @@ window.ashChatInputIntegration = {
 	hostCompletionRequests: () => [...hostCompletionRequests],
 	setInputReadOnly: readOnly => inlineEditor!.setReadOnly(readOnly),
 	openWorkspace: async () => services.invokeFunction(CommandsRegistry.getCommand(OpenWorkspacePickerAction.ID)!),
-	showIntroduction: () => { const onboarding = services.get(IDictationOnboardingService); onboarding.reset(); onboarding.showIfNeeded(); },
+	showVoiceIntroduction: () => { services.get(IVoiceModeOnboardingService).show(); },
 	setCatalogError: modelsError => { state = { ...state, modelsError }; part.render(state); },
 	toggleNoticeFocus: () => Promise.resolve(CommandsRegistry.getCommand('workbench.action.chat.focusTip')!(services)),
 	noticeAccessibility: () => {
@@ -1158,6 +1159,11 @@ window.ashChatInputIntegration = {
 	recoveryState: () => ({ pending: finishSubmission !== undefined, drafts: recoveryDrafts }),
 	setInputBlocked: inputBlocked => { state = { ...state, inputBlocked }; part.render(state); },
 	dictationState: () => ({ stops: dictationStops, errors: notifications.model.getNotifications().map(item => item.message) }),
+	dictationCapture: () => ({
+		requests: dictationAudio?.requests.length ?? 0,
+		activeTracks: dictationAudio?.tracks.filter(track => !track.stopped).length ?? 0,
+		activeContexts: dictationAudio?.contexts.filter(context => context.state !== 'closed').length ?? 0,
+	}),
 	setDictationLevel: level => dictationAudio?.setLevel(level),
 	dictationLevelReads: () => dictationAudio?.levelReads ?? 0,
 	setReduceMotion: value => services.get(IConfigurationService).updateValue('workbench.reduceMotion', value),

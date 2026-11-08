@@ -38,10 +38,9 @@ import { ICommandService } from '../../../src/ash/platform/commands/common/comma
 import { IContextKeyService } from '../../../src/ash/platform/contextkey/browser/contextKeyService.js';
 import { CodeEditorWidget } from '../../../src/ash/editor/browser/widget/codeEditor/codeEditorWidget.js';
 import { TextModel } from '../../../src/ash/editor/common/model/textModel.js';
-import { IStorageService, StorageScope } from '../../../src/ash/platform/storage/common/storage.js';
 import { IContextViewService } from '../../../src/ash/platform/contextview/browser/contextView.js';
 import { IAccessibleViewService } from '../../../src/ash/platform/accessibility/browser/accessibleView.js';
-import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
+import { registerTestVoiceInputServices, createTestDictationBackend, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
 import { ISpeechService, SPEECH_LANGUAGE_CONFIG } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import '../../../src/ash/base/browser/ui/button/button.css';
@@ -125,16 +124,11 @@ declare global {
 			startDictation(): Promise<void>;
 			codeDictation(): Promise<void>;
 			readonly codeText: string;
-			freshIntroduction(): void;
-			showIntroduction(): Promise<void>;
 			readonly microphone: string;
-			readonly language: string;
 			readonly starts: number;
 			readonly stops: number;
 			readonly audioPackets: number;
 			readonly analysing: boolean;
-			holdCapture(): void;
-			releaseCapture(): void;
 			transcript(text: string, final: boolean): void;
 			readonly draft: string;
 			stopDictation(): Promise<string | undefined>;
@@ -274,8 +268,6 @@ document.body.append(preview);
 let starts = 0;
 let stops = 0;
 let audioPackets = 0;
-let captureReady = Promise.resolve();
-let releaseCapture!: () => void;
 let transcript!: (text: string, final: boolean) => void;
 let declaredSpeech = false;
 let speechActivations = 0;
@@ -292,7 +284,7 @@ const speechExtensions = resources.add(new TestExtensionService({
 }));
 services.registerInstance(IExtensionService, speechExtensions);
 const transcriptionBackend = createTestDictationBackend(resources, {
-	getOptions: async () => ({ inputDevices: [{ id: 'microphone-1', label: 'Test microphone', isDefault: true }], languages: ['en', 'zh'] }), start: async (_options, onTranscript: (text: string, isFinal: boolean) => void) => { starts++; transcript = onTranscript; await captureReady; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; },
+	getOptions: async () => ({ inputDevices: [{ id: 'microphone-1', label: 'Test microphone', isDefault: true }], languages: ['en', 'zh'] }), start: async (_options, onTranscript: (text: string, isFinal: boolean) => void) => { starts++; transcript = onTranscript; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; },
 });
 transcriptionBackend.pushAudio = async (_resourceId, audio) => {
 	if (!audio || atob(audio).length % 2 !== 0) throw new Error('Invalid PCM16 from renderer');
@@ -301,7 +293,7 @@ transcriptionBackend.pushAudio = async (_resourceId, audio) => {
 services.registerInstance(IVoiceCodeTranscriptionBackendService, new URLSearchParams(location.search).has('extensionOnly') ? undefined : transcriptionBackend);
 services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-registerTestDictationOnboarding(services);
+registerTestVoiceInputServices(services);
 registerCodeEditorServices(services);
 const controls = resources.add(services.createInstance(LocalTranscriptionModelControls, root));
 controls.setVisible(true);
@@ -495,16 +487,11 @@ window.ashTableIntegration = {
 	setDictationButton: visible => configuration.updateValue('dictation.showButton', visible),
 	codeDictation: async () => { codeEditor.focus(); await services.get(ICommandService).executeCommand('workbench.action.editorDictation.start'); },
 	get codeText() { return codeModel.getValue(); },
-	freshIntroduction: () => services.get(IStorageService).remove('dictation.introductionSeen', StorageScope.PROFILE),
-	showIntroduction: () => services.get(ICommandService).executeCommand('workbench.action.chat.showSpeechToTextIntroduction'),
 	get microphone() { return configuration.getValue<string>(DictationConfiguration.inputDevice); },
-	get language() { return configuration.getValue<string>(DictationConfiguration.language); },
 	get starts() { return starts; },
 	get stops() { return stops; },
 	get audioPackets() { return audioPackets; },
 	get analysing() { return !!services.get(IChatSpeechToTextService).analyserNode; },
-	holdCapture: () => { captureReady = new Promise(resolve => { releaseCapture = resolve; }); },
-	releaseCapture: () => releaseCapture(),
 	secondDraft: async () => (await secondInput.captureDraft())?.draft.text ?? '',
 	operations,
 	startDictation: async () => { await dictationSession.action.run(); },

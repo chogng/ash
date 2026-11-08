@@ -98,7 +98,7 @@ import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../src/ash/workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
-import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
+import { registerTestVoiceInputServices, createTestDictationBackend, installTestDictationAudio } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { INotificationService } from '../../../src/ash/platform/notification/common/notification.js';
 import { TestNotificationService } from './notificationFixture.js';
@@ -1412,7 +1412,7 @@ if (new URLSearchParams(location.search).has('input')) {
 			services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 			services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
 			services.registerInstance(IVoiceCodeTranscriptionBackendService, createTestDictationBackend(store, { getOptions: async () => ({ inputDevices: [], languages: [] }), start: async () => ({ stop: async () => { }, cancel: async () => { } }) }));
-			registerTestDictationOnboarding(services);
+			registerTestVoiceInputServices(services);
 			await services.get(IConfigurationService).updateValue('dictation.backend', 'cloud');
 			services.registerInstance(IPreferencesService, { openSettings: async () => { } } as unknown as IPreferencesService);
 

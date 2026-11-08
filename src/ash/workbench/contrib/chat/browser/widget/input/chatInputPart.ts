@@ -39,7 +39,7 @@ import { ChatPasteProvidersFeature } from './editor/chatPasteProviders.js';
 import { AgentHostInputCompletions, type AgentHostInputCompletionHost } from './editor/agentHostInputCompletions.js';
 import { ChatDragAndDrop } from '../chatDragAndDrop.js';
 import { CancellationError, isCancellationError } from '../../../../../../base/common/errors.js';
-import { ChatInputAction, ChatInputSurface } from './chatInputSurface.js';
+import { ChatInputAction, ChatInputButtonViewItem, ChatInputSurface } from './chatInputSurface.js';
 import { toErrorMessage } from '../../../../../../base/common/errorMessage.js';
 import { ChatChangesPill } from './chatChangesPill.js';
 import { ChatWorkingLogo } from '../chatWorkingLogo.js';
@@ -51,12 +51,13 @@ import type { ChatInputEditorSelection } from './chatInputEditorRegistry.js';
 import '../media/chat.css';
 import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../speechToText/chatSpeechToTextService.js';
 import { DictationActionViewItem, DictationToolbarAction } from '../../speechToText/dictationActionViewItem.js';
+import { DictationWaveformViewItem } from '../../speechToText/dictationMicFeedback.js';
+import { addMicButtonContextMenuListener, getDictationContextMenuActions } from '../../speechToText/micButtonMenuActions.js';
 import { IVoiceInputModeService } from '../../voiceInputMode/voiceInputMode.js';
 import { AgentsVoiceSettingId } from '../../../../agentsVoice/common/agentsVoice.js';
 import { VoiceInputModeActionViewItem, isVoiceInputModeAvailable } from '../../voiceInputMode/voiceInputModeActionViewItem.js';
 import { DictationInput } from '../../speechToText/dictationInputController.js';
 import { notifyDictationSubmitted } from '../../speechToText/dictationSession.js';
-import { IDictationOnboardingService } from '../../speechToText/dictationOnboarding.js';
 import { addDisposableListener, h, stopEvent } from '../../../../../../base/browser/dom.js';
 import { ActionViewItem, ButtonActionViewItem } from '../../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Action, type IAction } from '../../../../../../base/common/actions.js';
@@ -109,13 +110,12 @@ import {
 	chatInputStackClass, chatInputStackSlotClass, ChatInputStackSlot,
 	refreshChatInputStack, setChatInputStackInputFocused, setChatInputStackSlot,
 } from './chatInputStack.js';
-import { ChatInputNoticeHost } from './chatInputNoticeHost.js';
+import { ChatInputNoticeHost, ChatInputNoticeLane } from './chatInputNoticeHost.js';
 import { IChatInputNoticeHubService } from './chatInputNoticeHub.js';
 import { OpenSettingsCommandId } from '../../../../preferences/common/preferences.js';
 import { getChatInputAccessibilityHelp } from '../../actions/chatAccessibilityHelp.js';
 import { ChatInputNotificationWidget } from './chatInputNotificationWidget.js';
 import { ChatInputNotificationActionKind, ChatInputNotificationSeverity, IChatInputNotificationService } from './chatInputNotificationService.js';
-import { registerChatInputOnboardingHosts } from './chatInputOnboardingHosts.js';
 import { IVoiceModeOnboardingService } from '../../../../agentsVoice/browser/voiceModeOnboarding.js';
 import { ModelPickerActionItem } from './modelPicker/modelPickerActionItem.js';
 import { approvalModeDefinition, approvalModeDefinitions } from '../../../../../../platform/agentHost/common/approvalModes.js';
@@ -135,6 +135,7 @@ import { ChatQueueMessageAction, ChatSteerWithMessageAction } from '../../action
 import { ChatConfiguration } from '../../../common/constants.js';
 import { ChatRequestQueueKind } from '../../../../../services/chat/common/chatService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
+import { IKeybindingService } from '../../../../../../platform/keybinding/common/keybinding.js';
 
 interface ChatInputToolbarState {
 	readonly voiceAvailable: boolean;
@@ -267,7 +268,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private readonly notificationUri = URI.from({ scheme: 'ash-chat-input', path: `/${createUuid()}` });
 	private readonly notificationVisible = observableValue(this, true);
 	private readonly noticeRegistration = this._register(new MutableDisposable());
-	private readonly dictationOnboardingContainer: HTMLElement;
 	private readonly voiceOnboardingContainer: HTMLElement;
 	readonly element: HTMLElement;
 	private readonly history: ChatHistoryNavigator<InputHistoryDraft>;
@@ -344,7 +344,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 	private skillSelectors: ChatInputState['skillSelectors'] = [];
 	private get mode(): ChatInputMode { return this.state.mode; }
 	private readonly dictationSession: DictationInput;
-	private readonly onboardingHosts = this._register(new MutableDisposable());
+	private readonly dictationWaveform = this._register(new Action('ash.chat.input.dictationWaveform', '', '', false));
+	private readonly voiceOnboardingHost = this._register(new MutableDisposable());
 	private dictationSample: { text: string; backend: string; } | undefined;
 	private measuringDictation = false;
 	private measureWholeDraft = false;
@@ -369,7 +370,6 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IChatSpeechToTextService private readonly speechToText: IChatSpeechToTextService,
 		@IVoiceInputModeService private readonly voiceInputMode: IVoiceInputModeService,
-		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IMenuService menuService: IMenuService,
 		@IChatAttachmentResolveService private readonly attachmentResolver: IChatAttachmentResolveService,
@@ -408,9 +408,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			modelSelection: { openPicker: () => this.openModelPicker() },
 		}));
 		this._register(toDisposable(() => this.clearInputNotifications()));
-		this.dictationOnboardingContainer = h(ownerDocument, 'div', { className: `ash-chat-input-notice-slot ${chatInputStackSlotClass}` });
 		this.voiceOnboardingContainer = h(ownerDocument, 'div', { className: `ash-chat-input-notice-slot ${chatInputStackSlotClass}` });
-		this.element.append(this.voiceOnboardingContainer, this.dictationOnboardingContainer);
+		this.element.append(this.voiceOnboardingContainer);
 		const context = this._register(contextKeys.createScoped(this.element));
 		this.executeContext = context;
 		this.queueContextKeys = {
@@ -651,7 +650,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (this.inputFooter) this.element.append(this.inputFooter);
 		if (this.secondaryToolbarContainer) this.element.append(this.secondaryToolbarContainer);
 		refreshChatInputStack(this.element);
-		this.updateOnboardingHosts();
+		this.updateNoticeHosts();
 		this._register(addDisposableListener(this.inputContainer, 'focusin', event => {
 			this.inputContainer.classList.add('focused');
 			setChatInputStackInputFocused(this.inputContainer, true);
@@ -1394,7 +1393,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		this.toolConfirmation?.setVisible(visible);
 		this.inputDecorations?.update();
 		this.changesPill.setVisible(visible);
-		this.updateOnboardingHosts();
+		this.updateNoticeHosts();
 		this.renderStatus();
 		if (visible) {
 			this.input.layout();
@@ -1407,15 +1406,18 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		}
 	}
 
-	private updateOnboardingHosts(): void {
+	private updateNoticeHosts(): void {
 		if (!this.visible || this.state.aiDisabled) {
-			this.onboardingHosts.clear();
+			this.voiceOnboardingHost.clear();
 			this.noticeRegistration.clear();
 		} else {
 			this.noticeRegistration.value ??= this.noticeHub.registerHost(this.noticeHost, this.element);
-			this.onboardingHosts.value ??= registerChatInputOnboardingHosts(this.noticeHost,
-				{ voice: this.voiceOnboardingContainer, dictation: this.dictationOnboardingContainer }, this.element,
-				() => { if (!this.isDisposed && this.visible) this.focus(); }, this.voiceOnboarding, this.onboarding);
+			this.voiceOnboardingHost.value ??= this.voiceOnboarding.registerHost({
+				container: this.voiceOnboardingContainer,
+				focusRoot: this.element,
+				focus: () => { if (!this.isDisposed && this.visible) this.focus(); },
+				claimNotice: options => this.noticeHost.occupy(ChatInputNoticeLane.Onboarding, options),
+			});
 		}
 	}
 
@@ -1455,7 +1457,7 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 			if (previousDraft?.files !== state.draft.files || previousDraft.readOnly !== state.draft.readOnly) this.renderStagedFiles();
 		}
 		this.inputDecorations?.update();
-		this.updateOnboardingHosts();
+		this.updateNoticeHosts();
 		this.conversation.set(state.conversation, undefined);
 		this.changesPill.render(state.changes, this.delegate.openChanges !== undefined, state.changesScope, state.changesError);
 		this.renderStatus();
@@ -1769,6 +1771,8 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		// The idle voice button shares Send's slot. Keep the segmented controls for a live call.
 		const segmentedVoice = !this.inlineActionsToolbar && !this.state.aiDisabled && voice?.isActive &&
 			(isVoiceInputModeAvailable(this.voiceInputMode) === 'both' || this.voiceInputMode.voiceAvailable.get() && voice.isConnected);
+		const recording = !segmentedVoice && !this.state.aiDisabled && this.toolbarState.inputKind !== 'command' &&
+			this.dictationSession.showButton && this.dictationSession.isActive && this.speechToText.state === ChatSpeechToTextState.Recording;
 		const showVoiceButton = this.configuration.getValue<boolean>(AgentsVoiceSettingId.ShowButton) !== false;
 		// Availability controls whether Voice can be used, not which action represents an empty draft.
 		const showIdleVoice = showVoiceButton && !segmentedVoice &&
@@ -1777,14 +1781,17 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		const executionActions = this.delegate.draft ? [] : this.executeMenu.getActions({ arg: this.executionContext() }).flatMap(([, actions]) => actions);
 		const keepSendVisible = this.inlineActionsToolbar && !this.delegate.draft && !this.toolbarState.canInterrupt && !voice?.isActive && !showIdleVoice;
 		const canSubmitDictation = !!this.delegate.draft && this.dictationSession.isActive && !this.submitting && !this.isSubmissionBlocked(false);
+		if (recording) {
+			trailingActions.push(new ChatInputAction('ash.chat.input.finishDictation', micAction.label, micAction.tooltip, Lxicon.check, micAction.enabled, 'dictation-finish', () => this.stopDictation().catch(() => undefined)));
+		}
 		if (executionActions.length) {
 			trailingActions.push(...executionActions);
-		} else if (this.toolbarState.hasInput || keepSendVisible || canSubmitDictation) {
+		} else if (!recording && (this.toolbarState.hasInput || keepSendVisible || canSubmitDictation)) {
 			const label = localize('chat.input.send', 'Send');
 			const tooltip = this.toolbarState.inputKind === 'command' ? localize('chat.input.runCommand', 'Run command') : localize('chat.input.sendMessage', 'Send message');
 			const icon = this.toolbarState.inputKind === 'command' ? Lxicon.arrowUp : Lxicon.enter;
 			trailingActions.push(new ChatInputAction('ash.chat.input.send', label, tooltip, icon, this.toolbarState.canSubmit || canSubmitDictation, 'send', () => this.inputContainer.requestSubmit()));
-		} else if (showIdleVoice) {
+		} else if (!recording && showIdleVoice) {
 			const label = voice?.isActive ? localize('chat.voice.stop', 'Stop voice conversation') : localize('chat.input.voice', 'Voice conversation');
 			const enabled = voice?.isActive === true || this.toolbarState.voiceAvailable && (!this.speechToText.isBusy || this.dictationSession.isActive);
 			trailingActions.push(new ChatInputAction('ash.chat.input.voice', label, this.toolbarState.voiceAvailable || voice?.isActive ? label : localize('chat.input.voiceUnavailable', 'Voice conversation is unavailable'), Lxicon.voiceMode, enabled, 'voice', () => this.toggleVoiceInput()));
@@ -1812,12 +1819,21 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 				'workbench.action.chat.voiceInputMode', localize('chat.input.voice', 'Voice conversation'), '', Lxicon.voiceMode,
 				voice?.isActive === true || !this.speechToText.isBusy || this.dictationSession.isActive, 'voice', () => this.toggleVoiceInput(),
 			));
+		} else if (recording) {
+			const cancel = localize({ bundle: 'ash', key: 'dictation.cancel' }, 'Cancel dictation');
+			dictationActions.push(
+				this.dictationWaveform,
+				new ChatInputAction(micAction.id, cancel, cancel, Lxicon.close, true, 'dictation-cancel', async () => {
+					this.focus();
+					await this.runSecondaryAction(() => this.dictationSession.cancel());
+				}),
+			);
 		} else if (this.dictationSession.showButton) {
 			dictationActions.push(new DictationToolbarAction(micAction));
 		}
 		const inputActions = this.toolbarState.inputKind === 'command' ? modeActions : [...additionalActions, ...modeActions, this.modelAction, ...(this.inlineActionsToolbar ? [] : dictationActions)];
 		this.attachmentToolbar?.setActions([this.attachAction]);
-		const showInlineDictation = trailingActions.length === 0
+		const showInlineDictation = recording || trailingActions.length === 0
 			|| executionActions.length === 0 && !this.toolbarState.canInterrupt && !voice?.isActive;
 		this.inlineActionsToolbar?.setActions(showInlineDictation ? [...dictationActions, ...trailingActions] : trailingActions);
 		this.inputToolbar.setActions(this.inlineActionsToolbar ? inputActions : [...inputActions, ...trailingActions]);
@@ -2082,7 +2098,13 @@ export class ChatInputPart extends Disposable implements IChatInputPart {
 		if (action instanceof DictationToolbarAction) {
 			return this.instantiationService.createInstance(DictationActionViewItem, action.primary, this.dictationSession.activeState);
 		}
+		if (action === this.dictationWaveform) {
+			return this.instantiationService.createInstance(DictationWaveformViewItem, action);
+		}
 		if (!(action instanceof ChatInputAction)) return undefined;
+		if (action.presentation === 'dictation-cancel') {
+			return this.instantiationService.createInstance(DictationCancelActionViewItem, action);
+		}
 		if (action.presentation === 'model') {
 			const options = this.options;
 			return this.modelPickerActionItem = this.instantiationService.createInstance(ModelPickerActionItem, action, {
@@ -2464,6 +2486,24 @@ class ChatAttachContextActionViewItem extends ButtonActionViewItem {
 		super.render(container);
 		this.button.domNode.setAttribute('aria-haspopup', 'menu');
 		this.button.domNode.setAttribute('aria-expanded', 'false');
+	}
+}
+
+class DictationCancelActionViewItem extends ChatInputButtonViewItem {
+	constructor(
+		action: ChatInputAction,
+		@ICommandService private readonly commands: ICommandService,
+		@IConfigurationService private readonly configuration: IConfigurationService,
+		@IKeybindingService private readonly keybindings: IKeybindingService,
+		@IContextMenuService private readonly contextMenus: IContextMenuService,
+	) { super(action); }
+
+	override render(container: HTMLElement): void {
+		super.render(container);
+		this.button.domNode.classList.add('ash-chat-input-mic-action');
+		this.button.domNode.setAttribute('aria-pressed', 'true');
+		this._register(addMicButtonContextMenuListener(container, () =>
+			getDictationContextMenuActions(this.commands, this.configuration, this.keybindings, this.action.id), this.contextMenus));
 	}
 }
 

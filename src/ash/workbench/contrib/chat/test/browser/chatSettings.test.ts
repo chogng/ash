@@ -5,7 +5,7 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 suite('chatSettings browser component', () => {
 	const browserTests = useBrowserTests();
 	for (const locale of ['en', 'zh-CN']) for (const cowork of [false, true]) for (const theme of ['light', 'dark', 'hcDark', 'hcLight']) {
-		test(`Voice introduction shares notices with dictation in ${locale} ${cowork ? 'Cowork' : 'Chat'} ${theme}`, async () => {
+		test(`Voice introduction shares notices with notifications in ${locale} ${cowork ? 'Cowork' : 'Chat'} ${theme}`, async () => {
 			const { page } = browserTests;
 			await page.goto(`/chatTranscript.html?voiceOnboarding&locale=${locale}&theme=${theme}`);
 			await page.evaluate(cowork => window.ashChatTranscriptIntegration.showChatApp(true, cowork), cowork);
@@ -24,12 +24,6 @@ suite('chatSettings browser component', () => {
 			await input.focus();
 			await page.keyboard.insertText('Retained voice introduction draft');
 			const draft = await page.evaluate(() => window.ashChatTranscriptIntegration.chatDraft());
-			await page.evaluate(() => window.ashChatTranscriptIntegration.showDictationIntroduction());
-			const dictation = chat.locator('.ash-dictation-onboarding');
-			await expect(dictation).toBeVisible();
-			await expect(voice).toBeHidden();
-			await dictation.press('Escape');
-			await expect(voice).toBeVisible();
 			await input.focus();
 			await page.evaluate(() => window.ashChatTranscriptIntegration.toggleIntroductionFocus());
 			await expect(voice).toBeFocused();

@@ -45,7 +45,7 @@ import { FileDialogService } from '../../../workbench/services/dialogs/browser/f
 import { IHostService } from '../../../workbench/services/host/browser/host.js';
 import { TestHostService } from '../../../workbench/services/host/test/browser/testHostService.js';
 import type { IWebWorkspaceClient } from '../../../workbench/services/workspaces/browser/appServerWebWorkspaceClient.js';
-import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
+import { registerTestVoiceInputServices } from '../../../workbench/test/common/testDictationServices.js';
 import { registerTestExtensionService } from '../../../workbench/test/common/testExtensionServices.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../workbench/contrib/speech/common/speechService.js';
@@ -353,7 +353,7 @@ test('SessionsPart remains owned by the Sessions product layer', async () => {
 	const storage = resources.add(new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'test', flushInterval: 0 }));
 	services.registerInstance(IStorageService, storage);
 	services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root: dom.window.document.body })));
-	registerTestDictationOnboarding(services);
+	registerTestVoiceInputServices(services);
 	services.registerInstance(ISessionsManagementService, sessionService);
 	const initialDrafts = ['saved-first', 'saved-second'].map(untitledSessionId => ({ untitledSessionId, title: 'New code session', workspace: { type: 'current' } }));
 	storage.store('sessions.viewState', JSON.stringify({

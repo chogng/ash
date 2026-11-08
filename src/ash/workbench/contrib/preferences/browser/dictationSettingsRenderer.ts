@@ -277,7 +277,7 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 		}
 	}
 
-	private setMicrophoneOptions(devices: Awaited<ReturnType<typeof readDictationInputDevices>>): void {
+	private setMicrophoneOptions(devices: Awaited<ReturnType<typeof readDictationInputDevices>>['inputDevices']): void {
 		const configuredDevice = this.configuration.getValue<string>(DictationConfiguration.inputDevice);
 		this.microphone.select.setOptions(getDictationMicrophoneChoices(devices, configuredDevice).map(({ id, label }) => ({ value: id, label })));
 		this.microphone.select.value = configuredDevice;
@@ -285,8 +285,8 @@ export class DictationSettingsRenderer extends SettingsPageRenderer<ISetting | S
 
 	private async readMicrophones(version: number): Promise<void> {
 		try {
-			const devices = await readDictationInputDevices(this.window);
-			if (!this.isDisposed && version === this.requestVersion) this.setMicrophoneOptions(devices);
+			const { inputDevices } = await readDictationInputDevices(this.window);
+			if (!this.isDisposed && version === this.requestVersion) this.setMicrophoneOptions(inputDevices);
 		} catch (error) { if (!this.isDisposed && version === this.requestVersion) { this.notifications.error(String(error)); } }
 	}
 

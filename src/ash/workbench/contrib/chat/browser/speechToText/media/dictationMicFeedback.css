@@ -25,3 +25,23 @@
 	opacity: 0;
 	pointer-events: none;
 }
+
+.ash-chat-input-toolbars .ash-chat-dictation-waveform {
+	display: flex;
+	align-items: center;
+	margin-inline-start: auto;
+	padding-inline: var(--ash-spacing-size80);
+	color: var(--ash-description-foreground);
+	pointer-events: none;
+}
+
+.ash-chat-dictation-waveform > svg {
+	fill: currentColor;
+	mask-image: linear-gradient(
+		to right,
+		transparent,
+		black 14%,
+		black 86%,
+		transparent
+	);
+}

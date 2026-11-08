@@ -8,7 +8,7 @@ import { IEditorService } from '../../../../services/editor/common/editorService
 import './editorDictation.css';
 import { h, addDisposableListener } from '../../../../../base/browser/dom.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
-import { Disposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
+import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { ICodeEditor, OverlayWidgetPositionPreference, type IOverlayWidget } from '../../../../../editor/browser/editorBrowser.js';
 import { EditorAction2, EditorContributionInstantiation, registerEditorContribution } from '../../../../../editor/browser/editorExtensions.js';
 import { EditorOption } from '../../../../../editor/common/config/editorOptions.js';
@@ -19,7 +19,6 @@ import { IKeybindingService } from '../../../../../platform/keybinding/common/ke
 import { IPreferencesService } from '../../../../services/preferences/common/preferences.js';
 import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { DictationInput, DictationAccessibilityHelp } from '../../../chat/browser/speechToText/dictationInputController.js';
-import { IDictationOnboardingService } from '../../../chat/browser/speechToText/dictationOnboarding.js';
 
 
 /** Editing and undo remain with the target code editor, including asynchronous finalization. */
@@ -27,12 +26,10 @@ export class EditorDictation extends Disposable {
 	public static readonly ID = 'editorDictation';
 	private readonly session: DictationInput;
 	private readonly widget: IOverlayWidget;
-	private readonly dictationHost = this._register(new MutableDisposable());
 	constructor(
 		private readonly editor: ICodeEditor,
 		@IInstantiationService instantiation: IInstantiationService,
 		@IChatSpeechToTextService speech: IChatSpeechToTextService,
-		@IDictationOnboardingService private readonly onboarding: IDictationOnboardingService,
 		@IEditorService editorService: IEditorService,
 		@IPreferencesService preferences: IPreferencesService,
 		@INotificationService notifications: INotificationService,
@@ -98,18 +95,15 @@ export class EditorDictation extends Disposable {
 		}, true));
 		this._register(editorService.onDidVisibleEditorsChange(() => {
 			if (editor.getContainerDomNode().closest('[hidden]')) {
-				this.dictationHost.clear();
 				void this.session.cancel().catch(error => notifications.error(String(error)));
 			}
 		}));
 		this._register(editor.onWillChangeModel(() => {
-			this.dictationHost.clear();
 			void this.session.cancel().catch(error => notifications.error(String(error)));
 		}));
 	}
 	public async start(released?: Promise<void>): Promise<void> {
 		if (this.editor.isSimpleWidget || this.editor.getOption(EditorOption.readOnly)) return;
-		if (!this.dictationHost.value) this.dictationHost.value = this.onboarding.registerHost({ container: this.widget.getDomNode(), focusRoot: this.editor.getContainerDomNode(), focus: () => this.editor.focus() });
 		this.editor.focus();
 		if (!released || this.session.isActive) {
 			await this.session.action.run();
@@ -128,7 +122,6 @@ export class EditorDictation extends Disposable {
 	}
 	public stop(): Promise<void> { return this.session.stop(); }
 	protected override disposeCore(): void {
-		this.dictationHost.clear();
 		this.editor.removeOverlayWidget(this.widget);
 		super.disposeCore();
 	}

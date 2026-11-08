@@ -467,7 +467,7 @@
 	background: color-mix(in srgb, var(--ash-charts-green) 16%, transparent);
 }
 
-.ash-chat-input-mic-action {
+:where(.ash-chat-input-mic) .ash-chat-input-mic-action {
 	width: var(--ash-toolbar-actionSize);
 	min-width: var(--ash-toolbar-actionSize);
 	padding: 4px;

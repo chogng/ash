@@ -96,7 +96,7 @@ import { ISessionGroupsService } from '../../../src/ash/sessions/services/sessio
 import { IVoiceCodeTranscriptionBackendService } from '../../../src/ash/platform/dictation/common/dictation.js';
 import { ISpeechService } from '../../../src/ash/workbench/contrib/speech/common/speechService.js';
 import { SpeechService } from '../../../src/ash/workbench/contrib/speech/browser/speechService.js';
-import { registerTestDictationOnboarding, createTestDictationBackend, installTestDictationAudio, type TestDictationCapture } from '../../../src/ash/workbench/test/common/testDictationServices.js';
+import { registerTestVoiceInputServices, createTestDictationBackend, installTestDictationAudio, type TestDictationCapture } from '../../../src/ash/workbench/test/common/testDictationServices.js';
 import { IPreferencesService } from '../../../src/ash/workbench/services/preferences/common/preferences.js';
 import { IChatService } from '../../../src/ash/workbench/services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../src/ash/workbench/services/chat/common/chatSessionNavigationService.js';
@@ -227,7 +227,7 @@ services.registerSingleton(ISpeechService, () => services.createInstance(SpeechS
 if (!services.has(IChatSpeechToTextService)) services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 const commands = resources.add(new CommandService(services));
 services.registerInstance(ICommandService, commands);
-registerTestDictationOnboarding(services);
+registerTestVoiceInputServices(services);
 registerTestComponentServices(services);
 services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({
 	root: document.body, contextKeyService: services.get(IContextKeyService), configurationService: configuration,

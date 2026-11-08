@@ -76,7 +76,7 @@ import { IConfigurationService } from '../../../platform/configuration/common/co
 import { ChatAIDisabledSettingId } from '../../../platform/chat/common/chatSettings.js';
 import { ChatContextKeys } from '../../../workbench/contrib/chat/common/actions/chatContextKeys.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../workbench/common/contributions.js';
-import { registerTestDictationOnboarding } from '../../../workbench/test/common/testDictationServices.js';
+import { registerTestVoiceInputServices } from '../../../workbench/test/common/testDictationServices.js';
 import { IVoiceCodeTranscriptionBackendService } from '../../../platform/dictation/common/dictation.js';
 import { IVoiceCodeTranscriptionClient, VoiceCodeTranscriptionClient } from '../../../workbench/contrib/chat/browser/speechToText/voiceCodeTranscriptionClient.js';
 import { IVoiceInputModeService, VoiceInputModeService } from '../../../workbench/contrib/chat/browser/voiceInputMode/voiceInputMode.js';
@@ -233,7 +233,7 @@ function createInputServices(
 	services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
 	services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
 	services.registerSingleton(IVoiceInputModeService, () => services.createInstance(VoiceInputModeService));
-	registerTestDictationOnboarding(services);
+	registerTestVoiceInputServices(services);
 	// Command actions validate membership against the registry that owns this composer.
 	if (commandScope) commandScope.registerInstance(IChatWidgetService, services.get(IChatWidgetService));
 	return services;
@@ -1672,7 +1672,7 @@ for (const background of [false, true]) test(background
 		editorServices.registerInstance(IChatSessionNavigationService, {
 			openConversation: async (sessionId: string, threadId: string) => { opened.push({ sessionId, threadId }); },
 		} as unknown as IChatSessionNavigationService);
-		registerTestDictationOnboarding(editorServices);
+		registerTestVoiceInputServices(editorServices);
 		editorServices.registerInstance(IChatTipService, editorResources.add(editorServices.createInstance(ChatTipService)));
 		Object.defineProperty(dom.window.performance, 'getEntriesByType', { value: () => [] });
 		editorServices.registerInstance(ILifecycleService, editorResources.add(editorServices.createInstance(BrowserLifecycleService, { ownerWindow: dom.window as unknown as Window, onError: (error: unknown) => { throw error; } })));

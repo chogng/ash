@@ -2,6 +2,40 @@ import { expect, test } from '@playwright/test';
 test.use({ launchOptions: { args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] } });
 
 test.describe('renderer audio capture', () => {
+	test('the dictation menu measures a live audio stream without starting transcription', async ({ page }) => {
+		await page.goto('/table.html?realAudio');
+		const signal = await page.evaluateHandle(() => {
+			const context = new AudioContext();
+			const oscillator = context.createOscillator();
+			const gain = context.createGain();
+			const input = context.createMediaStreamDestination();
+			gain.gain.value = 0;
+			oscillator.connect(gain).connect(input);
+			oscillator.start();
+			navigator.mediaDevices.getUserMedia = async () => {
+				await context.resume();
+				return input.stream;
+			};
+			return { context, gain, input };
+		});
+		try {
+			await page.locator('#second-input').getByRole('button', { name: 'Dictation settings', exact: true }).click();
+			const meter = page.getByRole('meter', { name: 'Microphone input level', exact: true });
+			const level = () => meter.evaluate(element => (element as HTMLMeterElement).value);
+			expect(await level()).toBe(0);
+			await signal.evaluate(({ gain }) => { gain.gain.value = 0.1; });
+			await expect.poll(level).toBeGreaterThan(0);
+			await signal.evaluate(({ gain }) => { gain.gain.value = 0; });
+			await expect.poll(level).toBe(0);
+			expect(await page.evaluate(() => [window.ashTableIntegration.starts, window.ashTableIntegration.audioPackets])).toEqual([0, 0]);
+			await page.keyboard.press('Escape');
+			await expect.poll(() => signal.evaluate(({ input }) => input.stream.getAudioTracks()[0]?.readyState)).toBe('ended');
+		} finally {
+			await signal.evaluate(({ context }) => context.close());
+			await signal.dispose();
+		}
+	});
+
 	for (const locale of ['en', 'zh-CN']) {
 		test(`streams real worklet PCM through the standard client and releases capture (${locale})`, async ({ page }) => {
 			await page.goto(`/table.html?realAudio&locale=${locale}`);
@@ -41,7 +75,7 @@ test('dictation inserts at the rich editor selection and preserves undo', async 
 test('shared dictation disables other inputs and routes text to its current editor', async ({ page }) => {
 	await page.goto('/table.html');
 	const second = page.locator('#second-input');
-	const microphone = second.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] button');
+	const microphone = second.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action');
 	await expect(microphone).toBeEnabled();
 	await page.evaluate(() => window.ashTableIntegration.startDictation());
 	await expect(microphone).toBeDisabled();
@@ -54,7 +88,7 @@ test('shared dictation disables other inputs and routes text to its current edit
 	await page.keyboard.press('Space');
 	await expect(microphone).toHaveAttribute('aria-pressed', 'true');
 	await page.evaluate(() => window.ashTableIntegration.transcript('second editor', true));
-	await microphone.click();
+	await second.getByRole('button', { name: 'Stop dictation', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('second editor');
 	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('second editor');
 	expect(await page.evaluate(() => window.ashTableIntegration.draft)).toBe('first editor');
@@ -69,7 +103,7 @@ test('shared dictation disables other inputs and routes text to its current edit
 test('dictation microphone menu uses Chinese settings and commands still work with the button hidden', async ({ page }) => {
 	await page.goto('/table.html?locale=zh-CN');
 	const second = page.locator('#second-input');
-	const microphone = second.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] button');
+	const microphone = second.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action');
 	await microphone.click({ button: 'right' });
 	await page.getByText('选择麦克风', { exact: true }).click();
 	await page.getByText('USB microphone', { exact: true }).click();
@@ -120,82 +154,25 @@ test('ordinary editor dictation command replaces its selection, supports undo an
 	await expect.poll(() => page.evaluate(() => window.ashTableIntegration.stops)).toBe(3);
 });
 
-test('first dictation starts alongside the introduction and closing the card keeps recording', async ({ page }) => {
-	await page.goto('/table.html');
-	await page.evaluate(() => window.ashTableIntegration.freshIntroduction());
-	const microphone = page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] button');
+test('first dictation starts from the microphone and writes directly to the draft', async ({ page }) => {
+	await page.goto('/table.html?locale=zh-CN');
+	const microphone = page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action');
 	await microphone.click();
-	const intro = page.getByRole('region', { name: 'Dictation introduction', exact: true });
-	await expect(intro).toBeVisible();
+	await expect(page.getByRole('region', { name: '听写入门', exact: true })).toHaveCount(0);
 	await expect(microphone).toHaveAttribute('aria-pressed', 'true');
-	expect(await page.evaluate(() => window.ashTableIntegration.starts)).toBe(1);
-	await intro.getByRole('button', { name: 'Done', exact: true }).click();
-	await expect(intro).toHaveCount(0);
-	await expect(microphone).toHaveAttribute('aria-pressed', 'true');
-	await page.evaluate(() => window.ashTableIntegration.transcript('first draft', true));
+	await expect.poll(() => page.evaluate(() => window.ashTableIntegration.starts)).toBe(1);
+	await page.evaluate(() => window.ashTableIntegration.transcript('首次听写', true));
 	await page.evaluate(() => window.ashTableIntegration.stopDictation());
-	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('first draft');
+	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('首次听写');
 	expect(await page.evaluate(() => window.ashTableIntegration.stops)).toBe(1);
 });
 
-test('manual dictation introduction keeps trial text out of drafts and saves microphone and language in Chinese', async ({ page }) => {
-	await page.goto('/table.html?locale=zh-CN');
-	await page.evaluate(() => window.ashTableIntegration.freshIntroduction());
-	const input = page.locator('#second-input');
-	await page.evaluate(() => window.ashTableIntegration.showIntroduction());
-	const intro = page.getByRole('region', { name: '听写入门', exact: true });
-	await expect(intro).toBeVisible();
-	expect(await page.evaluate(() => window.ashTableIntegration.starts)).toBe(0);
-	await intro.getByRole('combobox', { name: '麦克风', exact: true }).click();
-	await page.getByRole('option', { name: 'Test microphone', exact: true }).click();
-	await intro.getByRole('combobox', { name: '转写语言', exact: true }).focus();
-	await page.keyboard.press('End');
-	await page.keyboard.press('Enter');
-	expect(await page.evaluate(() => [window.ashTableIntegration.microphone, window.ashTableIntegration.language])).toEqual(['microphone-1', 'zh']);
-	await intro.getByRole('button', { name: '测试麦克风', exact: true }).click();
-	await expect(intro.getByRole('button', { name: '停止测试', exact: true })).toBeEnabled();
-	await page.evaluate(() => window.ashTableIntegration.transcript('这只是试录', false));
-	await expect(intro.getByRole('status')).toHaveText('这只是试录');
-	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('');
-	await intro.getByRole('button', { name: '完成', exact: true }).focus();
-	await page.keyboard.press('Escape');
-	await expect(intro).toHaveCount(0);
-	await expect.poll(() => page.evaluate(() => window.ashTableIntegration.stops)).toBe(1);
-	await input.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] button').click();
-	await expect(input.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] button')).toHaveAttribute('aria-pressed', 'true');
-	await expect(intro).toHaveCount(0);
-	await page.evaluate(() => window.ashTableIntegration.transcript('写入草稿', true));
-	await input.locator('[data-action-id="workbench.action.chat.toggleSpeechToText"] button').click();
-	await expect.poll(() => page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('写入草稿');
-	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('写入草稿');
-});
-
-
-test('closing the dictation introduction while capture starts releases the acquired microphone', async ({ page }) => {
-	await page.goto('/table.html');
-	await page.evaluate(() => { window.ashTableIntegration.freshIntroduction(); window.ashTableIntegration.holdCapture(); });
-	const microphone = page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] button');
-	await page.evaluate(() => window.ashTableIntegration.showIntroduction());
-	const intro = page.getByRole('region', { name: 'Dictation introduction', exact: true });
-	await intro.getByRole('button', { name: 'Test microphone', exact: true }).click();
-	await expect.poll(() => page.evaluate(() => window.ashTableIntegration.starts)).toBe(1);
-	await expect(intro.getByRole('button', { name: 'Stop test', exact: true })).toBeDisabled();
-	await intro.getByRole('button', { name: 'Done', exact: true }).click();
-	await page.evaluate(() => window.ashTableIntegration.releaseCapture());
-	await expect.poll(() => page.evaluate(() => window.ashTableIntegration.stops)).toBe(1);
-	await expect(microphone).toBeEnabled();
-	await page.evaluate(() => window.ashTableIntegration.transcript('late trial', true));
-	expect(await page.evaluate(() => window.ashTableIntegration.secondDraft())).toBe('');
-});
-
-test('repeated editor dictation commands share capture while the first introduction stays open', async ({ page }) => {
+test('repeated editor dictation commands share capture', async ({ page }) => {
 	await page.goto('/table.html');
 	await page.evaluate(async () => {
-		window.ashTableIntegration.freshIntroduction();
 		await Promise.all([window.ashTableIntegration.codeDictation(), window.ashTableIntegration.codeDictation()]);
 		await window.ashTableIntegration.codeDictation();
 	});
-	await expect(page.getByRole('region', { name: 'Dictation introduction', exact: true })).toHaveCount(1);
 	expect(await page.evaluate(() => [window.ashTableIntegration.starts, window.ashTableIntegration.stops])).toEqual([1, 1]);
 });
 
@@ -223,34 +200,17 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect.poll(() => page.evaluate(() => window.ashTableIntegration.codeText)).toBe('first second');
 		await page.evaluate(() => window.ashTableIntegration.extensionSpeech(false));
 		expect(await page.evaluate(() => window.ashTableIntegration.speechFlags)).toEqual([false, false, false]);
-		await expect(page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] button')).toBeEnabled();
+		await expect(page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')).toBeEnabled();
 		await page.evaluate(() => window.ashTableIntegration.transcript('stale', true));
 		expect(await page.evaluate(() => window.ashTableIntegration.codeText)).toBe('first second');
 		expect(await page.evaluate(() => window.ashTableIntegration.extensionStarts)).toBe(2);
-	});
-	test(`extension Speech trial hides unrelated device settings and accumulates final phrases (${locale})`, async ({ page }) => {
-		await page.goto(`/table.html?locale=${locale}`);
-		await page.evaluate(() => { window.ashTableIntegration.extensionSpeech(true); window.ashTableIntegration.freshIntroduction(); });
-		await page.evaluate(() => window.ashTableIntegration.showIntroduction());
-		const region = page.getByRole('region', { name: locale === 'zh-CN' ? '听写入门' : 'Dictation introduction' });
-		await expect(region).toBeVisible();
-		await expect(region.getByRole('combobox')).toHaveCount(0);
-		await expect(region).toContainText(locale === 'zh-CN' ? '它负责识别和麦克风访问' : 'It controls recognition and microphone access');
-		await region.getByRole('button', { name: locale === 'zh-CN' ? '测试麦克风' : 'Test microphone', exact: true }).click();
-		await page.evaluate(() => window.ashTableIntegration.transcript('first', true));
-		await expect(region.getByRole('status')).toHaveText('first');
-		await page.evaluate(() => window.ashTableIntegration.transcript('second', true));
-		await expect(region.getByRole('status')).toHaveText('first second');
-		expect(await page.evaluate(() => window.ashTableIntegration.codeText)).toBe('before old after');
-		await region.getByRole('button', { name: locale === 'zh-CN' ? '完成' : 'Done', exact: true }).click();
-		expect(await page.evaluate(() => window.ashTableIntegration.starts)).toBe(0);
 	});
 }
 
 for (const locale of ['en', 'zh-CN']) {
 	test(`declared Speech provider becomes available and activates on first Chat input (${locale})`, async ({ page }) => {
 		await page.goto(`/table.html?extensionOnly&locale=${locale}`);
-		const microphone = page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] button');
+		const microphone = page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action');
 		await expect(microphone).toBeDisabled();
 		await page.evaluate(() => window.ashTableIntegration.extensionSpeech(true, true));
 		await expect(microphone).toBeEnabled();
@@ -269,12 +229,12 @@ for (const locale of ['en', 'zh-CN']) {
 		const editor = page.getByRole('textbox', { name: 'Dictation draft' }); await editor.focus(); await page.keyboard.type('keep');
 		await page.evaluate(() => { void window.ashTableIntegration.startDictation(); });
 		await expect.poll(() => page.evaluate(() => window.ashTableIntegration.speechActivations)).toBe(1);
-		await expect(page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] button')).toBeDisabled();
+		await expect(page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')).toBeDisabled();
 		expect(await page.evaluate(() => window.ashTableIntegration.speechFlags)).toEqual([true, true, false]);
 		const stopped = page.evaluate(() => window.ashTableIntegration.cancelSpeechCommand());
 		await page.evaluate(() => window.ashTableIntegration.releaseSpeechActivation());
 		await stopped;
-		await expect(page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] button')).toBeEnabled();
+		await expect(page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action')).toBeEnabled();
 		expect(await page.evaluate(() => [window.ashTableIntegration.starts, window.ashTableIntegration.extensionStarts])).toEqual([0, 0]);
 		expect(await page.evaluate(() => window.ashTableIntegration.draft)).toBe('keep');
 	});
@@ -298,8 +258,8 @@ for (const locale of ['en', 'zh-CN']) {
 	test(`Chat reports Speech activation before announcing real listening (${locale})`, async ({ page }) => {
 		await page.goto(`/table.html?extensionOnly&locale=${locale}`);
 		await page.evaluate(async () => { await window.ashTableIntegration.extensionSpeech(true, true); window.ashTableIntegration.holdSpeechActivation(); });
-		const microphone = page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] button');
-		const status = page.locator('#second-input').getByRole('status', { includeHidden: true });
+		const microphone = page.locator('#second-input [data-action-id="workbench.action.chat.toggleSpeechToText"] .ash-chat-input-mic-action');
+		const status = page.locator('#second-input .ash-chat-status-summary');
 		await microphone.click();
 		await expect.poll(() => page.evaluate(() => window.ashTableIntegration.speechActivations)).toBe(1);
 		await expect(status).toHaveText(locale === 'zh-CN' ? '正在启动听写…' : 'Starting dictation…');

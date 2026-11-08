@@ -141,8 +141,8 @@ window's notice hub; hiding a composer releases its introduction and focus regis
 with composer identities preventing messages in one input from hiding another's notices.
 `ChatInputNotificationWidget` owns banner rendering and action lifetimes. Input state
 only projects failures into the service; replacing a conversation or disposing its
-composer retires those projections. `registerChatInputOnboardingHosts` binds the
-voice and dictation providers to that composer's visible lifetime and onboarding lane.
+composer retires those projections. The composer registers voice onboarding in its
+notice lane while the input is visible.
 Voice introductions retain the profile acknowledgement preference and share one
 service across Chat, Cowork and floating voice controls. Escape and hiding an input
 release their presentation without acknowledging it; Got it records acknowledgement.

@@ -22,7 +22,6 @@ import { ILogService } from '../../../../../../platform/log/common/log.js';
 import { IKeybindingService } from '../../../../../../platform/keybinding/common/keybinding.js';
 import { IPreferencesService } from '../../../../../services/preferences/common/preferences.js';
 import { ISpeechService } from '../../../../speech/common/speechService.js';
-import { IDictationOnboardingService } from '../../../browser/speechToText/dictationOnboarding.js';
 import { IChatWidgetService, type IChatWidget } from '../../../browser/chat.js';
 import { ChatWidgetService } from '../../../browser/widget/chatWidgetService.js';
 
@@ -297,7 +296,6 @@ function commandFixture() {
 	services.registerInstance(ILocalTranscriptionModelService, {} as ILocalTranscriptionModelService);
 	services.registerInstance(ISpeechService, { hasSpeechProvider: true } as ISpeechService);
 	services.registerInstance(IPreferencesService, { openSettings: async () => { throw new Error('Unexpected settings'); } } as unknown as IPreferencesService);
-	services.registerInstance(IDictationOnboardingService, { showIfNeeded: () => false } as IDictationOnboardingService);
 	services.registerInstance(IKeybindingService, { enableKeybindingHoldMode: (command: string) => command.endsWith('.holdToSpeechToText') ? released.p : undefined } as unknown as IKeybindingService);
 	const run = (id = 'toggleSpeechToText', context?: unknown) => services.invokeFunction(accessor => CommandsRegistry.getCommand(`workbench.action.chat.${id}`)!(accessor, context));
 	return { ...f, services, widgets, widget, hidden, changed, released, registration, run, [Symbol.dispose]: () => resources.dispose() };
