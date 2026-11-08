@@ -244,6 +244,7 @@ export const lxiconsLibrary = {
 	preserveCase: registerLxicon("preserve-case", 0xe142),
 	preview: registerLxicon("preview", 0xe0d1),
 	primitiveSquare: registerLxicon("primitive-square", 0xe0d2),
+	primitiveSquareFilled: registerLxicon("primitive-square-filled", 0xe16d),
 	progress: registerLxicon("progress", 0xe149),
 	projects: registerLxicon("projects", 0xe003),
 	projectsFilled: registerLxicon("projects-filled", 0xe0d3),

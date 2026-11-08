@@ -364,7 +364,8 @@
     "open-in-window": "E169",
     "inbox": "E16A",
     "personalization": "E16B",
-    "bot": "E16C"
+    "bot": "E16C",
+    "primitive-square-filled": "E16D"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -606,6 +607,7 @@
     "plug": "924cb9a35889c70bfbce04d1ead07ec266a9595d36096a6993b07d4c85496cb6",
     "preserve-case": "d230c5f7b95a2571e27026b6d3d139fe0f28506dc13b7b332eecbdcde707bfa8",
     "preview": "bd40c6821d8c030c4687687b900c39d9046481cfd76168e66f865fcf92fa635e",
+    "primitive-square-filled": "ddb5245d439c629e39f8f64eedd3d2b58d7119a5b50bf105d904eeeff631d429",
     "primitive-square": "5baa0fc62fe952bf4c8a76e4ba6abfc99ecf89937ba0493e4498c9a3af46faac",
     "progress": "41630335c7f00f1c3e0549bdae9e820703144cb8f1dacb4d262b66124fd55cf5",
     "projects-filled": "bc119e9d9392b950120ddfe299050f2ce1dd8f6d7720ecdc9bc34890ee62f7f2",

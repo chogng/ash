@@ -1202,6 +1202,11 @@
       "rendering": "symbolic"
     },
     {
+      "id": "primitive-square-filled",
+      "file": "primitive-square-filled.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "progress",
       "file": "progress.svg",
       "rendering": "symbolic"
