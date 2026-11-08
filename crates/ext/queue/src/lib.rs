@@ -16,6 +16,13 @@ pub use contract::QueueMove;
 pub use contract::QueueStatus;
 pub use contract::QueuedMessage;
 
+/// Session visibility of the caller that supplied the queued conversation references.
+#[derive(Clone, Copy)]
+pub enum ReferenceReadScope {
+    CodeOnly,
+    Profile,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum QueueError {
     #[error("invalid queued message: {0}")]

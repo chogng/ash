@@ -527,6 +527,14 @@ impl ConnectionState {
         connection_state(self).code_sessions_only
     }
 
+    fn reference_read_scope(&self) -> queue::ReferenceReadScope {
+        if self.code_sessions_only() {
+            queue::ReferenceReadScope::CodeOnly
+        } else {
+            queue::ReferenceReadScope::Profile
+        }
+    }
+
     fn record_request_id(&self, request_id: u64) -> bool {
         connection_state(self).request_ids.insert(request_id)
     }
@@ -3401,14 +3409,11 @@ impl AppServer {
         let check_session = |id: &str| {
             let id = SessionId::new(id)
                 .map_err(|_| RpcError::new(-32602, AppServerErrorName::InvalidParams))?;
-            let session = self.threads.read_session_catalog(&id).map_err(core_error)?;
-            if session
-                .as_ref()
-                .is_some_and(|session| session.kind == ash_protocol::SessionKind::Chat)
-            {
-                return Err(core_error(CoreError::NotFound(id.to_string())));
-            }
-            Ok(session)
+            read_scoped_session(
+                &self.agent_runtime(),
+                queue::ReferenceReadScope::CodeOnly,
+                &id,
+            )
         };
         let session = params
             .get("sessionId")
@@ -3842,10 +3847,10 @@ impl AppServer {
             }
             Some(ClientMethod::QueueEdit) => self
                 .queue_processor()
-                .queue_edit(connection.connection_id, &request.params),
+                .queue_edit(connection, &request.params),
             Some(ClientMethod::QueueEnqueue) => self
                 .queue_processor()
-                .queue_enqueue(connection.connection_id, &request.params),
+                .queue_enqueue(connection, &request.params),
             Some(ClientMethod::QueueList) => self.queue_processor().queue_list(&request.params),
             Some(ClientMethod::QueueCancel) => self.queue_processor().queue_cancel(&request.params),
             Some(
@@ -5214,6 +5219,43 @@ pub(super) fn decode<T: for<'a> Deserialize<'a>>(params: &Value) -> Result<T, Rp
 pub(super) fn result<T: serde::Serialize>(value: &T) -> Result<Value, RpcError> {
     serde_json::to_value(value)
         .map_err(|_| RpcError::new(-32000, AppServerErrorName::InternalError))
+}
+
+fn read_scoped_session(
+    runtime: &impl AgentRuntime,
+    scope: queue::ReferenceReadScope,
+    id: &SessionId,
+) -> Result<Option<ash_protocol::Session>, RpcError> {
+    let session = runtime.read_session_catalog(id).map_err(core_error)?;
+    if matches!(scope, queue::ReferenceReadScope::CodeOnly)
+        && session
+            .as_ref()
+            .is_some_and(|session| session.kind == ash_protocol::SessionKind::Chat)
+    {
+        return Err(core_error(CoreError::NotFound(id.to_string())));
+    }
+    Ok(session)
+}
+
+fn check_chat_reference_sources<'a>(
+    runtime: &impl AgentRuntime,
+    scope: queue::ReferenceReadScope,
+    references: impl IntoIterator<Item = (&'a SessionId, &'a ThreadId)>,
+) -> Result<(), RpcError> {
+    for (session_id, thread_id) in references {
+        // Authorize the source pair without loading its history. Core also binds the
+        // excerpt to this pair when it reads the thread, so moves cannot redirect it.
+        let session = read_scoped_session(runtime, scope, session_id)?;
+        if !session.is_some_and(|session| {
+            session
+                .threads
+                .iter()
+                .any(|thread| &thread.thread_id == thread_id)
+        }) {
+            return Err(core_error(CoreError::NotFound(thread_id.to_string())));
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn core_error(error: CoreError) -> RpcError {

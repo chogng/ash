@@ -111,6 +111,7 @@ export class SessionsPreferences extends Disposable {
 	private readonly activeDialog = this._register(new MutableDisposable<DisposableStore>());
 	private dialog: Dialog | undefined;
 	private dialogVisible = false;
+	private closeDialog: (() => Promise<boolean>) | undefined;
 	private focusDialog: (() => void) | undefined;
 	private navigate: ((categoryId: string) => void) | undefined;
 	private applyQuery: ((query: string, focus: boolean) => void) | undefined;
@@ -152,7 +153,7 @@ export class SessionsPreferences extends Disposable {
 			// Sessions owns product preferences; resource and language editing belongs to the shared Workbench pane.
 			const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
 			const jsonEditor = validated.jsonEditor ?? false;
-			this.dialog?.dispose();
+			if (this.closeDialog && !await this.closeDialog()) { return; }
 			const inGroup = validated.openToSide || validated.groupId !== undefined;
 			// Revealing Code selects its document group. Settle that layout before opening and focusing the requested pane.
 			if (inGroup) await this.showEditor();
@@ -162,7 +163,7 @@ export class SessionsPreferences extends Disposable {
 		}
 		// Agent settings always open the UI unless JSON is explicitly requested.
 		if (validated.jsonEditor) {
-			this.dialog?.dispose();
+			if (this.closeDialog && !await this.closeDialog()) { return; }
 			const preferences = this.instantiationService.invokeFunction(accessor => accessor.get(IPreferencesService));
 			await preferences.openUserSettings({ ...validated, jsonEditor: true });
 			await this.showEditor();
@@ -242,6 +243,7 @@ export class SessionsPreferences extends Disposable {
 			ariaControls: page.id,
 		}));
 		if (query !== undefined) searchInput.value = query;
+		let memoryContent: MemorySettingsRenderer | undefined;
 		const dialog = resources.add(new Dialog(this.container, localize('sessions.settings.title', 'Settings'), [], {
 			buttonStyles: defaultButtonStyles,
 			dialogStyles: defaultDialogStyles,
@@ -249,10 +251,15 @@ export class SessionsPreferences extends Disposable {
 			inputBoxStyles: defaultInputBoxStyles,
 			extraClasses: ['ash-sessions-settings-dialog'],
 			closeOnBackdropClick: true,
+			canClose: () => memoryContent?.canClose() ?? true,
 			disableDefaultAction: true,
 			renderBody: body => body.append(content),
 			onVisibilityChange: (_window, visible) => { if (this.dialog === dialog) this.dialogVisible = visible; },
 		}));
+		const closeDialog = async (): Promise<boolean> => {
+			await dialog.requestClose();
+			return this.dialog !== dialog || !this.dialogVisible;
+		};
 		const contextView = resources.add(new ContextView(content));
 		// Modal menus and dropdowns must live in the dialog's top layer and end with it.
 		const contentServices = resources.add(this.instantiationService.createChild(new ServiceCollection([IContextViewService, {
@@ -267,7 +274,7 @@ export class SessionsPreferences extends Disposable {
 		// the modal, whose child service scope is released by open()'s finally block.
 		const notifications = this.instantiationService.invokeFunction(accessor => accessor.get(INotificationService));
 		const handoff = async (operation: () => Promise<void>, showEditor = true): Promise<void> => {
-			dialog.dispose();
+			if (!await closeDialog()) { return; }
 			try {
 				await operation();
 				if (showEditor && !this.isDisposed) await this.showEditor();
@@ -303,8 +310,8 @@ export class SessionsPreferences extends Disposable {
 		const codeDefaults = resources.add(contentServices.createInstance(CodeConversationDefaultsSettings));
 		const codeDefaultsContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, codeDefaults, AccessibleViewProviderId.ChatModelConfiguration, AccessibilityVerbositySettingId.ChatModelConfiguration));
 		const dictationContent = resources.add(contentServices.createInstance(DictationSettingsRenderer, list, { showGroupHeader: false }));
-		const customizeContent = resources.add(contentServices.createInstance(SessionsCustomizeContent, list, async () => { dialog.dispose(); }, this.showEditor, () => openSettingsEditor(), () => openUserSettings()));
-		const githubSettings = resources.add(contentServices.createInstance(GitHubSettingsModel, async () => { dialog.dispose(); }));
+		const customizeContent = resources.add(contentServices.createInstance(SessionsCustomizeContent, list, closeDialog, this.showEditor, () => openSettingsEditor(), () => openUserSettings()));
+		const githubSettings = resources.add(contentServices.createInstance(GitHubSettingsModel, closeDialog));
 		const githubContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, githubSettings, AccessibleViewProviderId.GitHubSettings, AccessibilityVerbositySettingId.GitHubSettings));
 		const traceSettings = resources.add(contentServices.createInstance(TraceSettingsModel));
 		const traceContent = resources.add(contentServices.createInstance(SettingsSectionRenderer, list, traceSettings, AccessibleViewProviderId.TraceSettings, AccessibilityVerbositySettingId.TraceSettings));
@@ -352,13 +359,13 @@ export class SessionsPreferences extends Disposable {
 				section.accessibleViewProviderId, section.accessibilityVerbositySettingId)),
 		}));
 		const commands = this.instantiationService.invokeFunction(accessor => accessor.get(ICommandService));
-		management.set(MEMORY_SETTINGS_CATEGORY, resources.add(contentServices.createInstance(MemorySettingsRenderer, list,
-			() => this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'chat' ? 'chat' : 'code',
-			async () => { dialog.dispose(); })));
+		memoryContent = resources.add(contentServices.createInstance(MemorySettingsRenderer, list,
+			() => this.contextKeys.getValue(SessionsWorkspaceModeContext.key) === 'chat' ? 'chat' : 'code', closeDialog));
+		management.set(MEMORY_SETTINGS_CATEGORY, memoryContent);
 		const sessions = this.instantiationService.invokeFunction(accessor => accessor.get(ISessionsService));
 		management.set('agents', resources.add(contentServices.createInstance(SessionsAgentsContent, list,
 			contributed.filter(section => section.categoryId === 'agents').map(section => section.content),
-			async () => { dialog.dispose(); await this.showEditor(); },
+			async () => { if (await closeDialog()) await this.showEditor(); },
 			(run: TeamRun) => handoff(async () => {
 				await commands.executeCommand('sessions.open.code');
 				await sessions.openThread(run.sessionId, run.coordinatorThreadId);
@@ -542,6 +549,7 @@ export class SessionsPreferences extends Disposable {
 		scope.createKey('sessionsSettingsFocused', true);
 		this.focusDialog = () => searchInput.focus();
 		this.dialog = dialog;
+		this.closeDialog = closeDialog;
 		this.activeDialog.value = resources;
 		try {
 			const shown = dialog.show();
@@ -556,6 +564,7 @@ export class SessionsPreferences extends Disposable {
 				this.applyQuery = undefined;
 				this.applySectionQuery = undefined;
 				this.dialog = undefined;
+				this.closeDialog = undefined;
 				this.focusDialog = undefined;
 				this.dialogVisible = false;
 				this.activeDialog.clear();

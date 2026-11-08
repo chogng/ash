@@ -33,7 +33,7 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 	private isBusy = false;
 	private version = 0;
 
-	constructor(private readonly closeSettings: () => Promise<void>,
+	constructor(private readonly closeSettings: () => Promise<boolean | void>,
 		@IAccountService private readonly accounts: IAccountService,
 		@IGitHubService private readonly github: IGitHubService,
 		@IGitHubReviewModel private readonly review: IGitHubReviewModel,
@@ -79,7 +79,8 @@ export class GitHubSettingsModel extends Disposable implements SettingsSectionMo
 					const account = this.review.selectedAccount; const repository = this.verifiedRepository;
 					if (!account || !repository) { return; }
 					const resource = URI.from({ scheme: 'ash-github', authority: account.host, path: `/${repository}`, query: new URLSearchParams({ account: account.id }).toString() });
-					await this.closeSettings(); await this.editors.openEditor({ resource, label: repository, readOnly: true, showBreadcrumbs: false });
+					if (await this.closeSettings() === false) { return; }
+					await this.editors.openEditor({ resource, label: repository, readOnly: true, showBreadcrumbs: false });
 				})
 			},
 			{ id: 'connector', kind: 'action', label: localize('github.settings.connector', 'Manage official Connector'), enabled: true, run: () => this.perform(async () => { await this.opener.open(URI.parse('https://github.com/apps/chatgpt-codex-connector'), { openExternal: true }); }) },

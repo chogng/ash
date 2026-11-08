@@ -173,7 +173,7 @@ fn concurrent_open_installs_an_empty_queue_once() {
             Ok((row.get::<_, u32>(0)?, row.get::<_, u32>(1)?))
         })
         .unwrap();
-    assert_eq!(metadata, (2, 0));
+    assert_eq!(metadata, (3, 0));
 }
 
 #[test]
@@ -199,7 +199,8 @@ fn old_permission_ids_migrate_once_without_changing_queue_delivery_or_revisions(
     }
     drop(store);
     let connection = Connection::open(&path).unwrap();
-    connection.execute_batch("UPDATE queue_metadata SET version=1 WHERE id=1;
+    connection.execute_batch("ALTER TABLE queued_messages DROP COLUMN profile_reference_reads;
+        UPDATE queue_metadata SET version=1 WHERE id=1;
         UPDATE queued_messages SET request=json_set(request,'$.approvalMode','askPermissions') WHERE id='manual';
         UPDATE queued_messages SET request=json_set(request,'$.approvalMode','autoReview') WHERE id='auto';").unwrap();
     drop(connection);
@@ -229,7 +230,7 @@ fn old_permission_ids_migrate_once_without_changing_queue_delivery_or_revisions(
                             row.get::<_, u32>(0)
                         })
                         .unwrap(),
-                    2
+                    3
                 );
             });
         }

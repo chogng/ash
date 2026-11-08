@@ -216,6 +216,102 @@ fn queue_is_shared_across_connections_and_uses_the_existing_turn_receipt() {
 }
 
 #[test]
+fn code_only_clients_cannot_resolve_chat_references_through_code_turns_or_queue_edits() {
+    let root = tempfile::tempdir().unwrap();
+    let (server, store) = queued_server(root.path());
+    let mut desktop = server.connection();
+    let (code, destination) = create(&server, &mut desktop);
+    let chat = call(
+        &server,
+        &mut desktop,
+        json!({"jsonrpc":"2.0","id":4,"method":"session/create","params":{
+            "commandId":"chat-source","kind":"chat","title":"Chat source","executionTarget":null
+        }}),
+    );
+    let chat = chat["result"]["session"]["sessionId"].as_str().unwrap();
+    let reference = |session: &str| json!([{"type":"chatReference","name":"Source","sessionId":session,"threadId":chat}]);
+    let mut cli = server.connection();
+    let initialized = call(
+        &server,
+        &mut cli,
+        json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{
+            "clientInfo":{"name":"ash-cli","version":"1"},"capabilities":{}
+        }}),
+    );
+    assert!(initialized.get("result").is_some(), "{initialized}");
+    let direct = call(
+        &server,
+        &mut cli,
+        json!({"jsonrpc":"2.0","id":2,"method":"session/thread/read","params":{"sessionId":chat,"threadId":chat}}),
+    );
+    assert_eq!(direct["error"]["code"], -32011, "{direct}");
+
+    for (offset, request) in [
+        json!({"type":"startTurn","threadId":destination,"expectedSequence":0,"input":reference(chat)}),
+        json!({"type":"startTurn","threadId":destination,"expectedSequence":0,"input":reference(&code)}),
+        json!({"type":"steerTurn","threadId":destination,"expectedSequence":0,"turnId":"unused","input":reference(chat)}),
+        json!({"type":"rewriteThread","parentThreadId":destination,"beforeTurnId":"unused","title":"Rewrite","input":reference(chat)}),
+    ].into_iter().enumerate() {
+        let response = call(&server, &mut cli, json!({"jsonrpc":"2.0","id":3+offset,
+            "method":"session/request","params":{"commandId":format!("restricted-{offset}"),"sessionId":code,"request":request}
+        }));
+        assert_eq!(response["error"], direct["error"], "{response}");
+    }
+
+    let enqueue = json!({"jsonrpc":"2.0","id":7,"method":"queue/enqueue","params":{
+        "commandId":"cross-kind-queue","sessionId":code,"threadId":destination,"input":reference(chat)
+    }});
+    let denied = call(&server, &mut cli, enqueue.clone());
+    assert_eq!(denied["error"], direct["error"], "{denied}");
+    let allowed = call(&server, &mut desktop, enqueue);
+    let allowed: queue::QueuedMessage =
+        serde_json::from_value(allowed["result"].clone()).expect(&allowed.to_string());
+    let edit = |client: &mut crate::ConnectionState, id, revision, action| {
+        call(
+            &server,
+            client,
+            json!({"jsonrpc":"2.0","id":id,"method":"queue/edit","params":{
+                "commandId":allowed.request.command_id,"sessionId":code,"threadId":destination,
+                "expectedRevision":revision,"action":action
+            }}),
+        )
+    };
+    let paused = edit(&mut desktop, 8, allowed.revision, json!({"type":"pause"}));
+    let revision = paused["result"]["revision"].as_i64().unwrap();
+    let denied = edit(
+        &mut cli,
+        8,
+        revision,
+        json!({"type":"replace","input":reference(chat)}),
+    );
+    assert_eq!(denied["error"], direct["error"], "{denied}");
+    let denied = edit(&mut cli, 9, revision, json!({"type":"send","turnId":null}));
+    assert_eq!(denied["error"], direct["error"], "{denied}");
+    let resumed = edit(&mut desktop, 9, revision, json!({"type":"resume"}));
+    let resumed: queue::QueuedMessage =
+        serde_json::from_value(resumed["result"].clone()).expect(&resumed.to_string());
+    server.close_connection(desktop);
+    server.close_connection(cli);
+
+    // A pre-upgrade row has no record of its submitting connection's scope.
+    let mut legacy = resumed.request.clone();
+    legacy.command_id = ash_protocol::CommandId::new("legacy-cross-kind-reference").unwrap();
+    let legacy = store.enqueue(&legacy).unwrap();
+    let reopened = queue::QueueStore::open(&root.path().join("state.sqlite")).unwrap();
+    let persisted = |message: &queue::QueuedMessage| {
+        reopened.get(&message.request.command_id).unwrap().unwrap()
+    };
+    assert!(matches!(
+        server.deliver_queued_message(&persisted(&legacy)).unwrap(),
+        queue::Delivery::Rejected(reason) if reason == "referenceUnavailable"
+    ));
+    assert!(matches!(
+        server.deliver_queued_message(&persisted(&resumed)).unwrap(),
+        queue::Delivery::Started(_)
+    ));
+}
+
+#[test]
 fn queued_chat_reference_reads_the_source_at_delivery_and_replays_the_same_turn() {
     let root = tempfile::tempdir().unwrap();
     let (server, queue) = queued_server(root.path());

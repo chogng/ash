@@ -48,7 +48,7 @@ export class MemoriesEditor extends Disposable {
 	private contextId = '';
 	private mutationId = generateUuid();
 
-	constructor(private readonly namespace: MemoryNamespace, container: HTMLElement, closeSettings: () => Promise<void>,
+	constructor(private readonly namespace: MemoryNamespace, container: HTMLElement, closeSettings: () => Promise<boolean | void>,
 		@IMemoriesService private readonly memories: IMemoriesService,
 		@IChatSessionNavigationService private readonly sessions: IChatSessionNavigationService,
 		@IDialogService private readonly dialogs: IDialogService,
@@ -84,7 +84,7 @@ export class MemoriesEditor extends Disposable {
 					if (!(focused instanceof HTMLElement) || !this.element.contains(focused)) { return undefined; }
 					return new AccessibleContentProvider(AccessibleViewProviderId.Memories, { type },
 						() => type === AccessibleViewType.Help
-							? localize({ bundle: 'ash.settings', key: 'memory.help' }, 'Choose a conversation and memory scope. Use Tab to move between controls and arrow keys to browse saved memories. <keybinding:ash.memories.save> saves a memory. Reading and model saving are separate permissions. Escape closes this help and returns focus.')
+							? localize({ bundle: 'ash.settings', key: 'memory.help' }, 'Choose a conversation and memory scope. Use Tab to move between controls and arrow keys to browse saved memories. <keybinding:ash.memories.save> saves a memory. Closing the Settings dialog with unsaved memory changes asks whether to discard them. Reading and model saving are separate permissions. Escape closes this help and returns focus.')
 							: [this.status.textContent, this.titleInput.value, this.body.value].filter(Boolean).join('\n'),
 						() => { if (focused.isConnected) { focused.focus(); } }, verbosity);
 				},
@@ -142,7 +142,7 @@ export class MemoriesEditor extends Disposable {
 		this.openSource = this.button(actions, localize('memories.openSource', 'Open source conversation'), async () => {
 			const origin = this.selected?.origin ?? this.referenceOrigin ?? this.draftOrigin;
 			if (!origin || !await this.discardDraft()) { return; }
-			await closeSettings();
+			if (await closeSettings() === false) { return; }
 			await this.sessions.openConversation(origin.sessionId, origin.threadId);
 		});
 		this.reference = this.input(detail, localize({ bundle: 'ash.settings', key: 'memory.reference' }, 'Memory reference'));
@@ -183,6 +183,14 @@ export class MemoriesEditor extends Disposable {
 
 	public initialize(): void {
 		if (!this.policy) { void this.perform(() => this.refresh()); }
+	}
+
+	public async canClose(): Promise<boolean> {
+		if (!this.dirty) { return true; }
+		if (this.working) { return false; }
+		let confirmed = false;
+		await this.perform(async () => { confirmed = await this.discardDraft(); });
+		return confirmed;
 	}
 
 	public async openProjectDraft(origin: MemoryTurnSource, text: string): Promise<void> {
@@ -386,7 +394,10 @@ export class MemoriesEditor extends Disposable {
 	}
 	private async discardDraft(): Promise<boolean> {
 		if (!this.dirty) { return true; }
-		const discard = await this.dialogs.confirm({ message: 'Discard unsaved memory changes?', primaryButton: 'Discard changes' });
+		const discard = await this.dialogs.confirm({
+			message: localize({ bundle: 'ash.settings', key: 'memory.discardPrompt' }, 'Discard unsaved memory changes?'),
+			primaryButton: localize({ bundle: 'ash.settings', key: 'memory.discardAction' }, 'Discard changes'),
+		});
 		if (discard.confirmed) { this.dirty = false; }
 		return discard.confirmed;
 	}

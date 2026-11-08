@@ -584,6 +584,27 @@ impl<'ctx, C: AgentRequestProcessorContext + ?Sized> AgentRequestProcessor<'ctx,
             session_id,
             request,
         } = decode(params)?;
+        if let SessionRequest::StartTurn { input, .. }
+        | SessionRequest::SteerTurn { input, .. }
+        | SessionRequest::RewriteThread { input, .. } = &request
+        {
+            super::check_chat_reference_sources(
+                &self.context.agent_runtime(),
+                connection.reference_read_scope(),
+                input.iter().filter_map(|item| {
+                    if let InputItem::ChatReference {
+                        session_id,
+                        thread_id,
+                        ..
+                    } = item
+                    {
+                        Some((session_id, thread_id))
+                    } else {
+                        None
+                    }
+                }),
+            )?;
+        }
         let session = if matches!(
             &request,
             SessionRequest::SetRecapPresence { focused: None, .. }

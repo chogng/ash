@@ -9,6 +9,7 @@ import { IAgentSessionService } from '../../../platform/agentHost/common/agentSe
 import { IAgentModelsService } from '../../../platform/models/common/agentModels.js';
 import { ITeamsManagementService } from '../../services/teams/common/teamsManagement.js';
 import { constObservable } from '../../../base/common/observable.js';
+import { DeferredPromise } from '../../../base/common/async.js';
 import '../../../workbench/contrib/advisor/browser/advisor.contribution.js';
 import { ISessionProviderScopeService, type ISessionProviderScope, type SessionProviderServices } from '../../browser/agentHost/sessionProviderScopeService.js';
 import { createDisconnectedRendererApi } from '../../../workbench/browser/rendererApi.js';
@@ -765,8 +766,12 @@ test('Sessions preferences reuses Workbench owners and preserves navigation, sea
 	assert.equal(window.document.querySelector('dialog'), null);
 	assert.equal(shortcutsOpened, callsBeforeCancel, 'cancelling Settings cannot open or edit a profile resource');
 	rejectShortcut = true;
-	await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
-	assert.equal(notifications.model.getNotifications().at(-1)?.message, 'Could not open preferences: Error: shortcut editor unavailable');
+	{
+		const reported = new DeferredPromise<string>();
+		using listener = notifications.model.onDidAdd(item => { void reported.complete(item.message); });
+		await openCategoryAction('keyboard-shortcuts', 'Keyboard Shortcuts');
+		assert.equal(await reported.p, 'Could not open preferences: Error: shortcut editor unavailable');
+	}
 	assert.equal(editorReveals, 5, 'a failed open cannot reveal an unrelated editor');
 	const notificationsBeforeShutdown = notifications.model.getNotifications().length;
 	let rejectLateOpen!: (error: Error) => void;

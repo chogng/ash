@@ -16,7 +16,7 @@ export class MemorySettingsRenderer extends SettingsPageRenderer<SettingsSection
 	private editor: MemoriesEditor | undefined;
 	private visible = false;
 
-	constructor(container: HTMLElement, private readonly namespace: () => MemoryNamespace, private readonly closeSettings: () => Promise<void>,
+	constructor(container: HTMLElement, private readonly namespace: () => MemoryNamespace, private readonly closeSettings: () => Promise<boolean | void>,
 		@IMemorySettingsNavigation private readonly navigation: MemorySettingsNavigation,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
@@ -25,6 +25,10 @@ export class MemorySettingsRenderer extends SettingsPageRenderer<SettingsSection
 		if (!CommandsRegistry.hasCommand(OPEN_MEMORIES_COMMAND_ID)) {
 			this.element.textContent = localize({ bundle: 'ash.settings', key: 'memory.unavailable' }, 'Memory management is unavailable in this window.');
 		}
+	}
+
+	public canClose(): boolean | Promise<boolean> {
+		return this.editor?.canClose() ?? true;
 	}
 
 	protected buildNodes(): readonly SettingsTreeNode<SettingsSectionReference>[] {
