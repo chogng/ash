@@ -48,6 +48,8 @@ import { AccessibilityVerbositySettingId } from '../../../platform/accessibility
 import { Lxicon } from '../../../base/common/lxicons.js';
 import type { IHoverService, HoverSetupOptions } from '../../../platform/hover/browser/hoverService.js';
 import type { HoverContent } from '../../../base/browser/ui/hover/hover.js';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from '../../../base/browser/ui/contextview/contextview.js';
+import { CancellationToken } from '../../../base/common/cancellation.js';
 import { getSessionSummaryHoverData } from '../../contrib/sessions/browser/sessionHoverContent.js';
 import { readNewChatDraftState, writeNewChatDraftState } from '../../contrib/chat/common/newChatDraftState.js';
 import '../../contrib/sessions/browser/views/sessionsViewActions.js';
@@ -489,19 +491,26 @@ test('SessionsList updates passive status without changing row identity or selec
 			if (args[0] === 'sessions.list.togglePin') { storage.store('sessions.list.pinned.background', true, StorageScope.PROFILE, StorageTarget.USER); return 'background'; }
 		}
 	} as ICommandService;
+	const updatedAt = new Date(Date.now() - 3 * 60_000);
 	let session = {
 		sessionId: 'background', kind: 'code' as const, title: 'Background session', status: 'active' as const, nextApprovalMode: 'manual' as const,
-		chats: [{ threadId: 'root', origin: { type: 'root' as const }, status: 'active' as const }],
+		workspace: { authorityId: 'local', root: '/work/fixture' },
+		chats: [{ threadId: 'root', origin: { type: 'root' as const }, status: 'active' as const, updatedAt }],
 		management: { status: 'working', statusChangedAtUnixMs: 10 },
 	};
 	const sessionService = { get sessions() { return [session]; }, untitledSessions: [], state: 'ready', onDidChange: changes.event } as unknown as ISessionsManagementService;
 	const viewService = { onDidChange: changes.event, activeSelection: undefined, visibleSelections: [], openSession(id: string) { opened.push(id); } } as unknown as ISessionsService;
 	const request: IResolvedSessionPullRequest = { uri: URI.parse('https://github.com/fixture/repo/pull/7'), owner: 'fixture', repo: 'repo', number: 7, title: 'Synthetic PR', state: 'open', status: { hasFailingChecks: true }, icon: computePullRequestIcon('open', { hasFailingChecks: true }) };
 	const summaries = new Map<HTMLElement, HoverContent>();
+	const summaryPlacements = new Map<HTMLElement, Pick<HoverSetupOptions, 'anchor' | 'anchorAlignment' | 'anchorAxisAlignment' | 'anchorPosition'>>();
 	const hoverService = {
-		setupHover({ target, content }: HoverSetupOptions) {
+		setupHover({ target, content, anchor, anchorAlignment, anchorAxisAlignment, anchorPosition }: HoverSetupOptions) {
 			summaries.set(target, content);
-			return Object.assign(toDisposable(() => { summaries.delete(target); }), {
+			summaryPlacements.set(target, { anchor, anchorAlignment, anchorAxisAlignment, anchorPosition });
+			return Object.assign(toDisposable(() => {
+				summaries.delete(target);
+				summaryPlacements.delete(target);
+			}), {
 				update(content: HoverContent) { summaries.set(target, content); },
 			});
 		},
@@ -516,18 +525,28 @@ test('SessionsList updates passive status without changing row identity or selec
 	assert.equal(button.textContent, 'Background session');
 	assert.equal(button.parentElement?.querySelector('[aria-live="polite"]')?.textContent, 'Working');
 	assert.equal(button.hasAttribute('title'), false);
-	const summary = summaries.get(button) as HTMLElement;
-	assert.equal(summary.className, 'ash-session-summary-hover');
-	assert.deepEqual([...summary.children].map(row => row.textContent), [
-		'Background session', 'Working', 'fixture/repo #7 · Synthetic PR · Open · Checks failed',
-	]);
+	assert.deepEqual(summaryPlacements.get(button), {
+		anchor: button.closest('.ash-sessions-list-row'),
+		anchorAlignment: AnchorAlignment.Left,
+		anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+		anchorPosition: AnchorPosition.Below,
+	});
+	const renderPreview = summaries.get(button);
+	assert.ok(typeof renderPreview === 'function');
+	const preview = renderPreview(CancellationToken.None);
+	assert.ok(preview && typeof preview !== 'string');
+	assert.equal(preview.className, 'ash-sessions-list-preview');
+	assert.equal(preview.querySelector('strong')?.textContent, 'Background session');
+	assert.equal(preview.querySelector('time')?.dateTime, updatedAt.toISOString());
+	assert.equal(preview.querySelector('time')?.textContent, '3 minutes ago');
+	assert.equal(preview.querySelector('.ash-sessions-list-preview-project')?.textContent, 'fixture');
 
 	session = { ...session, management: { status: 'needsInput', statusChangedAtUnixMs: 20 } };
 	changes.fire();
 	assert.equal(list.domNode.querySelector('.ash-sessions-list-item'), button);
 	assert.equal(button.textContent, 'Background session');
 	assert.equal(button.parentElement?.querySelector('[aria-live="polite"]')?.textContent, 'Needs input');
-	assert.equal((summaries.get(button) as HTMLElement).children[1].textContent, 'Needs input');
+	assert.equal(summaries.get(button), renderPreview);
 	assert.equal(button.getAttribute('aria-label'), 'Background session. Needs input. fixture/repo #7 · Synthetic PR · Open · Checks failed');
 	assert.equal(button.querySelector('[data-ash-icon-id="git-pull-request-error"]')?.getAttribute('aria-hidden'), 'true');
 	assert.equal(button.getAttribute('aria-current'), 'false');

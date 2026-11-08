@@ -172,9 +172,7 @@ test('First sends bind independent named worktrees, preserve failed drafts and r
 			await select(`session:${identity.sessionId}`);
 			await expect(active()).toHaveAttribute('data-thread-id', identity.threadId);
 			const root = identity === a ? rootA : rootB;
-			const status = active().locator('.ash-session-workspace-status');
-			await expect(status).toHaveText(basename(cwd));
-			await expect(status).toHaveAttribute('title', root);
+			await expect(active().locator('.ash-session-workspace-status')).toHaveCount(0);
 			expect(await verify(identity)).toBe(root);
 			const explicit = active().getByRole('link', { name: 'Checkout marker', exact: true });
 			const plainTextReference = active().getByRole('link', { name: 'agent.txt:2', exact: true });

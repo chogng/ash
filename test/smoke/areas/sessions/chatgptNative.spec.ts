@@ -334,8 +334,8 @@ test.describe('Unified Chat sidebar', () => {
 			await expect(code).toContainText('Original Chat message');
 			await expect(code).toContainText('Answer from Ash');
 			const { directory } = await readConversation();
-			expect(directory?.type).toBe('local');
-			await expect(code.locator('.ash-session-workspace-status')).toHaveText(directory!.root);
+			expect(directory).toEqual({ type: 'local', root: testWorkspace.directory });
+			await expect(code.locator('.ash-session-workspace-status')).toHaveCount(0);
 			const composer = new Editor(code);
 			await composer.waitForEditorFocus();
 			await composer.waitForTypeInEditor('Follow up from Code');
@@ -362,7 +362,7 @@ test.describe('Unified Chat sidebar', () => {
 			await page.locator('[data-action-id="sessions.newSession"] button').click();
 			const draft = page.locator('.ash-sessions-chat-slot.active:visible .ash-chat[data-untitled-session-id]');
 			await expect(draft.locator('.ash-sessions-workspace-picker')).toBeVisible();
-			await expect(draft.locator('.ash-session-workspace-status')).toBeHidden();
+			await expect(draft.locator('.ash-session-workspace-status')).toHaveCount(0);
 		} finally { await close(); }
 	});
 

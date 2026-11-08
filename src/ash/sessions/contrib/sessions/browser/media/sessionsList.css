@@ -130,6 +130,60 @@
 	white-space: nowrap;
 }
 
+.ash-sessions-window
+	.ash-context-view-hover:has(> .ash-hover > .ash-sessions-list-preview) {
+	--ash-hover-background: var(--ash-editor-background);
+	--ash-hover-foreground: var(--ash-foreground);
+	--ash-hover-border: var(--ash-contrastBorder, var(--ash-border));
+	box-shadow: 0 4px 16px var(--ash-widget-shadow);
+}
+
+.ash-hover:has(> .ash-sessions-list-preview) {
+	inline-size: 320px;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+	font-size: var(--ash-fontSize-body1);
+	line-height: 1.4;
+}
+
+.ash-sessions-list-preview {
+	display: grid;
+	gap: var(--ash-spacing-size80);
+}
+
+.ash-sessions-list-preview-heading,
+:is(.ash-sessions-list-preview-project, .ash-sessions-list-preview-branch) {
+	display: flex;
+	align-items: baseline;
+	gap: var(--ash-spacing-size80);
+	overflow-wrap: anywhere;
+}
+
+.ash-sessions-list-preview-heading {
+	justify-content: space-between;
+}
+
+.ash-sessions-list-preview-heading > strong {
+	min-inline-size: 0;
+	font-weight: var(--ash-fontWeight-semiBold);
+}
+
+.ash-sessions-list-preview-heading > time {
+	flex: none;
+	color: var(--ash-description-foreground);
+	font-size: var(--ash-fontSize-label1);
+	white-space: nowrap;
+}
+
+:is(.ash-sessions-list-preview-project, .ash-sessions-list-preview-branch) {
+	align-items: center;
+}
+
+:is(.ash-sessions-list-preview-project, .ash-sessions-list-preview-branch)
+	> .ash-icon {
+	flex: none;
+	color: var(--ash-description-foreground);
+}
+
 [dir="rtl"] .ash-sessions-list-row {
 	--sessions-row-title-fade-direction: to left;
 	--sessions-row-title-scroll-direction: 1;

@@ -14,7 +14,7 @@ import { addDisposableListener, getWindow, h, isHTMLElement, isNode } from '../.
 import { status } from '../../../../../base/browser/ui/aria/aria.js';
 import { ButtonActionViewItem } from '../../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { Button } from '../../../../../base/browser/ui/button/button.js';
-import { AnchorAxisAlignment, ContextView, ContextViewFocusRestore, ContextViewHideReason } from '../../../../../base/browser/ui/contextview/contextview.js';
+import { AnchorAlignment, AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore, ContextViewHideReason } from '../../../../../base/browser/ui/contextview/contextview.js';
 import { InputBox } from '../../../../../base/browser/ui/inputbox/inputbox.js';
 import { createLoadingSpinner } from '../../../../../base/browser/ui/loadingSpinner/loadingSpinner.js';
 import { observeResize } from '../../../../../base/browser/observer.js';
@@ -74,8 +74,7 @@ import { readNewChatDraftState } from '../../../chat/common/newChatDraftState.js
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { Icon } from '../../../../../base/common/icon.js';
 import { SessionLeadingIcon } from '../../../../browser/ui/sessionLeadingIcon.js';
-import { SessionSummaryHoverWidget, type ISessionSummaryHoverData } from '../../../../../workbench/contrib/chat/browser/agentSessions/sessionSummaryHover.js';
-import { getSessionSummaryHoverData, loadSessionSummaryHoverDetails } from '../sessionHoverContent.js';
+import { createSessionPreviewHover, loadSessionHoverBranch } from '../sessionHoverContent.js';
 import { IHoverService, type IManagedHover } from '../../../../../platform/hover/browser/hoverService.js';
 import { LocalChatSessionUri } from '../../../../../workbench/contrib/chat/common/model/chatUri.js';
 import { fillChatReferenceDragData } from '../../../../browser/dnd.js';
@@ -1144,13 +1143,14 @@ export class SessionsList extends DomWidget {
 		}
 	}
 
-	private updateSessionSummary(item: SessionListItem, session: ISession, chat: IChat): void {
+	private updateSessionPreview(item: SessionListItem, session: ISession, chat: IChat, projectName: string | undefined): void {
 		const scopes = this.providerScopes;
 		const { sessionId } = session;
 		const { threadId } = chat;
-		item.updateSummary(this.hoverService, getSessionSummaryHoverData(session, chat), threadId, scopes
-			? token => loadSessionSummaryHoverDetails(this.sessionService, scopes, sessionId, threadId, token)
-			: undefined);
+		item.updatePreview(this.hoverService, projectName, chat.updatedAt, scopes && {
+			key: JSON.stringify([sessionId, threadId, session.providerId, session.workspace, chat.workspace === undefined, chat.workspace]),
+			load: token => loadSessionHoverBranch(this.sessionService, scopes, sessionId, threadId, token),
+		});
 	}
 
 	private render(): void {
@@ -1352,6 +1352,9 @@ export class SessionsList extends DomWidget {
 			const thread = activeChats.find(chat => chat.threadId === session.sessionId)
 				?? activeChats.find(chat => chat.origin.type === 'root') ?? activeChats[0];
 			if (!thread) continue;
+			const workspace = session.workspace;
+			const projectName = projectNames.get(session.sessionId)
+				?? (workspace ? basename(sessionWorkspaceUri(workspace)) || workspace.root : undefined);
 			const requests = this.github.getSessionPullRequests(session.sessionId);
 			const fields = [session.title, session.providerLabel, session.workspace?.root, groupNames.get(session.sessionId), projectNames.get(session.sessionId), alert && attentionLabel,
 			...requests.map(getPullRequestLabel)];
@@ -1368,13 +1371,13 @@ export class SessionsList extends DomWidget {
 			item.update(session.title || localize('sessions.list.untitled', 'Untitled Session'), current?.threadId === thread.threadId, open, management);
 			item.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: thread.threadId } }, item, anchor));
 			item.updatePullRequests(getHighestPriorityPullRequestIcon(requests.map(request => request.icon)), requests.map(getPullRequestLabel).join('\n'));
-			this.updateSessionSummary(item, session, thread);
+			this.updateSessionPreview(item, session, thread, projectName);
 			const children = nested.map(chat => {
 				const child = itemFor(`chat:${JSON.stringify([session.sessionId, chat.threadId])}`, 'conversation', restingIcon ?? Lxicon.chatSession);
 				child.target = { sessionId: session.sessionId, threadId: chat.threadId };
 				child.update(chat.title || localize('sessions.list.untitledChat', 'Untitled Chat'), current?.threadId === chat.threadId,
 					() => this.openRow(options => this.viewService.openSession(session.sessionId, chat.threadId, options)), chat.management);
-				this.updateSessionSummary(child, session, chat);
+				this.updateSessionPreview(child, session, chat, projectName);
 				child.setContextMenu(anchor => this.showItemMenu({ kind: 'session', active: { session, threadId: chat.threadId } }, child, anchor));
 				return child.domNode;
 			});
@@ -1654,8 +1657,8 @@ class SessionListItem extends AbstractDisposable {
 	private readonly statusAnnouncement: HTMLSpanElement;
 	private managementDescription: string | undefined;
 	private pullRequestDescription = '';
-	private readonly summaryHover = new MutableDisposable<IManagedHover>();
-	private summaryText: string | undefined;
+	private readonly previewHover = new MutableDisposable<IManagedHover>();
+	private previewKey: string | undefined;
 	private open: () => void = () => { };
 	private readonly clickListener;
 	private readonly contextListeners;
@@ -1827,31 +1830,40 @@ class SessionListItem extends AbstractDisposable {
 
 	private updateDescription(): void {
 		const parts = [this.row.title, this.managementDescription, this.pullRequestDescription].filter(Boolean);
-		if (!this.summaryHover.value) this.button.title = parts.join('\n');
+		if (!this.previewHover.value) this.button.title = parts.join('\n');
 		this.button.setAttribute('aria-label', parts.join('. '));
 	}
 
-	updateSummary(hoverService: IHoverService | undefined, metadata: readonly string[], threadId: string, loadDetails?: ISessionSummaryHoverData['loadDetails']): void {
+	updatePreview(
+		hoverService: IHoverService | undefined,
+		projectName: string | undefined,
+		updatedAt: Date | undefined,
+		branchSource?: { readonly key: string; readonly load: (token: CancellationToken) => Promise<string | undefined>; },
+	): void {
 		if (!hoverService) return;
 		const title = this.row.title;
-		const details = [this.managementDescription, ...metadata, this.pullRequestDescription].filter((value): value is string => !!value);
-		const summaryText = JSON.stringify([title, details, threadId]);
-		if (this.summaryText === summaryText) return;
-		this.summaryText = summaryText;
-		const data = { title, details, loadDetails };
-		const content = loadDetails
-			? (token: CancellationToken) => new SessionSummaryHoverWidget(this.button.ownerDocument, data, token).domNode
-			: new SessionSummaryHoverWidget(this.button.ownerDocument, data).domNode;
-		if (this.summaryHover.value) {
-			this.summaryHover.value.update(content);
+		const timestamp = updatedAt?.getTime() ?? NaN;
+		const key = JSON.stringify([title, projectName, timestamp, branchSource?.key]);
+		if (this.previewKey === key) return;
+		this.previewKey = key;
+		const content = createSessionPreviewHover(this.button.ownerDocument, { title, projectName, timestamp, loadBranch: branchSource?.load });
+		if (this.previewHover.value) {
+			this.previewHover.value.update(content);
 		} else {
 			this.button.removeAttribute('title');
-			this.summaryHover.value = hoverService.setupHover({ target: this.button, content, groupId: 'sessions-list' });
+			this.previewHover.value = hoverService.setupHover({
+				target: this.button,
+				anchor: this.domNode,
+				content,
+				anchorAlignment: AnchorAlignment.Left,
+				anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+				anchorPosition: AnchorPosition.Below,
+			});
 		}
 	}
 
 	protected override disposeCore(): void {
-		this.summaryHover.dispose();
+		this.previewHover.dispose();
 		this.leadingIcon?.dispose();
 		this.clickListener.dispose();
 		this.actions.dispose();
