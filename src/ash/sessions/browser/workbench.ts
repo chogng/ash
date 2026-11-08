@@ -154,6 +154,7 @@ import { IVoiceCodeTranscriptionBackendService } from '../../platform/dictation/
 import '../../workbench/browser/style.js';
 import './media/style.css';
 import './media/workbench.css';
+import './media/notifications.css';
 import { SHOW_SESSIONS_PICKER_COMMAND_ID } from '../contrib/sessions/browser/sessionsActions.js';
 import './actions/sessionsChatActions.js';
 import { NEW_SESSION_ACTION_ID } from '../contrib/chat/common/constants.js';

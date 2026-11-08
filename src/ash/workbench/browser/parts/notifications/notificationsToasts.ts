@@ -1,5 +1,4 @@
 import { getNotificationsPosition, NotificationsPosition, type NotificationsModel, type NotificationItem } from '../../../common/notifications.js';
-import './media/notificationsToasts.css';
 import { addDisposableListener, getActiveElement, isEditableElement } from '../../../../base/browser/dom.js';
 import type { IActionRunner } from '../../../../base/common/actions.js';
 import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';

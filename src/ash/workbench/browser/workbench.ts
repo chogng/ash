@@ -134,6 +134,7 @@ import { IEmbedderTerminalService, type IEmbedderTerminalOptions } from '../serv
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { NotificationService } from '../services/notification/common/notificationService.js';
 import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../platform/accessibility/browser/accessibleView.js';
+import './media/notifications.css';
 import { INotificationsCenter, NotificationsCenter } from './parts/notifications/notificationsCenter.js';
 import { NotificationActionRunner } from './parts/notifications/notificationsCommands.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';

@@ -232,7 +232,7 @@ IDE 与 Agent Window 共用图标注册、主题解析和 WOFF2 渲染机制。I
 | 高对比度       | 无阴影，使用 `--ash-contrastBorder` 明确边界                    |
 
 - 完整值为 `box-shadow: 0 2px 8px color-mix(in srgb, var(--ash-widget-shadow) 30%, transparent)`；30% 是主题阴影色与透明色的混合比例，最终透明度随主题阴影色变化。
-- 外观集中在 [style.css](browser/media/style.css)，限定到 `.ash-sessions-window` 中的 `.ash-notification` 与 `.ash-notifications-center`。
+- Agent Window 和 IDE 分别加载各自的通知样式，覆盖 toast、通知中心、列表与操作区。Agent Window 的样式由 [notifications.css](browser/media/notifications.css) 持有，限定到 `.ash-sessions-window`。两个窗口复用通知组件的结构和交互。
 
 ## Tooltip
 
